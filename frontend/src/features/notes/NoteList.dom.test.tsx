@@ -20,7 +20,7 @@ const notes: Note[] = ["a", "b", "c"].map((id) => ({
   id,
   title: id,
   workspace_id: "ws",
-  revision: 1,
+  revision: 1, save_seq: 1,
   created_at: "2026-09-07",
   updated_at: "2026-09-07",
 }));

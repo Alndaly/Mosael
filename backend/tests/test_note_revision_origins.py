@@ -42,10 +42,10 @@ def test_页面上的新建_编辑_追加_恢复各记各的来历_作者是做�
     me = c.get("/api/auth/me").json()
     ws = c.post("/api/workspaces", json={"name": "W"}).json()["id"]
     n = c.post("/api/notes", json={"workspace_id": ws, "title": "周报", "markdown": "周一"}).json()
-    edited = c.patch(f"/api/notes/{n['id']}", json={**n, "base_revision": 1, "markdown": "周一开会"}).json()
+    edited = c.patch(f"/api/notes/{n['id']}", json={**n, "base_save_seq": 1, "markdown": "周一开会"}).json()
     appended = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": "> 原话", "sources": []}).json()
     restored = c.post(
-        f"/api/notes/{n['id']}/restore", json={"workspace_id": ws, "base_revision": appended["revision"], "revision": 1}
+        f"/api/notes/{n['id']}/restore", json={"workspace_id": ws, "base_save_seq": appended["save_seq"], "revision": 1}
     ).json()
     assert restored["revision"] == 4
 

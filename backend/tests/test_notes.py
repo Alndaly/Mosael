@@ -13,16 +13,16 @@ def test_notes_search_revision_conflict_trash_and_restore():
     assert n["revision"] == 1
     assert c.get("/api/notes", params={"workspace_id": ws, "q": "真实"}).json()[0]["id"] == n["id"]
     assert c.get("/api/notes", params={"workspace_id": ws, "q": "%"}).json() == []
-    body = {**n, "base_revision": 1, "markdown": "更新后的正文"}
+    body = {**n, "base_save_seq": 1, "markdown": "更新后的正文"}
     saved = c.patch(f"/api/notes/{n['id']}", json=body)
     assert saved.status_code == 200, saved.text
     assert saved.json()["revision"] == 2
     assert c.patch(f"/api/notes/{n['id']}", json=body).status_code == 409
     old = c.get(f"/api/notes/{n['id']}/revisions/1", params={"workspace_id": ws}).json()
     assert old["markdown"] == n["markdown"]
-    restored = c.post(f"/api/notes/{n['id']}/restore", json={"workspace_id": ws, "base_revision": 2, "revision": 1}).json()
+    restored = c.post(f"/api/notes/{n['id']}/restore", json={"workspace_id": ws, "base_save_seq": 2, "revision": 1}).json()
     assert restored["revision"] == 3 and restored["markdown"] == n["markdown"]
-    c.patch(f"/api/notes/{n['id']}", json={**restored, "base_revision": 3, "trashed": True})
+    c.patch(f"/api/notes/{n['id']}", json={**restored, "base_save_seq": 3, "trashed": True})
     assert c.get("/api/notes", params={"workspace_id": ws}).json() == []
     assert len(c.get("/api/notes", params={"workspace_id": ws, "trashed": True}).json()) == 1
 
@@ -57,12 +57,12 @@ def test_saved_provenance_survives_original_trash_and_restore():
     c, ws = setup()
     original = c.post("/api/notes", json={"workspace_id": ws, "markdown": "原始资料"}).json()
     linked = c.post("/api/notes", json={"workspace_id": ws, "sources": [{"kind": "note", "id": original["id"]}]}).json()
-    c.patch(f"/api/notes/{original['id']}", json={**original, "base_revision": 1, "trashed": True})
-    edited = c.patch(f"/api/notes/{linked['id']}", json={**linked, "base_revision": 1, "markdown": "继续写作"})
+    c.patch(f"/api/notes/{original['id']}", json={**original, "base_save_seq": 1, "trashed": True})
+    edited = c.patch(f"/api/notes/{linked['id']}", json={**linked, "base_save_seq": 1, "markdown": "继续写作"})
     assert edited.status_code == 200
-    cleared = c.patch(f"/api/notes/{linked['id']}", json={**edited.json(), "base_revision": 2, "sources": []})
+    cleared = c.patch(f"/api/notes/{linked['id']}", json={**edited.json(), "base_save_seq": 2, "sources": []})
     assert cleared.status_code == 200
-    restored = c.post(f"/api/notes/{linked['id']}/restore", json={"workspace_id": ws, "base_revision": 3, "revision": 1})
+    restored = c.post(f"/api/notes/{linked['id']}/restore", json={"workspace_id": ws, "base_save_seq": 3, "revision": 1})
     assert restored.status_code == 200
     assert restored.json()["sources"] == linked["sources"]
     assert c.post("/api/notes", json={"workspace_id": ws, "sources": [{"kind": "note", "id": original["id"]}]}).status_code == 409
@@ -72,12 +72,12 @@ def test_permanent_delete_requires_trash_access_and_current_revision():
     c, ws = setup()
     n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "正文"}).json()
     url = f"/api/notes/{n['id']}"
-    assert c.delete(url, params={"workspace_id": ws, "base_revision": 1}).status_code == 409
-    c.patch(url, json={**n, "base_revision": 1, "trashed": True})
-    assert c.delete(url, params={"workspace_id": ws, "base_revision": 1}).status_code == 409
+    assert c.delete(url, params={"workspace_id": ws, "base_save_seq": 1}).status_code == 409
+    c.patch(url, json={**n, "base_save_seq": 1, "trashed": True})
+    assert c.delete(url, params={"workspace_id": ws, "base_save_seq": 1}).status_code == 409
     other = second_client()
-    assert other.delete(url, params={"workspace_id": ws, "base_revision": 2}).status_code in (403, 404)
-    assert c.delete(url, params={"workspace_id": ws, "base_revision": 2}).status_code == 204
+    assert other.delete(url, params={"workspace_id": ws, "base_save_seq": 2}).status_code in (403, 404)
+    assert c.delete(url, params={"workspace_id": ws, "base_save_seq": 2}).status_code == 204
     assert c.get(url, params={"workspace_id": ws}).status_code == 404
     assert c.get(url + "/revisions/1", params={"workspace_id": ws}).status_code == 404
     from app.core.db import SessionLocal
@@ -95,7 +95,7 @@ def test_追加不被过期的修订号挡住_也不覆盖并发编辑():
     c, ws = setup()
     n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "开头"}).json()
     # 有人先编辑了一版,笔记来到 revision 2;下面追加时手里那份仍然是 revision 1。
-    c.patch(f"/api/notes/{n['id']}", json={**n, "base_revision": 1, "markdown": "开头(改过)"})
+    c.patch(f"/api/notes/{n['id']}", json={**n, "base_save_seq": 1, "markdown": "开头(改过)"})
 
     for line in ("第一句", "第二句", "第三句"):
         r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": line})
@@ -110,7 +110,7 @@ def test_追加不被过期的修订号挡住_也不覆盖并发编辑():
 def test_追加不能复活回收站里的笔记():
     c, ws = setup()
     n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "正文"}).json()
-    c.patch(f"/api/notes/{n['id']}", json={**n, "base_revision": 1, "trashed": True})
+    c.patch(f"/api/notes/{n['id']}", json={**n, "base_save_seq": 1, "trashed": True})
     r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": "追加"})
     assert r.status_code == 409
 
@@ -153,7 +153,7 @@ def test_收藏和主题在服务端筛_不受第一页限制():
     """此前笔记页拉回前 200 条再在浏览器里筛:收藏排在后面时,空态说「还没有收藏」,底下却挂着「加载更多」。"""
     c, ws = setup()
     starred = c.post("/api/notes", json={"workspace_id": ws, "title": "收藏的那篇", "markdown": "", "topics": ["研究"]}).json()
-    c.patch(f"/api/notes/{starred['id']}", json={**starred, "base_revision": 1, "favorite": True})
+    c.patch(f"/api/notes/{starred['id']}", json={**starred, "base_save_seq": 1, "favorite": True})
     for index in range(3):
         c.post("/api/notes", json={"workspace_id": ws, "title": f"后来的 {index}", "markdown": "", "topics": ["研究生", "日常"]})
 

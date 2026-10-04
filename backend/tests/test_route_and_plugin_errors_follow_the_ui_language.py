@@ -38,7 +38,7 @@ def test_a_domain_conflict_answers_in_the_requested_language() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "t", "markdown": "a"}).json()
-    body = {**note, "base_revision": 1, "markdown": "b"}
+    body = {**note, "base_save_seq": 1, "markdown": "b"}
     assert client.patch(f"/api/notes/{note['id']}", json=body).status_code == 200
     stale = client.patch(f"/api/notes/{note['id']}", json=body, headers=EN)
     assert stale.status_code == 409

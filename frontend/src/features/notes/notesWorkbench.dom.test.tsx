@@ -34,7 +34,7 @@ const { NotesView } = await import("./NotesView");
 
 afterEach(() => { cleanup(); localStorage.clear(); window.location.hash = ""; vi.clearAllMocks(); });
 
-const note = (id: string, title: string): Note => ({ ...emptyNote, id, workspace_id: "ws", title, revision: 1, created_at: "2026-09-24", updated_at: "2026-09-24" });
+const note = (id: string, title: string): Note => ({ ...emptyNote, id, workspace_id: "ws", title, revision: 1, save_seq: 1, created_at: "2026-09-24", updated_at: "2026-09-24" });
 
 it("换成另一篇以列表结尾的笔记,「无序列表」不会自己亮", async () => {
   const props = { onChange: () => {}, onReference: () => {}, workspaceId: "ws", noteId: "a" };

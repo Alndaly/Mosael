@@ -80,7 +80,7 @@ def test_经工具通道开卡_批准后按段改好_旧的一版留在版本记
 
     after = chat.read(note["id"])
     assert after["markdown"] == "# 本周\n\n周一和剪辑组对了节奏。\n\n周二写了脚本。\n\n周三拍了素材。"
-    assert after["revision"] == note["revision"] + 1
+    assert after["revision"] == note["save_seq"] + 1
     assert done["result"]["revision"] == after["revision"], "结果里带上新的修订号,模型接着改时不用再查一次"
     old = chat.client.get(
         f"/api/notes/{note['id']}/revisions/{note['revision']}", params={"workspace_id": chat.workspace_id}
@@ -124,7 +124,7 @@ def test_回收站里的笔记不改() -> None:
     chat = Chat()
     note = chat.note("正文")
     trashed = chat.client.patch(f"/api/notes/{note['id']}", json={
-        "workspace_id": chat.workspace_id, "base_revision": note["revision"], "title": note["title"],
+        "workspace_id": chat.workspace_id, "base_save_seq": note["save_seq"], "title": note["title"],
         "markdown": note["markdown"], "trashed": True,
     })
     assert trashed.status_code == 200, trashed.text
@@ -141,7 +141,7 @@ def test_开卡之后用户在别处又写了字_批准落在当前正文上_不
     card = chat.edit(note["id"], [{"kind": "replace", "find": "第一段。", "text": "改过的第一段。"}])["result"]
 
     typed = chat.client.patch(f"/api/notes/{note['id']}", json={
-        "workspace_id": chat.workspace_id, "base_revision": note["revision"], "title": note["title"],
+        "workspace_id": chat.workspace_id, "base_save_seq": note["save_seq"], "title": note["title"],
         "markdown": "第一段。\n\n第二段。\n\n用户刚写的第三段。",
     })
     assert typed.status_code == 200, typed.text
@@ -156,7 +156,7 @@ def test_开卡之后那段原文被改掉了_批准失败_什么都不写() -> 
     card = chat.edit(note["id"], [{"kind": "replace", "find": "第一段。", "text": "改过的第一段。"}])["result"]
 
     typed = chat.client.patch(f"/api/notes/{note['id']}", json={
-        "workspace_id": chat.workspace_id, "base_revision": note["revision"], "title": note["title"],
+        "workspace_id": chat.workspace_id, "base_save_seq": note["save_seq"], "title": note["title"],
         "markdown": "用户自己重写了开头。\n\n第二段。",
     })
     assert typed.status_code == 200, typed.text

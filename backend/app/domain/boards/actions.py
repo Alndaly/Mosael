@@ -627,7 +627,7 @@ def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, mark
 
     if note_id:
         note = get_note(db, workspace_id, note_id)
-        note = save_note(db, workspace_id, note_id, note.revision,
+        note = save_note(db, workspace_id, note_id, note.save_seq,
                          NoteContent.model_validate({**snapshot(note), "markdown": markdown}), actor=actor_id,
                          origin="board")
     else:

@@ -14997,13 +14997,13 @@
             }
           },
           {
-            "name": "base_revision",
+            "name": "base_save_seq",
             "in": "query",
             "required": true,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "title": "Base Revision"
+              "title": "Base Save Seq"
             }
           }
         ],
@@ -30776,6 +30776,10 @@
             "type": "integer",
             "title": "Revision"
           },
+          "save_seq": {
+            "type": "integer",
+            "title": "Save Seq"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -30792,6 +30796,7 @@
           "id",
           "workspace_id",
           "revision",
+          "save_seq",
           "created_at",
           "updated_at"
         ],
@@ -30895,10 +30900,10 @@
             "type": "string",
             "title": "Workspace Id"
           },
-          "base_revision": {
+          "base_save_seq": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Base Revision"
+            "title": "Base Save Seq"
           },
           "revision": {
             "type": "integer",
@@ -30909,7 +30914,7 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "base_revision",
+          "base_save_seq",
           "revision"
         ],
         "title": "NoteRestore"
@@ -31156,16 +31161,16 @@
             "type": "string",
             "title": "Workspace Id"
           },
-          "base_revision": {
+          "base_save_seq": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Base Revision"
+            "title": "Base Save Seq"
           }
         },
         "type": "object",
         "required": [
           "workspace_id",
-          "base_revision"
+          "base_save_seq"
         ],
         "title": "NoteUpdate"
       },

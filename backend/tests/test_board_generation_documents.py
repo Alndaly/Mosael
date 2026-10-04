@@ -77,7 +77,7 @@ def test_连进来的文档按连线先后取_笔记给钉住的那一版_素材
     ws = _workspace(client)
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "企划", "markdown": "第一版正文"}).json()
     edited = client.patch(f"/api/notes/{note['id']}", json={
-        "workspace_id": ws, "base_revision": note["revision"], "title": "企划", "markdown": "第二版正文",
+        "workspace_id": ws, "base_save_seq": note["save_seq"], "title": "企划", "markdown": "第二版正文",
     })
     assert edited.status_code == 200, edited.text
     brief = _parsed_document(client, ws, "brief.md", "# 简报\n今天发布。")

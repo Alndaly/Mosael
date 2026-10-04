@@ -102,6 +102,12 @@ _Avoid_: 前端 `for (const id of ids) await 单个操作(...)`;把顺序依赖(
 修订，客户端重新载入当前投影，不得用一份过期的完整 canvas 静默覆盖队友或异步任务的结果。
 `base_revision` 必填(存画布、在画板上跑产出者都是)。
 
+**笔记的版本号与保存序号(Note revision / save_seq)**:
+两件事，两个数。`Note.revision` 是**版本号**:版本记录里的「版本 N」,来源、画板文档格、`&revision=N` 引用链接钉住的
+都是它。`Note.save_seq` 是**保存序号**:笔记的乐观并发令牌，每次写入都 +1;保存、恢复、彻底删除都带
+`base_save_seq` 做条件写，对不上就 409。追加不带(见 `domain/notes.append_note`)。
+_Avoid_: 拿版本号做并发判断(`base_revision`)—— 那会逼着每次保存都开一版
+
 **产出者(Producer)**:
 画板上「一格里能产出东西」的那件事由谁来做 —— 生成、写字、念出来、截一段是四个内置产出者
 (`domain/boards/producers`,ADR 0021)。每个产出者声明能挂的格子种类(hosts)、要的权限、有无花钱

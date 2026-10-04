@@ -26,7 +26,7 @@ const { NoteDocument } = await import("./NotesView");
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
-const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "草稿", revision: 3, created_at: "2026-09-14", updated_at: "2026-09-14" };
+const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "草稿", revision: 3, save_seq: 3, created_at: "2026-09-14", updated_at: "2026-09-14" };
 
 async function failToSave() {
   // 本机草稿和服务端版本不一致 → 挂载即进「草稿待保存」,700ms 后自动保存,然后失败。

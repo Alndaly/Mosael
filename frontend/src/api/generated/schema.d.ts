@@ -11122,6 +11122,8 @@ export interface components {
             workspace_id: string;
             /** Revision */
             revision: number;
+            /** Save Seq */
+            save_seq: number;
             /**
              * Created At
              * Format: date-time
@@ -11179,8 +11181,8 @@ export interface components {
         NoteRestore: {
             /** Workspace Id */
             workspace_id: string;
-            /** Base Revision */
-            base_revision: number;
+            /** Base Save Seq */
+            base_save_seq: number;
             /** Revision */
             revision: number;
         };
@@ -11296,8 +11298,8 @@ export interface components {
             trashed: boolean;
             /** Workspace Id */
             workspace_id: string;
-            /** Base Revision */
-            base_revision: number;
+            /** Base Save Seq */
+            base_save_seq: number;
         };
         /** NotificationListOut */
         NotificationListOut: {
@@ -25221,7 +25223,7 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
-                base_revision: number;
+                base_save_seq: number;
             };
             header?: never;
             path: {

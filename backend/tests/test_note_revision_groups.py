@@ -32,7 +32,7 @@ def _setup():
 
 
 def _save(c, ws: str, note: dict, **change) -> dict:
-    response = c.patch(f"/api/notes/{note['id']}", json={**note, **change, "workspace_id": ws, "base_revision": note["revision"]})
+    response = c.patch(f"/api/notes/{note['id']}", json={**note, **change, "workspace_id": ws, "base_save_seq": note["save_seq"]})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -55,7 +55,7 @@ def test_同一个人接连保存_归成一版_展开看得到每一次() -> Non
     c, ws, note = _setup()
     for text in ("周一和剪辑组开会。", "周一和剪辑组开会。\n\n周二写脚本。", "周一和剪辑组开会。\n\n周二写完脚本。"):
         note = _save(c, ws, note, markdown=text)
-    assert note["revision"] == 4
+    assert note["save_seq"] == 4
 
     versions = _versions(c, ws, note["id"])
     assert [(v["revision"], v["group_start"], v["saves"], v["origin"]) for v in versions] == [
@@ -92,7 +92,7 @@ def test_一版最长半小时_一直不停笔也会切开() -> None:
 def test_恢复和追加单独成版_后面的编辑另起一组_标题改了记得住() -> None:
     c, ws, note = _setup()
     note = _save(c, ws, note, markdown="周一开会。周二写脚本。")
-    restored = c.post(f"/api/notes/{note['id']}/restore", json={"workspace_id": ws, "base_revision": 2, "revision": 1}).json()
+    restored = c.post(f"/api/notes/{note['id']}/restore", json={"workspace_id": ws, "base_save_seq": 2, "revision": 1}).json()
     note = _save(c, ws, restored, title="第一周周报")
     appended = c.post(f"/api/notes/{note['id']}/append", json={"workspace_id": ws, "markdown": "> 原话", "sources": []}).json()
 
@@ -118,7 +118,7 @@ def test_换了一个人写_另起一版() -> None:
     with SessionLocal() as db:
         colleague = db.query(User).filter(User.username != "tester").first()
         assert colleague is not None
-        save_note(db, ws, note["id"], note["revision"], NoteContent(title="周报", markdown="周一开会。周二写完脚本。"),
+        save_note(db, ws, note["id"], note["save_seq"], NoteContent(title="周报", markdown="周一开会。周二写完脚本。"),
                   actor=colleague.id, origin="edit")
         db.commit()
     versions = _versions(c, ws, note["id"])

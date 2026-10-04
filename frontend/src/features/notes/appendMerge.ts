@@ -24,13 +24,14 @@ export const APPEND_SEPARATOR = "\n\n";
  * @returns 合并后的草稿;不是一次纯追加时返回 `null`
  */
 export function mergeAppendedNote(known: Note, server: Note, local: Note): Note | null {
-  if (server.revision <= known.revision) return null;
+  if (server.save_seq <= known.save_seq) return null;
   const appended = appendedTail(known.markdown, server.markdown);
   if (appended === null) return null;
   return {
     ...local,
-    // 修订号跟着服务端走 —— 下一次自动保存的 base_revision 因此是对的,不会再撞 409。
+    // 保存序号、版本号跟着服务端走 —— 下一次自动保存的 base_save_seq 因此是对的,不会再撞 409。
     revision: server.revision,
+    save_seq: server.save_seq,
     updated_at: server.updated_at,
     markdown: join(local.markdown, appended),
     sources: mergeSources(known, server, local),

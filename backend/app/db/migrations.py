@@ -185,6 +185,20 @@ def _migrate_note_revisions_fold_consecutive_edits() -> None:
                 ), {"start": start, "added": added, "removed": removed, "changed": changed, "note": note_id, "revision": revision})
 
 
+def _migrate_notes_count_their_saves() -> None:
+    """笔记补一列保存序号 `save_seq`:乐观并发从此认它,版本号(revision)只管版本记录。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 Note 已经指望它在了。从当前版本号起数 —— 起点是多少不要紧,
+    只要以后每次写入都 +1;取版本号是让老库里每篇的序号都不小于它已经走过的写入次数。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(notes)"))}
+        if not columns or "save_seq" in columns:
+            return
+        conn.execute(text("ALTER TABLE notes ADD COLUMN save_seq INTEGER NOT NULL DEFAULT 1"))
+        conn.execute(text("UPDATE notes SET save_seq = revision"))
+
+
 def _migrate_workflow_revisions() -> None:
     """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
@@ -7655,6 +7669,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_note_revisions_remember_where_they_came_from,
                 # 同上,而且要排在上一步之后:分组要看 origin。
                 _migrate_note_revisions_fold_consecutive_edits,
+                # 同上:ORM 上的 Note 指望保存序号这一列在。
+                _migrate_notes_count_their_saves,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

@@ -65,14 +65,14 @@ def reference(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)
 def edit(note_id: str, body: NoteUpdate, db: Tx, user: CurrentUser):
-    return use_cases.save(db, user, body.workspace_id, note_id, body.base_revision,
+    return use_cases.save(db, user, body.workspace_id, note_id, body.base_save_seq,
                           NoteContent.model_validate(body.model_dump()))
 
 
 @router.delete("/notes/{note_id}", status_code=204)
 def permanently_delete(note_id: str, workspace_id: str, db: Tx, user: CurrentUser,
-                       base_revision: int = Query(ge=1)):
-    use_cases.purge(db, user, workspace_id, note_id, base_revision)
+                       base_save_seq: int = Query(ge=1)):
+    use_cases.purge(db, user, workspace_id, note_id, base_save_seq)
     return Response(status_code=204)
 
 
@@ -95,4 +95,4 @@ def revision_content(note_id: str, revision: int, workspace_id: str, db: DbSessi
 
 @router.post("/notes/{note_id}/restore", response_model=NoteOut)
 def restore(note_id: str, body: NoteRestore, db: Tx, user: CurrentUser):
-    return use_cases.restore(db, user, body.workspace_id, note_id, body.revision, body.base_revision)
+    return use_cases.restore(db, user, body.workspace_id, note_id, body.revision, body.base_save_seq)

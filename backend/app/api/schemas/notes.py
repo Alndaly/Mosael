@@ -22,14 +22,18 @@ class NotePageCreate(ApiModel):
 
 class NoteUpdate(NoteContent):
     workspace_id: str
-    base_revision: int = Field(ge=1)
+    #: 手里那份的保存序号(NoteOut.save_seq);别处刚存过就 409。
+    base_save_seq: int = Field(ge=1)
 
 
 class NoteOut(NoteContent):
     model_config = ConfigDict(from_attributes=True)
     id: str
     workspace_id: str
+    #: 当前是第几版(版本号)。
     revision: int
+    #: 保存序号:每次写入都 +1,下一次保存带着它(base_save_seq)。
+    save_seq: int
     created_at: datetime
     updated_at: datetime
 
@@ -61,13 +65,14 @@ class NoteRevisionOut(ApiModel):
 
 class NoteRestore(ApiModel):
     workspace_id: str
-    base_revision: int = Field(ge=1)
+    base_save_seq: int = Field(ge=1)
+    #: 恢复哪一版(版本号)。
     revision: int = Field(ge=1)
 
 
 class NoteAppend(ApiModel):
-    # **没有 base_revision。** 追加到末尾不需要调用方声明它读到的是哪一版 —— 见
-    # domain/notes.append_note:拿一个来自列表查询的旧修订号做 CAS,只会把并存的事判成冲突。
+    # **没有 base_save_seq。** 追加到末尾不需要调用方声明它读到的是哪一份 —— 见
+    # domain/notes.append_note:拿一个来自列表查询的旧保存序号做 CAS,只会把并存的事判成冲突。
     workspace_id: str
     markdown: str = Field(min_length=1, max_length=500000)
     sources: list[NoteSource] = Field(default_factory=list, max_length=200)

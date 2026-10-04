@@ -34,7 +34,7 @@ class NoteNotFound(NoteDomainError):
 
 
 class NoteConflict(NoteDomainError):
-    """笔记在,但当前状态下这件事做不了:修订号对不上、或者它在回收站里。"""
+    """笔记在,但当前状态下这件事做不了:保存序号对不上(别处刚存过)、或者它在回收站里。"""
 
     status = 409
 
@@ -138,41 +138,44 @@ def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: 
     return note
 
 
-def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, content: NoteContent, *,
+def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, content: NoteContent, *,
               actor: Actor, origin: NoteRevisionOrigin, restored_from: int | None = None,
               restored_sources: list[dict] | None = None) -> Note:
-    """写成新的一版。笔记上已有的来源(和要恢复的那一版上的)原样放行,不再按 `actor` 重判:它们落库时
+    """写成新的一版。`base_save_seq` 是调用方手里那份的保存序号,对不上就是别处刚存过(409)。
+
+    笔记上已有的来源(和要恢复的那一版上的)原样放行,不再按 `actor` 重判:它们落库时
     已经过了当时写的那个人的闸,同事改正文不该因为看不见别人引的那条消息而写不进;新加的来源照判。"""
     note = get_note(db, workspace_id, note_id)
-    if note.revision != base_revision:
+    if note.save_seq != base_save_seq:
         raise NoteConflict("noteErr_changedElsewhere")
     data = validate_content(db, workspace_id, content, actor=actor,
                             existing_sources=note.sources + (restored_sources or []))
     if data == snapshot(note):
         return note
-    # Compare-and-swap also catches two requests that read the same revision concurrently.
-    result = db.execute(update(Note).where(Note.id == note_id, Note.revision == base_revision).values(
-        **data, revision=base_revision + 1, updated_at=now(),
+    revision = note.revision + 1
+    # 条件写:两个请求读到同一个保存序号时,只有一个落得下。
+    result = db.execute(update(Note).where(Note.id == note_id, Note.save_seq == base_save_seq).values(
+        **data, revision=revision, save_seq=base_save_seq + 1, updated_at=now(),
     ), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
         # 条件 UPDATE 一行没动,不用回滚(那会把调用方这次用例里别的改动一起丢掉);
         # 让内存里这份过期,重试(append_note)时读到的是库里最新的一版。
         db.expire(note)
         raise NoteConflict("noteErr_changedElsewhere")
-    _record_revision(db, note_id, base_revision + 1, data, actor=actor, origin=origin, restored_from=restored_from)
+    _record_revision(db, note_id, revision, data, actor=actor, origin=origin, restored_from=restored_from)
     db.flush()
     db.refresh(note)
     return note
 
 
-def purge_note(db: Session, workspace_id: str, note_id: str, base_revision: int) -> None:
-    """永久删除。只删回收站里的,而且修订号得对得上 —— 条件删除:看到的那一版之后有人恢复或改过它,
+def purge_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int) -> None:
+    """永久删除。只删回收站里的,而且保存序号得对得上 —— 条件删除:看到的那一份之后有人恢复或改过它,
     就不删(409),而不是把别人刚救回来的那篇一并抹掉。"""
     note = get_note(db, workspace_id, note_id)
     if not note.trashed:
         raise NoteConflict("noteErr_trashFirst")
     result = db.execute(delete(Note).where(
-        Note.id == note_id, Note.workspace_id == workspace_id, Note.trashed.is_(True), Note.revision == base_revision,
+        Note.id == note_id, Note.workspace_id == workspace_id, Note.trashed.is_(True), Note.save_seq == base_save_seq,
     ))
     if result.rowcount != 1:
         raise NoteConflict("noteErr_changedBeforeDelete")
@@ -191,12 +194,12 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
                 sources: list[dict], *, actor: Actor, origin: NoteRevisionOrigin) -> Note:
     """把一段内容追加到笔记末尾。
 
-    **不拿调用方的 base_revision 做条件更新。** 追加到末尾与文档别处的编辑可交换,而调用方
-    手里的修订号往往来自一次列表查询,早就旧了 —— 用它做 CAS,只会把两件本可并存的事判成
+    **不拿调用方的保存序号做条件更新。** 追加到末尾与文档别处的编辑可交换,而调用方
+    手里的那份往往来自一次列表查询,早就旧了 —— 用它做 CAS,只会把两件本可并存的事判成
     冲突,然后让正在打字的那个人吃 409。
 
     写入本身仍然是 CAS 的(`save_note` 内部那条条件 UPDATE 一步没少),只是基准取**服务端
-    当前修订**:撞上真正的并发写就重读再追加,而不是把冲突推给用户。
+    当前的保存序号**:撞上真正的并发写就重读再追加,而不是把冲突推给用户。
     """
     for attempt in range(APPEND_RETRIES):
         note = get_note(db, workspace_id, note_id)
@@ -206,10 +209,10 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
         data["markdown"] = APPEND_SEPARATOR.join(filter(None, [note.markdown, markdown]))
         data["sources"] = note.sources + sources
         try:
-            return save_note(db, workspace_id, note_id, note.revision,
+            return save_note(db, workspace_id, note_id, note.save_seq,
                              NoteContent.model_validate(data), actor=actor, origin=origin)
         except NoteConflict:
-            # 只可能是修订号对不上:读到写之间有人抢先落地了一版,重读再追加就好。
+            # 只可能是保存序号对不上:读到写之间有人抢先存了,重读再追加就好。
             # 「在回收站里」同样是 NoteConflict,但它在 try 之外就抛掉了 —— 那种重试
             # 一万次也还在回收站。
             if attempt == APPEND_RETRIES - 1:

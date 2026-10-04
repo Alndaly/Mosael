@@ -48,7 +48,7 @@ vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
 const { NotesView } = await import("./NotesView");
 
 const note = (id: string, title: string, markdown: string): Note =>
-  ({ ...emptyNote, id, workspace_id: "ws", title, markdown, revision: 2, created_at: "2026-10-01", updated_at: "2026-10-01" });
+  ({ ...emptyNote, id, workspace_id: "ws", title, markdown, revision: 2, save_seq: 2, created_at: "2026-10-01", updated_at: "2026-10-01" });
 
 beforeEach(() => {
   notes.a = note("a", "周报", "周一和**剪辑组**对了节奏。\n\n周二写了脚本。");

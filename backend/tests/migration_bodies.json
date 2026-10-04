@@ -113,6 +113,7 @@
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-note-revisions-fold-consecutive-edits": "99040dbca5960ba7",
   "migrate-note-revisions-remember-where-they-came-from": "73cdc228d5d929e5",
+  "migrate-notes-count-their-saves": "05a1067821aea06d",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-outbound-allowlist": "616e80417ddef903",
   "migrate-partition-moves-are-settled-per-executor": "59890b00d35c0e14",

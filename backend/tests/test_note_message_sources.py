@@ -47,7 +47,7 @@ def test_别人私有对话的消息_写不进笔记_和不存在一模一样() 
 
     # 改一版、追加,同一道闸。
     note = mate.post("/api/notes", json={"workspace_id": workspace, "markdown": "正文"}).json()
-    edited = mate.patch(f"/api/notes/{note['id']}", json={**note, "base_revision": 1, "sources": [_cite(private)]})
+    edited = mate.patch(f"/api/notes/{note['id']}", json={**note, "base_save_seq": 1, "sources": [_cite(private)]})
     appended = mate.post(f"/api/notes/{note['id']}/append",
                          json={"workspace_id": workspace, "markdown": "补一句", "sources": [_cite(private)]})
     assert (edited.status_code, edited.json()) == (missing.status_code, missing.json())
@@ -91,7 +91,7 @@ def test_画板上同事改写文档格_笔记上原有的来源照留() -> None
     note = owner.post("/api/notes", json={"workspace_id": workspace, "title": "企划", "markdown": "第一版",
                                           "sources": [_cite(private)]}).json()
     board_id = _board(owner, workspace, [{"id": "doc", "kind": "document", "x": 0, "y": 0, "note_id": note["id"],
-                                          "note_revision": note["revision"], "text": "企划"}])
+                                          "note_revision": note["save_seq"], "text": "企划"}])
     _writable_profile(mate)
 
     done = _write(mate, board_id, workspace, "doc", "document", Seen("改过的正文"), prompt="改短一点")

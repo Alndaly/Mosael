@@ -199,7 +199,7 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
         else if(action==="duplicate") await createNote(workspace.id,{markdown:current.markdown,project_id:current.project_id,tags:current.tags,topics:current.topics,sources:current.sources,title:`${current.title||s.untitled} · ${s.copySuffix}`,trashed:false});
         else if(action==="delete") {
           if(!current.trashed)throw new Error("Move to trash first");
-          await purgeNote(workspace.id,current.id,current.revision);
+          await purgeNote(workspace.id,current.id,current.save_seq);
           localStorage.removeItem(`mosael.note.draft.${workspace.id}.${current.id}`);
           qc.removeQueries({queryKey:noteKeys.detail(workspace.id,current.id)});
           qc.removeQueries({queryKey:noteKeys.history(current.id)});
@@ -321,7 +321,7 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     if (busy.current || JSON.stringify(latest.current) === saved.current) return;
     busy.current = true; if (mounted.current) setStatus("saving"); const sent = latest.current;
     try { const result = await saveNote(sent); saved.current = JSON.stringify(result);
-      const current = latest.current; const next = current === sent ? result : {...current, revision: result.revision, updated_at: result.updated_at}; latest.current = next;
+      const current = latest.current; const next = current === sent ? result : {...current, revision: result.revision, save_seq: result.save_seq, updated_at: result.updated_at}; latest.current = next;
       if (current === sent) localStorage.removeItem(storageKey); else { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Keep the live draft. */ } }
       if (mounted.current) { setDraft(next); setStatus(current === sent ? "saved" : "draft"); setError(""); }
       qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), result); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)});
@@ -349,9 +349,9 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
   React.useEffect(() => {
     if (busy.current) return;
     const known = JSON.parse(saved.current) as Note;
-    // 服务端有了更新的一版、而这里没有没存的改动:整份跟上。此前只认「追加」这一种,于是别处
-    // 把它移进回收站、改了收藏,这里永远看不到,下一次自动保存还会拿旧修订号撞冲突。
-    if (note.revision > known.revision && JSON.stringify(latest.current) === saved.current) {
+    // 服务端有了更新的一份、而这里没有没存的改动:整份跟上。此前只认「追加」这一种,于是别处
+    // 把它移进回收站、改了收藏,这里永远看不到,下一次自动保存还会拿旧的保存序号撞冲突。
+    if (note.save_seq > known.save_seq && JSON.stringify(latest.current) === saved.current) {
       saved.current = JSON.stringify(note); latest.current = note; setDraft(note); setError(""); setStatus("saved");
       localStorage.removeItem(storageKey);
       return;
@@ -377,14 +377,14 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     readRevision(); window.addEventListener("hashchange", readRevision);
     return () => window.removeEventListener("hashchange", readRevision);
   }, [note.id]);
-  async function restore(revision: number) { if (busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await restoreNoteRevision(note.workspace_id, note.id, latest.current.revision, revision); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), next); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)}); } catch (e) { toast.error(errorText(e)); } }
+  async function restore(revision: number) { if (busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await restoreNoteRevision(note.workspace_id, note.id, latest.current.save_seq, revision); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), next); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)}); } catch (e) { toast.error(errorText(e)); } }
   async function deleteForever() {
     if (deleting || busy.current) return;
     await persist();
     if (JSON.stringify(latest.current) !== saved.current) return;
     setDeleting(true);
     try {
-      await purgeNote(note.workspace_id, note.id, latest.current.revision);
+      await purgeNote(note.workspace_id, note.id, latest.current.save_seq);
       localStorage.removeItem(storageKey);
       window.location.hash = "#/notes";
       qc.removeQueries({queryKey:noteKeys.detail(note.workspace_id, note.id)});

@@ -14,7 +14,7 @@ vi.mock("./NoteEditor", () => ({ NoteEditor: () => <div data-testid="editor" />,
 const { NoteDocument } = await import("./NotesView");
 afterEach(() => { cleanup(); localStorage.clear(); });
 
-const base: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "mosael", markdown: "正文", revision: 3, created_at: "x", updated_at: "x" };
+const base: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "mosael", markdown: "正文", revision: 3, save_seq: 3, created_at: "x", updated_at: "x" };
 
 function view(note: Note, client = new QueryClient()) {
   const controller = React.createRef<null>() as React.MutableRefObject<null>;
@@ -25,7 +25,7 @@ it("别处移进了回收站:打开着的这篇跟上,出现回收站提示条�
   const client = new QueryClient();
   const page = render(view(base, client));
   expect(screen.queryByText(/已移入回收站/)).toBeNull();
-  page.rerender(view({ ...base, trashed: true, revision: 4 }, client));
+  page.rerender(view({ ...base, trashed: true, revision: 4, save_seq: 4 }, client));
   expect(screen.getByText(/已移入回收站/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /移出回收站/ })).toBeInTheDocument();
   expect(document.querySelector(".note-status")?.getAttribute("data-state")).toBe("saved");

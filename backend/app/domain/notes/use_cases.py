@@ -102,10 +102,10 @@ def create(db: Session, user: User, workspace_id: str, content: NoteContent, *,
     return notes.create_note(db, workspace_id, content, actor=user.id, origin=origin)
 
 
-def save(db: Session, user: User, workspace_id: str, note_id: str, base_revision: int, content: NoteContent) -> Note:
+def save(db: Session, user: User, workspace_id: str, note_id: str, base_save_seq: int, content: NoteContent) -> Note:
     """编辑器里的保存。智能体不走这里改正文 —— 它走改笔记的确认卡(agent/confirmable/notes)。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return notes.save_note(db, workspace_id, note_id, base_revision, content, actor=user.id, origin="edit")
+    return notes.save_note(db, workspace_id, note_id, base_save_seq, content, actor=user.id, origin="edit")
 
 
 def append(
@@ -117,18 +117,18 @@ def append(
     return notes.append_note(db, workspace_id, note_id, markdown, sources, actor=user.id, origin=origin)
 
 
-def purge(db: Session, user: User, workspace_id: str, note_id: str, base_revision: int) -> None:
+def purge(db: Session, user: User, workspace_id: str, note_id: str, base_save_seq: int) -> None:
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    notes.purge_note(db, workspace_id, note_id, base_revision)
+    notes.purge_note(db, workspace_id, note_id, base_save_seq)
 
 
-def restore(db: Session, user: User, workspace_id: str, note_id: str, number: int, base_revision: int) -> Note:
+def restore(db: Session, user: User, workspace_id: str, note_id: str, number: int, base_save_seq: int) -> Note:
     ensure_workspace_perm(db, user, workspace_id, "edit")
     notes.get_note(db, workspace_id, note_id)
     row = db.get(NoteRevision, (note_id, number))
     if row is None:
         raise NotVisible("routeErr_noteVersionNotFound")
     return notes.save_note(
-        db, workspace_id, note_id, base_revision, NoteContent.model_validate(row.snapshot),
+        db, workspace_id, note_id, base_save_seq, NoteContent.model_validate(row.snapshot),
         actor=user.id, origin="restore", restored_from=number, restored_sources=row.snapshot["sources"],
     )

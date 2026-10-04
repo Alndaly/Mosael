@@ -23,7 +23,10 @@ class Note(Base):
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     trashed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 当前是第几版(版本记录里的版本号,来源 / 画板文档格 / 引用链接钉的就是它)。**不是**乐观并发的基准 —— 那是 save_seq。
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    #: 保存序号:每次写入(哪怕只改了收藏)都 +1。保存、恢复、彻底删除都拿它做条件写(base_save_seq)。
+    save_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

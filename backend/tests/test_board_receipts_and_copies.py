@@ -394,8 +394,8 @@ def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()
     item = {"id": "doc", "kind": "document", "x": 0, "y": 0, "note_id": note["id"], "note_revision": 1}
     board_id = _board(client, ws, {"items": [item], "edges": []})
-    trash = client.patch(f"/api/notes/{note['id']}", json={**note, "base_revision": 1, "trashed": True}).json()
-    client.delete(f"/api/notes/{note['id']}", params={"workspace_id": ws, "base_revision": trash["revision"]})
+    trash = client.patch(f"/api/notes/{note['id']}", json={**note, "base_save_seq": 1, "trashed": True}).json()
+    client.delete(f"/api/notes/{note['id']}", params={"workspace_id": ws, "base_save_seq": trash["save_seq"]})
     return board_id, item
 
 

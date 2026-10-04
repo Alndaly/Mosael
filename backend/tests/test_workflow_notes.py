@@ -21,7 +21,7 @@ def setup():
 
 def test_read_current_and_pinned_revision_and_citations():
     client, ws, _, note, wid = setup()
-    changed = client.patch('/api/notes/'+note['id'], json={**note, 'base_revision': 1, 'markdown': '新版内容'}).json()
+    changed = client.patch('/api/notes/'+note['id'], json={**note, 'base_save_seq': 1, 'markdown': '新版内容'}).json()
     assert changed['revision'] == 2
     with SessionLocal() as db:
         wf = db.get(Workflow, wid)
@@ -79,8 +79,8 @@ def test_board_pin_survives_source_updates_and_handles_deleted_source():
     assert client.post('/api/boards', json={**payload, 'workspace_id': other}).status_code == 400
     bad = {**item, 'note_revision': True}
     assert client.post('/api/boards', json={**payload, 'canvas': {'items': [bad]}}).status_code == 400
-    trash = client.patch('/api/notes/'+note['id'], json={**note, 'base_revision': 1, 'trashed': True}).json()
-    client.delete('/api/notes/'+note['id'], params={'workspace_id': ws, 'base_revision': trash['revision']})
+    trash = client.patch('/api/notes/'+note['id'], json={**note, 'base_save_seq': 1, 'trashed': True}).json()
+    client.delete('/api/notes/'+note['id'], params={'workspace_id': ws, 'base_save_seq': trash['save_seq']})
     assert client.get(f"/api/notes/{note['id']}/reference", params={'workspace_id': ws, 'revision': 1}).status_code == 404
     moved = {**item, 'x': 120}
     result = client.patch('/api/boards/'+board['id'], json={**payload, 'base_revision': board['revision'], 'canvas': {'items': [moved], 'edges': []}})

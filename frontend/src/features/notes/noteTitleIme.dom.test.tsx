@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 
-const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "", revision: 3, created_at: "x", updated_at: "x" };
+const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "", revision: 3, save_seq: 3, created_at: "x", updated_at: "x" };
 
 it("组词期间自动保存回来了:框里的字不被改写,上屏后标题是中文、后面的空格还在", async () => {
   const controller = React.createRef<null>() as React.MutableRefObject<null>;

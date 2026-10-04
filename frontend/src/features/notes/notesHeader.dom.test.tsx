@@ -33,7 +33,7 @@ vi.stubGlobal("ResizeObserver", class {
 const { NoteDocument } = await import("./NotesView");
 const { visibleFormatGroups } = await import("./NoteFormatToolbar");
 
-const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "周报", markdown: "周一开了会。", revision: 1, created_at: "x", updated_at: "x" };
+const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "周报", markdown: "周一开了会。", revision: 1, save_seq: 1, created_at: "x", updated_at: "x" };
 
 beforeEach(() => { layout.width = 1200; layout.observers = []; });
 afterEach(() => { cleanup(); localStorage.clear(); });

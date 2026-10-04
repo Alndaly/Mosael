@@ -62,7 +62,7 @@ def test_笔记的三档也没变() -> None:
     ws = c.post("/api/workspaces", json={"name": "Notes"}).json()["id"]
     assert c.get("/api/notes/nope", params={"workspace_id": ws}).status_code == 404
     note = c.post("/api/notes", json={"workspace_id": ws, "markdown": "正文"}).json()
-    body = {**note, "base_revision": note["revision"], "markdown": "改过"}
+    body = {**note, "base_save_seq": note["save_seq"], "markdown": "改过"}
     assert c.patch(f"/api/notes/{note['id']}", json=body).status_code == 200
     assert c.patch(f"/api/notes/{note['id']}", json=body).status_code == 409   # 修订号已过期
     assert c.post("/api/notes", json={"workspace_id": ws, "tags": ["x" * 81]}).status_code == 422

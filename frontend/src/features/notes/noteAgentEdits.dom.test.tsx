@@ -24,7 +24,7 @@ const { NoteDocument } = await import("./NotesView");
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
 const base: Note = {
-  ...emptyNote, id: "n1", workspace_id: "ws", title: "周报", revision: 3, created_at: "x", updated_at: "x",
+  ...emptyNote, id: "n1", workspace_id: "ws", title: "周报", revision: 3, save_seq: 3, created_at: "x", updated_at: "x",
   markdown: "开头不动。\n\n要改的一段。\n\n结尾也不动。",
 };
 
@@ -50,7 +50,7 @@ it("服务端改了一段:编辑器当场变、不算本地草稿;撤销退回�
   });
   expect(beforeCaret()).toBe("结尾");
 
-  page.rerender(view({ ...base, revision: 4, markdown: "开头不动。\n\n智能体改好的一段。\n\n结尾也不动。" }, client));
+  page.rerender(view({ ...base, revision: 4, save_seq: 4, markdown: "开头不动。\n\n智能体改好的一段。\n\n结尾也不动。" }, client));
 
   await waitFor(() => expect(prose()).toContain("智能体改好的一段。"));
   expect(prose()).toContain("开头不动。");
