@@ -6,6 +6,11 @@ Evolink 每个任务的终态回包里都带着扣费:`usage.cost.{credits, usd,
 
 币种照服务商报的记,不换算。Evolink 同时报 usd 和 cny(都是同一笔积分折出来的):记 usd —— Evolink 的价目页
 按美元挂牌,内置参考价也是美元,同一个模型的估算和实扣落在同一个币种里,才加得起来、比得起来。
+
+**按积分(credits)记,不按回包里的 usd 记。**回包里的 usd 四舍五入到了 4 位:用户在 Evolink 后台核对过三笔,积分
+分毫不差(0.3682 / 1.02 / 0.3682),而后台的美元是 $0.005415 / $0.015000 / $0.005415,回包写的是 0.0055 / 0.015 /
+0.0055 —— 小图每张差一百多 micros。后台的美元正是「积分 ÷ 68」(0.3682 / 68 = 0.0054147…,1.02 / 68 = 0.015,
+13.5 / 68 = 0.19853,回包四舍五入成 0.199)。所以有积分时按积分折美元,积分本身也记进计量,对账按积分对。
 """
 
 from __future__ import annotations
@@ -25,13 +30,28 @@ from app.ai.providers.contracts.generation import (
 from app.core.db import SessionLocal
 from app.db.models import ProviderUsageEvent
 from app.domain.billing.usage import billable, create_pricing_rule
-from tests.billing_samples import EVOLINK_SEEDANCE_MINI
+from tests.billing_samples import EVOLINK_GPT_IMAGE_2_LOW, EVOLINK_SEEDANCE_MINI
 from tests.util import add_provider, fresh_client, wait_status
 
 
 def test_evolink_reports_the_charge_in_its_task_payload() -> None:
     reported = EvolinkGenerationAdapter("video").reported_usage(EVOLINK_SEEDANCE_MINI["raw"])
-    assert (reported.cost_micros, reported.currency) == (199_000, "USD")
+    assert (reported.cost_micros, reported.currency) == (198_529, "USD"), "13.5 积分 ÷ 68"
+    assert reported.units == {"credits": 13.5}
+
+
+def test_the_charge_matches_the_evolink_back_office_to_the_micro() -> None:
+    """后台核对过的两笔:gpt-image-2 低画质 1K 一张 0.3682 积分 = $0.005415;gpt-image-2-beta 一张 1.02 积分 = $0.015。"""
+    adapter = EvolinkGenerationAdapter("image")
+    low = adapter.reported_usage(EVOLINK_GPT_IMAGE_2_LOW["raw"])
+    assert (low.cost_micros, low.currency, low.units) == (5_415, "USD", {"credits": 0.3682})
+    beta = adapter.reported_usage({"status": "completed", "usage": {"cost": {"credits": 1.02, "usd": 0.015, "cny": 0.102}, "credits_used": 1.02}})
+    assert beta.cost_micros == 15_000
+
+
+def test_without_credits_the_reported_dollars_are_taken_as_is() -> None:
+    reported = EvolinkGenerationAdapter("video").reported_usage({"usage": {"cost": {"usd": 0.2}}})
+    assert (reported.cost_micros, reported.currency, reported.units) == (200_000, "USD", {})
 
 
 def test_a_payload_without_a_charge_reports_none() -> None:
@@ -39,7 +59,7 @@ def test_a_payload_without_a_charge_reports_none() -> None:
     assert adapter.reported_usage({"status": "completed"}).cost_micros is None
     assert adapter.reported_usage({"usage": {"credits_used": 13.5}}).cost_micros is None, "只有积分、没有钱数,不替它折算"
     wrapped = adapter.reported_usage({"data": EVOLINK_SEEDANCE_MINI["raw"]})
-    assert wrapped.cost_micros == 199_000, "网关有时把任务包在 data 里"
+    assert wrapped.cost_micros == 198_529, "网关有时把任务包在 data 里"
 
 
 def test_a_reported_charge_beats_the_price_list() -> None:
@@ -102,5 +122,5 @@ def test_the_runner_books_the_reported_charge() -> None:
     assert wait_status(client, job_id, timeout=30) == "succeeded"
     with SessionLocal() as db:
         usage = db.scalars(select(ProviderUsageEvent).where(ProviderUsageEvent.job_id == job_id)).one()
-    assert (usage.cost_micros, usage.currency, usage.cost_confidence) == (199_000, "USD", "reported")
-    assert usage.units["video_seconds"] == 5.0
+    assert (usage.cost_micros, usage.currency, usage.cost_confidence) == (198_529, "USD", "reported")
+    assert usage.units["video_seconds"] == 5.0 and usage.units["credits"] == 13.5

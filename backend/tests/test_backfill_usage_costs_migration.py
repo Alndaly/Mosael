@@ -104,7 +104,7 @@ def test_backfill_prices_what_can_now_be_priced_and_nothing_else() -> None:
     assert seedance[4]["output_tokens"] == 110_902 and "token_estimate" not in seedance[4], "计量照现在的读法补齐"
     assert after["gpt-client"][:3] == (62_715, "USD", "backfilled")
     assert after["gpt-client"][4]["image_input_tokens"] == 1120
-    assert after["evolink"][:3] == (199_000, "USD", "backfilled"), "回包里的实扣"
+    assert after["evolink"][:3] == (198_529, "USD", "backfilled"), "回包里的实扣(13.5 积分 ÷ 68)"
     assert after["late-rule"][:3] == (250_000, "CNY", "backfilled"), "先用了、后来才配的价"
     assert after["rejected"][:4] == (0, "CNY", "not_billed", None)
     for key in ("partial", "timed-out", "no-rule", "subscription-chat", "failed-chat"):

@@ -97,6 +97,25 @@ EVOLINK_SEEDANCE_MINI = {
     },
 }
 
+#: Evolink 上的 gpt-image-2,低画质 1K 1:1 一张(付费冒烟实拍)。用户在 Evolink 后台核对过:0.3682 积分 = $0.005415,
+#: 回包里的 usd 四舍五入成了 0.0055。
+EVOLINK_GPT_IMAGE_2_LOW = {
+    "raw": {
+        "status": "completed",
+        "duration": 12,
+        "usage": {
+            "cost": {"credits": 0.3682, "usd": 0.0055, "cny": 0.037},
+            "credits_used": 0.3682,
+            "image_cached_input_tokens": 0,
+            "image_input_tokens": 0,
+            "image_output_tokens": 196,
+            "text_cached_input_tokens": 0,
+            "text_input_tokens": 27,
+            "total_tokens": 223,
+        },
+    },
+}
+
 #: 方舟 Seedance 2.0,480p 5 秒、带音频。当时适配器还没读 completion_tokens,账上是未定价。
 SEEDANCE_480P_WITH_AUDIO = {
     "units": {

@@ -201,7 +201,7 @@ def test_a_finished_seedance_task_whose_download_failed_is_billed_by_the_reporte
 
 def test_a_finished_evolink_task_whose_download_failed_keeps_the_reported_charge() -> None:
     usage = _run("fake-evolink-dl", "seedance-2.0-mini-image-to-video", rule=("video_second", 40_000, "USD"))
-    assert (usage.status, usage.cost_micros, usage.currency, usage.cost_confidence) == ("failed", 199_000, "USD", "reported")
+    assert (usage.status, usage.cost_micros, usage.currency, usage.cost_confidence) == ("failed", 198_529, "USD", "reported")
 
 
 def test_a_task_the_provider_failed_without_charging_still_costs_nothing() -> None:

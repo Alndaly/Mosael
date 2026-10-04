@@ -27,7 +27,7 @@ One generation returns **two tracks** (product page https://evolink.ai/suno); bo
 from __future__ import annotations
 
 import mimetypes
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -265,27 +265,41 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
 #: 挂牌,内置参考价也是美元,同一个模型的估算和实扣落在同一个币种里才加得起来、比得起来。
 _REPORTED_CURRENCIES = (("usd", "USD"), ("cny", "CNY"))
 
+#: 一积分折多少美元的倒数:Evolink 后台的美元 = 积分 ÷ 68。用户在后台核对过三笔(2026-10-05):0.3682 积分 =
+#: $0.005415、1.02 积分 = $0.015000,早先一条 13.5 积分 = 回包 $0.199(= 0.19853 四舍五入)。回包里的 usd 只保留
+#: 4 位小数,一张低画质小图就差一百多 micros;按积分折才和后台分毫不差。
+_CREDITS_PER_USD = Decimal(68)
+
+
+def _decimal(value: Any) -> Decimal | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return amount if amount.is_finite() and amount >= 0 else None
+
 
 def reported_charge(payload: dict[str, Any]) -> ReportedUsage:
     """终态回包里**这一次实际扣了多少钱**:`usage.cost.{credits, usd, cny}`(文档 Task Query,真机回包同形)。
 
-    只有积分(`credits_used`)、没有钱数的不替它折算 —— 积分换多少钱是账户的事,我们不知道。
+    **有积分就按积分记**:积分是 Evolink 实际扣的东西,后台的美元由它折出来(÷ 68),积分本身也记进计量,
+    对账按积分对。没有积分才退回回包里的钱数(美元在前)。只有 `credits_used`、没有 `cost` 的不替它折算。
     """
     task = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     usage = task.get("usage") if isinstance(task, dict) else None
     cost = usage.get("cost") if isinstance(usage, dict) else None
     if not isinstance(cost, dict):
         return ReportedUsage()
+    credits = _decimal(cost.get("credits"))
+    if credits is not None:
+        micros = int((credits * 1_000_000 / _CREDITS_PER_USD).to_integral_value(rounding=ROUND_HALF_UP))
+        return ReportedUsage(units={"credits": float(credits)}, cost_micros=micros, currency="USD")
     for key, currency in _REPORTED_CURRENCIES:
-        amount = cost.get(key)
-        if isinstance(amount, bool) or not isinstance(amount, (int, float, str)):
-            continue
-        try:
-            micros = int((Decimal(str(amount)) * 1_000_000).to_integral_value())
-        except InvalidOperation:
-            continue
-        if micros >= 0:
-            return ReportedUsage(cost_micros=micros, currency=currency)
+        amount = _decimal(cost.get(key))
+        if amount is not None:
+            return ReportedUsage(cost_micros=int((amount * 1_000_000).to_integral_value()), currency=currency)
     return ReportedUsage()
 
 
