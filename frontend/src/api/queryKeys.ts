@@ -150,6 +150,8 @@ export const noteKeys = {
   /** 不带修订号是失效用的前缀。 */
   history: (noteId: string, revision?: number) =>
     (revision === undefined ? (["note-history", noteId] as const) : (["note-history", noteId, revision] as const)),
+  /** 某一版的内容。版本不可变,读过就一直有效;挂在 history 前缀下,随整篇的历史一起失效。 */
+  revisionContent: (noteId: string, revision: number) => ["note-history", noteId, "content", revision] as const,
   sourceMessage: (workspaceId: string, messageId: string) => ["note-source", workspaceId, "message", messageId] as const,
 };
 

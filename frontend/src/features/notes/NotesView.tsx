@@ -8,8 +8,6 @@ import { PageLoadError } from "@/components/layout/EmptyState";
 import {
   createNote,
   getNote,
-  getNoteRevision,
-  listNoteRevisions,
   listNotes,
   listNoteTopics,
   purgeNote,
@@ -17,7 +15,6 @@ import {
   saveNote,
   type Note,
   type NoteContent,
-  type NoteRevision,
 } from "@/api/domains/notes";
 import { noteKeys } from "@/api/queryKeys";
 import { noteHref, openNote } from "@/lib/deepLink";
@@ -27,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { DraftTextarea } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
@@ -40,11 +36,12 @@ import type { ComposerChip } from "@/lib/composerChip";
 import { plainExcerpt } from "@/lib/plainExcerpt";
 import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { noteAgentContext } from "./noteAgentContext";
+import { NoteHistoryDialog } from "./NoteHistoryDialog";
 import type { NoteSelection } from "./noteSelection";
 import type { NoteAiAction } from "./NoteSelectionToolbar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { NoteEditor, NoteReader } from "./NoteEditor";
+import { NoteEditor } from "./NoteEditor";
 import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
@@ -315,22 +312,10 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
   //: 换了看的方式,编辑器重建、选区没了 —— 助手那边也别再带着上一个模式里的那段。
   React.useEffect(() => { onSelectionChange?.(null); }, [mode, onSelectionChange]);
   const [history, setHistory] = React.useState(false);
+  //: 版本记录打开时选中哪一版:「查看引用版本」进来的是引用的那一版,从菜单进来的是当前版本。
+  const [historyFocus, setHistoryFocus] = React.useState<number | null>(null);
   const [referenceRevision,setReferenceRevision] = React.useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false); const [deleting, setDeleting] = React.useState(false);
-  const historyPreview = React.useRef<HTMLDivElement>(null);
-  const historyRequest = React.useRef(0);
-  const [pendingVersion, setPendingVersion] = React.useState<number | null>(null);
-  const [historic, setHistoric] = React.useState<NoteRevision | null>(null);
-  const revisions = useQuery({ queryKey: noteKeys.history(note.id, draft.revision), queryFn: () => listNoteRevisions(note.workspace_id, note.id), enabled: history });
-  const loadVersion = React.useCallback(async (revision: number) => {
-    const request = ++historyRequest.current; setPendingVersion(revision);
-    try {
-      const value = await getNoteRevision(note.workspace_id, note.id, revision);
-      if (request === historyRequest.current) { setHistoric(value); if (historyPreview.current) historyPreview.current.scrollTop = 0; }
-    } catch (e) { if (request === historyRequest.current) toast.error(errorText(e)); }
-    finally { if (request === historyRequest.current) setPendingVersion(null); }
-  }, [note.id, note.workspace_id]);
-  React.useEffect(() => { if (historyPreview.current) historyPreview.current.scrollTop = 0; }, [historic?.revision]);
   function change(patch: Partial<NoteContent>) { const next = {...latest.current, ...patch}; latest.current = next; try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Server autosave remains available when device storage is full. */ } setDraft(next); setStatus("draft"); }
   const persist = React.useCallback(async () => {
     if (busy.current || JSON.stringify(latest.current) === saved.current) return;
@@ -392,7 +377,7 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     readRevision(); window.addEventListener("hashchange", readRevision);
     return () => window.removeEventListener("hashchange", readRevision);
   }, [note.id]);
-  async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await restoreNoteRevision(note.workspace_id, note.id, latest.current.revision, historic.revision); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), next); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)}); } catch (e) { toast.error(errorText(e)); } }
+  async function restore(revision: number) { if (busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await restoreNoteRevision(note.workspace_id, note.id, latest.current.revision, revision); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), next); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)}); } catch (e) { toast.error(errorText(e)); } }
   async function deleteForever() {
     if (deleting || busy.current) return;
     await persist();
@@ -421,13 +406,13 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><IconButton unstyled className="note-icon" label={s.actions} aria-haspopup="menu"><MoreHorizontal size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>{/* 和笔记列表的右键菜单同一套条目(MenuItem / MenuItemBody)。 */}
       <MenuContent label={s.actions} align="end">
         <MenuItem icon={<Download />} label={s.export} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }} />
-        <MenuItem icon={<History />} label={s.history} onClick={() => { setMoreOpen(false); setHistory(true); }} />
+        <MenuItem icon={<History />} label={s.history} onClick={() => { setMoreOpen(false); setHistoryFocus(null); setHistory(true); }} />
         <MenuItem icon={<Info />} label={s.source} onClick={() => { setMoreOpen(false); setProperties(!properties); }} />
         <MenuSeparator />
         <MenuItem icon={draft.trashed ? <RotateCcw /> : <Trash2 />} label={draft.trashed ? s.restoreTrash : s.moveTrash} destructive={!draft.trashed} onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} />
       </MenuContent></Popover>
     </div></header>{draft.trashed && <div className="note-trash-notice" role="status"><div className="note-notice-row"><span>{s.inTrash}</span><span className="note-notice-actions"><button onClick={() => change({trashed: false})}><RotateCcw size={13} aria-hidden="true" />{s.restoreTrash}</button><button className="note-notice-danger" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={13} aria-hidden="true" />{s.deleteForever}</button></span></div></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
-    {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div></div>}
+    {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistoryFocus(referenceRevision);setHistory(true);}}>{s.viewReference}</button></div></div>}
     <div className="note-body"><article className="note-paper">
       {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={!draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
         title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} />}
@@ -437,18 +422,8 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     </article></div></main>
     {properties && <aside className="note-properties"><header><strong>{s.source}</strong><IconButton unstyled className="note-icon" label={s.close} onClick={()=>setProperties(false)}><X size={15}/></IconButton></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={draft.trashed} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={draft.trashed} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
     <ConfirmDialog open={confirmDelete} title={`${s.deleteForever} · ${draft.title || s.untitled}`} body={s.deleteWarning} onCancel={() => { if (!deleting) setConfirmDelete(false); }} pending={deleting} onConfirm={() => void deleteForever()} />
-    <Dialog open={history} onOpenChange={setHistory}><DialogContent className="flex h-[min(80dvh,800px)] max-w-5xl flex-col gap-4 overflow-hidden">
-      <DialogTitle className="shrink-0">{s.history}</DialogTitle><p className="shrink-0 text-sm text-muted-foreground">{s.historyHint}</p>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(100px,160px)_minmax(0,1fr)] gap-4 sm:gap-6">
-        <div className="note-history-list min-h-0 overflow-y-auto overscroll-contain pr-1" aria-label={s.history}>
-          {revisions.data?.map(r => <button key={r.revision} className="note-list-row" aria-current={(pendingVersion ?? historic?.revision) === r.revision} onClick={() => void loadVersion(r.revision)}>{s.version} {r.revision}<time>{new Date(r.created_at).toLocaleString()}</time></button>)}
-        </div>
-        <div ref={historyPreview} className="note-history-preview min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-1" aria-label={s.versionContent}>
-          {pendingVersion ? <p className="p-4 text-sm text-muted-foreground">{s.loading}</p> : historic ? <><h3 className="mb-5 break-words text-lg font-semibold">{historic.title}</h3><NoteReader markdown={historic.markdown} /></> : <p className="p-4 text-sm text-muted-foreground">{s.chooseVersion}</p>}
-        </div>
-      </div>
-      <div className="flex shrink-0 justify-end"><Button disabled={!historic || !!pendingVersion} onClick={() => void restore()}>{s.restore}</Button></div>
-    </DialogContent></Dialog>
+    <NoteHistoryDialog open={history} onOpenChange={setHistory} workspaceId={note.workspace_id} noteId={note.id}
+      current={{ revision: draft.revision, title: draft.title, markdown: draft.markdown }} focusRevision={historyFocus} onRestore={restore} />
   </>;
 }
 

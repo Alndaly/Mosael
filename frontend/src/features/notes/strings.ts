@@ -6,7 +6,6 @@ const zh = {
 
   actions: "笔记操作", close: "关闭属性",
   insert: "插入",
-  chooseVersion: "选择左侧版本查看内容。",
   deleteForever: "彻底删除", deleteWarning: "笔记及所有历史版本将被永久删除，无法恢复。已有引用会保留，但无法再打开来源。", inTrash: "这篇笔记已移入回收站。恢复后可以继续编辑。",
   bold: "粗体", italic: "斜体", strike: "删除线", heading: "段落样式", paragraph: "正文", headingLevels: ["一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"], bulletList: "无序列表", numberedList: "有序列表", taskList: "任务列表", quote: "引用块", code: "代码块", divider: "分隔线", image: "插入图片", imageHint: "也可粘贴或拖入", uploading: "图片上传中…", undo: "撤销", redo: "重做", nothingToUndo: "没有可撤销的操作", nothingToRedo: "没有可重做的操作", link: "网页链接", apply: "应用", table: "表格", insertTable: "插入 3 × 3 表格", addRow: "在下方插入行", addColumn: "在右侧插入列", deleteRow: "删除当前行", deleteColumn: "删除当前列", deleteTable: "删除表格",
   listEmpty: "还没有笔记", listEmptyHint: "写下第一个想法，慢慢积累你的创作资料。", trashEmpty: "回收站是空的", trashHint: "移入回收站的笔记可以在这里恢复。", favoriteEmpty: "还没有收藏", favoriteHint: "给常用笔记点亮星标，下次更容易找到。", searchHint: "换个关键词，或清除筛选再看看。", clearSearch: "清除筛选",
@@ -25,8 +24,8 @@ const zh = {
   willSave: (chars:number, sources:number)=>`将写入约 ${chars} 字，附 ${sources} 条来源`,
   saveAll: "全部存为笔记", saveAllTranscript: "把整份逐字稿存成一篇笔记。选中了片段就只存选中的那些。",
   saveAllSubtitles: "把整条字幕轨存成一篇笔记；有译文时原文与译文一起写入。",
-  historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
-  askAi: "问 AI", askAiHint: "带着选中的文字问助手", passageGone: "那段文字已经改过了,没在笔记里找到。", focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
+  localDraft: "已恢复本机未保存草稿", more: "加载更多",
+  askAi: "问 AI", askAiHint: "带着选中的文字问助手", passageGone: "那段文字已经改过了,没在笔记里找到。", focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…",
   selection: {
     toolbar: "选区工具", inlineCode: "行内代码", highlight: "高亮", unlink: "去掉链接", linkPlaceholder: "粘贴 https:// 链接后回车",
     ai: "AI 动作", more: "更多", copy: "复制", copied: "已复制", quote: "引用到对话", addToBoard: "加到画板",
@@ -61,6 +60,23 @@ const zh = {
     copied: "已复制",
     failed: "复制失败，请选中代码手动复制。",
   },
+  //: 版本记录弹窗(NoteHistoryDialog)。
+  versions: {
+    hint: "恢复会新建一个版本，现有版本都还在。",
+    list: "版本列表",
+    current: "当前版本",
+    version: (n: number) => `版本 ${n}`,
+    today: "今天",
+    yesterday: "昨天",
+    copy: "复制这一版的内容",
+    copied: (n: number) => `已复制版本 ${n} 的正文`,
+    restore: "恢复此版本",
+    restoreTitle: (n: number) => `恢复到版本 ${n}？`,
+    restoreBody: (n: number, next: number) => `会新建版本 ${next}，内容和版本 ${n} 一样。现有的版本都还在，随时可以再换回来。`,
+    restoreConfirm: "恢复",
+    onlyOne: "这篇笔记目前只有这一个版本。之后每次编辑、智能体修改或恢复，都会在这里留下一版。",
+    loadFailed: "这一版没读出来",
+  },
 };
 type Strings = typeof zh;
 const en: Strings = {
@@ -70,7 +86,6 @@ const en: Strings = {
 
   actions: "Note actions", close: "Close properties",
   insert: "Insert",
-  chooseVersion: "Select a version to preview its contents.",
   deleteForever: "Delete permanently", deleteWarning: "This note and all its revisions will be permanently deleted. Existing references will remain, but their source will no longer open.", inTrash: "This note is in trash. Restore it to continue editing.",
   bold: "Bold", italic: "Italic", strike: "Strikethrough", heading: "Paragraph style", paragraph: "Paragraph", headingLevels: ["Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"], bulletList: "Bullet list", numberedList: "Numbered list", taskList: "Task list", quote: "Blockquote", code: "Code block", divider: "Divider", image: "Insert image", imageHint: "Or paste / drop it in", uploading: "Uploading image…", undo: "Undo", redo: "Redo", nothingToUndo: "Nothing to undo", nothingToRedo: "Nothing to redo", link: "Web link", apply: "Apply", table: "Table", insertTable: "Insert 3 × 3 table", addRow: "Add row below", addColumn: "Add column right", deleteRow: "Delete row", deleteColumn: "Delete column", deleteTable: "Delete table",
   listEmpty: "No notes yet", listEmptyHint: "Start with one idea. Build a collection as you create.", trashEmpty: "Trash is empty", trashHint: "Notes moved to trash can be restored here.", favoriteEmpty: "No favorites yet", favoriteHint: "Star a note to keep it close for next time.", searchHint: "Try another keyword or clear your filters.", clearSearch: "Clear filters",
@@ -89,8 +104,8 @@ const en: Strings = {
   willSave: (chars:number, sources:number)=>`About ${chars} characters and ${sources} source references`,
   saveAll: "Save all to notes", saveAllTranscript: "Save the whole transcript as one note. With a selection, only the selected lines.",
   saveAllSubtitles: "Save the whole subtitle track as one note; translations are written alongside the original.",
-  historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
-  askAi: "Ask AI", askAiHint: "Ask the assistant about the selected text", passageGone: "That passage has changed since; it was not found in the note.", focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
+  localDraft: "Recovered a local unsaved draft", more: "Load more",
+  askAi: "Ask AI", askAiHint: "Ask the assistant about the selected text", passageGone: "That passage has changed since; it was not found in the note.", focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…",
   selection: {
     toolbar: "Selection tools", inlineCode: "Inline code", highlight: "Highlight", unlink: "Remove link", linkPlaceholder: "Paste an https:// link and press Enter",
     ai: "AI actions", more: "More", copy: "Copy", copied: "Copied", quote: "Quote in chat", addToBoard: "Add to board",
@@ -124,6 +139,22 @@ const en: Strings = {
     copy: "Copy code",
     copied: "Copied",
     failed: "Could not copy. Select the code and copy it manually.",
+  },
+  versions: {
+    hint: "Restoring creates a new version; every existing version stays.",
+    list: "Versions",
+    current: "Current version",
+    version: (n: number) => `Version ${n}`,
+    today: "Today",
+    yesterday: "Yesterday",
+    copy: "Copy this version's content",
+    copied: (n: number) => `Copied the text of version ${n}`,
+    restore: "Restore this version",
+    restoreTitle: (n: number) => `Restore version ${n}?`,
+    restoreBody: (n: number, next: number) => `This creates version ${next} with the same content as version ${n}. Every existing version stays, so you can switch back at any time.`,
+    restoreConfirm: "Restore",
+    onlyOne: "This note has only this one version so far. Every edit, assistant change or restore from now on leaves a version here.",
+    loadFailed: "This version could not be loaded",
   },
 };
 export function noteStrings(locale: string) { return locale === "en-US" ? en : zh; }
