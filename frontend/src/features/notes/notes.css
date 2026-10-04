@@ -135,6 +135,11 @@
 .note-mode { height:26px; padding:0 9px; border-radius:6px; }
 .note-mode[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 .note-mode:hover { color:var(--foreground); }
+/* 助手开关:和剪辑页那一颗同样是「图标 + AI 助手」、开着时 accent 底,高度跟这一行走(30px)。 */
+.note-agent-toggle { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 9px; border-radius:6px; }
+.note-agent-toggle:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }
+.note-agent-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
+@media(max-width:950px) { .note-agent-toggle span { display:none; } .note-agent-toggle { width:30px; padding:0; justify-content:center; } }
 /* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
 .note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
 @media(max-width:1250px) { .note-document-header .note-status { font-size:0; gap:0; } .note-document-header { padding-inline:12px; } }

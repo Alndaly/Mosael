@@ -191,6 +191,19 @@ export const nodeToolbar = {
   boardAgentPlaceholder: "例如:按分镜拆成六张便签,每张后面接一个图片空槽",
   boardAgentContext:
     "你正在协助编辑 Mosael 创意画板「{name}」(board_id={id})。先用 get_board 看当前画布,再用 edit_board 提交细粒度算子(add_item/set_title/set_text/set_color/move_item/resize_item/connect/remove_item/remove_edge/set_form,一次可批量,由服务端落到当前画布,你不用重写整张板 —— 上面的位置是用户一手拖出来的)。每一格都可以有名字(title,get_board 里看得到;没名字的画布上只显示种类),提到某一格时用它的名字。图片/视频/音频项不带 asset_id 就是一个空槽,用户在上面写提示词然后生成;给他摆好空槽并连上参考往往比替他决定生成什么更有用。画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的能力(音频 / 视频格会转写、分离人声、降噪,视频格会转 GIF,便签 / 文档会翻译,插件工具按它吃什么内容挂在对应的格子上),产出落成那一格右边的新格子;凭空出图出片的插件生成器是空格子的一种填法。流程控制和数据处理不在画板上,那是工作流的事:list_board_producers 看有哪些(role 为 ability 的是能力,host_fields 说宿主的内容填进哪个字段,那个字段不用填),set_form 带上 producer 在宿主那一格上写这一项的设置,run_board_item 带上 producer 对宿主跑 —— 只读的直接跑,花钱或对外的先出卡。3D 场景格自己会渲白模参考:set_form 在场景格上写 config(shot_id、render),再对场景格 run_board_item,首尾帧、运镜视频落在它右边。画板不是工作流,不要用 edit_workflow 改它。改动都会生成确认卡等我批准。",
+  noteAgentEmpty: "问我这篇笔记的事:总结、列提纲、改写或翻译选中的一段、接着往下写,也可以拿它搭工作流、摆画板;改正文会先出确认卡,批准后能撤销。",
+  noteAgentPlaceholder: "例如:把选中的这段改得口语一些,再缩短一半",
+  noteAgentContext:
+    "你正在协助编辑 Mosael 笔记「{title}」(note_id={id},第 {revision} 版,正文 {chars} 字)。总结、提纲、翻译这类直接回答,不改笔记;用户要改正文时用 edit_note 按段替换或插入(锚点逐字照抄下面给的原文),会出确认卡等我批准,批准后编辑器里立刻可见、可撤销,不要整篇重写。末尾追加用 append_note。要从笔记生成工作流、画板或时间线素材,用对应的现有工具。",
+  noteAgentBody: "正文全文:\n\"\"\"\n{body}\n\"\"\"",
+  noteAgentBodyHead: "正文较长,下面只是开头;读全文用 read_note(note_id, offset, length) 分段读,truncated 为真就接着读:\n\"\"\"\n{body}\n\"\"\"",
+  noteAgentSelection: "用户选中了这一段(正文原文,第 {start}–{end} 字):\n\"\"\"\n{text}\n\"\"\"",
+  noteAgentSelectionLong:
+    "用户选中了很长一段(第 {start}–{end} 字),下面只有开头和结尾;完整原文用 read_note(offset={start}, length={length}) 读:\n\"\"\"\n{head}\n……\n{tail}\n\"\"\"",
+  noteAgentSelectionLoose: "用户选中了这一段(编辑器里的纯文字,可能和正文原文不逐字一致;改之前先 read_note 取原文):\n\"\"\"\n{text}\n\"\"\"",
+  noteAgentCursor: "光标位置:前文「{before}」,后文「{after}」。在光标处插入时用前文作 after 锚点(前文为空就用后文作 before 锚点)。",
+  noteAgentNoNote: "用户在 Mosael 笔记页,当前没有打开笔记。找笔记用 search_notes,读用 read_note,新建用 create_note。",
+  noteAgentSelectionChip: "选中的文字",
   wfAgentPlaceholder: "例如:加一个条件分支,检索结果为空就走 HTTP 通知",
   wfAgentAttach: "添加文件",
   wfAgentAttached: "附件",

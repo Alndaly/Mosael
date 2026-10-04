@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -32,7 +32,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MENU_ITEM, MENU_SEPARATOR } from "@/components/ui/floating";
 import { saveBlobToDisk } from "@/lib/download";
 import { useFileDrop } from "@/lib/useFileDrop";
-import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { SIDEBAR_HANDLE_CLASS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { useI18n } from "@/app/preferences";
+import type { ComposerChip } from "@/lib/composerChip";
+import { noteAgentContext } from "./noteAgentContext";
+import type { NoteSelection } from "./noteSelection";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { NoteEditor, NoteReader } from "./NoteEditor";
@@ -54,6 +58,34 @@ function rememberNote(workspaceId: string, id: string | null) {
   try { if (id) window.localStorage.setItem(lastNoteKey(workspaceId), id); else window.localStorage.removeItem(lastNoteKey(workspaceId)); } catch { /* 记不住只是少一个便利 */ }
 }
 const NOTE_FILTERS = ["all", "favorite", "trash"] as const;
+/** 停靠助手时给正文留的最小宽度;放不下就改成盖在正文上(和剪辑页同一个做法)。 */
+const NOTE_MIN_WIDTH = 480;
+/** 助手开着时多久重取一次打开着的那篇:智能体直接写的(append_note 不走确认卡)也要实时看得到。 */
+const NOTE_FOLLOW_MS = 3000;
+const selectionKey = (selection: NoteSelection) => `${selection.start}:${selection.end}:${selection.text}`;
+/** 小条上给人看的那几个字:去掉 Markdown 记号。发给助手的仍是原文(带着记号它才找得到)。 */
+const plainExcerpt = (markdown: string) =>
+  markdown.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_~`>#]+/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
+type AgentMode = "docked" | "floating";
+
+/**
+ * 笔记页的助手面板 —— 就是剪辑页、画板用的那一个(features/agent/CanvasAgentChat),**由页面装配层交进来**
+ * (app/pages)。助手认识笔记(给消息挂笔记、把回复存成笔记),笔记这边再 import 助手就成了互相依赖
+ * (见 features/featureBoundaries.test)。这里只写笔记页要给它的那几样。
+ */
+export interface NotesAgentPanelProps {
+  contextLine: () => string;
+  contextChips: ComposerChip[];
+  focusSignal: number;
+  emptyHint: string;
+  placeholder: string;
+  rectKey: string;
+  dockedLayout: "inline" | "overlay";
+  workspaceId: string;
+  mode: AgentMode;
+  onModeChange: (mode: AgentMode) => void;
+  onClose: () => void;
+}
 const MARKDOWN_IMPORT_LIMIT = 500_000;
 const isMarkdownFile = (file: File) => /\.(md|markdown|txt)$/i.test(file.name);
 export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources">) {
@@ -64,8 +96,8 @@ export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources"
   saveBlobToDisk(blob, `${(note.title || "note").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100)}.md`);
 }
 
-export function NotesView({ workspace }: { workspace: Workspace }) {
-  const s = useNoteStrings(); const qc = useQueryClient();
+export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; AgentPanel?: React.ComponentType<NotesAgentPanelProps> }) {
+  const s = useNoteStrings(); const qc = useQueryClient(); const t = useI18n();
   const [id, setId] = React.useState(() => locationNote() ?? rememberedNote(workspace.id));
   // 从记住的那篇打开时把地址补上,和点开一篇的状态一样(刷新、返回都认它)。
   React.useEffect(() => { if (id && !locationNote()) window.history.replaceState(null, "", noteHref(id)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,7 +120,36 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   const topics = useQuery({ queryKey: noteKeys.topics(workspace.id, filter === "trash"), queryFn: () => listNoteTopics(workspace.id, filter === "trash") }).data ?? [];
   // 打开一篇就重新取一次(staleTime 0):缓存里的那份可能是移进回收站、收藏之前的,打开后看到的
   // 就是错的状态 —— 回收站里的笔记没有提示条、还能编辑。
-  const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0 });
+  //: 笔记页的助手:和剪辑页、画板**同一个面板**(CanvasAgentChat)、同一个工作区会话(见 currentAgentSession)——
+  //: 换一篇笔记不换会话,每条消息带上发出那一刻在看的是哪一篇(contextLine)。开合、停靠方式、宽度各记各的。
+  const [agentOpen, setAgentOpen] = usePersistentTab<"on" | "off">("notes-agent", "off", ["on", "off"]);
+  const [agentMode, setAgentMode] = usePersistentTab<AgentMode>("notes-agent-mode", "docked", ["docked", "floating"]);
+  const agentPanel = useResizableSidebar("notes-agent", { min: 320, max: 640, fallback: 400 });
+  const [layoutWidth, setLayoutWidth] = React.useState(Infinity);
+  const measureLayout = React.useCallback((node: HTMLDivElement | null) => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => { if (entry.contentRect.width > 0) setLayoutWidth(entry.contentRect.width); });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  const showAgent = agentOpen === "on" && !!AgentPanel;
+  const dockedAgent = showAgent && agentMode === "docked" && layoutWidth >= (focus ? 0 : sidebar.width) + agentPanel.width + NOTE_MIN_WIDTH;
+  //: 编辑器里的选区 / 光标(正文原文,见 noteSelection)。点了小条上的 × 就不再带这一段,直到选区变了。
+  const [selection, setSelection] = React.useState<NoteSelection | null>(null);
+  const [dismissed, setDismissed] = React.useState("");
+  const quoted = selection && !(selection.text && selectionKey(selection) === dismissed) ? selection : null;
+  const quotedRef = React.useRef(quoted); quotedRef.current = quoted;
+  const [focusSignal, setFocusSignal] = React.useState(0);
+  React.useEffect(() => { setSelection(null); setDismissed(""); }, [id]);
+  //: 发送那一刻才拼:正文取编辑器里最新的草稿(controller),不是上次存盘的那份。
+  const agentContext = React.useCallback(() => noteAgentContext(t, controller.current?.read() ?? null, quotedRef.current), [t]);
+  const selectionChips: ComposerChip[] = quoted?.text ? [{
+    id: "note-selection", label: plainExcerpt(quoted.text), icon: <TextQuote size={11} />,
+    text: { title: t("noteAgentSelectionChip"), body: quoted.text }, onRemove: () => setDismissed(selectionKey(quoted)),
+  }] : [];
+  const askAi = (picked: NoteSelection) => { setSelection(picked); setDismissed(""); setAgentOpen("on"); setFocusSignal(n => n + 1); };
+  const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0,
+    refetchInterval: showAgent ? NOTE_FOLLOW_MS : false });
   // 记住的那篇已经删了:不再自动打开它。
   React.useEffect(() => { if (selected.isError && id === rememberedNote(workspace.id)) rememberNote(workspace.id, null); }, [selected.isError, id, workspace.id]);
   async function listAction(action:NoteListAction, targets:Note[], value?:string) {
@@ -138,7 +199,7 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   }
   // 只拖图片/音视频时不接:那是往正文里插图(编辑器自己处理),不是导入笔记。
   const drop = useFileDrop(files => void importFiles(files), isMarkdownFile, types => types.some(type => !/^(image|video|audio)\//.test(type)));
-  return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...drop.handlers}>
+  return <div ref={measureLayout} className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...drop.handlers}>
     {drop.active && <div className="notes-drop" aria-hidden="true"><span><Import size={20} />{s.dropHint}</span></div>}
     {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Import size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
@@ -150,7 +211,29 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
       <input hidden ref={input} type="file" multiple accept=".md,.markdown,.txt" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) void importFiles(files); }} />
     </aside>}
     {!focus && <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "notes-resize")} />}
-    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
+    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)}
+      agentOpen={showAgent} onToggleAgent={AgentPanel && (() => setAgentOpen(agentOpen === "on" ? "off" : "on"))} onSelectionChange={setSelection} onAskAi={AgentPanel && askAi} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
+    {showAgent && (
+      // 停靠:占一栏,正文真的让出宽度。放不下时改成盖在正文右侧;浮动时面板自己 fixed,外层 contents 不占位。
+      <div data-testid="notes-agent-slot"
+        className={dockedAgent ? "grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] border-l border-divider" : agentMode === "docked" ? "absolute bottom-2 right-2 top-2 z-40 grid w-[min(400px,90%)] grid-cols-[minmax(0,1fr)]" : "contents"}
+        style={dockedAgent ? { flex: `0 0 ${agentPanel.width}px` } : undefined}>
+        <React.Suspense fallback={null}><AgentPanel
+          contextLine={agentContext}
+          contextChips={selectionChips}
+          focusSignal={focusSignal}
+          emptyHint={t("noteAgentEmpty")}
+          placeholder={t("noteAgentPlaceholder")}
+          rectKey="mosael.notes.agent.rect.v1"
+          dockedLayout={dockedAgent ? "inline" : "overlay"}
+          workspaceId={workspace.id}
+          mode={agentMode}
+          onModeChange={setAgentMode}
+          onClose={() => setAgentOpen("off")}
+        /></React.Suspense>
+      </div>
+    )}
+    {dockedAgent && <div className={SIDEBAR_HANDLE_CLASS} style={{ right: handleOffset(agentPanel.width) }} role="separator" aria-orientation="vertical" onPointerDown={agentPanel.startDragFromRight} />}
   </div>;
 }
 
@@ -165,8 +248,13 @@ function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string 
   </span>;
 }
 
-export function NoteDocument({ note, controller, focus, onFocus }: { note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void }) {
-  const s = useNoteStrings(); const qc = useQueryClient();
+export function NoteDocument({ note, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi }: {
+  note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void;
+  /** 笔记页助手的开关(顶栏右边那一组里);不给就不显示。 */
+  agentOpen?: boolean; onToggleAgent?: () => void;
+  onSelectionChange?: (selection: NoteSelection | null) => void; onAskAi?: (selection: NoteSelection) => void;
+}) {
+  const s = useNoteStrings(); const qc = useQueryClient(); const t = useI18n();
   const storageKey = `mosael.note.draft.${note.workspace_id}.${note.id}`;
   const [draft, setDraft] = React.useState<Note>(() => { try { const cached = JSON.parse(localStorage.getItem(storageKey) || "null") as Note | null; return cached?.id === note.id && cached.workspace_id === note.workspace_id ? cached : note; } catch { return note; } });
   const latest = React.useRef(draft); latest.current = draft;
@@ -174,6 +262,8 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
   const [status, setStatus] = React.useState<NoteStatus>(JSON.stringify(draft) === JSON.stringify(note) ? "saved" : "draft"); const [error, setError] = React.useState("");
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [mode, setMode] = React.useState("edit"); const [properties, setProperties] = React.useState(false);
+  //: 换了看的方式,编辑器重建、选区没了 —— 助手那边也别再带着上一个模式里的那段。
+  React.useEffect(() => { onSelectionChange?.(null); }, [mode, onSelectionChange]);
   const [history, setHistory] = React.useState(false);
   const [referenceRevision,setReferenceRevision] = React.useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false); const [deleting, setDeleting] = React.useState(false);
@@ -274,6 +364,7 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
           夹在收起按钮和格式工具之间时像是格式工具的一部分。 */}
       <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
       <div className="note-modes" role="group" aria-label={s.viewMode}>{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}</div>
+      {onToggleAgent && <button className="note-agent-toggle" aria-label={t("wfAgentTitle")} title={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={15} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></button>}
       <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={18}/></button></PopoverTrigger>{/* 和笔记列表的右键菜单同一套尺寸与条目样式(components/ui/floating 的 MENU_ITEM)。 */}
       <PopoverContent className="grid w-auto min-w-48 gap-0.5 p-1.5" align="end">
@@ -288,7 +379,8 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
     <div className="note-body"><article className="note-paper">
       {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
         title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed || mode === "read"} onValueChange={title => change({title})} />}
-        onReference={n => { if (!latest.current.sources.some(source => source.kind === "note" && source.id === n.id && source.revision === n.revision)) change({sources: [...latest.current.sources, {kind: "note", id: n.id, label: n.title, quote: "", revision: n.revision}]}); }} />}
+        onReference={n => { if (!latest.current.sources.some(source => source.kind === "note" && source.id === n.id && source.revision === n.revision)) change({sources: [...latest.current.sources, {kind: "note", id: n.id, label: n.title, quote: "", revision: n.revision}]}); }}
+        onSelectionChange={onSelectionChange} onAskAi={onAskAi} />}
     </article></div></main>
     {properties && <aside className="note-properties"><header><strong>{s.source}</strong><button className="note-icon" aria-label={s.close} onClick={()=>setProperties(false)}><X size={15}/></button></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={draft.trashed} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={draft.trashed} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
     <ConfirmDialog open={confirmDelete} title={`${s.deleteForever} · ${draft.title || s.untitled}`} body={s.deleteWarning} onCancel={() => { if (!deleting) setConfirmDelete(false); }} pending={deleting} onConfirm={() => void deleteForever()} />
