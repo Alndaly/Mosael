@@ -267,6 +267,26 @@ def test_重启之后没列过也拿得到预览图(library) -> None:
     assert hit.status_code == 200 and hit.content == WEBP
 
 
+def test_重启后一屏预览图同时到_只替它列一遍(library) -> None:
+    """模型库一打开就是几十张卡同时要预览图;宿主记着的地址没了(重启)时,不能每张图各让插件列一遍目录。"""
+    client, instance_id, _ = library
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.db.models import PluginInstance
+    from app.domain import model_library
+
+    model_library.forget()
+
+    def fetch(_index: int):
+        with SessionLocal() as db:
+            return model_library.preview(db, db.get(PluginInstance, instance_id), "checkpoints", "sdxl_base.safetensors")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(fetch, range(8)))
+    assert all(result and result[0] == WEBP for result in results)
+    assert sum(1 for one in _ops() if one["op"] == "library") == 1
+
+
 def test_详情_原样交回插件读到的元数据(library) -> None:
     client, instance_id, _ = library
     response = client.get(f"/api/plugins/instances/{instance_id}/model-library/detail",

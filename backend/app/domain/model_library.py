@@ -20,6 +20,7 @@ import logging
 import shutil
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -82,6 +83,8 @@ class _Snapshot:
 
 _lock = threading.Lock()
 _snapshots: dict[str, _Snapshot] = {}
+#: 一个连接一把:记着的地址没了时,同时到的几十个预览请求只让插件列一遍,别的等它列完。
+_listing_locks: dict[str, threading.Lock] = {}
 #: (连接, 预览地址) → 到这个时刻之前不再去问(那边说没有)。
 _absent: dict[tuple[str, str], float] = {}
 
@@ -204,12 +207,7 @@ def _preview_dir(instance_id: str) -> Path:
 def preview(db: Session, instance: PluginInstance, folder: str, name: str) -> tuple[bytes, str] | None:
     """一个模型文件的预览图(字节、类型);没有就是 None。取回来的记在磁盘上,同一个地址第二次不再去取。"""
     _require(db, instance)
-    with _lock:
-        snapshot = _snapshots.get(instance.id)
-    if snapshot is None:
-        library(db, instance)
-        with _lock:
-            snapshot = _snapshots.get(instance.id)
+    snapshot = _snapshot_for(db, instance)
     url = snapshot.previews.get((folder, name)) if snapshot else None
     if not url:
         return None
@@ -230,11 +228,29 @@ def preview(db: Session, instance: PluginInstance, folder: str, name: str) -> tu
         return None
     data, kind = fetched
     target.parent.mkdir(parents=True, exist_ok=True)
-    partial = target.with_suffix(".part")
-    partial.write_bytes(data)
-    partial.replace(target)
-    kind_file.write_text(kind, encoding="utf-8")
+    # 同一张图可能同时被几个请求取回:各写各的临时文件再换上去,不抢同一个半截文件。类型先落,读的人见到图就有类型。
+    for path, content in ((kind_file, kind.encode("utf-8")), (target, data)):
+        partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
+        partial.write_bytes(content)
+        partial.replace(path)
     return data, kind
+
+
+def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
+    """记着的预览图地址;没有(重启了)就先列一遍。一屏的预览请求是同时到的:只有第一个去列,别的等它。"""
+    with _lock:
+        snapshot = _snapshots.get(instance.id)
+        gate = _listing_locks.setdefault(instance.id, threading.Lock())
+    if snapshot is not None:
+        return snapshot
+    with gate:
+        with _lock:
+            snapshot = _snapshots.get(instance.id)
+        if snapshot is None:
+            library(db, instance)
+            with _lock:
+                snapshot = _snapshots.get(instance.id)
+    return snapshot
 
 
 def _fetch_preview(db: Session, instance: PluginInstance, url: str, headers: dict[str, str]) -> tuple[bytes, str] | None:
