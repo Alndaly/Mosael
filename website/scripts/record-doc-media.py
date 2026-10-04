@@ -7,8 +7,9 @@ Start the environment first (see docs/media/README.md):
   backend/.venv/bin/python website/scripts/record-doc-media.py --demo-dir /private/path/mosael-demo
 
 No DOM replacement, fabricated agent responses, provider calls, or publishing actions. Screenshots are
-native Playwright captures; GIFs and MP4s come from actual browser video of real clicks, typing, hovering
-and dragging. A failed selector stops the run, so an old asset can never pass as a fresh recording.
+native Playwright captures, quantized with pngquant (same resolution); the MP4s are actual browser video of
+real clicks, typing, hovering and dragging. There are no GIFs: the website plays the MP4s as muted loops.
+A failed selector stops the run, so an old asset can never pass as a fresh recording.
 Edits a scene makes for the camera (a typed prompt, a 3D keyframe) are undone before it ends, so every
 language and theme starts from the same seeded data.
 
@@ -22,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -167,6 +169,7 @@ class Capture:
     def shot(self, name: str) -> None:
         target = self.path("screens", name + ".png")
         self.page.screenshot(path=str(target))
+        compress_png(target)
         self.outputs.append(target)
 
     def begin(self) -> None:
@@ -723,7 +726,7 @@ def login(c: Capture) -> None:
     c.hold(1800)
 
 
-#: Scene name → (function, editor panel sizes). The name is the GIF / MP4 file name.
+#: Scene name → function. The name is the MP4 file name.
 SCENES = {
     "home": home,
     "media-preview": media,
@@ -763,13 +766,25 @@ CLOCK_SCENES = {"home", "appearance"}
 TIMELINE_HEIGHT = {"timeline-tools": 262}
 
 
-def encode(src: Path, target: Path, start: float, duration: float, gif: bool) -> None:
-    base = ["ffmpeg", "-y", "-v", "error", "-ss", str(max(0, start)), "-i", str(src), "-t", str(duration), "-an"]
-    if gif:
-        base += ["-filter_complex", "fps=10,scale=960:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3", "-loop", "0"]
-    else:
-        base += ["-vf", "scale=1280:-2", "-c:v", "libx264", "-crf", "24", "-preset", "fast", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
-    subprocess.run(base + [str(target)], check=True)
+def encode(src: Path, target: Path, start: float, duration: float) -> None:
+    """The recording as a 1280 × 800 H.264 MP4 without audio (the website loops it muted)."""
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", str(max(0, start)), "-i", str(src), "-t", str(duration), "-an",
+                    "-vf", "scale=1280:-2", "-c:v", "libx264", "-crf", "24", "-preset", "fast", "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart", str(target)], check=True)
+
+
+#: Screenshots are 2880 × 1800 UI captures: flat colours and text quantize to about 40% of the size with no visible
+#: change. The upper bound is 100, not 95: with 95 pngquant drops colours once the target is met, and small areas of
+#: unique colour get merged away (a gold sphere turned grey, a red badge lost its colour, gradient swatches banded).
+#: --skip-if-larger keeps the original when quantizing would not help; the resolution never changes.
+PNGQUANT = ["pngquant", "--quality=80-100", "--speed", "1", "--skip-if-larger", "--strip", "--force", "--ext", ".png"]
+
+
+def compress_png(path: Path) -> None:
+    result = subprocess.run([*PNGQUANT, str(path)], capture_output=True, text=True)
+    # 98 / 99: the quantized file would be larger or below the quality floor — the original stays, which is fine.
+    if result.returncode not in (0, 98, 99):
+        raise RuntimeError(f"pngquant failed on {path}: {result.stderr.strip()}")
 
 
 def main() -> None:
@@ -785,6 +800,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, help="trial run: write here, leave the public media and manifest alone")
     parser.add_argument("--clock", default="", help="wall-clock time for the scenes whose greeting depends on it (Home), e.g. 2026-10-04T10:30")
     args = parser.parse_args()
+    if not shutil.which("pngquant"):
+        parser.error("pngquant is required for the screenshots (brew install pngquant).")
     for url in (args.api, args.app):
         if urlparse(url).hostname not in ("127.0.0.1", "localhost") or urlparse(url).port in (8800, 5173):
             parser.error("Capture only the isolated local demo environment (not the 8800 / 5173 dev servers).")
@@ -855,10 +872,9 @@ def main() -> None:
                     video = page.video
                     context.close()
                     raw = Path(video.path())
-                    for kind, ext in [("gifs", "gif"), ("videos", "mp4")]:
-                        target = c.path(kind, f"{name}.{ext}")
-                        encode(raw, target, c.start - origin, duration, ext == "gif")
-                        c.outputs.append(target)
+                    target = c.path("videos", f"{name}.mp4")
+                    encode(raw, target, c.start - origin, duration)
+                    c.outputs.append(target)
                     raw.unlink(missing_ok=True)
                     if name == "agent":
                         # Each language and theme starts from an empty conversation list again.

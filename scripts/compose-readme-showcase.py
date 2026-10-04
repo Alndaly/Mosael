@@ -19,6 +19,8 @@ README 顶上那张图此前是**手工拼的**:拼完就是一个死文件,截�
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -127,7 +129,11 @@ def main() -> None:
         image = compose(locale, args.stage_width)
         target = args.out_dir / f"readme-showcase.{locale}.png"
         image.save(target, optimize=True)
-        print(f"{target.relative_to(ROOT)}  {image.width}×{image.height}")
+        # 和官网截图同一道量化(website/scripts/record-doc-media.py 的 PNGQUANT):分辨率不变,体积小一大截。
+        if shutil.which("pngquant"):
+            subprocess.run(["pngquant", "--quality=80-100", "--speed", "1", "--skip-if-larger", "--strip", "--force",
+                            "--ext", ".png", str(target)], check=False)
+        print(f"{target.relative_to(ROOT)}  {image.width}×{image.height}  {target.stat().st_size // 1024} KB")
 
 
 if __name__ == "__main__":

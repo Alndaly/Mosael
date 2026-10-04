@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,8 @@ def main():
     parser.add_argument('--app', default=f'http://127.0.0.1:{seed.APP_PORT}')
     parser.add_argument('--api', default=f'http://127.0.0.1:{seed.API_PORT}')
     args = parser.parse_args()
+    if not shutil.which('pngquant'):
+        parser.error('pngquant is required for the screenshots (brew install pngquant).')
     for url in [args.app, args.api]:
         if urlparse(url).hostname not in ['127.0.0.1', 'localhost'] or urlparse(url).port in (8800, 5173):
             parser.error('Capture only the isolated local demo environment.')
@@ -81,6 +84,11 @@ def main():
                 target = PUBLIC / 'homepage' / locale / (name + '.png')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(target))
+                # Same quantization as the documentation screenshots (record-doc-media.py): resolution unchanged.
+                result = subprocess.run(['pngquant', '--quality=80-100', '--speed', '1', '--skip-if-larger', '--strip',
+                                         '--force', '--ext', '.png', str(target)], capture_output=True, text=True)
+                if result.returncode not in (0, 98, 99):
+                    raise RuntimeError(f'pngquant failed on {target}: {result.stderr.strip()}')
                 manifest['captures'][str(target.relative_to(PUBLIC))] = {
                     'scene': name, 'locale': locale, 'theme': theme, 'font': font,
                     'version': version, 'sourceCommit': commit, 'capturedAt': datetime.now(timezone.utc).isoformat(),
