@@ -9,10 +9,10 @@ import { nativeImage, type NativeImage, type WebContents } from "electron";
 import { sharedViews } from "./accountViews";
 import { PageToolError, foreground, pageOf } from "./pageTarget";
 import {
-  cdpClip,
   planClip,
   planFullPage,
   regionCropRect,
+  screenRatio,
   type PageInfo,
   type PageRect,
   type SelectionFraction,
@@ -52,8 +52,8 @@ export class ElementCaptureError extends Error {
 /**
  * 截一个页面:可见区域、整页长图、某个元素(`selector`,截它整块,哪怕有一部分在视口外)。
  *
- * 页面被缩放过(悬浮面板里的自动化会话缩到三成上下)时照样按屏幕原生清晰度出图(见 pageToolsCore.clipScale)
- * —— 直接 capturePage 截出来的只有面板那么大一点。
+ * 缩小显示的页面(悬浮面板里的自动化会话缩到三成上下)截图那一下按原清晰度渲染(见 atNativeResolution),
+ * 截出来和前台页面一样清楚、边界一样准。
  */
 export async function captureContents(
   wc: WebContents,
@@ -63,24 +63,83 @@ export async function captureContents(
   const page = pageOf(wc);
   const capturedAt = new Date().toISOString();
   const zoom = wc.getZoomFactor();
-  if (mode === "visible" && Math.abs(zoom - 1) < 1e-3) return asCapture(await wc.capturePage(), page, capturedAt);
-  if (mode === "full") {
-    const { png, truncated } = await captureFullPage(wc, zoom);
-    return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, truncated);
-  }
-  const rect = mode === "element" ? await elementRect(wc, opts.selector ?? "") : await visibleRect(wc);
-  const ratio = Number(await wc.executeJavaScript("window.devicePixelRatio")) || 1;
-  const plan = planClip(rect, ratio, zoom);
-  if (!plan) throw new ElementCaptureError("empty");
-  const png = await cdpShot(wc, plan.clip, mode === "element");
-  return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, plan.truncated);
+  const shoot = () => shootAs(wc, mode, opts.selector ?? "", page, capturedAt);
+  return Math.abs(zoom - 1) < 1e-3 ? shoot() : atNativeResolution(wc, zoom, shoot);
 }
 
-/** 可见区域在文档里的位置(CSS 像素)。 */
-function visibleRect(wc: WebContents): Promise<PageRect> {
-  return wc.executeJavaScript(
-    "({ x: window.scrollX, y: window.scrollY, width: document.documentElement.clientWidth || window.innerWidth, height: document.documentElement.clientHeight || window.innerHeight })",
-  ) as Promise<PageRect>;
+async function shootAs(
+  wc: WebContents,
+  mode: "visible" | "full" | "element",
+  selector: string,
+  page: PageInfo,
+  capturedAt: string,
+): Promise<PageCapture> {
+  if (mode === "visible") return asCapture(await wc.capturePage(), page, capturedAt);
+  if (mode === "full") {
+    const { png, truncated } = await captureFullPage(wc);
+    return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, truncated);
+  }
+  const rect = await elementRect(wc, selector);
+  const ratio = Number(await wc.executeJavaScript("window.devicePixelRatio")) || 1;
+  const plan = planClip(rect, ratio);
+  if (!plan) throw new ElementCaptureError("empty");
+  const shot = nativeImage.createFromBuffer(await cdpShot(wc, plan.clip));
+  // 按设备像素裁到元素自己(见 planClip);Chromium 出图比预计的少一两像素时夹进图里。
+  const size = shot.getSize();
+  const x = Math.min(plan.crop.x, Math.max(0, size.width - 1));
+  const y = Math.min(plan.crop.y, Math.max(0, size.height - 1));
+  const image = shot.crop({ x, y, width: Math.min(plan.crop.width, size.width - x), height: Math.min(plan.crop.height, size.height - y) });
+  return asCapture(image, page, capturedAt, plan.truncated);
+}
+
+/**
+ * 缩小显示的页面按原清晰度截:截图那一下把缩放换回 1,用设备模拟让页面按**同样的 CSS 视口**、屏幕的设备
+ * 像素比渲染,再按原来的缩放比例缩回视图那么大显示(`scale`)—— 页面不重排、不滚动,面板里看到的还是那一页;
+ * 截完撤掉模拟、缩放还原(截失败了也还原)。
+ *
+ * 为什么不直接让 CDP 放大截:缩到 0.3 的页面是按 0.6 的设备像素比画的,CDP 的 scale 只是把这张小图放大 ——
+ * 实测 1px 的边框糊成灰的、外圈的红色渗进边上、出图尺寸也差好几个像素。
+ */
+async function atNativeResolution<T>(wc: WebContents, zoom: number, shoot: () => Promise<T>): Promise<T> {
+  const view = (await wc.executeJavaScript("({ width: innerWidth, height: innerHeight, ratio: devicePixelRatio })")) as {
+    width: number;
+    height: number;
+    ratio: number;
+  };
+  try {
+    if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
+  } catch {
+    throw new PageToolError("capture_failed"); // 开着 DevTools 时 attach 会被拒
+  }
+  const screen = screenRatio(view.ratio / zoom);
+  wc.setZoomFactor(1);
+  try {
+    await wc.debugger.sendCommand("Emulation.setDeviceMetricsOverride", {
+      width: view.width,
+      height: view.height,
+      deviceScaleFactor: screen,
+      mobile: false,
+      scale: zoom,
+    });
+    // 缩放和设备模拟都是异步送到页面的:等页面读到的设备像素比真变成屏幕的,再等它按新的画完一帧。
+    // 不等的话元素位置还是按缩小时的排版读的(实跑:37.734 而不是 37.75),裁出来顶边、左边带进一行外圈。
+    await untilRatio(wc, screen);
+    await wc.executeJavaScript("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))");
+    return await shoot();
+  } finally {
+    await wc.debugger.sendCommand("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
+    wc.setZoomFactor(zoom);
+  }
+}
+
+/** 等页面读到的设备像素比变成 `target`(最多等一秒;等不到就照样截,不卡住这一步)。 */
+async function untilRatio(wc: WebContents, target: number): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const ratio = Number(await wc.executeJavaScript("devicePixelRatio"));
+    if (Math.abs(ratio - target) < 0.01) return;
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
 }
 
 /** 元素在文档里的位置(CSS 像素);页面上没有它就抛 missing。 */
@@ -98,13 +157,16 @@ async function elementRect(wc: WebContents, selector: string): Promise<PageRect>
   return rect;
 }
 
-/** CDP 截一块。debugger 的挂法同整页长图(见 captureFullPage 的说明)。 */
-async function cdpShot(wc: WebContents, clip: PageRect & { scale: number }, beyondViewport: boolean): Promise<Buffer> {
+/**
+ * CDP 截一块。`captureBeyondViewport`:元素有一部分在视口外也整块截;视图不在屏幕上(挂在窗口外面)时
+ * 也只有这样 Chromium 才肯出一帧(实测不带它的截图一直等不到)。debugger 的挂法同整页长图。
+ */
+async function cdpShot(wc: WebContents, clip: PageRect & { scale: number }): Promise<Buffer> {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
     const shot = (await wc.debugger.sendCommand("Page.captureScreenshot", {
       format: "png",
-      captureBeyondViewport: beyondViewport,
+      captureBeyondViewport: true,
       fromSurface: true,
       clip,
     })) as { data: string };
@@ -124,7 +186,7 @@ async function cdpShot(wc: WebContents, clip: PageRect & { scale: number }, beyo
  * debugger 可能已被 PageDriver 挂上(发布 / RPA 驱动同一个视图时),那时直接复用、不再 attach;
  * 我们挂上的也不摘 —— 摘的那一刻若驱动正在用它,它的下一条命令就会失败。
  */
-async function captureFullPage(wc: WebContents, zoom: number): Promise<{ png: Buffer; truncated: boolean }> {
+async function captureFullPage(wc: WebContents): Promise<{ png: Buffer; truncated: boolean }> {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
     const metrics = (await wc.debugger.sendCommand("Page.getLayoutMetrics")) as {
@@ -136,12 +198,12 @@ async function captureFullPage(wc: WebContents, zoom: number): Promise<{ png: Bu
     const content = metrics.cssContentSize ?? metrics.contentSize;
     const layout = metrics.cssLayoutViewport ?? metrics.layoutViewport;
     const ratio = Number(await wc.executeJavaScript("window.devicePixelRatio")) || 1;
-    const plan = planFullPage(content, { width: layout.clientWidth, height: layout.clientHeight }, ratio, zoom);
+    const plan = planFullPage(content, { width: layout.clientWidth, height: layout.clientHeight }, ratio);
     const shot = (await wc.debugger.sendCommand("Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: true,
       fromSurface: true,
-      clip: cdpClip({ x: 0, y: 0, width: plan.width, height: plan.height }, plan.scale, zoom),
+      clip: { x: 0, y: 0, width: plan.width, height: plan.height, scale: plan.scale },
     })) as { data: string };
     return { png: Buffer.from(shot.data, "base64"), truncated: plan.truncated };
   } catch (error) {
