@@ -10,6 +10,8 @@
     {"op": "trash_workflow", "path"}                   → 「删除」:挪进回收目录
     {"op": "restore_workflow", "path", "new_path"}     → 从回收目录挪回去
 
+导入、装缺的节点包、重启在 workflow_import。
+
 用到的 ComfyUI 接口(0.38.0,写 / 移动照源码 app/user_manager.py 核对,见 ADR 0035 的表):
 
 - `GET /api/userdata?dir=…&recurse=true&full_info=true` 列目录;`GET /api/userdata/{file}` 取一份;
@@ -355,6 +357,39 @@ def _trash(comfy: Comfy) -> list[dict[str, Any]]:
     return sorted(out, key=lambda one: -one["deleted_at"])
 
 
+def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str, Any], options: dict[str, set[str]],
+             comfy: Comfy, locale: str, *, missing: Counter[str] | None = None,
+             packs: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+    """一张工作流的样子,补进 `row`:节点数、图摘要、缺的节点(和节点包)、识别出的输入 / 参数 / 输出、用到的模型和缺的模型、
+    跑不了的原因。列工作流库和导入前的预览是同一份(列的时候缺什么、节点包一次问完,传进来)。"""
+    missing = missing if missing is not None else missing_types(source, object_info)
+    packs = packs if packs is not None else _packs(comfy, sorted(missing))
+    row["node_count"] = len(source["nodes"]) if isinstance(source.get("nodes"), list) else \
+        len([one for one in source.values() if isinstance(one, dict) and "class_type" in one])
+    row["graph"] = graph_summary(source, object_info, set(missing))
+    row["missing_nodes"] = [{"type": name, "count": count, "packs": packs.get(name, [])}
+                            for name, count in sorted(missing.items())]
+    api: dict[str, Any] = {}
+    try:
+        api = graph.live(convert.to_api(source, object_info, locale), object_info)
+    except Exception as exc:  # noqa: BLE001 — 一张转不过来,照样列出来、带着原因
+        row["problem"] = str(exc) or type(exc).__name__
+    if api:
+        info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info,
+                                 convert.titles_of(api), locale)
+        row.update({"kind": info["kind"], "inputs": info["inputs"], "parameters": info["parameters"],
+                    "outputs": info["outputs"]})
+    elif not row.get("problem"):
+        row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
+    if missing and not row.get("problem"):
+        names = "、".join(sorted(missing))
+        row["problem"] = say(locale, f"这台 ComfyUI 上没有这几种节点:{names}。装上对应的节点包才跑得了",
+                             f"This ComfyUI lacks these node types: {', '.join(sorted(missing))}. "
+                             "Install the node packs that provide them to run it")
+    row["models"], row["missing_models"] = _models(api, source, options)
+    return row
+
+
 def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     object_info = comfy.object_info()
     options = model_options(object_info)
@@ -375,35 +410,8 @@ def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, A
         lacking |= set(missing)
         rows.append((row, source, missing))
     packs = _packs(comfy, sorted(lacking))
-    out: list[dict[str, Any]] = []
-    for row, source, missing in rows:
-        if not source:
-            out.append(row)
-            continue
-        row["node_count"] = len(source["nodes"]) if isinstance(source.get("nodes"), list) else \
-            len([one for one in source.values() if isinstance(one, dict) and "class_type" in one])
-        row["graph"] = graph_summary(source, object_info, set(missing))
-        row["missing_nodes"] = [{"type": name, "count": count, "packs": packs.get(name, [])}
-                                for name, count in sorted(missing.items())]
-        api: dict[str, Any] = {}
-        try:
-            api = graph.live(convert.to_api(source, object_info, locale), object_info)
-        except Exception as exc:  # noqa: BLE001 — 一张转不过来,照样列出来、带着原因
-            row["problem"] = str(exc) or type(exc).__name__
-        if api:
-            info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info,
-                                     convert.titles_of(api), locale)
-            row.update({"kind": info["kind"], "inputs": info["inputs"], "parameters": info["parameters"],
-                        "outputs": info["outputs"]})
-        elif not row.get("problem"):
-            row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
-        if missing and not row.get("problem"):
-            names = "、".join(sorted(missing))
-            row["problem"] = say(locale, f"这台 ComfyUI 上没有这几种节点:{names}。装上对应的节点包才跑得了",
-                                 f"This ComfyUI lacks these node types: {', '.join(sorted(missing))}. "
-                                 "Install the node packs that provide them to run it")
-        row["models"], row["missing_models"] = _models(api, source, options)
-        out.append(row)
+    out = [describe(row, source, object_info, options, comfy, locale, missing=missing, packs=packs) if source else row
+           for row, source, missing in rows]
     return {
         "workflows": out,
         "others": [{"path": path, "reason": models._not_a_workflow(path, locale)} for path in others],

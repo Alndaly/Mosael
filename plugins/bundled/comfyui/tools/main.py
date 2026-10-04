@@ -48,6 +48,7 @@ import run
 import server
 import sources
 import tooling
+import workflow_import
 import workflow_library
 import workflows
 from comfy_http import Comfy, env_access_token, env_base_url
@@ -78,6 +79,8 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return sources.resolve(payload, comfy, locale)
     if op == "download":
         return install.download(payload, comfy, locale, emit)
+    if op == "install_nodes":
+        return workflow_import.install_nodes(payload, comfy, locale, emit)
     if op in _WORKFLOW_LIBRARY:
         return _WORKFLOW_LIBRARY[op](payload, comfy, locale)
     raise ComfyError(say(locale, f"不认识的操作:{op}", f"Unknown op: {op}"))
@@ -91,6 +94,9 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "rename_workflow": workflow_library.rename_workflow,
     "trash_workflow": workflow_library.trash_workflow,
     "restore_workflow": workflow_library.restore_workflow,
+    "inspect_import": workflow_import.inspect_import,
+    "save_workflow": workflow_import.save_workflow,
+    "reboot": workflow_import.reboot,
 }
 
 #: 一问一答的工具。

@@ -244,6 +244,29 @@ workflow); the web version opens a new tab and tells you which workflow to open 
 ComfyUI, come back to Mosael, and the workflow library plus this connection's models and tools are fetched again. If
 ComfyUI sits behind a reverse proxy that needs a login, sign in once in that embedded browser.
 
+## Import and fill in (1.12.0)
+
+"Import" in the workflow library: drop a file in, pick one, or paste JSON or a link.
+
+- **What it understands**: the JSON from ComfyUI's Save / Export and from Export (API); PNG / WebP files saved by ComfyUI
+  (the workflow is embedded in the image; the UI format is used when present, otherwise the API format); archives (the
+  first workflow inside, the rest listed in a note); links only from HuggingFace, Civitai, ModelScope and this ComfyUI
+  itself (the network permissions the plugin declares), and a web page instead of a file is called out.
+- **The API format has no layout**: values are put back according to this ComfyUI's node definitions, links are rebuilt
+  and nodes are placed left to right by dependency, then it is saved in the UI format, so ComfyUI's sidebar can open it
+  and the plugin can read it; the preview says the positions were laid out automatically. Images produced through Mosael
+  only carry the API format (the plugin doesn't send the UI workflow when it submits), so importing them works the same way.
+- **Preview before saving**: the node graph, the parameters it takes, missing node types with their node packs, and
+  missing models; it is saved into `workflows/` without overwriting (a free name is offered on a clash) and gets a new
+  graph id (so its tool name doesn't clash with the original).
+- **Missing node packs**: with ComfyUI-Manager (V4), after you confirm, they are installed one by one through it (registry
+  packs at their latest version, git-only packs from git); ComfyUI must restart to load them, which also goes through
+  the Manager (confirmed again; running tasks are interrupted). The Manager's security policy: installing node packs
+  needs ComfyUI to listen only locally or `network_mode = personal_cloud`; restarting needs `security_level` no stricter
+  than normal. When refused, you're told what to change or how to install by hand.
+- **Missing models**: those with a declared download URL download from the model library in one click (same dialog,
+  same route).
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and

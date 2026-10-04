@@ -563,6 +563,12 @@ class State:
     #: Manager 的节点映射(`/v2/customnode/getmappings`):包 → [节点类型…, 附加信息];已装的包(`/v2/customnode/installed`)。
     manager_mappings: dict[str, Any] = field(default_factory=dict)
     manager_installed: dict[str, Any] = field(default_factory=dict)
+    #: Manager 让不让重启(`/v2/manager/reboot`,安全等级 middle);重启之后 `/system_stats` 连着几次答不上(停下了)。
+    manager_reboot_allowed: bool = True
+    reboot_down_polls: int = 0
+    down_left: int = 0
+    #: 别的静态地址(测「链接指着一个网页」):路径 → (Content-Type, 正文)。
+    static: dict[str, tuple[str, bytes]] = field(default_factory=dict)
 
     def userdata_get(self, path: str) -> Any:
         if path.startswith("workflows/"):
@@ -627,7 +633,17 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/ws":
             self._websocket(query.get("clientId", [""])[0])
             return
-        if path == "/object_info":
+        if path in state.static:
+            kind, body = state.static[path]
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/system_stats" and state.down_left > 0:
+            state.down_left -= 1
+            self._json({"error": "restarting"}, 503)
+        elif path == "/object_info":
             self._json(state.object_info)
         elif path == "/api/userdata" and query.get("dir") == ["workflows"] and not state.workflows:
             # 刚装好的 ComfyUI 还没存过工作流:workflows 目录不存在,ComfyUI 回 404 "Directory not found"
@@ -871,8 +887,43 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Length", "0")
             self.end_headers()
+        elif path == "/v2/manager/queue/task" and state.manager:
+            # 节点包之类的任务(QueueTaskItem:ui_id、client_id、kind、params)。缺字段 → 400,和 pydantic 校验一样。
+            if not all(key in body for key in ("ui_id", "client_id", "kind", "params")):
+                self._json({"error": "Invalid task data"}, 400)
+                return
+            state.manager_tasks.append(body)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif path == "/v2/manager/reboot" and state.manager:
+            if not state.manager_reboot_allowed:
+                self._json({}, 403)
+                return
+            state.down_left = state.reboot_down_polls
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif path == "/v2/manager/queue/start" and state.manager:
             # 真的 Manager 在后台线程里一个个跑;这里当场跑完,插件轮询历史时就看得到结果。
+            for task in [one for one in state.manager_tasks if one.get("kind") == "install"]:
+                ok = state.manager_outcome == "success"
+                params = task["params"]
+                if ok:
+                    state.manager_installed[params["id"]] = {"ver": "1.0.0", "cnr_id": params["id"], "aux_id": None,
+                                                            "enabled": True}
+                elif state.manager_outcome == "policy":
+                    state.log({"m": f"\x1b[1m\x1b[31m[ERROR]\x1b[0m {MANAGER_POLICY_MESSAGE}\n"})
+                else:
+                    state.log({"m": f"[ComfyUI-Manager] Installation failed: Cannot resolve install target: '{params['id']}'\n"})
+                state.manager_history[task["ui_id"]] = {
+                    "ui_id": task["ui_id"], "client_id": task["client_id"], "kind": "install",
+                    "result": "success" if ok else "failed",
+                    "status": {"status_str": "success" if ok else "error", "completed": True,
+                               "messages": [] if ok else ["failed"]},
+                    "params": params,
+                }
+            state.manager_tasks[:] = [one for one in state.manager_tasks if one.get("kind") != "install"]
             for task in state.manager_tasks:
                 ok = state.manager_outcome == "success"
                 if ok:
