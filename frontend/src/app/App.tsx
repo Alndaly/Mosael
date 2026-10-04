@@ -67,7 +67,7 @@ import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
 import { listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Hint, HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
 
 // 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
@@ -131,6 +131,8 @@ export function App() {
  *  EMBED_HEADER_HEIGHT),两者不等就会露出一条缝、缝里是 App 自己的顶栏。
  *  由 contracts/shared-constants.json 钉住。 */
 export const PUBLISH_BAR_HEIGHT = 56;
+/** 这条栏就是说明浮层唯一画得出来的地方(见 HintRegion)。 */
+const PUBLISH_BAR_REGION = { band: { top: 0, height: PUBLISH_BAR_HEIGHT } };
 
 /** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 页面工具 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
@@ -172,6 +174,8 @@ function PublishViewBar() {
         WINDOW_CHROME_INSET,
       )}
     >
+      {/* 栏下面是原生网页视图,盖在一切 DOM 上:栏里的悬停说明只能画在这条横带里(见 HintRegion)。 */}
+      <HintRegion.Provider value={PUBLISH_BAR_REGION}>
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <IconButton
           unstyled
@@ -232,13 +236,18 @@ function PublishViewBar() {
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
       )}
-      <button
-        type="button"
-        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
-        onClick={() => void window.mosaelPublish?.hideView()}
-      >
-        <ArrowLeft size={14} /> {t("publishBackToApp")}
-      </button>
+      {/* 离开这个窗口的主出口:留着字(图标认不出「回到 Mosael」),说明里补一句连按两次 Esc 也能回来。 */}
+      <Hint label={t("publishBackHint")}>
+        <button
+          type="button"
+          data-publish-back=""
+          className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
+          onClick={() => void window.mosaelPublish?.hideView()}
+        >
+          <ArrowLeft size={14} /> {t("publishBackToApp")}
+        </button>
+      </Hint>
+      </HintRegion.Provider>
     </div>
     {/* 左侧页面列表。不能放进上面那条栏里:栏的 backdrop-filter 会让 fixed 定位相对它而不是窗口。
         key:换了一个会话就是另一份列表。 */}

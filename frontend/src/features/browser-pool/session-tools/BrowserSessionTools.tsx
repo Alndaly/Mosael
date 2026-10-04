@@ -36,12 +36,22 @@ import { useImageTools } from "./useImageTools";
 import { useNoteTools } from "./useNoteTools";
 import { useShotTools } from "./useShotTools";
 import { PAGE_TEMPLATES, useStartTools } from "./useStartTools";
+import { toolAvailability, type PageTool } from "./toolAvailability";
 import { useToolNotice } from "./useToolNotice";
 import { useVideoTools } from "./useVideoTools";
 import { useViewProfile } from "./viewProfile";
 
 type Group = "shot" | "note" | "start" | null;
 type Drawer = "video" | "images" | null;
+
+/** 工具的补充说明(悬停说明里名字下面那一行)。 */
+const TOOL_HINTS: Record<PageTool, MessageKey> = {
+  shot: "browserToolsShotHint",
+  video: "browserToolsVideoHint",
+  images: "browserToolsImagesHint",
+  note: "browserToolsNoteHint",
+  start: "browserToolsStartHint",
+};
 
 const TEMPLATE_LOOK: Record<(typeof PAGE_TEMPLATES)[number], { label: MessageKey; icon: React.ReactNode }> = {
   viral_video_breakdown: { label: "browserToolsTemplateViral", icon: <TrendingUp /> },
@@ -58,7 +68,8 @@ const TEMPLATE_LOOK: Record<(typeof PAGE_TEMPLATES)[number], { label: MessageKey
  * - 框选时网页暂时藏起,原处铺一张冻结画面(见 RegionOverlay);
  * - 做完的提示(「已存进素材库」可点过去)也在顶栏里说(见 useToolNotice)。
  *
- * 平时只露图标,指针移到工具区(或键盘焦点进来)时文字标签展开。只作用于前台那一页,全部由用户点出来。
+ * 只露图标:名字和一句补充说明在悬停说明里,点不了时(页面还没打开、还在加载、上一个操作没做完)说明里写为什么
+ * (见 toolAvailability)。只作用于前台那一页,全部由用户点出来。
  * 每样能力的状态在各自的 hook 里(use*Tools),这里只摆按钮、侧栏和遮罩。
  */
 export function BrowserSessionTools({
@@ -113,24 +124,28 @@ function SessionTools({
     });
   }, [group]);
 
-  const tool = (key: string, icon: React.ReactNode, label: MessageKey, onClick: () => void, active = false) => (
-    <Button
-      key={key}
-      type="button"
-      variant="ghost"
-      size="xs"
-      data-page-tool={key}
-      aria-pressed={active}
-      // 名字平时收着(指针移进工具区或键盘切进来才展开),读屏的名字不能跟着它一起没了。
-      aria-label={t(label)}
-      disabled={busy}
-      onClick={onClick}
-      className={cn("gap-1.5 px-1.5", active && "bg-secondary")}
-    >
-      {icon}
-      <span className="hidden group-hover/tools:inline group-focus-within/tools:inline">{t(label)}</span>
-    </Button>
-  );
+  const unavailable = toolAvailability(state, busy);
+  // 只留图标:名字和一句补充说明在悬停说明里(IconButton 的 label / hint),点不了时说明里写为什么。
+  const tool = (key: PageTool, icon: React.ReactNode, label: MessageKey, onClick: () => void, active = false) => {
+    const reason = unavailable[key];
+    return (
+      <IconButton
+        key={key}
+        type="button"
+        data-page-tool={key}
+        aria-pressed={active}
+        label={t(label)}
+        // 点不了时说明里只留名字和原因:顶栏只有一条 56px 的横带画得下说明(见 HintRegion),三行放不下。
+        hint={reason ? undefined : t(TOOL_HINTS[key])}
+        disabled={reason !== null}
+        disabledReason={reason ? t(reason) : undefined}
+        onClick={onClick}
+        className={cn(active && "bg-secondary")}
+      >
+        {icon}
+      </IconButton>
+    );
+  };
   // 选了就收回去:做到哪了由状态条说,工具区回到平时的样子,下一样工具马上点得到。
   const choice = (key: string, icon: React.ReactNode, label: MessageKey, onClick: () => void) => (
     <Button
@@ -186,7 +201,7 @@ function SessionTools({
           {t("browserToolsDownloading").replace("{p}", String(Math.round(video.active.progress * 100)))}
         </button>
       )}
-      <div role="toolbar" aria-label={t("browserToolsLabel")} className="group/tools [-webkit-app-region:no-drag] inline-flex flex-none items-center gap-0.5" data-page-tools="">
+      <div role="toolbar" aria-label={t("browserToolsLabel")} className="[-webkit-app-region:no-drag] inline-flex flex-none items-center gap-0.5" data-page-tools="">
         {group === "shot" ? (
           <>
             {choice("visible", <Monitor />, "browserToolsShotVisible", () => shot.shoot.mutate("visible"))}

@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 /**
  * 浏览器会话顶栏的页面工具,走的都是用户会点的那几下:截屏三种、下载视频(平台页 / 直链 / 受保护 / 没有)、
  * 采集图片、存成笔记、用当前页开工、交给智能体。主进程那一侧换成假的 window.mosaelPageTools,后端接口换成
@@ -82,11 +84,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function show() {
+function show(state: PublishViewState = STATE) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BrowserSessionTools workspaceId="ws" state={STATE} barHeight={56} />
+      <BrowserSessionTools workspaceId="ws" state={state} barHeight={56} />
     </QueryClientProvider>,
   );
 }
@@ -381,4 +383,53 @@ it("子选项在顶栏里原地展开(不往网页上掉),Esc 收回", () => {
   fireEvent.keyDown(window, { key: "Escape" });
   expect(choiceButton("visible")).toBeNull();
   expect(toolButton("shot")).not.toBeNull();
+});
+
+describe("工具区只留图标", () => {
+  const TOOLS = [
+    ["shot", "browserToolsShot"],
+    ["video", "browserToolsVideo"],
+    ["images", "browserToolsImages"],
+    ["note", "browserToolsNote"],
+    ["start", "browserToolsStart"],
+  ] as const;
+
+  it("按钮上没有字;名字是按钮的名字,名字和一句补充说明在悬停说明里", async () => {
+    show();
+    for (const [key, label] of TOOLS) {
+      const button = toolButton(key);
+      expect(button.textContent).toBe("");
+      expect(button.getAttribute("aria-label")).toBe(label);
+      expect(button.hasAttribute("title")).toBe(false);
+      expect(await readHint(button)).toBe(`${label}${label}Hint`);
+      act(() => button.blur());
+    }
+  });
+
+  it("页面还没打开(空白页、错误页):工具都点不了,说明里写为什么", async () => {
+    show({ ...STATE, url: "about:blank", title: "" });
+    for (const [key] of TOOLS) expect((toolButton(key) as HTMLButtonElement).disabled).toBe(true);
+    expect(await readHint(toolButton("shot"))).toContain("browserToolsNeedsPage");
+  });
+
+  it("页面还在加载:下载视频、采集图片、存成笔记等它加载完,截屏和开工照常", async () => {
+    show({ ...STATE, loading: true });
+    expect((toolButton("video") as HTMLButtonElement).disabled).toBe(true);
+    expect((toolButton("images") as HTMLButtonElement).disabled).toBe(true);
+    expect((toolButton("note") as HTMLButtonElement).disabled).toBe(true);
+    expect((toolButton("shot") as HTMLButtonElement).disabled).toBe(false);
+    expect((toolButton("start") as HTMLButtonElement).disabled).toBe(false);
+    expect(await readHint(toolButton("video"))).toContain("browserToolsStillLoading");
+  });
+
+  it("上一个操作还没做完:工具都等一等,说明里写为什么", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    tools.capture.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("visible"));
+    await waitFor(() => expect((toolButton("video") as HTMLButtonElement).disabled).toBe(true));
+    expect(await readHint(toolButton("video"))).toContain("browserToolsBusy");
+    await act(async () => finish(capture()));
+  });
 });

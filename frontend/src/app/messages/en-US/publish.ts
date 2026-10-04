@@ -328,6 +328,7 @@ export const publish = {
   publishProxySet: "Set proxy",
   publishProxyOn: "Proxy",
   publishBackToApp: "Back to Mosael",
+  publishBackHint: "The page stays open; pressing Esc twice also brings you back",
   navBack: "Back",
   navForward: "Forward",
   navReload: "Reload",

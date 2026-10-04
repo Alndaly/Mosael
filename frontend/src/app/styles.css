@@ -7,6 +7,10 @@
 [data-radix-popper-content-wrapper] {
   z-index: 120 !important;
 }
+/* 内嵌浏览器的顶栏、侧栏(z 200,压在原生网页视图周围)里出的说明,压在它们上面(见 tooltip.tsx 的 HintRegion)。 */
+[data-radix-popper-content-wrapper]:has(> [data-over-chrome]) {
+  z-index: 210 !important;
+}
 /* Custom-background menus and canvas panels. Modal surfaces own their independent glass. */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] [data-radix-popper-content-wrapper] > *:not([data-tooltip]),

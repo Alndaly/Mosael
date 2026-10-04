@@ -2,7 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-import { EnsureProvider, HintScope, Tooltip, TooltipContent, TooltipTrigger, useExclusiveOpen } from "./tooltip"
+import { EnsureProvider, HintRegion, HintScope, Tooltip, TooltipContent, TooltipTrigger, regionPlacement, useExclusiveOpen } from "./tooltip"
 
 const CLAMP = { 1: "truncate", 2: "line-clamp-2", 3: "line-clamp-3", 4: "line-clamp-4" } as const
 
@@ -42,8 +42,9 @@ const Truncate = React.forwardRef<
     /** 给 `<label>` 用。 */
     htmlFor?: string
   }
->(({ children, text, hint, lines = 1, side = "top", as: Tag = "span", className, onPointerEnter, onPointerLeave, ...props }, forwarded) => {
+>(({ children, text, hint, lines = 1, side, as: Tag = "span", className, onPointerEnter, onPointerLeave, ...props }, forwarded) => {
   const [open, setOpen] = useExclusiveOpen()
+  const region = React.useContext(HintRegion)
   const [clipped, setClipped] = React.useState(false)
   const ref = React.useRef<HTMLElement | null>(null)
   const setRef = React.useCallback(
@@ -91,7 +92,7 @@ const Truncate = React.forwardRef<
         }}
       >
         <TooltipTrigger asChild>{element}</TooltipTrigger>
-        <TooltipContent side={side} data-truncate-full="" className="max-w-[min(28rem,calc(100vw-1rem))] whitespace-pre-wrap">
+        <TooltipContent {...regionPlacement(region, side)} data-truncate-full="" className="max-w-[min(28rem,calc(100vw-1rem))] whitespace-pre-wrap">
           {clipped ? <span className="block">{full}</span> : null}
           {hint ? <span className={cn("block", clipped && "text-muted-foreground")}>{hint}</span> : null}
         </TooltipContent>

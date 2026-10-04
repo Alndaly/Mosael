@@ -110,6 +110,32 @@ export type HintShortcut = string | readonly string[]
 type OverflowText = () => React.ReactNode | null
 const HintScope = React.createContext<((get: OverflowText) => () => void) | null>(null)
 
+/**
+ * 说明浮层所在的「区域」,给**内嵌浏览器**那几块用:顶栏、侧栏。它们压在原生网页视图周围,z 是 200,比所有
+ * 浮层(styles.css 统一定成 120)都高 —— 不说一声,说明就画在它们底下。
+ *
+ * - `band`:只能画在这一条横带里(顶栏)。顶栏下面是原生网页视图,盖在一切 DOM 上 —— 说明往下出被它盖住,
+ *   往上出又出了窗口(窗口装饰那一截的避让也会把它推下去)。带里的说明默认往左右出,竖直方向夹在带里;
+ *   两行(名字 + 一句说明)放得下 56px 的顶栏。
+ * - `band: null`:不限位置,只是要压在这块上面(侧栏:它旁边的网页让开了,浮层照常摆)。
+ *
+ * 两种都给浮层标上 `data-over-chrome`,styles.css 据此把它那层抬到顶栏、侧栏之上。
+ */
+const HintRegion = React.createContext<{ band: { top: number; height: number } | null } | null>(null)
+
+/** 区域里的说明怎么摆:带里默认往左出(放不下 Radix 会翻到右边),上下的避让按带的上下沿算。 */
+function regionPlacement(region: { band: { top: number; height: number } | null } | null, side: Side | undefined) {
+  if (!region) return { side: side ?? "top" }
+  const band = region.band
+  if (!band) return { side: side ?? "top", "data-over-chrome": "" }
+  const viewport = typeof window === "undefined" ? band.top + band.height : window.innerHeight
+  return {
+    side: side ?? "left",
+    collisionPadding: { top: band.top, bottom: Math.max(0, viewport - band.top - band.height), left: 8, right: 8 },
+    "data-over-chrome": "",
+  }
+}
+
 /** 浮层内容用它把 Hint 的范围清掉(见 HintScope)。 */
 function HintScopeReset({ children }: { children?: React.ReactNode }) {
   return <HintScope.Provider value={null}>{children}</HintScope.Provider>
@@ -143,7 +169,7 @@ function Hint({
   hint,
   shortcut,
   disabledReason,
-  side = "top",
+  side,
   align,
   children,
 }: {
@@ -157,6 +183,7 @@ function Hint({
   children: React.ReactNode
 }) {
   const [open, setOpen] = useExclusiveOpen()
+  const placement = regionPlacement(React.useContext(HintRegion), side)
   const hovered = React.useRef(false)
   const overflows = React.useRef(new Set<OverflowText>())
   const register = React.useCallback((get: OverflowText) => {
@@ -210,7 +237,7 @@ function Hint({
             {trigger}
           </TooltipTrigger>
         </HintScope.Provider>
-        <TooltipContent side={side} align={align} data-hint="">
+        <TooltipContent {...placement} align={align} data-hint="">
           {full.map((one, index) => (
             <span key={index} data-truncate-full="" className="block whitespace-pre-wrap">
               {one}
@@ -230,4 +257,16 @@ function Hint({
   )
 }
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Hint, EnsureProvider, useExclusiveOpen, HintScope, HintScopeReset }
+export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+  Hint,
+  HintRegion,
+  regionPlacement,
+  EnsureProvider,
+  useExclusiveOpen,
+  HintScope,
+  HintScopeReset,
+}

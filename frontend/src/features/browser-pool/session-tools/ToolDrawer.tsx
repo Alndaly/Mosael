@@ -5,6 +5,9 @@ import { X } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
+import { HintRegion } from "@/components/ui/tooltip";
+
+const DRAWER_REGION = { band: null };
 
 /** 侧栏宽度。开着侧栏时网页右侧让出这么宽(主进程 setShellInset)。 */
 export const DRAWER_WIDTH = 360;
@@ -39,7 +42,9 @@ export function ToolDrawer({
     void window.mosaelPageTools?.setInset(DRAWER_WIDTH);
     return () => void window.mosaelPageTools?.setInset(0);
   }, []);
+  // 侧栏不在顶栏那条横带里(它旁边的网页让开了这一块):里面的说明照常摆,只是要压在侧栏上面。
   return createPortal(
+    <HintRegion.Provider value={DRAWER_REGION}>
     <aside
       data-page-tools-drawer=""
       aria-label={title}
@@ -55,7 +60,8 @@ export function ToolDrawer({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
       {footer && <footer className="flex flex-none items-center justify-end gap-2 border-t border-border p-3">{footer}</footer>}
-    </aside>,
+    </aside>
+    </HintRegion.Provider>,
     document.body,
   );
 }
