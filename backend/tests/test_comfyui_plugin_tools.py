@@ -180,10 +180,14 @@ def test_工作流里设成每次随机的种子_没给就换一个(comfy, tmp_p
 
 
 def test_蒙版接到LoadImage的alpha那一路(comfy, tmp_path: Path) -> None:
+    # 重绘那一路得真的接到保存节点上:悬空的 VAEEncodeForInpaint 什么都不影响,不在 ComfyUI 会跑的那部分图里
     comfy.state.workflows["inpaint.json"] = {
         "1": {"class_type": "LoadImage", "inputs": {"image": "x.png"}},
-        "2": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["1", 0], "mask": ["1", 1]}},
-        "3": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "p"}},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base.safetensors"}},
+        "2": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["1", 0], "mask": ["1", 1], "vae": ["4", 2],
+                                                              "grow_mask_by": 6}},
+        "5": {"class_type": "VAEDecode", "inputs": {"samples": ["2", 0], "vae": ["4", 2]}},
+        "3": {"class_type": "SaveImage", "inputs": {"images": ["5", 0], "filename_prefix": "p"}},
     }
     _stream(comfy.url, _by_path("inpaint.json"), {"image_1": str(_png(tmp_path)),
                                                   "mask": str(_png(tmp_path, "mask.png"))}, tmp_path)

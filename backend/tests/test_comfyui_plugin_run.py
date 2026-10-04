@@ -26,6 +26,7 @@ from tests.fake_comfyui import (
     MINIMAX_T2V_API,
     PNG,
     TWO_SAVES_API,
+    UPSCALE_API,
     VIDEO_NODE_INFO,
     FakeComfyUI,
     minimax_h3_ui,
@@ -373,6 +374,39 @@ def test_一部分输出校验不过_ComfyUI照样排上_说出原因并把它�
     with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list: ckpt_name: 'gone.safetensors'"):
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     assert comfy.posted("/queue") == [{"delete": ["p1"]}], "排上的那个任务撤掉,不让它在 ComfyUI 上跑一个没人要的结果"
+
+
+def test_缺节点缺模型文件_提交之前一次说全_说人话(comfy, tmp_path: Path) -> None:
+    """用户的 krea2 那张缺五个自定义节点,ComfyUI 每次只回第一个(「Node 'TTResolutionSelector' not found. The custom node
+    may not be installed.」),装好一个才知道下一个;缺模型文件时回一句英文的「Value not in list」或执行到一半才说
+    「Model in folder 'checkpoints' with filename … not found」。插件手里有 object_info:提交之前就看得出缺什么,一次说全,
+    什么都不排上。"""
+    comfy.state.workflows["missing.json"] = {
+        **UPSCALE_API,
+        "2": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4xNomosWebPhoto_RealPLKSR.pth"}},
+        "7": {"class_type": "CR Prompt Text", "inputs": {"prompt": "田园"}},
+        "8": {"class_type": "TTResolutionSelector", "inputs": {"resolution": "1920x1080"}},
+    }
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "missing.json", "inputs": [{"role": "reference_image",
+                                                                             "path": str(_png(tmp_path))}]})
+    said = str(caught.value)
+    assert "没装" in said and "CR Prompt Text" in said and "TTResolutionSelector" in said
+    assert "4xNomosWebPhoto_RealPLKSR.pth" in said and "模型文件" in said
+    assert not comfy.posted("/prompt") and not comfy.posted("/upload/image"), "缺东西的图不提交、不传素材"
+
+
+def test_执行到一半才发现缺模型文件_也说人话(comfy, tmp_path: Path) -> None:
+    """有的加载节点(带子目录的 checkpoint 名)校验时不拦,执行到它才说找不到文件 —— DaSiWa WAN 2.2 就是这样。"""
+    comfy.state.outcome = "error"
+    comfy.state.error_node = "CheckpointLoaderSimple"
+    comfy.state.error_message = ("Model in folder 'checkpoints' with filename "
+                                 "'Wan/22/Wan2_2-I2V-High-LS-DaSiWa-TastySin-fp8-v81.safetensors' not found.")
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    said = str(caught.value)
+    assert "没有模型文件" in said and "Wan/22/Wan2_2-I2V-High-LS-DaSiWa-TastySin-fp8-v81.safetensors" in said
+    assert "checkpoints" in said and "not found" not in said
 
 
 def test_执行失败带出ComfyUI自己的原因(comfy, tmp_path: Path) -> None:

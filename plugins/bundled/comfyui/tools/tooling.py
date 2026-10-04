@@ -513,6 +513,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
     # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
     prompt = graph.fill(api, values, overrides, object_info)
+    run.preflight(prompt, object_info, locale)
 
     uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
                          + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))

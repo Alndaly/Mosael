@@ -111,6 +111,79 @@ def _safe_name(name: str) -> str:
     return cleaned[-80:]
 
 
+#: 加载节点读的模型文件:输入名以 `_name` 结尾(ckpt_name、lora_name、unet_name、vae_name、clip_name、model_name …)、
+#: 值带着这几种后缀。值不在 ComfyUI 给的可选值里,就是那台机器上没有这个文件。
+_MODEL_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sft", ".onnx")
+#: 一句话里最多点几个名字(一张大图缺十几个节点时,后面的用「等 n 个」带过)。
+_MAX_NAMED = 8
+
+
+def _options(definition: Any) -> list[str]:
+    if not isinstance(definition, list) or not definition:
+        return []
+    if isinstance(definition[0], list):
+        return [str(one) for one in definition[0]]
+    extra = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
+    return [str(one) for one in extra.get("options") or []] if definition[0] == "COMBO" else []
+
+
+def _same_file(name: str) -> str:
+    """模型文件名比较时不分 / 和 \\(Windows 上的 ComfyUI 列子目录用反斜杠,别处存的工作流用斜杠)。"""
+    return name.replace("\\", "/")
+
+
+def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """这张图要、这台 ComfyUI 上没有的东西:(没装的节点类型, 「模型文件(#节点 类型 · 输入名)」)。"""
+    nodes: list[str] = []
+    files: list[str] = []
+    for node_id in sorted(prompt, key=graph._node_order):  # noqa: SLF001 — 同一个插件里的模块
+        node = prompt[node_id]
+        class_type = str(node.get("class_type", ""))
+        if class_type not in object_info:
+            if class_type not in nodes:
+                nodes.append(class_type)
+            continue
+        defs = graph._input_defs(object_info, class_type)  # noqa: SLF001
+        for name, value in (node.get("inputs") or {}).items():
+            if not (isinstance(value, str) and name.endswith("_name") and value.lower().endswith(_MODEL_SUFFIXES)):
+                continue
+            options = {_same_file(one) for one in _options(defs.get(name))}
+            if options and _same_file(value) not in options:
+                files.append(f"「{value}」(#{node_id} {class_type} · {name})")
+    return nodes, files
+
+
+def _named(names: list[str], sep: str) -> str:
+    shown = sep.join(names[:_MAX_NAMED])
+    return shown if len(names) <= _MAX_NAMED else f"{shown}{sep}… ({len(names)})"
+
+
+def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) -> None:
+    """提交之前看一眼:这张图要的节点、模型文件这台 ComfyUI 上有没有。缺的**一次说全**,什么都不排上。
+
+    ComfyUI 自己每次只说第一个没装的节点(「Node 'X' not found. The custom node may not be installed.」),装好一个才知道
+    下一个;缺模型文件时回一句英文的「Value not in list」,有的加载节点还要执行到它才说找不到。不知道节点定义
+    (object_info 拿不到)就不判,交给 ComfyUI 去说。"""
+    if not object_info:
+        return
+    nodes, files = missing(prompt, object_info)
+    zh: list[str] = []
+    en: list[str] = []
+    if nodes:
+        zh.append(f"这台 ComfyUI 没装这张工作流用到的节点:{_named(nodes, '、')}。它们多半来自没装的自定义节点包 —— 在 ComfyUI "
+                  "的 Manager 里「安装缺失的节点」、重启 ComfyUI 再试。")
+        en.append(f"This ComfyUI doesn't have the nodes this workflow uses: {_named(nodes, ', ')}. They most likely come from "
+                  "custom node packs that aren't installed; install them from ComfyUI Manager (Install Missing Custom Nodes), "
+                  "restart ComfyUI and try again.")
+    if files:
+        zh.append(f"这台 ComfyUI 上没有这张工作流要的模型文件:{_named(files, '、')}。把文件放进 ComfyUI 对应的模型目录,"
+                  "或者在参数里换成已有的文件再试。")
+        en.append(f"This ComfyUI doesn't have the model files this workflow needs: {_named(files, ', ')}. Put them in the "
+                  "matching ComfyUI models folder, or pick a file it has in the parameters, and try again.")
+    if zh:
+        raise ComfyError(say(locale, "".join(zh), " ".join(en)))
+
+
 def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str) -> str:
     try:
         answer = comfy.post("/prompt", {"prompt": prompt, "client_id": client_id})
@@ -272,6 +345,8 @@ def _follow_ws(comfy: Comfy, socket: WebSocket, prompt_id: str, tracker: _Tracke
 #: ComfyUI 的「这个输入是空的」:加载节点交出的东西里缺了这一块。最常见的是 checkpoint 文件里本来就没有
 #: 文本编码器(或 VAE)—— Flux、Anima 这类模型的权重单独发,要在图里另加一个加载节点。
 _MISSING_PART = re.compile(r"\b(clip|vae) input is invalid: None", re.IGNORECASE)
+#: ComfyUI 执行到加载节点才发现文件不在:「Model in folder 'checkpoints' with filename '…' not found.」
+_MISSING_FILE = re.compile(r"Model in folder '([^']+)' with filename '([^']+)' not found", re.IGNORECASE)
 
 
 def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> ComfyError:
@@ -281,6 +356,16 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> Co
     「ComfyUI 执行失败:CLIPTextEncode: ERROR: clip input is invalid: None If the clip is from a checkpoint…」——
     用户在「模型」里挑了一个不带文本编码器的文件,读完这句也不知道是哪个文件、该换成什么。
     """
+    absent = _MISSING_FILE.search(said or "")
+    if absent:
+        folder, name = absent.groups()
+        return ComfyError(say(
+            locale,
+            f"ComfyUI 上没有模型文件「{name}」({folder} 目录)。把它放进 ComfyUI 的 models/{folder},或者在参数里换成已有的"
+            "文件再试。",
+            f"ComfyUI doesn't have the model file “{name}” (folder {folder}). Put it in ComfyUI's models/{folder}, or pick a "
+            "file it has in the parameters, and try again.",
+        ))
     missing = _MISSING_PART.search(said or "")
     if missing:
         files = graph.checkpoint_files(api or {})
@@ -436,6 +521,7 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         prompt = graph.fill(api, values, overrides_from(parameters), object_info)
         if picked:
             prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
+        preflight(prompt, object_info, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded)

@@ -72,6 +72,22 @@ OBJECT_INFO: dict[str, Any] = {
     "ShowText|pysssss": {"input": {"required": {"text": ["STRING", {"forceInput": True}]}}, "output_node": True},
     #: 参考图进模型的那一类(IP-Adapter):图接进来,交出改过的模型。
     "IPAdapter": {"input": {"required": {"model": ["MODEL"], "image": ["IMAGE"]}}, "output": ["MODEL"]},
+    "VAEEncodeForInpaint": {"input": {"required": {
+        "pixels": ["IMAGE"], "vae": ["VAE"], "mask": ["MASK"],
+        "grow_mask_by": ["INT", {"default": 6, "min": 0, "max": 64, "step": 1}]}}, "output": ["LATENT"]},
+    "Canny": {"input": {"required": {
+        "image": ["IMAGE"], "low_threshold": ["FLOAT", {"default": 0.4, "min": 0.01, "max": 0.99, "step": 0.01}],
+        "high_threshold": ["FLOAT", {"default": 0.8, "min": 0.01, "max": 0.99, "step": 0.01}]}}, "output": ["IMAGE"]},
+    "ControlNetLoader": {"input": {"required": {"control_net_name": [["control_canny.safetensors"]]}},
+                         "output": ["CONTROL_NET"]},
+    "ControlNetApply": {"input": {"required": {
+        "conditioning": ["CONDITIONING"], "control_net": ["CONTROL_NET"], "image": ["IMAGE"],
+        "strength": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}]}}, "output": ["CONDITIONING"]},
+    "EmptyAceStepLatentAudio": {"input": {"required": {
+        "seconds": ["FLOAT", {"default": 120.0, "min": 1.0, "max": 1000.0, "step": 0.1}],
+        "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096}]}}, "output": ["LATENT"]},
+    "SaveAudio": {"input": {"required": {"audio": ["AUDIO"], "filename_prefix": ["STRING", {"default": "audio/ComfyUI"}]}},
+                  "output_node": True},
 }
 for _name in ("SaveImage",):
     OBJECT_INFO[_name]["output_node"] = True
