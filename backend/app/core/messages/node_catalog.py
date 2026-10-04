@@ -18,6 +18,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "aiErr_gatewayFailed": {"zh": "Gateway 调用失败", "en": "The gateway call failed"},
     "aiErr_gatewayTimeout": {"zh": "Gateway 调用超过 {seconds} 秒未返回", "en": "The gateway call did not return within {seconds} seconds"},
     "aiErr_gatewayNoResult": {"zh": "Gateway 没有返回结果", "en": "The gateway returned no result"},
+    "aiErr_gatewayCancelled": {"zh": "Gateway 调用随任务取消而中断", "en": "The gateway call was stopped because its task was cancelled"},
     "aiErr_turnFailedCheckProvider": {
         "zh": "{detail}\n请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。",
         "en": "{detail}\nCheck the AI provider settings: the base_url must be a complete OpenAI-compatible endpoint (with port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable.",

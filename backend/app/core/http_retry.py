@@ -15,6 +15,8 @@ import time
 
 import httpx
 
+from app.core import abort
+
 #: 默认重试次数(不含首次)。与 db.models.AiRuntimeConfig.max_retries 的列默认值一致。
 DEFAULT_MAX_RETRIES = 3
 #: 上限。封顶是为了一次限流不至于被拖成几分钟的静默重试。
@@ -105,16 +107,27 @@ class RetryingClient(httpx.Client):
 
     def __init__(self, *args, max_retries: int | None = None, **kwargs) -> None:
         self._max_retries = max_retries
+        #: 在一件可以取消的活里建的客户端(见 core/abort):记下自己建的连接,活被取消时把它们关掉。
+        scope = abort.current()
+        self._reaper = abort.SocketReaper(scope) if scope is not None else None
         super().__init__(*args, **kwargs)
 
     def send(self, request: httpx.Request, **kwargs) -> httpx.Response:  # type: ignore[override]
         limit = self._max_retries if self._max_retries is not None else _max_retries
         attempts = max(1, limit + 1)
+        reaper = self._reaper
+        if reaper is not None:
+            request.extensions["trace"] = reaper.trace(request.extensions.get("trace"))
         for attempt in range(attempts):
             last = attempt == attempts - 1
+            #: 活已经被取消:不再发(也不再重试)—— 一次新的付费调用正是取消要拦住的东西。
+            if reaper is not None and reaper.scope.aborted:
+                raise abort.RequestAborted("the work this request belongs to was cancelled", request=request)
             try:
                 response = super().send(request, **kwargs)
             except httpx.RequestError as exc:
+                if reaper is not None and reaper.scope.aborted:
+                    raise abort.RequestAborted("cancelled while the request was in flight", request=request) from exc
                 # 连接断开 / 超时 / DNS:末次才抛,其余退避后再来。
                 if last or not resend_is_safe(request, exc):
                     raise
@@ -125,6 +138,17 @@ class RetryingClient(httpx.Client):
                 response.close()
             time.sleep(backoff_seconds(attempt))
         raise AssertionError("unreachable: the last attempt always returns or raises")  # 仅为类型收敛
+
+    def close(self) -> None:
+        if self._reaper is not None:
+            self._reaper.close()
+        super().close()
+
+    def __exit__(self, *exc_info) -> None:  # type: ignore[override]
+        #: httpx 的 __exit__ 不经过 close():两条路都要把取消登记撤掉。
+        if self._reaper is not None:
+            self._reaper.close()
+        super().__exit__(*exc_info)
 
 
 def post(url: str, *, max_retries: int | None = None, **kwargs) -> httpx.Response:

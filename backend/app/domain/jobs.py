@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
+from app.core import abort
 from app.core.db import SessionLocal
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
@@ -155,12 +156,20 @@ def stop_watching_new_jobs(token: contextvars.Token) -> None:
 # processes belongs to the workflow job (see plugins/runtime.execute_tool).
 _CHILDREN: dict[str, list[Any]] = {}
 _CHILDREN_LOCK = threading.Lock()
+#: 取消已经掐过、而执行体还在跑的任务。取消在**提交之前**就掐子进程(_cancel_job_row),执行体却可能恰好在那一刻起一个
+#: 新的子进程:它登记时去库里查,取消还没提交,查到的仍是 running —— 于是这个新来的没人掐,插件照跑到底(取消落在插件
+#: 刚要起进程的那一下就是这样)。记在内存里,登记时先看这里;执行体结束时(run_as_job)忘掉。
+_KILLED: set[str] = set()
 
 
 def register_job_child(job_id: str, child: Any) -> None:
     """Associate a killable child (anything with .kill()) with a job for its lifetime."""
     with _CHILDREN_LOCK:
         _CHILDREN.setdefault(job_id, []).append(child)
+        already_killed = job_id in _KILLED
+    if already_killed:
+        child.kill()
+        return
     # Cancellation may have committed before the subprocess existed.
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -186,12 +195,22 @@ def unregister_job_child(job_id: str) -> None:
 
 
 def kill_job_child(job_id: str) -> bool:
-    """Stop the children of a running job, if any are registered. True if something was killed."""
+    """Stop the children of a running job, if any are registered. True if something was killed.
+
+    执行体还在跑的(登记过东西的)记进 _KILLED:之后才登记的子进程当场掐掉,不等取消提交。"""
     with _CHILDREN_LOCK:
         children = list(_CHILDREN.get(job_id, ()))
+        if children:
+            _KILLED.add(job_id)
     for child in children:
         child.kill()
     return bool(children)
+
+
+def forget_job_kill(job_id: str) -> None:
+    """这个任务的执行体结束了:不再需要记着它被取消过(见 _KILLED)。"""
+    with _CHILDREN_LOCK:
+        _KILLED.discard(job_id)
 
 
 # Admission control for work that is heavy in CPU, GPU or memory. There was none: ten
@@ -660,9 +679,16 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         # 执行体里建出来的任务都归这个任务(ADR-0018)。新线程不继承 contextvar ——
         # 此前字幕配音逐句建的合成、导出收尾排的代理转码,全都成了顶层任务,各自弹一条"完成"。
         token = set_parent_job(job_id, strict=False)
+        # 取消要掐得掉**正在进行**的出站请求(大模型、配音、翻译……)和一次性子进程,不只是改一行状态(见 core/abort)。
+        # 开关登记成这个任务的「子进程」:取消(连同级联到它的)经 kill_job_child 调到它的 kill()。
+        stop = abort.AbortScope()
+        register_job_child(job_id, stop)
         try:
-            thread_target()
+            with abort.scope(stop):
+                thread_target()
         finally:
+            detach_job_child(job_id, stop)
+            forget_job_kill(job_id)
             reset_parent_job(token)
 
     def submit() -> None:

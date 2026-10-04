@@ -348,6 +348,18 @@ function lastAssistant(messages: readonly unknown[]): unknown {
   return [...messages].reverse().find((message) => (message as { role?: string }).role === "assistant");
 }
 
+/**
+ * 这一轮是不是被「停止」掐断的。
+ *
+ * pi 的 Agent 被 abort 时 **prompt() 不抛**:它记下一条 stopReason="aborted" 的消息、照常结束这一次运行 —— 而运行一结束
+ * `agent.signal` 就没了(它挂在那次运行上)。所以此前只靠「prompt 抛了、或者 signal 还是 aborted」来认,一次都认不出来:
+ * 停止之后照常发 turn_done,后端把一轮「还没出字就被停下」当成「模型什么都没回」,报一句检查供应商配置;
+ * 有子智能体在跑的话,收尾那段还会把它们的报告续成**新的一次请求** —— 用户按了停止,供应商照样被调用。
+ */
+function stoppedByUser(messages: readonly unknown[]): boolean {
+  return (lastAssistant(messages) as { stopReason?: string } | undefined)?.stopReason === "aborted";
+}
+
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
 export function buildModels(
   baseUrl: string,
@@ -771,7 +783,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
   const settleSubagents = async () => {
     for (;;) {
-      if (agent.signal?.aborted) {
+      if (agent.signal?.aborted || stoppedByUser(agent.state.messages.slice(turnStartIndex))) {
         // 中止也要等后台子智能体真的停下。它们现在收得到同一个中止信号(见 subagent.ts),
         // 所以这一等是有限的 —— 等的是把在飞的请求收掉,不是等它们跑完。
         // 直接 break 的话 promise 还挂在事件循环里,Node 不退,只能等后端强杀收场。
@@ -796,7 +808,10 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     await settleSubagents();
     // 没说完就停下的(截断 / 工具调用丢了 / 供应商暂停,见 stallOf):**续一次**,让它从断处接着做。
     // 只续一次:输出额度本身太小的话续多少次都一样,那时该说清楚,而不是替用户一遍遍花钱。
-    const stall = agent.signal?.aborted ? null : stallOf(lastAssistant(agent.state.messages));
+    const stall =
+      agent.signal?.aborted || stoppedByUser(agent.state.messages.slice(turnStartIndex))
+        ? null
+        : stallOf(lastAssistant(agent.state.messages));
     if (stall) {
       await agent.prompt(stall.nudge);
       await settleSubagents();
@@ -807,6 +822,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     if (agent.signal?.aborted || String(err).includes("abort")) aborted = true;
     else throw err;
   }
+  if (stoppedByUser(agent.state.messages.slice(turnStartIndex))) aborted = true;
   // 工具截图不进会话状态:下一轮重发上一轮的画面没有意义(见 toolImages.ts)。
   const messages = dropToolImages(agent.state.messages);
   const turnMessages = messages.slice(turnStartIndex);

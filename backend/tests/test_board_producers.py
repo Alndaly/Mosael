@@ -1027,10 +1027,16 @@ def test_停止会杀掉正在跑的插件进程(tmp_path) -> None:
     placed = _run(client, board_id, ws, producer, kind="image")
     assert placed.status_code == 200, placed.text
     job_id = next(one for one in placed.json()["canvas"]["items"] if one["id"] == "a1")["run"]["job_id"]
+    from app.domain.plugins.runtime import _CancelSwitch
+
+    #: 任务一开跑就登记了它的取消开关(core/abort,掐在途的请求);这里等的是**插件进程**登记上来。
+    def plugin_processes() -> list:
+        return [child for child in jobs._CHILDREN.get(job_id, ()) if isinstance(child, _CancelSwitch)]
+
     deadline = time.monotonic() + 15
-    while not jobs._CHILDREN.get(job_id) and time.monotonic() < deadline:
+    while not plugin_processes() and time.monotonic() < deadline:
         time.sleep(0.05)
-    assert jobs._CHILDREN.get(job_id), "插件进程没有登记到画板这一轮的任务名下"
+    assert plugin_processes(), "插件进程没有登记到画板这一轮的任务名下"
 
     started = time.monotonic()
     cancelled = client.post(f"/api/jobs/{job_id}/cancel")

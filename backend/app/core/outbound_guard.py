@@ -41,6 +41,7 @@ from urllib.parse import urljoin
 
 import httpx
 
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError, fragment
 
 #: 跟随重定向时最多几跳。
@@ -253,8 +254,11 @@ class Exchange(NamedTuple):
 
 def client(*, timeout: float, proxy: str | None) -> httpx.Client:
     """发一跳用的 httpx 客户端。**不认环境变量**:代理走不走已经在 check 里按同一份环境判过了。
-    单独成一个函数:测试在这里装 MockTransport。"""
-    return httpx.Client(timeout=timeout, proxy=proxy, trust_env=False, follow_redirects=False)
+
+    用 RetryingClient 只为了它认得「这件活被取消了」(core/abort,取消时连接当场关掉);不重试 —— 用户的请求
+    多半不是幂等的,和此前一样只发一次。单独成一个函数:测试在这里装 MockTransport。
+    """
+    return RetryingClient(max_retries=0, timeout=timeout, proxy=proxy, trust_env=False, follow_redirects=False)
 
 
 def _send_once(

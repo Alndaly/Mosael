@@ -17,6 +17,7 @@ Mosael's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
 
+from app.core import abort
 from app.core.child_process import ChildProcess, popen_text
 from app.core.i18n import LocalizedError, tr
 
@@ -131,22 +132,31 @@ def gateway_complete(
     process.stdin.flush()
     process.stdin.close()
     child = ChildProcess(process, timeout)
-    for line in child.lines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "gateway_done":
-            child.finish()
-            usage = event.get("usage")
-            return GatewayResult(
-                text=str(event.get("text", "")).strip(),
-                usage=usage if isinstance(usage, dict) else None,
-            )
-        if event.get("type") == "error":
-            child.finish()
-            raise _reported(event, "aiErr_gatewayFailed")
-    stderr = _tail(child.finish())
+    #: 这次补全所属的活被取消(core/abort):掐掉这个一次性的 sidecar —— 它对供应商的那条连接随进程一起断,
+    #: 而不是答完、计完费才停。
+    stop = abort.current()
+    detach = stop.on_abort(child.kill) if stop is not None else (lambda: None)
+    try:
+        for line in child.lines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") == "gateway_done":
+                child.finish()
+                usage = event.get("usage")
+                return GatewayResult(
+                    text=str(event.get("text", "")).strip(),
+                    usage=usage if isinstance(usage, dict) else None,
+                )
+            if event.get("type") == "error":
+                child.finish()
+                raise _reported(event, "aiErr_gatewayFailed")
+        stderr = _tail(child.finish())
+    finally:
+        detach()
+    if stop is not None and stop.aborted:
+        raise SidecarError("aiErr_gatewayCancelled")
     if child.timed_out:
         raise SidecarError("aiErr_gatewayTimeout", seconds=f"{timeout:g}")
     raise SidecarError(stderr or "aiErr_gatewayNoResult")
