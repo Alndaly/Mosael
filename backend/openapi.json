@@ -21679,6 +21679,49 @@
           }
         }
       }
+    },
+    "/api/browser/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "browser-profiles"
+        ],
+        "summary": "Session Owner",
+        "description": "这个会话是谁开的:悬浮卡片据此写明它属于哪个工作流的哪一次运行,点标题跳过去。\n\n卡片只知道一个 id —— 发布账号的卡片 id 是账号 id,不是会话,这里回 404,卡片就不改标题。",
+        "operationId": "session_owner_api_browser_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -24923,6 +24966,60 @@
         },
         "type": "object",
         "title": "BrowserProfileUpdate"
+      },
+      "BrowserSessionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrowserSessionRunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "BrowserSessionOut",
+        "description": "一个浏览器自动化会话是谁开的。`run` 只在它是工作流运行开的、而且看的人看得见那次运行时才有。"
+      },
+      "BrowserSessionRunOut": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "workflow_name": {
+            "type": "string",
+            "title": "Workflow Name"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "workflow_id",
+          "workflow_name",
+          "started_at"
+        ],
+        "title": "BrowserSessionRunOut",
+        "description": "会话属于哪一次工作流运行 —— 悬浮卡片的标题,点标题跳到那次运行。"
       },
       "CanvasCommentAnchor": {
         "properties": {

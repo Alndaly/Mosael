@@ -1,11 +1,28 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+vi.mock("@/app/preferences", () => ({
+  useI18n: () => (key: string) => (key === "livePanelRunTitle" ? "{workflow} · {time}" : key),
+}));
 
+const sessions = vi.hoisted(() => ({ getBrowserSession: vi.fn() }));
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
+  ...sessions,
+}));
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { ApiError } from "@/api/client";
 import { LivePanels } from "./LivePanels";
+
+/** 卡片标题要问后端「这个会话是谁开的」(react-query);缺省它是发布账号那种 —— 不是会话,404。 */
+function renderPanels(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const CARD: LivePanelCard = {
   id: "browser-1",
@@ -24,6 +41,8 @@ const setPanelMuted = vi.fn(async () => undefined);
 const setPanelLayout = vi.fn(async (_change: unknown) => undefined);
 
 beforeEach(() => {
+  sessions.getBrowserSession.mockReset();
+  sessions.getBrowserSession.mockRejectedValue(new ApiError("not found", 404, ""));
   publishPanels = null;
   setPanelMuted.mockClear();
   setPanelLayout.mockClear();
@@ -54,7 +73,7 @@ const handle = (name: LivePanelHandle) => document.querySelector(`[data-resize-h
 
 describe("LivePanels audio", () => {
   it("uses the main-process mute state and toggles the top embedded browser", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     const button = screen.getByRole("button", { name: "livePanelUnmute" });
@@ -65,7 +84,7 @@ describe("LivePanels audio", () => {
 
   it("blocks exposed borders and title gaps from reaching the workflow canvas", () => {
     const canvasPointer = vi.fn();
-    render(<div onPointerDown={canvasPointer}><LivePanels /></div>);
+    renderPanels(<div onPointerDown={canvasPointer}><LivePanels /></div>);
     show();
 
     expect(shell().className).toContain("pointer-events-auto");
@@ -79,7 +98,7 @@ describe("LivePanels audio", () => {
 
 describe("LivePanels resize handles", () => {
   it("keeps the title bar to move / mute / close — resizing lives on the card's edges", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     const titleButtons = within(shell()).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
@@ -88,7 +107,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("puts a named, focusable handle on each corner and a cursor-only drag zone on each edge", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     for (const [corner, label] of [
@@ -114,7 +133,7 @@ describe("LivePanels resize handles", () => {
 
   it("shows the handles while the pointer is on the card and fades them after it leaves", () => {
     vi.useFakeTimers();
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
     expect(handlesLayer().dataset.visible).toBe("false");
 
@@ -130,7 +149,7 @@ describe("LivePanels resize handles", () => {
 
   it("shows the handles while the main process reports the pointer over the web page", () => {
     vi.useFakeTimers();
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show({ ...CARD, hovered: true });
     expect(handlesLayer().dataset.visible).toBe("true");
 
@@ -141,7 +160,7 @@ describe("LivePanels resize handles", () => {
 
   it("keeps the handles up for the whole drag even when the pointer is elsewhere", () => {
     vi.useFakeTimers();
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     fireEvent.pointerDown(handle("se"), { clientX: 100, clientY: 100 });
@@ -166,7 +185,7 @@ describe("LivePanels resize handles", () => {
     ["e", { x: 20, y: 20, width: 414, height: 265 }],
     ["w", { x: 50, y: 20, width: 354, height: 265 }],
   ] as const)("dragging %s sends the rectangle the pointer asks for", (name, rect) => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     fireEvent.pointerDown(handle(name), { clientX: 100, clientY: 100 });
@@ -179,7 +198,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("dragging a top corner or the top edge only resizes — it never also drags the title bar under it", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     for (const name of ["nw", "n", "ne"] as const) {
@@ -200,7 +219,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("measures the drag from where it started, not from the previous move", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     fireEvent.pointerDown(handle("e"), { clientX: 100, clientY: 100 });
@@ -210,7 +229,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("acts on the whole stack through its top card", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     const lower = { ...CARD, id: "browser-0", y: 0 };
     const top = { ...CARD, id: "browser-1", y: 22 };
     show(lower, top);
@@ -222,7 +241,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("still moves the stack from the title bar", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
 
     const title = shell().querySelector(".cursor-grab") as HTMLElement;
@@ -232,7 +251,7 @@ describe("LivePanels resize handles", () => {
   });
 
   it("resizes from a focused corner with the arrow keys: outward grows, inward shrinks", () => {
-    render(<LivePanels />);
+    renderPanels(<LivePanels />);
     show();
     const ratio = CARD.height / CARD.width;
 
@@ -253,5 +272,47 @@ describe("LivePanels resize handles", () => {
     setPanelLayout.mockClear();
     fireEvent.keyDown(handle("nw"), { key: "Enter" });
     expect(setPanelLayout).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("LivePanels 标题:属于哪个工作流的哪次运行", () => {
+  it("工作流运行开的浏览器:标题写工作流名和运行开始时间,点它跳到那次运行", async () => {
+    sessions.getBrowserSession.mockResolvedValue({
+      id: "browser-1",
+      run: { job_id: "job-9", workflow_id: "wf-3", workflow_name: "爆款拆解", started_at: "2026-10-04T06:32:00" },
+    });
+    const opened: string[] = [];
+    const listen = (event: Event) => opened.push((event as CustomEvent<string>).detail);
+    window.addEventListener("mosael:open-workflow-run", listen);
+    const { container } = renderPanels(<LivePanels />);
+    show();
+
+    const title = await within(shell()).findByRole("button", { name: /爆款拆解/ });
+    // 后端时间是 UTC:按本地时区显示「月-日 时:分」
+    const at = new Date("2026-10-04T06:32:00Z");
+    const pad = (n: number) => String(n).padStart(2, "0");
+    expect(title.textContent).toBe(`爆款拆解 · ${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`);
+    expect(title.getAttribute("title")).toBe("livePanelOpenRun");
+    expect(sessions.getBrowserSession).toHaveBeenCalledWith("browser-1");
+
+    // 按在标题上是要跳过去,不是拖:不进入拖动(拖动时全屏垫一层 grabbing 光标的遮罩)
+    const dragging = () => container.querySelector('[style*="cursor: grabbing"]');
+    fireEvent.pointerDown(title, { clientX: 0, clientY: 0 });
+    expect(dragging()).toBeNull();
+    fireEvent.pointerUp(window);
+
+    fireEvent.click(title);
+    expect(window.location.hash).toBe("#/workflows");
+    expect(opened).toEqual(["wf-3/job-9"]);
+    window.removeEventListener("mosael:open-workflow-run", listen);
+  });
+
+  it("不是会话的卡片(发布账号):照旧显示执行器报来的步骤名,没有可点的标题", async () => {
+    renderPanels(<LivePanels />);
+    show();
+    await waitFor(() => expect(sessions.getBrowserSession).toHaveBeenCalledWith("browser-1"));
+    const titleButtons = within(shell()).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
+    expect(titleButtons).toEqual(["livePanelUnmute", "close"]);
   });
 });

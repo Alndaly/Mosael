@@ -169,6 +169,21 @@ export function findPluginsFor(capability: string): void {
 /** 打开工作流社区并选中某个官方模板(官网「在 Mosael 中打开」)。 */
 export const OPEN_WORKFLOW_TEMPLATE = "mosael:open-workflow-template";
 
+/**
+ * 打开某条工作流的**某一次运行**:选中那条工作流,执行历史停在那一次(画布和检查器跟着它)。
+ * 载荷是「工作流 id/运行 id」—— 信箱里只放得下一串字。
+ */
+export const OPEN_WORKFLOW_RUN = "mosael:open-workflow-run";
+
+export function workflowRunLink(workflowId: string, runId: string): string {
+  return `${workflowId}/${runId}`;
+}
+
+export function parseWorkflowRunLink(link: string): { workflowId: string; runId: string } | null {
+  const [workflowId, runId, ...rest] = link.split("/");
+  return workflowId && runId && !rest.length ? { workflowId, runId } : null;
+}
+
 /** 页面 → 打开单条记录的事件名(mosael:// 深链、任务中心「前往」共用)。没有对应事件的页面就只跳页。 */
 export const VIEW_RECORD_EVENTS: Record<string, string> = {
   workflows: "mosael:open-workflow",

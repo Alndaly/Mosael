@@ -56,6 +56,21 @@ def record_opened(db: Session, user: User, profile_id: str, url: str) -> Browser
     return prof
 
 
+# ---------------- 会话 ----------------
+
+
+def visible_session(db: Session, user: User, session_id: str) -> BrowserSession:
+    """看得见的会话:在他能进的工作区里。只用来回答「这是谁开的」,不能拿它动手(动手见 operable_session)。"""
+    session = db.get(BrowserSession, session_id)
+    if session is None:
+        raise NotVisible("routeErr_browserSessionNotFound")
+    try:
+        ensure_workspace_access(db, user, session.workspace_id)
+    except NotVisible:
+        raise NotVisible("routeErr_browserSessionNotFound") from None
+    return session
+
+
 # ---------------- 智能体的内联动作 ----------------
 
 

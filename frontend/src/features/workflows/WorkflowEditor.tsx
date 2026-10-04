@@ -81,12 +81,17 @@ export function WorkflowEditor({
   nodeTypes,
   workspaceId,
   onBack,
+  openRunId = null,
+  onRunOpened,
 }: {
   workflow: Workflow;
   nodeTypes: WorkflowNodeType[];
   workspaceId: string;
   /** 返回列表。**和标题同一行** —— 单独占一行会把整条工具栏挤下去(第一版就是这么做的)。 */
   onBack: () => void;
+  /** 从别处点过来要看的那一次运行(浏览器悬浮卡片的标题):打开执行历史、停在那一次,然后交回 onRunOpened。 */
+  openRunId?: string | null;
+  onRunOpened?: () => void;
 }) {
   const [markerMode, setMarkerMode] = React.useState(false);
   const [markersVisible, setMarkersVisible] = React.useState(true);
@@ -376,6 +381,14 @@ export function WorkflowEditor({
     checklistOpen,
     setChecklistOpen,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
+  React.useEffect(() => {
+    if (!openRunId) return;
+    viewRun(openRunId);
+    setShowHistory(true);
+    onRunOpened?.();
+    // 只认「又有一次要看」这一件事;viewRun / onRunOpened 换引用不该重放
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRunId]);
   //: 就绪清单里认不出的插件节点为什么用不了(后端的真实原因;画布角标、检查器问的是同一份缓存)。
   const unusableReasons = useUnusableNodeReasons(
     React.useMemo(

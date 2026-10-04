@@ -11,10 +11,19 @@ from sqlalchemy import select
 
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate
-from app.db.models import BrowserProfile, PublishAccount, User
+from app.api.schemas import (
+    BrowserProfileCreate,
+    BrowserProfileOpened,
+    BrowserProfileOut,
+    BrowserProfileUpdate,
+    BrowserSessionOut,
+    BrowserSessionRunOut,
+)
+from app.db.models import BrowserProfile, BrowserSession, PublishAccount, User, Workflow
 from app.domain import browser
 from app.domain.browser import use_cases as profiles
+from app.domain.job_center import use_cases as job_center
+from app.domain.permissions import NotVisible
 
 router = APIRouter(tags=["browser-profiles"])
 
@@ -103,3 +112,27 @@ def delete_profile(profile_id: str, db: Tx, user: CurrentUser) -> Response:
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+@router.get("/browser/sessions/{session_id}", response_model=BrowserSessionOut)
+def session_owner(session_id: str, db: DbSession, user: CurrentUser) -> BrowserSessionOut:
+    """这个会话是谁开的:悬浮卡片据此写明它属于哪个工作流的哪一次运行,点标题跳过去。
+
+    卡片只知道一个 id —— 发布账号的卡片 id 是账号 id,不是会话,这里回 404,卡片就不改标题。
+    """
+    session = profiles.visible_session(db, user, session_id)
+    return BrowserSessionOut(id=session.id, run=_run_of(db, user, session))
+
+
+def _run_of(db: DbSession, user: User, session: BrowserSession) -> BrowserSessionRunOut | None:
+    """工作流运行开的会话属于那一次运行(会话的 owner 就是那次运行的工作流任务);看不见那次运行就不说。"""
+    if session.owner_kind != "workflow" or not session.owner_id:
+        return None
+    try:
+        job = job_center.readable(db, user, session.owner_id)
+    except NotVisible:
+        return None
+    workflow = db.get(Workflow, str((job.payload or {}).get("workflow_id") or ""))
+    if workflow is None:
+        return None
+    return BrowserSessionRunOut(job_id=job.id, workflow_id=workflow.id, workflow_name=workflow.name, started_at=job.created_at)

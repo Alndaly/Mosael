@@ -4,6 +4,7 @@ import { MonitorPlay, Volume2, VolumeX, X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 
 import { PanelResizeHandles } from "./PanelResizeHandles";
+import { PanelTitle } from "./PanelTitle";
 
 /** 指针离开后手柄再撑这么久才淡出。指针在卡片那圈边与网页之间穿过时,DOM 的悬停和主进程报的
  *  网页悬停会有几毫秒都是假 —— 不撑这一下,手柄会跟着闪。 */
@@ -134,7 +135,7 @@ export function LivePanels() {
                 }
               >
                 <MonitorPlay size={12} className="shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate">{labels[card.id] ?? ""}</span>
+                <PanelTitle id={card.id} label={labels[card.id] ?? ""} />
               </div>
 
               {isTop && (

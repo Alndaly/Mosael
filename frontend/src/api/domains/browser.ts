@@ -2,6 +2,7 @@ import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
 export type BrowserProfile = components["schemas"]["BrowserProfileOut"];
+export type BrowserSession = components["schemas"]["BrowserSessionOut"];
 
 export function listBrowserProfiles(workspaceId: string): Promise<BrowserProfile[]> {
   return api<BrowserProfile[]>(`/api/browser/profiles?workspace_id=${workspaceId}`);
@@ -29,4 +30,9 @@ export function recordBrowserProfileOpened(profileId: string, url: string): Prom
 
 export function deleteBrowserProfile(profileId: string): Promise<unknown> {
   return api(`/api/browser/profiles/${profileId}`, { method: "DELETE" });
+}
+
+/** 一个浏览器自动化会话是谁开的(悬浮卡片的标题)。不是会话的 id(发布账号的卡片)回 404。 */
+export function getBrowserSession(sessionId: string): Promise<BrowserSession> {
+  return api<BrowserSession>(`/api/browser/sessions/${encodeURIComponent(sessionId)}`);
 }

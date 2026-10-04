@@ -12,7 +12,14 @@ from __future__ import annotations
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel  # noqa: F401
 from app.api.schemas.agent import AgentCompactOut, AgentContextOut, AgentContextPart, AgentManifestOut, AgentMemoryCreate, AgentMemoryOut, AgentMemoryUpdate, AgentMessageCreate, AgentMessageOut, AgentMessageQuoteIn, AgentPendingView, AgentPlanUpdate, AgentQuestionAnswer, AgentQuestionCreate, AgentQuestionItem, AgentQuestionOption, AgentQuestionOut, AgentReferenceIn, AgentSessionCreate, AgentSessionOut, AgentSessionUpdate, AgentSkillOut, AgentStreamEvent, ConfirmationCreate, ConfirmationOut, SessionAllowance, SessionGroupCreate, SessionGroupOut, SessionGroupUpdate  # noqa: F401
 from app.api.schemas.boards import BoardCreate, BoardDuplicate, BoardOut, BoardPreview, BoardPreviewEdge, BoardPreviewItem, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate  # noqa: F401
-from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate  # noqa: F401
+from app.api.schemas.browser import (  # noqa: F401
+    BrowserProfileCreate,
+    BrowserProfileOpened,
+    BrowserProfileOut,
+    BrowserProfileUpdate,
+    BrowserSessionOut,
+    BrowserSessionRunOut,
+)
 from app.api.schemas.capabilities import CapabilityChoicesOut, CapabilityDefaultUpdate, CapabilityProviderOut, CapabilityTermOut, CapabilityUseOut  # noqa: F401
 from app.api.schemas.collaboration import ActivityOut, ActorOut, CanvasCommentAnchor, CommentAnchorUpdate, CommentContentUpdate, CommentCreate, CommentOut  # noqa: F401
 from app.api.schemas.dashboard import AdminOverviewOut, DailyActivityOut, DailyPublishOut, DailyUsageOut, DailyUsageTokensOut, DaySeriesPoint, UnpricedUsageOut, UserSpendPoint, WorkspaceSummaryOut  # noqa: F401

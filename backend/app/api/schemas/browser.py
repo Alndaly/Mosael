@@ -44,3 +44,19 @@ class BrowserProfileUpdate(ApiModel):
     name: str | None = Field(default=None, max_length=160)
     proxy: str | None = None
     enabled: bool | None = None
+
+
+class BrowserSessionRunOut(ApiModel):
+    """会话属于哪一次工作流运行 —— 悬浮卡片的标题,点标题跳到那次运行。"""
+
+    job_id: str
+    workflow_id: str
+    workflow_name: str
+    started_at: datetime
+
+
+class BrowserSessionOut(ApiModel):
+    """一个浏览器自动化会话是谁开的。`run` 只在它是工作流运行开的、而且看的人看得见那次运行时才有。"""
+
+    id: str
+    run: BrowserSessionRunOut | None = None

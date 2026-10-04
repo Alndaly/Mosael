@@ -7081,6 +7081,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Owner
+         * @description 这个会话是谁开的:悬浮卡片据此写明它属于哪个工作流的哪一次运行,点标题跳过去。
+         *
+         *     卡片只知道一个 id —— 发布账号的卡片 id 是账号 id,不是会话,这里回 404,卡片就不改标题。
+         */
+        get: operations["session_owner_api_browser_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8567,6 +8589,32 @@ export interface components {
             proxy?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /**
+         * BrowserSessionOut
+         * @description 一个浏览器自动化会话是谁开的。`run` 只在它是工作流运行开的、而且看的人看得见那次运行时才有。
+         */
+        BrowserSessionOut: {
+            /** Id */
+            id: string;
+            run?: components["schemas"]["BrowserSessionRunOut"] | null;
+        };
+        /**
+         * BrowserSessionRunOut
+         * @description 会话属于哪一次工作流运行 —— 悬浮卡片的标题,点标题跳到那次运行。
+         */
+        BrowserSessionRunOut: {
+            /** Job Id */
+            job_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Name */
+            workflow_name: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
         };
         /**
          * CanvasCommentAnchor
@@ -29290,6 +29338,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_owner_api_browser_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSessionOut"];
                 };
             };
             /** @description Validation Error */

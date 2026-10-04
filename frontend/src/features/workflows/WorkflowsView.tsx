@@ -32,7 +32,7 @@ import { WorkflowCard } from "@/features/workflows/WorkflowCard";
 import { WorkflowEditor } from "@/features/workflows/WorkflowEditor";
 import { analyzeWorkflowNow } from "@/features/workflows/readiness";
 import { refreshAfterWorkflowDelete } from "@/features/workflows/workflowViewShared";
-import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
+import { OPEN_WORKFLOW_RUN, OPEN_WORKFLOW_TEMPLATE, parseWorkflowRunLink, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
@@ -56,6 +56,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   // 通知/任务中心深链(mosael:open-* 事件通道):直接选中对应工作流。
   useOpenRequest("mosael:open-workflow", (id) => setSelectedId(id));
+  //: 打开某一次运行(浏览器自动化的悬浮卡片点标题):选中那条工作流,编辑器的执行历史停在那一次。
+  const [runToOpen, setRunToOpen] = React.useState<{ workflowId: string; runId: string } | null>(null);
+  useOpenRequest(OPEN_WORKFLOW_RUN, (link) => {
+    const target = parseWorkflowRunLink(link);
+    if (!target) return;
+    setSelectedId(target.workflowId);
+    setRunToOpen(target);
+  });
 
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
@@ -322,6 +330,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             nodeTypes={nodeTypes.data}
             workspaceId={workspace.id}
             onBack={() => setSelectedId(null)}
+            openRunId={runToOpen?.workflowId === selected.id ? runToOpen.runId : null}
+            onRunOpened={() => setRunToOpen(null)}
           />
         </div>
         {importControl}

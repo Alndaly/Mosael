@@ -293,6 +293,8 @@ export const shell = {
   livePanelResizeBottomRight: "从右下角缩放浏览器",
   livePanelMute: "关闭浏览器声音",
   livePanelUnmute: "打开浏览器声音",
+  livePanelRunTitle: "{workflow} · {time} 的运行",
+  livePanelOpenRun: "打开这次运行",
   imagePreviewTitle: "图片预览",
   openOriginal: "打开原图",
   rename: "重命名",

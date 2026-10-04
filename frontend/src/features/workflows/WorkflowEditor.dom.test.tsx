@@ -584,3 +584,22 @@ describe("工作流列表", () => {
     expect(menuItems()).toEqual(["wfRun", "rename", "wfExport", "delete"]);
   });
 });
+
+describe("从别处打开某一次运行", () => {
+  //: 浏览器自动化的悬浮卡片点标题跳过来:选中那条工作流、执行历史打开并停在那一次 —— 不是最近那次。
+  it("打开那条工作流,执行历史停在指定的那一次", async () => {
+    const { emitOpenEvent, OPEN_WORKFLOW_RUN, workflowRunLink } = await import("@/lib/deepLink");
+    apiMocks.listWorkflowRuns.mockResolvedValue([
+      { id: "job-new", kind: "workflow", status: "running", message: "最新一次", created_at: "2026-09-19T05:00:00", updated_at: "2026-09-19T05:00:10", payload: {} },
+      { id: "job-old", kind: "workflow", status: "succeeded", message: "较早一次", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {} },
+    ]);
+    localStorage.removeItem("mosael:selected:workflows");
+    act(() => emitOpenEvent(OPEN_WORKFLOW_RUN, workflowRunLink("wf1", "job-old")));
+    await renderEditor({ nodes: [{ id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: {} } }], edges: [] });
+
+    const older = (await screen.findByText("较早一次")).closest("button")!;
+    expect(older.getAttribute("aria-current")).toBe("true");
+    expect(screen.getByText("最新一次").closest("button")!.getAttribute("aria-current")).toBeNull();
+    await waitFor(() => expect(apiMocks.listJobEvents).toHaveBeenCalledWith("job-old"));
+  });
+});
