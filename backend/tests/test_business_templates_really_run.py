@@ -303,7 +303,7 @@ class Test混剪真跑:
     def test_标签没填运行前就拦住(self) -> None:
         #: 标签空着的话「按标签取」取到的是整个素材库。
         errors = validate_graph(footage_montage_graph(chat=CHAT, voice_id="voice-1"))
-        assert any("params.footage_tag" in one for one in errors), errors
+        assert "「填主题与素材标签」缺少必填:footage_tag" in errors, errors
 
     def test_标签下没有素材_停下说清楚_不花对话的钱(self, monkeypatch) -> None:
         ws = _workspace()
@@ -502,12 +502,12 @@ class Test带货口播真跑:
     def test_出镜版_主播没挑时运行前就拦住(self) -> None:
         graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
         _pick(graph, "product_photo", asset_id="some-photo")
-        assert any("presenter" in one for one in validate_graph(graph))
+        assert "「挑一位主播(资产库里的人物)」的 资产 / 名称 要填一个" in validate_graph(graph)
 
     def test_不出镜版_音色空着运行前就拦住(self) -> None:
         graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id=""), "product_photo", asset_id="p")
         errors = validate_graph(graph)
-        assert any("beat_voice" in one and "voice" in one for one in errors), errors
+        assert "「逐拍出画面、配音并上时间线 › 念这一拍的画外音」缺少必填:音色" in errors, errors
 
 
 # --------------------------------------------------------------------------------------
@@ -726,8 +726,8 @@ class Test稿子口播真跑:
     def test_稿子或音色空着运行前就拦住(self) -> None:
         graph = talking_script_video_graph(voice_id="")
         errors = validate_graph(graph)
-        assert any("voicing" in one and "text" in one for one in errors), errors
-        assert any("voicing" in one and "voice" in one for one in errors), errors
+        assert "「长稿分段配音」缺少必填:文本" in errors, errors
+        assert "「长稿分段配音」缺少必填:音色" in errors, errors
 
 
 # --------------------------------------------------------------------------------------

@@ -49,7 +49,7 @@ def test_查找串为空_报错而不是每个字符之间插一遍(op: str) -> 
                   {"id": "n", "type": "text_transform", "config": {"text": "ab", "op": op}}],
         "edges": [{"id": "e1", "source": "start", "target": "n"}],
     })
-    assert any("find" in one for one in errors), errors
+    assert errors == ["「文本处理」缺少必填:查找"], errors
 
 
 def test_其它处理不要求填查找串() -> None:

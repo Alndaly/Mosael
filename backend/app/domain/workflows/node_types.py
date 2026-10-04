@@ -373,6 +373,49 @@ def field_name(key: str, spec: dict[str, Any] | None = None) -> Any:
     return fragment(config_label(key, spec or {}))
 
 
+def node_title(node: dict[str, Any], types: dict[str, dict[str, Any]] | None = None) -> str:
+    """报错里提到一个节点时叫它什么:节点的标题;没起名就是节点类型的显示名(按这次请求的语言);类型认不出(插件没装)
+    就是它的 id。和画布就绪清单的节点名同一个取法(analyze.ts 的 nodeName)—— 同一个问题两边说的是同一个名字。"""
+    from app.core.i18n import get_current_locale, pick_text, tr
+
+    name = node.get("name")
+    #: 官方模板的图在建图那一刻才定语言,之前节点名是 {zh, en}(见 templates.localised_names)。
+    if isinstance(name, dict):
+        name = pick_text(name, get_current_locale())
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    meta = (types or NODE_TYPES).get(str(node.get("type") or ""))
+    label = str((meta or {}).get("label") or "").strip()
+    return tr(label) if label else str(node.get("id") or "")
+
+
+def layer_titles(nodes: list[Any], types: dict[str, dict[str, Any]] | None = None) -> dict[str, str]:
+    """一层图里每个节点在报错里叫什么(node_title);**同一层里撞名的**(两个都没起名的「文本模板」)后面带上 id ——
+    「「文本模板」引用了…,可「文本模板」没接进流程」读不出说的是哪两个。和画布 analyze.ts 的 layerDisplayNames 同一条。"""
+    base = {str(node.get("id", "")): node_title(node, types) for node in nodes if isinstance(node, dict)}
+    counts: dict[str, int] = {}
+    for title in base.values():
+        counts[title] = counts.get(title, 0) + 1
+    return {node_id: f"{title}({node_id})" if counts[title] > 1 else title for node_id, title in base.items()}
+
+
+def reference_label(parts: list[str], nodes: dict[str, dict[str, Any]], types: dict[str, dict[str, Any]] | None = None) -> str:
+    """一条引用(按点号拆开)在一句话里怎么说:「节点的名字 · 输出的显示名 · 子路径」;根不是这一层的节点(作用域名、
+    不存在的节点)就按段说。和画布的 workflowRefCatalog.look / refLabel 同一个取法(节点没起名的用 id)—— 句子里不摆 `{{…}}`。"""
+    from app.core.i18n import tr
+
+    node = nodes.get(parts[0]) if parts else None
+    if node is None:
+        return " · ".join(parts)
+    name = node.get("name")
+    head = [name.strip() if isinstance(name, str) and name.strip() else str(node.get("id") or "")]
+    if len(parts) > 1:
+        meta = (types or NODE_TYPES).get(str(node.get("type") or "")) or {}
+        output = parts[1]
+        head.append(tr(output_label(output, meta)) if output in (meta.get("outputs") or ()) else output)
+    return " · ".join([*head, *parts[2:]])
+
+
 def available_node_types(db: Session, *, user_id: str | None = None) -> dict[str, dict[str, Any]]:
     """**这台机器上此刻可用的全部节点类型** —— 内置的加上插件的。
 

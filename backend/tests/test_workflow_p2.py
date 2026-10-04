@@ -55,7 +55,7 @@ class TestLoopBodyScope:
         """run_body seeds the body with its declared scope and the body's own nodes only, so this used
         to interpolate to the empty string — silently missing text in whatever the loop made."""
         errors = validate_body_graph(self._body("prefix = '{{start.prefix}}'"), "loop_foreach")
-        assert errors and any("循环外" in e for e in errors)
+        assert errors == ["「文本模板」引用了这一层看不见的 start:这里只看得见 loop、input 和同一层的节点,外面的值经容器的「输入」传进来"]
 
     def test_loop_and_sibling_references_are_allowed(self) -> None:
         body = {
@@ -81,4 +81,4 @@ def test_foreach_is_capped_like_while() -> None:
 @pytest.mark.parametrize("value", ["{{loop.item}}", "{{n1.text}}", "no templates here"])
 def test_body_validation_accepts_ordinary_templates(value: str) -> None:
     body = {"nodes": [{"id": "n1", "type": "template", "config": {"template": value}}], "edges": []}
-    assert all("循环外" not in e for e in validate_body_graph(body, "loop_foreach"))
+    assert all("看不见" not in e for e in validate_body_graph(body, "loop_foreach"))

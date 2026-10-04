@@ -471,6 +471,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_generateSound": {"zh": "生成音乐/音效: {asked}", "en": "Generate music / sound: {asked}"},
     "confirm_generatePodcast": {"zh": "生成播客: {asked}", "en": "Generate a podcast: {asked}"},
     "punct_listSep": {"zh": "、", "en": ", "},
+    #: 几句完整的话连成一段(运行前检查一次报出的几处问题)。
+    "punct_sentenceSep": {"zh": "；", "en": "; "},
     "confirm_createWorkflow": {"zh": "创建工作流「{name}」({nodes} 个节点){warning}", "en": "Create workflow \u300c{name}\u300d ({nodes} nodes){warning}"},
     "confirm_updateWorkflow": {"zh": "修改工作流({nodes} 个节点){warning}", "en": "Update workflow ({nodes} nodes){warning}"},
     "confirm_updateWorkflowPlain": {"zh": "修改工作流{warning}", "en": "Update workflow{warning}"},

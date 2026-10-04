@@ -88,12 +88,12 @@ def test_形状不对_保存就拒_说清哪一格() -> None:
 def test_运行前_值不在选项里就拦_点名参数和可选的值() -> None:
     #: 此前手填的一格:打错一个字静默走浏览器。
     errors = validate_graph(with_run_params(_graph(), {"data_source": "TikHub"}))
-    assert errors == ["节点 start 的参数 data_source 是「TikHub」,只能选:browser(内嵌浏览器)、tikhub(TikHub)"], errors
+    assert errors == ["「开始」的参数 data_source 是「TikHub」,只能选:browser(内嵌浏览器)、tikhub(TikHub)"], errors
     assert validate_graph(with_run_params(_graph(), {"data_source": "tikhub"})) == []
     #: 没填、也不是必填:不拦(引用出来是空串,和自由输入的参数一样)。
     assert validate_graph(_graph(required=False)) == []
     #: 没填、是必填:照旧按必填说。
-    assert validate_graph(_graph()) == ["节点 start 缺少必填配置 params.data_source"]
+    assert validate_graph(_graph()) == ["「开始」缺少必填:data_source"]
 
 
 def _actor_and_workspace() -> tuple[str, str]:

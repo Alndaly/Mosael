@@ -52,6 +52,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_condition_op": {"zh": "比较方式", "en": "Comparison"},
     "wfNode_condition_right": {"zh": "empty/not_empty 不需要", "en": "Not needed for empty / not_empty"},
     "wfNode_http_request": {"zh": "HTTP 请求", "en": "HTTP request"},
+    #: 「AI 生成素材」的服务商 / 模型 / 类型是一次选择的三个产物:就绪检查和运行前检查都按这一个名字说(画布 wfGenModel)。
+    "wfField_generationModel": {"zh": "生成模型", "en": "Generation model"},
     "wfNode_http_request_desc": {"zh": "调用外部 API,输出状态码与响应内容。只许访问公网;本机和内网地址要部署管理员在「内网访问」里放行。", "en": "Call an external API; outputs the status code and the response body. Only public addresses are allowed; local and internal addresses must be allowed by a deployment admin under Internal network access."},
     "wfNode_http_request_method": {"zh": "默认 GET", "en": "GET by default"},
     "wfNode_http_request_body": {"zh": "请求体(POST/PUT),JSON 或纯文本。写成 JSON 时引用按 JSON 转义填进去,并自动带上 Content-Type: application/json", "en": "Request body (POST/PUT), JSON or plain text. When it is JSON, references are filled in with JSON escaping and Content-Type: application/json is sent automatically"},

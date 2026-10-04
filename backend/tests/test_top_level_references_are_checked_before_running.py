@@ -27,7 +27,7 @@ def _graph(template: str, params: dict | None = None) -> dict:
 
 def test_引用不存在的节点_运行前就报() -> None:
     errors = validate_graph(_graph("{{scirpt.text}}"))
-    assert any("scirpt" in one for one in errors), errors
+    assert errors == ["「文本模板(t)」引用了不存在的节点:scirpt · text"], errors
 
 
 def test_保存时不拦_删了一个节点还没改引用也存得下() -> None:
@@ -49,13 +49,13 @@ def test_容器的体内字段不按顶层判() -> None:
 
 def _start_errors(graph: dict, params: dict) -> list[str]:
     """运行前校验看到的是**这一次运行**的图:开始节点叠上本次参数(和 start_workflow_job 同一条路)。"""
-    return [one for one in validate_graph(with_run_params(graph, params)) if "开始节点没有" in one]
+    return [one for one in validate_graph(with_run_params(graph, params)) if "引用的开始参数不存在" in one]
 
 
 def test_开始节点的参数_声明了或这次给了才算() -> None:
     graph = _graph("{{start.topic}} {{script.text}}")
     missing = _start_errors(graph, {})
-    assert missing and "start.topic" in missing[0]
+    assert missing == ["「文本模板(t)」引用的开始参数不存在:start · topic。在开始节点的参数里声明它,或运行时传进来"]
     assert _start_errors(graph, {"topic": "猫"}) == []
     assert _start_errors(_graph("{{start.topic}}", params={"topic": ""}), {}) == []
 
@@ -64,7 +64,10 @@ def test_从开始节点拉出的数据边也要有那个参数() -> None:
     graph = _graph("")
     graph["edges"].append({"id": "d1", "source": "start", "target": "t", "kind": "data",
                            "source_output": "topic", "target_input": "template"})
-    assert _start_errors(graph, {})
+    #: 算在数据边的目标节点头上。
+    assert _start_errors(graph, {}) == [
+        "「文本模板(t)」引用的开始参数不存在:start · topic。在开始节点的参数里声明它,或运行时传进来"
+    ]
     assert _start_errors(graph, {"topic": "猫"}) == []
 
 
@@ -79,6 +82,6 @@ def test_启动任务时就拦下_不建任务() -> None:
         try:
             start_workflow_job(db, db.get(Workflow, workflow.id), created_by=user_id(), params={})
         except WorkflowDomainError as exc:
-            assert "start.topic" in str(exc)
+            assert str(exc) == "「文本模板(t)」引用的开始参数不存在:start · topic。在开始节点的参数里声明它,或运行时传进来"
         else:
             raise AssertionError("少传的参数没拦下来")

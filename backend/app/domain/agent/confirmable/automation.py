@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment
+from app.core.i18n import fragment, tr
 from app.domain.effects import needs_card, permission_for, warning_key
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
@@ -58,15 +58,17 @@ def _check_graph(db: Session, graph: object, before: object = None) -> None:
     )
     errors.extend(_new_code_field_problems(graph, before))
     if errors:
-        raise ConfirmationError("；".join(errors))
+        raise ConfirmationError(tr("punct_sentenceSep").join(errors))
 
 
 
 def _new_code_field_problems(after: object, before: object) -> list[str]:
-    from app.domain.workflows.graph_rules import code_field_problems
+    """这次改动新出现的代码字段问题。按「哪个节点、哪一格、哪一种」认是不是同一处(见 CodeFieldFinding),
+    不按那句话 —— 句子里是节点的标题:两个没起名的代码节点说出来一模一样,改个名字同一处又成了「新的」。"""
+    from app.domain.workflows.graph_rules import code_field_findings
 
-    existing = set(code_field_problems(before))
-    return [problem for problem in code_field_problems(after) if problem not in existing]
+    existing = {(one.where, one.field, one.kind) for one in code_field_findings(before)}
+    return [one.message for one in code_field_findings(after) if (one.where, one.field, one.kind) not in existing]
 
 
 def _escalate_graph(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
@@ -198,7 +200,7 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
         edited = apply_graph_ops(current or {}, payload["operations"])
         problems = _new_code_field_problems(edited, current)
         if problems:
-            raise ConfirmationError("；".join(problems))
+            raise ConfirmationError(tr("punct_sentenceSep").join(problems))
         return edited
 
     edit_workflow_graph(db, workflow, change, source="agent", created_by=actor)

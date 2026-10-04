@@ -193,7 +193,7 @@ def test_必填的数组入参填了空列表_运行前就拦() -> None:
         "items": {"type": "array", "items": {"type": "string"}}}}}
     graph = _graph({"id": "p", "type": "plugin.pkg.t", "config": {"items": []}})
     errors = validate_graph(graph, extra_types={"plugin.pkg.t": node_meta(tool)})
-    assert any("items" in one for one in errors), errors
+    assert errors == ["「T」缺少必填:要遍历的列表"], errors
 
 
 def test_数组入参的边界_一行JSON数组文字拼进来_逗号不拆_nan不转_对象文字解开(tmp_path) -> None:

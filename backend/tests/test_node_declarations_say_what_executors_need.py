@@ -28,14 +28,14 @@ def _one(node_type: str, config: dict) -> list[str]:
 
 
 def test_取资产_点名和按名字找两样都空_运行前就拦() -> None:
-    assert any("entity_id / name" in one for one in _one("entity_get", {"entity_id": "", "kind": "character"}))
+    assert _one("entity_get", {"entity_id": "", "kind": "character"}) == ["「取资产」的 资产 / 名称 要填一个"]
     assert _one("entity_get", {"entity_id": "e-1"}) == []
     assert _one("entity_get", {"kind": "character", "name": "{{start.name}}"}) == []
 
 
 def test_长稿分段配音没挑音色_运行前就拦() -> None:
     errors = _one("talking_segments", {"text": "大家好", "engine": "builtin:clone", "voice": ""})
-    assert any("voice" in one for one in errors), errors
+    assert errors == ["「长稿分段配音」缺少必填:音色"], errors
     assert _one("talking_segments", {"text": "大家好", "engine": "builtin:clone", "voice": "v-1"}) == []
 
 

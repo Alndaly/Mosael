@@ -103,7 +103,7 @@ def test_迁移把逗号分隔的一串改成参数名的列表_点名了却没�
         assert db.query(WorkflowRevision).filter_by(workflow_id=old_id).count() == revisions, "重跑不再落新的一版"
     #: 补出来的那一行照旧是必填:运行前照旧拦,说清是哪一个。
     refused = client.post(f"/api/workflows/{old_id}/run", json={"params": {"topic": "猫"}})
-    assert refused.status_code == 422 and "params.extra" in refused.json()["detail"], refused.text
+    assert refused.status_code == 422 and refused.json()["detail"] == "「开始」缺少必填:extra", refused.text
 
 
 def test_导入老版本导出的文件_必填改成列表() -> None:
@@ -155,11 +155,11 @@ def test_还写成一串字的_保存就拒_说清形状() -> None:
 
 def test_运行前按列表查_空着拦_这一次带了值就过() -> None:
     graph = _graph({"params": {"topic": "", "count": 0}, "required_params": ["topic", "count"]})
-    assert validate_graph(graph) == ["节点 start 缺少必填配置 params.topic"], "0 是值,不是空"
+    assert validate_graph(graph) == ["「开始」缺少必填:topic"], "0 是值,不是空"
     client, workspace = _client_and_workspace()
     workflow = client.post("/api/workflows", json={"workspace_id": workspace, "name": "W", "graph": graph}).json()
     blank = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})
-    assert blank.status_code == 422 and "params.topic" in blank.json()["detail"], blank.text
+    assert blank.status_code == 422 and blank.json()["detail"] == "「开始」缺少必填:topic", blank.text
     given = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {"topic": "猫"}})
     assert given.status_code == 200, given.text
 

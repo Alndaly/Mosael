@@ -1092,3 +1092,59 @@ describe("没接进流程的节点被引用(和后端运行前那一道同一个
     expect(ofNode(a, "p", ["loop"])).toEqual([]);
   });
 });
+
+describe("就绪清单里节点叫什么", () => {
+  //: 和后端运行前检查的 node_title 同一个取法:标题;没起名就是节点类型的显示名;类型都不认识才是类型本身。
+  const labelled: RegistryLike = {
+    get: (type) => (type === "template" ? { ...registry.get(type), label: "文本模板" } : registry.get(type)),
+  };
+
+  it("没起名的节点用显示名,起了名的用标题,体里的带上外层", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "t1", type: "template", config: { template: "" } },
+          { id: "t2", type: "template", name: "拼文案", config: { template: "" } },
+          {
+            id: "loop",
+            type: "loop_foreach",
+            name: "逐镜生成",
+            config: { items: "a", body: { nodes: [{ id: "t3", type: "template", config: { template: "" } }], edges: [] } },
+          },
+        ],
+        [
+          { id: "e1", source: "start", target: "t1" },
+          { id: "e2", source: "start", target: "t2" },
+          { id: "e3", source: "start", target: "loop" },
+        ],
+      ),
+      labelled,
+      fullCtx,
+    );
+    const required = a.issues.filter((issue) => issue.code === "required-missing").map((issue) => issue.nodeName);
+    expect(required).toEqual(["文本模板", "拼文案", "逐镜生成 › 文本模板"]);
+  });
+
+  it("同一层里撞名的带上 id,读得出说的是哪一个(后端 layer_titles 同一条)", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "props", type: "template", config: { template: "" } },
+          { id: "stage", type: "template", config: { template: "" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "props" },
+          { id: "e2", source: "start", target: "stage" },
+        ],
+      ),
+      labelled,
+      fullCtx,
+    );
+    expect(a.issues.filter((issue) => issue.code === "required-missing").map((issue) => issue.nodeName)).toEqual([
+      "文本模板(props)",
+      "文本模板(stage)",
+    ]);
+  });
+});

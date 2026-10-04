@@ -46,7 +46,7 @@ def test_调用的子工作流缺必填参数_父工作流点运行当场就说_
     missing = _parent(client, ws, child["id"], {})
     refused = client.post(f"/api/workflows/{missing['id']}/run", json={"params": {}})
     assert refused.status_code == 422, refused.text
-    assert "写稿子" in refused.text and "topic" in refused.text and "call" in refused.text
+    assert refused.json()["detail"] == "「调用工作流」调用的工作流「写稿子」现在跑不起来:「开始」缺少必填:topic"
 
     given = _parent(client, ws, child["id"], {"topic": "猫"})
     started = client.post(f"/api/workflows/{given['id']}/run", json={"params": {}})
@@ -132,7 +132,7 @@ def test_智能体的运行工作流卡_跑不起来就不开卡_原因交给智
 
     refused = open_card({})
     assert refused.status_code == 422, refused.text
-    assert "params.topic" in refused.text
+    assert "「开始」缺少必填:topic" in refused.text
     assert open_card({"topic": "   "}).status_code == 422, "空白不算给了"
     assert open_card({"topic": "猫"}).status_code == 200
 

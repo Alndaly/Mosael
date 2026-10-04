@@ -108,9 +108,10 @@ def test_什么都没配时_按下运行给的是一句话而不是一个死掉�
     assert run.status_code in (200, 422), run.text
     if run.status_code == 422:
         detail = run.json()["detail"]
-        assert "缺少必填配置" in detail, f"{template_id} 拒了,但没说清缺什么:{detail}"
-        # 指得准:要么点名顶层节点,要么点名"某个节点的子图里"的那个节点。
-        assert re.search(r"节点 \w+", detail), detail
+        assert "缺少必填" in detail, f"{template_id} 拒了,但没说清缺什么:{detail}"
+        # 指得准:每一句都点名一个节点 —— 按标题(体里的带上外层,「逐镜生成 › 生成画面」),不是 id。
+        for one in detail.split("；"):
+            assert re.match(r"「[^」]+」", one), detail
         return
 
     # 接了任务,那它就**不许**再死在"少配了个东西"上 —— 那种错该在上面那一步就拦住,
@@ -123,7 +124,7 @@ def test_什么都没配时_按下运行给的是一句话而不是一个死掉�
         time.sleep(0.15)
     if job["status"] == "failed":
         reason = str(job.get("error") or "")
-        assert "缺少必填配置" not in reason, (
+        assert "缺少必填" not in reason, (
             f"{template_id} 接了任务却死在缺必填配置上(进度 {job.get('progress')}):{reason}\n"
             "  这一类该在启动前就拦住 —— 跑到这里意味着前面那些步骤(可能包括付费的 AI 调用)"
             "已经白花了。"
@@ -152,11 +153,11 @@ def test_必填检查下得到循环体里() -> None:
     inner["config"]["sequence_id"] = ""
 
     errors = validate_graph(graph, require_config=True)
-    assert any("sequence_id" in one and inner["id"] in one for one in errors), (
+    #: 说清它住在哪个循环里(「循环 › 节点」,都按标题)、缺的是哪一格(界面上的名字)。
+    assert f"「{loop['name']} › {inner['name']}」缺少必填:时间线" in errors, (
         "顶层校验没看见循环体里缺的必填项 —— 这条工作流会启动、跑掉前半段、再死在循环上:\n  "
         + "\n  ".join(errors or ["(什么都没报)"])
     )
-    assert any(loop["id"] in one for one in errors), f"报错没说清它住在哪个循环里:{errors}"
 
 
 #: 边上有人读的键。多出来的键没有任何代码读它 —— 模板作者以为自己写了一个设定,其实什么都没写。

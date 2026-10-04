@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import DEFAULT_LOCALE, t, tr
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import (
@@ -49,6 +49,7 @@ from app.domain.workflows import (
     with_run_params,
 )
 from app.domain.workflows.graph_rules import run_params
+from app.domain.workflows.node_types import node_title
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
@@ -191,7 +192,8 @@ def _check_graph_runnable(
         explain_plugin_node=lambda node_type: _why_plugin_node_unusable(db, node_type, actor),
     )
     if errors:
-        raise WorkflowDomainError("；".join(errors))
+        #: 几处问题连成一段,按这次请求的语言(每一句 validate_graph 已经按它翻好了)。
+        raise WorkflowDomainError(tr("punct_sentenceSep").join(errors))
     _check_chosen_options(db, with_run_params(graph, params), workspace_id, actor)
     _check_generation_text(db, graph, actor)
     #: 节点登记的运行前检查,连同插件节点「轮到它时落得到一条连接吗」(按前缀登记的那一族,见 executors.content)。
@@ -255,17 +257,18 @@ def _bound(graph: dict[str, Any]) -> set[tuple[str, str]]:
     }
 
 
-def _nodes(graph: Any):
-    """这张图里的节点,连同循环体 / 子图体里的,带着它所在那一层的图(数据边按层算)。"""
+def _nodes(graph: Any, path: tuple[str, ...] = ()):
+    """这张图里的节点,连同循环体 / 子图体里的,带着它所在那一层的图(数据边按层算)和报错时它叫什么
+    (「外层容器 › 节点」,同 validate_graph)。"""
     if not isinstance(graph, dict):
         return
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
             continue
-        yield graph, node
+        yield graph, node, " › ".join((*path, node_title(node)))
         config = node.get("config") if isinstance(node.get("config"), dict) else {}
         if str(node.get("type") or "") in NESTED_BODY_TYPES:
-            yield from _nodes(config.get("body"))
+            yield from _nodes(config.get("body"), (*path, node_title(node)))
 
 
 def _check_called_workflows(
@@ -276,7 +279,7 @@ def _check_called_workflows(
     子工作流的名字是引用、由数据边供、入参整格是引用或由数据边供的,到运行时才知道,不在这里判。
     已经在这条调用链上的(自己调自己、互相调)不再往下查 —— 那是执行时防递归的事。
     """
-    for layer, node in _nodes(graph):
+    for layer, node, title in _nodes(graph):
         if node.get("type") != "call_workflow":
             continue
         node_id = str(node.get("id") or "")
@@ -296,7 +299,7 @@ def _check_called_workflows(
         child = db.get(Workflow, target_id.strip())
         if child is None or child.workspace_id != workspace_id:
             raise WorkflowDomainError(
-                "wfErr_callNodeNotRunnable", params={"node": node_id, "reason": WorkflowDomainError("wfErr_calledWorkflowMissing")}
+                "wfErr_callNodeNotRunnable", params={"node": title, "reason": WorkflowDomainError("wfErr_calledWorkflowMissing")}
             )
         if child.id in seen:
             continue
@@ -313,7 +316,7 @@ def _check_called_workflows(
             )
         except WorkflowDomainError as exc:
             raise WorkflowDomainError(
-                "wfErr_calledWorkflowNotRunnable", params={"node": node_id, "name": child.name, "reason": exc}
+                "wfErr_calledWorkflowNotRunnable", params={"node": title, "name": child.name, "reason": exc}
             ) from exc
 
 

@@ -88,6 +88,6 @@ def test_条件启用同时约束运行前必填校验() -> None:
     }
     assert validate_graph(graph, extra_types={"conditional-test": node_type}) == []
     graph["nodes"][1]["config"]["engine"] = "ai"
-    assert "节点 translate 缺少必填配置 profile_id" in validate_graph(
+    assert "「translate」缺少必填:供应商配置" in validate_graph(
         graph, extra_types={"conditional-test": node_type}
     )

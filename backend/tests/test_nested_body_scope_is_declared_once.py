@@ -70,7 +70,8 @@ def test_条件循环体里的_input_在启动前就被拒() -> None:
     workflow = _saved(_graph("loop_while", "x={{input.who}}", output="{{say.text}}"))
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
         start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None)
-    assert "input" in str(caught.value) and "box" in str(caught.value)
+    assert str(caught.value) == ("「循环·条件 › 文本模板」引用了这一层看不见的 input:这里只看得见 loop 和同一层的节点,"
+                                 "外面的值经容器的「输入」传进来")
 
 
 def test_子图体里的_loop_在启动前就被拒() -> None:
@@ -90,7 +91,9 @@ def test_体里越出作用域的引用在启动前就被拒(body_template: str)
     workflow = _saved(_graph("loop_foreach", body_template, items=["a"], output="{{say.text}}"))
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
         start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None)
-    assert "循环外" in str(caught.value)
+    outer = body_template.removeprefix("x={{").split(".")[0]
+    assert str(caught.value) == (f"「循环·遍历 › 文本模板」引用了这一层看不见的 {outer}:这里只看得见 loop、input 和同一层的节点,"
+                                 "外面的值经容器的「输入」传进来")
     with SessionLocal() as db:
         assert db.query(Job).filter(Job.kind == "workflow").count() == 0, "被拒的工作流不该占一个任务位"
 
@@ -98,7 +101,7 @@ def test_体里越出作用域的引用在启动前就被拒(body_template: str)
 def test_空的循环体在启动前就被拒() -> None:
     graph = _graph("loop_foreach", "x", items=["a"])
     graph["nodes"][2]["config"].pop("body")
-    assert any("循环体不能为空" in one and "box" in one for one in validate_graph(graph))
+    assert "「循环·遍历」里面还没有节点:至少放一个" in validate_graph(graph)
     # 保存照样放行:刚拖出来的循环节点还没有体,那是「还没配完」,不是错。
     assert validate_graph(graph, require_config=False) == []
 
@@ -151,4 +154,4 @@ def test_条件循环体里的_loop_item_在启动前就被拒() -> None:
     workflow = _saved(_graph("loop_while", "x={{loop.item}}", output="{{say.text}}"))
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
         start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None)
-    assert "loop.item" in str(caught.value) and "box" in str(caught.value)
+    assert str(caught.value) == "「循环·条件 › 文本模板」用到的 loop · item 这里没有:只提供 loop · index"

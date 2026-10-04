@@ -30,7 +30,9 @@ def _graph(*nodes: dict, edges: list | None = None) -> dict:
 
 
 def _errors(node: dict, edges: list | None = None) -> list[str]:
-    return [one for one in validate_graph(_graph(node, edges=edges)) if node["id"] in one]
+    """这一个节点的运行前报错。报错按节点的标题说,给它起个认得出的名字再按名字挑。"""
+    named = {**node, "name": f"节点{node['id']}"}
+    return [one for one in validate_graph(_graph(named, edges=edges)) if f"「节点{node['id']}」" in one]
 
 
 @pytest.mark.parametrize(("config", "ok"), [
@@ -57,7 +59,7 @@ def test_等待_前两格都是引用或接了数据边_最后一格兜底() -> 
 def test_浏览器上传两样都给就报错_不认兜底() -> None:
     errors = _errors({"id": "u", "type": "browser_upload",
                       "config": {"session": "s", "asset_id": "{{t.text}}", "file_path": "/tmp/a.png"}})
-    assert errors == ["节点 u 的 asset_id / file_path 只能填一个"]
+    assert errors == ["「节点u」的 素材 / 文件路径 只能填一个"]
 
 
 def _config(graph: dict, node_id: str) -> dict:

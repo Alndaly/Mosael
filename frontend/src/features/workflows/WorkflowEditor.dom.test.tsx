@@ -493,7 +493,8 @@ describe("循环体里的就绪问题", () => {
     await waitFor(() => expect(badgeOf("loop-1")).not.toBeNull(), SLOW);
 
     fireEvent.click(screen.getByRole("button", { name: /^wfChecklist:/ }));
-    fireEvent.click(await screen.findByText("loop_foreach › 体内", undefined, SLOW));
+    //: 没起名的循环按它的显示名叫(registry 的 label),和后端运行前检查说的是同一个名字。
+    fireEvent.click(await screen.findByText("loop › 体内", undefined, SLOW));
     const trail = screen.getByRole("navigation", { name: "page-trail" });
     await waitFor(() => expect(within(trail).getByText("loop · wfLoopBody").getAttribute("aria-current")).toBe("page"), SLOW);
     await waitFor(() => expect(nodeEl("template-1").className).toContain("selected"), SLOW);

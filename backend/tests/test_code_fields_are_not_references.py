@@ -26,7 +26,7 @@ def test_数据边连进代码字段_运行前拦下() -> None:
         edges=[_data_edge("llm", "text", "js", "expression")],
     )
     errors = validate_graph(graph)
-    assert any("js" in e and "expression" in e and "input" in e for e in errors), errors
+    assert errors == ["「浏览器·执行脚本」的代码字段「表达式」接了上游:上游的值会整段当成代码跑。把上游接到这个节点的 input,代码里读 input"]
 
 
 def test_接到入参上的上游值照常() -> None:

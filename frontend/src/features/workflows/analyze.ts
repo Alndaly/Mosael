@@ -121,6 +121,8 @@ interface ConfigSpecLike {
 }
 
 interface NodeMetaLike {
+  /** 节点类型的显示名(按界面语言,后端发下来)。节点没起名时,就绪清单用它叫这个节点 —— 和后端运行前检查同一个取法。 */
+  label?: string;
   // registry 的 config 值在 OpenAPI 里是 unknown;取用时按 ConfigSpecLike 收窄。
   config?: Record<string, unknown>;
   /** 「这几个字段里至少要有一个」。**由后端声明**,不在这里按节点名写死 —— 见下面的说明。 */
@@ -247,6 +249,25 @@ function isEmpty(value: unknown): boolean {
 
 type WorkflowNodeLike = WorkflowGraph["nodes"][number];
 type WorkflowEdgeLike = WorkflowGraph["edges"][number];
+
+/**
+ * 就绪清单里怎么叫一个节点:它的标题;没起名就是节点类型的显示名;类型都不认识(插件没装)才是类型本身。
+ * 和后端运行前检查的 node_title 同一个取法 —— 同一个问题,画布和「运行」被拒时说的是同一个名字。
+ */
+export function nodeDisplayName(node: Pick<WorkflowNodeLike, "name" | "type">, registry: RegistryLike): string {
+  return node.name?.trim() || registry.get(node.type)?.label?.trim() || node.type;
+}
+
+/**
+ * 一层图里每个节点在就绪清单里叫什么(nodeDisplayName);**同一层里撞名的**(两个都没起名的「文本模板」)后面带上 id ——
+ * 「「文本模板」引用了…,可「文本模板」没接进流程」读不出说的是哪两个。和后端 node_types.layer_titles 同一条。
+ */
+export function layerDisplayNames(nodes: readonly WorkflowNodeLike[], registry: RegistryLike): Map<string, string> {
+  const base = new Map(nodes.map((node) => [node.id, nodeDisplayName(node, registry)]));
+  const counts = new Map<string, number>();
+  for (const name of base.values()) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return new Map([...base].map(([id, name]) => [id, (counts.get(name) ?? 0) > 1 ? `${name}(${id})` : name]));
+}
 
 /**
  * 这个节点在**这一层**会插值的 `{{…}}` 引用:代码字段不插值、容器节点的 body / output / condition 属于体内,
@@ -419,7 +440,7 @@ function collect(
   const unwired = new Map(
     (judgesRuns ? neverRunReferences(graph, registry, { entryIsRoot }) : []).map((one) => [one.source, one]),
   );
-  const layerNames = new Map(graph.nodes.map((n) => [n.id, n.name || n.type]));
+  const layerNames = layerDisplayNames(graph.nodes, registry);
   if (!hasStart && path.length === 0) {
     issues.push({
       nodeId: "__workflow__",
@@ -450,7 +471,7 @@ function collect(
   );
 
   for (const node of graph.nodes) {
-    const nodeName = node.name || node.type;
+    const nodeName = layerNames.get(node.id) ?? nodeDisplayName(node, registry);
     const meta = registry.get(node.type);
     const config = (node.config ?? {}) as Record<string, unknown>;
     const push = (severity: IssueSeverity, code: IssueCode, extra?: Partial<NodeIssue>) =>
@@ -610,7 +631,8 @@ function collect(
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (!source || !target) continue;
-    const targetName = insideName ? `${insideName} › ${target.name || target.type}` : target.name || target.type;
+    const ownName = layerNames.get(target.id) ?? nodeDisplayName(target, registry);
+    const targetName = insideName ? `${insideName} › ${ownName}` : ownName;
     // 从开始节点拉出的数据边:`source_output` 就是参数名,同上面 {{start.x}} 那一条。
     if (startParamMissing(source.id, edge.source_output)) {
       issues.push({

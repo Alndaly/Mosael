@@ -29,7 +29,7 @@ def _graph(required: list[str], **params: object) -> dict:
 
 
 def test_点名的参数空着就报_说清是哪一个() -> None:
-    assert validate_graph(_graph(["topic", "tag"], topic="面馆", tag="  ")) == ["节点 start 缺少必填配置 params.tag"]
+    assert validate_graph(_graph(["topic", "tag"], topic="面馆", tag="  ")) == ["「开始」缺少必填:tag"]
     #: 0 和 false 是值,不是空。
     assert validate_graph(_graph(["topic", "count"], topic="面馆", count=0)) == []
     #: 没点名的参数照旧可以空着。
@@ -55,12 +55,15 @@ def test_官方模板把要用户填的那几格都点名了_而且默认是空�
         "footage_montage": (footage_montage_graph(chat=chat, voice_id=""), {"topic", "footage_tag"}),
     }
     for template_id, (graph, names) in expected.items():
-        start = next(node for node in graph["nodes"] if node["type"] == "start")["config"]
+        start_node = next(node for node in graph["nodes"] if node["type"] == "start")
+        start = start_node["config"]
         assert set(start["required_params"]) == names, template_id
         #: 默认空着 —— 不放「请把这里改成……」那种会被当成真参数的说明文字。
         assert all(start["params"][name] == "" for name in names), template_id
         errors = validate_graph(graph)
-        assert all(f"params.{name}" in "".join(errors) for name in names), (template_id, errors)
+        #: 按开始节点的标题说、点名是哪一个参数(和画布就绪清单同一句)。
+        title = start_node["name"]["zh"]
+        assert all(f"「{title}」缺少必填:{name}" in errors for name in names), (template_id, errors)
     assert {card["id"] for card in TEMPLATE_CATALOG} >= set(expected)
 
 
@@ -70,11 +73,11 @@ def test_按下运行时空着拦下_带着参数跑就过了这一关() -> None
     made = client.post("/api/workflows", json={"workspace_id": workspace, "name": "带货", "template_id": "product_pitch_short"})
     assert made.status_code == 200, made.text
     blank = client.post(f"/api/workflows/{made.json()['id']}/run", json={"params": {}})
-    assert blank.status_code == 422 and "params.selling_points" in blank.json()["detail"], blank.text
+    assert blank.status_code == 422 and "「填商品与卖点」缺少必填:selling_points" in blank.json()["detail"], blank.text
     given = client.post(f"/api/workflows/{made.json()['id']}/run",
                         json={"params": {"product_name": "开衫", "selling_points": "不起球"}})
     #: 商品图还没挑,照样拦 —— 但不再是因为这两个参数。
-    assert given.status_code == 422 and "params." not in given.json()["detail"], given.text
+    assert given.status_code == 422 and "「填商品与卖点」" not in given.json()["detail"], given.text
 
 
 def test_必填参数这一格是参数名的列表_不是能插值能接上游的模板() -> None:

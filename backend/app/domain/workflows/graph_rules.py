@@ -5,15 +5,21 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import tr
+from app.core.i18n import fragment, tr
 from app.domain.workflows.field_activation import config_field_active
 from app.domain.workflows.template_requirements import CHECKS
 from app.domain.workflows.node_types import (
     NODE_TYPES,
+    config_label,
+    field_name,
+    layer_titles,
+    node_title,
+    reference_label,
 )
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -30,7 +36,21 @@ def code_fields(node_type: str, types: dict[str, dict[str, Any]] | None = None) 
     return {key for key, spec in specs.items() if isinstance(spec, dict) and spec.get("type") == "code"}
 
 
-def code_field_problems(graph: Any, types: dict[str, dict[str, Any]] | None = None) -> list[str]:
+@dataclass(frozen=True)
+class CodeFieldFinding:
+    """代码字段里的一处问题:哪个节点(从外往里的 id 路径)、哪一格、哪一种(bound = 接了数据边,reference = 写了引用),
+    和说给人听的那句话。认「是不是同一处」按前三样,不按那句话 —— 句子里是节点的标题,改个名字就变了。"""
+
+    where: tuple[str, ...]
+    field: str
+    kind: str
+    message: str
+
+
+def code_field_findings(
+    graph: Any, types: dict[str, dict[str, Any]] | None = None, *, _path: tuple[str, ...] = (),
+    _titles: tuple[str, ...] = (),
+) -> list[CodeFieldFinding]:
     """代码字段里写了 `{{…}}`、或者接了上游的数据边 —— 两样都是想把上游的值拼进代码(连同循环体 / 子图体里的)。
 
     代码字段不插值(见 code_fields):`{{…}}` 原样留在代码里,不会被换成上游的值 —— 写的人以为接上了,跑起来
@@ -48,20 +68,34 @@ def code_field_problems(graph: Any, types: dict[str, dict[str, Any]] | None = No
         for edge in edges
         if isinstance(edge, dict) and str(edge.get("kind", "")) == "data" and edge.get("target_input")
     }
-    problems: list[str] = []
-    for node in graph.get("nodes") or []:
-        if not isinstance(node, dict):
-            continue
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    titles = layer_titles(nodes, known)
+    findings: list[CodeFieldFinding] = []
+    for node in nodes:
         node_id, node_type = str(node.get("id", "")), str(node.get("type", ""))
         config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        specs = (known.get(node_type) or {}).get("config") or {}
+        title = " › ".join((*_titles, titles[node_id]))
         for key in sorted(code_fields(node_type, known)):
             if (node_id, key) in bound:
-                problems.append(tr("wfErr_codeFieldBound", node=node_id, field=key))
+                kind, message_key = "bound", "wfErr_codeFieldBound"
             elif isinstance(config.get(key), str) and VARIABLE_RE.search(config[key]):
-                problems.append(tr("wfErr_codeFieldReference", node=node_id, field=key))
+                kind, message_key = "reference", "wfErr_codeFieldReference"
+            else:
+                continue
+            findings.append(CodeFieldFinding(
+                where=(*_path, node_id), field=key, kind=kind,
+                message=tr(message_key, node=title, field=field_name(key, specs[key])),
+            ))
         if node_type in NESTED_BODY_TYPES:
-            problems.extend(code_field_problems(config.get("body"), types))
-    return problems
+            findings.extend(code_field_findings(config.get("body"), types, _path=(*_path, node_id),
+                                                _titles=(*_titles, titles[node_id])))
+    return findings
+
+
+def code_field_problems(graph: Any, types: dict[str, dict[str, Any]] | None = None) -> list[str]:
+    """代码字段的问题,说给人听的那几句(见 code_field_findings)。"""
+    return [finding.message for finding in code_field_findings(graph, types)]
 
 
 def _referencing_config(node: dict[str, Any]) -> dict[str, Any]:
@@ -86,7 +120,12 @@ PURE_REFERENCE_RE = re.compile(r"^\s*\{\{\s*[\w.-]+\s*\}\}\s*$")
 
 
 def one_of_errors(
-    node_id: str, config: dict[str, Any], specs: dict[str, Any], data_bound: set[tuple[str, str]]
+    node_id: str,
+    config: dict[str, Any],
+    specs: dict[str, Any],
+    data_bound: set[tuple[str, str]],
+    *,
+    node_name: str | None = None,
 ) -> list[str]:
     """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。「填了」按 blank 判,和必填同一个判据。
 
@@ -102,20 +141,22 @@ def one_of_errors(
     for keys in groups.values():
         bound = {key for key in keys if (node_id, key) in data_bound}
         filled = [key for key in keys if not blank(config.get(key)) or key in bound]
-        names = " / ".join(keys)
+        #: 那一组字段在界面上的名字,和画布就绪清单同一个写法(「元素选择器 / 文本」)。
+        names = " / ".join(tr(config_label(key, specs[key])) for key in keys)
+        name = node_name if node_name is not None else node_id
         strict = any(specs[key].get("one_of_strict") for key in keys)
         fallback = not strict and all(
             key in bound or (isinstance(config.get(key), str) and PURE_REFERENCE_RE.match(config[key]))
             for key in filled[:-1]
         )
         if len(filled) > 1 and not fallback:
-            errors.append(f"节点 {node_id} 的 {names} 只能填一个")
+            errors.append(tr("wfCheck_oneOfBoth", node=name, fields=names))
         elif not filled:
-            errors.append(f"节点 {node_id} 的 {names} 要填一个")
+            errors.append(tr("wfCheck_oneOfMissing", node=name, fields=names))
     return errors
 
 
-def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+def _start_param_errors(node_name: str, config: dict[str, Any]) -> list[str]:
     """开始节点勾了「必填」的参数(`required_params`,参数名的列表)一个都不能空。
 
     参数的值常常是模板建好之后才由用户填的(商品名、卖点、主题),而它们被别的节点用 `{{start.x}}` 引用 ——
@@ -124,7 +165,7 @@ def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
     """
     params = config.get("params") if isinstance(config.get("params"), dict) else {}
     names = config.get("required_params") if isinstance(config.get("required_params"), list) else []
-    return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if isinstance(name, str) and blank(params.get(name))]
+    return [tr("wfCheck_required", node=node_name, field=name) for name in names if isinstance(name, str) and blank(params.get(name))]
 
 
 def _param_options(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -138,14 +179,14 @@ def _param_options(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def _param_options_shape_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+def _param_options_shape_errors(node_name: str, config: dict[str, Any]) -> list[str]:
     """`param_options` 的形状:参数名 → 非空的选项列表,每一项有不重复的 value(非空字符串)、一个 label(字符串),
     可选 description(字符串),`requires` 只能是模板前置条件的检查键(运行前按它查,见 engine._check_chosen_options)。"""
     declared = config.get("param_options")
     if declared is None:
         return []
     if not isinstance(declared, dict):
-        return [tr("wfErr_paramOptionsShape", node=node_id, param="—")]
+        return [tr("wfErr_paramOptionsShape", node=node_name, param="—")]
     errors: list[str] = []
     for name, options in declared.items():
         values = [one.get("value") for one in options] if isinstance(options, list) and all(
@@ -159,7 +200,7 @@ def _param_options_shape_errors(node_id: str, config: dict[str, Any]) -> list[st
             and all(one.get("requires") in (None, "") or one.get("requires") in CHECKS for one in options)
         )
         if not good:
-            errors.append(tr("wfErr_paramOptionsShape", node=node_id, param=name))
+            errors.append(tr("wfErr_paramOptionsShape", node=node_name, param=name))
     return errors
 
 
@@ -177,7 +218,7 @@ def start_option_violations(config: dict[str, Any]) -> list[str]:
     ]
 
 
-def _start_option_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+def _start_option_errors(node_name: str, config: dict[str, Any]) -> list[str]:
     """选项参数的值(默认值叠上这一次带的,见 with_run_params)不在选项里就拦,点名参数和可选的值。"""
     params = config.get("params") if isinstance(config.get("params"), dict) else {}
     errors: list[str] = []
@@ -188,17 +229,17 @@ def _start_option_errors(node_id: str, config: dict[str, Any]) -> list[str]:
             if one.get("label") and one.get("label") != one.get("value") else str(one.get("value"))
             for one in options
         )
-        errors.append(tr("wfErr_startParamNotAnOption", node=node_id, param=name, value=as_text(value), choices=choices))
+        errors.append(tr("wfErr_startParamNotAnOption", node=node_name, param=name, value=as_text(value), choices=choices))
     return errors
 
 
-def _required_params_shape_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+def _required_params_shape_errors(node_name: str, config: dict[str, Any]) -> list[str]:
     """`required_params` 是参数名的列表。还写成一串逗号分隔的字的(旧形状,智能体照旧习惯写的)当场说清 ——
     不在这里猜着拆:旧形状由迁移和图升级改(graph_upgrade.start_required_params_become_a_list)。"""
     value = config.get("required_params")
     if value is None or (isinstance(value, list) and all(isinstance(name, str) for name in value)):
         return []
-    return [tr("wfErr_requiredParamsShape", node=node_id)]
+    return [tr("wfErr_requiredParamsShape", node=node_name)]
 
 
 def blank(value: Any) -> bool:
@@ -255,8 +296,14 @@ def validate_graph(
     allow_missing_start: bool = False,
     extra_types: dict[str, dict[str, Any]] | None = None,
     explain_plugin_node: Callable[[str], str | None] | None = None,
+    _path: tuple[str, ...] = (),
 ) -> list[str]:
     """结构校验:返回错误列表(空表 = 合法)。
+
+    **报错说人话**:节点按标题说(没起名就是节点类型的显示名,见 node_title)、字段按界面上的名字说(见 field_name),
+    按这次请求的语言(tr)。体里的节点带上它在哪一层(`_path`:从外往里经过的容器的标题,「逐镜生成 › 生成画面」)——
+    和画布就绪清单的写法一样,同一个问题两边说同一句话。此前是「节点 shoot_beats 的循环体里:节点 beat_frame 缺少必填
+    配置 provider」:只有中文,而且是 id 和配置的原名。
 
     explain_plugin_node:图里的插件节点不在 extra_types 里时,**为什么**(没装、没接连接、连接停用、工具没勾选……)。
     和 extra_types 一样由知道「谁在跑」的调用方给(见 engine.start_workflow_job);不给就只说是哪个插件的节点用不了。
@@ -279,13 +326,13 @@ def validate_graph(
     nodes = graph.get("nodes")
     edges = graph.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
-        return ["graph 必须包含 nodes 与 edges 两个数组"]
+        return [tr("wfCheck_notAGraph")]
     # Only the CONTAINERS were type-checked. Their elements were assumed to be dicts, so
     # {"nodes": ["oops"]} reached .get() and raised AttributeError straight past the
     # WorkflowDomainError handler — a 500 for what is plainly a bad request. This has to come
     # before the first .get() below, not after.
     if any(not isinstance(node, dict) for node in nodes) or any(not isinstance(e, dict) for e in edges):
-        return ["节点与连线必须是对象"]
+        return [tr("wfCheck_notObjects")]
 
     # 标记(位置书签)不是节点:它不执行、不连线,只是"跳到这儿"。所以它在 graph 里自成一份
     # 列表,校验也自成一条 —— 规则见 domain/markers,画板那边用的是同一份。
@@ -301,36 +348,43 @@ def validate_graph(
     }
 
     known_types = {**NODE_TYPES, **(extra_types or {})}
+    titles = layer_titles(nodes, known_types)
 
-    def _unknown_type_error(node_type: str, node_id: str) -> str:
+    def title(node: dict[str, Any]) -> str:
+        """报错里这个节点叫什么:它的标题(同一层撞名的带上 id,见 layer_titles),体里的带上外面那几层
+        (同画布就绪清单的「外层 › 内层」)。"""
+        return " › ".join((*_path, titles.get(str(node.get("id", "")), node_title(node, known_types))))
+
+    def _unknown_type_error(node: dict[str, Any]) -> str:
         # 插件节点在别人机器上会缺:说清楚是"缺哪个插件"、为什么用不了,而不是一句让人无从下手的"未知类型"。
         from app.domain.plugins.nodes import parse_node_type
 
+        node_type = str(node.get("type", ""))
         parsed = parse_node_type(node_type)
         if parsed:
             why = explain_plugin_node(node_type) if explain_plugin_node is not None else None
-            return tr("wfErr_pluginNodeUnusable", node=node_id, reason=why or tr("wfErr_pluginNodeUnknownReason",
-                                                                                  plugin=parsed[0], tool=parsed[1]))
-        return f"未知节点类型: {node_type} ({node_id})"
+            return tr("wfErr_pluginNodeUnusable", node=title(node), reason=why or tr("wfErr_pluginNodeUnknownReason",
+                                                                                      plugin=parsed[0], tool=parsed[1]))
+        return tr("wfCheck_unknownType", node=title(node), type=node_type)
 
     seen_ids: set[str] = set()
-    start_count = 0
+    starts: list[dict[str, Any]] = []
     for node in nodes:
         node_id = str(node.get("id", ""))
         node_type = str(node.get("type", ""))
         if not node_id:
-            errors.append("存在缺少 id 的节点")
+            errors.append(tr("wfCheck_nodeWithoutId"))
             continue
         if node_id in seen_ids:
-            errors.append(f"节点 id 重复: {node_id}")
+            errors.append(tr("wfCheck_duplicateId", id=node_id))
         seen_ids.add(node_id)
         if node_type not in known_types:
-            errors.append(_unknown_type_error(node_type, node_id))
+            errors.append(_unknown_type_error(node))
             continue
         if node_type == "start":
-            start_count += 1
-            errors.extend(_required_params_shape_errors(node_id, node.get("config") or {}))
-            errors.extend(_param_options_shape_errors(node_id, node.get("config") or {}))
+            starts.append(node)
+            errors.extend(_required_params_shape_errors(title(node), node.get("config") or {}))
+            errors.extend(_param_options_shape_errors(title(node), node.get("config") or {}))
         if require_config:
             node_config = node.get("config") or {}
             node_specs = known_types[node_type]["config"]
@@ -338,18 +392,25 @@ def validate_graph(
                 if isinstance(spec, dict) and spec.get("required") and config_field_active(spec, node_config, node_specs):
                     value = node_config.get(key)
                     #: 「空着」和画布的就绪检查同一个判据(blank):空白、空列表、空对象也是没填。
-                    if blank(value) and (node_id, key) not in data_bound:
-                        errors.append(f"节点 {node_id} 缺少必填配置 {key}")
-            errors.extend(one_of_errors(node_id, node_config, node_specs, data_bound))
+                    if not blank(value) or (node_id, key) in data_bound:
+                        continue
+                    #: 「AI 生成素材」的服务商 / 模型 / 类型是**一次选择**的三个产物(选一个生成模型三格一起填上):
+                    #: 分开报是三条指向界面上不存在的字段的待办。归成一条「生成模型」—— 和画布就绪清单同一条(analyze.ts)。
+                    if node_type == "ai_generate" and key in GENERATION_MODEL_FIELDS:
+                        if key == "model":
+                            errors.append(tr("wfCheck_required", node=title(node), field=fragment("wfField_generationModel")))
+                        continue
+                    errors.append(tr("wfCheck_required", node=title(node), field=field_name(key, spec)))
+            errors.extend(one_of_errors(node_id, node_config, node_specs, data_bound, node_name=title(node)))
             #: 代码字段不能接上游:上游的值整段变成代码,和把 {{}} 拼进去是同一个注入(见 code_fields)。
             errors.extend(
-                tr("wfErr_codeFieldBound", node=node_id, field=key)
+                tr("wfErr_codeFieldBound", node=title(node), field=field_name(key, node_specs[key]))
                 for key in sorted(code_fields(node_type, known_types))
                 if (node_id, key) in data_bound
             )
             if node_type == "start":
-                errors.extend(_start_param_errors(node_id, node_config))
-                errors.extend(_start_option_errors(node_id, node_config))
+                errors.extend(_start_param_errors(title(node), node_config))
+                errors.extend(_start_option_errors(title(node), node_config))
             #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
             #: (缺必填、引用越出作用域、空体、体里有开始节点、环、未知类型)在这里不报,就只能等
             #: 循环真跑到时才由执行器报 —— 那时工作流已经占了一个任务位、把循环之前的步骤全跑完
@@ -358,37 +419,40 @@ def validate_graph(
             #:
             #: 此前这里只下探「缺必填」一项,其余的留给执行器在运行时再校验一遍 —— 而那一遍拿不到
             #: `extra_types`,于是**循环体里的插件节点一律被判「未安装或未启用」**。现在体只在这里
-            #: 校验一次,带着和外层同一份节点类型。
+            #: 校验一次,带着和外层同一份节点类型。体里的报错说的是「外层 › 内层」那个节点。
             if node_type in NESTED_BODY_TYPES:
-                where = f"节点 {node_id} 的{_body_label(node_type)}里:"
                 errors.extend(
-                    where + one
-                    for one in validate_body_graph(
+                    validate_body_graph(
                         node_config.get("body"), node_type, extra_types=extra_types, container=node_config,
-                        explain_plugin_node=explain_plugin_node,
+                        explain_plugin_node=explain_plugin_node, _path=(*_path, titles[node_id]),
                     )
                 )
     if require_start:
-        if start_count > 1 or (start_count == 0 and not allow_missing_start):
-            errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
+        if not starts and not allow_missing_start:
+            errors.append(tr("wfCheck_missingStart"))
+        elif len(starts) > 1:
+            errors.append(tr("wfCheck_tooManyStarts", count=len(starts)))
         #: 顶层的 `{{节点.字段}}` 要指向本图里的节点、`{{开始.参数}}` 要是开始节点有的参数。只在**运行前**
         #: (require_config)查:保存时删掉一个节点、引用它的那几格还没改,不该连存都存不下(画布会标出
         #: 失效引用)。体内的引用另有作用域规则(见 validate_body_graph)。
         if require_config:
-            errors.extend(_unresolved_reference_errors(nodes, edges))
-    elif start_count > 0:
-        errors.append("循环体子图不能包含开始节点")
+            errors.extend(_unresolved_reference_errors(nodes, edges, title, known_types))
+    else:
+        errors.extend(tr("wfCheck_startInBody", node=title(node)) for node in starts)
     #: **会跑的节点引用了一定不会跑的节点**(没接进流程):那个引用跑起来只会是空串,工作流照样报成功 ——
     #: 「从主题到完整视频」的「可用的 3D 道具」从模板 v8 到 v11 一次都没跑过,画布上只挂着一个黄色提醒。
     #: 只在**运行前**(require_config)拦:保存不拦,旧图照样存得下、打得开,用户才连得上它、或者按新版重建。
     #: 顶层没有开始节点时什么都不会跑,上面已经说了这一件,不再逐个报。循环体 / 子图按它们自己的入口规则
     #: (无入边的根也是入口,见 never_run_nodes)。
-    if require_config and (start_count > 0 or not require_start):
+    by_id = {str(node.get("id", "")): node for node in nodes}
+    if require_config and (starts or not require_start):
         separator = tr("punct_listSep")
         errors.extend(
-            tr("wfErr_referencesNeverRunNode", nodes=separator.join(one["referenced_by"]),
-               refs=separator.join(one["refs"]), source=one["source"])
-            for one in never_run_references({"nodes": nodes, "edges": edges}, entry_is_root=not require_start)
+            tr("wfErr_referencesNeverRunNode",
+               nodes=separator.join(tr("wfQuoted", name=title(by_id[one])) for one in found["referenced_by"]),
+               refs=separator.join(reference_label(_bare(ref), by_id, known_types) for ref in found["refs"]),
+               source=title(by_id[found["source"]]))
+            for found in never_run_references({"nodes": nodes, "edges": edges}, entry_is_root=not require_start)
         )
 
     node_types = {str(node.get("id", "")): str(node.get("type", "")) for node in nodes}
@@ -398,12 +462,12 @@ def validate_graph(
         source = str(edge.get("source", ""))
         target = str(edge.get("target", ""))
         if source not in seen_ids or target not in seen_ids:
-            errors.append(f"连线引用了不存在的节点: {source} → {target}")
+            errors.append(tr("wfCheck_danglingEdge", source=source, target=target))
             continue
         handle = edge.get("source_handle")
         branches = known_types.get(node_types.get(source, ""), {}).get("branches")
         if branches and handle not in (None, *branches):
-            errors.append(f"条件节点的分支端点必须是 {'/'.join(branches)}: {source}")
+            errors.append(tr("wfCheck_badBranch", node=title(by_id[source]), branches=" / ".join(branches)))
         adjacency.setdefault(source, []).append(target)
         indegree[target] = indegree.get(target, 0) + 1
     #: 引用即依赖(见 reference_dependencies):一个节点引用了它自己的下游,就是一个环 ——
@@ -425,8 +489,17 @@ def validate_graph(
             if degrees[nxt] == 0:
                 queue.append(nxt)
     if seen_ids and visited != len(seen_ids):
-        errors.append("工作流包含环路(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图")
+        errors.append(tr("wfCheck_cycle"))
     return errors
+
+
+#: 「AI 生成素材」上由一次「选生成模型」同时填上的三格(见 validate_graph 里那一段,画布 analyze.ts 的 GENERATE_MODEL_KEYS)。
+GENERATION_MODEL_FIELDS = frozenset({"provider", "model", "kind"})
+
+
+def _bare(ref: str) -> list[str]:
+    """`{{a.b.c}}` → ["a", "b", "c"]。"""
+    return ref.strip().removeprefix("{{").removesuffix("}}").strip().split(".")
 
 
 def _outer_references(node: dict[str, Any]) -> list[list[str]]:
@@ -436,8 +509,14 @@ def _outer_references(node: dict[str, Any]) -> list[list[str]]:
     return [match.group(1).strip().split(".") for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))]
 
 
-def _unresolved_reference_errors(nodes: list[Any], edges: list[Any]) -> list[str]:
-    """顶层引用解析得到:根是本图里的节点;引到开始节点的,那个参数开始节点有。
+def _unresolved_reference_errors(
+    nodes: list[Any],
+    edges: list[Any],
+    title: Callable[[dict[str, Any]], str],
+    types: dict[str, dict[str, Any]],
+) -> list[str]:
+    """顶层引用解析得到:根是本图里的节点;引到开始节点的,那个参数开始节点有。**按引用它的那个节点报**
+    (和画布就绪清单一样挂在引用方身上),引用按名字说(reference_label)。
 
     此前后端不查:画布会标出失效引用,可定时任务、智能体、call_workflow 触发的运行不经过画布 ——
     一个拼错的 `{{scirpt.text}}`、调用方少传的 `{{start.topic}}` 运行时静默插值成空串,下游拿着
@@ -445,34 +524,36 @@ def _unresolved_reference_errors(nodes: list[Any], edges: list[Any]) -> list[str
 
     开始节点"有"哪些参数是**这一次运行**说了算的:运行前校验拿的是 with_run_params 叠过本次参数的图,
     所以这里只看开始节点 config 里的 params —— 声明了的、这次传进来的都在里面。从开始节点拉出的
-    数据边(`source_output` 就是参数名)同一条规矩。
+    数据边(`source_output` 就是参数名)同一条规矩,算在边的目标节点头上。
     """
-    ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    by_id = {str(node.get("id", "")): node for node in nodes if isinstance(node, dict)}
     starts = {
-        str(node.get("id", "")): set((node.get("config") or {}).get("params") or {})
-        for node in nodes
-        if isinstance(node, dict) and node.get("type") == "start"
+        node_id: set((node.get("config") or {}).get("params") or {})
+        for node_id, node in by_id.items()
+        if node.get("type") == "start"
     }
-    errors: list[str] = []
-    missing: set[str] = set()
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        references = _outer_references(node)
-        unknown = sorted({parts[0] for parts in references if parts[0] and parts[0] not in ids})
-        if unknown:
-            errors.append(f"节点 {node.get('id')} 引用了不存在的节点:{', '.join(unknown)}")
-        missing |= {
-            f"{parts[0]}.{parts[1]}"
-            for parts in references
-            if parts[0] in starts and len(parts) > 1 and parts[1] not in starts[parts[0]]
-        }
+    separator = tr("punct_listSep")
+    unknown: dict[str, set[tuple[str, ...]]] = {}
+    missing: dict[str, set[tuple[str, ...]]] = {}
+    for node_id, node in by_id.items():
+        for parts in _outer_references(node):
+            if parts[0] and parts[0] not in by_id:
+                unknown.setdefault(node_id, set()).add(tuple(parts))
+            elif parts[0] in starts and len(parts) > 1 and parts[1] not in starts[parts[0]]:
+                missing.setdefault(node_id, set()).add(tuple(parts[:2]))
     for edge in edges:
         source, output = str(edge.get("source", "")), str(edge.get("source_output", ""))
-        if edge.get("kind") == "data" and source in starts and output and output not in starts[source]:
-            missing.add(f"{source}.{output}")
-    if missing:
-        errors.append(f"开始节点没有这些参数:{', '.join(sorted(missing))};在开始节点里声明它们,或运行时传进来")
+        target = str(edge.get("target", ""))
+        if edge.get("kind") == "data" and source in starts and output and output not in starts[source] and target in by_id:
+            missing.setdefault(target, set()).add((source, output))
+    errors: list[str] = []
+    for node_id, node in by_id.items():
+        if node_id in unknown:
+            refs = separator.join(reference_label(list(parts), by_id, types) for parts in sorted(unknown[node_id]))
+            errors.append(tr("wfCheck_staleRef", node=title(node), refs=refs))
+        if node_id in missing:
+            refs = separator.join(reference_label(list(parts), by_id, types) for parts in sorted(missing[node_id]))
+            errors.append(tr("wfCheck_startParamMissing", node=title(node), refs=refs))
     return errors
 
 
@@ -501,8 +582,8 @@ NESTED_BODY_RAW_KEYS = ("body", "output", "condition")
 BRANCHING_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("branches"))
 
 
-def _body_label(node_type: str) -> str:
-    return "循环体" if "loop" in NODE_TYPES[node_type]["body_scope"] else "子图"
+def _body_label_key(node_type: str) -> str:
+    return "wfBody_loop" if "loop" in NODE_TYPES[node_type]["body_scope"] else "wfBody_subgraph"
 
 
 def validate_body_graph(
@@ -512,6 +593,7 @@ def validate_body_graph(
     extra_types: dict[str, dict[str, Any]] | None = None,
     container: dict[str, Any] | None = None,
     explain_plugin_node: Callable[[str], str | None] | None = None,
+    _path: tuple[str, ...] = (),
 ) -> list[str]:
     """内嵌子图(循环体 / subgraph)校验:必须非空、无 start 节点、其余同 validate_graph;
     再查引用是否越出 `node_type` 声明的作用域(`body_scope`)。
@@ -520,27 +602,39 @@ def validate_body_graph(
     作用域里解析,一并按同一份作用域查。此前只扫体里的节点,这两格前后端都不看 —— 条件循环的条件
     写错一个节点名,运行时插值成空串,循环安静地只跑一轮。
 
+    `_path`:从外往里经过的容器的标题(最后一个就是这个体的容器)。体里的报错说「容器 › 节点」,说的是容器自己的
+    那几格(空体、output / condition 里的引用)就说容器。
+
     `extra_types` 和外层那次校验是同一份 —— 体里的插件节点和顶层的一样认得出来。"""
-    label = _body_label(node_type)
+    container_title = " › ".join(_path) if _path else tr(_body_label_key(node_type))
     nodes = body.get("nodes") if isinstance(body, dict) else None
     if not isinstance(nodes, list) or not nodes:
-        return [f"{label}不能为空,至少要有一个节点"]
+        return [tr("wfCheck_bodyEmpty", node=container_title)]
+    known = {**NODE_TYPES, **(extra_types or {})}
+    titles = layer_titles(nodes, known)
+
+    def title(node: dict[str, Any]) -> str:
+        return " › ".join((*_path, titles.get(str(node.get("id", "")), node_title(node, known))))
+
     errors = validate_graph(
-        body, require_start=False, extra_types=extra_types, explain_plugin_node=explain_plugin_node
+        body, require_start=False, extra_types=extra_types, explain_plugin_node=explain_plugin_node, _path=_path
     )
     #: 「输出」节点声明的是**整条工作流**交给调用方的东西,只在顶层算数(见 engine.run_workflow)。
     #: 放在体里它照样跑、产出却没人收 —— 看起来声明了输出,被调用时拿到的还是没有。
-    if any(isinstance(node, dict) and node.get("type") == "output" for node in nodes):
-        errors.append(f"{label}里不能放「输出」节点:工作流的输出只能在最外层声明")
-    errors.extend(_unresolvable_body_refs(nodes, node_type))
+    errors.extend(
+        tr("wfCheck_outputInBody", node=title(node))
+        for node in nodes
+        if isinstance(node, dict) and node.get("type") == "output"
+    )
+    errors.extend(_unresolvable_body_refs(nodes, node_type, title))
     if container:
         inner = {key: container[key] for key in NESTED_BODY_RAW_KEYS if key != "body" and key in container}
-        errors.extend(_unresolvable_container_refs(inner, nodes, node_type))
+        errors.extend(_unresolvable_container_refs(inner, nodes, node_type, container_title))
     return errors
 
 
-def _body_refs(texts: list[str], nodes: list[Any], node_type: str) -> tuple[set[str], set[str]]:
-    """这几段文字里,体内作用域解析不了的引用:(不认识的根, 固定作用域里没有的字段)。
+def _body_refs(text: str, nodes: list[Any], node_type: str) -> tuple[list[list[str]], list[list[str]]]:
+    """这段文字里,体内作用域解析不了的引用(按点号拆开):(根不认识的, 固定作用域里没有那个字段的)。
 
     体内看得见的只有节点类型声明的作用域名(`body_scope`)和体里自己的节点。字段是固定几个的
     作用域(`loop`),字段也要对得上;字段来自配置的(`*inputs`)只有运行时知道。
@@ -549,30 +643,46 @@ def _body_refs(texts: list[str], nodes: list[Any], node_type: str) -> tuple[set[
     body_ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
     known = set(declared) | body_ids
     fixed = {root: set(fields) for root, fields in declared.items() if not any(one.startswith("*") for one in fields)}
-    unknown: set[str] = set()
-    missing: set[str] = set()
-    for text in texts:
-        for match in VARIABLE_RE.finditer(text):
-            parts = match.group(1).strip().split(".")
-            root = parts[0]
-            if root and root not in known:
-                unknown.add(root)
-            elif root in fixed and root not in body_ids and len(parts) > 1 and parts[1] not in fixed[root]:
-                missing.add(f"{root}.{parts[1]}")
+    unknown: list[list[str]] = []
+    missing: list[list[str]] = []
+    for match in VARIABLE_RE.finditer(text):
+        parts = match.group(1).strip().split(".")
+        root = parts[0]
+        if root and root not in known:
+            unknown.append(parts)
+        elif root in fixed and root not in body_ids and len(parts) > 1 and parts[1] not in fixed[root]:
+            missing.append(parts[:2])
     return unknown, missing
 
 
-def _missing_fields_error(missing: set[str], node_type: str) -> str:
-    fixed = {
-        root: fields for root, fields in NODE_TYPES[node_type]["body_scope"].items()
-        if not any(one.startswith("*") for one in fields)
-    }
-    provided = "、".join(f"{root}.{field}" for root, fields in fixed.items() for field in sorted(fields))
-    return f"{_body_label(node_type)}里没有 {', '.join(sorted(missing))};这里只提供 {provided}"
+def _scope_problems(text: str, nodes: list[Any], node_type: str, who: str, *, field: Any = None) -> list[str]:
+    """一段在体内作用域里解析的文字有什么引用解析不了,按「谁」报:体里的节点,或者容器自己的那一格(`field`,
+    output / condition 的界面名字)。"""
+    unknown, missing = _body_refs(text, nodes, node_type)
+    declared = NODE_TYPES[node_type]["body_scope"]
+    separator = tr("punct_listSep")
+    errors: list[str] = []
+    if missing:
+        provided = separator.join(
+            f"{root} · {field}"
+            for root, fields in declared.items()
+            if not any(one.startswith("*") for one in fields)
+            for field in fields
+        )
+        refs = separator.join(sorted({" · ".join(parts) for parts in missing}))
+        errors.append(tr("wfCheck_scopeFieldMissing", node=who, ref=refs, available=provided))
+    if unknown:
+        roots = separator.join(sorted({parts[0] for parts in unknown}))
+        if field is None:
+            errors.append(tr("wfCheck_outsideScope", node=who, refs=roots, allowed=separator.join(declared)))
+        else:
+            errors.append(tr("wfCheck_containerFieldOutsideScope", node=who, field=field, refs=roots,
+                             allowed=separator.join(declared)))
+    return errors
 
 
-def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
-    """Reject a body template that references anything outside its own scope.
+def _unresolvable_body_refs(nodes: list[Any], node_type: str, title: Callable[[dict[str, Any]], str]) -> list[str]:
+    """Reject a body template that references anything outside its own scope — per body node.
 
     A body context is seeded with the scope names its node type declares (`body_scope`) and the
     body's own nodes — nothing else. A body node referencing an outer node like {{start.prefix}}
@@ -589,36 +699,22 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
     body/output/condition belong to *its* inner scope and validate_graph checks them against that
     scope. Its `inputs`/`items` (outer-facing) are still scanned, since those resolve in *this* scope.
     """
-    texts: list[str] = []
+    errors: list[str] = []
     for node in nodes:
         if not isinstance(node, dict):
             continue
-        texts.append(json.dumps(_referencing_config(node), ensure_ascii=False))
-    unknown, missing = _body_refs(texts, nodes, node_type)
-    errors: list[str] = []
-    if missing:
-        errors.append(_missing_fields_error(missing, node_type))
-    if not unknown:
-        return errors
-    allowed = "、".join(NODE_TYPES[node_type]["body_scope"])
-    if "loop" in NODE_TYPES[node_type]["body_scope"]:
-        return [*errors, f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 {allowed} 与体内节点"]
-    return [*errors, f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 {allowed} 与体内节点"]
+        text = json.dumps(_referencing_config(node), ensure_ascii=False)
+        errors.extend(_scope_problems(text, nodes, node_type, title(node)))
+    return errors
 
 
-def _unresolvable_container_refs(inner: dict[str, Any], nodes: list[Any], node_type: str) -> list[str]:
-    """容器节点自己的 output / condition 在体内作用域里解析 —— 和体里的节点同一份作用域。"""
-    label = _body_label(node_type)
+def _unresolvable_container_refs(inner: dict[str, Any], nodes: list[Any], node_type: str, who: str) -> list[str]:
+    """容器节点自己的 output / condition 在体内作用域里解析 —— 和体里的节点同一份作用域;报在容器头上。"""
+    specs = NODE_TYPES[node_type]["config"]
     errors: list[str] = []
     for key, value in inner.items():
-        unknown, missing = _body_refs([json.dumps(value, ensure_ascii=False)], nodes, node_type)
-        if missing:
-            errors.append(_missing_fields_error(missing, node_type))
-        if unknown:
-            allowed = "、".join(NODE_TYPES[node_type]["body_scope"])
-            errors.append(
-                f"{key} 引用了{label}里没有的节点:{', '.join(sorted(unknown))};只能引用 {allowed} 与{label}里的节点"
-            )
+        errors.extend(_scope_problems(json.dumps(value, ensure_ascii=False), nodes, node_type, who,
+                                      field=field_name(key, specs.get(key))))
     return errors
 
 

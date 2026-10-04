@@ -80,7 +80,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     graph = _full_video()
 
     #: 主题是必填的开始参数(模板里空着,运行时由用户填),其余都已配好。
-    assert validate_graph(graph) == ["节点 start 缺少必填配置 params.topic"]
+    assert validate_graph(graph) == ["「填写视频主题」缺少必填:topic"]
     assert validate_graph(with_run_params(graph, {"topic": "一家老面馆"})) == []
     assert _invalid_references(graph) == []
     assert graph["meta"] == {

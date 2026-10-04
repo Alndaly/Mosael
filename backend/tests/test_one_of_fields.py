@@ -23,7 +23,7 @@ def _graph(upload_config: dict, *, bound: str = "") -> dict:
 
 
 def _one_of_errors(graph: dict, **kwargs) -> list[str]:
-    return [error for error in validate_graph(graph, **kwargs) if "asset_id / file_path" in error]
+    return [error for error in validate_graph(graph, **kwargs) if "素材 / 文件路径" in error]
 
 
 def test_上传节点的素材和路径声明成一组() -> None:
@@ -39,15 +39,15 @@ def test_恰好填一个才过() -> None:
 
 def test_两个都填或都没填_运行前就报() -> None:
     assert _one_of_errors(_graph({"asset_id": "a1", "file_path": "/tmp/x.mp4"})) == [
-        "节点 up 的 asset_id / file_path 只能填一个"
+        "「浏览器·上传文件」的 素材 / 文件路径 只能填一个"
     ]
-    assert _one_of_errors(_graph({})) == ["节点 up 的 asset_id / file_path 要填一个"]
+    assert _one_of_errors(_graph({})) == ["「浏览器·上传文件」的 素材 / 文件路径 要填一个"]
 
 
 def test_接了上游也算填了() -> None:
     assert _one_of_errors(_graph({}, bound="asset_id")) == []
     assert _one_of_errors(_graph({"file_path": "/tmp/x.mp4"}, bound="asset_id")) == [
-        "节点 up 的 asset_id / file_path 只能填一个"
+        "「浏览器·上传文件」的 素材 / 文件路径 只能填一个"
     ]
 
 

@@ -79,7 +79,7 @@ def test_引用绕回自己时_保存就报环路() -> None:
         ],
         "edges": [{"id": "e0", "source": "start", "target": "a"}, {"id": "e1", "source": "a", "target": "b"}],
     }
-    assert any("环路" in error for error in validate_graph(graph))
+    assert "工作流里有环(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图" in validate_graph(graph)
 
 
 @pytest.mark.parametrize("config", [{"template": "{{reader.text}}"}, {"template": "自己:{{self.text}}"}])

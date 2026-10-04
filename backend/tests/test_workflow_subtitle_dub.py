@@ -214,7 +214,7 @@ class Test官方工作流:
 
         graph = translated_dub_graph(voice_id="v1")
         # 只差用户自己选那份视频 —— 其余每一处配置都该是完整的。
-        assert validate_graph(graph) == ["节点 source_video 缺少必填配置 asset_id"]
+        assert validate_graph(graph) == ["「选择要配音的视频」缺少必填:素材"]
         nodes = {node["id"]: node for node in graph["nodes"]}
         assert nodes["dubbing"]["config"]["match_duration"] == "yes"
         # 字幕的时间码来自逐字稿,落点来自视频真正接到了第几秒。模板写的是 {{引用}},

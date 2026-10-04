@@ -6,6 +6,59 @@ key → {语言: 文案}。规矩见 core/i18n 与 tests/test_backend_i18n.py。
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # ---- 运行前检查(graph_rules.validate_graph):节点按标题说、字段按界面标签说,和画布的就绪清单同一套措辞 ----
+    "wfQuoted": {"zh": "「{name}」", "en": "“{name}”"},
+    #: 体的容器没有标题可说时(直接校验一份体)用的名字。
+    "wfBody_loop": {"zh": "循环体", "en": "Loop body"},
+    "wfBody_subgraph": {"zh": "子图", "en": "Subgraph"},
+    "wfCheck_required": {"zh": "「{node}」缺少必填:{field}", "en": "“{node}” is missing a required field: {field}"},
+    "wfCheck_oneOfBoth": {"zh": "「{node}」的 {fields} 只能填一个", "en": "“{node}”: fill in only one of {fields}"},
+    "wfCheck_oneOfMissing": {"zh": "「{node}」的 {fields} 要填一个", "en": "“{node}”: fill in one of {fields}"},
+    "wfCheck_missingStart": {"zh": "缺少开始节点,无法运行", "en": "Missing start node — cannot run"},
+    "wfCheck_tooManyStarts": {
+        "zh": "只能有一个开始节点,现在有 {count} 个",
+        "en": "There can only be one start node, but there are {count}",
+    },
+    "wfCheck_startInBody": {
+        "zh": "「{node}」:循环体和子图里不能放开始节点",
+        "en": "“{node}”: a start node can't go inside a loop or subgraph",
+    },
+    "wfCheck_staleRef": {"zh": "「{node}」引用了不存在的节点:{refs}", "en": "“{node}” references a node that doesn't exist: {refs}"},
+    "wfCheck_startParamMissing": {
+        "zh": "「{node}」引用的开始参数不存在:{refs}。在开始节点的参数里声明它,或运行时传进来",
+        "en": "“{node}” references a start parameter that doesn't exist: {refs}. Declare it in the start node's parameters, or pass it in when running",
+    },
+    "wfCheck_bodyEmpty": {"zh": "「{node}」里面还没有节点:至少放一个", "en": "“{node}” has nothing inside yet: add at least one node"},
+    "wfCheck_outputInBody": {
+        "zh": "「{node}」:「输出」节点只在最外层算数,放在循环体或子图里,调用方拿不到它的产出",
+        "en": "“{node}”: an Output node only counts at the top level — inside a loop or subgraph, nobody receives what it produces",
+    },
+    "wfCheck_scopeFieldMissing": {
+        "zh": "「{node}」用到的 {ref} 这里没有:只提供 {available}",
+        "en": "“{node}”: {ref} doesn't exist here — only {available} is provided",
+    },
+    "wfCheck_outsideScope": {
+        "zh": "「{node}」引用了这一层看不见的 {refs}:这里只看得见 {allowed} 和同一层的节点,外面的值经容器的「输入」传进来",
+        "en": "“{node}” references {refs}, which isn't visible on this layer: only {allowed} and nodes on the same layer are — pass outer values in through the container's inputs",
+    },
+    "wfCheck_containerFieldOutsideScope": {
+        "zh": "「{node}」的「{field}」在里面那一层解析,引用了那里看不见的 {refs}:那里只看得见 {allowed} 和里面的节点",
+        "en": "“{node}”: “{field}” is resolved inside, where {refs} isn't visible — only {allowed} and the nodes inside are",
+    },
+    "wfCheck_unknownType": {"zh": "「{node}」:未知的节点类型 {type}", "en": "“{node}”: unknown node type {type}"},
+    "wfCheck_badBranch": {"zh": "「{node}」的分支只能是 {branches}", "en": "“{node}”: the branch can only be {branches}"},
+    "wfCheck_cycle": {
+        "zh": "工作流里有环(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图",
+        "en": "The workflow has a cycle (a connection or a {{node.…}} reference loops back to itself); it must be acyclic",
+    },
+    "wfCheck_danglingEdge": {
+        "zh": "有一条连线连着不存在的节点:{source} → {target}",
+        "en": "A connection points at a node that doesn't exist: {source} → {target}",
+    },
+    "wfCheck_nodeWithoutId": {"zh": "有节点没有 id", "en": "A node has no id"},
+    "wfCheck_duplicateId": {"zh": "节点 id 重复:{id}", "en": "Duplicate node id: {id}"},
+    "wfCheck_notAGraph": {"zh": "graph 必须包含 nodes 与 edges 两个数组", "en": "graph must contain the nodes and edges arrays"},
+    "wfCheck_notObjects": {"zh": "节点与连线必须是对象", "en": "Nodes and connections must be objects"},
     # ---- 工作流执行期的失败原因(WorkflowDomainError 的 key) ----
     "wfErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
     "wfErr_assetNotInWorkspace": {"zh": "素材不在这个工作区里", "en": "That asset is not in this workspace"},
@@ -18,10 +71,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_recursiveCall": {"zh": "工作流递归调用(直接或间接调用了自身),已阻止", "en": "Blocked: the workflow calls itself, directly or indirectly"},
     "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
     "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
-    "wfErr_callNodeNotRunnable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
+    "wfErr_callNodeNotRunnable": {"zh": "「{node}」:{reason}", "en": "“{node}”: {reason}"},
     "wfErr_calledWorkflowNotRunnable": {
-        "zh": "节点 {node} 调用的工作流「{name}」现在跑不起来:{reason}",
-        "en": "The workflow “{name}” called by node {node} can't run right now: {reason}",
+        "zh": "「{node}」调用的工作流「{name}」现在跑不起来:{reason}",
+        "en": "The workflow “{name}” called by “{node}” can't run right now: {reason}",
     },
     "wfErr_calledWorkflowCannotStart": {
         "zh": "调用的工作流「{name}」跑不起来:{reason}",
@@ -96,18 +149,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
     "wfErr_codeFieldBound": {
-        "zh": "节点 {node} 的代码字段 {field} 不能接上游:上游的值会整段变成代码。把它接到这个节点的 input,代码里读 input",
-        "en": "Node {node}: the code field {field} can't take an upstream value, which would become code wholesale. Wire it into this node's input and read it there",
+        "zh": "「{node}」的代码字段「{field}」接了上游:上游的值会整段当成代码跑。把上游接到这个节点的 input,代码里读 input",
+        "en": "“{node}”: the code field “{field}” is wired to an upstream output, which would run as code. Wire upstream values into this node's input and read them there",
     },
     "wfErr_tagConflict": {
         "zh": "这份素材的标签同时被好几处改,重试几次都没写上 —— 稍后再跑一次",
         "en": "This asset's tags were being changed in several places at once and the write kept losing — run it again shortly",
     },
     "wfErr_codeFieldReference": {
-        "zh": "节点 {node} 的代码字段 {field} 里写了上游引用:代码不替换引用,它会原样留在代码里。把上游的值接到这个节点的 input(键随你起,值选上游的输出),代码里读 input.键(Python 是 inputs[\"键\"])",
-        "en": "Node {node}: the code field {field} contains an upstream reference. Code isn't interpolated, so it stays in the code as-is. Wire the upstream value into this node's input (any key, pick the upstream output as its value) and read input.key in the code (inputs[\"key\"] in Python)",
+        "zh": "「{node}」的代码字段「{field}」里写了上游引用:代码不替换引用,它会原样留在代码里。把上游的值接到这个节点的 input(键随你起,值选上游的输出),代码里读 input.键(Python 是 inputs[\"键\"])",
+        "en": "“{node}”: the code field “{field}” contains an upstream reference. Code isn't interpolated, so it stays in the code as-is. Wire the upstream value into this node's input (any key, pick the upstream output as its value) and read input.key in the code (inputs[\"key\"] in Python)",
     },
-    "wfErr_pluginNodeUnusable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
+    "wfErr_pluginNodeUnusable": {"zh": "「{node}」插件节点不可用:{reason}", "en": "“{node}”: plugin node unavailable — {reason}"},
     "wfErr_pluginNodeUnknownReason": {
         "zh": "它来自插件「{plugin}」的工具 {tool},这里用不了(插件没装、没有可用的连接,或者没勾选这个工具)",
         "en": "it comes from the tool {tool} of the plugin “{plugin}”, which can't be used here (the plugin isn't installed, has no usable connection, or doesn't have this tool enabled)",
@@ -133,16 +186,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A chat step has no model picked, and the connection “{name}” has no usable chat model: enable one in Settings (or pick one on the step), then run again",
     },
     "wfErr_requiredParamsShape": {
-        "zh": "节点 {node} 的 required_params 要是参数名的列表(params 里的名字),例如 [\"topic\"] —— 不是一串逗号分隔的字",
-        "en": "Node {node}: required_params must be a list of parameter names from params, e.g. [\"topic\"] — not a comma-separated string",
+        "zh": "「{node}」的 required_params 要是参数名的列表(params 里的名字),例如 [\"topic\"] —— 不是一串逗号分隔的字",
+        "en": "“{node}”: required_params must be a list of parameter names from params, e.g. [\"topic\"] — not a comma-separated string",
     },
     "wfErr_paramOptionsShape": {
-        "zh": "节点 {node} 的 param_options 里,参数 {param} 的选项写得不对:要是一个非空的列表,每一项有不重复的 value、一个 label,可选 description,requires 只能是模板前置条件的检查键",
-        "en": "Node {node}: the param_options for parameter {param} are malformed — they must be a non-empty list whose items each have a unique value and a label, optionally a description, and a requires that names a template requirement check",
+        "zh": "「{node}」的 param_options 里,参数 {param} 的选项写得不对:要是一个非空的列表,每一项有不重复的 value、一个 label,可选 description,requires 只能是模板前置条件的检查键",
+        "en": "“{node}”: the param_options for parameter {param} are malformed — they must be a non-empty list whose items each have a unique value and a label, optionally a description, and a requires that names a template requirement check",
     },
     "wfErr_startParamNotAnOption": {
-        "zh": "节点 {node} 的参数 {param} 是「{value}」,只能选:{choices}",
-        "en": "Node {node}: parameter {param} is “{value}”, but it can only be one of: {choices}",
+        "zh": "「{node}」的参数 {param} 是「{value}」,只能选:{choices}",
+        "en": "“{node}”: parameter {param} is “{value}”, but it can only be one of: {choices}",
     },
     "wfOptionChoice": {"zh": "{value}({label})", "en": "{value} ({label})"},
     "wfErr_startOptionUnavailable": {
@@ -168,8 +221,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfErr_referencesNeverRunNode": {
         # 一个会跑的节点引用了一定不会跑(没接进流程)的节点 —— 见 graph_rules.never_run_references。
-        "zh": "节点 {nodes} 引用了 {refs},可节点 {source} 没接进流程(没有一条会让它运行的入边),永远不会运行 —— 这个引用跑起来只会是空的。把 {source} 连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",
-        "en": "Node {nodes} references {refs}, but node {source} isn't wired into the flow (no incoming connection makes it run), so it never runs and the reference would always come out empty. Connect {source} into the flow; if this workflow was built from an official template, use “Rebuild from the new version” at the top of the canvas",
+        "zh": "{nodes}引用了 {refs},可「{source}」没接进流程(没有一条会让它运行的入边),永远不会运行 —— 这个引用跑起来只会是空的。把「{source}」连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",
+        "en": "{nodes} reference {refs}, but “{source}” isn't wired into the flow (no incoming connection makes it run), so it never runs and the reference would always come out empty. Connect “{source}” into the flow; if this workflow was built from an official template, use “Rebuild from the new version” at the top of the canvas",
     },
     "wfErr_notFromTemplate": {
         "zh": "这张图不是从官方模板建的(或那个模板已经没有了),没法按新版重建",

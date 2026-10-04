@@ -29,15 +29,17 @@ def _node(node_type: str, **config) -> dict:
 
 
 def test_具名模式要名字_池模式要档案_临时模式都不要() -> None:
-    assert any("session_name" in e for e in _errors(_node("browser_open", session_mode="named")))
-    assert any("profile_id" in e for e in _errors(_node("browser_open", session_mode="pool")))
+    assert _errors(_node("browser_open", session_mode="named")) == ["「打开浏览器」缺少必填:会话名称"]
+    assert _errors(_node("browser_open", session_mode="pool")) == ["「打开浏览器」缺少必填:浏览器池档案"]
     assert _errors(_node("browser_open")) == []  # 缺省就是临时
     assert _errors(_node("browser_open", session_mode="named", session_name="小红书")) == []
 
 
 def test_点击的选择器和文字恰好一样() -> None:
-    assert any("selector / text" in e for e in _errors(_node("browser_click", session="s")))
-    assert any("只能填一个" in e for e in _errors(_node("browser_click", session="s", selector="#a", text="b")))
+    assert _errors(_node("browser_click", session="s")) == ["「浏览器·点击」的 元素选择器 / 文本 要填一个"]
+    assert _errors(_node("browser_click", session="s", selector="#a", text="b")) == [
+        "「浏览器·点击」的 元素选择器 / 文本 只能填一个"
+    ]
     assert _errors(_node("browser_click", session="s", text="发布")) == []
 
 

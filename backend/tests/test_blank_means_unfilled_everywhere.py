@@ -25,16 +25,16 @@ def test_必填字段空白_空列表_空对象都算没填(value) -> None:
     errors = validate_graph(_graph({"id": "loop", "type": "loop_foreach", "config": {
         "items": value, "body": {"nodes": [{"id": "t", "type": "template", "config": {"template": "x"}}], "edges": []},
     }}))
-    assert "节点 loop 缺少必填配置 items" in errors
+    assert "「循环·遍历」缺少必填:要遍历的列表" in errors
 
 
 def test_one_of_里留了空格的那一格不算填了() -> None:
     errors = validate_graph(_graph({"id": "click", "type": "browser_click",
                                     "config": {"session": "s", "selector": "  ", "text": "提交"}}))
-    assert not [one for one in errors if "click" in one], errors
+    assert not [one for one in errors if "浏览器·点击" in one], errors
     errors = validate_graph(_graph({"id": "click", "type": "browser_click",
                                     "config": {"session": "s", "selector": " ", "text": "\n"}}))
-    assert "节点 click 的 selector / text 要填一个" in errors
+    assert "「浏览器·点击」的 元素选择器 / 文本 要填一个" in errors
 
 
 def test_只敲了空格的必填_点运行当场就拒() -> None:
@@ -45,4 +45,4 @@ def test_只敲了空格的必填_点运行当场就拒() -> None:
     )}).json()
     refused = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})
     assert refused.status_code == 422, refused.text
-    assert "req" in refused.text and "url" in refused.text
+    assert refused.json()["detail"] == "「HTTP 请求」缺少必填:网址"

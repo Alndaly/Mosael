@@ -58,12 +58,12 @@ def test_没接进流程的节点被引用_点运行当场拦下_文案点名谁
     refused = _run(client, workflow["id"])
     assert refused.status_code == 422, refused.text
     detail = refused.json()["detail"]
-    assert "set_design" in detail and "{{props.text}}" in detail, detail
-    assert "props 没接进流程" in detail and "永远不会运行" in detail
-    assert "按新版重建" in detail
+    #: 两个都没起名的「文本模板」撞了名:按标题说的同时带上 id,读得出是哪两个;引用按名字说(没起名的用 id)。
+    assert detail.startswith("「文本模板(set_design)」引用了 props · 文本,可「文本模板(props)」没接进流程"), detail
+    assert "永远不会运行" in detail and "按新版重建" in detail
     #: 英文界面看到的是英文。
     english = _run(client, workflow["id"], **{"Accept-Language": "en"}).json()["detail"]
-    assert "Node set_design references {{props.text}}" in english
+    assert english.startswith("“Text template(set_design)” reference props · Text, but “Text template(props)”"), english
     assert "isn't wired into the flow" in english and "Rebuild from the new version" in english
 
 
@@ -88,7 +88,7 @@ def test_整格一条的引用存成了数据边_照样拦() -> None:
     assert any(edge.get("kind") == "data" and edge["source"] == "props" for edge in workflow["graph"]["edges"])
     refused = _run(client, workflow["id"])
     assert refused.status_code == 422, refused.text
-    assert "{{props.text}}" in refused.json()["detail"] and "props 没接进流程" in refused.json()["detail"]
+    assert refused.json()["detail"].startswith("「文本模板(set_design)」引用了 props · 文本,可「文本模板(props)」没接进流程")
 
 
 def test_被引用的在条件分支里_可能跑可能不跑_不拦() -> None:
@@ -164,7 +164,7 @@ def test_循环节点在外层的_inputs_引用了没接进流程的节点_照�
     refused = _run(client, workflow["id"])
     assert refused.status_code == 422, refused.text
     detail = refused.json()["detail"]
-    assert "节点 loop 引用了 {{props.text}}" in detail and "props 没接进流程" in detail, detail
+    assert detail.startswith("「循环·遍历」引用了 props · 文本,可「文本模板」没接进流程"), detail
 
 
 def test_旧版整片模板建的图_道具没接进流程_被拦并指向按新版重建() -> None:
@@ -180,5 +180,5 @@ def test_旧版整片模板建的图_道具没接进流程_被拦并指向按新
     refused = _run(client, workflow["id"])
     assert refused.status_code == 422, refused.text
     detail = refused.json()["detail"]
-    assert "节点 set_design 引用了 {{props.catalog}},可节点 props 没接进流程" in detail, detail
+    assert "「设计 3D 白模布景与机位」引用了 可用的 3D 道具 · 道具清单,可「可用的 3D 道具」没接进流程" in detail, detail
     assert "按新版重建" in detail

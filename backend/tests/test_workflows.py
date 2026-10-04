@@ -62,7 +62,7 @@ def test_validate_graph_rules() -> None:
     assert validate_graph(linear_graph()) == []
 
     no_start = {"nodes": [{"id": "a", "type": "llm", "config": {"prompt": "x"}}], "edges": []}
-    assert any("开始节点" in e for e in validate_graph(no_start))
+    assert validate_graph(no_start) == ["缺少开始节点,无法运行"]
 
     cycle = {
         "nodes": [
@@ -75,16 +75,16 @@ def test_validate_graph_rules() -> None:
             {"id": "e2", "source": "b", "target": "a"},
         ],
     }
-    assert any("环路" in e for e in validate_graph(cycle))
+    assert "工作流里有环(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图" in validate_graph(cycle)
 
     missing_required = {
         "nodes": [{"id": "start", "type": "start", "config": {}}, {"id": "l", "type": "llm", "config": {}}],
         "edges": [],
     }
-    assert any("必填配置" in e for e in validate_graph(missing_required))
+    assert "「LLM 生成」缺少必填:提示词" in validate_graph(missing_required)
 
     bad_edge = {"nodes": [{"id": "start", "type": "start", "config": {}}], "edges": [{"id": "e", "source": "start", "target": "ghost"}]}
-    assert any("不存在的节点" in e for e in validate_graph(bad_edge))
+    assert "有一条连线连着不存在的节点:start → ghost" in validate_graph(bad_edge)
 
 
 def data_edge_graph() -> dict:
@@ -635,7 +635,7 @@ def test_loop_foreach_rejects_start_in_body() -> None:
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {"x": ["a"]}})
     # 在启动前就拒,而不是接了任务、跑到循环才失败。
     assert run.status_code == 422, run.text
-    assert "loop" in run.json()["detail"] and "开始节点" in run.json()["detail"], run.text
+    assert run.json()["detail"] == "「循环·遍历 › 开始」:循环体和子图里不能放开始节点", run.text
 
 
 def test_asset_query_filters_and_feeds_loop() -> None:
@@ -1314,7 +1314,7 @@ def test_condition_operators_and_bad_branch_handle() -> None:
             {"id": "e2", "source": "c", "target": "t", "source_handle": "maybe"},
         ],
     }
-    assert any("true/false" in error for error in validate_graph(bad))
+    assert "「条件分支」的分支只能是 true / false" in validate_graph(bad)
 
 
 def test_workflow_tools_via_confirmations() -> None:
@@ -1820,7 +1820,7 @@ def test_workflow_import_rejects_bad_files() -> None:
         "graph": {"nodes": [{"id": "n1", "type": "not-a-node", "config": {}}], "edges": []},
     }
     res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": unknown_node})
-    assert res.status_code == 422 and "未知节点类型" in res.json()["detail"]
+    assert res.status_code == 422 and res.json()["detail"] == "「n1」:未知的节点类型 not-a-node"
 
 
 def test_每个节点类型都有分组和一句人话描述() -> None:

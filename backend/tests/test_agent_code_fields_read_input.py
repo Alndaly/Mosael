@@ -40,7 +40,9 @@ def test_代码里写引用_开卡就拒_说清改用input() -> None:
         {"kind": "add_node", "type": "code", "node_id": "py", "config": {"code": "output = '{{start.x}}' * 2"}},
     ])
     assert refused.status_code == 422, refused.text
-    assert "py" in refused.text and "input" in refused.text
+    #: 说清是哪个节点的哪一格(按标题和界面上的名字;图里已经有一个没起名的代码节点,撞名的带上 id),以及改用 input。
+    assert refused.json()["detail"].startswith("「代码(py)」的代码字段「代码」里写了上游引用"), refused.text
+    assert "代码里读 input" in refused.json()["detail"]
 
     fine = _edit(client, ws, workflow["id"], [
         {"kind": "add_node", "type": "code", "node_id": "py",
@@ -56,7 +58,7 @@ def test_数据边接到代码字段_开卡就拒() -> None:
         {"kind": "connect_data", "source": "start", "source_output": "x", "target": "py", "target_input": "code"},
     ])
     assert refused.status_code == 422, refused.text
-    assert "py" in refused.text
+    assert refused.json()["detail"].startswith("「代码(py)」的代码字段「代码」接了上游"), refused.text
 
 
 def test_图里人手写的字面量不挡智能体别的改动() -> None:
@@ -81,4 +83,4 @@ def test_整图替换和新建也一样拒() -> None:
             "workspace_id": ws, "tool": tool, "requested_by": "pi", "payload": payload,
         })
         assert refused.status_code == 422, (tool, refused.text)
-        assert "js" in refused.text
+        assert refused.json()["detail"].startswith("「浏览器·执行脚本」的代码字段「表达式」里写了上游引用"), refused.text

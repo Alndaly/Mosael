@@ -32,7 +32,6 @@ from app.domain.workflows.graph_rules import (  # noqa: F401
     NESTED_BODY_RAW_KEYS,
     NESTED_BODY_TYPES,
     VARIABLE_RE,
-    _body_label,
     _is_external,
     _nodes_of_types,
     one_of_errors,

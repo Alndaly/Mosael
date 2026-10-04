@@ -364,8 +364,8 @@ class Test账号诊断真跑:
 
     def test_没填链接和数据来源_运行前就拦(self) -> None:
         errors = validate_graph(account_analysis_graph(chat=CHAT))
-        assert any("params.account_link" in one for one in errors)
-        assert any("params.data_source" in one for one in errors)
+        assert "「填账号与数据来源」缺少必填:account_link" in errors, errors
+        assert "「填账号与数据来源」缺少必填:data_source" in errors, errors
 
 
 # --------------------------------------------------------------------------------------
@@ -585,8 +585,10 @@ class Test数据来源是选项:
     @pytest.mark.parametrize("template_id", list(GRAPHS))
     def test_打错字_运行前就拦_说出能选哪几个(self, template_id: str) -> None:
         build, link, url, _ = GRAPHS[template_id]
-        errors = validate_graph(with_run_params(build(chat=CHAT), {link: url, "data_source": "TikHub"}))
-        assert errors == ["节点 start 的参数 data_source 是「TikHub」,只能选:browser(内嵌浏览器)、tikhub(TikHub)"], errors
+        graph = build(chat=CHAT)
+        title = next(node for node in graph["nodes"] if node["type"] == "start")["name"]["zh"]
+        errors = validate_graph(with_run_params(graph, {link: url, "data_source": "TikHub"}))
+        assert errors == [f"「{title}」的参数 data_source 是「TikHub」,只能选:browser(内嵌浏览器)、tikhub(TikHub)"], errors
 
     @pytest.mark.parametrize("template_id", list(GRAPHS))
     def test_选了TikHub而没装_运行前当场拦_说清去装或改选浏览器(self, template_id: str) -> None:
