@@ -1,12 +1,18 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Check,
+  ChevronDown,
   CircleAlert,
   Copy,
   Download,
+  LayoutGrid,
   Library,
   RefreshCcw,
+  Search,
+  SearchX,
+  TriangleAlert,
   Workflow,
   X,
 } from "lucide-react";
@@ -27,16 +33,33 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { CatalogBadge, CatalogDetail, CatalogDialog, CatalogSection } from "@/components/app/CatalogDialog";
+import { CatalogBadge, CatalogDetail, CatalogSection } from "@/components/app/CatalogDialog";
+import { LibraryDialog, LibraryFilterChips, type LibraryChip, type LibraryNavItem } from "@/components/app/LibraryBrowser";
 import { ModalShell } from "@/components/app/modals";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import {
+  ALL_FOLDERS,
+  DOWNLOADS_VIEW,
+  MISSING_VIEW,
+  SORTS,
+  UNKNOWN_FAMILY,
+  familyCounts,
+  filterModels,
+  folderEntries,
+  inFolder,
+  sortModels,
+  type LibrarySort,
+} from "@/features/plugins/modelLibraryView";
 import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
 import { formatBytes } from "@/lib/bytes";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -45,17 +68,15 @@ import { cn } from "@/lib/utils";
 /**
  * 模型库(ADR 0034):一个连接**那台服务器上的模型文件**。任何认领了 `model_library` 的插件连接都走这里,不认识哪一家。
  *
- * 版式是插件市场同一个目录弹窗(CatalogDialog):按目录分的页签、按底模筛、搜索,卡片网格(有预览图用预览图,没有就是
- * 按目录分的占位),点开是一页详情(元数据、触发词、在用的工作流)。网格上面是两组「要处理的事」:工作流缺的模型(一键下载)
- * 和下载中的任务(进度、取消)。下载框先解析链接(文件名、大小、建议的目录),同名文件不覆盖 —— 要求换名。
+ * 版式是文件浏览器那一套(LibraryBrowser):左边一列目录(按数量排、空的不列),「工作流缺的模型」(一键下载)和
+ * 「下载记录」(进度、取消)是钉在这一列底部的特殊项;右边顶上一条工具条 —— 搜索、按底模多选(只列当前目录里有的)、
+ * 排序 —— 下面是卡片网格(有预览图用预览图,没有就是按目录分的占位),点开是一页详情(元数据、触发词、在用的工作流)。
+ * 下载框先解析链接(文件名、大小、建议的目录),同名文件不覆盖 —— 要求换名。
  *
  * 列表每次打开现问插件(不存库);下载的进度读任务本身,不反复让插件把几百个文件再列一遍。
  */
 
 type Translate = ReturnType<typeof useI18n>;
-
-const ALL = "__all__";
-const UNKNOWN_FAMILY = "__unknown__";
 
 const keyOf = (model: { folder: string; name: string }) => `${model.folder}/${model.name}`;
 const norm = normModelName;
@@ -124,31 +145,24 @@ export function ModelLibraryDialog({
   const qc = useQueryClient();
   const queryKey = React.useMemo(() => ["model-library", instance.id], [instance.id]);
   const library = useQuery({ queryKey, queryFn: () => getModelLibrary(instance.id), enabled: open, staleTime: 30_000 });
-  const [folder, setFolder] = React.useState(ALL);
-  const [family, setFamily] = React.useState(ALL);
+  const [view, setView] = React.useState(ALL_FOLDERS);
+  const [families, setFamilies] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
+  const [sort, setSort] = React.useState<LibrarySort>("name");
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
   const [seed, setSeed] = React.useState<DownloadSeed | null>(null);
   //: 这次打开之后发起的下载(列表里的那份是打开时的快照)。
   const [started, setStarted] = React.useState<Job[]>([]);
 
   const models = React.useMemo(() => library.data?.models ?? [], [library.data]);
-  const folders = React.useMemo(
-    () => [...(library.data?.folders ?? [])].filter((one) => one.count > 0).sort((a, b) => b.count - a.count),
-    [library.data],
-  );
-  const inFolder = folder === ALL ? models : models.filter((model) => model.folder === folder);
-  const families = React.useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const model of inFolder) counts.set(model.family || UNKNOWN_FAMILY, (counts.get(model.family || UNKNOWN_FAMILY) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [inFolder]);
-  const needle = query.trim().toLowerCase();
-  const shown = inFolder.filter((model) => {
-    if (family !== ALL && (model.family || UNKNOWN_FAMILY) !== family) return false;
-    if (!needle) return true;
-    return `${model.name} ${model.title ?? ""} ${model.family ?? ""} ${(model.triggers ?? []).join(" ")}`.toLowerCase().includes(needle);
-  });
+  const folders = React.useMemo(() => folderEntries(library.data?.folders ?? []), [library.data]);
+  const missing = library.data?.missing ?? [];
+  const special = view === MISSING_VIEW || view === DOWNLOADS_VIEW;
+  const scope = React.useMemo(() => inFolder(models, special ? ALL_FOLDERS : view), [models, view, special]);
+  const familyList = React.useMemo(() => familyCounts(scope), [scope]);
+  //: 勾着的底模里,当前目录没有的不算数 —— 换了目录,网格不该因为上一个目录勾的东西莫名其妙是空的。
+  const activeFamilies = families.filter((one) => familyList.some(([value]) => value === one));
+  const shown = sortModels(filterModels(scope, { families: activeFamilies, query }), sort);
   const detail = detailKey ? models.find((model) => keyOf(model) === detailKey) ?? null : null;
 
   const downloads = useDownloads(library.data, started, () => {
@@ -157,100 +171,288 @@ export function ModelLibraryDialog({
     invalidatePluginDependents(qc);
   });
 
-  const placeholder = library.isLoading ? (
-    <p className="m-0 max-w-[420px] text-center text-ui-sm text-muted-foreground">{t("modelLibraryLoading")}</p>
-  ) : library.isError ? (
-    <p className="m-0 max-w-[520px] text-center text-ui-sm text-destructive">
-      {t("modelLibraryError").replace("{error}", errorText(library.error))}
-    </p>
-  ) : (
-    <p className="m-0 text-ui-sm text-muted-foreground">{models.length ? t("modelLibraryNoMatch") : t("modelLibraryEmpty")}</p>
+  const changeView = (next: string) => {
+    setView(next);
+    setFamilies((current) => current.filter((one) => familyCounts(inFolder(models, next)).some(([value]) => value === one)));
+  };
+  const clearFilters = () => {
+    setQuery("");
+    setFamilies([]);
+  };
+  const familyName = (value: string) => (value === UNKNOWN_FAMILY ? t("modelLibraryFamilyUnknown") : value);
+  const scopeName = view === ALL_FOLDERS ? "" : view;
+
+  const navItems: LibraryNavItem[] = [
+    { value: ALL_FOLDERS, label: t("modelLibraryAll"), count: models.length, icon: <LayoutGrid /> },
+    ...folders.map((one) => {
+      const Icon = folderIcon(one.name);
+      return { value: one.name, label: one.name, count: one.count, icon: <Icon /> };
+    }),
+  ];
+  const pinned: LibraryNavItem[] = [
+    ...(missing.length > 0
+      ? [{ value: MISSING_VIEW, label: t("modelMissingTitle"), count: missing.length, icon: <TriangleAlert />, tone: "warning" as const }]
+      : []),
+    ...(downloads.length > 0 ? [{ value: DOWNLOADS_VIEW, label: t("modelLibraryDownloadsNav"), count: downloads.length, icon: <Download /> }] : []),
+  ];
+  //: 特殊项没了(缺的都下好了)还停在那一页:回到「全部」。
+  const current = [...navItems, ...pinned].some((one) => one.value === view) ? view : ALL_FOLDERS;
+
+  const chips: LibraryChip[] = [
+    ...(query.trim()
+      ? [{
+          key: "query",
+          label: t("modelLibraryChipSearch").replace("{query}", query.trim()),
+          removeLabel: t("modelLibraryChipRemoveSearch").replace("{query}", query.trim()),
+          onRemove: () => setQuery(""),
+        }]
+      : []),
+    ...activeFamilies.map((one) => ({
+      key: `family:${one}`,
+      label: familyName(one),
+      removeLabel: t("modelLibraryChipRemoveFamily").replace("{family}", familyName(one)),
+      onRemove: () => setFamilies((list) => list.filter((value) => value !== one)),
+    })),
+  ];
+
+  const searchLabel = scopeName
+    ? t("modelLibrarySearchIn").replace("{folder}", scopeName).replace("{n}", String(scope.length))
+    : t("modelLibrarySearch").replace("{n}", String(scope.length));
+
+  const actions = (
+    <>
+      <IconButton
+        variant="outline"
+        size="default"
+        className="px-3 text-muted-foreground"
+        label={t("modelLibraryRefresh")}
+        loading={library.isFetching}
+        onClick={() => void library.refetch()}
+      >
+        <RefreshCcw size={13} />
+      </IconButton>
+      <Button onClick={() => setSeed({})} disabled={!library.data}>
+        <Download size={13} />
+        {t("modelLibraryDownload")}
+      </Button>
+    </>
   );
 
+  const toolbar =
+    current === MISSING_VIEW || current === DOWNLOADS_VIEW ? (
+      <>
+        <div className="grid min-w-0 flex-1 basis-[240px] gap-0.5">
+          <h3 className="m-0 text-ui-md font-semibold text-foreground">
+            {current === MISSING_VIEW ? t("modelMissingTitle") : t("modelLibraryDownloadsNav")}
+          </h3>
+          <p className="m-0 text-ui-xs text-muted-foreground">
+            {current === MISSING_VIEW ? t("modelMissingDesc") : t("modelLibraryDownloadsDesc")}
+          </p>
+        </div>
+        {actions}
+      </>
+    ) : (
+      <>
+        <label className="relative min-w-[180px] flex-1 basis-[220px]">
+          <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder={searchLabel}
+            aria-label={scopeName ? t("modelLibrarySearchIn").replace("{folder}", scopeName).replace("{n}", String(scope.length)) : searchLabel}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <FamilyFilter
+          families={familyList}
+          value={activeFamilies}
+          onChange={setFamilies}
+          nameOf={familyName}
+        />
+        <OptionPicker
+          className="w-[148px]"
+          ariaLabel={t("modelLibrarySort")}
+          value={sort}
+          onChange={(next) => setSort(SORTS.includes(next as LibrarySort) ? (next as LibrarySort) : "name")}
+          options={SORTS.map((one) => ({
+            value: one,
+            label: t(one === "name" ? "modelLibrarySortName" : one === "size" ? "modelLibrarySortSize" : "modelLibrarySortModified"),
+          }))}
+        />
+        {actions}
+      </>
+    );
+
+  const content = (openItem: (key: string) => void) => {
+    if (library.isLoading) return <p className="m-auto text-ui-sm text-muted-foreground">{t("modelLibraryLoading")}</p>;
+    if (library.isError) {
+      return (
+        <p className="m-auto max-w-[520px] text-center text-ui-sm text-destructive">
+          {t("modelLibraryError").replace("{error}", errorText(library.error))}
+        </p>
+      );
+    }
+    if (current === MISSING_VIEW) {
+      return <MissingList missing={missing} onDownload={(one) => setSeed({ url: one.url, folder: one.folder, name: one.name })} />;
+    }
+    if (current === DOWNLOADS_VIEW) return <DownloadList jobs={downloads} />;
+    if (shown.length === 0) {
+      return chips.length > 0 ? (
+        <EmptyState
+          size="section"
+          icon={<SearchX />}
+          title={t("modelLibraryNoMatchTitle")}
+          body={t("modelLibraryNoMatchBody")}
+          action={<Button variant="secondary" onClick={clearFilters}>{t("modelLibraryClearFilters")}</Button>}
+        />
+      ) : (
+        <EmptyState size="section" icon={<Library />} title={t("modelLibraryEmpty")} />
+      );
+    }
+    return (
+      <ul
+        role="list"
+        aria-label={t("modelLibraryTitle").replace("{name}", instance.name)}
+        className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-3 p-0"
+      >
+        {shown.map((model) => (
+          <li key={keyOf(model)} className="grid min-w-0">
+            <ModelCard instanceId={instance.id} model={model} onOpen={() => openItem(keyOf(model))} />
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
-    <CatalogDialog<ModelFile>
+    <LibraryDialog
       open={open}
       onOpenChange={onOpenChange}
       title={t("modelLibraryTitle").replace("{name}", instance.name)}
-      description={t("modelLibraryDescription")}
-      searchLabel={t("modelLibrarySearch").replace("{n}", String(models.length))}
-      query={query}
-      onQueryChange={setQuery}
-      headerActions={
-        <>
-          <Button variant="outline" loading={library.isFetching} onClick={() => void library.refetch()}>
-            <RefreshCcw size={13} />
-            {t("modelLibraryRefresh")}
-          </Button>
-          <Button onClick={() => setSeed({})} disabled={!library.data}>
-            <Download size={13} />
-            {t("modelLibraryDownload")}
-          </Button>
-        </>
-      }
-      filters={
-        folders.length
-          ? {
-              label: t("modelLibraryFolders"),
-              value: folder,
-              onChange: (value) => {
-                setFolder(value);
-                setFamily(ALL);
-              },
-              items: [
-                { value: ALL, label: t("modelLibraryAll"), count: models.length },
-                ...folders.map((one) => ({ value: one.name, label: one.name, count: one.count })),
-              ],
-            }
+      nav={
+        library.data
+          ? { label: t("modelLibraryFolders"), value: current, onChange: changeView, items: navItems, pinned }
           : undefined
       }
-      refine={
-        families.length > 1 ? (
-          <OptionPicker
-            className="w-[200px]"
-            ariaLabel={t("modelLibraryFamilyLabel")}
-            value={family}
-            onChange={setFamily}
-            options={[
-              { value: ALL, label: t("modelLibraryFamilyAll") },
-              ...families.map(([value, count]) => ({
-                value,
-                label: `${value === UNKNOWN_FAMILY ? t("modelLibraryFamilyUnknown") : value} · ${count}`,
-              })),
-            ]}
+      toolbar={toolbar}
+      chips={
+        !special && library.data ? (
+          <LibraryFilterChips
+            label={t("modelLibraryActiveFilters")}
+            summary={t("modelLibraryResultCount").replace("{n}", String(shown.length))}
+            chips={chips}
+            onClearAll={clearFilters}
           />
         ) : undefined
       }
-      notice={
-        library.data && ((library.data.missing ?? []).length > 0 || downloads.length > 0) ? (
-          <div className="grid gap-3">
-            {downloads.length > 0 && <DownloadList jobs={downloads} />}
-            {(library.data.missing ?? []).length > 0 && (
-              <MissingList missing={library.data.missing ?? []} onDownload={(one) => setSeed({ url: one.url, folder: one.folder, name: one.name })} />
-            )}
+      detailKey={detail ? detailKey : null}
+      onOpenItem={setDetailKey}
+      onBack={() => setDetailKey(null)}
+      detail={
+        detail && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 px-6 pb-2">
+              <Button variant="ghost" className="-ml-3" onClick={() => setDetailKey(null)}>
+                <ArrowLeft />
+                {t("modelLibraryBack")}
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+              <ModelDetailPage instanceId={instance.id} model={detail} />
+            </div>
           </div>
+        )
+      }
+      dialogs={
+        seed && library.data ? (
+          <ModelDownloadDialog
+            instance={instance}
+            workspaceId={workspaceId}
+            library={library.data}
+            seed={seed}
+            onClose={() => setSeed(null)}
+            onStarted={(job) => {
+              setStarted((list) => [job, ...list]);
+              // 发起的下载在「下载记录」里看进度
+              setView(DOWNLOADS_VIEW);
+            }}
+          />
         ) : undefined
       }
-      items={library.data ? shown : []}
-      itemKey={keyOf}
-      renderCard={(model, openDetail) => <ModelCard instanceId={instance.id} model={model} onOpen={openDetail} />}
-      placeholder={placeholder}
-      detail={detail}
-      onDetailChange={setDetailKey}
-      renderDetail={(model) => <ModelDetailPage instanceId={instance.id} model={model} />}
-      backLabel={t("modelLibraryBack")}
     >
-      {seed && library.data && (
-        <ModelDownloadDialog
-          instance={instance}
-          workspaceId={workspaceId}
-          library={library.data}
-          seed={seed}
-          onClose={() => setSeed(null)}
-          onStarted={(job) => setStarted((current) => [job, ...current])}
-        />
-      )}
-    </CatalogDialog>
+      {content}
+    </LibraryDialog>
+  );
+}
+
+/**
+ * 按底模筛:勾几种都行(其中任一),勾的时候菜单不关。只列**当前目录里有的**底模,每种标着几个文件 ——
+ * 勾之前就知道会剩多少。只有一种(或一种都认不出)时没什么可筛的,按钮点不了并说为什么。
+ */
+function FamilyFilter({
+  families,
+  value,
+  onChange,
+  nameOf,
+}: {
+  families: [string, number][];
+  value: string[];
+  onChange: (value: string[]) => void;
+  nameOf: (family: string) => string;
+}) {
+  const t = useI18n();
+  const chosen = new Set(value);
+  const label =
+    value.length === 0
+      ? t("modelLibraryFamilyButton")
+      : value.length === 1
+        ? `${t("modelLibraryFamilyButton")} · ${nameOf(value[0])}`
+        : `${t("modelLibraryFamilyButton")} · ${value.length}`;
+  if (families.length < 2) {
+    return (
+      <Hint label={t("modelLibraryFamilyHint")} disabledReason={t("modelLibraryFamilySingle")}>
+        <Button variant="outline" disabled aria-label={t("modelLibraryFamilyLabel")}>
+          {t("modelLibraryFamilyButton")}
+          <ChevronDown />
+        </Button>
+      </Hint>
+    );
+  }
+  return (
+    <Popover>
+      <Hint label={t("modelLibraryFamilyHint")}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            aria-label={`${t("modelLibraryFamilyLabel")}${value.length ? ` · ${label}` : ""}`}
+            className={cn("max-w-[220px]", value.length > 0 && "border-primary/40 bg-accent text-primary")}
+          >
+            <Truncate>{label}</Truncate>
+            <ChevronDown />
+          </Button>
+        </PopoverTrigger>
+      </Hint>
+      <MenuContent label={t("modelLibraryFamilyLabel")} align="end">
+        {families.map(([family, count]) => (
+          <MenuItem
+            key={family}
+            role="menuitemcheckbox"
+            aria-label={`${nameOf(family)} ${count}`}
+            checked={chosen.has(family)}
+            label={nameOf(family)}
+            truncate
+            hint={count}
+            onClick={() => onChange(chosen.has(family) ? value.filter((one) => one !== family) : [...value, family])}
+          />
+        ))}
+        {value.length > 0 && (
+          <>
+            <MenuSeparator />
+            <MenuItem label={t("modelLibraryFamilyClear")} onClick={() => onChange([])} />
+          </>
+        )}
+      </MenuContent>
+    </Popover>
   );
 }
 
@@ -387,11 +589,11 @@ function ModelCard({ instanceId, model, onOpen }: { instanceId: string; model: M
   const used = model.used_by?.length ?? 0;
   return (
     <article
-      data-catalog-card={keyOf(model)}
+      data-library-item={keyOf(model)}
       className={cn(
         "relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
         "hover:border-border-strong hover:bg-panel-subtle",
-        "has-[[data-catalog-open]:focus-visible]:border-primary has-[[data-catalog-open]:focus-visible]:ring-2 has-[[data-catalog-open]:focus-visible]:ring-ring",
+        "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
       <ModelThumb instanceId={instanceId} model={model} className="aspect-[4/3] w-full" />
@@ -399,7 +601,7 @@ function ModelCard({ instanceId, model, onOpen }: { instanceId: string; model: M
         <h3 className="m-0 min-w-0 text-ui-sm font-semibold leading-snug text-foreground">
           <button
             type="button"
-            data-catalog-open
+            data-library-open
             className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
             onClick={onOpen}
           >
