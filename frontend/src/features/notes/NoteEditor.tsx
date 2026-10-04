@@ -1,9 +1,8 @@
 import { usePreferences } from "@/app/preferences";
 import { createPortal } from "react-dom";
-import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import React from "react";
-import { Bold, Italic, List, ListOrdered, Quote, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown, Check } from "lucide-react";
 import { Selection } from "@tiptap/pm/state";
 import { toast } from "sonner";
 import { useNoteStrings } from "./strings";
@@ -15,7 +14,6 @@ import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
-import { MENU_ITEM } from "@/components/ui/floating";
 import type { NoteSource } from "@/api/domains/notes";
 import { NoteSelectionToolbar, type NoteAiAction, type ToolbarKeys } from "./NoteSelectionToolbar";
 import { useReadAloud } from "./readAloud";
@@ -24,8 +22,7 @@ import { AddToBoardDialog } from "./AddToBoardDialog";
 import { InactiveSelection } from "./inactiveSelection";
 import { findPassage, followMarkdown, readNoteSelection, type NoteSelection } from "./noteSelection";
 import { NOTE_PASSAGE_EVENT, parseNotePassage, useOpenRequest } from "@/lib/deepLink";
-import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { NoteFormatToolbar } from "./NoteFormatToolbar";
 
 export function NoteReader({ markdown }: { markdown: string }) {
   const { locale } = usePreferences();
@@ -67,12 +64,9 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   //: 「加到画板」:要放上去的那段纯文字;有就开着画板选择器。
   const [boarding, setBoarding] = React.useState<string | null>(null);
   const reference = React.useRef(onReference); reference.current = onReference;
-  const [insertOpen, setInsertOpen] = React.useState(false);
-  const [blockOpen, setBlockOpen] = React.useState(false);
   const [stuck, setStuck] = React.useState(false);
   const sentinel = React.useRef<HTMLDivElement>(null);
   const [uploading, setUploading] = React.useState(false);
-  const [linkOpen, setLinkOpen] = React.useState(false); const [url, setUrl] = React.useState("");
   const fileInput = React.useRef<HTMLInputElement>(null);
   const menu = useSuggestionMenu<Note>({ emptyHint: () => s.noResults });
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
@@ -119,12 +113,6 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     observer.observe(element);
     return () => observer.disconnect();
   }, [editable, editor]);
-  const state = useEditorState({ editor, selector: ({editor: e}) => ({
-    bold: e?.isActive("bold"), italic: e?.isActive("italic"), strike: e?.isActive("strike"), heading: e?.isActive("heading") ? Number(e.getAttributes("heading").level) : 0,
-    bullet: e?.isActive("bulletList"), ordered: e?.isActive("orderedList"), task: e?.isActive("taskList"),
-    quote: e?.isActive("blockquote"), code: e?.isActive("codeBlock"), table: e?.isActive("table"),
-    undo: e?.can().undo(), redo: e?.can().redo(),
-  }) });
   // Compare against the last emitted value: parent autosave must not rebuild the document or move the caret.
   // **换了一篇**才整份换掉、光标放回开头。不放的话它按旧文档的位置映射到新文档**末尾** —— 新笔记以列表
   // 结尾时,一打开「无序列表」就亮着,而你根本没点进去。
@@ -182,60 +170,9 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     finally { editor.off("transaction", map); setUploading(false); }
   };
   if (!editor) return null;
-  const actions = [
-    { name: s.bold, icon: Bold, active: state?.bold, action: () => editor.chain().focus().toggleBold().run() },
-    { name: s.italic, icon: Italic, active: state?.italic, action: () => editor.chain().focus().toggleItalic().run() },
-    { name: s.strike, icon: Strikethrough, active: state?.strike, action: () => editor.chain().focus().toggleStrike().run() },
-    { name: s.bulletList, icon: List, active: state?.bullet, action: () => editor.chain().focus().toggleBulletList().run() },
-    { name: s.numberedList, icon: ListOrdered, active: state?.ordered, action: () => editor.chain().focus().toggleOrderedList().run() },
-    { name: s.taskList, icon: ListTodo, active: state?.task, action: () => editor.chain().focus().toggleTaskList().run() },
-    { name: s.quote, icon: Quote, active: state?.quote, action: () => editor.chain().focus().toggleBlockquote().run() },
-    { name: s.code, icon: Code2, active: state?.code, action: () => editor.chain().focus().toggleCodeBlock().run() },
-    { name: s.divider, icon: Minus, action: () => editor.chain().focus().setHorizontalRule().run() },
-    { name: s.addReference, icon: AtSign, action: () => editor.chain().focus().insertContent("@").run() },
-    { name: uploading ? s.uploading : s.image, icon: ImagePlus, disabled: uploading, action: () => fileInput.current?.click() },
-    { name: s.undo, icon: Undo2, disabled: !state?.undo, action: () => editor.chain().focus().undo().run() },
-    { name: s.redo, icon: Redo2, disabled: !state?.redo, action: () => editor.chain().focus().redo().run() },
-  ];
-  const actionButton = (a: typeof actions[number]) => <button key={a.name} type="button" title={a.name} aria-label={a.name} aria-pressed={a.active} disabled={a.disabled} onMouseDown={e => e.preventDefault()} onClick={a.action}><a.icon size={16} strokeWidth={1.7} /></button>;
-  const toolbar = <div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.format}>
-    <div className="note-format-group">
-      {/* 段落样式和「插入」是同一种控件:文字 + 小箭头的菜单按钮,菜单条目和右键菜单一个样。
-          此前这里是一个带边框的表单下拉,高出工具栏一截,和旁边的图标按钮不像一排。 */}
-      <Popover open={blockOpen} onOpenChange={setBlockOpen}>
-        <PopoverTrigger asChild><button type="button" className="note-format-menu note-block-style" aria-label={s.heading} title={s.heading} onMouseDown={e => e.preventDefault()}><span>{state?.heading ? s.headingLevels[state.heading - 1] : s.paragraph}</span><ChevronDown size={12} /></button></PopoverTrigger>
-        <PopoverContent align="start" className="grid w-44 gap-0.5 p-1.5" onCloseAutoFocus={event => event.preventDefault()}>
-          {[0, 1, 2, 3, 4, 5, 6].map(level => {
-            const current = (state?.heading ?? 0) === level;
-            return <button key={level} type="button" role="menuitemradio" aria-checked={current} className={cn(MENU_ITEM, "w-full text-left")} onClick={() => {
-              setBlockOpen(false);
-              const chain = editor.chain().focus();
-              if (level === 0) chain.setParagraph().run();
-              else chain.setHeading({ level: level as 1|2|3|4|5|6 }).run();
-            }}>
-              {level ? <span className="note-heading-option"><span>H{level}</span>{s.headingLevels[level - 1]}</span> : s.paragraph}
-              {current && <Check className="ml-auto" />}
-            </button>;
-          })}
-        </PopoverContent>
-      </Popover>
-      {actions.slice(0,3).map(actionButton)}
-    </div>
-    <div className="note-format-group">{actions.slice(3,6).map(actionButton)}</div>
-    <div className="note-format-group">
-    <Popover open={insertOpen} onOpenChange={setInsertOpen}><PopoverTrigger asChild><button type="button" className="note-format-menu note-format-insert" aria-label={s.insert} title={s.insert}><Plus size={16} strokeWidth={1.7} /><span>{s.insert}</span><ChevronDown size={12} /></button></PopoverTrigger>
-      <PopoverContent align="start" className="grid w-48 gap-0.5 p-1.5">{actions.slice(6,11).map(a => <button key={a.name} type="button" disabled={a.disabled} aria-pressed={a.active} className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setInsertOpen(false); a.action(); }}><a.icon size={16} /><span>{a.name}</span></button>)}</PopoverContent>
-    </Popover>
-    <Popover open={linkOpen} onOpenChange={open => { setLinkOpen(open); if (open) setUrl(String(editor.getAttributes("link").href || "")); }}><PopoverTrigger asChild><button title={s.link} aria-label={s.link}><Link size={16} /></button></PopoverTrigger><PopoverContent className="w-80 p-3"><form className="grid gap-3" onSubmit={e => { e.preventDefault(); if (url && !/^https?:\/\//i.test(url)) return; const chain = editor.chain().focus().extendMarkRange("link"); if (!url) chain.unsetLink().run(); else if (editor.state.selection.empty) chain.insertContent({type: "text", text: url, marks: [{type:"link", attrs:{href:url}}]}).run(); else chain.setLink({href:url}).run(); setLinkOpen(false); }}><label className="text-sm">{s.link}<input className="mt-2 w-full rounded-md bg-secondary p-2 text-sm" aria-label={s.link} placeholder="https://" type="url" value={url} onChange={e => setUrl(e.target.value)} /></label><button className="rounded-md bg-secondary p-2 text-sm" type="submit">{s.apply}</button></form></PopoverContent></Popover>
-    <Popover><PopoverTrigger asChild><button title={s.table} aria-label={s.table} aria-pressed={state?.table}><Table2 size={16} /></button></PopoverTrigger><PopoverContent align="start" className="grid w-48 gap-0.5 p-1.5">{(state?.table ? [
-      [s.addRow, () => editor.chain().focus().addRowAfter().run()], [s.addColumn, () => editor.chain().focus().addColumnAfter().run()],
-      [s.deleteRow, () => editor.chain().focus().deleteRow().run()], [s.deleteColumn, () => editor.chain().focus().deleteColumn().run()], [s.deleteTable, () => editor.chain().focus().deleteTable().run()],
-    ] : [[s.insertTable, () => editor.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run()]]).map(([label, action]) => <button type="button" className={cn(MENU_ITEM, "w-full text-left")} key={String(label)} onClick={action as () => void}>{String(label)}</button>)}</PopoverContent></Popover>
-    </div>
-    <div className="note-format-group note-format-history">{actions.slice(11).map(actionButton)}</div>
-    <input type="file" hidden multiple ref={fileInput} accept="image/*" onChange={e => { upload.current(Array.from(e.target.files || [])); e.target.value = ""; }} />
-  </div>;
+  const toolbar = <NoteFormatToolbar editor={editor} uploading={uploading} onPickImage={() => fileInput.current?.click()} stuck={toolbarTarget ? undefined : stuck} />;
   return <>{editable && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" />{toolbar}</>)}{title}<EditorContent editor={editor} />
+  {editable && <input type="file" hidden multiple ref={fileInput} accept="image/*" onChange={e => { upload.current(Array.from(e.target.files || [])); e.target.value = ""; }} />}
   {editable && <NoteSelectionToolbar editor={editor} keys={toolbarKeys} readAloud={readAloud} onAskAi={onAskAi} onAiAction={onAiAction} onQuote={onQuote}
     onSaveToNote={markdown => setSaving(previous => ({ markdown, n: (previous?.n ?? 0) + 1 }))} onAddToBoard={setBoarding} />}
   {boarding !== null && <AddToBoardDialog workspaceId={workspaceId} text={boarding} source={saveSource} onClose={() => setBoarding(null)} />}

@@ -284,10 +284,12 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
 type NoteStatus = "saved" | "saving" | "draft" | "error";
 const STATUS_ICON = { saved: Check, saving: Loader2, draft: PenLine, error: AlertCircle } as const;
 
+/** 保存状态:一块定宽的位置(「保存中」「已保存」换来换去时不推着右边的按钮动),颜色比按钮弱一档;
+ *  窄了只剩图标,文字在 title 里还有一份。 */
 function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string }) {
   const Icon = STATUS_ICON[status];
-  return <span className="note-status" role="status" data-state={status}>
-    <Icon size={12} className={status === "saving" ? "animate-mosael-spin" : undefined} aria-hidden="true" />{label}
+  return <span className="note-status" role="status" data-slot="save-status" data-state={status} title={label}>
+    <Icon size={12} className={status === "saving" ? "animate-mosael-spin" : undefined} aria-hidden="true" /><span className="note-status-label">{label}</span>
   </span>;
 }
 
@@ -404,16 +406,16 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     } catch (e) { toast.error(errorText(e)); setDeleting(false); }
   }
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);
-  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
+  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} strokeWidth={1.7} /> : <PanelLeftClose size={16} strokeWidth={1.7} />}</button>
       <div className="note-header-format" ref={setToolbarTarget} />
-      {/* 右边一组:保存状态 → Markdown → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
-          夹在收起按钮和格式工具之间时像是格式工具的一部分。 */}
+      {/* 右边一组是文档级的:保存状态 → Markdown → AI 助手 → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
+          夹在收起按钮和格式工具之间时像是格式工具的一部分。图标和左边格式按钮同一个规格(16、描边 1.7)。 */}
       <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
       {/* Markdown 只剩一个选项:一颗能按下的切换(按下看源码,再点回到编辑)。 */}
-      <button className="note-icon note-source-toggle" aria-label={s.raw} title={s.rawHint} aria-pressed={mode === "raw"} onClick={() => setMode(mode === "raw" ? "edit" : "raw")}><FileCode size={16} aria-hidden="true" /></button>
-      {onToggleAgent && <button className="note-agent-toggle" aria-label={t("wfAgentTitle")} title={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={15} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></button>}
-      <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>
-      <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={18}/></button></PopoverTrigger>{/* 和笔记列表的右键菜单同一套尺寸与条目样式(components/ui/floating 的 MENU_ITEM)。 */}
+      <button className="note-icon note-source-toggle" aria-label={s.raw} title={s.rawHint} aria-pressed={mode === "raw"} onClick={() => setMode(mode === "raw" ? "edit" : "raw")}><FileCode size={16} strokeWidth={1.7} aria-hidden="true" /></button>
+      {onToggleAgent && <button className="note-agent-toggle" aria-label={t("wfAgentTitle")} title={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></button>}
+      <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></button>
+      <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={16} strokeWidth={1.7} /></button></PopoverTrigger>{/* 和笔记列表的右键菜单同一套尺寸与条目样式(components/ui/floating 的 MENU_ITEM)。 */}
       <PopoverContent className="grid w-auto min-w-48 gap-0.5 p-1.5" align="end">
         <button type="button" className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }}><Download />{s.export}</button>
         <button type="button" className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMoreOpen(false); setHistory(true); }}><History />{s.history}</button>

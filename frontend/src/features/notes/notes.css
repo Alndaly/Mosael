@@ -81,7 +81,7 @@
 .note-source { padding:12px 0; overflow-wrap:anywhere; }.note-source blockquote { color:var(--muted-foreground); margin:8px 0; line-height:1.6; }
 .notes-layout button { transition:color 160ms,background-color 160ms; cursor:pointer; }.notes-layout button:disabled { opacity:.5; cursor:default; }
 @media(max-width:1000px) { .note-properties { width:220px; } }
-@media(max-width:740px) { .notes-layout { flex-direction:column; }.notes-index { flex-basis:auto; max-height:230px; }.note-properties { width:100%; max-height:250px; }.note-body { padding:0 20px 40px; scroll-padding-top:110px; }.note-document-header { padding:8px 12px; }.note-format { gap:6px; margin-bottom:24px; }.note-format-group + .note-format-group { padding-left:6px; }.note-format button { width:28px; height:30px; }.note-format .note-format-menu { width:auto; }.notes-resize { display:none; } }
+@media(max-width:740px) { .notes-layout { flex-direction:column; }.notes-index { flex-basis:auto; max-height:230px; }.note-properties { width:100%; max-height:250px; }.note-body { padding:0 20px 40px; scroll-padding-top:110px; }.note-document-header { padding:8px 12px; }.note-format { gap:6px; margin-bottom:24px; }.note-format-group + .note-format-group { padding-left:6px; }.notes-resize { display:none; } }
 @media(prefers-reduced-motion:reduce) { .notes-layout button,.note-format::before { transition:none; } }
 @media(max-width:740px) {
   .notes-show-list > .notes-index { flex:1; max-height:none; }
@@ -95,9 +95,6 @@
 .note-empty-icon { display:grid; place-items:center; width:52px; height:52px; border-radius:16px; background:color-mix(in srgb,var(--foreground) 4%,transparent); color:var(--muted-foreground); margin-bottom:3px; }
 .note-empty-state strong { font-size:var(--text-ui-sm); font-weight:550; }.note-empty-state p { font-size:var(--text-ui-xs); line-height:1.75; color:var(--muted-foreground); }
 
-@container (max-width:520px) {
-  .note-format-insert span { display:none; }
-}
 @container (max-width:380px) {
   .note-format .note-format-history { margin-left:0; }
 }
@@ -114,23 +111,30 @@
 .note-prose { line-height:1.9; }
 .note-prose th { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
 .note-properties header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-@media(max-width:950px) { .note-header-format .note-format-insert span { display:none; } .note-properties { position:absolute; right:16px; top:70px; bottom:16px; z-index:20; width:280px; border-radius:12px; background:var(--modal-surface); backdrop-filter:blur(24px); box-shadow:var(--shadow-floating); } }
+@media(max-width:950px) { .note-properties { position:absolute; right:16px; top:70px; bottom:16px; z-index:20; width:280px; border-radius:12px; background:var(--modal-surface); backdrop-filter:blur(24px); box-shadow:var(--shadow-floating); } }
 
 /* ── 文档顶栏 ──────────────────────────────────────────────────────────────
-   一行:收起列表 | 格式工具(占满,放不下时横向滚) | 保存状态 · 查看方式 · 收藏 · 更多。
-   按钮一律 30px 高;组内 2px、组间 6px + 一条分隔线 + 6px;右侧各项之间 6px。
-   此前同一批选择器在这个文件里被重写了三四遍,后写的零散覆盖先写的,间距因此一直对不齐。 */
-.note-document-header { min-height:56px; padding:10px 16px; display:flex; flex-wrap:nowrap; align-items:center; gap:8px; border-bottom:1px solid var(--divider); color:var(--muted-foreground); font-size:var(--text-ui-xs); }
-.note-header-format { flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; }
-.note-header-format:empty { overflow:visible; }
+   一行:左边是编辑格式 —— 侧栏开关 | 段落类型 | 粗体 斜体 删除线 高亮 | 三种列表 | 插入 链接 表格 | 撤销 重做;
+   右边是文档级的 —— 保存状态 · Markdown · AI 助手 · 收藏 · 更多。
+   按钮一律 30×30、图标 16;组内 2px,组与组之间(侧栏开关后面那一道也算)都是 6px + 一条分隔线 + 6px;右侧各项之间 6px。
+   窄了格式那一栏按优先级收组进「更多格式」(见 NoteFormatToolbar),不换行、不横向滚;万一估宽差了,也是被裁掉而不是压到右边那组上。
+   Markdown 源码里编辑器不挂载,格式那一栏是空的(收起),分隔线跟着不画。 */
+.note-document-header { min-height:56px; padding:10px 16px; display:flex; flex-wrap:nowrap; align-items:center; gap:6px; border-bottom:1px solid var(--divider); color:var(--muted-foreground); font-size:var(--text-ui-xs); }
+.note-header-format { flex:1; min-width:0; overflow:clip; overflow-clip-margin:4px; }
+.note-header-format:not(:empty) { padding-left:6px; border-left:1px solid var(--divider); }
 .note-header-format .note-format { position:static; flex-wrap:nowrap; width:max-content; margin:0; padding:0; gap:0; }
 .note-header-format .note-format::before { display:none; }
 .note-header-format .note-format-history { margin-left:0; }
 .note-format-group + .note-format-group { margin-left:6px; padding-left:6px; border-left:1px solid var(--divider); }
 .note-format .note-format-menu { width:auto; height:30px; padding:0 8px; gap:4px; font-size:var(--text-ui-xs); }
-.note-format .note-block-style { margin-right:4px; }
+/* 段落类型定宽(放得下最长的「Heading 6」):光标在正文和标题之间移动时,后面那一排不跟着字数左右挪。 */
+.note-format .note-block-style { width:96px; justify-content:space-between; }
+.note-format .note-block-style > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; white-space:nowrap; }
-.note-document-header .note-status { display:flex; align-items:center; height:30px; gap:5px; margin-right:2px; font-size:var(--text-ui-2xs); }
+/* 保存状态定宽、靠右、比按钮弱一档:「保存中…」「已保存」换来换去不推着右边的按钮动。 */
+.note-document-header .note-status { display:flex; flex-shrink:0; align-items:center; justify-content:flex-end; width:88px; height:30px; gap:5px; margin-right:2px; overflow:hidden; white-space:nowrap; font-size:var(--text-ui-2xs); color:color-mix(in srgb,var(--muted-foreground) 78%,transparent); }
+.note-document-header .note-status svg { flex-shrink:0; }
+.note-status-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 /* Markdown 源码:一颗切换,按下时和格式按钮的按下态同一个样子。 */
 .note-source-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 /* 助手开关:和剪辑页那一颗同样是「图标 + AI 助手」、开着时 accent 底,高度跟这一行走(30px)。 */
@@ -142,7 +146,7 @@
 .note-prose mark.note-highlight { background:color-mix(in srgb,var(--warning) 30%,transparent); color:inherit; border-radius:2px; padding:0 1px; }
 /* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
 .note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
-@media(max-width:1250px) { .note-document-header .note-status { font-size:0; gap:0; } .note-document-header { padding-inline:12px; } }
+@media(max-width:1250px) { .note-document-header .note-status { width:auto; gap:0; } .note-status-label { display:none; } .note-document-header { padding-inline:12px; } }
 .note-heading-option { display:inline-flex; align-items:center; gap:10px; }
 .note-heading-option > span { font:500 var(--text-ui-xs) var(--font-mono); color:var(--muted-foreground); }
 .note-format button[aria-pressed=true],.notes-filter button[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }

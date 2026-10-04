@@ -30,6 +30,7 @@ vi.stubGlobal("ResizeObserver", class {
 });
 
 const { NoteDocument } = await import("./NotesView");
+const { visibleFormatGroups } = await import("./NoteFormatToolbar");
 
 const note: Note = { ...emptyNote, id: "n1", workspace_id: "ws", title: "周报", markdown: "周一开了会。", revision: 1, created_at: "x", updated_at: "x" };
 
@@ -67,4 +68,66 @@ it("只剩编辑和 Markdown:没有「阅读」,Markdown 是一颗能按下的�
   fireEvent.click(markdown);
   expect(markdown).toHaveAttribute("aria-pressed", "false");
   await waitFor(() => expect(format()).not.toBeNull());
+});
+
+it("左边全是编辑格式(含高亮,和选区工具条一致),右边依次是保存状态、Markdown、AI 助手、收藏、笔记操作", async () => {
+  mount();
+  await waitFor(() => expect(format()).not.toBeNull());
+  const toolbar = format()!;
+  for (const name of ["段落样式", "粗体", "斜体", "删除线", "高亮", "无序列表", "有序列表", "任务列表", "插入", "网页链接", "表格", "撤销", "重做"]) {
+    expect(within(toolbar).getByRole("button", { name }), name).toBeInTheDocument();
+  }
+  const right = header().querySelector(".note-header-actions")!;
+  const labels = [...right.children].map((one) => one.getAttribute("aria-label") ?? one.getAttribute("data-slot"));
+  expect(labels).toEqual(["save-status", "Markdown", "wfAgentTitle", "收藏", "笔记操作"]);
+
+  //: 高亮按钮作用在选区上,已高亮的再点取消。
+  const editor = (document.querySelector(".note-prose") as unknown as { editor: Editor }).editor;
+  act(() => { editor.commands.setTextSelection({ from: 1, to: 3 }); });
+  fireEvent.click(within(toolbar).getByRole("button", { name: "高亮" }));
+  expect(editor.getMarkdown()).toContain("==周一==");
+  await waitFor(() => expect(within(toolbar).getByRole("button", { name: "高亮" })).toHaveAttribute("aria-pressed", "true"));
+  fireEvent.click(within(toolbar).getByRole("button", { name: "高亮" }));
+  expect(editor.getMarkdown()).not.toContain("==");
+});
+
+it("保存状态是一块固定的位置:文字在 title 里也有一份,切换状态时不推着别的按钮动", async () => {
+  mount();
+  const status = header().querySelector("[data-slot='save-status']") as HTMLElement;
+  expect(status.getAttribute("title")).toBe("已保存");
+  expect(status.className).toContain("note-status");
+});
+
+it("宽的时候一组不收;窄了先收插入、撤销,再收列表,收进「更多格式」—— 菜单里点了照样作用在正文上", async () => {
+  mount();
+  await waitFor(() => expect(format()).not.toBeNull());
+  expect(within(format()!).queryByRole("button", { name: "更多格式" })).toBeNull();
+
+  layout.width = 320;
+  act(() => { for (const observer of layout.observers) observer([{ contentRect: { width: 320 } } as unknown as ResizeObserverEntry], {} as ResizeObserver); });
+
+  const toolbar = format()!;
+  expect(within(toolbar).getByRole("button", { name: "粗体" })).toBeInTheDocument();
+  for (const name of ["插入", "网页链接", "表格", "撤销", "重做", "无序列表"]) {
+    expect(within(toolbar).queryByRole("button", { name }), name).toBeNull();
+  }
+  fireEvent.click(within(toolbar).getByRole("button", { name: "更多格式" }));
+  const menu = await screen.findByRole("menu", { name: "更多格式" });
+  for (const name of ["无序列表", "插入 3 × 3 表格", "撤销"]) expect(within(menu).getByRole("menuitem", { name }), name).toBeInTheDocument();
+
+  const editor = (document.querySelector(".note-prose") as unknown as { editor: Editor }).editor;
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "无序列表" }));
+  expect(editor.isActive("bulletList")).toBe(true);
+});
+
+it("收的先后:插入那组 → 撤销重做 → 列表 → 粗体那组;段落类型一直在", () => {
+  //: 估的宽度:段落 96、粗体那组 126、列表 94、插入那组 160、撤销重做 62;组间 13;「更多格式」13 + 30。
+  expect(visibleFormatGroups(Infinity)).toEqual(["block", "marks", "lists", "insert", "history"]);
+  expect(visibleFormatGroups(590)).toEqual(["block", "marks", "lists", "insert", "history"]);
+  expect(visibleFormatGroups(589)).toEqual(["block", "marks", "lists", "history"]);
+  expect(visibleFormatGroups(459)).toEqual(["block", "marks", "lists"]);
+  expect(visibleFormatGroups(384)).toEqual(["block", "marks"]);
+  expect(visibleFormatGroups(120)).toEqual(["block"]);
+  //: 量到了就按量到的算:「插入」实际只有 76 宽时,590 以下也还放得下。
+  expect(visibleFormatGroups(580, { insert: 76 + 64 })).toEqual(["block", "marks", "lists", "insert", "history"]);
 });
