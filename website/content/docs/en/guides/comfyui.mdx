@@ -150,6 +150,32 @@ file from every save node, plus whatever text display nodes show. It uses the GP
 (a confirmation card); once approved it runs in the background, not bound by the agent's 3-minute wait for a single
 tool call. Longer runs belong in generation.
 
+## Model library: browse and download models
+
+Every ComfyUI connection on the Plugins page has a **Model library** row. It opens **every model file** on that server,
+with a tab per folder (checkpoints, loras, vae…), a base-model filter and search; files with a preview image show it.
+Open one to see its base model (SDXL, Illustrious, Flux, Wan… and whether that came from the file's metadata or its
+name), trigger words, which saved workflows use it, and all the metadata written into the file.
+
+**Missing models download in one click.** Models a workflow declares a download link for (as ComfyUI's official
+templates do) but that aren't on the server are listed at the top of the library; click Download. Or click Download
+model and paste a link: a HuggingFace file, a Civitai model page or download link, or any other direct link. It is looked
+up first (file name, size and a suggested folder), then downloaded onto that ComfyUI once you confirm; you can follow the
+progress and cancel in the library or the task center. Once it's done you can pick it right away when generating.
+
+Good to know:
+
+- **Existing files are never overwritten**: if the folder already has that name you're asked to pick another (with a
+  suggestion). Mosael never deletes or renames model files.
+- When ComfyUI runs on **another machine**, that machine's **ComfyUI-Manager** does the download (without byte progress,
+  and it can't be stopped once started). A LAN ComfyUI started with `--listen 0.0.0.0` won't let the Manager install
+  models over the network by default: on that machine open `ComfyUI/user/__manager/config.ini`, set `network_mode` to
+  `personal_cloud` and restart ComfyUI (the library spells out the reason and this step).
+- When ComfyUI runs on **this computer**, Mosael writes straight into its models folder, with progress, cancel and a
+  free-space check first.
+- For gated HuggingFace repositories or Civitai models that need a login, enter a "HuggingFace token" or "Civitai token"
+  in the connection's credentials. Each token is sent only to its own site.
+
 ## Progress, cancel and restarts
 
 - Progress comes from ComfyUI itself: the task center shows which node is running (by the name you gave it), the

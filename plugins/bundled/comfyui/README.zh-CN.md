@@ -86,6 +86,52 @@ WanVideoDecode…,说明这是一张会生成东西的图),而一个 PreviewImag
 `asset_ids`)、文字产出、按节点分的摘要;占的是显卡,标 `effects: "paid"` —— 智能体调它先开确认卡,批准后在后台跑,
 不占智能体那一次调用的等待时间。更久的走生成(6 小时、有回执、能续等)。
 
+## 模型库(1.8.0)
+
+插件页上这个连接的「模型库」:这台 ComfyUI 上的全部模型文件,按目录分页签、按底模筛、能搜;有预览图的用预览图(同名的
+png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位。点开一个看完整的元数据、触发词、哪几张工作流在用。
+决策见 Mosael 仓库的 ADR 0034。
+
+**底模家族怎么认**(认到为止,界面上写明凭的是什么;规矩在 `tools/families.py`):
+
+1. 文件头里的 `ss_base_model_version`(kohya 训练脚本写的,最具体)。训练脚本不认识的底模(实测有 anima),
+   `modelspec.architecture` 会照默认写成 `stable-diffusion-v1` —— 所以先看它;
+2. 没有时看 `modelspec.architecture`;
+3. 认出是 SDXL 的,训练用的底模名(`ss_sd_model_name`)或文件名里带 illustrious / noob / pony 的,细分成那一支;
+4. 都没有时看文件名(连子目录)里的关键词:`illustrious` / 单独的 `IL` → Illustrious、`noob` → NoobAI、`pony` → Pony、
+   `kontext` → Flux Kontext、`flux` → Flux、`wan2.2` → Wan 2.2、`wan2.1` → Wan 2.1、`qwen_image` → Qwen-Image、
+   `z_image` → Z-Image、`hunyuan` → HunyuanVideo、`ltx` → LTX-Video、`sdxl` / 单独的 `xl` → SDXL、`sd15` / `v1-5` → SD 1.5……
+   只在放「给某个底模用的东西」的目录里按名字猜(checkpoints、loras、diffusion_models、controlnet、embeddings、vae……),
+   文本编码器、放大、检测模型不猜;
+5. 元数据里写了、表里没有的值(anima、krea2)原样显示;什么都没有就空着。
+
+**触发词**:作者写在文件头里的(`modelspec.trigger_phrase` / `ss_trigger_words`);没有时取训练标签(`ss_tag_frequency`)
+里出现最多的几个,并标明「不一定是作者指定的触发词」。**在用的工作流**:保存的工作流里,节点输入写着这个文件名的。
+**工作流缺的模型**:工作流声明了下载地址(节点 `properties.models`,或新格式的顶层 `models`)、节点当前真在用、这台服务器
+上又没有的;只认 `https://huggingface.co/` 和 `https://civitai.com/` 的地址(和 ComfyUI 官方前端同一份白名单)。
+
+逐个读的元数据按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要几秒,之后只读目录。
+
+**下载**:贴一个链接 —— HuggingFace 的文件(`/blob/` 或 `/resolve/`)、Civitai 的模型页(带不带 `modelVersionId`)或
+下载链接、别的直链 —— 先解析出文件名、大小、建议放进哪个目录(Civitai 按模型类型定;HuggingFace 文件路径里正好有
+这台服务器上的某个目录名时建议它;别的自己选),确认后下到**那台 ComfyUI** 上。按优先级走:
+
+1. ComfyUI 自己的下载接口 —— 0.38.0 没有;
+2. **ComfyUI-Manager(V4)**:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停单个任务的接口,取消只是
+   Mosael 不再等)。它的安全策略只在 ComfyUI 监听本机地址、或 `user/__manager/config.ini` 里 `network_mode = personal_cloud`
+   时才放行 —— 用 `--listen 0.0.0.0` 开着的局域网 ComfyUI 默认不让,插件把日志里的原因说成人话,并记下来,下次在模型库里
+   提前提醒;
+3. **ComfyUI 就在这台电脑上**(它报的模型目录在本机存在,且本机的文件和它报的一致):直接写进去,先写 `名字.mosael-part`、
+   下完挂上正式的名字;按字节报进度、能取消(只删自己的半截文件);开始前查剩余空间,不够就不下;
+4. 都不行:说清楚,并给出能做的那一步(装 Manager、改 `network_mode`、或手动把直链下到 `models/<目录>/`)。
+
+**不覆盖任何已有文件**:同名的先要求换名(给一个 `名字 (1).扩展名` 的建议),写盘时再查一遍(硬链接挂正式名字,目标已在就失败)。
+不删、不改名、不移动模型文件;不装自定义节点、不改 Manager 的配置。
+
+**凭据**:要同意条款或私有的 HuggingFace 仓库,在连接上填「HuggingFace 令牌」;要登录的 Civitai 模型填「Civitai 令牌」。
+令牌只发给它自己那个站(跳转到别家存储时不带),不进结果和报错;经 Manager 下 Civitai 时只能拼进下载地址,会留在那台
+机器的 Manager 任务记录里。
+
 ## 进度、取消、重启
 
 - 进度来自 ComfyUI 的 WebSocket:哪个节点在跑(用界面上的节点名)、采样器第几步、第几个节点;连不上就退回轮询。
@@ -110,6 +156,8 @@ WanVideoDecode…,说明这是一张会生成东西的图),而一个 PreviewImag
 - `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
+- `library.py` / `families.py` / `model_files.py` —— 模型库:列出模型文件、读元数据、认底模家族、找在用的和缺的;
+- `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 
 协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」「流式工具」「一次交出几份」。

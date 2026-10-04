@@ -103,6 +103,67 @@ marked `effects: "paid"`: when the agent calls it, a confirmation card opens fir
 background without holding up that agent call. Longer jobs go through generation (6 hours, with receipts, and waiting
 can resume).
 
+## Model library (1.8.0)
+
+The connection's **Model library** on the Plugins page: every model file on this ComfyUI, with a tab per folder, a
+base-model filter and search. Files with a preview (a png / jpg / webp of the same name, or a cover inside the
+safetensors) show it; the others get a per-folder placeholder. Open one for its full metadata, trigger words and the
+workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
+
+**How the base model is recognised** (first match wins, and the interface says which; the rules live in
+`tools/families.py`):
+
+1. `ss_base_model_version` in the file header (written by kohya's training scripts; the most specific). For base models
+   the training script doesn't know (anima, seen on a real server), `modelspec.architecture` defaults to
+   `stable-diffusion-v1`, so this one is read first;
+2. otherwise `modelspec.architecture`;
+3. once it is known to be SDXL, a training base model name (`ss_sd_model_name`) or file name containing illustrious /
+   noob / pony narrows it to that branch;
+4. otherwise keywords in the file name (including subfolders): `illustrious` / a standalone `IL` → Illustrious, `noob` →
+   NoobAI, `pony` → Pony, `kontext` → Flux Kontext, `flux` → Flux, `wan2.2` → Wan 2.2, `wan2.1` → Wan 2.1, `qwen_image` →
+   Qwen-Image, `z_image` → Z-Image, `hunyuan` → HunyuanVideo, `ltx` → LTX-Video, `sdxl` / a standalone `xl` → SDXL,
+   `sd15` / `v1-5` → SD 1.5, and so on. Names are only read in folders holding things made for a base model
+   (checkpoints, loras, diffusion_models, controlnet, embeddings, vae…), never for text encoders, upscalers or detectors;
+5. values written in the metadata but not in the table (anima, krea2) are shown as they are; with nothing to go on it
+   stays empty.
+
+**Trigger words**: the ones the author wrote into the header (`modelspec.trigger_phrase` / `ss_trigger_words`);
+otherwise the most frequent training tags (`ss_tag_frequency`), marked as "not necessarily trigger words".
+**Used by**: saved workflows whose node inputs name the file. **Missing for workflows**: models a workflow declares a
+download link for (node `properties.models`, or the newer top-level `models`), that a node currently uses, and that
+aren't on this server; only `https://huggingface.co/` and `https://civitai.com/` links count (the same allow-list as
+ComfyUI's own frontend).
+
+Metadata read file by file is remembered in the plugin's data folder by server, folder, name, size and modification
+time: the first look at a few hundred files takes seconds, later ones only list the folders.
+
+**Downloading**: paste a link (a HuggingFace file, `/blob/` or `/resolve/`; a Civitai model page, with or without
+`modelVersionId`, or download link; any other direct link). It is looked up first (file name, size and a suggested
+folder: from the model type on Civitai, from a folder name in a HuggingFace file path, otherwise you pick), then
+downloaded onto **that ComfyUI**, by the first route that works:
+
+1. ComfyUI's own download API: 0.38.0 has none;
+2. **ComfyUI-Manager (V4)**: that machine downloads it, without byte progress and without a way to stop it once started
+   (the Manager can't stop a single task; cancelling only stops Mosael waiting). Its security policy only allows this when
+   ComfyUI listens on a local address or `network_mode = personal_cloud` in `user/__manager/config.ini`; a LAN ComfyUI
+   started with `--listen 0.0.0.0` refuses by default, so the plugin turns the reason in the log into plain words,
+   remembers it and warns in the model library next time;
+3. **ComfyUI runs on this computer** (its model folders exist here and the files match what it reports): written
+   straight in, first as `name.mosael-part` and then given the real name; with byte progress and cancel (only its own
+   partial file is removed), and a free-space check before starting;
+4. none of these: it says so and gives the step you can take (install the Manager, change `network_mode`, or put the
+   direct link into `models/<folder>/` yourself).
+
+**Nothing existing is overwritten**: a name already taken must be changed first (a `name (1).ext` suggestion is
+offered), and it is checked again when writing (a hard link gives the file its real name and fails if the name exists).
+Model files are never deleted, renamed or moved; no custom nodes are installed and the Manager's settings are not
+changed.
+
+**Credentials**: enter a "HuggingFace token" on the connection for gated or private HuggingFace repositories and a
+"Civitai token" for Civitai models that need a login. Each token goes only to its own site (not to the storage a
+download redirects to) and never into results or errors; a Civitai download through the Manager can only carry it in the
+URL, so it stays in that machine's Manager task history.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -133,6 +194,10 @@ can resume).
 - `workflows.py`: `list_workflows` / `import_outputs`, and the part that returns outputs;
 - `tooling.py`: one tool per workflow: derives inputs and outputs from the graph and runs the current graph;
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
+- `library.py` / `families.py` / `model_files.py`: the model library (model files, metadata, base-model
+  families, which workflows use a file and which models they miss);
+- `sources.py` / `install.py`: resolving HuggingFace / Civitai / direct links and downloading via the Manager →
+  same machine → explain order;
 - `comfy_http.py` / `ws.py`: talking to ComfyUI.
 
 For the protocol, see `docs/PLUGIN_MANIFEST.md` in the Mosael repository: the sections on doing generation for the host,
