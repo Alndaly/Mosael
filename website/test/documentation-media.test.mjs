@@ -12,7 +12,7 @@ const files = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
 
 test('every current screenshot and recording has an intact live-capture provenance entry', () => {
   assert.equal(manifest.documentedVersion ?? manifest.version, version);
-  for (const kind of ['screens', 'gifs', 'videos', 'homepage']) {
+  for (const kind of ['screens', 'videos', 'homepage']) {
     for (const file of files(path.join(media, kind))) {
       const relative = path.relative(media, file);
       const record = manifest.captures[relative];
@@ -23,7 +23,9 @@ test('every current screenshot and recording has an intact live-capture provenan
 });
 
 test('all scenes have light/dark and Chinese/English MP4 recordings', () => {
-  for (const scene of ['scenes', 'notes', 'annotations', 'home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login']) {
+  // The scene names are record-doc-media.py's SCENES; a scene dropped there must be dropped here on purpose.
+  for (const scene of ['scenes', 'notes', 'annotations', 'home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login',
+    'documents', 'timeline-tools', 'subtitle-panel', 'export', 'agent', 'workflow-editor', 'workflow-templates', 'board-cells', 'entities', 'plugin-market', 'admin']) {
     for (const locale of ['zh', 'en']) for (const theme of ['light', 'dark']) {
       const directory = `${locale === 'en' ? 'en/' : ''}${theme === 'dark' ? 'dark/' : ''}`;
       assert.ok(manifest.captures[`videos/${directory}${scene}.mp4`], `${scene}/${locale}/${theme}`);
@@ -36,6 +38,8 @@ test('all scenes have light/dark and Chinese/English MP4 recordings', () => {
  * 文档里再出现一个 GIF 引用,就是把这笔体积又请了回来。
  */
 test('docs show recordings as MP4, never GIF', () => {
+  const gifs = files(media).filter((file) => file.endsWith('.gif')).map((file) => path.relative(media, file));
+  assert.deepEqual(gifs, [], 'GIFs are not published; record-doc-media.py writes MP4 only');
   for (const file of files(docs)) {
     if (!file.endsWith('.mdx')) continue;
     assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /\.gif\b/, path.relative(docs, file));
@@ -50,7 +54,7 @@ test('localized docs reference existing media, use the correct language, and hav
     assert.ok(fs.existsSync(path.join(docs, relative.replace(/^(zh|en)/, locale === 'zh' ? 'en' : 'zh'))), relative);
     const body = fs.readFileSync(file, 'utf8');
     assert.equal(body.match(/^version: (.+)$/m)?.[1], version, relative);
-    for (const match of body.matchAll(/\/media\/(?:screens|gifs|videos)\/[^\s"')]+/g)) {
+    for (const match of body.matchAll(/\/media\/(?:screens|videos)\/[^\s"')]+/g)) {
       const src = match[0];
       assert.ok(fs.existsSync(path.join('public', src)), `${relative}: ${src}`);
       assert.equal(src.includes('/en/'), locale === 'en', `${relative}: wrong image language`);
