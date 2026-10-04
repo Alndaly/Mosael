@@ -58,6 +58,10 @@ app.setAppUserModelId("dev.mosael.app");
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/account-view-preload.cjs。
 app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
+// 浏览器自动化的会话视图挂在主窗口里。Chromium 在 macOS 上把被别的窗口挡住、或不在当前桌面的窗口当成隐藏:
+// 不再出帧,scroll 事件和 IntersectionObserver 都停,滚动加载的列表 / 评论区就不往下加载了 —— 而工作流正是让人
+// 切走去干别的时候在跑(实测:B 站评论区读页面那一路从 33 条一级评论掉到 3 条)。只关这一条,最小化照旧按隐藏。
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
 const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
