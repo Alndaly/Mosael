@@ -1570,6 +1570,40 @@ def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
     assert cancelled
 
 
+def test_取消之后才失败的节点_执行历史里记的是已取消_不是被收走的资源报的错(monkeypatch) -> None:
+    """取消一条运行时,它名下的东西跟着被收走(浏览器会话关掉、子任务取消),正在等这些东西的节点随即失败 ——
+    失败原因是「会话已关闭」「子任务失败」这类**被收走的那一方**的话。实测(真实执行器,取消一条在等元素出现的
+    运行):执行历史里那一步写着「浏览器会话不存在或已关闭」,看的人会以为是会话出了问题。它是被取消的。"""
+    from app.domain.jobs import cancel_job
+    from app.domain.workflows.executors import _REGISTRY
+
+    def waits_then_loses_its_resource(db, scope, config):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            with SessionLocal() as check:
+                if check.get(Job, job_id).status != "running":
+                    break
+            time.sleep(0.05)
+        raise WorkflowDomainError("browserErr_sessionClosed")
+
+    monkeypatch.setitem(_REGISTRY, "delay", waits_then_loses_its_resource)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    graph = {"nodes": [{"id": "d", "type": "delay", "name": "等元素", "config": {"seconds": 30}}], "edges": []}
+    outcome, job_id, thread = _run_graph_in_thread(graph, workspace_id=ws)
+    time.sleep(0.3)
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    with SessionLocal() as db:
+        failed = [e.payload for e in db.query(TaskEvent).filter(TaskEvent.job_id == job_id).all()
+                  if e.type == "workflow.node.failed"]
+    assert [one["node_id"] for one in failed] == ["d"]
+    assert failed[0]["error_key"] == "jobErr_cancelled", failed[0]
+
+
 def test_工作流的失败原因不按位置截断_带着文案_key(monkeypatch) -> None:
     """失败原因此前在引擎这一层被 `str(exc)[:500]` / 通知里 `[:300]` 按位置截断:长一点的
     原因(条件节点把两边的原值带进去)后半截直接没了,用户看到的是半句话。

@@ -694,6 +694,14 @@ def execute_graph(
                 try:
                     outputs = future.result()
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
+                    if is_cancelled():
+                        # 取消在前、失败在后:这一步是**被取消的**。运行名下的东西随取消被收走(浏览器会话关掉、
+                        # 子任务取消),等着它们的节点随即失败,报的是被收走那一方的话(「会话已关闭」)——
+                        # 写进执行历史就像是会话自己出了问题。
+                        cancelled = True
+                        node_event("workflow.node.failed", nid,
+                                   error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
+                        break
                     error = exc
                     node_event("workflow.node.failed", nid, **_failure_payload(exc))
                     # **失败让这一轮停下。** 还在跑的兄弟节点做完了也没人要:它们正在等的子任务
