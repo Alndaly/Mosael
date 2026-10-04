@@ -20810,6 +20810,46 @@
         }
       }
     },
+    "/api/agent/speech/read": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Read Aloud",
+        "description": "用他在「语音对话」里选的那把嗓子念他自己的一段字(笔记选区工具条上的「朗读」),音频直接回给调用方,\n不建任务、不进素材库。\n\n和试听一样**只要求选好**:「让它出声」管的是对话里它开不开口,不是他想听自己的笔记。没选过就 409 ——\n界面据此退回免费的 Edge 语音,不替他挑一个要花钱的。",
+        "operationId": "read_aloud_api_agent_speech_read_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSpeechRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/view": {
       "post": {
         "tags": [

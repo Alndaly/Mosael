@@ -1,16 +1,22 @@
 import React from "react";
 import { toast } from "sonner";
 
-import { EDGE_ENGINE, fetchVoicePreview, synthesizeWithEngine } from "@/api/domains/speech";
+import {
+  CLONE_ENGINE, EDGE_ENGINE, fetchVoicePreview, getAgentVoice, readWithAgentVoice, synthesizeVoice, synthesizeWithEngine,
+  type AgentVoice,
+} from "@/api/domains/speech";
 import { errorText } from "@/api/errorMessage";
 
 /**
- * 选区工具条上的「朗读」:用**免费的 Edge 引擎**念,在本地播放,不建素材 —— 念完就没了;要留下来另点
- * 「存为音频素材」(那一步才走 /api/tts/synthesize 建任务、进素材库)。
+ * 选区工具条上的「朗读」:在本地播放,不建素材 —— 念完就没了;要留下来另点「存为音频素材」(那一步才建任务、
+ * 进素材库)。
  *
- * 走的是试听那条路(`POST /api/tts/preview`,同一个合成、记账照记),它一次只收 200 字以内,所以按句切成
- * 小段一段段念:念这一段时先去取下一段,段与段之间不留空当。不走对话音色(/api/agent/speech):那条要
- * 「让它出声」开着、用的是用户为智能体选的(可能收费的)嗓子,而这里说好了只用免费的那个。
+ * **用哪把嗓子**:他在设置「语音对话」里选好了的那一把(`POST /api/agent/speech/read`,只要求选好,不要求
+ * 「让它出声」开着);没选过就用免费的 Edge(走试听那条路 `POST /api/tts/preview`),有中文用晓晓、否则 Aria。
+ * 配音本身没有「默认音色」(引擎和音色每次成对点名,见 backend/domain/voices/speech),所以个人存着的音色只有
+ * 这一份。选的是收费的引擎时照常按字符记账(和对话里念一句同一条路、同一道 ai 权限),提示条上写明用的是谁的声音。
+ *
+ * 按句切成小段一段段念:念这一段时先去取下一段,段与段之间不留空当;第一段出声也快。
  */
 
 /** 一段最多多少字(试听接口的上限是 200,留点余量)。 */
@@ -52,7 +58,7 @@ export interface ReadAloud {
  * 朗读的状态挂在编辑器上(不挂在工具条上):工具条跟着选区出现、消失,念到一半选区一变它就卸了 ——
  * 声音不该跟着断。
  */
-export function useReadAloud(workspaceId: string, strings: { reading: string; stopReading: string; saveAudio: string; savingAudio: string }): ReadAloud {
+export function useReadAloud(workspaceId: string, strings: { readingWithVoice: string; readingWithEdge: string; stopReading: string; saveAudio: string; savingAudio: string }): ReadAloud {
   const [reading, setReading] = React.useState(false);
   const run = React.useRef(0);
   const audio = React.useRef<HTMLAudioElement | null>(null);
@@ -70,24 +76,30 @@ export function useReadAloud(workspaceId: string, strings: { reading: string; st
     stop();
     const chunks = splitForSpeech(text);
     if (!chunks.length) return;
-    const voice = edgeVoiceFor(text);
+    const edgeVoice = edgeVoiceFor(text);
     const mine = ++run.current;
     setReading(true);
-    toastId.current = toast(strings.reading, {
-      duration: Infinity,
-      action: {
-        label: strings.saveAudio,
-        onClick: () => {
-          void synthesizeWithEngine({ workspace_id: workspaceId, text: text.slice(0, SAVE_LIMIT), engine: EDGE_ENGINE, engine_voice: voice })
-            .then(() => toast.success(strings.savingAudio))
-            .catch((error) => toast.error(errorText(error)));
-        },
-      },
-      cancel: { label: strings.stopReading, onClick: stop },
-    });
-    const fetchChunk = (chunk: string) => fetchVoicePreview({ workspace_id: workspaceId, engine: EDGE_ENGINE, voice, text: chunk });
     void (async () => {
       try {
+        //: 每次开念时现问一次:设置页刚改过音色,下一次朗读就该是新的那把。
+        const pref = await getAgentVoice().catch(() => null);
+        if (run.current !== mine) return;
+        const chosen = pref?.engine && pref.engine_voice ? pref : null;
+        toastId.current = toast(chosen ? strings.readingWithVoice : strings.readingWithEdge, {
+          duration: Infinity,
+          action: {
+            label: strings.saveAudio,
+            onClick: () => {
+              void saveAsAudio(workspaceId, text.slice(0, SAVE_LIMIT), chosen, edgeVoice)
+                .then(() => toast.success(strings.savingAudio))
+                .catch((error) => toast.error(errorText(error)));
+            },
+          },
+          cancel: { label: strings.stopReading, onClick: stop },
+        });
+        const fetchChunk = (chunk: string) => chosen
+          ? readWithAgentVoice({ workspace_id: workspaceId, text: chunk })
+          : fetchVoicePreview({ workspace_id: workspaceId, engine: EDGE_ENGINE, voice: edgeVoice, text: chunk });
         let next = fetchChunk(chunks[0]);
         for (let index = 0; index < chunks.length; index += 1) {
           const blob = await next;
@@ -105,6 +117,16 @@ export function useReadAloud(workspaceId: string, strings: { reading: string; st
     })();
   }, [stop, strings, workspaceId]);
   return { reading, start, stop };
+}
+
+/** 「存为音频素材」:用念的那把嗓子合成一份、进素材库(这一步建任务)。克隆音色走音色库那条路。 */
+function saveAsAudio(workspaceId: string, text: string, chosen: AgentVoice | null, edgeVoice: string) {
+  if (!chosen) return synthesizeWithEngine({ workspace_id: workspaceId, text, engine: EDGE_ENGINE, engine_voice: edgeVoice });
+  if (chosen.engine === CLONE_ENGINE) return synthesizeVoice(chosen.voice_id || chosen.engine_voice, { text, speed: chosen.speed });
+  return synthesizeWithEngine({
+    workspace_id: workspaceId, text, engine: chosen.engine, engine_voice: chosen.engine_voice,
+    engine_voice_resource: chosen.engine_voice_resource, speed: chosen.speed,
+  });
 }
 
 function play(blob: Blob, holder: React.MutableRefObject<HTMLAudioElement | null>): Promise<void> {

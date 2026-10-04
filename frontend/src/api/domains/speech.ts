@@ -212,6 +212,14 @@ export function fetchAgentVoicePreview(body: { workspace_id: string; text: strin
   return apiBlob("/api/agent/speech/preview", { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * 用设置「语音对话」里选的那把嗓子念他自己的一段字(笔记选区工具条的「朗读」,`POST /api/agent/speech/read`)。
+ * 只要求选好、不要求「让它出声」开着;没选过回 409,调用方据此退回免费的 Edge。不建任务、不进素材库。
+ */
+export function readWithAgentVoice(body: { workspace_id: string; text: string }): Promise<Blob> {
+  return apiBlob("/api/agent/speech/read", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function voiceSampleUrl(id: string): string {
   const token = getAuthToken();
   const suffix = token ? `?token=${token}` : "";

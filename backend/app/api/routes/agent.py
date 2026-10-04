@@ -382,7 +382,7 @@ def speak(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。
     """
     with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp, _speech_errors():
-        return _audio(agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp)))
+        return _audio(agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp), purpose="chat"))
 
 
 @router.post("/agent/speech/preview")
@@ -394,7 +394,21 @@ def preview_speech(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Respo
     """
     with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp, _speech_errors():
         return _audio(
-            agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp), preview=True)
+            agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp), purpose="preview")
+        )
+
+
+@router.post("/agent/speech/read")
+def read_aloud(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
+    """用他在「语音对话」里选的那把嗓子念他自己的一段字(笔记选区工具条上的「朗读」),音频直接回给调用方,
+    不建任务、不进素材库。
+
+    和试听一样**只要求选好**:「让它出声」管的是对话里它开不开口,不是他想听自己的笔记。没选过就 409 ——
+    界面据此退回免费的 Edge 语音,不替他挑一个要花钱的。
+    """
+    with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp, _speech_errors():
+        return _audio(
+            agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp), purpose="read_aloud")
         )
 
 

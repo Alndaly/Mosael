@@ -30,7 +30,7 @@ const zh = {
   selection: {
     toolbar: "选区工具", inlineCode: "行内代码", unlink: "去掉链接", linkPlaceholder: "粘贴 https:// 链接后回车",
     ai: "AI 动作", more: "更多", copy: "复制", copied: "已复制", quote: "引用到对话",
-    readAloud: "朗读", stopReading: "停止朗读", reading: "正在朗读选中的文字(免费的 Edge 语音)", saveAudio: "存为音频素材", savingAudio: "已开始生成音频,完成后在素材库里",
+    readAloud: "朗读", stopReading: "停止朗读", readingWithVoice: "正在用你在「语音对话」里选的音色朗读", readingWithEdge: "正在用免费的 Edge 语音朗读", saveAudio: "存为音频素材", savingAudio: "已开始生成音频,完成后在素材库里",
     actions: {
       polish: { label: "润色", hint: "让表达更通顺、更得体,意思不变", prompt: "润色选中的这段" },
       rewrite: { label: "改写", hint: "换一种说法重写这段,意思不变", prompt: "改写选中的这段" },
@@ -89,7 +89,7 @@ const en: Strings = {
   selection: {
     toolbar: "Selection tools", inlineCode: "Inline code", unlink: "Remove link", linkPlaceholder: "Paste an https:// link and press Enter",
     ai: "AI actions", more: "More", copy: "Copy", copied: "Copied", quote: "Quote in chat",
-    readAloud: "Read aloud", stopReading: "Stop reading", reading: "Reading the selection aloud (free Edge voice)", saveAudio: "Save as audio", savingAudio: "Generating the audio; it will be in the media library",
+    readAloud: "Read aloud", stopReading: "Stop reading", readingWithVoice: "Reading aloud with the voice you chose under Voice chat", readingWithEdge: "Reading aloud with the free Edge voice", saveAudio: "Save as audio", savingAudio: "Generating the audio; it will be in the media library",
     actions: {
       polish: { label: "Polish", hint: "Make it read more smoothly without changing the meaning", prompt: "Polish the selected passage" },
       rewrite: { label: "Rewrite", hint: "Say the same thing a different way", prompt: "Rewrite the selected passage" },

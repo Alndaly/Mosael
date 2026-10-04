@@ -6792,6 +6792,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/speech/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Aloud
+         * @description 用他在「语音对话」里选的那把嗓子念他自己的一段字(笔记选区工具条上的「朗读」),音频直接回给调用方,
+         *     不建任务、不进素材库。
+         *
+         *     和试听一样**只要求选好**:「让它出声」管的是对话里它开不开口,不是他想听自己的笔记。没选过就 409 ——
+         *     界面据此退回免费的 Edge 语音,不替他挑一个要花钱的。
+         */
+        post: operations["read_aloud_api_agent_speech_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}/view": {
         parameters: {
             query?: never;
@@ -28691,6 +28715,39 @@ export interface operations {
         };
     };
     preview_speech_api_agent_speech_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSpeechRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_aloud_api_agent_speech_read_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -14,12 +14,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ usePreferences: () => ({ locale: "zh-CN" }), useI18n: () => (key: string) => key }));
 const speech = vi.hoisted(() => ({
   fetchVoicePreview: vi.fn(async () => new Blob(["audio"], { type: "audio/mpeg" })),
+  readWithAgentVoice: vi.fn(async () => new Blob(["audio"], { type: "audio/mpeg" })),
   synthesizeWithEngine: vi.fn(async () => ({ id: "job-1" })),
+  //: 设置「语音对话」里选的那把嗓子;默认没选过。
+  agentVoice: { engine: "", engine_voice: "", engine_voice_resource: "", engine_model: "", speed: 1, enabled: false },
 }));
 vi.mock("@/api/domains/speech", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/speech")>()),
   fetchVoicePreview: speech.fetchVoicePreview,
+  readWithAgentVoice: speech.readWithAgentVoice,
   synthesizeWithEngine: speech.synthesizeWithEngine,
+  getAgentVoice: vi.fn(async () => speech.agentVoice),
 }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/notes")>()),
@@ -195,7 +200,7 @@ it("AI 动作带着这段选区交出去;问 AI、引用到对话也是", async 
   expect(handlers.onAskAi).toHaveBeenCalledWith(expect.objectContaining({ text: "脚本" }));
 });
 
-it("朗读走免费的 Edge 引擎、在本地播放,不建素材", async () => {
+it("没选过音色:朗读走免费的 Edge 引擎、在本地播放,不建素材", async () => {
   mount();
   const instance = await editor();
   select(instance, "周一和剪辑组对了节奏");
@@ -209,6 +214,25 @@ it("朗读走免费的 Edge 引擎、在本地播放,不建素材", async () => 
   });
   await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
   expect(speech.synthesizeWithEngine).not.toHaveBeenCalled();
+  expect(speech.readWithAgentVoice).not.toHaveBeenCalled();
+});
+
+it("在「语音对话」里选过音色:朗读跟着那把嗓子念(走后端朗读那条路),不再用 Edge", async () => {
+  speech.agentVoice = { ...speech.agentVoice, engine: "openai", engine_voice: "alloy" };
+  try {
+    mount();
+    const instance = await editor();
+    select(instance, "周一和剪辑组对了节奏");
+    await screen.findByRole("toolbar", { name: "选区工具" });
+
+    fireEvent.click(button("朗读"));
+
+    await waitFor(() => expect(speech.readWithAgentVoice).toHaveBeenCalledWith({ workspace_id: "ws", text: "周一和剪辑组对了节奏" }));
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    expect(speech.fetchVoicePreview).not.toHaveBeenCalled();
+  } finally {
+    speech.agentVoice = { ...speech.agentVoice, engine: "", engine_voice: "" };
+  }
 });
 
 it("存到笔记:打开现有的保存对话框,写进去的是选中的这段", async () => {

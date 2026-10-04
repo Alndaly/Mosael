@@ -155,6 +155,30 @@ def test_试听不要求开着_只要求选好(monkeypatch) -> None:
     assert len(calls) == 1
 
 
+def test_朗读笔记用他选的那把嗓子_不要求开着_记在朗读名下(monkeypatch) -> None:
+    """笔记选区工具条上的「朗读」跟随他选好的音色:和试听一样只要求选好(「让它出声」管的是对话),
+    记账来源写明是朗读,不混进「试听」。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    _choose_voice(engine="openai", engine_voice="alloy", speed=1.1, enabled=False)
+    calls = _record_speech(monkeypatch)
+
+    reply = client.post("/api/agent/speech/read", json={"text": "笔记里选中的一段", "workspace_id": workspace["id"]})
+
+    assert reply.status_code == 200, reply.text
+    assert reply.content == b"ID3fake-audio"
+    assert [(one["engine"], one["engine_voice"], one["speed"], one["source_type"]) for one in calls] == [
+        ("openai", "alloy", 1.1, "note_read_aloud"),
+    ]
+
+
+def test_朗读没选过音色就说没设_界面据此退回免费的_Edge() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    reply = client.post("/api/agent/speech/read", json={"text": "念", "workspace_id": workspace["id"]})
+    assert reply.status_code == 409
+
+
 def test_试听和真念走的是同一套参数(monkeypatch) -> None:
     """试听听到的得是以后念给他的那个声音:两条路交给合成的东西,除了记账来源,一样不差。"""
     client = fresh_client()

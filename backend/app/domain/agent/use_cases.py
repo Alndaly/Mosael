@@ -300,17 +300,31 @@ def confirmation(db: Session, user: User, confirmation_id: str) -> ToolConfirmat
 # ---------------- 念一句话 ----------------
 
 
-def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir: Path, preview: bool = False) -> Path:
-    """用他的对话音色念一句,落到 `out_dir`。
+#: 用他选的那把嗓子念,是为了什么 → (取配置的那道闸, 记账来源)。
+#:
+#: - chat:对话里它说话 —— 要「让它出声」开着;
+#: - preview:设置页试听 —— 只要选好(试听发生在打开之前);
+#: - read_aloud:笔记选区工具条上的「朗读」,念的是他自己的字 —— 只要选好(「让它出声」管的是对话里它开不开口)。
+#:
+#: 三样都花钱、都记账(各家 TTS 按字符计费),来源分开写,统计里才看得出钱花在哪儿。
+SPEECH_PURPOSES = {
+    "chat": (agent_voice.require_enabled, "agent_speech"),
+    "preview": (agent_voice.require_ready, "agent_voice_preview"),
+    "read_aloud": (agent_voice.require_ready, "note_read_aloud"),
+}
 
-    念一句是**花钱的**(各家 TTS 按字符计费),所以要 `ai` 权限,和对话、生成同一档;试听照样花钱、
-    照样记账。两条路只差取配置的那道闸:真念要「让它出声」开着,试听只要选好了(见 voices/agent_voice)。
+
+def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir: Path, purpose: str) -> Path:
+    """用他选的那把嗓子(设置「语音对话」)念一段,落到 `out_dir`。为了什么念见 SPEECH_PURPOSES。
+
+    念一句是**花钱的**(各家 TTS 按字符计费),所以要 `ai` 权限,和对话、生成同一档。
     """
+    gate, source_type = SPEECH_PURPOSES[purpose]
     ensure_workspace_perm(db, user, workspace_id, "ai")
     text = text.strip()
     if not text:
         raise NothingToSay("routeErr_nothingToRead")
-    pref = (agent_voice.require_ready if preview else agent_voice.require_enabled)(db, user.id)
+    pref = gate(db, user.id)
     try:
         return agent_voice.speak(
             db,
@@ -318,7 +332,7 @@ def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir
             text=text,
             workspace_id=workspace_id,
             out_dir=out_dir,
-            source_type="agent_voice_preview" if preview else "agent_speech",
+            source_type=source_type,
         )
     except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
         raise SpeechFailed(str(exc)[:300]) from exc
