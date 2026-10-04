@@ -8,7 +8,10 @@ import { TraceView } from "@/features/agent/trace/TraceView";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { InspectorCard } from "@/components/layout/InspectorCard";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -161,42 +164,23 @@ export function SubagentButton({
           <ChevronDown size={11} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[340px] p-1">
-        <div className="grid max-h-[300px] gap-px overflow-y-auto">
-          {runs.map((run, index) => (
-            <button
-              key={`${run.call.id}-${index}`}
-              type="button"
-              // min-w-0:弹层是固定宽的,这个按钮是 grid 子项,长任务名会把整列撑出弹层
-              // (真机看到文字顶穿右边)。名字最多两行,超出省略 —— 单行省略对"以一串
-              // UUID 开头"的任务名太狠,两行正好露出人写的那半句。
-              className="grid w-full min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-1.5 gap-y-0.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted"
-              onClick={() => {
-                setOpen(false);
-                onOpen(run);
-              }}
-            >
-              {/* 状态点和第一行文字对中:点自身 6px,首行行高约 17px,垫出差值的一半。 */}
-              <span className="flex pt-[5px]">
-                <StatusDot run={run} />
-              </span>
-              <span className="min-w-0 text-ui-xs leading-snug text-foreground line-clamp-2 [word-break:break-word]">
-                {subagentRunLabel(run)}
-              </span>
-              {typeof run.call.usage?.duration_seconds === "number" ? (
-                <span className="timecode pt-[2px] text-ui-2xs text-muted-foreground">
-                  {formatElapsedSeconds(run.call.usage.duration_seconds)}
-                </span>
-              ) : (
-                <span />
-              )}
-              <span className="col-start-2 text-ui-2xs text-muted-foreground">
-                <RunMeta run={run} />
-              </span>
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
+      <MenuContent align="end" label={t("chatSubagentsTitle")} className="max-h-[300px] overflow-y-auto">
+        {runs.map((run, index) => (
+          <MenuItem
+            key={`${run.call.id}-${index}`}
+            icon={<StatusDot run={run} />}
+            // 名字最多两行,超出省略、悬停看全文 —— 单行省略对"以一串 UUID 开头"的任务名太狠,
+            // 两行正好露出人写的那半句。
+            label={<Truncate lines={2}>{subagentRunLabel(run)}</Truncate>}
+            description={<RunMeta run={run} />}
+            hint={typeof run.call.usage?.duration_seconds === "number" ? formatElapsedSeconds(run.call.usage.duration_seconds) : undefined}
+            onClick={() => {
+              setOpen(false);
+              onOpen(run);
+            }}
+          />
+        ))}
+      </MenuContent>
     </Popover>
   );
 }
@@ -227,10 +211,9 @@ export function InspectorSubagentList({
               type="button"
               className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-ui-xs text-foreground transition-colors hover:bg-panel"
               onClick={() => onOpen(run)}
-              title={label}
             >
               <StatusDot run={run} />
-              <span className="min-w-0 truncate">{label}</span>
+              <Truncate>{label}</Truncate>
               {run.archive && (
                 <span className="shrink-0 tabular-nums text-ui-2xs text-muted-foreground">
                   {t("chatSubagentSteps").replace("{n}", String(run.archive.steps))}
@@ -263,20 +246,19 @@ export function SubagentBreadcrumb({
     <div className="flex min-w-0 flex-1 items-center gap-1.5 text-ui-xs">
       <button
         type="button"
-        className="max-w-[180px] shrink-0 cursor-pointer truncate border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
+        className="min-w-0 max-w-[180px] shrink-0 cursor-pointer border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
         onClick={onBack}
-        title={sessionTitle}
       >
-        {sessionTitle}
+        <Truncate>{sessionTitle}</Truncate>
       </button>
       <span className="shrink-0 text-muted-foreground/60" aria-hidden>/</span>
       <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-foreground">
         <Bot size={12} className="shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate" title={label}>{label}</span>
+        <Truncate>{label}</Truncate>
       </span>
-      <Button size="icon" variant="ghost" className="ml-1 h-6 w-6 shrink-0" aria-label={t("close")} onClick={onBack}>
+      <IconButton size="icon" variant="ghost" className="ml-1 h-6 w-6 shrink-0" label={t("close")} onClick={onBack}>
         <X size={12} />
-      </Button>
+      </IconButton>
     </div>
   );
 }

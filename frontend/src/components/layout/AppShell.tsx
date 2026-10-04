@@ -1,7 +1,6 @@
 import React from "react";
 import {
   Boxes,
-  Check,
   ChevronsUpDown,
   FolderPlus,
   Languages,
@@ -18,10 +17,11 @@ import { toast } from "sonner";
 import { customServerHost, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MenuContent, MenuItem, MenuItemBody, MenuLabel, MenuSeparator } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/jobs/NotificationCenter";
 import { TaskCenter } from "@/components/jobs/TaskCenter";
@@ -33,9 +33,11 @@ import {
 import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { gotoSettings } from "@/lib/deepLink";
+import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace } from "@/lib/workspaces";
 import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
@@ -162,9 +164,9 @@ export function AppShell({
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
             <div className="flex min-w-0 items-center gap-3 text-ui-sm text-muted-foreground">
-              <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" aria-label={compact ? t("navExpand") : t("navCollapse")}>
+              <IconButton variant="ghost" size="icon" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" label={compact ? t("navExpand") : t("navCollapse")}>
                 {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
-              </Button>
+              </IconButton>
               <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", (scoped || trail) && "font-medium text-muted-foreground")}>
                 {trail?.onRoot ? (
                   <button type="button" onClick={trail.onRoot} className={TRAIL_LINK}>
@@ -180,29 +182,29 @@ export function AppShell({
                   <React.Fragment key={`${index}:${segment.label}`}>
                     <span className="text-border-strong">/</span>
                     {last && segment.onRename ? (
-                      <button
-                        type="button"
-                        onClick={segment.onRename}
-                        aria-current="page"
-                        aria-label={`${segment.label} · ${segment.renameLabel ?? ""}`}
-                        title={`${segment.label} · ${segment.renameLabel ?? ""}`}
-                        className="group/rename inline-flex max-w-64 cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <span className="truncate">{segment.label}</span>
-                        <Pencil size={11} className="shrink-0 opacity-0 transition-opacity group-hover/rename:opacity-60" aria-hidden />
-                      </button>
+                      <Hint label={segment.label} hint={segment.renameLabel}>
+                        <button
+                          type="button"
+                          onClick={segment.onRename}
+                          aria-current="page"
+                          aria-label={`${segment.label} · ${segment.renameLabel ?? ""}`}
+                          className="group/rename inline-flex max-w-64 cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Truncate>{segment.label}</Truncate>
+                          <Pencil size={11} className="shrink-0 opacity-0 transition-opacity group-hover/rename:opacity-60" aria-hidden />
+                        </button>
+                      </Hint>
                     ) : segment.onSelect && !last ? (
-                      <button type="button" onClick={segment.onSelect} className={cn(TRAIL_LINK, "max-w-48 truncate")} title={segment.label}>
-                        {segment.label}
+                      <button type="button" onClick={segment.onSelect} className={cn(TRAIL_LINK, "min-w-0 max-w-48")}>
+                        <Truncate>{segment.label}</Truncate>
                       </button>
                     ) : (
-                      <span
-                        className={cn("max-w-64 truncate", last ? "font-semibold text-foreground" : "")}
+                      <Truncate
+                        className={cn("max-w-64", last ? "font-semibold text-foreground" : "")}
                         aria-current={last ? "page" : undefined}
-                        title={segment.label}
                       >
                         {segment.label}
-                      </span>
+                      </Truncate>
                     )}
                   </React.Fragment>
                 );
@@ -220,7 +222,7 @@ export function AppShell({
                         creatingProject={creatingProject}
                       />
                     ) : (
-                      <strong className="truncate font-semibold text-foreground">{projectName}</strong>
+                      <Truncate as="strong" className="font-semibold text-foreground">{projectName}</Truncate>
                     )
                   ) : (
                     <span className="italic text-muted-foreground">{t("crumbNoProject")}</span>
@@ -240,38 +242,27 @@ export function AppShell({
           >
             <Search size={15} />
             <span>{t("cmdkTitle")}</span>
-            <Kbd className="max-[760px]:hidden">⌘K</Kbd>
+            <Kbd className="max-[760px]:hidden">{formatCombo("Mod+K")}</Kbd>
           </button>
           {workspaceId && <TaskCenter workspaceId={workspaceId} />}
           {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(nextTheme(theme))}
-                aria-label={t("settingsTheme")}
-              >
-                <ThemeIcon size={15} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t(THEME_LABEL_KEYS[theme])}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
-                aria-label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
-              >
-                <Languages size={15} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{locale === "zh-CN" ? t("languageEn") : t("languageZh")}</TooltipContent>
-          </Tooltip>
+          <IconButton
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(nextTheme(theme))}
+            label={t("settingsTheme")}
+            hint={t(THEME_LABEL_KEYS[theme])}
+          >
+            <ThemeIcon size={15} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
+            label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
+          >
+            <Languages size={15} />
+          </IconButton>
         </div>
       </header>
       <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-divider bg-panel px-3 py-3">
@@ -325,47 +316,42 @@ function ProjectSwitcher({
           className="-mx-1 inline-flex min-w-0 shrink cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] font-semibold text-foreground transition-colors duration-100 [font:inherit] hover:bg-secondary [&_svg]:text-muted-foreground"
           aria-label={t("timelineSwitch")}
         >
-          <span className="truncate">{current?.name ?? ""}</span>
+          <Truncate>{current?.name ?? ""}</Truncate>
           <ChevronsUpDown size={12} className="shrink-0" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="grid max-h-[min(60vh,360px)] w-80 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-x-hidden overflow-y-auto p-1.5" align="start" sideOffset={8}>
-        <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("timelineSwitch")}</div>
+      <MenuContent label={t("timelineSwitch")} className="max-h-[min(60vh,360px)] overflow-y-auto" align="start" sideOffset={8}>
+        <MenuLabel>{t("timelineSwitch")}</MenuLabel>
         {projects.map((p) => (
-          <button
+          <MenuItem
             key={p.id}
-            type="button"
-            className={cn(
-              "flex min-w-0 w-full cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
-              p.id === currentProjectId && "font-semibold text-primary",
-            )}
+            role="menuitemradio"
+            checked={p.id === currentProjectId}
+            inset={Boolean(onCreateProject)}
+            label={p.name}
+            truncate
+            className={cn(p.id === currentProjectId && "font-semibold text-primary")}
             onClick={() => {
               setOpen(false);
               if (p.id !== currentProjectId) onSwitchProject(p.id);
             }}
-          >
-            <span className="min-w-0 flex-1 truncate" title={p.name}>{p.name}</span>
-            {p.id === currentProjectId && <Check size={13} />}
-          </button>
+          />
         ))}
         {onCreateProject && (
           <>
-            <div className="mx-0.5 my-1 h-px bg-divider" />
-            <button
-              type="button"
+            <MenuSeparator />
+            <MenuItem
+              icon={<FolderPlus />}
+              label={t("createProject")}
               disabled={creatingProject}
-              className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-60 [&_svg]:shrink-0"
               onClick={() => {
                 setOpen(false);
                 onCreateProject();
               }}
-            >
-              <FolderPlus size={13} />
-              {t("createProject")}
-            </button>
+            />
           </>
         )}
-      </PopoverContent>
+      </MenuContent>
     </Popover>
   );
 }
@@ -403,27 +389,32 @@ function WorkspaceSwitcher({
   });
 
   if (!onSelectWorkspace) {
-    return <span className="block truncate px-2 text-ui-sm" title={workspaceName}>{compact ? workspaceName.slice(0, 1) : workspaceName}</span>;
+    return compact ? (
+      <Hint label={workspaceName} side="right">
+        <span className="block px-2 text-ui-sm">{workspaceName.slice(0, 1)}</span>
+      </Hint>
+    ) : (
+      <Truncate className="px-2 text-ui-sm">{workspaceName}</Truncate>
+    );
   }
 
   return (
     <>
       <Popover open={open} onOpenChange={(next) => { setOpen(next); setSearch(""); }}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2.5 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")} title={workspaceName}>
-                <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Boxes size={compact ? 20 : 18} /></span>
-                {!compact && <><span className="min-w-0 flex-1"><span className="block truncate text-ui-sm font-semibold">{workspaceName}</span><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
-              </button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          {compact && <TooltipContent side="right">{workspaceName} · {t("workspaceSwitch")}</TooltipContent>}
-        </Tooltip>
-        <PopoverContent className="w-80 p-2" side={compact ? "right" : "bottom"} align="start" sideOffset={12}>
-          <div className="flex items-center justify-between px-2 pb-3 pt-2"><span className="text-ui-md font-semibold">{t("workspaceSwitch")}</span><span className="text-ui-xs font-medium text-muted-foreground">Mosael</span></div>
+        {/* 收起的侧栏里只剩一枚图标:名字和「切换工作区」放进悬停说明。展开时名字就写在按钮上,不再说一遍。 */}
+        <Hint label={compact ? workspaceName : undefined} hint={compact ? t("workspaceSwitch") : undefined} side="right">
+          <PopoverTrigger asChild>
+            <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2.5 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")}>
+              <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Boxes size={compact ? 20 : 18} /></span>
+              {!compact && <><span className="min-w-0 flex-1"><Truncate className="text-ui-sm font-semibold">{workspaceName}</Truncate><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
+            </button>
+          </PopoverTrigger>
+        </Hint>
+        <MenuContent label={t("workspaceSwitch")} side={compact ? "right" : "bottom"} align="start" sideOffset={12}>
+          <div className="flex items-center justify-between gap-3 px-2 pb-3 pt-2"><span className="text-ui-md font-semibold">{t("workspaceSwitch")}</span><span className="text-ui-xs font-medium text-muted-foreground">Mosael</span></div>
+          {/* Home / End 留给搜索框挪光标,不让菜单拿去跳到第一项 / 最后一项。 */}
           <Input aria-label={t("workspaceSearch")} placeholder={t("workspaceSearch")} value={search} onChange={(e) => setSearch(e.target.value)} className="mb-2" />
-          <div className="max-h-72 overflow-y-auto">
+          <div className="grid max-h-72 gap-0.5 overflow-y-auto">
           {workspaces.filter(ws => ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((ws) => {
             const gate = workspaceMenuState(ws.role, workspaces.length);
             //: 灰掉的按钮要说为什么 —— 权限不够和「只剩这一个」是两件事,用户得知道该找谁、还是先建一个。
@@ -432,28 +423,32 @@ function WorkspaceSwitcher({
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
-                  <div className={cn("flex items-center gap-1 rounded-md p-1 hover:bg-secondary", ws.id === workspaceId && "bg-accent")}>
-                    <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-ui-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setOpen(false); setSearch(""); if (ws.id !== workspaceId) onSelectWorkspace(ws.id); }} aria-current={ws.id === workspaceId ? "true" : undefined}>
-                      <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-panel text-primary">{ws.name.slice(0, 1)}</span>
-                      <span className="truncate">{ws.name}</span>
-                      {ws.id === workspaceId && <Check size={14} className="ml-auto shrink-0 text-primary" />}
-                    </button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={renameReason ? t(renameReason) : t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={deleteReason ? t(deleteReason) : t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
+                  <div className={cn("flex items-center gap-1 rounded-md pr-1", ws.id === workspaceId && "bg-accent")}>
+                    <MenuItem
+                      className="min-w-0 flex-1"
+                      role="menuitemradio"
+                      checked={ws.id === workspaceId}
+                      icon={<span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold text-primary">{ws.name.slice(0, 1)}</span>}
+                      label={ws.name}
+                      truncate
+                      onClick={() => { setOpen(false); setSearch(""); if (ws.id !== workspaceId) onSelectWorkspace(ws.id); }}
+                    />
+                    <IconButton variant="ghost" size="icon-xs" disabled={gate.renameDisabled} label={`${t("rename")}: ${ws.name}`} disabledReason={renameReason && t(renameReason)} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></IconButton>
+                    <IconButton variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} label={`${t("delete")}: ${ws.name}`} disabledReason={deleteReason && t(deleteReason)} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></IconButton>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem disabled={gate.renameDisabled} onSelect={() => { setOpen(false); setRenaming(ws); }}><Pencil /> {t("rename")}</ContextMenuItem>
-                  <ContextMenuItem disabled={gate.deleteDisabled} className="text-destructive focus:text-destructive" onSelect={() => { setOpen(false); setRemoving(ws); }}><Trash2 /> {t("delete")}</ContextMenuItem>
+                  <ContextMenuItem disabled={gate.renameDisabled} onSelect={() => { setOpen(false); setRenaming(ws); }}><MenuItemBody icon={<Pencil />} label={t("rename")} /></ContextMenuItem>
+                  <ContextMenuItem disabled={gate.deleteDisabled} className="text-destructive focus:text-destructive" onSelect={() => { setOpen(false); setRemoving(ws); }}><MenuItemBody icon={<Trash2 />} label={t("delete")} /></ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
             );
           })}
           {workspaces.every(ws => !ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && <p className="px-2 py-4 text-ui-sm text-muted-foreground">{t("workspaceNoResults")}</p>}
           </div>
-          <div className="my-2 border-t border-divider" />
-          <Button variant="ghost" className="w-full justify-start text-primary" onClick={() => { setOpen(false); setCreating(true); }}><FolderPlus />{t("workspaceNew")}</Button>
-        </PopoverContent>
+          <MenuSeparator />
+          <MenuItem icon={<FolderPlus />} label={t("workspaceNew")} className="text-primary" onClick={() => { setOpen(false); setCreating(true); }} />
+        </MenuContent>
       </Popover>
       <RenameDialog
         open={creating}
@@ -502,50 +497,51 @@ function RailUserMenu({ compact }: { compact: boolean }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
-          <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
+      {/* 收起的侧栏里只剩头像:名字放进悬停说明。 */}
+      <Hint label={compact ? displayName : undefined} side="right">
+        <PopoverTrigger asChild>
+          <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
+            <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
+              {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+            </span>
+            {!compact && <><Truncate className="flex-1 text-ui-sm font-medium">{displayName}</Truncate><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
+          </button>
+        </PopoverTrigger>
+      </Hint>
+      <MenuContent label={displayName} side="right" align="end" sideOffset={10}>
+        <div className="flex items-center gap-2 px-1.5 pb-1.5 pt-0.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-ui-md font-bold text-primary">
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
           </span>
-          {!compact && <><span className="min-w-0 flex-1 truncate text-ui-sm font-medium">{displayName}</span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="grid w-[220px] gap-1.5 p-2" side="right" align="end" sideOffset={10}>
-        <div className="flex items-center gap-2 px-1 py-0.5">
-          <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-ui-md font-bold text-primary">
-            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
-          </span>
-          <div className="grid min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
-            <strong>{displayName}</strong>
-            {user?.username && <small>@{user.username}</small>}
-            <small>{origin}</small>
+          <div className="grid min-w-0 text-ui-xs text-muted-foreground">
+            <Truncate as="strong" className="text-ui-md text-foreground">{displayName}</Truncate>
+            {user?.username && <Truncate as="small" className="text-ui-xs">@{user.username}</Truncate>}
+            <small className="break-words text-ui-xs">{origin}</small>
           </div>
         </div>
-        <div className="grid gap-0.5 border-t border-divider pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-ui-sm [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
-          {/* 直达「账号」那一节:侧栏底部已经有一个「设置」,而它回到的是上次停留的分区 ——
-              从账号菜单点进去的人要的是账号本身。 */}
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              gotoSettings("account");
-            }}
-          >
-            <UserRound size={13} /> {t("railAccountSettings")}
-          </button>
-          <button
-            type="button"
-            className="text-destructive! hover:bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)]!"
-            onClick={() => {
-              setOpen(false);
-              void logout();
-            }}
-          >
-            <LogOut size={13} /> {t("signOut")}
-          </button>
-        </div>
-        <div className="border-t border-divider pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Mosael v{__APP_VERSION__}</div>
-      </PopoverContent>
+        <MenuSeparator />
+        {/* 直达「账号」那一节:侧栏底部已经有一个「设置」,而它回到的是上次停留的分区 ——
+            从账号菜单点进去的人要的是账号本身。 */}
+        <MenuItem
+          icon={<UserRound />}
+          label={t("railAccountSettings")}
+          onClick={() => {
+            setOpen(false);
+            gotoSettings("account");
+          }}
+        />
+        <MenuItem
+          icon={<LogOut />}
+          label={t("signOut")}
+          destructive
+          onClick={() => {
+            setOpen(false);
+            void logout();
+          }}
+        />
+        <MenuSeparator />
+        <div className="pb-0.5 text-center text-ui-2xs tabular-nums text-muted-foreground">Mosael v{__APP_VERSION__}</div>
+      </MenuContent>
     </Popover>
   );
 }
@@ -564,25 +560,23 @@ function RailButton({
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-          "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
-          compact && "justify-center px-0",
-          active &&
-            "bg-accent font-semibold text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-        )}
-          onClick={onClick}
-          aria-label={label}
-          aria-current={active ? "page" : undefined}
-        >
-          {children}
-          {!compact && <span className="truncate">{label}</span>}
-        </button>
-      </TooltipTrigger>
-      {compact && <TooltipContent side="right">{label}</TooltipContent>}
-    </Tooltip>
+    // 收起时只剩图标,名字放进悬停说明;展开时名字就写在按钮上,不再说一遍。
+    <Hint label={compact ? label : undefined} side="right">
+      <button
+        type="button"
+        className={cn(
+        "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
+        compact && "justify-center px-0",
+        active &&
+          "bg-accent font-semibold text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+      )}
+        onClick={onClick}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+      >
+        {children}
+        {!compact && <Truncate>{label}</Truncate>}
+      </button>
+    </Hint>
   );
 }

@@ -15,6 +15,7 @@ import {
   type AgentReference,
   type ReferenceKind,
 } from "@/features/agent/references";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /** 从文档里收出所有引用,按出现顺序去重。 */
@@ -285,7 +286,7 @@ export function ChatComposer({
               onClick={() => menu.choose(item)}
             >
               <ReferenceThumb kind={item.kind} id={item.id} />
-              <span className="min-w-0 flex-1 truncate text-ui-xs text-foreground">{item.name}</span>
+              <Truncate className="flex-1 text-ui-xs text-foreground">{item.name}</Truncate>
             </button>
           </React.Fragment>
         )}

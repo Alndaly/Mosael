@@ -2,6 +2,8 @@ import React from "react";
 import { Paperclip } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
@@ -71,7 +73,6 @@ export function AssetInlinePreview({
         src={src}
         onError={() => { if (stage < 2) setImageFailure({ assetId, stage: stage + 1 }); }}
         alt={name}
-        title={previewOnClick ? undefined : name}
         loading={lazy ? "lazy" : "eager"}
         className={className ?? "block max-h-[180px] w-auto max-w-full object-contain"}
         onLoad={(event) => {
@@ -82,19 +83,20 @@ export function AssetInlinePreview({
     );
     //: **不点开预览的时候连按钮都不要**。只把 onClick 摘掉的话,外面那层按钮和它的放大镜
     //: 光标还在 —— 鼠标一悬上去就说「这儿能点开」,点了却什么都不发生。
-    if (!previewOnClick) return picture;
+    if (!previewOnClick) return <Hint label={name}>{picture}</Hint>;
     return (
-      <button
-        type="button"
-        title={name}
-        className={cn(
-          "block max-w-full cursor-zoom-in overflow-hidden p-0",
-          plain ? "w-full border-0 bg-transparent" : "w-fit rounded-lg border border-border bg-black",
-        )}
-        onClick={openPreview}
-      >
-        {picture}
-      </button>
+      <Hint label={name}>
+        <button
+          type="button"
+          className={cn(
+            "block max-w-full cursor-zoom-in overflow-hidden p-0",
+            plain ? "w-full border-0 bg-transparent" : "w-fit rounded-lg border border-border bg-black",
+          )}
+          onClick={openPreview}
+        >
+          {picture}
+        </button>
+      </Hint>
     );
   }
   if (kind === "video") {
@@ -118,9 +120,7 @@ export function AssetInlinePreview({
   const label = (
     <>
       <Paperclip size={12} className="shrink-0" />
-      <span className="min-w-0 truncate" title={name}>
-        {name}
-      </span>
+      <Truncate>{name}</Truncate>
     </>
   );
   if (onOpenFile) {

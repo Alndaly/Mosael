@@ -10,11 +10,12 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { gotoJobPage, JobKindIcon, jobPage, queryKeysAffectedBy, shouldAnnounce, useJobKinds } from "@/components/jobs/jobKinds";
 import { relativeTime } from "@/lib/time";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Progress } from "@/components/ui/progress";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
@@ -164,22 +165,17 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative"
-              aria-label={t("taskCenter")}
-            >
-              {active.length > 0 ? <Loader2 size={15} className="animate-mosael-spin" /> : <Activity size={15} />}
-              {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{active.length}</em>}
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t("taskCenter")}</TooltipContent>
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <IconButton
+          variant="ghost"
+          size="icon"
+          className="relative"
+          label={t("taskCenter")}
+        >
+          {active.length > 0 ? <Loader2 size={15} className="animate-mosael-spin" /> : <Activity size={15} />}
+          {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{active.length}</em>}
+        </IconButton>
+      </PopoverTrigger>
 
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
@@ -266,9 +262,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
             <strong className="shrink-0">{meta.label}</strong>
             {/* 干的是谁的活:素材名/序列名/提示词。没有它,一列失败全长一个样。 */}
             {subject && (
-              <span className="min-w-0 truncate text-ui-xs text-muted-foreground" title={subject}>
-                {subject}
-              </span>
+              <Truncate className="text-ui-xs text-muted-foreground">{subject}</Truncate>
             )}
             {count > 1 && (
               <span className="shrink-0 rounded-full bg-secondary px-1.5 text-ui-2xs tabular-nums text-muted-foreground">
@@ -278,7 +272,9 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
           </span>
           <span className="inline-flex shrink-0 items-center gap-1 text-ui-2xs tabular-nums text-muted-foreground">
             {!running && (
-              <span title={job.updated_at}>{relativeTime(job.updated_at, locale)}</span>
+              <Hint label={new Date(job.updated_at).toLocaleString(locale)}>
+                <span>{relativeTime(job.updated_at, locale)}</span>
+              </Hint>
             )}
             {job.status === "succeeded" ? (
               <CheckCircle2 size={12} className="text-success" />
@@ -290,28 +286,31 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
               // 一次没报过进度就**别报数**。视频生成这类活儿,供应商只在做完时回一次结果,
               // 中间没有百分比可言 —— 而一个挂了五分钟的「0%」读起来就是"卡死了"
               // (真机反馈原话:一直挂在这个状态上没动)。这时有用的是**已经跑了多久**。
-              <span title={job.created_at}>{t("jobRunningFor").replace("{t}", relativeTime(job.created_at, locale))}</span>
+              <Hint label={new Date(job.created_at).toLocaleString(locale)}>
+                <span>{t("jobRunningFor").replace("{t}", relativeTime(job.created_at, locale))}</span>
+              </Hint>
             )}
             {running && onCancel && (
-              <button
+              <IconButton
+                unstyled
                 type="button"
                 className="ml-[3px] inline-grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-destructive"
-                title={t("jobCancel")}
-                aria-label={t("jobCancel")}
+                label={t("jobCancel")}
+                hint={t("jobCancelHint")}
                 onClick={(event) => {
                   event.stopPropagation();
                   onCancel();
                 }}
               >
                 <X size={11} />
-              </button>
+              </IconButton>
             )}
           </span>
         </div>
         {running && job.progress > 0 && <Progress value={Math.round(job.progress * 100)} />}
-        <small className={cn("truncate text-ui-xs text-muted-foreground", failed && "text-destructive")} title={job.error ?? job.message}>
+        <Truncate as="small" className={cn("text-ui-xs text-muted-foreground", failed && "text-destructive")}>
           {job.status === "failed" ? (job.error ?? job.message) : job.message}
-        </small>
+        </Truncate>
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { readHint } from "@/test/hint";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -125,7 +126,7 @@ describe("共享来的会话只能看", () => {
   it("左栏那一行没有右键菜单(改名、收纳、删除都是主人的事),也选不进批量删", async () => {
     const { writes } = renderStudio({ isMine: false });
     const row = await screen.findByRole("button", { name: /同事的海报/ });
-    expect(row).toHaveAttribute("title", "generationSessionReadOnly");
+    expect(await readHint(row)).toContain("generationSessionReadOnly");
     fireEvent.contextMenu(row);
     expect(screen.queryByRole("menuitem", { name: /rename/ })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: /delete/ })).toBeNull();

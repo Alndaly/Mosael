@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { FileText, Film, Music } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type Job } from "@/api/client";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { noteHref } from "@/lib/deepLink";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
@@ -73,11 +75,11 @@ export function JobResult({ job }: { job: Job }) {
           {visual.map((id, index) => {
             const asset = byId.get(id);
             return (
-              <button
+              <IconButton
+                unstyled
                 key={id}
                 type="button"
-                title={asset?.name ?? ""}
-                aria-label={asset?.name || t("imagePreviewTitle")}
+                label={asset?.name || t("imagePreviewTitle")}
                 onClick={() => openImagePreview({ ...gallery[index], gallery })}
                 className="relative aspect-square cursor-zoom-in overflow-hidden rounded-md border border-border bg-panel-inset p-0 hover:border-border-strong"
               >
@@ -85,7 +87,7 @@ export function JobResult({ job }: { job: Job }) {
                 {asset?.kind === "video" && (
                   <Film size={12} className="absolute bottom-1 right-1 text-[#e8eaed] drop-shadow" aria-hidden />
                 )}
-              </button>
+              </IconButton>
             );
           })}
         </div>
@@ -95,7 +97,7 @@ export function JobResult({ job }: { job: Job }) {
         .map((id) => (
           <div key={id} className="flex min-w-0 items-center gap-2 rounded-md bg-secondary/40 px-2 py-1.5">
             <Music size={14} className="shrink-0 text-muted-foreground" />
-            <span className="min-w-0 max-w-[40%] truncate text-ui-xs">{byId.get(id)?.name}</span>
+            <Truncate className="max-w-[40%] text-ui-xs">{byId.get(id)?.name}</Truncate>
             <audio controls preload="none" src={assetFileUrl(id)} className="h-7 min-w-0 flex-1" />
           </div>
         ))}
@@ -121,7 +123,7 @@ export function JobResult({ job }: { job: Job }) {
             className="inline-flex min-w-0 items-center gap-1.5 text-ui-xs text-primary hover:underline"
           >
             <FileText size={13} className="shrink-0" />
-            <span className="truncate">{one.title || t("documentUntitled")}</span>
+            <Truncate>{one.title || t("documentUntitled")}</Truncate>
           </a>
         ) : null,
       )}

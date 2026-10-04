@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Truncate } from "@/components/ui/truncate";
 import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import { CLONE_ENGINE, PODCAST_ENGINE } from "@/api/domains/speech";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
@@ -282,9 +283,7 @@ function RecentAudio({ workspace, source }: { workspace: Workspace; source: stri
         {recent.map((asset) => (
           <li key={asset.id} className="grid gap-1.5 py-2.5">
             <div className="flex min-w-0 items-baseline justify-between gap-3">
-              <span className="min-w-0 truncate text-ui-sm" title={asset.name}>
-                {asset.name}
-              </span>
+              <Truncate className="text-ui-sm">{asset.name}</Truncate>
               {asset.created_at && (
                 <span className={cn("shrink-0 text-ui-2xs text-muted-foreground tabular-nums")}>
                   {relativeTime(asset.created_at, locale)}

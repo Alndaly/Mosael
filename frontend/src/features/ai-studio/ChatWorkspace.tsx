@@ -28,7 +28,9 @@ import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
@@ -451,9 +453,7 @@ export function ChatWorkspace({
           <>
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
               进了子代理它变成面包屑的第一段,回来它就是标题本身。空会话仍保留弹性间距,分开模式与视图切换。 */}
-          <span className="min-w-0 flex-1 truncate text-ui-sm font-medium text-foreground" title={activeSession?.title}>
-            {activeSession?.title}
-          </span>
+          <Truncate className="flex-1 text-ui-sm font-medium text-foreground">{activeSession?.title}</Truncate>
           <div className={SEGMENTED_LIST} role="tablist" aria-label={t("chatSessionsTitle")}>
             {(["chat", "trace"] as const).map((item) => (
               <button
@@ -470,7 +470,7 @@ export function ChatWorkspace({
           </div>
           </>
           )}
-          <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("agentInspectorTitle")} title={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>
+          <IconButton variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" label={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></IconButton>
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">
@@ -635,7 +635,7 @@ export function ChatWorkspace({
                     <div className="flex items-center gap-1.5">
                       {noteAttach.trigger}
                       {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
-                      <Button asChild variant="ghost" size="icon-xs" aria-label={t("attachFile")} disabled={attach.uploading}>
+                      <IconButton asChild variant="ghost" size="icon-xs" label={t("attachFile")} disabled={attach.uploading}>
                         <label>
                           <input
                             type="file"
@@ -648,7 +648,7 @@ export function ChatWorkspace({
                           />
                           {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
                         </label>
-                      </Button>
+                      </IconButton>
                       {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
                       <DictateButton
                         onText={(text) =>
@@ -674,26 +674,30 @@ export function ChatWorkspace({
                         works it stops the turn, and the moment you type something it becomes send
                         again — because then the obvious intent is to say that, not to stop. */}
                     {showStop ? (
-                      <Button
+                      <IconButton
                         type="button"
+                        variant="default"
                         size="icon"
                         className="shrink-0 rounded-full"
-                        aria-label={t("chatStop")}
+                        label={t("chatStop")}
                         loading={stopTurn.isPending}
                         onClick={() => stopTurn.mutate()}
                       >
                         <Square size={13} fill="currentColor" />
-                      </Button>
+                      </IconButton>
                     ) : (
-                      <Button
+                      <IconButton
                         type="submit"
+                        variant="default"
                         size="icon"
                         className="shrink-0 rounded-full"
-                        aria-label={running ? t("chatSteer") : t("chatSend")}
+                        label={running ? t("chatSteer") : t("chatSend")}
+                        hint={running ? t("chatSteerHint") : undefined}
                         disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
+                        disabledReason={attach.uploading ? t("composerUploading") : undefined}
                       >
                         <Send size={15} />
-                      </Button>
+                      </IconButton>
                     )}
                   </div>
                 </form>
@@ -809,8 +813,8 @@ function ChatInspector({
           说的是同一件事)。留下的是**看了会改变你下一步动作**的:在哪个工作区、用哪个模型、
           有没有消息在排队、有没有回合失败。 */}
       <InspectorCard icon={Database} title={t("agentInspectorOverview")}>
-        <InspectorRow label={t("agentWorkspace")} value={workspace.name} title={workspace.name} />
-        <InspectorRow label={t("agentModel")} value={effectiveModel || "—"} title={effectiveModel} />
+        <InspectorRow label={t("agentWorkspace")} value={workspace.name} />
+        <InspectorRow label={t("agentModel")} value={effectiveModel || "—"} />
         {/* 排队只在真有东西排队时出现 —— 一个常驻的 0 不构成信息。 */}
         {queue.length > 0 && <InspectorRow label={t("agentMetricQueue")} value={queue.length} />}
         {failedCount > 0 && (
@@ -953,15 +957,16 @@ export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
           </span>
         )}
       </span>
-      <span
-        className={cn(
-          "min-w-0 break-words text-ui-xs leading-[1.5] text-muted-foreground",
-          !open && "line-clamp-2",
-        )}
-      >
-        {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。 */}
-        <InlineMarkdown text={tool.description} links={false} />
-      </span>
+      {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。收着时露两行,点开看全。 */}
+      {open ? (
+        <span className="min-w-0 break-words text-ui-xs leading-[1.5] text-muted-foreground">
+          <InlineMarkdown text={tool.description} links={false} />
+        </span>
+      ) : (
+        <Truncate lines={2} className="text-ui-xs leading-[1.5] text-muted-foreground">
+          <InlineMarkdown text={tool.description} links={false} />
+        </Truncate>
+      )}
     </button>
   );
 }

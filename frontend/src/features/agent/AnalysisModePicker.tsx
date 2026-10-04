@@ -4,6 +4,7 @@ import { Film } from "lucide-react";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Hint } from "@/components/ui/tooltip";
 import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -25,13 +26,15 @@ export function AnalysisModePicker({ workspaceId, session }: { workspaceId: stri
   return (
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题。
     <Select key={value} value={value} onValueChange={(next) => setMode.mutate({ analysis_video_mode: next })}>
-      <SelectTrigger size="sm" className="w-full text-xs text-muted-foreground" aria-label={t("analysisModeLabel")} title={t("analysisModeHint")}>
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Film size={13} className="shrink-0 opacity-70" />
-          <SelectValue />
-        </span>
-      </SelectTrigger>
-      <SelectContent className="max-w-none">
+      <Hint label={t("analysisModeHint")}>
+        <SelectTrigger size="sm" className="w-full text-xs text-muted-foreground" aria-label={t("analysisModeLabel")}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Film size={13} className="shrink-0 opacity-70" />
+            <SelectValue />
+          </span>
+        </SelectTrigger>
+      </Hint>
+      <SelectContent>
         {MODES.map((mode) => (
           <SelectItem key={mode} value={mode}>
             {label(mode)}

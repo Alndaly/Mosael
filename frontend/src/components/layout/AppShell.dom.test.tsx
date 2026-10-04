@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { readHint } from "@/test/hint";
 import { AppShell } from "./AppShell";
 import { usePageTrail } from "./pageTrail";
 import { NAV_ITEMS } from "./navLabels";
@@ -72,20 +73,20 @@ it("keeps workspace switching and management reachable from both sidebar sizes",
   for (const compact of [false, true]) {
     if (compact) fireEvent.click(screen.getByRole("button", { name: "navCollapse" }));
     fireEvent.click(screen.getByRole("button", { name: "workspaceSwitch" }));
-    const popup = await screen.findByRole("dialog");
+    const popup = await screen.findByRole("menu", { name: "workspaceSwitch" });
     expect(within(popup).getByRole("button", { name: "rename: Studio" })).toBeEnabled();
     expect(within(popup).getByRole("button", { name: "rename: Second studio" })).toBeDisabled();
     expect(within(popup).getByRole("button", { name: "delete: Second studio" })).toBeDisabled();
     // 灰掉的按钮说原因(和设置页同一份门槛,见 workspaceMenu)
-    expect(within(popup).getByRole("button", { name: "rename: Second studio" })).toHaveAttribute("title", "workspaceRenameNeedsAdmin");
-    expect(within(popup).getByRole("button", { name: "delete: Second studio" })).toHaveAttribute("title", "workspaceDeleteNeedsOwner");
-    expect(within(popup).getByRole("button", { name: "delete: Studio" })).toHaveAttribute("title", "delete");
-    expect(within(popup).getByRole("button", { name: "workspaceNew" })).toBeEnabled();
+    expect(await readHint(within(popup).getByRole("button", { name: "rename: Second studio" }))).toContain("workspaceRenameNeedsAdmin");
+    expect(await readHint(within(popup).getByRole("button", { name: "delete: Second studio" }))).toContain("workspaceDeleteNeedsOwner");
+    expect(await readHint(within(popup).getByRole("button", { name: "delete: Studio" }))).toBe("delete: Studio");
+    expect(within(popup).getByRole("menuitem", { name: "workspaceNew" })).toBeEnabled();
     fireEvent.change(within(popup).getByRole("textbox", { name: "workspaceSearch" }), { target: { value: "Second" } });
     expect(within(popup).queryByRole("button", { name: "rename: Studio" })).not.toBeInTheDocument();
-    fireEvent.click(within(popup).getByRole("button", { name: "Second studio" }));
+    fireEvent.click(within(popup).getByRole("menuitemradio", { name: "Second studio" }));
     expect(select).toHaveBeenLastCalledWith("b");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   }
 });
 
@@ -125,7 +126,7 @@ it("账号菜单说出账号从哪来;「账号设置」直达设置里的账号
   state.user = { username: "ada", oauth_providers: ["google"] };
   mount();
   fireEvent.click(screen.getByRole("button", { name: "ada" }));
-  const popup = await screen.findByRole("dialog");
+  const popup = await screen.findByRole("menu", { name: "ada" });
   // 文案表被桩成原样回 key:两半都在,说明服务器那一半和登录方式那一半都接上了。
   expect(within(popup).getByText("railLocalAccount · railSignedInWith")).toBeVisible();
   expect(within(popup).queryByText(/^@ada · /)).toBeNull();
@@ -133,7 +134,7 @@ it("账号菜单说出账号从哪来;「账号设置」直达设置里的账号
   const opened = vi.fn();
   const listener = (event: Event) => opened((event as CustomEvent<string>).detail);
   window.addEventListener("mosael:open-settings", listener);
-  fireEvent.click(within(popup).getByRole("button", { name: "railAccountSettings" }));
+  fireEvent.click(within(popup).getByRole("menuitem", { name: "railAccountSettings" }));
   window.removeEventListener("mosael:open-settings", listener);
   expect(window.location.hash).toBe("#/settings");
   expect(opened).toHaveBeenCalledWith("account");

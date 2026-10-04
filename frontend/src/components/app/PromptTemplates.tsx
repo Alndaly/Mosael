@@ -3,8 +3,9 @@ import { LayoutTemplate } from "lucide-react";
 
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -85,17 +86,16 @@ export function PromptTemplateButton({ onPick, className }: { onPick: (prompt: s
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <IconButton
           type="button"
           variant="ghost"
           size="icon-xs"
           className={className}
-          aria-label={t("promptTemplates")}
-          title={t("promptTemplates")}
+          label={t("promptTemplates")}
           data-prompt-templates=""
         >
           <LayoutTemplate size={14} />
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(520px,calc(100vw-16px))] p-0">
         <div className="grid grid-cols-[8.5rem_minmax(0,1fr)]">
@@ -129,7 +129,7 @@ export function PromptTemplateButton({ onPick, className }: { onPick: (prompt: s
                 className="grid cursor-pointer gap-0.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-secondary"
               >
                 <span className="text-ui-xs font-medium text-foreground">{t(one.title)}</span>
-                <span className="line-clamp-2 text-ui-2xs leading-relaxed text-muted-foreground">{t(one.prompt)}</span>
+                <Truncate lines={2} className="text-ui-2xs leading-relaxed text-muted-foreground">{t(one.prompt)}</Truncate>
               </button>
             ))}
           </div>

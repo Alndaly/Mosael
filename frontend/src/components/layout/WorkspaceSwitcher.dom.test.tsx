@@ -80,7 +80,7 @@ it("新建之后立刻出现在列表里,并且切了过去", async () => {
   const { client, resolved } = shell();
   await screen.findByRole("button", { name: new RegExp(zh.workspaceSwitch) });
   fireEvent.click(screen.getByRole("button", { name: new RegExp(zh.workspaceSwitch) }));
-  fireEvent.click(await screen.findByRole("button", { name: zh.workspaceNew }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: zh.workspaceNew }));
   const box = await screen.findByRole("textbox");
   fireEvent.change(box, { target: { value: "新工作区" } });
   // jsdom 不会因为点提交按钮而提交表单,直接发 submit —— 测的是提交之后发生什么。

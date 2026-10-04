@@ -1,5 +1,6 @@
 import { Circle, CircleCheck, CircleDot, CircleX } from "lucide-react";
 
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -50,8 +51,6 @@ export function AgentStatusIcon({
  */
 export function ToolName({ name, className }: { name: string; className?: string }) {
   return (
-    <span className={cn("min-w-0 truncate font-mono text-ui-sm font-[650] text-foreground", className)} title={name}>
-      {name}
-    </span>
+    <Truncate className={cn("font-mono text-ui-sm font-[650] text-foreground", className)}>{name}</Truncate>
   );
 }

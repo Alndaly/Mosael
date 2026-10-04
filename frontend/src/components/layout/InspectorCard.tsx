@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -80,13 +81,11 @@ export function InspectorCard({
 }
 
 /** 一行事实:左标签、右值。检查器里所有"某某是什么"都长这样。 */
-export function InspectorRow({ label, value, title }: { label: string; value: React.ReactNode; title?: string }) {
+export function InspectorRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="grid min-h-6 grid-cols-[64px_minmax(0,1fr)] items-center gap-3">
-      <span className="truncate text-ui-sm text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-ui-sm font-medium text-foreground" title={title}>
-        {value}
-      </span>
+      <Truncate className="text-ui-sm text-muted-foreground">{label}</Truncate>
+      <Truncate className="text-ui-sm font-medium text-foreground">{value}</Truncate>
     </div>
   );
 }

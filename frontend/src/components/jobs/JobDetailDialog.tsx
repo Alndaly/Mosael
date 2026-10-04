@@ -15,6 +15,8 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
 import { Progress } from "@/components/ui/progress";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -84,16 +86,17 @@ export function JobDetailDialog({
         current ? (
           <>
             {active && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="mr-auto hover:border-destructive/50 hover:text-destructive"
-                loading={stop.isPending}
-                title={t("jobCancelHint")}
-                onClick={() => stop.mutate()}
-              >
-                <Square size={13} /> {t("jobCancel")}
-              </Button>
+              <Hint label={t("jobCancelHint")}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mr-auto hover:border-destructive/50 hover:text-destructive"
+                  loading={stop.isPending}
+                  onClick={() => stop.mutate()}
+                >
+                  <Square size={13} /> {t("jobCancel")}
+                </Button>
+              </Hint>
             )}
             {onGoto && <Button size="sm" variant="outline" onClick={onGoto}><ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}</Button>}
             <Button size="sm" onClick={onClose}>{t("close")}</Button>
@@ -122,7 +125,7 @@ export function JobDetailDialog({
               )}
               {runStatusText(t, active ? "running" : current.status)}
             </span>
-            <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</span>
+            <Truncate className="text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</Truncate>
           </div>
 
           {active && <Progress className="my-0.5" value={Math.round(current.progress * 100)} />}

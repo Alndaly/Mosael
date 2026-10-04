@@ -68,7 +68,6 @@ export function SpeakButton({
       type="button"
       className={cn(FOOTER_ACTION_CLASS, className)}
       aria-label={active ? t("speakStop") : t("speak")}
-      title={active ? t("speakStop") : t("speak")}
       disabled={busy || !text.trim()}
       onClick={() => (active ? stopPlayback() : void play())}
     >

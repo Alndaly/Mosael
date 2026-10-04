@@ -3,6 +3,7 @@ import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -240,34 +241,35 @@ export function VideoPlayer({
 
       {/* 没在播时压一个大的播放键 —— 一块静止的画面本身看不出它是段视频。 */}
       {!playing && (
-        <button
+        <IconButton
+          unstyled
           type="button"
-          aria-label={t("boardPlay")}
+          label={t("boardPlay")}
           onClick={toggle}
           className="absolute inset-0 grid cursor-pointer place-items-center bg-black/10 transition-colors hover:bg-black/20"
         >
           <span className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
             <Play size={15} className="translate-x-px" fill="currentColor" />
           </span>
-        </button>
+        </IconButton>
       )}
 
       {/* 控件条悬停才出现;藏起来时连指针事件一起收掉(透明不等于不吃事件)。 */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-[opacity,transform] duration-150 group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100 group-focus-within/player:pointer-events-auto group-focus-within/player:translate-y-0 group-focus-within/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
-          <button type="button" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          <IconButton unstyled type="button" label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
-          </button>
+          </IconButton>
           <span className="text-ui-2xs tabular-nums opacity-90">
             {compact ? mediaClock(total) : `${mediaClock(at)} / ${mediaClock(total)}`}
           </span>
-          <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          <IconButton unstyled type="button" label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-          </button>
-          <button type="button" aria-label={t("boardFullscreen")} onClick={() => onExpand ? onExpand() : void ref.current?.requestFullscreen?.()} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          </IconButton>
+          <IconButton unstyled type="button" label={t("boardFullscreen")} onClick={() => onExpand ? onExpand() : void ref.current?.requestFullscreen?.()} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             <Maximize2 size={13} />
-          </button>
+          </IconButton>
         </div>
       </div>
     </div>
@@ -306,23 +308,24 @@ export function AudioPlayerBar({
         onLoadedMetadata={(event) => setTotal(event.currentTarget.duration)}
         {...bind}
       />
-      <button
+      <IconButton
+        unstyled
         type="button"
-        aria-label={t(playing ? "boardPause" : "boardPlay")}
+        label={t(playing ? "boardPause" : "boardPlay")}
         onClick={toggle}
         className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-action text-action-foreground transition-opacity hover:opacity-90"
       >
         {playing ? <Pause size={12} fill="currentColor" /> : <Play size={12} className="translate-x-px" fill="currentColor" />}
-      </button>
+      </IconButton>
       {/* 卡片式布局(调用方在上面已经摆了一枚大音符)可以把它关掉,免得一枚条里两枚图标。 */}
       {showIcon && <Music size={13} className="shrink-0 opacity-60" />}
       <Scrubber media={ref} at={at} total={total} className="min-w-0 flex-1 text-primary" trackClassName="bg-border-strong" />
       <span className="shrink-0 text-ui-2xs tabular-nums">
         {mediaClock(at)} / {mediaClock(total)}
       </span>
-      <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
+      <IconButton unstyled type="button" label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
         {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-      </button>
+      </IconButton>
     </div>
   );
 }

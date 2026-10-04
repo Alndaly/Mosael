@@ -6,7 +6,8 @@ import { ArrowLeftRight, Music, Plus, X } from "lucide-react";
 import { assetPreviewUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
 
 /**
@@ -88,35 +89,36 @@ function Tile({
   if (slot && !isEmptySlot(slot)) {
     return (
       <div className="relative">
-        <button
-          type="button"
-          className={`${TILE} cursor-zoom-in p-0`}
-          onClick={() =>
-            isAudio
-              ? undefined
-              : openImagePreview({ src: assetPreviewUrl(slot.assetId), title: slot.assetName || t(copy.label) })
-          }
-        >
-          {isAudio ? (
-            <span className="flex items-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
-              <Music size={13} />
-              <span className="truncate">{slot.assetName}</span>
+        {isAudio ? (
+          <button type="button" className={`${TILE} cursor-zoom-in p-0`}>
+            <span className="flex min-w-0 items-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
+              <Music size={13} className="shrink-0" />
+              <Truncate>{slot.assetName}</Truncate>
             </span>
-          ) : (
+          </button>
+        ) : (
+          //: 只有一张缩略图:名字放进悬停说明(也是读屏念的名字)。
+          <IconButton
+            unstyled
+            type="button"
+            className={`${TILE} cursor-zoom-in p-0`}
+            label={slot.assetName || t(copy.label)}
+            onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: slot.assetName || t(copy.label) })}
+          >
             <img className="block h-full w-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
-          )}
-        </button>
+          </IconButton>
+        )}
         {onClear && !disabled && (
-          <Button
+          <IconButton
             type="button"
             variant="ghost"
             size="icon"
             className="absolute right-1 top-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background"
             onClick={onClear}
-            aria-label={t("delete")}
+            label={t("delete")}
           >
             <X size={11} />
-          </Button>
+          </IconButton>
         )}
       </div>
     );
@@ -136,18 +138,32 @@ function Tile({
           if (files.length) onPick(files);
         }}
       />
-      <button
-        type="button"
-        disabled={disabled}
-        className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
-        onClick={() => inputRef.current?.click()}
-      >
-        {/* 加号和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
-        <span className="flex items-center gap-1 px-1.5">
+      {label ? (
+        <button
+          type="button"
+          disabled={disabled}
+          className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
+          onClick={() => inputRef.current?.click()}
+        >
+          {/* 加号和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
+          <span className="flex min-w-0 items-center gap-1 px-1.5">
+            <Plus size={14} className="shrink-0" />
+            <Truncate>{label}</Truncate>
+          </span>
+        </button>
+      ) : (
+        //: 只有一个加号:角色名放进悬停说明(也是读屏念的名字)。
+        <IconButton
+          unstyled
+          type="button"
+          disabled={disabled}
+          label={t(copy.label)}
+          className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
+          onClick={() => inputRef.current?.click()}
+        >
           <Plus size={14} />
-          {label && <span className="truncate">{label}</span>}
-        </span>
-      </button>
+        </IconButton>
+      )}
     </>
   );
 }
@@ -276,18 +292,19 @@ export function KeyframePairField({
             onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
             label={t("genFirstFrame")}
           />
-          <Button
+          <IconButton
             type="button"
             variant="ghost"
             size="icon"
             className="mx-auto h-6 w-6"
             disabled={!canSwap}
             onClick={() => onChange({ first: last, last: first })}
-            aria-label={t("genSwapKeyframes")}
-            title={t("genSwapKeyframes")}
+            label={t("genSwapKeyframes")}
+            //: 整组被锁住时上面已经写了原因;这里只说「少了一张」这一种。
+            disabledReason={!disabled && !canSwap ? t("genSwapKeyframesNeedsBoth") : undefined}
           >
             <ArrowLeftRight size={13} />
-          </Button>
+          </IconButton>
           <Tile
             slot={lastSlot}
             role="last_frame"

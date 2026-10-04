@@ -1,7 +1,7 @@
 import { Spline, Waypoints, type LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -58,18 +58,17 @@ export function EdgeShapeToggle({ value, onChange }: { value: EdgeShape; onChang
       {EDGE_SHAPES.map((shape) => {
         const Icon = EDGE_SHAPE_ICON[shape];
         return (
-          <Button
+          <IconButton
             key={shape}
             variant={value === shape ? "secondary" : "ghost"}
             size="icon-sm"
             className={cn(value === shape && "bg-secondary text-foreground")}
-            aria-label={t(EDGE_SHAPE_LABEL[shape])}
-            title={t(EDGE_SHAPE_LABEL[shape])}
+            label={t(EDGE_SHAPE_LABEL[shape])}
             aria-pressed={value === shape}
             onClick={() => onChange(shape)}
           >
             <Icon size={13} />
-          </Button>
+          </IconButton>
         );
       })}
     </div>

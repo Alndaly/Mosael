@@ -8,6 +8,8 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import { cn } from "@/lib/utils";
@@ -80,21 +82,24 @@ export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: str
      * 手填的别名),这一格就永远停在「读取模型…」—— 用户看到的是一个一直转不完的东西,
      * 而它其实已经有结论了:我们不认识这个模型,发不出档位。
      */
-    const reason = models.isPending || effective.pending ? t("modelListLoading") : t("agentThinkingUnavailable");
+    const unavailable = !(models.isPending || effective.pending);
+    const reason = unavailable ? t("agentThinkingUnavailable") : t("modelListLoading");
+    //: 按钮一直是禁用的,说明挂在 Hint 给它套的壳上:读取中只说「读取中」,发不出时再说一句怎么办。
     return (
-      <button
-        type="button"
-        disabled
-        className={cn(
-          fieldTriggerClass("sm"),
-          "text-xs text-muted-foreground",
-        )}
-        aria-label={reason}
-        title={models.isPending ? reason : `${reason}\n${t("agentThinkingUnavailableHint")}`}
-      >
-        <Brain size={13} className="shrink-0 opacity-70" />
-        <span className="min-w-0 truncate">{reason}</span>
-      </button>
+      <Hint label={unavailable ? reason : undefined} disabledReason={unavailable ? t("agentThinkingUnavailableHint") : reason}>
+        <button
+          type="button"
+          disabled
+          className={cn(
+            fieldTriggerClass("sm"),
+            "text-xs text-muted-foreground",
+          )}
+          aria-label={reason}
+        >
+          <Brain size={13} className="shrink-0 opacity-70" />
+          <Truncate>{reason}</Truncate>
+        </button>
+      </Hint>
     );
   }
   /*
@@ -133,14 +138,13 @@ export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: str
         size="sm"
         className="w-full justify-between text-xs text-muted-foreground"
         aria-label={t("agentThinkingLevel")}
-        title={t("agentThinkingLevel")}
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <Brain size={13} className="shrink-0 opacity-70" />
           <SelectValue />
         </span>
       </SelectTrigger>
-      <SelectContent className="max-w-none">
+      <SelectContent>
         {offered.map((level) => (
           <SelectItem key={level} value={level}>
             {label(level)}

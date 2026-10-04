@@ -3,7 +3,7 @@ import { Maximize2, Music2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { fetchWaveform } from "@/api/client";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { mediaClock, usePlayback, useScrub } from "./media-playback";
 
@@ -76,13 +76,13 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
           style={{ "--media-progress": `${duration ? shown / duration * 100 : 0}%` } as React.CSSProperties}
           className="media-preview-range h-4 w-full cursor-pointer disabled:cursor-default" />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Button variant="ghost" size="icon-sm" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle}>
+          <IconButton variant="ghost" size="icon-sm" label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle}>
             {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
-          </Button>
+          </IconButton>
           <span className="mr-auto text-ui-xs tabular-nums text-muted-foreground">{mediaClock(shown)} / {mediaClock(duration)}</span>
-          <Button variant="ghost" size="icon-sm" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute}>
+          <IconButton variant="ghost" size="icon-sm" label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute}>
             {muted || volume === 0 ? <VolumeX /> : <Volume2 />}
-          </Button>
+          </IconButton>
           <input type="range" aria-label={t("mediaVolume")} min={0} max={1} step="0.05" value={muted ? 0 : volume}
             onChange={(event) => { if (ref.current) { ref.current.volume = Number(event.target.value); ref.current.muted = false; } }}
             style={{ "--media-progress": `${muted ? 0 : volume * 100}%` } as React.CSSProperties}
@@ -94,10 +94,10 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
             <SelectTrigger aria-label={t("mediaSpeed")} size="sm" className="w-20 border-transparent bg-control text-ui-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => <SelectItem key={rate} value={String(rate)}>{rate}×</SelectItem>)}</SelectContent>
           </Select>
-          {kind === "video" && <Button variant="ghost" size="icon-sm" aria-label={t("boardFullscreen")} onClick={() => {
+          {kind === "video" && <IconButton variant="ghost" size="icon-sm" label={t("boardFullscreen")} onClick={() => {
             if (document.fullscreenElement === frame.current) void document.exitFullscreen();
             else void frame.current?.requestFullscreen?.();
-          }}><Maximize2 /></Button>}
+          }}><Maximize2 /></IconButton>}
         </div>
       </div>
     </div>

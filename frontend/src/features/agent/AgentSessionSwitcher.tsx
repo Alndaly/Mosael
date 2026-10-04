@@ -1,8 +1,12 @@
 import React from "react";
-import { Check, ChevronDown, Eye, Search, Trash2 } from "lucide-react";
+import { ChevronDown, Eye, Search, Trash2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export interface AgentSessionChoice {
@@ -57,19 +61,14 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
           type="button"
           className="group/session flex h-7 w-fit min-w-0 max-w-full cursor-pointer items-center gap-1 overflow-hidden border-0 bg-transparent px-0 text-left text-ui-sm font-semibold text-foreground hover:text-primary"
           aria-label={t("wfAgentSessions")}
-          title={title}
         >
-          <span className="min-w-0 truncate">{title}</span>
+          <Truncate>{title}</Truncate>
           <span className="grid size-[18px] shrink-0 place-items-center rounded-md text-muted-foreground transition-colors group-hover/session:bg-secondary group-hover/session:text-foreground">
             <ChevronDown size={11} className={cn("transition-transform duration-100", open && "rotate-180")} />
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="z-[120] w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
-        aria-label={t("wfAgentSessions")}
-      >
+      <MenuContent align="start" className="z-[120] gap-0 overflow-hidden p-0" label={t("wfAgentSessions")}>
         <label className="flex h-9 items-center gap-2 border-b border-border px-2.5 text-muted-foreground focus-within:text-foreground">
           <Search size={13} className="shrink-0" aria-hidden="true" />
           <input
@@ -82,7 +81,7 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
             className="min-w-0 flex-1 border-0 bg-transparent p-0 text-ui-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:appearance-none"
           />
         </label>
-        <div className="max-h-[min(280px,var(--radix-popover-content-available-height))] overflow-y-auto p-1.5">
+        <div className="grid max-h-[min(280px,var(--radix-popover-content-available-height))] gap-0.5 overflow-y-auto p-1.5">
           {visibleSessions.length === 0 ? (
             <p className="m-0 px-2.5 py-5 text-center text-ui-sm text-muted-foreground">
               {/* 一条都没有和搜不到是两回事 —— 没输搜索词时说「没有匹配」是在答一个没人问的问题。 */}
@@ -93,28 +92,27 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
               <div
                 key={session.id}
                 className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-md hover:bg-secondary",
+                  "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-md",
                   session.id === activeSession?.id && "bg-secondary",
                 )}
               >
-                <button
-                  type="button"
-                  className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-ui-md text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
-                  title={session.is_mine ? undefined : t("chatSessionReadOnly")}
+                <MenuItem
+                  role="menuitemradio"
+                  checked={session.id === activeSession?.id}
+                  label={session.title}
+                  truncate
+                  className="[&_svg]:text-primary"
                   onClick={() => {
                     setMenuOpen(false);
                     onSelect(session.id);
                   }}
-                >
-                  <span>{session.title}</span>
-                  {session.id === activeSession?.id && <Check size={13} />}
-                </button>
+                />
                 {session.is_mine ? (
-                  <button
+                  <IconButton
+                    unstyled
                     type="button"
                     className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
-                    aria-label={`${t("delete")}: ${session.title}`}
-                    title={t("delete")}
+                    label={`${t("delete")}: ${session.title}`}
                     disabled={deleting}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -123,15 +121,20 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
                     }}
                   >
                     <Trash2 size={13} />
-                  </button>
+                  </IconButton>
                 ) : (
-                  <Eye size={13} className="justify-self-center text-muted-foreground" aria-hidden />
+                  //: 同事共享来的:眼睛说明为什么没有删除、点进去为什么只能看。
+                  <Hint label={t("chatSessionReadOnly")}>
+                    <span role="img" aria-label={t("chatSessionReadOnly")} className="grid justify-self-center text-muted-foreground">
+                      <Eye size={13} />
+                    </span>
+                  </Hint>
                 )}
               </div>
             ))
           )}
         </div>
-      </PopoverContent>
+      </MenuContent>
     </Popover>
   );
 }

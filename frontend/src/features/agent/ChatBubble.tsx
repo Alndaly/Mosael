@@ -16,6 +16,8 @@ import { UserMessageContent } from "@/features/agent/userMessage";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice } from "@/features/agent/JobReceiptNotice";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 import type { AgentMessageQuote } from "@/api/domains/sessions";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -32,7 +34,7 @@ export type AgentMessage = components["schemas"]["AgentMessageOut"];
  * 「这条是另一个智能体会话发来的」。
  *
  * 显示的是**对方会话的标题**,不是它的 id:一串 32 位十六进制对读的人没有任何意义,而标题
- * 正好是那次对话在左侧列表里的名字 —— 看到就知道是哪一个。id 留在 title 属性里备查。
+ * 正好是那次对话在左侧列表里的名字 —— 看到就知道是哪一个。id 放在悬停说明里备查。
  */
 function AgentOrigin({ sessionId }: { sessionId: string }) {
   const t = useI18n();
@@ -44,16 +46,18 @@ function AgentOrigin({ sessionId }: { sessionId: string }) {
   });
   const title = source.data?.title?.trim();
   return (
-    <span className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground" title={sessionId}>
-      <Bot size={12} className="flex-none" />
-      <span className="font-medium">{t("chatFromAgentSession")}</span>
-      {title && (
-        <>
-          <span aria-hidden>·</span>
-          <span className="min-w-0 truncate">{title}</span>
-        </>
-      )}
-    </span>
+    <Hint label={title || sessionId} hint={title ? sessionId : undefined}>
+      <span className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground">
+        <Bot size={12} className="flex-none" />
+        <span className="font-medium">{t("chatFromAgentSession")}</span>
+        {title && (
+          <>
+            <span aria-hidden>·</span>
+            <Truncate>{title}</Truncate>
+          </>
+        )}
+      </span>
+    </Hint>
   );
 }
 

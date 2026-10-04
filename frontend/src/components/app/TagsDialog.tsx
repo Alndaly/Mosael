@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 
@@ -69,14 +70,15 @@ export function TagsDialog({
                 key={tag}
               >
                 {tag}
-                <button
+                <IconButton
+                  unstyled
                   type="button"
-                  aria-label={t("delete")}
+                  label={t("mediaRemoveTag").replace("{tag}", tag)}
                   className="ml-px grid place-items-center border-0 bg-transparent p-0 text-inherit opacity-70 hover:opacity-100"
                   onClick={() => setTags((current) => current.filter((item) => item !== tag))}
                 >
                   <X size={10} />
-                </button>
+                </IconButton>
               </span>
             ))}
           </div>

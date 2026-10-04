@@ -6,6 +6,8 @@ import { InspectorCard } from "@/components/layout/InspectorCard";
 import { Input } from "@/components/ui/input";
 import { OptionPicker, type PickerOption } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
 
 /**
@@ -45,13 +47,15 @@ export function ParameterField({
   label: string;
   /** 控件下面那句解释。可省 —— 不必为每一栏硬凑一句。 */
   hint?: React.ReactNode;
-  /** 悬停在标签上看到的那句(原始的「节点 · 输入名」这类排错用的字,不值得占一行)。 */
+  /** 悬停在标签上看到的那句说明(原始的「节点 · 输入名」这类排错用的字,不值得占一行)。 */
   title?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="grid gap-1.5 text-ui-sm text-muted-foreground">
-      <span title={title}>{label}</span>
+      <Hint label={title}>
+        <span>{label}</span>
+      </Hint>
       {children}
       {hint != null && <span className="text-ui-2xs leading-[1.45] text-muted-foreground">{hint}</span>}
     </label>
@@ -64,7 +68,7 @@ export function ParameterField({
  * 此前是写死的 `112px | 1fr` 两列:参数名一长(`CheckpointLoaderSimple · ckpt_name`)就折成两行,
  * 再长就溢进控件那一列。现在两件事一起兜住:
  *
- * - 标签**单行截断**,全名在悬停提示里(`title`)—— 两列时每一行一样高,扫一眼对得齐;
+ * - 标签**单行截断**,截断了悬停看全名;给了 `title`(全名 + 说明)就悬停看它 —— 两列时每一行一样高,扫一眼对得齐;
  * - 按**容器**宽度而不是视口宽度决定两列还是上下叠(容器查询):同一个弹层放在窄的节点旁边、
  *   或者被挤窄时,标签到控件上面去,控件拿满整行,不会只剩一小截。
  */
@@ -74,16 +78,22 @@ export function ParameterRow({
   children,
 }: {
   label: string;
-  /** 悬停在标签上看到的全文。不给就是标签本身(截断之后得有地方看全)。 */
+  /**
+   * 悬停在标签上看到的全文(全名 + 说明)。不给就只在标签被截断时悬停看全名。
+   * 和标签不一样时(多出了说明)不管截没截断都出 —— 说明本身就值得看。
+   */
   title?: string;
   children: React.ReactNode;
 }) {
+  const name = (
+    <Truncate data-slot="parameter-label" className="text-ui-xs text-muted-foreground" text={title || label}>
+      {label}
+    </Truncate>
+  );
   return (
     <div className="@container/parameter-row min-w-0">
       <div className="grid min-w-0 gap-1.5 @[280px]/parameter-row:grid-cols-[112px_minmax(0,1fr)] @[280px]/parameter-row:items-center @[280px]/parameter-row:gap-3">
-        <span data-slot="parameter-label" className="min-w-0 truncate text-ui-xs text-muted-foreground" title={title || label}>
-          {label}
-        </span>
+        {title && title !== label ? <Hint label={title}>{name}</Hint> : name}
         {children}
       </div>
     </div>

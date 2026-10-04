@@ -1,6 +1,6 @@
 import { Mouse, Touchpad } from "lucide-react";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { useCanvasInputMode } from "./canvasInputMode";
 
 /** One click switches navigation without opening a menu over the canvas. */
@@ -11,17 +11,16 @@ export function CanvasInputModeSwitch() {
   const label = trackpad ? t("canvasInputTrackpadMode") : t("canvasInputMouseMode");
   const Icon = trackpad ? Touchpad : Mouse;
   return (
-    <Button
+    <IconButton
       type="button"
       variant="ghost"
       size="icon-sm"
       data-canvas-input-mode={mode}
-      aria-label={label}
-      title={label}
+      label={label}
       onClick={() => setMode(trackpad ? "mouse" : "trackpad")}
       className="nodrag nopan nowheel shrink-0 self-center p-0 text-muted-foreground hover:text-foreground"
     >
       <Icon aria-hidden="true" />
-    </Button>
+    </IconButton>
   );
 }

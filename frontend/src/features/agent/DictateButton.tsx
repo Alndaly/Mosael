@@ -21,7 +21,7 @@ import { toast } from "sonner";
 
 import { ApiError, dictate } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 
 /** 和后端 DICTATION_MAX_SECONDS 对齐。到点自己收,不指望被拒。 */
@@ -103,15 +103,14 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
   const busy = state === "transcribing";
   const recording = state === "recording";
   return (
-    <Button
+    <IconButton
       variant="ghost"
       //: 两种形态都钉在 28px 高。**录制时会从圆变成带计时的胶囊**,高度再变的话整条
       //: 工具行会跟着跳一下 —— 而那一跳发生在你刚开口的瞬间,看着像点错了什么。
       //: 所以换的是 xs↔icon-xs 这一对(同一档的胶囊和圆),不是 sm↔icon(32↔36)。
       size={recording ? "xs" : "icon-xs"}
       className={cn(recording && "gap-1.5 text-destructive")}
-      aria-label={recording ? t("dictateStop") : t("dictate")}
-      title={recording ? t("dictateStop") : t("dictate")}
+      label={recording ? t("dictateStop") : t("dictate")}
       disabled={disabled || busy}
       onClick={() => (recording ? stop() : void start())}
     >
@@ -126,6 +125,6 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
       ) : (
         <Mic size={14} />
       )}
-    </Button>
+    </IconButton>
   );
 }

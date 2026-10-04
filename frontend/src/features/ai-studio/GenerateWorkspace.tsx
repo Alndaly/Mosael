@@ -37,6 +37,7 @@ import {
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
+import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,8 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/app/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useImagePreview } from "@/components/app/image-preview";
 import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
@@ -751,7 +754,7 @@ export function GenerateWorkspace({
       <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
-          <span className="min-w-0 flex-1 truncate text-ui-sm font-medium" title={activeSession?.title}>{activeSession?.title}</span>
+          <Truncate className="flex-1 text-ui-sm font-medium">{activeSession?.title}</Truncate>
           {!readOnly && (
             <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
           )}
@@ -838,7 +841,7 @@ export function GenerateWorkspace({
                   <PromptTemplateButton onPick={(template) => setPrompt((current) => withTemplate(current, template))} />
                 )}
                 {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
-                  <Button
+                  <IconButton
                     type="button"
                     variant="ghost"
                     size="icon-xs"
@@ -846,40 +849,43 @@ export function GenerateWorkspace({
                     disabled={!prompt.trim() || chatModelMissing || createGeneration.isPending}
                     loading={optimizePrompt.isPending}
                     onClick={() => optimizePrompt.mutate()}
-                    aria-label={t("optimizePrompt")}
-                    title={chatModelMissing ? t("optimizePromptNeedsChatModel") : t("optimizePrompt")}
+                    label={t("optimizePrompt")}
+                    disabledReason={chatModelMissing ? t("optimizePromptNeedsChatModel") : undefined}
                   >
                     <Wand2 size={14} />
-                  </Button>
+                  </IconButton>
                 )}
                 {/* 模型是一个能点的东西(和对话页的模型选择器同一种样子):点开右边的「模型与参数」。
                     此前它是一枚点不动的标签,要换模型得去找右上角那个按钮。 */}
                 {selectedModel && (
-                  <button
-                    type="button"
-                    onClick={() => setParametersOpen(true)}
-                    aria-label={t("generationEngineSettings")}
-                    title={t("generationEngineSettings")}
-                    className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
-                  >
-                    <span className="truncate">{selectedModel.label}</span>
-                    <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
-                  </button>
+                  //: 悬停说全名(按钮上的可能被截断)和点下去会去哪儿。
+                  <Hint label={selectedModel.label} hint={t("generationEngineSettings")}>
+                    <button
+                      type="button"
+                      onClick={() => setParametersOpen(true)}
+                      aria-label={t("generationEngineSettings")}
+                      className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+                    >
+                      <Truncate>{selectedModel.label}</Truncate>
+                      <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
+                    </button>
+                  </Hint>
                 )}
                 {/* 参数栏开着时,「一个模型都没有」由那边的提示条说,这里不再摆第二个入口。 */}
                 {!(noGenerationModels && parametersOpen) && (
                   <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} section={settingsSection} />
                 )}
               </div>
-              <Button
+              <IconButton
                 type="submit"
+                variant="default"
                 size="icon"
                 className="shrink-0 rounded-full"
-                aria-label={t("generate")}
+                label={t("generate")}
                 disabled={!canSubmitText || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
               >
                 <Send size={15} />
-              </Button>
+              </IconButton>
             </div>
           </form>
         )}
@@ -900,9 +906,9 @@ export function GenerateWorkspace({
             标题和那个关闭按钮就一起滚出视野。高度对齐左边工具栏的 min-h-14,两条分隔线连成一条。 */}
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-divider px-4">
           <h2 className="m-0 text-ui-sm font-semibold">{t("generationEngineSettings")}</h2>
-          <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}>
+          <IconButton variant="ghost" size="icon-xs" label={t("close")} onClick={() => setParametersOpen(false)}>
             <X />
-          </Button>
+          </IconButton>
         </div>
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 overflow-y-auto overflow-x-hidden p-4">
@@ -1412,9 +1418,11 @@ function GenerationTurn({
           //: 躺着,而他不知道)。一张时就是原来的样子,多张时并排铺开。
           <div className={cn("flex max-w-[min(560px,100%)] flex-wrap gap-1.5")}>
             {outputs.map((assetId) => (
-              <button
+              <IconButton
+                unstyled
                 key={assetId}
                 type="button"
+                label={t("imagePreviewTitle")}
                 className={cn(
                   "cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring",
                   outputs.length > 1 ? "min-w-0 flex-[1_1_45%]" : "inline-block max-w-full",
@@ -1436,7 +1444,7 @@ function GenerationTurn({
                   alt=""
                   loading="lazy"
                 />
-              </button>
+              </IconButton>
             ))}
           </div>
         ) : status === "failed" ? (

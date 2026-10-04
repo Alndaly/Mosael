@@ -31,18 +31,23 @@ vi.mock("@/api/client", () => ({
   ...sessions,
 }));
 //: 下拉本身(Popover + cmdk)不是这里要验的;每个选项摊成一个按钮,只验「选了之后写到哪」。
-vi.mock("@/components/ui/searchable-select", () => ({
+//: 触发器外面的悬停说明照真的那样套(真组件也是 Hint 包着触发器)。
+vi.mock("@/components/ui/searchable-select", async () => {
+  const { Hint } = await import("@/components/ui/tooltip");
+  return {
   SearchableSelect: ({
     trigger,
+    hint,
     options,
     onValueChange,
   }: {
     trigger: React.ReactNode;
+    hint?: string | null;
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
   }) => (
     <>
-      {trigger}
+      <Hint label={hint}>{trigger}</Hint>
       {options.map((option) => (
         <button key={option.value} type="button" data-option={option.value} onClick={() => onValueChange(option.value)}>
           {option.label}
@@ -50,7 +55,8 @@ vi.mock("@/components/ui/searchable-select", () => ({
       ))}
     </>
   ),
-}));
+  };
+});
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
     ({
@@ -70,6 +76,7 @@ vi.mock("@/features/agent/effectiveModel", () => ({
 vi.mock("@/lib/gotoSettings", () => ({ gotoSettings: vi.fn() }));
 
 import { ModelPicker } from "@/features/agent/ModelPicker";
+import { readHint } from "@/test/hint";
 
 const SESSION = { id: "s1", provider_profile_id: "p1", model: "deepseek-v4-flash" } as never;
 
@@ -116,7 +123,7 @@ describe("模型选择器", () => {
     const trigger = await screen.findByRole("button", { name: "模型" });
     expect(trigger.textContent).toContain("deepseek-v4-flash");
     //: 少了东西要说一声,不能一声不吭。
-    expect(trigger.getAttribute("title")).toBe("有连接的模型列表没读出来");
+    expect(await readHint(trigger)).toBe("有连接的模型列表没读出来");
   });
 });
 

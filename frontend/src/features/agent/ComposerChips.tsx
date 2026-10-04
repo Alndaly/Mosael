@@ -3,6 +3,8 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,8 +46,8 @@ export function ComposerChips({
             // 键盘走到哪一个都不确定。
             <span
               key={chip.id}
+              data-composer-chip=""
               className="inline-flex max-w-52 items-center rounded-md border border-border bg-secondary pr-1 text-ui-xs text-foreground"
-              title={chip.label}
             >
               <button
                 type="button"
@@ -64,16 +66,17 @@ export function ComposerChips({
                     chip.icon
                   )}
                 </span>
-                <span className="truncate">{chip.label}</span>
+                <Truncate>{chip.label}</Truncate>
               </button>
-              <button
+              <IconButton
+                unstyled
                 type="button"
                 className="inline-flex cursor-pointer border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
-                aria-label={`${t("close")} ${chip.label}`}
+                label={`${t("close")} ${chip.label}`}
                 onClick={chip.onRemove}
               >
                 <X size={11} />
-              </button>
+              </IconButton>
             </span>
           );
         })}

@@ -2,8 +2,10 @@ import React from "react";
 import { Check, ChevronDown, Tags, X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { TAG_MATCHES, type TagMatch } from "@/lib/tags";
 
@@ -42,13 +44,13 @@ export function TagFilter({ counts, value, onChange, match, onMatchChange, compa
   const label = value.length === 0 ? t("filterByTag") : value.length === 1 ? value[0] : `${value[0]} +${value.length - 1}`;
   const active = value.length > 0;
   const trigger = compact ? (
-    <Button variant="ghost" size="icon-sm" aria-label={t("filterByTag")} title={active ? label : t("filterByTag")} className={cn("relative shrink-0 text-muted-foreground hover:text-foreground", active && "bg-accent text-primary hover:text-primary")}>
+    <IconButton variant="ghost" size="icon-sm" label={t("filterByTag")} hint={active ? label : undefined} className={cn("relative shrink-0 text-muted-foreground hover:text-foreground", active && "bg-accent text-primary hover:text-primary")}>
       <Tags />
       {active && <span data-tag-filter-count className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-ui-2xs leading-4 tabular-nums text-primary-foreground">{value.length}</span>}
-    </Button>
+    </IconButton>
   ) : (
     <Button variant="outline" aria-label={t("filterByTag")} className={cn("max-w-52", active && "border-primary/40 bg-accent text-primary")}>
-      <Tags /><span className="truncate">{label}</span><ChevronDown />
+      <Tags /><Truncate>{label}</Truncate><ChevronDown />
     </Button>
   );
   return <div className="flex min-w-0 items-center gap-1">
@@ -58,7 +60,7 @@ export function TagFilter({ counts, value, onChange, match, onMatchChange, compa
         <Input aria-label={t("mediaSearchTags")} placeholder={t("mediaSearchTags")} value={search} onChange={event => setSearch(event.target.value)} />
         <div className="mt-2 grid max-h-64 gap-1 overflow-y-auto" role="group" aria-label={t("filterByTag")}>
           {matches.map(tag => <Button key={tag} variant="ghost" className={cn("min-w-0 justify-start", chosen.has(tag) && "text-primary hover:text-primary")} aria-pressed={chosen.has(tag)} onClick={() => toggle(tag)}>
-            <span className="min-w-0 flex-1 truncate text-left">{tag}</span>
+            <Truncate className="flex-1 text-left">{tag}</Truncate>
             <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{counts.get(tag)}</span>
             {/* 勾没勾都占一格,数字才不会随着勾选左右跳。 */}
             <Check className={cn("shrink-0", !chosen.has(tag) && "invisible")} />
@@ -77,7 +79,7 @@ export function TagFilter({ counts, value, onChange, match, onMatchChange, compa
         )}
       </PopoverContent>
     </Popover>
-    {!compact && active && <Button variant="outline" className="px-3" aria-label={t("mediaClearTag")} onClick={() => onChange([])}><X /></Button>}
+    {!compact && active && <IconButton variant="outline" size="default" className="px-3" label={t("mediaClearTag")} onClick={() => onChange([])}><X /></IconButton>}
   </div>;
 }
 
@@ -101,11 +103,10 @@ export function ActiveTagChips({ value, onChange, match }: {
           key={tag}
           type="button"
           aria-label={t("mediaRemoveTag").replace("{tag}", tag)}
-          title={t("mediaRemoveTag").replace("{tag}", tag)}
           onClick={() => onChange(value.filter(one => one !== tag))}
           className="inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm bg-accent pl-2 pr-1 text-ui-xs text-primary hover:bg-[color-mix(in_srgb,var(--primary)_16%,transparent)]"
         >
-          <span className="min-w-0 truncate">{tag}</span>
+          <Truncate>{tag}</Truncate>
           <X size={12} className="shrink-0" />
         </button>
       ))}

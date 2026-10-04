@@ -4,6 +4,7 @@ import { PhotoSlider } from "react-photo-view";
 
 import { useI18n } from "@/app/preferences";
 import { VideoPlayer } from "@/components/app/media-playback";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export type ImagePreviewItem = {
@@ -135,9 +136,9 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         }}
         overlayRender={({ overlay }) =>
           overlay ? (
-            <div className="fixed bottom-[22px] left-1/2 max-w-[min(760px,calc(100vw-64px))] -translate-x-1/2 truncate rounded-full border border-[rgb(255_255_255/0.14)] bg-[rgb(0_0_0/0.38)] px-[13px] py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[10px]">
+            <Truncate as="div" className="fixed bottom-[22px] left-1/2 max-w-[min(760px,calc(100vw-64px))] -translate-x-1/2 rounded-full border border-[rgb(255_255_255/0.14)] bg-[rgb(0_0_0/0.38)] px-[13px] py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[10px]">
               {overlay}
-            </div>
+            </Truncate>
           ) : null
         }
       />

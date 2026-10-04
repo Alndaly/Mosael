@@ -4,14 +4,14 @@ import { toast } from "sonner";
 
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 
 /**
  * 试听键:点一下取来念,再点一下停。同一时刻只响一段(和对话里念消息共用 lib/audioPlayback 那一个播放器)。
  *
  * 音频从哪来由调用方给(`load`)—— 各处试听的是不同的东西,取、播、停这一段是同一件事。
- * `disabledReason` 是灰着的时候 title 上那句「为什么点不了」。
+ * `disabledReason` 是灰着的时候悬停说明里那句「为什么点不了」。
  */
 export function VoicePreviewButton({
   load,
@@ -55,16 +55,16 @@ export function VoicePreviewButton({
 
   const label = state === "playing" ? t("voicePreviewStop") : t("voicePreview");
   return (
-    <Button
+    <IconButton
       variant="outline"
       size="icon"
       loading={state === "loading"}
       disabled={disabled}
-      aria-label={label}
-      title={disabled ? (disabledReason ?? label) : label}
+      label={label}
+      disabledReason={disabledReason}
       onClick={() => (state === "playing" ? stopPlayback() : void play())}
     >
       {state === "playing" ? <Square /> : <Volume2 />}
-    </Button>
+    </IconButton>
   );
 }

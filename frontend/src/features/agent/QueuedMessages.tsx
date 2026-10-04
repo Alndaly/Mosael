@@ -1,6 +1,9 @@
 import { CornerDownRight, Trash2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,27 +45,27 @@ export function QueuedMessages({
           key={message.id}
         >
           <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-foreground" title={message.content}>
-            {message.content}
-          </span>
-          <button
-            type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-            disabled={steering}
-            onClick={() => onSteer(message.id)}
-            title={t("chatSteerHint")}
-          >
-            <CornerDownRight size={11} /> {t("chatSteerAction")}
-          </button>
-          <button
+          <Truncate className="flex-1 text-foreground">{message.content}</Truncate>
+          <Hint label={t("chatSteerHint")}>
+            <button
+              type="button"
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              disabled={steering}
+              onClick={() => onSteer(message.id)}
+            >
+              <CornerDownRight size={11} /> {t("chatSteerAction")}
+            </button>
+          </Hint>
+          <IconButton
+            unstyled
             type="button"
             className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             disabled={cancelling}
             onClick={() => onCancel(message.id)}
-            aria-label={t("chatQueuedCancel")}
+            label={t("chatQueuedCancel")}
           >
             <Trash2 size={12} />
-          </button>
+          </IconButton>
         </div>
       ))}
     </>

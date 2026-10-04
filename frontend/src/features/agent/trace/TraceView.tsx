@@ -13,7 +13,10 @@ import { ChevronRight, Clock, ListOrdered, SearchX, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
@@ -110,28 +113,32 @@ function TraceOverview({
     <div className="grid gap-1 border-b border-border px-3 py-2">
       {[0, 1, 2].map((lane) => (
         <div key={lane} className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-          <span className="truncate text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground">{laneNames[lane]}</span>
+          <Truncate className="text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground">{laneNames[lane]}</Truncate>
           <div className="relative h-2.5 rounded-sm bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)]">
             {model.spans
               .filter((item) => item.lane === lane)
-              .map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  title={`${t(KIND_LABEL[item.kind === "turn" ? "text" : item.kind] as never)}${item.label ? ` · ${item.label}` : ""}`}
-                  aria-label={item.label || t(KIND_LABEL[item.kind === "turn" ? "text" : item.kind] as never)}
-                  onClick={() => item.eventKey && onSelect(item.eventKey)}
-                  className={cn(
-                    "absolute inset-y-0 min-w-[2px] cursor-pointer rounded-[2px] border-0 p-0",
-                    item.kind === "turn"
-                      ? "bg-[color-mix(in_srgb,var(--primary)_18%,transparent)]"
-                      : LANE_TONE[lane],
-                    item.isError && "bg-[color-mix(in_srgb,var(--destructive)_70%,transparent)]",
-                    item.eventKey && item.eventKey === selectedKey && "outline outline-2 outline-offset-1 outline-ring",
-                  )}
-                  style={{ left: `${pct(item.start)}%`, width: `${Math.max(0.4, pct(item.end) - pct(item.start))}%` }}
-                />
-              ))}
+              .map((item) => {
+                const kind = t(KIND_LABEL[item.kind === "turn" ? "text" : item.kind] as never);
+                return (
+                  // 一段色块:悬停说是哪一类、做的什么。
+                  <Hint key={item.key} label={kind} hint={item.label || undefined}>
+                    <button
+                      type="button"
+                      aria-label={item.label || kind}
+                      onClick={() => item.eventKey && onSelect(item.eventKey)}
+                      className={cn(
+                        "absolute inset-y-0 min-w-[2px] cursor-pointer rounded-[2px] border-0 p-0",
+                        item.kind === "turn"
+                          ? "bg-[color-mix(in_srgb,var(--primary)_18%,transparent)]"
+                          : LANE_TONE[lane],
+                        item.isError && "bg-[color-mix(in_srgb,var(--destructive)_70%,transparent)]",
+                        item.eventKey && item.eventKey === selectedKey && "outline outline-2 outline-offset-1 outline-ring",
+                      )}
+                      style={{ left: `${pct(item.start)}%`, width: `${Math.max(0.4, pct(item.end) - pct(item.start))}%` }}
+                    />
+                  </Hint>
+                );
+              })}
           </div>
         </div>
       ))}
@@ -194,7 +201,9 @@ export function TraceStatsBar({
       {parts.map((part, index) => (
         <React.Fragment key={part.text}>
           {index > 0 && <span aria-hidden className="opacity-40">|</span>}
-          <span title={part.title}>{part.text}</span>
+          <Hint label={part.title}>
+            <span>{part.text}</span>
+          </Hint>
         </React.Fragment>
       ))}
     </div>
@@ -231,9 +240,9 @@ function TraceInspector({ event, turn, onClose }: { event: TraceEvent; turn: Tra
         <span className="text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground">
           {t("traceTurnStep").replace("{turn}", String(event.turn)).replace("{step}", String(event.step))}
         </span>
-        <Button variant="ghost" size="icon" className="ml-auto h-6 w-6" onClick={onClose} aria-label={t("close")}>
+        <IconButton variant="ghost" size="icon" className="ml-auto h-6 w-6" onClick={onClose} label={t("close")}>
           <X size={13} />
-        </Button>
+        </IconButton>
       </div>
       <div className="flex gap-1 border-b border-border px-2 py-1.5" role="tablist">
         {tabs.map((item) => (
@@ -441,10 +450,10 @@ export function TraceView({
                   <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind])}>
                     {t(KIND_LABEL[event.kind] as never)}
                   </span>
-                  <span className="min-w-0 truncate font-mono text-ui-xs text-muted-foreground">
+                  <Truncate className="font-mono text-ui-xs text-muted-foreground">
                     {event.name && <span className="text-foreground">{event.name} </span>}
                     {event.summary}
-                  </span>
+                  </Truncate>
                   <span className="timecode text-ui-2xs text-muted-foreground">{seconds(event.durationSeconds)}</span>
                   <ChevronRight size={12} className="justify-self-end text-muted-foreground" aria-hidden />
                 </button>

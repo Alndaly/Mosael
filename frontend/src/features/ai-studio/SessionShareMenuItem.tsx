@@ -4,6 +4,7 @@ import { Users2 } from "lucide-react";
 import { setResourceShared } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { ContextMenuItem } from "@/components/ui/context-menu";
+import { MenuItemBody } from "@/components/ui/menu";
 
 /**
  * 「把这次对话给同事看 / 收回」。
@@ -36,7 +37,7 @@ export function SessionShareMenuItem({
   if (!session.is_mine) return null; // 别人的对话:能看,但共享与否是他的事
   return (
     <ContextMenuItem onSelect={() => share.mutate(!session.shared)}>
-      <Users2 /> {session.shared ? t("sessionUnshare") : t("sessionShare")}
+      <MenuItemBody icon={<Users2 />} label={session.shared ? t("sessionUnshare") : t("sessionShare")} />
     </ContextMenuItem>
   );
 }

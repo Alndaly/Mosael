@@ -4,6 +4,7 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 import { WrapText } from "lucide-react";
 
 import { codeHighlighter } from "@/components/markdown/codeHighlighter";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { CitationLink } from "./CitationLink";
 
@@ -68,16 +69,16 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
       <div className="flex h-7 items-center gap-1 border-b border-border px-2.5 text-ui-2xs text-muted-foreground">
         <span className="font-mono lowercase">{language}</span>
         <span className="ml-auto flex items-center gap-1.5">
-          <button
+          <IconButton
+            unstyled
             type="button"
             className={HEADER_ICON_BUTTON}
-            title={wrap ? t("codeNoWrap") : t("codeWrap")}
-            aria-label={wrap ? t("codeNoWrap") : t("codeWrap")}
+            label={wrap ? t("codeNoWrap") : t("codeWrap")}
             aria-pressed={wrap}
             onClick={() => setWrap((value) => !value)}
           >
             <WrapText size={14} />
-          </button>
+          </IconButton>
           <CodeBlockCopyButton className={HEADER_ICON_BUTTON} code={code} />
         </span>
       </div>

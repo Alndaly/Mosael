@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { SpeakButton } from "@/features/agent/SpeakButton";
 import { usePreferences } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { formatCosts, sumByCurrency, type CostAmount } from "@/lib/money";
 import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -158,7 +159,7 @@ export function MessageFooter({
     // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
     // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/时间一样齐。
     <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
-      <button type="button" className={FOOTER_ACTION_CLASS} title={t("copyMessage")} onClick={copy}>
+      <button type="button" className={FOOTER_ACTION_CLASS} onClick={copy}>
         {copied ? <Check size={11} /> : <Copy size={11} />}
         {copied ? t("copied") : t("copyMessage")}
       </button>
@@ -178,9 +179,11 @@ export function MessageTime({ iso }: { iso: string | null | undefined }) {
   useNow(30_000);
   if (!iso) return null;
   return (
-    <time className="text-ui-xs text-muted-foreground" dateTime={iso} title={new Date(iso).toLocaleString(locale)}>
-      {relativeTime(iso, locale)}
-    </time>
+    <Hint label={new Date(iso).toLocaleString(locale)}>
+      <time className="text-ui-xs text-muted-foreground" dateTime={iso}>
+        {relativeTime(iso, locale)}
+      </time>
+    </Hint>
   );
 }
 
@@ -223,9 +226,9 @@ export function MessageUsageFooter({
         </span>
       )}
       {tokenLabel && (
-        <span className="text-ui-xs text-muted-foreground" title={tokenTitle}>
-          {tokenLabel}
-        </span>
+        <Hint label={tokenTitle}>
+          <span className="text-ui-xs text-muted-foreground">{tokenLabel}</span>
+        </Hint>
       )}
       {costLabel && <span className="text-ui-xs text-muted-foreground">{costLabel}</span>}
     </MessageFooter>

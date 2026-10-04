@@ -5,6 +5,7 @@ import { ModalShell } from "@/components/app/modals";
 import { CollectionTabs } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -288,18 +289,17 @@ export function CatalogCard({
             <button
               type="button"
               data-catalog-open
-              className="block max-w-full cursor-pointer truncate text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
+              className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
               onClick={onOpen}
             >
-              {title}
+              <Truncate>{title}</Truncate>
             </button>
           </h3>
-          {meta && <p className="m-0 min-w-0 truncate text-ui-xs text-muted-foreground">{meta}</p>}
+          {meta && <Truncate as="p" className="m-0 text-ui-xs text-muted-foreground">{meta}</Truncate>}
         </div>
         {badge}
       </div>
-      {/* 不能再加 `block`:line-clamp 靠的是 -webkit-box,block 会把它覆盖掉,摘要就整段铺开。 */}
-      <p className="m-0 line-clamp-3 min-w-0 text-ui-xs leading-relaxed text-muted-foreground">{summary}</p>
+      <Truncate as="p" lines={3} className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{summary}</Truncate>
       <div className="flex min-h-8 min-w-0 items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-3 text-ui-xs text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
           {facts}
@@ -313,9 +313,9 @@ export function CatalogCard({
 /** 卡片左下角的一条事实:图标 + 一句短话。 */
 export function CatalogFact({ icon, children, tone }: { icon: React.ReactNode; children: React.ReactNode; tone?: "warning" | "success" }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center gap-1 truncate", tone === "warning" && "text-warning", tone === "success" && "text-success")}>
+    <span className={cn("inline-flex min-w-0 items-center gap-1", tone === "warning" && "text-warning", tone === "success" && "text-success")}>
       {icon}
-      <span className="truncate">{children}</span>
+      <Truncate>{children}</Truncate>
     </span>
   );
 }

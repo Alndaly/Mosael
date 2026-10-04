@@ -28,6 +28,7 @@ import { useVoiceLoop } from "@/features/agent/useVoiceLoop";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { VoiceOrb } from "@/features/agent/VoiceOrb";
 import { useFloatingPanel } from "@/components/app/useFloatingPanel";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -99,7 +100,8 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
 
   //: 状态说明什么时候露出来。**换状态时自动露 2.4 秒**,而不是只在悬停时 —— 免提的前提
   //: 就是手和眼睛都在别处,一个要先把鼠标挪过去才肯解释自己的提示,恰好在唯一需要它的
-  //: 时刻不说话。之后自己收起来,它平时该只是一颗。
+  //: 时刻不说话。之后自己收起来,它平时该只是一颗。悬停时说的是同一件事,走全应用那一条
+  //: 悬停说明(名字 + 上一句听到了什么),不再另露一份这个气泡。
   const [showCaption, setShowCaption] = React.useState(false);
   React.useEffect(() => {
     if (!loop.on) return;
@@ -121,10 +123,9 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       {...focusProps}
       role="complementary"
       aria-label={t("voiceModeStart")}
-      onMouseEnter={() => setShowCaption(true)}
-      onMouseLeave={() => setShowCaption(false)}
     >
-      <button
+      <IconButton
+        unstyled
         type="button"
         className={cn(
           "relative grid size-[52px] cursor-grab touch-none place-items-center rounded-full p-0",
@@ -142,11 +143,12 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
           if (loop.on) loop.stop();
           else void loop.start();
         }}
-        aria-label={label}
-        title={label}
+        label={label}
+        hint={loop.heard ? `${t("voiceDockHeard")}${loop.heard}` : undefined}
+        tooltipSide={captionOnLeft ? "left" : "right"}
       >
         <VoiceOrb state={loop.state} levelRef={loop.levelRef} />
-      </button>
+      </IconButton>
 
       {/* 说明:当前在干什么,或者上一句听到了什么。 */}
       <div
@@ -167,19 +169,19 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       {/* 关掉浮标本身:不必为了收起它去翻设置页。悬停才出现,常态下它只是一颗。
           **放在那颗之外**:按钮里套按钮读屏会把两个念成一个,而且点它会连带触发外面
           那一下开关 —— 于是"收起来"变成了"先开始对话再收起来"。 */}
-      <button
+      <IconButton
+        unstyled
         type="button"
         data-no-drag
         className="absolute -right-1 -top-1 z-[1] hidden size-[18px] cursor-pointer place-items-center rounded-full border border-floating-border bg-panel text-muted-foreground hover:text-destructive group-hover/dock:grid"
-        aria-label={t("voiceDockHide")}
-        title={t("voiceDockHide")}
+        label={t("voiceDockHide")}
         onClick={() => {
           loop.stop();
           onClose();
         }}
       >
         <X size={11} />
-      </button>
+      </IconButton>
     </div>
   );
 }

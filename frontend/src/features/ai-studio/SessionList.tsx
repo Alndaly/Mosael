@@ -17,7 +17,6 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ContextMenu,
@@ -29,7 +28,11 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { IconButton } from "@/components/ui/icon-button";
 import { Marker, MarkerContent } from "@/components/ui/marker";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
@@ -334,64 +337,59 @@ export function SessionList({
           <>
             <h2>{t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}</h2>
             <span className="flex items-center gap-0.5">
-              <Button
+              <IconButton
                 variant="ghost"
                 size="icon-xs"
-                title={allSelected(visibleManageable) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-                aria-label={allSelected(visibleManageable) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                label={allSelected(visibleManageable) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                 onClick={() => selectAll(visibleManageable)}
               >
                 <ListChecks size={14} />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
                 size="icon-xs"
                 className="hover:text-destructive"
-                title={t("delete")}
-                aria-label={t("delete")}
+                label={t("delete")}
                 disabled={selectedIds.size === 0}
                 onClick={() => setBatchDeleting(true)}
               >
                 <Trash2 size={14} />
-              </Button>
-              <Button variant="ghost" size="icon-xs" title={t("cancel")} aria-label={t("cancel")} onClick={exit}>
+              </IconButton>
+              <IconButton variant="ghost" size="icon-xs" label={t("cancel")} onClick={exit}>
                 <X size={14} />
-              </Button>
+              </IconButton>
             </span>
           </>
         ) : (
           <>
             <h2>{t(spec.title)}</h2>
             <span className="flex items-center gap-0.5">
-              <Button
+              <IconButton
                 variant="ghost"
                 size="icon-xs"
-                title={t("chatNewGroup")}
-                aria-label={t("chatNewGroup")}
+                label={t("chatNewGroup")}
                 onClick={() => setCreatingGroup(true)}
               >
                 <FolderPlus size={14} />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
                 size="icon-xs"
-                title={t("mediaSelectMode")}
-                aria-label={t("mediaSelectMode")}
+                label={t("mediaSelectMode")}
                 disabled={manageableSessions.length === 0}
                 onClick={() => enterSelectMode()}
               >
                 <ListChecks size={14} />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
                 size="icon-xs"
-                title={t(spec.newSession)}
-                aria-label={t(spec.newSession)}
+                label={t(spec.newSession)}
                 onClick={onCreate}
                 loading={creating}
               >
                 <Plus size={14} />
-              </Button>
+              </IconButton>
             </span>
           </>
         )}
@@ -459,21 +457,19 @@ export function SessionList({
                       className={cn("shrink-0 transition-transform duration-[120ms]", !isCollapsed && "rotate-90")}
                       aria-hidden
                     />
-                    <span className="min-w-0 flex-1 truncate normal-case" title={group.name}>
-                      {group.name}
-                    </span>
+                    <Truncate className="flex-1 normal-case">{group.name}</Truncate>
                     <span className="shrink-0 tabular-nums">{members.length}</span>
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem onSelect={() => setRenamingGroup(group)}>
-                    <Pencil /> {t("rename")}
+                    <MenuItemBody icon={<Pencil />} label={t("rename")} />
                   </ContextMenuItem>
                   <ContextMenuItem
                     className="text-destructive focus:text-destructive"
                     onSelect={() => setDeletingGroup(group)}
                   >
-                    <Trash2 /> {t("delete")}
+                    <MenuItemBody icon={<Trash2 />} label={t("delete")} />
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -499,9 +495,9 @@ export function SessionList({
       {/* 拖起来时跟手的那一片 —— 没有它,拖动中的行只是原地变淡,看不出自己在拖什么。 */}
       <DragOverlay dropAnimation={null}>
         {draggingId ? (
-          <div className="truncate rounded-md border border-border bg-panel px-2 py-1.5 text-xs font-semibold shadow-[var(--shadow-raised)]">
+          <Truncate as="div" className="rounded-md border border-border bg-panel px-2 py-1.5 text-xs font-semibold shadow-[var(--shadow-raised)]">
             {sessions.find((session) => session.id === draggingId)?.title}
-          </div>
+          </Truncate>
         ) : null}
       </DragOverlay>
       </DndContext>
@@ -614,7 +610,6 @@ function SessionRow({
     <button
       ref={setNodeRef}
       type="button"
-      title={viewOnly ? t(viewOnly) : undefined}
       className={cn(
         "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted",
         selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
@@ -636,25 +631,32 @@ function SessionRow({
         <Checkbox checked={checked} disabled={Boolean(viewOnly)} className="pointer-events-none" tabIndex={-1} />
       )}
       <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-ui-sm">{session.title}</span>
+        <Truncate className="text-ui-sm">{session.title}</Truncate>
         {viewOnly && <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
       </span>
     </button>
   );
   //: 只能看的没有右键菜单:改名、收纳、删除都是主人的事,共享与否也是(SessionShareMenuItem 本来就藏)。
-  if (viewOnly) return row;
+  //: 悬停说全名和「为什么只能看」。
+  if (viewOnly) {
+    return (
+      <Hint label={session.title} hint={t(viewOnly)}>
+        {row}
+      </Hint>
+    );
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={onRename}>
-          <Pencil /> {t("rename")}
+          <MenuItemBody icon={<Pencil />} label={t("rename")} />
         </ContextMenuItem>
         <ContextMenuSub>
           {/* 图标不能省:SubTrigger 和普通项共用 gap-2 + 图标槽的排版,没图标时标签会顶到
               图标列上,和上下两条对不齐(真机可见)。 */}
           <ContextMenuSubTrigger>
-            <FolderInput /> {t("chatMoveToGroup")}
+            <MenuItemBody icon={<FolderInput />} label={t("chatMoveToGroup")} />
           </ContextMenuSubTrigger>
           <ContextMenuSubContent>
             {groups.map((group) => (
@@ -663,15 +665,15 @@ function SessionRow({
                 disabled={session.group_id === group.id}
                 onSelect={() => onMove(group.id)}
               >
-                {group.name}
+                <MenuItemBody inset label={group.name} truncate />
               </ContextMenuItem>
             ))}
             {groups.length > 0 && <ContextMenuSeparator />}
             <ContextMenuItem disabled={!session.group_id} onSelect={() => onMove(null)}>
-              {t("chatUngrouped")}
+              <MenuItemBody inset label={t("chatUngrouped")} />
             </ContextMenuItem>
             <ContextMenuItem onSelect={onNewGroup}>
-              <FolderPlus /> {t("chatNewGroup")}
+              <MenuItemBody icon={<FolderPlus />} label={t("chatNewGroup")} />
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
@@ -683,7 +685,7 @@ function SessionRow({
         />
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-          <Trash2 /> {t("delete")}
+          <MenuItemBody icon={<Trash2 />} label={t("delete")} />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -24,6 +24,7 @@ vi.mock("@/features/agent/messageUsage", () => ({
 }));
 
 import { ChatBubble } from "./ChatBubble";
+import { hoverHint } from "@/test/hint";
 
 it("用户气泡不被悬停脚注撑宽:那一列靠右对齐,不拉伸", () => {
   const message = {
@@ -43,7 +44,7 @@ it("用户气泡不被悬停脚注撑宽:那一列靠右对齐,不拉伸", () =>
   expect(column.className).not.toContain("items-stretch");
 });
 
-it("后台任务的回执画成一行任务通知:不是用户气泡,没有发出时间那行脚注", () => {
+it("后台任务的回执画成一行任务通知:不是用户气泡,没有发出时间那行脚注", async () => {
   //: 用户截图:「签章文件.pdf」已完成……靠右摆着,像是他自己发的(「这不是我发送的」)。回执现在是自己的角色
   //: (job_receipt),不再借用户消息的壳。
   const message = {
@@ -58,9 +59,10 @@ it("后台任务的回执画成一行任务通知:不是用户气泡,没有发�
       <ChatBubble message={message} usageEvents={[]} workspaceId="w1" />
     </QueryClientProvider>,
   );
-  const receipt = container.querySelector("[data-job-receipt]");
+  const receipt = container.querySelector<HTMLElement>("[data-job-receipt]");
   expect(receipt?.textContent).toContain("「签章文件.pdf」已完成,素材 id:ce5e。");
-  expect(receipt?.getAttribute("title")).toContain("job-1");
+  // 任务 id 只在悬停说明里(给查问题的人看)。
+  expect(await hoverHint(receipt!)).toContain("job-1");
   expect(container.querySelector(".bg-secondary")).toBeNull();
   expect(screen.queryByTestId("footer")).toBeNull();
   expect(container.querySelectorAll("button")).toHaveLength(0);

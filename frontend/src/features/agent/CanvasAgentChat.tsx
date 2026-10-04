@@ -42,7 +42,7 @@ import { UserMessageContent, attachmentToken } from "@/features/agent/userMessag
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { useI18n } from "@/app/preferences";
 import { LoadingState } from "@/components/layout/LoadingState";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
@@ -441,28 +441,28 @@ export function CanvasAgentChat({
             onDelete={setDeletingSession}
           />
         </h2>
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-          aria-label={t("wfAgentNewSession")}
-          title={t("wfAgentNewSession")}
+          label={t("wfAgentNewSession")}
           disabled={newSession.isPending}
           onClick={() => newSession.mutate()}
         >
           <Plus size={13} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          unstyled
           type="button"
           className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-          aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
-          title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
-        </button>
-        <button type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
+        </IconButton>
+        <IconButton unstyled type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
           <X size={13} />
-        </button>
+        </IconButton>
       </div>
       <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
       <div
@@ -627,15 +627,14 @@ export function CanvasAgentChat({
                 {noteAttach.trigger}
                 {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
                     在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
-                <Button
+                <IconButton
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={t("wfAgentAttach")}
-                  title={t("wfAgentAttach")}
+                  label={t("wfAgentAttach")}
                   onClick={() => fileRef.current?.click()}
                 >
                   <Paperclip size={14} />
-                </Button>
+                </IconButton>
                 {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
                 <DictateButton
                   onText={(text) =>
@@ -661,25 +660,29 @@ export function CanvasAgentChat({
                 />
               </div>
               {showStop ? (
-                <Button
+                <IconButton
+                  variant="default"
                   size="icon"
                   className="rounded-full"
-                  aria-label={t("chatStop")}
+                  label={t("chatStop")}
                   loading={stopTurn.isPending}
                   onClick={() => stopTurn.mutate()}
                 >
                   <Square size={12} fill="currentColor" />
-                </Button>
+                </IconButton>
               ) : (
-                <Button
+                <IconButton
+                  variant="default"
                   size="icon"
                   className="rounded-full"
-                  aria-label={running ? t("chatSteer") : t("chatSend")}
+                  label={running ? t("chatSteer") : t("chatSend")}
+                  hint={running ? t("chatSteerHint") : undefined}
                   disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
+                  disabledReason={attach.uploading ? t("composerUploading") : undefined}
                   onClick={submit}
                 >
                   <Send size={14} />
-                </Button>
+                </IconButton>
               )}
             </div>
           </div>

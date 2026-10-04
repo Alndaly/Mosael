@@ -13,7 +13,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 import { DEFAULT_CHOICE, DeclaredParameterControl, ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
+import { hoverHint } from "@/test/hint";
 
 const steps: DeclaredParameter = {
   key: "3.steps",
@@ -95,17 +97,20 @@ describe("declaredChoices", () => {
 });
 
 describe("ParameterRow", () => {
-  it("标签单行截断、悬停看全名;按容器宽度决定两列还是上下叠", () => {
+  it("标签单行截断、悬停看全名;按容器宽度决定两列还是上下叠", async () => {
     const long = "CheckpointLoaderSimple · ckpt_name";
     render(
-      <ParameterRow label="模型" title={long}>
-        <input aria-label="模型" />
-      </ParameterRow>,
+      <TooltipProvider delayDuration={0}>
+        <ParameterRow label="模型" title={long}>
+          <input aria-label="模型" />
+        </ParameterRow>
+      </TooltipProvider>,
     );
     const label = screen.getByText("模型", { selector: "[data-slot=parameter-label]" });
     expect(label.className).toContain("truncate");
     expect(label.className).toContain("min-w-0");
-    expect(label.getAttribute("title")).toBe(long);
+    // 给了全名就悬停看全名(没截断也出 —— 它比标签多说了东西)。
+    expect(await hoverHint(label)).toBe(long);
     const grid = label.parentElement!;
     // 两列只在容器够宽时才出现;控件那一列是 minmax(0,1fr),不会被长值顶出去
     expect(grid.className).toMatch(/@\[\d+px\]\/parameter-row:grid-cols-\[112px_minmax\(0,1fr\)\]/);

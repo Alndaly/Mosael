@@ -62,10 +62,10 @@ describe("附件分流", () => {
     expect(get().media.map((a) => a.id)).toEqual(["a1"]);
     expect(get().files).toEqual([{ name: "scene.srt", content: "第一幕" }]);
     // 两类附件都在同一排小条里,不再是两套长得不一样的东西。
-    expect(screen.getByTitle("shot.png")).toBeTruthy();
-    expect(screen.getByTitle("scene.srt")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "shot.png" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "scene.srt" })).toBeTruthy();
     // 图片带缩略图,点开走全局灯箱;文本附件点开看到的是它真正带上去的那段字。
-    expect(screen.getByTitle("shot.png").querySelector("img")).toHaveAttribute("src", "/thumb/a1");
+    expect(screen.getByRole("button", { name: "shot.png" }).querySelector("img")).toHaveAttribute("src", "/thumb/a1");
   });
 
   it("读不了的类型明确拒绝,而不是静默丢掉", async () => {

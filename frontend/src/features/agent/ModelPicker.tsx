@@ -10,6 +10,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Truncate } from "@/components/ui/truncate";
 import { gotoSettings } from "@/lib/deepLink";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -84,7 +85,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
         role="status"
         className="inline-flex h-7 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground opacity-70"
       >
-        <span className="truncate">{session?.model || t("agentModelPlaceholder")}</span>
+        <Truncate>{session?.model || t("agentModelPlaceholder")}</Truncate>
         <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
       </span>
     );
@@ -115,15 +116,15 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
       options={options}
       searchPlaceholder={t("agentModelPlaceholder")}
       emptyText={t("cmdkEmpty")}
+      //: 有连接读不出来时说一声 —— 少了几个模型总比"整个控件不见了"好,但也不能一声不吭。
+      hint={failed ? t("agentModelSomeUnavailable") : undefined}
       trigger={
         <button
           type="button"
           aria-label={t("agentModelLabel")}
-          //: 有连接读不出来时说一声 —— 少了几个模型总比"整个控件不见了"好,但也不能一声不吭。
-          title={failed ? t("agentModelSomeUnavailable") : undefined}
           className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
         >
-          <span className="truncate">{currentLabel}</span>
+          <Truncate>{currentLabel}</Truncate>
           {/* 没有会话时这一下要先建会话再写,不止一个来回 —— 转圈说明"收到了,在办"。 */}
           {update.isPending ? (
             <Loader2 size={13} className="shrink-0 animate-mosael-spin" />

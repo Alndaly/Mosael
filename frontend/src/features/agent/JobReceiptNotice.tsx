@@ -1,6 +1,7 @@
 import { ListChecks } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /** 后台任务回执那条消息的形状(后端 host.JOB_RECEIPT_ROLE)。 */
@@ -35,16 +36,17 @@ export function JobReceiptNotice({
   const t = useI18n();
   const receipt = payload as ReceiptPayload;
   return (
-    <div
-      data-job-receipt=""
-      title={receipt?.job_id ? `${t("chatFromJob")} · ${receipt.job_id}` : t("chatFromJob")}
-      className={cn("flex min-w-0 items-start gap-1.5 px-0.5 text-ui-xs leading-[1.6] text-muted-foreground", className)}
-    >
-      <ListChecks size={12} className="mt-[3px] flex-none" aria-hidden />
-      <span className="min-w-0 [overflow-wrap:anywhere]">
-        {content}
-        {receipt?.undelivered ? <span className="opacity-70"> · {t("chatReceiptWaiting")}</span> : null}
-      </span>
-    </div>
+    <Hint label={t("chatFromJob")} hint={receipt?.job_id}>
+      <div
+        data-job-receipt=""
+        className={cn("flex min-w-0 items-start gap-1.5 px-0.5 text-ui-xs leading-[1.6] text-muted-foreground", className)}
+      >
+        <ListChecks size={12} className="mt-[3px] flex-none" aria-hidden />
+        <span className="min-w-0 [overflow-wrap:anywhere]">
+          {content}
+          {receipt?.undelivered ? <span className="opacity-70"> · {t("chatReceiptWaiting")}</span> : null}
+        </span>
+      </div>
+    </Hint>
   );
 }

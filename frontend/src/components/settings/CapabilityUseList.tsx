@@ -8,6 +8,7 @@
 import { Bot, LayoutGrid, Workflow } from "lucide-react";
 
 import type { components } from "@/api/generated/schema";
+import { Truncate } from "@/components/ui/truncate";
 
 export type CapabilityUse = components["schemas"]["CapabilityUseOut"];
 
@@ -28,7 +29,7 @@ export function CapabilityUseList({ uses, label }: { uses: CapabilityUse[]; labe
               className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5 text-ui-xs leading-5 text-foreground"
             >
               <Icon size={12} className="shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 truncate">{use.label}</span>
+              <Truncate>{use.label}</Truncate>
             </li>
           );
         })}

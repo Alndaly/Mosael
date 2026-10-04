@@ -20,6 +20,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { readHint } from "@/test/hint";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -166,13 +167,14 @@ describe("优化提示词看的是对话模型", () => {
     await waitFor(() => expect(optimize).toBeEnabled());
   });
 
-  it("没有对话默认模型:灰掉,title 说原因", async () => {
+  it("没有对话默认模型:灰掉,悬停说明说原因", async () => {
     const user = userEvent.setup();
     renderStudio({ modes: ["text-to-image"], parameter_keys: [] });
     const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
     await user.type(box, "一只猫");
     const optimize = await screen.findByRole("button", { name: /optimizePrompt/ });
-    await waitFor(() => expect(optimize).toHaveAttribute("title", "optimizePromptNeedsChatModel"));
+    await waitFor(() => expect(optimize).toBeDisabled());
+    expect(await readHint(optimize)).toContain("optimizePromptNeedsChatModel");
     expect(optimize).toBeDisabled();
   });
 });

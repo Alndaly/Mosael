@@ -5,6 +5,8 @@ import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Marker, MarkerContent } from "@/components/ui/marker";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { formatCompactTokens } from "./tokenCount";
 
@@ -104,7 +106,11 @@ export function ContextMeter({
 
   // 没有分项就没有可展开的东西 —— 给一个点开是空的浮层,比不给更像坏了。
   if (!context.parts || context.parts.length === 0) {
-    return <span title={`${used.toLocaleString()} / ${context.window.toLocaleString()}`}>{meter}</span>;
+    return (
+      <Hint label={`${used.toLocaleString()} / ${context.window.toLocaleString()}`}>
+        <span>{meter}</span>
+      </Hint>
+    );
   }
 
   return (
@@ -156,7 +162,7 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
                   kind === "free" ? "border border-border bg-field" : PART_COLORS[kind] ?? "bg-muted-foreground",
                 )}
               />
-              <span className="min-w-0 flex-1 truncate">{t(`agentContextPart_${kind}`)}</span>
+              <Truncate className="flex-1">{t(`agentContextPart_${kind}`)}</Truncate>
               <span className="timecode shrink-0 text-muted-foreground">
                 {formatCompactTokens(tokens)} · {Math.round((tokens / context.window) * 100)}%
               </span>

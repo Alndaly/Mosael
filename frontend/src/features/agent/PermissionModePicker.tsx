@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Truncate } from "@/components/ui/truncate";
 import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +81,7 @@ export function PermissionModePicker({ workspaceId, session }: { workspaceId: st
               于是触发器变成两行、把整条工具栏撑高。触发器只要档位名。 */}
           <span className="flex min-w-0 items-center gap-1.5">
             <Icon size={13} className={cn("shrink-0", ACCENT[mode])} />
-            <span className="truncate">{t(LABEL[mode])}</span>
+            <Truncate>{t(LABEL[mode])}</Truncate>
           </span>
         </SelectTrigger>
         <SelectContent>

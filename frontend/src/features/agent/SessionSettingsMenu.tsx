@@ -6,6 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { ContextMeter, type ContextInfo } from "@/features/agent/ContextMeter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AutoApprovalTrace } from "@/features/agent/AutoApprovalTrace";
 import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/features/agent/PermissionModePicker";
@@ -51,12 +52,11 @@ export function SessionSettingsMenu({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-xs"
           className="relative"
-          aria-label={t("agentSessionSettings")}
-          title={t("agentSessionSettings")}
+          label={t("agentSessionSettings")}
         >
           <SlidersHorizontal size={14} />
           {mode !== "manual" && (
@@ -67,7 +67,7 @@ export function SessionSettingsMenu({
               )}
             />
           )}
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="start" className="grid w-[260px] gap-2.5 p-2.5">
         {/* 权限模式排在最前:它决定智能体能不问就做什么,是这里分量最重的一项。 */}

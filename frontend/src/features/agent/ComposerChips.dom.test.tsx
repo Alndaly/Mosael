@@ -33,15 +33,15 @@ describe("输入框里那排东西", () => {
         ]}
       />,
     );
-    const row = screen.getByTitle("IMG_1353.PNG").parentElement;
-    expect(row).toBe(screen.getByTitle("mosael").parentElement);
+    const chipOf = (name: string) => screen.getByRole("button", { name }).closest("[data-composer-chip]")!;
+    expect(chipOf("IMG_1353.PNG").parentElement).toBe(chipOf("mosael").parentElement);
   });
 
   it("有画面的给缩略图,没有的给图标", () => {
     render(<ComposerChips chips={[chip({ id: "a", label: "图", thumbnail: "/thumb/a" }), chip({ id: "f", label: "文件" })]} />);
-    expect(screen.getByTitle("图").querySelector("img")).toHaveAttribute("src", "/thumb/a");
-    expect(screen.getByTitle("文件").querySelector("img")).toBeNull();
-    expect(screen.getByTitle("文件").querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "图" }).querySelector("img")).toHaveAttribute("src", "/thumb/a");
+    expect(screen.getByRole("button", { name: "文件" }).querySelector("img")).toBeNull();
+    expect(screen.getByRole("button", { name: "文件" }).querySelector("svg")).toBeTruthy();
   });
 
   it("点开看得到内容 —— 带上去的是什么,发之前能确认", async () => {

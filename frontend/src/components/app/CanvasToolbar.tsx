@@ -8,7 +8,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { CANVAS_GLASS_SURFACE_CLASS } from "./canvasPanelLayout";
 import { cn } from "@/lib/utils";
 
@@ -87,17 +87,16 @@ export function CanvasToolbar({
     >
       <div ref={area} className="flex min-w-0 items-center">
         {scroll.overflow && (
-          <Button
+          <IconButton
             variant="ghost"
             size="icon-xs"
             className="shrink-0"
             disabled={!scroll.left}
-            aria-label={t("canvasToolsPrevious")}
-            title={t("canvasToolsPrevious")}
+            label={t("canvasToolsPrevious")}
             onClick={() => move(-1)}
           >
             <ChevronLeft size={14} />
-          </Button>
+          </IconButton>
         )}
         <div
           ref={viewport}
@@ -108,17 +107,16 @@ export function CanvasToolbar({
           </div>
         </div>
         {scroll.overflow && (
-          <Button
+          <IconButton
             variant="ghost"
             size="icon-xs"
             className="shrink-0"
             disabled={!scroll.right}
-            aria-label={t("canvasToolsNext")}
-            title={t("canvasToolsNext")}
+            label={t("canvasToolsNext")}
             onClick={() => move(1)}
           >
             <ChevronRight size={14} />
-          </Button>
+          </IconButton>
         )}
       </div>
       {/* Assistant, run and document actions stay reachable without scrolling. */}

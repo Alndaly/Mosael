@@ -196,7 +196,7 @@ describe.each(Object.keys(HOSTS))("%s:从系统拖文件进来", (host) => {
     expect(drop.defaultPrevented).toBe(true);
     expect(screen.queryByText("composerDropHint")).toBeNull();
     await waitFor(() => expect(mocks.importAsset).toHaveBeenCalledWith({ workspaceId: "w1", file }));
-    expect(await screen.findByTitle("shot.png")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "shot.png" })).toBeTruthy();
   });
 
   it("松手在输入框上也算数,不会被编辑器吞掉或当成一段字插进正文", async () => {
@@ -250,7 +250,7 @@ describe.each(Object.keys(HOSTS))("%s:粘贴", (host) => {
 
     expect(event.defaultPrevented).toBe(true);
     await waitFor(() => expect(mocks.importAsset).toHaveBeenCalledTimes(1));
-    expect(await screen.findByTitle("pasted.png")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "pasted.png" })).toBeTruthy();
     expect(editor.textContent).toBe("");
   });
 

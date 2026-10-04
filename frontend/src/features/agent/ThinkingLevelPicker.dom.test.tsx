@@ -29,6 +29,7 @@ vi.mock("@/api/transport", async (importOriginal) => ({
   api: (url: string) => api(url),
 }));
 
+import { readHint } from "@/test/hint";
 import { ThinkingLevelPicker } from "./ThinkingLevelPicker";
 
 const session = { id: "s1", model: "kimi-k3", provider_profile_id: "p1", thinking_level: "off" };
@@ -68,6 +69,8 @@ describe("思考档位", () => {
     mount();
     expect(await screen.findByText("这条连接发不出思考档位")).toBeInTheDocument();
     expect(screen.getByRole("button")).toBeDisabled();
+    // 点不了也说得出怎么办。
+    expect(await readHint(screen.getByRole("button"))).toContain("去设置里打开 reasoning_effort");
     expect(screen.queryByText("关闭")).not.toBeInTheDocument();
   });
 

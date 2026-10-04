@@ -19,7 +19,8 @@ import type { LucideIcon } from "lucide-react";
 import { type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { CANVAS_EDGE_OPTIONS, canvasEdgeClass } from "@/components/app/canvasEdges";
 import { DraftInput } from "@/components/ui/draft-text";
-import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM_ROVING } from "@/components/ui/floating";
+import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM_ROVING, MENU_WIDTH } from "@/components/ui/floating";
+import { MenuItemBody } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -431,7 +432,7 @@ export function PendingLinkMenu<K extends string>({
       //: 摆好位置之前先透明 —— **不能用 visibility: hidden**:隐藏的元素拿不到焦点,打开时
       //: 往第一项上放的焦点会落空,键盘就用不了(真机上焦点留在了起手那一格上)。
       style={{ opacity: 0 }}
-      className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 w-64 p-1.5")}
+      className={cn(FLOATING_SURFACE, MENU_WIDTH, "fixed left-0 top-0 z-50 p-1.5")}
       onKeyDown={(event) => {
         if (isImeKeystroke(event)) return;
         //: 在搜索框里打字:空格、Home/End 是它自己的(空格是字,不是「选这一项」)。
@@ -490,11 +491,7 @@ export function PendingLinkMenu<K extends string>({
               onChoose(kind);
             }}
           >
-            <Icon className="text-muted-foreground" />
-            <span className="grid min-w-0">
-              <span className="truncate">{label}</span>
-              {hint && <span className="truncate text-ui-2xs leading-4 text-muted-foreground">{hint}</span>}
-            </span>
+            <MenuItemBody icon={<Icon className="text-muted-foreground" />} label={label} description={hint} />
           </button>
           </React.Fragment>
         );

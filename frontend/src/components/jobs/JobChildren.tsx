@@ -26,6 +26,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { JobEventList } from "@/components/jobs/JobEvents";
 import { useJobKinds } from "@/components/jobs/jobKinds";
 import { runStatusText } from "@/components/jobs/runStatus";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -78,7 +79,7 @@ function ChildRow({ child }: { child: Job }) {
         />
         <div className="grid min-w-0 gap-px">
           <span className="text-ui-xs text-foreground">{kindOf(child.kind).label}</span>
-          {child.message && <small className="truncate text-ui-xs text-muted-foreground">{child.message}</small>}
+          {child.message && <Truncate as="small" className="text-ui-xs text-muted-foreground">{child.message}</Truncate>}
         </div>
         <span
           className={cn(

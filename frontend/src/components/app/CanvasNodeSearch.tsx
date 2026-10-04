@@ -3,11 +3,12 @@ import { Search } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { isTypingTarget, listenKeys } from "@/lib/shortcuts";
+import { Truncate } from "@/components/ui/truncate";
+import { formatCombo, isTypingTarget, listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 /**
@@ -164,16 +165,16 @@ export function CanvasNodeSearch({
   return (
     <Popover open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
       <PopoverTrigger asChild>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-sm"
           className={cn("text-muted-foreground hover:text-foreground", open && "bg-secondary text-foreground")}
-          aria-label={t("wfNodeSearch")}
-          title={`${t("wfNodeSearch")}  ⌘F`}
+          label={t("wfNodeSearch")}
+          shortcut={formatCombo("Mod+F")}
           aria-pressed={open}
         >
           <Search size={14} />
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -238,7 +239,7 @@ export function CanvasNodeSearch({
                     close();
                   }}
                 >
-                  <span className="truncate text-ui-sm font-semibold text-foreground">{entry.title}</span>
+                  <Truncate className="text-ui-sm font-semibold text-foreground">{entry.title}</Truncate>
                   {sub && <span className="shrink-0 text-ui-xs text-muted-foreground">{sub}</span>}
                 </button>
               );

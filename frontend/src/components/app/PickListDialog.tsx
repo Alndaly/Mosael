@@ -6,6 +6,7 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /** 一行里放什么:行首认脸用的一小块(缩略图或图标)、名字、一行说明、行尾一小段附注(版本、时长、日期)。 */
@@ -169,8 +170,8 @@ export function PickListDialog<T>({
                   {one.lead}
                 </span>
                 <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate text-ui-sm text-foreground">{one.title}</span>
-                  {one.subtitle ? <span className="truncate text-ui-xs text-muted-foreground">{one.subtitle}</span> : null}
+                  <Truncate className="text-ui-sm text-foreground">{one.title}</Truncate>
+                  {one.subtitle ? <Truncate className="text-ui-xs text-muted-foreground">{one.subtitle}</Truncate> : null}
                 </span>
                 {one.meta ? (
                   <span className="shrink-0 self-start pt-0.5 text-ui-2xs tabular-nums text-muted-foreground">{one.meta}</span>

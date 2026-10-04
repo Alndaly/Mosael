@@ -5,7 +5,8 @@ import type { Confirmation } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { payloadFields, type PayloadField } from "@/features/agent/confirmationPayload";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { NoteEditPreview } from "@/features/agent/NoteEditPreview";
@@ -54,7 +55,7 @@ export function ConfirmationCard({
     >
       <header className="flex min-w-0 items-center gap-2">
         <ShieldAlert size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-ui-xs text-muted-foreground">{eyebrow}</span>
+        <Truncate className="flex-1 text-ui-xs text-muted-foreground">{eyebrow}</Truncate>
         <PermissionBadge permission={item.permission} />
       </header>
       <p className="m-0 text-ui-sm font-semibold leading-[1.5] [overflow-wrap:anywhere]">
@@ -95,9 +96,9 @@ function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () =
         {item.error ? <FailureReason text={item.error} /> : null}
       </div>
       {onDismiss ? (
-        <Button variant="ghost" size="icon-xs" className="-my-1 shrink-0" aria-label={t("confirmDismiss")} onClick={onDismiss}>
+        <IconButton variant="ghost" size="icon-xs" className="-my-1 shrink-0" label={t("confirmDismiss")} onClick={onDismiss}>
           <X />
-        </Button>
+        </IconButton>
       ) : null}
     </div>
   );
@@ -188,7 +189,7 @@ function FieldList({ fields }: { fields: PayloadField[] }) {
         <dl className="m-0 grid min-w-0 grid-cols-[fit-content(40%)_minmax(0,1fr)] gap-x-3 gap-y-1 text-ui-xs">
           {values.map((one) => (
             <React.Fragment key={one.key}>
-              <dt className="min-w-0 truncate font-mono text-muted-foreground" title={one.key}>{one.key}</dt>
+              <Truncate as="dt" className="font-mono text-muted-foreground">{one.key}</Truncate>
               <dd className="m-0 min-w-0 [overflow-wrap:anywhere]">{one.text === "" ? <EmptyValue /> : one.text}</dd>
             </React.Fragment>
           ))}
@@ -223,7 +224,7 @@ function EmptyValue() {
 function FieldLabel({ name, meta }: { name: string; meta?: string }) {
   return (
     <div className="flex min-w-0 items-baseline gap-2 text-ui-xs">
-      <span className="min-w-0 truncate font-mono text-muted-foreground">{name}</span>
+      <Truncate className="font-mono text-muted-foreground">{name}</Truncate>
       {meta ? <span className="shrink-0 text-ui-2xs text-muted-foreground">{meta}</span> : null}
     </div>
   );

@@ -9,7 +9,9 @@ import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
+import { IconButton } from "@/components/ui/icon-button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { Truncate } from "@/components/ui/truncate";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { NOISE_KEYS } from "@/features/agent/machineFields";
@@ -151,15 +153,17 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
   return (
     <figure className="m-0 flex max-w-[240px] flex-col gap-1">
       {asset.data.kind === "image" ? (
-        <button
+        <IconButton
+          unstyled
           type="button"
+          label={asset.data.name}
           className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           //: 点开不是孤零零一张 —— 同一个工具结果里的全部图/视频装进画廊,
           //: 灯箱里可以左右翻(单张结果时 gallery 为空,行为和原来一样)。
           onClick={() => openImagePreview({ src, title: asset.data.name, gallery })}
         >
           <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
-        </button>
+        </IconButton>
       ) : asset.data.kind === "video" ? (
         //: 不用原生 controls —— 全站共享的 VideoPlayer(画板节点、大图灯箱同一副面孔)。
         //: 卡片尺寸与图/音频对齐(240×135):播放器悬停出控件,静止时压一枚大播放键。
@@ -179,7 +183,7 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
           <FileWarning size={13} /> {asset.data.name}
         </div>
       )}
-      <figcaption className="truncate text-ui-xs text-muted-foreground">{asset.data.name}</figcaption>
+      <Truncate as="figcaption" className="text-ui-xs text-muted-foreground">{asset.data.name}</Truncate>
     </figure>
   );
 }
@@ -367,7 +371,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="flex-none font-mono text-foreground">{tool.name}</span>
-            {preview && !open && <span className="min-w-0 flex-1 truncate font-mono">{preview}</span>}
+            {preview && !open && <Truncate className="flex-1 font-mono">{preview}</Truncate>}
             {/* 摘要占中间那一段(它可缩),状态与耗时**永远靠右** —— 但靠的是摘要那一栏的右缘,
                 不是整行的最右。没有摘要时补一个占位,否则这一行的耗时会贴在名字后面,
                 和上下几行对不齐。

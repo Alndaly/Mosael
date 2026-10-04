@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { PanelLeft } from "lucide-react";
 import { useMediaMatch } from "@/lib/useMediaMatch";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /** The same working index stays reachable when the canvas needs the full width. */
@@ -12,7 +12,7 @@ export function StudioIndex({ label, children }: { label: string; children: Reac
       <div className="absolute left-3 top-3 z-30">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="icon-sm" aria-label={label}><PanelLeft /></Button>
+            <IconButton variant="outline" size="icon-sm" label={label}><PanelLeft /></IconButton>
           </PopoverTrigger>
           <PopoverContent align="start" className="flex h-[min(600px,70vh)] w-[min(320px,calc(100vw-32px))] flex-col overflow-hidden p-0">
             {children}

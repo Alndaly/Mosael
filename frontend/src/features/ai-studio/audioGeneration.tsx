@@ -18,6 +18,7 @@ import { assetFileUrl, type GenerationOption } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Textarea } from "@/components/ui/textarea";
+import { Truncate } from "@/components/ui/truncate";
 import { capabilityNumber, supportsParameter } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
@@ -86,9 +87,9 @@ export function GeneratedAudioList({ assetIds, title }: { assetIds: string[]; ti
     <ul className="m-0 grid w-full max-w-[min(560px,100%)] list-none gap-2 p-0" aria-label={t("genAudioResults")}>
       {assetIds.map((assetId, index) => (
         <li key={assetId} className="grid gap-1 rounded-lg border border-border bg-card px-3 py-2">
-          <span className="truncate text-ui-xs font-medium text-muted-foreground">
+          <Truncate className="text-ui-xs font-medium text-muted-foreground">
             {assetIds.length > 1 ? `${title} · ${t("genAudioTrack").replace("{n}", String(index + 1))}` : title}
-          </span>
+          </Truncate>
           <audio className="block h-9 w-full" src={assetFileUrl(assetId)} controls preload="metadata" />
         </li>
       ))}

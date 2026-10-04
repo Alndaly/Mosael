@@ -3,6 +3,7 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+import { hoverHint } from "@/test/hint";
 
 /**
  * 自动放行留了痕,而**人此前看不到**。
@@ -105,5 +106,9 @@ it("摘要里的 **强调** 渲染成粗体,悬停提示是纯文本", async () 
 
   const strong = await screen.findByText("不隔离");
   expect(strong.tagName).toBe("STRONG");
-  expect(strong.closest("[title]")?.getAttribute("title")).toBe("⚠️ 不隔离,直接运行");
+  // 截断了才出说明:让这一行放不下,悬停读到的是纯文本(没有 ** 记号)。
+  const line = strong.closest<HTMLElement>(".truncate")!;
+  Object.defineProperty(line, "scrollWidth", { value: 400, configurable: true });
+  Object.defineProperty(line, "clientWidth", { value: 120, configurable: true });
+  expect(await hoverHint(line)).toBe("⚠️ 不隔离,直接运行");
 });

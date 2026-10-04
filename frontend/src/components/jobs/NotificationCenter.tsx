@@ -16,9 +16,10 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LIST_HAIRLINE } from "@/components/ui/floating";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { NOTIFICATION_DEEP_LINKS, gotoRecord } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -101,17 +102,12 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         if (next) void query.refetch();
       }}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label={t("notifTitle")}>
-              <Bell size={15} />
-              {unread > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{unread > 99 ? "99+" : unread}</em>}
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t("notifTitle")}</TooltipContent>
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <IconButton variant="ghost" size="icon" className="relative" label={t("notifTitle")}>
+          <Bell size={15} />
+          {unread > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{unread > 99 ? "99+" : unread}</em>}
+        </IconButton>
+      </PopoverTrigger>
 
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
@@ -201,8 +197,8 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                 {TYPE_ICONS[item.type] ?? <Bell size={13} />}
               </span>
               <span className="grid min-w-0 gap-0.5">
-                <span className={cn("truncate text-ui-sm", !item.read_at && "font-semibold")}>{item.title}</span>
-                {item.body && <small className="line-clamp-2 text-ui-sm leading-relaxed text-muted-foreground">{item.body}</small>}
+                <Truncate className={cn("text-ui-sm", !item.read_at && "font-semibold")}>{item.title}</Truncate>
+                {item.body && <Truncate as="small" lines={2} className="text-ui-sm leading-relaxed text-muted-foreground">{item.body}</Truncate>}
                 <small className="text-ui-2xs text-muted-foreground">{relativeTime(item.created_at, locale)}</small>
               </span>
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}

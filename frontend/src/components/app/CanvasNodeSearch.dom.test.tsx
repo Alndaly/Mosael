@@ -4,6 +4,8 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { messages, type MessageKey } from "@/app/messages";
+import { formatCombo } from "@/lib/shortcuts";
+import { readHint } from "@/test/hint";
 
 const zh = messages["zh-CN"];
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: MessageKey) => zh[key] }));
@@ -170,10 +172,10 @@ describe("查找节点", () => {
     expect(screen.queryByRole("textbox", { name: zh.wfNodeSearch })).toBeNull();
   });
 
-  it("工具条上的按钮也能打开,标题里写着快捷键", () => {
+  it("工具条上的按钮也能打开,悬停说明里写着快捷键", async () => {
     mount();
     const trigger = screen.getByRole("button", { name: zh.wfNodeSearch });
-    expect(trigger.getAttribute("title")).toContain("⌘F");
+    expect(await readHint(trigger)).toContain(formatCombo("Mod+F"));
     fireEvent.click(trigger);
     expect(screen.getByRole("textbox", { name: zh.wfNodeSearch })).toBeInTheDocument();
   });

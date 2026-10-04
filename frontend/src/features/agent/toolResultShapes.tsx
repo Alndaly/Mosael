@@ -7,6 +7,8 @@ import { errorText } from "@/api/errorMessage";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { AnsweredChoiceCard } from "@/features/agent/AnsweredChoice";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -115,9 +117,7 @@ function AssetRow({ row, onOpen }: { row: Record<string, unknown>; onOpen: (id: 
           </span>
         )}
       </span>
-      <span className="min-w-0 flex-1 truncate text-foreground" title={name}>
-        {name}
-      </span>
+      <Truncate className="flex-1 text-foreground">{name}</Truncate>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
         {kind}
         {duration != null && seconds(duration) ? ` · ${seconds(duration)}` : ""}
@@ -167,7 +167,7 @@ function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row) => (
         <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id)}>
-          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.name ?? row.id)}</span>
+          <Truncate className="flex-1 text-foreground">{String(row.name ?? row.id)}</Truncate>
           {row.active_sequence_id ? <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultActiveSequence")}</span> : null}
         </li>
       ))}
@@ -188,10 +188,10 @@ function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
           // 工具结果列表,不重排,兜底用 index 是安全的。
           <li className="grid gap-0.5 text-xs" key={String(row.id ?? row.session_id ?? row.tool_name ?? index)}>
             <span className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">
-              <span className="min-w-0 flex-1 truncate text-foreground" title={title}>{title}</span>
+              <Truncate className="flex-1 text-foreground">{title}</Truncate>
               {meta && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{meta}</span>}
             </span>
-            {snippet && <span className="line-clamp-2 text-ui-xs leading-[1.45] text-muted-foreground">{snippet}</span>}
+            {snippet && <Truncate lines={2} className="text-ui-xs leading-[1.45] text-muted-foreground">{snippet}</Truncate>}
           </li>
         );
       })}
@@ -215,14 +215,14 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
         const clips = Array.isArray(track.clips) ? (track.clips as Record<string, unknown>[]) : [];
         return (
           <div className="flex min-w-0 items-center gap-2" key={String(track.id ?? track.name ?? index)}>
-            <span className="w-[76px] shrink-0 grow-0 basis-[76px] truncate text-ui-xs text-muted-foreground">
+            <Truncate className="w-[76px] shrink-0 grow-0 basis-[76px] text-ui-xs text-muted-foreground">
               {String(track.name ?? track.kind ?? t("agentResultTrack").replace("{n}", String(index + 1)))}
-            </span>
+            </Truncate>
             <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
               {clips.map((clip, clipIndex) => (
-                <span className="max-w-[140px] shrink-0 truncate rounded-md border border-border bg-muted px-[7px] py-0.5 text-ui-xs" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
+                <Truncate className="max-w-[140px] shrink-0 rounded-md border border-border bg-muted px-[7px] py-0.5 text-ui-xs" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
                   {String(clip.asset ?? clip.asset_id ?? t("agentResultClip"))}
-                </span>
+                </Truncate>
               ))}
               {clips.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultTrackEmpty")}</span>}
             </div>
@@ -238,7 +238,7 @@ function ConfirmationCard({ value }: { value: Record<string, unknown> }) {
   const status = String(value.status ?? "");
   return (
     <div className="flex items-center justify-between gap-2 text-xs" data-status={status}>
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.summary ?? value.permission ?? "")}</span>
+      <Truncate className="flex-1 text-foreground">{String(value.summary ?? value.permission ?? "")}</Truncate>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
         {status === "pending" ? t("agentResultAwaitingConfirm") : status}
       </span>
@@ -251,10 +251,10 @@ function SearchResults({ rows }: { rows: Record<string, unknown>[] }) {
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
         <li className="grid gap-0.5 text-xs" key={String(row.url ?? index)}>
-          <a href={String(row.url)} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate text-foreground">
-            {String(row.title ?? row.url)}
+          <a href={String(row.url)} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 text-foreground">
+            <Truncate>{String(row.title ?? row.url)}</Truncate>
           </a>
-          <span className="line-clamp-2 text-ui-xs leading-[1.45] text-muted-foreground">{String(row.snippet ?? "")}</span>
+          <Truncate lines={2} className="text-ui-xs leading-[1.45] text-muted-foreground">{String(row.snippet ?? "")}</Truncate>
         </li>
       ))}
     </ul>
@@ -271,10 +271,8 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
               没有 min-w-0 —— 说明的自动最小尺寸是 min-content,于是长说明把名字挤成 **0 宽**,
               truncate 连省略号都画不出:节点目录里说明长的那几行左边整个是空的,说明短的那几行
               名字又好好的,看着像随机丢字。现在反过来:名字按内容宽、最多占四成,说明拿剩下的。 */}
-          <span className="min-w-0 max-w-[45%] shrink-0 truncate text-foreground" title={String(row.name ?? row.label ?? row.type)}>
-            {String(row.name ?? row.label ?? row.type)}
-          </span>
-          <span className="min-w-0 flex-1 line-clamp-2 text-right text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</span>
+          <Truncate className="max-w-[45%] shrink-0 text-foreground">{String(row.name ?? row.label ?? row.type)}</Truncate>
+          <Truncate lines={2} className="flex-1 text-right text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</Truncate>
         </li>
       ))}
     </ul>
@@ -296,12 +294,11 @@ function GenerationModelList({ rows }: { rows: Record<string, unknown>[] }) {
           className="flex w-full min-w-0 items-center gap-2 text-xs"
           key={`${String(row.provider ?? "")}:${String(row.model ?? index)}`}
         >
-          <span className="min-w-0 flex-1 truncate font-mono text-foreground" title={String(row.model ?? "")}>
-            {String(row.model ?? "")}
-          </span>
-          <span className="shrink-0 truncate text-ui-xs text-muted-foreground" title={String(row.profile ?? "")}>
-            {String(row.provider ?? "")}
-          </span>
+          <Truncate className="flex-1 font-mono text-foreground">{String(row.model ?? "")}</Truncate>
+          {/* 供应商后面的档案名(哪一套凭据)放进悬停说明:它是限定语,不值得占一列。 */}
+          <Hint label={String(row.profile ?? "") || undefined}>
+            <span className="shrink-0 whitespace-nowrap text-ui-xs text-muted-foreground">{String(row.provider ?? "")}</span>
+          </Hint>
           {/* 配置了但连不上的要看得出来 —— 否则模型会挑一个用不了的引擎去生成。 */}
           {row.available === false && (
             <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] px-1.5 text-ui-2xs text-destructive">
@@ -322,16 +319,16 @@ function WorkflowCard({ value }: { value: Record<string, unknown> }) {
   const chips = nodes.slice(0, 8).map((node, index) => String(node.name ?? node.type ?? index));
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? t("agentResultWorkflow"))}</span>
+      <Truncate className="flex-1 text-foreground">{String(value.name ?? t("agentResultWorkflow"))}</Truncate>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
         {t("agentResultWorkflowStats").replace("{nodes}", String(nodes.length)).replace("{edges}", String((graph.edges ?? []).length))}
       </span>
       {chips.length > 0 && (
         <span className="flex min-w-0 flex-wrap gap-1">
           {chips.map((chip, index) => (
-            <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={`${chip}-${index}`}>{chip}</span>
+            <Truncate className="max-w-[140px] rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={`${chip}-${index}`}>{chip}</Truncate>
           ))}
-          {nodes.length > 8 && <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground">+{nodes.length - 8}</span>}
+          {nodes.length > 8 && <span className="rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground">+{nodes.length - 8}</span>}
         </span>
       )}
     </div>
@@ -343,11 +340,11 @@ function TaggedAsset({ value }: { value: Record<string, unknown> }) {
   const tags = (value.tags as unknown[]).map(String);
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.asset_id)}</span>
+      <Truncate className="flex-1 text-foreground">{String(value.name ?? value.asset_id)}</Truncate>
       <span className="flex min-w-0 flex-wrap gap-1">
         {tags.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultTagsCleared")}</span>}
         {tags.map((tag) => (
-          <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>{tag}</span>
+          <Truncate className="max-w-[140px] rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>{tag}</Truncate>
         ))}
       </span>
     </div>
@@ -363,13 +360,13 @@ function UpdatedList({ value }: { value: Record<string, unknown> }) {
       <ul className="m-0 grid list-none gap-1 p-0">
         {rows.map((row, index) => (
           <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id ?? index)}>
-            <span className="min-w-0 flex-1 truncate text-foreground" title={String(row.name ?? row.id ?? "")}>
+            <Truncate className="flex-1 text-foreground">
               {String(row.name ?? row.id ?? t("agentResultItem").replace("{n}", String(index + 1)))}
-            </span>
+            </Truncate>
             {Array.isArray(row.tags) && (
               <span className="flex min-w-0 flex-wrap gap-1">
                 {row.tags.map((tag) => (
-                  <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={String(tag)}>{String(tag)}</span>
+                  <Truncate className="max-w-[140px] rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={String(tag)}>{String(tag)}</Truncate>
                 ))}
               </span>
             )}
@@ -391,7 +388,7 @@ function AssetBundle({ value }: { value: Record<string, unknown> }) {
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{t("agentResultAssetBundle")}</span>
+      <Truncate className="flex-1 text-foreground">{t("agentResultAssetBundle")}</Truncate>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultCount").replace("{n}", String(value.count ?? rows.length))}</span>
     </div>
   );
@@ -402,8 +399,13 @@ function AssetRef({ value }: { value: Record<string, unknown> }) {
   const id = String(value.asset_id ?? "");
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? t("agentResultAsset"))}</span>
-      {id && <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground">{id.slice(0, 12)}</span>}
+      <Truncate className="flex-1 text-foreground">{String(value.name ?? value.title ?? t("agentResultAsset"))}</Truncate>
+      {/* 只摆前 12 位认个脸,完整 id 在悬停说明里。 */}
+      {id && (
+        <Hint label={id}>
+          <span className="rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground">{id.slice(0, 12)}</span>
+        </Hint>
+      )}
       {typeof value.generation_id === "string" && value.generation_id.trim() && (
         <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultGenerationTask")} {value.generation_id.slice(0, 8)}</span>
       )}
@@ -436,28 +438,31 @@ function RefSummary({ value }: { value: Record<string, unknown> }) {
     .map(([key, label]) => [key, t(label)] as const);
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? t("agentResultCreated"))}</span>
+      <Truncate className="flex-1 text-foreground">{String(value.name ?? value.title ?? t("agentResultCreated"))}</Truncate>
       {refs.map(([key, label]) => {
         const id = String(value[key]);
         const go = REF_TARGETS[key];
-        const chip = "max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground";
+        // 只摆前 12 位认个脸,完整的「类型 + id」在悬停说明里。
+        const chip = "max-w-[140px] min-w-0 rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground";
         if (!go) {
           return (
-            <span className={chip} key={key} title={`${label} ${id}`}>
-              {label} {id.slice(0, 12)}
-            </span>
+            <Hint label={`${label} ${id}`} key={key}>
+              <span className={chip}>
+                <Truncate>{label} {id.slice(0, 12)}</Truncate>
+              </span>
+            </Hint>
           );
         }
         return (
-          <button
-            type="button"
-            key={key}
-            className={cn(chip, "cursor-pointer transition-colors hover:border-border-strong hover:text-foreground")}
-            title={`${label} ${id}`}
-            onClick={() => go(id)}
-          >
-            {label} {id.slice(0, 12)}
-          </button>
+          <Hint label={`${label} ${id}`} key={key}>
+            <button
+              type="button"
+              className={cn(chip, "cursor-pointer transition-colors hover:border-border-strong hover:text-foreground")}
+              onClick={() => go(id)}
+            >
+              <Truncate>{label} {id.slice(0, 12)}</Truncate>
+            </button>
+          </Hint>
         );
       })}
       {value.nodes != null && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultNodes").replace("{n}", String(value.nodes))}</span>}
@@ -472,7 +477,7 @@ function PluginOutput({ value }: { value: Record<string, unknown> }) {
   return (
     <div className="grid min-w-0 gap-1.5">
       <div className="flex items-center justify-between gap-2 text-xs" data-status={String(value.status ?? "")}>
-        <span className="min-w-0 flex-1 truncate text-foreground">{t("agentResultPluginTool")}</span>
+        <Truncate className="flex-1 text-foreground">{t("agentResultPluginTool")}</Truncate>
         <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.status ?? "done")}</span>
       </div>
       {error ? <LongText text={errorText(error)} /> : <ToolResultCard value={output} />}
@@ -534,11 +539,11 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
     .slice(0, 8);
   if (entries.length === 0) return <EmptyResult />;
   return (
-    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:truncate [&_dd]:text-foreground [&_dt]:text-muted-foreground">
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
       {entries.map(([key, item]) => (
         <React.Fragment key={key}>
           <dt>{keyLabel(key, t)}</dt>
-          <dd title={typeof item === "string" ? item : undefined}>{valueLabel(item, t)}</dd>
+          <Truncate as="dd">{valueLabel(item, t)}</Truncate>
         </React.Fragment>
       ))}
     </dl>

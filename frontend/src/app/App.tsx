@@ -52,6 +52,7 @@ import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
@@ -172,35 +173,35 @@ function PublishViewBar() {
       )}
     >
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoBack}
           onClick={() => void window.mosaelPublish?.back()}
-          title={t("navBack")}
-          aria-label={t("navBack")}
+          label={t("navBack")}
         >
           <ChevronLeft size={16} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          unstyled
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoForward}
           onClick={() => void window.mosaelPublish?.forward()}
-          title={t("navForward")}
-          aria-label={t("navForward")}
+          label={t("navForward")}
         >
           <ChevronRight size={16} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          unstyled
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           onClick={() => void window.mosaelPublish?.reload()}
-          title={state.loading ? t("navStop") : t("navReload")}
-          aria-label={state.loading ? t("navStop") : t("navReload")}
+          label={state.loading ? t("navStop") : t("navReload")}
         >
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
-        </button>
+        </IconButton>
       </div>
       <form
         className="[-webkit-app-region:no-drag] flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-ui-sm [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0"

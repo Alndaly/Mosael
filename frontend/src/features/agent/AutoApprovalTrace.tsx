@@ -7,6 +7,7 @@ import { confirmationKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
+import { Truncate } from "@/components/ui/truncate";
 import { relativeTime } from "@/lib/time";
 
 
@@ -74,9 +75,9 @@ export function AutoApprovalTrace({ workspaceId, sessionId }: { workspaceId: str
                 className={card.decision_mode === "bypass" ? "mt-[3px] text-destructive" : "mt-[3px] text-primary"}
               />
               <span className="grid gap-0.5">
-                <span className="truncate text-foreground" title={toPlainText(card.summary)}>
+                <Truncate className="text-foreground" text={card.summary ? toPlainText(card.summary) : undefined}>
                   {card.summary ? <InlineMarkdown text={card.summary} links={false} /> : card.tool}
-                </span>
+                </Truncate>
                 <span className="text-muted-foreground">
                   {t(GATE_LABEL[card.decision_mode])}
                   {card.resolved_at ? ` · ${relativeTime(card.resolved_at, locale)}` : ""}

@@ -14,6 +14,8 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 vi.mock("@/features/media/AssetPreviewModalById", () => ({ AssetPreviewModalById: () => null }));
 vi.mock("@/api/client", () => ({ assetThumbnailUrl: () => "" }));
 vi.mock("@/app/preferences", async () => {
@@ -31,11 +33,14 @@ afterEach(() => {
 });
 
 describe("引用标签", () => {
-  it("任务不换页，开任务中心并带上完整 id", () => {
+  it("任务不换页，开任务中心并带上完整 id", async () => {
     const events: string[] = [];
     window.addEventListener("mosael:open-tasks", (e) => events.push(String((e as CustomEvent).detail)));
     render(<ToolResultCard value={{ name: "跑一遍", job_id: "c5d80984cd054c86b7405728f6689230" }} />);
-    fireEvent.click(screen.getByTitle(/任务 c5d80984cd054c86b7405728f6689230/));
+    const chip = screen.getByRole("button", { name: "任务 c5d80984cd05" });
+    // 胶囊上只摆前 12 位,完整 id 在悬停说明里。
+    expect(await readHint(chip)).toBe("任务 c5d80984cd054c86b7405728f6689230");
+    fireEvent.click(chip);
     // 截断只发生在显示上 —— 派发出去的必须是完整 id,否则跟进的是一条不存在的任务。
     expect(events).toEqual(["c5d80984cd054c86b7405728f6689230"]);
     expect(HASH()).toBe("");
@@ -43,13 +48,13 @@ describe("引用标签", () => {
 
   it("工作流跳到工作流页", () => {
     render(<ToolResultCard value={{ name: "改好了", workflow_id: "wf-1" }} />);
-    fireEvent.click(screen.getByTitle("工作流 wf-1"));
+    fireEvent.click(screen.getByRole("button", { name: "工作流 wf-1" }));
     expect(HASH()).toBe("#/workflows");
   });
 
   it("项目带上 id 进剪辑页", () => {
     render(<ToolResultCard value={{ name: "建好了", project_id: "p 1/2" }} />);
-    fireEvent.click(screen.getByTitle("项目 p 1/2"));
+    fireEvent.click(screen.getByRole("button", { name: "项目 p 1/2" }));
     // id 要转义 —— 不转的话带空格或斜杠的 id 会把 hash 拆坏。
     expect(HASH()).toBe(`#/editor?p=${encodeURIComponent("p 1/2")}`);
   });
@@ -57,8 +62,8 @@ describe("引用标签", () => {
   it("没有落点的仍然是静态的，不伪装成可点", () => {
     render(<ToolResultCard value={{ name: "出图了", generation_id: "g-1", sequence_id: "s-1" }} />);
     for (const label of ["生成 g-1", "序列 s-1"]) {
-      const chip = screen.getByTitle(label);
-      expect(chip.tagName).toBe("SPAN");
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: label })).toBeNull();
     }
   });
 });

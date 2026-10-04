@@ -4,6 +4,7 @@ import { Node, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from "@
 import { assetThumbnailUrl } from "@/api/client";
 import { REFERENCE_META, type ReferenceKind } from "@/features/agent/references";
 import { useReferencePreview } from "@/features/agent/useReferencePreview";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -101,7 +102,6 @@ export function ReferenceBadge({
         : {})}
       data-agent-ref-kind={kind}
       data-agent-ref-id={id}
-      title={name}
       //: 底色**不能用调色板里的具名面色**(原来是 bg-secondary)。这颗胶囊同时出现在输入框里
       //: 和消息气泡里,而用户气泡自己就是 bg-secondary —— 两者一模一样,胶囊在气泡里完全消失,
       //: 只剩一行灰字挨着正文。改成"在当前底色上再压一层前景色":无论压在哪张面上、在哪个
@@ -118,7 +118,7 @@ export function ReferenceBadge({
       ) : (
         <Icon size={11} className="shrink-0 text-muted-foreground" />
       )}
-      <span className="truncate">{name}</span>
+      <Truncate>{name}</Truncate>
     </Tag>
   );
 }
