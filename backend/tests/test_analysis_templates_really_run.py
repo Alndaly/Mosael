@@ -592,6 +592,15 @@ class Test评论区洞察真跑:
         assert "读到 1 条" in line and "1374" in line and "不是全部" in line
         assert line in context["data_block"]["text"]
 
+    def test_引号里只放评论原文_分批和综合的提示词都说清(self) -> None:
+        """实测(k3,409 条评论):报告把归纳出来的一句话放进「」当「依据」,取回的评论里没有这句。"""
+        nodes = {node["id"]: node for node in comment_insights_graph(chat=CHAT)["nodes"]}
+        batch = nodes["batch_analyze"]["config"]["body"]["nodes"][0]["config"]["system"]
+        for system in (nodes["insight"]["config"]["system"], batch):
+            assert "逐字摘录" in system and "不要加「」" in system
+        viral = {node["id"]: node for node in viral_video_breakdown_graph(chat=CHAT)["nodes"]}
+        assert "逐字摘录" in viral["breakdown"]["config"]["system"]
+
     def test_读页面的节点带着B站取数的上限_时间预算_和按界面语言写好的没取全原因(self) -> None:
         graph = comment_insights_graph(chat=CHAT, locale="en")
         web_read = next(node for node in graph["nodes"] if node["id"] == "web_read")["config"]

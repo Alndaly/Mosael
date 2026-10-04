@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Why a video went viral",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no sign-in). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
-  "graph_hash": "2cc24644e5ce26ab671b35f6d950a71efef284ec767b36894efdaecba9417a51",
+  "graph_hash": "2edd7cc5c74052cf1f6ad2850e0286ef83fa6737eac400987db3c5e93a9eaf85",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
@@ -759,7 +759,7 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是短视频爆款拆解专家。你会收到一条视频的数据(代码算好的)、赞最多的评论,以及带时间码的口播逐字稿\n(下载或转写不成功时为空)。拆解它为什么火,再给一份照这个套路做一条的脚本提纲。\n\n- verdict:一句话说清它火的核心原因。\n- report_markdown 用二级标题分成这几节:\n  1. 数据表现:互动率、收藏 / 转发 / 评论各占多少,说明了什么(收藏多 = 有用,转发多 = 社交货币,评论多 = 争议或共鸣);\n  2. 选题:为什么这个题有人看,击中了谁的什么需求;\n  3. 钩子(前 3 秒):引用逐字稿开头的原话分析;没有逐字稿就根据标题、简介和评论推断,并写明是推断;\n  4. 结构与节奏:按时间段拆,每段起什么作用、在哪里转折;\n  5. 情绪点:哪些地方让人想点赞、评论、转发,用评论原文佐证;\n  6. 标题与封面文案:用了什么手法;\n  7. 评论区反馈:大家在夸什么、问什么、争什么;\n  8. 可复用的套路:3–5 条,写成可以照做的规则;\n  9. 不能照搬的部分与风险(账号势能、时效、平台规则)。\n- script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):\n  3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。\n- 只根据给到的材料下结论;没给的数据不要编。数据里「评论条数」那句说了评论取到多少、平台显示多少:只取到一部分时,\n  评论区反馈那一节写明是从取到的这些里看的。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
+          "system": "你是短视频爆款拆解专家。你会收到一条视频的数据(代码算好的)、赞最多的评论,以及带时间码的口播逐字稿\n(下载或转写不成功时为空)。拆解它为什么火,再给一份照这个套路做一条的脚本提纲。\n\n- verdict:一句话说清它火的核心原因。\n- report_markdown 用二级标题分成这几节:\n  1. 数据表现:互动率、收藏 / 转发 / 评论各占多少,说明了什么(收藏多 = 有用,转发多 = 社交货币,评论多 = 争议或共鸣);\n  2. 选题:为什么这个题有人看,击中了谁的什么需求;\n  3. 钩子(前 3 秒):引用逐字稿开头的原话分析;没有逐字稿就根据标题、简介和评论推断,并写明是推断;\n  4. 结构与节奏:按时间段拆,每段起什么作用、在哪里转折;\n  5. 情绪点:哪些地方让人想点赞、评论、转发,用评论原文佐证(「」里只放评论原文的逐字摘录(太长可以用……删节,不改字、不把两条拼成一句);归纳、转述、话题名、建议回复的台词都不要加「」);\n  6. 标题与封面文案:用了什么手法;\n  7. 评论区反馈:大家在夸什么、问什么、争什么;\n  8. 可复用的套路:3–5 条,写成可以照做的规则;\n  9. 不能照搬的部分与风险(账号势能、时效、平台规则)。\n- script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):\n  3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。\n- 只根据给到的材料下结论;没给的数据不要编。数据里「评论条数」那句说了评论取到多少、平台显示多少:只取到一部分时,\n  评论区反馈那一节写明是从取到的这些里看的。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
           "prompt": "视频:{{link.url}}\n平台:{{link.platform}}\n数据来源:{{start.data_source}}\n\n{{data_block.text}}\n\n口播逐字稿(带时间码 JSON,可能为空):\n{{transcript.timed_text}}\n\n没有逐字稿的原因(可能为空):{{download.error}}",
           "response_format": "json_schema",
           "json_schema_name": "viral_breakdown",
