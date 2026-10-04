@@ -101,7 +101,7 @@ export const getModelLibrary = (instanceId: string) =>
 export const getModelDetail = (instanceId: string, folder: string, name: string) =>
   api<ModelDetail>(`/api/plugins/instances/${instanceId}/model-library/detail?${new URLSearchParams({ folder, name })}`);
 
-/** 一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是哪个文件。 */
+/** 一个链接(HuggingFace 文件、Civitai 页面或下载链接、ModelScope 的模型页或文件、别的直链)指的是哪个文件。 */
 export const resolveModelLink = (instanceId: string, url: string) =>
   api<ModelResolved>(`/api/plugins/instances/${instanceId}/model-library/resolve`, {
     method: "POST",

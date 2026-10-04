@@ -119,7 +119,7 @@ LoRA 的下拉不在这次范围里加缩略图(见「后续」)。
 - 写盘只在第 3 条路:目标目录是 ComfyUI 自己报的那个模型目录(按用户选的目录名查,不收任意路径),文件名不含分隔符;
   不覆盖;半截文件是 Mosael 自己的 `.mosael-part`,只删它;
 - 不装自定义节点、不改 Manager 的配置、不重启 ComfyUI —— 这些都是用户那台机器上的决定,Mosael 只说该怎么做;
-- 插件如实申报它要做的事(见「后续」):连 ComfyUI、连 HuggingFace / Civitai、同一台电脑时写 ComfyUI 的 models 目录。
+- 插件如实申报它要做的事(见「后续」):连 ComfyUI、连 HuggingFace / Civitai / ModelScope、同一台电脑时写 ComfyUI 的 models 目录。
   粘贴的别的直链也会去连 —— 那是用户自己给的地址,确认框里写着来自哪个站。
 
 ## 后续(2026-10-04,维护者按建议拍板,插件 1.9.0)
@@ -133,3 +133,40 @@ LoRA 的下拉不在这次范围里加缩略图(见「后续」)。
 - **经 Manager 下载时下载框先说清楚**:要带 Civitai 令牌时它会留在那台机器的任务记录里、看不到按字节的进度、开始后取消停不下
   那边的下载。解析 Civitai 链接先不带令牌问,对方要登录才带;
 - 用户那台 ComfyUI 要不要经 Manager 下载(把 `network_mode` 改成 `personal_cloud` 并重启)由用户在那台机器上决定。
+
+## 后续(2026-10-05,插件 1.10.0):ModelScope(魔搭)
+
+维护者:「modelscope 上面也有很多好用的模型 也得要支持」。和 HuggingFace、Civitai 并列,规矩照旧。动手前对真站点只读核对过
+(2026-10-05):
+
+| 要什么 | 接口 / 实测 |
+| --- | --- |
+| 模型信息 | `GET /api/v1/models/{仓库}` → `{"Code":200,"Data":{…},"Success":true}`;`Name`、`ChineseName`、`Revision`(默认分支,`master`)、AIGC 专区的 `AigcType`(只有 Checkpoint / LoRA / VAE 三种,官方 SDK 的 `AigcModel.AIGC_TYPES` 同一份)、`VisionFoundation`(登记的底模类型:SD_XL、FLUX_1、QWEN_IMAGE_20_B、WAN_VIDEO_2_2_I2V_A_14_B、KREA_2……)、`BaseModel`(底模仓库,可带 `@版本`)、`TriggerWords` |
+| 文件列表 | `GET /api/v1/models/{仓库}/repo/files?Revision=&Recursive=&Root=` → `Data.Files[]`:`Path`、`Size`、`Sha256`、`Type`(blob / tree)。分支不对回 404,目录不存在回 200、`Files: null` |
+| 下载 | `/models/{仓库}/resolve/{版本}/{路径}`:HEAD 回 200 和 `X-Linked-Etag`(就是 sha256),**不给长度**;GET 小文件直接回,LFS 文件 302 到签好名的 CDN(`cdn-lfs-cn-1.modelscope.cn` / `cdn-lfs-ap-1.modelscope.ai`),那边给长度和 `content-disposition` |
+| 没有的 | 模型不存在:404 + `Code 10010205001`;文件不存在:HEAD 404、GET 500 |
+| 认证 | 官方 SDK(modelscope_hub)把访问令牌既当 `Authorization: Bearer` 发(新接口),又当会话 cookie `m_session_id` 发(`/api/v1` 老接口和下载);它对 404 的说明是「不存在,或者是要登录的私有仓库」 |
+| 国际站 | `modelscope.ai` 接口一样,但**是另一个站**:SDXL base、实测的 LoRA 在 .cn 有、在 .ai 404;同名仓库两边的数据也不一样;SDK 找不到时才去另一个站找,令牌也分站(「这个令牌在另一个站有效」) |
+
+- **链接**:模型页 `/models/{仓库}`(及 `/summary`、`/files` 这些页签)、目录页 `/tree/{版本}/{目录}`、文件页
+  `/file/view/{版本}/{路径}`(路径里的斜杠常被编码成 `%2F`)、直链 `/resolve/{版本}/{路径}`、SDK 的
+  `/api/v1/models/{仓库}/repo?Revision=&FilePath=`。文件链接直接解析那一个;模型页 / 目录页里只有一个模型文件
+  (`.safetensors`、`.sft`、`.ckpt`、`.pt`、`.pth`、`.bin`、`.gguf`)就是它,好几个就列出候选(最多十个)请用户贴具体文件的
+  地址 —— 比 HuggingFace 贴仓库页只说「去 Files 页」多走一步。大小取文件列表里的 `Size`(HEAD 不给长度);
+- **目录与家族**:`AigcType` Checkpoint / LoRA / VAE → checkpoints / loras / vae(这台服务器没有那个目录就不建议);推不出就
+  像 HuggingFace 那样看路径里有没有这台服务器上的目录名(Comfy-Org 在魔搭上也有拆分仓库的镜像)。家族只认 AIGC 专区登记的:
+  `VisionFoundation` 和 `BaseModel` 都是架构名的写法,接文件头底模的同一张表(为它把 `wan_video_2_2`、`sd_2` 两种写法补进表里);
+  SDXL 再按底模仓库名、它自己的仓库名和文件名细分 Illustrious / NoobAI / Pony(ModelE/Illustrious-XL 登记的是 SD_XL 上的
+  Checkpoint,底模写 SDXL base);表里没有的原样交出底模仓库名。普通仓库不猜;
+- **两个站各认各的**:`www.` 换掉(`www.modelscope.cn` → `modelscope.cn`),`.ai` 不改写成 `.cn` —— 和 Civitai 的别名不同,
+  它们不是同一个站;
+- **令牌**:清单加 `modelscope_token`,只发给 `modelscope.cn` / `modelscope.ai`(CDN 那一跳不带),两样一起发
+  (Bearer + `m_session_id`,和 SDK 一样)。解析时先不带,回 401 / 403 **或 404**(私有模型看不到时它回 404)且填了令牌才
+  带上再问;下载那一步和 HuggingFace、Civitai 一样,填了就带给 ModelScope 自己。一个连接只有一格:令牌是哪个站的,就只在那个
+  站上管用,说明里写明;
+- **Manager**:V4 的装模型接口不挑站点(除 HuggingFace / GitHub 走它自己的下载器外,别的地址一律按浏览器 UA 跟着跳转下),
+  只看安全策略 —— ModelScope 的直链照样能交给它。它不收请求头,ModelScope 的令牌只走请求头和 cookie(没有放进地址的用法,SDK 也不这么用),所以经 Manager
+  带不过去,下载框像 HuggingFace 那样说清楚;
+- **工作流里声明的地址**:可信来源加上 `https://modelscope.cn/`、`https://modelscope.ai/`(先换成规范域名再比)。这一条比
+  ComfyUI 官方前端的白名单宽 —— 魔搭是国内用户最常用的模型站;
+- **权限**:清单加 `network:modelscope`,已有连接升级后照 1.9.0 的规矩先停用、等授予这一项。

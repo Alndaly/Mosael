@@ -4,9 +4,9 @@
 
 - 列出:每个目录的每个文件(大小、改动时间、预览地址),推断的底模家族(先元数据、再文件名,凭的是什么写明)、
   触发词(作者写的,或训练标签里最多的几个)、哪几张工作流在用;
-- 工作流缺的模型:声明了下载地址、节点真在用、这台服务器上又没有的才列,只认 HuggingFace / Civitai;
+- 工作流缺的模型:声明了下载地址、节点真在用、这台服务器上又没有的才列,只认 HuggingFace / Civitai / ModelScope;
 - 逐个读的元数据记在持久目录里,第二次只读目录;
-- 链接解析:HuggingFace 文件、Civitai 页面、别的直链;
+- 链接解析:HuggingFace 文件、Civitai 页面、ModelScope 的文件与模型页、别的直链;
 - 下载按优先级走:Manager → 同一台机器直接写 → 说清楚能做的那一步。不覆盖已有文件,取消时只删自己的半截文件,
   空间不够就不下;Manager 被安全策略拒绝时说人话、记下来,能走本机就走本机;令牌只发给它自己那个站。
 """
@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import sys
 import threading
@@ -21,6 +22,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib import parse
 
 import pytest
 
@@ -393,8 +395,9 @@ def test_令牌只发给它自己那个站(comfy, data_dir, tmp_path, files) -> 
     _same_machine(comfy, tmp_path / "models")
     site = files({"/tiny.safetensors": b"abc"})
     _download(comfy, {"url": f"{site.url}/tiny.safetensors", "folder": "vae", "filename": "t.safetensors"},
-              data_dir, tmp_path, HUGGINGFACE_TOKEN="hf_secret", CIVITAI_TOKEN="civ_secret")
-    assert all(request["auth"] is None for request in site.requests), "HuggingFace / Civitai 的令牌不发给别的站"
+              data_dir, tmp_path, HUGGINGFACE_TOKEN="hf_secret", CIVITAI_TOKEN="civ_secret", MODELSCOPE_TOKEN="ms_secret")
+    assert all(request["auth"] is None for request in site.requests), \
+        "HuggingFace / Civitai / ModelScope 的令牌不发给别的站"
 
 
 def test_Manager那条路_提交装模型_等到下完(comfy, data_dir, tmp_path) -> None:
@@ -662,6 +665,329 @@ def test_解析认不出的HuggingFace页面_说该复制哪个地址(modules, c
 
     with pytest.raises(Exception, match="Files"):
         sources.resolve({"url": "https://huggingface.co/Comfy-Org/z_image_turbo"}, Comfy(comfy.url), "zh")
+
+
+# --- ModelScope(魔搭)--------------------------------------------------------
+
+def _ms_file(path: str, size: int = 1000) -> dict[str, Any]:
+    return {"Path": path, "Name": path.split("/")[-1], "Size": size, "Sha256": "ab" * 32, "Type": "blob"}
+
+
+#: AIGC 专区里的一个 LoRA(字段照 2026-10 真站点的接口):一个模型文件,类型 LoRA,底模 SDXL 上的 Illustrious。
+MS_LORA = {
+    "info": {"Name": "chibi-style", "ChineseName": "Q 版画风", "Revision": "master", "AigcType": "LoRA",
+             "VisionFoundation": "SD_XL", "BaseModel": ["ModelE/Illustrious-XL"], "TriggerWords": ["chibi", ""]},
+    "files": [_ms_file(".gitattributes", 2143), _ms_file("README.md", 2928), _ms_file("configuration.json", 108),
+              _ms_file("chibi_v2.safetensors", 228456516)],
+}
+#: 一个普通仓库(不在 AIGC 专区):ComfyUI 官方的拆分仓库在魔搭上的镜像,按 ComfyUI 的目录名放文件。
+MS_SPLIT = {
+    "info": {"Name": "Qwen-Image_ComfyUI", "ChineseName": "", "Revision": "master", "AigcType": "", "VisionFoundation": "",
+             "BaseModel": []},
+    "files": [{"Path": "split_files", "Name": "split_files", "Size": 0, "Type": "tree"},
+              {"Path": "split_files/vae", "Name": "vae", "Size": 0, "Type": "tree"},
+              _ms_file("README.md"), _ms_file("split_files/vae/qwen_image_vae.safetensors", 253806246),
+              _ms_file("split_files/diffusion_models/qwen_image_fp8_e4m3fn.safetensors", 20430635136),
+              _ms_file("split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", 9384670680)],
+}
+
+
+class _ModelScope:
+    """替 sources 的出网口扮 ModelScope:模型信息(`/api/v1/models/{仓库}`)、文件列表(`…/repo/files`,认 Revision、
+    Root、Recursive)。真站点的样子:没有的仓库、没有的分支回 404;`locked` 里的仓库不带对的令牌就回给定的状态码
+    (私有的回 404,要授权的回 401 / 403)。站点按域名分:modelscope.cn 和 modelscope.ai 各是各的。记下每次请求。"""
+
+    def __init__(self, repos: dict[str, dict[str, Any]], *, site: str = "modelscope.cn",
+                 locked: dict[str, int] | None = None, token: str = "ms_secret") -> None:
+        self.repos, self.site, self.locked, self.token = repos, site, locked or {}, token
+        self.calls: list[tuple[str, str, dict[str, str]]] = []
+
+    def __call__(self, url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: float = 30):
+        self.calls.append((method, url, dict(headers or {})))
+        parts = parse.urlsplit(url)
+        found = re.match(r"^/api/v1/models/([^/]+/[^/]+?)(/repo/files)?$", parse.unquote(parts.path))
+        repo = found.group(1) if found and parts.hostname == self.site else ""
+        if repo not in self.repos:
+            return self._answer(404, {"Code": 10010205001, "Message": "获取模型信息失败,信息:record not found", "Success": False})
+        if repo in self.locked and (headers or {}).get("Authorization") != f"Bearer {self.token}":
+            return self._answer(self.locked[repo], {"Code": self.locked[repo], "Message": "denied", "Success": False})
+        if not found.group(2):
+            return self._answer(200, {"Code": 200, "Data": self.repos[repo]["info"], "Success": True})
+        query = {key: values[0] for key, values in parse.parse_qs(parts.query).items()}
+        if query.get("Revision", "master") != "master":
+            return self._answer(404, {"Code": 10990101004, "Message": "获取模型目录树失败", "Success": False})
+        root = query.get("Root", "").strip("/")
+        recursive = query.get("Recursive", "true").lower() == "true"
+
+        def under(path: str) -> bool:
+            rest = path[len(root) + 1:] if root else path
+            return (not root or path.startswith(root + "/")) and (recursive or "/" not in rest)
+
+        files = [one for one in self.repos[repo]["files"] if under(one["Path"])]
+        return self._answer(200, {"Code": 200, "Data": {"Files": files or None}, "Success": True})
+
+    def _answer(self, status: int, body: dict[str, Any]):
+        from sources import Answer
+
+        return Answer(status=status, headers={"content-type": "application/json"},
+                      body=json.dumps(body, ensure_ascii=False).encode(), url="")
+
+
+def test_解析ModelScope文件页_AIGC类型定目录_底模定家族_交回resolve直链(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    site = _ModelScope({"someone/chibi-style": MS_LORA})
+    monkeypatch.setattr(sources, "fetch", site)
+    monkeypatch.setenv("MODELSCOPE_TOKEN", "ms_secret")
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://modelscope.cn/models/someone/chibi-style/file/view/master/chibi_v2.safetensors?status=1"},
+                          Comfy(comfy.url), "zh")
+    assert out["source"] == "modelscope"
+    assert out["url"] == "https://modelscope.cn/models/someone/chibi-style/resolve/master/chibi_v2.safetensors"
+    assert (out["filename"], out["size"], out["folder"]) == ("chibi_v2.safetensors", 228456516, "loras"), "AIGC 类型 LoRA → loras"
+    assert out["family"] == "Illustrious", "登记的底模类型是 SDXL,底模仓库名说是 Illustrious"
+    assert (out["triggers"], out["title"]) == (["chibi"], "Q 版画风")
+    assert out["page"] == "https://modelscope.cn/models/someone/chibi-style/file/view/master/chibi_v2.safetensors"
+    assert "ms_secret" not in json.dumps(out), "令牌不进结果"
+    assert all("Authorization" not in headers and "Cookie" not in headers for _, _, headers in site.calls), \
+        "公开的模型不用令牌就看得到:令牌能不带就不带"
+    assert out["uses_token"] is True, "下载时会带上 ModelScope 令牌(经 Manager 时带不过去,界面据此提醒)"
+    english = sources.resolve({"url": "https://modelscope.cn/models/someone/chibi-style/file/view/master/chibi_v2.safetensors"},
+                              Comfy(comfy.url), "en")
+    assert english["title"] == "chibi-style", "英文界面用仓库名"
+
+
+@pytest.mark.parametrize("url", [
+    "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/resolve/master/split_files/vae/qwen_image_vae.safetensors",
+    "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/file/view/master/split_files%2Fvae%2Fqwen_image_vae.safetensors?status=2",
+    "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/file/view/master/split_files/vae/qwen_image_vae.safetensors",
+    "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/file/view/master/split_files/vae/qwen_image_vae.safetensors",
+    "https://modelscope.cn/api/v1/models/Comfy-Org/Qwen-Image_ComfyUI/repo?Revision=master&FilePath=split_files%2Fvae%2Fqwen_image_vae.safetensors",
+    # 目录页:里面只有一个模型文件,就是它
+    "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/tree/master/split_files/vae",
+])
+def test_解析ModelScope各种文件链接_不在AIGC专区的按路径里的目录名建议(modules, comfy, monkeypatch, url) -> None:
+    _, sources = modules
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"Comfy-Org/Qwen-Image_ComfyUI": MS_SPLIT}))
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": url}, Comfy(comfy.url), "zh")
+    assert out["url"] == \
+        "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/resolve/master/split_files/vae/qwen_image_vae.safetensors"
+    assert (out["filename"], out["size"], out["folder"], out["family"]) == ("qwen_image_vae.safetensors", 253806246, "vae", "")
+
+
+@pytest.mark.parametrize("page", ["", "/", "/summary", "/files"])
+def test_解析ModelScope模型页_只有一个模型文件就是它(modules, comfy, monkeypatch, page) -> None:
+    _, sources = modules
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"someone/chibi-style": MS_LORA}))
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": f"https://modelscope.cn/models/someone/chibi-style{page}"}, Comfy(comfy.url), "zh")
+    assert (out["filename"], out["folder"]) == ("chibi_v2.safetensors", "loras")
+    assert out["url"] == "https://modelscope.cn/models/someone/chibi-style/resolve/master/chibi_v2.safetensors"
+
+
+def test_解析ModelScope模型页_好几个模型文件_列出候选请贴具体文件(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"Comfy-Org/Qwen-Image_ComfyUI": MS_SPLIT}))
+    from comfy_http import Comfy
+
+    with pytest.raises(Exception) as caught:
+        sources.resolve({"url": "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/files"}, Comfy(comfy.url), "zh")
+    message = str(caught.value)
+    assert "3 个模型文件" in message
+    assert "split_files/vae/qwen_image_vae.safetensors" in message and "qwen_2.5_vl_7b_fp8_scaled.safetensors" in message
+    assert "README.md" not in message, "只列模型文件"
+    assert "文件" in message and "地址" in message, "说该贴哪个地址"
+
+
+def test_解析ModelScope模型页_一个模型文件都没有_说清楚(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    empty = {"info": MS_SPLIT["info"], "files": [_ms_file("README.md"), _ms_file("configuration.json")]}
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"a/b": empty}))
+    from comfy_http import Comfy
+
+    with pytest.raises(Exception, match="没有模型文件"):
+        sources.resolve({"url": "https://modelscope.cn/models/a/b"}, Comfy(comfy.url), "zh")
+
+
+@pytest.mark.parametrize(("kind", "folder"), [("Checkpoint", "checkpoints"), ("LoRA", "loras"), ("VAE", "vae"),
+                                               ("", "")])
+def test_ModelScope的AIGC类型定目录(modules, comfy, monkeypatch, kind, folder) -> None:
+    _, sources = modules
+    repo = {"info": {**MS_LORA["info"], "AigcType": kind}, "files": [_ms_file("x.safetensors")]}
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"a/b": repo}))
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://modelscope.cn/models/a/b/resolve/master/x.safetensors"}, Comfy(comfy.url), "zh")
+    assert out["folder"] == folder
+    assert bool(out["family"]) is bool(kind), "底模家族只看 AIGC 专区登记的;普通仓库不猜"
+
+
+@pytest.mark.parametrize(("vision", "bases", "expected"), [
+    ("SD_XL", [], "SDXL"),
+    ("SD_XL", ["ModelE/Illustrious-XL"], "Illustrious"),
+    ("SD_XL", ["LaxharLAB/NoobAI-XL@epsilon1.1"], "NoobAI"),
+    ("SD_XL", ["Liudef/XB_PONY"], "Pony"),
+    ("SD_1_5", ["MusePublic/majicMIX_realistic"], "SD 1.5"),
+    ("SD_2_1", [], "SD 2"),
+    ("SD_3", [], "SD 3"),
+    ("FLUX_1", ["black-forest-labs/FLUX.1-dev"], "Flux"),
+    ("FLUX_2", ["black-forest-labs/FLUX.2-dev"], "Flux.2"),
+    ("QWEN_IMAGE_20_B", ["Qwen/Qwen-Image"], "Qwen-Image"),
+    ("Z_IMAGE_TURBO", ["Tongyi-MAI/Z-Image-Turbo@master"], "Z-Image"),
+    ("WAN_VIDEO_2_2_I2V_A_14_B", ["Wan-AI/Wan2.2-I2V-A14B"], "Wan 2.2"),
+    ("WAN_VIDEO_2_1_T2V_14_B", [], "Wan 2.1"),
+    ("MINIMAX_H3", ["MiniMax/MiniMax-H3"], "MiniMax H3"),
+    ("LTX_VIDEO", [], "LTX-Video"),
+    # 没登记类型(或 UNKNOWN):看底模仓库名
+    ("", ["AI-ModelScope/stable-diffusion-xl-base-1.0"], "SDXL"),
+    ("UNKNOWN", ["MusePublic/489_ckpt_FLUX_1@2172"], "Flux"),
+    # 表里没有的:底模仓库名原样交出(没有就类型原样),不往认得的家族上靠
+    ("KREA_2", ["krea/Krea-2-Turbo"], "Krea-2-Turbo"),
+    ("IDEOGRAM_4", [], "IDEOGRAM_4"),
+    ("", ["undefined", ""], ""),
+    ("", [], ""),
+])
+def test_ModelScope登记的底模_接同一张家族表(modules, vision, bases, expected) -> None:
+    from families import family_from_modelscope
+
+    assert family_from_modelscope(vision, bases) == expected
+
+
+def test_ModelScope登记成SDXL的_自己的仓库名和文件名也能细分(modules) -> None:
+    """真站点上的 ModelE/Illustrious-XL:Checkpoint,类型 SD_XL,底模写的是 SDXL base —— 它本身就是 Illustrious。"""
+    from families import family_from_modelscope
+
+    assert family_from_modelscope("SD_XL", ["stabilityai/stable-diffusion-xl-base-1.0"],
+                                  ("Illustrious-XL", "Illustrious-XL-v0.1.safetensors")) == "Illustrious"
+    assert family_from_modelscope("SD_XL", ["stabilityai/stable-diffusion-xl-base-1.0"], ("my-style", "x.safetensors")) == "SDXL"
+    assert family_from_modelscope("FLUX_1", [], ("pony-on-flux", "x.safetensors")) == "Flux", "只在认出是 SDXL 之后细分"
+
+
+def test_解析ModelScope_私有模型_不带令牌回404_带上令牌再问一次(modules, comfy, monkeypatch) -> None:
+    """ModelScope 对看不到的私有模型回 404(官方 SDK 也这么说:不存在,或者是要登录的私有仓库)。"""
+    _, sources = modules
+    site = _ModelScope({"me/private": MS_LORA}, locked={"me/private": 404})
+    monkeypatch.setattr(sources, "fetch", site)
+    monkeypatch.setenv("MODELSCOPE_TOKEN", "ms_secret")
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://modelscope.cn/models/me/private/resolve/master/chibi_v2.safetensors"},
+                          Comfy(comfy.url), "zh")
+    assert out["filename"] == "chibi_v2.safetensors"
+    assert [headers.get("Authorization") for _, _, headers in site.calls] == [None, "Bearer ms_secret", "Bearer ms_secret"], \
+        "先不带;模型信息带了令牌才看得到,文件列表直接带"
+    assert all(headers.get("Cookie") == "m_session_id=ms_secret" for _, _, headers in site.calls[1:]), \
+        "老接口和下载认会话 cookie(官方 SDK 两样都带)"
+    assert "ms_secret" not in json.dumps(out)
+
+
+@pytest.mark.parametrize(("status", "token", "said"), [
+    (404, "", "令牌"), (404, "ms_wrong", "没有这个模型"),
+    (401, "", "填"), (403, "", "填"), (403, "ms_wrong", "没有权限"),
+])
+def test_解析ModelScope_被拒或没有_说清楚(modules, comfy, monkeypatch, status, token, said) -> None:
+    """`ms_wrong` 是看不到这个模型的令牌(别人的,或另一个站的)。"""
+    _, sources = modules
+    site = _ModelScope({"me/private": MS_LORA}, locked={"me/private": status})
+    monkeypatch.setattr(sources, "fetch", site)
+    if token:
+        monkeypatch.setenv("MODELSCOPE_TOKEN", token)
+    else:
+        monkeypatch.delenv("MODELSCOPE_TOKEN", raising=False)
+    from comfy_http import Comfy
+
+    with pytest.raises(Exception) as caught:
+        sources.resolve({"url": "https://modelscope.cn/models/me/private"}, Comfy(comfy.url), "zh")
+    message = str(caught.value)
+    assert said in message and "ModelScope" in message
+    assert not token or token not in message, "令牌不进报错"
+    assert len(site.calls) == (2 if token else 1), "填了令牌才再问一次"
+
+
+def test_解析ModelScope_没有的文件_没有的分支_说清楚(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    monkeypatch.setattr(sources, "fetch", _ModelScope({"someone/chibi-style": MS_LORA}))
+    from comfy_http import Comfy
+
+    with pytest.raises(Exception, match="没有这个文件"):
+        sources.resolve({"url": "https://modelscope.cn/models/someone/chibi-style/resolve/master/nope.safetensors"},
+                        Comfy(comfy.url), "zh")
+    with pytest.raises(Exception, match="v9"):
+        sources.resolve({"url": "https://modelscope.cn/models/someone/chibi-style/resolve/v9/chibi_v2.safetensors"},
+                        Comfy(comfy.url), "zh")
+
+
+def test_ModelScope国际站_是另一个站_各认各的(modules, comfy, monkeypatch) -> None:
+    """modelscope.ai 和 modelscope.cn 接口一样,但模型库和账号各是各的(.cn 上的模型 .ai 上不一定有):
+    只把 www. 换掉,不互相改写。"""
+    _, sources = modules
+    site = _ModelScope({"someone/chibi-style": MS_LORA}, site="modelscope.ai")
+    monkeypatch.setattr(sources, "fetch", site)
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://www.modelscope.ai/models/someone/chibi-style"}, Comfy(comfy.url), "zh")
+    assert out["url"] == "https://modelscope.ai/models/someone/chibi-style/resolve/master/chibi_v2.safetensors"
+    assert {sources._host(url) for _, url, _ in site.calls} == {"modelscope.ai"}  # noqa: SLF001
+    assert sources.canonical_url("https://www.modelscope.cn/models/a/b") == "https://modelscope.cn/models/a/b"
+    assert sources.canonical_url("https://modelscope.ai/models/a/b") == "https://modelscope.ai/models/a/b"
+
+
+def test_ModelScope令牌_只发给ModelScope自己的站(modules, monkeypatch) -> None:
+    _, sources = modules
+    monkeypatch.setenv("MODELSCOPE_TOKEN", "ms_secret")
+    monkeypatch.setenv("HUGGINGFACE_TOKEN", "hf_secret")
+    for url in ("https://modelscope.cn/models/a/b/resolve/master/x.safetensors",
+                "https://modelscope.ai/models/a/b/resolve/master/x.safetensors"):
+        assert sources.auth_for(url) == {"Authorization": "Bearer ms_secret", "Cookie": "m_session_id=ms_secret"}
+    # 下载跳到的 CDN(签好名的地址)、别名域名、别的站都不带
+    for url in ("https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/48/52/x?auth_key=1",
+                "https://www.modelscope.cn/models/a/b/resolve/master/x.safetensors",
+                "https://modelscope.cn.evil.example/models/a/b", "https://example.com/x.safetensors"):
+        assert sources.auth_for(url) == {}, url
+    assert sources.auth_for("https://huggingface.co/a/b/resolve/main/x.safetensors") == {"Authorization": "Bearer hf_secret"}
+
+
+def test_下载时ModelScope的页面链接换成resolve直链_不用联网(modules, monkeypatch) -> None:
+    _, sources = modules
+
+    def offline(*_args: Any, **_kwargs: Any):
+        raise AssertionError("文件链接换直链不该联网")
+
+    monkeypatch.setattr(sources, "fetch", offline)
+    assert sources.direct_url("https://www.modelscope.cn/models/a/b/file/view/master/sub%2Fx.safetensors", "zh", set()) == \
+        "https://modelscope.cn/models/a/b/resolve/master/sub/x.safetensors"
+    assert sources.direct_url("https://modelscope.cn/api/v1/models/a/b/repo?Revision=v1&FilePath=x.gguf", "zh", set()) == \
+        "https://modelscope.cn/models/a/b/resolve/v1/x.gguf"
+
+
+def test_Manager那条路_ModelScope的令牌带不过去_不拼进地址(comfy, data_dir, tmp_path) -> None:
+    comfy.state.manager = "V4.2.1"
+    out, _ = _download(comfy, {"url": "https://modelscope.cn/models/a/b/file/view/master/tiny.safetensors",
+                               "folder": "vae", "filename": "mosael-test-tiny.safetensors"},
+                       data_dir, tmp_path, MODELSCOPE_TOKEN="ms_secret")
+    assert out["route"] == "manager"
+    task = comfy.posted("/v2/manager/queue/install_model")[0]
+    assert task["url"] == "https://modelscope.cn/models/a/b/resolve/master/tiny.safetensors"
+    assert "ms_secret" not in json.dumps(comfy.posted("/v2/manager/queue/install_model")), \
+        "Manager 不收请求头,ModelScope 的令牌又没有放进地址的用法:不拼进去"
+
+
+def test_工作流声明的ModelScope地址也算可信来源_先换成规范域名(comfy, data_dir) -> None:
+    comfy.state.workflows["ms.json"] = {
+        "id": "ms", "links": [],
+        "nodes": [{"id": 1, "type": "VAELoader", "widgets_values": ["qwen_image_vae.safetensors"], "inputs": [],
+                   "properties": {"models": [{
+                       "name": "qwen_image_vae.safetensors", "directory": "vae",
+                       "url": "https://www.modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/resolve/master/"
+                              "split_files/vae/qwen_image_vae.safetensors"}]}}],
+    }
+    out = _call(comfy, {"op": "library"}, data_dir)
+    found = next(one for one in out["missing"] if one["name"] == "qwen_image_vae.safetensors")
+    assert found["url"] == \
+        "https://modelscope.cn/models/Comfy-Org/Qwen-Image_ComfyUI/resolve/master/split_files/vae/qwen_image_vae.safetensors"
 
 
 def test_插件的持久目录里没有令牌(comfy, data_dir, tmp_path) -> None:

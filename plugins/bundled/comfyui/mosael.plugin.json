@@ -3,7 +3,7 @@
   "manifest_version": 6,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.9.2",
+  "version": "1.10.0",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",
@@ -21,6 +21,7 @@
     "network:comfyui",
     "network:huggingface",
     "network:civitai",
+    "network:modelscope",
     "filesystem:write"
   ],
   "provides": [
@@ -104,6 +105,18 @@
         "help": {
           "zh": "模型库下载要登录的 Civitai 模型时才填(civitai.com → 账号设置 → API Keys)。只发给 civitai.com;经 ComfyUI-Manager 下载时会拼进下载地址,留在那台机器的 Manager 任务记录里。",
           "en": "Only for model-library downloads of Civitai models that need a login (civitai.com → Account settings → API Keys). Sent only to civitai.com; when downloading through ComfyUI-Manager it goes into the download URL and stays in that machine's Manager task history."
+        }
+      },
+      {
+        "key": "modelscope_token",
+        "label": {
+          "zh": "ModelScope 令牌(可选)",
+          "en": "ModelScope token (optional)"
+        },
+        "required": false,
+        "help": {
+          "zh": "模型库下载私有或要授权的 ModelScope(魔搭)模型时才填(在 modelscope.cn/my/myaccesstoken 拿;国际站 modelscope.ai 的账号和令牌另算,填你在那个站上的)。只发给 modelscope.cn / modelscope.ai;经 ComfyUI-Manager 下载时带不过去。",
+          "en": "Only for model-library downloads of private or restricted ModelScope models (get one at modelscope.cn/my/myaccesstoken; the international site modelscope.ai has separate accounts and tokens, so use the one from the site you download from). Sent only to modelscope.cn / modelscope.ai; it can't be passed through ComfyUI-Manager."
         }
       }
     ]

@@ -319,9 +319,10 @@ def _open_download(url: str, locale: str):
             response.close()
             if status in (401, 403):
                 raise ComfyError(say(locale, f"{sources._host(current)} 不让下(HTTP {status}):要登录的,在这个连接的凭据里填"  # noqa: SLF001
-                                             "那个站的令牌(HuggingFace / Civitai)",
+                                             "那个站的令牌(HuggingFace / Civitai / ModelScope)",
                                      f"{sources._host(current)} refused the download (HTTP {status}). If it needs a login, "  # noqa: SLF001
-                                     "enter that site's token (HuggingFace / Civitai) in this connection's credentials"))
+                                     "enter that site's token (HuggingFace / Civitai / ModelScope) in this connection's "
+                                     "credentials"))
             raise ComfyError(say(locale, f"下载地址回了 HTTP {status}", f"The download link answered HTTP {status}"))
         return response, current
     raise ComfyError(say(locale, "下载地址跳转太多次", "The download link redirected too many times"))

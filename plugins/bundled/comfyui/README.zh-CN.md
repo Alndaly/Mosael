@@ -7,13 +7,14 @@
 
 1. 插件页 → ComfyUI → 「新建连接」,填服务器地址(本机默认 `http://127.0.0.1:8188`)。放在要登录的反向代理或
    ComfyUI-Login 后面的,把 `用户名:密码`(Basic)或令牌(Bearer)填进凭据「访问凭据」,HTTP 和 WebSocket 都带上。
-2. 授予它要的权限,打开连接(1.9.0 起如实申报四项):
+2. 授予它要的权限,打开连接(1.10.0 起如实申报五项):
    - `network:comfyui`:连这台 ComfyUI;
-   - `network:huggingface`、`network:civitai`:模型库解析链接、下载模型时连这两个站;
+   - `network:huggingface`、`network:civitai`、`network:modelscope`:模型库解析链接、下载模型时连这几个站;
    - `filesystem:write`:ComfyUI 和 Mosael 在同一台电脑上时,把下载的模型写进它的 models 目录。
 
-   从 1.8 及更早升上来的连接会**先停用**,等你授予新增的三项:连接卡片最上面写着多要了哪几项,点「授予这 3 项」
-   马上恢复,之前授予的 `network:comfyui` 不受影响;插件列表上它标着「待授权」。
+   **从旧版本升级**:升上来的连接会**先停用**,等你授予新增的那几项 —— 从 1.9 升上来的多一项 `network:modelscope`
+   (1.10.0),从 1.8 及更早升上来的多四项。连接卡片最上面写着多要了哪几项,点「授予这 N 项」马上恢复,之前授予的
+   不受影响;插件列表上它标着「待授权」。
 3. 它在 ComfyUI 里**保存的每张工作流**会作为一个模型出现在 AI 工作台、画板、工作流「AI 生成素材」节点的
    模型选择器里;新存的工作流一分钟内出现(宿主每分钟问一次清单的指纹),等不及就在插件页点「刷新模型」。
 
@@ -117,15 +118,27 @@ png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位
 **触发词**:作者写在文件头里的(`modelspec.trigger_phrase` / `ss_trigger_words`);没有时取训练标签(`ss_tag_frequency`)
 里出现最多的几个,并标明「不一定是作者指定的触发词」。**在用的工作流**:保存的工作流里,节点输入写着这个文件名的。
 **工作流缺的模型**:工作流声明了下载地址(节点 `properties.models`,或新格式的顶层 `models`)、节点当前真在用、这台服务器
-上又没有的;只认 `https://huggingface.co/` 和 `https://civitai.com/` 的地址(和 ComfyUI 官方前端同一份白名单)。
+上又没有的;只认 `https://huggingface.co/`、`https://civitai.com/`(ComfyUI 官方前端的白名单)和 ModelScope 的
+`https://modelscope.cn/`、`https://modelscope.ai/` 的地址(1.10.0)。
 Civitai 的另外几个域名(`civitai.red`、`civitai.green`)是同一个站:贴进来的链接、工作流里写的地址都先换成 `civitai.com`
-再解析和下载,令牌也只交给 `civitai.com`(1.9.1)。
+再解析和下载,令牌也只交给 `civitai.com`(1.9.1);ModelScope 带 `www.` 的同样先去掉。
 
 逐个读的元数据按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要几秒,之后只读目录。
 
 **下载**:贴一个链接 —— HuggingFace 的文件(`/blob/` 或 `/resolve/`)、Civitai 的模型页(带不带 `modelVersionId`)或
-下载链接、别的直链 —— 先解析出文件名、大小、建议放进哪个目录(Civitai 按模型类型定;HuggingFace 文件路径里正好有
-这台服务器上的某个目录名时建议它;别的自己选),确认后下到**那台 ComfyUI** 上。按优先级走:
+下载链接、ModelScope(魔搭)的模型页或文件、别的直链 —— 先解析出文件名、大小、建议放进哪个目录(Civitai 按模型类型定;
+ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope 文件路径里正好有这台服务器上的某个目录名时建议它;
+别的自己选),确认后下到**那台 ComfyUI** 上。
+
+**ModelScope**(1.10.0):认模型页 `/models/{仓库}`(及「模型文件」这些页签)、目录页 `/tree/{版本}/{目录}`、文件页
+`/file/view/{版本}/{路径}`、直链 `/resolve/{版本}/{路径}`,以及官方 SDK 的下载地址 `/api/v1/models/{仓库}/repo?FilePath=`。
+贴的是模型页或目录页时,里面只有一个模型文件(`.safetensors`、`.ckpt`、`.gguf`、`.pt`、`.pth`、`.bin`)就是它;有好几个
+就列出候选、请你贴具体那个文件的地址。AIGC 专区的模型:类型 Checkpoint / LoRA / VAE → checkpoints / loras / vae,登记的
+底模类型(`VisionFoundation`)和底模仓库(`BaseModel`)按上面同一张家族表认,作者写的触发词、中文名一并带上;普通仓库
+不猜家族。国际站 `modelscope.ai` 是另一个站(接口一样,模型和账号各是各的),各问各的,不互相改写。下载走 `/resolve/`
+直链(大文件它会跳到签好名的 CDN 地址,那一跳不带令牌)。
+
+下载按优先级走:
 
 1. ComfyUI 自己的下载接口 —— 0.38.0 没有;
 2. **ComfyUI-Manager(V4)**:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停单个任务的接口,取消只是
@@ -146,12 +159,16 @@ Civitai 的另外几个域名(`civitai.red`、`civitai.green`)是同一个站:�
 (已经有的不重复加)。
 
 **经 ComfyUI-Manager 下载时**,下载框里先说清楚:要带 Civitai 令牌时它会拼进下载地址、留在那台机器的 Manager 任务
-记录里;看不到按字节的进度;开始之后取消,那台机器上的下载还会继续。解析 Civitai 链接时先不带令牌问(公开的模型
-不用登录),对方说要登录才再带上。
+记录里;HuggingFace、ModelScope 的令牌带不过去(Manager 不收请求头,这两个站的令牌又没有放进地址的用法),
+要令牌才能下的文件会失败;看不到按字节的进度;开始之后取消,那台机器上的下载还会继续。Manager V4 装模型不挑站点
+(只看它的安全策略),ModelScope 的直链它照样下。解析 Civitai、ModelScope 链接时先不带令牌问(公开的模型不用登录),对方说要登录才再带上
+(ModelScope 对看不到的私有模型回 404,所以 404 时也带上再问一次)。
 
-**凭据**:要同意条款或私有的 HuggingFace 仓库,在连接上填「HuggingFace 令牌」;要登录的 Civitai 模型填「Civitai 令牌」。
-令牌只发给它自己那个站(跳转到别家存储时不带),不进结果和报错;经 Manager 下 Civitai 时只能拼进下载地址,会留在那台
-机器的 Manager 任务记录里。
+**凭据**:要同意条款或私有的 HuggingFace 仓库,在连接上填「HuggingFace 令牌」;要登录的 Civitai 模型填「Civitai 令牌」;
+私有或要授权的 ModelScope 模型填「ModelScope 令牌」(在 modelscope.cn/my/myaccesstoken 拿;按 `Authorization: Bearer`
+和会话 cookie `m_session_id` 两样发,和官方 SDK 一样;国际站的账号和令牌另算)。令牌只发给它自己那个站(ModelScope 的
+发给 modelscope.cn / modelscope.ai;跳转到别处的存储时不带),不进结果和报错;经 Manager 下 Civitai 时只能拼进下载地址,
+会留在那台机器的 Manager 任务记录里。
 
 ## 进度、取消、重启
 
@@ -178,7 +195,7 @@ Civitai 的另外几个域名(`civitai.red`、`civitai.green`)是同一个站:�
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `model_files.py` —— 模型库:列出模型文件、读元数据、认底模家族、找在用的和缺的;
-- `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
+- `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 
 协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」「流式工具」「一次交出几份」。

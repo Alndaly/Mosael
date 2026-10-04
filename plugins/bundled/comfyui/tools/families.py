@@ -1,6 +1,6 @@
 """底模家族怎么认(ADR 0034 §2,规矩也写在插件 README 里):先看文件头里的元数据,再看文件名,认不出不猜。
 
-模型库列表、Civitai 链接解析共用这一份。
+模型库列表、Civitai / ModelScope 链接解析共用这一份。
 """
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ _META_FAMILIES: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(patt
     (r"minimax[-_]?h3", "MiniMax H3"),
     (r"qwen[-_]?image", "Qwen-Image"),
     (r"hidream", "HiDream"),
-    (r"wan[-_. ]?2[._]?2|wan22", "Wan 2.2"),
+    # ModelScope 登记的底模类型写成 WAN_VIDEO_2_2_I2V_A_14_B
+    (r"wan[-_. ]?(?:video[-_. ]?)?2[._]?2|wan22", "Wan 2.2"),
     (r"wan", "Wan 2.1"),
     (r"hunyuan", "HunyuanVideo"),
     (r"ltx", "LTX-Video"),
@@ -34,7 +35,8 @@ _META_FAMILIES: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(patt
     (r"illustrious", "Illustrious"),
     (r"noob", "NoobAI"),
     (r"sdxl|stable-diffusion-xl|sd_xl", "SDXL"),
-    (r"sd_?v2|stable-diffusion-v2|sd2", "SD 2"),
+    # ModelScope 写成 SD_2 / SD_2_1
+    (r"sd_?v?2|stable-diffusion-v2", "SD 2"),
     (r"sd_?v1|stable-diffusion-v1|sd_?1[._]?5|sd1", "SD 1.5"),
 ))
 #: 文件名(连子目录)里的关键词 → 家族。SDXL 的几支(Illustrious、NoobAI、Pony)排在 SDXL 前面。
@@ -126,3 +128,23 @@ def family_from_base(base: str) -> str:
     """Civitai 写的底模 → 家族;表里没有的原样交出(不往认得的家族上靠)。"""
     text = (base or "").strip()
     return _by_name(text, _BASE_FAMILIES) or text[:80] if text else ""
+
+
+def family_from_modelscope(vision: str, bases: list[str], own: tuple[str, ...] = ()) -> str:
+    """ModelScope AIGC 专区登记的底模 → 家族。`VisionFoundation` 是它的底模类型(SD_XL、FLUX_1、QWEN_IMAGE_20_B、
+    WAN_VIDEO_2_2_I2V_A_14_B……),`BaseModel` 是底模仓库(ModelE/Illustrious-XL、Qwen/Qwen-Image-2.1@master……)。
+    两样都是架构名的写法,和文件头里的底模用同一张表:
+
+    1. 类型认得就用它;是 SDXL 时,底模仓库名、再是它自己的仓库名和文件名(`own`)里带 illustrious / noob / pony 的,
+       细分成那一支(和 `family_of` 第 3 条同一个规矩:Illustrious 本身登记成 SDXL 上的 Checkpoint);
+    2. 类型没写(或 UNKNOWN)时看底模仓库名;
+    3. 都认不出:底模仓库名原样交出(没有就类型原样),不往认得的家族上靠。
+    """
+    names = [one.strip().split("@")[0].split("/")[-1] for one in bases if one.strip() and one.strip() != "undefined"]
+    kind = "" if vision.strip().upper() == "UNKNOWN" else vision.strip()
+    label = _by_name(kind, _META_FAMILIES) or next((found for found in (_by_name(name, _META_FAMILIES) for name in names)
+                                                   if found), "")
+    if label == "SDXL":
+        hints = (_by_name(name, _NAME_FAMILIES) for name in (*names, *own))
+        return next((found for found in hints if found in _SDXL_BRANCHES), label)
+    return label or (names[0] if names else kind)[:80]

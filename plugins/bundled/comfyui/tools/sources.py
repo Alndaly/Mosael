@@ -1,10 +1,11 @@
-"""一个链接指的是哪个模型文件(ADR 0034 §4):HuggingFace、Civitai、别的直链 —— 以及去这些站的那一个出网口。
+"""一个链接指的是哪个模型文件(ADR 0034 §4):HuggingFace、Civitai、ModelScope、别的直链 —— 以及去这些站的那一个出网口。
 
     {"op": "resolve", "url": "…"} → 直链、文件名、大小、建议的目录、底模家族、触发词、同名文件在不在
 
 **令牌只发给它自己那个站**:HuggingFace 的令牌(连接凭据 `huggingface_token`)只带给 huggingface.co,Civitai 的
-(`civitai_token`)只带给 civitai.com。跳转不自动跟:两个站都会把下载跳到别家的存储(CDN、对象存储)上,urllib 自己跟
-跳转时会把 Authorization 头原样带过去 —— 这里每一跳自己判,换了站就不带。令牌不进结果、不进报错。
+(`civitai_token`)只带给 civitai.com,ModelScope 的(`modelscope_token`)只带给 modelscope.cn 和它的国际站 modelscope.ai。
+跳转不自动跟:这几个站都会把下载跳到别处的存储(CDN、对象存储)上,urllib 自己跟跳转时会把 Authorization 头原样带过去
+—— 这里每一跳自己判,换了站就不带。令牌不进结果、不进报错。
 
 和 ComfyUI 说话不走代理(局域网);去这些站走宿主给这个连接的出站(环境变量里的代理,没有就照系统的)。
 """
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib import error, parse, request
 
-from families import family_from_base
+from families import family_from_base, family_from_modelscope
 from comfy_http import Comfy
 from lines import ComfyError, say
 from model_files import folder_info, names_in, norm
@@ -28,6 +29,17 @@ CIVITAI_HOSTS = frozenset({"civitai.com", "www.civitai.com"})
 #: Civitai 的另外几个域名(同一个站、同一套接口;用户常从这些域名上复制链接)。一律换成 civitai.com 再问 ——
 #: 令牌也就只交给 civitai.com 这一个地方。
 CIVITAI_ALIASES = frozenset({"civitai.red", "www.civitai.red", "civitai.green", "www.civitai.green"})
+#: ModelScope 的两个站:modelscope.cn 和国际站 modelscope.ai。接口一样,但模型库和账号各是各的(.cn 上的模型 .ai 上
+#: 不一定有,一个站的令牌另一个站不认)—— 各问各的,不互相改写。
+MODELSCOPE_HOSTS = frozenset({"modelscope.cn", "modelscope.ai"})
+#: 带 www. 的是同一个站:换成不带 www. 的再问,令牌也就只交给上面那两个地方。
+MODELSCOPE_ALIASES = {"www.modelscope.cn": "modelscope.cn", "www.modelscope.ai": "modelscope.ai"}
+#: ModelScope AIGC 专区的模型类型(`AigcType`,它只有这三种)→ ComfyUI 的模型目录。
+MODELSCOPE_FOLDERS = {"checkpoint": "checkpoints", "lora": "loras", "vae": "vae"}
+#: 贴的是 ModelScope 的模型页时,仓库里哪些文件算模型文件。
+MODEL_EXTENSIONS = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
+#: 好几个模型文件时报错里最多列几个。
+LISTED_CANDIDATES = 10
 #: Civitai 的模型类型 → ComfyUI 的模型目录(这台服务器上没有那个目录就不建议)。
 CIVITAI_FOLDERS = {
     "checkpoint": "checkpoints",
@@ -73,10 +85,14 @@ def _host(url: str) -> str:
 
 
 def canonical_url(url: str) -> str:
-    """Civitai 别的域名上的链接换成 civitai.com 上同一个地址;别的原样。"""
+    """别名域名上的链接换成那个站的规范域名上同一个地址:Civitai 别的域名 → civitai.com,ModelScope 带 www. 的 → 不带的;
+    别的原样。"""
     parts = parse.urlsplit(url)
-    if (parts.hostname or "").lower() in CIVITAI_ALIASES:
+    host = (parts.hostname or "").lower()
+    if host in CIVITAI_ALIASES:
         return parse.urlunsplit(parts._replace(netloc="civitai.com"))
+    if host in MODELSCOPE_ALIASES:
+        return parse.urlunsplit(parts._replace(netloc=MODELSCOPE_ALIASES[host]))
     return url
 
 
@@ -87,12 +103,19 @@ def token_for(url: str) -> str:
         return os.environ.get("HUGGINGFACE_TOKEN", "").strip()
     if host in CIVITAI_HOSTS:
         return os.environ.get("CIVITAI_TOKEN", "").strip()
+    if host in MODELSCOPE_HOSTS:
+        return os.environ.get("MODELSCOPE_TOKEN", "").strip()
     return ""
 
 
 def auth_for(url: str) -> dict[str, str]:
     token = token_for(url)
-    return {"Authorization": f"Bearer {token}"} if token else {}
+    if not token:
+        return {}
+    if _host(url) in MODELSCOPE_HOSTS:
+        # ModelScope 新接口认 Bearer,老接口(/api/v1)和下载认会话 cookie —— 官方 SDK 两样都带
+        return {"Authorization": f"Bearer {token}", "Cookie": f"m_session_id={token}"}
+    return {"Authorization": f"Bearer {token}"}
 
 
 def open_url(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: float = 30):
@@ -282,6 +305,166 @@ def _civitai(url: str, locale: str, folders: set[str]) -> Link:
     )
 
 
+# --- ModelScope -------------------------------------------------------------------
+
+@dataclass
+class _ModelScopeLink:
+    """一个 ModelScope 链接指着哪儿:一个文件(`path`),或一个仓库 / 目录(`root`,在里面找模型文件)。
+    `revision` 空着就用仓库的默认分支。"""
+
+    site: str
+    repo: str
+    revision: str = ""
+    path: str = ""
+    root: str = ""
+
+
+def _ms_path(segments: list[str]) -> str:
+    # 文件页上路径里的斜杠常被编码成 %2F
+    return parse.unquote("/".join(segments)).strip("/")
+
+
+def _ms_link(url: str, locale: str) -> _ModelScopeLink:
+    """认 ModelScope 的几种链接:模型页 `/models/{仓库}`(及 `/summary`、`/files` 这些页签)、目录页 `/tree/{版本}/{目录}`、
+    文件页 `/file/view/{版本}/{路径}`、直链 `/resolve/{版本}/{路径}`,以及官方 SDK 的下载地址
+    `/api/v1/models/{仓库}/repo?Revision=&FilePath=`。"""
+    parts = parse.urlsplit(url)
+    site = _host(url)
+    if found := re.match(r"^/api/v1/models/([^/]+)/([^/]+)/repo/?$", parts.path):
+        query = parse.parse_qs(parts.query)
+        repo = f"{parse.unquote(found.group(1))}/{parse.unquote(found.group(2))}"
+        return _ModelScopeLink(site, repo, (query.get("Revision") or [""])[0],
+                               path=(query.get("FilePath") or [""])[0].strip("/"))
+    found = re.match(r"^/models/([^/]+)/([^/]+)(?:/(.*))?$", parts.path)
+    if not found:
+        raise ComfyError(say(locale, "认不出这是 ModelScope 上的哪个模型:贴模型页的地址,或者模型文件页里那个文件的地址",
+                             "Can't tell which ModelScope model this is. Paste the model page, or the address of a file "
+                             "from its Files tab"))
+    repo = f"{parse.unquote(found.group(1))}/{parse.unquote(found.group(2))}"
+    rest = [one for one in (found.group(3) or "").split("/") if one]
+    if rest[:2] == ["file", "view"] and len(rest) > 3:
+        return _ModelScopeLink(site, repo, parse.unquote(rest[2]), path=_ms_path(rest[3:]))
+    if rest[:1] == ["resolve"] and len(rest) > 2:
+        return _ModelScopeLink(site, repo, parse.unquote(rest[1]), path=_ms_path(rest[2:]))
+    if rest[:1] == ["tree"] and len(rest) > 1:
+        return _ModelScopeLink(site, repo, parse.unquote(rest[1]), root=_ms_path(rest[2:]))
+    return _ModelScopeLink(site, repo)
+
+
+def _ms_resolve_url(site: str, repo: str, revision: str, path: str) -> str:
+    return f"https://{site}/models/{parse.quote(repo)}/resolve/{parse.quote(revision, safe='')}/{parse.quote(path)}"
+
+
+def _ms_json(url: str, locale: str, missing: tuple[str, str], *, authed: bool) -> tuple[Any, bool]:
+    """ModelScope 的接口,交回 (Data, 这回带没带令牌)。先不带令牌问 —— 公开的模型不用登录就看得到,令牌能不发就不发;
+    回 401 / 403,或 404(ModelScope 对看不到的私有模型也回 404)且填了令牌时,再带上它问一次。
+    `missing` 是 404 时说的那一句(中、英)。"""
+    accept = {"Accept": "application/json"}
+    answer = fetch(url, headers={**accept, **(auth_for(url) if authed else {})})
+    if not authed and answer.status in (401, 403, 404) and auth_for(url):
+        authed = True
+        answer = fetch(url, headers={**accept, **auth_for(url)})
+    has_token = bool(token_for(url))
+    if answer.status == 404:
+        hint = say(locale, "(要是私有模型:填的令牌也看不到它)" if has_token else
+                   "(要是私有模型:在这个连接的凭据里填一个有权限的 ModelScope 令牌)",
+                   " (if it's private, the token you entered can't see it either)" if has_token else
+                   " (if it's private, enter a ModelScope token that can read it in this connection's credentials)")
+        raise ComfyError(say(locale, f"{missing[0]}{hint}", f"{missing[1]}{hint}"))
+    if answer.status in (401, 403):
+        raise ComfyError(say(
+            locale,
+            "ModelScope 不让看这个模型:填的 ModelScope 令牌没有权限(modelscope.cn 和 modelscope.ai 的账号不通用,令牌要是"
+            "这个站的)" if has_token else
+            "ModelScope 不让看这个模型(私有或要授权):在这个连接的凭据里填 ModelScope 访问令牌",
+            "ModelScope refused this model: the ModelScope token you entered has no access (modelscope.cn and modelscope.ai "
+            "accounts are separate; the token must be from this site)" if has_token else
+            "ModelScope refused this model (private or restricted). Enter a ModelScope access token in this connection's "
+            "credentials",
+        ))
+    if answer.status != 200:
+        raise ComfyError(say(locale, f"ModelScope 回了 HTTP {answer.status}", f"ModelScope answered HTTP {answer.status}"))
+    try:
+        found = json.loads(answer.body.decode("utf-8"))
+    except ValueError as exc:
+        raise ComfyError(say(locale, "ModelScope 回了一段读不懂的东西", "ModelScope answered with something unreadable")) from exc
+    if not isinstance(found, dict) or found.get("Success") is False:
+        said = str(found.get("Message") or "")[:200] if isinstance(found, dict) else ""
+        raise ComfyError(say(locale, f"ModelScope 没给出这个模型的信息:{said}", f"ModelScope gave no information on this model: {said}"))
+    return found.get("Data"), authed
+
+
+def _ms_files(api: str, revision: str, root: str, *, recursive: bool, locale: str, authed: bool) -> list[dict[str, Any]]:
+    """仓库里 `root` 这个目录下的文件(`recursive` 连子目录)。只要文件,不要目录。"""
+    query = {"Revision": revision, "Recursive": "true" if recursive else "false", **({"Root": root} if root else {})}
+    data, _ = _ms_json(f"{api}/repo/files?{parse.urlencode(query)}", locale,
+                       (f"ModelScope 上这个模型没有「{revision}」这个分支或版本",
+                        f"This ModelScope model has no branch or version “{revision}”"), authed=authed)
+    files = data.get("Files") if isinstance(data, dict) else None
+    return [one for one in files or [] if isinstance(one, dict) and one.get("Type", "blob") == "blob" and one.get("Path")]
+
+
+def _candidates(locale: str, paths: list[str]) -> str:
+    shown = paths[:LISTED_CANDIDATES]
+    more = len(paths) - len(shown)
+    return say(locale, "、".join(shown) + (f" 等 {len(paths)} 个" if more else ""),
+               ", ".join(shown) + (f" and {more} more" if more else ""))
+
+
+def _modelscope(url: str, locale: str, folders: set[str]) -> Link:
+    target = _ms_link(url, locale)
+    api = f"https://{target.site}/api/v1/models/{parse.quote(target.repo)}"
+    info, authed = _ms_json(api, locale, ("ModelScope 上没有这个模型", "ModelScope has no such model"), authed=False)
+    info = info if isinstance(info, dict) else {}
+    revision = target.revision or str(info.get("Revision") or "") or "master"
+    if target.path:
+        directory = target.path.rpartition("/")[0]
+        entries = _ms_files(api, revision, directory, recursive=False, locale=locale, authed=authed)
+        entry = next((one for one in entries if one["Path"] == target.path), None)
+        if entry is None:
+            raise ComfyError(say(locale, "ModelScope 上这个模型里没有这个文件(分支或路径不对)",
+                                 "This ModelScope model has no such file (wrong branch or path)"))
+    else:
+        # 模型页 / 目录页:只有一个模型文件就是它,好几个就列出来请用户挑
+        entries = _ms_files(api, revision, target.root, recursive=True, locale=locale, authed=authed)
+        models = [one for one in entries if str(one["Path"]).lower().endswith(MODEL_EXTENSIONS)]
+        if not models:
+            raise ComfyError(say(locale, "这个 ModelScope 仓库里没有模型文件(.safetensors、.ckpt、.gguf……):贴要下的那个文件的地址",
+                                 "This ModelScope repository has no model file (.safetensors, .ckpt, .gguf…). Paste the "
+                                 "address of the file you want"))
+        if len(models) > 1:
+            paths = [str(one["Path"]) for one in models]
+            raise ComfyError(say(
+                locale,
+                f"这个 ModelScope 仓库里有 {len(models)} 个模型文件,不知道要下哪一个:{_candidates(locale, paths)}。"
+                "在「模型文件」页点进要下的那个文件,复制它的地址再贴进来",
+                f"This ModelScope repository has {len(models)} model files, so it's unclear which one you want: "
+                f"{_candidates(locale, paths)}. Open its Files tab, click the file you want and paste that address instead.",
+            ))
+        entry = models[0]
+    path = str(entry["Path"])
+    # 目录:AIGC 专区的模型按登记的类型定;推不出就看路径里有没有这台服务器上的某个目录名(官方的拆分仓库按 ComfyUI
+    # 的目录名放文件,和 HuggingFace 一样)
+    kind = str(info.get("AigcType") or "").strip().lower()
+    folder = MODELSCOPE_FOLDERS.get(kind, "")
+    if folder not in folders:
+        folder = next((one for one in reversed(path.split("/")[:-1]) if one in folders), "")
+    # 底模家族只认 AIGC 专区登记的;普通仓库没写,不按名字猜
+    bases = [str(one) for one in info.get("BaseModel") or [] if isinstance(one, str)]
+    name = str(info.get("Name") or "").strip() or target.repo.split("/")[-1]
+    family = family_from_modelscope(str(info.get("VisionFoundation") or ""), bases, (name, path)) if kind else ""
+    chinese = str(info.get("ChineseName") or "").strip()
+    size = entry.get("Size")
+    return Link(
+        "modelscope", _ms_resolve_url(target.site, target.repo, revision, path), _safe_name(path.split("/")[-1]),
+        size if isinstance(size, int) else None, folder, family,
+        [str(one).strip() for one in info.get("TriggerWords") or [] if str(one).strip()][:30],
+        say(locale, chinese or name, name),
+        page=f"https://{target.site}/models/{parse.quote(target.repo)}/file/view/{parse.quote(revision, safe='')}/"
+             f"{parse.quote(path)}",
+    )
+
+
 # --- 别的直链 ------------------------------------------------------------------
 
 def _direct(url: str, locale: str) -> Link:
@@ -308,11 +491,14 @@ def link_for(url: str, locale: str, folders: set[str]) -> Link:
         return _huggingface(url, locale, folders)
     if host in CIVITAI_HOSTS:
         return _civitai(url, locale, folders)
+    if host in MODELSCOPE_HOSTS:
+        return _modelscope(url, locale, folders)
     return _direct(url, locale)
 
 
 def direct_url(url: str, locale: str, folders: set[str]) -> str:
-    """下载时用的直链:HuggingFace 的 `/blob/` 换成 `/resolve/`、Civitai 的模型页换成下载链接;别的原样。"""
+    """下载时用的直链:HuggingFace 的 `/blob/` 换成 `/resolve/`、Civitai 的模型页换成下载链接、ModelScope 的文件页换成
+    `/resolve/`(模型页要先挑出那一个文件);别的原样。"""
     url = canonical_url(url)
     host = _host(url)
     if host in HF_HOSTS:
@@ -321,6 +507,11 @@ def direct_url(url: str, locale: str, folders: set[str]) -> str:
             return f"https://huggingface.co/{found.group('repo')}/resolve/{found.group('rev')}/{found.group('path')}"
         return url
     if host in CIVITAI_HOSTS and not parse.urlsplit(url).path.startswith("/api/download/"):
+        return link_for(url, locale, folders).url
+    if host in MODELSCOPE_HOSTS:
+        target = _ms_link(url, locale)
+        if target.path:
+            return _ms_resolve_url(target.site, target.repo, target.revision or "master", target.path)
         return link_for(url, locale, folders).url
     return url
 
@@ -338,7 +529,7 @@ def resolve(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         "source": link.source, "url": link.url, "page": link.page, "filename": link.filename, "size": link.size,
         "folder": link.folder, "family": link.family, "triggers": link.triggers or [], "title": link.title,
         "exists": exists, "note": link.note,
-        # 下载时会不会带上那个站的令牌(填了 HuggingFace / Civitai 令牌、链接正是那个站的):经 ComfyUI-Manager 下载时
-        # Civitai 的令牌只能拼进下载地址、留在那台机器的任务记录里,界面据此提醒
+        # 下载时会不会带上那个站的令牌(填了 HuggingFace / Civitai / ModelScope 令牌、链接正是那个站的):经 ComfyUI-Manager
+        # 下载时 Civitai 的令牌只能拼进下载地址、留在那台机器的任务记录里,另两个的带不过去 —— 界面据此提醒
         "uses_token": bool(token_for(link.url)),
     }

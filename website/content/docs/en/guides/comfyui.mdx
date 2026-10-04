@@ -25,8 +25,9 @@ brings two things:
    login or ComfyUI-Login, enter `user:password` or a token as the **Access credential** (the former is sent as Basic
    auth, the latter as a Bearer token); don't put a user name and password in the URL.
 3. Grant the permissions it asks for and switch the connection on: `network:comfyui` (talk to this ComfyUI),
-   `network:huggingface` and `network:civitai` (the model library looks up links and downloads models from these sites),
-   and `filesystem:write` (when ComfyUI runs on this computer, downloaded models are written into its models folder).
+   `network:huggingface`, `network:civitai` and `network:modelscope` (the model library looks up links and downloads
+   models from these sites), and `filesystem:write` (when ComfyUI runs on this computer, downloaded models are written
+   into its models folder).
 
 Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
 “N models · refreshed just now”; **View models** lists whether each one makes images or videos, which kinds of
@@ -161,9 +162,11 @@ name), trigger words, which saved workflows use it, and all the metadata written
 
 **Missing models download in one click.** Models a workflow declares a download link for (as ComfyUI's official
 templates do) but that aren't on the server are listed at the top of the library; click Download. Or click Download
-model and paste a link: a HuggingFace file, a Civitai model page or download link, or any other direct link. It is looked
-up first (file name, size and a suggested folder), then downloaded onto that ComfyUI once you confirm; you can follow the
-progress and cancel in the library or the task center. Once it's done you can pick it right away when generating.
+model and paste a link: a HuggingFace file, a Civitai model page or download link, a ModelScope model page or file, or
+any other direct link. It is looked up first (file name, size and a suggested folder), then downloaded onto that ComfyUI
+once you confirm; you can follow the progress and cancel in the library or the task center. Once it's done you can pick
+it right away when generating. A ModelScope model page with a single model file picks that file; with several, the
+candidates are listed and you paste the address of the one you want from its Files tab.
 
 Good to know:
 
@@ -175,9 +178,10 @@ Good to know:
   `personal_cloud` and restart ComfyUI (the library spells out the reason and this step).
 - When ComfyUI runs on **this computer**, Mosael writes straight into its models folder, with progress, cancel and a
   free-space check first.
-- For gated HuggingFace repositories or Civitai models that need a login, enter a "HuggingFace token" or "Civitai token"
-  in the connection's credentials. Each token is sent only to its own site; when a download through ComfyUI-Manager
-  needs the Civitai token, the download dialog warns that it stays in that machine's task history.
+- For gated HuggingFace repositories, Civitai models that need a login, or private ModelScope models, enter a
+  "HuggingFace token", "Civitai token" or "ModelScope token" in the connection's credentials. Each token is sent only to
+  its own site; when a download through ComfyUI-Manager needs the Civitai token, the download dialog warns that it stays
+  in that machine's task history, and that HuggingFace and ModelScope tokens can't be passed through the Manager at all.
 
 **The model library shows up when generating too.** In AI Studio, boards and the workflow generate node, the field
 that picks a checkpoint or LoRA is a list with thumbnails: each item shows its base model and first trigger words, which
@@ -210,6 +214,9 @@ ComfyUI connections you already have get the new tools automatically after upgra
 **Upgrading to 1.9 pauses the connection**: the plugin now declares three more permissions (`network:huggingface`,
 `network:civitai`, `filesystem:write`, see above). The top of the connection card lists them and “Grant these 3” resumes
 it right away; earlier grants are kept. The plugin list marks it “Needs permission”.
+
+**Upgrading to 1.10 pauses it again, for one more**: `network:modelscope` (the model library now also resolves and
+downloads ModelScope links). “Grant these 1” on the connection card resumes it.
 
 ## Workflows it can't read: the API template
 

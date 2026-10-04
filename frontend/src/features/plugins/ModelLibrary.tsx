@@ -1326,6 +1326,7 @@ function ModelDetail({
 function sourceLabel(t: Translate, resolved: ModelResolved): string {
   if (resolved.source === "huggingface") return t("modelDownloadSourceHuggingface");
   if (resolved.source === "civitai") return t("modelDownloadSourceCivitai");
+  if (resolved.source === "modelscope") return t("modelDownloadSourceModelscope");
   let host = "";
   try {
     host = new URL(resolved.url).host;
@@ -1473,8 +1474,8 @@ function ModelDownloadDialog({
               </div>
             )}
             {route === "manager" && (
-              /* 走 ComfyUI-Manager 时先说清楚的几件事:令牌会留在那台机器上(只在真要带 Civitai 令牌时说)、
-                 看不到按字节的进度、开始之后取消停不下那边的下载。 */
+              /* 走 ComfyUI-Manager 时先说清楚的几件事:令牌会留在那台机器上(只在真要带 Civitai 令牌时说;
+                 HuggingFace / ModelScope 的令牌则带不过去)、看不到按字节的进度、开始之后取消停不下那边的下载。 */
               <div
                 role="note"
                 aria-label={t("modelDownloadManagerCaution")}
@@ -1484,6 +1485,9 @@ function ModelDownloadDialog({
                 <ul className="m-0 grid list-disc gap-1 pl-4">
                   {resolved.source === "civitai" && resolved.uses_token && <li>{t("modelDownloadCivitaiTokenInUrl")}</li>}
                   {resolved.source === "huggingface" && resolved.uses_token && <li>{t("modelDownloadHfTokenUnsupported")}</li>}
+                  {resolved.source === "modelscope" && resolved.uses_token && (
+                    <li>{t("modelDownloadModelscopeTokenUnsupported")}</li>
+                  )}
                   <li>{t("modelDownloadManagerNoProgress")}</li>
                   <li>{t("modelDownloadManagerCancel")}</li>
                 </ul>

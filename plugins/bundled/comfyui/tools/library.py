@@ -93,8 +93,9 @@ def _cache_key(folder: str, item: dict[str, Any]) -> str:
 
 # --- 工作流:在用哪些文件、声明了哪些下载地址 ---------------------------------
 
-#: 一键下载只认这几个站(和 ComfyUI 官方前端缺模型时的白名单同一份):工作流文件来自四面八方,不替陌生链接背书。
-TRUSTED_SOURCES = ("https://huggingface.co/", "https://civitai.com/")
+#: 一键下载只认这几个站:ComfyUI 官方前端缺模型时认的 HuggingFace、Civitai,加上 ModelScope 的两个站。工作流文件来自
+#: 四面八方,不替陌生链接背书。地址先换成规范域名再比(见 sources.canonical_url)。
+TRUSTED_SOURCES = ("https://huggingface.co/", "https://civitai.com/", "https://modelscope.cn/", "https://modelscope.ai/")
 
 
 def _strings(value: Any) -> set[str]:

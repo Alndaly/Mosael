@@ -625,6 +625,23 @@ describe("模型库", () => {
     expect((screen.getByRole("button", { name: /modelDownloadConfirm/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("ModelScope 的链接:来源写 ModelScope;经 ComfyUI-Manager 又填了令牌时,说令牌带不过去", async () => {
+    api.getModelLibrary.mockResolvedValue(library({ download: { route: "manager", note: "" } }));
+    api.resolveModelLink.mockResolvedValue({ source: "modelscope",
+      url: "https://modelscope.cn/models/a/b/resolve/master/chibi.safetensors", page: "", filename: "chibi.safetensors",
+      size: 1024, folder: "loras", family: "Illustrious", triggers: [], title: "Q 版画风", exists: false, note: "",
+      uses_token: true });
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryDownload/ }));
+    fireEvent.change(await screen.findByPlaceholderText("modelDownloadLinkPlaceholder"),
+                     { target: { value: "https://modelscope.cn/models/a/b" } });
+    fireEvent.click(screen.getByRole("button", { name: "modelDownloadResolve" }));
+    const caution = await screen.findByRole("note", { name: "modelDownloadManagerCaution" });
+    expect(caution.textContent).toContain("modelDownloadModelscopeTokenUnsupported");
+    expect(caution.textContent).not.toContain("modelDownloadCivitaiTokenInUrl");
+    expect(screen.getByText("modelDownloadSourceModelscope")).toBeTruthy();
+  });
+
   it("不带令牌、或者本机那条路:不提令牌;本机那条路也没有 Manager 的那两个限制", async () => {
     api.getModelLibrary.mockResolvedValue(library({ download: { route: "manager", note: "" } }));
     api.resolveModelLink.mockResolvedValue({ source: "civitai", url: "https://civitai.com/api/download/models/5", page: "",

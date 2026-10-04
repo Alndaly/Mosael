@@ -10,15 +10,17 @@ One connection brings two things: **models** (every saved workflow is an image /
 1. Plugins page → ComfyUI → "New connection", and fill in the server URL (`http://127.0.0.1:8188` by default on this
    machine). If it sits behind a reverse proxy with login or behind ComfyUI-Login, put `user:password` (Basic) or a
    token (Bearer) into the "Access credential" credential; it is sent on both HTTP and WebSocket requests.
-2. Grant the permissions it asks for and turn the connection on (since 1.9.0 it declares four):
+2. Grant the permissions it asks for and turn the connection on (since 1.10.0 it declares five):
    - `network:comfyui`: talk to this ComfyUI;
-   - `network:huggingface`, `network:civitai`: the model library looks up links and downloads models from these sites;
+   - `network:huggingface`, `network:civitai`, `network:modelscope`: the model library looks up links and downloads
+     models from these sites;
    - `filesystem:write`: when ComfyUI runs on the same computer as Mosael, downloaded models are written into its
      models folder.
 
-   Connections upgraded from 1.8 or earlier are **paused** until you grant the three new ones: the top of the connection
-   card lists them, and "Grant these 3" resumes it right away; the `network:comfyui` grant is kept. The plugin list
-   marks it "Needs permission".
+   **Upgrading from an older version**: an upgraded connection is **paused** until you grant the new ones: one more
+   (`network:modelscope`, 1.10.0) when coming from 1.9, four more when coming from 1.8 or earlier. The top of the
+   connection card lists them, and "Grant these N" resumes it right away; earlier grants are kept. The plugin list marks
+   it "Needs permission".
 3. **Every workflow saved** in that ComfyUI shows up as a model in the model pickers of AI Studio, boards and the
    workflow "AI generate" node. A newly saved workflow appears within a minute (the host asks for the list's fingerprint
    once a minute); if you can't wait, click "Refresh models" on the Plugins page.
@@ -143,18 +145,32 @@ workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
 otherwise the most frequent training tags (`ss_tag_frequency`), marked as "not necessarily trigger words".
 **Used by**: saved workflows whose node inputs name the file. **Missing for workflows**: models a workflow declares a
 download link for (node `properties.models`, or the newer top-level `models`), that a node currently uses, and that
-aren't on this server; only `https://huggingface.co/` and `https://civitai.com/` links count (the same allow-list as
-ComfyUI's own frontend). Civitai's other domains (`civitai.red`, `civitai.green`) are the same site: pasted links and
-links in workflows are rewritten to `civitai.com` before resolving and downloading, and the token only goes to
-`civitai.com` (1.9.1).
+aren't on this server; only `https://huggingface.co/` and `https://civitai.com/` links (ComfyUI's own frontend's
+allow-list) and ModelScope's `https://modelscope.cn/` and `https://modelscope.ai/` (1.10.0) count. Civitai's other
+domains (`civitai.red`, `civitai.green`) are the same site: pasted links and links in workflows are rewritten to
+`civitai.com` before resolving and downloading, and the token only goes to `civitai.com` (1.9.1); ModelScope's `www.`
+hosts are rewritten the same way.
 
 Metadata read file by file is remembered in the plugin's data folder by server, folder, name, size and modification
 time: the first look at a few hundred files takes seconds, later ones only list the folders.
 
 **Downloading**: paste a link (a HuggingFace file, `/blob/` or `/resolve/`; a Civitai model page, with or without
-`modelVersionId`, or download link; any other direct link). It is looked up first (file name, size and a suggested
-folder: from the model type on Civitai, from a folder name in a HuggingFace file path, otherwise you pick), then
-downloaded onto **that ComfyUI**, by the first route that works:
+`modelVersionId`, or download link; a ModelScope model page or file; any other direct link). It is looked up first (file
+name, size and a suggested folder: from the model type on Civitai and for models in ModelScope's AIGC section, from a
+folder name in a HuggingFace / ModelScope file path, otherwise you pick), then downloaded onto **that ComfyUI**.
+
+**ModelScope** (1.10.0): model pages `/models/{repo}` (and tabs such as Files), folder pages `/tree/{revision}/{folder}`,
+file pages `/file/view/{revision}/{path}`, direct links `/resolve/{revision}/{path}`, and the official SDK's download URL
+`/api/v1/models/{repo}/repo?FilePath=` are understood. For a model or folder page, a single model file inside
+(`.safetensors`, `.ckpt`, `.gguf`, `.pt`, `.pth`, `.bin`) is the one; with several, the candidates are listed and you're
+asked to paste that file's address. Models in the AIGC section: type Checkpoint / LoRA / VAE → checkpoints / loras / vae,
+the registered base model type (`VisionFoundation`) and base model repository (`BaseModel`) go through the same family
+table as above, and the author's trigger words and display name come along; ordinary repositories get no guessed family.
+The international site `modelscope.ai` is a separate site (same API, its own models and accounts), asked on its own and
+never rewritten to `.cn`. Downloads use the `/resolve/` link (large files redirect to a signed CDN address, which gets no
+token).
+
+Downloads take the first route that works:
 
 1. ComfyUI's own download API: 0.38.0 has none;
 2. **ComfyUI-Manager (V4)**: that machine downloads it, without byte progress and without a way to stop it once started
@@ -181,14 +197,21 @@ placeholder), its base model and first trigger words, which can also be searched
 words, a line below lists them and "Add to prompt" appends them to the prompt (skipping ones already there).
 
 **When downloading through ComfyUI-Manager**, the download dialog says up front that a Civitai token, when one is
-needed, goes into the download URL and stays in that machine's Manager task history; that there is no byte progress;
-and that cancelling after it starts doesn't stop the download on that machine. Civitai links are looked up without the
-token first (public models need no login) and only retried with it when the site asks for a login.
+needed, goes into the download URL and stays in that machine's Manager task history; that HuggingFace and ModelScope
+tokens can't be passed at all (the Manager takes no request headers, and neither site has a way to put the token in the
+URL), so files that need one fail; that there is no byte progress; and that cancelling after it starts doesn't stop the
+download on that machine. Manager V4 doesn't restrict model downloads by site (only by its security policy), so
+ModelScope links work through it too. Civitai and ModelScope links are looked up without the token first (public models
+need no login) and only retried with it when the site asks for a login (ModelScope answers 404 for private models it
+won't show, so a 404 is retried with the token too).
 
-**Credentials**: enter a "HuggingFace token" on the connection for gated or private HuggingFace repositories and a
-"Civitai token" for Civitai models that need a login. Each token goes only to its own site (not to the storage a
-download redirects to) and never into results or errors; a Civitai download through the Manager can only carry it in the
-URL, so it stays in that machine's Manager task history.
+**Credentials**: enter a "HuggingFace token" on the connection for gated or private HuggingFace repositories, a
+"Civitai token" for Civitai models that need a login, and a "ModelScope token" for private or restricted ModelScope
+models (get one at modelscope.cn/my/myaccesstoken; it is sent both as `Authorization: Bearer` and as the `m_session_id`
+session cookie, like the official SDK; the international site has separate accounts and tokens). Each token goes only to
+its own site (ModelScope's to modelscope.cn / modelscope.ai; never to the storage a download redirects to) and never
+into results or errors; a Civitai download through the Manager can only carry it in the URL, so it stays in that
+machine's Manager task history.
 
 ## Progress, cancelling, restarts
 
@@ -222,8 +245,8 @@ URL, so it stays in that machine's Manager task history.
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `model_files.py`: the model library (model files, metadata, base-model
   families, which workflows use a file and which models they miss);
-- `sources.py` / `install.py`: resolving HuggingFace / Civitai / direct links and downloading via the Manager →
-  same machine → explain order;
+- `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading via the
+  Manager → same machine → explain order;
 - `comfy_http.py` / `ws.py`: talking to ComfyUI.
 
 For the protocol, see `docs/PLUGIN_MANIFEST.md` in the Mosael repository: the sections on doing generation for the host,

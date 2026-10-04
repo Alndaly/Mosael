@@ -6384,7 +6384,8 @@ export interface paths {
         put?: never;
         /**
          * Resolve Model Link
-         * @description 一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是什么:文件名、大小、建议的目录、同名文件在不在。
+         * @description 一个链接(HuggingFace 文件、Civitai 页面或下载链接、ModelScope 的模型页或文件、别的直链)指的是什么:文件名、大小、
+         *     建议的目录、同名文件在不在。
          */
         post: operations["resolve_model_link_api_plugins_instances__instance_id__model_library_resolve_post"];
         delete?: never;

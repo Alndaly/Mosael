@@ -21,9 +21,9 @@ ComfyUI 由随 Mosael 一起发的 **ComfyUI 插件**接入：装好就在「插
 2. 打开「插件」→ **ComfyUI** → 「新建连接」，填**服务器地址**。填局域网地址(如 `http://192.168.1.20:8188`)
    就能用另一台机器的显卡。ComfyUI 放在要登录的反向代理或 ComfyUI-Login 后面时，把「用户名:密码」或令牌
    填进「**访问凭据**」(前者按 Basic 认证、后者按 Bearer 令牌发)；地址里不要写用户名和密码。
-3. 授予它要的权限，打开连接开关:`network:comfyui`(连这台 ComfyUI)、`network:huggingface` 与
-   `network:civitai`(模型库解析链接、下载模型时连这两个站)、`filesystem:write`(ComfyUI 就在这台电脑上时，把下载的模型
-   写进它的 models 目录)。
+3. 授予它要的权限，打开连接开关:`network:comfyui`(连这台 ComfyUI)、`network:huggingface`、`network:civitai` 与
+   `network:modelscope`(模型库解析链接、下载模型时连这几个站)、`filesystem:write`(ComfyUI 就在这台电脑上时，把下载的
+   模型写进它的 models 目录)。
 
 打开之后 Mosael 会去问这台 ComfyUI 有哪些工作流，连接卡片上「生成模型」一行显示「N 个模型 · 刚刚刷新」；
 点「**查看模型**」能看到每个模型是图像还是视频、能做哪几种生成、收哪些素材、有哪些参数。没连上时那一行直接说原因
@@ -136,9 +136,10 @@ ComfyUI 停下这一个任务，**全部产出**收进素材库 —— 每个保
 认出来的，页面上写明)、触发词、哪几张保存的工作流在用它，以及文件里写着的全部元数据。
 
 **缺的模型一键下载。** 工作流声明了下载地址(ComfyUI 官方模板就是这么写的)、这台服务器上又没有的模型，排在模型库最上面，
-点「下载」就行。也可以点「下载模型」贴一个链接：HuggingFace 上的文件、Civitai 的模型页或下载链接、别的直链都行 ——
-先解析出文件名、大小和建议放进的目录，确认后下到那台 ComfyUI 上；下载中看得到进度，在模型库或任务中心里能取消。
-下完马上就能在生成时选到它。
+点「下载」就行。也可以点「下载模型」贴一个链接：HuggingFace 上的文件、Civitai 的模型页或下载链接、ModelScope(魔搭)
+的模型页或文件、别的直链都行 —— 先解析出文件名、大小和建议放进的目录，确认后下到那台 ComfyUI 上；下载中看得到进度，
+在模型库或任务中心里能取消。下完马上就能在生成时选到它。贴的是 ModelScope 的模型页时，里面只有一个模型文件就下它；
+有好几个会列出来，请到「模型文件」页点进要的那个，复制它的地址再贴。
 
 几件要知道的事：
 
@@ -147,8 +148,9 @@ ComfyUI 停下这一个任务，**全部产出**收进素材库 —— 每个保
   `--listen 0.0.0.0` 开着的 ComfyUI，Manager 默认不让经网络装模型：在那台机器上打开 `ComfyUI/user/__manager/config.ini`，
   把 `network_mode` 改成 `personal_cloud`，重启 ComfyUI 就行(模型库会把原因和这一步写清楚)。
 - ComfyUI 就在**这台电脑**上时，Mosael 直接写进它的 models 目录：看得到进度、能取消，开始前会查剩余空间。
-- 要同意条款的 HuggingFace 仓库、要登录的 Civitai 模型，在连接的凭据里填「HuggingFace 令牌」「Civitai 令牌」。令牌只发给它
-  自己那个站；经 ComfyUI-Manager 下载要带 Civitai 令牌时，下载框会提醒它会留在那台机器的任务记录里。
+- 要同意条款的 HuggingFace 仓库、要登录的 Civitai 模型、私有的 ModelScope 模型，在连接的凭据里填「HuggingFace 令牌」
+  「Civitai 令牌」「ModelScope 令牌」。令牌只发给它自己那个站；经 ComfyUI-Manager 下载要带 Civitai 令牌时，下载框会提醒
+  它会留在那台机器的任务记录里，HuggingFace、ModelScope 的令牌则经 Manager 带不过去。
 
 **生成时也看得到模型库。** AI 工作台、画板、工作流的生成节点里，选大模型、LoRA 的那一格是带缩略图的下拉：每一项写着
 底模和前几个触发词，也能按它们搜；选中带触发词的 LoRA，下面一行点「加进提示词」就接在提示词末尾。
@@ -174,6 +176,9 @@ ComfyUI 停下这一个任务，**全部产出**收进素材库 —— 每个保
 
 **升到 1.9 时连接会先停用**:插件多申报了三项权限(`network:huggingface`、`network:civitai`、`filesystem:write`，见上)。
 连接卡片最上面写着多要了哪几项，点「授予这 3 项」马上恢复，之前授予的不受影响；插件列表上它标着「待授权」。
+
+**升到 1.10 时还会再停一次，多要一项**:`network:modelscope`(模型库也能解析、下载 ModelScope 的链接了)。在连接卡片上
+点「授予这 1 项」就恢复。
 
 ## 认不出的工作流：API 模板
 

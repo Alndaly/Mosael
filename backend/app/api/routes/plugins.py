@@ -500,7 +500,8 @@ def get_model_detail(instance_id: str, folder: str, name: str, db: DbSession, us
 
 @router.post("/plugins/instances/{instance_id}/model-library/resolve", response_model=ModelResolveOut)
 def resolve_model_link(instance_id: str, body: ModelResolveRequest, db: DbSession, user: CurrentUser) -> dict:
-    """一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是什么:文件名、大小、建议的目录、同名文件在不在。"""
+    """一个链接(HuggingFace 文件、Civitai 页面或下载链接、ModelScope 的模型页或文件、别的直链)指的是什么:文件名、大小、
+    建议的目录、同名文件在不在。"""
     instance = my_instance(db, instance_id, user)
     try:
         return model_library.resolve(db, instance, body.url)

@@ -43,8 +43,9 @@ def test_随应用装好_卸不掉() -> None:
     client = fresh_client()
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
     assert package["bundled"] is True and package["provides"] == ["generation", "tools", "model_library"]
-    # 如实申报(ADR 0034):解析和下载模型会连 HuggingFace / Civitai,ComfyUI 在同一台电脑上时会写它的 models 目录
-    assert package["permissions"] == ["network:comfyui", "network:huggingface", "network:civitai", "filesystem:write"]
+    # 如实申报(ADR 0034):解析和下载模型会连 HuggingFace / Civitai / ModelScope,ComfyUI 在同一台电脑上时会写它的 models 目录
+    assert package["permissions"] == ["network:comfyui", "network:huggingface", "network:civitai", "network:modelscope",
+                                      "filesystem:write"]
     assert package["summary_field"] == "server_url", "收起的连接那一行摆服务器地址"
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
     template = package["config_fields"][1]
