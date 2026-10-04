@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import sys
 import threading
 import time
@@ -672,6 +673,23 @@ def test_插件的持久目录里没有令牌(comfy, data_dir, tmp_path) -> None
     for file in data_dir.rglob("*"):
         if file.is_file():
             assert "civ_secret" not in file.read_text(encoding="utf-8", errors="replace")
+
+
+def test_连不上时_第一行只说该做什么_地址和原文在下一行(modules) -> None:
+    """界面把报错的第一行当正文,其余收进「详情」(docs/PLUGIN_MANIFEST.md):用户先读到的是该做什么,不是 errno。"""
+    from comfy_http import Comfy
+    from lines import ComfyError
+
+    with socket.socket() as sock:  # 一个没人在听的端口
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    for locale, first in (("zh", "连不上这台 ComfyUI,确认它在运行、地址填对"),
+                          ("en", "Can't reach this ComfyUI. Make sure it is running and the URL is right")):
+        with pytest.raises(ComfyError) as caught:
+            Comfy(f"http://127.0.0.1:{port}", locale).get("/system_stats")
+        head, *rest = str(caught.value).split("\n")
+        assert head == first
+        assert rest and f"http://127.0.0.1:{port}" in rest[0], "地址和原文在下一行,排查的人展开还看得到"
 
 
 @pytest.fixture(autouse=True)

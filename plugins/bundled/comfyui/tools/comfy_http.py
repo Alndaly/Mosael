@@ -62,9 +62,10 @@ class Comfy:
             raise
         except (error.URLError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
+            # 第一行是给人看的那句(该做什么),地址和原文(errno)换到下一行:界面把第一行当正文,其余收进「详情」
             raise ComfyError(
-                say(self.locale, f"连不上 ComfyUI({self.base}):{reason}。请确认它在运行、地址填对了",
-                    f"Can't reach ComfyUI ({self.base}): {reason}. Make sure it is running and the URL is right")
+                say(self.locale, f"连不上这台 ComfyUI,确认它在运行、地址填对\n{self.base}:{reason}",
+                    f"Can't reach this ComfyUI. Make sure it is running and the URL is right\n{self.base}: {reason}")
             ) from exc
 
     def request_json(self, method: str, path: str, *, params: dict[str, Any] | None = None,

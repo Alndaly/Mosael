@@ -25,6 +25,10 @@ One connection brings two things: **models** (every saved workflow is an image /
 
 For several servers, create several connections; each brings its own set of models.
 
+**When it can't connect** (1.9.2), the first line of the error only says what to do — "Can't reach this ComfyUI. Make
+sure it is running and the URL is right"; the URL and the raw reason (`[Errno 61] Connection refused` and the like) are
+on the next line, which Mosael puts under "Details" or in a hover note.
+
 ## How a workflow becomes a model
 
 | In the workflow | In Mosael |
