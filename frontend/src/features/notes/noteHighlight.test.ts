@@ -29,7 +29,7 @@ it("==文字== 读进来是高亮(里面还能套粗体),存回去一字不差",
   expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
 });
 
-it("阅读模式(只读的那个渲染器)同样画出高亮", () => {
+it("只读的渲染(版本记录预览、画板上的文档格)同样画出高亮", () => {
   const reader = open("==要点==", true);
   expect(reader.view.dom.querySelector("mark")?.textContent).toBe("要点");
 });

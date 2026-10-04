@@ -1910,16 +1910,6 @@
       "bytes": 141665,
       "sha256": "47793222872c7144fe6d95b40701616300d63dcd27eef4dd9f10afcb05b59102"
     },
-    "screens/notes-read.png": {
-      "scene": "notes",
-      "locale": "zh",
-      "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 137942,
-      "sha256": "feea80bcad1f8947e24e8c30faa9640aaaa1b8fa65f48c588f0a50cb1d5854aa"
-    },
     "screens/notes-markdown.png": {
       "scene": "notes",
       "locale": "zh",
@@ -2039,16 +2029,6 @@
       "capturedAt": "2026-10-03T20:27:40.192314+00:00",
       "bytes": 141516,
       "sha256": "1cfd6bd6030635a0edeee09b8a84afe255483c197318e5a72b3e46a28dc870c5"
-    },
-    "screens/dark/notes-read.png": {
-      "scene": "notes",
-      "locale": "zh",
-      "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 137722,
-      "sha256": "690013101d6e9077baeec0a4422635ba6d276d684ab2758f6720d288753633de"
     },
     "screens/dark/notes-markdown.png": {
       "scene": "notes",
@@ -2170,16 +2150,6 @@
       "bytes": 146563,
       "sha256": "0f0e0a1a478c42050f0e7bca9a605d4f8b17449c4c62106b69cc8e9f36de3c68"
     },
-    "screens/en/notes-read.png": {
-      "scene": "notes",
-      "locale": "en",
-      "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 142128,
-      "sha256": "b5554a34df665329fd813c747646f3af27e2625581e28916bdef7d22225f944a"
-    },
     "screens/en/notes-markdown.png": {
       "scene": "notes",
       "locale": "en",
@@ -2299,16 +2269,6 @@
       "capturedAt": "2026-10-03T20:27:40.192314+00:00",
       "bytes": 146021,
       "sha256": "0c2523baaa766d4bb40038aecff9f0449db973519b71b189ca77f9c65361d341"
-    },
-    "screens/en/dark/notes-read.png": {
-      "scene": "notes",
-      "locale": "en",
-      "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 142468,
-      "sha256": "ecf237e63953c5baa683e54372f8205658c422e149bdd391c5d31c650e271aec"
     },
     "screens/en/dark/notes-markdown.png": {
       "scene": "notes",

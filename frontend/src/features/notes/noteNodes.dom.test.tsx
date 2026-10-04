@@ -54,7 +54,7 @@ it("edits an image beside the selection, preserves its title and supports undo a
   editor.commands.undo();
   expect(editor.getMarkdown()).toContain("https://example.com/old.png");
 });
-it("rejects invalid image URLs, cancels drafts, and hides editing controls in reading mode", () => {
+it("rejects invalid image URLs, cancels drafts, and hides editing controls when the editor is read-only", () => {
   const { editor, element } = setup("![Original](https://example.com/a.png)");
   (element.querySelector("img") as HTMLElement).click();
   const form = element.querySelector("form")!,

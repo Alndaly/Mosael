@@ -55,7 +55,7 @@ Each scene is one recording (`videos/<scene>.mp4`) plus the screenshots taken al
 | `boards` | `boards`, `board-form`, `board-mention` |
 | `board-cells` | `board-add-menu`, `board-abilities`, `board-selection` (shared exit), `board-generate` ("N×"), `board-picker`, `board-scene-cell`, `board-scene-reference`, `board-timeline` |
 | `annotations` | `annotations`, `marker-editor` |
-| `notes` | `notes`, `notes-read`, `notes-markdown` |
+| `notes` | `notes`, `notes-markdown` |
 | `scenes` | `scenes`, `scene-add`, `scene-camera`, `scene-observation`, `scene-keyframes` |
 | `entities` | `entities`, `entity-detail`, `entity-speak` |
 | `plugins` | `plugins`, `plugin-detail` (connection with its Network row), `plugin-connection` |

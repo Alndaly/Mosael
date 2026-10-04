@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, FileCode, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -305,7 +305,9 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
   const saved = React.useRef(JSON.stringify(note)); const busy = React.useRef(false); const mounted = React.useRef(true);
   const [status, setStatus] = React.useState<NoteStatus>(JSON.stringify(draft) === JSON.stringify(note) ? "saved" : "draft"); const [error, setError] = React.useState("");
   const [moreOpen, setMoreOpen] = React.useState(false);
-  const [mode, setMode] = React.useState("edit"); const [properties, setProperties] = React.useState(false);
+  //: 两种看法:编辑(所见即所得)和 Markdown 源码。没有单独的「阅读」—— 只读的版本记录预览、画板上的文档格用的是
+  //: NoteReader,那是另一个组件。
+  const [mode, setMode] = React.useState<"edit" | "raw">("edit"); const [properties, setProperties] = React.useState(false);
   //: 换了看的方式,编辑器重建、选区没了 —— 助手那边也别再带着上一个模式里的那段。
   React.useEffect(() => { onSelectionChange?.(null); }, [mode, onSelectionChange]);
   const [history, setHistory] = React.useState(false);
@@ -404,10 +406,11 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);
   return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
       <div className="note-header-format" ref={setToolbarTarget} />
-      {/* 右边一组:保存状态 → 看的方式 → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
+      {/* 右边一组:保存状态 → Markdown → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
           夹在收起按钮和格式工具之间时像是格式工具的一部分。 */}
       <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
-      <div className="note-modes" role="group" aria-label={s.viewMode}>{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}</div>
+      {/* Markdown 只剩一个选项:一颗能按下的切换(按下看源码,再点回到编辑)。 */}
+      <button className="note-icon note-source-toggle" aria-label={s.raw} title={s.rawHint} aria-pressed={mode === "raw"} onClick={() => setMode(mode === "raw" ? "edit" : "raw")}><FileCode size={16} aria-hidden="true" /></button>
       {onToggleAgent && <button className="note-agent-toggle" aria-label={t("wfAgentTitle")} title={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={15} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></button>}
       <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={18}/></button></PopoverTrigger>{/* 和笔记列表的右键菜单同一套尺寸与条目样式(components/ui/floating 的 MENU_ITEM)。 */}
@@ -421,8 +424,8 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     </div></header>{draft.trashed && <div className="note-trash-notice" role="status"><div className="note-notice-row"><span>{s.inTrash}</span><span className="note-notice-actions"><button onClick={() => change({trashed: false})}><RotateCcw size={13} aria-hidden="true" />{s.restoreTrash}</button><button className="note-notice-danger" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={13} aria-hidden="true" />{s.deleteForever}</button></span></div></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
     {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div></div>}
     <div className="note-body"><article className="note-paper">
-      {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
-        title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed || mode === "read"} onValueChange={title => change({title})} />}
+      {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={!draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
+        title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} />}
         onReference={n => { if (!latest.current.sources.some(source => source.kind === "note" && source.id === n.id && source.revision === n.revision)) change({sources: [...latest.current.sources, {kind: "note", id: n.id, label: n.title, quote: "", revision: n.revision}]}); }}
         onSelectionChange={onSelectionChange} onAskAi={onAskAi} onAiAction={onAiAction} onQuote={onQuote}
         saveSource={{ kind: "note", id: note.id, label: draft.title || s.untitled, quote: "", revision: draft.revision }} />}
@@ -435,7 +438,7 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
         <div className="note-history-list min-h-0 overflow-y-auto overscroll-contain pr-1" aria-label={s.history}>
           {revisions.data?.map(r => <button key={r.revision} className="note-list-row" aria-current={(pendingVersion ?? historic?.revision) === r.revision} onClick={() => void loadVersion(r.revision)}>{s.version} {r.revision}<time>{new Date(r.created_at).toLocaleString()}</time></button>)}
         </div>
-        <div ref={historyPreview} className="note-history-preview min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-1" aria-label={s.preview}>
+        <div ref={historyPreview} className="note-history-preview min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-1" aria-label={s.versionContent}>
           {pendingVersion ? <p className="p-4 text-sm text-muted-foreground">{s.loading}</p> : historic ? <><h3 className="mb-5 break-words text-lg font-semibold">{historic.title}</h3><NoteReader markdown={historic.markdown} /></> : <p className="p-4 text-sm text-muted-foreground">{s.chooseVersion}</p>}
         </div>
       </div>

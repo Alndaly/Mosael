@@ -131,10 +131,8 @@
 .note-format .note-block-style { margin-right:4px; }
 .note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; white-space:nowrap; }
 .note-document-header .note-status { display:flex; align-items:center; height:30px; gap:5px; margin-right:2px; font-size:var(--text-ui-2xs); }
-.note-modes { display:flex; align-items:center; height:30px; gap:2px; padding:2px; border-radius:8px; background:color-mix(in srgb,var(--foreground) 4%,transparent); }
-.note-mode { height:26px; padding:0 9px; border-radius:6px; }
-.note-mode[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
-.note-mode:hover { color:var(--foreground); }
+/* Markdown 源码:一颗切换,按下时和格式按钮的按下态同一个样子。 */
+.note-source-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 /* 助手开关:和剪辑页那一颗同样是「图标 + AI 助手」、开着时 accent 底,高度跟这一行走(30px)。 */
 .note-agent-toggle { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 9px; border-radius:6px; }
 .note-agent-toggle:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }

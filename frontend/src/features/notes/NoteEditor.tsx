@@ -198,7 +198,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     { name: s.redo, icon: Redo2, disabled: !state?.redo, action: () => editor.chain().focus().redo().run() },
   ];
   const actionButton = (a: typeof actions[number]) => <button key={a.name} type="button" title={a.name} aria-label={a.name} aria-pressed={a.active} disabled={a.disabled} onMouseDown={e => e.preventDefault()} onClick={a.action}><a.icon size={16} strokeWidth={1.7} /></button>;
-  const toolbar = <div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.write}>
+  const toolbar = <div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.format}>
     <div className="note-format-group">
       {/* 段落样式和「插入」是同一种控件:文字 + 小箭头的菜单按钮,菜单条目和右键菜单一个样。
           此前这里是一个带边框的表单下拉,高出工具栏一截,和旁边的图标按钮不像一排。 */}

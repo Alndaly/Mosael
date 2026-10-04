@@ -543,15 +543,12 @@ def notes(c: Capture) -> None:
     c.goto("notes?note=" + c.F["note"])
     c.shot("notes")
     c.begin()
-    # The note's own mode buttons, inside the page — in English the sidebar's "Edit" (the editor) has the same name.
-    mode = lambda zh, en: c.page.get_by_role("main").get_by_role("button", name=c.word(zh, en), exact=True).first.click()
-    mode("阅读", "Read")
-    c.hold(1100)
-    c.shot("notes-read")
-    mode("Markdown", "Markdown")
+    # The note's Markdown toggle, inside the page: pressed shows the source, pressed again goes back to editing.
+    source = lambda: c.page.get_by_role("main").get_by_role("button", name="Markdown", exact=True).first.click()
+    source()
     c.hold(1300)
     c.shot("notes-markdown")
-    mode("编辑", "Edit")
+    source()
     c.hold(1000)
 
 
