@@ -456,3 +456,30 @@ describe("报错怎么说、说在哪", () => {
     expect(text.className).not.toContain("line-clamp-2");
   });
 });
+
+it("开发时主进程是旧的(能替你重启):报错直接给「重启」", async () => {
+  const restart = vi.fn(async () => undefined);
+  Object.assign(window, {
+    mosaelDesktop: {
+      devMain: {
+        status: async () => ({ files: ["publish.bundle.cjs"], canRestart: true }),
+        onStale: () => () => undefined,
+        restart,
+      },
+    },
+  });
+  const { mainStale } = await import("@/features/desktop/mainStale");
+  mainStale.reset();
+  const off = mainStale.subscribe(() => undefined);
+  await waitFor(() => expect(mainStale.get().files).toEqual(["publish.bundle.cjs"]));
+  tools.capture.mockRejectedValueOnce(new Error("这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)"));
+  show();
+  fireEvent.click(toolButton("shot"));
+  fireEvent.click(choiceButton("visible"));
+  await waitFor(() => expect(notice()?.getAttribute("data-page-tools-notice")).toBe("error"));
+  fireEvent.click(within(notice()!).getByRole("button", { name: "mainStaleRestart" }));
+  expect(restart).toHaveBeenCalled();
+  off();
+  mainStale.reset();
+  Object.assign(window, { mosaelDesktop: undefined });
+});

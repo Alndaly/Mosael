@@ -59,6 +59,13 @@ export type LivePanelLayoutChange =
   | { x: number; y: number }
   | { handle: LivePanelHandle; x: number; y: number; width: number; height: number };
 
+export interface MainStaleStatus {
+  /** 主进程启动之后变了的产物(electron/ 下的 .cjs)。 */
+  files: string[];
+  /** 能不能替用户重启(经 pnpm dev 的 dev-loop 拉起时才能)。 */
+  canRestart: boolean;
+}
+
 export interface MosaelUpdateInfo {
   current?: string;
   latest?: string;
@@ -222,6 +229,13 @@ export interface MosaelDesktopBridge {
     exportDiagnostics(): Promise<{ status: "saved" | "cancelled"; path?: string }>;
     createBackup(token: string): Promise<{ status: "saved" | "cancelled"; path?: string }>;
     applyRestore(stageId: string): Promise<{ status: "restarting" }>;
+  };
+  /** 开发时主进程过期(正式打包的应用里文件列表永远是空的)。 */
+  devMain?: {
+    status(): Promise<MainStaleStatus>;
+    onStale(callback: (status: MainStaleStatus) => void): () => void;
+    /** 只在 canRestart 时可用:Electron 退出后由 dev-loop 重新拉起,vite、后端不动。 */
+    restart(): Promise<void>;
   };
   customCss: {
     read(): Promise<string>;

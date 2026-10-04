@@ -193,6 +193,13 @@ try {
 // —— 托盘建不出来时应用还能正常用,只是退化成「关窗即退」的老行为。
 let system = null;
 let systemHandle = null;
+
+// 开发时主进程过期(见 dev-staleness.cjs):哪几份产物变了;能不能替用户重启(由 dev-loop.cjs 拉起时才能)。
+const { createStalenessWatcher } = require("./dev-staleness.cjs");
+const DEV_RESTART_CODE = Number(process.env.MOSAEL_DEV_RESTART_CODE) || 0;
+let staleMainFiles = [];
+let staleWatcher = null;
+const mainStaleStatus = () => ({ files: staleMainFiles, canRestart: isDev && DEV_RESTART_CODE > 0 });
 try {
   system = require("./system.bundle.cjs");
 } catch (e) {
@@ -887,6 +894,27 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
     requirePublish().saveDownload(parseSaveDownload(payload)),
   );
+  // 开发时主进程过期提示:主进程启动时加载的产物(main.cjs、几个 bundle)变了,而正在跑的还是旧的 —— 渲染层
+  // 热更新成了新代码,去调旧主进程里没有的处理器就会失败。给界面一条「重启后生效」,能重启时带按钮。
+  // 正式打包的应用不起这个(isDev 为假)。
+  ipcMain.handle(IPC.invoke.mainStatus, () => mainStaleStatus());
+  ipcMain.handle(IPC.invoke.restartMain, () => {
+    if (!DEV_RESTART_CODE) throw new Error(t("devMain_cannotRestart"));
+    // 由 dev-loop.cjs 拉起:以「要重启」的退出码退出,它再拉一遍 Electron;vite、后端那几栏不动。
+    appendMainLog("dev-restart", `stale=${staleMainFiles.join(",")}`);
+    quitting = true;
+    systemHandle?.dispose();
+    app.exit(DEV_RESTART_CODE);
+  });
+  if (isDev && !isSmokeTest) {
+    staleWatcher = createStalenessWatcher({
+      dir: __dirname,
+      onChange: (files) => {
+        staleMainFiles = files;
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.mainStale, mainStaleStatus());
+      },
+    });
+  }
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
   ipcMain.handle(IPC.invoke.checkUpdates, async () => {
@@ -1081,6 +1109,7 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   markSmokeStage("will-quit");
+  staleWatcher?.close();
   stopBackend();
 });
 process.on("exit", stopBackend);

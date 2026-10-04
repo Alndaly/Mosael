@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
+import { restartForStaleMain, staleMainRestartable } from "@/features/desktop/mainStale";
 import { gotoRecord } from "@/lib/deepLink";
 
 import { listenDownloadNotices } from "./downloadActions";
@@ -54,7 +55,9 @@ export function useToolNotice() {
             : code === "full_page_unavailable"
               ? t("browserToolsFullPageUnavailable")
               : (error as Error)?.message || String(error);
-      say({ tone: "error", text: t("browserToolsFailed").replace("{reason}", reason) });
+      // 开发时主进程是旧的(渲染层热更新成了新代码,调的处理器主进程里没有)且能替用户重启:直接给「重启」。
+      const restart = staleMainRestartable() ? { label: t("mainStaleRestart"), run: () => void restartForStaleMain() } : undefined;
+      say({ tone: "error", text: t("browserToolsFailed").replace("{reason}", reason), action: restart });
     },
     [say, t],
   );

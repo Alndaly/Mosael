@@ -58,6 +58,7 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
+import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
 import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
@@ -112,6 +113,7 @@ export function App() {
                 <ImagePreviewProvider>
                   <AuthGate />
                   <AppToaster />
+                  <MainStaleNotice />
                   <PublishViewBar />
                   <BrowserDownloads />
                   <BrowserPreview />

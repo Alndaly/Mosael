@@ -335,6 +335,10 @@ const MESSAGES = {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
   },
+  devMain_cannotRestart: {
+    zh: "这次不是经 pnpm dev 拉起的,没法替你重启,请手动重启 Mosael",
+    en: "Mosael wasn't started by pnpm dev, so it can't restart itself; restart it by hand",
+  },
   // 渲染层经 IPC 调主进程失败时给人看的话(见 ipc-errors.cjs)。
   ipcErr_mainOutdated: {
     zh: "这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)",

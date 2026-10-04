@@ -1,6 +1,8 @@
 export const IPC: {
   readonly invoke: Readonly<{
     checkUpdates: "mosael:check-updates";
+    mainStatus: "mosael:main-status";
+    restartMain: "mosael:restart-main";
     recordingStatus: "recording-permissions:status";
     recordingRequest: "recording-permissions:request";
     recordingOpenSettings: "recording-permissions:open-settings";
@@ -54,6 +56,7 @@ export const IPC: {
     deepLink: "mosael:deep-link";
     openFiles: "mosael:open-files";
     updateAvailable: "mosael:update-available";
+    mainStale: "mosael:main-stale";
     customCss: "mosael:custom-css";
     publishView: "publish:view";
     publishPanels: "publish:panels";

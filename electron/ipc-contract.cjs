@@ -9,6 +9,9 @@
 const IPC = Object.freeze({
   invoke: Object.freeze({
     checkUpdates: "mosael:check-updates",
+    // 开发时主进程过期了没有、要求重启(见 dev-staleness.cjs / dev-loop.cjs)。
+    mainStatus: "mosael:main-status",
+    restartMain: "mosael:restart-main",
     recordingStatus: "recording-permissions:status",
     recordingRequest: "recording-permissions:request",
     recordingOpenSettings: "recording-permissions:open-settings",
@@ -64,6 +67,7 @@ const IPC = Object.freeze({
     deepLink: "mosael:deep-link",
     openFiles: "mosael:open-files",
     updateAvailable: "mosael:update-available",
+    mainStale: "mosael:main-stale",
     customCss: "mosael:custom-css",
     publishView: "publish:view",
     publishPanels: "publish:panels",
