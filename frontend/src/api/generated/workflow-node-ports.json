@@ -225,10 +225,14 @@
       },
       "url": {
         "type": "template"
+      },
+      "allow_error_page": {
+        "type": "string"
       }
     },
     "outputs": [
-      "session"
+      "session",
+      "status"
     ]
   },
   {
@@ -245,11 +249,15 @@
       },
       "profile_id": {
         "type": "string"
+      },
+      "allow_error_page": {
+        "type": "string"
       }
     },
     "outputs": [
       "session",
-      "notice"
+      "notice",
+      "status"
     ]
   },
   {

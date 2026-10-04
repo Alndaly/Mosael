@@ -149,7 +149,14 @@ export async function executeBrowserAction(
       if (landed.startsWith("chrome-error://")) {
         throw new Error(t("browserErr_navigateFailed", { code: "chrome-error", url: brief(url, 120) }));
       }
-      return { lastUrl: landed };
+      //: 打开了,但服务器回的是错误页(404 / 5xx):默认算失败 —— 此前节点照样「成功」,下一步在错误页上找元素。
+      //: 确实要读错误页的(比如检查死链),在节点上打开「允许错误页」,状态码照样交出去。
+      if (result.outcome === "rejected" || result.status === undefined) return { lastUrl: landed };
+      if (result.status >= 400 && !args.allow_error_page) {
+        const answer = `${result.status} ${result.statusText ?? ""}`.trim();
+        throw new Error(t("browserErr_httpError", { status: answer, url: brief(landed || url, 120) }));
+      }
+      return { value: result.status, lastUrl: landed };
     }
     case "click": {
       const waitMs = waitMsOf(args);

@@ -299,6 +299,10 @@ const MESSAGES = {
     zh: "网页没有打开({code}):{url}",
     en: "The page didn't open ({code}): {url}",
   },
+  browserErr_httpError: {
+    zh: "网页打开了,但服务器回的是 {status}:{url}(要照样往下走,在节点上打开「允许错误页」)",
+    en: "The page opened, but the server answered {status}: {url} (to carry on anyway, turn on “Allow error pages” on the node)",
+  },
   browserErr_extractMissing: {
     zh: "页面上没有匹配的元素可提取:{selector};当前停在 {url}",
     en: "No element on the page matches, so there is nothing to extract: {selector}; the page is at {url}",

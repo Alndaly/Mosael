@@ -53,7 +53,8 @@ const EVALUATE_MAX_MS = 180_000;
 
 /** 一次导航的结局。rejected 带着 Chromium 的网络错误码(errno 是负数,code 是 ERR_… 名字)。 */
 export type GotoOutcome =
-  | { outcome: "loaded" | "timeout" }
+  /** status:主框架最后一次导航时服务器回的状态码(跳转之后落地那一页);拿不到(about:blank 之类)就没有。 */
+  | { outcome: "loaded" | "timeout"; status?: number; statusText?: string }
   | { outcome: "rejected"; errno?: number; code: string };
 
 /** 找文件框的方式:`exact` 只认给的选择器(含 shadow DOM 里的),不退回页面上随便哪个文件框。 */
@@ -244,13 +245,21 @@ export class PageDriver {
     plog("goto:", url);
     // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +
     // 持续加载),没有超时就会把整条认领链吊死。超时后放行:页面通常已可交互,交给 checkLogin 判断。
+    //: 服务器回了什么。loadURL 对 404 / 500 照样 resolve(实测,连空 body 的 500 也是),状态码只在 did-navigate 上。
+    let answered: { status: number; statusText: string } | null = null;
+    const onNavigate = (_event: unknown, _url: string, status: number, statusText: string) => {
+      if (status > 0) answered = { status, statusText };
+    };
+    const withStatus = (outcome: "loaded" | "timeout"): GotoOutcome =>
+      answered ? { outcome, status: answered.status, statusText: answered.statusText } : { outcome };
+    this.wc.on("did-navigate", onNavigate);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<GotoOutcome>((resolve) => {
-      timer = setTimeout(() => resolve({ outcome: "timeout" }), 45_000);
+      timer = setTimeout(() => resolve(withStatus("timeout")), 45_000);
     });
     const result = await this.untilAborted(Promise.race([
       this.wc.loadURL(url).then(
-        (): GotoOutcome => ({ outcome: "loaded" }),
+        (): GotoOutcome => withStatus("loaded"),
         (error: unknown): GotoOutcome => {
           plog("goto rejected:", url, String(error).slice(0, 160));
           // Electron 的 loadURL 失败带着 Chromium 的网络错误:errno(-105)和 code(ERR_NAME_NOT_RESOLVED)。
@@ -263,7 +272,10 @@ export class PageDriver {
         },
       ),
       timeout,
-    ])).finally(() => clearTimeout(timer));
+    ])).finally(() => {
+      clearTimeout(timer);
+      this.wc.removeListener("did-navigate", onNavigate);
+    });
     plog(`goto ${result.outcome}:`, this.wc.getURL());
     return result;
   }

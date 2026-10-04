@@ -128,6 +128,7 @@ _FIELD_LABELS = {
     "account_id": "wfField_account_id",
     "all": "wfField_all",
     "allow_missing": "wfField_allow_missing",
+    "allow_error_page": "wfField_allow_error_page",
     "asset_id": "wfField_asset_id",
     "asset_ids": "wfField_asset_ids",
     "attribute": "wfField_attribute",
@@ -1926,9 +1927,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "label": "wfField_browser_profile",
                 "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles",
             },
+            "allow_error_page": {
+                "advanced": True, "type": "string", "options": ["false", "true"], "default": "false",
+                "description": "wfNode_browser_allow_error_page",
+            },
         },
-        "outputs": ["session", "notice"],
-        "output_labels": {"notice": "wfOut_browser_open_notice"},
+        "outputs": ["session", "notice", "status"],
+        "output_labels": {"notice": "wfOut_browser_open_notice", "status": "wfOut_browser_http_status"},
     },
     "browser_navigate": {
         "external": True,
@@ -1938,8 +1943,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_navigate_session"},
             "url": {"type": "template", "required": True, "description": "wfNode_browser_navigate_url"},
+            "allow_error_page": {
+                "advanced": True, "type": "string", "options": ["false", "true"], "default": "false",
+                "description": "wfNode_browser_allow_error_page",
+            },
         },
-        "outputs": ["session"],
+        "outputs": ["session", "status"],
+        "output_labels": {"status": "wfOut_browser_http_status"},
     },
     "browser_click": {
         "external": True,

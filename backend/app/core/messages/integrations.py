@@ -630,6 +630,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_account_id": {"zh": "发布账号", "en": "Publishing account"},
     "wfField_all": {"zh": "全部", "en": "All"},
     "wfField_allow_missing": {"zh": "找不到时输出空", "en": "Output empty when missing"},
+    "wfField_allow_error_page": {"zh": "允许错误页", "en": "Allow error pages"},
     "wfField_asset_id": {"zh": "素材", "en": "Asset"},
     "wfField_entity_id": {"zh": "资产", "en": "Asset"},
     "wfField_scope": {"zh": "补哪些", "en": "Which angles"},

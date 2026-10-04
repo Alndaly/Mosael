@@ -15,6 +15,7 @@ const { ActionAbortedError } = await import("./errors");
 function stuckWebContents() {
   return {
     on: () => undefined,
+    removeListener: () => undefined,
     executeJavaScript: () => new Promise(() => undefined),
     loadURL: () => new Promise(() => undefined),
     getURL: () => "https://example.com/",

@@ -44,7 +44,37 @@ def test_browser_open_navigates_and_returns_session(monkeypatch) -> None:
         sid = out["session"]
         assert sid  # 真的建了会话(隔离分区)
         assert db.get(BrowserSession, sid).partition == f"ephemeral-{sid}"
-    assert calls == [("navigate", {"url": "https://x.test"})]
+    assert calls == [("navigate", {"url": "https://x.test", "allow_error_page": False})]
+
+
+def test_打开网址_错误页默认算失败_打开开关才放行_状态码交出去(monkeypatch) -> None:
+    """404 / 5xx 默认失败是执行器那边判的(它看得见状态码);这里要做的是把开关交过去、把状态码交出来。"""
+    calls: list = []
+    monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (calls.append((action, args)) or {"value": 404}))
+    ws = _workspace_id()
+    with SessionLocal() as db:
+        opened = bx.browser_open(db, _wf(ws), {"url": "https://x.test/gone", "allow_error_page": "true"})
+        assert opened["status"] == 404
+        navigated = bx.browser_navigate(db, _wf(ws), {"session": opened["session"], "url": "https://x.test/a"})
+        assert navigated == {"session": opened["session"], "status": 404}
+    assert calls == [
+        ("navigate", {"url": "https://x.test/gone", "allow_error_page": True}),
+        ("navigate", {"url": "https://x.test/a", "allow_error_page": False}),
+    ]
+
+
+def test_打开浏览器不带网址_没有状态码(monkeypatch) -> None:
+    monkeypatch.setattr(bdom, "run_action", lambda *a, **k: {})
+    ws = _workspace_id()
+    with SessionLocal() as db:
+        assert bx.browser_open(db, _wf(ws), {})["status"] is None
+
+
+def test_打开网址的节点声明了开关和状态码输出() -> None:
+    for node_type in ("browser_open", "browser_navigate"):
+        spec = NODE_TYPES[node_type]
+        assert spec["config"]["allow_error_page"]["options"] == ["false", "true"]
+        assert "status" in spec["outputs"]
 
 
 def test_browser_extract_returns_value(monkeypatch) -> None:

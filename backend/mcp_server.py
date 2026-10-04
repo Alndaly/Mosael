@@ -1343,8 +1343,11 @@ def browser_pool_open(profile_id: str, url: str = "", workspace_id: str = "") ->
 
 @tool(effect="writes")
 def browser_navigate(session_id: str, url: str, workspace_id: str = "") -> dict[str, Any]:
-    """Navigate an already-open browser session to a URL. Needs a session_id from browser_open."""
-    return _browser_act(session_id, "navigate", {"url": url}, workspace_id)
+    """Navigate an already-open browser session to a URL. Needs a session_id from browser_open.
+
+    Returns { value } — the HTTP status code of the page that loaded. Error pages (404 / 5xx) still open:
+    check the code before reading the page as if it were the content you wanted."""
+    return _browser_act(session_id, "navigate", {"url": url, "allow_error_page": True}, workspace_id)
 
 
 @tool(effect="writes")

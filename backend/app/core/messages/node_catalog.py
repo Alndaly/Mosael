@@ -170,6 +170,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_camera_move": {"zh": "镜头语言", "en": "Camera language"},
     "wfOut_skipped_models": {"zh": "未渲染的导入模型", "en": "Imported models not rendered"},
     "wfOut_browser_open_notice": {"zh": "提示(如升级后这份登录要重新登录)", "en": "Notice (e.g. this sign-in must be redone after an upgrade)"},
+    "wfOut_browser_http_status": {"zh": "HTTP 状态码", "en": "HTTP status code"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
     "dubOverlapNote": {
@@ -489,6 +490,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_navigate_desc": {"zh": "在会话里跳转到网址。", "en": "Go to a URL in this session."},
     "wfNode_browser_navigate_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
     "wfNode_browser_navigate_url": {"zh": "目标网址", "en": "Target URL"},
+    "wfNode_browser_allow_error_page": {"zh": "服务器回 404 / 5xx 这类错误页时照样往下走(默认算失败);状态码交在输出里", "en": "Carry on when the server answers with an error page such as 404 / 5xx (by default that fails the step); the status code is in the output"},
     "wfNode_browser_click": {"zh": "浏览器·点击", "en": "Browser · click"},
     "wfNode_browser_click_desc": {"zh": "按 CSS 选择器或可见文本点击元素。", "en": "Click an element by CSS selector or by its visible text."},
     "wfNode_browser_click_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},

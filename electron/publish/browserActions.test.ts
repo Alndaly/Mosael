@@ -102,6 +102,57 @@ describe("导航没打开就说没打开", () => {
     });
   });
 
+  it("服务器回了 404:默认算失败,说出状态码和网址,并提示「允许错误页」", async () => {
+    // 实测(真实执行器):打开一个 500 页,节点「成功」,下一步在那张错误页上找元素。
+    const driver = fakeDriver("https://example.com/gone", {
+      goto: async () => ({ outcome: "loaded" as const, status: 404, statusText: "Not Found" }),
+    });
+    setLocale("zh-CN");
+    const error = await executeBrowserAction(driver, "navigate", { url: "https://example.com/gone" }).then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(error?.message).toMatch(/404.*https:\/\/example\.com\/gone/s);
+    expect(error?.message).toContain("允许错误页");
+  });
+
+  it("5xx 一样;英文界面说英文", async () => {
+    const driver = fakeDriver("https://example.com/", {
+      goto: async () => ({ outcome: "loaded" as const, status: 503, statusText: "Service Unavailable" }),
+    });
+    setLocale("en-US");
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://example.com/" })).rejects.toThrow(
+      /^The page opened, but the server answered 503 Service Unavailable: https:\/\/example\.com\//,
+    );
+  });
+
+  it("打开了「允许错误页」:照旧往下走,状态码交出去", async () => {
+    const driver = fakeDriver("https://example.com/gone", {
+      goto: async () => ({ outcome: "loaded" as const, status: 404, statusText: "Not Found" }),
+    });
+    await expect(
+      executeBrowserAction(driver, "navigate", { url: "https://example.com/gone", allow_error_page: true }),
+    ).resolves.toEqual({ value: 404, lastUrl: "https://example.com/gone" });
+  });
+
+  it("正常的页面也把状态码交出去;3xx 跳转之后看的是落地那一页", async () => {
+    const driver = fakeDriver("https://example.com/", {
+      goto: async () => ({ outcome: "loaded" as const, status: 200, statusText: "OK" }),
+    });
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://example.com/" })).resolves.toEqual({
+      value: 200,
+      lastUrl: "https://example.com/",
+    });
+  });
+
+  it("等满 45 秒放行的那种(还在加载)也看状态码", async () => {
+    const driver = fakeDriver("https://example.com/slow", {
+      goto: async () => ({ outcome: "timeout" as const, status: 500, statusText: "Internal Server Error" }),
+    });
+    setLocale("zh-CN");
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://example.com/slow" })).rejects.toThrow(/500/);
+  });
+
   it("最后停在 chrome-error:// 也算没打开", async () => {
     const driver = fakeDriver("chrome-error://chromewebdata/", { goto: async () => ({ outcome: "loaded" as const }) });
     setLocale("en-US");

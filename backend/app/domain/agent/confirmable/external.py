@@ -161,9 +161,16 @@ def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> 
     )
     notice = browser_domain.login_notice(db, session)
     url = str(payload.get("url") or "").strip()
-    if url:
-        browser_domain.run_action(session.id, "navigate", {"url": url})
-    return {"session_id": session.id, "url": url, **({"notice": notice} if notice else {})}
+    status = _agent_navigate(browser_domain, session.id, url) if url else None
+    return {"session_id": session.id, "url": url, "status": status, **({"notice": notice} if notice else {})}
+
+
+def _agent_navigate(browser_domain: Any, session_id: str, url: str) -> int | None:
+    """智能体打开网址:404 / 5xx 的错误页照样打开、状态码交给模型 —— 它读得懂页面上写了什么,自己决定下一步。
+    (工作流节点默认把错误页当失败,那里没有人在看着。)"""
+    out = browser_domain.run_action(session_id, "navigate", {"url": url, "allow_error_page": True})
+    status = out.get("value")
+    return status if isinstance(status, int) else None
 
 def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain import browser as browser_domain
@@ -206,9 +213,8 @@ def _execute_browser_pool_open(db: Session, confirmation: Any, actor: str | None
         actor=actor,
     )
     url = str(payload.get("url") or "").strip()
-    if url:
-        browser_domain.run_action(session.id, "navigate", {"url": url})
-    return {"session_id": session.id, "url": url}
+    status = _agent_navigate(browser_domain, session.id, url) if url else None
+    return {"session_id": session.id, "url": url, "status": status}
 
 confirmable_tool(ConfirmableTool(
     name="publish_asset",

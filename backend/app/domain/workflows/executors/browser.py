@@ -170,16 +170,22 @@ def browser_open(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     #: 具名会话第一次打开、而升级时它的旧登录没能带过来:原因交在 notice 上(否则人只看到「登录没了」)
     notice = browser.login_notice(db, session)
     url = str(config.get("url") or "").strip()
-    if url:
-        _run(session.id, "navigate", {"url": url})
-    return {"session": session.id, "notice": notice}
+    status = _navigate(session.id, url, config) if url else None
+    return {"session": session.id, "notice": notice, "status": status}
+
+
+def _navigate(session_id: str, url: str, config: dict[str, Any]) -> int | None:
+    """打开一个网址,交回服务器回的状态码。404 / 5xx 默认算失败 —— 执行器看得见状态码,在那边判;
+    节点上打开「允许错误页」就照样往下走(检查死链、读错误页上的说明)。"""
+    out = _run(session_id, "navigate", {"url": url, "allow_error_page": _truthy(config.get("allow_error_page"))})
+    status = out.get("value")
+    return status if isinstance(status, int) else None
 
 
 @register("browser_navigate")
 def browser_navigate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    _run(sid, "navigate", {"url": str(config.get("url") or "")})
-    return {"session": sid}
+    return {"session": sid, "status": _navigate(sid, str(config.get("url") or ""), config)}
 
 
 @register("browser_click")
