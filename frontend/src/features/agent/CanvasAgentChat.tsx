@@ -64,6 +64,7 @@ import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/featu
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { cn } from "@/lib/utils";
+import type { ComposerChip } from "@/lib/composerChip";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
@@ -80,8 +81,13 @@ export type CanvasAgentMode = "docked" | "floating";
 const COMPOSER_COLUMN = "mx-2";
 
 export function CanvasAgentChat({
-  /** 附在每条消息上的隐藏上下文:告诉智能体它在看哪张画布、该用哪几个工具。 */
+  /** 附在每条消息上的隐藏上下文:告诉智能体它在看哪张画布、该用哪几个工具。
+   *  给函数的话**发送那一刻**才取 —— 笔记页的正文和选区每敲一个字都在变,没必要为它每次重渲整页。 */
   contextLine,
+  /** 页面挂进这条消息的东西(笔记页:选中的那段),和附件同一排小条。上下文由页面自己写进 contextLine。 */
+  contextChips,
+  /** 变一次就把光标放进输入框(笔记页的「问 AI」)。 */
+  focusSignal,
   /** 空态那句话 —— 说清这个面板能干什么。 */
   emptyHint,
   placeholder,
@@ -93,7 +99,9 @@ export function CanvasAgentChat({
   onModeChange,
   onClose,
 }: {
-  contextLine: string;
+  contextLine: string | (() => string);
+  contextChips?: ComposerChip[];
+  focusSignal?: number;
   emptyHint: string;
   placeholder: string;
   rectKey: string;
@@ -308,7 +316,8 @@ export function CanvasAgentChat({
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
       if (noteAttach.hasNotes) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
-      const context = [contextLine, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
+      const page = typeof contextLine === "function" ? contextLine() : contextLine;
+      const context = [page, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
       //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
       if (visibleContent.length > MAX_MESSAGE_CHARS || context.length > MAX_CONTEXT_CHARS) {
         throw new Error(t("composerMessageTooLong"));
@@ -552,7 +561,7 @@ export function CanvasAgentChat({
             />
             {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
             {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
-            <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
+            <ComposerChips chips={[...(contextChips ?? []), ...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
             {attach.previewModal}
             {noteAttach.dialog}
             {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
@@ -563,6 +572,7 @@ export function CanvasAgentChat({
               onSubmit={() => submit()}
               onPaste={attach.onPaste}
               placeholder={placeholder}
+              focusSignal={focusSignal}
             />
             <div className="flex items-center justify-between gap-1.5">
               <div className="flex min-w-0 items-center gap-1">

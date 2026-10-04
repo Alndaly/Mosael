@@ -135,6 +135,7 @@ export function ChatComposer({
   placeholder,
   className,
   search = searchReferences,
+  focusSignal,
 }: {
   workspaceId: string;
   value: JSONContent;
@@ -152,6 +153,8 @@ export function ChatComposer({
   /** 候选从哪儿来。默认问工作区;**留这个口子是为了测得动** —— 菜单的排版和键盘行为
    *  不该为了验证一次就得起一个后端。 */
   search?: (workspaceId: string, query: string) => Promise<AgentReference[]>;
+  /** 变一次就把光标放到末尾(页面上的「问 AI」把人带到这里)。0 / 不给 = 不动。 */
+  focusSignal?: number;
 }) {
   const t = useI18n();
   //: 插件的回调在创建时一次性装好,拿不到后续渲染的闭包 —— 用 ref 兜住当前值(同画布)。
@@ -250,6 +253,10 @@ export function ChatComposer({
     emitted.current = incoming;
     instance.commands.setContent(value, { emitUpdate: false });
   }, [value]);
+
+  React.useEffect(() => {
+    if (focusSignal && editor && !editor.isDestroyed) editor.commands.focus("end");
+  }, [editor, focusSignal]);
 
   return (
     <>
