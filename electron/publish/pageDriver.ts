@@ -4,7 +4,7 @@
  * It knows navigation, DOM inspection, trusted input, files, cookies, diagnostics and capture.
  * Platform URLs, selectors, wording and publishing state machines belong to Adapter modules.
  */
-import type { NativeImage, WebContents } from "electron";
+import type { NativeImage, WebContents, WebFrameMain } from "electron";
 import { writeFile } from "node:fs/promises";
 
 import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "./errors";
@@ -60,12 +60,34 @@ export type GotoOutcome =
 /** 找文件框的方式:`exact` 只认给的选择器(含 shadow DOM 里的),不退回页面上随便哪个文件框。 */
 export interface FileInputLookup {
   exact?: boolean;
+  /** 在这个 iframe(按选择器)的文档里找,而不是外层页面。只认同源框架,见 locateFrame。 */
+  frame?: string;
 }
+
+/** CDP 的 DOM 树节点(只用到这几项)。 */
+interface DomNode {
+  nodeId: number;
+  nodeName?: string;
+  children?: DomNode[];
+  contentDocument?: DomNode;
+}
+
+/** 脚本在哪儿跑:整个页面(WebContents),或页面里的一个框架(WebFrameMain)—— 两者送脚本的方式一样。 */
+type ScriptTarget = Pick<WebContents, "executeJavaScript">;
+
+/** 页面里一个框架(iframe)找到了没有、进不进得去(见 locateFrame)。 */
+export type FrameLookup =
+  | { state: "ok"; frame: Pick<WebFrameMain, "executeJavaScript"> }
+  | { state: "missing" }
+  | { state: "notFrame"; tag: string }
+  | { state: "crossOrigin"; src: string };
 
 export class PageDriver {
   private debuggerAttached = false;
   private abortSignal: AbortSignal | null = null;
   private latestFrame: NativeImage | null = null; // 离屏渲染的最近一帧(paint 事件),供预览/截图
+  /** 脚本送到哪儿。null = 整个页面;inFrame 造出来的驱动换成那个框架。 */
+  private scriptTarget: ScriptTarget | null = null;
 
   constructor(private readonly wc: WebContents) {
     // 离屏渲染(offscreen)的视图靠 paint 事件出帧;非离屏视图不触发,无害。
@@ -298,12 +320,16 @@ export class PageDriver {
    * **之间**检查,所以单次调用超时多久,整体就超多久。
    */
   async evaluate<T = unknown>(expression: string, budgetMs = EVALUATE_TIMEOUT_MS): Promise<T> {
+    return this.evaluateIn(this.scriptTarget ?? this.wc, expression, budgetMs);
+  }
+
+  private async evaluateIn<T>(target: ScriptTarget, expression: string, budgetMs = EVALUATE_TIMEOUT_MS): Promise<T> {
     this.throwIfAborted();
     const cap = Math.max(200, Math.min(EVALUATE_MAX_MS, budgetMs));
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await this.untilAborted(Promise.race([
-        this.wc.executeJavaScript(expression, true) as Promise<T>,
+        target.executeJavaScript(expression, true) as Promise<T>,
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new EvaluateTimeoutError(cap)), cap);
         }),
@@ -311,6 +337,63 @@ export class PageDriver {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /**
+   * 页面里按 `frameSelector` 找一个框架(iframe),找到同源的就交回它在主进程里对应的 WebFrameMain。
+   *
+   * 选择器只在外层页面(含 open shadow root)里找。元素和主进程里的框架对上号的办法:往那个框架的 window
+   * 上记一个这一次才有的记号,再挨个问主进程里的框架「你身上有没有这个记号」。按位置、按名字对都靠不住
+   * (动态插入的框架顺序会变,name 可以重名或为空)。
+   *
+   * 跨域框架里的文档外层页面读不到(contentDocument 是 null)—— 照实交回「跨域」,由调用方说清做不到。
+   */
+  async locateFrame(frameSelector: string): Promise<FrameLookup> {
+    const token = `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    const probe = await this.evaluateIn<{ state: string; tag?: string; src?: string }>(
+      this.wc,
+      `(() => {
+        ${this.deepQueryPrelude(frameSelector)}
+        const el = find(document);
+        if (!el) return { state: 'missing' };
+        if (el.tagName !== 'IFRAME' && el.tagName !== 'FRAME') return { state: 'notFrame', tag: el.tagName };
+        if (!el.contentDocument) return { state: 'crossOrigin', src: el.src || '' };
+        el.contentWindow.__mosaelFrameToken = ${JSON.stringify(token)};
+        return { state: 'ok' };
+      })()`,
+    );
+    if (probe.state === "notFrame") return { state: "notFrame", tag: probe.tag ?? "" };
+    if (probe.state === "crossOrigin") return { state: "crossOrigin", src: probe.src ?? "" };
+    if (probe.state !== "ok") return { state: "missing" };
+    const main = this.wc.mainFrame;
+    for (const frame of main.framesInSubtree) {
+      if (frame === main) continue;
+      const mine = await frame
+        .executeJavaScript(`window.__mosaelFrameToken === ${JSON.stringify(token)}`)
+        .catch(() => false);
+      if (mine) return { state: "ok", frame };
+    }
+    return { state: "missing" };
+  }
+
+  /**
+   * 同一个驱动,脚本改送进 `frameSelector` 那个同源框架:按选择器点击、填表、读取、等待……都在框架的文档里做。
+   *
+   * 送的路是 WebFrameMain.executeJavaScript,不在页面里 eval —— 框架页的 CSP 没放行 unsafe-eval 时页面里的
+   * eval 会被拦,主进程送进去的不受它管。每一次都重新找框架:框架里的页面换了(提交表单、刷新),
+   * 主进程里的那个对象就作废了。找不到时抛 ElementMissingError,点击 / 输入的短等待会接着等它挂出来。
+   */
+  inFrame(frameSelector: string): PageDriver {
+    const scoped = Object.create(this) as PageDriver;
+    scoped.scriptTarget = {
+      executeJavaScript: async (code: string, userGesture?: boolean) => {
+        const found = await this.locateFrame(frameSelector);
+        if (found.state === "ok") return found.frame.executeJavaScript(code, userGesture);
+        if (found.state === "missing") throw new ElementMissingError(frameSelector, `frame not found: ${frameSelector}`);
+        throw new Error(`frame unreachable (${found.state}): ${frameSelector}`);
+      },
+    };
+    return scoped;
   }
 
   async waitForFunction(expression: string, timeout = 30_000, poll = 300): Promise<boolean> {
@@ -1306,17 +1389,20 @@ export class PageDriver {
       .catch(() => undefined);
   }
 
-  private async findFileInputNode(selector: string, { exact = false }: FileInputLookup = {}): Promise<number> {
+  private async findFileInputNode(selector: string, { exact = false, frame = "" }: FileInputLookup = {}): Promise<number> {
     this.throwIfAborted();
     this.ensureDebugger();
     await this.wc.debugger.sendCommand("DOM.enable");
-    const doc = (await this.wc.debugger.sendCommand("DOM.getDocument", { depth: -1 })) as {
-      root: { nodeId: number };
+    //: 在框架里找时要 pierce:同源 iframe 的文档只有这样才出现在树上(带着 nodeId)。
+    const doc = (await this.wc.debugger.sendCommand("DOM.getDocument", { depth: -1, pierce: Boolean(frame) })) as {
+      root: DomNode;
     };
+    const scope = frame ? await this.frameDocumentNode(doc.root, frame) : doc.root.nodeId;
     const found = (await this.wc.debugger.sendCommand("DOM.querySelector", {
-      nodeId: doc.root.nodeId,
+      nodeId: scope,
       selector,
     })) as { nodeId: number };
+    if (!found.nodeId && frame) throw new Error(`setFiles: file input not found in frame ${frame}: ${selector}`);
     if (!found.nodeId) {
       const flattened = (await this.wc.debugger.sendCommand("DOM.getFlattenedDocument", {
         depth: -1,
@@ -1353,6 +1439,25 @@ export class PageDriver {
       throw new Error(`setFiles: file input not found: ${selector}`);
     }
     return found.nodeId;
+  }
+
+  /** `frameSelector` 那个 iframe 的文档在 CDP 树上的 nodeId(树要用 pierce 取)。找不到就说清是哪个框架。 */
+  private async frameDocumentNode(root: DomNode, frameSelector: string): Promise<number> {
+    const host = (await this.wc.debugger.sendCommand("DOM.querySelector", {
+      nodeId: root.nodeId,
+      selector: frameSelector,
+    })) as { nodeId: number };
+    const walk = (node: DomNode): DomNode | null => {
+      if (node.nodeId === host.nodeId) return node;
+      for (const child of [...(node.children ?? []), ...(node.contentDocument ? [node.contentDocument] : [])]) {
+        const hit = walk(child);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    const documentId = host.nodeId ? walk(root)?.contentDocument?.nodeId : undefined;
+    if (!documentId) throw new Error(`setFiles: frame not found: ${frameSelector}`);
+    return documentId;
   }
 
   // ---- misc ---------------------------------------------------------------

@@ -55,6 +55,11 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+def _frame(config: dict[str, Any]) -> str:
+    """「在框架里」:元素在页面里哪个同源 iframe 里(那个框架的选择器);空串是整个页面。找框架、判跨域在执行器那边。"""
+    return str(config.get("frame") or "").strip()
+
+
 def _element_wait(config: dict[str, Any]) -> dict[str, int]:
     """点击 / 输入之前等元素出现多久:节点上填了就交给执行器,没填由执行器用它的缺省(5 秒)。"""
     raw = config.get("wait_ms")
@@ -195,6 +200,7 @@ def browser_click(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         "selector": str(config.get("selector") or ""),
         "text": str(config.get("text") or ""),
         "exact": _truthy(config.get("exact")),
+        "frame": _frame(config),
         **_element_wait(config),
     })
     return {"session": sid}
@@ -206,6 +212,7 @@ def browser_input(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     _run(sid, "input", {
         "selector": str(config.get("selector") or ""),
         "value": str(config.get("value") or ""),
+        "frame": _frame(config),
         **_element_wait(config),
     })
     return {"session": sid}
@@ -233,7 +240,7 @@ def browser_upload(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     selector = str(config.get("selector") or "").strip()
     try:
-        browser.upload_file(sid, file, selector=selector, timeout_ms=timeout_ms, should_stop=halted)
+        browser.upload_file(sid, file, selector=selector, frame=_frame(config), timeout_ms=timeout_ms, should_stop=halted)
     except browser.BrowserDomainError as exc:
         _raise_failure(exc, sid, "upload", {"selector": selector})
     return {"session": sid}
@@ -248,6 +255,7 @@ def browser_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         "attribute": attribute or None,
         "all": _truthy(config.get("all")),
         "allow_missing": _truthy(config.get("allow_missing")),
+        "frame": _frame(config),
     })
     return {"session": sid, "value": out.get("value")}
 
@@ -256,7 +264,7 @@ def browser_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 def browser_wait(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
-    args: dict[str, Any] = {"timeout_ms": timeout_ms}
+    args: dict[str, Any] = {"timeout_ms": timeout_ms, "frame": _frame(config)}
     if config.get("selector"):
         args["selector"] = str(config["selector"])
         args["gone"] = _truthy(config.get("gone"))
@@ -277,6 +285,7 @@ def browser_scroll(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
         "selector": str(config.get("selector") or ""),
         "dy": _int(config.get("dy"), 600),
         "allow_missing": _truthy(config.get("allow_missing")),
+        "frame": _frame(config),
     })
     return {"session": sid}
 

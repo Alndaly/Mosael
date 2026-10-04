@@ -543,10 +543,11 @@ def upload_file(
     file: HostFile,
     *,
     selector: str = "",
+    frame: str = "",
     timeout_ms: int = 15_000,
     should_stop: StopCheck | None = None,
 ) -> dict:
-    """往会话页面的 `<input type=file>` 塞一个本机文件。
+    """往会话页面的 `<input type=file>` 塞一个本机文件。`frame`:文件框在哪个同源 iframe 里(空 = 整个页面)。
 
     只收 `HostFile`:它只能由 domain/host_files 造出来(按工作区校验过的素材,或这个人有权读的本机
     路径),所以这里不再判权限 —— 判过了才拿得到这个类型。收裸字符串的话,任何一个调用点忘了过闸,
@@ -557,7 +558,7 @@ def upload_file(
     return _enqueue(
         session_id,
         "upload",
-        {"selector": (selector or "").strip(), "path": str(file.path), "timeout_ms": timeout_ms},
+        {"selector": (selector or "").strip(), "frame": (frame or "").strip(), "path": str(file.path), "timeout_ms": timeout_ms},
         timeout=timeout_ms / 1000 + 20,
         should_stop=should_stop,
     )

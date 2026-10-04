@@ -299,6 +299,18 @@ const MESSAGES = {
     zh: "网页没有打开({code}):{url}",
     en: "The page didn't open ({code}): {url}",
   },
+  browserErr_frameMissing: {
+    zh: "等了 {seconds}s 还是找不到框架:{frame};当前停在 {url}",
+    en: "Still couldn't find the frame after {seconds}s: {frame}; the page is at {url}",
+  },
+  browserErr_frameCrossOrigin: {
+    zh: "框架 {frame} 里是另一个网站的页面({src}),浏览器自动化够不到跨域框架里的元素;可以用「打开网址」直接打开这个地址再操作",
+    en: "The frame {frame} holds a page from another site ({src}); browser automation can't reach inside cross-origin frames. Open that address with “Open URL” and work on it directly",
+  },
+  browserErr_notAFrame: {
+    zh: "{frame} 不是框架(iframe),是 <{tag}>;「在框架里」要填 iframe 的选择器",
+    en: "{frame} isn't a frame (iframe), it's a <{tag}>; “In frame” takes the iframe's selector",
+  },
   browserErr_httpError: {
     zh: "网页打开了,但服务器回的是 {status}:{url}(要照样往下走,在节点上打开「允许错误页」)",
     en: "The page opened, but the server answered {status}: {url} (to carry on anyway, turn on “Allow error pages” on the node)",

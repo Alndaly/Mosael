@@ -490,6 +490,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_navigate_desc": {"zh": "在会话里跳转到网址。", "en": "Go to a URL in this session."},
     "wfNode_browser_navigate_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
     "wfNode_browser_navigate_url": {"zh": "目标网址", "en": "Target URL"},
+    "wfNode_browser_frame": {"zh": "元素在页面里的一个框架(iframe)里时,填这个框架的选择器(如 #editor-frame);只认同源框架,跨域框架里的元素够不到。留空就是整个页面", "en": "When the element lives inside a frame (iframe) on the page, the frame's selector (e.g. #editor-frame). Same-origin frames only; elements inside cross-origin frames can't be reached. Leave empty for the whole page"},
     "wfNode_browser_allow_error_page": {"zh": "服务器回 404 / 5xx 这类错误页时照样往下走(默认算失败);状态码交在输出里", "en": "Carry on when the server answers with an error page such as 404 / 5xx (by default that fails the step); the status code is in the output"},
     "wfNode_browser_click": {"zh": "浏览器·点击", "en": "Browser · click"},
     "wfNode_browser_click_desc": {"zh": "按 CSS 选择器或可见文本点击元素。", "en": "Click an element by CSS selector or by its visible text."},

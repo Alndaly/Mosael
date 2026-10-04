@@ -631,6 +631,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_all": {"zh": "全部", "en": "All"},
     "wfField_allow_missing": {"zh": "找不到时输出空", "en": "Output empty when missing"},
     "wfField_allow_error_page": {"zh": "允许错误页", "en": "Allow error pages"},
+    "wfField_frame": {"zh": "在框架里", "en": "In frame"},
     "wfField_asset_id": {"zh": "素材", "en": "Asset"},
     "wfField_entity_id": {"zh": "资产", "en": "Asset"},
     "wfField_scope": {"zh": "补哪些", "en": "Which angles"},

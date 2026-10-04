@@ -388,6 +388,97 @@ describe("上传:写了选择器就只认这个选择器", () => {
   });
 });
 
+describe("在框架里(iframe)操作", () => {
+  /** 外层页面 + 一个框架驱动:动作落在哪一个上,看 calls 里记的是谁。 */
+  function framed(lookups: Array<Record<string, unknown>>) {
+    const calls: string[] = [];
+    const inner = fakeDriver("https://example.com/outer", {
+      clickCss: async (selector: string) => void calls.push(`inner click ${selector}`),
+      fillField: async (selector: string, value: string) => void calls.push(`inner fill ${selector}=${value}`),
+      evaluate: (async () => {
+        calls.push("inner evaluate");
+        return { value: "框架里的文字" };
+      }) as PageDriver["evaluate"],
+      cssVisible: async (selector: string) => (calls.push(`inner visible ${selector}`), true),
+    });
+    const outer = fakeDriver("https://example.com/outer", {
+      locateFrame: (async () => (lookups.length > 1 ? lookups.shift() : lookups[0])) as unknown as PageDriver["locateFrame"],
+      inFrame: ((frame: string) => (calls.push(`enter ${frame}`), inner)) as PageDriver["inFrame"],
+      clickCss: async (selector: string) => void calls.push(`outer click ${selector}`),
+      evaluate: (async () => (calls.push("outer evaluate"), { value: "外层" })) as PageDriver["evaluate"],
+    });
+    return { outer, calls };
+  }
+
+  it("填了「在框架里」:点击、输入、读取、等待都落在框架里", async () => {
+    const { outer, calls } = framed([{ state: "ok" }]);
+    await executeBrowserAction(outer, "click", { selector: "#frame-btn", frame: "#same" });
+    await executeBrowserAction(outer, "input", { selector: "#frame-input", value: "你好", frame: "#same" });
+    await expect(executeBrowserAction(outer, "extract", { selector: "#inframe", frame: "#same" })).resolves.toMatchObject({
+      value: "框架里的文字",
+    });
+    await executeBrowserAction(outer, "wait", { selector: "#frame-late", frame: "#same", timeout_ms: 1000 });
+    expect(calls).toEqual([
+      "enter #same", "inner click #frame-btn",
+      "enter #same", "inner fill #frame-input=你好",
+      "enter #same", "inner evaluate",
+      "enter #same", "inner visible #frame-late",
+    ]);
+  });
+
+  it("没填就照旧在外层页面", async () => {
+    const { outer, calls } = framed([{ state: "ok" }]);
+    await executeBrowserAction(outer, "click", { selector: "#btn" });
+    expect(calls).toEqual(["outer click #btn"]);
+  });
+
+  it("框架晚一点才挂出来:等到它再动手", async () => {
+    const { outer, calls } = framed([{ state: "missing" }, { state: "missing" }, { state: "ok" }]);
+    await executeBrowserAction(outer, "click", { selector: "#frame-btn", frame: "#late", wait_ms: 3000 });
+    expect(calls).toEqual(["enter #late", "inner click #frame-btn"]);
+  });
+
+  it("跨域框架:说清够不到,而且不等满", async () => {
+    const { outer } = framed([{ state: "crossOrigin", src: "https://other.example/inner" }]);
+    setLocale("zh-CN");
+    const started = Date.now();
+    await expect(
+      executeBrowserAction(outer, "click", { selector: "#x", frame: "#cross", wait_ms: 5000 }),
+    ).rejects.toThrow(/#cross.*https:\/\/other\.example\/inner.*跨域/s);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("填的不是框架:说清它是什么", async () => {
+    const { outer } = framed([{ state: "notFrame", tag: "DIV" }]);
+    setLocale("en-US");
+    await expect(executeBrowserAction(outer, "extract", { selector: "#x", frame: "#box" })).rejects.toThrow(
+      /#box.*<div>.*iframe/s,
+    );
+  });
+
+  it("框架一直没出现:说的是框架,不是里面的元素", async () => {
+    const { outer } = framed([{ state: "missing" }]);
+    setLocale("zh-CN");
+    await expect(
+      executeBrowserAction(outer, "click", { selector: "#frame-btn", frame: "#never", wait_ms: 300 }),
+    ).rejects.toThrow(/找不到框架.*#never/s);
+  });
+
+  it("上传:框架交给文件框查找,在那个框架的文档里找", async () => {
+    const seen: unknown[] = [];
+    const { outer } = framed([{ state: "ok" }]);
+    Object.assign(outer, {
+      fileInputAttached: async (selector: string, _timeout: number, opts: unknown) => (seen.push([selector, opts]), true),
+      setFiles: async (selector: string, _path: string, opts: unknown) => void seen.push([selector, opts]),
+    });
+    await executeBrowserAction(outer, "upload", { selector: "#frame-file", path: "/tmp/a.txt", frame: "#same" });
+    expect(seen).toEqual([
+      ["#frame-file", { exact: true, frame: "#same" }],
+      ["#frame-file", { exact: true, frame: "#same" }],
+    ]);
+  });
+});
+
 describe("evaluate 的脚本预算", () => {
   it("声明了 timeout_ms 就按它给预算(长读脚本用),没声明走缺省", async () => {
     const seen: Array<number | undefined> = [];

@@ -64,6 +64,36 @@ describe("文件框:点了名的选择器只认它", () => {
     expect(setFilesTarget(sent)).toEqual([12]);
   });
 
+  it("在框架里:到那个 iframe 的文档里按选择器找", async () => {
+    const sent: Array<[string, Record<string, unknown>]> = [];
+    const tree = {
+      nodeId: 1, nodeName: "#document",
+      children: [{ nodeId: 20, nodeName: "IFRAME", contentDocument: { nodeId: 30, nodeName: "#document" } }],
+    };
+    const wc = {
+      on: () => undefined,
+      debugger: {
+        isAttached: () => true,
+        attach: () => undefined,
+        sendCommand: async (method: string, params: Record<string, unknown> = {}) => {
+          sent.push([method, params]);
+          if (method === "DOM.getDocument") return { root: tree };
+          if (method === "DOM.querySelector") {
+            const table: Record<string, number> = { "1 #same": 20, "30 #frame-file": 31, "1 #frame-file": 0 };
+            return { nodeId: table[`${params.nodeId} ${params.selector}`] ?? 0 };
+          }
+          return {};
+        },
+      },
+    };
+    const driver = new PageDriver(wc as never);
+    await expect(driver.fileInputAttached("#frame-file", 0, { exact: true, frame: "#same" })).resolves.toBe(true);
+    await driver.setFiles("#frame-file", "/tmp/a.txt", { exact: true, frame: "#same" });
+    expect(setFilesTarget(sent)).toEqual([31]);
+    expect(sent.find(([method]) => method === "DOM.getDocument")?.[1]).toMatchObject({ pierce: true });
+    await expect(driver.setFiles("#frame-file", "/tmp/a.txt", { exact: true, frame: "#nope" })).rejects.toThrow(/#nope/);
+  });
+
   it("发布适配器那种(不点名):选择器没对上时仍退回页面上的文件框", async () => {
     const { driver, sent } = cdpPage();
     await driver.setFiles("input[accept*=video]", "/tmp/a.mp4");

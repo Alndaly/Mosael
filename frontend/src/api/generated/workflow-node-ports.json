@@ -136,6 +136,9 @@
       },
       "wait_ms": {
         "type": "number"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [
@@ -190,6 +193,9 @@
       },
       "allow_missing": {
         "type": "string"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [
@@ -211,6 +217,9 @@
       },
       "wait_ms": {
         "type": "number"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [
@@ -274,6 +283,9 @@
       },
       "allow_missing": {
         "type": "string"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [
@@ -297,6 +309,9 @@
       },
       "timeout_ms": {
         "type": "number"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [
@@ -323,6 +338,9 @@
       },
       "timeout_ms": {
         "type": "number"
+      },
+      "frame": {
+        "type": "template"
       }
     },
     "outputs": [

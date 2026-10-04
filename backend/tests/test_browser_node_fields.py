@@ -111,3 +111,47 @@ def test_提取和滚动带上找不到时输出空的开关() -> None:
     assert args["allow_missing"] is True
     args = _claimed_args(_in_node(ws, bx.browser_scroll, {"session": sid, "selector": "#f"}))
     assert args["allow_missing"] is False
+
+
+#: 按选择器找元素的六种节点:都能「在框架里」(同源 iframe)找。脚本节点自己写 JS,不需要这一格。
+FRAME_NODES = ("browser_click", "browser_input", "browser_upload", "browser_extract", "browser_wait", "browser_scroll")
+
+
+def test_按选择器找元素的节点都有在框架里这一格() -> None:
+    from app.core.i18n import tr
+    from app.domain.workflows import NODE_TYPES, config_label
+
+    for node_type in FRAME_NODES:
+        spec = NODE_TYPES[node_type]["config"]["frame"]
+        assert spec["advanced"] is True and spec["type"] == "template", node_type
+        assert tr(config_label("frame", spec)) == "在框架里"
+    assert "frame" not in NODE_TYPES["browser_evaluate"]["config"]
+
+
+def test_在框架里交到执行器手上() -> None:
+    ws, sid = _session()
+    cases = [
+        (bx.browser_click, {"selector": "#frame-btn"}),
+        (bx.browser_input, {"selector": "#frame-input", "value": "hi"}),
+        (bx.browser_extract, {"selector": "#inframe"}),
+        (bx.browser_wait, {"selector": "#frame-late"}),
+        (bx.browser_scroll, {"selector": "#inframe"}),
+    ]
+    for fn, config in cases:
+        args = _claimed_args(_in_node(ws, fn, {"session": sid, "frame": "#same", **config}))
+        assert args["frame"] == "#same", fn.__name__
+    args = _claimed_args(_in_node(ws, bx.browser_click, {"session": sid, "selector": "#btn"}))
+    assert args["frame"] == "", "没填就是外层页面"
+
+
+def test_上传在框架里也交到执行器手上(tmp_path) -> None:
+    from app.domain.host_files import HostFile
+
+    ws, sid = _session()
+    (tmp_path / "a.txt").write_text("x")
+
+    def run() -> None:
+        bdom.upload_file(sid, HostFile(path=tmp_path / "a.txt"), selector="#frame-file", frame="#same")
+
+    args = _claimed_args(run)
+    assert (args["selector"], args["frame"]) == ("#frame-file", "#same")

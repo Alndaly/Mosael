@@ -58,6 +58,43 @@ async function untilFound(
   }
 }
 
+/**
+ * 「在框架里」:动作改在页面里一个**同源** iframe 的文档上做。没填就是外层页面。
+ *
+ * 先等这个框架出现(最多 `waitMs`),在这里把两种做不到的情况说清:框架里是别的网站(跨域,外层读不到它的文档)、
+ * 填的根本不是框架。之后的动作交给只换了「脚本在哪儿跑」的驱动(PageDriver.inFrame),动作本身一行不改。
+ * 交回还剩多少时间给动作自己的等待。
+ */
+async function withinFrame(
+  driver: PageDriver,
+  args: Record<string, unknown>,
+  waitMs: number,
+): Promise<{ target: PageDriver; left: number }> {
+  const frame = s(args.frame).trim();
+  if (!frame) return { target: driver, left: waitMs };
+  const deadline = Date.now() + Math.max(0, waitMs);
+  for (;;) {
+    const found = await driver.locateFrame(frame);
+    if (found.state === "ok") return { target: driver.inFrame(frame), left: Math.max(0, deadline - Date.now()) };
+    if (found.state === "crossOrigin") {
+      throw new Error(t("browserErr_frameCrossOrigin", { frame: brief(frame), src: brief(found.src, 120) }));
+    }
+    if (found.state === "notFrame") {
+      throw new Error(t("browserErr_notAFrame", { frame: brief(frame), tag: found.tag.toLowerCase() }));
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        t("browserErr_frameMissing", {
+          frame: brief(frame),
+          seconds: (Math.max(0, waitMs) / 1000).toFixed(1),
+          url: brief(driver.url(), 120),
+        }),
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(ELEMENT_POLL_MS, Math.max(0, deadline - Date.now()))));
+  }
+}
+
 const waitMsOf = (args: Record<string, unknown>): number => {
   const raw = Number(args.wait_ms);
   return Number.isFinite(raw) && raw >= 0 ? raw : ELEMENT_WAIT_MS;
@@ -159,19 +196,21 @@ export async function executeBrowserAction(
       return { value: result.status, lastUrl: landed };
     }
     case "click": {
-      const waitMs = waitMsOf(args);
+      if (!args.selector && !args.text) throw new Error(t("browserErr_clickNeedsTarget"));
+      const { target, left } = await withinFrame(driver, args, waitMsOf(args));
       if (args.selector) {
         const selector = s(args.selector);
-        await untilFound(driver, waitMs, selector, () => driver.clickCss(selector));
-      } else if (args.text) {
+        await untilFound(target, left, selector, () => target.clickCss(selector));
+      } else {
         const text = s(args.text);
-        await untilFound(driver, waitMs, text, () => driver.clickByText(text, { exact: Boolean(args.exact) }));
-      } else throw new Error(t("browserErr_clickNeedsTarget"));
+        await untilFound(target, left, text, () => target.clickByText(text, { exact: Boolean(args.exact) }));
+      }
       return { lastUrl: driver.url() };
     }
     case "input": {
       const selector = s(args.selector);
-      await untilFound(driver, waitMsOf(args), selector, () => driver.fillField(selector, s(args.value)));
+      const { target, left } = await withinFrame(driver, args, waitMsOf(args));
+      await untilFound(target, left, selector, () => target.fillField(selector, s(args.value)));
       return { lastUrl: driver.url() };
     }
     case "upload": {
@@ -179,9 +218,11 @@ export async function executeBrowserAction(
       if (!path) throw new Error(t("browserErr_uploadNeedsPath"));
       //: 节点上写了选择器就**只认它**:页面上有视频框和封面框时,退回「随便哪个文件框」会把文件塞错地方而节点照报成功。
       //: 没写才是「页面上的文件框」(含 shadow DOM 里的)。
-      const lookup = { exact: Boolean(s(args.selector)) };
+      const frame = s(args.frame).trim();
+      const lookup = { exact: Boolean(s(args.selector)), ...(frame ? { frame } : {}) };
       const selector = s(args.selector) || 'input[type="file"]';
-      const timeout = Number(args.timeout_ms) || 15_000;
+      //: 在框架里时先确认框架在、而且是同源的(说清做不到的情况);塞文件走 CDP,由页面驱动按 frame 找。
+      const { left: timeout } = await withinFrame(driver, args, Number(args.timeout_ms) || 15_000);
       // 文件输入框常在点了「上传」后才挂载:先等它出现,再经 CDP setFileInputFiles 塞文件(不弹系统框)。
       const ok = await driver.fileInputAttached(selector, timeout, lookup);
       if (!ok) throw new Error(t("browserErr_fileInputMissing", { selector }));
@@ -204,7 +245,8 @@ export async function executeBrowserAction(
         const get = (el) => ${attribute ? `el.getAttribute(${JSON.stringify(attribute)})` : "((el.innerText || el.textContent || '').trim())"};
         return { value: ${all ? "els.map(get)" : "get(els[0])"} };
       })()`;
-      const found = await driver.evaluate<{ missing?: boolean; value?: unknown }>(expr);
+      const { target } = await withinFrame(driver, args, 0);
+      const found = await target.evaluate<{ missing?: boolean; value?: unknown }>(expr);
       if (found?.missing) {
         if (!args.allow_missing) {
           throw new Error(t("browserErr_extractMissing", { selector: brief(selector), url: brief(driver.url(), 120) }));
@@ -219,15 +261,19 @@ export async function executeBrowserAction(
     case "wait": {
       const timeout = Number(args.timeout_ms) || 15_000;
       let ok = false;
-      if (args.selector) {
-        ok = Boolean(args.gone)
-          ? await driver.waitForFunction(`!document.querySelector(${JSON.stringify(s(args.selector))})`, timeout, 300)
-          : await driver.cssVisible(s(args.selector), timeout);
-      } else if (args.url_contains) {
+      if (args.url_contains && !args.selector) {
+        //: 网址只有外层页面的那一个 —— 「在框架里」对它不起作用。
         const needle = s(args.url_contains);
         ok = await driver.waitForUrl((u) => u.includes(needle), timeout);
-      } else if (args.text) {
-        ok = await driver.waitForFunction(`(document.body?.innerText||'').includes(${JSON.stringify(s(args.text))})`, timeout, 300);
+      } else if (args.selector || args.text) {
+        const { target, left } = await withinFrame(driver, args, timeout);
+        if (args.selector) {
+          ok = Boolean(args.gone)
+            ? await target.waitForFunction(`!document.querySelector(${JSON.stringify(s(args.selector))})`, left, 300)
+            : await target.cssVisible(s(args.selector), left);
+        } else {
+          ok = await target.waitForFunction(`(document.body?.innerText||'').includes(${JSON.stringify(s(args.text))})`, left, 300);
+        }
       } else {
         throw new Error(t("browserErr_waitNeedsTarget"));
       }
@@ -246,9 +292,10 @@ export async function executeBrowserAction(
       return { lastUrl: driver.url() };
     }
     case "scroll": {
+      const { target } = await withinFrame(driver, args, 0);
       if (args.selector) {
         const selector = s(args.selector);
-        const found = await driver.evaluate<boolean>(`(() => {
+        const found = await target.evaluate<boolean>(`(() => {
           const el = document.querySelector(${JSON.stringify(selector)});
           if (!el) return false;
           el.scrollIntoView({ block: 'center' });
@@ -258,7 +305,7 @@ export async function executeBrowserAction(
           throw new Error(t("browserErr_scrollMissing", { selector: brief(selector), url: brief(driver.url(), 120) }));
         }
       } else {
-        await driver.evaluate(`window.scrollBy(0, ${Number(args.dy) || 600})`);
+        await target.evaluate(`window.scrollBy(0, ${Number(args.dy) || 600})`);
       }
       return { lastUrl: driver.url() };
     }
