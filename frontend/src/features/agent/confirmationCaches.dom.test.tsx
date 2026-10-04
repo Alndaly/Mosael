@@ -12,7 +12,7 @@ vi.mock("@/api/transport", async (importOriginal) => ({
   api: (path: string) => api(path),
 }));
 
-import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
+import { invalidateAfterDecision, useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 
 function Watcher({ workspaceId }: { workspaceId: string }) {
   useRefreshWhenCardsLand(workspaceId);
@@ -86,4 +86,19 @@ it("窗口藏起来时不轮询,回到前台当场查一次", async () => {
     focusManager.setFocused(undefined);
     vi.useRealTimers();
   }
+});
+
+/**
+ * 智能体改笔记(edit_note)批准之后:打开着的那篇重取,编辑器里实时看到改动 —— 不等用户切走再回来。
+ * 自动放行批的卡同样走这一份清单(见上面那条)。
+ */
+it("批完一张卡,笔记详情和列表都要失效", () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+
+  invalidateAfterDecision(client, "w1");
+
+  const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+  expect(keys).toContain(JSON.stringify(["note"]));
+  expect(keys).toContain(JSON.stringify(["notes"]));
 });

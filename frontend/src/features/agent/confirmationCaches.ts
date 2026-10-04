@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { listConfirmations } from "@/api/client";
-import { assetKeys, boardKeys, confirmationKeys } from "@/api/queryKeys";
+import { assetKeys, boardKeys, confirmationKeys, noteKeys } from "@/api/queryKeys";
 
 /**
  * 一张确认卡批准或拒绝之后要刷新的缓存。卡背后的动作可能改了时间线、素材、工作流、生成任务、画板。
@@ -19,6 +19,9 @@ export function invalidateAfterDecision(qc: QueryClient, workspaceId: string): v
     ["generation-jobs"],
     //: 智能体改画板(edit_board)批准之后:打开着的那张板重取详情、合进本地,不必等下一次自己保存撞版本号。
     boardKeys.everywhere(),
+    //: 智能体改笔记(edit_note)批准之后:打开着的那篇重取,编辑器按最小差异接过来(见 notes/noteSelection.followMarkdown)。
+    noteKeys.allDetails(),
+    noteKeys.everywhere(),
   ]) {
     void qc.invalidateQueries({ queryKey });
   }

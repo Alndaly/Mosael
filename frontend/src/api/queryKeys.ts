@@ -145,6 +145,8 @@ export const noteKeys = {
   reference: (workspaceId: string, noteId: string, revision?: number) =>
     ["notes", workspaceId, "reference", noteId, revision] as const,
   detail: (workspaceId: string, noteId: string) => ["note", workspaceId, noteId] as const,
+  /** 失效用:所有工作区的笔记详情 —— 确认卡批完不知道改的是哪一篇(智能体的 edit_note)。 */
+  allDetails: () => ["note"] as const,
   /** 不带修订号是失效用的前缀。 */
   history: (noteId: string, revision?: number) =>
     (revision === undefined ? (["note-history", noteId] as const) : (["note-history", noteId, revision] as const)),
