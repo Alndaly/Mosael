@@ -1,7 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   CircleAlert,
@@ -40,8 +39,15 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { CatalogBadge, CatalogDetail, CatalogSection } from "@/components/app/CatalogDialog";
-import { LibraryDialog, LibraryFilterChips, type LibraryChip, type LibraryNavItem } from "@/components/app/LibraryBrowser";
+import { CatalogBadge } from "@/components/app/CatalogDialog";
+import {
+  LibraryDetail,
+  LibraryDialog,
+  LibraryFilterChips,
+  LibrarySection,
+  type LibraryChip,
+  type LibraryNavItem,
+} from "@/components/app/LibraryBrowser";
 import { ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -451,21 +457,7 @@ export function ModelLibraryDialog({
       detailKey={detail ? detailKey : null}
       onOpenItem={setDetailKey}
       onBack={() => setDetailKey(null)}
-      detail={
-        detail && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 px-6 pb-2">
-              <Button variant="ghost" className="-ml-3" onClick={() => setDetailKey(null)}>
-                <ArrowLeft />
-                {t("modelLibraryBack")}
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-              <ModelDetailPage instanceId={instance.id} model={detail} blurred={blurred} />
-            </div>
-          </div>
-        )
-      }
+      detail={detail && <ModelDetail instanceId={instance.id} model={detail} blurred={blurred} onBack={() => setDetailKey(null)} />}
       dialogs={
         seed && library.data ? (
           <ModelDownloadDialog
@@ -912,71 +904,290 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function ModelDetailPage({ instanceId, model, blurred }: { instanceId: string; model: ModelFile; blurred: boolean }) {
+/** 概要里的一行:左边名字,右边内容;内容下面可以跟一行弱一档的说明(判据)。 */
+function OverviewRow({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] items-baseline gap-x-3">
+      <dt className="text-ui-xs text-muted-foreground">{label}</dt>
+      <dd className="m-0 grid min-w-0 gap-1 text-ui-sm text-foreground">
+        {children}
+        {note && <span className="text-ui-xs leading-relaxed text-muted-foreground">{note}</span>}
+      </dd>
+    </div>
+  );
+}
+
+/** 一个触发词:点一下复制,复制了就打个勾。 */
+function TriggerChip({ word }: { word: string }) {
+  const t = useI18n();
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <Hint label={copied ? t("modelTriggerCopied") : t("modelTriggerCopy").replace("{word}", word)}>
+      <button
+        type="button"
+        className="inline-flex h-7 max-w-full cursor-pointer items-center gap-1 rounded-full bg-secondary px-2.5 text-ui-xs text-foreground hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => {
+          void navigator.clipboard?.writeText(word);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        }}
+      >
+        <Truncate>{word}</Truncate>
+        {copied && <Check size={12} aria-hidden className="shrink-0 text-success" />}
+      </button>
+    </Hint>
+  );
+}
+
+/** 元数据值里那段 JSON(合并模型的 sd_merge_models、训练参数……)按两格缩进排开;不是 JSON 就是 null。 */
+function prettyJson(value: string): string | null {
+  const text = value.trim();
+  if (!(text.startsWith("{") || text.startsWith("["))) return null;
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return null;
+  }
+}
+
+/** 训练标签先摆这么多个(出现最多的那些),其余点「显示全部」。 */
+const TAGS_SHOWN = 24;
+
+/** 长于这个(或带换行、或是 JSON)的值默认折叠成一行预览。 */
+const LONG_VALUE = 120;
+
+/**
+ * 元数据的一行:键 + 值。短值直接摆;长值默认折成一行预览(截在 JS 里,悬停不弹一整段几千字的说明),能展开、
+ * 能复制;JSON 展开后按缩进排开。展开的值在自己的框里横竖都能滚,不撑宽右栏。
+ */
+function MetadataRow({ name, value }: { name: string; value: string }) {
+  const t = useI18n();
+  const pretty = React.useMemo(() => prettyJson(value), [value]);
+  const long = Boolean(pretty) || value.length > LONG_VALUE || value.includes("\n");
+  const [open, setOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const flat = value.replace(/\s+/g, " ");
+  return (
+    <div data-meta-row="" className="grid min-w-0 grid-cols-[minmax(96px,32%)_minmax(0,1fr)] gap-x-3 border-b border-divider py-2 last:border-b-0">
+      <Truncate as="dt" className="pt-0.5 font-mono text-ui-2xs text-muted-foreground">{name}</Truncate>
+      <dd className="m-0 grid min-w-0 gap-1.5">
+        {!long ? (
+          <span className="min-w-0 break-all text-ui-xs text-foreground">{value}</span>
+        ) : (
+          <>
+            {open ? (
+              <pre
+                className={cn(
+                  "m-0 max-h-80 min-w-0 overflow-auto rounded-md bg-muted/60 p-2.5 font-mono text-ui-2xs leading-[1.55] text-foreground",
+                  pretty ? "whitespace-pre" : "whitespace-pre-wrap break-all",
+                )}
+              >
+                {pretty ?? value}
+              </pre>
+            ) : (
+              <span className="min-w-0 break-all font-mono text-ui-2xs leading-relaxed text-foreground">
+                {flat.length > LONG_VALUE ? `${flat.slice(0, LONG_VALUE)}…` : flat}
+              </span>
+            )}
+            <span className="flex flex-wrap items-center gap-1">
+              <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
+                <ChevronDown className={cn("transition-transform duration-100", open && "rotate-180")} />
+                {open ? t("modelMetaCollapse") : t("modelMetaExpand")}
+              </Button>
+              <IconButton
+                label={t("modelMetaCopy").replace("{key}", name)}
+                className="text-muted-foreground"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(value);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1200);
+                }}
+              >
+                {copied ? <Check className="text-success" /> : <Copy />}
+              </IconButton>
+              <span className="text-ui-2xs tabular-nums text-muted-foreground">{t("modelMetaLength").replace("{n}", String(value.length))}</span>
+            </span>
+          </>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/** 元数据:搜索框 + 键值表。几百个键的(训练脚本写的 ss_*)靠搜。 */
+function MetadataSection({ entries, loading, error }: { entries: [string, string][]; loading: boolean; error: unknown }) {
+  const t = useI18n();
+  const [query, setQuery] = React.useState("");
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? entries.filter(([key, value]) => key.toLowerCase().includes(needle) || value.toLowerCase().includes(needle))
+    : entries;
+  return (
+    <LibrarySection title={t("modelMetadata")} count={entries.length || undefined}>
+      {loading ? (
+        <p className="m-0 text-ui-xs text-muted-foreground">{t("modelMetadataLoading")}</p>
+      ) : error ? (
+        <p className="m-0 text-ui-xs text-destructive">{errorText(error)}</p>
+      ) : entries.length === 0 ? (
+        <p className="m-0 text-ui-xs text-muted-foreground">{t("modelMetadataEmpty")}</p>
+      ) : (
+        <>
+          {entries.length > 1 && (
+            <label className="relative min-w-0">
+              <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                className="pl-9"
+                placeholder={t("modelMetaSearch")}
+                aria-label={t("modelMetaSearch")}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+          )}
+          {shown.length > 0 ? (
+            <dl className="m-0 grid min-w-0">
+              {shown.map(([key, value]) => (
+                <MetadataRow key={key} name={key} value={value} />
+              ))}
+            </dl>
+          ) : (
+            <p className="m-0 text-ui-xs text-muted-foreground">{t("modelMetaNoMatch")}</p>
+          )}
+        </>
+      )}
+    </LibrarySection>
+  );
+}
+
+/**
+ * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(遵循「模糊预览图」,
+ * 悬停或点「看清」才清楚);右栏概要(底模和判据、触发词点一下复制、文件、改动时间)、在用的工作流、训练标签、元数据。
+ */
+function ModelDetail({
+  instanceId,
+  model,
+  blurred,
+  onBack,
+}: {
+  instanceId: string;
+  model: ModelFile;
+  blurred: boolean;
+  onBack: () => void;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
   const meta = useQuery({
     queryKey: ["model-library-detail", instanceId, model.folder, model.name],
     queryFn: () => getModelDetail(instanceId, model.folder, model.name),
   });
+  const [revealed, setRevealed] = React.useState(false);
+  const [allTags, setAllTags] = React.useState(false);
+  const tags = meta.data?.tags ?? [];
+  const usedRef = React.useRef<HTMLElement>(null);
   const Icon = folderIcon(model.folder);
   const entries = Object.entries(meta.data?.metadata ?? {});
   const triggers = model.triggers ?? [];
+  const used = model.used_by ?? [];
+  const familyNote = model.family
+    ? model.family_source === "filename"
+      ? t("modelFamilySourceFilename")
+      : t("modelFamilySourceMetadata")
+    : undefined;
+  const jumpToUsed = () => {
+    const section = usedRef.current;
+    if (!section) return;
+    section.scrollIntoView({ block: "start", behavior: "smooth" });
+    section.querySelector<HTMLElement>("h4")?.focus({ preventScroll: true });
+  };
+
+  const media = model.has_preview ? (
+    <div className="group/thumb relative overflow-hidden rounded-xl bg-secondary">
+      <ModelThumb instanceId={instanceId} model={model} blurred={blurred && !revealed} className="max-h-[640px] w-full object-contain [[data-library-detail-scroll=both]_&]:max-h-[50dvh]" />
+      {blurred && !revealed && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 shadow-[var(--shadow-floating)]"
+          onClick={() => setRevealed(true)}
+        >
+          <Eye size={13} />
+          {t("modelRevealPreview")}
+        </Button>
+      )}
+    </div>
+  ) : (
+    <div className="grid aspect-[3/4] place-items-center content-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-primary">
+      <Icon className="size-10 opacity-70" />
+      <span className="text-ui-xs text-muted-foreground">{t("modelNoPreview")}</span>
+    </div>
+  );
+
   return (
-    <CatalogDetail
-      icon={<Icon />}
+    <LibraryDetail
+      backLabel={t("modelLibraryBack")}
+      onBack={onBack}
       title={baseName(model.name)}
-      badges={<FamilyBadge model={model} />}
-      meta={[model.folder, model.size != null ? formatBytes(model.size) : ""].filter(Boolean).join(" · ")}
-      actions={<CopyButton text={model.name} label={t("modelCopyName")} />}
-      aside={
-        <CatalogSection title={t("modelFileFacts")}>
-          <dl className="m-0 grid gap-3">
-            <Fact label={t("modelFolder")}>{model.folder}</Fact>
-            <Fact label={t("modelFileName")}>{model.name}</Fact>
-            {model.size != null && <Fact label={t("modelSize")}>{formatBytes(model.size)}</Fact>}
-            {model.modified != null && (
-              <Fact label={t("modelModified")}>{new Date(model.modified * 1000).toLocaleString(locale)}</Fact>
-            )}
-            {model.family && (
-              <Fact label={t("modelFamily")}>
-                {model.family}
-                <span className="block text-ui-xs text-muted-foreground">
-                  {model.family_source === "filename" ? t("modelFamilySourceFilename") : t("modelFamilySourceMetadata")}
-                </span>
-              </Fact>
-            )}
-          </dl>
-        </CatalogSection>
+      meta={
+        <>
+          <span>{placeOf(model)}</span>
+          {model.size != null && <span aria-hidden>·</span>}
+          {model.size != null && <span className="tabular-nums">{formatBytes(model.size)}</span>}
+          <FamilyBadge model={model} />
+        </>
       }
+      actions={
+        <>
+          <CopyButton text={model.name} label={t("modelCopyName")} />
+          <Hint label={t("modelUsedByJump")} disabledReason={used.length ? undefined : t("modelUsedByNone")}>
+            <Button variant="outline" disabled={used.length === 0} onClick={jumpToUsed}>
+              <Workflow size={13} />
+              {t("modelUsedCount").replace("{n}", String(used.length))}
+            </Button>
+          </Hint>
+        </>
+      }
+      media={media}
     >
-      {model.has_preview && (
-        <div className="group/thumb overflow-hidden rounded-xl">
-          <ModelThumb instanceId={instanceId} model={model} blurred={blurred} className="max-h-[420px] w-full object-contain" />
-        </div>
-      )}
-      {triggers.length > 0 && (
-        <CatalogSection title={t("modelTriggers")} count={triggers.length}>
-          {model.triggers_source === "tags" && <p className="m-0 text-ui-xs text-muted-foreground">{t("modelTriggersFromTags")}</p>}
-          <div className="flex min-w-0 flex-wrap gap-1.5">
-            {triggers.map((word) => (
-              <Hint key={word} label={t("modelTriggerCopy").replace("{word}", word)}>
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-full bg-secondary px-2.5 py-1 text-ui-xs text-foreground hover:bg-secondary/70"
-                  onClick={() => void navigator.clipboard?.writeText(word)}
-                >
-                  {word}
-                </button>
-              </Hint>
-            ))}
-          </div>
-        </CatalogSection>
-      )}
-      <CatalogSection title={t("modelUsedBy")} count={model.used_by?.length ?? 0}>
-        {(model.used_by?.length ?? 0) > 0 ? (
+      <LibrarySection title={t("modelOverview")}>
+        <dl className="m-0 grid min-w-0 gap-3">
+          <OverviewRow label={t("modelFamily")} note={familyNote}>
+            {model.family ? (
+              <span className="flex">
+                <CatalogBadge tone={model.family_source === "filename" ? "muted" : "primary"}>{model.family}</CatalogBadge>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">{t("modelLibraryFamilyUnknown")}</span>
+            )}
+          </OverviewRow>
+          {triggers.length > 0 && (
+            <OverviewRow label={t("modelTriggers")} note={model.triggers_source === "tags" ? t("modelTriggersFromTags") : undefined}>
+              <span className="flex min-w-0 flex-wrap gap-1.5">
+                {triggers.map((word) => (
+                  <TriggerChip key={word} word={word} />
+                ))}
+              </span>
+            </OverviewRow>
+          )}
+          {model.title && model.title !== baseName(model.name) && (
+            <OverviewRow label={t("modelTitle")}>
+              <span className="break-words">{model.title}</span>
+            </OverviewRow>
+          )}
+          <OverviewRow label={t("modelFileName")}>
+            <span className="break-all">{model.name}</span>
+          </OverviewRow>
+          {model.modified != null && (
+            <OverviewRow label={t("modelModified")}>
+              <span className="tabular-nums">{new Date(model.modified * 1000).toLocaleString(locale)}</span>
+            </OverviewRow>
+          )}
+        </dl>
+      </LibrarySection>
+      <LibrarySection ref={usedRef} title={t("modelUsedBy")} count={used.length}>
+        {used.length > 0 ? (
           <ul className="m-0 grid list-none gap-1 p-0">
-            {(model.used_by ?? []).map((flow) => (
+            {used.map((flow) => (
               <li key={flow.id} className="flex min-w-0 items-center gap-2 text-ui-sm text-foreground">
                 <Workflow size={13} className="shrink-0 text-muted-foreground" />
                 <Truncate hint={flow.id !== flow.label ? flow.id : undefined}>{flow.label}</Truncate>
@@ -986,38 +1197,32 @@ function ModelDetailPage({ instanceId, model, blurred }: { instanceId: string; m
         ) : (
           <p className="m-0 text-ui-xs text-muted-foreground">{t("modelUsedByNone")}</p>
         )}
-      </CatalogSection>
-      {(meta.data?.tags?.length ?? 0) > 0 && (
-        <CatalogSection title={t("modelTags")} count={meta.data?.tags?.length}>
+      </LibrarySection>
+      {tags.length > 0 && (
+        <LibrarySection
+          title={t("modelTags")}
+          count={tags.length}
+          action={
+            tags.length > TAGS_SHOWN ? (
+              <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={allTags} onClick={() => setAllTags(!allTags)}>
+                {allTags ? t("modelMetaCollapse") : t("modelTagsAll").replace("{n}", String(tags.length))}
+              </Button>
+            ) : undefined
+          }
+        >
+          {/* 训练标签动辄上百个:先摆出现最多的二十几个,不把元数据挤到很下面 */}
           <div className="flex min-w-0 flex-wrap gap-1.5">
-            {(meta.data?.tags ?? []).slice(0, 60).map((one) => (
+            {(allTags ? tags : tags.slice(0, TAGS_SHOWN)).map((one) => (
               <span key={one.tag} className="rounded-full bg-secondary px-2.5 py-1 text-ui-xs text-foreground">
                 {one.tag}
                 <span className="ml-1 tabular-nums text-muted-foreground">{one.count}</span>
               </span>
             ))}
           </div>
-        </CatalogSection>
+        </LibrarySection>
       )}
-      <CatalogSection title={t("modelMetadata")} count={entries.length || undefined}>
-        {meta.isLoading ? (
-          <p className="m-0 text-ui-xs text-muted-foreground">{t("modelMetadataLoading")}</p>
-        ) : meta.isError ? (
-          <p className="m-0 text-ui-xs text-destructive">{errorText(meta.error)}</p>
-        ) : entries.length === 0 ? (
-          <p className="m-0 text-ui-xs text-muted-foreground">{t("modelMetadataEmpty")}</p>
-        ) : (
-          <dl className="m-0 grid min-w-0 grid-cols-[minmax(120px,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5">
-            {entries.map(([key, value]) => (
-              <React.Fragment key={key}>
-                <Truncate as="dt" className="text-ui-xs text-muted-foreground">{key}</Truncate>
-                <Truncate as="dd" lines={3} className="m-0 break-all text-ui-xs text-foreground">{value}</Truncate>
-              </React.Fragment>
-            ))}
-          </dl>
-        )}
-      </CatalogSection>
-    </CatalogDetail>
+      <MetadataSection entries={entries} loading={meta.isLoading} error={meta.isError ? meta.error : null} />
+    </LibraryDetail>
   );
 }
 

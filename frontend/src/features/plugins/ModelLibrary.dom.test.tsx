@@ -11,7 +11,8 @@
  *   工具条上的搜索、筛选、下载不装作「0 个文件」;
  * - 「模糊预览图」开关(这台机器的预览图里可能有不适合当众打开的):默认关,打开后先模糊、悬停或点开看清,记在本机;
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
- * - 点开是详情:底模和凭的是什么、触发词(来自训练标签时说清楚)、在用的工作流、文件头里的元数据;
+ * - 点开是详情:顶上一条固定头(返回、名字、目录·大小·底模、常用操作),下面左边预览、右边概要 / 在用的工作流 /
+ *   元数据,两栏各自滚(窄窗口上下排、一起滚);元数据能搜,长值折叠、能展开、能复制,大段 JSON 格式化显示;
  * - 工作流缺的模型一键下载:下载框带着地址、目录、文件名,解析之后确认,发起的任务在模型库里看得到进度、能取消;
  * - 同名文件不覆盖:换一个名字(给建议)之前「下载」点不了;这台服务器下不了时也点不了,并说为什么。
  */
@@ -110,21 +111,42 @@ function pickFamilies(...labels: string[]) {
   return menu;
 }
 
-function narrowWindow() {
+/** 窗口只有 `width` 宽:`(max-width: Npx)` 里 N 不小于它的都算匹配。 */
+function narrowWindow(width = 700) {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: (query: string) => ({
-      matches: query.includes("max-width: 760px"), media: query, onchange: null,
+      matches: Number(/max-width: (\d+)px/.exec(query)?.[1] ?? 0) >= width, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
       dispatchEvent: () => false,
     }),
   });
 }
 
+async function openDetail(name = "detail.safetensors", metadata: Record<string, string> = { ss_output_name: "detail_tweaker" }) {
+  api.getModelDetail.mockResolvedValue({ folder: "loras", name, metadata, tags: [{ tag: "1girl", count: 45 }] });
+  await openLibrary();
+  const card = cards().find((item) => item.textContent?.includes(name))!;
+  fireEvent.click(within(card).getByRole("button", { name }));
+  return await screen.findByRole("button", { name: "modelLibraryBack" });
+}
+
+//: 合并模型带的那种大段 JSON(sd_merge_models)
+const MERGE = JSON.stringify({
+  sd_merge_models: {
+    a1b2: { name: "animagine-xl-3.1", legacy_hash: "e3c47aed" },
+    c3d4: { name: "pony", legacy_hash: "67ab2fd8" },
+  },
+});
+
 const wideMatchMedia = window.matchMedia;
+
+const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 
 beforeEach(() => {
   window.localStorage.clear();
+  clipboard.writeText.mockClear();
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
   Object.defineProperty(window, "matchMedia", { configurable: true, value: wideMatchMedia });
   Element.prototype.scrollIntoView ??= () => {};
   for (const fn of [api.getModelLibrary, api.getModelDetail, api.resolveModelLink, api.startModelDownload, api.getJob,
@@ -366,18 +388,87 @@ describe("模型库", () => {
     expect(cards()).toHaveLength(3);
   });
 
+  it("详情页:顶上一条固定头 —— 返回、名字、目录 · 大小 · 底模、复制文件名;下面左右两栏各自滚动", async () => {
+    const back = await openDetail();
+    await waitFor(() => expect(document.activeElement).toBe(back));
+    const head = back.closest("[data-library-detail-head]") as HTMLElement;
+    expect(within(head).getByRole("heading", { name: "detail.safetensors" })).toBeTruthy();
+    expect(head.textContent).toContain("loras");
+    expect(head.textContent).toContain("228 MB");
+    expect(head.textContent).toContain("Illustrious");
+    fireEvent.click(within(head).getByRole("button", { name: /modelCopyName/ }));
+    expect(clipboard.writeText).toHaveBeenCalledWith("detail.safetensors");
+    const media = document.querySelector("[data-library-detail-pane='media']") as HTMLElement;
+    const info = document.querySelector("[data-library-detail-pane='info']") as HTMLElement;
+    expect(media.className).toContain("overflow-y-auto");
+    expect(info.className).toContain("overflow-y-auto");
+    // 头不在任何一栏里:滚到元数据时名字和操作还在
+    expect(media.contains(head) || info.contains(head)).toBe(false);
+    expect(within(media).getByRole("img").getAttribute("src")).toBe("preview://i1/loras/detail.safetensors");
+  });
+
+  it("窄窗口:详情改成上下排、整体一起滚", async () => {
+    narrowWindow(800);
+    await openDetail();
+    expect(document.querySelector("[data-library-detail-pane]")).toBeNull();
+    const both = document.querySelector("[data-library-detail-scroll='both']") as HTMLElement;
+    expect(both.className).toContain("overflow-y-auto");
+    expect(both.querySelector("img")).toBeTruthy();
+    expect(both.textContent).toContain("modelOverview");
+  });
+
+  it("概要:底模和判据(弱一档的一行说明)、触发词点一下复制;「在哪些工作流里用到」跳到那一节", async () => {
+    await openDetail();
+    const overview = screen.getByRole("region", { name: "modelOverview" });
+    expect(overview.textContent).toContain("modelFamilySourceMetadata");
+    expect(overview.textContent).toContain("modelTriggersFromTags");
+    fireEvent.click(within(overview).getByRole("button", { name: "1girl" }));
+    expect(clipboard.writeText).toHaveBeenCalledWith("1girl");
+
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+    fireEvent.click(screen.getByRole("button", { name: /modelUsedCount/ }));
+    const used = screen.getByRole("region", { name: "modelUsedBy" });
+    expect(scrolled).toHaveBeenCalled();
+    await waitFor(() => expect(used.contains(document.activeElement)).toBe(true));
+    expect(used.textContent).toContain("declaring");
+  });
+
+  it("元数据:能搜;长值默认折叠、能展开、能复制;大段 JSON 格式化显示,不撑宽", async () => {
+    await openDetail("detail.safetensors", { ss_output_name: "detail_tweaker", ss_network_dim: "32", sd_merge_models: MERGE });
+    const meta = await screen.findByRole("region", { name: "modelMetadata" });
+    await within(meta).findByText("sd_merge_models");
+    const row = within(meta).getByText("sd_merge_models").closest("[data-meta-row]") as HTMLElement;
+    expect(row.querySelector("pre")).toBeNull();
+    const expand = within(row).getByRole("button", { name: "modelMetaExpand" });
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(expand);
+    const pre = row.querySelector("pre") as HTMLElement;
+    expect(pre.textContent).toContain('\n  "sd_merge_models": {');
+    expect(pre.className).toContain("overflow-auto");
+    fireEvent.click(within(row).getByRole("button", { name: "modelMetaCopy" }));
+    expect(clipboard.writeText).toHaveBeenCalledWith(MERGE);
+
+    const search = within(meta).getByRole("searchbox", { name: "modelMetaSearch" });
+    fireEvent.change(search, { target: { value: "dim" } });
+    expect(within(meta).queryByText("sd_merge_models")).toBeNull();
+    expect(within(meta).getByText("ss_network_dim")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "没有这个" } });
+    expect(within(meta).getByText("modelMetaNoMatch")).toBeTruthy();
+  });
+
   it("点开是详情:底模和凭的是什么、触发词来自训练标签时说清楚、在用的工作流、文件头里的元数据", async () => {
     api.getModelDetail.mockResolvedValue({ folder: "loras", name: "detail.safetensors",
                                            metadata: { ss_output_name: "detail_tweaker" }, tags: [{ tag: "1girl", count: 45 }] });
     await openLibrary();
     const card = cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
     fireEvent.click(within(card).getByRole("button", { name: "detail.safetensors" }));
-    expect(await screen.findByText("detail_tweaker")).toBeTruthy();
+    // 标题(概要里)和元数据里的 ss_output_name 都是它
+    expect(await screen.findByText("ss_output_name")).toBeTruthy();
+    expect(screen.getAllByText("detail_tweaker")).toHaveLength(2);
     expect(api.getModelDetail).toHaveBeenCalledWith("i1", "loras", "detail.safetensors");
-    expect(screen.getByText("modelTriggersFromTags")).toBeTruthy();
+    expect(screen.getAllByText("modelTriggersFromTags").length).toBeGreaterThan(0);
     expect(screen.getAllByText("modelFamilySourceMetadata").length).toBeGreaterThan(0);
     expect(screen.getByText("declaring")).toBeTruthy();
-    expect(screen.getByText("ss_output_name")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryBack" }));
     expect(await screen.findByRole("list", { name: "modelLibraryTitle" })).toBeTruthy();
   });

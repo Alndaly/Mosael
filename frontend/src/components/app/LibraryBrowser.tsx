@@ -1,8 +1,9 @@
 import React from "react";
-import { X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
+import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Truncate } from "@/components/ui/truncate";
 import { useMediaMatch } from "@/lib/useMediaMatch";
@@ -286,3 +287,100 @@ export function LibraryFilterChips({
     </div>
   );
 }
+
+/**
+ * 一条的详情页。**顶上一条固定头**:返回、名字(一行截断)、一行事实(目录 · 大小 · 标签)、右边常用操作 —— 往下滚多长,
+ * 名字和操作都在。下面**左右两栏各自滚**:左边是看的(预览),右边是读的(概要、谁在用、元数据);元数据可能很长
+ * (合并模型带的大段 JSON),整页一起滚的话一滚到那儿,右边的信息和左边的预览就都滚走了。窄窗口放不下两栏时上下排、
+ * 整体一起滚。进来时焦点给返回键(读屏从这一页的开头读起)。
+ */
+export function LibraryDetail({
+  backLabel,
+  onBack,
+  title,
+  meta,
+  actions,
+  media,
+  children,
+}: {
+  backLabel: string;
+  onBack: () => void;
+  title: string;
+  /** 名字下面那一行事实(目录 · 大小 · 底模标签)。 */
+  meta?: React.ReactNode;
+  /** 右边的常用操作。 */
+  actions?: React.ReactNode;
+  /** 左栏:预览。 */
+  media: React.ReactNode;
+  /** 右栏:一节一节的 {@link LibrarySection}。 */
+  children: React.ReactNode;
+}) {
+  const stacked = useMediaMatch(LIBRARY_DETAIL_STACK_QUERY);
+  const backRef = React.useRef<HTMLButtonElement>(null);
+  React.useLayoutEffect(() => {
+    backRef.current?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header
+        data-library-detail-head=""
+        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-divider px-6 pb-3"
+      >
+        <IconButton ref={backRef} variant="ghost" size="icon" className="-ml-2 shrink-0" label={backLabel} onClick={onBack}>
+          <ArrowLeft />
+        </IconButton>
+        <div className="grid min-w-0 flex-1 basis-[240px] gap-1">
+          <h3 className="m-0 min-w-0 text-ui-lg font-semibold leading-snug tracking-tight text-foreground">
+            <Truncate>{title}</Truncate>
+          </h3>
+          {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">{meta}</div>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      </header>
+      {stacked ? (
+        <div data-library-detail-scroll="both" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6 pt-5">
+          <div className="grid min-w-0 gap-7">
+            {media}
+            {children}
+          </div>
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+          <section
+            data-library-detail-pane="media"
+            className="min-h-0 min-w-0 overflow-y-auto overscroll-contain border-r border-divider p-6"
+          >
+            {media}
+          </section>
+          <div data-library-detail-pane="info" className="grid min-h-0 min-w-0 content-start gap-7 overflow-y-auto overscroll-contain p-6">
+            {children}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 详情右栏里的一节:小标题(带数量)+ 内容。标题能拿焦点(`tabIndex=-1`):头上的「在哪些工作流里用到」跳过来时,
+ * 读屏从这一节的标题读起。
+ */
+export const LibrarySection = React.forwardRef<
+  HTMLElement,
+  { title: string; count?: number; action?: React.ReactNode; children: React.ReactNode }
+>(({ title, count, action, children }, ref) => {
+  return (
+    // 读屏念这一节叫什么:只念标题,不连着后面的数量
+    <section ref={ref} aria-label={title} className="grid min-w-0 content-start gap-3">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <h4 tabIndex={-1} className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground outline-none">
+          {title}
+          {count !== undefined && <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{count}</span>}
+        </h4>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+});
+LibrarySection.displayName = "LibrarySection";
