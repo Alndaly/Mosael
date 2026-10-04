@@ -1,6 +1,6 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { ChevronRight, Copy } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
 import { getNoteRevision, listNoteRevisions, type NoteRevisionSummary } from "@/api/domains/notes";
@@ -24,17 +24,19 @@ import { cn } from "@/lib/utils";
 import { NoteReader } from "./NoteEditor";
 import { useNoteStrings } from "./strings";
 import { diffDocument, type DocumentDiffBlock } from "./versionDiff";
-import { versionClock, versionFullTime, versionMoment } from "./versionTime";
+import { versionClock, versionMoment, versionSpan } from "./versionTime";
 
 type Content = { revision: number; title: string; markdown: string };
+/** 编辑器里的这一份:多带一个保存序号 —— 连续编辑改写的是同一版,版本号不变,列表要跟着它刷新。 */
+type Current = Content & { saveSeq: number };
 type View = "preview" | "current" | "previous";
 
 /**
  * 笔记的版本记录。
  *
  * 一个大弹窗:左边是按天分组的版本列表(新的在上,顶上那一版标「当前版本」),右边是选中那一版的预览,正文按阅读宽度排。
- * 连续的手动编辑在后端合成一项(domain/notes/history):列表上一组一项,写着这一组改了多少(+120 −30 字、改了标题),
- * 「N 次连续编辑」点开看得到组里的每一版,每一版都能单独看、比、恢复。
+ * 连续的手动编辑在存储上就合成了一版(domain/notes/history):列表上每一项写着它改了多少(+120 −30 字、改了标题),
+ * 悬停时间看得到这一版从几点写到几点。
  * 当前版本就是编辑器里这一份(`current`),不再去读一遍;别的版本按需读,读过的留在缓存里。
  *
  * - 「恢复此版本」先确认:恢复会新建一个版本,现有版本都还在 —— 当前版本上没有这颗;
@@ -49,7 +51,7 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
   workspaceId: string;
   noteId: string;
   /** 编辑器里的这一份 —— 列表顶上那一版。 */
-  current: Content;
+  current: Current;
   /** 打开时选中哪一版(「查看引用版本」);不给就是当前版本。 */
   focusRevision: number | null;
   /** 恢复成新的一版;做完由笔记页关掉弹窗。 */
@@ -60,30 +62,12 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
   const t = useI18n();
   const { locale } = usePreferences();
   const versions = useQuery({
-    queryKey: noteKeys.history(noteId, current.revision), queryFn: () => listNoteRevisions(workspaceId, noteId), enabled: open,
+    queryKey: noteKeys.history(noteId, current.saveSeq), queryFn: () => listNoteRevisions(workspaceId, noteId), enabled: open,
   });
   const [selected, setSelected] = React.useState<number | null>(null);
   //: 每次打开重新挑:引用的那一版,或者当前版本。开着的时候 current.revision 变了(恢复完)不重挑。
   React.useEffect(() => { if (open) setSelected(focusRevision ?? current.revision); }, [open, focusRevision]); // eslint-disable-line react-hooks/exhaustive-deps
   const items = versions.data ?? [];
-  const [expanded, setExpanded] = React.useState<ReadonlySet<number>>(new Set());
-  const toggle = (group: number) => setExpanded((was) => {
-    const next = new Set(was);
-    if (next.has(group)) next.delete(group); else next.add(group);
-    return next;
-  });
-  //: 从「查看引用版本」进来、引用的又是组里的一版:把那一组展开,选中的那一行看得见。
-  React.useEffect(() => {
-    const holder = items.find((one) => focusRevision !== null && one.group_start <= focusRevision && focusRevision < one.revision);
-    if (open && holder) setExpanded((was) => new Set([...was, holder.group_start]));
-  }, [open, focusRevision, versions.data]); // eslint-disable-line react-hooks/exhaustive-deps
-  const opened = items.filter((one) => one.saves > 1 && expanded.has(one.group_start));
-  const inside = useQueries({ queries: opened.map((one) => ({
-    queryKey: noteKeys.historyGroup(noteId, one.group_start, one.revision),
-    queryFn: () => listNoteRevisions(workspaceId, noteId, one.group_start), enabled: open,
-  })) });
-  //: 组里除了最新那一版(它就是列表上那一项)之外的每一版。
-  const childrenOf = new Map(opened.map((one, index) => [one.group_start, (inside[index]?.data ?? []).filter((child) => child.revision !== one.revision)]));
   const chosen = selected ?? current.revision;
   const isCurrent = chosen === current.revision;
   const content = useQuery({
@@ -92,9 +76,9 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
   });
   const shown: Content | undefined = isCurrent ? current : content.data;
   const [view, setView] = React.useState<View>("preview");
-  //: 「上一版」是列表上的上一项:选的是一组,就是这一组之前那一版;选的是组里的一版,就是紧挨着它的前一版。
-  const chosenGroup = items.find((one) => one.revision === chosen);
-  const previous = (chosenGroup ? chosenGroup.group_start : chosen) - 1;
+  //: 「上一版」是列表上紧挨着的那一项(更早的一版)。列表还没回来时按版本号退一步。
+  const at = items.findIndex((one) => one.revision === chosen);
+  const previous = at >= 0 ? (items[at + 1]?.revision ?? 0) : chosen - 1;
   const usable: Record<View, boolean> = { preview: true, current: !isCurrent, previous: previous >= 1 };
   const showing: View = usable[view] ? view : "preview";
   const before = useQuery({
@@ -105,13 +89,13 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
     : showing === "current" ? [shown, current]
     : showing === "previous" ? (before.data ? [before.data, shown] : null)
     : null;
-  const chosenItem = chosenGroup ?? [...childrenOf.values()].flat().find((one) => one.revision === chosen);
-  const only = items.length === 1 && items[0].saves === 1;
+  const chosenItem = at >= 0 ? items[at] : undefined;
+  const only = items.length === 1;
 
   const rows = React.useRef(new Map<number, HTMLButtonElement>());
   const body = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => { if (body.current) body.current.scrollTop = 0; }, [chosen]);
-  const order = items.flatMap((one) => [one.revision, ...(childrenOf.get(one.group_start) ?? []).map((child) => child.revision)]);
+  const order = items.map((one) => one.revision);
   const move = (event: React.KeyboardEvent, revision: number) => {
     const index = order.indexOf(revision);
     const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: order.length - 1 }[event.key];
@@ -138,43 +122,25 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
     const day = dayGroupOf(key, now, locale);
     return day.kind === "today" ? v.today : day.kind === "yesterday" ? v.yesterday : day.text;
   };
-  const button = (item: NoteRevisionSummary, child: boolean) => {
+  const row = (item: NoteRevisionSummary) => {
     const active = item.revision === chosen;
-    //: 一组的时间说明写这一组从几点到几点(精确到秒)。
-    const when = item.saves > 1
-      ? `${versionFullTime(item.started_at, locale)} – ${versionClock(item.created_at, locale, true)}`
-      : versionFullTime(item.created_at, locale);
     return (
-      <button type="button" className={cn("note-history-item", child && "note-history-child")} aria-current={active} tabIndex={active ? 0 : -1}
-        ref={(node) => { if (node) rows.current.set(item.revision, node); else rows.current.delete(item.revision); }}
-        onClick={() => setSelected(item.revision)} onKeyDown={(event) => move(event, item.revision)}>
-        <span className="note-history-item-head">
-          <Hint label={when} side="right">
-            <time dateTime={item.created_at}>{versionClock(item.created_at, locale, child)}</time>
-          </Hint>
-          {item.revision === current.revision && <span className="note-history-badge">{v.current}</span>}
-          <span className="note-history-number">{v.version(item.revision)}</span>
-        </span>
-        {!child && (
+      <li key={item.revision}>
+        <button type="button" className="note-history-item" aria-current={active} tabIndex={active ? 0 : -1}
+          ref={(node) => { if (node) rows.current.set(item.revision, node); else rows.current.delete(item.revision); }}
+          onClick={() => setSelected(item.revision)} onKeyDown={(event) => move(event, item.revision)}>
+          <span className="note-history-item-head">
+            <Hint label={versionSpan(item.started_at, item.created_at, locale)} side="right">
+              <time dateTime={item.created_at}>{versionClock(item.created_at, locale)}</time>
+            </Hint>
+            {item.revision === current.revision && <span className="note-history-badge">{v.current}</span>}
+            <span className="note-history-number">{v.version(item.revision)}</span>
+          </span>
           <span className="note-history-meta">
             <VersionHow item={item} className="note-history-how" />
             <VersionChange item={item} />
           </span>
-        )}
-      </button>
-    );
-  };
-  const row = (item: NoteRevisionSummary) => {
-    const group = item.saves > 1 ? childrenOf.get(item.group_start) : undefined;
-    return (
-      <li key={item.revision}>
-        {button(item, false)}
-        {item.saves > 1 && (
-          <button type="button" className="note-history-fold" aria-expanded={expanded.has(item.group_start)} onClick={() => toggle(item.group_start)}>
-            <ChevronRight size={12} aria-hidden="true" />{v.edits(item.saves)}
-          </button>
-        )}
-        {group && <ul className="note-history-children">{group.map((child) => <li key={child.revision}>{button(child, true)}</li>)}</ul>}
+        </button>
       </li>
     );
   };
@@ -281,7 +247,7 @@ function VersionHow({ item, className }: { item: NoteRevisionSummary; className?
   return <Truncate className={className}>{by ? `${origin} · ${by}` : origin}</Truncate>;
 }
 
-/** 这一组改了多少:「+120 −30 字」「改了标题」。只改了来源的那种两样都没有,就不写。 */
+/** 这一版改了多少:「+120 −30 字」「改了标题」。只改了来源的那种两样都没有,就不写。 */
 function VersionChange({ item }: { item: NoteRevisionSummary }) {
   const v = useNoteStrings().versions;
   const words = item.chars_added > 0 || item.chars_removed > 0;

@@ -1,16 +1,16 @@
-"""一版笔记归在哪一组、相对这一组之前那一版改了多少 —— 版本记录一组一项(见 tests/test_note_revision_groups.py)。
+"""一次保存是接着写最新那一版(改写它),还是开新的一版;以及每一版相对上一版改了多少。
 
-编辑器停笔 700ms 就自动保存一次,每次保存都是一版:修订号同时是乐观并发的基准、来源 / 画板文档格 / 引用链接钉住的
-那一版,所以**每次保存照旧落一行,一行都不删不改**。合成一版的是**版本记录里的一项**:每一版落库时记下它归在哪一组
-(`group_start`:这一组第一版的号),判据:
+编辑器停笔 700ms 就自动保存一次。每次保存都开一版的话,版本记录里「版本 3 到 6」会在 7 秒内连着出现。所以连续的
+手动编辑在**存储上**合成一版 —— 窗口内的保存改写最新那一版,判据(`continues`):
 
-- 这一版和上一版都是编辑器里的保存(origin = edit),而且是同一个人;
-- 离上一版不到 EDIT_PAUSE —— 停笔超过这么久再动笔,是新的一版;
-- 离这一组第一版不到 EDIT_SPAN —— 一口气写一个小时,版本记录里也隔半小时有一个能回去的点;
-- 智能体改的、恢复的、追加的、新建的、画板和工作流写的,永远单独成一组,它后面的编辑也另起一组。
+- 这次保存和最新那一版都是编辑器里的保存(origin = edit),而且是同一个人;
+- 离那一版最后一次保存不到 EDIT_PAUSE —— 停笔超过这么久再动笔,是新的一版;
+- 那一版从开始写起不到 EDIT_SPAN —— 一口气写一个小时,版本记录里也每半小时有一个能回去的点;
+- 智能体改的、恢复的、追加的、新建的、画板和工作流写的,永远单独成版,它后面的编辑也另起一版。
 
-每一版还记下相对**这一组之前那一版**改了多少:新加 / 删掉的字数(不算空白)、标题改没改。一组里最新那一版的这几个数,
-就是这一组一共改了多少 —— 列表上那一句「+120 −30 字」。
+改写只发生在**最新**那一版上:更早的版本一旦有了后一版就不再变。乐观并发不看版本号,看保存序号(Note.save_seq)。
+
+每一版记下相对**上一版**新加 / 删掉的字数(不算空白)和标题改没改,版本记录里那一句「+120 −30 字」就是它。
 """
 
 from __future__ import annotations
@@ -28,19 +28,17 @@ EDIT_SPAN = timedelta(minutes=30)
 CHAR_ALIGN_LIMIT = 4_000_000
 
 
-def group_start(db: Session, note_id: str, revision: int, *, origin: str, created_by: str | None, at: datetime) -> int:
-    """这一版归在哪一组(返回那一组第一版的号;自己起一组就是自己的号)。"""
-    if origin != "edit" or created_by is None or revision == 1:
-        return revision
-    previous = db.get(NoteRevision, (note_id, revision - 1))
-    if previous is None or previous.origin != "edit" or previous.created_by != created_by:
-        return revision
-    if at - previous.created_at > EDIT_PAUSE:
-        return revision
-    first = previous if previous.group_start == previous.revision else db.get(NoteRevision, (note_id, previous.group_start))
-    if first is None or at - first.created_at > EDIT_SPAN:
-        return revision
-    return previous.group_start
+def continues(latest: NoteRevision | None, *, origin: str, created_by: str | None, at: datetime) -> bool:
+    """这次保存是不是接着写最新那一版(是就改写它,不是就开新的一版)。"""
+    return (
+        latest is not None
+        and origin == "edit"
+        and latest.origin == "edit"
+        and created_by is not None
+        and latest.created_by == created_by
+        and at - latest.created_at <= EDIT_PAUSE
+        and at - latest.started_at <= EDIT_SPAN
+    )
 
 
 def _visible(text: str) -> int:
@@ -69,9 +67,9 @@ def count_changes(before: str, after: str) -> tuple[int, int]:
     return added, removed
 
 
-def changes_since_group(db: Session, note_id: str, start: int, data: dict) -> dict:
-    """相对这一组之前那一版(第 start - 1 版)改了多少。第一组之前什么都没有:正文全算新加,标题不算「改了」。"""
-    base = db.get(NoteRevision, (note_id, start - 1)) if start > 1 else None
+def changes_since_previous(db: Session, note_id: str, revision: int, data: dict) -> dict:
+    """第 revision 版相对第 revision - 1 版改了多少。第 1 版之前什么都没有:正文全算新加,标题不算「改了」。"""
+    base = db.get(NoteRevision, (note_id, revision - 1)) if revision > 1 else None
     before = base.snapshot if base is not None else {}
     added, removed = count_changes(str(before.get("markdown") or ""), str(data.get("markdown") or ""))
     return {

@@ -86,12 +86,17 @@ references stay where they are, but their source can no longer be opened.
 
 ## Revision history
 
-Every save leaves an immutable revision. **More → Version history** opens a large dialog: versions
-grouped by day (Today, Yesterday, a date) on the left, the selected one on the right at reading width.
+Every change to the text is kept in the revision history. **More → Version history** opens a large
+dialog: versions grouped by day (Today, Yesterday, a date) on the left, the selected one on the right at
+reading width.
 
-- **Consecutive manual edits fold into one entry**: one person saving in a row (pauses under 5 minutes,
-  at most 30 minutes per entry) takes a single row that says how much changed, such as "+120 −30 chars"
-  or "Title changed". Open **N consecutive edits** to see, compare or restore each revision inside it.
+- **Consecutive manual edits make one revision**: one person typing in a row (pauses under 5 minutes, at
+  most 30 minutes per revision) is kept as a single revision that autosave keeps updating. A pause over
+  5 minutes, another person, or an assistant change, restore or Save to note in between starts a new one.
+  Each revision says how much changed, such as "+120 −30 chars" or "Title changed"; hover the time to see
+  when it was written.
+- Favorites, moving to trash, tags and topics **don't create revisions**, and restoring a revision brings
+  back the title, text and sources only, leaving those properties as they are now.
 - Each entry says **how it came about**: Edited, Changed by the assistant, Saved to note, Restored from
   version N… Someone else's changes carry their name.
 - Switch between **Preview / Compare with current / Compare with previous** on the right: removed text

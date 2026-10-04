@@ -4915,10 +4915,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Revisions
-         * @description 一组一项;`group`(那一组第一版的号)给了就列那一组里的每一版。
-         */
+        /** Revisions */
         get: operations["revisions_api_notes__note_id__revisions_get"];
         put?: never;
         post?: never;
@@ -11188,9 +11185,7 @@ export interface components {
         };
         /**
          * NoteRevisionOut
-         * @description 版本记录里的一项:连续的手动编辑合成一组(见 domain/notes/history),这一项是那一组最新的一版。
-         *
-         *     带 `group` 查的是一组里的每一版,那时每一项就是一版(saves = 1)。
+         * @description 版本记录里的一版。连续的手动编辑在存储上就合成了一版(见 domain/notes/history)。
          */
         NoteRevisionOut: {
             /** Revision */
@@ -11202,10 +11197,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Group Start */
-            group_start: number;
-            /** Saves */
-            saves: number;
             /**
              * Started At
              * Format: date-time
@@ -25359,7 +25350,6 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
-                group?: number | null;
             };
             header?: never;
             path: {

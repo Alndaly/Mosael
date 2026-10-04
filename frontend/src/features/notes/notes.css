@@ -273,14 +273,6 @@
 .note-history-change > span { display:inline-flex; gap:3px; }
 .note-history-added { color:var(--success); }
 .note-history-removed { color:var(--destructive); }
-/* 「N 次连续编辑」:挂在那一项下面的一行小字,点开是组里的每一版(缩进一级,时间带秒)。 */
-.note-history-fold { display:flex; align-items:center; gap:4px; margin:0 0 2px 10px; padding:2px 6px; border-radius:6px; font-size:var(--text-ui-2xs); color:var(--muted-foreground); }
-.note-history-fold:hover { background:color-mix(in srgb,var(--foreground) 4%,transparent); color:var(--foreground); }
-.note-history-fold svg { transition:transform 120ms ease; }
-.note-history-fold[aria-expanded=true] svg { transform:rotate(90deg); }
-.note-history-list .note-history-children { margin:0 0 6px 16px; padding-left:8px; border-left:1px solid var(--divider); }
-.note-history-child { padding-block:6px; }
-.note-history-child .note-history-item-head { font-size:var(--text-ui-xs); }
 .note-history-item[aria-current=true] .note-history-how { color:inherit; opacity:.8; }
 .note-history-badge { padding:1px 7px; border-radius:999px; font-size:var(--text-ui-2xs); line-height:1.6; white-space:nowrap; background:color-mix(in srgb,var(--primary) 12%,transparent); color:var(--primary); }
 .note-history-only { margin:12px 10px 0; font-size:var(--text-ui-xs); line-height:1.7; color:var(--muted-foreground); }

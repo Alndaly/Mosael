@@ -33,7 +33,13 @@ export function versionMoment(iso: string, locale: string, now: Date, words: { t
   return locale.startsWith("zh") ? `${day} ${clock}` : `${day}, ${clock}`;
 }
 
-/** 精确到秒的完整时间(悬停说明里那一份)。 */
+/** 一版从几点写到几点(悬停说明里那一份,精确到秒)。开始和最后一次保存在同一分钟里就只写一个时间。 */
+export function versionSpan(startedIso: string, savedIso: string, locale: string): string {
+  const minutes = (parseServerTime(savedIso).getTime() - parseServerTime(startedIso).getTime()) / 60_000;
+  return minutes < 1 ? versionFullTime(savedIso, locale) : `${versionFullTime(startedIso, locale)} – ${versionClock(savedIso, locale, true)}`;
+}
+
+/** 精确到秒的完整时间。 */
 export function versionFullTime(iso: string, locale: string): string {
   return plain(parseServerTime(iso).toLocaleString(locale, { dateStyle: "long", timeStyle: "medium", hourCycle: locale.startsWith("zh") ? "h23" : undefined }));
 }

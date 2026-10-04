@@ -102,89 +102,6 @@ def _migrate_note_revisions_remember_where_they_came_from() -> None:
             ), {"by": decided_by, "note": note_id, "revision": revision})
 
 
-def _migrate_note_revisions_fold_consecutive_edits() -> None:
-    """笔记的每一版补四列:归在哪一组 `group_start`、相对这一组之前那一版新加 / 删掉多少字 `chars_added` /
-    `chars_removed`、标题改没改 `title_changed`(判据见 domain/notes/history)。
-
-    加列必须在 SCHEMA 之前:之后 ORM 上的 NoteRevision 已经指望这四列在了。排在补来历的那一步之后 —— 分组要看 origin。
-    老版本按同一条判据回填,只有一处不同:老数据说不出是谁写的(created_by 为空),空和空算同一个人 —— 那时的库
-    几乎都是一个人在用,而不这么算,老笔记的碎版本一个也合不起来。算法抄在这里,不引领域层:领域那边日后改了判据,
-    重放这条迁移得到的还该是今天的结果。
-    """
-    from datetime import datetime, timedelta
-    from difflib import SequenceMatcher
-
-    with engine.begin() as conn:
-        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(note_revisions)"))}
-        if not columns or "group_start" in columns:
-            return
-        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN group_start INTEGER NOT NULL DEFAULT 0"))
-        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN chars_added INTEGER NOT NULL DEFAULT 0"))
-        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN chars_removed INTEGER NOT NULL DEFAULT 0"))
-        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN title_changed BOOLEAN NOT NULL DEFAULT 0"))
-
-        def visible(value: str) -> int:
-            return sum(1 for char in value if not char.isspace())
-
-        def changes(before: str, after: str) -> tuple[int, int]:
-            if before == after:
-                return 0, 0
-            a, b = before.splitlines(keepends=True), after.splitlines(keepends=True)
-            added = removed = 0
-            for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-                if tag == "equal":
-                    continue
-                old, new = "".join(a[i1:i2]), "".join(b[j1:j2])
-                if tag != "replace" or len(old) * len(new) > 4_000_000:
-                    removed, added = removed + visible(old), added + visible(new)
-                    continue
-                for inner, k1, k2, l1, l2 in SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
-                    if inner != "equal":
-                        removed, added = removed + visible(old[k1:k2]), added + visible(new[l1:l2])
-            return added, removed
-
-        def moment(value: Any) -> datetime | None:
-            try:
-                return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
-            except ValueError:
-                return None
-
-        def content(value: Any) -> dict:
-            try:
-                data = json.loads(value) if isinstance(value, str) else value
-            except ValueError:
-                return {}
-            return data if isinstance(data, dict) else {}
-
-        rows = conn.execute(text(
-            "SELECT note_id, revision, snapshot, origin, created_by, created_at FROM note_revisions ORDER BY note_id, revision"
-        )).all()
-        by_note: dict[str, list[Any]] = {}
-        for row in rows:
-            by_note.setdefault(row[0], []).append(row)
-        for note_id, versions in by_note.items():
-            seen: dict[Any, dict] = {}
-            for _, revision, snapshot, origin, created_by, created_at in versions:
-                at = moment(created_at)
-                previous = seen.get(revision - 1) if isinstance(revision, int) else None
-                start = revision
-                if origin == "edit" and previous is not None and previous["origin"] == "edit" \
-                        and previous["created_by"] == created_by and at is not None and previous["at"] is not None \
-                        and at - previous["at"] <= timedelta(minutes=5):
-                    first = seen.get(previous["start"])
-                    if first is not None and first["at"] is not None and at - first["at"] <= timedelta(minutes=30):
-                        start = previous["start"]
-                data = content(snapshot)
-                base = seen.get(start - 1) if isinstance(start, int) else None
-                added, removed = changes(str((base or {}).get("data", {}).get("markdown") or ""), str(data.get("markdown") or ""))
-                changed = base is not None and base["data"].get("title") != data.get("title")
-                seen[revision] = {"origin": origin, "created_by": created_by, "at": at, "start": start, "data": data}
-                conn.execute(text(
-                    "UPDATE note_revisions SET group_start = :start, chars_added = :added, chars_removed = :removed, "
-                    "title_changed = :changed WHERE note_id = :note AND revision = :revision"
-                ), {"start": start, "added": added, "removed": removed, "changed": changed, "note": note_id, "revision": revision})
-
-
 def _migrate_notes_count_their_saves() -> None:
     """笔记补一列保存序号 `save_seq`:乐观并发从此认它,版本号(revision)只管版本记录。
 
@@ -197,6 +114,30 @@ def _migrate_notes_count_their_saves() -> None:
             return
         conn.execute(text("ALTER TABLE notes ADD COLUMN save_seq INTEGER NOT NULL DEFAULT 1"))
         conn.execute(text("UPDATE notes SET save_seq = revision"))
+
+
+def _migrate_note_revisions_take_the_merged_shape() -> None:
+    """笔记的版本表收成「连续编辑在存储上合成一版」那个样子:补上从什么时候开始写 `started_at`、相对上一版改了多少
+    (`chars_added` / `chars_removed` / `title_changed`),去掉分组那一列 `group_start`。
+
+    取代了 1.8.3 开发期的 note-revisions-fold-consecutive-edits(它只在界面上分组,加的 group_start 现在没用了;
+    它靠「group_start 在不在」判断跑没跑过,在新样子的库上重跑会撞上重复的列,所以整步拿掉)。老库停在哪一步都收得拢:
+    跑过那一步的有 group_start 和字数列,没跑过的两样都没有。加列、删列都必须在 SCHEMA 之前。
+    老版本的开始时间就是它落库的时间;字数先记 0,老库里的碎版本由后面的 merge-consecutive-edits 真正合并,字数在那里重算。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(note_revisions)"))}
+        if not columns:
+            return
+        for name, kind in (("chars_added", "INTEGER NOT NULL DEFAULT 0"), ("chars_removed", "INTEGER NOT NULL DEFAULT 0"),
+                           ("title_changed", "BOOLEAN NOT NULL DEFAULT 0")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE note_revisions ADD COLUMN {name} {kind}"))
+        if "started_at" not in columns:
+            conn.execute(text("ALTER TABLE note_revisions ADD COLUMN started_at DATETIME"))
+            conn.execute(text("UPDATE note_revisions SET started_at = created_at"))
+        if "group_start" in columns:
+            conn.execute(text("ALTER TABLE note_revisions DROP COLUMN group_start"))
 
 
 def _migrate_workflow_revisions() -> None:
@@ -7667,10 +7608,10 @@ def migration_plan() -> MigrationPlan:
                 _migrate_tool_confirmations_name_their_tool_call,
                 # 同上:ORM 上的 NoteRevision 指望来历、作者、恢复自哪一版这三列在。
                 _migrate_note_revisions_remember_where_they_came_from,
-                # 同上,而且要排在上一步之后:分组要看 origin。
-                _migrate_note_revisions_fold_consecutive_edits,
                 # 同上:ORM 上的 Note 指望保存序号这一列在。
                 _migrate_notes_count_their_saves,
+                # 同上:ORM 上的 NoteRevision 指望 started_at 和字数那几列在、group_start 不在。
+                _migrate_note_revisions_take_the_merged_shape,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

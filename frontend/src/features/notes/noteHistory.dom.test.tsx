@@ -9,7 +9,7 @@
  * - 只有一个版本时说一句合适的话,不摆恢复按钮;
  * - 右边能切「预览 / 和当前版本对比 / 和上一版对比」:对比按字(删去的划掉、新加的高亮),大段没改的折起来;
  * - 每一版写清怎么来的(手动编辑 / 智能体修改 / 从版本 N 恢复……),别人写的带上名字,自己写的不念自己;
- * - 连续的手动编辑在后端合成一项:写着这一组改了多少,「N 次连续编辑」点开看得到组里的每一版。
+ * - 连续的手动编辑在存储上就合成了一版:每一项写着改了多少,悬停时间看得到这一版从几点写到几点。
  */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -24,23 +24,22 @@ vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "me" } }) }));
 type Version = {
   revision: number; title: string; created_at: string; origin: string;
   created_by: string | null; created_by_name: string; restored_from: number | null;
-  group_start: number; saves: number; started_at: string; chars_added: number; chars_removed: number; title_changed: boolean;
+  started_at: string; chars_added: number; chars_removed: number; title_changed: boolean;
 };
 const api = vi.hoisted(() => ({
   versions: [] as Version[],
-  groups: {} as Record<number, Version[]>,
   content: {} as Record<number, { title: string; markdown: string }>,
 }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/notes")>()),
-  listNoteRevisions: vi.fn(async (_ws: string, _id: string, group?: number) => (group ? api.groups[group] : api.versions)),
+  listNoteRevisions: vi.fn(async () => api.versions),
   getNoteRevision: vi.fn(async (_ws: string, _id: string, revision: number) => ({
     ...api.content[revision], revision, project_id: null, tags: [], topics: [], sources: [], favorite: false, trashed: false,
   })),
 }));
 
 const { NoteHistoryDialog } = await import("./NoteHistoryDialog");
-const { versionMoment, versionFullTime } = await import("./versionTime");
+const { versionMoment, versionFullTime, versionSpan } = await import("./versionTime");
 
 //: 「现在」是 2026-10-04 下午三点(本地时间)。后端给的是不带时区标记的 UTC 串。
 const NOW = new Date(2026, 9, 4, 15, 0, 0);
@@ -55,7 +54,6 @@ beforeEach(() => {
     version(2, new Date(2026, 9, 3, 11, 24, 47)),
     version(1, new Date(2026, 9, 2, 12, 39, 50), { origin: "create" }),
   ];
-  api.groups = {};
   api.content = {
     1: { title: "周报", markdown: "周一" },
     2: { title: "周报", markdown: "周一开会。" },
@@ -64,11 +62,11 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
-/** 一版(或一组)的列表项:默认是自己手动编辑、单独一版、什么都没改。 */
+/** 一版的列表项:默认是自己手动编辑、什么都没改。 */
 function version(revision: number, at: Date, extra: Partial<Version> = {}): Version {
   return {
     revision, title: "周报", created_at: utc(at), origin: "edit", created_by: "me", created_by_name: "我自己", restored_from: null,
-    group_start: revision, saves: 1, started_at: utc(at), chars_added: 0, chars_removed: 0, title_changed: false, ...extra,
+    started_at: utc(at), chars_added: 0, chars_removed: 0, title_changed: false, ...extra,
   };
 }
 
@@ -78,7 +76,7 @@ function mount(props: Partial<React.ComponentProps<typeof NoteHistoryDialog>> = 
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <TooltipProvider>
         <NoteHistoryDialog open onOpenChange={() => {}} workspaceId="ws" noteId="n1"
-          current={{ revision: 3, title: "周报", markdown: "周一开会。周二写脚本。" }} focusRevision={null} onRestore={onRestore} {...props} />
+          current={{ revision: 3, saveSeq: 9, title: "周报", markdown: "周一开会。周二写脚本。" }} focusRevision={null} onRestore={onRestore} {...props} />
       </TooltipProvider>
     </QueryClientProvider>,
   );
@@ -184,7 +182,7 @@ it("从「查看引用版本」进来,直接选中那一版", async () => {
 
 it("只有一个版本时说一句话,不摆恢复", async () => {
   api.versions = api.versions.slice(2);
-  mount({ current: { revision: 1, title: "周报", markdown: "周一" } });
+  mount({ current: { revision: 1, saveSeq: 1, title: "周报", markdown: "周一" } });
   expect(await screen.findByText(/目前只有这一个版本/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "恢复此版本" })).toBeNull();
 });
@@ -248,7 +246,7 @@ it("改了标题也画出来;一模一样时说没有区别", async () => {
 it("大段没改的折起来,点一下展开", async () => {
   const lines = Array.from({ length: 30 }, (_, index) => `第 ${index + 1} 行`);
   api.content[2] = { title: "周报", markdown: lines.join("\n") };
-  mount({ current: { revision: 3, title: "周报", markdown: [...lines.slice(0, 29), "第 30 行,改过"].join("\n") } });
+  mount({ current: { revision: 3, saveSeq: 9, title: "周报", markdown: [...lines.slice(0, 29), "第 30 行,改过"].join("\n") } });
   await waitFor(() => expect(row(2)).toBeInTheDocument());
   fireEvent.click(row(2));
   await screen.findByText(/第 1 行/);
@@ -276,59 +274,6 @@ it("每一版写清怎么来的:手动编辑、智能体修改、从版本 N 恢
   await waitFor(() => expect(document.querySelector(".note-history-what")).toHaveTextContent("智能体修改 · 小王"));
 });
 
-function burst() {
-  //: 第 2、3、4 版是一口气写的,合成一项(列表上是第 4 版);第 1 版是新建。
-  api.versions = [
-    version(4, new Date(2026, 9, 4, 13, 3, 38), { group_start: 2, saves: 3, started_at: utc(new Date(2026, 9, 4, 13, 2, 14)), chars_added: 11, chars_removed: 2 }),
-    version(1, new Date(2026, 9, 4, 12, 39, 50), { origin: "create", chars_added: 2 }),
-  ];
-  api.groups = { 2: [
-    api.versions[0],
-    version(3, new Date(2026, 9, 4, 13, 2, 20), { group_start: 2 }),
-    version(2, new Date(2026, 9, 4, 13, 2, 14), { group_start: 2 }),
-  ] };
-  api.content[3] = { title: "周报", markdown: "周一开会。周二" };
-  api.content[4] = { title: "周报", markdown: "周一开会。周二写脚本。" };
-  return { revision: 4, ...api.content[4] };
-}
-
-it("连续编辑合成一项:写着这一组改了多少,「3 次连续编辑」点开看得到组里的每一版", async () => {
-  mount({ current: burst() });
-  await waitFor(() => expect(row(4)).toBeInTheDocument());
-  expect(row(4)).toHaveTextContent("+11");
-  expect(row(4)).toHaveTextContent("−2");
-  expect(row(4)).toHaveTextContent("字");
-  expect(row(1)).toHaveTextContent("+2");
-  expect(within(list()).queryByText("版本 3")).toBeNull();
-
-  const fold = within(list()).getByRole("button", { name: "3 次连续编辑" });
-  expect(fold).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(fold);
-  await waitFor(() => expect(row(3)).toBeInTheDocument());
-  expect(row(2)).toBeInTheDocument();
-  expect(within(list()).getAllByText("版本 4")).toHaveLength(1);
-  expect(row(3)).toHaveTextContent("13:02:20");
-
-  //: 组里的一版和紧挨着它的前一版比;整组和这一组之前那一版比。
-  fireEvent.click(row(3));
-  await screen.findByText("周一开会。周二");
-  fireEvent.click(screen.getByRole("radio", { name: "和上一版对比" }));
-  await waitFor(() => expect(added()).toEqual(["周二"]));
-  fireEvent.click(row(4));
-  await waitFor(() => expect(added()).toEqual(["开会。周二写脚本。"]));
-
-  row(4).focus();
-  fireEvent.keyDown(row(4), { key: "ArrowDown" });
-  expect(row(3)).toHaveAttribute("aria-current", "true");
-});
-
-it("引用的是组里的一版:进来时那一组已经展开、选中那一版", async () => {
-  const current = burst();
-  mount({ current, focusRevision: 3 });
-  await waitFor(() => expect(row(3)).toHaveAttribute("aria-current", "true"));
-  expect(within(list()).getByRole("button", { name: "3 次连续编辑" })).toHaveAttribute("aria-expanded", "true");
-});
-
 it("只改了标题也写出来", async () => {
   api.versions[0] = { ...api.versions[0], title_changed: true };
   mount();
@@ -337,10 +282,22 @@ it("只改了标题也写出来", async () => {
   expect(row(2)).not.toHaveTextContent("改了标题");
 });
 
-it("只有一项但它是好几次连续编辑:不算只有一个版本", async () => {
-  const current = burst();
-  api.versions = api.versions.slice(0, 1);
-  mount({ current });
-  await waitFor(() => expect(row(4)).toBeInTheDocument());
-  expect(screen.queryByText(/目前只有这一个版本/)).toBeNull();
+it("「上一版」是列表上紧挨着的那一项,版本号不连着也对", async () => {
+  api.versions = [
+    version(5, new Date(2026, 9, 4, 13, 3, 38)),
+    version(2, new Date(2026, 9, 3, 11, 24, 47)),
+    version(1, new Date(2026, 9, 2, 12, 39, 50), { origin: "create" }),
+  ];
+  api.content[5] = { title: "周报", markdown: "周一开会。周二写脚本。" };
+  mount({ current: { revision: 5, saveSeq: 9, title: "周报", markdown: "周一开会。周二写脚本。" } });
+  await waitFor(() => expect(row(5)).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("radio", { name: "和上一版对比" }));
+  await waitFor(() => expect(added()).toEqual(["周二写脚本。"]));
+});
+
+it("悬停的时间写这一版从几点写到几点", () => {
+  const started = utc(new Date(2026, 9, 4, 13, 2, 14));
+  const saved = utc(new Date(2026, 9, 4, 13, 31, 5));
+  expect(versionSpan(started, saved, "zh-CN")).toMatch(/2026年10月4日 13:02:14 – 13:31:05/);
+  expect(versionSpan(saved, saved, "zh-CN")).toMatch(/^2026年10月4日 13:31:05$/);
 });

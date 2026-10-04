@@ -423,7 +423,7 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     {properties && <aside className="note-properties"><header><strong>{s.source}</strong><IconButton unstyled className="note-icon" label={s.close} onClick={()=>setProperties(false)}><X size={15}/></IconButton></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={draft.trashed} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={draft.trashed} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
     <ConfirmDialog open={confirmDelete} title={`${s.deleteForever} · ${draft.title || s.untitled}`} body={s.deleteWarning} onCancel={() => { if (!deleting) setConfirmDelete(false); }} pending={deleting} onConfirm={() => void deleteForever()} />
     <NoteHistoryDialog open={history} onOpenChange={setHistory} workspaceId={note.workspace_id} noteId={note.id}
-      current={{ revision: draft.revision, title: draft.title, markdown: draft.markdown }} focusRevision={historyFocus} onRestore={restore} />
+      current={{ revision: draft.revision, saveSeq: draft.save_seq, title: draft.title, markdown: draft.markdown }} focusRevision={historyFocus} onRestore={restore} />
   </>;
 }
 

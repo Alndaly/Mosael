@@ -32,7 +32,10 @@ class Note(Base):
 
 
 class NoteRevision(Base):
-    """笔记的一版。**不可变**:修订号同时是乐观并发的基准、来源 / 画板文档格 / 引用链接钉住的那一版。"""
+    """笔记的一版。版本号是来源 / 画板文档格 / 引用链接钉住的那个数。
+
+    只有**最新**那一版会变:连续的手动编辑改写它(见 domain/notes/history);一旦有了后一版就不再变。
+    """
 
     __tablename__ = "note_revisions"
     note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
@@ -44,10 +47,11 @@ class NoteRevision(Base):
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     #: origin 是 restore 时:从第几版恢复的。
     restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    #: 归在哪一组:这一组第一版的号。连续的手动编辑合成版本记录里的一项(见 domain/notes/history)。
-    group_start: Mapped[int] = mapped_column(Integer, nullable=False)
-    #: 相对这一组之前那一版:新加 / 删掉的字数(不算空白)、标题改没改。
+    #: 相对上一版:新加 / 删掉的字数(不算空白)、标题改没改。
     chars_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     chars_removed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     title_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 这一版从什么时候开始写(连续编辑合成一版时是第一次保存的时间)。
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    #: 这一版最后一次保存的时间。
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

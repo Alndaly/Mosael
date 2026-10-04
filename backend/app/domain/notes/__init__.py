@@ -118,15 +118,13 @@ def _ensure_cites_session(db: Session, session: AgentSession, actor: Actor) -> N
 
 def _record_revision(db: Session, note_id: str, revision: int, data: dict, *, actor: Actor,
                      origin: NoteRevisionOrigin, restored_from: int | None = None) -> None:
-    """落一版。归在哪一组、相对这一组之前改了多少,在这里一并记下(见 notes/history)。"""
+    """开新的一版。相对上一版改了多少在这里一并记下(见 notes/history)。"""
     from app.domain.notes import history
 
     at = now()
-    created_by = actor_id(actor)
-    start = history.group_start(db, note_id, revision, origin=origin, created_by=created_by, at=at)
-    db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin, created_by=created_by,
-                        restored_from=restored_from, group_start=start, created_at=at,
-                        **history.changes_since_group(db, note_id, start, data)))
+    db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin, created_by=actor_id(actor),
+                        restored_from=restored_from, started_at=at, created_at=at,
+                        **history.changes_since_previous(db, note_id, revision, data)))
 
 
 def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor,
@@ -144,7 +142,10 @@ def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: 
 def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, content: NoteContent, *,
               actor: Actor, origin: NoteRevisionOrigin, restored_from: int | None = None,
               restored_sources: list[dict] | None = None) -> Note:
-    """写成新的一版。`base_save_seq` 是调用方手里那份的保存序号,对不上就是别处刚存过(409)。
+    """存一次。`base_save_seq` 是调用方手里那份的保存序号,对不上就是别处刚存过(409)。
+
+    正文(VERSIONED)变了才动版本:接着写最新那一版就改写它,否则开新的一版(判据见 notes/history);只改了属性
+    不动版本。保存序号每次都 +1。
 
     笔记上已有的来源(和要恢复的那一版上的)原样放行,不再按 `actor` 重判:它们落库时
     已经过了当时写的那个人的闸,同事改正文不该因为看不见别人引的那条消息而写不进;新加的来源照判。"""
@@ -156,18 +157,28 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, 
     current = snapshot(note)
     if data == current:
         return note
-    opens_version = any(data[key] != current[key] for key in VERSIONED)
-    revision = note.revision + 1 if opens_version else note.revision
+    from app.domain.notes import history
+
+    at = now()
+    content_changed = any(data[key] != current[key] for key in VERSIONED)
+    latest = db.get(NoteRevision, (note_id, note.revision)) if content_changed else None
+    rewrites = content_changed and history.continues(latest, origin=origin, created_by=actor_id(actor), at=at)
+    revision = note.revision + 1 if content_changed and not rewrites else note.revision
     # 条件写:两个请求读到同一个保存序号时,只有一个落得下。
     result = db.execute(update(Note).where(Note.id == note_id, Note.save_seq == base_save_seq).values(
-        **data, revision=revision, save_seq=base_save_seq + 1, updated_at=now(),
+        **data, revision=revision, save_seq=base_save_seq + 1, updated_at=at,
     ), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
         # 条件 UPDATE 一行没动,不用回滚(那会把调用方这次用例里别的改动一起丢掉);
         # 让内存里这份过期,重试(append_note)时读到的是库里最新的一版。
         db.expire(note)
         raise NoteConflict("noteErr_changedElsewhere")
-    if opens_version:
+    if rewrites:
+        assert latest is not None
+        latest.snapshot, latest.created_at = data, at
+        for key, value in history.changes_since_previous(db, note_id, revision, data).items():
+            setattr(latest, key, value)
+    elif content_changed:
         _record_revision(db, note_id, revision, data, actor=actor, origin=origin, restored_from=restored_from)
     db.flush()
     db.refresh(note)

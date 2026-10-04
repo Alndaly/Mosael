@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, func, literal, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Note, NoteRevision, User
@@ -41,43 +41,26 @@ def reference(db: Session, user: User, workspace_id: str, note_id: str, revision
     return notes.read_reference(db, workspace_id, note_id, revision)
 
 
-#: 版本记录最多列多少组;展开一组最多列多少版。
-REVISION_GROUPS = 100
-GROUP_REVISIONS = 200
+#: 版本记录最多列多少版。
+REVISION_LIMIT = 200
 
 
-def revisions(db: Session, user: User, workspace_id: str, note_id: str, group: int | None = None) -> list[dict[str, Any]]:
-    """版本记录:一组一项(那一组最新的一版);带 `group`(那一组第一版的号)时列那一组里的每一版。
-
-    只取标题,不把每一版的整篇快照搬出来 —— 一组一项也可能是上百版里挑出来的。
-    """
+def revisions(db: Session, user: User, workspace_id: str, note_id: str) -> list[dict[str, Any]]:
+    """版本记录,新的在前。只取标题,不把每一版的整篇快照搬出来。"""
     read(db, user, note_id, workspace_id)
-    columns = (
-        NoteRevision.revision, NoteRevision.created_at, func.json_extract(NoteRevision.snapshot, "$.title").label("title"),
-        NoteRevision.origin, NoteRevision.created_by, NoteRevision.restored_from, NoteRevision.group_start,
-        NoteRevision.chars_added, NoteRevision.chars_removed, NoteRevision.title_changed,
-        User.display_name, User.username,
+    rows = db.execute(
+        select(
+            NoteRevision.revision, NoteRevision.created_at, NoteRevision.started_at,
+            func.json_extract(NoteRevision.snapshot, "$.title").label("title"),
+            NoteRevision.origin, NoteRevision.created_by, NoteRevision.restored_from,
+            NoteRevision.chars_added, NoteRevision.chars_removed, NoteRevision.title_changed,
+            User.display_name, User.username,
+        )
+        .outerjoin(User, User.id == NoteRevision.created_by)
+        .where(NoteRevision.note_id == note_id)
+        .order_by(NoteRevision.revision.desc())
+        .limit(REVISION_LIMIT)
     )
-    if group is None:
-        last = (
-            select(NoteRevision.group_start, func.max(NoteRevision.revision).label("last"), func.count().label("saves"),
-                   func.min(NoteRevision.created_at).label("started_at"))
-            .where(NoteRevision.note_id == note_id)
-            .group_by(NoteRevision.group_start)
-            .order_by(NoteRevision.group_start.desc())
-            .limit(REVISION_GROUPS)
-            .subquery()
-        )
-        stmt = select(*columns, last.c.saves, last.c.started_at).join(
-            last, and_(NoteRevision.note_id == note_id, NoteRevision.revision == last.c.last)
-        )
-    else:
-        stmt = (
-            select(*columns, literal(1).label("saves"), NoteRevision.created_at.label("started_at"))
-            .where(NoteRevision.note_id == note_id, NoteRevision.group_start == group)
-            .limit(GROUP_REVISIONS)
-        )
-    rows = db.execute(stmt.outerjoin(User, User.id == NoteRevision.created_by).order_by(NoteRevision.revision.desc()))
     return [
         {**row._asdict(), "title": row.title or "", "created_by_name": row.display_name or row.username or ""}
         for row in rows
