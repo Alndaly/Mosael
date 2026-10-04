@@ -166,6 +166,9 @@ class UrlSupportResponse(ApiModel):
 class UrlImportItem(ApiModel):
     url: str = Field(min_length=4, max_length=2000)
     title: str = Field(default="", max_length=300)
+    #: 从内嵌浏览器的哪一页里找到的(顶栏「下载页面里的视频」)。给了就记进出处,直链下载时还当 Referer 带上。
+    page_url: str = Field(default="", max_length=2000)
+    page_title: str = Field(default="", max_length=300)
 
 
 class UrlImportRequest(ApiModel):

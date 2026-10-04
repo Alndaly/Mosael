@@ -8,14 +8,23 @@ N 个任务的话,任务中心会被一次勾选刷屏,而"还剩几条"要自�
 
 入库走 `register_file_asset` —— 上传、本机注册、渲染产出、配音产出用的都是它(见 assets/importer
 的说明)。这里只是第四个"字节从哪来",后面的探测、缩略图、波形、建记录完全一样。
+
+**从内嵌浏览器的页面里下的**(顶栏「下载页面里的视频」)条目还带着所在页面(`page_url` / `page_title`):
+直链下载时带上 Referer(防盗链),入库后出处与截图同一套字段(见 assets/web_capture)。
+
+**取消要真的停**:任务被取消时,正在下的那一条在下一次进度回调就中止(见 ytdlp.download 的 should_stop),
+任务保持「已取消」—— 不再在收尾时写回「成功」、把取消前没下完的那一条塞进库里。
 """
 from __future__ import annotations
 
 import logging
 import shutil
 import tempfile
+import threading
+from datetime import timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy.orm import Session
@@ -26,7 +35,8 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
 from app.domain.assets import register_file_asset
 from app.domain.assets.source_url import remember_asset_source
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
+from app.domain.assets.web_capture import PAGE_VIDEO, WebSource, remember_web_source
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, register_job_child, say, unregister_job_child
 from app.media import ytdlp
 
 logger = logging.getLogger(__name__)
@@ -53,7 +63,7 @@ def start_url_import(
 ) -> Job:
     """给这些链接排一次下载。`items` 是 `[{url, title}]` —— 标题是用户勾选时看到的那个名字
     (来自探测),任务消息和入库后的素材名都用它。"""
-    chosen = [item for item in items if str(item.get("url") or "").strip()]
+    chosen = [_item(item) for item in items if str(item.get("url") or "").strip()]
     if not chosen:
         raise UrlImportError("urlImportErr_noneSelected")
     if len(chosen) > MAX_ITEMS:
@@ -91,6 +101,33 @@ def start_url_import(
     return job
 
 
+def _item(item: dict[str, Any]) -> dict[str, str]:
+    """一条要下的:地址、标题,以及(从内嵌浏览器页面里下的)所在页面。页面地址只认 http(s)。"""
+    page_url = str(item.get("page_url") or "").strip()
+    if page_url:
+        try:
+            parts = urlsplit(page_url)
+        except ValueError:
+            parts = None
+        if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
+            raise UrlImportError("urlImportErr_badPageUrl")
+    chosen = {"url": str(item.get("url") or "").strip(), "title": str(item.get("title") or "")}
+    if page_url:
+        chosen["page_url"] = page_url
+        chosen["page_title"] = str(item.get("page_title") or "")[:300]
+    return chosen
+
+
+class _StopFlag:
+    """登记成任务的「子进程」:取消任务时总线调它的 kill()(见 jobs.kill_job_child),下载在下一次进度回调停下。"""
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
+
+    def kill(self) -> None:
+        self.event.set()
+
+
 def _run(job_id: str) -> None:
     with unit_of_work() as db:
         job = db.get(Job, job_id)
@@ -104,8 +141,13 @@ def _run(job_id: str) -> None:
         profile_id = str(payload.get("profile_id") or "")
         max_height = int(payload.get("max_height") or 0)
         actor = job.created_by
+        #: 从页面里下的视频,「截取时间」就是点下载的那一刻 —— 任务建出来的时候。
+        requested_at = job.created_at.replace(tzinfo=timezone.utc)
         job.status = "running"
         emit_job_event(db, job.id, "job.running", {})
+
+    stop = _StopFlag()
+    register_job_child(job_id, stop)
 
     done = 0
     failed = 0
@@ -116,7 +158,10 @@ def _run(job_id: str) -> None:
     try:
         cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if profile_id else None
         for index, item in enumerate(items):
+            if stop.event.is_set():
+                break
             title = str(item.get("title") or item.get("url") or "")
+            page_url = str(item.get("page_url") or "")
             try:
                 def report(fraction: float, _text: str, index: int = index, title: str = title) -> None:
                     # 整批的进度 = 已完成的条数 + 当前这条的进度。只报当前条的话,进度条会在
@@ -135,7 +180,12 @@ def _run(job_id: str) -> None:
                     on_progress=report,
                     cookie_file=cookie_file,
                     max_height=max_height,
+                    # 平台页面(地址就是页面本身)交给站点解析器,不替它加请求头。
+                    referer=page_url if page_url and page_url != item["url"] else "",
+                    should_stop=stop.event.is_set,
                 )
+            except ytdlp.YtdlpCancelled:
+                break
             except ytdlp.YtdlpError as exc:
                 failed += 1
                 # 原因**本来就是现成的**:ytdlp.classify 已经把「HTTP Error 403」这类翻成了
@@ -156,13 +206,21 @@ def _run(job_id: str) -> None:
                     source="downloaded",
                 )
                 remember_asset_source(asset, item["url"])
+                if page_url:
+                    remember_web_source(asset, WebSource(
+                        page_url=page_url,
+                        page_title=str(item.get("page_title") or ""),
+                        captured_at=requested_at,
+                        capture=PAGE_VIDEO,
+                    ))
             asset_ids.append(asset.id)
             path.unlink(missing_ok=True)
             done += 1
 
         with unit_of_work() as db:
             job = db.get(Job, job_id)
-            if job is None:
+            # 被取消了:那一行已经由取消写好(已取消),这里不再改写它。
+            if job is None or stop.event.is_set():
                 return
             if done == 0:
                 job.status = "failed"
@@ -193,6 +251,7 @@ def _run(job_id: str) -> None:
                 job.error = str(exc)[:600]
                 emit_job_event(db, job.id, "job.failed", {})
     finally:
+        unregister_job_child(job_id)
         shutil.rmtree(workdir, ignore_errors=True)
 
 

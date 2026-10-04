@@ -45,6 +45,7 @@ const {
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
+  parseToolsInset,
   parseUrlRequest,
 } = require("./ipc-contract.cjs");
 const i18n = require("./i18n.cjs");
@@ -848,6 +849,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.pageToolsRegionStart, () => requirePublish().beginRegionCapture());
   ipcMain.handle(IPC.invoke.pageToolsRegionFinish, (_e, payload) =>
     requirePublish().finishRegionCapture(parseRegionSelection(payload).selection),
+  );
+  ipcMain.handle(IPC.invoke.pageToolsVideos, () => requirePublish().probeVideos());
+  ipcMain.handle(IPC.invoke.pageToolsInset, (_e, payload) =>
+    requirePublish().setToolsInset(parseToolsInset(payload).right),
   );
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。

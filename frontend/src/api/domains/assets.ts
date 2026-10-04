@@ -46,11 +46,17 @@ export function probeUrl(
   });
 }
 
+/** 这个地址有没有站点专门的解析器(B 站、抖音、YouTube……);只认地址,不出网。 */
+export function urlSupport(workspaceId: string, url: string): Promise<{ supported: boolean; extractor: string }> {
+  return api(`/api/assets/url-support?${new URLSearchParams({ workspace_id: workspaceId, url })}`);
+}
+
 /** Download selected remote entries into the asset library as one background job. */
 export function importFromUrl(body: {
   workspace_id: string;
   project_id?: string | null;
-  items: { url: string; title: string }[];
+  /** `page_url` / `page_title`:从内嵌浏览器的哪一页里找到的 —— 记进出处,直链下载时当 Referer 带上。 */
+  items: { url: string; title: string; page_url?: string; page_title?: string }[];
   kind: "video" | "audio";
   max_height?: number;
   profile_id?: string | null;

@@ -29,3 +29,8 @@ export function foreground(): Foreground {
 export function pageOf(wc: WebContents): PageInfo {
   return { url: wc.getURL(), title: wc.getTitle() };
 }
+
+/** 侧栏开合(视频清单、图片网格):前台视图右侧让出这么宽,侧栏画在网页旁边而不是底下。 */
+export function setToolsInset(right: number): void {
+  sharedViews()?.setShellInset(right);
+}

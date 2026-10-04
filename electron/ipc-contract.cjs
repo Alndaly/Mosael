@@ -39,6 +39,8 @@ const IPC = Object.freeze({
     pageToolsCapture: "pageTools:capture",
     pageToolsRegionStart: "pageTools:regionStart",
     pageToolsRegionFinish: "pageTools:regionFinish",
+    pageToolsVideos: "pageTools:videos",
+    pageToolsInset: "pageTools:inset",
   }),
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
@@ -222,6 +224,18 @@ function parseRegionSelection(value) {
   return { selection };
 }
 
+/** 侧栏开合:前台视图右侧让出的像素宽。 */
+function parseToolsInset(value) {
+  const channel = IPC.invoke.pageToolsInset;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["right"], channel);
+  const right = payload.right;
+  if (typeof right !== "number" || !Number.isFinite(right) || right < 0 || right > 4000) {
+    throw new TypeError(`${channel}: right must be a number between 0 and 4000`);
+  }
+  return { right };
+}
+
 function parseTitleOverlay(value) {
   const channel = IPC.send.titleOverlay;
   const payload = record(value, channel);
@@ -285,5 +299,6 @@ module.exports = {
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
+  parseToolsInset,
   parseUrlRequest,
 };

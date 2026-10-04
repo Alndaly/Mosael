@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>DRM 测试页</title></head>
+<body>
+  <h1>受 DRM 保护的视频</h1>
+  <video id="player" controls width="320" src="clip.mp4"></video>
+  <script>
+    // 用浏览器自带的 ClearKey 给播放器挂上 MediaKeys —— 和真实 DRM 站点在 EME 层面是同一个形态。
+    (async () => {
+      const config = [{ initDataTypes: ["cenc"], videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }] }];
+      const access = await navigator.requestMediaKeySystemAccess("org.w3.clearkey", config);
+      const keys = await access.createMediaKeys();
+      await document.getElementById("player").setMediaKeys(keys);
+      document.body.dataset.drm = "ready";
+    })().catch((error) => { document.body.dataset.drm = "failed:" + error; });
+  </script>
+</body>
+</html>

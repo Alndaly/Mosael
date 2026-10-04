@@ -36844,6 +36844,18 @@
             "maxLength": 300,
             "title": "Title",
             "default": ""
+          },
+          "page_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Page Url",
+            "default": ""
+          },
+          "page_title": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Page Title",
+            "default": ""
           }
         },
         "type": "object",

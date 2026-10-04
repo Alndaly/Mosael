@@ -106,6 +106,30 @@ export interface PageCaptureResult {
   capturedAt: string;
 }
 
+export type PageVideoKind = "direct" | "hls" | "dash";
+
+export interface PageVideoCandidate {
+  url: string;
+  kind: PageVideoKind;
+  from: "element" | "network" | "meta";
+  mime: string;
+  bytes: number | null;
+  width: number;
+  height: number;
+  duration: number | null;
+  /** 受保护(DRM / 加密流):不给下载。 */
+  protection: "drm" | "encrypted" | null;
+}
+
+export interface PageVideoProbe {
+  page: PageToolsPage;
+  candidates: PageVideoCandidate[];
+  /** 页面上有播放器正在放 DRM 内容。 */
+  drm: boolean;
+  /** 播放器用的是 MSE 分段流,而网络里没看到能下载的地址。 */
+  streamOnly: boolean;
+}
+
 /**
  * 浏览器会话顶栏的页面工具。**都作用于前台那个内嵌视图**(主进程自己认是哪个)。
  * 失败时 reject 的消息里带 `page-tools: <原因码>`(no_page / capture_failed / full_page_unavailable)。
@@ -116,6 +140,9 @@ export interface MosaelPageToolsBridge {
   beginRegion(): Promise<{ frame: string; width: number; height: number }>;
   /** 框选第二步:按比例(0–1)裁出那一块;null 是取消。网页亮回来。 */
   finishRegion(selection: { x: number; y: number; width: number; height: number } | null): Promise<PageCaptureResult | null>;
+  probeVideos(): Promise<PageVideoProbe>;
+  /** 侧栏开合:网页右侧让出这么宽(像素)。 */
+  setInset(right: number): Promise<void>;
 }
 
 export interface MosaelDesktopBridge {

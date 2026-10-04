@@ -413,6 +413,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "You can download at most {max} items at a time. Split them into several batches.",
     },
     "urlImportErr_badKind": {"zh": "只能下载视频或音频", "en": "Only video or audio can be downloaded."},
+    "urlImportErr_badPageUrl": {"zh": "视频所在页面的地址必须是 http(s) 地址", "en": "The address of the page the video came from must be an http(s) address."},
     "assetErr_notFoundRef": {"zh": "素材不存在: {ref}", "en": "Asset not found: {ref}"},
     "capability_public_url": {"zh": "素材外链", "en": "Asset links"},
     "capability_public_url_desc": {"zh": "有些模型只收链接不收本地文件(方舟 Seedance 的参考视频等):本地素材先传到你的对象存储,换一条限时直链。", "en": "Some models only accept a link, not a local file (Seedance's reference video, for one): local assets are uploaded to your object storage for a time-limited link."},

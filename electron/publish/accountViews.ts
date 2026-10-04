@@ -2,6 +2,7 @@ import { app, screen, session, WebContentsView, type BaseWindow } from "electron
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
+import { MediaRecorder } from "./mediaRecorder";
 import { PageDriver } from "./pageDriver";
 import { panelMediaScript } from "./panelAudio";
 import {
@@ -114,10 +115,18 @@ export class AccountViewManager {
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
   /**
+   * 前台视图右侧让出多少像素给顶栏页面工具的侧栏(视频清单、图片网格)。侧栏是渲染层的 DOM,
+   * 而原生视图永远盖在 DOM 上面 —— 不让出这一块,侧栏就画在网页底下、谁也看不见。让出而不是
+   * 盖住:网页照常排版、照常能点,只是窄一点。换前台视图、收起视图时归零。
+   */
+  private shellInsetRight = 0;
+  /**
    * 框选截图时前台视图暂时藏起来:渲染层在原处铺一张冻结的画面让人拖框(原生视图上画不了框)。
    * 只藏不摘 —— 页面不重排、不暂停,框完原样亮回来。
    */
   private foregroundHidden = false;
+  /** 前台视图收到过的媒体响应(「下载页面里的视频」要用,见 mediaRecorder)。 */
+  readonly media = new MediaRecorder();
 
   constructor(
     private readonly onViewChanged: (state: ViewState) => void = noop,
@@ -253,6 +262,8 @@ export class AccountViewManager {
     this.hover.drop(accountId); // 亮到前台就不再是面板,手柄不该因为它亮着
     if (this.visibleId !== accountId) this.resetShell();
     this.visibleId = accountId;
+    // 从亮到前台这一刻起记媒体响应:视频地址往往只在页面加载时出现一次。
+    this.media.watch(view.webContents.session);
     this.layout();
     // Re-adding the same View is the current View API's z-order operation:
     // Electron reorders it to the topmost child of the window content view.
@@ -547,6 +558,16 @@ export class AccountViewManager {
     return { id: this.visibleId, webContents: wc, partition: this.partitionFor(this.visibleId) };
   }
 
+  /** 侧栏开合:前台视图右侧让出这么宽(见 shellInsetRight)。 */
+  setShellInset(right: number): void {
+    const width = this.window && !this.window.isDestroyed() ? this.window.getContentSize()[0] : 0;
+    // 至少给网页留一半:侧栏再宽也不能把页面挤没了。
+    const next = Math.max(0, Math.min(Math.round(right), Math.floor(width / 2)));
+    if (next === this.shellInsetRight) return;
+    this.shellInsetRight = next;
+    this.layout();
+  }
+
   /** 框选截图期间藏起 / 亮回前台视图(见 foregroundHidden)。 */
   setForegroundHidden(hidden: boolean): void {
     this.foregroundHidden = hidden;
@@ -554,8 +575,9 @@ export class AccountViewManager {
     if (this.alive(view)) view.setVisible(!hidden);
   }
 
-  /** 换了前台视图 / 收起了:框选的隐藏不该留给下一个视图。 */
+  /** 换了前台视图 / 收起了:侧栏让出的宽度和框选的隐藏都不该留给下一个视图。 */
   private resetShell(): void {
+    this.shellInsetRight = 0;
     if (this.foregroundHidden) this.setForegroundHidden(false);
   }
 
@@ -708,7 +730,13 @@ export class AccountViewManager {
       });
       // 视图在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 ——
       // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。
-      view.webContents.on("destroyed", () => this.forget(accountId));
+      const contentsId = view.webContents.id;
+      view.webContents.on("destroyed", () => {
+        this.media.forget(contentsId);
+        this.forget(accountId);
+      });
+      // 换了一页:上一页看见过的视频不属于这一页。页内跳转(单页应用)不算。
+      view.webContents.on("did-navigate", () => this.media.forget(contentsId));
       view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
         console.warn("[mosael:view] load failed", {
           accountId,
@@ -794,7 +822,7 @@ export class AccountViewManager {
       visible.setBounds({
         x: 0,
         y: EMBED_HEADER_HEIGHT,
-        width,
+        width: Math.max(0, width - this.shellInsetRight),
         height: Math.max(0, height - EMBED_HEADER_HEIGHT),
       });
     }

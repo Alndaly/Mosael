@@ -32,8 +32,10 @@ from app.domain.assets.source_url import remember_asset_source
 #: Electron 那一侧取页面图片用的是同一个数(electron/publish/pageTools.ts 的 MAX_IMAGE_BYTES)。
 MAX_CAPTURE_BYTES = 40 * 1024 * 1024
 
-#: 怎么来的。截图三种对应顶栏「截屏」的三个选项;page_image 是页面上的一张图(另记它自己的地址)。
+#: 怎么来的。截图三种对应顶栏「截屏」的三个选项;page_image 是「采集页面图片」;page_video 是「下载页面里的视频」
+#: (那一条走从链接导入的任务,见 from_url,出处字段与这里同一套)。
 CAPTURE_KINDS = ("screenshot_visible", "screenshot_full", "screenshot_region", "page_image")
+PAGE_VIDEO = "page_video"
 
 #: 认得的图片格式 → 落盘扩展名。和 electron/publish/pageToolsCore.sniffImage 认的是同一组。
 _EXTENSIONS = {

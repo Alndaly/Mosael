@@ -14015,6 +14015,16 @@ export interface components {
              * @default
              */
             title: string;
+            /**
+             * Page Url
+             * @default
+             */
+            page_url: string;
+            /**
+             * Page Title
+             * @default
+             */
+            page_title: string;
         };
         /** UrlImportRequest */
         UrlImportRequest: {

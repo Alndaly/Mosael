@@ -27,6 +27,8 @@ export const IPC: {
     pageToolsCapture: "pageTools:capture";
     pageToolsRegionStart: "pageTools:regionStart";
     pageToolsRegionFinish: "pageTools:regionFinish";
+    pageToolsVideos: "pageTools:videos";
+    pageToolsInset: "pageTools:inset";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
@@ -73,3 +75,4 @@ export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
 export function parseRegionSelection(value: unknown): {
   selection: { x: number; y: number; width: number; height: number } | null;
 };
+export function parseToolsInset(value: unknown): { right: number };

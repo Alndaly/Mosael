@@ -357,6 +357,19 @@ describe("the foreground view and the toolbar's page tools", () => {
     expect(manager.foreground()).toBeNull();
   });
 
+  it("makes room on the right for the tools drawer, never more than half the window, and gives it back", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setShellInset(360);
+    expect(viewOf("pool-a").bounds).toEqual({ x: 0, y: HEADER, width: 1440 - 360, height: 900 - HEADER });
+    manager.setShellInset(5000);
+    expect(viewOf("pool-a").bounds.width).toBe(720);
+    // 收起再亮出来:上一回的侧栏不该还占着位置。
+    manager.hide();
+    manager.show("pool-a");
+    expect(viewOf("pool-a").bounds.width).toBe(1440);
+  });
+
   it("hides the page while a region is picked, and never leaves the next foreground view hidden", () => {
     manager.registerSession("pool-a", "persist:pool-a");
     manager.registerSession("pool-b", "persist:pool-b");

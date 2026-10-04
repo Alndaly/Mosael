@@ -90,6 +90,10 @@ class YtdlpError(RuntimeError):
         super().__init__(t(key, DEFAULT_LOCALE, **params))
 
 
+class YtdlpCancelled(RuntimeError):
+    """下载被叫停了(任务被人取消)。**不是失败**:不进 classify,不会被说成一句「下载失败」。"""
+
+
 @lru_cache(maxsize=1)
 def extractor_classes() -> tuple[type[Any], ...]:
     """Return yt-dlp's current site-specific extractor registry.
@@ -275,6 +279,8 @@ def download(
     on_progress: Callable[[float, str], None] | None = None,
     cookie_file: Path | None = None,
     max_height: int = 0,
+    referer: str = "",
+    should_stop: Callable[[], bool] | None = None,
 ) -> Path:
     """把一条下到 `target_dir`,返回落地的文件路径。
 
@@ -285,12 +291,22 @@ def download(
     `max_height`:画质上限(0 = 不限)。**上限而不是精确值** —— 同一个播放列表里每条能给的
     画质并不一样,要求"正好 1080p"会让没有这一档的那些直接失败;要"不超过 1080p"则每条都
     取它自己能给的最好的那一档。4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
+
+    `referer`:这条地址是从哪个页面里找到的(内嵌浏览器「下载页面里的视频」)。很多站点的视频直链防盗链,
+    不带它只回 403。平台页面交给站点解析器时不传 —— 解析器自己知道该带什么。
+
+    `should_stop`:每次进度回调问一次「还要不要接着下」(任务被取消时答「不要」),答不要就中止并抛
+    `YtdlpCancelled`。yt-dlp 认的中止方式正是在进度回调里抛 DownloadCancelled。
     """
     import yt_dlp
 
     target_dir.mkdir(parents=True, exist_ok=True)
 
     def hook(status: dict[str, Any]) -> None:
+        if should_stop is not None and should_stop():
+            from yt_dlp.utils import DownloadCancelled
+
+            raise DownloadCancelled()
         if on_progress is None:
             return
         if status.get("status") == "downloading":
@@ -315,6 +331,8 @@ def download(
     }
     if cookie_file is not None:
         options["cookiefile"] = str(cookie_file)
+    if referer:
+        options["http_headers"] = {"Referer": referer}
     if kind == "audio":
         options["format"] = "bestaudio/best"
     else:
@@ -330,6 +348,9 @@ def download(
             info = ydl.extract_info(url, download=True)
             path = Path(ydl.prepare_filename(info))
     except Exception as exc:  # noqa: BLE001
+        # 叫停引起的中止 yt-dlp 可能包了几层才抛出来;问一句「是不是我们叫停的」比认异常类型稳。
+        if should_stop is not None and should_stop():
+            raise YtdlpCancelled() from exc
         raise classify(exc) from exc
 
     if path.is_file():

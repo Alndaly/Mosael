@@ -27,6 +27,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseLocale: (value: unknown) => { locale: string };
   parseCaptureMode: (value: unknown) => { mode: string };
   parseRegionSelection: (value: unknown) => { selection: Record<string, number> | null };
+  parseToolsInset: (value: unknown) => { right: number };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -141,5 +142,9 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseRegionSelection({ selection: { x: 0.8, y: 0, width: 0.5, height: 0.5 } })).toThrow(/inside the frame/);
     expect(() => contract.parseRegionSelection({ selection: { x: -1, y: 0, width: 0.5, height: 0.5 } })).toThrow(/selection.x/);
     expect(() => contract.parseRegionSelection({ selection: { x: 0, y: 0, width: 400, height: 300 } })).toThrow(/selection.width/);
+
+    expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
+    expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);
+    expect(() => contract.parseToolsInset({ right: Number.NaN })).toThrow(/right/);
   });
 });

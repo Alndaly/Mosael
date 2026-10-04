@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -165,6 +165,117 @@ describe("截屏到素材", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(tools.finishRegion).toHaveBeenCalledWith(null));
     expect(api.importWebCapture).not.toHaveBeenCalled();
+  });
+});
+
+describe("下载页面里的视频", () => {
+  it("平台页面:按整页走「从链接导入」,带当前档案;侧栏开着时网页让出右边", async () => {
+    api.urlSupport.mockResolvedValue({ supported: true, extractor: "BiliBili" });
+    api.importFromUrl.mockResolvedValue({ id: "job-1", progress: 0 });
+    show();
+    fireEvent.click(toolButton("video"));
+    expect(tools.setInset).toHaveBeenCalledWith(360);
+    const card = await waitFor(() => {
+      const found = document.querySelector("[data-video-platform]") as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    fireEvent.click(within(card).getByRole("button"));
+    await waitFor(() => expect(api.importFromUrl).toHaveBeenCalled());
+    expect(api.importFromUrl.mock.calls[0][0]).toEqual({
+      workspace_id: "ws",
+      items: [{ url: PAGE.url, title: PAGE.title, page_url: PAGE.url, page_title: PAGE.title }],
+      kind: "video",
+      max_height: 0,
+      profile_id: "p1",
+    });
+  });
+
+  it("直链:下那条地址,带着所在页面;进度跑完说「已存进素材库」", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    tools.probeVideos.mockResolvedValue({
+      page: PAGE,
+      drm: false,
+      streamOnly: false,
+      candidates: [{ url: "https://cdn.example.com/a.mp4", kind: "direct", from: "element", mime: "video/mp4", bytes: 1024, width: 1280, height: 720, duration: 12, protection: null }],
+    });
+    api.importFromUrl.mockResolvedValue({ id: "job-2", progress: 0 });
+    api.getJob.mockResolvedValue({ id: "job-2", status: "succeeded", progress: 1, result: { asset_ids: ["asset-9"] }, error: null });
+    show();
+    fireEvent.click(toolButton("video"));
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-video-candidate="direct"]') as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    fireEvent.click(within(row).getByRole("button"));
+    await waitFor(() => expect(api.importFromUrl).toHaveBeenCalled());
+    expect(api.importFromUrl.mock.calls[0][0].items).toEqual([
+      { url: "https://cdn.example.com/a.mp4", title: PAGE.title, page_url: PAGE.url, page_title: PAGE.title },
+    ]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsSavedAsset"));
+    fireEvent.click(within(notice()!).getByText("browserToolsView"));
+    expect(links.gotoRecord).toHaveBeenCalledWith("/media", "mosael:open-asset", "asset-9");
+  });
+
+  it("受保护(加密流 / DRM):如实说「受保护,无法下载」,不给下载按钮", async () => {
+    tools.probeVideos.mockResolvedValue({
+      page: PAGE,
+      drm: true,
+      streamOnly: false,
+      candidates: [{ url: "https://cdn.example.com/locked/index.m3u8", kind: "hls", from: "element", mime: "", bytes: null, width: 0, height: 0, duration: null, protection: "encrypted" }],
+    });
+    show();
+    fireEvent.click(toolButton("video"));
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-video-candidate="hls"]') as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(within(row).getByText("browserToolsVideoProtected")).toBeInTheDocument();
+    expect(within(row).queryByRole("button")).toBeNull();
+    expect(document.querySelector("[data-video-drm]")).toHaveTextContent("browserToolsVideoDrmBanner");
+  });
+
+  it("没有视频:说没找到", async () => {
+    show();
+    fireEvent.click(toolButton("video"));
+    await waitFor(() => expect(document.querySelector("[data-video-empty]")).toHaveTextContent("browserToolsVideoEmpty"));
+  });
+
+  it("下载可以取消", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    tools.probeVideos.mockResolvedValue({
+      page: PAGE,
+      drm: false,
+      streamOnly: false,
+      candidates: [{ url: "https://cdn.example.com/a.mp4", kind: "direct", from: "network", mime: "video/mp4", bytes: null, width: 0, height: 0, duration: null, protection: null }],
+    });
+    api.importFromUrl.mockResolvedValue({ id: "job-3", progress: 0 });
+    api.getJob.mockResolvedValue({ id: "job-3", status: "running", progress: 0.4, result: null, error: null });
+    api.cancelJob.mockResolvedValue({ id: "job-3", status: "failed" });
+    show();
+    fireEvent.click(toolButton("video"));
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-video-candidate="direct"]') as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    fireEvent.click(within(row).getByRole("button"));
+    const running = await waitFor(() => {
+      const found = document.querySelector('[data-download-status="running"]') as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+    fireEvent.click(within(running).getByRole("button", { name: "browserToolsDownloadCancel" }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-3"));
+    await waitFor(() => expect(document.querySelector('[data-download-status="cancelled"]')).not.toBeNull());
   });
 });
 
