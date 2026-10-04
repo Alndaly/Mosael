@@ -140,6 +140,147 @@ def _migrate_note_revisions_take_the_merged_shape() -> None:
             conn.execute(text("ALTER TABLE note_revisions DROP COLUMN group_start"))
 
 
+def _migrate_note_revisions_guess_where_they_came_from() -> None:
+    """老版本的来历尽量补出来。只动说不出是谁写的老版本(created_by 为空、记成新建 / 编辑的那些)。
+
+    补来历那一步(remember-where-they-came-from)只认得出第 1 版是新建、批准过的改笔记卡是智能体改的。这里再往下推,
+    先看留了记录的,再看内容:
+    - board_write 任务的产出里记着笔记和版本号 → 画板写入,作者是点「写」的人;
+    - 对话记录里 create_note / append_note 的结果记着笔记和版本号 → 智能体修改,作者是对话的主人;
+    - 工作流运行事件里「存成笔记」节点的产出(有引用链接、没有正文,版本 1)→ 工作流写入;
+    - 标题、正文、来源和更早的某一版一模一样,又和紧挨着的上一版不同,而且那一版在这一口气之前(两版之间隔过一次超过
+      5 分钟的停笔)→ 从那一版恢复(取最近的那一版)。同一口气里打了几个字又删回去,内容也会和两版之前一样,那是编辑;
+    - 在上一版末尾隔一个空行接了一段、来源也多了 → 存到笔记(追加);
+    - 推不出来的才留着「手动编辑」。和上一版内容一样的(只改了属性)不在这里管,由 merge-consecutive-edits 清掉。
+    要读任务、对话、运行事件,所以排在 SCHEMA 之后、合并那一步之前(合并时恢复的那一版要单独成版)。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
+
+        def columns(table: str) -> set[str]:
+            return {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))} if table in tables else set()
+
+        if not {"origin", "created_by", "restored_from", "snapshot"} <= columns("note_revisions"):
+            return
+        rows = conn.execute(text(
+            "SELECT note_id, revision, snapshot, origin, created_by, created_at FROM note_revisions ORDER BY note_id, revision"
+        )).all()
+        unknown = {(note_id, revision) for note_id, revision, _, origin, created_by, _ in rows
+                   if created_by is None and origin in ("create", "edit") and isinstance(revision, int)}
+        if not unknown:
+            return
+        users = {row[0] for row in conn.execute(text("SELECT id FROM users"))} if "users" in tables else set()
+
+        def parsed(value: Any) -> Any:
+            if not isinstance(value, str):
+                return value
+            try:
+                return json.loads(value)
+            except ValueError:
+                return None
+
+        found: dict[tuple[str, int], tuple[str, str | None]] = {}
+
+        def note_at(note_id: Any, revision: Any) -> tuple[str, int] | None:
+            if isinstance(note_id, str) and isinstance(revision, int) and not isinstance(revision, bool):
+                return note_id, revision
+            return None
+
+        if {"kind", "result", "created_by"} <= columns("jobs"):
+            for result, created_by in conn.execute(text(
+                "SELECT result, created_by FROM jobs WHERE kind = 'board_write' AND result LIKE '%note_id%'"
+            )):
+                for output in (parsed(result) or {}).get("outputs") or []:
+                    key = note_at(output.get("note_id"), output.get("revision")) if isinstance(output, dict) else None
+                    if key and output.get("type") == "note":
+                        found.setdefault(key, ("board", created_by))
+        if {"payload", "session_id"} <= columns("agent_messages") and "owner_user_id" in columns("agent_sessions"):
+            for payload, owner in conn.execute(text(
+                "SELECT m.payload, s.owner_user_id FROM agent_messages m JOIN agent_sessions s ON s.id = m.session_id "
+                "WHERE m.payload LIKE '%create_note%' OR m.payload LIKE '%append_note%'"
+            )):
+                timeline = (parsed(payload) or {}).get("timeline") if isinstance(parsed(payload), dict) else None
+                for item in timeline or []:
+                    tool = item.get("tool") if isinstance(item, dict) else None
+                    if not isinstance(tool, dict) or tool.get("name") not in ("create_note", "append_note") or tool.get("status") != "done":
+                        continue
+                    result = tool.get("result")
+                    content = result.get("content") if isinstance(result, dict) else None
+                    text_part = content[0].get("text") if isinstance(content, list) and content and isinstance(content[0], dict) else None
+                    note = parsed(text_part)
+                    key = note_at(note.get("id"), note.get("revision")) if isinstance(note, dict) else None
+                    if key:
+                        found.setdefault(key, ("agent", owner))
+        if {"job_id", "payload"} <= columns("task_events") and {"kind", "created_by"} <= columns("jobs"):
+            for payload, created_by in conn.execute(text(
+                "SELECT t.payload, j.created_by FROM task_events t JOIN jobs j ON j.id = t.job_id "
+                "WHERE j.kind = 'workflow' AND t.payload LIKE '%citation_url%'"
+            )):
+                outputs = (parsed(payload) or {}).get("outputs") if isinstance(parsed(payload), dict) else None
+                if isinstance(outputs, dict) and "citation_url" in outputs and "markdown" not in outputs \
+                        and outputs.get("revision") == 1:
+                    key = note_at(outputs.get("note_id"), 1)
+                    if key:
+                        found.setdefault(key, ("workflow", created_by))
+
+        guessed = {key: (origin, by if by in users else None, None) for key, (origin, by) in found.items() if key in unknown}
+
+        def content(snapshot: Any) -> tuple[str, str, str]:
+            data = parsed(snapshot)
+            data = data if isinstance(data, dict) else {}
+            return (str(data.get("title") or ""), str(data.get("markdown") or ""),
+                    json.dumps(data.get("sources") or [], ensure_ascii=False, sort_keys=True))
+
+        def moment(value: Any) -> Any:
+            from datetime import datetime
+
+            try:
+                return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+
+        def paused_between(versions: list[Any], start: int, end: int) -> bool:
+            """versions[start] 到 versions[end] 之间有没有一次超过 5 分钟的停笔(说不出时间的算有)。"""
+            from datetime import timedelta
+
+            for one, two in zip(versions[start:end], versions[start + 1:end + 1]):
+                if one[2] is None or two[2] is None or two[2] - one[2] > timedelta(minutes=5):
+                    return True
+            return False
+
+        by_note: dict[str, list[tuple[int, tuple[str, str, str], Any]]] = {}
+        for note_id, revision, snapshot, _, _, created_at in rows:
+            if isinstance(revision, int):
+                by_note.setdefault(note_id, []).append((revision, content(snapshot), moment(created_at)))
+        for note_id, versions in by_note.items():
+            for index, (revision, this, _) in enumerate(versions):
+                key = (note_id, revision)
+                if key not in unknown or key in guessed or index == 0:
+                    continue
+                before = versions[index - 1][1]
+                if this == before:
+                    continue
+                earlier = [position for position, (_, other, _) in enumerate(versions[:index - 1]) if other == this]
+                if earlier and paused_between(versions, earlier[-1], index):
+                    guessed[key] = ("restore", None, versions[earlier[-1]][0])
+                    continue
+                prefix = before[1] + "\n\n"
+                old_sources, new_sources = json.loads(before[2]), json.loads(this[2])
+                if before[1] and this[1].startswith(prefix) and len(this[1]) > len(prefix) \
+                        and len(new_sources) > len(old_sources) and new_sources[:len(old_sources)] == old_sources:
+                    guessed[key] = ("append", None, None)
+
+        for (note_id, revision), (origin, created_by, restored_from) in guessed.items():
+            conn.execute(text(
+                "UPDATE note_revisions SET origin = :origin, created_by = :by, restored_from = :restored "
+                "WHERE note_id = :note AND revision = :revision"
+            ), {"origin": origin, "by": created_by, "restored": restored_from, "note": note_id, "revision": revision})
+        counts: dict[str, int] = {}
+        for origin, _, _ in guessed.values():
+            counts[origin] = counts.get(origin, 0) + 1
+        logger.info("note revisions: guessed origins for %d old revisions %s", len(guessed), counts)
+
+
 def _migrate_workflow_revisions() -> None:
     """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
@@ -7780,6 +7921,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _reprice_usage_billed_on_estimated_prompt_tokens),
             #: 老库补上 Evolink GPT Image 的参考价。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_evolink_gpt_image_prices),
+            #: 老版本的来历尽量补出来:要读任务、对话、运行事件,所以在 SCHEMA 之后。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_guess_where_they_came_from),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

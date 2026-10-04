@@ -111,6 +111,7 @@
   "migrate-mov-videos-become-mp4": "6d1b2a8be0f80c80",
   "migrate-named-browser-partitions-are-per-workspace": "21fd23af420b5b36",
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
+  "migrate-note-revisions-guess-where-they-came-from": "3bbca088c90614d8",
   "migrate-note-revisions-remember-where-they-came-from": "73cdc228d5d929e5",
   "migrate-note-revisions-take-the-merged-shape": "903417f5de50b2ee",
   "migrate-notes-count-their-saves": "05a1067821aea06d",
