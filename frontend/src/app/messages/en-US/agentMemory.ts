@@ -272,6 +272,8 @@ export const agentMemory = {
   quotaMetric_secondary_window: "Secondary window",
   quotaMetric_credits: "Balance",
   quotaMetric_total: "Total quota",
+  quotaMetric_weekly: "Weekly usage",
+  quotaMetric_rate_limit: "Rate limit",
   quotaMetric_window: "Window {n}",
   quotaMetric_monthly: "Monthly",
   quotaMetric_on_demand: "On-demand cap",

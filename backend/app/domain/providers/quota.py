@@ -198,53 +198,37 @@ def parse_openrouter(payload: dict[str, Any]) -> dict[str, Any]:
 def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
     """`GET https://api.kimi.com/coding/v1/usages`。
 
-    这家给的是**剩余量**而不是已用量,而且分两层:`usage` 是总配额,`limits[]` 是每个滚动
-    窗口各自的上限与剩余。窗口长度得由 duration + timeUnit 两个字段一起算 —— 只看 duration
-    会把「5 分钟」当成「5 秒」。
+    两层:`usage` 是本周用量,`limits[]` 是每个滚动窗口的频率限制(现在只有一个 5 小时窗口)。两处都给
+    `limit` 和 `remaining`,**分母恒为 100 —— 是百分点,不是次数**:Kimi Code 后台对同一份数据写的是
+    「Weekly usage 83%」「Rate limit 0%」。此前这里归一成「已用 83 / 上限 100」、单位记成 call,界面读作
+    「用了 83 次、共 100 次」,和后台对不上。所以两条都按百分比报(已用 / 上限),分母哪天不是 100 也照样是比例。
+
+    窗口长度得由 duration + timeUnit 两个字段一起算 —— 只看 duration 会把「300 分钟」当成「300 秒」。
+    重置时间各在各的 `resetTime` 里(窗口的在 `detail` 里)。
     """
     metrics: list[dict[str, Any]] = []
     usage = payload.get("usage")
     if isinstance(usage, dict):
-        limit = _number(usage.get("limit"))
-        remaining = _number(usage.get("remaining"))
-        if limit is not None or remaining is not None:
+        used_percent = _kimi_used_percent(usage)
+        if used_percent is not None:
             reset = usage.get("resetTime")
-            metrics.append(
-                {
-                    "key": "total",
-                    "kind": "balance",
-                    "used_percent": None,
-                    # 归一成「已用」:界面其余几家都是已用/上限,这里报剩余会让同一排数字
-                    # 一半是"用了多少"一半是"还剩多少",读起来要来回换算。
-                    "used": (limit - remaining) if (limit is not None and remaining is not None) else None,
-                    "limit": limit,
-                    "unit": "call",
-                    "window_seconds": None,
-                    "resets_at": str(reset) if reset else None,
-                    "unlimited": False,
-                }
-            )
+            metrics.append(_percent_metric("weekly", used_percent, window_seconds=None, resets_at=str(reset) if reset else None))
     for index, entry in enumerate(payload.get("limits") or []):
         if not isinstance(entry, dict):
             continue
         window = entry.get("window") if isinstance(entry.get("window"), dict) else {}
         detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else {}
-        limit = _number(detail.get("limit"))
-        remaining = _number(detail.get("remaining"))
-        if limit is None and remaining is None:
+        used_percent = _kimi_used_percent(detail)
+        if used_percent is None:
             continue
+        reset = detail.get("resetTime")
         metrics.append(
-            {
-                "key": f"window_{index}",
-                "kind": "balance",
-                "used_percent": None,
-                "used": (limit - remaining) if (limit is not None and remaining is not None) else None,
-                "limit": limit,
-                "unit": "call",
-                "window_seconds": _window_seconds(window.get("duration"), window.get("timeUnit")),
-                "resets_at": None,
-                "unlimited": False,
-            }
+            _percent_metric(
+                "rate_limit" if index == 0 else f"rate_limit_{index + 1}",
+                used_percent,
+                window_seconds=_window_seconds(window.get("duration"), window.get("timeUnit")),
+                resets_at=str(reset) if reset else None,
+            )
         )
     if not metrics:
         raise QuotaUnavailable("quotaErr_noQuota")
@@ -252,6 +236,16 @@ def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
     membership = user.get("membership") if isinstance(user, dict) else None
     plan = membership.get("level") if isinstance(membership, dict) else None
     return {"plan": str(plan) if plan else None, "metrics": metrics}
+
+
+def _kimi_used_percent(entry: dict[str, Any]) -> float | None:
+    """已用占上限的百分比。接口给的是剩余量(有时也给 used):已用 = 上限 − 剩余。"""
+    limit = _number(entry.get("limit"))
+    if not limit:
+        return None
+    remaining = _number(entry.get("remaining"))
+    used = (limit - remaining) if remaining is not None else _number(entry.get("used"))
+    return round(used / limit * 100, 2) if used is not None else None
 
 
 #: Kimi 的窗口单位是枚举名。少一个映射就会把窗口算错一个数量级,所以列全而不是只认分钟。

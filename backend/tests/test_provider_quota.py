@@ -91,9 +91,33 @@ def test_openrouter_周期用量各自成条():
     assert keys == ["credits", "usage_daily", "usage_monthly"]
 
 
-def test_kimi_剩余量归一成已用():
-    """这家给的是 remaining。界面其余几家都是「已用 / 上限」,这里报剩余会让同一排数字
-    一半是"用了多少"一半是"还剩多少",读起来要来回换算。"""
+def test_kimi_报的是百分比_和_kimi_后台一致():
+    """Kimi 额度接口的真实形状(2026-10-05 只读取样):`usage` 是本周用量、`limits[]` 是 5 小时的频率限制,
+    两处都是「limit 100、remaining 17」这种 —— 分母恒为 100,是百分点,不是次数。Kimi Code 后台对同一份数据
+    写的是「Weekly usage 83%」「Rate limit 0%」。此前这里归一成 `83 / 100`、单位记成 call,界面上读作「用了
+    83 次、共 100 次」,和后台对不上。所以两条都按百分比报(已用 / 上限),各带各的重置时间。"""
+    snapshot = parse_kimi(
+        {
+            "usage": {"limit": "100", "used": "83", "remaining": "17", "resetTime": "2026-10-05T03:23:13.020522Z"},
+            "limits": [
+                {
+                    "window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"},
+                    "detail": {"limit": "100", "remaining": "100", "resetTime": "2026-10-04T18:23:13.020522Z"},
+                }
+            ],
+        }
+    )
+    weekly, rate = snapshot["metrics"]
+    assert (weekly["key"], weekly["kind"], weekly["used_percent"]) == ("weekly", "percent", 83.0)
+    assert weekly["resets_at"] == "2026-10-05T03:23:13.020522Z"
+    assert (rate["key"], rate["kind"], rate["used_percent"]) == ("rate_limit", "percent", 0.0)
+    # duration + timeUnit 要一起算:只看 duration 会把「300 分钟」当成「300 秒」。
+    assert rate["window_seconds"] == 5 * 3600
+    assert rate["resets_at"] == "2026-10-04T18:23:13.020522Z", "频率限制的重置时间在 detail 里,此前没读"
+
+
+def test_kimi_分母不是_100_时也按比例报():
+    """接口哪天改成按次给(limit 1000、remaining 250),报的照样是比例:用了 75%,不编一个单位。"""
     snapshot = parse_kimi(
         {
             "usage": {"limit": 1000, "remaining": 250, "resetTime": "2026-08-01T00:00:00Z"},
@@ -102,12 +126,7 @@ def test_kimi_剩余量归一成已用():
         }
     )
     assert snapshot["plan"] == "pro"
-    total = snapshot["metrics"][0]
-    assert total["used"] == 750 and total["limit"] == 1000
-    window = snapshot["metrics"][1]
-    assert window["used"] == 210
-    # duration + timeUnit 要一起算:只看 duration 会把「5 小时」当成「5 秒」。
-    assert window["window_seconds"] == 5 * 3600
+    assert [m["used_percent"] for m in snapshot["metrics"]] == [75.0, 70.0]
 
 
 def test_kimi_未知时间单位不瞎猜():

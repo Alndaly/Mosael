@@ -288,6 +288,8 @@ export const agentMemory = {
   quotaMetric_secondary_window: "次窗口用量",
   quotaMetric_credits: "余额",
   quotaMetric_total: "总配额",
+  quotaMetric_weekly: "本周用量",
+  quotaMetric_rate_limit: "频率限制",
   quotaMetric_window: "窗口配额 {n}",
   quotaMetric_monthly: "月度额度",
   quotaMetric_on_demand: "按需上限",
