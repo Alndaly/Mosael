@@ -495,6 +495,8 @@ export const aiStudio = {
   pricingUnit_cache_write_token: "每缓存写 token",
   pricingUnit_million_cache_read_token: "每百万缓存读 token",
   pricingUnit_million_cache_write_token: "每百万缓存写 token",
+  pricingUnit_image_input_token: "图像输入 Token",
+  pricingUnit_million_image_input_token: "百万图像输入 Token",
   pricingTimePrices: "分时段价格",
   pricingTimePricesHint: "有的厂商按时段收不同的价(如 DeepSeek 工作日白天是高峰价)。不落在任何时段里的时刻,按上面的单价计。",
   pricingTimeZone: "时区",

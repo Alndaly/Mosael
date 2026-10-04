@@ -135,13 +135,21 @@ PRICING_BILLING_UNITS = frozenset(
         "output_token",
         "cache_read_token",
         "cache_write_token",
+        #: 图像输入 token(GPT Image 的参考图)。和文字输入是两个价(gpt-image-2:$8 对 $5),
+        #: 也是独立的桶:适配器把服务商回报的输入拆成文字 / 图像两格(见 adapters/openai/image)。
+        "image_input_token",
         "million_token",
         "million_input_token",
         "million_output_token",
         "million_cache_read_token",
         "million_cache_write_token",
+        "million_image_input_token",
     }
 )
+
+#: 按 token 计的单位(去掉 million_ 前缀之后)。计量里的 token 数是按提示词估的(`token_estimate`)时,
+#: 这些单位不计价 —— 见 price_usage。
+_TOKEN_UNITS = frozenset({"token", "input_token", "output_token", "cache_read_token", "cache_write_token", "image_input_token"})
 
 
 
@@ -449,7 +457,7 @@ def price_usage(
         resolution=str(units.get("resolution") or ""),
     )
     metered = [
-        (rule, quantity) for rule in rules if (quantity := _quantity_for_unit(units, rule.billing_unit)) is not None
+        (rule, quantity) for rule in rules if (quantity := _priced_quantity(units, rule.billing_unit)) is not None
     ]
     currencies = {rule.currency for rule, _ in metered} or {rule.currency for rule in rules}
     currency = next(iter(currencies)) if len(currencies) == 1 else None
@@ -469,6 +477,19 @@ def price_usage(
         currency=currency,
         rules=tuple(rule for rule, _ in metered),
     )
+
+
+def _priced_quantity(units: dict[str, Any], billing_unit: str) -> float | None:
+    """这个单位能拿来**计价**的数量。
+
+    **按提示词估的 token 数不计价。**它是给首页图表看趋势的(见 core/token_estimate),不是账单:回包没报
+    用量的兼容端点上,GPT Image 只剩估的十几个输入 token,按它记出几十 micros —— 看起来「有价」,实际差
+    两个数量级,而真正的大头(图像输出)根本没记。宁可记成未定价,一眼看得出缺什么。服务商报了 token 数的,
+    适配器读回包时会把估的那份换掉(见 contracts.generation.with_reported)。张数、秒数这些不是估的,照算。
+    """
+    if units.get("token_estimate") is True and billing_unit.removeprefix("million_") in _TOKEN_UNITS:
+        return None
+    return _quantity_for_unit(units, billing_unit)
 
 
 def _announce(db: Session, event: ProviderUsageEvent) -> None:
@@ -782,6 +803,7 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
         "output_token": ("output_token", "output_tokens", "completion_tokens"),
         "cache_read_token": ("cache_read_token", "cache_read_tokens", "cached_tokens"),
         "cache_write_token": ("cache_write_token", "cache_write_tokens"),
+        "image_input_token": ("image_input_token", "image_input_tokens"),
     }
     for key in (billing_unit, *aliases.get(billing_unit, ())):
         value = units.get(key)

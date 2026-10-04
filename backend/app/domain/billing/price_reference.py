@@ -493,7 +493,7 @@ _ALIBABA_TTS = [
 # —— 火山方舟(bytedance)——
 # 价目页按**模型族**写(doubao-seedream-4-0),带版本号的 id 取自同站模型列表。
 # Seedance 按 token 计价(元/百万 token),计费 token 数是任务回包的 usage.completion_tokens ——
-# 适配器把它记成 output_tokens(见 adapters/bytedance/ark/video.seedance_metering),所以单位是
+# 适配器把它记成 output_tokens(见 adapters/bytedance/ark/video.seedance_usage),所以单位是
 # million_output_token。分「输入含不含视频」两价(只记不含视频那档)、按输出分辨率分档:720P 是基础档,
 # 1080P 另一条;480P 价目页没单列,按基础档估。
 # 已关停的(Seedance 1.5 pro / 1.0 lite、Seedream 3.0、SeedEdit 3.0 在国内)不收;
@@ -651,9 +651,9 @@ _MINIMAX_PRICES = [
 
 # —— OpenAI ——(读的是 developers.openai.com 的价目页,Standard 档)
 # GPT-6 / 5.6 / 5.5 / 5.4 输入超过 272K 的请求整单按输入与缓存 2 倍、输出 1.5 倍计;记 272K 以下那档。
-# GPT Image 按 token 计价:只记**图像输出 token** 的价 —— 适配器从回包 usage.output_tokens 取数
-# (见 adapters/openai/image.image_metering)。文本输入价只配得上提示词的估算值,记上它会让没回
-# usage 的兼容端点显得"有价"而实际只算了几分钱,不收。
+# GPT Image 按 token 计价,三种 token 三个价:文字输入、参考图(图像)输入、图像输出。适配器从回包
+# usage 里分三格取数(见 adapters/openai/image.image_usage);没回 usage 的兼容端点只剩按提示词估的
+# token,估出来的数不计价(见 domain/billing/usage.price_usage),账上照实是未定价,不会「只算了输入」。
 # gpt-4o-mini-tts 按 token 计价,而语音合成的计量是字符数,不收。
 _OPENAI = "https://developers.openai.com/api/docs/pricing"
 _OPENAI_LONG = ("输入不超过 272K 的价;超过的请求整单按输入与缓存 2 倍、输出 1.5 倍计",
@@ -687,8 +687,11 @@ _OPENAI_CHAT_ROWS = (
     ("o3-pro", "20", "", "", "80", False),
     ("o4-mini", "1.1", "0.275", "", "4.4", False),
 )
-_GPT_IMAGE_REMARK = ("只计图像输出 token;文本输入 ${text}/百万、参考图输入 ${image}/百万未计入(通常远小于输出)",
-                     "Image output tokens only; text input (${text}/1M) and reference-image input (${image}/1M) are not counted (usually far below output)")
+_GPT_IMAGE_UNITS = (
+    ("million_input_token", "文字输入 token 的价", "Text input token price"),
+    ("million_image_input_token", "参考图(图像)输入 token 的价", "Reference-image (image) input token price"),
+    ("million_output_token", "图像输出 token 的价", "Image output token price"),
+)
 _OPENAI_PRICES = [
     *[
         entry
@@ -700,16 +703,16 @@ _OPENAI_PRICES = [
            remark=("官方标注的优惠价(至少持续到 2026-11-21);输入超过 272K 的请求整单按输入与缓存 2 倍、输出 1.5 倍计",
                    "Promotional price (through at least 2026-11-21); prompts over 272K are billed at 2x input/cache and 1.5x output")),
     *[
-        _p("openai", model, "image", "million_output_token", output, "USD", _OPENAI,
-           remark=(_GPT_IMAGE_REMARK[0].format(text=text, image=image), _GPT_IMAGE_REMARK[1].format(text=text, image=image)))
-        for model, output, text, image in (
-            ("gpt-image-2.5-sunburst", "30", "5", "8"),
-            ("gpt-image-2.5-flare", "30", "5", "8"),
-            ("gpt-image-2", "30", "5", "8"),
-            ("gpt-image-1.5", "32", "5", "8"),
-            ("gpt-image-1", "40", "5", "10"),
-            ("gpt-image-1-mini", "8", "2", "2.5"),
+        _p("openai", model, "image", unit, amount, "USD", _OPENAI, remark=(zh, en))
+        for model, prices in (
+            ("gpt-image-2.5-sunburst", ("5", "8", "30")),
+            ("gpt-image-2.5-flare", ("5", "8", "30")),
+            ("gpt-image-2", ("5", "8", "30")),
+            ("gpt-image-1.5", ("5", "8", "32")),
+            ("gpt-image-1", ("5", "10", "40")),
+            ("gpt-image-1-mini", ("2", "2.5", "8")),
         )
+        for (unit, zh, en), amount in zip(_GPT_IMAGE_UNITS, prices)
     ],
     _p("openai", "tts-1", "tts", "character", "15", "USD", _OPENAI, per=1_000_000,
        remark=("官方价 $15/百万字符", "Listed at $15 per 1M characters")),

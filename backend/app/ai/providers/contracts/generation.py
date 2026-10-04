@@ -203,6 +203,22 @@ class GenerationProgressCallbacks:
     is_cancelled: Any  # Callable[[], bool]
 
 
+@dataclass(frozen=True)
+class ReportedUsage:
+    """回包里**服务商自己报的**用量与扣费。
+
+    请求侧的计量(请求了几张、几秒、什么分辨率,`metering_from_request`)是我们自己说的;这一份是服务商
+    说的 —— 图像 / 视频实际计费的 token 数、平台回报的扣费。记账以它为准:叠在请求侧计量上
+    (`with_reported`),有扣费就直接记扣费,不再拿价目去估。
+
+    `cost_micros` + `currency` 是服务商回报的这一次实际扣了多少钱(币种照它报的,不换算);没报为 None。
+    """
+
+    units: dict[str, Any] = field(default_factory=dict)
+    cost_micros: int | None = None
+    currency: str = ""
+
+
 class GenerationAdapter(ABC):
     vendor_id: str
     media_kind: str
@@ -227,6 +243,14 @@ class GenerationAdapter(ABC):
 
     def requires_credentials(self) -> bool:
         return True
+
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        """从这家的回包(`GenerationResult.raw_usage`)里读出服务商报的用量与扣费。
+
+        **只读回包,不看请求** —— 运行器记账时用它,补算老账的迁移也对着库里存的回包用它,两边读出来
+        的必然是同一个数。没有可读的就什么都不报(默认)。
+        """
+        return ReportedUsage()
 
     def validate_request(self, request: GenerationRequest) -> None:
         """Adapter-neutral shape guardrails; model limits live in the capability catalog.
@@ -283,6 +307,27 @@ class GenerationAdapter(ABC):
         落库,见 `watching_remote_tasks`)。
         """
         raise GenerationAdapterError("providerErr_resumeUnsupported", vendor=self.vendor_id)
+
+
+#: 请求侧按提示词估 token 时写进的格(见 metering_from_request)。服务商报了 token 数,它们就让位。
+_ESTIMATED_TOKEN_KEYS = ("input_tokens", "output_tokens", "total_tokens")
+_TOKEN_KEYS = frozenset({*_ESTIMATED_TOKEN_KEYS, "image_input_tokens", "cache_read_tokens", "cache_write_tokens"})
+
+
+def with_reported(units: dict[str, Any], reported: dict[str, Any]) -> dict[str, Any]:
+    """请求侧计量叠上服务商回报的计量(`ReportedUsage.units`),服务商说的为准。
+
+    请求侧按提示词估的 token(`token_estimate`)在服务商报了 token 数之后整组让位:Seedance 只报成片的
+    token,不报提示词的;留着那个估的输入数,账上就成了一半是服务商的、一半是我们猜的,而且看不出哪一半。
+    提示词有多长(`input_characters`)照旧留着。
+    """
+    merged = dict(units)
+    if merged.get("token_estimate") and any(key in _TOKEN_KEYS for key in reported):
+        merged.pop("token_estimate")
+        for key in _ESTIMATED_TOKEN_KEYS:
+            merged.pop(key, None)
+    merged.update(reported)
+    return merged
 
 
 def metering_from_request(request: GenerationRequest) -> dict[str, Any]:

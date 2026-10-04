@@ -495,6 +495,8 @@ export const aiStudio = {
   pricingUnit_cache_write_token: "per cache-write token",
   pricingUnit_million_cache_read_token: "per million cache-read tokens",
   pricingUnit_million_cache_write_token: "per million cache-write tokens",
+  pricingUnit_image_input_token: "image input token",
+  pricingUnit_million_image_input_token: "1M image input tokens",
   pricingTimePrices: "Time-of-day prices",
   pricingTimePricesHint: "Some vendors charge differently by time of day (e.g. DeepSeek's weekday peak hours). Any time outside these slots uses the unit price above.",
   pricingTimeZone: "Time zone",

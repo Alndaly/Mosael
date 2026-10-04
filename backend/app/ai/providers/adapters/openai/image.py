@@ -17,6 +17,7 @@ from app.ai.providers.contracts.generation import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    ReportedUsage,
     metering_from_request,
     source_url_values,
 )
@@ -31,23 +32,42 @@ POST /images/generations → b64_json/url → local image file.
 OPENAI_BASE = "https://api.openai.com/v1"
 
 
-def image_metering(request: GenerationRequest, content: dict[str, Any]) -> dict[str, Any]:
-    """计量:请求侧的那份,再叠上回包 `usage` 里**实际计费的图像输出 token**。
+def _count(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
-    GPT Image 按 token 计价(输出图像 token 的单价是文本输入的好几倍),张数和尺寸只决定
-    token 数。回包带 `usage.output_tokens` 时记成 output_tokens —— 按 token 的计价规则
-    才对得上;不带的(不少兼容端点)就只有请求侧那份,规则对不上,账上照实显示未定价。
+
+def image_usage(content: dict[str, Any]) -> ReportedUsage:
+    """回包 `usage` 里**实际计费的 token 数**,三种各记一格:
+
+    - `input_tokens` 文字输入(`input_tokens_details.text_tokens`);
+    - `image_input_tokens` 参考图输入(`input_tokens_details.image_tokens`);
+    - `output_tokens` 输出(几乎全是图像 token)。
+
+    GPT Image 三种 token 三个价(gpt-image-2:文字输入 $5、图像输入 $8、图像输出 $30,每百万),张数和尺寸
+    只决定 token 数。只回输入总数、不拆文字 / 图像的端点,整段按文字输入记 —— 拆不出来就不猜。
+    不带 usage 的(不少兼容端点)什么都不报,账上照实是未定价。
     """
-    units = metering_from_request(request)
     usage = content.get("usage") if isinstance(content, dict) else None
-    if isinstance(usage, dict):
-        output = usage.get("output_tokens")
-        if isinstance(output, int) and not isinstance(output, bool) and output > 0:
-            units["output_tokens"] = output
-            total = usage.get("total_tokens")
-            if isinstance(total, int) and not isinstance(total, bool) and total >= output:
-                units["total_tokens"] = total
-    return units
+    if not isinstance(usage, dict):
+        return ReportedUsage()
+    output = _count(usage.get("output_tokens"))
+    if output is None:
+        return ReportedUsage()
+    units: dict[str, Any] = {}
+    details = usage.get("input_tokens_details")
+    text = _count(details.get("text_tokens")) if isinstance(details, dict) else None
+    image = _count(details.get("image_tokens")) if isinstance(details, dict) else None
+    if text is not None:
+        units["input_tokens"] = text
+        if image:
+            units["image_input_tokens"] = image
+    elif (whole := _count(usage.get("input_tokens"))) is not None:
+        units["input_tokens"] = whole
+    units["output_tokens"] = output
+    total = _count(usage.get("total_tokens"))
+    if total is not None and total >= output:
+        units["total_tokens"] = total
+    return ReportedUsage(units=units)
 
 
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
@@ -110,6 +130,9 @@ class OpenAIImageAdapter(GenerationAdapter):
     def __init__(self, vendor_id: str = "openai") -> None:
         self.vendor_id = vendor_id
 
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        return image_usage(raw_usage)
+
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="OpenAI")
@@ -165,6 +188,6 @@ class OpenAIImageAdapter(GenerationAdapter):
                 targets = [output_dir / f"generated-{index + 1}.{suffix}" for index in range(len(images))]
                 for target, blob in zip(targets, images):
                     target.write_bytes(blob)
-                return GenerationResult(output_paths=targets, usage=image_metering(request, content), raw_usage=content)
+                return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
             raise adapter_http_error("OpenAI", exc, context.api_key) from exc

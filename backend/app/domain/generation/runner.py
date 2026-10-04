@@ -25,7 +25,13 @@ from app.ai.providers import (
     get_generation_adapter,
     watching_remote_tasks,
 )
-from app.ai.providers.contracts.generation import direct_media_url, sanitize_adapter_error
+from app.ai.providers.contracts.generation import (
+    GenerationAdapter,
+    ReportedUsage,
+    direct_media_url,
+    sanitize_adapter_error,
+    with_reported,
+)
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
@@ -192,7 +198,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 else:
                     result = adapter.generate(request, context, workdir)
             if not finish_job(db, job, status="running"):
-                _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
+                _record_generation_usage(db, generation, job, adapter, request, context, result, started, "succeeded")
                 db.commit()
                 return
             db.commit()
@@ -250,7 +256,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 **({"note": result.note} if result.note else {}),
             }
             _record_generation_usage(
-                db, generation, job, request, context, result, started, "succeeded",
+                db, generation, job, adapter, request, context, result, started, "succeeded",
                 measured_seconds=_measured_seconds(assets) if generation.kind in ("audio", "video") else None,
             )
             emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
@@ -265,7 +271,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             )
         except GenerationAdapterError as exc:
             if request is not None:
-                _record_generation_usage(db, generation, job, request, context, None, started, "failed")
+                _record_generation_usage(db, generation, job, adapter, request, context, None, started, "failed")
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
             # 泛化的 Generation failed,取消看起来就像出了错。
             if job.status in ("queued", "running"):
@@ -274,7 +280,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
             if request is not None:
-                _record_generation_usage(db, generation, job, request, context, None, started, "failed")
+                _record_generation_usage(db, generation, job, adapter, request, context, None, started, "failed")
             _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -419,6 +425,7 @@ def _record_generation_usage(
     db,
     generation: GenerationJob,
     job: Job,
+    adapter: GenerationAdapter,
     request: GenerationRequest,
     context: GenerationAdapterContext,
     result: GenerationResult | None,
@@ -427,7 +434,15 @@ def _record_generation_usage(
     *,
     measured_seconds: float | None = None,
 ) -> None:
-    units = dict(result.usage if result is not None else {})
+    # 服务商在回包里报的(实际计费的 token 数、平台回报的扣费)叠在请求侧计量上,以它为准。读法由适配器
+    # 说了算(GenerationAdapter.reported_usage),补算老账的迁移对着库里存的回包读的是同一个函数。
+    reported = ReportedUsage()
+    if result is not None:
+        try:
+            reported = adapter.reported_usage(result.raw_usage or {})
+        except Exception:  # noqa: BLE001 — 记账是旁路:回包读不懂,不该把一次成功的生成判成失败
+            logger.warning("读不懂 %s 的回包用量,按请求侧计量记账", generation.provider, exc_info=True)
+    units = with_reported(dict(result.usage if result is not None else {}), reported.units)
     if "requests" not in units:
         units["requests"] = 1
     if request.kind == "image":

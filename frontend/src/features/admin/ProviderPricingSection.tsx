@@ -118,11 +118,14 @@ const BILLING_UNITS = [
   // 不同 —— 缓存读约为输入价一成,缓存写约 1.25 倍。不给它们单独的单位就只能少算。
   "cache_read_token",
   "cache_write_token",
+  // 图像输入(GPT Image 的参考图)和文字输入是两个价,也是两个桶 —— 适配器把服务商回报的输入拆成两格。
+  "image_input_token",
   "million_token",
   "million_input_token",
   "million_output_token",
   "million_cache_read_token",
   "million_cache_write_token",
+  "million_image_input_token",
 ] as const;
 const CAPABILITY_LABELS: Record<string, MessageKey> = {
   chat: "capChat",
@@ -151,6 +154,8 @@ const UNIT_LABELS: Record<string, MessageKey> = {
   cache_write_token: "pricingUnit_cache_write_token",
   million_cache_read_token: "pricingUnit_million_cache_read_token",
   million_cache_write_token: "pricingUnit_million_cache_write_token",
+  image_input_token: "pricingUnit_image_input_token",
+  million_image_input_token: "pricingUnit_million_image_input_token",
 };
 
 function formatRuleAmount(rule: PricingRule, unitLabel: string): string {

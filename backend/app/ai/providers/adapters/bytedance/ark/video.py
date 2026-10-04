@@ -13,6 +13,7 @@ from app.ai.providers.contracts.generation import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    ReportedUsage,
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
@@ -131,23 +132,24 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
     return None
 
 
-def seedance_metering(request: GenerationRequest, poll_payload: dict[str, Any]) -> dict[str, Any]:
-    """计量:请求侧的那份,再叠上方舟回包里**实际计费的 token 数**。
+def seedance_usage(poll_payload: dict[str, Any]) -> ReportedUsage:
+    """方舟回包里**实际计费的 token 数**。
 
-    方舟对 Seedance 是按 token 计价的(元/百万 tokens,token 数由分辨率 × 帧率 × 时长折算),
-    成片的 token 数只有任务完成后回包 `usage.completion_tokens` 里才有。不取它的话,按 token
-    的计价规则只能对上请求侧按提示词估的那几十个 token —— 差好几个数量级,还看起来"有价"。
-    记成 output_tokens:那正是方舟计费的那一项,和提示词估算的 input_tokens 不混。
+    方舟对 Seedance 是按 token 计价的(元/百万 tokens,token 数由分辨率 × 帧率 × 时长折算,带音频的
+    成片 token 数也更多),成片的 token 数只有任务完成后回包 `usage.completion_tokens` 里才有。不取它的话,
+    按 token 的计价规则只能对上请求侧按提示词估的那几十个 token —— 差好几个数量级,还看起来"有价"。
+    记成 output_tokens:那正是方舟计费的那一项。
     """
-    units = metering_from_request(request)
     usage = poll_payload.get("usage") if isinstance(poll_payload, dict) else None
-    if isinstance(usage, dict):
-        completion = usage.get("completion_tokens")
-        if isinstance(completion, int) and not isinstance(completion, bool) and completion > 0:
-            units["output_tokens"] = completion
-            total = usage.get("total_tokens")
-            units["total_tokens"] = total if isinstance(total, int) and total >= completion else completion
-    return units
+    if not isinstance(usage, dict):
+        return ReportedUsage()
+    completion = usage.get("completion_tokens")
+    if not isinstance(completion, int) or isinstance(completion, bool) or completion <= 0:
+        return ReportedUsage()
+    total = usage.get("total_tokens")
+    return ReportedUsage(
+        units={"output_tokens": completion, "total_tokens": total if isinstance(total, int) and total >= completion else completion}
+    )
 
 
 class SeedanceAdapter(GenerationAdapter):
@@ -155,6 +157,9 @@ class SeedanceAdapter(GenerationAdapter):
     media_kind = "video"
 
     supports_resume = True
+
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        return seedance_usage(raw_usage)
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
@@ -187,4 +192,4 @@ class SeedanceAdapter(GenerationAdapter):
         output_dir.mkdir(parents=True, exist_ok=True)
         target = output_dir / "generated.mp4"
         download_to_path(url, target)
-        return GenerationResult(output_paths=[target], usage=seedance_metering(request, poll_payload), raw_usage=poll_payload)
+        return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
