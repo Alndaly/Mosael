@@ -237,6 +237,13 @@ overwriting**:
   original place is taken. To really delete it, remove that folder on the machine;
 - after every change the host refreshes this connection's models and tools right away.
 
+"Open in editor" (1.11.1): the listing also reports this ComfyUI's web address. The Mosael desktop app opens its
+interface in this connection's own embedded browser and, once the page is ready, opens that workflow through the ComfyUI
+frontend's own workflow list (ComfyUI's URLs only understand templates, shares and graph ids, so they can't open a saved
+workflow); the web version opens a new tab and tells you which workflow to open from the "Workflows" sidebar. Save in
+ComfyUI, come back to Mosael, and the workflow library plus this connection's models and tools are fetched again. If
+ComfyUI sits behind a reverse proxy that needs a login, sign in once in that embedded browser.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and

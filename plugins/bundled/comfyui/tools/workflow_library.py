@@ -409,6 +409,8 @@ def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, A
         "others": [{"path": path, "reason": models._not_a_workflow(path, locale)} for path in others],
         "trash": _trash(comfy),
         "manager": {"version": manager_version(comfy)},
+        #: 「在编辑器里打开」开的就是这台服务器的网页界面(宿主只认 http(s));打开具体哪一张由 Mosael 在页面里做
+        "editor": {"kind": "comfyui", "url": comfy.base},
     }
 
 

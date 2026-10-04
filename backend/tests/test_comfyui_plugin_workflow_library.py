@@ -169,6 +169,11 @@ def test_不是工作流的文件_回收目录里的_另列(library, comfy) -> N
     assert out["manager"] == {"version": "V4.2.1"}
 
 
+def test_列出时带上编辑器的地址_就是这台服务器(library, comfy) -> None:
+    out = _listed(library, comfy)
+    assert out["editor"] == {"kind": "comfyui", "url": comfy.url.rstrip("/")}
+
+
 def test_取原文(library, comfy) -> None:
     module, Comfy = library
     out = module.workflow({"op": "workflow", "path": "sub/laid out.json"}, Comfy(comfy.url), "zh")
