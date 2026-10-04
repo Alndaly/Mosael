@@ -95,7 +95,7 @@ export function GenerationModelsRow({
   return (
     <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
       <div className="flex min-w-0 items-center gap-2">
-        <Truncate className={cn("text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>
+        <Truncate className={cn("max-w-[22rem] text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>
           {summary}
         </Truncate>
         <Button variant="outline" disabled={!models} onClick={() => setOpen(true)}>

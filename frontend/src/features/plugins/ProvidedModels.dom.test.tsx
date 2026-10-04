@@ -118,6 +118,8 @@ describe("插件提供的模型", () => {
       <GenerationModelsRow instance={instance} status={{ models: null, error: "连不上" }} refreshing={false} onRefresh={vi.fn()} />,
     );
     expect(screen.getByText("pluginGenerationError").className).toContain("text-destructive");
+    // 原因可能很长(连不上的原话):这一格有上限,不把左边的标签和说明挤成一列窄条,放不下的悬停看全文
+    expect(screen.getByText("pluginGenerationError").className).toMatch(/max-w-/);
     expect((screen.getByRole("button", { name: "pluginModelsView" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
