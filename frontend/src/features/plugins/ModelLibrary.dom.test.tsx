@@ -130,7 +130,7 @@ describe("模型库", () => {
   it("工作流缺的模型一键下载:带着地址、目录、文件名解析,确认后任务在模型库里看得到进度、能取消", async () => {
     api.resolveModelLink.mockResolvedValue({ source: "huggingface", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors",
       page: "", filename: "ae.safetensors", size: 335304388, folder: "vae", family: "", triggers: [], title: "",
-      exists: false, suggested_filename: "", note: "" });
+      exists: false, note: "" });
     api.startModelDownload.mockResolvedValue(job({ status: "queued", progress: 0, message: "排队" }));
     api.getJob.mockResolvedValue(job({}));
     api.cancelJob.mockResolvedValue(job({ status: "failed" }));
@@ -164,7 +164,7 @@ describe("模型库", () => {
   it("同名文件不覆盖:换名之前点不了下载,给一个不撞名的建议", async () => {
     api.resolveModelLink.mockResolvedValue({ source: "civitai", url: "https://civitai.com/api/download/models/5",
       page: "", filename: "detail.safetensors", size: 1024, folder: "loras", family: "SDXL", triggers: [], title: "D · v1",
-      exists: true, suggested_filename: "detail (1).safetensors", note: "" });
+      exists: true, note: "" });
     await openLibrary();
     fireEvent.click(screen.getByRole("button", { name: /modelLibraryDownload/ }));
     const link = await screen.findByPlaceholderText("modelDownloadLinkPlaceholder");
@@ -183,7 +183,7 @@ describe("模型库", () => {
     api.getModelLibrary.mockResolvedValue(library({ download: { route: "none", note: "在那台机器上装 ComfyUI-Manager" } }));
     api.resolveModelLink.mockResolvedValue({ source: "direct", url: "https://example.com/x.safetensors", page: "",
       filename: "x.safetensors", size: null, folder: "", family: "", triggers: [], title: "", exists: false,
-      suggested_filename: "", note: "" });
+      note: "" });
     await openLibrary();
     const missing = screen.getByRole("region", { name: "modelMissingTitle" });
     fireEvent.click(within(missing).getByRole("button", { name: /modelMissingDownload/ }));
@@ -192,7 +192,7 @@ describe("模型库", () => {
     expect((screen.getByRole("button", { name: /modelDownloadConfirm/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("不撞名的建议和插件同一个规矩", () => {
+  it("不撞名的建议:按目录里已有的名字往后数", () => {
     const taken = new Set(["a.safetensors", "a (1).safetensors"]);
     expect(freeName("a.safetensors", taken)).toBe("a (2).safetensors");
     expect(freeName("noext", new Set(["noext"]))).toBe("noext (1)");

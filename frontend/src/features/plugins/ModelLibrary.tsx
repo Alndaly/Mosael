@@ -99,7 +99,7 @@ const norm = (name: string) => name.replace(/\\/g, "/").trim();
 const baseName = (name: string) => norm(name).split("/").pop() || name;
 const subFolder = (name: string) => norm(name).split("/").slice(0, -1).join("/");
 
-/** 一个不撞名的建议:`x.safetensors` → `x (1).safetensors`、`x (2).safetensors`……(和插件同一个规矩)。 */
+/** 一个不撞名的建议:`x.safetensors` → `x (1).safetensors`、`x (2).safetensors`……按用户此刻选的目录算(他可能改了目录)。 */
 export function freeName(name: string, taken: Set<string>): string {
   const dot = name.lastIndexOf(".");
   const stem = dot > 0 ? name.slice(0, dot) : name;

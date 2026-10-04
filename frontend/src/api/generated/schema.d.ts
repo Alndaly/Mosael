@@ -10953,11 +10953,6 @@ export interface components {
              */
             exists: boolean;
             /**
-             * Suggested Filename
-             * @default
-             */
-            suggested_filename: string;
-            /**
              * Note
              * @default
              */

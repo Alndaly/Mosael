@@ -69,18 +69,6 @@ def metadata_of(comfy: Comfy, folder: str, name: str) -> dict[str, Any] | None:
     return found if isinstance(found, dict) else None
 
 
-def free_name(name: str, taken: set[str]) -> str:
-    """一个不撞名的建议:`x.safetensors` → `x (1).safetensors`、`x (2).safetensors`……"""
-    stem, dot, ext = name.rpartition(".")
-    if not dot:
-        stem, ext = name, ""
-    for index in range(1, 1000):
-        candidate = f"{stem} ({index}){'.' + ext if ext else ''}"
-        if norm(candidate) not in taken:
-            return candidate
-    return name
-
-
 def plain(value: str) -> bool:
     """文件名、目录名只能是一段:不带路径分隔符、不是 `.` / `..`、没有控制字符。"""
     text = (value or "").strip()

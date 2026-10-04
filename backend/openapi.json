@@ -30411,11 +30411,6 @@
             "title": "Exists",
             "default": false
           },
-          "suggested_filename": {
-            "type": "string",
-            "title": "Suggested Filename",
-            "default": ""
-          },
           "note": {
             "type": "string",
             "title": "Note",

@@ -21,7 +21,7 @@ from urllib import error, parse, request
 from families import family_from_base
 from comfy_http import Comfy
 from lines import ComfyError, say
-from model_files import folder_info, free_name, names_in, norm
+from model_files import folder_info, names_in, norm
 
 HF_HOSTS = frozenset({"huggingface.co", "www.huggingface.co", "hf.co"})
 CIVITAI_HOSTS = frozenset({"civitai.com", "www.civitai.com"})
@@ -315,13 +315,10 @@ def resolve(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
     link = link_for(url, locale, folders)
     if not link.filename:
         raise ComfyError(say(locale, "从这个链接看不出文件名,下不了", "Can't tell the file name from this link"))
-    exists, suggestion = False, ""
-    if link.folder:
-        taken = names_in(comfy, link.folder)
-        exists = norm(link.filename) in taken
-        suggestion = free_name(link.filename, taken) if exists else ""
+    # 同名的在不在:界面据此要求换名(不撞名的建议由界面按同一个规矩算 —— 用户可能改了目录,建议得跟着那个目录)
+    exists = bool(link.folder) and norm(link.filename) in names_in(comfy, link.folder)
     return {
         "source": link.source, "url": link.url, "page": link.page, "filename": link.filename, "size": link.size,
         "folder": link.folder, "family": link.family, "triggers": link.triggers or [], "title": link.title,
-        "exists": exists, "suggested_filename": suggestion, "note": link.note,
+        "exists": exists, "note": link.note,
     }

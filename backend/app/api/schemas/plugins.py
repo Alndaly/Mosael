@@ -439,7 +439,6 @@ class ModelResolveOut(ApiModel):
     triggers: list[str] = Field(default_factory=list)
     title: str = ""
     exists: bool = False
-    suggested_filename: str = ""
     note: str = ""
 
 

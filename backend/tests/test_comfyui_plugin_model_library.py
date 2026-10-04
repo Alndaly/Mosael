@@ -569,7 +569,7 @@ def test_解析Civitai页面_版本接口给文件_类型定目录_底模定家�
     assert web.calls[0][2].get("Authorization") == "Bearer civ_secret", "Civitai 的接口带它自己的令牌"
 
 
-def test_解析Civitai_同名文件已在_给一个不撞名的建议(modules, comfy, monkeypatch) -> None:
+def test_解析Civitai_同名文件已在_说出来(modules, comfy, monkeypatch) -> None:
     _, sources = modules
     version = {"id": 5, "name": "v1", "modelId": 4, "baseModel": "SDXL 1.0", "model": {"name": "D", "type": "LORA"},
                "files": [{"name": "detail.safetensors", "type": "Model", "primary": True, "sizeKB": 1,
@@ -579,7 +579,7 @@ def test_解析Civitai_同名文件已在_给一个不撞名的建议(modules, c
     from comfy_http import Comfy
 
     out = sources.resolve({"url": "https://civitai.com/api/download/models/5"}, Comfy(comfy.url), "zh")
-    assert out["exists"] is True and out["suggested_filename"] == "detail (1).safetensors"
+    assert out["exists"] is True
     assert out["family"] == "SDXL"
 
 

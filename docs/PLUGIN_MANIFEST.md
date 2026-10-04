@@ -1117,7 +1117,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   ```
 - `{"op": "detail", "folder": "loras", "name": "…"}` → `{"metadata": {"键": "值"}, "tags": [{"tag": "1girl", "count": 40}]}`;
 - `{"op": "resolve", "url": "…"}` → `{"source", "url"(直链), "page", "filename", "size", "folder"(建议的目录,定不了给空串),
-  "family", "triggers", "title", "exists"(这个名字在建议的目录里已经有了), "suggested_filename", "note"}`。认不出就失败,
+  "family", "triggers", "title", "exists"(这个名字在建议的目录里已经有了), "note"}`。认不出就失败,
   原因写给人看;
 - `{"op": "download", "url": "…", "folder": "loras", "filename": "…"}` → **流式**(宿主一定按流式协议调它,不论工具上写没写
   `stream`):进度行、取消文件照常;结果 `{"folder", "name", "size", "route"}`。**不许覆盖已有文件**:同名的就失败、说清楚。
