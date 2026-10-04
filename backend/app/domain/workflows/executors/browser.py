@@ -86,7 +86,10 @@ def _failure_scene(session_id: str, action: str, args: dict[str, Any]) -> dict[s
         if value:
             scene[key] = value[:200]
     try:
-        shot = browser.run_action(session_id, "screenshot", {}, timeout=_SHOT_TIMEOUT_SECONDS)
+        #: 排队也按这个短上限:执行器不在的时候(这一步多半正是因此失败的),不陪着排满一分钟。
+        shot = browser.run_action(
+            session_id, "screenshot", {}, timeout=_SHOT_TIMEOUT_SECONDS, queue_timeout=_SHOT_TIMEOUT_SECONDS
+        )
     except Exception:  # noqa: BLE001 — 会话已经关掉、执行器没响应……都只意味着"这次没有图"
         return scene
     image = str(shot.get("value") or "")

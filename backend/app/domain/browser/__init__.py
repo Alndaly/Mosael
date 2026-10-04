@@ -517,12 +517,14 @@ def run_action(
     args: dict | None = None,
     *,
     timeout: float = ACTION_TIMEOUT_SECONDS,
+    queue_timeout: float | None = None,
     should_stop: StopCheck | None = None,
 ) -> dict:
     """在会话上跑一个动作:入队 → 阻塞轮询到终态 → 返回 result(失败/超时抛 BrowserDomainError)。
 
     用独立短会话轮询(照 wait_for_job),既避免长事务,又能看到 worker 在另一连接里的提交。
-    `timeout` 是**执行**的上限,从执行器认领那一刻算;排队另有 QUEUE_TIMEOUT_SECONDS。
+    `timeout` 是**执行**的上限,从执行器认领那一刻算;排队另有上限,缺省 QUEUE_TIMEOUT_SECONDS ——
+    只是顺带看一眼的动作(失败现场的截图)给自己一个短的,执行器不在时不必陪着排满一分钟。
 
     两类动作在这里就挡下:`upload` 只能经 `upload_file`(它只收放行过的 `HostFile`),导航只认
     http(s) —— 两者都是「读这台电脑上的文件」的门,见 domain/host_files。
@@ -533,7 +535,7 @@ def run_action(
         url = str((args or {}).get("url") or "").strip()
         if url and not _NAVIGABLE.match(url):
             raise BrowserDomainError("browserErr_navigateScheme")
-    return _enqueue(session_id, action, args, timeout=timeout, should_stop=should_stop)
+    return _enqueue(session_id, action, args, timeout=timeout, queue_timeout=queue_timeout, should_stop=should_stop)
 
 
 def upload_file(
@@ -562,7 +564,13 @@ def upload_file(
 
 
 def _enqueue(
-    session_id: str, action: str, args: dict | None, *, timeout: float, should_stop: StopCheck | None
+    session_id: str,
+    action: str,
+    args: dict | None,
+    *,
+    timeout: float,
+    queue_timeout: float | None = None,
+    should_stop: StopCheck | None,
 ) -> dict:
     # 入队是自己的一次用例:提交之后执行器(另一个进程)和下面的轮询才看得见它。
     with unit_of_work() as db:
@@ -586,6 +594,7 @@ def _enqueue(
     #: **排在同一会话前一条后面的那段不算排队**:同一会话串行(见 claim_next_action),前一条是一次
     #: 60 秒的等待,这一条就得等它 —— 此前排队计时照走,同一次运行里另一条分支在同一个具名会话上的
     #: 动作,前面那条还没做完它就被报成「桌面端没开」。前面那条自己有执行上限,这里不会无限等。
+    queue_limit = QUEUE_TIMEOUT_SECONDS if queue_timeout is None else queue_timeout
     queued_for = 0.0
     tick = time.monotonic()
     run_deadline: float | None = None
@@ -611,7 +620,7 @@ def _enqueue(
             queued_for += elapsed
         if should_stop is not None and should_stop():
             return _give_up(action_id, "browserErr_actionHalted")
-        if run_deadline is None and queued_for >= QUEUE_TIMEOUT_SECONDS:
+        if run_deadline is None and queued_for >= queue_limit:
             return _give_up_unclaimed(action_id)
         if run_deadline is not None and time.monotonic() >= run_deadline:
             return _give_up(action_id, "browserErr_actionTimeout")

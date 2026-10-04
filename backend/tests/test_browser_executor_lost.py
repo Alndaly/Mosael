@@ -12,9 +12,12 @@ import threading
 import time
 from datetime import timedelta
 
+import pytest
+
 from app.core.db import SessionLocal
 from app.db.models import BrowserAction, now
 from app.domain import browser
+from app.domain.workflows.executors import browser as browser_nodes
 from tests.util import fresh_client, worker_client
 
 
@@ -67,3 +70,20 @@ def test_租约没到就照常等_执行器回报了就是回报的结果() -> N
     })
     thread.join(timeout=5)
     assert box.get("value") == {"value": "标题"}
+
+
+@pytest.fixture
+def no_executor(monkeypatch):
+    monkeypatch.setattr(browser, "_executor_contact", None)
+    #: 排队上限给得很长:截图要是还按它等,这条测试就要等这么久
+    monkeypatch.setattr(browser, "QUEUE_TIMEOUT_SECONDS", 30.0)
+    monkeypatch.setattr(browser_nodes, "_SHOT_TIMEOUT_SECONDS", 1.0)
+
+
+def test_失败现场的截图_执行器不在时按它自己的短上限放弃_不再排满一个排队上限(no_executor) -> None:
+    sid = _session()
+    started = time.monotonic()
+    scene = browser_nodes._failure_scene(sid, "click", {"selector": "#go"})
+    elapsed = time.monotonic() - started
+    assert elapsed < 5, f"截图在排队上限上等了 {elapsed:.1f} 秒"
+    assert scene == {"action": "click", "selector": "#go"}, "拿不到图就只有动作和选择器"
