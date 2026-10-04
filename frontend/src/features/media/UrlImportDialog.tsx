@@ -4,6 +4,7 @@ import { Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { importFromUrl, listBrowserProfiles, probeUrl, type UrlProbe, type Workspace } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { ModalShell } from "@/components/app/modals";
@@ -230,7 +231,7 @@ export function UrlImportDialog({
             )}
 
             <div className="grid max-h-[38vh] min-w-0 gap-px overflow-y-auto overflow-x-hidden">
-              {entries.map((entry) => {
+              {entries.map((entry, index) => {
                 const checked = selected.has(entry.url);
                 return (
                   <button
@@ -252,7 +253,13 @@ export function UrlImportDialog({
                   >
                     <Checkbox checked={checked} tabIndex={-1} aria-hidden className="pointer-events-none" />
                     <span className="grid min-w-0 gap-px">
-                      <Truncate className="text-ui-xs text-foreground">{entry.title}</Truncate>
+                      {entry.title ? (
+                        <Truncate className="text-ui-xs text-foreground">{entry.title}</Truncate>
+                      ) : (
+                        <Truncate className="text-ui-xs text-muted-foreground">
+                          {untitledEntryLabel(entry.url, (listing.start ?? 1) + index, t)}
+                        </Truncate>
+                      )}
                       {entry.uploader && (
                         <Truncate className="text-ui-2xs text-muted-foreground">{entry.uploader}</Truncate>
                       )}
@@ -315,4 +322,17 @@ export function UrlImportDialog({
       </div>
     </ModalShell>
   );
+}
+
+
+/** 名字没取到的那一条(站点限流时会这样):有分 P 号就说第几 P,否则说列表里第几条。不编名字 —— 导入时这一条按下载拿到的真标题起名。 */
+export function untitledEntryLabel(url: string, position: number, t: (key: MessageKey) => string): string {
+  let part: string | null = null;
+  try {
+    part = new URL(url).searchParams.get("p");
+  } catch {
+    part = null;
+  }
+  if (part && /^\d+$/.test(part)) return t("urlImportUntitledPart").replace("{n}", part);
+  return t("urlImportUntitledEntry").replace("{n}", String(position));
 }

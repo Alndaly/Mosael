@@ -443,11 +443,15 @@ class Test浅层条目没标题时逐条补:
     却没放进条目。补法与站点无关:对缺标题的那几条再问一次(`process=False`,不挑格式、不下载)。
     """
 
-    def _fake_ytdlp(self, monkeypatch: pytest.MonkeyPatch, flat: dict, *, broken: frozenset[str] = frozenset()) -> list[tuple]:
+    def _fake_ytdlp(
+        self, monkeypatch: pytest.MonkeyPatch, flat: dict, *, broken: frozenset[str] = frozenset(), flaky: frozenset[str] = frozenset()
+    ) -> list[tuple]:
+        """`broken`:每次都 412;`flaky`:第一次 412、再问就给 —— B 站对一阵密集请求就是这样。"""
         import sys
         import types
 
         calls: list[tuple] = []
+        monkeypatch.setattr(ytdlp, "RESOLVE_RETRY_PAUSE_SECONDS", 0)
 
         class FakeYDL:
             def __init__(self, options):
@@ -462,7 +466,7 @@ class Test浅层条目没标题时逐条补:
             def extract_info(self, url, download=False, process=True):
                 calls.append((url, download, process))
                 if url in _BILIBILI_PARTS:
-                    if url in broken:
+                    if url in broken or (url in flaky and sum(1 for call in calls if call[0] == url) == 1):
                         raise RuntimeError("HTTP Error 412: Precondition Failed")
                     return dict(_BILIBILI_PARTS[url])
                 return dict(flat)
@@ -497,12 +501,26 @@ class Test浅层条目没标题时逐条补:
         assert [entry.title for entry in listing.entries] == ["第一条"]
         assert len(calls) == 1
 
-    def test_某条补不上不拖垮整份清单(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_并发时被限流的那几条_停一下再补一次就有名字(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """用户在 1.8.3 里看到四行「未命名」:并发补标题时 B 站回了 412,当时只记一条 debug 就放过了。"""
+        flaky = frozenset({"https://www.bilibili.com/video/BV1qEtn6ZEWe?p=2", "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=3"})
+        self._fake_ytdlp(monkeypatch, _BILIBILI_FLAT, flaky=flaky)
+        listing = ytdlp.probe("https://www.bilibili.com/video/BV1qEtn6ZEWe")
+        assert [entry.title for entry in listing.entries] == [
+            "p01 开篇", "p02 全新ComfyUI中文桌面版", "p03 01.ComfyUI 界面的常用按钮和功能",
+        ]
+
+    def test_某条怎么都补不上_标题留空并记一条警告_不拖垮整份清单(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """不再编一个「未命名」:那会被当成素材名存下,而下载那一步其实拿得到真标题。占位交给界面画。"""
         broken = "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=2"
         self._fake_ytdlp(monkeypatch, _BILIBILI_FLAT, broken=frozenset({broken}))
-        listing = ytdlp.probe("https://www.bilibili.com/video/BV1qEtn6ZEWe")
-        assert [entry.title for entry in listing.entries] == ["p01 开篇", "未命名", "p03 01.ComfyUI 界面的常用按钮和功能"]
+        with caplog.at_level("WARNING", logger=ytdlp.logger.name):
+            listing = ytdlp.probe("https://www.bilibili.com/video/BV1qEtn6ZEWe")
+        assert [entry.title for entry in listing.entries] == ["p01 开篇", "", "p03 01.ComfyUI 界面的常用按钮和功能"]
         assert listing.entries[1].url == broken
+        assert any("412" in record.getMessage() and broken in record.getMessage() for record in caplog.records)
 
 
 def test_imported_assets_take_the_entry_title(monkeypatch: pytest.MonkeyPatch) -> None:

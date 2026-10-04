@@ -312,6 +312,8 @@ export const otherUi = {
   urlImportProbe: "获取列表",
   urlImportProbing: "正在读取链接内容…",
   urlImportUntitled: "未命名",
+  urlImportUntitledPart: "P{n} · 名字没取到",
+  urlImportUntitledEntry: "第 {n} 条 · 名字没取到",
   urlImportCount: "共 {n} 条",
   urlImportRange: "第 {from}–{to} 条",
   urlImportPrevPage: "上一批",

@@ -312,6 +312,8 @@ export const otherUi = {
   urlImportProbe: "Fetch list",
   urlImportProbing: "Reading what is behind this link…",
   urlImportUntitled: "Untitled",
+  urlImportUntitledPart: "Part {n} · name unavailable",
+  urlImportUntitledEntry: "Item {n} · name unavailable",
   urlImportCount: "{n} item(s)",
   urlImportRange: "Items {from}–{to}",
   urlImportPrevPage: "Previous",

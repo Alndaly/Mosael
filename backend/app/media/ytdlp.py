@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
@@ -29,6 +30,9 @@ MAX_ENTRIES = 200
 #: 浅层条目缺标题时,同时补几条的元数据。补一条约 0.6 s(实测 B 站分 P),200 条串行要两分钟;
 #: 开太多又容易被站点当成刷接口(B 站回 412)。
 RESOLVE_WORKERS = 6
+
+#: 并发补没补上的(多半是 B 站回 412),停这么久再一条条补一次。被当成刷接口是一阵子的事,串行重来通常就过了。
+RESOLVE_RETRY_PAUSE_SECONDS = 1.0
 
 #: 下载单条的超时。长视频 + 慢网络是常态,给得宽;超时不是"下得慢",是"这条再也不会回来"。
 DOWNLOAD_TIMEOUT_SECONDS = 60 * 60
@@ -181,7 +185,8 @@ def _entry(raw: dict[str, Any], fallback_url: str, *, within: str = "") -> Remot
     return RemoteEntry(
         id=video_id,
         url=url or fallback_url,
-        title=title or video_id or "未命名",
+        #: 取不到就留空,由界面画占位 —— 编一个「未命名」出来,导入时会被当成素材名存下(而下载那一步拿得到真标题)。
+        title=title,
         duration=float(duration) if isinstance(duration, (int, float)) else None,
         uploader=str(raw.get("uploader") or raw.get("channel") or ""),
         thumbnail=str(raw.get("thumbnail") or ""),
@@ -198,25 +203,32 @@ def _fill_untitled(yt_dlp: Any, options: dict[str, Any], entries: list[dict[str,
 
     补的方式与站点无关:对那一条再问一次 yt-dlp,`process=False` 只跑站点解析、不挑格式、
     不碰媒体流。有标题的条目(YouTube 列表等)一条也不多问,所以这一步只在需要时才花时间。
-    某条补不上就原样留着 —— 列表照样能用,只是那一条没名字,不该因为它让整次探测失败。
+    并发补不上的(B 站对一阵密集请求回 412)停一下再一条条补一次;还补不上就原样留着、标题为空 ——
+    列表照样能用,界面给那一条画占位,导入时按下载拿到的真标题起名,不该因为它让整次探测失败。
     """
     missing = [index for index, raw in enumerate(entries) if not raw.get("title") and raw.get("url")]
     if not missing:
         return entries
 
-    def resolve(raw: dict[str, Any]) -> dict[str, Any]:
+    def resolve(raw: dict[str, Any], *, last_try: bool) -> dict[str, Any]:
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(str(raw["url"]), download=False, process=False)
-        except Exception:  # noqa: BLE001 — 补不上的那一条保持原样,不拖垮整份清单
-            logger.debug("yt-dlp 补不上条目 %s 的元数据", raw.get("url"), exc_info=True)
+        except Exception as exc:  # noqa: BLE001 — 补不上的那一条保持原样,不拖垮整份清单
+            if last_try:
+                logger.warning("yt-dlp 补不上条目 %s 的标题:%s", raw.get("url"), str(exc).splitlines()[0][:200])
             return raw
         return {**raw, **info} if isinstance(info, dict) else raw
 
     filled = list(entries)
     with ThreadPoolExecutor(max_workers=min(RESOLVE_WORKERS, len(missing))) as pool:
-        for index, info in zip(missing, pool.map(resolve, [entries[index] for index in missing])):
+        for index, info in zip(missing, pool.map(lambda raw: resolve(raw, last_try=False), [entries[index] for index in missing])):
             filled[index] = info
+    still = [index for index in missing if not filled[index].get("title")]
+    if still:
+        time.sleep(RESOLVE_RETRY_PAUSE_SECONDS)
+        for index in still:
+            filled[index] = resolve(filled[index], last_try=True)
     return filled
 
 
