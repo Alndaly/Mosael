@@ -7329,6 +7329,41 @@ def _reindex_record_references() -> None:
         reindex(conn)
 
 
+def _migrate_existing_libraries_get_the_new_reference_prices() -> None:
+    """老库补上这一版新增的内置参考价(见 domain/billing/price_reference)。
+
+    参考价进库只有「预填」这一条路,新装的库也要点了才有;这一版新加的价(生视频按分辨率分档、GPT Image 的
+    文字 / 参考图输入价、147ai 的 gpt-image-2-client、Evolink 的 Seedance、海螺 H3 的 2K)不补的话,老库里
+    这些型号照旧按一档价记、或者一直未定价 —— 而紧接着的补算老账正要用到它们。
+
+    照预填的规则走(只补不改、不混币种、只补模型行上真会用到的能力),而且**只看这一版新增的那些型号**:
+    用户没点过预填的其余型号是他的选择,升级不替他补。不取目录(那要联网、要钥匙),只用内置价目表。
+    """
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import ProviderProfile
+    from app.domain.billing.pricing_prefill import prefill_profile_pricing
+
+    models = frozenset({
+        # 生视频按输出分辨率分档
+        "wan2.5-t2v-preview", "wan2.6-t2v", "wan2.7-t2v", "wan2.5-i2v-preview", "wan2.6-i2v", "wan2.7-i2v",
+        "wan2.7-r2v", "wan2.7-videoedit", "wan2.2-s2v", "MiniMax-H3",
+        "doubao-seedance-2-5-260628", "doubao-seedance-2-0-260128", "dreamina-seedance-2-5-260628",
+        "dreamina-seedance-2-0-260128", "veo-3.1-generate-preview", "veo-3.1-fast-generate-preview",
+        "veo-3.1-lite-generate-preview",
+        # GPT Image 的文字输入、参考图输入价;147ai 自己的型号名
+        "gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-2", "gpt-image-1.5", "gpt-image-1",
+        "gpt-image-1-mini", "gpt-image-2-client",
+        # Evolink 自己的价目
+        "seedance-2.5-text-to-video", "seedance-2.5-image-to-video", "seedance-2.5-reference-to-video",
+        "seedance-2.5-video-edit", "seedance-2.5-video-extend", "seedance-2.0-text-to-video",
+        "seedance-2.0-image-to-video", "seedance-2.0-reference-to-video", "seedance-2.0-mini-text-to-video",
+        "seedance-2.0-mini-image-to-video", "seedance-2.0-mini-reference-to-video",
+    })
+    with unit_of_work() as db:
+        for profile in db.query(ProviderProfile).order_by(ProviderProfile.created_at):
+            prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -7617,6 +7652,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_sequence_operation_clip_records_are_complete),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_removed_track_records_are_complete),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_added_track_records_list_what_moved),
+            #: 老库补上这一版新增的内置参考价。要读模型行上的能力(插件连接的模型行由上面的 ComfyUI 那几步建好)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_new_reference_prices),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

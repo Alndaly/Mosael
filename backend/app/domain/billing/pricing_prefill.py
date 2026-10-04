@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 
 from sqlalchemy import or_, select
@@ -59,17 +60,21 @@ def prefill_profile_pricing(
     *,
     base_url: str,
     catalog: list[tuple[str, dict[str, float | None]]],
+    only_models: Collection[str] | None = None,
 ) -> PrefillOutcome:
     """按「目录 → 价目表」给这条连接的每个模型补缺失的规则。只补不改(见 usage.prefill_model_pricing)。
 
     `catalog` 由调用方取好传进来(那是一次网络请求,不在领域层里发);`base_url` 用来判断这条
-    连接是不是中转、落在哪个地区的价目上。
+    连接是不是中转、落在哪个地区的价目上。`only_models` 给了就只看这几个型号 —— 升级时给老库补
+    「这一版新增的参考价」用,用户没点过预填的其余型号不替他补。
     """
     rows = {row.model_id: row for row in list_models(db, profile.id)}
     catalog_rates: dict[str, dict[str, float | None]] = {}
     for model_id, rates in catalog:
         catalog_rates.setdefault(model_id, rates)
     model_ids = list(dict.fromkeys([*catalog_rates, *rows]))
+    if only_models is not None:
+        model_ids = [model_id for model_id in model_ids if model_id in only_models]
 
     relay = price_reference.is_relay(profile.vendor, base_url)
     region = price_reference.region_for(profile.vendor, base_url)

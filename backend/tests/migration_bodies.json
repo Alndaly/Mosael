@@ -87,6 +87,7 @@
   "migrate-encrypt-secrets": "29857ecc953f3cab",
   "migrate-entity-reference-roles-follow-kind": "1074454e2a84e892",
   "migrate-entity-voices-name-their-engine": "33328168d8ffae49",
+  "migrate-existing-libraries-get-the-new-reference-prices": "8e1d25b87ddfe78c",
   "migrate-frame-rate-is-not-a-time-base": "9b84333df81d2b37",
   "migrate-generation-capabilities-need-evidence": "8f9c3b77541a35a9",
   "migrate-generation-capability-profiles": "4efdae207a221ca1",

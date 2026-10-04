@@ -97,6 +97,8 @@ _JSON_COLUMNS = frozenset({
     "oauth_credential", "model_catalog", "capabilities", "sources", "topics", "tags", "output",
     "input", "discovered_tools", "summary_params", "decision_detail", "body_document", "anchor",
     "plan", "auto_allow_tools", "kinds",
+    # 连接和模型行上的两列 JSON:此前没有迁移用 ORM 读这两张表,塞个空串也没人发现;补参考价的迁移要读。
+    "extra", "capability_ids",
 })
 
 
