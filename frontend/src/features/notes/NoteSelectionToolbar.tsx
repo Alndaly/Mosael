@@ -2,7 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { useEditorState, type Editor } from "@tiptap/react";
 import {
-  BookPlus, Bold, Bot, ChevronDown, Code, Copy, Italic, Link, List, ListTodo, MoreHorizontal, Sparkles, Square,
+  BookPlus, Bold, Bot, ChevronDown, Code, Copy, Italic, LayoutGrid, Link, List, ListTodo, MoreHorizontal, Sparkles, Square,
   Strikethrough, TextQuote, Unlink, Volume2, type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,7 +45,7 @@ const NARROW = 640;
 
 type Item = { id: string; label: string; icon: LucideIcon; pressed?: boolean; run: () => void };
 
-export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAction, onQuote, onSaveToNote }: {
+export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAction, onQuote, onSaveToNote, onAddToBoard }: {
   editor: Editor;
   keys: React.MutableRefObject<ToolbarKeys | null>;
   readAloud: ReadAloud;
@@ -53,6 +53,8 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   onAiAction?: (action: NoteAiAction, selection: NoteSelection) => void;
   onQuote?: (selection: NoteSelection) => void;
   onSaveToNote?: (markdown: string) => void;
+  /** 「加到画板」:交出选区的纯文字(画板上的便签按纯文字显示),由编辑器打开画板选择器。 */
+  onAddToBoard?: (text: string) => void;
 }) {
   const s = useNoteStrings();
   const ss = s.selection;
@@ -164,6 +166,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
       ? { id: "read", label: ss.stopReading, icon: Square, run: readAloud.stop }
       : { id: "read", label: ss.readAloud, icon: Volume2, run: () => readAloud.start(plain()) },
     ...(onSaveToNote ? [{ id: "save", label: s.saveTo, icon: BookPlus, run: () => { onSaveToNote(readNoteSelection(editor)?.text || plain()); close(); } }] : []),
+    ...(onAddToBoard ? [{ id: "board", label: ss.addToBoard, icon: LayoutGrid, run: () => { onAddToBoard(plain()); close(); } }] : []),
   ];
   const applyLink = () => {
     if (!/^https?:\/\/\S+$/i.test(url.trim())) return;

@@ -29,7 +29,7 @@ const zh = {
   askAi: "问 AI", askAiHint: "带着选中的文字问助手", passageGone: "那段文字已经改过了,没在笔记里找到。", focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
   selection: {
     toolbar: "选区工具", inlineCode: "行内代码", unlink: "去掉链接", linkPlaceholder: "粘贴 https:// 链接后回车",
-    ai: "AI 动作", more: "更多", copy: "复制", copied: "已复制", quote: "引用到对话",
+    ai: "AI 动作", more: "更多", copy: "复制", copied: "已复制", quote: "引用到对话", addToBoard: "加到画板",
     readAloud: "朗读", stopReading: "停止朗读", readingWithVoice: "正在用你在「语音对话」里选的音色朗读", readingWithEdge: "正在用免费的 Edge 语音朗读", saveAudio: "存为音频素材", savingAudio: "已开始生成音频,完成后在素材库里",
     actions: {
       polish: { label: "润色", hint: "让表达更通顺、更得体,意思不变", prompt: "润色选中的这段" },
@@ -42,6 +42,11 @@ const zh = {
       continue: { label: "续写", hint: "接着这段往下写一段,插在它后面", prompt: "接着选中的这段往下写" },
     },
     languages: { en: "英文", zh: "中文" },
+  },
+  board: {
+    title: "加到画板", search: "搜索画板", empty: "还没有画板", noMatch: "没有叫这个的画板", loading: "正在载入画板…",
+    newBoard: "新建画板", newBoardNamed: (name: string) => `新建画板「${name}」`, defaultName: "新画板",
+    added: (name: string) => `已加到画板「${name}」`, open: "打开画板",
   },
   node: {
     imageLink: "图片链接",
@@ -88,7 +93,7 @@ const en: Strings = {
   askAi: "Ask AI", askAiHint: "Ask the assistant about the selected text", passageGone: "That passage has changed since; it was not found in the note.", focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
   selection: {
     toolbar: "Selection tools", inlineCode: "Inline code", unlink: "Remove link", linkPlaceholder: "Paste an https:// link and press Enter",
-    ai: "AI actions", more: "More", copy: "Copy", copied: "Copied", quote: "Quote in chat",
+    ai: "AI actions", more: "More", copy: "Copy", copied: "Copied", quote: "Quote in chat", addToBoard: "Add to board",
     readAloud: "Read aloud", stopReading: "Stop reading", readingWithVoice: "Reading aloud with the voice you chose under Voice chat", readingWithEdge: "Reading aloud with the free Edge voice", saveAudio: "Save as audio", savingAudio: "Generating the audio; it will be in the media library",
     actions: {
       polish: { label: "Polish", hint: "Make it read more smoothly without changing the meaning", prompt: "Polish the selected passage" },
@@ -101,6 +106,11 @@ const en: Strings = {
       continue: { label: "Continue", hint: "Write the next paragraph and insert it after this one", prompt: "Continue writing after the selected passage" },
     },
     languages: { en: "English", zh: "Chinese" },
+  },
+  board: {
+    title: "Add to board", search: "Search boards", empty: "No boards yet", noMatch: "No board by that name", loading: "Loading boards…",
+    newBoard: "New board", newBoardNamed: (name: string) => `New board “${name}”`, defaultName: "New board",
+    added: (name: string) => `Added to board “${name}”`, open: "Open board",
   },
   node: {
     imageLink: "Image address",

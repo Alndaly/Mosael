@@ -71,6 +71,8 @@ export const publish = {
   boardKindNoteHint: "Jot it down, or let AI write it",
   boardKindFrameHint: "Group a few cells together",
   boardNotePlaceholder: "Double-click to write something",
+  boardNoteSourceFrom: "From note “{title}”",
+  boardNoteSourceHint: "Go back to this note and find this passage",
   boardRenameHint: "Double-click to rename",
   boardSpawnTitle: "Generate from this node",
   boardSpawnImageFromNote: "Turn this text into an image",

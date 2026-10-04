@@ -1,6 +1,6 @@
 import React from "react";
 import type { NoteReference } from "@/api/domains/notes";
-import { noteHref } from "@/lib/deepLink";
+import { locateNotePassage, noteHref } from "@/lib/deepLink";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
@@ -407,6 +407,22 @@ export function NoteNode({ data, selected }: NodeProps) {
         >
           {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
         </div>
+      )}
+      {item.source_note && !editing && (
+        //: 从笔记摘来的:回到那篇笔记、把这段字定位出来(定位不到 —— 字在画板上改过、笔记里也改了 —— 笔记页会说一声)。
+        <button
+          type="button"
+          data-note-source=""
+          className="nodrag absolute inset-x-2 bottom-1 z-10 flex min-w-0 cursor-pointer items-center gap-1 truncate rounded border-0 bg-transparent px-1 text-left text-ui-2xs text-muted-foreground hover:text-foreground"
+          title={t("boardNoteSourceHint")}
+          onClick={(event) => {
+            event.stopPropagation();
+            locateNotePassage({ noteId: item.source_note!.note_id, text: item.text ?? "", start: -1 });
+          }}
+        >
+          <FileText size={11} className="shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">{t("boardNoteSourceFrom").replace("{title}", item.source_note.title || item.source_note.note_id)}</span>
+        </button>
       )}
       {editing && (item.text ?? "").length >= BOARD_TEXT_MAX && (
         <span role="status" data-note-text-limit="" className="absolute inset-x-2 bottom-1 truncate text-ui-xs text-destructive">

@@ -20,6 +20,7 @@ import type { NoteSource } from "@/api/domains/notes";
 import { NoteSelectionToolbar, type NoteAiAction, type ToolbarKeys } from "./NoteSelectionToolbar";
 import { useReadAloud } from "./readAloud";
 import { SaveToNote } from "./SaveToNote";
+import { AddToBoardDialog } from "./AddToBoardDialog";
 import { InactiveSelection } from "./inactiveSelection";
 import { findPassage, followMarkdown, readNoteSelection, type NoteSelection } from "./noteSelection";
 import { NOTE_PASSAGE_EVENT, parseNotePassage, useOpenRequest } from "@/lib/deepLink";
@@ -63,6 +64,8 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const [saving, setSaving] = React.useState<{ markdown: string; n: number } | null>(null);
   const openSave = React.useRef<() => void>(() => {});
   React.useEffect(() => { if (saving) openSave.current(); }, [saving]);
+  //: 「加到画板」:要放上去的那段纯文字;有就开着画板选择器。
+  const [boarding, setBoarding] = React.useState<string | null>(null);
   const reference = React.useRef(onReference); reference.current = onReference;
   const [insertOpen, setInsertOpen] = React.useState(false);
   const [blockOpen, setBlockOpen] = React.useState(false);
@@ -234,7 +237,8 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   </div>;
   return <>{editable && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" />{toolbar}</>)}{title}<EditorContent editor={editor} />
   {editable && <NoteSelectionToolbar editor={editor} keys={toolbarKeys} readAloud={readAloud} onAskAi={onAskAi} onAiAction={onAiAction} onQuote={onQuote}
-    onSaveToNote={markdown => setSaving(previous => ({ markdown, n: (previous?.n ?? 0) + 1 }))} />}
+    onSaveToNote={markdown => setSaving(previous => ({ markdown, n: (previous?.n ?? 0) + 1 }))} onAddToBoard={setBoarding} />}
+  {boarding !== null && <AddToBoardDialog workspaceId={workspaceId} text={boarding} source={saveSource} onClose={() => setBoarding(null)} />}
   {saving && <SaveToNote workspaceId={workspaceId} content={saving.markdown} sources={saveSource ? [{ ...saveSource, quote: saving.markdown.slice(0, 280) }] : []}
     trigger={({ open }) => { openSave.current = open; return null; }} />}
   <menu.Portal className="fixed z-[80] w-[340px] max-w-[calc(100vw-24px)] rounded-xl p-1.5" header={<div className="px-3 py-2 text-xs text-muted-foreground">{s.addReference}</div>}>

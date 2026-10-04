@@ -786,3 +786,12 @@ describe("一格的能力(把它的内容变成新内容)", () => {
     expect(canvasHarness.api.add).toHaveBeenCalledWith("image", { asset_id: "a9", text: "海报.png" });
   });
 });
+
+it("「打开画板」带着要定位的那一格:板打开、画布就位之后把视野挪过去(笔记「加到画板」之后)", async () => {
+  const { openBoardItem } = await import("@/lib/deepLink");
+  opens(boardAt(2, { items: [{ id: "note_9", kind: "note", x: 2000, y: 120, width: 220, height: 140, text: "摘来的" }], edges: [] }));
+  openBoardItem("b1", "note_9");
+  mount();
+  await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+  expect(canvasHarness.api.focusItem).toHaveBeenCalledWith("note_9");
+});

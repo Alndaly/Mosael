@@ -72,6 +72,8 @@ export const publish = {
   boardKindNoteHint: "随手写，或让 AI 写",
   boardKindFrameHint: "把几格圈在一起",
   boardNotePlaceholder: "双击写点什么",
+  boardNoteSourceFrom: "来自笔记「{title}」",
+  boardNoteSourceHint: "回到这篇笔记,定位到这段字",
   boardRenameHint: "双击重命名",
   boardSpawnTitle: "引用该节点生成",
   boardSpawnImageFromNote: "用这段文字生成图片",

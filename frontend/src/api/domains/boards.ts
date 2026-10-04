@@ -29,6 +29,8 @@ export interface BoardItem {
   entity_id?: string;
   note_id?: string;
   note_revision?: number;
+  /** 便签上的字从哪篇笔记的哪一版摘来(笔记「加到画板」)。卡上据此给一条回到那篇笔记的路;和后端 shape._normalize_source_note 同形。 */
+  source_note?: { note_id: string; revision: number; title: string };
   form?: {
     prompt?: string;
     /** 上一次自动填进提示词的那段上游文字(便签连进生成、念的格子)。提示词还是它,上游改了就跟着换;
@@ -129,6 +131,14 @@ export function createBoardSequence(
     method: "POST",
     body: JSON.stringify({ workspace_id: workspaceId, ...(copyOf ? { copy_of: copyOf } : {}) }),
   });
+}
+
+/** 往画板上追加一张便签:服务端落在当前画布上、摆在空位(不压住已有的格子)。不要 base_revision。 */
+export function appendBoardNote(
+  boardId: string,
+  body: { workspace_id: string; text: string; source_note?: { note_id: string; revision: number; title: string } },
+): Promise<{ board_id: string; item_id: string; revision: number }> {
+  return api(`/api/boards/${boardId}/notes`, { method: "POST", body: JSON.stringify(body) });
 }
 
 export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {

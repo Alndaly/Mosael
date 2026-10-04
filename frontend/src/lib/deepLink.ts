@@ -134,6 +134,24 @@ export function parseNotePassage(raw: string): NotePassage | null {
   }
 }
 
+/** 「打开这张画板、把视野挪到这一格」—— 笔记「加到画板」之后那条提示上的「打开画板」。走信箱:画板页、那张板、
+ *  画布都要先就位,画布好了自己来取(见 BoardsView 的 BoardDetail)。 */
+export const BOARD_ITEM_EVENT = "mosael:focus-board-item";
+
+export function openBoardItem(boardId: string, itemId: string): void {
+  gotoRecord(`#/boards?board=${encodeURIComponent(boardId)}`, "mosael:open-board", boardId);
+  emitOpenEvent(BOARD_ITEM_EVENT, JSON.stringify({ boardId, itemId }));
+}
+
+export function parseBoardItem(raw: string): { boardId: string; itemId: string } | null {
+  try {
+    const value = JSON.parse(raw) as { boardId?: unknown; itemId?: unknown };
+    return typeof value.boardId === "string" && typeof value.itemId === "string" ? { boardId: value.boardId, itemId: value.itemId } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 打开一篇笔记。 */
 export function openNote(noteId: string): void {
   window.location.hash = noteHref(noteId);

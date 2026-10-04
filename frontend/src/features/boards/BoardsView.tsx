@@ -2,7 +2,7 @@ import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolba
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
-import { useOpenRequest } from "@/lib/deepLink";
+import { BOARD_ITEM_EVENT, parseBoardItem, useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -619,6 +619,13 @@ function BoardDetail({
   //: 画布就交上来一份新把手(canUndo 变了),进了依赖的话一直在操作,轮询的定时器就一直被重置,产出要停手 2.5 秒才出现。
   const apiRef = React.useRef(api);
   apiRef.current = api;
+  //: 「打开画板」带着要定位的那一格(笔记「加到画板」之后):画布就位、那一格在这张板上了才接,没好就留在信箱里。
+  useOpenRequest(BOARD_ITEM_EVENT, (raw) => {
+    const target = parseBoardItem(raw);
+    if (!target) return;
+    if (target.boardId !== board.id || !api || !(board.canvas?.items ?? []).some((one) => one.id === target.itemId)) return false;
+    api.focusItem(target.itemId);
+  }, [api, board]);
   const commentsKey = ["comments", board.workspace_id, "board", board.id] as const;
   const comments = useQuery({
     queryKey: commentsKey,

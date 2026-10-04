@@ -26,6 +26,10 @@ vi.mock("@/api/domains/speech", async (importOriginal) => ({
   synthesizeWithEngine: speech.synthesizeWithEngine,
   getAgentVoice: vi.fn(async () => speech.agentVoice),
 }));
+vi.mock("@/api/domains/boards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/domains/boards")>()),
+  listBoards: vi.fn(async () => []),
+}));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/notes")>()),
   listNotes: vi.fn(async () => []),
@@ -51,7 +55,8 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 function mount(markdown = "周一和剪辑组对了节奏。\n\n周二写了脚本,还加了链接文字。") {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <NoteEditor markdown={markdown} onChange={() => {}} onReference={() => {}} workspaceId="ws" noteId="n1" {...handlers} />
+      <NoteEditor markdown={markdown} onChange={() => {}} onReference={() => {}} workspaceId="ws" noteId="n1" {...handlers}
+        saveSource={{ kind: "note", id: "n1", label: "周报", quote: "", revision: 2 }} />
     </QueryClientProvider>,
   );
 }
@@ -257,4 +262,15 @@ it("窄屏收成「问 AI」+「更多」,其余都在「更多」菜单里", as
   fireEvent.click(button("更多"));
   fireEvent.click(await screen.findByRole("menuitem", { name: "粗体" }));
   expect(instance.getMarkdown()).toContain("**剪辑组**");
+});
+
+it("加到画板:打开画板选择器", async () => {
+  mount();
+  const instance = await editor();
+  select(instance, "剪辑组");
+  await screen.findByRole("toolbar", { name: "选区工具" });
+  fireEvent.click(button("加到画板"));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("searchbox")).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: /新建画板/ })).toBeInTheDocument();
 });

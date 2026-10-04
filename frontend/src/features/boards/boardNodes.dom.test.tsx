@@ -33,6 +33,7 @@ vi.mock("@/app/preferences", () => ({
       boardKindAudio: "音频",
       boardKindFrame: "分组",
       boardNotePlaceholder: "双击写点什么",
+      boardNoteSourceFrom: "来自笔记「{title}」",
     })[key] ?? key,
 }));
 vi.mock("@/components/app/asset-preview", () => ({
@@ -436,4 +437,29 @@ it("便签的输入框按正文上限限长;到了上限说一声 —— 超了�
     fireEvent.doubleClick(short.container.querySelector("[data-board-run-status]")!);
   });
   expect(short.container.querySelector("[data-note-text-limit]")).toBeNull();
+});
+
+it("从笔记摘来的便签:底下一条「来自笔记」,点了回到那篇笔记、把这段字定位出来", async () => {
+  const { NOTE_PASSAGE_EVENT } = await import("@/lib/deepLink");
+  const located: string[] = [];
+  const listener = (event: Event) => located.push(String((event as CustomEvent).detail));
+  window.addEventListener(NOTE_PASSAGE_EVENT, listener);
+  try {
+    const view = renderNode("note", "idle", {
+      text: "周二把脚本写完", form: { producer: "write" }, source_note: { note_id: "n1", revision: 3, title: "宣传片周报" },
+    });
+    const link = view.container.querySelector<HTMLButtonElement>("[data-note-source]")!;
+    expect(link.textContent).toContain("宣传片周报");
+    fireEvent.click(link);
+    expect(window.location.hash).toContain("note=n1");
+    expect(located.map((raw) => JSON.parse(raw))).toEqual([{ noteId: "n1", text: "周二把脚本写完", start: -1 }]);
+  } finally {
+    window.removeEventListener(NOTE_PASSAGE_EVENT, listener);
+    window.location.hash = "";
+  }
+});
+
+it("没有来源的便签没有这一条", () => {
+  const view = renderNode("note", "idle", { text: "手写的", form: { producer: "write" } });
+  expect(view.container.querySelector("[data-note-source]")).toBeNull();
 });
