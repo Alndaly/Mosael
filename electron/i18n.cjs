@@ -335,6 +335,15 @@ const MESSAGES = {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
   },
+  // 渲染层经 IPC 调主进程失败时给人看的话(见 ipc-errors.cjs)。
+  ipcErr_mainOutdated: {
+    zh: "这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)",
+    en: "Restart Mosael to use this (part of the app is still the old version)",
+  },
+  ipcErr_failed: {
+    zh: "桌面端没有完成这一步,再试一次",
+    en: "The desktop app couldn't finish this; try again",
+  },
   // 「切换页面」节点(见 publish/actionPage.ts)。
   browserErr_pageNeedsTarget: {
     zh: "要切到哪一页:填第几个、标题里的字,或网址里的一段",

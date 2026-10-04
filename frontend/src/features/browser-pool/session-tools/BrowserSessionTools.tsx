@@ -172,12 +172,15 @@ function SessionTools({
           role="status"
           data-page-tools-notice={shown.tone}
           className={cn(
-            "[-webkit-app-region:no-drag] inline-flex min-w-0 max-w-[340px] items-center gap-1.5 rounded-md border border-border bg-panel-inset px-2 py-1 text-ui-xs",
-            shown.tone === "error" && "text-destructive",
+            "[-webkit-app-region:no-drag] inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-panel-inset px-2 py-1 text-ui-xs",
+            // 报错要读得完:宽一些、折成两行(56px 的顶栏放得下),还长就悬停看全文;做好了 / 进行中的一行就够。
+            shown.tone === "error" ? "max-w-[420px] text-destructive" : "max-w-[340px]",
           )}
         >
           {shown.tone === "busy" && <Loader2 size={12} className="flex-none animate-mosael-spin" />}
-          <Truncate>{shown.text}</Truncate>
+          <Truncate data-page-tools-notice-text="" lines={shown.tone === "error" ? 2 : 1}>
+            {shown.text}
+          </Truncate>
           {shown.action && (
             <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-ui-xs font-medium text-primary hover:underline" onClick={shown.action.run}>
               {shown.action.label}

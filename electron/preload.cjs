@@ -3,6 +3,19 @@
 // 前端以此判断「桌面发布器是否可用」。
 const { contextBridge, ipcRenderer } = require("electron");
 const { IPC } = require("./ipc-contract.cjs");
+const { humanIpcError } = require("./ipc-errors.cjs");
+
+/**
+ * 调主进程。**失败时给人看的话在这里统一整理**(见 ipc-errors.cjs):不露 Electron 的「Error invoking remote
+ * method …」前缀和堆栈;主进程里没有这个处理器(主进程是旧的)时说要重启。语言跟着页面(`<html lang>`)。
+ * @param {string} channel
+ * @param {...unknown} args
+ */
+function invoke(channel, ...args) {
+  return ipcRenderer.invoke(channel, ...args).catch((error) => {
+    throw humanIpcError(error, document.documentElement.lang);
+  });
+}
 
 /**
  * 订阅一条主进程事件,只把载荷交给回调。listener 的参数类型在这里写一次,免得每个
@@ -72,30 +85,30 @@ const desktopBridge = {
   reportStatus: (status) => ipcRenderer.send(IPC.send.systemStatus, status),
   // 任务结束时通知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。
   notifyTask: (notice) => ipcRenderer.send(IPC.send.systemNotify, notice),
-  getOpenAtLogin: () => ipcRenderer.invoke(IPC.invoke.getOpenAtLogin),
-  setOpenAtLogin: (enabled) => ipcRenderer.invoke(IPC.invoke.setOpenAtLogin, enabled),
+  getOpenAtLogin: () => invoke(IPC.invoke.getOpenAtLogin),
+  setOpenAtLogin: (enabled) => invoke(IPC.invoke.setOpenAtLogin, enabled),
   recordingPermissions: {
-    getStatus: (kind) => ipcRenderer.invoke(IPC.invoke.recordingStatus, kind),
-    request: (kind) => ipcRenderer.invoke(IPC.invoke.recordingRequest, kind),
-    openSettings: (kind) => ipcRenderer.invoke(IPC.invoke.recordingOpenSettings, kind),
+    getStatus: (kind) => invoke(IPC.invoke.recordingStatus, kind),
+    request: (kind) => invoke(IPC.invoke.recordingRequest, kind),
+    openSettings: (kind) => invoke(IPC.invoke.recordingOpenSettings, kind),
   },
   data: {
-    exportDiagnostics: () => ipcRenderer.invoke(IPC.invoke.dataExportDiagnostics),
-    createBackup: (token) => ipcRenderer.invoke(IPC.invoke.dataCreateBackup, { token }),
-    applyRestore: (stageId) => ipcRenderer.invoke(IPC.invoke.dataApplyRestore, { stageId }),
+    exportDiagnostics: () => invoke(IPC.invoke.dataExportDiagnostics),
+    createBackup: (token) => invoke(IPC.invoke.dataCreateBackup, { token }),
+    applyRestore: (stageId) => invoke(IPC.invoke.dataApplyRestore, { stageId }),
   },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
-  checkUpdates: () => ipcRenderer.invoke(IPC.invoke.checkUpdates),
+  checkUpdates: () => invoke(IPC.invoke.checkUpdates),
   onUpdateAvailable: (callback) => onEvent(IPC.event.updateAvailable, callback),
   // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。订阅时立即补发缓存的当前值,
   // 避免渲染层挂载晚于首帧推送时"有时"漏掉全屏态。
   // 自定义 CSS(userData/custom.css)。read 取当前内容,onChange 订阅存盘后的推送 ——
   // 「改一下就生效」靠的是后者,而不是让渲染层去轮询文件。
   customCss: {
-    read: () => ipcRenderer.invoke(IPC.invoke.customCssRead),
-    path: () => ipcRenderer.invoke(IPC.invoke.customCssPath),
-    open: () => ipcRenderer.invoke(IPC.invoke.customCssOpen),
-    reveal: () => ipcRenderer.invoke(IPC.invoke.customCssReveal),
+    read: () => invoke(IPC.invoke.customCssRead),
+    path: () => invoke(IPC.invoke.customCssPath),
+    open: () => invoke(IPC.invoke.customCssOpen),
+    reveal: () => invoke(IPC.invoke.customCssReveal),
     onChange: (callback) => onEvent(IPC.event.customCss, callback),
   },
   onFullscreen: (callback) => {
@@ -107,30 +120,30 @@ contextBridge.exposeInMainWorld("mosaelDesktop", desktopBridge);
 
 /** @type {import("./preload-api").MosaelPublishBridge} */
 const publishBridge = {
-  login: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishLogin, { accountId, platform }),
-  openPage: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishOpenPage, { accountId, platform }),
-  signOut: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishSignOut, { accountId, platform }),
-  inspect: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishInspect, { accountId, platform }),
-  navigate: (url) => ipcRenderer.invoke(IPC.invoke.publishNavigate, { url }),
-  back: () => ipcRenderer.invoke(IPC.invoke.publishBack),
-  forward: () => ipcRenderer.invoke(IPC.invoke.publishForward),
-  reload: () => ipcRenderer.invoke(IPC.invoke.publishReload),
-  hideView: () => ipcRenderer.invoke(IPC.invoke.publishHideView),
+  login: (accountId, platform) => invoke(IPC.invoke.publishLogin, { accountId, platform }),
+  openPage: (accountId, platform) => invoke(IPC.invoke.publishOpenPage, { accountId, platform }),
+  signOut: (accountId, platform) => invoke(IPC.invoke.publishSignOut, { accountId, platform }),
+  inspect: (accountId, platform) => invoke(IPC.invoke.publishInspect, { accountId, platform }),
+  navigate: (url) => invoke(IPC.invoke.publishNavigate, { url }),
+  back: () => invoke(IPC.invoke.publishBack),
+  forward: () => invoke(IPC.invoke.publishForward),
+  reload: () => invoke(IPC.invoke.publishReload),
+  hideView: () => invoke(IPC.invoke.publishHideView),
   onViewState: (callback) => onEvent(IPC.event.publishView, callback),
   /** 悬浮卡片几何(见 main.cjs onPanels):渲染层照它画圆角/阴影/标题条。 */
   /** 拖动/缩放悬浮面板(几何由主进程持有并落盘)。 */
-  setPanelLayout: (patch) => ipcRenderer.invoke(IPC.invoke.publishPanelLayout, patch),
+  setPanelLayout: (patch) => invoke(IPC.invoke.publishPanelLayout, patch),
   /** 手动关闭某块面板:只撤面板,任务照常继续。 */
-  closePanel: (id) => ipcRenderer.invoke(IPC.invoke.publishClosePanel, { id }),
+  closePanel: (id) => invoke(IPC.invoke.publishClosePanel, { id }),
   /** 悬浮浏览器声音开关；真实状态随 onPanels 回传。 */
-  setPanelMuted: (id, muted) => ipcRenderer.invoke(IPC.invoke.publishPanelMuted, { id, muted }),
+  setPanelMuted: (id, muted) => invoke(IPC.invoke.publishPanelMuted, { id, muted }),
   onPanels: (callback) => onEvent(IPC.event.publishPanels, callback),
   // 前台会话的页面列表(左侧那一列):页面本身随 onViewState 的 pages 下发。
-  switchPage: (id) => ipcRenderer.invoke(IPC.invoke.publishSwitchPage, { id }),
-  closePage: (id) => ipcRenderer.invoke(IPC.invoke.publishClosePage, { id }),
-  reorderPages: (ids) => ipcRenderer.invoke(IPC.invoke.publishReorderPages, { ids }),
-  newPage: (url) => ipcRenderer.invoke(IPC.invoke.publishNewPage, { url }),
-  setPagesInset: (left) => ipcRenderer.invoke(IPC.invoke.publishPagesInset, { left }),
+  switchPage: (id) => invoke(IPC.invoke.publishSwitchPage, { id }),
+  closePage: (id) => invoke(IPC.invoke.publishClosePage, { id }),
+  reorderPages: (ids) => invoke(IPC.invoke.publishReorderPages, { ids }),
+  newPage: (url) => invoke(IPC.invoke.publishNewPage, { url }),
+  setPagesInset: (left) => invoke(IPC.invoke.publishPagesInset, { left }),
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 
@@ -139,24 +152,24 @@ contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 const browserBridge = {
   onFrame: (callback) => onEvent(IPC.event.browserFrame, callback),
   // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
-  openLogin: (opts) => ipcRenderer.invoke(IPC.invoke.browserOpenLogin, opts),
-  clearProfile: (partition) => ipcRenderer.invoke(IPC.invoke.browserClearProfile, { partition }),
+  openLogin: (opts) => invoke(IPC.invoke.browserOpenLogin, opts),
+  clearProfile: (partition) => invoke(IPC.invoke.browserClearProfile, { partition }),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 
 // 浏览器会话顶栏的页面工具。都作用于前台那个内嵌视图 —— 渲染层不点名要哪个视图(见 publish/pageTarget.ts)。
 /** @type {import("./preload-api").MosaelPageToolsBridge} */
 const pageToolsBridge = {
-  capture: (mode) => ipcRenderer.invoke(IPC.invoke.pageToolsCapture, { mode }),
-  beginRegion: () => ipcRenderer.invoke(IPC.invoke.pageToolsRegionStart),
-  finishRegion: (selection) => ipcRenderer.invoke(IPC.invoke.pageToolsRegionFinish, { selection }),
-  probeVideos: () => ipcRenderer.invoke(IPC.invoke.pageToolsVideos),
-  listImages: () => ipcRenderer.invoke(IPC.invoke.pageToolsImages),
-  fetchImages: (urls) => ipcRenderer.invoke(IPC.invoke.pageToolsFetchImages, { urls }),
-  readPage: (mode) => ipcRenderer.invoke(IPC.invoke.pageToolsRead, { mode }),
-  setInset: (right) => ipcRenderer.invoke(IPC.invoke.pageToolsInset, { right }),
+  capture: (mode) => invoke(IPC.invoke.pageToolsCapture, { mode }),
+  beginRegion: () => invoke(IPC.invoke.pageToolsRegionStart),
+  finishRegion: (selection) => invoke(IPC.invoke.pageToolsRegionFinish, { selection }),
+  probeVideos: () => invoke(IPC.invoke.pageToolsVideos),
+  listImages: () => invoke(IPC.invoke.pageToolsImages),
+  fetchImages: (urls) => invoke(IPC.invoke.pageToolsFetchImages, { urls }),
+  readPage: (mode) => invoke(IPC.invoke.pageToolsRead, { mode }),
+  setInset: (right) => invoke(IPC.invoke.pageToolsInset, { right }),
   // 内嵌浏览器里点的下载不弹保存框:主进程报进度 / 下好了,渲染层带着自己的会话来存进素材库。
   onDownload: (callback) => onEvent(IPC.event.pageToolsDownload, callback),
-  saveDownload: (request) => ipcRenderer.invoke(IPC.invoke.pageToolsSaveDownload, request),
+  saveDownload: (request) => invoke(IPC.invoke.pageToolsSaveDownload, request),
 };
 contextBridge.exposeInMainWorld("mosaelPageTools", pageToolsBridge);

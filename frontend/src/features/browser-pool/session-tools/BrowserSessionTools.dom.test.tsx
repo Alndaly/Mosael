@@ -433,3 +433,26 @@ describe("工具区只留图标", () => {
     await act(async () => finish(capture()));
   });
 });
+
+describe("报错怎么说、说在哪", () => {
+  it("没做成时照桌面端整理好的那句话说(不露 Electron 的原话);长的折成两行,不在地址栏旁边挤成半句", async () => {
+    tools.capture.mockRejectedValueOnce(new Error("这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)"));
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("visible"));
+    await waitFor(() => expect(notice()?.getAttribute("data-page-tools-notice")).toBe("error"));
+    expect(notice()).toHaveTextContent("browserToolsFailed:这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)");
+    expect(notice()?.textContent).not.toContain("Error invoking remote method");
+    const text = notice()!.querySelector("[data-page-tools-notice-text]") as HTMLElement;
+    expect(text.className).toContain("line-clamp-2");
+  });
+
+  it("做好了、进行中的那句话一行就够", async () => {
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("visible"));
+    await waitFor(() => expect(notice()?.getAttribute("data-page-tools-notice")).toBe("done"));
+    const text = notice()!.querySelector("[data-page-tools-notice-text]") as HTMLElement;
+    expect(text.className).not.toContain("line-clamp-2");
+  });
+});
