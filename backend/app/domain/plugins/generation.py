@@ -252,6 +252,23 @@ class GenerationOutcome:
     paths: list[Path]
     usage: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
+    #: 每份产出实际用的参数(和 paths 一一对应),插件在产出项上写的 `parameters`(只收标量)。
+    output_parameters: list[dict[str, Any]] = field(default_factory=list)
+    #: 插件说的一句话(`note`):比如循环里有一次失败了,出来的照样交回、说清成功了几张。
+    note: str = ""
+
+
+#: 一份产出上的参数最多记几个、说明最长多少字。
+_MAX_OUTPUT_PARAMETERS = 16
+_MAX_NOTE = 500
+
+
+def _output_parameters(raw: Any) -> dict[str, Any]:
+    """产出项上的 `parameters`:只收标量值,键是普通的参数名。"""
+    if not isinstance(raw, dict):
+        return {}
+    kept = {key: value for key, value in raw.items() if isinstance(key, str) and _PARAMETER_KEY.match(key) and _scalar(value)}
+    return dict(list(kept.items())[:_MAX_OUTPUT_PARAMETERS])
 
 
 #: 产出最多几份。一次生成交回几百个文件,多半是插件把中间帧也交回来了。
@@ -274,6 +291,7 @@ def generate(
     #: 产出若是一个地址,由后端替这个连接去下 —— 走这个连接的出站决定(和插件进程拿到的是同一个,见 egress)。
     egress = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
     collected: list[Path] = []
+    parameters: list[dict[str, Any]] = []
     extras: dict[str, Any] = {}
     # 调用记录里留的那一份:不带本地路径(那是一次性的暂存路径),只说挂了哪几种素材。
     recorded = {
@@ -320,16 +338,25 @@ def generate(
             target = output_dir / f"{index:02d}-{got.name}"
             shutil.move(str(got), target)
             collected.append(target)
+            parameters.append(_output_parameters(spec.get("parameters")))
         if not collected:
             raise PluginDomainError("pluginErr_generationNoOutput", name=name)
         usage = output.get("usage")
         raw = output.get("raw")
         extras["usage"] = dict(usage) if isinstance(usage, dict) else {}
         extras["raw"] = dict(raw) if isinstance(raw, dict) else {}
-        return {"outputs": [path.name for path in collected], "usage": extras["usage"]}
+        note = output.get("note")
+        extras["note"] = note.strip()[:_MAX_NOTE] if isinstance(note, str) else ""
+        recorded_output: dict[str, Any] = {"outputs": [path.name for path in collected], "usage": extras["usage"]}
+        if any(parameters):
+            recorded_output["parameters"] = parameters
+        if extras["note"]:
+            recorded_output["note"] = extras["note"]
+        return recorded_output
 
     tools.invoke_host(db, instance_id, GENERATION, recorded, prepare=prepare, collect=collect, hooks=hooks)
-    return GenerationOutcome(paths=collected, usage=extras.get("usage", {}), raw=extras.get("raw", {}))
+    return GenerationOutcome(paths=collected, usage=extras.get("usage", {}), raw=extras.get("raw", {}),
+                             output_parameters=parameters if any(parameters) else [], note=extras.get("note", ""))
 
 
 __all__ = [

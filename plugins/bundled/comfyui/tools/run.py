@@ -18,7 +18,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 import graph
 import models
@@ -456,14 +456,15 @@ def _open_socket(comfy: Comfy, client_id: str) -> WebSocket | None:
 
 
 def run_prompt(comfy: Comfy, prompt: dict[str, Any], emit: Emit, locale: str,
-               titles: dict[str, str] | None = None) -> tuple[str, dict[str, Any] | None]:
-    """提交一张填好的 API 图并等它跑完。返回 (任务号, 历史条目)。"""
+               titles: dict[str, str] | None = None, receipt: dict[str, Any] | None = None
+               ) -> tuple[str, dict[str, Any] | None]:
+    """提交一张填好的 API 图并等它跑完。返回 (任务号, 历史条目)。`receipt` 是回执里多记的东西(循环到第几次)。"""
     client_id = uuid.uuid4().hex
     # 先连 WebSocket 再提交:ComfyUI 只把事件推给**已经连着**的那个 clientId,晚连就错过开头。
     socket = _open_socket(comfy, client_id)
     try:
         prompt_id = submit(comfy, prompt, client_id, locale)
-        emit({"event": "task", "task": {"prompt_id": prompt_id, "client_id": client_id}})
+        emit({"event": "task", "task": {"prompt_id": prompt_id, "client_id": client_id, **(receipt or {})}})
         tracker = _Tracker(prompt, locale, titles)
         progress(emit, 0.02, tracker.message())
         if socket is not None:
@@ -498,13 +499,93 @@ def download(comfy: Comfy, files: list[dict[str, Any]], stem: str) -> list[dict[
     return artifacts
 
 
+class Repeated(NamedTuple):
+    """循环提交 N 次的结果:跑出来的那几次 (任务号, 历史条目, 种子),和没出来的那几次 (第几张, 原因)。"""
+
+    runs: list[tuple[str, dict[str, Any], int]]
+    failures: list[tuple[int, str]]
+    count: int
+
+
+def run_repeated(comfy: Comfy, build: Callable[[int], dict[str, Any]], count: int, given_seed: int | None, emit: Emit,
+                 locale: str, titles: dict[str, str] | None, resume: dict[str, Any] | None = None) -> Repeated:
+    """没有画布的图出 N 张:循环提交 N 次,每次换一个种子 —— 给了种子就从它开始依次 +1,没给就每次随机。
+
+    `build(种子)` 交回这一次要提交的图。一次一次来(跑完一张再提交下一张,不往 ComfyUI 的队列里灌);取消了剩下的
+    不再提交,在跑的那一次由 run_prompt 停下。某一次失败不拖垮别的:记下原因接着跑,出来的照样交回。
+    回执里记着这是第几次、前面几次的任务号和种子(`repeat`):后端重启后带着它回来,接着等在跑的那一次,剩下的照常提交。
+    """
+    state = (resume or {}).get("repeat") if isinstance(resume, dict) else None
+    seeds: list[int] = [int(one) for one in (state or {}).get("seeds") or []]
+    done: list[str] = [str(one) for one in (state or {}).get("done") or []]
+    runs: list[tuple[str, dict[str, Any], int]] = []
+    failures: list[tuple[int, str]] = []
+
+    def step_emit(index: int) -> Emit:
+        def relay(event: dict[str, Any]) -> None:
+            if event.get("event") == "progress":
+                share = (index + float(event.get("progress") or 0)) / count
+                head = say(locale, f"第 {index + 1}/{count} 张", f"Image {index + 1}/{count}")
+                event = {**event, "progress": round(min(0.95, share), 4), "message": f"{head} · {event.get('message', '')}"}
+            emit(event)
+        return relay
+
+    def settle(index: int, prompt_id: str, waiting: Callable[[], dict[str, Any] | None]) -> None:
+        try:
+            entry = waiting()
+        except ComfyError as exc:
+            if cancelled():
+                raise
+            failures.append((index + 1, str(exc)))
+            return
+        if entry:
+            runs.append((prompt_id, entry, seeds[index]))
+
+    for index, prompt_id in enumerate(done):  # 重启之前已经跑完的那几次:历史里取
+        settle(index, prompt_id, lambda pid=prompt_id: history_entry(comfy, pid))
+    start = len(done)
+    if state and resume.get("prompt_id"):  # 重启时在跑的那一次:接着等,不再提交
+        current = str(resume["prompt_id"])
+        settle(start, current, lambda: follow_poll(comfy, current, step_emit(start), locale))
+        done.append(current)
+        start += 1
+    for index in range(start, count):
+        if cancelled():
+            raise ComfyError(say(locale, "已取消", "Cancelled"))
+        seed = given_seed + index if given_seed is not None else random.randint(0, 2**31 - 1)
+        seeds = seeds[:index] + [seed]
+        prompt = build(seed)
+        receipt = {"repeat": {"count": count, "index": index, "done": list(done), "seeds": list(seeds)}}
+        try:
+            prompt_id, entry = run_prompt(comfy, prompt, step_emit(index), locale, titles, receipt=receipt)
+        except ComfyError as exc:
+            if cancelled():
+                raise
+            failures.append((index + 1, str(exc)))
+            continue
+        done.append(prompt_id)
+        if entry:
+            runs.append((prompt_id, entry, seed))
+    return Repeated(runs, failures, count)
+
+
+def repeat_note(result: Repeated, locale: str) -> str:
+    """循环里有几次没出来时给人看的那一句:N 张里出了几张、哪几张没出来、为什么。都出来了是空串。"""
+    if not result.failures:
+        return ""
+    which = "、".join(str(index) for index, _ in result.failures)
+    reasons = ";".join(dict.fromkeys(reason for _, reason in result.failures))
+    return say(locale, f"{result.count} 张里出了 {len(result.runs)} 张;第 {which} 张没出来:{reasons}",
+               f"{len(result.runs)} of {result.count} images came out; image {which.replace('、', ', ')} failed: {reasons}")
+
+
 def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
     kind = str(request.get("kind") or "image")
     resume = request.get("resume")
     #: 「结果取自」选了一个节点(见 graph._output_choice):只要它的,别的保存节点不跑。「全部」和没选一样。
     picked = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
     picked = "" if picked == graph.ALL_OUTPUTS else picked
-    if isinstance(resume, dict) and resume.get("prompt_id"):
+    if isinstance(resume, dict) and resume.get("prompt_id") and not resume.get("repeat"):
         # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。
         prompt_id = str(resume["prompt_id"])
         progress(emit, 0.05, say(locale, "接着等 ComfyUI 里的任务", "Resuming the ComfyUI task"))
@@ -518,6 +599,10 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         # 没给张数就一次一张(目录里张数的缺省就是 1,见 graph.describe):不照画布上存着的 batch_size ——
         # 宿主照目录说的份数摆占位,做的得是同一件事。
         values.setdefault("batch", 1)
+        if isinstance(resume, dict) and resume.get("repeat") or (values["batch"] > 1 and graph.repeats_for_count(api)):
+            # 没有画布的图出 N 张:循环提交 N 次(重启时带着循环的回执回来,接着跑)
+            return _generate_repeated(request, comfy, locale, emit, kind, picked,
+                                      (object_info, api, titles, values, parameters))
         prompt = graph.fill(api, values, overrides_from(parameters), object_info)
         if picked:
             prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
@@ -533,3 +618,50 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     outputs = [{"path": one["path"]} for one in download(comfy, files, "comfyui")]
     usage = {_USAGE_UNITS.get(kind, "images"): len(outputs)}
     return {"outputs": outputs, "usage": usage, "raw": {"prompt_id": prompt_id}}
+
+
+def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str, picked: str,
+                       loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any]],
+                       ) -> dict[str, Any]:
+    """没有画布的图出 N 张:循环提交 N 次(run_repeated),每份产出带着它用的种子;有几次没出来时说明一句。
+
+    `loaded` 是 generate 已经取好的 (object_info, 图, 节点名字, 主控件的值, 参数表),不再拉第二遍。"""
+    object_info, api, titles, values, parameters = loaded
+    count = min(int(values.get("batch") or 1), graph.MAX_BATCH)
+    given = int(parameters["seed"]) if _number(parameters.get("seed")) else None
+    overrides = overrides_from(parameters)
+    uploaded: dict[str, list[str]] | None = None
+
+    def build(seed: int) -> dict[str, Any]:
+        nonlocal uploaded
+        prompt = graph.fill(api, {**values, "seed": seed, "batch": 1}, overrides, object_info)
+        if picked:
+            prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
+        if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
+            preflight(prompt, object_info, locale)
+            uploaded = upload(comfy, request.get("inputs") or [])
+        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded) if uploaded else prompt
+
+    result = run_repeated(comfy, build, count, given, emit, locale, titles, request.get("resume"))
+    if not result.runs:
+        raise ComfyError(result.failures[0][1] if result.failures else say(locale, "一张都没出来", "No image came out"))
+    files: list[dict[str, Any]] = []
+    seeds: list[int] = []
+    for _, entry, seed in result.runs:
+        for item in graph.collect_outputs(entry, kind, {picked} if picked else None):
+            files.append({"item": item, "media": kind})
+            seeds.append(seed)
+    if not files:
+        raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
+                             "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
+    outputs = [{"path": one["path"], "parameters": {"seed": seed}}
+               for one, seed in zip(download(comfy, files, "comfyui"), seeds, strict=True)]
+    output: dict[str, Any] = {
+        "outputs": outputs,
+        "usage": {_USAGE_UNITS.get(kind, "images"): len(outputs)},
+        "raw": {"prompt_ids": [prompt_id for prompt_id, _, _ in result.runs], "seeds": [seed for _, _, seed in result.runs]},
+    }
+    note = repeat_note(result, locale)
+    if note:
+        output["note"] = note
+    return output

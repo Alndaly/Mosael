@@ -213,14 +213,17 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             ]
             if not assets:
                 raise GenerationAdapterError("Provider returned no output")
-            for asset in assets:
+            #: 每份产出实际用的参数(ComfyUI 循环提交时每张一个种子):记在它自己那一行上,也进任务结果。
+            used = [dict(one) for one in result.output_parameters[: len(assets)]]
+            used += [{}] * (len(assets) - len(used))
+            for asset, own in zip(assets, used, strict=True):
                 db.add(
                     GeneratedAsset(
                         asset_id=asset.id,
                         provider=generation.provider,
                         model=generation.model,
                         prompt=request.prompt,
-                        parameters=request.parameters,
+                        parameters={**request.parameters, **own},
                         job_id=job.id,
                     )
                 )
@@ -232,10 +235,20 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 return
             generation.result_asset_id = assets[0].id
             job.progress = 1.0
-            say(job, "jobMsg_generationDone")
+            #: 供应商说了一句(循环里有一次失败、成功了几张)就把它当这一次的最后一句话,没说才是「生成完成」。
+            if result.note:
+                say(job, result.note)
+            else:
+                say(job, "jobMsg_generationDone")
             #: 回执里放**一串**。收成单数的话,消费方拿到的永远只是第一张 —— 而这正是
             #: 多出来那几张此前消失的地方。
-            job.result = {"asset_ids": asset_ids}
+            job.result = {
+                "asset_ids": asset_ids,
+                #: 每份用的参数各不一样时(每张一个种子)记一份对照,运行记录里看得到
+                **({"outputs": [{"asset_id": asset.id, "parameters": own} for asset, own in zip(assets, used, strict=True)]}
+                   if any(used) else {}),
+                **({"note": result.note} if result.note else {}),
+            }
             _record_generation_usage(
                 db, generation, job, request, context, result, started, "succeeded",
                 measured_seconds=_measured_seconds(assets) if generation.kind in ("audio", "video") else None,

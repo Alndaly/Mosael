@@ -263,16 +263,93 @@ def test_没接到能跑的输出上的节点_目录里不算_提交时也不带
     comfy.state.object_info.update(json.loads(json.dumps(INPAINT_NODE_INFO)))
     comfy.state.workflows["inpainting.json"] = INPAINT_MUTED_FIRST_PASS_API
     model = next(one for one in _models(comfy.url) if one["id"] == "inpainting.json")
-    assert "size" not in model["parameters"] and "num_images" not in model["parameters"]
+    assert "size" not in model["parameters"], "悬空的画布不是「尺寸」"
     assert model["outputs_per_run"] == 1
 
     comfy.state.outputs = {"16": {"images": [{"filename": "ComfyUI_temp_00001_.png", "subfolder": "", "type": "temp"}]}}
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 2},
                                                    "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]})
-    submitted = comfy.posted("/prompt")[0]["prompt"]
-    assert not {"6", "8", "10", "11"} & set(submitted)
-    assert submitted["21"]["inputs"]["image"].startswith("mosael/")
-    assert len(output["outputs"]) == 1
+    for submitted in (one["prompt"] for one in comfy.posted("/prompt")):
+        assert not {"6", "8", "10", "11"} & set(submitted)
+        assert submitted["21"]["inputs"]["image"].startswith("mosael/")
+    assert len(output["outputs"]) == 2, "张数靠循环提交两次(见下面那几条),不是写进悬空节点的 batch_size"
+
+
+def _inpaint(comfy) -> None:
+    comfy.state.object_info.update(json.loads(json.dumps(INPAINT_NODE_INFO)))
+    comfy.state.workflows["inpainting.json"] = INPAINT_MUTED_FIRST_PASS_API
+    comfy.state.outputs = {"16": {"images": [{"filename": "ComfyUI_temp_00001_.png", "subfolder": "", "type": "temp"}]}}
+
+
+def _submitted_seeds(comfy) -> list[int]:
+    return [one["prompt"]["13"]["inputs"]["seed"] for one in comfy.posted("/prompt")]
+
+
+def test_没有画布的图出N张_循环提交N次_每次换一个种子(comfy, tmp_path: Path) -> None:
+    """用户拍板:局部重绘这类没有自己画布的图,张数照常生效 —— 插件循环提交 N 次。给了种子就从它开始依次 +1,
+    没给就每次随机;每张用的种子跟着产出交回(宿主记进生成记录),图只传一次。"""
+    _inpaint(comfy)
+    model = next(one for one in _models(comfy.url) if one["id"] == "inpainting.json")
+    assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1}
+    assert model["max_outputs"] == 4
+    image = {"role": "reference_image", "path": str(_png(tmp_path))}
+
+    output, hooks, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "inputs": [image],
+                                                       "parameters": {"num_images": 3, "seed": 100}})
+    assert _submitted_seeds(comfy) == [100, 101, 102]
+    assert len(comfy.state.uploads) == 1, "图只传一次,三次提交都接它"
+    assert [one["parameters"] for one in output["outputs"]] == [{"seed": 100}, {"seed": 101}, {"seed": 102}]
+    assert output["usage"] == {"images": 3} and output["raw"]["prompt_ids"] == ["p1", "p2", "p3"]
+    assert "note" not in output
+    assert [task["prompt_id"] for task in hooks.tasks] == ["p1", "p2", "p3"]
+    assert any("第 2/3 张" in message for _, message in hooks.progress)
+
+    _generate(comfy.url, tmp_path, {"model": "inpainting.json", "inputs": [image], "parameters": {"num_images": 2}})
+    unseeded = _submitted_seeds(comfy)[3:]
+    assert len(unseeded) == 2 and unseeded[0] != unseeded[1], "没给种子:每次随机"
+
+
+def test_循环里一次失败_出来的照样交回_说明成功了几张和原因(comfy, tmp_path: Path) -> None:
+    _inpaint(comfy)
+    comfy.state.outcomes = ["success", "error", "success"]
+    comfy.state.error_message = "CUDA out of memory"
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 3, "seed": 7},
+                                                   "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]})
+    assert [one["parameters"]["seed"] for one in output["outputs"]] == [7, 9], "第 2 张失败,第 1、3 张照样交回"
+    assert "3 张里出了 2 张" in output["note"] and "第 2 张" in output["note"] and "CUDA out of memory" in output["note"]
+
+
+def test_循环里一张都没出来_照旧报失败(comfy, tmp_path: Path) -> None:
+    _inpaint(comfy)
+    comfy.state.outcomes = ["error", "error"]
+    with pytest.raises(runtime.PluginRuntimeError, match="CUDA out of memory"):
+        _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 2},
+                                        "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]})
+
+
+def test_循环中途取消_剩下的不再提交_在跑的那个中断(comfy, tmp_path: Path) -> None:
+    _inpaint(comfy)
+    comfy.state.outcome = "never"
+    with pytest.raises(runtime.PluginCancelled):
+        _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 3},
+                                        "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]},
+                  _Hooks(cancel_after_task=True))
+    assert len(comfy.posted("/prompt")) == 1, "剩下的两次不再提交"
+    assert comfy.posted("/interrupt") == [{"prompt_id": "p1"}], "在跑的那个在 ComfyUI 上中断"
+
+
+def test_循环到一半后端重启_接着等那一次再把剩下的跑完(comfy, tmp_path: Path) -> None:
+    """回执里记着这是第几次、前面几次的任务号和种子:重启后接着等在跑的那一次,不重复提交它,剩下的照常提交。"""
+    _inpaint(comfy)
+    done = {"status": {"status_str": "success", "completed": True},
+            "outputs": {"16": {"images": [{"filename": "done.png", "subfolder": "", "type": "temp"}]}}}
+    comfy.state.history.update({"p8": done, "p9": json.loads(json.dumps(done))})
+    receipt = {"prompt_id": "p9", "repeat": {"count": 3, "index": 1, "done": ["p8"], "seeds": [50, 51]}}
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 3, "seed": 50},
+                                                   "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}],
+                                                   "resume": receipt})
+    assert _submitted_seeds(comfy) == [52], "只提交还没跑的第 3 次"
+    assert [one["parameters"]["seed"] for one in output["outputs"]] == [50, 51, 52]
 
 
 def test_两个保存节点_一次交回两份_结果取自选一个就只交回它的(comfy, tmp_path: Path) -> None:

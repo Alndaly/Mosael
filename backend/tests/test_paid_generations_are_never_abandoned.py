@@ -27,6 +27,7 @@ import pytest
 
 from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
+    GenerationResult,
     RemoteTaskWatch,
     watching_remote_tasks,
 )
@@ -189,7 +190,7 @@ def test_取回时不再提交_成片照常入库(quiet_runner, monkeypatch, tmp
 
     def resume(poll_path, request, context, output_dir):
         resumed.append(poll_path)
-        return SimpleNamespace(output_paths=[_png(tmp_path / "out.png")], usage={}, raw_usage={})
+        return GenerationResult(output_paths=[_png(tmp_path / "out.png")])
 
     def generate(*args, **kwargs):
         raise AssertionError("取回时又提交了一次 —— 那是再付一次钱")

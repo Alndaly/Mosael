@@ -510,7 +510,8 @@ def test_没接到能跑的输出上的节点不算_局部重绘图没有假的�
     api = graph.live(INPAINT_MUTED_FIRST_PASS_API, info)
     assert set(api) == {"4", "7", "13", "14", "15", "16", "21", "23", "24"}
     model = graph.describe("inpainting.json", "inpainting", api, info, {})
-    assert "size" not in model["parameters"] and "num_images" not in model["parameters"]
+    assert "size" not in model["parameters"]
+    assert model["parameters"]["num_images"]["default"] == 1, "没有画布:张数靠循环提交(graph.repeats_for_count)"
     assert model["outputs_per_run"] == 1 and "output_node" not in model["parameters"]
     assert "6.text" not in model["parameters"], "没接上的那句提示词不是一个可调的参数"
     assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}, {"role": "mask", "max": 1}], (

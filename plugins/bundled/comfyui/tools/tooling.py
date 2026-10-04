@@ -261,7 +261,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             if sized is not None:
                 alias(sized, name, name)
     batched = graph.batch_input(api)
-    if batched is not None and kind == "image":
+    #: 有画布的写 batch_size;没有画布、有种子的循环提交(graph.repeats_for_count),和生成那一路同一件事
+    if (batched is not None and kind == "image") or graph.repeats_for_count(api):
         # 缺省 1,和生成那一路同一个答案:不照画布上存着的 batch_size(古风女孩存的是 4,不填就一次出 4 张)
         shape.properties["num_images"] = {
             "type": "integer", "minimum": 1, "maximum": graph.MAX_BATCH, "x-advanced": True, "default": 1,
@@ -515,21 +516,44 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
     # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
     values.setdefault("batch", 1)  # 没填张数就一次一张(入参的缺省),不照画布上存着的
-    prompt = graph.fill(api, values, overrides, object_info)
-    run.preflight(prompt, object_info, locale)
+    uploads: dict[str, list[str]] | None = None
 
-    uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
-                         + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
-    for role, names in uploads.items():
-        if role == "mask":
-            prompt = graph.wire_inputs(prompt, kind, {"mask": names})
-            continue
-        node = role.removeprefix("slot:")
-        if node in prompt:
-            graph.put_input(prompt, node, names[0])
+    def build(seed: int | None) -> dict[str, Any]:
+        """这一次要提交的图:填好入参(循环提交时换上这一次的种子、一次一张),接上传好的素材。素材只传一次。"""
+        nonlocal uploads
+        filled = {**values, "seed": seed, "batch": 1} if seed is not None else values
+        prompt = graph.fill(api, filled, overrides, object_info)
+        if uploads is None:
+            run.preflight(prompt, object_info, locale)
+            uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
+                                 + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
+        for role, names in uploads.items():
+            if role == "mask":
+                prompt = graph.wire_inputs(prompt, kind, {"mask": names})
+                continue
+            node = role.removeprefix("slot:")
+            if node in prompt:
+                graph.put_input(prompt, node, names[0])
+        return prompt
 
-    prompt_id, finished = run.run_prompt(comfy, prompt, emit, locale, titles)
     from workflows import deliver  # 避免循环 import:workflows 也用这里的 output_key
 
+    count = min(int(values["batch"]), graph.MAX_BATCH)
+    if count > 1 and graph.repeats_for_count(api):
+        # 没有画布的图出 N 张:循环提交 N 次,每次换一个种子(和生成那一路同一个 run.run_repeated)
+        given = int(parameters["seed"]) if run._number(parameters.get("seed")) else None  # noqa: SLF001
+        repeated = run.run_repeated(comfy, build, count, given, emit, locale, titles)
+        if not repeated.runs:
+            raise ComfyError(repeated.failures[0][1])
+        result = deliver(comfy, [(prompt_id, finished) for prompt_id, finished, _ in repeated.runs], build(None),
+                         titles, locale, entry.id, include_previews=include_previews, workflow=entry.id, one_workflow=True)
+        result["seeds"] = [seed for _, _, seed in repeated.runs]
+        note = run.repeat_note(repeated, locale)
+        if note:
+            result["note"] = note
+            result["summary"] = f"{result['summary']}({note})"
+        return result
+    prompt = build(None)
+    prompt_id, finished = run.run_prompt(comfy, prompt, emit, locale, titles)
     return deliver(comfy, [(prompt_id, finished or {})], prompt, titles, locale, entry.id,
                    include_previews=include_previews, workflow=entry.id)

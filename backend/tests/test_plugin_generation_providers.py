@@ -134,6 +134,14 @@ if payload.get("kind") == "audio":
         handle.writeframes(b"\x00\x00" * 8000)
     emit({"ok": True, "output": {"outputs": [{"path": "song.wav"}], "raw": {"job": "t-1"}}})
     sys.exit(0)
+if prompt == "repeat-with-note":
+    # 循环提交了三次、出了两张:每份带着它用的种子,另说一句「三张里出了两张」
+    for name in ("a.png", "b.png"):
+        (Path(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]) / name).write_bytes(PNG)
+    emit({"ok": True, "output": {"outputs": [{"path": "a.png", "parameters": {"seed": 7}},
+                                             {"path": "b.png", "parameters": {"seed": 9, "nested": {"x": 1}}}],
+                                 "usage": {"images": 2}, "note": "3 张里出了 2 张;第 2 张失败:显存不够"}})
+    sys.exit(0)
 out = Path(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]) / "out.png"
 out.write_bytes(Path(inputs[0]["path"]).read_bytes() if inputs else PNG)
 emit({"ok": True, "output": {"outputs": [{"path": "out.png"}], "usage": {"images": 1}, "raw": {"job": "t-1"}}})
@@ -433,6 +441,27 @@ def test_一次生成走普通的生成执行器(plugged) -> None:
         ).first()
         assert invocation.status == "succeeded"
         assert invocation.input["inputs"] == ["reference_image"], "调用记录里不留一次性的暂存路径"
+
+
+def test_每份产出用的参数和一句说明进生成记录(plugged) -> None:
+    """ComfyUI 没有画布的图出 N 张是循环提交 N 次:每张的种子不一样,其中一次失败时出来的照样交回。插件在每份产出上
+    写它实际用的参数(`parameters`,只收标量),再给一句说明(`note`);宿主记进这一次的任务结果(运行记录里看得到每张的
+    种子)和每份素材的生成参数,说明作为任务的最后一句话。"""
+    client, instance_id = plugged
+    workspace = client.post("/api/workspaces", json={"name": "生成"}).json()["id"]
+    submitted = _submit(client, workspace, instance_id, "repeat-with-note", parameters={"seed": 7})
+    assert submitted.status_code == 200, submitted.text
+    job_id = submitted.json()["job"]["id"]
+    assert wait_status(client, job_id, timeout=30) == "succeeded"
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        first, second = job.result["asset_ids"]
+        assert job.result["outputs"] == [{"asset_id": first, "parameters": {"seed": 7}},
+                                         {"asset_id": second, "parameters": {"seed": 9}}], "嵌套的值不收"
+        assert job.result["note"] == "3 张里出了 2 张;第 2 张失败:显存不够"
+        assert db.get(GeneratedAsset, second).parameters == {"seed": 9}
+    shown = client.get(f"/api/jobs/{job_id}").json()
+    assert shown["message"] == "3 张里出了 2 张;第 2 张失败:显存不够"
 
 
 def test_插件的音频模型走同一个生成执行器_产出登记成音频素材(plugged) -> None:

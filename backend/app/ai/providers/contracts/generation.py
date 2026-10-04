@@ -171,6 +171,11 @@ class GenerationResult:
     output_paths: list[Path]
     usage: dict[str, Any] = field(default_factory=dict)
     raw_usage: dict[str, Any] = field(default_factory=dict)
+    #: 每份产出**实际用的**参数(和 output_paths 一一对应,空的就是照请求):一次请求里各份不一样时才有 ——
+    #: ComfyUI 没有画布的图出 N 张是循环提交 N 次,每张一个种子。运行器记进任务结果和每份素材的生成参数。
+    output_parameters: list[dict[str, Any]] = field(default_factory=list)
+    #: 给人看的一句说明(「3 张里出了 2 张;第 2 张失败:…」)。运行器把它当这一次的最后一句话。
+    note: str = ""
 
 
 @dataclass(frozen=True)

@@ -154,8 +154,11 @@ def import_outputs(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run
 
 def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dict[str, Any] | None,
              titles: dict[str, str], locale: str, stem: str, *, include_previews: bool,
-             workflow: str = "") -> dict[str, Any]:
-    """一条或几条历史 → 取回**全部**文件交给宿主(`artifacts`),外加一份按节点分的摘要和所有文字产出。"""
+             workflow: str = "", one_workflow: bool = False) -> dict[str, Any]:
+    """一条或几条历史 → 取回**全部**文件交给宿主(`artifacts`),外加一份按节点分的摘要和所有文字产出。
+
+    `one_workflow`:这几条是同一张图循环提交出来的(没有画布的图出 N 张),每个输出节点的具名输出照样记第一张;
+    `import_outputs` 取回的几条历史各是各的图,不记。"""
     files: list[dict[str, Any]] = []
     texts: list[dict[str, Any]] = []
     for prompt_id, entry in entries:
@@ -180,7 +183,7 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
     named: set[str] = set()
     for one, artifact in zip(files, artifacts):
         key = _named_output(one, one["media"])
-        if key not in named and len(entries) == 1:
+        if key not in named and (len(entries) == 1 or one_workflow):
             artifact["output"] = key
             named.add(key)
     summary: dict[str, dict[str, Any]] = {}

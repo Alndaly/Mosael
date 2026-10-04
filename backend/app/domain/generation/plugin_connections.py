@@ -376,7 +376,8 @@ class PluginGenerationAdapter(GenerationAdapter):
             except (PluginDomainError, PluginRuntimeError, LocalizedError) as exc:
                 raise GenerationAdapterError("providerErr_pluginFailed", name=profile.name, detail=str(exc)) from exc
         usage = {**metering_from_request(request), **outcome.usage}
-        return GenerationResult(output_paths=outcome.paths, usage=usage, raw_usage=outcome.raw)
+        return GenerationResult(output_paths=outcome.paths, usage=usage, raw_usage=outcome.raw,
+                                output_parameters=outcome.output_parameters, note=outcome.note)
 
 
 def _library_file(path: Path) -> Path:

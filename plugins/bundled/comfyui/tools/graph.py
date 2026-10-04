@@ -275,6 +275,14 @@ def size_node(api: dict[str, Any]) -> str | None:
     return None
 
 
+def repeats_for_count(api: dict[str, Any]) -> bool:
+    """这张图的「张数」靠**循环提交**:出图的、没有自己的画布(局部重绘、图生图这类从读进来的图出发的),
+    又有种子可换(每次换一个种子才出得来不一样的图)。有画布的写 batch_size,一次出 N 张;没有种子的(放大)
+    跑 N 遍也是同一张,不给张数。"""
+    return (kind_of(api) == "image" and batch_input(api) is None
+            and bool(seed_inputs(api) or "seed" in _placeholders_in(api)))
+
+
 def batch_input(api: dict[str, Any]) -> str | None:
     """一次出几张写在哪:画布节点上的字面量 `batch_size`。没有就是 None(这张图一次只出它自己那么多)。"""
     sized = size_node(api)
@@ -812,7 +820,8 @@ def describe(
     delivering = generation_nodes(api, kind, object_info, titles)
     per_run = max(1, len(delivering))
     max_outputs = per_run
-    if kind == "image" and batched is not None:
+    if kind == "image" and (batched is not None or repeats_for_count(api)):
+        # 有画布的写 batch_size;没有画布、有种子的循环提交 N 次,每次换一个种子(见 run.generate)
         max_outputs = per_run * MAX_BATCH
         # 缺省是 1:生成那一路没给张数就一次出一张(见 run.generate),不照画布上存着的 batch_size ——
         # 宿主的「N×」缺省就是 1,说的和做的得是同一件事。

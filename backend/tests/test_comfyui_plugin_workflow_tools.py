@@ -182,6 +182,31 @@ def test_工具的张数默认也是1_不照工作流里存着的batch_size(comf
     assert sizes == [1, 1, 3], "没填(或空着)就是 1,填了 3 就是 3"
 
 
+def test_没有画布的图的工具也能出N张_循环提交_每张的种子交回(comfy, tmp_path: Path) -> None:
+    """和生成那一路同一件事(run.run_repeated):局部重绘的工具给了张数就循环提交,给了种子依次 +1;交回全部产出、
+    每次的任务号和种子,每个输出节点的那个具名输出是第一张。"""
+    from tests.fake_comfyui import INPAINT_MUTED_FIRST_PASS_API, INPAINT_NODE_INFO
+
+    comfy.state.object_info.update(json.loads(json.dumps(INPAINT_NODE_INFO)))
+    comfy.state.workflows["inpainting.json"] = INPAINT_MUTED_FIRST_PASS_API
+    comfy.state.outputs = {"16": {"images": [{"filename": "ComfyUI_temp_00001_.png", "subfolder": "", "type": "temp"}]}}
+    name = "wf_" + hashlib.sha1(b"inpainting.json").hexdigest()[:12]
+    tool = _tools(comfy.url, tmp_path)[name]
+    assert tool["input_schema"]["properties"]["num_images"]["default"] == 1
+    image = tmp_path / "图.png"
+    image.write_bytes(PNG)
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    result = runtime.stream_tool(
+        PLUGIN, ENTRY, name, {"image_21": str(image), "num_images": "2", "seed": "5"}, {"SERVER_URL": comfy.url},
+        hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False), scratch_dir=scratch, timeout=60,
+    ).output
+    assert [one["prompt"]["13"]["inputs"]["seed"] for one in comfy.posted("/prompt")] == [5, 6]
+    assert result["seeds"] == [5, 6] and result["prompt_ids"] == ["p1", "p2"]
+    first, second = result["artifacts"]
+    assert first["output"] == "image_16" and "output" not in second
+
+
 def test_工具的宽高也按8的倍数取整(comfy, tmp_path: Path) -> None:
     hooks = runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False)
     scratch = tmp_path / "out"

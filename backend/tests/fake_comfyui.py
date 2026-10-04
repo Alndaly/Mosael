@@ -501,6 +501,8 @@ class State:
     #: prompt_id → history 条目。提交时按 `outcome` 生成;None = 永远跑不完(测取消)。
     history: dict[str, Any] = field(default_factory=dict)
     outcome: str = "success"  # success | error | never | video
+    #: 一次一次提交各自的结果(按先后取,取完了用 `outcome`):测「循环提交 N 次,其中一次失败」。
+    outcomes: list[str] = field(default_factory=list)
     #: outcome == "error" 时 ComfyUI 说的是哪一类节点、什么原话(WebSocket 和历史里是同一句)。
     error_node: str = "KSampler"
     error_message: str = "CUDA out of memory"
@@ -641,26 +643,27 @@ class _Handler(BaseHTTPRequestHandler):
                 state.submitted.set()
                 self._json({"prompt_id": prompt_id, "number": state.next_id, "node_errors": state.node_errors})
                 return
-            if state.outputs is not None:
+            outcome = state.outcomes.pop(0) if state.outcomes else state.outcome
+            if state.outputs is not None and outcome == "success":
                 state.history[prompt_id] = {
                     "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],
                     "status": {"status_str": "success", "completed": True, "messages": []},
                     "outputs": json.loads(json.dumps(state.outputs)),
                 }
-            elif state.outcome == "success":
+            elif outcome == "success":
                 state.history[prompt_id] = {
                     "status": {"status_str": "success", "completed": True, "messages": []},
                     "outputs": {"9": {"images": [{"filename": "mosael_00001_.png", "subfolder": "", "type": "output"}],
                                       },
                                 "12": {"images": [{"filename": "preview.png", "subfolder": "", "type": "temp"}]}},
                 }
-            elif state.outcome == "video":
+            elif outcome == "video":
                 state.history[prompt_id] = {
                     "status": {"status_str": "success", "completed": True, "messages": []},
                     "outputs": {"8": {"images": [{"filename": "frame_00001.png", "subfolder": "", "type": "output"}]},
                                 "30": {"gifs": [{"filename": "wan_00001.mp4", "subfolder": "video", "type": "output"}]}},
                 }
-            elif state.outcome == "interrupted":
+            elif outcome == "interrupted":
                 # 有人在 ComfyUI 界面里点了中断:历史里记成 error,消息里是 execution_interrupted
                 state.history[prompt_id] = {"status": {
                     "status_str": "error", "completed": False,
@@ -668,7 +671,7 @@ class _Handler(BaseHTTPRequestHandler):
                                  ["execution_interrupted", {"prompt_id": prompt_id, "node_id": "3",
                                                             "node_type": "KSampler", "executed": ["4"]}]],
                 }, "outputs": {}}
-            elif state.outcome == "error":
+            elif outcome == "error":
                 # 和真的 ComfyUI 一样,历史里存着提交的那张图(`prompt` 的第三项)。
                 state.history[prompt_id] = {
                     "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],
