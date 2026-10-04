@@ -87,6 +87,16 @@ class Comfy:
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return self.request_json("GET", path, params=params)
 
+    def get_text(self, path: str) -> str | None:
+        """回一段纯文字的接口(ComfyUI-Manager 的 `/v2/manager/version` 回 `V4.2.1`)。没有这个接口(404)→ None。"""
+        try:
+            with self._open("GET", path) as response:
+                return response.read(4096).decode("utf-8", "replace").strip()
+        except error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise self._http_error(exc) from exc
+
     def post(self, path: str, body: Any) -> Any:
         return self.request_json("POST", path, body=body)
 

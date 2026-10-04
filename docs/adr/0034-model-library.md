@@ -49,8 +49,9 @@
 - **名字、目录、大小、改动时间**:目录给的原样;
 - **预览图**:有就用;没有就是按目录分的占位(大模型、LoRA、VAE、放大……各一个图标),不留白;
 - **底模家族**:按下面的顺序认,**认到为止**,每一条记下凭的是什么(`metadata` / `filename`),界面上看得到:
-  1. 文件头里的 `modelspec.architecture`(SAI 的模型规范,`stable-diffusion-xl-v1-base/lora`、`flux-1-dev/lora`……);
-  2. `ss_base_model_version`(kohya 训练脚本写的,`sdxl_base_v1-0`、`sd_v1`、`flux1`……);
+  1. 文件头里的 `ss_base_model_version`(kohya 训练脚本写的,`sdxl_base_v1-0`、`sd_v1`、`flux1`……)—— 它最具体:训练脚本
+     不认识的底模(实测有 `anima`),`modelspec.architecture` 会照默认写成 `stable-diffusion-v1`,不能信后者;
+  2. 没有它时看 `modelspec.architecture`(SAI 的模型规范,`stable-diffusion-xl-v1-base/lora`、`flux-1-dev/lora`……);
   3. 认出是 SDXL 之后,训练用的底模名 `ss_sd_model_name` 或文件名里带 illustrious / noob / pony 的,细分成那一支;
   4. 文件名(连子目录)里的关键词:`illustrious` / `_il` → Illustrious、`noob` → NoobAI、`pony` → Pony、`flux` → Flux、
      `wan2.2` / `wan22` → Wan 2.2、`wan` → Wan 2.1、`sdxl` / `_xl` → SDXL、`sd15` / `v1-5` → SD 1.5、`qwen` → Qwen-Image、
@@ -95,7 +96,7 @@
   `trainedWords` 是触发词;
 - **其他直链**:`HEAD` 取 `content-disposition` 里的文件名和大小,没有就取地址最后一段。
 
-只有 Civitai 能定目录;别的由用户选(列出这台服务器上的全部模型目录)。文件名去掉路径分隔符和 `..`,扩展名保留。
+目录:Civitai 按模型类型定;HuggingFace 文件的路径里正好有这台服务器上的某个目录名时建议它(官方的拆分仓库按 ComfyUI 的目录名放文件:`split_files/vae/ae.safetensors`);别的由用户选(列出这台服务器上的全部模型目录),建议的也能改。文件名去掉路径分隔符和 `..`,扩展名保留。
 
 **工作流里声明的地址**只认 `https://huggingface.co/` 和 `https://civitai.com/`(和 ComfyUI 官方前端的白名单同一份):工作流
 文件来自四面八方,一键下载不该替一个陌生链接背书;粘贴的链接是用户自己给的,任何 http(s) 都行,确认框里写明来自哪个站。

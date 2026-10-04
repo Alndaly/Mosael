@@ -2,7 +2,8 @@
 
 **测试套不连真的 ComfyUI。** 这台假的只实现插件用到的那几个接口,形状照 ComfyUI 0.3x 的真实回包:
 `/object_info`、`/api/userdata`(列工作流 / 取工作流)、`/upload/image`(multipart)、`/prompt`、
-`/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件。
+`/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件;模型库用到的
+`/experiment/models*`、`/view_metadata/*`、`/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`。
 
 每次请求都记在 `server.calls` 里,测试据此断言插件发了什么(提交的图、上传的文件、停的是哪个任务)。
 """
@@ -477,6 +478,13 @@ TWO_VIDEOS_API: dict[str, Any] = {
     "31": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["3", 0], "frame_rate": 32}, "_meta": {"title": "补帧"}},
 }
 
+#: Manager 的安全策略拒绝装模型时写进日志的那句(原文,V4.2.1 的 SECURITY_MESSAGE_MIDDLE_P)。
+MANAGER_POLICY_MESSAGE = (
+    "ERROR: To use this action, security_level must be `normal or below`, and network_mode must be set to "
+    "`personal_cloud`. Please contact the administrator.\nReference: https://github.com/ltdrdata/ComfyUI-Manager#security-policy"
+)
+WEBP = b"RIFF\x1a\x00\x00\x00WEBPVP8L\x0d\x00\x00\x00/\x00\x00\x00\x10\x07\x10\x11\x11\x88\x88\xfe\x07\x00"
+
 #: 模型目录(`/models` 与 `/models/<目录>`)。
 MODEL_FOLDERS: dict[str, list[str]] = {
     "checkpoints": ["sd_xl_base.safetensors", "v1-5.ckpt"],
@@ -526,6 +534,27 @@ class State:
     model_folders: dict[str, list[str]] = field(default_factory=lambda: json.loads(json.dumps(MODEL_FOLDERS)))
     #: 这一次提交跑完时的产出;None = 按 `outcome` 给默认的那一份。
     outputs: dict[str, Any] | None = None
+    #: 模型库(`/experiment/models*`,0.3.x 起有):每个目录在磁盘上的位置(测「和 Mosael 在同一台机器上」时指向临时
+    #: 目录)、每个文件的大小(键是「目录/名字」)、文件头里的元数据、哪几个有预览图。
+    experiment_models: bool = True
+    folder_paths: dict[str, list[str]] = field(default_factory=dict)
+    model_sizes: dict[str, int] = field(default_factory=dict)
+    model_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
+    model_previews: set[str] = field(default_factory=set)
+    #: ComfyUI-Manager:None = 没装,否则是 `/v2/manager/version` 回的版本。`manager_outcome`:success(真的把文件
+    #: 加进那个目录)| policy(安全策略拒绝:历史里只记 failed,原因只在日志里 —— 和 V4.2.1 一样)| error。
+    manager: str | None = None
+    manager_outcome: str = "success"
+    manager_tasks: list[dict[str, Any]] = field(default_factory=list)
+    manager_history: dict[str, Any] = field(default_factory=dict)
+    log_entries: list[dict[str, str]] = field(default_factory=list)
+
+    def log(self, entry: dict[str, str]) -> None:
+        """记一行日志。和 ComfyUI 一样只留最近 300 行(环形缓冲):行数到顶之后不再变,只能按时间认新旧。"""
+        from datetime import datetime
+
+        self.log_entries.append({"t": datetime.now().isoformat(), **entry})
+        del self.log_entries[:-300]
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -588,6 +617,54 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(state.model_folders[folder])
             else:
                 self._json({"error": "not found"}, 404)
+        elif path == "/experiment/models" and state.experiment_models:
+            self._json([{"name": name, "folders": state.folder_paths.get(name) or [f"/srv/comfy/models/{name}"],
+                         "extensions": [".safetensors", ".ckpt", ".pt", ".pth", ".bin"]}
+                        for name in state.model_folders])
+        elif path.startswith("/experiment/models/preview/") and state.experiment_models:
+            folder, _index, name = unquote(path[len("/experiment/models/preview/"):]).split("/", 2)
+            if f"{folder}/{name}" in state.model_previews:
+                self.send_response(200)
+                self.send_header("Content-Type", "image/webp")
+                self.send_header("Content-Length", str(len(WEBP)))
+                self.end_headers()
+                self.wfile.write(WEBP)
+            else:
+                self._json({"error": "not found"}, 404)
+        elif path.startswith("/experiment/models/") and state.experiment_models:
+            folder = unquote(path[len("/experiment/models/"):])
+            if folder not in state.model_folders:
+                self._json({"error": "not found"}, 404)
+            else:
+                self._json([{"name": name, "pathIndex": 0, "modified": 1700000000.0 + index, "created": 1700000000.0,
+                             "size": state.model_sizes.get(f"{folder}/{name}", 1000)}
+                            for index, name in enumerate(state.model_folders[folder])])
+        elif path.startswith("/view_metadata/"):
+            folder = unquote(path[len("/view_metadata/"):])
+            name = query.get("filename", [""])[0]
+            meta = state.model_metadata.get(f"{folder}/{name}")
+            if not name.endswith(".safetensors") or name not in state.model_folders.get(folder, []) or meta is None:
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._json(meta)
+        elif path == "/internal/logs/raw":
+            self._json({"entries": state.log_entries, "size": {"cols": 120, "rows": 40}})
+        elif path == "/v2/manager/version" and state.manager:
+            body = state.manager.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/v2/manager/queue/history" and state.manager:
+            ui_id = query.get("ui_id", [""])[0]
+            entry = state.manager_history.get(ui_id)
+            self._json({"history": entry} if entry else {"history": {}})
+        elif path == "/v2/manager/queue/status" and state.manager:
+            self._json({"total_count": 0, "done_count": len(state.manager_history), "in_progress_count": 0,
+                        "pending_count": 0, "is_processing": False})
         elif path == "/history":
             items = list(state.history.items())
             limit = int(query.get("max_items", ["0"])[0] or 0)
@@ -685,6 +762,37 @@ class _Handler(BaseHTTPRequestHandler):
                 state.running.append(prompt_id)
             state.submitted.set()
             self._json({"prompt_id": prompt_id, "number": state.next_id, "node_errors": {}})
+        elif path == "/v2/manager/queue/install_model" and state.manager:
+            if "client_id" not in body or "ui_id" not in body:
+                self.send_response(400)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            state.manager_tasks.append(body)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif path == "/v2/manager/queue/start" and state.manager:
+            # 真的 Manager 在后台线程里一个个跑;这里当场跑完,插件轮询历史时就看得到结果。
+            for task in state.manager_tasks:
+                ok = state.manager_outcome == "success"
+                if ok:
+                    state.model_folders.setdefault(task["save_path"], []).append(task["filename"])
+                elif state.manager_outcome == "policy":
+                    state.log({"m": f"\x1b[1m\x1b[31m[ERROR]\x1b[0m {MANAGER_POLICY_MESSAGE}\n"})
+                else:
+                    state.log({"m": "[ComfyUI-Manager] Model installation error: HTTP Error 404: Not Found\n"})
+                state.manager_history[task["ui_id"]] = {
+                    "ui_id": task["ui_id"], "client_id": task["client_id"], "kind": "install-model",
+                    "result": "success" if ok else "failed",
+                    "status": {"status_str": "success" if ok else "error", "completed": True,
+                               "messages": [] if ok else ["failed"]},
+                    "params": {key: value for key, value in task.items() if key not in ("client_id",)},
+                }
+            state.manager_tasks.clear()
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif path in ("/interrupt", "/queue", "/free"):
             if path == "/queue" and body.get("clear"):
                 state.pending.clear()

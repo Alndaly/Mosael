@@ -9,6 +9,13 @@
     {"op": "fingerprint"} → 一行结果:清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
     {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果
 
+**模型库**(ADR 0034,同一个工具认领 `model_library`):
+
+    {"op": "library"}                      → 全部模型文件、各目录数目、工作流缺的模型、下载走哪条路(见 library)
+    {"op": "detail", "folder", "name"}     → 一个文件的完整元数据
+    {"op": "resolve", "url"}               → 一个链接指的是哪个文件(见 sources)
+    {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
+
 **给智能体和工作流的工具**:
 
     wf_<id>                                                每张工作流自己的那个(运行时报出,流式)
@@ -27,9 +34,12 @@ import sys
 import traceback
 from typing import Any, Callable
 
+import install
+import library
 import models
 import run
 import server
+import sources
 import tooling
 import workflows
 from comfy_http import Comfy, env_access_token, env_base_url
@@ -52,6 +62,14 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return {"fingerprint": models.fingerprint(comfy)}
     if op == "generate":
         return run.generate(payload, comfy, locale, emit)
+    if op == "library":
+        return library.library(payload, comfy, locale)
+    if op == "detail":
+        return library.detail(payload, comfy, locale)
+    if op == "resolve":
+        return sources.resolve(payload, comfy, locale)
+    if op == "download":
+        return install.download(payload, comfy, locale, emit)
     raise ComfyError(say(locale, f"不认识的操作:{op}", f"Unknown op: {op}"))
 
 

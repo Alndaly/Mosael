@@ -22,7 +22,8 @@
   ],
   "provides": [
     "generation",
-    "tools"
+    "tools",
+    "model_library"
   ],
   "skills": [
     {
@@ -77,6 +78,30 @@
           "zh": "ComfyUI 放在要登录的反向代理或 ComfyUI-Login 后面时才填:`用户名:密码` 按 Basic 认证发,别的按 `Bearer` 令牌发。本机和局域网里直接开着的 ComfyUI 不用填。",
           "en": "Only for a ComfyUI behind a reverse proxy with login or ComfyUI-Login: `user:password` is sent as Basic auth, anything else as a `Bearer` token. Leave empty for a ComfyUI running directly on this machine or your LAN."
         }
+      },
+      {
+        "key": "huggingface_token",
+        "label": {
+          "zh": "HuggingFace 令牌(可选)",
+          "en": "HuggingFace token (optional)"
+        },
+        "required": false,
+        "help": {
+          "zh": "模型库下载要同意条款或私有的 HuggingFace 仓库时才填(huggingface.co → Settings → Access Tokens,读权限就够)。只发给 huggingface.co。",
+          "en": "Only for model-library downloads from gated or private HuggingFace repositories (huggingface.co → Settings → Access Tokens; read access is enough). Sent only to huggingface.co."
+        }
+      },
+      {
+        "key": "civitai_token",
+        "label": {
+          "zh": "Civitai 令牌(可选)",
+          "en": "Civitai token (optional)"
+        },
+        "required": false,
+        "help": {
+          "zh": "模型库下载要登录的 Civitai 模型时才填(civitai.com → 账号设置 → API Keys)。只发给 civitai.com;经 ComfyUI-Manager 下载时会拼进下载地址,留在那台机器的 Manager 任务记录里。",
+          "en": "Only for model-library downloads of Civitai models that need a login (civitai.com → Account settings → API Keys). Sent only to civitai.com; when downloading through ComfyUI-Manager it goes into the download URL and stays in that machine's Manager task history."
+        }
       }
     ]
   },
@@ -98,12 +123,13 @@
         },
         "provides": [
           "generation",
-          "tools"
+          "tools",
+          "model_library"
         ],
         "timeout_seconds": 21600,
         "description": {
-          "zh": "替 Mosael 在这台 ComfyUI 上列出模型与工具(每张工作流一个)、做一次生成。只给宿主调。",
-          "en": "Lists models and tools (one per workflow) and runs generations on this ComfyUI server for Mosael. Host-only."
+          "zh": "替 Mosael 在这台 ComfyUI 上列出模型与工具(每张工作流一个)、做一次生成,以及模型库(列出模型文件、解析链接、下载模型)。只给宿主调。",
+          "en": "Lists models and tools (one per workflow), runs generations, and serves the model library (model files, link resolution, downloads) on this ComfyUI server for Mosael. Host-only."
         },
         "input_schema": {
           "type": "object"

@@ -42,7 +42,7 @@ def _options(client, kind: str) -> dict[str, dict]:
 def test_随应用装好_卸不掉() -> None:
     client = fresh_client()
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
-    assert package["bundled"] is True and package["provides"] == ["generation", "tools"]
+    assert package["bundled"] is True and package["provides"] == ["generation", "tools", "model_library"]
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
     template = package["config_fields"][1]
     assert (template["type"], template["language"]) == ("json", "json"), "API 模板是一段 JSON:代码编辑器 + 保存前校验"
