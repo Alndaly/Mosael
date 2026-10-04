@@ -897,7 +897,10 @@ class BillableCall:
     agent_message_id: str | None = None
     units: dict[str, Any] = None  # type: ignore[assignment]
     raw_usage: dict[str, Any] = None  # type: ignore[assignment]
+    #: 服务商回报的这一次实扣(见 report_cost)。为空就按计价规则估。
     cost_micros: int | None = None
+    currency: str = "USD"
+    cost_confidence: str = "unknown"
     #: 记账落库后由 billable 填上,供调用方读取算好的成本(智能体把它写进消息 payload)。
     event: ProviderUsageEvent | None = None
     #: 调用方**捕获了**异常自己处理时,用它显式标失败 —— 异常没往外抛,billable 看不见。
@@ -905,6 +908,12 @@ class BillableCall:
 
     def mark_failed(self) -> None:
         self.status = "failed"
+
+    def report_cost(self, micros: int, currency: str) -> None:
+        """服务商在回包里报了这一次实扣多少钱:直接记它(`reported`),不再拿价目去估。币种照它报的。"""
+        self.cost_micros = int(micros)
+        self.currency = (currency or "USD").upper()
+        self.cost_confidence = "reported"
 
     def __post_init__(self) -> None:
         if self.units is None:
@@ -1056,6 +1065,8 @@ def billable(
                     units=call.units,
                     raw_usage=call.raw_usage,
                     cost_micros=call.cost_micros,
+                    currency=call.currency,
+                    cost_confidence=call.cost_confidence,
                 )
             except Exception:  # noqa: BLE001 — 记账是旁路,不该把主流程带下水
                 logger.warning("用量入账失败(%s),已忽略", operation, exc_info=True)

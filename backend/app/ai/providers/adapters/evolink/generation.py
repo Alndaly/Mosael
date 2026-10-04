@@ -27,6 +27,7 @@ One generation returns **two tracks** (product page https://evolink.ai/suno); bo
 from __future__ import annotations
 
 import mimetypes
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -47,6 +48,7 @@ from app.ai.providers.contracts.generation import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    ReportedUsage,
     metering_from_request,
     source_url_values,
 )
@@ -252,6 +254,34 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
     return None
 
 
+#: 回包里同一笔扣费同时给了几种币(都是同一笔积分折出来的),取哪一种:美元在前 —— Evolink 的价目页按美元
+#: 挂牌,内置参考价也是美元,同一个模型的估算和实扣落在同一个币种里才加得起来、比得起来。
+_REPORTED_CURRENCIES = (("usd", "USD"), ("cny", "CNY"))
+
+
+def reported_charge(payload: dict[str, Any]) -> ReportedUsage:
+    """终态回包里**这一次实际扣了多少钱**:`usage.cost.{credits, usd, cny}`(文档 Task Query,真机回包同形)。
+
+    只有积分(`credits_used`)、没有钱数的不替它折算 —— 积分换多少钱是账户的事,我们不知道。
+    """
+    task = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    usage = task.get("usage") if isinstance(task, dict) else None
+    cost = usage.get("cost") if isinstance(usage, dict) else None
+    if not isinstance(cost, dict):
+        return ReportedUsage()
+    for key, currency in _REPORTED_CURRENCIES:
+        amount = cost.get(key)
+        if isinstance(amount, bool) or not isinstance(amount, (int, float, str)):
+            continue
+        try:
+            micros = int((Decimal(str(amount)) * 1_000_000).to_integral_value())
+        except InvalidOperation:
+            continue
+        if micros >= 0:
+            return ReportedUsage(cost_micros=micros, currency=currency)
+    return ReportedUsage()
+
+
 def _task_id(payload: dict[str, Any]) -> str:
     task = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     return str(task.get("id") or task.get("task_id") or "").strip()
@@ -366,6 +396,9 @@ class EvolinkGenerationAdapter(GenerationAdapter):
         if media_kind not in self._SURFACE_BY_KIND:
             raise ValueError(f"unsupported Evolink generation kind: {media_kind}")
         self.media_kind = media_kind
+
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        return reported_charge(raw_usage)
 
     @property
     def parameter_surface(self) -> tuple[str, ...]:

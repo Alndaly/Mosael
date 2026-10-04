@@ -486,6 +486,8 @@ def _record_generation_usage(
         started=started,
     ) as call:
         call.meter(units, raw=result.raw_usage if result is not None else {})
+        if reported.cost_micros is not None:
+            call.report_cost(reported.cost_micros, reported.currency)
         if status != "succeeded":
             # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
             call.mark_failed()

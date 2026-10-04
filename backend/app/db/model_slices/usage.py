@@ -87,7 +87,8 @@ class ProviderUsageEvent(Base):
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
     #: 这笔钱有多可信:
     #: `unknown` 没能定价(cost_micros 为空);`estimated` 按计价规则算的;
-    #: `not_billed` 失败了、服务商什么都没回 —— 没扣钱,记 0。
+    #: `not_billed` 失败了、服务商什么都没回 —— 没扣钱,记 0;
+    #: `reported` 服务商在回包里报了这一次的实扣(Evolink 的 usage.cost),照它记、币种照它报的。
     cost_confidence: Mapped[str] = mapped_column(String(24), nullable=False, default="unknown")
     #: 没能定价时**为什么**。目前只有一种:`mixed_currency` —— 这次调用对上的几条规则币种不一样
     #: (输入按人民币、输出按美元),而不同币种的钱不能相加,只好整条记成未定价。
