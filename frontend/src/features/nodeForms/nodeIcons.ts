@@ -1,5 +1,6 @@
 import {
   Grid3x3,
+  Quote,
   MessageCircle,
   FileText,
   Speech,
@@ -161,6 +162,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 自媒体分析:认链接、整理数据算指标、从链接下载(和「导出」的下载箭头区分开)。
   social_link: Link2,
   social_metrics: ChartColumn,
+  quote_check: Quote,
   import_url: HardDriveDownload,
   asset: ImageIcon,
 };

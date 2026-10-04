@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain import social_media
+from app.domain import quotes, social_media
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors.registry import RunScope, register
 
@@ -91,4 +91,21 @@ def social_metrics(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
         "stats": stats,
         "summary": social_media.posts_summary(stats, account),
         "table": social_media.posts_table(posts),
+    }
+
+
+@register("quote_check")
+def quote_check(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """模型写的几段文字里加了引号的话,逐条核对是不是 `sources` 里的原文;找不到的去掉引号、标为转述(见 domain/quotes)。"""
+    texts = config.get("texts")
+    if not isinstance(texts, dict) or not texts:
+        raise WorkflowDomainError("wfErr_quoteCheckNoTexts")
+    result = quotes.check_quotes(texts, config.get("sources"))
+    return {
+        "texts": result.texts,
+        "checked": result.checked,
+        "matched": result.matched,
+        "paraphrased": result.paraphrased,
+        "unmatched": result.unmatched,
+        "summary": result.summary(),
     }

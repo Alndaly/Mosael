@@ -1191,6 +1191,27 @@
     ]
   },
   {
+    "type": "quote_check",
+    "config": {
+      "texts": {
+        "type": "object",
+        "editor": "map"
+      },
+      "sources": {
+        "type": "object",
+        "editor": "map"
+      }
+    },
+    "outputs": [
+      "texts",
+      "checked",
+      "matched",
+      "paraphrased",
+      "unmatched",
+      "summary"
+    ]
+  },
+  {
     "type": "scene_create",
     "config": {
       "name": {

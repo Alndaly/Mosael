@@ -130,6 +130,11 @@ _FIELD_LABELS = {
     "allow_missing": "wfField_allow_missing",
     "allow_error_page": "wfField_allow_error_page",
     "frame": "wfField_frame",
+    "sources": "wfField_sources",
+    "checked": "wfField_checked",
+    "matched": "wfField_matched",
+    "paraphrased": "wfField_paraphrased",
+    "unmatched": "wfField_unmatched",
     "asset_id": "wfField_asset_id",
     "asset_ids": "wfField_asset_ids",
     "attribute": "wfField_attribute",
@@ -1162,6 +1167,23 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["items", "count", "account", "stats", "summary", "table"],
         "output_types": {"items": "json", "count": "number", "account": "json", "stats": "json",
                          "summary": "text", "table": "text"},
+    },
+    #: 模型写的报告里加了引号的话,逐条核对是不是取回来的原文;找不到的去掉引号、标为转述(见 domain/quotes)。
+    #: 分析类模板在存笔记之前都过它 —— 提示词里写了「只引用原文」,模型仍会把归纳的话放进引号。
+    "quote_check": {
+        "external": False,
+        "category": "wfCat_data",
+        "label": "wfNode_quote_check",
+        "description": "wfNode_quote_check_desc",
+        "config": {
+            #: 「texts」在别的节点上是「逐条文本」;这里是要核对的那几段,名字单独给。
+            "texts": {"type": "object", "label": "wfField_quote_texts", "description": "wfNode_quote_check_texts"},
+            "sources": {"type": "object", "description": "wfNode_quote_check_sources"},
+        },
+        "outputs": ["texts", "checked", "matched", "paraphrased", "unmatched", "summary"],
+        "output_labels": {"texts": "wfOut_quote_texts"},
+        "output_types": {"texts": "json", "checked": "number", "matched": "number", "paraphrased": "number",
+                         "unmatched": "json", "summary": "text"},
     },
     "delay": {
         "external": False,

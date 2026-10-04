@@ -25,6 +25,37 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "只给编号时,它是账号还是作品(带链接时以链接为准)",
         "en": "With a bare id, whether it is an account or a post (a link decides for itself)",
     },
+    "wfNode_quote_check": {"zh": "核对引用", "en": "Check quotes"},
+    "wfNode_quote_check_desc": {
+        "zh": "模型写的几段文字里加了「」或“”的话,逐条核对是不是原文(取回来的评论、标题、逐字稿……)里的话:全半角、空白、表情码不算改字,用省略号删节的要每一段按顺序在同一条原文里。找不到的去掉引号、后面标「(转述)」,并交出一句核对说明。",
+        "en": "Check every phrase the model put in 「」 or “” against the source material (fetched comments, titles, transcripts…): full/half-width forms, whitespace and emote codes don't count as changes, and an excerpt cut with an ellipsis must have every part, in order, in one source item. Phrases not found lose their quotes and get “(paraphrased)” after them, and a one-line summary of the check comes out.",
+    },
+    "wfNode_quote_check_texts": {
+        "zh": "要核对的文字:名字 → 一段文字(接模型的输出),改写后按同样的名字交在「文字」里",
+        "en": "The text to check: name → a piece of text (wire in the model's output); the rewritten versions come out under the same names in Texts",
+    },
+    "wfNode_quote_check_sources": {
+        "zh": "原文:名字 → 评论清单 / 数据 / 文字(接取数那几步的输出),引号里的话得出自这些",
+        "en": "The sources: name → a comment list / data / text (wire in the fetching steps' outputs); quoted phrases must come from these",
+    },
+    "wfField_quote_texts": {"zh": "要核对的文字", "en": "Text to check"},
+    "wfOut_quote_texts": {"zh": "核对后的文字", "en": "Checked text"},
+    "wfField_sources": {"zh": "原文", "en": "Sources"},
+    "wfField_checked": {"zh": "核对的引号数", "en": "Quotes checked"},
+    "wfField_matched": {"zh": "找得到原文的", "en": "Found in the sources"},
+    "wfField_paraphrased": {"zh": "改成转述的", "en": "Turned into paraphrase"},
+    "wfField_unmatched": {"zh": "找不到原文的引号", "en": "Quotes not found"},
+    "wfErr_quoteCheckNoTexts": {"zh": "「核对引用」没有要核对的文字", "en": "“Check quotes” has no text to check"},
+    "quoteCheck_paraphrasedMark": {"zh": "(转述)", "en": " (paraphrased)"},
+    "quoteCheck_none": {"zh": "引用核对:没有加引号的引用。", "en": "Quote check: nothing was put in quotes."},
+    "quoteCheck_allFound": {
+        "zh": "引用核对:加了引号的 {checked} 处都在取回的原文里找得到。",
+        "en": "Quote check: all {checked} quoted phrases were found in the fetched sources.",
+    },
+    "quoteCheck_some": {
+        "zh": "引用核对:加了引号的 {checked} 处里,{matched} 处在取回的原文里找得到;{paraphrased} 处找不到,已去掉引号、标为转述。",
+        "en": "Quote check: of {checked} quoted phrases, {matched} were found in the fetched sources; {paraphrased} weren't, so their quotes were removed and they are marked as paraphrased.",
+    },
     "wfNode_social_metrics": {"zh": "整理作品与评论数据", "en": "Tidy post and comment data"},
     "wfNode_social_metrics_desc": {
         "zh": "把 TikHub、浏览器或别处取回来的一份 JSON 整理成同一个形状:作品按发布时间、时长、播放 / 点赞 / 评论 / 收藏 / 转发取数,算出发布频率、发布时段分布、互动率、头部作品和增长 / 衰退信号;评论按点赞排好。字段名不用对齐 —— 按各平台常见的叫法去找,缺的字段如实标出来,不拿 0 冒充。",

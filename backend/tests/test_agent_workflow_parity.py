@@ -53,6 +53,8 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 整理作品 / 评论、算发布频率和互动率:智能体读一份 JSON 自己会整理,真要算数(中位数、按小时分布)
     #: 就写一段代码算 —— 同一个目标,算术交给代码而不是心算。
     "social_metrics": "run_code",
+    #: 核对引号里的话是不是原文:智能体写报告时要核对,同样是拿原文搜一遍 —— 交给代码,不靠记忆。
+    "quote_check": "run_code",
     "ai_generate": "generate_image",  # 与 generate_video 同一节点的两种 kind
     "publish": "publish_asset",
     "http_request": "http_request",
