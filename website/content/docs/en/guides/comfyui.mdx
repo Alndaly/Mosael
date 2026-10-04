@@ -24,7 +24,9 @@ brings two things:
    (such as `http://192.168.1.20:8188`) uses another machine's GPU. If ComfyUI sits behind a reverse proxy with
    login or ComfyUI-Login, enter `user:password` or a token as the **Access credential** (the former is sent as Basic
    auth, the latter as a Bearer token); don't put a user name and password in the URL.
-3. Grant `network:comfyui` and switch the connection on.
+3. Grant the permissions it asks for and switch the connection on: `network:comfyui` (talk to this ComfyUI),
+   `network:huggingface` and `network:civitai` (the model library looks up links and downloads models from these sites),
+   and `filesystem:write` (when ComfyUI runs on this computer, downloaded models are written into its models folder).
 
 Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
 “N models · refreshed just now”; **View models** lists whether each one makes images or videos, which kinds of
@@ -174,7 +176,12 @@ Good to know:
 - When ComfyUI runs on **this computer**, Mosael writes straight into its models folder, with progress, cancel and a
   free-space check first.
 - For gated HuggingFace repositories or Civitai models that need a login, enter a "HuggingFace token" or "Civitai token"
-  in the connection's credentials. Each token is sent only to its own site.
+  in the connection's credentials. Each token is sent only to its own site; when a download through ComfyUI-Manager
+  needs the Civitai token, the download dialog warns that it stays in that machine's task history.
+
+**The model library shows up when generating too.** In AI Studio, boards and the workflow generate node, the field
+that picks a checkpoint or LoRA is a list with thumbnails: each item shows its base model and first trigger words, which
+can also be searched; after picking a LoRA with trigger words, “Add to prompt” on the line below appends them.
 
 ## Progress, cancel and restarts
 
@@ -199,6 +206,10 @@ Earlier versions had ComfyUI as a provider under Settings → AI image; upgradin
   reports that the model is unavailable — pick a video workflow instead.
 
 ComfyUI connections you already have get the new tools automatically after upgrading, switched on as listed above.
+
+**Upgrading to 1.9 pauses the connection**: the plugin now declares three more permissions (`network:huggingface`,
+`network:civitai`, `filesystem:write`, see above). The top of the connection card lists them and “Grant these 3” resumes
+it right away; earlier grants are kept. The plugin list marks it “Needs permission”.
 
 ## Workflows it can't read: the API template
 

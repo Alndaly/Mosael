@@ -10,7 +10,15 @@ One connection brings two things: **models** (every saved workflow is an image /
 1. Plugins page → ComfyUI → "New connection", and fill in the server URL (`http://127.0.0.1:8188` by default on this
    machine). If it sits behind a reverse proxy with login or behind ComfyUI-Login, put `user:password` (Basic) or a
    token (Bearer) into the "Access credential" credential; it is sent on both HTTP and WebSocket requests.
-2. Grant `network:comfyui` and turn the connection on.
+2. Grant the permissions it asks for and turn the connection on (since 1.9.0 it declares four):
+   - `network:comfyui`: talk to this ComfyUI;
+   - `network:huggingface`, `network:civitai`: the model library looks up links and downloads models from these sites;
+   - `filesystem:write`: when ComfyUI runs on the same computer as Mosael, downloaded models are written into its
+     models folder.
+
+   Connections upgraded from 1.8 or earlier are **paused** until you grant the three new ones: the top of the connection
+   card lists them, and "Grant these 3" resumes it right away; the `network:comfyui` grant is kept. The plugin list
+   marks it "Needs permission".
 3. **Every workflow saved** in that ComfyUI shows up as a model in the model pickers of AI Studio, boards and the
    workflow "AI generate" node. A newly saved workflow appears within a minute (the host asks for the list's fingerprint
    once a minute); if you can't wait, click "Refresh models" on the Plugins page.
@@ -158,6 +166,18 @@ downloaded onto **that ComfyUI**, by the first route that works:
 offered), and it is checked again when writing (a hard link gives the file its real name and fails if the name exists).
 Model files are never deleted, renamed or moved; no custom nodes are installed and the Manager's settings are not
 changed.
+
+**Picking model files in generation forms** (1.9.0): the parameter for a workflow input that picks a checkpoint, LoRA,
+VAE, text encoder… says which model folder its files are in (`x-model-folder`, recognised by input name and by node for
+shared names: CLIPLoader's `clip_name` is text_encoders, CLIPVisionLoader's is clip_vision). AI Studio, boards and the
+workflow node use it to read this connection's model library: each item in the list has a thumbnail (or a per-folder
+placeholder), its base model and first trigger words, which can also be searched; after picking a LoRA with trigger
+words, a line below lists them and "Add to prompt" appends them to the prompt (skipping ones already there).
+
+**When downloading through ComfyUI-Manager**, the download dialog says up front that a Civitai token, when one is
+needed, goes into the download URL and stays in that machine's Manager task history; that there is no byte progress;
+and that cancelling after it starts doesn't stop the download on that machine. Civitai links are looked up without the
+token first (public models need no login) and only retried with it when the site asks for a login.
 
 **Credentials**: enter a "HuggingFace token" on the connection for gated or private HuggingFace repositories and a
 "Civitai token" for Civitai models that need a login. Each token goes only to its own site (not to the storage a

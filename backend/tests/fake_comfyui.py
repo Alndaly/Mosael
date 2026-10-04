@@ -478,6 +478,14 @@ TWO_VIDEOS_API: dict[str, Any] = {
     "31": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["3", 0], "frame_rate": 32}, "_meta": {"title": "补帧"}},
 }
 
+def comfyui_grants() -> dict[str, bool]:
+    """随应用发的 ComfyUI 插件声明的全部权限,全都授予 —— 测试里接连接时用(照清单读,清单改了这里跟着变)。"""
+    from pathlib import Path
+
+    manifest = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui" / "mosael.plugin.json"
+    return {permission: True for permission in json.loads(manifest.read_text(encoding="utf-8"))["permissions"]}
+
+
 #: Manager 的安全策略拒绝装模型时写进日志的那句(原文,V4.2.1 的 SECURITY_MESSAGE_MIDDLE_P)。
 MANAGER_POLICY_MESSAGE = (
     "ERROR: To use this action, security_level must be `normal or below`, and network_mode must be set to "

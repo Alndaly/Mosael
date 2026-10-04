@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
-from tests.fake_comfyui import PNG, TWO_SAVES_API, TWO_VIDEOS_API, FakeComfyUI
+from tests.fake_comfyui import comfyui_grants, PNG, TWO_SAVES_API, TWO_VIDEOS_API, FakeComfyUI
 from tests.util import fresh_client, run_on_board
 
 PACKAGE = "dev.mosael.comfyui"
@@ -178,7 +178,7 @@ def connected():
         created = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}})
         assert created.status_code == 200, created.text
         instance_id = created.json()["id"]
-        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": {"network:comfyui": True}})
+        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
         enabled = client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True})
         assert enabled.status_code == 200, enabled.text
         with SessionLocal() as db:

@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, Job, ProviderProfile
-from tests.fake_comfyui import PNG, FakeComfyUI
+from tests.fake_comfyui import comfyui_grants, PNG, FakeComfyUI
 from tests.util import fresh_client, wait_status
 
 PACKAGE = "dev.mosael.comfyui"
@@ -29,7 +29,7 @@ def connected():
         created = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}})
         assert created.status_code == 200, created.text
         instance_id = created.json()["id"]
-        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": {"network:comfyui": True}})
+        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
         enabled = client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True})
         assert enabled.status_code == 200, enabled.text
         yield client, comfy, instance_id
@@ -43,6 +43,8 @@ def test_随应用装好_卸不掉() -> None:
     client = fresh_client()
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
     assert package["bundled"] is True and package["provides"] == ["generation", "tools", "model_library"]
+    # 如实申报(ADR 0034):解析和下载模型会连 HuggingFace / Civitai,ComfyUI 在同一台电脑上时会写它的 models 目录
+    assert package["permissions"] == ["network:comfyui", "network:huggingface", "network:civitai", "filesystem:write"]
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
     template = package["config_fields"][1]
     assert (template["type"], template["language"]) == ("json", "json"), "API 模板是一段 JSON:代码编辑器 + 保存前校验"

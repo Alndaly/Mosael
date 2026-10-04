@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage, Workflow, WorkflowRevision
-from tests.fake_comfyui import PNG, PORTRAIT_ID, UPSCALE_API, FakeComfyUI
+from tests.fake_comfyui import comfyui_grants, PNG, PORTRAIT_ID, UPSCALE_API, FakeComfyUI
 from tests.util import fresh_client, user_id
 
 PACKAGE = "dev.mosael.comfyui"
@@ -36,7 +36,7 @@ def connected():
         created = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}})
         assert created.status_code == 200, created.text
         instance_id = created.json()["id"]
-        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": {"network:comfyui": True}})
+        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
         assert client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
         yield client, comfy, instance_id
 

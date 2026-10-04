@@ -3,7 +3,7 @@
   "manifest_version": 6,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",
@@ -18,7 +18,10 @@
     "entry": "tools/main.py"
   },
   "permissions": [
-    "network:comfyui"
+    "network:comfyui",
+    "network:huggingface",
+    "network:civitai",
+    "filesystem:write"
   ],
   "provides": [
     "generation",

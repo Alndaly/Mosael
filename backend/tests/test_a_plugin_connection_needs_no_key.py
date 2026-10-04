@@ -16,6 +16,7 @@ from app.core.db import SessionLocal
 from app.db.models import ProviderProfile, User
 from app.domain.providers import credentials as provider_credentials
 from tests.util import fresh_client, second_client
+from tests.fake_comfyui import comfyui_grants
 
 PACKAGE = "dev.mosael.comfyui"
 
@@ -30,7 +31,7 @@ def _plugin_connection(client) -> str:
     """接一个 ComfyUI(地址指向一个没人听的端口:目录刷不出来,但连接照样在)。返回连接 id。"""
     created = client.post(f"/api/plugins/{PACKAGE}/instances",
                           json={"config": {"server_url": f"http://127.0.0.1:{_unused_port()}"}}).json()
-    client.patch(f"/api/plugins/instances/{created['id']}/permissions", json={"grants": {"network:comfyui": True}})
+    client.patch(f"/api/plugins/instances/{created['id']}/permissions", json={"grants": comfyui_grants()})
     client.patch(f"/api/plugins/instances/{created['id']}", json={"enabled": True})
     with SessionLocal() as db:
         return db.query(ProviderProfile).filter(ProviderProfile.plugin_instance_id == created["id"]).one().id
