@@ -7507,6 +7507,22 @@ def _reprice_usage_billed_on_estimated_prompt_tokens() -> None:
         reprice_estimated_prompt_only(db)
 
 
+def _migrate_existing_libraries_get_the_evolink_gpt_image_prices() -> None:
+    """老库补上 Evolink GPT Image 的内置参考价(gpt-image-2 / 2-beta / 2.5-flare / 2.5-sunburst)。
+
+    「补新增参考价」那一步(上面的 migrate-existing-libraries-get-the-new-reference-prices)身体不能再改,所以另开一步;
+    规则和点「预填」一样:只补模型行上配了的、只补不改、不混币种。连接上还没启用这几个型号的,启用之后点一次「预填」。
+    """
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import ProviderProfile
+    from app.domain.billing.pricing_prefill import prefill_profile_pricing
+
+    models = frozenset({"gpt-image-2", "gpt-image-2-beta", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"})
+    with unit_of_work() as db:
+        for profile in db.query(ProviderProfile).filter(ProviderProfile.vendor == "evolink").order_by(ProviderProfile.created_at):
+            prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -7805,6 +7821,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_usage_costs),
             #: 补算的第二步:按旧规则只算了估的提示词 token 的那批重算(要用到补上的参考图输入价)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _reprice_usage_billed_on_estimated_prompt_tokens),
+            #: 老库补上 Evolink GPT Image 的参考价。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_evolink_gpt_image_prices),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

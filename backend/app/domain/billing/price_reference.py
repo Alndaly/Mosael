@@ -764,7 +764,15 @@ _GOOGLE_PRICES = [
 # 运行前估算和回包没报扣费时用的。
 # 没收的:seedance-2.0-fast-*(页面只写「标准价七五折、限时到 2026-10-06」,没有数字)、seedance-2.5-draft-to-video
 # (草稿转 1080p,和成片不是一回事)。
+#
+# GPT Image(2026-10-04 查证,evolink.ai/gpt-image-2、evolink.ai/gpt-image-2-5):gpt-image-2 和 2.5(flare / sunburst)同价,
+# 按 token —— 图像输出 $0.027 / 千、图像输入 $0.0072 / 千(参考图和蒙版都算)、文字输入 $0.0045 / 千,记成每百万
+# $27 / $7.2 / $4.5。价钱主要由画质和分辨率档决定:1K 1:1 低画质约 $0.0053 一张、2.5 的 1K 中画质约 $0.012、
+# 2K 高画质约 $0.386。gpt-image-2-beta 固定 $0.015 一张(只出 1K、一次一张、参考图含在价里)。
+# gpt-image-1.5 在 Evolink 上的价没核到,不收(连接上会照约定 5 借 OpenAI 的原厂价)。
 _EVOLINK_25 = "https://evolink.ai/seedance-2-5"
+_EVOLINK_GPT_IMAGE_2 = "https://evolink.ai/gpt-image-2"
+_EVOLINK_GPT_IMAGE_25 = "https://evolink.ai/gpt-image-2-5"
 _EVOLINK_20 = "https://evolink.ai/seedance-2-0"
 _EVOLINK_20_MINI = "https://evolink.ai/seedance-2-0-mini"
 _EVOLINK_NOTE = ("音频不另收费;实扣以回包里服务商报的为准", "audio is free; the charge reported in the task payload is what gets booked")
@@ -784,6 +792,25 @@ def _evolink(models: tuple[str, ...], source: str, tiers: dict[str, str], extra:
            ))
         for model in models
         for tier, amount in tiers.items()
+    ]
+
+
+#: Evolink 上 GPT Image 的三种 token 价(每百万):文字输入、参考图(和蒙版)输入、图像输出。
+_EVOLINK_GPT_IMAGE_UNITS = (
+    ("million_input_token", "4.5", "文字输入 token 的价", "Text input token price"),
+    ("million_image_input_token", "7.2", "图像输入 token 的价(参考图和蒙版都算)", "Image input token price (reference images and masks)"),
+    ("million_output_token", "27", "图像输出 token 的价", "Image output token price"),
+)
+
+
+def _evolink_gpt_image(models: tuple[str, ...], source: str) -> list[ListPrice]:
+    note = ("价钱主要由画质和分辨率档决定;实扣以回包里服务商报的为准",
+            "the price is mostly set by quality and resolution tier; the charge reported in the task payload is what gets booked")
+    return [
+        _p("evolink", model, "image", unit, amount, "USD", source, checked="2026-10",
+           remark=(f"{zh};{note[0]}", f"{en}; {note[1]}"))
+        for model in models
+        for unit, amount, zh, en in _EVOLINK_GPT_IMAGE_UNITS
     ]
 
 
@@ -818,6 +845,12 @@ _EVOLINK_PRICES = [
               {"": "0.040", "480p": "0.019"}, ("页面标的六折后价;最短 4 秒", "the page's 60%-off price; 4 seconds minimum")),
     *_evolink(("seedance-2.0-mini-reference-to-video",), _EVOLINK_20_MINI, {"": "0.040", "480p": "0.019"},
               _reference_tier("480p $0.012 / 720p $0.025 每秒,页面标的六折后价", "480p $0.012 / 720p $0.025 per second, the page's 60%-off price")),
+    *_evolink_gpt_image(("gpt-image-2",), _EVOLINK_GPT_IMAGE_2),
+    *_evolink_gpt_image(("gpt-image-2.5-flare", "gpt-image-2.5-sunburst"), _EVOLINK_GPT_IMAGE_25),
+    _p("evolink", "gpt-image-2-beta", "image", "image", "0.015", "USD", _EVOLINK_GPT_IMAGE_2, checked="2026-10",
+       remark=("固定价一张,只出 1K、一次一张,参考图含在价里;实扣以回包里服务商报的为准",
+               "Flat price per image, 1K only, one image per call, reference images included; "
+               "the charge reported in the task payload is what gets booked")),
 ]
 
 # —— 音频生成(音乐 / BGM / 音效,ADR 0022)—— 2026-09 查证。

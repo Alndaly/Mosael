@@ -501,6 +501,29 @@ def test_evolink_seedance_gets_evolinks_own_per_second_prices_by_resolution(monk
     assert (event.cost_micros, event.currency) == (690_000, "USD"), "5 秒 × $0.138"
 
 
+def test_evolink_gpt_images_get_evolinks_own_token_prices(monkeypatch, client_fixture) -> None:
+    """Evolink 自己的价目页(evolink.ai/gpt-image-2、gpt-image-2-5):gpt-image-2 和 2.5 同价,按 token —— 图像输出
+    $0.027 / 千、图像输入 $0.0072 / 千(参考图和蒙版都算)、文字输入 $0.0045 / 千;gpt-image-2-beta 固定 $0.015 一张。
+    记账照旧走 Evolink 回包里的实扣,这几条给运行前估算和价目页用。"""
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": []})
+    profile_id = _profile(client, "evolink", {"api_key": "k", "default_model": "gpt-image-2"})
+    _add_models(profile_id, ("gpt-image-2", ["image"]), ("gpt-image-2-beta", ["image"]), ("gpt-image-2.5-flare", ["image"]))
+
+    body = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    assert body["unpriced_models"] == []
+    rules = _rules(client)
+    for model in ("gpt-image-2", "gpt-image-2.5-flare"):
+        assert {unit: rules[(model, "image", unit)]["unit_amount_micros"] for unit in (
+            "million_output_token", "million_image_input_token", "million_input_token"
+        )} == {"million_output_token": 27_000_000, "million_image_input_token": 7_200_000, "million_input_token": 4_500_000}
+        assert rules[(model, "image", "million_output_token")]["currency"] == "USD"
+        assert "evolink.ai" in rules[(model, "image", "million_output_token")]["notes"]
+    beta = rules[("gpt-image-2-beta", "image", "image")]
+    assert (beta["unit_amount_micros"], beta["currency"]) == (15_000, "USD")
+    assert "1K" in beta["notes"]
+
+
 def test_an_official_vendor_pointed_at_a_relay_still_says_the_price_is_borrowed(monkeypatch, client_fixture) -> None:
     """OpenAI 连接把 Endpoint 改到了中转:价照借原厂的,备注照旧说明中转可能另价。"""
     client = client_fixture
