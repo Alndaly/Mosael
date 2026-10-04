@@ -5,6 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { declaredChoices } from "@/components/generation/parameterPanel";
+import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -33,6 +34,7 @@ import {
   carriedParameters,
   declaredParameters,
   declaredParameterValue,
+  withTriggerWords,
   durationChoices,
   type DeclaredParameter,
   sizeOptions,
@@ -451,7 +453,23 @@ export function generateNodeSection({
               <span>{label}</span>
               {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
                   4–15 秒的模型只剩两个档,而用户看不出少了什么。 */}
-              {declared ? (
+              {declared && declared.modelFolder && genModel.plugin_instance_id && declared.options.length > 0 ? (
+                /* 选模型文件的那一格:缩略图、底模、触发词来自这个连接的模型库;选中 LoRA 能把触发词加进提示词
+                   (提示词是模板时照样接在末尾)。 */
+                <ModelFilePicker
+                  parameter={declared}
+                  instanceId={genModel.plugin_instance_id}
+                  value={genParams[key] === undefined ? "" : String(genParams[key])}
+                  onChange={(text) => {
+                    const next = { ...genParams };
+                    const value = declaredParameterValue(declared, text);
+                    if (value === undefined) delete next[key];
+                    else next[key] = value;
+                    setConfig("parameters", next);
+                  }}
+                  onUseTriggers={(words) => setConfig("prompt", withTriggerWords(String(config.prompt ?? ""), words))}
+                />
+              ) : declared ? (
                 <DeclaredGenControl
                   parameter={declared}
                   value={genParams[key] === undefined ? "" : String(genParams[key])}

@@ -57,7 +57,7 @@ const PRODUCERS = [
 ];
 
 const GIRL: GenerationOption = {
-  id: "girl", provider_profile_id: "comfy", profile_name: "ComfyUI", label: "古风女孩.json · ComfyUI",
+  id: "girl", provider_profile_id: "comfy", plugin_instance_id: "", profile_name: "ComfyUI", label: "古风女孩.json · ComfyUI",
   adapter_available: true, is_default: true, capabilities_known: true, provider: "plugin:dev.mosael.comfyui",
   model: "古风女孩.json", kind: "image", capabilities: { prompt: "optional", parameter_keys: [] },
 } as GenerationOption;

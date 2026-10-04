@@ -10352,6 +10352,11 @@ export interface components {
             id: string;
             /** Provider Profile Id */
             provider_profile_id: string;
+            /**
+             * Plugin Instance Id
+             * @default
+             */
+            plugin_instance_id: string;
             /** Profile Name */
             profile_name: string;
             /** Provider */

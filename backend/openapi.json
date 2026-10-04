@@ -29067,6 +29067,11 @@
             "type": "string",
             "title": "Provider Profile Id"
           },
+          "plugin_instance_id": {
+            "type": "string",
+            "title": "Plugin Instance Id",
+            "default": ""
+          },
           "profile_name": {
             "type": "string",
             "title": "Profile Name"

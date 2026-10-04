@@ -154,26 +154,45 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
  */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: React.ReactNode; truncate?: boolean }
->(({ className, children, description, truncate, ...props }, ref) => (
-  <SelectPrimitive.Item
-    ref={ref}
-    className={cn(
-      "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
-      description ? "flex-col items-start gap-px" : "items-center",
-      className
-    )}
-    {...props}
-  >
-    <span className="absolute right-2 top-2.5 flex h-3.5 w-3.5 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </SelectPrimitive.ItemIndicator>
-    </span>
-    <SelectPrimitive.ItemText className="min-w-0 max-w-full break-words">{truncate ? <Truncate>{children}</Truncate> : children}</SelectPrimitive.ItemText>
-    {description && <span className="min-w-0 break-words text-ui-xs leading-4 text-muted-foreground">{description}</span>}
-  </SelectPrimitive.Item>
-))
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    description?: React.ReactNode
+    truncate?: boolean
+    /** 行首的一张小图(模型文件的缩略图)。在 ItemText 外面:选中后克隆进触发器的只有名字。 */
+    media?: React.ReactNode
+  }
+>(({ className, children, description, truncate, media, ...props }, ref) => {
+  const text = (
+    <>
+      <SelectPrimitive.ItemText className="min-w-0 max-w-full break-words">{truncate ? <Truncate>{children}</Truncate> : children}</SelectPrimitive.ItemText>
+      {description && <span className="min-w-0 break-words text-ui-xs leading-4 text-muted-foreground">{description}</span>}
+    </>
+  )
+  return (
+    <SelectPrimitive.Item
+      ref={ref}
+      className={cn(
+        "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+        media ? "items-center gap-2.5" : description ? "flex-col items-start gap-px" : "items-center",
+        className
+      )}
+      {...props}
+    >
+      <span className="absolute right-2 top-2.5 flex h-3.5 w-3.5 items-center justify-center">
+        <SelectPrimitive.ItemIndicator>
+          <Check className="h-4 w-4" />
+        </SelectPrimitive.ItemIndicator>
+      </span>
+      {media ? (
+        <>
+          <span aria-hidden className="grid size-9 shrink-0 overflow-hidden rounded-md [&>*]:size-full">{media}</span>
+          <span className="grid min-w-0 flex-1 gap-px">{text}</span>
+        </>
+      ) : (
+        text
+      )}
+    </SelectPrimitive.Item>
+  )
+})
 SelectItem.displayName = SelectPrimitive.Item.displayName
 
 const SelectSeparator = React.forwardRef<

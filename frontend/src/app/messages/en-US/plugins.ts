@@ -366,4 +366,7 @@ export const plugins = {
   pluginPermPendingBody: "What the plugin declares it needs is listed below. Once granted, its models and tools are available.",
   pluginPermGrantAll: "Grant these {n}",
   pluginPermWaiting: "Needs permission",
+  // 生成表单里选模型文件的那一格
+  modelTriggersAddToPrompt: "Add to prompt",
+  modelTriggersCommonTags: "Common training tags",
 } as const;

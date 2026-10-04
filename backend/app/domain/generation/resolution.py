@@ -227,6 +227,7 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
             {
                 "id": f"{resolved.profile_id}:{kind}:{resolved.model}",
                 "provider_profile_id": resolved.profile_id,
+                "plugin_instance_id": resolved.row.profile.plugin_instance_id or "",
                 "profile_name": resolved.profile_name,
                 "provider": resolved.provider,
                 "kind": kind,

@@ -371,4 +371,7 @@ export const plugins = {
   pluginPermPendingBody: "插件声明要做的事都在下面。授予之后,它提供的模型和工具就能用了。",
   pluginPermGrantAll: "授予这 {n} 项",
   pluginPermWaiting: "待授权",
+  // 生成表单里选模型文件的那一格
+  modelTriggersAddToPrompt: "加进提示词",
+  modelTriggersCommonTags: "训练标签里常见的词",
 } as const;

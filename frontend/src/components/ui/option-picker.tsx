@@ -18,6 +18,11 @@ export type PickerOption = {
   style?: React.CSSProperties;
   /** 副标题,解释"选它会怎样"。短清单和可搜索那版都要渲染 —— 换个分支说法就没了不行。 */
   description?: string;
+  /**
+   * 行首的一张小图(模型文件的缩略图)。和 `description` 一样两个分支都画;只画在清单里,
+   * 不进触发器 —— 触发器里那一枚由调用方经 `icon` 给(它知道选中的是哪一项、该多大)。
+   */
+  media?: React.ReactNode;
 };
 
 /**
@@ -125,6 +130,7 @@ export function OptionPicker({
             truncate
             style={one.style}
             description={one.description}
+            media={one.media}
           >
             {one.label}
           </SelectItem>

@@ -26,6 +26,8 @@ type Option = {
   keywords?: string[];
   /** 只作用在这一项的行内样式。用于**用样式本身当信息**的清单:字体选择器按各自的字体渲染。 */
   style?: React.CSSProperties;
+  /** 行首的一张小图(模型文件的缩略图),比 `icon` 大一号。 */
+  media?: React.ReactNode;
 };
 
 /**
@@ -167,6 +169,11 @@ export function SearchableSelect({
                   {item.icon && (
                     <span aria-hidden className="grid size-4 shrink-0 place-items-center self-start pt-px text-muted-foreground [&_svg]:size-3.5">
                       {item.icon}
+                    </span>
+                  )}
+                  {item.media && (
+                    <span aria-hidden className="grid size-9 shrink-0 overflow-hidden rounded-md [&>*]:size-full">
+                      {item.media}
                     </span>
                   )}
                   {/* 名字是动态的长值(模型名、文件名):单行截断、悬停看全文。说明是静态的一句话:折行。 */}

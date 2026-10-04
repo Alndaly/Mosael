@@ -91,7 +91,9 @@ import {
   promptMode,
   promptToSend,
   videoResolutionOptions,
+  withTriggerWords,
 } from "@/lib/generationCapabilities";
+import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
@@ -1304,16 +1306,33 @@ export function GenerateWorkspace({
                     label={GENERATION_PARAMETER_LABELS[parameter.key] ? t(GENERATION_PARAMETER_LABELS[parameter.key]) : parameter.label}
                     title={toPlainText(parameter.description) || undefined}
                   >
-                    <DeclaredParameterControl
-                      parameter={parameter}
-                      value={generationConfig.declared[parameter.key] ?? ""}
-                      onChange={(value) =>
-                        setGenerationConfig((current) => ({
-                          ...current,
-                          declared: { ...current.declared, [parameter.key]: value },
-                        }))
-                      }
-                    />
+                    {parameter.modelFolder && selectedModel?.plugin_instance_id && parameter.options.length > 0 ? (
+                      /* 选模型文件的那一格:缩略图、底模、触发词来自这个连接的模型库,选中 LoRA 能一键加触发词 */
+                      <ModelFilePicker
+                        parameter={parameter}
+                        instanceId={selectedModel.plugin_instance_id}
+                        value={generationConfig.declared[parameter.key] ?? ""}
+                        onChange={(value) =>
+                          setGenerationConfig((current) => ({
+                            ...current,
+                            declared: { ...current.declared, [parameter.key]: value },
+                          }))
+                        }
+                        onUseTriggers={(words) => setPrompt((current) => withTriggerWords(current, words))}
+                        className={PARAMETER_CONTROL_CLASS}
+                      />
+                    ) : (
+                      <DeclaredParameterControl
+                        parameter={parameter}
+                        value={generationConfig.declared[parameter.key] ?? ""}
+                        onChange={(value) =>
+                          setGenerationConfig((current) => ({
+                            ...current,
+                            declared: { ...current.declared, [parameter.key]: value },
+                          }))
+                        }
+                      />
+                    )}
                   </ParameterField>
                 ))}
                 {parameterChoiceEntries(selectedModel).map(([key, choices]) => {

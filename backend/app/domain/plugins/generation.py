@@ -39,6 +39,9 @@ MODEL_KINDS = ("image", "video", "audio")
 _MODEL_ID = re.compile(r"^[^\x00-\x1f]{1,160}$")
 #: 参数键:工作流里的「节点.输入」、宿主词汇里的 `seed`、`duration_seconds`……不收空格和控制字符。
 _PARAMETER_KEY = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:\-]{0,79}$")
+#: `x-model-folder`:这一格选的是哪个模型目录的文件(ComfyUI 的 checkpoints / loras……)。只收一段像目录名的字:
+#: 表单拿它去模型库对文件,不是路径。
+_MODEL_FOLDER = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 _PARAMETER_TYPES = ("integer", "number", "string", "boolean")
 #: 一个参数最多列多少个可选值(ComfyUI 的 checkpoint 下拉动辄几十个,上千就不是下拉了)。
 _MAX_ENUM = 1000
@@ -177,6 +180,10 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
             clean["x-advanced"] = True
         if spec.get("x-multiline") is True and kind == "string":
             clean["x-multiline"] = True
+        # 选模型文件的那一格写明是哪个模型目录的(生成表单据此从这个连接的模型库取缩略图、底模、触发词)
+        folder = spec.get("x-model-folder")
+        if isinstance(folder, str) and _MODEL_FOLDER.match(folder) and "enum" in clean:
+            clean["x-model-folder"] = folder
         # 可选值的名字(「结果取自」的选项是节点 id,给人看的是节点标题)和每个可选值一次交回几份:
         # 只认可选值里有的,对不上的丢掉。
         choices = {str(one) for one in clean.get("enum") or ()}

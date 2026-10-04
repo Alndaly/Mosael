@@ -25,6 +25,7 @@ import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { IconButton } from "@/components/ui/icon-button";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
+import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { Input } from "@/components/ui/input";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -53,6 +54,7 @@ import {
   sourceLimit,
   supportsParameter,
   videoResolutionOptions,
+  withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { cn } from "@/lib/utils";
@@ -621,6 +623,21 @@ export function NodeComposer({
   //: **上一次自动填进去的那段存在表单上**(`form.prefilled`),不记在面板里:重新选中这一格时面板是新挂的,记在
   //: 面板里的话一挂就忘了 —— 上游改了字,重新选中下游,提示词还停在旧的那段。
   const textKey = texts.map((one) => `${one.itemId}:${one.text}`).join("|");
+  /** 把选中 LoRA 的触发词接进提示词:接在最后一段末尾,**不重建文档** —— 重建会把 `@` 过的素材抹成纯文字。 */
+  const appendTriggers = (words: string[]) => {
+    const next = withTriggerWords(prompt, words);
+    if (next === prompt) return;
+    const added = next.slice(prompt.replace(/[\s,，]+$/u, "").length);
+    const base = promptDocument ?? textDocument(prompt);
+    const blocks = (base.content ?? []).filter((block) => (block.content ?? []).length > 0);
+    const last = blocks[blocks.length - 1];
+    setPrompt(next);
+    setPromptDocument(
+      last
+        ? { ...base, content: [...blocks.slice(0, -1), { ...last, content: [...(last.content ?? []), { type: "text", text: added }] }] }
+        : textDocument(next),
+    );
+  };
   const [prefilled, setPrefilled] = React.useState(saved.prefilled ?? "");
   const promptNow = React.useRef(prompt);
   promptNow.current = prompt;
@@ -1180,6 +1197,27 @@ export function NodeComposer({
                   const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
                   const listed = parameter.type === "boolean" || parameter.options.length > 0;
                   const choices = declaredChoices(parameter, t);
+                  if (parameter.modelFolder && current?.plugin_instance_id && parameter.options.length > 0) {
+                    /* 选模型文件的那一格:缩略图、底模、触发词来自这个连接的模型库;选中 LoRA 能把触发词接进提示词 */
+                    return (
+                      <ParameterRow
+                        key={parameter.key}
+                        label={parameter.label}
+                        title={parameter.description ? `${parameter.label} — ${toPlainText(parameter.description)}` : parameter.label}
+                      >
+                        <ModelFilePicker
+                          parameter={parameter}
+                          instanceId={current.plugin_instance_id}
+                          size="sm"
+                          ariaLabel={parameter.label}
+                          className="w-full min-w-0 gap-1 text-ui-xs"
+                          value={declared[parameter.key] ?? ""}
+                          onChange={(next) => setDeclared((values) => ({ ...values, [parameter.key]: next }))}
+                          onUseTriggers={appendTriggers}
+                        />
+                      </ParameterRow>
+                    );
+                  }
                   return (
                     <Pick
                       key={parameter.key}

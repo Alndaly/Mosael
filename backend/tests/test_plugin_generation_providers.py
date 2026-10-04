@@ -62,7 +62,12 @@ MODELS: list[dict[str, Any]] = [
         "inputs": [{"role": "reference_image", "max": 2}],
         "prompt_dialect": "sd-tags",
     },
-    {"id": "clip.json", "label": "clip", "kind": "video", "parameters": {"4.length": {"type": "integer", "default": 81}}},
+    {"id": "clip.json", "label": "clip", "kind": "video", "parameters": {
+        "4.length": {"type": "integer", "default": 81},
+        # 选模型文件的参数写明目录(生成表单据此从模型库取缩略图);写得不像一个目录名的丢掉
+        "6.unet_name": {"type": "string", "enum": ["wan.safetensors"], "x-model-folder": "diffusion_models"},
+        "7.lora_name": {"type": "string", "enum": ["a.safetensors"], "x-model-folder": "../etc"},
+    }},
     # 音频模型(ADR 0022):歌词、纯音乐是宿主有控件的词汇,时长走宿主的时长控件。
     {
         "id": "song",
@@ -335,7 +340,12 @@ def test_接上之后_插件的模型出现在选择器里(plugged) -> None:
     assert caps["parameter_schema"]["3.sampler_name"]["x-advanced"] is True
     assert "seed" not in caps["parameter_schema"] and "size" not in caps["parameter_schema"]
     # 视频、音频照样进(音频是生成的第三种,ADR 0022);坏条目丢掉
-    assert [one["model"] for one in _options(client, "video")] == ["clip.json"]
+    [clip] = _options(client, "video")
+    assert clip["model"] == "clip.json"
+    assert clip["capabilities"]["parameter_schema"]["6.unet_name"]["x-model-folder"] == "diffusion_models"
+    assert "x-model-folder" not in clip["capabilities"]["parameter_schema"]["7.lora_name"]
+    # 表单要知道去哪个连接的模型库取预览图:插件连接的选项带着它的连接 id
+    assert portrait["plugin_instance_id"] == instance_id == clip["plugin_instance_id"]
     [song] = _options(client, "audio")
     assert song["model"] == "song" and song["adapter_available"] is True
     song_caps = song["capabilities"]

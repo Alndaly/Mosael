@@ -16,7 +16,7 @@ it("edits parameters in the settings popup, persists them after closing, and sub
   const onFormChange = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
+    models={[{ id: "model", provider_profile_id: "profile", plugin_instance_id: "", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
       parameter_keys: ["aspect_ratio", "generate_audio"], aspect_ratios: ["16:9", "9:16"], default_aspect_ratio: "16:9",
     } } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
@@ -56,7 +56,7 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   // 但「我们不认识这个模型」多半**有**参数,只是目录里查不到(手填的别名、经另一条中转配的
   // 同一个模型)。两者都静默的话,用户会以为这个模型就是没参数 —— 今天就是这么错的。
   const model = (known: boolean) => ({
-    id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
+    id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "T", label: "L",
     adapter_available: true, is_default: true, capabilities_known: known,
     provider: "test", model: "some-image-model", kind: "image", capabilities: { parameter_keys: [] },
   } as GenerationOption);
@@ -123,7 +123,7 @@ it("目录没给取值时,用户没填就一个值都不提交", async () => {
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "一段风景" } as BoardItem}
     models={[{
-      id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
+      id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "T", label: "L",
       adapter_available: true, is_default: true, capabilities_known: false,
       provider: "relay", model: "上游昨天刚上的型号", kind: "video",
       capabilities: { parameter_keys: ["size", "resolution", "aspect_ratio", "duration_seconds"] },
@@ -150,7 +150,7 @@ it("尺寸只是推荐值时可以手填 —— 768x1024 照写的发出去", as
   render(<NodeComposer
     item={{ id: "image", kind: "image", text: "一只猫" } as BoardItem}
     models={[{
-      id: "m", provider_profile_id: "p", profile_name: "ComfyUI", label: "girl", adapter_available: true, is_default: true,
+      id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "ComfyUI", label: "girl", adapter_available: true, is_default: true,
       capabilities_known: true, provider: "plugin:dev.mosael.comfyui", model: "girl.json", kind: "image",
       capabilities: { parameter_keys: ["size"], sizes: ["1280x1920", "512x512"], default_size: "1280x1920",
         custom_size: { minimum: 16, multiple_of: 8 } },

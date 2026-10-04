@@ -216,6 +216,9 @@ export interface DeclaredParameter {
   optionLabels: Record<string, string>;
   multiline: boolean;
   advanced: boolean;
+  /** 这一格选的是哪个模型目录的文件(插件的 `x-model-folder`,ComfyUI 的 checkpoints / loras……):表单据此从
+   *  那个连接的模型库取缩略图、底模和触发词。不是选模型文件的格子没有。 */
+  modelFolder?: string;
 }
 
 const DECLARED_TYPES: readonly DeclaredParameterType[] = ["integer", "number", "string", "boolean"];
@@ -256,9 +259,24 @@ export function declaredParameters(model: GenerationOption | null): DeclaredPara
       optionLabels: optionLabels(spec["x-enum-labels"]),
       multiline: spec["x-multiline"] === true,
       advanced: spec["x-advanced"] === true,
+      ...(typeof spec["x-model-folder"] === "string" && spec["x-model-folder"] ? { modelFolder: spec["x-model-folder"] } : {}),
     });
   }
   return [...out.filter((one) => !one.advanced), ...out.filter((one) => one.advanced)];
+}
+
+/**
+ * 把 LoRA 的触发词加进提示词:接在末尾、逗号隔开;提示词里已经有的(按词认,不分大小写)不重复加。
+ */
+export function withTriggerWords(prompt: string, words: string[]): string {
+  const base = prompt.replace(/[\s,，]+$/u, "");
+  const present = (word: string) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=[^\\p{L}\\p{N}_]|$)`, "iu").test(base);
+  };
+  const added = words.map((word) => word.trim()).filter((word, index, all) => word && all.indexOf(word) === index && !present(word));
+  if (added.length === 0) return prompt;
+  return base ? `${base}, ${added.join(", ")}` : added.join(", ");
 }
 
 /**

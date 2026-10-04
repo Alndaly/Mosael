@@ -1,27 +1,14 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Boxes,
   Check,
   CircleAlert,
   Copy,
   Download,
-  Eye,
-  FileBox,
-  ImagePlus,
-  Layers,
   Library,
-  Maximize2,
-  Palette,
   RefreshCcw,
-  ScanFace,
-  Sparkles,
-  Spline,
-  Tag,
-  Type,
   Workflow,
   X,
-  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -29,7 +16,6 @@ import {
   getJob,
   getModelDetail,
   getModelLibrary,
-  modelPreviewUrl,
   resolveModelLink,
   startModelDownload,
   type Job,
@@ -51,6 +37,7 @@ import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
 import { formatBytes } from "@/lib/bytes";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -67,37 +54,13 @@ import { cn } from "@/lib/utils";
 
 type Translate = ReturnType<typeof useI18n>;
 
-/** 目录 → 没有预览图时占位用的图标。认不出的目录用通用的文件图标。 */
-const FOLDER_ICONS: Record<string, LucideIcon> = {
-  checkpoints: Boxes,
-  loras: Layers,
-  lycoris: Layers,
-  vae: Palette,
-  vae_approx: Palette,
-  text_encoders: Type,
-  clip: Type,
-  clip_gguf: Type,
-  diffusion_models: Sparkles,
-  unet: Sparkles,
-  unet_gguf: Sparkles,
-  controlnet: Spline,
-  upscale_models: Maximize2,
-  embeddings: Tag,
-  clip_vision: Eye,
-  ipadapter: ImagePlus,
-  ultralytics: ScanFace,
-  ultralytics_bbox: ScanFace,
-  ultralytics_segm: ScanFace,
-};
-
 const ALL = "__all__";
 const UNKNOWN_FAMILY = "__unknown__";
 
 const keyOf = (model: { folder: string; name: string }) => `${model.folder}/${model.name}`;
-/** ComfyUI 在 Windows 上报的相对路径用反斜杠:比较前统一。 */
-const norm = (name: string) => name.replace(/\\/g, "/").trim();
-const baseName = (name: string) => norm(name).split("/").pop() || name;
-const subFolder = (name: string) => norm(name).split("/").slice(0, -1).join("/");
+const norm = normModelName;
+const baseName = modelBaseName;
+const subFolder = modelSubFolder;
 
 /** 一个不撞名的建议:`x.safetensors` → `x (1).safetensors`、`x (2).safetensors`……按用户此刻选的目录算(他可能改了目录)。 */
 export function freeName(name: string, taken: Set<string>): string {
@@ -394,36 +357,6 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
   );
 }
 
-function ModelThumb({ instanceId, model, className }: { instanceId: string; model: ModelFile; className?: string }) {
-  const t = useI18n();
-  const [failed, setFailed] = React.useState(false);
-  const Icon = FOLDER_ICONS[model.folder] ?? FileBox;
-  if (!model.has_preview || failed) {
-    return (
-      <div
-        aria-hidden
-        data-placeholder={model.folder}
-        className={cn(
-          "grid place-items-center content-center gap-1.5 bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-primary",
-          className,
-        )}
-      >
-        <Icon className="size-8 opacity-70" />
-        <span className="text-ui-2xs font-medium text-muted-foreground">{model.folder}</span>
-      </div>
-    );
-  }
-  return (
-    <img
-      src={modelPreviewUrl(instanceId, model.folder, model.name)}
-      alt={t("modelPreviewAlt").replace("{name}", baseName(model.name))}
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={cn("bg-secondary object-cover", className)}
-    />
-  );
-}
-
 function FamilyBadge({ model }: { model: ModelFile }) {
   const t = useI18n();
   if (!model.family) return null;
@@ -510,7 +443,7 @@ function ModelDetailPage({ instanceId, model }: { instanceId: string; model: Mod
     queryKey: ["model-library-detail", instanceId, model.folder, model.name],
     queryFn: () => getModelDetail(instanceId, model.folder, model.name),
   });
-  const Icon = FOLDER_ICONS[model.folder] ?? FileBox;
+  const Icon = folderIcon(model.folder);
   const entries = Object.entries(meta.data?.metadata ?? {});
   const triggers = model.triggers ?? [];
   return (

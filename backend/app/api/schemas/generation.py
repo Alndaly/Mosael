@@ -35,6 +35,9 @@ class GenerationOptionOut(ApiModel):
 
     id: str
     provider_profile_id: str
+    #: 这条连接是插件连接时,它是哪个插件实例(空串 = 不是插件连接)。表单拿它去那个连接的模型库取
+    #: 选模型文件那一格的缩略图、底模和触发词(参数上的 `x-model-folder`)。
+    plugin_instance_id: str = ""
     profile_name: str
     provider: str
     kind: str

@@ -22,7 +22,7 @@ vi.mock("./PromptEditor", () => ({
 }));
 
 const TALKING = {
-  id: "m", provider_profile_id: "p", profile_name: "百炼", label: "说话照片", adapter_available: true, is_default: true,
+  id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "百炼", label: "说话照片", adapter_available: true, is_default: true,
   capabilities_known: true, provider: "alibaba", model: "wan2.2-s2v", kind: "video",
   capabilities: { parameter_keys: ["first_frame", "driving_audio"], prompt: "none" },
 } as GenerationOption;

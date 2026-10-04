@@ -36,7 +36,7 @@ beforeEach(() => {
 
 function model(capabilities: Record<string, unknown>, kind: "image" | "video" = "image"): GenerationOption {
   return {
-    id: "m", provider_profile_id: "p", profile_name: "T", label: "L", adapter_available: true, is_default: true,
+    id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "T", label: "L", adapter_available: true, is_default: true,
     capabilities_known: true, provider: "test", model: "m", kind, capabilities: { prompt: "optional", ...capabilities },
   } as GenerationOption;
 }
