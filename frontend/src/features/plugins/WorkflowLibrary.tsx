@@ -8,6 +8,7 @@ import {
   FolderTree,
   Info,
   LayoutGrid,
+  Library,
   MoreHorizontal,
   PencilLine,
   RefreshCcw,
@@ -62,6 +63,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import {
@@ -100,7 +102,8 @@ import { cn } from "@/lib/utils";
  * 和模型库同一套骨架(LibraryBrowser):左边一列子目录(按数量排),「缺节点或模型」钉在这一列底部;右边顶上搜索、按种类筛、
  * 排序、三档显示方式;一张卡是节点图的缩略预览(照插件给的图摘要画)、名字、种类、节点数、缺什么。点开是详情:能填什么 /
  * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台;「在编辑器里
- * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。
+ * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。和模型库互相跳(见 ConnectionLibraries):用到的模型
+ * 点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
  *
  * 列表每次打开现问插件(不存库)。
  */
@@ -108,52 +111,6 @@ import { cn } from "@/lib/utils";
 type Translate = ReturnType<typeof useI18n>;
 
 const keyOf = (flow: WorkflowFile) => flow.path;
-
-export function WorkflowLibraryButton({
-  instance,
-  workspaceId,
-  onCheckSettings,
-}: {
-  instance: PluginInstance;
-  workspaceId: string;
-  /** 读不出来时「去检查连接设置」:插件页给的。不给就不摆那颗按钮。 */
-  onCheckSettings?: () => void;
-}) {
-  const t = useI18n();
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <IconButton
-        variant="outline"
-        size="default"
-        className="px-3 text-muted-foreground"
-        label={t("workflowLibraryOpen")}
-        hint={t("workflowLibraryDesc")}
-        disabled={Boolean(instance.blocked_reason)}
-        disabledReason={instance.blocked_reason}
-        onClick={() => setOpen(true)}
-      >
-        <FolderTree size={13} />
-      </IconButton>
-      {open && (
-        <WorkflowLibraryDialog
-          open={open}
-          onOpenChange={setOpen}
-          instance={instance}
-          workspaceId={workspaceId}
-          onCheckSettings={
-            onCheckSettings
-              ? () => {
-                  setOpen(false);
-                  onCheckSettings();
-                }
-              : undefined
-          }
-        />
-      )}
-    </>
-  );
-}
 
 const kindName = (t: Translate, kind: string) =>
   kind === "image" || kind === "video" || kind === "audio" ? t(`workflowKind_${kind}`) : t("workflowKind_unknown");
@@ -163,12 +120,18 @@ export function WorkflowLibraryDialog({
   onOpenChange,
   instance,
   workspaceId,
+  focus,
+  onShowModel,
   onCheckSettings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instance: PluginInstance;
   workspaceId: string;
+  /** 从模型库跳过来:停到这一张。 */
+  focus?: Focused<WorkflowFocus> | null;
+  /** 用到的模型点了跳到模型库(在的停到那一项,缺的打开下载框):连接也认领了模型库才给。 */
+  onShowModel?: (focus: ModelFocus) => void;
   onCheckSettings?: () => void;
 }) {
   const t = useI18n();
@@ -185,6 +148,9 @@ export function WorkflowLibraryDialog({
   //: 显示方式记在本机,和模型库各记各的
   const [density, setDensity] = usePersistentTab<LibraryDensity>("workflow-library.density", "small", LIBRARY_DENSITIES);
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (focus) setDetailKey(focus.path);
+  }, [focus]);
   //: 正在确认的那一次改动(复制、改名、恢复要一个名字;删除只要一句确认)
   const [action, setAction] = React.useState<
     | { kind: "copy" | "rename"; path: string; initial: string }
@@ -400,6 +366,7 @@ export function WorkflowLibraryDialog({
             opening={editor.opening}
             note={editor.note?.path === detail.path ? editor.note : null}
             onOpenEditor={(where) => void editor.open(where, detail)}
+            onShowModel={onShowModel}
             onDismissNote={editor.dismiss}
             onBack={() => setDetailKey(null)}
             onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
@@ -669,6 +636,7 @@ function WorkflowDetail({
   opening,
   note,
   onOpenEditor,
+  onShowModel,
   onDismissNote,
   onBack,
   onCopy,
@@ -681,6 +649,7 @@ function WorkflowDetail({
   opening: boolean;
   note: EditorNote | null;
   onOpenEditor: (editor: WorkflowEditor) => void;
+  onShowModel?: (focus: ModelFocus) => void;
   onDismissNote: () => void;
   onBack: () => void;
   onCopy: () => void;
@@ -694,6 +663,7 @@ function WorkflowDetail({
   const { locale } = usePreferences();
   const generation = flow.generation;
   const parameters = flow.parameters ?? [];
+
   const [allParameters, setAllParameters] = React.useState(false);
 
   const media = (
@@ -848,6 +818,17 @@ function WorkflowDetail({
                 <CatalogBadge tone={one.present ? "success" : "warning"}>
                   {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
                 </CatalogBadge>
+                {/* 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库 */}
+                {onShowModel && one.present && (
+                  <IconButton
+                    size="sm"
+                    className="shrink-0 text-muted-foreground"
+                    label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
+                    onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
+                  >
+                    <Library size={13} />
+                  </IconButton>
+                )}
               </li>
             ))}
           </ul>
@@ -885,14 +866,23 @@ function WorkflowDetail({
         <LibrarySection title={t("workflowMissingModels")} count={flow.missing_models?.length}>
           <ul className="m-0 grid list-none gap-1 p-0">
             {(flow.missing_models ?? []).map((one) => (
-              <li key={`${one.folder}/${one.name}`} className="grid min-w-0 gap-0.5">
-                <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                  <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
-                  <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
+              <li key={`${one.folder}/${one.name}`} className="flex min-w-0 items-center gap-3">
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
+                    <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
+                    <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
+                  </span>
+                  <Truncate className="text-ui-xs text-muted-foreground">
+                    {one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
+                  </Truncate>
                 </span>
-                <Truncate className="text-ui-xs text-muted-foreground">
-                  {one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
-                </Truncate>
+                {onShowModel && (
+                  <Button variant="outline" size="sm" aria-label={t("workflowDownloadInModelLibrary").replace("{name}", one.name)}
+                          onClick={() => onShowModel({ download: { folder: one.folder, name: one.name, ...(one.url ? { url: one.url } : {}) } })}>
+                    <Download size={13} />
+                    {t("modelMissingDownload")}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

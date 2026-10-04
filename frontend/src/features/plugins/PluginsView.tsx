@@ -53,8 +53,7 @@ import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
-import { ModelLibraryButton } from "@/features/plugins/ModelLibrary";
-import { WorkflowLibraryButton } from "@/features/plugins/WorkflowLibrary";
+import { ConnectionLibraries } from "@/features/plugins/ConnectionLibraries";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { useConnectionOpen } from "@/features/plugins/connectionOpen";
@@ -756,20 +755,13 @@ export function ConnectionCard({
               <RefreshCcw size={13} />
             </IconButton>
           )}
-          {(pkg.provides ?? []).includes("model_library") && (
-            <ModelLibraryButton
-              instance={instance}
-              workspaceId={workspaceId}
-              onCheckSettings={settingsTarget ? checkSettings : undefined}
-            />
-          )}
-          {(pkg.provides ?? []).includes("workflow_library") && (
-            <WorkflowLibraryButton
-              instance={instance}
-              workspaceId={workspaceId}
-              onCheckSettings={settingsTarget ? checkSettings : undefined}
-            />
-          )}
+          <ConnectionLibraries
+            instance={instance}
+            workspaceId={workspaceId}
+            models={(pkg.provides ?? []).includes("model_library")}
+            workflows={(pkg.provides ?? []).includes("workflow_library")}
+            onCheckSettings={settingsTarget ? checkSettings : undefined}
+          />
           <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{instance.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />

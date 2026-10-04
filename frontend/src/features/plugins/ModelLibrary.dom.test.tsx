@@ -43,7 +43,8 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import type { Job, ModelLibrary, PluginInstance } from "@/api/client";
-import { ModelLibraryButton, freeName } from "./ModelLibrary";
+import { ConnectionLibraries } from "./ConnectionLibraries";
+import { ModelLibraryDialog, freeName } from "./ModelLibrary";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
 
@@ -94,13 +95,13 @@ function wrap(node: React.ReactNode) {
 }
 
 async function openLibrary() {
-  wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+  wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
   fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
   return within(await screen.findByRole("list", { name: "modelLibraryTitle" }));
 }
 
 async function openLibraryAs(role: "list" | "table") {
-  wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+  wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
   fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
   return within(await screen.findByRole(role, { name: "modelLibraryTitle" }));
 }
@@ -286,7 +287,7 @@ describe("模型库", () => {
 
   it("还在读:加载中在工具条下面的整块里居中(没有左栏);搜索、筛选、下载不装作「0 个文件」", async () => {
     api.getModelLibrary.mockReturnValue(new Promise(() => {}));
-    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
     const status = await screen.findByRole("status");
     expect(status.textContent).toContain("modelLibraryLoading");
@@ -307,7 +308,7 @@ describe("模型库", () => {
   it("读不出来:居中说清楚,给「重试」和「去检查连接设置」;工具条照样不装作 0 个文件", async () => {
     const onCheckSettings = vi.fn();
     api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
-    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" onCheckSettings={onCheckSettings} />);
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models onCheckSettings={onCheckSettings} />);
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
     const title = await screen.findByText("modelLibraryErrorTitle");
     const state = title.closest(".empty-state") as HTMLElement;
@@ -324,7 +325,7 @@ describe("模型库", () => {
 
   it("报错的原文(errno、地址)收进「详情」,正文只说第一行那句人话", async () => {
     api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused"));
-    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
     const state = (await screen.findByText("modelLibraryErrorTitle")).closest(".empty-state") as HTMLElement;
     expect(state.textContent).toContain("连不上这台 ComfyUI,确认它在运行、地址填对");
@@ -335,7 +336,7 @@ describe("模型库", () => {
 
   it("读不出来时点「重试」再问一遍,读到了就照常列出来", async () => {
     api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
-    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
     await screen.findByText("modelLibraryErrorTitle");
     // 没人接「去检查连接设置」(不在插件页上打开的)就不摆这颗按钮
@@ -579,6 +580,36 @@ describe("模型库", () => {
     fireEvent.click(within(downloads).getByRole("button", { name: "modelDownloadCancelLabel" }));
     await waitFor(() => expect(api.cancelJob).toHaveBeenCalled());
     expect(api.cancelJob.mock.calls[0][0]).toBe("j1");
+  });
+
+  it("在用的工作流:旁边一颗「在工作流库里看」,点了跳到工作流库那一张(行本身照旧是用它生成)", async () => {
+    const showWorkflow = vi.fn();
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1" onShowWorkflow={showWorkflow} />);
+    const sdxl = (await screen.findAllByRole("listitem")).find((item) => item.textContent?.includes("sd_xl_base.safetensors"))!;
+    fireEvent.click(within(sdxl).getByRole("button", { name: "sd_xl_base.safetensors" }));
+    const used = await screen.findByRole("region", { name: "modelUsedBy" });
+    fireEvent.click(within(used).getByRole("button", { name: "modelShowInWorkflowLibrary" }));
+    expect(showWorkflow).toHaveBeenCalledWith("portrait.json");
+    expect(handoff).not.toHaveBeenCalled();
+  });
+
+  it("从工作流库跳过来:停到那一项", async () => {
+    api.getModelDetail.mockResolvedValue({ folder: "loras", name: "detail.safetensors", metadata: {}, tags: [] });
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                             focus={{ model: { folder: "loras", name: "detail.safetensors" }, at: 1 }} />);
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    expect(screen.getByRole("heading", { name: "detail.safetensors" })).toBeTruthy();
+  });
+
+  it("从工作流库跳过来下载缺的模型:下载框带着工作流里写的地址、目录和文件名", async () => {
+    api.resolveModelLink.mockResolvedValue({ source: "huggingface", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors",
+      page: "", filename: "ae.safetensors", size: 335304388, folder: "vae", family: "", triggers: [], title: "",
+      exists: false, note: "" });
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                             focus={{ download: { url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae",
+                                                  name: "ae.safetensors" }, at: 1 }} />);
+    await waitFor(() => expect(api.resolveModelLink).toHaveBeenCalledWith("i1", "https://huggingface.co/x/y/resolve/main/ae.safetensors"));
+    expect(await screen.findByRole("button", { name: /modelDownloadConfirm/ })).toBeTruthy();
   });
 
   it("下好了让模型库重新列一遍", async () => {

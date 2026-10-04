@@ -11,7 +11,8 @@
  * - 改那台机器上的文件(复制、改名、删除、恢复)每次都先确认、写明改哪台服务器的哪个文件;撞名(409)不覆盖,给建议名;
  *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机;
  * - 在编辑器里打开:桌面版在这个连接自己的内嵌视图里开 ComfyUI 并打开这一张,网页版开新标签页并说清楚在哪点开;
- *   回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变)。
+ *   回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变);
+ * - 和模型库互相跳:用到的模型点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
  */
 
 import React from "react";
@@ -40,7 +41,8 @@ const handoff = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 
 import type { PluginInstance, WorkflowFile, WorkflowLibrary } from "@/api/client";
-import { WorkflowLibraryButton } from "./WorkflowLibrary";
+import { ConnectionLibraries } from "./ConnectionLibraries";
+import { WorkflowLibraryDialog } from "./WorkflowLibrary";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
 
@@ -102,7 +104,7 @@ function wrap(node: React.ReactNode) {
 }
 
 async function openLibrary() {
-  wrap(<WorkflowLibraryButton instance={instance} workspaceId="w1" />);
+  wrap(<ConnectionLibraries instance={instance} workspaceId="w1" workflows />);
   fireEvent.click(screen.getByRole("button", { name: "workflowLibraryOpen" }));
   return await screen.findByRole("list", { name: "workflowLibraryTitle" });
 }
@@ -383,9 +385,40 @@ describe("工作流库", () => {
     expect(screen.queryByRole("button", { name: "workflowOpenInEditor" })).toBeNull();
   });
 
+  it("用到的模型:在的点了跳到模型库那一项;缺的模型点了去模型库下载(带上工作流里写的地址)", async () => {
+    const showModel = vi.fn();
+    wrap(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1" onShowModel={showModel} />);
+    const card = (await screen.findAllByRole("listitem")).find((item) => item.textContent?.includes("portrait"))!;
+    fireEvent.click(within(card).getByRole("button", { name: "portrait" }));
+    const usedModels = await screen.findByRole("region", { name: "workflowModels" });
+    const present = within(usedModels).getByText("sdxl.safetensors").closest("li") as HTMLElement;
+    fireEvent.click(within(present).getByRole("button", { name: "workflowShowInModelLibrary" }));
+    expect(showModel).toHaveBeenLastCalledWith({ model: { folder: "checkpoints", name: "sdxl.safetensors" } });
+    const absent = within(usedModels).getByText("gone.safetensors").closest("li") as HTMLElement;
+    expect(within(absent).queryByRole("button"), "缺的在「缺的模型」那一节里下载").toBeNull();
+    const missing = screen.getByRole("region", { name: "workflowMissingModels" });
+    fireEvent.click(within(missing).getByRole("button", { name: "workflowDownloadInModelLibrary" }));
+    expect(showModel).toHaveBeenLastCalledWith({
+      download: { folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors" },
+    });
+  });
+
+  it("不能跳去模型库(连接没认领模型库)就只列名字", async () => {
+    await openDetail("portrait");
+    const usedModels = screen.getByRole("region", { name: "workflowModels" });
+    expect(within(usedModels).queryByRole("button")).toBeNull();
+  });
+
+  it("从模型库跳过来:停到那一张", async () => {
+    wrap(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                                focus={{ path: "video/wan.json", at: 1 }} />);
+    await screen.findByRole("button", { name: "workflowLibraryBack" });
+    expect(screen.getByRole("heading", { name: "wan" })).toBeTruthy();
+  });
+
   it("读不出来:居中说清楚、能重试", async () => {
     api.getWorkflowLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://x:[Errno 61]"));
-    wrap(<WorkflowLibraryButton instance={instance} workspaceId="w1" />);
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" workflows />);
     fireEvent.click(screen.getByRole("button", { name: "workflowLibraryOpen" }));
     const title = await screen.findByText("workflowLibraryErrorTitle");
     expect(title.closest(".empty-state")?.textContent).not.toContain("Errno");

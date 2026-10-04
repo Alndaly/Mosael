@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FolderTree,
   LayoutGrid,
   Library,
   RefreshCcw,
@@ -61,6 +62,7 @@ import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import {
   ALL_FOLDERS,
@@ -92,7 +94,8 @@ import { cn } from "@/lib/utils";
  * 版式是文件浏览器那一套(LibraryBrowser):左边一列目录(按数量排、空的不列),「工作流缺的模型」(一键下载)和
  * 「下载记录」(进度、取消)是钉在这一列底部的特殊项;右边顶上一条工具条 —— 搜索、按底模多选(只列当前目录里有的)、
  * 排序 —— 下面是卡片网格(有预览图用预览图,没有就是按目录分的占位),点开是一页详情(元数据、触发词、在用的工作流)。
- * 下载框先解析链接(文件名、大小、建议的目录),同名文件不覆盖 —— 要求换名。
+ * 下载框先解析链接(文件名、大小、建议的目录),同名文件不覆盖 —— 要求换名。和工作流库互相跳(见 ConnectionLibraries):
+ * 在用的工作流旁边能跳到工作流库那一张;从工作流库跳过来停到那一项,或者为它缺的文件打开下载框。
  *
  * 列表每次打开现问插件(不存库);下载的进度读任务本身,不反复让插件把几百个文件再列一遍。
  */
@@ -125,55 +128,6 @@ const plainName = (name: string) => {
 const ACTIVE = new Set(["queued", "running"]);
 const BLUR_SETTINGS = ["on", "off"] as const;
 
-/**
- * 连接标题行上的「模型库」(收起时也在,和「刷新」并排):一颗图标按钮,悬停说它是什么;连接停着时点不了,并说为什么。
- */
-export function ModelLibraryButton({
-  instance,
-  workspaceId,
-  onCheckSettings,
-}: {
-  instance: PluginInstance;
-  workspaceId: string;
-  /** 读不出来时「去检查连接设置」:插件页给的(展开这个连接、定位到服务器地址)。不给就不摆那颗按钮。 */
-  onCheckSettings?: () => void;
-}) {
-  const t = useI18n();
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <IconButton
-        variant="outline"
-        size="default"
-        className="px-3 text-muted-foreground"
-        label={t("modelLibraryOpen")}
-        hint={t("modelLibraryDesc")}
-        disabled={Boolean(instance.blocked_reason)}
-        disabledReason={instance.blocked_reason}
-        onClick={() => setOpen(true)}
-      >
-        <Library size={13} />
-      </IconButton>
-      {open && (
-        <ModelLibraryDialog
-          open={open}
-          onOpenChange={setOpen}
-          instance={instance}
-          workspaceId={workspaceId}
-          onCheckSettings={
-            onCheckSettings
-              ? () => {
-                  setOpen(false);
-                  onCheckSettings();
-                }
-              : undefined
-          }
-        />
-      )}
-    </>
-  );
-}
-
 type DownloadSeed = { url?: string; folder?: string; name?: string };
 
 export function ModelLibraryDialog({
@@ -181,12 +135,18 @@ export function ModelLibraryDialog({
   onOpenChange,
   instance,
   workspaceId,
+  focus,
+  onShowWorkflow,
   onCheckSettings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instance: PluginInstance;
   workspaceId: string;
+  /** 从工作流库跳过来:停到这一项,或者为缺的那个文件打开下载框。 */
+  focus?: Focused<ModelFocus> | null;
+  /** 在用的工作流旁边「在工作流库里看」:连接也认领了工作流库才给。 */
+  onShowWorkflow?: (path: string) => void;
   onCheckSettings?: () => void;
 }) {
   const t = useI18n();
@@ -207,6 +167,10 @@ export function ModelLibraryDialog({
   const [seed, setSeed] = React.useState<DownloadSeed | null>(null);
   //: 这次打开之后发起的下载(列表里的那份是打开时的快照)。
   const [started, setStarted] = React.useState<Job[]>([]);
+  React.useEffect(() => {
+    if (focus?.model) setDetailKey(keyOf(focus.model));
+    else if (focus?.download) setSeed({ ...focus.download });
+  }, [focus]);
 
   const models = React.useMemo(() => library.data?.models ?? [], [library.data]);
   const folders = React.useMemo(() => folderEntries(library.data?.folders ?? []), [library.data]);
@@ -461,7 +425,17 @@ export function ModelLibraryDialog({
       detailKey={detail ? detailKey : null}
       onOpenItem={setDetailKey}
       onBack={() => setDetailKey(null)}
-      detail={detail && <ModelDetail instanceId={instance.id} model={detail} blurred={blurred} onBack={() => setDetailKey(null)} />}
+      detail={
+        detail && (
+          <ModelDetail
+            instanceId={instance.id}
+            model={detail}
+            blurred={blurred}
+            onShowWorkflow={onShowWorkflow}
+            onBack={() => setDetailKey(null)}
+          />
+        )
+      }
       dialogs={
         seed && library.data ? (
           <ModelDownloadDialog
@@ -1104,11 +1078,13 @@ function ModelDetail({
   instanceId,
   model,
   blurred,
+  onShowWorkflow,
   onBack,
 }: {
   instanceId: string;
   model: ModelFile;
   blurred: boolean;
+  onShowWorkflow?: (path: string) => void;
   onBack: () => void;
 }) {
   const t = useI18n();
@@ -1240,7 +1216,7 @@ function ModelDetail({
               //: 点了就用这张工作流生成(选中它、那一格填上这个文件);不在生成模型里的(没启用、转不过来)只列名字
               const target = targets.find((one) => one.option.model === flow.id);
               return (
-                <li key={flow.id} className="flex min-w-0">
+                <li key={flow.id} className="flex min-w-0 items-center gap-1">
                   {target ? (
                     <Hint label={t("modelUseToGenerateWith").replace("{workflow}", flow.label)}>
                       <button
@@ -1258,6 +1234,16 @@ function ModelDetail({
                       <Workflow size={13} aria-hidden className="shrink-0 text-muted-foreground" />
                       <Truncate hint={t("modelUsedByNotRunnable")}>{flow.label}</Truncate>
                     </span>
+                  )}
+                  {onShowWorkflow && (
+                    <IconButton
+                      size="sm"
+                      className="ml-auto shrink-0 text-muted-foreground"
+                      label={t("modelShowInWorkflowLibrary").replace("{workflow}", flow.label)}
+                      onClick={() => onShowWorkflow(flow.id)}
+                    >
+                      <FolderTree size={13} />
+                    </IconButton>
                   )}
                 </li>
               );
