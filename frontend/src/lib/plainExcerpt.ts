@@ -7,7 +7,7 @@
 export function plainExcerpt(markdown: string, length = 24): string {
   return markdown
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[*_~`>#]+/g, "")
+    .replace(/[*_~`>#]+|==/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, length);

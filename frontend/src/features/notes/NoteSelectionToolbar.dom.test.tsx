@@ -274,3 +274,21 @@ it("加到画板:打开画板选择器", async () => {
   expect(within(dialog).getByRole("searchbox")).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: /新建画板/ })).toBeInTheDocument();
 });
+
+it("高亮:格式组里一颗按钮,点了加上、已高亮的再点取消;Mod+Shift+H 同样切换", async () => {
+  mount();
+  const instance = await editor();
+  select(instance, "剪辑组");
+  await screen.findByRole("toolbar", { name: "选区工具" });
+
+  fireEvent.click(button("高亮"));
+  expect(instance.getMarkdown()).toContain("==剪辑组==");
+  await waitFor(() => expect(button("高亮")).toHaveAttribute("aria-pressed", "true"));
+  fireEvent.click(button("高亮"));
+  expect(instance.getMarkdown()).not.toContain("==");
+
+  fireEvent.keyDown(instance.view.dom, { key: "H", code: "KeyH", keyCode: 72, ctrlKey: true, shiftKey: true });
+  expect(instance.getMarkdown()).toContain("==剪辑组==");
+  fireEvent.keyDown(instance.view.dom, { key: "H", code: "KeyH", keyCode: 72, ctrlKey: true, shiftKey: true });
+  expect(instance.getMarkdown()).not.toContain("==");
+});

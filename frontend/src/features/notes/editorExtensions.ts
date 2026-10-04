@@ -7,7 +7,7 @@ import { TableKit } from "@tiptap/extension-table";
 import { NoteTable } from "./NoteTable";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import { Markdown } from "@tiptap/markdown";
+import { NoteHighlight, NoteMarkdown } from "./NoteHighlight";
 export const NoteReference = Node.create({
   name: "noteReference", priority: 1100, inline: true, group: "inline", atom: true,
   addAttributes: () => ({ href: { default: "" }, label: { default: "" } }),
@@ -52,5 +52,5 @@ export const notePlaceholder =
 
 export function noteExtensions(readonly = false, locale = "zh-CN") {
   return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale), createNoteCodeBlock(locale),
-    TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), Markdown];
+    TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), NoteHighlight, NoteMarkdown];
 }

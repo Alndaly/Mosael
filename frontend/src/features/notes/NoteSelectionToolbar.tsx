@@ -2,7 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { useEditorState, type Editor } from "@tiptap/react";
 import {
-  BookPlus, Bold, Bot, ChevronDown, Code, Copy, Italic, LayoutGrid, Link, List, ListTodo, MoreHorizontal, Sparkles, Square,
+  BookPlus, Bold, Bot, ChevronDown, Code, Copy, Highlighter, Italic, LayoutGrid, Link, List, ListTodo, MoreHorizontal, Sparkles, Square,
   Strikethrough, TextQuote, Unlink, Volume2, type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { readNoteSelection, type NoteSelection } from "./noteSelection";
+import { HIGHLIGHT } from "./NoteHighlight";
 import type { ReadAloud } from "./readAloud";
 import { useNoteStrings } from "./strings";
 
@@ -26,7 +27,7 @@ import { useNoteStrings } from "./strings";
  *   在按钮间走,Esc 收起并回到正文(在正文里按 Esc 也收起)。选区一变,收起作废、重新出现。
  * - **窄屏**:只留「问 AI」和「更多」,其余都进「更多」菜单。
  *
- * 高亮没有放:这个编辑器没有高亮标记,Markdown 也没有它的标准写法 —— 加它是换存储格式,不是加一颗按钮。
+ * 高亮存成 `==文字==`(见 NoteHighlight),快捷键 Mod+Shift+H,已高亮的再点一次取消。
  */
 
 export const NOTE_AI_ACTIONS = ["polish", "rewrite", "expand", "shorten", "translate", "summarize", "explain", "continue"] as const;
@@ -61,6 +62,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   const state = useEditorState({ editor, selector: ({ editor: e }) => ({
     empty: e.state.selection.empty, from: e.state.selection.from, to: e.state.selection.to, focused: e.isFocused,
     bold: e.isActive("bold"), italic: e.isActive("italic"), strike: e.isActive("strike"), code: e.isActive("code"),
+    highlight: e.isActive(HIGHLIGHT),
     link: e.isActive("link"), bullet: e.isActive("bulletList"), task: e.isActive("taskList"),
   }) });
   const range = `${state.from}:${state.to}`;
@@ -153,6 +155,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
     { id: "italic", label: s.italic, icon: Italic, pressed: state.italic, run: () => editor.chain().focus().toggleItalic().run() },
     { id: "strike", label: s.strike, icon: Strikethrough, pressed: state.strike, run: () => editor.chain().focus().toggleStrike().run() },
     { id: "code", label: ss.inlineCode, icon: Code, pressed: state.code, run: () => editor.chain().focus().toggleCode().run() },
+    { id: "highlight", label: ss.highlight, icon: Highlighter, pressed: state.highlight, run: () => editor.chain().focus().toggleMark(HIGHLIGHT).run() },
     state.link
       ? { id: "unlink", label: ss.unlink, icon: Unlink, run: () => editor.chain().focus().extendMarkRange("link").unsetLink().run() }
       : { id: "link", label: s.link, icon: Link, run: () => { setUrl(""); setLinking(true); } },

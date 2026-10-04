@@ -185,3 +185,11 @@ def test_重叠出现也算不唯一() -> None:
     with pytest.raises(NoteDomainError) as refused:
         apply_passage_edits("哈哈哈", [{"kind": "replace", "find": "哈哈", "text": "嘿"}])
     assert refused.value.key == "noteErr_passageAmbiguous"
+
+
+def test_高亮的字照原文改_记号跟着走() -> None:
+    """笔记里的高亮存成 `==文字==`(前端 notes/NoteHighlight):锚点照抄原文时连记号一起抄,改完记号还在。"""
+    text = apply_passage_edits("开场 ==三十秒太慢== 以内。", [
+        {"kind": "replace", "find": "==三十秒太慢==", "text": "==十五秒以内=="},
+    ])
+    assert text == "开场 ==十五秒以内== 以内。"

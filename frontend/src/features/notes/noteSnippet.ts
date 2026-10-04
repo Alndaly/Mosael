@@ -16,7 +16,7 @@ export function noteSnippet(markdown: string, max = 120): string {
     .replace(/\|/g, " ")
     // 行首的标题、引用、列表记号。
     .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
-    .replace(/[*_~`#>]/g, "")
+    .replace(/[*_~`#>]|==/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return text.length > max ? `${text.slice(0, max)}…` : text;

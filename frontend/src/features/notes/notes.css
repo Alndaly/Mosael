@@ -140,6 +140,8 @@
 .note-agent-toggle:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }
 .note-agent-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 @media(max-width:950px) { .note-agent-toggle span { display:none; } .note-agent-toggle { width:30px; padding:0; justify-content:center; } }
+/* 高亮(存成 ==文字==,见 NoteHighlight):提醒色压一层浅底,字色不变 —— 明暗两档都跟着 --warning 走。 */
+.note-prose mark.note-highlight { background:color-mix(in srgb,var(--warning) 30%,transparent); color:inherit; border-radius:2px; padding:0 1px; }
 /* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
 .note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
 @media(max-width:1250px) { .note-document-header .note-status { font-size:0; gap:0; } .note-document-header { padding-inline:12px; } }

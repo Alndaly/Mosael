@@ -28,7 +28,7 @@ const zh = {
   historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
   askAi: "问 AI", askAiHint: "带着选中的文字问助手", passageGone: "那段文字已经改过了,没在笔记里找到。", focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
   selection: {
-    toolbar: "选区工具", inlineCode: "行内代码", unlink: "去掉链接", linkPlaceholder: "粘贴 https:// 链接后回车",
+    toolbar: "选区工具", inlineCode: "行内代码", highlight: "高亮", unlink: "去掉链接", linkPlaceholder: "粘贴 https:// 链接后回车",
     ai: "AI 动作", more: "更多", copy: "复制", copied: "已复制", quote: "引用到对话", addToBoard: "加到画板",
     readAloud: "朗读", stopReading: "停止朗读", readingWithVoice: "正在用你在「语音对话」里选的音色朗读", readingWithEdge: "正在用免费的 Edge 语音朗读", saveAudio: "存为音频素材", savingAudio: "已开始生成音频,完成后在素材库里",
     actions: {
@@ -92,7 +92,7 @@ const en: Strings = {
   historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
   askAi: "Ask AI", askAiHint: "Ask the assistant about the selected text", passageGone: "That passage has changed since; it was not found in the note.", focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
   selection: {
-    toolbar: "Selection tools", inlineCode: "Inline code", unlink: "Remove link", linkPlaceholder: "Paste an https:// link and press Enter",
+    toolbar: "Selection tools", inlineCode: "Inline code", highlight: "Highlight", unlink: "Remove link", linkPlaceholder: "Paste an https:// link and press Enter",
     ai: "AI actions", more: "More", copy: "Copy", copied: "Copied", quote: "Quote in chat", addToBoard: "Add to board",
     readAloud: "Read aloud", stopReading: "Stop reading", readingWithVoice: "Reading aloud with the voice you chose under Voice chat", readingWithEdge: "Reading aloud with the free Edge voice", saveAudio: "Save as audio", savingAudio: "Generating the audio; it will be in the media library",
     actions: {
