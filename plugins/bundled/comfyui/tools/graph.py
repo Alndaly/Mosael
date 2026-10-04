@@ -707,6 +707,9 @@ def tunable(
             spec = _schema(defs.get(name), value)
             if spec is None:
                 continue
+            folder = labels.model_folder(class_type, name)
+            if folder and "enum" in spec:
+                spec["x-model-folder"] = folder
             described = labels.describe(node_id, name, class_type, titles.get(node_id, ""), order)
             if not described.common or class_type in _SAVE_NODE_TYPES:
                 spec["x-advanced"] = True

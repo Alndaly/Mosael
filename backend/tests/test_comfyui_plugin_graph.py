@@ -1018,3 +1018,34 @@ def test_只要一个节点时_别的保存节点不跑(graph) -> None:
     assert "9" in TWO_SAVES_API, "不改入参"
     with pytest.raises(Exception, match="结果取自"):
         graph.keep_output(TWO_SAVES_API, "image", "99", OBJECT_INFO)
+
+
+def test_选模型文件的参数写明是哪个模型目录的文件(graph) -> None:
+    """生成表单要按它从模型库取缩略图、底模和触发词(ADR 0034 后续):大模型、LoRA、VAE……各是哪个目录,
+    同名输入按节点分(CLIPLoader 的 clip_name 是文本编码器,CLIPVisionLoader 的是 clip_vision)。"""
+    api = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
+        "2": {"class_type": "LoraLoader", "inputs": {"lora_name": "l.safetensors", "strength_model": 1.0,
+                                                     "strength_clip": 1.0, "model": ["1", 0], "clip": ["1", 1]}},
+        "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": "t.safetensors", "type": "wan"}},
+        "4": {"class_type": "CLIPVisionLoader", "inputs": {"clip_name": "v.safetensors"}},
+        "5": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x.pth"}},
+        "6": {"class_type": "KSampler", "inputs": {"sampler_name": "euler"}},
+    }
+    info = {
+        "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["a.safetensors"]]}}},
+        "LoraLoader": {"input": {"required": {"lora_name": [["l.safetensors"]], "strength_model": ["FLOAT", {}],
+                                              "strength_clip": ["FLOAT", {}], "model": ["MODEL"], "clip": ["CLIP"]}}},
+        "CLIPLoader": {"input": {"required": {"clip_name": [["t.safetensors"]], "type": [["wan", "sd3"]]}}},
+        "CLIPVisionLoader": {"input": {"required": {"clip_name": [["v.safetensors"]]}}},
+        "UpscaleModelLoader": {"input": {"required": {"model_name": [["4x.pth"]]}}},
+        "KSampler": {"input": {"required": {"sampler_name": [["euler", "dpmpp_2m"]]}}},
+    }
+    folders = {key: spec.get("x-model-folder") for key, spec in graph.tunable(api, info).items()}
+    assert folders["1.ckpt_name"] == "checkpoints"
+    assert folders["2.lora_name"] == "loras"
+    assert folders["3.clip_name"] == "text_encoders"
+    assert folders["4.clip_name"] == "clip_vision"
+    assert folders["5.model_name"] == "upscale_models"
+    assert folders["6.sampler_name"] is None, "不是模型文件的下拉不写"
+    assert folders["3.type"] is None

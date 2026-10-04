@@ -82,6 +82,40 @@ HIDDEN_INPUTS = frozenset(
 )
 
 
+#: 选**模型文件**的输入 → 它的文件在哪个模型目录(ComfyUI 的 folder_paths 名)。生成表单据此从模型库取缩略图、
+#: 底模和触发词(ADR 0034 后续)。按输入名认;同名输入在不同节点上指不同目录的,写在 _MODEL_FOLDER_NODES 里。
+#: 认不出就不写 —— 表单照旧是一个普通下拉。
+_MODEL_FOLDER_INPUTS = {
+    "ckpt_name": "checkpoints",
+    "lora_name": "loras",
+    "vae_name": "vae",
+    "unet_name": "diffusion_models",
+    "clip_name": "text_encoders",
+    "clip_name1": "text_encoders",
+    "clip_name2": "text_encoders",
+    "clip_name3": "text_encoders",
+    "clip_name4": "text_encoders",
+    "control_net_name": "controlnet",
+    "style_model_name": "style_models",
+    "gligen_name": "gligen",
+    "hypernetwork_name": "hypernetworks",
+    "upscale_model": "upscale_models",
+}
+_MODEL_FOLDER_NODES = {
+    ("CLIPVisionLoader", "clip_name"): "clip_vision",
+    ("UpscaleModelLoader", "model_name"): "upscale_models",
+    ("UnetLoaderGGUF", "unet_name"): "unet_gguf",
+    ("CLIPLoaderGGUF", "clip_name"): "clip_gguf",
+    ("DualCLIPLoaderGGUF", "clip_name1"): "clip_gguf",
+    ("DualCLIPLoaderGGUF", "clip_name2"): "clip_gguf",
+}
+
+
+def model_folder(class_type: str, name: str) -> str:
+    """这个输入选的是哪个模型目录的文件;不是选模型文件的输入回空串。"""
+    return _MODEL_FOLDER_NODES.get((class_type, name)) or _MODEL_FOLDER_INPUTS.get(name, "")
+
+
 @dataclass(frozen=True)
 class Parameter:
     """描述好的一个参数(还没挂到模型上)。"""
