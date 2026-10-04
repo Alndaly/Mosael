@@ -22252,6 +22252,16 @@
               }
             ],
             "title": "Origin Session Id"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentMessageQuoteIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22311,6 +22321,47 @@
           "created_at"
         ],
         "title": "AgentMessageOut"
+      },
+      "AgentMessageQuoteIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "note",
+            "title": "Kind",
+            "default": "note"
+          },
+          "note_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Note Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "title": "Title",
+            "default": ""
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": -1.0,
+            "title": "Start",
+            "default": -1
+          }
+        },
+        "type": "object",
+        "required": [
+          "note_id",
+          "text"
+        ],
+        "title": "AgentMessageQuoteIn",
+        "description": "消息带着的一段笔记摘录(笔记页的选区)。**只给界面画**:气泡下面一行可点的摘录,点了回到那篇笔记、\n定位到那段。模型读到的选区走 `context`,不靠这里。"
       },
       "AgentPendingView": {
         "properties": {

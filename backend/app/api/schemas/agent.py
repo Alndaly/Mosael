@@ -210,6 +210,19 @@ class AgentReferenceIn(ApiModel):
     name: str = Field(default="", max_length=200)
 
 
+class AgentMessageQuoteIn(ApiModel):
+    """消息带着的一段笔记摘录(笔记页的选区)。**只给界面画**:气泡下面一行可点的摘录,点了回到那篇笔记、
+    定位到那段。模型读到的选区走 `context`,不靠这里。"""
+
+    kind: Literal["note"] = "note"
+    note_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="", max_length=240)
+    #: 选中的正文原文(笔记 Markdown 里的那一段)。定位时拿它在编辑器里找回那一段。
+    text: str = Field(min_length=1, max_length=2000)
+    #: 在正文 Markdown 里的起始下标;-1 = 不知道(选区只对得上纯文字时)。同一段字出现多次时拿它挑最近的那处。
+    start: int = Field(default=-1, ge=-1)
+
+
 class AgentMessageCreate(ApiModel):
     content: str = Field(min_length=1, max_length=8000)
     context: str | None = Field(default=None, max_length=4000)
@@ -221,6 +234,8 @@ class AgentMessageCreate(ApiModel):
     #: 发起方是另一个智能体会话时带上它的 id(notify_agent_session)。结构化而不是靠文案前缀:
     #: 标题自动命名要跳过它,前端要给它画来源徽章 —— 两件事都不该建立在字符串匹配上。
     origin_session_id: str | None = Field(default=None, max_length=64)
+    #: 笔记页发出的消息带着的选区摘录(见 AgentMessageQuoteIn)。落库进 payload["quote"]。
+    quote: AgentMessageQuoteIn | None = None
 
 
 class AgentMessageOut(OrmModel):

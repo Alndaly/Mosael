@@ -459,6 +459,7 @@ def post_user_message(
     body_document: dict | None = None,
     origin_session_id: str | None = None,
     answers: dict | None = None,
+    quote: dict | None = None,
     steer_if_running: bool = False,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread.
@@ -487,6 +488,16 @@ def post_user_message(
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
     origin_marker = origin_marker_for(origin_session_id)
+    #: 落库的 payload 里除了排队标记之外的那些:三条路(插话、排队、直发)**同一份**。此前各抄一遍,
+    #: 加一样东西就得记得改三处 —— 漏掉排队那条,那条消息回看时就少了它。
+    stored = {
+        **({"references": references} if references else {}),
+        **({"body_document": body_document} if body_document else {}),
+        **({"context": context.strip()} if context and context.strip() else {}),
+        **({"answers": answers} if answers else {}),
+        **({"quote": quote} if quote else {}),
+        **origin_marker,
+    }
     if not _claim_idle_session(db, session.id):
         # 回答走插话:抢不到会话说明有一轮在跑,而这条正是它等的东西。插进去成功就当场落库
         # (不带 queued 标),于是它像一条正常的用户消息出现在对话里,而不是队列里那种待办。
@@ -496,13 +507,7 @@ def post_user_message(
                 session_id=session.id,
                 role="user",
                 content=content,
-                payload={
-                    **({"references": references} if references else {}),
-                    **({"body_document": body_document} if body_document else {}),
-                    **({"context": context.strip()} if context and context.strip() else {}),
-                    **({"answers": answers} if answers else {}),
-                    **origin_marker,
-                },
+                payload=dict(stored),
             )
             db.add(message)
             db.commit()
@@ -525,15 +530,7 @@ def post_user_message(
                 session_id=session.id,
                 role="user",
                 content=content,
-                payload={
-                    "queued": True,
-                    "queued_by": user.id,
-                    **({"references": references} if references else {}),
-                    **({"body_document": body_document} if body_document else {}),
-                    **({"context": context.strip()} if context and context.strip() else {}),
-                    **({"answers": answers} if answers else {}),
-                    **origin_marker,
-                },
+                payload={"queued": True, "queued_by": user.id, **stored},
             ),
         )
     # context 也要存:发出去的是 `_prompt_with_context(content, context)`,而 content 只是它的一半。
@@ -543,13 +540,7 @@ def post_user_message(
         session_id=session.id,
         role="user",
         content=content,
-        payload={
-            **({"references": references} if references else {}),
-            **({"body_document": body_document} if body_document else {}),
-            **({"context": context.strip()} if context and context.strip() else {}),
-            **({"answers": answers} if answers else {}),
-            **origin_marker,
-        },
+        payload=dict(stored),
     )
     if session.title == "新对话" and content.strip() and not origin_session_id:
         session.title = session_title(content)

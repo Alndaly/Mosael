@@ -7346,6 +7346,7 @@ export interface components {
             } | null;
             /** Origin Session Id */
             origin_session_id?: string | null;
+            quote?: components["schemas"]["AgentMessageQuoteIn"] | null;
         };
         /** AgentMessageOut */
         AgentMessageOut: {
@@ -7368,6 +7369,33 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AgentMessageQuoteIn
+         * @description 消息带着的一段笔记摘录(笔记页的选区)。**只给界面画**:气泡下面一行可点的摘录,点了回到那篇笔记、
+         *     定位到那段。模型读到的选区走 `context`,不靠这里。
+         */
+        AgentMessageQuoteIn: {
+            /**
+             * Kind
+             * @default note
+             * @constant
+             */
+            kind: "note";
+            /** Note Id */
+            note_id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Text */
+            text: string;
+            /**
+             * Start
+             * @default -1
+             */
+            start: number;
         };
         /**
          * AgentPendingView
