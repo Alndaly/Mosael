@@ -6495,6 +6495,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library/install-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Workflow Nodes
+         * @description 经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。
+         */
+        post: operations["install_workflow_nodes_api_plugins_instances__instance_id__workflow_library_install_nodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/reboot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reboot Workflow Server
+         * @description 经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来(正在跑的任务会中断 —— 界面上确认过)。
+         */
+        post: operations["reboot_workflow_server_api_plugins_instances__instance_id__workflow_library_reboot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library/copy": {
         parameters: {
             query?: never;
@@ -15296,6 +15336,13 @@ export interface components {
              */
             role: string;
         };
+        /** WorkflowInstallNodesRequest */
+        WorkflowInstallNodesRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Packs */
+            packs: string[];
+        };
         /** WorkflowLastOutputOut */
         WorkflowLastOutputOut: {
             /** Asset Id */
@@ -15397,6 +15444,8 @@ export interface components {
             trash?: components["schemas"]["WorkflowTrashedOut"][];
             manager?: components["schemas"]["WorkflowManagerOut"];
             editor?: components["schemas"]["WorkflowEditorOut"] | null;
+            /** Installs */
+            installs?: components["schemas"]["JobOut"][];
         };
         /** WorkflowLibrarySaveRequest */
         WorkflowLibrarySaveRequest: {
@@ -15612,6 +15661,11 @@ export interface components {
         WorkflowPathOut: {
             /** Path */
             path: string;
+        };
+        /** WorkflowRebootOut */
+        WorkflowRebootOut: {
+            /** Back */
+            back: boolean;
         };
         /** WorkflowRenameRequest */
         WorkflowRenameRequest: {
@@ -29236,6 +29290,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_workflow_nodes_api_plugins_instances__instance_id__workflow_library_install_nodes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowInstallNodesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reboot_workflow_server_api_plugins_instances__instance_id__workflow_library_reboot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRebootOut"];
                 };
             };
             /** @description Validation Error */

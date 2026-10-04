@@ -12,7 +12,9 @@
  *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机;
  * - 在编辑器里打开:桌面版在这个连接自己的内嵌视图里开 ComfyUI 并打开这一张,网页版开新标签页并说清楚在哪点开;
  *   回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变);
- * - 和模型库互相跳:用到的模型点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
+ * - 和模型库互相跳:用到的模型点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张;
+ * - 补齐缺的节点:装了 ComfyUI-Manager 的,没装的节点包旁边能「装上」(先确认:改哪台机器、要重启);装好了、或者装了
+ *   却没加载的,给「重启 ComfyUI」(也先确认),重启完重新列;没装 Manager 就说在那台机器上手动装。
  */
 
 import React from "react";
@@ -28,6 +30,9 @@ const api = vi.hoisted(() => ({
   trashWorkflow: vi.fn(),
   restoreWorkflow: vi.fn(),
   refreshPluginInstance: vi.fn(),
+  startNodeInstall: vi.fn(),
+  rebootWorkflowServer: vi.fn(),
+  getJob: vi.fn(),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
 }));
 const saved = vi.hoisted(() => vi.fn());
@@ -144,6 +149,7 @@ beforeEach(() => {
   handoff.mockReset();
   api.refreshPluginInstance.mockReset();
   api.refreshPluginInstance.mockResolvedValue({});
+  for (const fn of [api.startNodeInstall, api.rebootWorkflowServer, api.getJob]) fn.mockReset();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView ??= () => {};
 });
@@ -414,6 +420,69 @@ describe("工作流库", () => {
                                 focus={{ path: "video/wan.json", at: 1 }} />);
     await screen.findByRole("button", { name: "workflowLibraryBack" });
     expect(screen.getByRole("heading", { name: "wan" })).toBeTruthy();
+  });
+
+  it("缺的节点:没装的节点包能「装上」—— 先确认;装好了给「重启 ComfyUI」,也先确认;重启完重新列", async () => {
+    const job = { id: "j1", kind: "node_install", status: "running", progress: 0.4, message: "正在装", error: "",
+                  result: null, updated_at: "2020-01-01T00:00:00Z",
+                  payload: { packs: ["ComfyUI_Comfyroll_CustomNodes"], subject: "ComfyUI_Comfyroll_CustomNodes" } };
+    api.startNodeInstall.mockResolvedValue(job);
+    api.getJob.mockResolvedValue({ ...job, status: "succeeded", progress: 1,
+                                   result: { installed: ["ComfyUI_Comfyroll_CustomNodes"], restart: true } });
+    api.rebootWorkflowServer.mockResolvedValue({ back: true });
+    await openDetail("sketch");
+    const missing = screen.getByRole("region", { name: "workflowMissingNodes" });
+    const installs = within(missing).getAllByRole("button", { name: "workflowInstallPackLabel" });
+    expect(installs, "装了却没加载的那个包不给「装上」").toHaveLength(1);
+    fireEvent.click(installs[0]);
+    const ask = await screen.findByRole("alertdialog");
+    expect(ask.textContent).toContain("workflowInstallBody");
+    fireEvent.click(within(ask).getByRole("button", { name: "workflowInstallConfirm" }));
+    await waitFor(() => expect(api.startNodeInstall).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", packs: ["ComfyUI_Comfyroll_CustomNodes"],
+    }));
+    await waitFor(() => expect(within(missing).getByText(/workflowInstallDone/)).toBeTruthy(), { timeout: 4000 });
+    fireEvent.click(within(missing).getByRole("button", { name: "workflowRestart" }));
+    const restart = await screen.findByRole("alertdialog");
+    expect(restart.textContent).toContain("workflowRestartBody");
+    const before = api.getWorkflowLibrary.mock.calls.length;
+    // 重启回来:这个包装上了,可这台(假的)ComfyUI 还是没加载它
+    const reloaded = library();
+    reloaded.workflows![2].missing_nodes![0].packs![0].installed = true;
+    api.getWorkflowLibrary.mockResolvedValue(reloaded);
+    fireEvent.click(within(restart).getByRole("button", { name: "workflowRestartConfirm" }));
+    await waitFor(() => expect(api.rebootWorkflowServer).toHaveBeenCalledWith("i1"));
+    await waitFor(() => expect(api.getWorkflowLibrary.mock.calls.length).toBeGreaterThan(before));
+    const after = await screen.findByRole("region", { name: "workflowMissingNodes" });
+    await waitFor(() => expect(after.textContent).toContain("workflowInstalledNotLoaded"));
+    expect(after.textContent, "重启过了:不再说「重启之后才加载」").not.toContain("workflowInstallDone");
+  });
+
+  it("装节点包没装成:原话留着", async () => {
+    const job = { id: "j2", kind: "node_install", status: "running", progress: 0.1, message: "", error: "", result: null,
+                  payload: { packs: ["ComfyUI_Comfyroll_CustomNodes"], subject: "ComfyUI_Comfyroll_CustomNodes" } };
+    api.startNodeInstall.mockResolvedValue(job);
+    api.getJob.mockResolvedValue({ ...job, status: "failed", error: "ComfyUI-Manager 不让经网络装节点包:network_mode 改成 personal_cloud" });
+    await openDetail("sketch");
+    const missing = screen.getByRole("region", { name: "workflowMissingNodes" });
+    fireEvent.click(within(missing).getByRole("button", { name: "workflowInstallPackLabel" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "workflowInstallConfirm" }));
+    await waitFor(() => expect(missing.textContent).toContain("personal_cloud"), { timeout: 4000 });
+  });
+
+  it("装了却没加载的节点包:给「重启 ComfyUI」", async () => {
+    await openDetail("sketch");
+    const missing = screen.getByRole("region", { name: "workflowMissingNodes" });
+    expect(missing.textContent).toContain("workflowInstalledNotLoaded");
+    expect(within(missing).getByRole("button", { name: "workflowRestart" })).toBeTruthy();
+  });
+
+  it("没装 ComfyUI-Manager:不给「装上」,说在那台机器上手动装", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ manager: { version: "" } }));
+    await openDetail("sketch");
+    const missing = screen.getByRole("region", { name: "workflowMissingNodes" });
+    expect(within(missing).queryByRole("button", { name: "workflowInstallPackLabel" })).toBeNull();
+    expect(missing.textContent).toContain("workflowInstallNoManager");
   });
 
   it("读不出来:居中说清楚、能重试", async () => {

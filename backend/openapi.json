@@ -19714,6 +19714,102 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/install-nodes": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Install Workflow Nodes",
+        "description": "经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。",
+        "operationId": "install_workflow_nodes_api_plugins_instances__instance_id__workflow_library_install_nodes_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowInstallNodesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/reboot": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Reboot Workflow Server",
+        "description": "经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来(正在跑的任务会中断 —— 界面上确认过)。",
+        "operationId": "reboot_workflow_server_api_plugins_instances__instance_id__workflow_library_reboot_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRebootOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library/copy": {
       "post": {
         "tags": [
@@ -39595,6 +39691,27 @@
         "title": "WorkflowInputOut",
         "description": "读素材的一格:哪个节点、读什么(image / video / audio)、在生成里当什么用(参考图、首帧……)。"
       },
+      "WorkflowInstallNodesRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "packs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Packs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "packs"
+        ],
+        "title": "WorkflowInstallNodesRequest"
+      },
       "WorkflowLastOutputOut": {
         "properties": {
           "asset_id": {
@@ -39784,6 +39901,13 @@
                 "type": "null"
               }
             ]
+          },
+          "installs": {
+            "items": {
+              "$ref": "#/components/schemas/JobOut"
+            },
+            "type": "array",
+            "title": "Installs"
           }
         },
         "type": "object",
@@ -40139,6 +40263,19 @@
         ],
         "title": "WorkflowPathOut",
         "description": "改完之后它在哪(复制、改名、恢复是 workflows/ 里的路径,删除是回收目录里的路径)。"
+      },
+      "WorkflowRebootOut": {
+        "properties": {
+          "back": {
+            "type": "boolean",
+            "title": "Back"
+          }
+        },
+        "type": "object",
+        "required": [
+          "back"
+        ],
+        "title": "WorkflowRebootOut"
       },
       "WorkflowRenameRequest": {
         "properties": {

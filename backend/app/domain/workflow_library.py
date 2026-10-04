@@ -18,6 +18,9 @@
 这里规整预览(和列出来的每一张同一套);存进去和别的写操作同一套,原文以 JSON 字符串交给插件 —— 调用记录里只留截断的
 一段,不把整张图存进记录。
 
+**补齐缺的节点**:装节点包是一个后台任务(`node_install`,经插件交给 ComfyUI-Manager,进度照插件说的),装完要重启
+ComfyUI 才加载;重启经插件(等它停下再起来),回来以后这个连接的目录重拉一遍。包名先在这里过一遍(几个、多长、没有控制字符)。
+
 **这里不认识 ComfyUI**:任何认领 `workflow_library` 的连接,插件页上都有「工作流库」。列表不存库,每次现问插件。
 """
 
@@ -32,14 +35,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment
-from app.db.models import Board, GenerationJob, PluginInstance, ProviderProfile, User, Workflow
+from app.core.unit_of_work import unit_of_work
+from app.db.models import Board, GenerationJob, Job, PluginInstance, ProviderProfile, User, Workflow
 from app.db.references import generation_model_key
 from app.domain import capabilities
-from app.domain.permissions import ensure_workspace_access
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import WORKFLOW_LIBRARY
+from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
+from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
 from app.domain.references import referrers
 
@@ -47,6 +55,12 @@ from app.domain.references import referrers
 LIBRARY_TIMEOUT_SECONDS = 600
 #: 取一张、存一张、挪一张:一两个请求的事。
 QUICK_TIMEOUT_SECONDS = 120
+#: 重启:插件等 ComfyUI 停下再起来,最多 4 分钟,再留一点余量。
+REBOOT_TIMEOUT_SECONDS = 300
+#: 装节点包的任务种类(见 job_catalog);工作流库列这个连接最近几次。
+NODE_INSTALL_KIND = "node_install"
+RECENT_INSTALLS = 5
+_MAX_PACKS = 10
 
 _MAX_WORKFLOWS = 2000
 _MAX_LIST = 200
@@ -311,6 +325,7 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
         "trash": _trash(output.get("trash")),
         "manager": {"version": _text(manager.get("version"), 40)},
         "editor": _editor(output.get("editor")),
+        "installs": node_installs(db, instance),
     }
 
 
@@ -431,6 +446,115 @@ def save(db: Session, instance: PluginInstance, path: str, content: dict[str, An
     return {"path": _write(db, instance, {"op": "save_workflow", "path": path, "content": text}, wanted=path)}
 
 
+# --- 补齐缺的节点 ------------------------------------------------------------------
+
+def _packs(value: list[str]) -> list[str]:
+    packs = [one.strip() for one in value if isinstance(one, str)]
+    if not packs or len(packs) > _MAX_PACKS or any(
+        not one or len(one) > 300 or any(ord(char) < 32 for char in one) for one in packs
+    ):
+        raise WorkflowLibraryError("workflowLibErr_badPacks", most=str(_MAX_PACKS))
+    return list(dict.fromkeys(packs))
+
+
+def start_node_install(db: Session, user: User, instance: PluginInstance, *, workspace_id: str,
+                       packs: list[str]) -> Job:
+    """经这个连接(ComfyUI-Manager)装几个节点包:一个后台任务。装完要重启 ComfyUI 才加载 —— 任务的结果里写着。"""
+    _require(db, instance)
+    packs = _packs(packs)
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    blocked = inst.blocked_reason(db, instance)
+    if blocked:
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    subject = "、".join(packs)
+    job = create_job(
+        db,
+        workspace_id=workspace_id,
+        kind="node_install",  # 和 NODE_INSTALL_KIND 同一个;任务目录的测试按字面量扫
+        created_by=user.id,
+        payload={"instance_id": instance.id, "packs": packs, "subject": subject},
+        message="jobMsg_nodeInstallQueued",
+        message_params={"name": subject},
+    )
+    job_id = job.id
+    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _install(job_id), what="装节点包"))
+    return job
+
+
+def _install(job_id: str) -> None:
+    """装节点包的任务身子。和模型下载一样,每一步一个短的 unit_of_work,状态都经 finish_job 写。"""
+    with unit_of_work() as db:
+        job = db.get(Job, job_id)
+        if job is None:
+            return
+        payload = dict(job.payload or {})
+        subject = str(payload.get("subject") or "")
+        if db.get(PluginInstance, str(payload.get("instance_id") or "")) is None:
+            if finish_job(db, job, status="failed", error="", error_key="modelLibErr_instanceGone", error_params={}):
+                say(job, "jobMsg_nodeInstallFailed", name=subject)
+            return
+        if not finish_job(db, job, status="running", progress=0.01):
+            return
+        say(job, "jobMsg_nodeInstallRunning", name=subject)
+        emit_job_event(db, job.id, "job.running", {})
+
+    def on_progress(fraction: float, message: str) -> None:
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None or not finish_job(db, job, status="running"):
+                return
+            job.progress = min(0.99, max(float(job.progress or 0.0), float(fraction)))
+            if message:
+                say(job, message[:200])
+
+    def cancelled() -> bool:
+        from app.domain.jobs import was_cancelled
+
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            return job is None or was_cancelled(job) or job.status not in ("queued", "running")
+
+    hooks = StreamHooks(on_progress=on_progress, on_task=lambda _receipt: None, is_cancelled=cancelled)
+    try:
+        with unit_of_work() as db:
+            output = tools.invoke_host(db, str(payload["instance_id"]), WORKFLOW_LIBRARY,
+                                       {"op": "install_nodes", "packs": payload["packs"]}, hooks=hooks,
+                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS)
+    except (PluginDomainError, PluginRuntimeError) as exc:
+        from app.domain.jobs import blame
+
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is not None and finish_job(db, job, status="failed", **blame(exc)):
+                say(job, "jobMsg_nodeInstallFailed", name=subject)
+                emit_job_event(db, job.id, "job.failed", {})
+        return
+    installed = [_text(one, 300) for one in output.get("installed") or [] if isinstance(one, str)]
+    result = {"installed": installed or list(payload["packs"]), "restart": output.get("restart") is not False}
+    with unit_of_work() as db:
+        job = db.get(Job, job_id)
+        if job is not None and finish_job(db, job, status="succeeded", progress=1.0, result=result):
+            say(job, "jobMsg_nodeInstallDone", name=subject)
+            emit_job_event(db, job.id, "job.succeeded", dict(result))
+
+
+def node_installs(db: Session, instance: PluginInstance) -> list[Job]:
+    """这个连接最近的几次装节点包(在跑的总在里面),新的在前。"""
+    rows = db.scalars(select(Job).where(Job.kind == NODE_INSTALL_KIND).order_by(Job.created_at.desc()).limit(100))
+    mine = [job for job in rows if (job.payload or {}).get("instance_id") == instance.id]
+    active = [job for job in mine if job.status in ("queued", "running")]
+    finished = [job for job in mine if job.status not in ("queued", "running")]
+    return active + finished[: max(0, RECENT_INSTALLS - len(active))]
+
+
+def reboot(db: Session, instance: PluginInstance) -> dict[str, bool]:
+    """经插件(ComfyUI-Manager)重启那台 ComfyUI,等它回来;回来以后这个连接的目录重拉一遍 —— 新装的节点包这时才加载。"""
+    _require(db, instance)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "reboot"}, timeout=REBOOT_TIMEOUT_SECONDS)
+    host_capabilities.notify(db, instance, refresh=True)
+    return {"back": output.get("back") is True}
+
+
 def register_uses() -> None:
     capabilities.register_use(capabilities.Use(WORKFLOW_LIBRARY, "app", fragment("capUse_workflowLibrary")))
 
@@ -452,10 +576,13 @@ __all__ = [
     "copy",
     "inspect_import",
     "library",
+    "node_installs",
+    "reboot",
     "register_uses",
     "rename",
     "restore",
     "save",
+    "start_node_install",
     "trash",
     "trash_path",
     "workflow_path",

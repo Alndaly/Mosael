@@ -228,6 +228,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "要存的不是一张界面格式的工作流(没有 nodes)",
         "en": "What's being saved is not a UI-format workflow (no nodes)",
     },
+    "workflowLibErr_badPacks": {
+        "zh": "要装的节点包不对:一次 1 到 {most} 个,每个是 Manager 里那个包的名字或仓库地址",
+        "en": "The node packs to install won't do: 1 to {most} at a time, each the pack's name or repository URL in the Manager",
+    },
     "workflowLibErr_badAnswer": {
         "zh": "「{name}」的插件回的东西不对,没改成",
         "en": "The plugin of “{name}” answered with something unexpected; nothing was changed",

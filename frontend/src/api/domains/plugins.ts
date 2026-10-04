@@ -164,6 +164,13 @@ export const inspectWorkflowImport = (
 export const saveImportedWorkflow = (instanceId: string, path: string, content: Record<string, unknown>) =>
   workflowWrite(instanceId, "save", { path, content });
 
+/** 经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。 */
+export const startNodeInstall = (instanceId: string, body: { workspace_id: string; packs: string[] }) =>
+  api<Job>(`/api/plugins/instances/${instanceId}/workflow-library/install-nodes`, { method: "POST", body: JSON.stringify(body) });
+/** 经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来。 */
+export const rebootWorkflowServer = (instanceId: string) =>
+  api<{ back: boolean }>(`/api/plugins/instances/${instanceId}/workflow-library/reboot`, { method: "POST" });
+
 /** 预览图地址。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
 export function modelPreviewUrl(instanceId: string, folder: string, name: string): string {
   const params = new URLSearchParams({ folder, name });

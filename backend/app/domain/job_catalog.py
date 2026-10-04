@@ -68,6 +68,8 @@ JOB_KINDS: dict[str, JobKind] = {
         # 模型库里「下载模型」(ADR 0034):下到那台 ComfyUI 上,几百 MB 到几 GB,要一阵;下完告诉他能用了。
         # 改动的是那台服务器上的模型文件,不是 Mosael 里的哪种资源 —— 模型库自己轮询。
         JobKind("model_download", "always", ()),
+        # 工作流库里「装上」缺的节点包(ADR 0035):经 ComfyUI-Manager 装到那台机器上,要一阵;装完提醒他要重启。
+        JobKind("node_install", "always", ()),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
     )

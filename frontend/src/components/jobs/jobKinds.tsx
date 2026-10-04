@@ -22,6 +22,7 @@ import {
   Link as LinkIcon,
   type LucideIcon,
   Mic,
+  PackagePlus,
   PenLine,
   Radio,
   Rotate3d,
@@ -58,6 +59,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   entity_draw: Rotate3d,
   proxy: Clapperboard,
   model_download: HardDriveDownload,
+  node_install: PackagePlus,
 };
 
 /** 后端说"改动了哪种资源",这里说"那是哪些缓存"。 */

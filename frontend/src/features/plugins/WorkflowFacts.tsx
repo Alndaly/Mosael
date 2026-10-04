@@ -27,16 +27,19 @@ export const mediaName = (t: Translate, media: string) =>
  * 能填什么 / 能调什么 / 交出什么、用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)、缺的模型(声明的下载地址)。
  *
  * `onShowModel` 给了才有跳到模型库的入口(在的停到那一项,缺的打开下载框);`packAction` 给了,「缺的节点」每个节点包后面
- * 放它交回的东西(装节点包的按钮)。导入前的预览两样都不给 —— 那时这张还没存进去。
+ * 放它交回的东西(装节点包的按钮),`missingNodesNote` 放在那一节底下(装到哪了、要不要重启)。导入前的预览都不给 ——
+ * 那时这张还没存进去。
  */
 export function WorkflowFacts({
   facts,
   onShowModel,
   packAction,
+  missingNodesNote,
 }: {
   facts: WorkflowFactsSource;
   onShowModel?: (focus: ModelFocus) => void;
   packAction?: (pack: WorkflowNodePack) => React.ReactNode;
+  missingNodesNote?: React.ReactNode;
 }) {
   const t = useI18n();
   const parameters = facts.parameters ?? [];
@@ -146,6 +149,7 @@ export function WorkflowFacts({
               </li>
             ))}
           </ul>
+          {missingNodesNote}
         </LibrarySection>
       )}
       {(facts.missing_models?.length ?? 0) > 0 && (

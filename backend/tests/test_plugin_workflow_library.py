@@ -9,7 +9,9 @@
 - 写操作(复制、改名、挪进 / 挪出回收目录):路径先在宿主这里过一遍(不合格的不交给插件);撞名回 409 带建议名、
   不覆盖;改成了让这个连接的目录马上重拉一遍;
 - 导入:要导入的东西(一段文字 / 一个文件 / 一个链接,只给一样,太大的不交)先让插件认一遍,宿主规整预览;存进去和别的
-  写操作同一套(不覆盖、撞名 409、改完重拉),原文以 JSON 字符串交给插件(调用记录里只留截断的一段)。
+  写操作同一套(不覆盖、撞名 409、改完重拉),原文以 JSON 字符串交给插件(调用记录里只留截断的一段);
+- 装缺的节点包:一个后台任务(`node_install`),进度照插件说的,装完说要重启;包名先在宿主这里过一遍;工作流库列着这个
+  连接最近的几次;重启经插件,回来以后让这个连接的目录重拉一遍。
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
 from app.domain.plugins import runtime
-from tests.util import fresh_client
+from tests.util import fresh_client, wait_status
 
 PACKAGE_ID = "test.workflows"
 
@@ -109,6 +111,14 @@ elif op == "save_workflow":
         emit({"ok": True, "output": {"conflict": True, "suggestion": "taken (1).json"}})
     else:
         emit({"ok": True, "output": {"path": payload["path"]}})
+elif op == "install_nodes":
+    emit({"event": "progress", "progress": 0.4, "message": "ComfyUI-Manager 正在装 " + payload["packs"][0] + "(1/1)"})
+    if "refused" in payload["packs"]:
+        emit({"ok": False, "error": "这台 ComfyUI 的 ComfyUI-Manager 不让经网络装节点包:把 network_mode 改成 personal_cloud"})
+    else:
+        emit({"ok": True, "output": {"installed": payload["packs"], "restart": True}})
+elif op == "reboot":
+    emit({"ok": True, "output": {"back": True}})
 elif op == "trash_workflow":
     emit({"ok": True, "output": {"path": ".mosael-trash/workflows/20261005-101500/" + payload["path"]}})
 else:
@@ -359,6 +369,55 @@ def test_导入的存进去_不覆盖_撞名回409_原文以JSON字符串交给�
     for bad in ({"path": "x.json", "content": {"3": {"class_type": "KSampler"}}}, {"path": "../x.json", "content": flow}):
         assert client.post(f"{base}/save", json=bad).status_code == 422
     assert len([one for one in _ops() if one["op"] == "save_workflow"]) == 2, "不像样的不交给插件"
+
+
+def _workspace(client) -> str:
+    return client.post("/api/workspaces", json={"name": "工作流库"}).json()["id"]
+
+
+def test_装节点包是一个后台任务_进度照插件说的_装完说要重启_库里列着(library) -> None:
+    client, instance_id = library
+    workspace = _workspace(client)
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    response = client.post(f"{base}/install-nodes", json={"workspace_id": workspace,
+                                                          "packs": ["ComfyUI_Comfyroll_CustomNodes"]})
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["kind"] == "node_install"
+    assert wait_status(client, job["id"]) == "succeeded"
+    done = client.get(f"/api/jobs/{job['id']}").json()
+    assert done["result"] == {"installed": ["ComfyUI_Comfyroll_CustomNodes"], "restart": True}
+    assert "重启" in done["message"]
+    sent = [one for one in _ops() if one["op"] == "install_nodes"][-1]
+    assert sent == {"op": "install_nodes", "packs": ["ComfyUI_Comfyroll_CustomNodes"]}
+    listed = client.get(base, params={"workspace_id": workspace}).json()
+    assert [(one["id"], one["status"]) for one in listed["installs"]] == [(job["id"], "succeeded")]
+
+
+def test_装节点包_Manager拒绝时任务失败_原话留着(library) -> None:
+    client, instance_id = library
+    job = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/install-nodes",
+                      json={"workspace_id": _workspace(client), "packs": ["refused"]}).json()
+    assert wait_status(client, job["id"]) == "failed"
+    assert "personal_cloud" in client.get(f"/api/jobs/{job['id']}").json()["error"]
+
+
+@pytest.mark.parametrize("packs", [[], ["a"] * 11, ["bad\nname"], [""], ["x" * 400]])
+def test_装节点包_包名先过一遍(library, packs) -> None:
+    client, instance_id = library
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/install-nodes",
+                           json={"workspace_id": _workspace(client), "packs": packs})
+    assert response.status_code == 422, response.text
+    assert not [one for one in _ops() if one.get("op") == "install_nodes"]
+
+
+def test_重启_经插件_回来以后重拉这个连接的目录(library) -> None:
+    client, instance_id = library
+    before = len([one for one in _ops() if one["op"] == "models"])
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/reboot")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"back": True}
+    assert len([one for one in _ops() if one["op"] == "models"]) > before, "重启后新装的节点包才加载:模型、工具清单跟着变"
 
 
 def test_删除是挪进回收目录_能恢复_改完马上重拉目录(library) -> None:

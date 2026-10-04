@@ -42,11 +42,13 @@ from app.api.schemas import (
     PluginToolOut,
     WorkflowContentOut,
     WorkflowCopyRequest,
+    WorkflowInstallNodesRequest,
     WorkflowLibraryImportOut,
     WorkflowLibraryImportRequest,
     WorkflowLibraryOut,
     WorkflowPathOut,
     WorkflowRenameRequest,
+    WorkflowRebootOut,
     WorkflowRestoreRequest,
     WorkflowLibrarySaveRequest,
     WorkflowTrashRequest,
@@ -582,6 +584,26 @@ def save_workflow(instance_id: str, body: WorkflowLibrarySaveRequest, db: Tx, us
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.save(db, instance, body.path, body.content)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/install-nodes", response_model=JobOut)
+def install_workflow_nodes(instance_id: str, body: WorkflowInstallNodesRequest, db: Tx, user: CurrentUser) -> Job:
+    """经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.start_node_install(db, user, instance, workspace_id=body.workspace_id, packs=body.packs)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/reboot", response_model=WorkflowRebootOut)
+def reboot_workflow_server(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来(正在跑的任务会中断 —— 界面上确认过)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.reboot(db, instance)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

@@ -633,6 +633,8 @@ class WorkflowLibraryOut(ApiModel):
     manager: WorkflowManagerOut = Field(default_factory=WorkflowManagerOut)
     #: 插件没报编辑器、或者报的不像样就没有 —— 界面不出「在编辑器里打开」
     editor: WorkflowEditorOut | None = None
+    #: 这个连接最近的几次装节点包(在跑的总在里面)
+    installs: list[JobOut] = Field(default_factory=list)
 
 
 class WorkflowLibraryImportRequest(ApiModel):
@@ -673,6 +675,17 @@ class WorkflowLibrarySaveRequest(ApiModel):
     path: str
     #: 界面格式的工作流
     content: dict[str, Any]
+
+
+class WorkflowInstallNodesRequest(ApiModel):
+    workspace_id: str
+    #: 节点包:Manager 映射里的那个 id(registry 的包名,或只在 git 上的仓库地址)
+    packs: list[str]
+
+
+class WorkflowRebootOut(ApiModel):
+    #: 等到它重新起来了
+    back: bool
 
 
 class WorkflowContentOut(ApiModel):

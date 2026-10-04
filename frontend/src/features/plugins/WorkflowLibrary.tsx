@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   CircleAlert,
@@ -31,12 +31,16 @@ import {
   copyWorkflow,
   getWorkflowContent,
   getWorkflowLibrary,
+  rebootWorkflowServer,
   refreshPluginInstance,
   renameWorkflow,
   restoreWorkflow,
+  startNodeInstall,
   trashWorkflow,
+  type Job,
   type PluginInstance,
   type WorkflowFile,
+  type WorkflowNodePack,
   type WorkflowTrashed,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -69,6 +73,13 @@ import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import { WorkflowImportDialog, importable } from "@/features/plugins/WorkflowImport";
+import {
+  NodeInstallNote,
+  awaitingRestart,
+  installActive,
+  packsOf,
+  useNodeInstalls,
+} from "@/features/plugins/WorkflowNodeInstall";
 import { WorkflowPathField, useWorkflowPath } from "@/features/plugins/WorkflowPathField";
 import {
   embeddedEditor,
@@ -160,6 +171,27 @@ export function WorkflowLibraryDialog({
   const [deleting, setDeleting] = React.useState(false);
   //: 正在导入(往库上拖进来的那个文件一并带上)
   const [importing, setImporting] = React.useState<{ file?: File } | null>(null);
+  //: 装节点包:这次打开之后发起的任务、正在确认装哪个、正在确认重启
+  const [installStarted, setInstallStarted] = React.useState<Job[]>([]);
+  const installs = useNodeInstalls(library.data, installStarted);
+  const [installAsk, setInstallAsk] = React.useState<WorkflowNodePack | null>(null);
+  const [installPending, setInstallPending] = React.useState(false);
+  const [restartAsk, setRestartAsk] = React.useState(false);
+  const [restartedAt, setRestartedAt] = React.useState(0);
+  //: 摆出来的:这次打开之后发起的(什么状态都摆),和别处发起、还在跑的
+  const sessionInstalls = installs.filter(
+    (job) => installActive(job) || installStarted.some((one) => one.id === job.id),
+  );
+  const restart = useMutation({
+    mutationFn: () => rebootWorkflowServer(instance.id),
+    //: 宿主已经让这个连接的目录重拉过:新装的节点包这时才加载,工作流库、模型库、生成选项重新问
+    onSuccess: () => {
+      setRestartedAt(Date.now());
+      void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+      void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
+      invalidatePluginDependents(qc);
+    },
+  });
   const qc = useQueryClient();
   //: 改完一张:工作流库重新问一遍;生成选项、工具清单里的那张也跟着变(宿主已经让这个连接的目录重拉过)
   const changed = () => {
@@ -395,6 +427,14 @@ export function WorkflowLibraryDialog({
             note={editor.note?.path === detail.path ? editor.note : null}
             onOpenEditor={(where) => void editor.open(where, detail)}
             onShowModel={onShowModel}
+            manager={library.data?.manager?.version ?? ""}
+            installs={sessionInstalls.filter((job) => packsOf(job).some((id) =>
+              (detail.missing_nodes ?? []).some((node) => (node.packs ?? []).some((pack) => pack.id === id))))}
+            onInstall={setInstallAsk}
+            restartedAt={restartedAt}
+            restarting={restart.isPending}
+            restartError={restart.error ? errorText(restart.error) : ""}
+            onRestart={() => setRestartAsk(true)}
             onDismissNote={editor.dismiss}
             onBack={() => setDetailKey(null)}
             onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
@@ -409,6 +449,40 @@ export function WorkflowLibraryDialog({
       }
       dialogs={
         <>
+          {installAsk && (
+            <ConfirmDialog
+              open
+              title={t("workflowInstallTitle").replace("{server}", instance.name).replace("{name}", installAsk.title)}
+              body={t("workflowInstallBody")}
+              confirmLabel={t("workflowInstallConfirm")}
+              pending={installPending}
+              onCancel={() => setInstallAsk(null)}
+              onConfirm={async () => {
+                setInstallPending(true);
+                try {
+                  const job = await startNodeInstall(instance.id, { workspace_id: workspaceId, packs: [installAsk.id] });
+                  setInstallStarted((list) => [job, ...list]);
+                  setInstallAsk(null);
+                } finally {
+                  setInstallPending(false);
+                }
+              }}
+            />
+          )}
+          {restartAsk && (
+            <ConfirmDialog
+              open
+              title={t("workflowRestartTitle").replace("{server}", instance.name)}
+              body={t("workflowRestartBody")}
+              confirmLabel={t("workflowRestartConfirm")}
+              pending={false}
+              onCancel={() => setRestartAsk(false)}
+              onConfirm={() => {
+                setRestartAsk(false);
+                restart.mutate();
+              }}
+            />
+          )}
           {importing && (
             <WorkflowImportDialog
               instance={instance}
@@ -674,6 +748,13 @@ function WorkflowDetail({
   note,
   onOpenEditor,
   onShowModel,
+  manager,
+  installs,
+  onInstall,
+  restartedAt,
+  restarting,
+  restartError,
+  onRestart,
   onDismissNote,
   onBack,
   onCopy,
@@ -687,6 +768,13 @@ function WorkflowDetail({
   note: EditorNote | null;
   onOpenEditor: (editor: WorkflowEditor) => void;
   onShowModel?: (focus: ModelFocus) => void;
+  manager: string;
+  installs: Job[];
+  onInstall: (pack: WorkflowNodePack) => void;
+  restartedAt: number;
+  restarting: boolean;
+  restartError: string;
+  onRestart: () => void;
   onDismissNote: () => void;
   onBack: () => void;
   onCopy: () => void;
@@ -792,7 +880,30 @@ function WorkflowDetail({
           <span className="min-w-0 break-words">{flow.problem}</span>
         </div>
       )}
-      <WorkflowFacts facts={flow} onShowModel={onShowModel} />
+      <WorkflowFacts
+        facts={flow}
+        onShowModel={onShowModel}
+        packAction={(pack) =>
+          manager && !pack.installed && !installs.some((job) =>
+            (installActive(job) || awaitingRestart(job, restartedAt)) && packsOf(job).includes(pack.id)) ? (
+            <Button variant="outline" size="xs" className="ml-auto shrink-0"
+                    aria-label={t("workflowInstallPackLabel").replace("{name}", pack.title)} onClick={() => onInstall(pack)}>
+              {t("workflowInstallPack")}
+            </Button>
+          ) : null
+        }
+        missingNodesNote={
+          <NodeInstallNote
+            manager={manager}
+            jobs={installs}
+            restartedAt={restartedAt}
+            packs={(flow.missing_nodes ?? []).flatMap((node) => node.packs ?? [])}
+            restarting={restarting}
+            restartError={restartError}
+            onRestart={onRestart}
+          />
+        }
+      />
       {flow.last_output && (
         <LibrarySection title={t("workflowLastOutput")}>
           <div className="flex min-w-0 items-center gap-3">
