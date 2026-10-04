@@ -30444,6 +30444,11 @@
             "type": "string",
             "title": "Note",
             "default": ""
+          },
+          "uses_token": {
+            "type": "boolean",
+            "title": "Uses Token",
+            "default": false
           }
         },
         "type": "object",

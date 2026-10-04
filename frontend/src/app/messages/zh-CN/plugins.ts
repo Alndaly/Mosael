@@ -374,4 +374,10 @@ export const plugins = {
   // 生成表单里选模型文件的那一格
   modelTriggersAddToPrompt: "加进提示词",
   modelTriggersCommonTags: "训练标签里常见的词",
+  // 下载框:经 ComfyUI-Manager 下载时先说清楚的几件事
+  modelDownloadManagerCaution: "经 ComfyUI-Manager 下载,先知道这几件事",
+  modelDownloadCivitaiTokenInUrl: "这个下载要带上你的 Civitai 令牌。ComfyUI-Manager 不收请求头,令牌只能拼进下载地址,会留在那台机器的 Manager 任务记录里。",
+  modelDownloadHfTokenUnsupported: "HuggingFace 令牌经 ComfyUI-Manager 带不过去:要令牌才能下的文件会下载失败。",
+  modelDownloadManagerNoProgress: "看不到按字节的进度:只知道「正在下」和「下好了 / 没下成」。",
+  modelDownloadManagerCancel: "下载开始后取消,只是 Mosael 不再等;那台机器上的下载还会继续,下完刷新模型库就能看到。",
 } as const;

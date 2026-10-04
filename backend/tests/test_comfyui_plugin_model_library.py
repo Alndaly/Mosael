@@ -508,14 +508,19 @@ def test_底模家族_先元数据再文件名_认不出不猜(modules, folder, 
 class _Web:
     """替 sources 的那一个出网口:按 (方法, 地址) 回预先写好的答案,记下每次带的头。"""
 
-    def __init__(self, answers: dict[tuple[str, str], tuple[int, dict[str, str], bytes]]) -> None:
+    def __init__(self, answers: dict[tuple[str, str], tuple[int, dict[str, str], bytes]],
+                 needs_auth: set[str] | None = None) -> None:
         self.answers = answers
+        #: 这些地址不带 Authorization 就回 401(要登录才看得到的模型)
+        self.needs_auth = needs_auth or set()
         self.calls: list[tuple[str, str, dict[str, str]]] = []
 
     def __call__(self, url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: float = 30):
         from sources import Answer
 
         self.calls.append((method, url, dict(headers or {})))
+        if url in self.needs_auth and not (headers or {}).get("Authorization"):
+            return Answer(status=401, headers={}, body=b"", url=url)
         status, answer_headers, body = self.answers.get((method, url), (404, {}, b""))
         return Answer(status=status, headers={k.lower(): v for k, v in answer_headers.items()}, body=body, url=url)
 
@@ -566,7 +571,38 @@ def test_解析Civitai页面_版本接口给文件_类型定目录_底模定家�
     assert (out["family"], out["triggers"]) == ("Illustrious", ["chibi", "sd style"])
     assert out["title"] == "Chibi Style · v2.0"
     assert "civ_secret" not in json.dumps(out), "令牌不进结果"
-    assert web.calls[0][2].get("Authorization") == "Bearer civ_secret", "Civitai 的接口带它自己的令牌"
+    assert "Authorization" not in web.calls[0][2], "公开的模型信息不用令牌就看得到:令牌能不带就不带"
+    assert out["uses_token"] is True, "下载时会带上 Civitai 令牌(界面据此提醒经 Manager 下载时它会留在那台机器上)"
+
+
+def test_解析Civitai_要登录才看得到的模型_再带上令牌问一次(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    version = {"id": 9, "name": "v1", "modelId": 8, "baseModel": "Pony", "model": {"name": "P", "type": "LORA"},
+               "files": [{"name": "p.safetensors", "type": "Model", "primary": True, "sizeKB": 1,
+                          "downloadUrl": "https://civitai.com/api/download/models/9"}]}
+    url = "https://civitai.com/api/v1/model-versions/9"
+    web = _Web({("GET", url): (200, {}, json.dumps(version).encode())}, needs_auth={url})
+    monkeypatch.setattr(sources, "fetch", web)
+    monkeypatch.setenv("CIVITAI_TOKEN", "civ_secret")
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://civitai.com/api/download/models/9"}, Comfy(comfy.url), "zh")
+    assert out["filename"] == "p.safetensors"
+    assert [call[2].get("Authorization") for call in web.calls] == [None, "Bearer civ_secret"]
+
+
+def test_没填令牌_解析结果说下载不带令牌(modules, comfy, monkeypatch) -> None:
+    _, sources = modules
+    version = {"id": 7, "name": "v1", "modelId": 6, "baseModel": "SDXL 1.0", "model": {"name": "S", "type": "LORA"},
+               "files": [{"name": "s.safetensors", "type": "Model", "primary": True, "sizeKB": 1,
+                          "downloadUrl": "https://civitai.com/api/download/models/7"}]}
+    monkeypatch.setattr(sources, "fetch", _Web({("GET", "https://civitai.com/api/v1/model-versions/7"):
+                                                (200, {}, json.dumps(version).encode())}))
+    monkeypatch.delenv("CIVITAI_TOKEN", raising=False)
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": "https://civitai.com/api/download/models/7"}, Comfy(comfy.url), "zh")
+    assert out["uses_token"] is False
 
 
 def test_解析Civitai_同名文件已在_说出来(modules, comfy, monkeypatch) -> None:

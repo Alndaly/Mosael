@@ -369,4 +369,10 @@ export const plugins = {
   // 生成表单里选模型文件的那一格
   modelTriggersAddToPrompt: "Add to prompt",
   modelTriggersCommonTags: "Common training tags",
+  // 下载框:经 ComfyUI-Manager 下载时先说清楚的几件事
+  modelDownloadManagerCaution: "Downloading through ComfyUI-Manager: good to know",
+  modelDownloadCivitaiTokenInUrl: "This download carries your Civitai token. ComfyUI-Manager takes no request headers, so the token goes into the download URL and stays in that machine's Manager task history.",
+  modelDownloadHfTokenUnsupported: "A HuggingFace token can't be passed through ComfyUI-Manager: files that need it will fail to download.",
+  modelDownloadManagerNoProgress: "There is no byte progress: only \u201cdownloading\u201d and \u201cdone / failed\u201d.",
+  modelDownloadManagerCancel: "Cancelling after it starts only stops Mosael waiting; the download keeps going on that machine, and the file shows up in the library once it's done.",
 } as const;

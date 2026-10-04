@@ -82,7 +82,7 @@ elif op == "resolve":
         emit({"ok": False, "error": "这个链接认不出是哪个模型"})
     else:
         emit({"ok": True, "output": {"source": "huggingface", "url": payload["url"], "filename": "tiny.safetensors",
-                                     "size": 4900000, "folder": "", "exists": False}})
+                                     "size": 4900000, "folder": "", "exists": False, "uses_token": True}})
 elif op == "download":
     cancel = Path(os.environ["MOSAEL_PLUGIN_CANCEL_FILE"])
     emit({"event": "progress", "progress": 0.25, "message": "已下载 1.2 MB / 4.9 MB"})
@@ -304,6 +304,7 @@ def test_解析链接_插件认不出的原话报给人看(library) -> None:
     ok = client.post(url, json={"url": "https://huggingface.co/a/b/blob/main/tiny.safetensors"})
     assert ok.status_code == 200, ok.text
     assert ok.json()["filename"] == "tiny.safetensors" and ok.json()["size"] == 4900000
+    assert ok.json()["uses_token"] is True, "下载会不会带上那个站的令牌,照插件说的交给界面"
     bad = client.post(url, json={"url": "https://example.com/nope"})
     assert bad.status_code == 422 and "认不出" in bad.json()["detail"]
     local = client.post(url, json={"url": "file:///etc/passwd"})

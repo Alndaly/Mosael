@@ -692,6 +692,23 @@ function ModelDownloadDialog({
                 </span>
               </div>
             )}
+            {route === "manager" && (
+              /* 走 ComfyUI-Manager 时先说清楚的几件事:令牌会留在那台机器上(只在真要带 Civitai 令牌时说)、
+                 看不到按字节的进度、开始之后取消停不下那边的下载。 */
+              <div
+                role="note"
+                aria-label={t("modelDownloadManagerCaution")}
+                className="grid gap-1.5 rounded-lg border border-warning/40 bg-warning/5 p-3 text-ui-xs leading-relaxed text-foreground"
+              >
+                <strong className="text-ui-sm">{t("modelDownloadManagerCaution")}</strong>
+                <ul className="m-0 grid list-disc gap-1 pl-4">
+                  {resolved.source === "civitai" && resolved.uses_token && <li>{t("modelDownloadCivitaiTokenInUrl")}</li>}
+                  {resolved.source === "huggingface" && resolved.uses_token && <li>{t("modelDownloadHfTokenUnsupported")}</li>}
+                  <li>{t("modelDownloadManagerNoProgress")}</li>
+                  <li>{t("modelDownloadManagerCancel")}</li>
+                </ul>
+              </div>
+            )}
             <p className={cn("m-0 break-words text-ui-xs leading-relaxed", route === "none" ? "text-destructive" : "text-muted-foreground")}>
               {route === "none" && <strong className="mr-1">{t("modelDownloadCannot")}</strong>}
               {library.download?.note}

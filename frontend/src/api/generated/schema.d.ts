@@ -10965,6 +10965,11 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * Uses Token
+             * @default false
+             */
+            uses_token: boolean;
         };
         /** ModelResolveRequest */
         ModelResolveRequest: {

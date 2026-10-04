@@ -444,6 +444,9 @@ class ModelResolveOut(ApiModel):
     title: str = ""
     exists: bool = False
     note: str = ""
+    #: 下载时会带上那个站的令牌(连接上填了 HuggingFace / Civitai 令牌)。经 ComfyUI-Manager 下载 Civitai 时,
+    #: 令牌只能拼进下载地址、留在那台机器的任务记录里 —— 界面据此在下载框里提醒。
+    uses_token: bool = False
 
 
 class ModelDownloadRequest(ApiModel):

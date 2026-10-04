@@ -174,9 +174,8 @@ def describe(comfy: Comfy, info: dict[str, list[str]] | None, listing: dict[str,
             "ComfyUI-Manager refused to install models last time; ComfyUI is on this computer, so files go straight into its "
             "models folder (with progress and cancel)")}
     if version:
-        note = say(locale, f"经 ComfyUI-Manager({version})下载:由那台机器自己去下,看不到字节进度,开始之后停不下",
-                   f"Downloads go through ComfyUI-Manager ({version}): that machine downloads by itself, without byte progress, "
-                   "and can't be stopped once started")
+        note = say(locale, f"经 ComfyUI-Manager({version})下载:由那台机器自己去下",
+                   f"Downloads go through ComfyUI-Manager ({version}): that machine downloads by itself")
         if refused:
             note = f"{note} · {say(locale, '上次被拒绝了:', 'Refused last time: ')}{_policy_steps(locale)}"
         return {"route": "manager", "note": note}

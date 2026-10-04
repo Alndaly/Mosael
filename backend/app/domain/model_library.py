@@ -314,6 +314,7 @@ def resolve(db: Session, instance: PluginInstance, url: str) -> dict[str, Any]:
         "triggers": [_text(one, 200) for one in output.get("triggers") or [] if _text(one, 200)][:_MAX_TRIGGERS],
         "title": _text(output.get("title"), 300),
         "exists": bool(output.get("exists")),
+        "uses_token": bool(output.get("uses_token")),
         "note": _text(output.get("note"), 2000),
     }
 

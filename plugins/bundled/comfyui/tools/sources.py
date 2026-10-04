@@ -206,8 +206,12 @@ def _huggingface(url: str, locale: str, folders: set[str]) -> Link:
 # --- Civitai ----------------------------------------------------------------------
 
 def _civitai_json(path: str, locale: str) -> dict[str, Any]:
+    """Civitai 的公开接口。先不带令牌问 —— 公开的模型信息不用登录就看得到,令牌能不发就不发;回 401 / 403
+    (要登录才看得到的模型)且填了令牌时,再带上它问一次。"""
     url = f"https://civitai.com{path}"
-    answer = fetch(url, headers={"Accept": "application/json", **auth_for(url)})
+    answer = fetch(url, headers={"Accept": "application/json"})
+    if answer.status in (401, 403) and auth_for(url):
+        answer = fetch(url, headers={"Accept": "application/json", **auth_for(url)})
     if answer.status == 404:
         raise ComfyError(say(locale, "Civitai 上没有这个模型(或者它已经下架)", "Civitai has no such model (or it was taken down)"))
     if answer.status in (401, 403):
@@ -321,4 +325,7 @@ def resolve(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         "source": link.source, "url": link.url, "page": link.page, "filename": link.filename, "size": link.size,
         "folder": link.folder, "family": link.family, "triggers": link.triggers or [], "title": link.title,
         "exists": exists, "note": link.note,
+        # 下载时会不会带上那个站的令牌(填了 HuggingFace / Civitai 令牌、链接正是那个站的):经 ComfyUI-Manager 下载时
+        # Civitai 的令牌只能拼进下载地址、留在那台机器的任务记录里,界面据此提醒
+        "uses_token": bool(token_for(link.url)),
     }
