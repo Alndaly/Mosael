@@ -47,6 +47,8 @@ const IPC = Object.freeze({
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
+    // 工作流库「在编辑器里打开」:这个 ComfyUI 连接自己的内嵌视图里打开它的界面和指定的那张工作流。
+    comfyuiOpenWorkflow: "comfyui:openWorkflow",
     // 浏览器会话顶栏的页面工具:只作用于前台那个内嵌视图(主进程自己认是哪个,渲染层不点名)。
     pageToolsCapture: "pageTools:capture",
     pageToolsRegionStart: "pageTools:regionStart",
@@ -196,6 +198,35 @@ function parseBrowserProfile(value) {
     throw new TypeError(`${channel}: partition must start with persist:pool-`);
   }
   return { partition };
+}
+
+/**
+ * 工作流库「在编辑器里打开」。分区**由这里按连接 id 拼**(`persist:pool-comfyui-<id>`),渲染层点不了别的分区
+ * (发布账号、别的档案);路径和宿主同一套规矩(workflows/ 里的相对路径、.json 结尾、不带 ..、隐藏段和 Windows
+ * 不收的字符) —— 它只会作为字符串嵌进主进程写死的那段脚本(见 publish/comfyEditor.ts)。
+ */
+function parseComfyWorkflow(value) {
+  const channel = IPC.invoke.comfyuiOpenWorkflow;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["connectionId", "url", "name", "path"], channel);
+  const connectionId = requiredString(payload, "connectionId", channel);
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(connectionId)) {
+    throw new TypeError(`${channel}: connectionId must be a plain id`);
+  }
+  const { url } = parseUrlRequest(payload, channel);
+  const path = requiredString(payload, "path", channel);
+  const segments = path.split("/");
+  const badSegment = (one) =>
+    !one || one.startsWith(".") || one !== one.trim() || /[\x00-\x1f<>:"|?*\\]/.test(one);
+  if (!path.toLowerCase().endsWith(".json") || path.length > 500 || segments.some(badSegment)) {
+    throw new TypeError(`${channel}: path must be a workflow path under workflows/`);
+  }
+  return {
+    partition: `persist:pool-comfyui-${connectionId}`,
+    url,
+    name: typeof payload.name === "string" ? payload.name.trim() : "",
+    path,
+  };
 }
 
 /** 只认这几个键,多一个就拒(理由同 parsePanelLayout:渲染层热更新、主进程不重启时两边常常不是同一版)。 */
@@ -412,6 +443,7 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComfyWorkflow,
   parseImageUrls,
   parseLocale,
   parseNewPage,

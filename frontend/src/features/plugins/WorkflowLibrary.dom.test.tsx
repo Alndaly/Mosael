@@ -9,13 +9,15 @@
  * - 点开是详情:能填什么 / 参数 / 交出什么、用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)和缺的模型、
  *   最近的产出、Mosael 里谁在用它(点了跳过去);「用它生成」交给 AI 工作台,不是生成模型的点不了并说为什么;
  * - 改那台机器上的文件(复制、改名、删除、恢复)每次都先确认、写明改哪台服务器的哪个文件;撞名(409)不覆盖,给建议名;
- *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机。
+ *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机;
+ * - 在编辑器里打开:桌面版在这个连接自己的内嵌视图里开 ComfyUI 并打开这一张,网页版开新标签页并说清楚在哪点开;
+ *   回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变)。
  */
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(),
@@ -24,6 +26,7 @@ const api = vi.hoisted(() => ({
   renameWorkflow: vi.fn(),
   trashWorkflow: vi.fn(),
   restoreWorkflow: vi.fn(),
+  refreshPluginInstance: vi.fn(),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
 }));
 const saved = vi.hoisted(() => vi.fn());
@@ -137,9 +140,34 @@ beforeEach(() => {
   api.getWorkflowLibrary.mockReset();
   api.getWorkflowLibrary.mockResolvedValue(library());
   handoff.mockReset();
+  api.refreshPluginInstance.mockReset();
+  api.refreshPluginInstance.mockResolvedValue({});
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView ??= () => {};
 });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const EDITOR = { kind: "comfyui", url: "http://192.168.3.15:8188" };
+
+type ViewState = { visible: boolean; accountId: string | null; accountName: string | null; partition?: string | null };
+
+/** 桌面版的两座桥:打开工作流的那一个,和内嵌视图亮出 / 收起的通知。 */
+function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
+  const listeners = new Set<(state: ViewState) => void>();
+  const openComfyWorkflow = vi.fn().mockResolvedValue(result);
+  vi.stubGlobal("mosaelBrowser", { openComfyWorkflow });
+  vi.stubGlobal("mosaelPublish", {
+    onViewState: (callback: (state: ViewState) => void) => {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+  });
+  const emit = (state: ViewState) => act(() => listeners.forEach((listener) => listener(state)));
+  return { openComfyWorkflow, emit };
+}
 
 describe("工作流库", () => {
   it("左边一列:全部、子目录(按数量排),钉在底部的「缺节点或模型」;一张卡一个节点图缩略预览", async () => {
@@ -306,6 +334,53 @@ describe("工作流库", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "workflowRestoreConfirm" }));
     await waitFor(() => expect(api.restoreWorkflow).toHaveBeenLastCalledWith("i1",
       ".mosael-trash/workflows/20261005-101500/old/one.json", "old/one (1).json"));
+  });
+
+  it("在编辑器里打开(桌面版):这个连接自己的内嵌视图里开 ComfyUI、打开这一张;回到 Mosael 时刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "opened" });
+    await openDetail("portrait");
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    await waitFor(() => expect(bridge.openComfyWorkflow).toHaveBeenCalledWith({
+      connectionId: "i1", url: EDITOR.url, name: instance.name, path: "portrait.json",
+    }));
+    const partition = "persist:pool-comfyui-i1";
+    bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
+    expect(api.refreshPluginInstance).not.toHaveBeenCalled();
+    bridge.emit({ visible: false, accountId: null, accountName: null });
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+    await waitFor(() => expect(api.getWorkflowLibrary).toHaveBeenCalledTimes(2));
+    bridge.emit({ visible: true, accountId: "persist:pool-other", accountName: "别的", partition: "persist:pool-other" });
+    bridge.emit({ visible: false, accountId: null, accountName: null });
+    expect(api.refreshPluginInstance, "只在自己开的那个视图收起时刷新一次").toHaveBeenCalledTimes(1);
+  });
+
+  it("在编辑器里打开:那台机器上没找到这一张、或者没打开成,回来时看得到怎么办", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "missing" });
+    await openDetail("portrait");
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    expect((await screen.findByRole("status")).textContent).toContain("workflowEditorMissing");
+    bridge.openComfyWorkflow.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("前台正被另一个页面占着");
+  });
+
+  it("在编辑器里打开(网页版):新标签页开这台 ComfyUI,说清楚在左边「工作流」里点开哪一张;回到这个标签页时刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const opened = vi.fn(() => null);
+    vi.stubGlobal("open", opened);
+    await openDetail("portrait");
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    expect(opened).toHaveBeenCalledWith(EDITOR.url, "_blank", "noopener,noreferrer");
+    expect((await screen.findByRole("status")).textContent).toContain("workflowEditorTab");
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+  });
+
+  it("插件没给编辑器地址就没有这个按钮", async () => {
+    await openDetail("portrait");
+    expect(screen.queryByRole("button", { name: "workflowOpenInEditor" })).toBeNull();
   });
 
   it("读不出来:居中说清楚、能重试", async () => {

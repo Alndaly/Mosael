@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   FolderTree,
+  Info,
   LayoutGrid,
   MoreHorizontal,
   PencilLine,
@@ -15,10 +16,12 @@ import {
   SearchX,
   Settings2,
   Sparkles,
+  SquarePen,
   Trash2,
   TriangleAlert,
   Unplug,
   Workflow,
+  X,
 } from "lucide-react";
 
 import {
@@ -26,6 +29,7 @@ import {
   copyWorkflow,
   getWorkflowContent,
   getWorkflowLibrary,
+  refreshPluginInstance,
   renameWorkflow,
   restoreWorkflow,
   trashWorkflow,
@@ -61,6 +65,12 @@ import { Truncate } from "@/components/ui/truncate";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import {
+  embeddedEditor,
+  useWorkflowEditor,
+  type EditorNote,
+  type WorkflowEditor,
+} from "@/features/plugins/workflowEditor";
+import {
   ALL_WORKFLOWS,
   PROBLEMS_VIEW,
   TRASH_VIEW,
@@ -89,7 +99,8 @@ import { cn } from "@/lib/utils";
  *
  * 和模型库同一套骨架(LibraryBrowser):左边一列子目录(按数量排),「缺节点或模型」钉在这一列底部;右边顶上搜索、按种类筛、
  * 排序、三档显示方式;一张卡是节点图的缩略预览(照插件给的图摘要画)、名字、种类、节点数、缺什么。点开是详情:能填什么 /
- * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台。
+ * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台;「在编辑器里
+ * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。
  *
  * 列表每次打开现问插件(不存库)。
  */
@@ -188,6 +199,17 @@ export function WorkflowLibraryDialog({
     void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
     invalidatePluginDependents(qc);
   };
+  //: 从编辑器回来:那边可能存了改动、换了模型 —— 先让这个连接的目录重拉,再让工作流库、模型库和生成选项重新问
+  const editorReturned = React.useCallback(() => {
+    void refreshPluginInstance(instance.id)
+      .catch(() => undefined)
+      .finally(() => {
+        void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+        void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
+        invalidatePluginDependents(qc);
+      });
+  }, [instance.id, qc]);
+  const editor = useWorkflowEditor(instance, editorReturned);
 
   const workflows = React.useMemo(() => library.data?.workflows ?? [], [library.data]);
   const trash = library.data?.trash ?? [];
@@ -374,6 +396,11 @@ export function WorkflowLibraryDialog({
         detail && (
           <WorkflowDetail
             flow={detail}
+            editor={library.data?.editor ?? null}
+            opening={editor.opening}
+            note={editor.note?.path === detail.path ? editor.note : null}
+            onOpenEditor={(where) => void editor.open(where, detail)}
+            onDismissNote={editor.dismiss}
             onBack={() => setDetailKey(null)}
             onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
             onRename={() => setAction({ kind: "rename", path: detail.path, initial: detail.path })}
@@ -607,8 +634,42 @@ const mediaName = (t: Translate, media: string) =>
  * (带节点标题和分组名);右栏转不过来的原因、能填什么 / 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、
  * Mosael 里谁在用它。
  */
+/** 「在编辑器里打开」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、或者出了错。 */
+function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () => void }) {
+  const t = useI18n();
+  const text =
+    note.kind === "error"
+      ? note.message || t("workflowEditorFailed")
+      : t(note.kind === "missing" ? "workflowEditorMissing" : note.kind === "tab" ? "workflowEditorTab" : "workflowEditorNotReady")
+          .replace("{name}", note.path);
+  return (
+    <div
+      role={note.kind === "error" ? "alert" : "status"}
+      className={cn(
+        "flex min-w-0 items-start gap-2 rounded-lg border bg-panel p-3 text-ui-sm text-foreground",
+        note.kind === "error" ? "border-destructive/40" : "border-border",
+      )}
+    >
+      {note.kind === "error" ? (
+        <CircleAlert size={14} aria-hidden className="mt-0.5 shrink-0 text-destructive" />
+      ) : (
+        <Info size={14} aria-hidden className="mt-0.5 shrink-0 text-muted-foreground" />
+      )}
+      <span className="min-w-0 flex-1 break-words">{text}</span>
+      <IconButton size="sm" className="-my-1 shrink-0 text-muted-foreground" label={t("close")} onClick={onDismiss}>
+        <X size={13} />
+      </IconButton>
+    </div>
+  );
+}
+
 function WorkflowDetail({
   flow,
+  editor,
+  opening,
+  note,
+  onOpenEditor,
+  onDismissNote,
   onBack,
   onCopy,
   onRename,
@@ -616,6 +677,11 @@ function WorkflowDetail({
   onExport,
 }: {
   flow: WorkflowFile;
+  editor: WorkflowEditor | null;
+  opening: boolean;
+  note: EditorNote | null;
+  onOpenEditor: (editor: WorkflowEditor) => void;
+  onDismissNote: () => void;
   onBack: () => void;
   onCopy: () => void;
   onRename: () => void;
@@ -678,6 +744,14 @@ function WorkflowDetail({
             {t("modelUseToGenerate")}
           </Button>
         </Hint>
+        {editor && (
+          <Hint label={t(embeddedEditor(editor) ? "workflowOpenInEditorHint" : "workflowOpenInEditorHintTab")}>
+            <Button variant="outline" disabled={opening} onClick={() => onOpenEditor(editor)}>
+              <SquarePen size={13} />
+              {t("workflowOpenInEditor")}
+            </Button>
+          </Hint>
+        )}
         {/* 改那台机器上的文件:每一样都先弹确认(见 WorkflowPathDialog / ConfirmDialog);导出只是下载到本机 */}
         <Popover open={menu} onOpenChange={setMenu}>
           <PopoverTrigger asChild>
@@ -706,6 +780,7 @@ function WorkflowDetail({
       }
       media={media}
     >
+      {note && <EditorNoteLine note={note} onDismiss={onDismissNote} />}
       {exportError && <p role="alert" className="m-0 text-ui-sm text-destructive">{exportError}</p>}
       {flow.problem && (
         <div role="alert" className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/40 bg-panel p-3 text-ui-sm text-foreground">

@@ -131,6 +131,16 @@ export interface MosaelBrowserBridge {
   }): Promise<{ ok: boolean; error?: string }>;
   /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
   clearProfile(partition: string): Promise<void>;
+  /**
+   * 工作流库「在编辑器里打开」:在这个 ComfyUI 连接自己的内嵌视图里打开它的界面,再打开 `workflows/<path>` 那一张。
+   * `outcome`:打开了 / 那台机器上没有这一张 / 视图不在这台 ComfyUI 上 / 前端一直没就绪(比如要先登录)。
+   */
+  openComfyWorkflow(opts: {
+    connectionId: string;
+    url: string;
+    name?: string;
+    path: string;
+  }): Promise<{ ok: boolean; outcome?: "opened" | "missing" | "elsewhere" | "notReady"; error?: string }>;
 }
 
 /** 页面工具作用的那一页。 */

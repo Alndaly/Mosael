@@ -162,6 +162,8 @@ const browserBridge = {
   // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
   openLogin: (opts) => invoke(IPC.invoke.browserOpenLogin, opts),
   clearProfile: (partition) => invoke(IPC.invoke.browserClearProfile, { partition }),
+  // 工作流库「在编辑器里打开」(见 main.cjs comfyui:openWorkflow)。
+  openComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiOpenWorkflow, opts),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 

@@ -8,7 +8,9 @@
   产出、这个工作区里哪些工作流节点 / 画板格子选的是它(引用表,见 db/references 的 `generation_model`);
 - **路径先查一遍**:只认 `workflows/` 里的相对路径(`.json`,不带 `..`、反斜杠、控制字符和 Windows 不收的字符),
   回收目录里的只认插件报过的那种形状 —— 不交给插件猜;
-- **改完马上刷新**:这个连接的生成目录和工具清单重拉一遍(`host_capabilities.notify(refresh=True)`),不等一分钟的指纹。
+- **改完马上刷新**:这个连接的生成目录和工具清单重拉一遍(`host_capabilities.notify(refresh=True)`),不等一分钟的指纹;
+- **在哪里编辑**:插件可以报一个编辑器(种类 + 网页地址,「在编辑器里打开」用),这里只认简单的种类名和不带用户名密码
+  的 http(s) 地址,不对就当没有。
 
 **不覆盖**:复制、改名、恢复撞了名,插件回 `conflict` 和一个建议名,这里翻成 409(带着建议名),界面要求换名。
 
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -51,6 +54,8 @@ _ROLES = {"input", "model", "sampler", "text", "output", "note", "missing", "oth
 _BAD_SEGMENT = re.compile(r'[\x00-\x1f<>:"|?*\\]')
 #: 回收目录里的一张:`.mosael-trash/workflows/<时刻>/<原来的相对路径>`(ADR 0035 §3)。
 _TRASH_PATH = re.compile(r"^\.mosael-trash/workflows/\d{8}-\d{6}(-\d+)?/(?P<original>.+)$")
+#: 编辑器的种类名(界面按它决定怎么打开那一张,如 `comfyui`)。
+_EDITOR_KIND = re.compile(r"[a-z][a-z0-9-]{0,39}")
 
 
 class WorkflowLibraryError(LocalizedError, ValueError):
@@ -266,6 +271,20 @@ def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflo
         flow["used_by"] = uses[:_MAX_USES]
 
 
+def _editor(raw: Any) -> dict[str, str] | None:
+    """插件说这些工作流在哪里编辑。地址会在桌面版的内嵌浏览器 / 网页版的新标签页里打开:只认 http(s)、有主机名、
+    不带「用户名:密码@」(凭据不该出现在地址里,见插件的连接配置)。"""
+    if not isinstance(raw, dict):
+        return None
+    kind, url = raw.get("kind"), raw.get("url")
+    if not isinstance(kind, str) or not _EDITOR_KIND.fullmatch(kind) or not isinstance(url, str) or len(url) > 500:
+        return None
+    parts = urlsplit(url.strip())
+    if parts.scheme not in ("http", "https") or not parts.hostname or "@" in parts.netloc:
+        return None
+    return {"kind": kind, "url": url.strip()}
+
+
 def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: str = "") -> dict[str, Any]:
     """现问插件:这个连接上存着的全部工作流(连同图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺什么)、不是工作流的
     文件、回收目录里的;再补上它们在 Mosael 里的样子(只看 `workspace_id` 这个工作区,`user` 得进得去)。"""
@@ -282,6 +301,7 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
         "others": [one for one in _items(output.get("others"), {"path": 500, "reason": 2000}) if one["path"]],
         "trash": _trash(output.get("trash")),
         "manager": {"version": _text(manager.get("version"), 40)},
+        "editor": _editor(output.get("editor")),
     }
 
 

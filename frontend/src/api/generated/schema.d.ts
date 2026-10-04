@@ -15049,6 +15049,17 @@ export interface components {
             template_id?: string | null;
         };
         /**
+         * WorkflowEditorOut
+         * @description 「在编辑器里打开」开哪里:`kind` 决定界面怎么打开那一张(`comfyui`:桌面版在内嵌浏览器里经前端打开),`url` 是
+         *     那台服务器的网页界面(只会是 http(s))。
+         */
+        WorkflowEditorOut: {
+            /** Kind */
+            kind: string;
+            /** Url */
+            url: string;
+        };
+        /**
          * WorkflowFieldOptionOut
          * @description 节点字段的一个动态选项。
          */
@@ -15264,6 +15275,7 @@ export interface components {
             /** Trash */
             trash?: components["schemas"]["WorkflowTrashedOut"][];
             manager?: components["schemas"]["WorkflowManagerOut"];
+            editor?: components["schemas"]["WorkflowEditorOut"] | null;
         };
         /** WorkflowManagerOut */
         WorkflowManagerOut: {

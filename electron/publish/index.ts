@@ -5,6 +5,7 @@ export {
   stopPublishWorker,
   openLogin,
   openPoolLogin,
+  openComfyWorkflow,
   openPage,
   signOutAccount,
   clearPoolProfile,

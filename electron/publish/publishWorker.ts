@@ -26,6 +26,7 @@ import {
 import type { DownloadNotice } from "./downloads";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
+import { openWorkflowInPage, type ComfyOpenOutcome } from "./comfyEditor";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
@@ -622,6 +623,22 @@ export async function openPoolLogin(opts: {
     proxy: opts.proxy ?? null,
     resume: opts.resume === true,
   });
+}
+
+/**
+ * 工作流库「在编辑器里打开」:亮出这个 ComfyUI 连接自己的内嵌视图(还开着就接着用,不重新载入 —— 那边可能有没存的
+ * 改动),再在页面里打开 `workflows/<path>` 那一张(见 comfyEditor)。和池档案登录同一个前台单槽。
+ */
+export async function openComfyWorkflow(opts: {
+  partition: string;
+  url: string;
+  name: string;
+  path: string;
+}): Promise<ComfyOpenOutcome> {
+  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
+  const driver = views?.existingDriver(opts.partition);
+  if (!driver) return "notReady";
+  return openWorkflowInPage(driver, opts);
 }
 
 /** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */

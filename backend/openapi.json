@@ -39083,6 +39083,25 @@
         ],
         "title": "WorkflowCreate"
       },
+      "WorkflowEditorOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "url"
+        ],
+        "title": "WorkflowEditorOut",
+        "description": "「在编辑器里打开」开哪里:`kind` 决定界面怎么打开那一张(`comfyui`:桌面版在内嵌浏览器里经前端打开),`url` 是\n那台服务器的网页界面(只会是 http(s))。"
+      },
       "WorkflowFieldOptionOut": {
         "properties": {
           "value": {
@@ -39514,6 +39533,16 @@
           },
           "manager": {
             "$ref": "#/components/schemas/WorkflowManagerOut"
+          },
+          "editor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowEditorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

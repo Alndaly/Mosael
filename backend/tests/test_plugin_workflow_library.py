@@ -76,6 +76,8 @@ elif op == "workflows":
         "trash": [{"path": ".mosael-trash/workflows/20261005-101500/old/one.json", "deleted_at": 1791000000.0},
                   {"path": ".mosael-trash/elsewhere/x.json"}],
         "manager": {"version": "V4.2.1"},
+        "editor": json.loads((data / "editor.json").read_text()) if (data / "editor.json").exists()
+        else {"kind": "comfyui", "url": "http://127.0.0.1:8188"},
     }})
 elif op == "workflow":
     emit({"ok": True, "output": {"content": {"nodes": [], "links": [], "path_seen": payload["path"]}}})
@@ -181,6 +183,19 @@ def test_列出插件报的工作流_宿主规整字段_补上它在Mosael里是
     assert body["trash"] == [{"path": ".mosael-trash/workflows/20261005-101500/old/one.json", "original": "old/one.json",
                               "label": "one", "deleted_at": 1791000000.0}], "不是回收目录形状的不认"
     assert body["manager"] == {"version": "V4.2.1"}
+    assert body["editor"] == {"kind": "comfyui", "url": "http://127.0.0.1:8188"}
+
+
+@pytest.mark.parametrize("editor", [{"kind": "comfyui", "url": "javascript:alert(1)"},
+                                    {"kind": "comfyui", "url": "http://user:pw@127.0.0.1:8188"},
+                                    {"kind": "Comfy UI!", "url": "http://127.0.0.1:8188"},
+                                    "http://127.0.0.1:8188"])
+def test_编辑器只认_http地址和简单的种类名_不对就当没有(library, editor) -> None:
+    client, instance_id = library
+    runtime.data_dir_for(PACKAGE_ID).mkdir(parents=True, exist_ok=True)
+    (runtime.data_dir_for(PACKAGE_ID) / "editor.json").write_text(json.dumps(editor), encoding="utf-8")
+    body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
+    assert body["editor"] is None
 
 
 def test_最近一次的产出_只看这个工作区里用它生成的(library) -> None:

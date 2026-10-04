@@ -33,6 +33,7 @@ const {
   IPC,
   parseAuthToken,
   parseBrowserLogin,
+  parseComfyWorkflow,
   parseBrowserProfile,
   parseCaptureMode,
   parseImageUrls,
@@ -875,6 +876,16 @@ app.whenReady().then(async () => {
       const request = parseBrowserLogin(payload);
       await requirePublish().openPoolLogin(request);
       return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  // 工作流库「在编辑器里打开」(ADR 0035):这个 ComfyUI 连接自己的内嵌视图里开它的界面,再打开那一张。分区由契约
+  // 按连接 id 拼好,打开那一张的是写死的脚本(publish/comfyEditor.ts),渲染层只给路径。
+  ipcMain.handle(IPC.invoke.comfyuiOpenWorkflow, async (_e, payload) => {
+    try {
+      const request = parseComfyWorkflow(payload);
+      return { ok: true, outcome: await requirePublish().openComfyWorkflow(request) };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }

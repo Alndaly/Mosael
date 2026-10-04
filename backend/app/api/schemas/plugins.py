@@ -618,11 +618,21 @@ class WorkflowManagerOut(ApiModel):
     version: str = ""
 
 
+class WorkflowEditorOut(ApiModel):
+    """「在编辑器里打开」开哪里:`kind` 决定界面怎么打开那一张(`comfyui`:桌面版在内嵌浏览器里经前端打开),`url` 是
+    那台服务器的网页界面(只会是 http(s))。"""
+
+    kind: str
+    url: str
+
+
 class WorkflowLibraryOut(ApiModel):
     workflows: list[WorkflowFileOut] = Field(default_factory=list)
     others: list[WorkflowOtherFileOut] = Field(default_factory=list)
     trash: list[WorkflowTrashedOut] = Field(default_factory=list)
     manager: WorkflowManagerOut = Field(default_factory=WorkflowManagerOut)
+    #: 插件没报编辑器、或者报的不像样就没有 —— 界面不出「在编辑器里打开」
+    editor: WorkflowEditorOut | None = None
 
 
 class WorkflowContentOut(ApiModel):

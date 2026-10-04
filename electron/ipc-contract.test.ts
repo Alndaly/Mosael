@@ -20,6 +20,7 @@ const contract = require("./ipc-contract.cjs") as {
     resume: boolean;
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
+  parseComfyWorkflow: (value: unknown) => { partition: string; url: string; name: string; path: string };
   parsePanelLayout: (value: unknown) => Record<string, number | string>;
   parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
@@ -96,6 +97,26 @@ describe("Electron IPC contract", () => {
     // 清登录数据是破坏性的:只许碰通用档案的分区,发布账号走 publish:signOut。
     expect(contract.parseBrowserProfile({ partition: "persist:pool-user" })).toEqual({ partition: "persist:pool-user" });
     expect(() => contract.parseBrowserProfile({ partition: "persist:mosael-account" })).toThrow(/partition/);
+
+    // 工作流库「在编辑器里打开」:分区由契约按连接 id 拼 —— 渲染层点不了别的分区(发布账号、别的档案)。
+    expect(contract.parseComfyWorkflow({
+      connectionId: "c0ffee-1",
+      url: "http://192.168.3.15:8188",
+      name: " 我的 ComfyUI ",
+      path: "人像/古风 女孩.json",
+    })).toEqual({
+      partition: "persist:pool-comfyui-c0ffee-1",
+      url: "http://192.168.3.15:8188",
+      name: "我的 ComfyUI",
+      path: "人像/古风 女孩.json",
+    });
+    const comfy = { connectionId: "c1", url: "http://127.0.0.1:8188", path: "a.json" };
+    expect(() => contract.parseComfyWorkflow({ ...comfy, connectionId: "../x" })).toThrow(/connectionId/);
+    expect(() => contract.parseComfyWorkflow({ ...comfy, partition: "persist:mosael-x" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyWorkflow({ ...comfy, url: "file:\/\/\/tmp/x" })).toThrow(/http/);
+    for (const path of ["../a.json", "/a.json", "a\\b.json", "a", ".hidden/a.json", "a/.b.json", "a\nb.json", "a//b.json"]) {
+      expect(() => contract.parseComfyWorkflow({ ...comfy, path }), path).toThrow(/path/);
+    }
 
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
