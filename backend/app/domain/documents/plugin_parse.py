@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import Asset, AssetExtraction, Job
 from app.domain.documents import DOCUMENT_PARSE
-from app.domain.documents.local import DocumentParseError, Parsed, Section, _html_to_markdown, _split_by_headings
+from app.domain.documents.local import DocumentParseError, Parsed, Section, html_to_markdown, _split_by_headings
 
 _MARKER = re.compile(r"<!--\s*(page|slide|sheet|section)\s*:\s*(\d+)\s*-->")
 _TABLE = re.compile(r"<table\b.*?</table>", re.S | re.I)
@@ -48,7 +48,7 @@ def _inside(root: Path, relative: str) -> Path:
 
 def sections_from_markdown(markdown: str) -> tuple[str, list[Section]]:
     """带段标记的 Markdown → (单位, 各段)。没有标记就按标题切,单位是 section。"""
-    markdown = _TABLE.sub(lambda match: "\n\n" + _html_to_markdown(match.group(0)) + "\n\n", markdown)
+    markdown = _TABLE.sub(lambda match: "\n\n" + html_to_markdown(match.group(0)) + "\n\n", markdown)
     marks = list(_MARKER.finditer(markdown))
     if not marks:
         return "section", _split_by_headings(markdown.strip())

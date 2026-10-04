@@ -311,6 +311,30 @@ describe("采集页面图片", () => {
   });
 });
 
+describe("存成笔记", () => {
+  it("整页正文:把渲染后的页面交给后端建笔记,点「打开」去那篇", async () => {
+    api.createNoteFromPage.mockResolvedValue({ id: "note-1" });
+    show();
+    fireEvent.click(toolButton("note"));
+    fireEvent.click(choiceButton("article"));
+    await waitFor(() => expect(api.createNoteFromPage).toHaveBeenCalled());
+    expect(api.createNoteFromPage.mock.calls[0][0]).toEqual({
+      workspace_id: "ws", url: PAGE.url, title: PAGE.title, html: "<article>正文</article>", selection: "",
+    });
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsNoteSaved"));
+    fireEvent.click(within(notice()!).getByText("browserToolsOpen"));
+    expect(links.openNote).toHaveBeenCalledWith("note-1");
+  });
+
+  it("选中的文字:没选中就先说一声,不建空笔记", async () => {
+    show();
+    fireEvent.click(toolButton("note"));
+    fireEvent.click(choiceButton("selection"));
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsNoSelection"));
+    expect(api.createNoteFromPage).not.toHaveBeenCalled();
+  });
+});
+
 it("选了一项就收回去,工具马上又点得到(连着截两张不用先收起)", async () => {
   show();
   fireEvent.click(toolButton("shot"));

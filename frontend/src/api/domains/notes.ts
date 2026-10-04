@@ -26,6 +26,9 @@ export function listNoteTopics(workspaceId: string, trashed = false) {
 }
 export const getNote = (workspaceId: string, id: string) => api<Note>(`/api/notes/${id}?workspace_id=${encodeURIComponent(workspaceId)}`);
 export const createNote = (workspaceId: string, body: Partial<NoteContent>) => api<Note>("/api/notes", { method: "POST", body: JSON.stringify({ ...emptyNote, ...body, workspace_id: workspaceId }) });
+/** 内嵌浏览器顶栏「存成笔记」:整页(渲染后的 HTML,正文由后端挑)或选中的文字,带着来源链接与标题。 */
+export const createNoteFromPage = (body: { workspace_id: string; url: string; title: string; html?: string; selection?: string }) =>
+  api<Note>("/api/notes/from-page", { method: "POST", body: JSON.stringify(body) });
 export const saveNote = (note: Note) => api<Note>(`/api/notes/${note.id}`, { method: "PATCH", body: JSON.stringify({ ...note, base_revision: note.revision }) });
 // **不带 base_revision。** 追加到末尾与文档别处的编辑可交换,服务端按它当前的修订落库
 // (见 backend/app/domain/notes.append_note);带上手里这份常常是旧的修订号,只会把

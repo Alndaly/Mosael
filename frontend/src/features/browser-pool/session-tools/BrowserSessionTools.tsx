@@ -3,11 +3,14 @@ import {
   BookmarkPlus,
   Camera,
   Crop,
+  FileText,
   Film,
   Images,
   Loader2,
   Monitor,
   PanelTop,
+  ScanText,
+  TextSelect,
   X,
 } from "lucide-react";
 
@@ -23,12 +26,13 @@ import { ToolDrawer } from "./ToolDrawer";
 import { VideoPanel } from "./VideoPanel";
 import type { PageInfo, PageToolsBridge } from "./pageActions";
 import { useImageTools } from "./useImageTools";
+import { useNoteTools } from "./useNoteTools";
 import { useShotTools } from "./useShotTools";
 import { useToolNotice } from "./useToolNotice";
 import { useVideoTools } from "./useVideoTools";
 import { useViewProfile } from "./viewProfile";
 
-type Group = "shot" | null;
+type Group = "shot" | "note" | null;
 type Drawer = "video" | "images" | null;
 
 /**
@@ -78,7 +82,8 @@ function SessionTools({
   const shot = useShotTools(tools, workspaceId, notice);
   const video = useVideoTools(tools, workspaceId, page, profileId, notice);
   const images = useImageTools(tools, workspaceId, notice);
-  const busy = shot.busy;
+  const note = useNoteTools(tools, workspaceId, notice);
+  const busy = shot.busy || note.isPending;
 
   const openDrawer = (next: Drawer) => {
     setGroup(null);
@@ -172,11 +177,17 @@ function SessionTools({
             {choice("full", <PanelTop />, "browserToolsShotFull", () => shot.shoot.mutate("full"))}
             {choice("region", <Crop />, "browserToolsShotRegion", () => shot.beginRegion.mutate())}
           </>
+        ) : group === "note" ? (
+          <>
+            {choice("article", <ScanText />, "browserToolsNoteArticle", () => note.mutate("article"))}
+            {choice("selection", <TextSelect />, "browserToolsNoteSelection", () => note.mutate("selection"))}
+          </>
         ) : (
           <>
             {tool("shot", <Camera />, "browserToolsShot", () => setGroup("shot"))}
             {tool("video", <Film />, "browserToolsVideo", () => openDrawer("video"), drawer === "video")}
             {tool("images", <Images />, "browserToolsImages", () => openDrawer("images"), drawer === "images")}
+            {tool("note", <FileText />, "browserToolsNote", () => setGroup("note"))}
           </>
         )}
         {group && (

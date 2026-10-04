@@ -4761,6 +4761,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/from-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create From Page
+         * @description 内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源链接与页面标题(见 domain/documents/web_page)。
+         */
+        post: operations["create_from_page_api_notes_from_page_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes/{note_id}": {
         parameters: {
             query?: never;
@@ -10677,6 +10697,33 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * NotePageCreate
+         * @description 内嵌浏览器顶栏「存成笔记」:整页(渲染后的 HTML)或选中的文字,二选一,带着页面地址与标题。
+         */
+        NotePageCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Url */
+            url: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Html
+             * @default
+             */
+            html: string;
+            /**
+             * Selection
+             * @default
+             */
+            selection: string;
         };
         /** NoteReferenceOut */
         NoteReferenceOut: {
@@ -24469,6 +24516,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_from_page_api_notes_from_page_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotePageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
                 };
             };
             /** @description Validation Error */

@@ -41,6 +41,7 @@ const {
   parsePanelLayout,
   parsePanelMuted,
   parsePublishTarget,
+  parseReadMode,
   parseRegionSelection,
   parseRestoreStage,
   parseSystemStatus,
@@ -856,6 +857,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.pageToolsFetchImages, (_e, payload) =>
     requirePublish().fetchImages(parseImageUrls(payload).urls),
   );
+  ipcMain.handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
   ipcMain.handle(IPC.invoke.pageToolsInset, (_e, payload) =>
     requirePublish().setToolsInset(parseToolsInset(payload).right),
   );

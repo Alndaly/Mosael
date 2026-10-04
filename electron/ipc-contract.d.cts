@@ -30,6 +30,7 @@ export const IPC: {
     pageToolsVideos: "pageTools:videos";
     pageToolsImages: "pageTools:images";
     pageToolsFetchImages: "pageTools:fetchImages";
+    pageToolsRead: "pageTools:read";
     pageToolsInset: "pageTools:inset";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
@@ -78,4 +79,5 @@ export function parseRegionSelection(value: unknown): {
   selection: { x: number; y: number; width: number; height: number } | null;
 };
 export function parseImageUrls(value: unknown): { urls: string[] };
+export function parseReadMode(value: unknown): { mode: "article" | "selection" };
 export function parseToolsInset(value: unknown): { right: number };

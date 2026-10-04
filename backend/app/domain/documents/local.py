@@ -208,7 +208,7 @@ def _parse_pdf(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
 # ── Word ────────────────────────────────────────────────────────────────────────
 
 
-def _html_to_markdown(html: str) -> str:
+def html_to_markdown(html: str) -> str:
     from bs4 import BeautifulSoup
     from markdownify import markdownify
 
@@ -249,7 +249,7 @@ def _parse_docx(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
     with source.open("rb") as handle:
         result = mammoth.convert_to_html(handle, convert_image=mammoth.images.img_element(keep_image))
     on_progress(0.5, "docProgress_readPages")
-    return Parsed(unit="section", sections=_split_by_headings(_html_to_markdown(result.value)), images=saved)
+    return Parsed(unit="section", sections=_split_by_headings(html_to_markdown(result.value)), images=saved)
 
 
 # ── PowerPoint ──────────────────────────────────────────────────────────────────
@@ -403,7 +403,7 @@ def _parse_html(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
 
     soup = BeautifulSoup(_read_text(source), "html.parser")
     body = soup.body or soup
-    return Parsed(unit="section", sections=_split_by_headings(_html_to_markdown(str(body))))
+    return Parsed(unit="section", sections=_split_by_headings(html_to_markdown(str(body))))
 
 
 def _parse_epub(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
@@ -428,7 +428,7 @@ def _parse_epub(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
             except KeyError:
                 continue
             soup = BeautifulSoup(html, "html.parser")
-            markdown = _html_to_markdown(str(soup.body or soup))
+            markdown = html_to_markdown(str(soup.body or soup))
             if not markdown:
                 continue
             heading = soup.find(["h1", "h2", "h3"])

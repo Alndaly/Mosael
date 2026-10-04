@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Response
 
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
+from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NotePageCreate, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.domain.agent import use_cases as agent_use_cases
 from app.domain.notes import use_cases
 
@@ -34,6 +34,17 @@ def list_topics(workspace_id: str, db: DbSession, user: CurrentUser, trashed: bo
 @router.post("/notes", response_model=NoteOut)
 def create(body: NoteCreate, db: Tx, user: CurrentUser):
     return use_cases.create(db, user, body.workspace_id, NoteContent.model_validate(body.model_dump()))
+
+
+@router.post("/notes/from-page", response_model=NoteOut)
+def create_from_page(body: NotePageCreate, db: Tx, user: CurrentUser):
+    """内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源链接与页面标题(见 domain/documents/web_page)。"""
+    from app.domain.documents import use_cases as documents
+
+    return documents.save_page_as_note(
+        db, user, body.workspace_id, url=body.url, title=body.title, html=body.html, selection=body.selection,
+        project_id=body.project_id,
+    )
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)

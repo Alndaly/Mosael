@@ -27,4 +27,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "文件太大了:最多 {max_mb} MB。",
         "en": "The file is too large: {max_mb} MB at most.",
     },
+    "pageNoteErr_empty": {
+        "zh": "这一页没有读出正文,也没有选中文字。",
+        "en": "No article text could be read from this page, and no text is selected.",
+    },
+    "pageNoteTitle_selection": {
+        "zh": "{title}(摘录)",
+        "en": "{title} (excerpt)",
+    },
+    "pageNoteFrom": {
+        "zh": "来源:[{title}]({url})",
+        "en": "Source: [{title}]({url})",
+    },
 }

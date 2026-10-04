@@ -70,3 +70,18 @@ def save_as_note(db: Session, user: User, asset_id: str) -> Note:
     from app.domain.documents.to_note import save_as_note as _save
 
     return _save(db, _document_for(db, user, asset_id, "edit"), actor_id=user.id)
+
+
+def save_page_as_note(
+    db: Session, user: User, workspace_id: str, *, url: str, title: str, html: str, selection: str,
+    project_id: str | None = None,
+) -> Note:
+    """内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源(见 documents/web_page)。点名 `edit`,和存文档为笔记一样。"""
+    from app.domain import notes
+    from app.domain.documents.web_page import page_note_content
+
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    content = page_note_content(url=url, title=title, html=html, selection=selection, project_id=project_id)
+    if content is None:
+        raise notes.NoteDomainError("pageNoteErr_empty")
+    return notes.create_note(db, workspace_id, content, actor=user.id)

@@ -28,6 +28,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseCaptureMode: (value: unknown) => { mode: string };
   parseRegionSelection: (value: unknown) => { selection: Record<string, number> | null };
   parseImageUrls: (value: unknown) => { urls: string[] };
+  parseReadMode: (value: unknown) => { mode: string };
   parseToolsInset: (value: unknown) => { right: number };
 };
 
@@ -148,6 +149,9 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseImageUrls({ urls: [] })).toThrow(/urls/);
     expect(() => contract.parseImageUrls({ urls: ["file:///etc/passwd"] })).toThrow(/http/);
     expect(() => contract.parseImageUrls({ urls: Array.from({ length: 121 }, (_, i) => `https://e.com/${i}.png`) })).toThrow(/urls/);
+
+    expect(contract.parseReadMode({ mode: "selection" })).toEqual({ mode: "selection" });
+    expect(() => contract.parseReadMode({ mode: "html" })).toThrow(/mode/);
 
     expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
     expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);

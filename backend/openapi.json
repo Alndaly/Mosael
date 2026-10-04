@@ -14682,6 +14682,48 @@
         }
       }
     },
+    "/api/notes/from-page": {
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Create From Page",
+        "description": "内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源链接与页面标题(见 domain/documents/web_page)。",
+        "operationId": "create_from_page_api_notes_from_page_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotePageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notes/{note_id}": {
       "get": {
         "tags": [
@@ -29813,6 +29855,57 @@
           "updated_at"
         ],
         "title": "NoteOut"
+      },
+      "NotePageCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 8,
+            "pattern": "^https?://",
+            "title": "Url"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Title",
+            "default": ""
+          },
+          "html": {
+            "type": "string",
+            "maxLength": 4000000,
+            "title": "Html",
+            "default": ""
+          },
+          "selection": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Selection",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "url"
+        ],
+        "title": "NotePageCreate",
+        "description": "内嵌浏览器顶栏「存成笔记」:整页(渲染后的 HTML)或选中的文字,二选一,带着页面地址与标题。"
       },
       "NoteReferenceOut": {
         "properties": {

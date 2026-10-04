@@ -42,6 +42,7 @@ const IPC = Object.freeze({
     pageToolsVideos: "pageTools:videos",
     pageToolsImages: "pageTools:images",
     pageToolsFetchImages: "pageTools:fetchImages",
+    pageToolsRead: "pageTools:read",
     pageToolsInset: "pageTools:inset",
   }),
   send: Object.freeze({
@@ -243,6 +244,14 @@ function parseImageUrls(value) {
   return { urls };
 }
 
+/** 读正文:整页 / 选中的文字。 */
+function parseReadMode(value) {
+  const channel = IPC.invoke.pageToolsRead;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["mode"], channel);
+  return { mode: oneOf(payload, "mode", ["article", "selection"], channel) };
+}
+
 /** 侧栏开合:前台视图右侧让出的像素宽。 */
 function parseToolsInset(value) {
   const channel = IPC.invoke.pageToolsInset;
@@ -315,6 +324,7 @@ module.exports = {
   parsePanelMuted,
   parsePanelLayout,
   parsePublishTarget,
+  parseReadMode,
   parseRegionSelection,
   parseSystemStatus,
   parseTaskNotice,

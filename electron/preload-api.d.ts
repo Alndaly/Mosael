@@ -155,6 +155,7 @@ export interface MosaelPageToolsBridge {
   listImages(): Promise<{ page: PageToolsPage; images: PageImageEntry[] }>;
   /** 只取最近一次 listImages 列出过的地址。 */
   fetchImages(urls: string[]): Promise<PageFetchedImage[]>;
+  readPage(mode: "article" | "selection"): Promise<{ page: PageToolsPage; html: string; selection: string }>;
   /** 侧栏开合:网页右侧让出这么宽(像素)。 */
   setInset(right: number): Promise<void>;
 }
