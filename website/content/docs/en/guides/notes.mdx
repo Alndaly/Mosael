@@ -86,8 +86,19 @@ references stay where they are, but their source can no longer be opened.
 
 ## Revision history
 
-Every save is an immutable revision. **More → Revision history** lists them by time; pick one to
-read it. **Restore this version** **creates a new revision** rather than erasing the history after it.
+Every save leaves an immutable revision. **More → Version history** opens a large dialog: versions
+grouped by day (Today, Yesterday, a date) on the left, the selected one on the right at reading width.
+
+- **Consecutive manual edits fold into one entry**: one person saving in a row (pauses under 5 minutes,
+  at most 30 minutes per entry) takes a single row that says how much changed, such as "+120 −30 chars"
+  or "Title changed". Open **N consecutive edits** to see, compare or restore each revision inside it.
+- Each entry says **how it came about**: Edited, Changed by the assistant, Saved to note, Restored from
+  version N… Someone else's changes carry their name.
+- Switch between **Preview / Compare with current / Compare with previous** on the right: removed text
+  is struck through, added text is highlighted, long unchanged stretches fold away.
+- The top entry is marked **Current version**. **Restore this version** asks first, then **creates a new
+  revision**; every existing revision stays. **Copy this version's content** copies its Markdown text.
+  Arrow keys move between versions in the list.
 
 ## Sources and properties
 
