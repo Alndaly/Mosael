@@ -1,8 +1,10 @@
 import React from "react";
 import {
+  BookmarkPlus,
   Camera,
   Crop,
   Film,
+  Images,
   Loader2,
   Monitor,
   PanelTop,
@@ -15,17 +17,19 @@ import { Button } from "@/components/ui/button";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
+import { ImagePanel } from "./ImagePanel";
 import { RegionOverlay } from "./RegionOverlay";
 import { ToolDrawer } from "./ToolDrawer";
 import { VideoPanel } from "./VideoPanel";
 import type { PageInfo, PageToolsBridge } from "./pageActions";
+import { useImageTools } from "./useImageTools";
 import { useShotTools } from "./useShotTools";
 import { useToolNotice } from "./useToolNotice";
 import { useVideoTools } from "./useVideoTools";
 import { useViewProfile } from "./viewProfile";
 
 type Group = "shot" | null;
-type Drawer = "video" | null;
+type Drawer = "video" | "images" | null;
 
 /**
  * 浏览器会话顶栏的**页面工具区**:用户在前台这一页上点出来的采集与开工动作。
@@ -73,12 +77,14 @@ function SessionTools({
 
   const shot = useShotTools(tools, workspaceId, notice);
   const video = useVideoTools(tools, workspaceId, page, profileId, notice);
+  const images = useImageTools(tools, workspaceId, notice);
   const busy = shot.busy;
 
   const openDrawer = (next: Drawer) => {
     setGroup(null);
     setDrawer(next);
     if (next === "video") video.find.mutate();
+    if (next === "images") images.find.mutate();
   };
   React.useEffect(() => {
     if (!group) return;
@@ -170,6 +176,7 @@ function SessionTools({
           <>
             {tool("shot", <Camera />, "browserToolsShot", () => setGroup("shot"))}
             {tool("video", <Film />, "browserToolsVideo", () => openDrawer("video"), drawer === "video")}
+            {tool("images", <Images />, "browserToolsImages", () => openDrawer("images"), drawer === "images")}
           </>
         )}
         {group && (
@@ -190,6 +197,27 @@ function SessionTools({
             onCancel={(jobId) => video.cancel.mutate(jobId)}
             onRefresh={() => video.find.mutate()}
           />
+        </ToolDrawer>
+      )}
+      {drawer === "images" && (
+        <ToolDrawer
+          top={barHeight}
+          title={t("browserToolsImagesTitle")}
+          onClose={() => setDrawer(null)}
+          actions={
+            images.anyReady ? (
+              <Button variant="ghost" size="xs" onClick={images.toggleAll}>
+                {images.selected.size ? t("browserToolsImagesSelectNone") : t("browserToolsImagesSelectAll")}
+              </Button>
+            ) : undefined
+          }
+          footer={
+            <Button size="sm" disabled={images.selected.size === 0} loading={images.save.isPending} onClick={() => images.save.mutate()}>
+              <BookmarkPlus /> {t("browserToolsImagesSave").replace("{n}", String(images.selected.size))}
+            </Button>
+          }
+        >
+          <ImagePanel images={images.images} loading={images.find.isPending} selected={images.selected} onToggle={images.toggle} />
         </ToolDrawer>
       )}
       {shot.region && <RegionOverlay top={barHeight} frame={shot.region} onDone={shot.onRegionDone} />}

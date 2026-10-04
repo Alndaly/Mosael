@@ -130,6 +130,17 @@ export interface PageVideoProbe {
   streamOnly: boolean;
 }
 
+export interface PageImageEntry {
+  url: string;
+  width: number;
+  height: number;
+  alt: string;
+}
+
+export type PageFetchedImage =
+  | { url: string; ok: true; bytes: Uint8Array; mime: string }
+  | { url: string; ok: false; reason: "failed" | "too_large" | "not_image" | "not_listed" };
+
 /**
  * 浏览器会话顶栏的页面工具。**都作用于前台那个内嵌视图**(主进程自己认是哪个)。
  * 失败时 reject 的消息里带 `page-tools: <原因码>`(no_page / capture_failed / full_page_unavailable)。
@@ -141,6 +152,9 @@ export interface MosaelPageToolsBridge {
   /** 框选第二步:按比例(0–1)裁出那一块;null 是取消。网页亮回来。 */
   finishRegion(selection: { x: number; y: number; width: number; height: number } | null): Promise<PageCaptureResult | null>;
   probeVideos(): Promise<PageVideoProbe>;
+  listImages(): Promise<{ page: PageToolsPage; images: PageImageEntry[] }>;
+  /** 只取最近一次 listImages 列出过的地址。 */
+  fetchImages(urls: string[]): Promise<PageFetchedImage[]>;
   /** 侧栏开合:网页右侧让出这么宽(像素)。 */
   setInset(right: number): Promise<void>;
 }

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -276,6 +276,38 @@ describe("下载页面里的视频", () => {
     fireEvent.click(within(running).getByRole("button", { name: "browserToolsDownloadCancel" }));
     await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-3"));
     await waitFor(() => expect(document.querySelector('[data-download-status="cancelled"]')).not.toBeNull());
+  });
+});
+
+describe("采集页面图片", () => {
+  it("取到的才能勾;勾中的带着页面与图片地址一张张入库", async () => {
+    tools.listImages.mockResolvedValue({
+      page: PAGE,
+      images: [
+        { url: "https://cdn.example.com/a.jpg", width: 800, height: 600, alt: "大图" },
+        { url: "https://cdn.example.com/b.jpg", width: 800, height: 600, alt: "" },
+      ],
+    });
+    tools.fetchImages.mockResolvedValue([
+      { url: "https://cdn.example.com/a.jpg", ok: true, bytes: Uint8Array.from([0xff, 0xd8, 0xff]), mime: "image/jpeg" },
+      { url: "https://cdn.example.com/b.jpg", ok: false, reason: "failed" },
+    ]);
+    show();
+    fireEvent.click(toolButton("images"));
+    await waitFor(() => expect(document.querySelector('[data-page-image="ready"]')).not.toBeNull());
+    expect(document.querySelector('[data-page-image="failed"]')).toBeDisabled();
+    fireEvent.click(document.querySelector('[data-page-image="ready"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /browserToolsImagesSave/ }));
+    await waitFor(() => expect(api.importWebCapture).toHaveBeenCalledTimes(1));
+    expect(api.importWebCapture.mock.calls[0][0]).toMatchObject({
+      capture: "page_image",
+      sourceUrl: "https://cdn.example.com/a.jpg",
+      pageUrl: PAGE.url,
+      pageTitle: PAGE.title,
+      name: "大图",
+    });
+    expect(api.importWebCapture.mock.calls[0][0].file.type).toBe("image/jpeg");
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsSavedAsset"));
   });
 });
 

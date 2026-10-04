@@ -27,6 +27,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseLocale: (value: unknown) => { locale: string };
   parseCaptureMode: (value: unknown) => { mode: string };
   parseRegionSelection: (value: unknown) => { selection: Record<string, number> | null };
+  parseImageUrls: (value: unknown) => { urls: string[] };
   parseToolsInset: (value: unknown) => { right: number };
 };
 
@@ -142,6 +143,11 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseRegionSelection({ selection: { x: 0.8, y: 0, width: 0.5, height: 0.5 } })).toThrow(/inside the frame/);
     expect(() => contract.parseRegionSelection({ selection: { x: -1, y: 0, width: 0.5, height: 0.5 } })).toThrow(/selection.x/);
     expect(() => contract.parseRegionSelection({ selection: { x: 0, y: 0, width: 400, height: 300 } })).toThrow(/selection.width/);
+
+    expect(contract.parseImageUrls({ urls: ["https://example.com/a.png"] })).toEqual({ urls: ["https://example.com/a.png"] });
+    expect(() => contract.parseImageUrls({ urls: [] })).toThrow(/urls/);
+    expect(() => contract.parseImageUrls({ urls: ["file:///etc/passwd"] })).toThrow(/http/);
+    expect(() => contract.parseImageUrls({ urls: Array.from({ length: 121 }, (_, i) => `https://e.com/${i}.png`) })).toThrow(/urls/);
 
     expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
     expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);

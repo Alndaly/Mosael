@@ -145,6 +145,8 @@ const pageToolsBridge = {
   beginRegion: () => ipcRenderer.invoke(IPC.invoke.pageToolsRegionStart),
   finishRegion: (selection) => ipcRenderer.invoke(IPC.invoke.pageToolsRegionFinish, { selection }),
   probeVideos: () => ipcRenderer.invoke(IPC.invoke.pageToolsVideos),
+  listImages: () => ipcRenderer.invoke(IPC.invoke.pageToolsImages),
+  fetchImages: (urls) => ipcRenderer.invoke(IPC.invoke.pageToolsFetchImages, { urls }),
   setInset: (right) => ipcRenderer.invoke(IPC.invoke.pageToolsInset, { right }),
 };
 contextBridge.exposeInMainWorld("mosaelPageTools", pageToolsBridge);

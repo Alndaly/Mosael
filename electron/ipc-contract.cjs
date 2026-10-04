@@ -40,6 +40,8 @@ const IPC = Object.freeze({
     pageToolsRegionStart: "pageTools:regionStart",
     pageToolsRegionFinish: "pageTools:regionFinish",
     pageToolsVideos: "pageTools:videos",
+    pageToolsImages: "pageTools:images",
+    pageToolsFetchImages: "pageTools:fetchImages",
     pageToolsInset: "pageTools:inset",
   }),
   send: Object.freeze({
@@ -224,6 +226,23 @@ function parseRegionSelection(value) {
   return { selection };
 }
 
+/** 取图:地址清单。主进程只取最近一次列图里出现过的地址(见 publish/pageImages.fetchImages)。 */
+function parseImageUrls(value) {
+  const channel = IPC.invoke.pageToolsFetchImages;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["urls"], channel);
+  const urls = payload.urls;
+  if (!Array.isArray(urls) || urls.length === 0 || urls.length > 120) {
+    throw new TypeError(`${channel}: urls must be a list of 1–120 addresses`);
+  }
+  for (const url of urls) {
+    if (typeof url !== "string" || url.length > 4096 || !/^https?:\/\//i.test(url)) {
+      throw new TypeError(`${channel}: every url must be an http(s) address`);
+    }
+  }
+  return { urls };
+}
+
 /** 侧栏开合:前台视图右侧让出的像素宽。 */
 function parseToolsInset(value) {
   const channel = IPC.invoke.pageToolsInset;
@@ -290,6 +309,7 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseImageUrls,
   parseLocale,
   parsePanelId,
   parsePanelMuted,

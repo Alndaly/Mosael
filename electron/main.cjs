@@ -35,6 +35,7 @@ const {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseImageUrls,
   parseLocale,
   parsePanelId,
   parsePanelLayout,
@@ -851,6 +852,10 @@ app.whenReady().then(async () => {
     requirePublish().finishRegionCapture(parseRegionSelection(payload).selection),
   );
   ipcMain.handle(IPC.invoke.pageToolsVideos, () => requirePublish().probeVideos());
+  ipcMain.handle(IPC.invoke.pageToolsImages, () => requirePublish().listImages());
+  ipcMain.handle(IPC.invoke.pageToolsFetchImages, (_e, payload) =>
+    requirePublish().fetchImages(parseImageUrls(payload).urls),
+  );
   ipcMain.handle(IPC.invoke.pageToolsInset, (_e, payload) =>
     requirePublish().setToolsInset(parseToolsInset(payload).right),
   );
