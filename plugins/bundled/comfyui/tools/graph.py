@@ -310,6 +310,36 @@ def _consumers(api: dict[str, Any]) -> dict[str, list[tuple[str, str, int]]]:
 
 #: 一格输入的名字说明接进来的是**参考**:`ref_images.ref_image_0`、`ref_videos.*`、`reference_video`、`ref_audio`…
 _REFERENCE_INPUT = re.compile(r"^(ref|reference)(_|s?\.|$)", re.IGNORECASE)
+#: 图进生成节点之前常先过一两道「图 → 图」的处理(缩放、裁切、调色、加水印):接在这几格上的,顺着它的第一个输出
+#: (图)往下找它最后进了哪儿。
+_IMAGE_PASSES = frozenset({"image", "images"})
+_FRAME_HOPS = 4
+
+
+def _frame_role(api: dict[str, Any], node_id: str) -> str:
+    """视频图里一张读进来的图是首帧、尾帧还是参考图:看它(或它缩放、裁切之后的那张)接进了哪一格。"""
+    downstream: dict[str, list[tuple[str, str, str, int]]] = {}
+    for consumer, node in api.items():
+        for name, value in (node.get("inputs") or {}).items():
+            if isinstance(value, list) and len(value) >= 2:
+                slot = value[1] if isinstance(value[1], int) else 0
+                downstream.setdefault(str(value[0]), []).append((consumer, str(node.get("class_type", "")), name, slot))
+    frontier, seen = [node_id], {node_id}
+    for _ in range(_FRAME_HOPS):
+        following: list[str] = []
+        for current in frontier:
+            for consumer, class_name, name, slot in downstream.get(current, []):
+                if slot != 0:
+                    continue
+                if name in _FIRST_FRAME_INPUTS or (name == "image" and "ImageToVideo" in class_name):
+                    return "first_frame"
+                if name in _LAST_FRAME_INPUTS:
+                    return "last_frame"
+                if name in _IMAGE_PASSES and consumer not in seen:
+                    seen.add(consumer)
+                    following.append(consumer)
+        frontier = following
+    return "reference_image"
 
 
 def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) -> list[dict[str, str]]:
@@ -317,7 +347,8 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
 
     角色看它**接到哪儿**(宿主的素材角色,见 ai/providers/contracts/generation.SOURCE_ROLES):
 
-    - 图:视频图里接到 start_image 这类输入的是首帧、接到 end_image 的是尾帧,其余是参考图;
+    - 图:视频图里接到 start_image 这类输入的是首帧、接到 end_image 的是尾帧(先过一道缩放、裁切再接进去的也算,
+      见 _frame_role),其余是参考图;
       只用了 LoadImage 的第二个输出(alpha 当蒙版)的,是蒙版;
     - LoadImageMask:蒙版;
     - 视频(LoadVideo / VHS_LoadVideo):被改的那一段(源视频);
@@ -344,15 +375,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
             if outputs_used == {1}:
                 media, role = "mask", "mask"
             elif kind == "video":
-                for class_name, name, slot in used:
-                    if slot != 0:
-                        continue
-                    if name in _FIRST_FRAME_INPUTS or (name == "image" and "ImageToVideo" in class_name):
-                        role = "first_frame"
-                        break
-                    if name in _LAST_FRAME_INPUTS:
-                        role = "last_frame"
-                        break
+                role = _frame_role(api, node_id)
         elif media == "mask":
             role = "mask"
         elif media == "video":
@@ -786,6 +809,9 @@ def describe(
         if needs_image and role in image_roles and not first_image_marked:
             entry["required"] = True
             first_image_marked = True
+        if role == "first_frame":
+            # 图生视频:首帧接在生成节点上,不给的话 ComfyUI 拿工作流里存着的那张图生成一段(模式里也没有文生视频)
+            entry["required"] = True
         if role in ("mask", "source_video") and role in {slot["role"] for slot in found_slots}:
             entry["required"] = True
         inputs.append(entry)

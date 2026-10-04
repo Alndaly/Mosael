@@ -127,7 +127,7 @@ def test_插件页列出提供的模型(connected) -> None:
     assert portrait["inputs"] == [{"role": "reference_image", "max": 1, "required": False}]
     assert "size" in portrait["host_parameters"] and "num_images" in portrait["host_parameters"]
     assert {"key": "3.steps", "title": "步数", "type": "integer", "advanced": False} in portrait["parameters"]
-    assert models["video/wan.json"]["inputs"] == [{"role": "first_frame", "max": 1, "required": False}]
+    assert models["video/wan.json"]["inputs"] == [{"role": "first_frame", "max": 1, "required": True}]
 
 
 def test_工具出现在插件页_智能体和工作流里(connected) -> None:

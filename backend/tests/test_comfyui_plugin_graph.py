@@ -8,6 +8,7 @@ muted 跳过、提示词递归穿过 ControlNet、占位符在解析之后填 �
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -449,10 +450,26 @@ def test_LoadImage_变成参考图槽位(graph, convert) -> None:
 def test_视频图_接到start_image的是首帧(graph) -> None:
     model = graph.describe("video/wan.json", "wan", WAN_API, OBJECT_INFO)
     assert model["kind"] == "video"
-    assert model["inputs"] == [{"role": "first_frame", "max": 1}]
+    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], "图生视频:首帧必须给"
     assert model["modes"] == ["image-to-video"]
     assert model["parameters"]["size"]["default"] == "832x480", "WanImageToVideo 决定成片尺寸"
     assert model["parameters"]["20.length"]["default"] == 81
+
+
+def test_首帧先过一道缩放再进图生视频节点_照样是首帧_而且必须给(graph) -> None:
+    """DaSiWa WAN 2.2 i2v:First-Frame-Image → BatchResizeWithLanczos → WanImageToVideo.start_image。只看 LoadImage
+    直接接到哪儿,它成了「参考图」,这张图生视频的工作流被说成文生视频 / 参考生视频;不给图也让跑,ComfyUI 就拿
+    工作流里存着的 example.png 生成一段 —— 用户拿回来的不是自己的图动起来。"""
+    info = {**OBJECT_INFO, "BatchResizeWithLanczos": {"input": {"required": {
+        "image": ["IMAGE"], "width": ["INT", {"default": 1280}], "height": ["INT", {"default": 1280}]}}}}
+    api = json.loads(json.dumps(WAN_API))
+    api["13"] = {"class_type": "BatchResizeWithLanczos", "inputs": {"image": ["12", 0], "width": 1280, "height": 1280}}
+    api["20"]["inputs"]["start_image"] = ["13", 0]
+    model = graph.describe("dasiwa.json", "dasiwa", graph.live(api, info), info)
+    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}]
+    assert model["modes"] == ["image-to-video"]
+    uploaded = graph.wire_inputs(api, "video", {"first_frame": ["mosael/start.png"]})
+    assert uploaded["12"]["inputs"]["image"] == "mosael/start.png", "给的首帧接到那个 LoadImage 上"
 
 
 def test_放大这类处理一张图的工作流_图必须给(graph) -> None:
@@ -814,7 +831,7 @@ def test_API节点的文生视频_提示词是它自己的prompt_text(graph) -> 
 def test_API节点的图生视频_接到image和first_frame_image上的是首帧(graph) -> None:
     for api in (MINIMAX_I2V_API, HAILUO_API):
         model = graph.describe("i2v.json", "i2v", api, VIDEO_INFO)
-        assert model["inputs"] == [{"role": "first_frame", "max": 1}], api["1"]["class_type"]
+        assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], api["1"]["class_type"]
         assert model["modes"] == ["image-to-video"]
     assert graph.describe("hailuo.json", "h", HAILUO_API, VIDEO_INFO)["prompt"] == "required", "存的是空串:要写"
     assert graph.fill(HAILUO_API, {"prompt": "P"}, {}, VIDEO_INFO)["1"]["inputs"]["prompt_text"] == "P"
@@ -826,7 +843,7 @@ def test_正反两句在同一个节点上_各归各的(graph) -> None:
     assert slots == {("1", "prompt"): "prompt", ("1", "negative_prompt"): "negative"}
     model = graph.describe("kling.json", "kling", KLING_I2V_API, VIDEO_INFO)
     assert model["prompt"] == "optional" and "negative_prompt" in model["parameters"]
-    assert model["inputs"] == [{"role": "first_frame", "max": 1}], "Kling 的首帧叫 start_frame"
+    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], "Kling 的首帧叫 start_frame"
     assert not {"1.prompt", "1.negative_prompt"} & set(model["parameters"])
     filled = graph.fill(KLING_I2V_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
     assert (filled["1"]["inputs"]["prompt"], filled["1"]["inputs"]["negative_prompt"]) == ("P", "N")
@@ -838,7 +855,7 @@ def test_正反两句在同一个节点上_各归各的(graph) -> None:
 
     wan = graph.describe("wan_wrapper.json", "wan", WAN_WRAPPER_API, VIDEO_INFO)
     assert wan["prompt"] == "optional" and "negative_prompt" in wan["parameters"]
-    assert wan["inputs"] == [{"role": "first_frame", "max": 1}] and wan["modes"] == ["image-to-video"]
+    assert wan["inputs"] == [{"role": "first_frame", "max": 1, "required": True}] and wan["modes"] == ["image-to-video"]
     filled = graph.fill(WAN_WRAPPER_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
     assert filled["11"]["inputs"] == {"positive_prompt": "P", "negative_prompt": "N"}
 

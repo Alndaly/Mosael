@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
-from tests.fake_comfyui import TWO_SAVES_API, TWO_VIDEOS_API, FakeComfyUI
+from tests.fake_comfyui import PNG, TWO_SAVES_API, TWO_VIDEOS_API, FakeComfyUI
 from tests.util import fresh_client, run_on_board
 
 PACKAGE = "dev.mosael.comfyui"
@@ -188,10 +188,11 @@ def connected():
 
 
 def _generate(client, ws: str, profile_id: str, *, kind: str = "image", model: str = "two.json",
-              parameters: dict[str, Any] | None = None) -> tuple[str, list[dict[str, Any]]]:
+              parameters: dict[str, Any] | None = None,
+              sources: list[dict[str, str]] | None = None) -> tuple[str, list[dict[str, Any]]]:
     board_id = _board(client, ws, [{"id": "cell", "kind": kind, "x": 0, "y": 0, "width": 240}])
     form = {"prompt": "", "provider": VENDOR, "provider_profile_id": profile_id, "model": model,
-            "parameters": parameters or {}, "source_assets": [], "item_form": {"prompt": ""}}
+            "parameters": parameters or {}, "source_assets": sources or [], "item_form": {"prompt": ""}}
     started = run_on_board(client, board_id, ws, producer="generate", item_id="cell", kind=kind, form=form)
     assert started.status_code == 200, started.text
     return board_id, started.json()["canvas"]["items"]
@@ -245,7 +246,9 @@ def test_两个视频保存节点_摆两格视频(connected) -> None:
     client, comfy, ws, profile_id = connected
     comfy.state.outputs = {"30": {"gifs": [{"filename": "a.mp4", "subfolder": "", "type": "output"}]},
                            "31": {"gifs": [{"filename": "b.mp4", "subfolder": "", "type": "output"}]}}
-    board_id, placed = _generate(client, ws, profile_id, kind="video", model="two_videos.json")
+    uploaded = client.post("/api/assets/import", data={"workspace_id": ws}, files={"file": ("首帧.png", PNG, "image/png")})
+    first_frame = {"asset_id": uploaded.json()["id"], "role": "first_frame"}  # 图生视频:首帧必须给
+    board_id, placed = _generate(client, ws, profile_id, kind="video", model="two_videos.json", sources=[first_frame])
     assert [(one["id"], one["kind"]) for one in placed] == [("cell", "video"), ("cell-2", "video")]
     items = _settled(client, board_id, ws)
     assert [one["kind"] for one in items] == ["video", "video"] and all(one.get("asset_id") for one in items)
