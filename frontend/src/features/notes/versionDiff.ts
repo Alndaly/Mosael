@@ -6,6 +6,9 @@ import { diffText, type DiffSegment } from "@/lib/textDiff";
  * 先按**行**对齐:没改的行原样成段(长的那几段由界面折起来),改了的相邻几行合成一块,块里再按字对齐(lib/textDiff,
  * 和改笔记确认卡同一套)。直接整篇逐字对齐不行:改动散在开头和结尾时,掐头去尾之后中间还是几乎整篇,超过逐字对齐的
  * 上限就退成「整篇删 + 整篇加」。
+ *
+ * 一块改动里两边几乎没有共同的字(整行换成了不相干的话)时,不逐字对齐:那样画出来是红绿交错的一串,哪句是哪句都
+ * 认不出。这种块拆成「删掉的一段」和「加上的一段」两块,各占一段。
  */
 
 export type DocumentDiffBlock =
@@ -14,6 +17,10 @@ export type DocumentDiffBlock =
 
 /** 中间那段两边行数之积超过它就不逐行对齐,整段当成一块改动(块里仍按字对齐,有自己的上限)。 */
 const LINE_ALIGN_LIMIT = 1_000_000;
+/** 一块改动里,共同的字占较短那一边的比例低于它,就当成整段换掉(删一段、加一段)。不算空白。 */
+const MIN_SHARED = 0.5;
+
+const visible = (text: string) => text.replace(/\s/g, "").length;
 
 const linesOf = (text: string) => (text === "" ? [] : text.split("\n"));
 
@@ -33,7 +40,17 @@ export function diffDocument(before: string, after: string): DocumentDiffBlock[]
     else out.push({ kind: "same", lines: [...lines] });
   };
   const change = (removed: string[], added: string[]) => {
-    if (removed.length || added.length) out.push({ kind: "change", segments: diffText(removed.join("\n"), added.join("\n")) });
+    const before = removed.join("\n");
+    const after = added.join("\n");
+    if (!removed.length && !added.length) return;
+    const segments = diffText(before, after);
+    const shared = segments.reduce((sum, one) => sum + (one.kind === "same" ? visible(one.text) : 0), 0);
+    const shorter = Math.min(visible(before), visible(after));
+    if (shorter > 0 && shared / shorter < MIN_SHARED) {
+      out.push({ kind: "change", segments: [{ kind: "del", text: before }] }, { kind: "change", segments: [{ kind: "ins", text: after }] });
+    } else {
+      out.push({ kind: "change", segments });
+    }
   };
 
   same(a.slice(0, head));
