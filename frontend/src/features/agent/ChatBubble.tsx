@@ -15,6 +15,7 @@ import type { JSONContent } from "@tiptap/react";
 import { UserMessageContent } from "@/features/agent/userMessage";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice } from "@/features/agent/JobReceiptNotice";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
+import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { cn } from "@/lib/utils";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -80,6 +81,8 @@ export function ChatBubble({
         from_agent_session?: string;
         /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
         answers?: AnsweredChoice;
+        /** 用户消息:带着的笔记摘录(笔记页的选区),气泡里画成可点的一行。 */
+        quote?: AgentMessageQuote;
       }
     | null;
   // 手动压缩留下的是一条 role=system、内容为空的消息,只承载压缩标记。
@@ -152,7 +155,7 @@ export function ChatBubble({
             {payload?.answers ? (
               <AnsweredChoiceCard answers={payload.answers} />
             ) : (
-              <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} />
+              <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} quote={payload?.quote} />
             )}
           </div>
         </div>

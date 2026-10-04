@@ -107,6 +107,33 @@ export function noteHref(noteId: string, revision?: number | null): string {
   return `#/notes?note=${encodeURIComponent(noteId)}${revision ? `&revision=${revision}` : ""}`;
 }
 
+/** 「回到这篇笔记、把这一段定位出来」—— 对话气泡里那行选区摘录点进来时用。 */
+export interface NotePassage {
+  noteId: string;
+  /** 那一段在笔记 Markdown 里的原文(带记号)。编辑器拿它找回那一段。 */
+  text: string;
+  /** 原文在 Markdown 里的起始下标;同一段字出现多次时挑最近的那处。-1 = 不知道。 */
+  start: number;
+}
+
+/** 定位请求走信箱(见上面的 emitOpenEvent):笔记页此刻多半还没挂上、那篇也还没取到,编辑器好了自己来取。 */
+export const NOTE_PASSAGE_EVENT = "mosael:locate-note-passage";
+
+export function locateNotePassage(passage: NotePassage): void {
+  gotoRecord(noteHref(passage.noteId), NOTE_PASSAGE_EVENT, JSON.stringify(passage));
+}
+
+/** 信箱里拿出来的那一份 → 定位请求;认不出来就是 null。 */
+export function parseNotePassage(raw: string): NotePassage | null {
+  try {
+    const value = JSON.parse(raw) as Partial<NotePassage>;
+    if (typeof value.noteId !== "string" || typeof value.text !== "string" || !value.text) return null;
+    return { noteId: value.noteId, text: value.text, start: typeof value.start === "number" ? value.start : -1 };
+  } catch {
+    return null;
+  }
+}
+
 /** 打开一篇笔记。 */
 export function openNote(noteId: string): void {
   window.location.hash = noteHref(noteId);

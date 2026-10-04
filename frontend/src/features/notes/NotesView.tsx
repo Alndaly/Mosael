@@ -35,6 +35,8 @@ import { useFileDrop } from "@/lib/useFileDrop";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { useI18n } from "@/app/preferences";
 import type { ComposerChip } from "@/lib/composerChip";
+import { plainExcerpt } from "@/lib/plainExcerpt";
+import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { noteAgentContext } from "./noteAgentContext";
 import type { NoteSelection } from "./noteSelection";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -63,9 +65,6 @@ const NOTE_MIN_WIDTH = 480;
 /** 助手开着时多久重取一次打开着的那篇:智能体直接写的(append_note 不走确认卡)也要实时看得到。 */
 const NOTE_FOLLOW_MS = 3000;
 const selectionKey = (selection: NoteSelection) => `${selection.start}:${selection.end}:${selection.text}`;
-/** 小条上给人看的那几个字:去掉 Markdown 记号。发给助手的仍是原文(带着记号它才找得到)。 */
-const plainExcerpt = (markdown: string) =>
-  markdown.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_~`>#]+/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
 type AgentMode = "docked" | "floating";
 
 /**
@@ -76,6 +75,8 @@ type AgentMode = "docked" | "floating";
 export interface NotesAgentPanelProps {
   contextLine: () => string;
   contextChips: ComposerChip[];
+  /** 这条消息带着的选区摘录:落进消息,对话气泡里画成可点的一行(点了回到这篇、定位到这段)。 */
+  messageQuote: AgentMessageQuote | null;
   focusSignal: number;
   emptyHint: string;
   placeholder: string;
@@ -150,6 +151,10 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
   const askAi = (picked: NoteSelection) => { setSelection(picked); setDismissed(""); setAgentOpen("on"); setFocusSignal(n => n + 1); };
   const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0,
     refetchInterval: showAgent ? NOTE_FOLLOW_MS : false });
+  //: 摘录最多存这么多字(后端上限 2000);定位靠它找回那一段,长了也只多占库。
+  const messageQuote: AgentMessageQuote | null = quoted?.text && selected.data ? {
+    kind: "note", note_id: selected.data.id, title: selected.data.title || s.untitled, text: quoted.text.slice(0, 2000), start: quoted.start,
+  } : null;
   // 记住的那篇已经删了:不再自动打开它。
   React.useEffect(() => { if (selected.isError && id === rememberedNote(workspace.id)) rememberNote(workspace.id, null); }, [selected.isError, id, workspace.id]);
   async function listAction(action:NoteListAction, targets:Note[], value?:string) {
@@ -221,6 +226,7 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
         <React.Suspense fallback={null}><AgentPanel
           contextLine={agentContext}
           contextChips={selectionChips}
+          messageQuote={messageQuote}
           focusSignal={focusSignal}
           emptyHint={t("noteAgentEmpty")}
           placeholder={t("noteAgentPlaceholder")}

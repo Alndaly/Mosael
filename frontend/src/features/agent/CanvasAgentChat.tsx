@@ -65,6 +65,7 @@ import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { cn } from "@/lib/utils";
 import type { ComposerChip } from "@/lib/composerChip";
+import type { AgentMessageQuote } from "@/api/domains/sessions";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
@@ -88,6 +89,8 @@ export function CanvasAgentChat({
   contextChips,
   /** 变一次就把光标放进输入框(笔记页的「问 AI」)。 */
   focusSignal,
+  /** 这条消息带着的笔记摘录(笔记页的选区):落进消息,气泡里画成可点的一行,回看时也在。 */
+  messageQuote,
   /** 空态那句话 —— 说清这个面板能干什么。 */
   emptyHint,
   placeholder,
@@ -102,6 +105,7 @@ export function CanvasAgentChat({
   contextLine: string | (() => string);
   contextChips?: ComposerChip[];
   focusSignal?: number;
+  messageQuote?: AgentMessageQuote | null;
   emptyHint: string;
   placeholder: string;
   rectKey: string;
@@ -303,12 +307,14 @@ export function CanvasAgentChat({
       document,
       files,
       mediaAssets,
+      quote,
     }: {
       text: string;
       references: AgentReference[];
       document: JSONContent;
       files: { name: string; content: string }[];
       mediaAssets: Asset[];
+      quote: AgentMessageQuote | null;
     }) => {
       // 文本文件内联为围栏上下文(纯文本智能体可读);图片/视频/音频编码成附件标记,气泡里渲染成缩略图。
       const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
@@ -323,7 +329,9 @@ export function CanvasAgentChat({
         throw new Error(t("composerMessageTooLong"));
       }
       const targetId = (await current.ensure()).id;
-      const message = await sendAgentMessage(targetId, { content: visibleContent, context, references, body_document: document });
+      const message = await sendAgentMessage(targetId, {
+        content: visibleContent, context, references, body_document: document, ...(quote ? { quote } : {}),
+      });
       return { message, targetId };
     },
     onError: (error) => toast.error((error as Error).message),
@@ -347,6 +355,7 @@ export function CanvasAgentChat({
       document: draft,
       files: attach.files,
       mediaAssets: attach.media,
+      quote: messageQuote ?? null,
     });
   };
 
@@ -448,6 +457,8 @@ export function CanvasAgentChat({
                 body_document?: JSONContent;
                 /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
                 answers?: AnsweredChoice;
+                /** 用户消息:带着的笔记摘录(笔记页的选区)。 */
+                quote?: AgentMessageQuote;
               }
             | null;
           const duration = payload?.usage?.duration_seconds;
@@ -488,7 +499,7 @@ export function CanvasAgentChat({
                 payload?.answers ? (
                   <AnsweredChoiceCard answers={payload.answers} />
                 ) : (
-                  <UserMessageContent content={message.content} document={payload?.body_document} />
+                  <UserMessageContent content={message.content} document={payload?.body_document} quote={payload?.quote} />
                 )
               )}
               {message.role === "assistant" && (

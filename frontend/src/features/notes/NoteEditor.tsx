@@ -19,7 +19,8 @@ import { FLOATING_SURFACE, MENU_ITEM } from "@/components/ui/floating";
 import { Button } from "@/components/ui/button";
 import type { Editor } from "@tiptap/react";
 import { InactiveSelection } from "./inactiveSelection";
-import { followMarkdown, readNoteSelection, type NoteSelection } from "./noteSelection";
+import { findPassage, followMarkdown, readNoteSelection, type NoteSelection } from "./noteSelection";
+import { NOTE_PASSAGE_EVENT, parseNotePassage, useOpenRequest } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -131,6 +132,16 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     return () => { clearTimeout(timer); editor.off("selectionUpdate", report); editor.off("update", report); };
   }, [editor]);
   React.useEffect(() => { editor?.setEditable(editable, false); }, [editor, editable]);
+  //: 对话气泡里那行选区摘录点进来:把那一段选中、滚到眼前。不是这篇、或编辑器还没好,就留在信箱里等(见 lib/deepLink)。
+  useOpenRequest(NOTE_PASSAGE_EVENT, (raw) => {
+    const passage = parseNotePassage(raw);
+    if (!passage) return;
+    if (!editor || editor.isDestroyed || passage.noteId !== noteId) return false;
+    const range = findPassage(editor, passage.text, passage.start);
+    if (!range) { toast.message(s.passageGone); return; }
+    editor.chain().focus().setTextSelection(range).run();
+    try { editor.commands.scrollIntoView(); } catch { /* 没有版面信息(测试环境)时滚不了,选中照样成立。 */ }
+  }, [editor, noteId]);
   markdownPaste.current = (text) => { editor?.chain().focus().insertContent(text, { contentType: "markdown" }).run(); };
   upload.current = async (files, at) => {
     if (!editor || !editable || uploading) return;

@@ -89,6 +89,7 @@ it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,�
       <CanvasAgentChat
         contextLine={() => page}
         contextChips={[{ id: "sel", label: "选中的那段", icon: null, onRemove() {} }]}
+        messageQuote={{ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 }}
         focusSignal={2}
         emptyHint="empty"
         placeholder="placeholder"
@@ -112,4 +113,6 @@ it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,�
   expect(sessionId).toBe("s1");
   expect(body.content).toBe("改写这段");
   expect(body.context).toBe("发送那一刻的上下文");
+  //: 页面给的摘录跟着这条消息落库(payload.quote),气泡里画出可点的一行。
+  expect((body as unknown as { quote: unknown }).quote).toEqual({ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 });
 });

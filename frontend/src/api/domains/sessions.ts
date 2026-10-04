@@ -55,6 +55,8 @@ export function setResourceShared(
 
 export type AgentSession = components["schemas"]["AgentSessionOut"];
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
+/** 消息带着的一段笔记摘录(笔记页的选区),落进 payload.quote,气泡里画成可点的一行。 */
+export type AgentMessageQuote = components["schemas"]["AgentMessageQuoteIn"];
 
 export const listAgentSessions = (workspaceId: string) =>
   api<AgentSession[]>(`/api/agent/sessions?workspace_id=${encodeURIComponent(workspaceId)}`);

@@ -154,3 +154,45 @@ function replaceHunk(tr: Editor["state"]["tr"], a: PMNode, b: PMNode, { fromA, t
   }
   tr.replace(fromA + start, fromA + endA, b.slice(fromB + start, fromB + endB));
 }
+
+/**
+ * 按一段**正文原文**(带 Markdown 记号,见 NoteSelection.text)找回它在编辑器文档里的位置。
+ *
+ * 对话气泡里那行选区摘录点进来时用。原文先按同一个序列化器解析成纯文字,再在文档的文字里找;同一段字出现
+ * 多次时挑相对位置离 `start`(原文在 Markdown 里的下标)最近的那处。找不到(那段已经改掉了)返回 null。
+ */
+export function findPassage(editor: Editor, markdown: string, start: number): { from: number; to: number } | null {
+  if (editor.isDestroyed || !editor.markdown) return null;
+  let needle = markdown;
+  try {
+    const parsed = editor.schema.nodeFromJSON(editor.markdown.parse(markdown));
+    needle = parsed.textBetween(0, parsed.content.size, "\n");
+  } catch {
+    // 解析不了就按原样找。
+  }
+  needle = needle.trim();
+  if (!needle) return null;
+  //: 文档的文字,块与块之间一个换行(和上面 textBetween 的分隔一致),逐字记下它在文档里的位置。
+  const chars: string[] = [];
+  const at: number[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isTextblock && chars.length) {
+      chars.push("\n");
+      at.push(pos);
+    }
+    if (node.isText) {
+      for (let i = 0; i < node.text!.length; i += 1) {
+        chars.push(node.text![i]);
+        at.push(pos + i);
+      }
+    }
+  });
+  const text = chars.join("");
+  const expected = start >= 0 ? start / Math.max(1, editor.getMarkdown().length) : 0;
+  let best = -1;
+  for (let index = text.indexOf(needle); index >= 0; index = text.indexOf(needle, index + 1)) {
+    if (best < 0 || Math.abs(index / text.length - expected) < Math.abs(best / text.length - expected)) best = index;
+  }
+  if (best < 0) return null;
+  return { from: at[best], to: at[best + needle.length - 1] + 1 };
+}

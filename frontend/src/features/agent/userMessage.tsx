@@ -4,6 +4,10 @@ import type { JSONContent } from "@tiptap/react";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { documentText } from "@/features/agent/ChatComposer";
 import { ReferenceDocument } from "@/features/agent/ReferenceDocument";
+import { ReferenceBadge } from "@/features/agent/ReferenceChip";
+import { useReferencePreview } from "@/features/agent/useReferencePreview";
+import type { AgentMessageQuote } from "@/api/domains/sessions";
+import { plainExcerpt } from "@/lib/plainExcerpt";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
@@ -69,6 +73,51 @@ export function chatMediaGallery(messages: readonly { role?: string; content: st
  * 笔记发出去,气泡里一点痕迹都没有。所以文档之后把 content 剩下的那截接着画出来。
  */
 export function UserMessageContent({
+  content,
+  document,
+  mediaGallery,
+  quote,
+}: {
+  content: string;
+  document?: JSONContent | null;
+  mediaGallery?: ImagePreviewItem[];
+  /** 这条消息带着的笔记摘录(payload.quote)。有就在最后画一行可点的摘录。 */
+  quote?: AgentMessageQuote | null;
+}) {
+  const body = <MessageBody content={content} document={document} mediaGallery={mediaGallery} />;
+  if (!quote) return body;
+  return (
+    <div className="grid gap-1.5">
+      {body}
+      <QuoteLine quote={quote} />
+    </div>
+  );
+}
+
+/**
+ * 选区摘录:笔记标题 + 选区开头一截,和 `@` 引用笔记的胶囊同一个样子。点了先问那篇还在不在
+ * (useReferencePreview),在就回到笔记、把那一段定位出来。
+ */
+function QuoteLine({ quote }: { quote: AgentMessageQuote }) {
+  const { open, modal } = useReferencePreview();
+  const title = quote.title ?? "";
+  return (
+    <div className="flex min-w-0">
+      <ReferenceBadge
+        kind="note"
+        id={quote.note_id}
+        name={`${title} · ${plainExcerpt(quote.text, QUOTE_EXCERPT_CHARS)}`}
+        className="max-w-full"
+        onOpen={() => void open({ kind: "note", id: quote.note_id, name: title }, { passage: { text: quote.text, start: quote.start ?? -1 } })}
+      />
+      {modal}
+    </div>
+  );
+}
+/** 摘录露多少字:够认出是哪段,一行放得下。 */
+const QUOTE_EXCERPT_CHARS = 32;
+
+function MessageBody({
   content,
   document,
   mediaGallery,

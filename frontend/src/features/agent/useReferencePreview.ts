@@ -5,7 +5,7 @@ import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
-import { gotoRecord, noteHref } from "@/lib/deepLink";
+import { gotoRecord, locateNotePassage, noteHref } from "@/lib/deepLink";
 import type { AgentReference, ReferenceKind } from "@/features/agent/references";
 
 /**
@@ -61,7 +61,8 @@ export function useReferencePreview() {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const { openAsset, modal } = useAssetPreviewModal();
-  const open = async (reference: AgentReference) => {
+  /** `passage`:笔记那一类可以带上要定位的那一段(对话气泡里的选区摘录),到了笔记页编辑器把它选中。 */
+  const open = async (reference: AgentReference, options: { passage?: { text: string; start: number } } = {}) => {
     const route = ROUTES[reference.kind];
     if (!route) return;
     const found = await api<Asset | unknown>(route.probe(reference.id)).catch(() => null);
@@ -69,6 +70,10 @@ export function useReferencePreview() {
       toast.error(t("agentRefGone").replace("{name}", reference.name), {
         description: t("agentRefGoneHint"),
       });
+      return;
+    }
+    if (reference.kind === "note" && options.passage) {
+      locateNotePassage({ noteId: reference.id, ...options.passage });
       return;
     }
     if (route.href) {

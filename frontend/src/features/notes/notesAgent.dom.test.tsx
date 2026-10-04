@@ -130,11 +130,14 @@ it("每条消息带上当前这篇:标题、id、正文;选中一段后带上它
   expect(context()).toContain("周一和**剪辑组**对了节奏");
   //: 小条上给人看的去掉了 Markdown 记号;发出去的仍是原文。
   expect(screen.getByTestId("agent-chip")).toHaveTextContent("周一和剪辑组对了节奏");
+  //: 这条消息带着的摘录(气泡里那一行):哪篇、标题、正文原文、位置。
+  expect(panel.props!.messageQuote).toMatchObject({ kind: "note", note_id: "a", title: "周报", text: "周一和**剪辑组**对了节奏" });
 
   //: 点掉小条:这一段不再跟着发。
   act(() => panel.props!.contextChips![0].onRemove());
   expect(context()).not.toContain("用户选中了");
   expect(screen.queryByTestId("agent-chip")).toBeNull();
+  expect(panel.props!.messageQuote).toBeNull();
 });
 
 it("换一篇笔记:上下文跟着换成那一篇,上一篇的选区不带过去", async () => {

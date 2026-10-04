@@ -8,7 +8,7 @@
 import { Editor } from "@tiptap/react";
 import { afterEach, expect, it } from "vitest";
 import { noteExtensions } from "./editorExtensions";
-import { followMarkdown, readNoteSelection, SELECTION_CONTEXT_CHARS } from "./noteSelection";
+import { findPassage, followMarkdown, readNoteSelection, SELECTION_CONTEXT_CHARS } from "./noteSelection";
 
 const editors: Editor[] = [];
 afterEach(() => { while (editors.length) editors.pop()!.destroy(); });
@@ -109,4 +109,17 @@ it("一样的正文不产生任何改动(也不进撤销历史)", () => {
   const editor = open("没变。");
   expect(followMarkdown(editor, editor.getMarkdown())).toBe(false);
   expect(editor.can().undo()).toBe(false);
+});
+
+it("按选区原文找回那一段(带着 Markdown 记号也认),同一段字出现多次时挑离原位置最近的那处", () => {
+  const editor = open("开头一句。\n\n周二把**脚本**写完。\n\n中间。\n\n周二把**脚本**写完。");
+  const markdown = editor.getMarkdown();
+  const second = markdown.lastIndexOf("周二把**脚本**写完");
+
+  const range = findPassage(editor, "周二把**脚本**写完", second)!;
+
+  expect(editor.state.doc.textBetween(range.from, range.to)).toBe("周二把脚本写完");
+  //: 挑的是后面那处(位置离第二处近),不是第一处。
+  expect(range.from).toBeGreaterThan(rangeOf(editor, "中间").from);
+  expect(findPassage(editor, "正文里没有的一句", 0)).toBeNull();
 });
