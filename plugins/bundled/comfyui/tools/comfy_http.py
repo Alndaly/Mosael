@@ -107,10 +107,19 @@ class Comfy:
         info = self.get("/object_info")
         return info if isinstance(info, dict) else {}
 
-    def list_workflows(self) -> list[str]:
-        """用户在 ComfyUI 里**保存**的工作流(相对 workflows/ 的路径)。隐藏文件不算(老版本前端的 .index.json)。"""
-        paths = [str(item.get("path")) for item in self.workflow_listing() if is_workflow_path(str(item.get("path") or ""))]
-        return sorted(paths, key=str.lower)
+    def saved_files(self) -> tuple[list[str], list[str]]:
+        """工作流目录里的文件(相对 workflows/ 的路径):(**保存**的工作流, 别的文件)。隐藏文件都不算(老版本前端的
+        .index.json)。
+
+        别的文件(用户拷进去的压缩包之类)不是工作流,ComfyUI 自己也打不开;交出来是为了说清楚它为什么用不了。"""
+        workflows: list[str] = []
+        others: list[str] = []
+        for item in self.workflow_listing():
+            path = str(item.get("path") or "")
+            if not path or any(part.startswith(".") for part in path.split("/")):
+                continue
+            (workflows if is_workflow_path(path) else others).append(path)
+        return sorted(workflows, key=str.lower), sorted(others, key=str.lower)
 
     def fetch_workflow(self, path: str) -> dict[str, Any]:
         graph = self.get(f"/api/userdata/{parse.quote('workflows/' + path, safe='')}")

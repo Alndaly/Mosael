@@ -122,7 +122,8 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
     """这台服务器上的每个模型。
 
     一张图拉不下来 / 转不过来,照样交出来(带着原因)—— 目录里跳过它,`list_workflows` 把原因说出来:
-    智能体问「有哪些工作流」时,一张静默消失的图比一张标着「转换失败」的图更让人摸不着头脑。
+    智能体问「有哪些工作流」时,一张静默消失的图比一张标着「转换失败」的图更让人摸不着头脑。工作流目录里
+    不是 .json 的文件(拷进去的压缩包)也一样带着原因交出来。
     """
     if checkpoints(object_info):
         api, _, titles = load(comfy, BUILTIN, object_info, locale)
@@ -134,7 +135,8 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
             yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, convert.titles_of(parsed), "")
         except ComfyError as exc:
             yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, {}, {}, str(exc))
-    for path in comfy.list_workflows():
+    workflows, others = comfy.saved_files()
+    for path in workflows:
         try:
             ui_graph = comfy.fetch_workflow(path)
             api = graph.live(convert.to_api(ui_graph, object_info, locale), object_info)
@@ -145,6 +147,20 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
             yield Entry(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
             continue
         yield Entry(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph))
+    for path in others:
+        yield Entry(path, path, {}, {}, _not_a_workflow(path, locale))
+
+
+def _not_a_workflow(path: str, locale: str) -> str:
+    """工作流目录里一个不是 .json 的文件为什么用不了。"""
+    if path.lower().endswith(".zip"):
+        return say(locale,
+                   "这是一个压缩包,不是工作流:ComfyUI 自己也打不开它。解压后在 ComfyUI 里打开里面的 .json(压缩包里带着"
+                   "自定义节点的话先装好),另存一份,Mosael 就认得出了",
+                   "This is a zip archive, not a workflow, and ComfyUI can't open it either. Unzip it, open the .json inside "
+                   "in ComfyUI (install any custom nodes it ships with first) and save it again; Mosael will then pick it up.")
+    return say(locale, "这不是 ComfyUI 保存的工作流(.json),Mosael 不读它",
+               "This is not a workflow saved by ComfyUI (.json), so Mosael doesn't read it.")
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:

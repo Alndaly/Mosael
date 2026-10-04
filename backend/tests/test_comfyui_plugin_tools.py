@@ -105,6 +105,21 @@ def test_转不过来的工作流也列出来_带着原因(comfy) -> None:
     assert listed["broken.json"]["error"], "静默消失比标着「转换失败」更让人摸不着头脑"
 
 
+def test_工作流目录里的压缩包也列出来_说清楚为什么用不了(comfy) -> None:
+    """用户的 ComfyUI 工作流目录里放着一个 zImageDualStageWorkflow_v40.zip(一张工作流加一个自定义节点包),ComfyUI
+    自己也打不开它。此前插件一声不吭地跳过:列表里找不到它,用户分不清是没连上、认不出,还是根本不该在这儿。
+    它不是模型、没有工具,只在列工作流时带着原因出现;隐藏文件(老版本前端的 .index.json)照旧不列。"""
+    comfy.state.workflows["zImageDualStageWorkflow_v40.zip"] = "PK\x03\x04"
+    comfy.state.workflows[".index.json"] = {}
+    listed = {one["id"]: one for one in _call(comfy.url, "list_workflows")["workflows"]}
+    zipped = listed["zImageDualStageWorkflow_v40.zip"]
+    assert "压缩包" in zipped["error"] and "解压" in zipped["error"] and "tool" not in zipped
+    assert ".index.json" not in listed
+    tools = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "models"}, {"SERVER_URL": comfy.url},
+                                 timeout=60).output["models"]
+    assert "zImageDualStageWorkflow_v40.zip" not in {one["id"] for one in tools}
+
+
 def test_按名字筛(comfy) -> None:
     listed = _call(comfy.url, "list_workflows", {"query": "UPSC"})["workflows"]
     assert [one["id"] for one in listed] == ["upscale.json"]
