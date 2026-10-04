@@ -586,6 +586,7 @@
         "TikHub 按平台取资料与作品,或浏览器打开主页、滚动读出页面",
         "整理作品、算频率 / 时段 / 互动率 / 趋势",
         "写运营诊断",
+        "核对引号里的话:找不到原文的去掉引号、标为转述",
         "存成笔记(附数据表)"
       ],
       "en": [
@@ -594,12 +595,13 @@
         "TikHub fetches profile and posts per platform, or the browser reads the page",
         "Tidy the posts; frequency, timing, engagement and trend",
         "Write the diagnosis",
+        "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased",
         "Save as a note with the numbers"
       ]
     },
     "author": "Mosael",
-    "version": 2,
-    "nodes": 28,
+    "version": 3,
+    "nodes": 29,
     "download": {
       "zh": "/workflows/account_analysis.zh.mosael-workflow.json",
       "en": "/workflows/account_analysis.en.mosael-workflow.json"
@@ -639,6 +641,7 @@
         "整理视频数据、评论按赞排好",
         "可选:下载视频、转写口播",
         "拆解爆款原因、写脚本提纲",
+        "核对引号里的话:找不到原文的去掉引号、标为转述",
         "存成笔记"
       ],
       "en": [
@@ -648,12 +651,13 @@
         "Tidy the numbers, rank the comments",
         "Optional: download and transcribe",
         "Break it down and outline a script",
+        "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased",
         "Save as a note"
       ]
     },
     "author": "Mosael",
-    "version": 4,
-    "nodes": 41,
+    "version": 5,
+    "nodes": 42,
     "download": {
       "zh": "/workflows/viral_video_breakdown.zh.mosael-workflow.json",
       "en": "/workflows/viral_video_breakdown.en.mosael-workflow.json"
@@ -690,6 +694,7 @@
         "TikHub 按平台取评论,或浏览器滚动读出评论区",
         "评论按赞排好",
         "做评论区洞察、写建议回复",
+        "核对引号里的话:找不到原文的去掉引号、标为转述",
         "存成笔记"
       ],
       "en": [
@@ -698,12 +703,13 @@
         "TikHub fetches comments per platform, or the browser reads the comment section",
         "Rank the comments by likes",
         "Analyse the comments, draft replies",
+        "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased",
         "Save as a note"
       ]
     },
     "author": "Mosael",
-    "version": 3,
-    "nodes": 32,
+    "version": 4,
+    "nodes": 33,
     "download": {
       "zh": "/workflows/comment_insights.zh.mosael-workflow.json",
       "en": "/workflows/comment_insights.en.mosael-workflow.json"

@@ -607,7 +607,7 @@ class Test评论区洞察真跑:
         assert web_read["timeout_ms"] > web_read["input"]["budget_ms"] > 0, "翻页的时间预算要落在脚本上限之内"
         assert web_read["input"]["comment_max"] == 2000
         assert "Not signed in" in web_read["input"]["notes"]["login"]
-        assert graph["meta"]["template_version"] == 3
+        assert graph["meta"]["template_version"] >= 3, "第 3 版起带着取数上限"
 
 
 # --------------------------------------------------------------------------------------
@@ -787,3 +787,68 @@ class Test数据来源是选项:
             params = _start(rebuilt.json()["graph"])["params"]
             assert params["data_source"] == carried, typed
             assert params["account_link"] == DOUYIN_USER, "别的开始参数照旧带过去"
+
+
+# --------------------------------------------------------------------------------------
+# 引用核对:三张分析模板存笔记之前都核对引号里的话
+# --------------------------------------------------------------------------------------
+
+
+class Test引用核对:
+    """实测(k3,409 / 423 条评论):提示词写明「引号里只放逐字摘录」之后,报告里仍有加了「」的话在取回的原文里
+    找不到。三张模板在存笔记之前都过「核对引用」:找不到的去掉引号、标为转述,核对说明写进取数说明。"""
+
+    def test_评论区洞察_编出来的引用改成转述_说明写进笔记和输出(self, monkeypatch, tikhub_tools) -> None:
+        ws, _ = _setup(with_tikhub=True)
+        insight = {"title": "色号 · 评论区洞察", "verdict": "大家最关心「这个色号显黑吗」",
+                   "report_markdown": "## 大家在聊什么\n- 「这个色号显黑吗」(👍320)\n- 「黄皮也能放心冲」",
+                   "reply_suggestions_markdown": "- 回复「求链接!!」:链接在简介"}
+        Outside(monkeypatch, {"comment_insights": insight})
+        context = _run(ws, comment_insights_graph(chat=CHAT), video_link=XHS_NOTE, data_source="tikhub")
+
+        checked = context["quotes"]
+        assert (checked["checked"], checked["matched"], checked["paraphrased"]) == (4, 3, 1)
+        assert checked["unmatched"] == ["黄皮也能放心冲"]
+        [note] = _notes(ws)
+        text = _note_text(note)
+        assert "「这个色号显黑吗」(👍320)" in text and "「求链接!!」" in text
+        assert "「黄皮也能放心冲」" not in text and "黄皮也能放心冲(转述)" in text
+        assert checked["summary"] in text, "核对说明写进笔记"
+        assert context["output"]["output"]["report"] == checked["texts"]["report"]
+
+    def test_爆款拆解_引用标题和评论的留着_编的改成转述_脚本提纲里的台词不核对(self, monkeypatch, tikhub_tools) -> None:
+        ws, _ = _setup(with_tikhub=True)
+        breakdown = {"title": "番茄炒蛋 · 爆款拆解", "verdict": "标题「三分钟学会番茄炒蛋」直给",
+                     "report_markdown": "## 评论区\n- 「先放蛋还是先放番茄?」\n- 「看完就会了」",
+                     "script_outline_markdown": "钩子台词:「你家番茄炒蛋是不是总出水?」"}
+        Outside(monkeypatch, {"viral_breakdown": breakdown})
+        context = _run(ws, viral_video_breakdown_graph(chat=CHAT), video_link=DOUYIN_VIDEO, data_source="tikhub",
+                       download_video="no")
+
+        checked = context["quotes"]
+        assert (checked["checked"], checked["matched"], checked["paraphrased"]) == (3, 2, 1)
+        [note] = _notes(ws)
+        text = _note_text(note)
+        assert "「三分钟学会番茄炒蛋」" in text and "「先放蛋还是先放番茄?」" in text
+        assert "看完就会了(转述)" in text
+        assert "「你家番茄炒蛋是不是总出水?」" in text, "脚本提纲是新写的台词,不是引用"
+        assert checked["summary"] in text
+
+    def test_账号诊断_引用作品标题的留着_编的改成转述(self, monkeypatch, tikhub_tools) -> None:
+        ws, _ = _setup(with_tikhub=True)
+        report = {"title": "做饭的老王 · 运营诊断", "verdict": "稳定更新",
+                  "report_markdown": "## 内容支柱\n- 代表作「第 17 道菜」\n- 「一周七天不重样」系列"}
+        Outside(monkeypatch, {"account_diagnosis": report})
+        context = _run(ws, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub")
+
+        checked = context["quotes"]
+        assert (checked["checked"], checked["matched"], checked["paraphrased"]) == (2, 1, 1)
+        [note] = _notes(ws)
+        text = _note_text(note)
+        assert "「第 17 道菜」" in text and "一周七天不重样(转述)" in text
+        assert checked["summary"] in text
+
+    def test_三张模板都升了版本(self) -> None:
+        assert comment_insights_graph(chat=CHAT)["meta"]["template_version"] == 4
+        assert viral_video_breakdown_graph(chat=CHAT)["meta"]["template_version"] == 5
+        assert account_analysis_graph(chat=CHAT)["meta"]["template_version"] == 3

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "自媒体账号运营诊断",
   "description": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书 / 抖音要换成已登录的浏览器档案,其他平台也能用,数字是页面上的约数)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起,以 TikHub 账单为准;字段全、更稳、不用登录)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
-  "graph_hash": "bb71bb2726ff4466c948a2f934ba4a65b4e0055a14d306fb4677a86ca70c3ea3",
+  "graph_hash": "db6734cd042bb5177cb091723ad29eeb714067f43f932fa558e0b7f300df2995",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -596,16 +596,37 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "存成笔记",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "核对引用的原文",
         "position": {
           "x": 3560,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{report.json.verdict}}",
+            "report": "{{report.json.report_markdown}}"
+          },
+          "sources": {
+            "posts": "{{dy_metrics.items}}{{xhs_metrics.items}}{{bili_metrics.items}}{{web_metrics.items}}",
+            "account": "{{dy_metrics.account}}{{xhs_metrics.account}}{{bili_metrics.account}}{{web_metrics.account}}",
+            "data": "{{data_block.text}}",
+            "focus": "{{start.focus}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "存成笔记",
+        "position": {
+          "x": 3880,
+          "y": 535
+        },
+        "config": {
           "title": "{{report.json.title}}",
-          "markdown": "> {{report.json.verdict}}\n\n{{report.json.report_markdown}}\n\n---\n\n## 附:关键数据\n\n{{data_block.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n---\n\n## 附:关键数据\n\n{{data_block.text}}\n\n{{quotes.summary}}",
           "tags": "账号分析"
         }
       },
@@ -614,12 +635,12 @@
         "type": "notify",
         "name": "诊断完成通知",
         "position": {
-          "x": 3880,
+          "x": 4200,
           "y": 535
         },
         "config": {
           "title": "账号运营诊断已存成笔记",
-          "body": "{{report.json.verdict}}"
+          "body": "{{quotes.texts.verdict}}"
         }
       },
       {
@@ -627,16 +648,17 @@
         "type": "output",
         "name": "交付诊断与数据",
         "position": {
-          "x": 4200,
+          "x": 4520,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{report.json.verdict}}",
-            "report": "{{report.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "platform": "{{link.platform}}",
-            "data": "{{data_block.text}}"
+            "data": "{{data_block.text}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -778,8 +800,13 @@
         "source_handle": "true"
       },
       {
-        "id": "report__save_note",
+        "id": "report__quotes",
         "source": "report",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {

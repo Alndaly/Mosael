@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Social account health check",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu / Douyin need a signed-in browser profile, other platforms work too, and the numbers are the page's rounded ones) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each — see your TikHub bill; complete fields, steadier, no sign-in). Plus one or two AI chat calls (one more on the browser route to read the page).",
-  "graph_hash": "57e77ac0112df5099a7e216b71af5239617aea0c2102fcd44a13931de55fa95e",
+  "graph_hash": "63fc33516e01bd531d10f54cfcf2b99bbcb79a3e1b79f75bc27e81a618d0691b",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -596,16 +596,37 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "Save as a note",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "Check the quotes against the source",
         "position": {
           "x": 3560,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{report.json.verdict}}",
+            "report": "{{report.json.report_markdown}}"
+          },
+          "sources": {
+            "posts": "{{dy_metrics.items}}{{xhs_metrics.items}}{{bili_metrics.items}}{{web_metrics.items}}",
+            "account": "{{dy_metrics.account}}{{xhs_metrics.account}}{{bili_metrics.account}}{{web_metrics.account}}",
+            "data": "{{data_block.text}}",
+            "focus": "{{start.focus}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "Save as a note",
+        "position": {
+          "x": 3880,
+          "y": 535
+        },
+        "config": {
           "title": "{{report.json.title}}",
-          "markdown": "> {{report.json.verdict}}\n\n{{report.json.report_markdown}}\n\n---\n\n## Appendix: the numbers\n\n{{data_block.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n---\n\n## Appendix: the numbers\n\n{{data_block.text}}\n\n{{quotes.summary}}",
           "tags": "account analysis"
         }
       },
@@ -614,12 +635,12 @@
         "type": "notify",
         "name": "Diagnosis ready",
         "position": {
-          "x": 3880,
+          "x": 4200,
           "y": 535
         },
         "config": {
           "title": "The account diagnosis is saved as a note",
-          "body": "{{report.json.verdict}}"
+          "body": "{{quotes.texts.verdict}}"
         }
       },
       {
@@ -627,16 +648,17 @@
         "type": "output",
         "name": "Hand over the diagnosis and data",
         "position": {
-          "x": 4200,
+          "x": 4520,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{report.json.verdict}}",
-            "report": "{{report.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "platform": "{{link.platform}}",
-            "data": "{{data_block.text}}"
+            "data": "{{data_block.text}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -778,8 +800,13 @@
         "source_handle": "true"
       },
       {
-        "id": "report__save_note",
+        "id": "report__quotes",
         "source": "report",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {

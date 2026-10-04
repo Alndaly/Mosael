@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Comment insights and audience",
   "description": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu comments need a signed-in browser profile) or TikHub (needs the plugin and an API key; 1 call per run; complete fields, steadier, no sign-in). Plus one or two AI chat calls.",
-  "graph_hash": "c01742cd8d9930c72d03035a9a4ebd9d8397458a3f4bac24422d47605cdc57b1",
+  "graph_hash": "4bb1d1633f541be159ae64837690455b74a21b9bdf340c1b98682024277c6c1a",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -651,16 +651,38 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "Save as a note",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "Check the quotes against the source",
         "position": {
           "x": 3560,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{insight.json.verdict}}",
+            "report": "{{insight.json.report_markdown}}",
+            "replies": "{{insight.json.reply_suggestions_markdown}}"
+          },
+          "sources": {
+            "comments": "{{all_items.text}}",
+            "data": "{{data_block.text}}",
+            "title": "{{web_struct.json.title}}{{web_read.value.title}}",
+            "focus": "{{start.focus}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "Save as a note",
+        "position": {
+          "x": 3880,
+          "y": 535
+        },
+        "config": {
           "title": "{{insight.json.title}}",
-          "markdown": "> {{insight.json.verdict}}\n\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n\n{{insight.json.report_markdown}}\n\n## Suggested replies\n\n{{insight.json.reply_suggestions_markdown}}\n\n---\n\n## Appendix: the comments\n\n{{data_block.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n\n{{quotes.summary}}\n\n{{quotes.texts.report}}\n\n## Suggested replies\n\n{{quotes.texts.replies}}\n\n---\n\n## Appendix: the comments\n\n{{data_block.text}}",
           "tags": "comment insights"
         }
       },
@@ -669,12 +691,12 @@
         "type": "notify",
         "name": "Insights ready",
         "position": {
-          "x": 3880,
+          "x": 4200,
           "y": 535
         },
         "config": {
           "title": "The comment insights are saved as a note",
-          "body": "{{insight.json.verdict}}\n{{web_api_coverage.text}}{{web_dom_coverage.text}}"
+          "body": "{{quotes.texts.verdict}}\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n{{quotes.summary}}"
         }
       },
       {
@@ -682,15 +704,16 @@
         "type": "output",
         "name": "Hand over the insights and replies",
         "position": {
-          "x": 4200,
+          "x": 4520,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{insight.json.verdict}}",
-            "report": "{{insight.json.report_markdown}}",
-            "replies": "{{insight.json.reply_suggestions_markdown}}"
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
+            "replies": "{{quotes.texts.replies}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -845,8 +868,13 @@
         "target": "insight"
       },
       {
-        "id": "insight__save_note",
+        "id": "insight__quotes",
         "source": "insight",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {

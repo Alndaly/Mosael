@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "自媒体视频爆款拆解",
   "description": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,要登录的平台换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起;字段全、更稳、不用登录)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
-  "graph_hash": "8c03591ee32ac26f4f9c776dc007f1a8ba5ac7c23a09fb88556a2f53ef62dd19",
+  "graph_hash": "9d1b3506dddba0d454163bd6d2870a689dc87ae0cda953398a4a008d0bae08c2",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
-      "template_version": 4,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -797,16 +797,38 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "存成笔记",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "核对引用的原文",
         "position": {
           "x": 4840,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{breakdown.json.verdict}}",
+            "report": "{{breakdown.json.report_markdown}}"
+          },
+          "sources": {
+            "videos": "{{dy_video_m.items}}{{xhs_video_m.items}}{{bili_video_m.items}}{{web_api_video_m.items}}{{web_video_m.items}}",
+            "comments": "{{dy_comments_m.items}}{{xhs_comments_m.items}}{{bili_comments_m.items}}{{web_api_comments_m.items}}{{web_comments_m.items}}",
+            "data": "{{data_block.text}}",
+            "transcript": "{{transcript.text}}",
+            "topic": "{{start.my_topic}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "存成笔记",
+        "position": {
+          "x": 5160,
+          "y": 535
+        },
+        "config": {
           "title": "{{breakdown.json.title}}",
-          "markdown": "> {{breakdown.json.verdict}}\n\n{{breakdown.json.report_markdown}}\n\n## 照这个套路做一条\n\n{{breakdown.json.script_outline_markdown}}\n\n---\n\n## 附:关键数据\n\n{{data_block.text}}\n\n{{transcript_section.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n## 照这个套路做一条\n\n{{breakdown.json.script_outline_markdown}}\n\n---\n\n## 附:关键数据\n\n{{data_block.text}}\n\n{{quotes.summary}}\n\n{{transcript_section.text}}",
           "tags": "爆款拆解"
         }
       },
@@ -815,12 +837,12 @@
         "type": "notify",
         "name": "拆解完成通知",
         "position": {
-          "x": 5160,
+          "x": 5480,
           "y": 535
         },
         "config": {
           "title": "爆款拆解已存成笔记",
-          "body": "{{breakdown.json.verdict}}"
+          "body": "{{quotes.texts.verdict}}"
         }
       },
       {
@@ -828,17 +850,18 @@
         "type": "output",
         "name": "交付拆解与脚本提纲",
         "position": {
-          "x": 5480,
+          "x": 5800,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{breakdown.json.verdict}}",
-            "report": "{{breakdown.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "script_outline": "{{breakdown.json.script_outline_markdown}}",
             "video_asset_id": "{{download.asset_id}}",
-            "transcript": "{{transcript.text}}"
+            "transcript": "{{transcript.text}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -1055,8 +1078,13 @@
         "source_handle": "true"
       },
       {
-        "id": "breakdown__save_note",
+        "id": "breakdown__quotes",
         "source": "breakdown",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {

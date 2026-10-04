@@ -610,6 +610,20 @@ def _merge(b: _Builder, node_id: str, name: dict[str, str], col: float, row: flo
     return node_id
 
 
+def _check_quotes(b: _Builder, model: str, col: float, row: float, fields: dict[str, str], sources: dict[str, str]) -> str:
+    """模型写完报告、存笔记之前:报告里加了「」/“”的话逐条到取回的原文里找,找不到的去掉引号、标为转述
+    (提示词写明了只引原文,实测仍有归纳出来的句子加了引号)。笔记和输出用核对过的 `{{quotes.texts.*}}`。
+
+    `fields` 是交出去的名字 → 模型那步 JSON 里的字段;`sources` 是这些话该出自的原文(只放取回的数据和用户填的,
+    不放模型自己写的东西)。"""
+    b.node("quotes", "quote_check", {"zh": "核对引用的原文", "en": "Check the quotes against the source"}, col, row, {
+        "texts": {name: f"{{{{{model}.json.{field}}}}}" for name, field in fields.items()},
+        "sources": sources,
+    })
+    b.edge(model, "quotes")
+    return "quotes"
+
+
 def _joined(node_ids: list[str], output: str) -> str:
     return "".join(f"{{{{{one}.{output}}}}}" for one in node_ids)
 
@@ -740,29 +754,35 @@ def account_analysis_graph(*, chat: Any, locale: str | None = None) -> dict[str,
                  "用户关心的问题(可能为空):{{start.focus}}\n\n{{data_block.text}}",
           schema_name="account_diagnosis", schema=_account_report_schema(), max_tokens=10000)
     b.edge("has_posts", "report", "true")
-    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 11, 2.5, {
+    _check_quotes(b, "report", 11, 2.5, {"verdict": "verdict", "report": "report_markdown"}, {
+        "posts": _joined(metrics, "items"), "account": _joined(metrics, "account"),
+        "data": "{{data_block.text}}", "focus": "{{start.focus}}",
+    })
+    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 12, 2.5, {
         "title": "{{report.json.title}}",
-        "markdown": "> {{report.json.verdict}}\n\n{{report.json.report_markdown}}\n\n---\n\n## "
-                    + b.text("附:关键数据", "Appendix: the numbers") + "\n\n{{data_block.text}}",
+        "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n---\n\n## "
+                    + b.text("附:关键数据", "Appendix: the numbers") + "\n\n{{data_block.text}}\n\n{{quotes.summary}}",
         "tags": b.text("账号分析", "account analysis"),
     })
-    b.edge("report", "save_note")
-    b.node("done_notice", "notify", {"zh": "诊断完成通知", "en": "Diagnosis ready"}, 12, 2.5, {
+    b.edge("quotes", "save_note")
+    b.node("done_notice", "notify", {"zh": "诊断完成通知", "en": "Diagnosis ready"}, 13, 2.5, {
         "title": b.text("账号运营诊断已存成笔记", "The account diagnosis is saved as a note"),
-        "body": "{{report.json.verdict}}",
+        "body": "{{quotes.texts.verdict}}",
     })
     b.edge("save_note", "done_notice")
-    b.node("output", "output", {"zh": "交付诊断与数据", "en": "Hand over the diagnosis and data"}, 13, 2.5, {
+    b.node("output", "output", {"zh": "交付诊断与数据", "en": "Hand over the diagnosis and data"}, 14, 2.5, {
         "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{report.json.verdict}}",
-            "report": "{{report.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "platform": "{{link.platform}}",
             "data": "{{data_block.text}}",
+            "quote_check": "{{quotes.summary}}",
         },
     })
     b.edge("done_notice", "output")
-    return b.graph(ACCOUNT_ANALYSIS)
+    #: 第 3 版:存笔记之前过「核对引用」,引号里的话在取回的作品和资料里找不到的去掉引号、标为转述。
+    return b.graph(ACCOUNT_ANALYSIS, version=3)
 
 
 # --------------------------------------------------------------------------------------
@@ -938,34 +958,41 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
                  "没有逐字稿的原因(可能为空):{{download.error}}",
           schema_name="viral_breakdown", schema=_breakdown_schema(), max_tokens=12000, temperature=0.4)
     b.edge("has_video", "breakdown", "true")
-    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 15, 2.5, {
+    #: 脚本提纲不核对:那是照着套路新写的台词,不是引用。
+    _check_quotes(b, "breakdown", 15, 2.5, {"verdict": "verdict", "report": "report_markdown"}, {
+        "videos": _joined(video_ids, "items"), "comments": _joined(comment_ids, "items"),
+        "data": "{{data_block.text}}", "transcript": "{{transcript.text}}", "topic": "{{start.my_topic}}",
+    })
+    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 16, 2.5, {
         "title": "{{breakdown.json.title}}",
-        "markdown": "> {{breakdown.json.verdict}}\n\n{{breakdown.json.report_markdown}}\n\n## "
+        "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n## "
                     + b.text("照这个套路做一条", "Make one the same way") + "\n\n{{breakdown.json.script_outline_markdown}}"
                     + "\n\n---\n\n## " + b.text("附:关键数据", "Appendix: the numbers") + "\n\n{{data_block.text}}"
-                    + "\n\n{{transcript_section.text}}",
+                    + "\n\n{{quotes.summary}}\n\n{{transcript_section.text}}",
         "tags": b.text("爆款拆解", "viral breakdown"),
     })
-    b.edge("breakdown", "save_note")
-    b.node("done_notice", "notify", {"zh": "拆解完成通知", "en": "Breakdown ready"}, 16, 2.5, {
+    b.edge("quotes", "save_note")
+    b.node("done_notice", "notify", {"zh": "拆解完成通知", "en": "Breakdown ready"}, 17, 2.5, {
         "title": b.text("爆款拆解已存成笔记", "The breakdown is saved as a note"),
-        "body": "{{breakdown.json.verdict}}",
+        "body": "{{quotes.texts.verdict}}",
     })
     b.edge("save_note", "done_notice")
-    b.node("output", "output", {"zh": "交付拆解与脚本提纲", "en": "Hand over the breakdown and outline"}, 17, 2.5, {
+    b.node("output", "output", {"zh": "交付拆解与脚本提纲", "en": "Hand over the breakdown and outline"}, 18, 2.5, {
         "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{breakdown.json.verdict}}",
-            "report": "{{breakdown.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "script_outline": "{{breakdown.json.script_outline_markdown}}",
             "video_asset_id": "{{download.asset_id}}",
             "transcript": "{{transcript.text}}",
+            "quote_check": "{{quotes.summary}}",
         },
     })
     b.edge("done_notice", "output")
     #: 第 3 版:浏览器那一路在 B 站上走接口(mode=api)时直接整理接口交回的视频数据和评论,不再交给模型当页面文字抄。
     #: 第 4 版:B 站评论接口翻全一级和楼中楼,汇合的数据里写明取到多少 / 平台显示多少(旧图的脚本只翻 15 页、不翻楼中楼)。
-    return b.graph(VIRAL_VIDEO_BREAKDOWN, version=4)
+    #: 第 5 版:存笔记之前过「核对引用」,拆解里引号里的话在取回的视频数据、评论、逐字稿里找不到的去掉引号、标为转述。
+    return b.graph(VIRAL_VIDEO_BREAKDOWN, version=5)
 
 
 # --------------------------------------------------------------------------------------
@@ -1171,31 +1198,39 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
                  "分批分析笔记(覆盖了全部评论,JSON 数组,逐条是一份笔记):\n{{batch_analyze.results}}",
           schema_name="comment_insights", schema=_insight_schema(), max_tokens=12000, temperature=0.3)
     b.edge("batch_analyze", "insight")
-    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 11, 2.5, {
+    #: 原文是取回的评论(和作品标题、用户自己写的问题);分批笔记是模型写的,不算原文。
+    _check_quotes(b, "insight", 11, 2.5,
+                  {"verdict": "verdict", "report": "report_markdown", "replies": "reply_suggestions_markdown"}, {
+                      "comments": "{{all_items.text}}", "data": "{{data_block.text}}",
+                      "title": "{{web_struct.json.title}}{{web_read.value.title}}", "focus": "{{start.focus}}",
+                  })
+    b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 12, 2.5, {
         "title": "{{insight.json.title}}",
-        "markdown": "> {{insight.json.verdict}}\n\n" + coverage + "\n\n{{insight.json.report_markdown}}\n\n## "
-                    + b.text("建议回复", "Suggested replies") + "\n\n{{insight.json.reply_suggestions_markdown}}"
+        "markdown": "> {{quotes.texts.verdict}}\n\n" + coverage + "\n\n{{quotes.summary}}\n\n{{quotes.texts.report}}\n\n## "
+                    + b.text("建议回复", "Suggested replies") + "\n\n{{quotes.texts.replies}}"
                     + "\n\n---\n\n## " + b.text("附:评论数据", "Appendix: the comments") + "\n\n{{data_block.text}}",
         "tags": b.text("评论区洞察", "comment insights"),
     })
-    b.edge("insight", "save_note")
-    b.node("done_notice", "notify", {"zh": "洞察完成通知", "en": "Insights ready"}, 12, 2.5, {
+    b.edge("quotes", "save_note")
+    b.node("done_notice", "notify", {"zh": "洞察完成通知", "en": "Insights ready"}, 13, 2.5, {
         "title": b.text("评论区洞察已存成笔记", "The comment insights are saved as a note"),
-        "body": "{{insight.json.verdict}}\n" + coverage,
+        "body": "{{quotes.texts.verdict}}\n" + coverage + "\n{{quotes.summary}}",
     })
     b.edge("save_note", "done_notice")
-    b.node("output", "output", {"zh": "交付洞察与建议回复", "en": "Hand over the insights and replies"}, 13, 2.5, {
+    b.node("output", "output", {"zh": "交付洞察与建议回复", "en": "Hand over the insights and replies"}, 14, 2.5, {
         "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{insight.json.verdict}}",
-            "report": "{{insight.json.report_markdown}}",
-            "replies": "{{insight.json.reply_suggestions_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
+            "replies": "{{quotes.texts.replies}}",
+            "quote_check": "{{quotes.summary}}",
         },
     })
     b.edge("done_notice", "output")
     #: 第 3 版:B 站评论接口翻全一级和楼中楼,结果里写明取到多少 / 平台显示多少(旧图的脚本只翻 15 页、不翻楼中楼,
     #: 洞察的提示词还说「所有评论都被读过了」)。
-    return b.graph(COMMENT_INSIGHTS, version=3)
+    #: 第 4 版:存笔记之前过「核对引用」,引号里的话在取回的评论里找不到的去掉引号、标为转述,核对结果写进取数说明。
+    return b.graph(COMMENT_INSIGHTS, version=4)
 
 
 # --------------------------------------------------------------------------------------
@@ -1269,10 +1304,11 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": ["填主页链接、选数据来源(内嵌浏览器或 TikHub),可选平台和关心的问题", "认出平台和账号编号",
                    "TikHub 按平台取资料与作品,或浏览器打开主页、滚动读出页面", "整理作品、算频率 / 时段 / 互动率 / 趋势",
-                   "写运营诊断", "存成笔记(附数据表)"],
+                   "写运营诊断", "核对引号里的话:找不到原文的去掉引号、标为转述", "存成笔记(附数据表)"],
             "en": ["Profile link and the data source (built-in browser or TikHub), optionally the platform and your question",
                    "Work out the platform and account id", "TikHub fetches profile and posts per platform, or the browser reads the page",
-                   "Tidy the posts; frequency, timing, engagement and trend", "Write the diagnosis", "Save as a note with the numbers"],
+                   "Tidy the posts; frequency, timing, engagement and trend", "Write the diagnosis",
+                   "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased", "Save as a note with the numbers"],
         },
     },
     {
@@ -1306,11 +1342,11 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": ["填视频链接、选数据来源(内嵌浏览器或 TikHub),可选你想做的主题", "认出平台和作品编号",
                    "TikHub 按平台取详情与评论,或浏览器打开、滚到评论区读出页面", "整理视频数据、评论按赞排好",
-                   "可选:下载视频、转写口播", "拆解爆款原因、写脚本提纲", "存成笔记"],
+                   "可选:下载视频、转写口播", "拆解爆款原因、写脚本提纲", "核对引号里的话:找不到原文的去掉引号、标为转述", "存成笔记"],
             "en": ["Video link and the data source (built-in browser or TikHub), optionally a topic of your own", "Work out the platform and post id",
                    "TikHub fetches details and comments per platform, or the browser reads the page down to the comments",
                    "Tidy the numbers, rank the comments", "Optional: download and transcribe", "Break it down and outline a script",
-                   "Save as a note"],
+                   "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased", "Save as a note"],
         },
     },
     {
@@ -1336,10 +1372,11 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         ],
         "stages": {
             "zh": ["填作品链接、选数据来源(内嵌浏览器或 TikHub),可选关心的问题", "认出平台和作品编号",
-                   "TikHub 按平台取评论,或浏览器滚动读出评论区", "评论按赞排好", "做评论区洞察、写建议回复", "存成笔记"],
+                   "TikHub 按平台取评论,或浏览器滚动读出评论区", "评论按赞排好", "做评论区洞察、写建议回复",
+                   "核对引号里的话:找不到原文的去掉引号、标为转述", "存成笔记"],
             "en": ["Post link and the data source (built-in browser or TikHub), optionally your question", "Work out the platform and post id",
                    "TikHub fetches comments per platform, or the browser reads the comment section", "Rank the comments by likes",
-                   "Analyse the comments, draft replies", "Save as a note"],
+                   "Analyse the comments, draft replies", "Check every quote against the fetched text; unmatched ones lose their quote marks and are marked paraphrased", "Save as a note"],
         },
     },
 ]

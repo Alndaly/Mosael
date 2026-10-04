@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Why a video went viral",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no sign-in). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
-  "graph_hash": "83ea9f62d0d40154ce8c8bfb551950c1a1363826a8889f7fb74874b47d0069dc",
+  "graph_hash": "fdc8eb30c9eb104dc3e2f60113ad50713fb1f69a784044f483294bd9bb51703a",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
-      "template_version": 4,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -797,16 +797,38 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "Save as a note",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "Check the quotes against the source",
         "position": {
           "x": 4840,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{breakdown.json.verdict}}",
+            "report": "{{breakdown.json.report_markdown}}"
+          },
+          "sources": {
+            "videos": "{{dy_video_m.items}}{{xhs_video_m.items}}{{bili_video_m.items}}{{web_api_video_m.items}}{{web_video_m.items}}",
+            "comments": "{{dy_comments_m.items}}{{xhs_comments_m.items}}{{bili_comments_m.items}}{{web_api_comments_m.items}}{{web_comments_m.items}}",
+            "data": "{{data_block.text}}",
+            "transcript": "{{transcript.text}}",
+            "topic": "{{start.my_topic}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "Save as a note",
+        "position": {
+          "x": 5160,
+          "y": 535
+        },
+        "config": {
           "title": "{{breakdown.json.title}}",
-          "markdown": "> {{breakdown.json.verdict}}\n\n{{breakdown.json.report_markdown}}\n\n## Make one the same way\n\n{{breakdown.json.script_outline_markdown}}\n\n---\n\n## Appendix: the numbers\n\n{{data_block.text}}\n\n{{transcript_section.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{quotes.texts.report}}\n\n## Make one the same way\n\n{{breakdown.json.script_outline_markdown}}\n\n---\n\n## Appendix: the numbers\n\n{{data_block.text}}\n\n{{quotes.summary}}\n\n{{transcript_section.text}}",
           "tags": "viral breakdown"
         }
       },
@@ -815,12 +837,12 @@
         "type": "notify",
         "name": "Breakdown ready",
         "position": {
-          "x": 5160,
+          "x": 5480,
           "y": 535
         },
         "config": {
           "title": "The breakdown is saved as a note",
-          "body": "{{breakdown.json.verdict}}"
+          "body": "{{quotes.texts.verdict}}"
         }
       },
       {
@@ -828,17 +850,18 @@
         "type": "output",
         "name": "Hand over the breakdown and outline",
         "position": {
-          "x": 5480,
+          "x": 5800,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{breakdown.json.verdict}}",
-            "report": "{{breakdown.json.report_markdown}}",
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
             "script_outline": "{{breakdown.json.script_outline_markdown}}",
             "video_asset_id": "{{download.asset_id}}",
-            "transcript": "{{transcript.text}}"
+            "transcript": "{{transcript.text}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -1055,8 +1078,13 @@
         "source_handle": "true"
       },
       {
-        "id": "breakdown__save_note",
+        "id": "breakdown__quotes",
         "source": "breakdown",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "7c97ada76f8694a03cf7193bb44bf8da04d98ff9ee7848d391e8edd1edba97be",
+  "graph_hash": "9f22f76a87f2e2ea016c135cf3af857c84bc13b041b696288bbc7752cf42131b",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -651,16 +651,38 @@
         }
       },
       {
-        "id": "save_note",
-        "type": "note_create",
-        "name": "存成笔记",
+        "id": "quotes",
+        "type": "quote_check",
+        "name": "核对引用的原文",
         "position": {
           "x": 3560,
           "y": 535
         },
         "config": {
+          "texts": {
+            "verdict": "{{insight.json.verdict}}",
+            "report": "{{insight.json.report_markdown}}",
+            "replies": "{{insight.json.reply_suggestions_markdown}}"
+          },
+          "sources": {
+            "comments": "{{all_items.text}}",
+            "data": "{{data_block.text}}",
+            "title": "{{web_struct.json.title}}{{web_read.value.title}}",
+            "focus": "{{start.focus}}"
+          }
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "存成笔记",
+        "position": {
+          "x": 3880,
+          "y": 535
+        },
+        "config": {
           "title": "{{insight.json.title}}",
-          "markdown": "> {{insight.json.verdict}}\n\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n\n{{insight.json.report_markdown}}\n\n## 建议回复\n\n{{insight.json.reply_suggestions_markdown}}\n\n---\n\n## 附:评论数据\n\n{{data_block.text}}",
+          "markdown": "> {{quotes.texts.verdict}}\n\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n\n{{quotes.summary}}\n\n{{quotes.texts.report}}\n\n## 建议回复\n\n{{quotes.texts.replies}}\n\n---\n\n## 附:评论数据\n\n{{data_block.text}}",
           "tags": "评论区洞察"
         }
       },
@@ -669,12 +691,12 @@
         "type": "notify",
         "name": "洞察完成通知",
         "position": {
-          "x": 3880,
+          "x": 4200,
           "y": 535
         },
         "config": {
           "title": "评论区洞察已存成笔记",
-          "body": "{{insight.json.verdict}}\n{{web_api_coverage.text}}{{web_dom_coverage.text}}"
+          "body": "{{quotes.texts.verdict}}\n{{web_api_coverage.text}}{{web_dom_coverage.text}}\n{{quotes.summary}}"
         }
       },
       {
@@ -682,15 +704,16 @@
         "type": "output",
         "name": "交付洞察与建议回复",
         "position": {
-          "x": 4200,
+          "x": 4520,
           "y": 535
         },
         "config": {
           "values": {
             "note_id": "{{save_note.note_id}}",
-            "verdict": "{{insight.json.verdict}}",
-            "report": "{{insight.json.report_markdown}}",
-            "replies": "{{insight.json.reply_suggestions_markdown}}"
+            "verdict": "{{quotes.texts.verdict}}",
+            "report": "{{quotes.texts.report}}",
+            "replies": "{{quotes.texts.replies}}",
+            "quote_check": "{{quotes.summary}}"
           }
         }
       }
@@ -845,8 +868,13 @@
         "target": "insight"
       },
       {
-        "id": "insight__save_note",
+        "id": "insight__quotes",
         "source": "insight",
+        "target": "quotes"
+      },
+      {
+        "id": "quotes__save_note",
+        "source": "quotes",
         "target": "save_note"
       },
       {
