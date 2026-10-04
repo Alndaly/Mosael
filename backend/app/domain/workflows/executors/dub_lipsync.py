@@ -109,8 +109,12 @@ def _mix_voice(lines: list[Line], duration: float, target: Path) -> None:
         chains.append(f"[{index}:a]atrim=start={line.src_in:.3f}:duration={length:.3f},asetpts=PTS-STARTPTS,"
                       f"{atempo_filters(line.speed)}volume={line.gain:.3f},adelay={delay}|{delay}[a{index}]")
     mix = "".join(f"[a{index}]" for index in range(len(lines)))
-    graph = ";".join(chains) + f";{mix}amix=inputs={len(lines)}:normalize=0,apad,atrim=0:{duration:.3f}[out]"
-    _ffmpeg([*inputs, "-filter_complex", graph, "-map", "[out]", "-ac", "1", "-ar", "24000", str(target)], "配音混成一段")
+    #: 补静音要有上限:光写 apad 是无尽的,收尾全靠后面的 atrim 把「结束」传回去 —— CI(FFmpeg 8.1,满载)上
+    #: 这条命令卡到 1800 秒超时过一次。whole_dur 让 apad 自己在片长处结束,输出再用 -t 兜一道。
+    graph = ";".join(chains) + (f";{mix}amix=inputs={len(lines)}:normalize=0,"
+                                f"apad=whole_dur={duration:.3f},atrim=end={duration:.3f}[out]")
+    _ffmpeg([*inputs, "-filter_complex", graph, "-map", "[out]", "-t", f"{duration:.3f}", "-ac", "1", "-ar", "24000",
+             str(target)], "配音混成一段")
 
 
 def _cut(source: Path, start: float, end: float, target: Path, *, audio: bool) -> None:
