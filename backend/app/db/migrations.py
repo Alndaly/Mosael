@@ -7496,6 +7496,17 @@ def _backfill_usage_costs() -> None:
         backfill_usage_costs(db)
 
 
+def _reprice_usage_billed_on_estimated_prompt_tokens() -> None:
+    """补算老账的第二步:已经有费用、但明显是按旧规则「只算了估的提示词 token」少算的生图生视频(147ai 的
+    gpt-image-2:回包里有图像输出 token,账上只按估的十几个输入 token 记了几十 micros),按现在的规则重算,
+    可信度 backfilled。判据很窄,见 domain/billing/backfill.reprice_estimated_prompt_only。"""
+    from app.core.unit_of_work import unit_of_work
+    from app.domain.billing.backfill import reprice_estimated_prompt_only
+
+    with unit_of_work() as db:
+        reprice_estimated_prompt_only(db)
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -7792,6 +7803,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_new_reference_prices),
             #: 补算老账:要用到上一步刚补上的参考价。
             *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_usage_costs),
+            #: 补算的第二步:按旧规则只算了估的提示词 token 的那批重算(要用到补上的参考图输入价)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _reprice_usage_billed_on_estimated_prompt_tokens),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

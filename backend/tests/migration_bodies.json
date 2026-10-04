@@ -164,5 +164,6 @@
   "migrate-voices-declare-consent": "5dbdaa53faeeaa9c",
   "migrate-workflow-revisions": "99c186ef9d504ed9",
   "migrate-workflow-source-assets": "7fc1c9a2743e4f67",
-  "remove-minimax-music-models": "d441c462a4e3d933"
+  "remove-minimax-music-models": "d441c462a4e3d933",
+  "reprice-usage-billed-on-estimated-prompt-tokens": "9b90460cbf622812"
 }

@@ -16,6 +16,9 @@
 - 补出来的可信度记 `backfilled`(补算),和当场记下的分得开;计量照现在的读法补齐,费用由它解释得通。
 
 重跑什么都不变:第一遍补过的已经有费用,改成 0 的已经不是「按请求侧估的价」了。
+
+第二步(`reprice_estimated_prompt_only`,用户拍板后加的):已经有费用、但明显是按旧规则「只算了估的提示词 token」
+少算的那批 —— 147ai 的 gpt-image-2 —— 按现在的规则重算。判据很窄,见那个函数。
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from sqlalchemy.orm import Session
 from app.ai.providers import get_generation_adapter
 from app.ai.providers.contracts.generation import ReportedUsage, with_reported
 from app.db.models import ProviderUsageEvent
-from app.domain.billing.usage import price_usage
+from app.domain.billing.usage import Pricing, price_usage
 
 #: 补算的范围:有生成适配器的能力(回包由适配器读,`reported_usage`)。对话不补,理由见模块说明。
 _GENERATION_CAPABILITIES = ("image", "video", "audio")
@@ -95,6 +98,65 @@ def backfill_usage_costs(db: Session) -> BackfillOutcome:
         backfilled += 1
     db.flush()
     return BackfillOutcome(backfilled=backfilled, unbilled_failures=unbilled)
+
+
+def reprice_estimated_prompt_only(db: Session) -> int:
+    """已经有费用、但明显是按旧规则「只算了估的提示词 token」少算的那批,按现在的规则重算。返回重算的条数。
+
+    旧规则把请求侧按提示词估的 token 当真计价,而服务商回报的输出 token 当时没读进计量:147ai 的 gpt-image-2
+    每次只记了十几个估算输入 token 的钱(几十 micros),回包里的几百上千个图像输出 token 一分没算。
+
+    **判据要窄**(这是对已有费用动手),四条都满足才重算:
+    1. 生图 / 生视频 / 生音频,可信度 `estimated`;
+    2. 计量里的 token 是估的(`token_estimate`),而且没有输出 token;
+    3. 回包里服务商报了输出 token(当时没进账的那一项);
+    4. 记下的费用正好等于旧规则拿这份计量算出来的数(估的 token 当真计价)—— 说明它就是那样算出来的,
+       不是用户手改的、不是别的规则算的。
+    重算后的费用还得比原来多(少算才改),可信度记 `backfilled`。重跑什么都不变:重算过的计量里已经没有估算。
+    """
+    repriced = 0
+    for event in db.scalars(
+        select(ProviderUsageEvent).where(
+            ProviderUsageEvent.capability.in_(_GENERATION_CAPABILITIES),
+            ProviderUsageEvent.cost_confidence == "estimated",
+            ProviderUsageEvent.cost_micros.is_not(None),
+        )
+    ):
+        units = dict(event.units or {})
+        if units.get("token_estimate") is not True or "output_tokens" in units:
+            continue
+        reported = _reported(event)
+        if "output_tokens" not in reported.units:
+            continue
+        # 旧规则 = 估的 token 当真计价:把估算标记去掉,同一处 price_usage 算出来的就是当时那个数。
+        as_old_rule_saw_it = {key: value for key, value in units.items() if key != "token_estimate"}
+        if _price(db, event, as_old_rule_saw_it).cost_micros != event.cost_micros:
+            continue
+        merged = with_reported(units, reported.units)
+        pricing = _price(db, event, merged)
+        if pricing.cost_micros is None or pricing.cost_micros <= event.cost_micros:
+            continue
+        event.units = merged
+        event.cost_micros = pricing.cost_micros
+        event.currency = pricing.currency or event.currency
+        event.pricing_rule_id = pricing.rules[0].id if len(pricing.rules) == 1 else None
+        event.cost_confidence = "backfilled"
+        repriced += 1
+    db.flush()
+    return repriced
+
+
+def _price(db: Session, event: ProviderUsageEvent, units: dict) -> Pricing:
+    return price_usage(
+        db,
+        workspace_id=event.workspace_id,
+        provider_profile_id=event.provider_profile_id,
+        provider=event.provider,
+        capability=event.capability,
+        model=event.model,
+        units=units,
+        moment=event.created_at,
+    )
 
 
 def _reported(event: ProviderUsageEvent) -> ReportedUsage:
