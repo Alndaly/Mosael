@@ -1,72 +1,120 @@
 # Current interface captures
 
-Documentation targets **1.2.0**. Changed 3D, note and annotation views are freshly captured from the running app; unchanged views retain their earlier captures, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
+Documentation targets **1.8.3**. Every screenshot and video under [`website/public/media`](../../website/public/media) was recaptured on 2026-10-04 from the running 1.8.3 app, in Chinese and English, light and dark, against an isolated demo environment that a script builds from scratch. The captures are real browser screenshots and real browser video of real clicks — not reconstructed UI or generated mockups. Historical design-review attachments elsewhere in `docs` are not current product documentation.
 
-Which interface views have changed since they were captured, release by release, is tracked in [RECAPTURE.md](RECAPTURE.md) — the list to work through at the next recapture.
+Which interface views have changed since they were captured, release by release, is tracked in [RECAPTURE.md](RECAPTURE.md) — the list to work through at the next recapture. Views this batch could not show truthfully stay listed there, each with the reason.
 
 ## Source and credit
 
-Sample footage and extracted frames: **Big Buck Bunny**, © 2008 Blender Foundation / www.bigbuckbunny.org, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). [Film and license](https://peach.blender.org/about/); [source trailer](https://media.w3.org/2010/05/bunny/trailer.mp4). Excerpts are trimmed, resized and rearranged in the demo timeline. Narration was synthesized with the macOS Samantha voice; subtitle cues are manually prepared editing exercises.
+Sample footage, excerpts and frames: **Big Buck Bunny**, © 2008 Blender Foundation / www.bigbuckbunny.org, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). [Film and license](https://peach.blender.org/about/); [source trailer](https://media.w3.org/2010/05/bunny/trailer.mp4). The seed script trims picture-only excerpts from the trailer, resizes them to 1280 × 720 and lays them out as an editing exercise; the stills are taken with the app's own "save this frame" and the demo library's GIF asset with its own "convert to GIF", so their source chains in the asset library are real. Narration is synthesized locally with the macOS Samantha (English) and Tingting (Chinese) voices; subtitle cues follow the synthesized sentences. The two-page shot-list PDF is printed locally from the same excerpts.
 
-The demo backend is isolated from personal projects and credentials. Empty AI and publishing pages show the actual unconfigured state. No AI responses, tool successes, login successes or platform posts are fabricated. The Chinese and English interface recordings use the same bilingual sample project.
+## What is real and what is a placeholder
+
+- The demo backend has its own data directory, its own demo account and its own ports. It never touches a personal backend, `~/.mosael` or the 8800 / 5173 development servers.
+- **No AI results, tool successes, sign-ins or platform posts are fabricated.** Pages that need a provider to produce something show their real empty or not-yet-run state.
+- One generation connection exists so that generation panels can be shown in their *configured, not run* state (model picker, "N×", 3D-reference chip, talking-photo model): it is named **「演示占位 · Placeholder」**, points at a closed local port and holds a placeholder string instead of a key. Nothing was ever generated through it, and it cannot generate anything.
+- The agent scene uses a **real local model** — `qwen3.5` served by Ollama on the capturing machine (seed flag `--local-chat`). Its tool calls and replies are genuine output of that model, captured as they happened, so the wording differs between the four sets. The script types a request to delete one asset (the English one adds "Please reply in English", since the model otherwise answers in Chinese); the model looks the asset up and calls the delete tool, which stops on the confirmation card; the script declines, so nothing is deleted. The conversation is removed after each recording.
+- The scheduled task, the workflow run history and the "to-edit" tags on the videos come from one real run of a small workflow that only uses local nodes (asset query, tag, text template, save note), started with the scheduler's own "run now".
+- The custom-CSS editor and the in-app browser windows exist only in the desktop shell; these captures come from the web build, which shows the custom-CSS section's real "needs the desktop app" note.
 
 ## Inventory
 
-- `screens/`: full-resolution native screenshots (2880 × 1800).
-- `gifs/`: actual browser recordings converted to looping 960 × 600 GIFs.
-- `videos/`: the same interactions as user-controlled 1280 × 800 MP4 recordings.
-- Chinese light files are at each directory root; `dark/` contains Chinese dark; `en/` and `en/dark/` contain English light and dark.
-- `capture-manifest.json` records per-file source commit, capture version/time, scene, locale, theme, byte count and SHA-256. The batch documentedVersion is not a claim that every file was recaptured.
-- `mosael-promo.mp4` is a concatenation of the current Home, media preview, timeline, board and workflow screen recordings, with no simulated product output.
+- `screens/`: full-resolution native screenshots (2880 × 1800, a 1440 × 900 viewport at 2×), quantized with
+  `pngquant --quality=80-100 --speed 1 --skip-if-larger --strip` — same resolution, about 40% of the size. The upper bound is
+  100 on purpose: with 80-95 pngquant uses fewer colours once the target is met, and small areas of unique colour got merged
+  away (the gold sphere in the 3D scene turned grey, a red badge lost its colour, gradient swatches banded). Compared block by
+  block with the originals and checked by eye in both themes and languages, there is no visible difference at 80-100.
+- `videos/`: the browser recordings as 1280 × 800 H.264 MP4s without audio. The website plays them as muted loops
+  (`<Loop>`: loads and plays only while in view, never autoplays under reduced motion) or with controls (`<Recording>`).
+- There are **no GIFs**: the same recording as a GIF was five to six times the size of the MP4. The media tests fail if a GIF
+  appears under `website/public/media` or a page references one.
+- Chinese light files are at each directory root; `dark/` holds Chinese dark; `en/` and `en/dark/` hold English light and dark. Chinese recordings use the Chinese demo workspace and English recordings the English one, with the same content in each language.
+- `homepage/{zh,en}/`: the three feature windows on the website's homepage (below).
+- `docs/media/mosael-promo.mp4` (the "watch the tour" link in the repository READMEs) is a plain concatenation of the Chinese dark `home`, `media-preview`, `timeline-edit`, `boards` and `workflows` recordings, re-encoded once, with nothing added.
+- `capture-manifest.json` records per-file source commit, capture version and time, scene, locale, theme, byte count and SHA-256. The website's media tests reject files missing from it or whose bytes no longer match.
 
-Scenes: 3D camera views and object keys; note editing/reading/Markdown; document dragging and marker modes; Home and project navigation; import and media previews; timeline selection/playback; subtitle dubbing and Transcript; AI Chat/Trace/Generate; workflow node catalog and parameters; board forms and `@` media picker; plugin connections; publishing form and browser accounts; scheduled tasks; provider/ASR settings; interface fonts; sign-in.
+### Scenes
 
-The previous handcrafted promo, obsolete GIF aliases and unused website hero images were retired rather than left beside current captures.
+Each scene is one recording (`videos/<scene>.mp4`) plus the screenshots taken along the way, in all four language/theme sets.
+
+| Scene | Screenshots |
+| --- | --- |
+| `home` | `home` |
+| `media-preview` | `media`, `url-import`, `media-video`, `media-audio`, `media-image` (source chain "From: … (frame)", source labels) |
+| `documents` | `media-documents` (Document filter), `document-reader` (parsed text / original pages / details) |
+| `timeline-edit` | `editor`, `editor-inspector` |
+| `timeline-tools` | `editor-linked`, `editor-overwrite` (cut-out preview while dragging), `editor-in-out`, `editor-clip-menu`, `editor-shortcuts` |
+| `subtitle-dub` | `subtitles`, `subtitle-dub`, `transcript` |
+| `subtitle-panel` | `subtitle-bilingual` (two tracks in one box), `subtitle-timing`, `subtitle-import`, `subtitle-files` |
+| `export` | `export-dialog` (loudness normalization) |
+| `ai-studio` | `ai-chat`, `agent-trace`, `ai-generate`, `ai-audio` |
+| `agent` | `agent-confirm` (card under the tool row), `agent-decided` (the one-line outcome) |
+| `workflows` | `workflow-list`, `workflows`, `workflow-add-node`, `workflow-node` |
+| `workflow-editor` | `workflow-references` (dotted reference lines), `workflow-reference-tags`, `workflow-start-params`, `workflow-readiness`, `workflow-runs` |
+| `workflow-templates` | `workflow-templates`, `workflow-template-check`, `workflow-start-options`, `workflow-readiness-blocked`, `workflow-full-video` |
+| `boards` | `boards`, `board-form`, `board-mention` |
+| `board-cells` | `board-add-menu`, `board-abilities`, `board-selection` (shared exit), `board-generate` ("N×"), `board-picker`, `board-scene-cell`, `board-scene-reference`, `board-timeline` |
+| `annotations` | `annotations`, `marker-editor` |
+| `notes` | `notes`, `notes-read`, `notes-markdown` |
+| `scenes` | `scenes`, `scene-add`, `scene-camera`, `scene-observation`, `scene-keyframes` |
+| `entities` | `entities`, `entity-detail`, `entity-speak` |
+| `plugins` | `plugins`, `plugin-detail` (connection with its Network row), `plugin-connection` |
+| `plugin-market` | `plugin-market` (filter by capability) |
+| `publishing` | `publish`, `publish-form`, `browser-pool`, `browser-account` |
+| `scheduler` | `scheduler`, `scheduler-runs`, `scheduler-form` |
+| `providers` | `settings`, `settings-models`, `settings-capabilities` |
+| `appearance` | `settings-appearance`, `settings-fonts`, `settings-background`, `appearance-glass` |
+| `admin` | `admin`, `admin-members`, `admin-engines`, `admin-deployment`, `statistics` |
+| `login` | `login` |
+
+## The demo environment
+
+[`website/scripts/seed-doc-demo.py`](../../website/scripts/seed-doc-demo.py) builds everything with one command. Give it a private directory outside the repository (or a git-ignored one):
+
+```bash
+pnpm install && pnpm --dir agent-sidecar build        # frontend and the agent sidecar
+backend/.venv/bin/python website/scripts/seed-doc-demo.py up --fresh \
+  --dir /private/path/mosael-demo --local-chat qwen3.5:latest
+# … record …
+backend/.venv/bin/python website/scripts/seed-doc-demo.py down --dir /private/path/mosael-demo
+```
+
+`up` downloads the trailer once (proxy variables cleared, direct from media.w3.org), cuts the excerpts and synthesizes the narration into `<dir>/media`, starts a backend on **127.0.0.1:8812** with `MOSAEL_DATA_DIR=<dir>/data`, builds the frontend into `<dir>/dist` and serves that build on **127.0.0.1:5274** (`vite preview`; the packaged app loads the same bundle, whereas the dev server's first-visit compiling would show up in recordings as "Loading…"), signs up the demo administrator through the app's own sign-up flow, and creates through the backend's HTTP API:
+
+- a Chinese and an English workspace, each with a project whose timeline has linked picture and music, narration, two subtitle tracks (bilingual) and an outlined title, plus a 9:16 vertical cut;
+- the asset library: trailer, excerpts, narration, stills, a GIF, the shot-list PDF (parsed locally), and asset-library characters, a location and a prop with reference images;
+- notes, the app's own three-hall example scene (created by clicking its button), three boards (story study; gallery with a note document, the 3D scene cell and markers; rough cut with a timeline cell);
+- the official templates (speech cleanup, topic to finished video, the three analysis templates) and the local-only roundup workflow, two scheduled tasks and one real run;
+- example plugins from `plugins/examples` placed in the demo plugins directory and picked up by the app's scan, a Baidu Netdisk connection without credentials, a browser-pool profile;
+- the placeholder generation connection, and — with `--local-chat` — the local Ollama chat model (only the named model is enabled; Ollama `:cloud` models stay off).
+
+It writes `<dir>/token.json` (the session token as a JSON string), `<dir>/credentials.json` and `<dir>/fixture.json` (workspace, project, sequence, board, workflow, scene, note, entity and asset IDs), all `0600`. **None of them, nor the demo database, may be committed.** The script refuses the 8800 / 5173 ports and any data directory inside `~/.mosael`, and checks that the backend answering on 8812 is the one using `<dir>/data`. `up` without `--fresh` reuses an existing demo; `--fresh` wipes the database (downloaded media are kept). Every demo title lives in the script's `TEXT` table; the capture script reads them from there.
 
 ## Re-record
 
-Run the current frontend on `http://127.0.0.1:5173` and an **isolated demo backend** on a loopback port. Import appropriately licensed sample media, prepare a project with video/audio/subtitle tracks, a board, the official speech-cleanup workflow, a scheduled task and sample plugin connections. Do not use a personal backend for public recordings.
-
-Prepare a private JSON-string token file and a fixture JSON containing `project`, `sequence`, `board`, `workflow` IDs and an `assets` map with `forest`, `narration` and `forest-frame` IDs. The recording script names its expected demo cards explicitly; keep those titles aligned when updating the fixture. Never commit either authentication tokens or the demo database.
-
 ```bash
 backend/.venv/bin/python website/scripts/record-doc-media.py \
-  --api http://127.0.0.1:8812 \
-  --token-file /tmp/demo-token.json \
-  --fixture /tmp/demo-capture.json
+  --demo-dir /private/path/mosael-demo --clock 2026-10-04T10:30
+backend/.venv/bin/python website/scripts/capture-homepage.py --demo-dir /private/path/mosael-demo
+python3 scripts/compose-readme-showcase.py
 ```
 
-Requires Playwright Chromium and ffmpeg. Use `--locale zh|en`, `--theme light|dark`, or `--only scene,scene` to retry a scene. A failed selector stops capture instead of substituting an old image. The script performs real clicks and records real browser video; it does not replace UI text or DOM content.
+Requires Playwright Chromium, ffmpeg and pngquant (`brew install pngquant`); every screenshot is quantized as it is saved, before its hash goes into the manifest. `--only scene,scene` retries scenes; `--locale zh|en` and `--theme light|dark` narrow the sets; `--out <dir>` makes a trial run elsewhere without touching `website/public/media` or the manifest. `--clock` fixes the wall-clock time only for the scenes that show the Home greeting, so all four sets read the same time of day. Interface labels are written in Chinese in the script and looked up in the app's own message tables for English; ambiguous ones are given explicitly. A failed selector stops the run instead of substituting an old image (a failure screenshot lands in the system temp directory). The script performs real clicks, typing, hovering and dragging and records real browser video; it does not replace UI text or DOM content. Where a recording moves to another page, that page is opened once before the recording starts, so the take shows a page already loaded this session rather than the first-visit "Loading…". Edits a scene makes for the camera are undone before it ends (a dragged clip is cancelled with Esc, a typed prompt is put back, 3D keyframes are undone, the agent conversation is deleted), so every set starts from the same seeded data.
 
-After recording, review screenshots and moving frames, update the related bilingual guide and its version, run `pnpm --dir website test` and `pnpm --dir website build`, and check both themes on desktop and narrow screens. The media tests reject stale/untracked public captures, incorrect-language references and missing light/dark pairs.
+Rebuild `docs/media/mosael-promo.mp4` from the five Chinese dark videos with ffmpeg's concat demuxer (libx264, CRF 24, `+faststart`, no audio).
+
+After recording, review the screenshots and a few frames of each recording (no misalignment, half-loaded panels, debug overlays or personal data), remove any file no longer produced and no longer referenced, run `pnpm --dir website test` and `pnpm --dir website build`, and check both themes on desktop and narrow screens. The media tests reject stale or untracked captures, wrong-language references and missing light/dark pairs.
 
 ## README showcase
 
-`readme-showcase.zh.png` and `readme-showcase.en.png` are composed by `scripts/compose-readme-showcase.py` from the same three unaltered 1.2.0 homepage captures the website uses (`website/public/media/homepage/{zh,en}/{boards,editor,scenes}.png`). The script reproduces the homepage's own layout — boards behind left at -2°, the editor behind right at +2°, the 3D scene in front — reading the percentages from `website/src/components/home-showcase.tsx`. Only rounded corners, a hairline border and a drop shadow are added; the screenshots themselves are untouched. Regenerate with `python3 scripts/compose-readme-showcase.py` after re-capturing the homepage images.
+`readme-showcase.zh.png` and `readme-showcase.en.png` are composed by `scripts/compose-readme-showcase.py` from the three unaltered homepage captures the website uses (`website/public/media/homepage/{zh,en}/{boards,editor,scenes}.png`). The script reproduces the homepage's own layout — boards behind left at -2°, the editor behind right at +2°, the 3D scene in front — reading the percentages from `website/src/components/home-showcase.tsx`. Only rounded corners, a hairline border and a drop shadow are added; the screenshots themselves are untouched, and the result is quantized the same way as the screenshots. Regenerate it after re-capturing the homepage images.
 
-The previous composite was assembled by hand from a separate `readme-shots/` directory. That made it a dead file: when the captures were refreshed nothing pointed at it, while the caption underneath still claimed it showed the current interface. Both it and `readme-shots/` were retired.
+## Homepage feature windows
 
-The manifest records `documentedVersion: 1.2.0`. Each file keeps its own capture version and source commit. Some unchanged views still originate from 1.0.0-beta5; fresh files are tagged 1.2.0. The 3D scene and bilingual gallery brief are manually prepared demonstration content, not generated results. Some 3D controls currently remain Chinese in English mode; recordings preserve the real interface.
+`website/public/media/homepage/{zh,en}/` contains six unaltered 2× browser captures (1440 × 940 viewport, quantized like the screenshots) from the same demo environment:
 
-For the new scenes, use `--only scenes,notes,annotations`. The fixture needs `scene`, `note` and `board` IDs for the gallery example, gallery brief and story board; titles are declared in the capture script. No provider calls, publication or external messages are performed.
+- `boards.png`: the story-study board; light, WenKai (Chinese) / Caveat (English).
+- `editor.png`: the Big Buck Bunny timeline with linked music, narration, bilingual subtitles and the outlined title; dark, Newsreader.
+- `scenes.png`: the three-hall example scene in the overview camera; dark, Space Grotesk.
 
-## Homepage feature windows (1.2.0)
-
-`website/public/media/homepage/{zh,en}/` contains six fresh, unaltered 2× browser captures taken on 2026-09-09 from the running app at commit `54ecfda1`. Each uses a 1440×940 viewport and an isolated demo workspace:
-
-- `boards.png`: the connected story-study board; light WenKai (Chinese) / Caveat (English).
-- `editor.png`: the working Big Buck Bunny picture, audio and subtitle timeline; dark Newsreader.
-- `scenes.png`: the gallery scene with global camera path, shot inset and object/camera keyframes; dark Space Grotesk.
-
-The homepage composes these original screenshots as overlapping windows in HTML. Its feature selectors bring one complete window forward; phones show one complete window at a time. The surrounding site follows its own light/dark theme while the captures deliberately retain different supported app appearances. The 3D feature chapter uses the same fresh scene capture. No app controls, content or generation results were fabricated. The footage attribution above also applies to these images.
-
-Re-capture with the existing Python Playwright environment and prepared local demo fixtures (tokens are JSON strings in private local files):
-
-```sh
-backend/.venv/bin/python website/scripts/capture-homepage.py \
-  --scene-api http://127.0.0.1:8813 --scene-token /private/path/scene-token.json \
-  --editor-api http://127.0.0.1:8812 --editor-token /private/path/editor-token.json \
-  --editor-fixture /private/path/editor-fixture.json
-```
-
-The scene demo contains “三间展厅 · Camera study”; the editor demo contains “镜头与灵感 · Story study” and a fixture with its `project` ID. The script records source commit, version, language, theme, font, timestamp, dimensions and SHA-256 in `capture-manifest.json`. Website media tests verify the homepage captures alongside documentation screenshots and recordings.
+The homepage composes these screenshots as overlapping windows in HTML; phones show one complete window at a time. The surrounding site follows its own light/dark theme while the captures deliberately keep different supported app appearances. No app controls, content or generation results were fabricated; the footage attribution above applies. `capture-homepage.py` records source commit, version, language, theme, font, timestamp, dimensions and SHA-256 in `capture-manifest.json`.

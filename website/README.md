@@ -25,7 +25,7 @@ NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=G-YDRX2Y5WZS
 
 ```
 content/docs/<语言>/<分区>/<页>.mdx   文档正文(zh / en,分区为 start / guides / about)
-public/media/{screens,gifs,videos}     文档的中英文、明暗主题实拍
+public/media/{screens,videos}          文档的中英文、明暗主题实拍(截图 PNG、录屏 MP4,不放 GIF)
 public/media/homepage/{zh,en}/        首页多窗口展示的实际截图
 src/lib/docs-navigation.ts           六组文档导航与阅读顺序
 src/components/docs-mobile-nav.tsx   手机和平板的单面板目录
