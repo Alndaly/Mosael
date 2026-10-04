@@ -379,7 +379,8 @@ def test_保存加预览的图_预览不算输出节点_和生成模型是同一
     comfy.state.workflows["two-saves.json"] = both_saved
     tools = _tools(comfy.url, tmp_path)
     tool = tools[CONTROLNET_TOOL]
-    assert {"image_9", "image_13"} <= set(tool["node"]["outputs"]), "预览节点照旧是工作流里接得上的一个输出"
+    assert "image_9" in tool["node"]["outputs"] and "image_13" not in tool["node"]["outputs"], (
+        "只预览线稿(上游没经过解码)的那个不是产出")
     mirror = tool["mirrors"]
     assert (mirror["generation_model"], mirror["kind"]) == ("controlnet.json", "image")
     assert mirror["sources"] == {"image_11": "reference_image"} and mirror["prompt"] == "prompt"

@@ -517,6 +517,38 @@ def test_没接到能跑的输出上的节点不算_局部重绘图没有假的�
     assert model["modes"] == ["image-to-image"]
 
 
+def test_只预览预处理结果的预览节点不是产出(graph) -> None:
+    """用户的 beautiful girl:LoadImage → AIO_Preprocessor(OpenPose)→ PreviewImage,只是看一眼骨架;ControlNet 被旁路了,
+    骨架图什么都不影响。此前它算一个产出:一次交回 4 份里有一张骨架图,参考图还成了一格输入。判据:一张会生成东西的图
+    (有解码节点)里,上游一个解码节点都没经过的预览节点只是在看预处理 / 读进来的原图,不是产出;它的上游随之不在
+    会跑的那部分图里。整张图都没有解码的(放大、抠图)预览照旧算。"""
+    info = {**OBJECT_INFO, "AIO_Preprocessor": {"input": {"required": {
+        "image": ["IMAGE"], "preprocessor": [["OpenposePreprocessor", "CannyEdgePreprocessor"]],
+        "resolution": ["INT", {"default": 512}]}}, "output": ["IMAGE"]}}
+    api = {
+        "3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "cfg": 7.5, "sampler_name": "euler",
+                                                    "scheduler": "normal", "denoise": 1.0, "model": ["4", 0],
+                                                    "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]}},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base.safetensors"}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 1080, "height": 1920, "batch_size": 4}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "1girl", "clip": ["4", 1]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "bad", "clip": ["4", 1]}},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+        "12": {"class_type": "PreviewImage", "inputs": {"images": ["8", 0]}},
+        "39": {"class_type": "AIO_Preprocessor", "inputs": {"image": ["41", 0], "preprocessor": "OpenposePreprocessor",
+                                                             "resolution": 512}},
+        "41": {"class_type": "LoadImage", "inputs": {"image": "pose.png"}},
+        "42": {"class_type": "PreviewImage", "inputs": {"images": ["39", 0]}},
+    }
+    assert [one["node"] for one in graph.output_nodes(api, info)] == ["12"]
+    kept = graph.live(api, info)
+    assert not {"39", "41", "42"} & set(kept), "骨架那一路不跑"
+    model = graph.describe("beautiful girl.json", "beautiful girl", kept, info)
+    assert model["outputs_per_run"] == 1 and model["inputs"] == [] and model["modes"] == ["text-to-image"]
+    assert [one["node"] for one in graph.output_nodes(UPSCALE_API, OBJECT_INFO)] == ["4", "5"], (
+        "没有解码的图(放大):预览照旧是产出")
+
+
 def test_没接到输出上的读图节点不是输入槽(graph) -> None:
     """DaSiWa WAN 2.2 里「Last-Frame-Image」那个 LoadImage 的下游全被旁路了:给它的图什么都不影响,不该是一格输入。"""
     api = {**WAN_API, "14": {"class_type": "LoadImage", "inputs": {"image": "last.png"}}}

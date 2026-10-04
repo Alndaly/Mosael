@@ -42,6 +42,13 @@ upstream of them. A dangling canvas node is not a "size" or "images" control, a 
 is not an input, and a preview cut off by a muted node upstream is not counted in "outputs per run"; frontend-only
 virtual nodes such as rgthree's Relay / Repeater are left out.
 
+**A preview that only shows a preprocessor result is not an output** (1.7.0): when the graph has a decoder (a class name
+containing `Decode`: VAEDecode, VAEDecodeTiled, WanVideoDecode…, i.e. the graph generates something) and a PreviewImage /
+PreviewAudio has no decoder anywhere upstream, it is looking at an image a LoadImage read, or at what a preprocessor
+(OpenPose skeleton, Canny lineart, depth map) computed from it; sampling played no part. It is not an output and doesn't
+run, and the preprocessing branch feeding only it (with its loader) drops out too. Only the wiring decides, never node
+titles; a graph with no decoder at all (upscaling, background removal, partner API nodes) keeps its previews.
+
 There are two more models: **Built-in text-to-image** (when the server has at least one checkpoint) and **API template**
 (when the connection config has the JSON from "Export (API)" pasted in; the `{{prompt}}` `{{negative}}` `{{seed}}`
 `{{width}}` `{{height}}` `{{steps}}` placeholders work as before; this config field is `type: "json"`, so the Plugins

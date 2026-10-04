@@ -432,6 +432,9 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
     ComfyUI 在 object_info 里给每个节点标了是不是输出节点(`output_node`)—— 标了就信它(自定义节点也认得出,
     标着 false 的也不算);没标的(没给 object_info、没装的节点)按已知的几类认。再按已知的几类说它交出的是图、
     视频、音频还是一段字。
+
+    **只预览预处理结果的预览节点不算**(见 `_previews_input`):一张会生成东西的图里,看一眼骨架、线稿、深度图
+    或读进来的原图的那个 PreviewImage 不是产出。
     """
     titles = titles or {}
     object_info = object_info or {}
@@ -441,12 +444,30 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
         info = object_info.get(class_type) if isinstance(object_info.get(class_type), dict) else {}
         if not (info["output_node"] is True if "output_node" in info else class_type in _KNOWN_OUTPUT_TYPES):
             continue
+        if _previews_input(api, node_id):
+            continue
         found.append({"node": node_id, "class_type": class_type, "title": titles.get(node_id) or class_type,
                       "media": output_media(class_type)})
     return found
 
 
 _KNOWN_OUTPUT_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYPES | _TEXT_OUTPUT_TYPES
+#: 类名里带它的节点把潜空间**解码**成图 / 声音(VAEDecode、VAEDecodeTiled、VAEDecodeAudio、WanVideoDecode …):
+#: 采样出来的东西要经过它才变成能看的图。
+_DECODE_MARK = "Decode"
+
+
+def _previews_input(api: dict[str, Any], node_id: str) -> bool:
+    """这个预览节点只是在看预处理的结果(或读进来的原图),不是这张图的产出。
+
+    判据只看连线:图里有解码节点(这是一张会生成东西的图),而这个预览节点(PreviewImage / PreviewAudio)的上游
+    一个解码节点都没有 —— 它看的是 LoadImage 读进来的、或预处理器(OpenPose 骨架、Canny 线稿、深度图)从它算出来的
+    东西,采样根本没参与。整张图都没有解码节点的(放大、抠图、合作方 API 节点)不判,预览照旧是产出。
+    """
+    if str(api[node_id].get("class_type", "")) not in _PREVIEW_OUTPUT_TYPES:
+        return False
+    decoders = {one for one, node in api.items() if _DECODE_MARK in str(node.get("class_type", ""))}
+    return bool(decoders) and not (_upstream_closure(api, {node_id}) & decoders)
 
 
 def _links_of(node: dict[str, Any]) -> list[str]:
