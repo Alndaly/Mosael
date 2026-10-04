@@ -26,8 +26,8 @@ export interface NoteSelection {
 export const SELECTION_CONTEXT_CHARS = 40;
 
 //: 私用区的两个字:Markdown 序列化不会转义它们,正文里也不会有。
-const START = "";
-const END = "";
+const START = "\uE000";
+const END = "\uE001";
 
 /**
  * 当前选区 / 光标在正文 Markdown 里是哪一段。
