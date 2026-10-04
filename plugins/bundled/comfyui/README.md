@@ -28,7 +28,7 @@ For several servers, create several connections; each brings its own set of mode
 | The canvas node's batch_size | "Image count" (up to 4, 1 when not set); every image is returned |
 | The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns (`outputs_per_run` = the node count, × the image count), so the host lays out that many placeholders up front; with more than one, the parameters get a "Results from" choice (node titles, "All" by default): pick one to get only its output, and the other save nodes don't run (1.6.0) |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node title or "KSampler #2"; the common ones come first and the rest go under "Advanced"; the raw "node · input name" is in the description |
-| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame |
+| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1) |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |
 | LoadVideo / VHS_LoadVideo | The video to edit (`source_video`, mode `video-edit`); one wired to a **reference** input such as `ref_videos.*` is a reference video |
 | LoadAudio / VHS_LoadAudioUpload | Driving audio (video graphs) / reference audio; one wired to a reference input is reference audio |
@@ -36,6 +36,11 @@ For several servers, create several connections; each brings its own set of mode
 
 A graph with neither a prompt nor a canvas (upscaling, background removal): an image is required and the only mode is
 `image-to-image`. Inputs that belong to the ComfyUI side, such as the file name prefix, are not listed.
+
+Only the part of the graph ComfyUI **actually runs** counts (1.6.1): the output nodes that can run and everything
+upstream of them. A dangling canvas node is not a "size" or "images" control, a loader whose downstream is all bypassed
+is not an input, and a preview cut off by a muted node upstream is not counted in "outputs per run"; frontend-only
+virtual nodes such as rgthree's Relay / Repeater are left out.
 
 There are two more models: **Built-in text-to-image** (when the server has at least one checkpoint) and **API template**
 (when the connection config has the JSON from "Export (API)" pasted in; the `{{prompt}}` `{{negative}}` `{{seed}}`
@@ -76,7 +81,7 @@ The fixed ones:
 
 | Tool | Read-only | Streaming | On by default | What it does |
 | --- | --- | --- | --- | --- |
-| `list_workflows` | ✓ | | ✓ | What each workflow takes (which node loads which kind of asset), what can be tuned, what it outputs, its `features` (upscale / inpaint / img2img / remove-background / …) and the tool that runs it (`tool`); workflows that can't be converted are listed too, with the reason |
+| `list_workflows` | ✓ | | ✓ | What each workflow takes (which node loads which kind of asset), what can be tuned, what it outputs, its `features` (upscale / inpaint / img2img / remove-background / …) and the tool that runs it (`tool`); workflows that can't be converted are listed too, with the reason; non-.json files in the workflows folder (a zip archive, say) are listed with why they can't be used (1.6.1) |
 | `import_outputs` | | ✓ | ✓ | Imports outputs from the history into the asset library, by task id (optionally waiting `wait_seconds`) or the most recent `last` runs. The task id is declared as `format: "external_id"`: it fetches things by their ComfyUI number rather than transforming content, so it is used in workflows and chat and not on boards |
 | `server_status` | ✓ | | ✓ | Version, GPU and free VRAM, RAM, queue |
 | `list_models` | ✓ | | ✓ | Model files under `/models`; on older versions without that endpoint, the loader nodes' dropdowns |
@@ -98,6 +103,9 @@ can resume).
 - When a generation task or a streaming tool is cancelled, the plugin tells ComfyUI to stop **this one** task (interrupt
   if it is running, remove it from the queue if it is waiting); other people's tasks on the same machine are left alone.
 - When Mosael restarts, a generation that was running is waited on again (by task id) rather than submitted again.
+- Before submitting, the plugin checks object_info for the nodes and model files the graph needs and lists everything
+  missing at once, queueing nothing. When only some outputs fail validation, ComfyUI still queues the prompt and runs the
+  rest; the plugin removes it and says why instead of returning a leftover preview as the result (1.6.1).
 
 ## Code
 

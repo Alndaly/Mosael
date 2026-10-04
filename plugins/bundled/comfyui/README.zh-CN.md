@@ -24,7 +24,7 @@
 | 画布节点的 batch_size | 「张数」(最多 4,没选就是 1),几张全部交回 |
 | 这一种的保存节点(一个都没存就是预览节点) | 一次交回几份(`outputs_per_run` = 节点数,× 张数),宿主据此一次摆好占位;不止一个时「参数」里有一项「结果取自」(节点标题,缺省「全部」),选了一个就只交回它的,别的保存节点不跑(1.6.0) |
 | 其余可调的字面量输入 | 参数表里的一项:认得的输入用人话起名(`labels.py`:采样器、步数、LoRA…),撞名才带上节点标题或「第 2 个 KSampler」;常用的在前,其余收进「高级」;原始的「节点 · 输入名」在说明里 |
-| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧 |
+| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧(先过一道缩放、裁切再接进去的也算;图生视频的首帧必须给,1.6.1) |
 | LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |
 | LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`);接在 `ref_videos.*` 这类**参考**口上的是参考视频 |
 | LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频;接在参考口上的是参考音频 |
@@ -32,6 +32,10 @@
 
 没有提示词、也没有画布的图(放大、抠图):图是必须给的,模式只有 `image-to-image`。文件名前缀这类
 ComfyUI 那一侧的输入不列出来。
+
+只看 ComfyUI **真会跑**的那部分图(1.6.1):能跑的输出节点和它们的上游。悬空的画布节点不是「尺寸」「张数」,
+下游全被旁路的读图节点不是一格输入,上游被静音断了线的预览不算进「一次交回几份」;rgthree 的 Relay / Repeater
+这类前端虚拟节点不进图。
 
 另有两个模型:**内置文生图**(服务器上至少有一个 checkpoint 时)和**API 模板**(连接配置里粘贴了
 「导出 (API)」的 JSON 时,`{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}`
@@ -63,7 +67,7 @@ ComfyUI 那一侧的输入不列出来。
 
 | 工具 | 只读 | 流式 | 默认开 | 做什么 |
 | --- | --- | --- | --- | --- |
-| `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个节点读哪种素材)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …),以及跑它的工具(`tool`);转不过来的也列,带原因 |
+| `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个节点读哪种素材)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …),以及跑它的工具(`tool`);转不过来的也列,带原因;工作流目录里的压缩包这类非 .json 文件也列出来,说为什么用不了(1.6.1) |
 | `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库。任务号声明成 `format: "external_id"`:这是按 ComfyUI 里的编号取东西,不是内容变换,只在工作流和对话里用,不上画板 |
 | `server_status` | ✓ | | ✓ | 版本、显卡与空闲显存、内存、队列 |
 | `list_models` | ✓ | | ✓ | `/models` 下的模型文件;老版本没有这个接口时看加载节点的下拉 |
@@ -82,6 +86,8 @@ ComfyUI 那一侧的输入不列出来。
 - 取消(生成任务、流式工具)时,插件会让 ComfyUI 停下**这一个**任务(在跑的 interrupt,在排队的从队列删掉),
   不会掐掉同一台机器上别人的任务。
 - Mosael 重启时正在跑的生成会接着等(按任务号),不会重新提交。
+- 提交之前先对着 object_info 看这台 ComfyUI 有没有这张图要的节点和模型文件,缺的一次列全、什么都不排上;一部分输出
+  校验不过时 ComfyUI 会照样排上、只跑过了的那几个 —— 插件把它撤掉并说出原因,不把剩下那个预览当成结果(1.6.1)。
 
 ## 代码
 
