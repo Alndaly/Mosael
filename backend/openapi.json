@@ -19229,6 +19229,274 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/model-library": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Model Library",
+        "description": "现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。",
+        "operationId": "get_model_library_api_plugins_instances__instance_id__model_library_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLibraryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/preview": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Model Preview",
+        "description": "一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。\n`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。",
+        "operationId": "get_model_preview_api_plugins_instances__instance_id__model_library_preview_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/detail": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Model Detail",
+        "operationId": "get_model_detail_api_plugins_instances__instance_id__model_library_detail_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/resolve": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Resolve Model Link",
+        "description": "一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是什么:文件名、大小、建议的目录、同名文件在不在。",
+        "operationId": "resolve_model_link_api_plugins_instances__instance_id__model_library_resolve_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResolveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/downloads": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Start Model Download",
+        "description": "把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。",
+        "operationId": "start_model_download_api_plugins_instances__instance_id__model_library_downloads_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDownloadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/capabilities": {
       "patch": {
         "tags": [
@@ -29816,6 +30084,383 @@
           "my_role"
         ],
         "title": "MembersOut"
+      },
+      "MissingModelOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "workflows": {
+            "items": {
+              "$ref": "#/components/schemas/ModelLibraryRefOut"
+            },
+            "type": "array",
+            "title": "Workflows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name",
+          "url"
+        ],
+        "title": "MissingModelOut",
+        "description": "工作流声明了下载地址、这台服务器上又没有的模型。"
+      },
+      "ModelDetailOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Metadata"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/ModelTagOut"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelDetailOut"
+      },
+      "ModelDownloadRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Folder"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Filename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "url",
+          "folder",
+          "filename"
+        ],
+        "title": "ModelDownloadRequest"
+      },
+      "ModelDownloadRouteOut": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "title": "Route",
+            "default": "none"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ModelDownloadRouteOut",
+        "description": "这台服务器下载走哪条路:`manager` / `local` / `none`,外加一句给人看的说明。"
+      },
+      "ModelFileOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family",
+            "default": ""
+          },
+          "family_source": {
+            "type": "string",
+            "title": "Family Source",
+            "default": ""
+          },
+          "triggers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Triggers"
+          },
+          "triggers_source": {
+            "type": "string",
+            "title": "Triggers Source",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "has_preview": {
+            "type": "boolean",
+            "title": "Has Preview",
+            "default": false
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/ModelLibraryRefOut"
+            },
+            "type": "array",
+            "title": "Used By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelFileOut",
+        "description": "那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。"
+      },
+      "ModelLibraryFolderOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ModelLibraryFolderOut"
+      },
+      "ModelLibraryOut": {
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/ModelLibraryFolderOut"
+            },
+            "type": "array",
+            "title": "Folders"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelFileOut"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/MissingModelOut"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "download": {
+            "$ref": "#/components/schemas/ModelDownloadRouteOut"
+          },
+          "downloads": {
+            "items": {
+              "$ref": "#/components/schemas/JobOut"
+            },
+            "type": "array",
+            "title": "Downloads"
+          }
+        },
+        "type": "object",
+        "title": "ModelLibraryOut"
+      },
+      "ModelLibraryRefOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ModelLibraryRefOut",
+        "description": "一张工作流:id 和给人看的名字。"
+      },
+      "ModelResolveOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "page": {
+            "type": "string",
+            "title": "Page",
+            "default": ""
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "default": ""
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "family": {
+            "type": "string",
+            "title": "Family",
+            "default": ""
+          },
+          "triggers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Triggers"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "default": false
+          },
+          "suggested_filename": {
+            "type": "string",
+            "title": "Suggested Filename",
+            "default": ""
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ModelResolveOut",
+        "description": "一个链接指的是什么。`exists`:这个名字在建议的目录里已经有了(不覆盖,界面要求换名)。"
+      },
+      "ModelResolveRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ModelResolveRequest"
+      },
+      "ModelTagOut": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "title": "ModelTagOut"
       },
       "MoveClipRequest": {
         "properties": {

@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.capabilities import CapabilityUseOut
+from app.api.schemas.jobs import JobOut
 
 class PluginOAuthCode(ApiModel):
     """对方显示出来、由用户贴回来的授权码。"""
@@ -349,3 +350,101 @@ class PluginInvocationOut(OrmModel):
     output: dict
     error: str | None
     created_at: datetime
+
+
+# --- 模型库(ADR 0034) ----------------------------------------------------
+
+class ModelLibraryRefOut(ApiModel):
+    """一张工作流:id 和给人看的名字。"""
+
+    id: str
+    label: str
+
+
+class ModelLibraryFolderOut(ApiModel):
+    name: str
+    count: int = 0
+
+
+class ModelFileOut(ApiModel):
+    """那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。"""
+
+    folder: str
+    #: 目录内的相对路径(可带子目录;Windows 上的分隔符是反斜杠)。
+    name: str
+    size: int | None = None
+    modified: float | None = None
+    #: 推断的底模家族(SDXL、Illustrious、Flux……;认不出是空串)与凭的是什么(`metadata` / `filename`)。
+    family: str = ""
+    family_source: str = ""
+    triggers: list[str] = Field(default_factory=list)
+    #: `metadata`(作者写的触发词)或 `tags`(训练标签里出现最多的几个,不一定是触发词)。
+    triggers_source: str = ""
+    title: str = ""
+    has_preview: bool = False
+    used_by: list[ModelLibraryRefOut] = Field(default_factory=list)
+
+
+class MissingModelOut(ApiModel):
+    """工作流声明了下载地址、这台服务器上又没有的模型。"""
+
+    folder: str
+    name: str
+    url: str
+    workflows: list[ModelLibraryRefOut] = Field(default_factory=list)
+
+
+class ModelDownloadRouteOut(ApiModel):
+    """这台服务器下载走哪条路:`manager` / `local` / `none`,外加一句给人看的说明。"""
+
+    route: str = "none"
+    note: str = ""
+
+
+class ModelLibraryOut(ApiModel):
+    folders: list[ModelLibraryFolderOut] = Field(default_factory=list)
+    models: list[ModelFileOut] = Field(default_factory=list)
+    missing: list[MissingModelOut] = Field(default_factory=list)
+    download: ModelDownloadRouteOut = Field(default_factory=ModelDownloadRouteOut)
+    #: 这个连接最近的下载任务(在跑的总在里面)。
+    downloads: list[JobOut] = Field(default_factory=list)
+
+
+class ModelTagOut(ApiModel):
+    tag: str
+    count: int = 0
+
+
+class ModelDetailOut(ApiModel):
+    folder: str
+    name: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+    tags: list[ModelTagOut] = Field(default_factory=list)
+
+
+class ModelResolveRequest(ApiModel):
+    url: str = Field(min_length=1, max_length=4000)
+
+
+class ModelResolveOut(ApiModel):
+    """一个链接指的是什么。`exists`:这个名字在建议的目录里已经有了(不覆盖,界面要求换名)。"""
+
+    source: str = ""
+    url: str
+    page: str = ""
+    filename: str = ""
+    size: int | None = None
+    folder: str = ""
+    family: str = ""
+    triggers: list[str] = Field(default_factory=list)
+    title: str = ""
+    exists: bool = False
+    suggested_filename: str = ""
+    note: str = ""
+
+
+class ModelDownloadRequest(ApiModel):
+    workspace_id: str
+    url: str = Field(min_length=1, max_length=4000)
+    folder: str = Field(min_length=1, max_length=200)
+    filename: str = Field(max_length=300)

@@ -106,6 +106,7 @@
   `app/media/render_executor.py:_HW_SELF_TESTED`(硬件编码小样自检通过过的分辨率与参数)——
   都是"问过 ffmpeg 了"。只记成功的探测,重启后第一次导出再问一遍,多花零点几秒。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
+- `app/domain/model_library.py:_snapshots`、`app/domain/model_library.py:_absent`、`app/domain/model_library.py:_listing_locks` — 模型库(ADR 0034):每个连接最近一次列出的「哪个文件的预览图在那台服务器上的哪儿」、哪些地址刚问过没有图(十分钟内不再问)、以及记着的地址没了时只让插件列一遍的那把锁。重启后是空的:界面要预览图时宿主先替它列一遍;预览图本身在磁盘缓存里(`<数据目录>/model-previews/`),不丢。多进程下各记各的,只是多列一遍。
 - `app/domain/providers/auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
 - `app/integrations/feishu/client.py:_token_cache`(租户令牌)、
   `app/integrations/feishu/inbound.py:_seen`(消息去重)、

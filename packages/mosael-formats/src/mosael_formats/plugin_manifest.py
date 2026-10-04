@@ -76,9 +76,13 @@ TRANSLATION = "translation"
 #: `speech`:用一个音色把一段文字念出来(ADR 0032 第四步)。认领的工具按 `op` 回答两件事:有哪些音色、念一句;
 #: 登记成素材、贴到时间线、字幕逐句配音的对齐都是宿主的事。
 SPEECH = "speech"
-#: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具」,本身不是一次能交给人的调用 ——
-#: 模型和工具各自出现在该出现的地方。只有它们的工具不进工具表。
-CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS})
+#: `model_library`:**这个连接上有哪些模型文件**(ADR 0034)。认领它的工具按 `op` 回答:列出全部模型文件(`library`)、
+#: 一个文件的完整元数据(`detail`)、一个链接指的是什么(`resolve`)、把它下到那台服务器上(`download`,流式)。
+#: 列表、预览图、下载任务都在宿主的「模型库」里,不是给智能体调的。
+MODEL_LIBRARY = "model_library"
+#: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具 / 哪些模型文件」,本身不是一次能交给人的
+#: 调用 —— 模型、工具、模型库各自出现在该出现的地方。只有它们的工具不进工具表。
+CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS, MODEL_LIBRARY})
 #: **调用类能力**:认领它们的工具是一个普通工具,智能体、工作流、画板照样点得到;能力只是加在它上面的一份契约
 #: (`CALL_CONTRACTS`),宿主自己的入口(文档「重新解析」、降噪按钮……)调的也是它。
 CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH})
@@ -804,6 +808,7 @@ __all__ = [
     "CALL_CAPABILITIES",
     "CALL_CONTRACTS",
     "CATALOG_CAPABILITIES",
+    "MODEL_LIBRARY",
     "CLAIMED_CAPABILITIES",
     "KEY_RE",
     "TRANSCRIPTION",

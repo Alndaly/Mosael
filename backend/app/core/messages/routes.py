@@ -231,6 +231,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件接入不存在",
         "en": "Plugin connection not found.",
     },
+    "routeErr_modelPreviewNotFound": {
+        "zh": "这个模型没有预览图",
+        "en": "This model has no preview image.",
+    },
     "pluginErr_oauthTokenExchangeFailed": {
         "zh": "换令牌失败:{detail}",
         "en": "Could not exchange the token: {detail}",

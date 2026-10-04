@@ -6315,6 +6315,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/model-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Library
+         * @description 现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。
+         */
+        get: operations["get_model_library_api_plugins_instances__instance_id__model_library_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Preview
+         * @description 一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。
+         *     `<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。
+         */
+        get: operations["get_model_preview_api_plugins_instances__instance_id__model_library_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Detail */
+        get: operations["get_model_detail_api_plugins_instances__instance_id__model_library_detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Model Link
+         * @description 一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是什么:文件名、大小、建议的目录、同名文件在不在。
+         */
+        post: operations["resolve_model_link_api_plugins_instances__instance_id__model_library_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Model Download
+         * @description 把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。
+         */
+        post: operations["start_model_download_api_plugins_instances__instance_id__model_library_downloads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/capabilities": {
         parameters: {
             query?: never;
@@ -10678,6 +10776,207 @@ export interface components {
             members: components["schemas"]["WorkspaceMemberOut"][];
             /** My Role */
             my_role: string;
+        };
+        /**
+         * MissingModelOut
+         * @description 工作流声明了下载地址、这台服务器上又没有的模型。
+         */
+        MissingModelOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Workflows */
+            workflows?: components["schemas"]["ModelLibraryRefOut"][];
+        };
+        /** ModelDetailOut */
+        ModelDetailOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            };
+            /** Tags */
+            tags?: components["schemas"]["ModelTagOut"][];
+        };
+        /** ModelDownloadRequest */
+        ModelDownloadRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Url */
+            url: string;
+            /** Folder */
+            folder: string;
+            /** Filename */
+            filename: string;
+        };
+        /**
+         * ModelDownloadRouteOut
+         * @description 这台服务器下载走哪条路:`manager` / `local` / `none`,外加一句给人看的说明。
+         */
+        ModelDownloadRouteOut: {
+            /**
+             * Route
+             * @default none
+             */
+            route: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * ModelFileOut
+         * @description 那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。
+         */
+        ModelFileOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /** Size */
+            size?: number | null;
+            /** Modified */
+            modified?: number | null;
+            /**
+             * Family
+             * @default
+             */
+            family: string;
+            /**
+             * Family Source
+             * @default
+             */
+            family_source: string;
+            /** Triggers */
+            triggers?: string[];
+            /**
+             * Triggers Source
+             * @default
+             */
+            triggers_source: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Has Preview
+             * @default false
+             */
+            has_preview: boolean;
+            /** Used By */
+            used_by?: components["schemas"]["ModelLibraryRefOut"][];
+        };
+        /** ModelLibraryFolderOut */
+        ModelLibraryFolderOut: {
+            /** Name */
+            name: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        };
+        /** ModelLibraryOut */
+        ModelLibraryOut: {
+            /** Folders */
+            folders?: components["schemas"]["ModelLibraryFolderOut"][];
+            /** Models */
+            models?: components["schemas"]["ModelFileOut"][];
+            /** Missing */
+            missing?: components["schemas"]["MissingModelOut"][];
+            download?: components["schemas"]["ModelDownloadRouteOut"];
+            /** Downloads */
+            downloads?: components["schemas"]["JobOut"][];
+        };
+        /**
+         * ModelLibraryRefOut
+         * @description 一张工作流:id 和给人看的名字。
+         */
+        ModelLibraryRefOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * ModelResolveOut
+         * @description 一个链接指的是什么。`exists`:这个名字在建议的目录里已经有了(不覆盖,界面要求换名)。
+         */
+        ModelResolveOut: {
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /** Url */
+            url: string;
+            /**
+             * Page
+             * @default
+             */
+            page: string;
+            /**
+             * Filename
+             * @default
+             */
+            filename: string;
+            /** Size */
+            size?: number | null;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /**
+             * Family
+             * @default
+             */
+            family: string;
+            /** Triggers */
+            triggers?: string[];
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Exists
+             * @default false
+             */
+            exists: boolean;
+            /**
+             * Suggested Filename
+             * @default
+             */
+            suggested_filename: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** ModelResolveRequest */
+        ModelResolveRequest: {
+            /** Url */
+            url: string;
+        };
+        /** ModelTagOut */
+        ModelTagOut: {
+            /** Tag */
+            tag: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
         };
         /** MoveClipRequest */
         MoveClipRequest: {
@@ -27924,6 +28223,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginProvidedModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_library_api_plugins_instances__instance_id__model_library_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelLibraryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_preview_api_plugins_instances__instance_id__model_library_preview_get: {
+        parameters: {
+            query: {
+                folder: string;
+                name: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_detail_api_plugins_instances__instance_id__model_library_detail_get: {
+        parameters: {
+            query: {
+                folder: string;
+                name: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_model_link_api_plugins_instances__instance_id__model_library_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelResolveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_model_download_api_plugins_instances__instance_id__model_library_downloads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDownloadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

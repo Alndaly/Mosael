@@ -18,6 +18,7 @@ import {
   FileText,
   Film,
   GitBranch,
+  HardDriveDownload,
   Link as LinkIcon,
   type LucideIcon,
   Mic,
@@ -56,6 +57,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   board_run: Wrench,
   entity_draw: Rotate3d,
   proxy: Clapperboard,
+  model_download: HardDriveDownload,
 };
 
 /** 后端说"改动了哪种资源",这里说"那是哪些缓存"。 */

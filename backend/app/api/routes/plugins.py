@@ -6,13 +6,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.core.i18n import get_current_locale, render_message, tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityTermOut,
+    JobOut,
+    ModelDetailOut,
+    ModelDownloadRequest,
+    ModelLibraryOut,
+    ModelResolveOut,
+    ModelResolveRequest,
     PluginOAuthCode,
     PluginCapabilityUpdate,
     PluginCredentialOut,
@@ -36,8 +42,10 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
-from app.db.models import PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
+from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
+from app.domain import model_library
 from app.domain.plugins import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.plugins import bundled
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
@@ -398,6 +406,8 @@ def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
     try:
         db.delete(my_instance(db, instance_id, user))
         db.commit()
+        # 模型库记着的预览图(内存里的地址、磁盘上的图)跟着连接走。
+        model_library.drop_cache(instance_id)
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
 
@@ -421,6 +431,75 @@ def list_instance_models(instance_id: str, db: DbSession, user: CurrentUser) -> 
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
     return host_capabilities.listing(db, instance, GENERATION) or []
+
+
+# --- 模型库(ADR 0034) ----------------------------------------------------
+#
+# 认领 `model_library` 的连接上有哪些模型文件:列出、看详情、取预览图、解析链接、下载。插件那一头说的错(连不上、
+# 链接认不出)原话交回(422);不提供模型库的连接也是 422,说清楚是哪一个。
+
+
+def _model_library_failed(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+_MODEL_LIBRARY_ERRORS = (model_library.ModelLibraryError, PluginDomainError, PluginRuntimeError)
+
+
+@router.get("/plugins/instances/{instance_id}/model-library", response_model=ModelLibraryOut)
+def get_model_library(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.library(db, instance)
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/model-library/preview")
+def get_model_preview(instance_id: str, folder: str, name: str, db: DbSession, user: CurrentUser) -> Response:
+    """一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。
+    `<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        found = model_library.preview(db, instance, folder, name)
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+    if found is None:
+        raise HTTPException(status_code=404, detail=tr("routeErr_modelPreviewNotFound"))
+    data, kind = found
+    return Response(content=data, media_type=kind, headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.get("/plugins/instances/{instance_id}/model-library/detail", response_model=ModelDetailOut)
+def get_model_detail(instance_id: str, folder: str, name: str, db: DbSession, user: CurrentUser) -> dict:
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.detail(db, instance, folder, name)
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/model-library/resolve", response_model=ModelResolveOut)
+def resolve_model_link(instance_id: str, body: ModelResolveRequest, db: DbSession, user: CurrentUser) -> dict:
+    """一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是什么:文件名、大小、建议的目录、同名文件在不在。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.resolve(db, instance, body.url)
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/model-library/downloads", response_model=JobOut)
+def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, user: CurrentUser) -> Job:
+    """把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.start_download(
+            db, user, instance, workspace_id=body.workspace_id, url=body.url, folder=body.folder, filename=body.filename
+        )
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
 
 
 @router.patch("/plugins/instances/{instance_id}/capabilities", response_model=PluginInstanceOut)

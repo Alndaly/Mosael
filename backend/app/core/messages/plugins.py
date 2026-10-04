@@ -176,6 +176,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件没有给出结果就结束了(最后一行应当是 {shape})",
         "en": "The plugin finished without a result (its last line should be {shape}).",
     },
+    "modelLibErr_notProvided": {
+        "zh": "「{name}」不提供模型库:它的插件没有认领 model_library",
+        "en": "“{name}” has no model library: its plugin does not provide model_library",
+    },
+    "modelLibErr_badUrl": {
+        "zh": "这不是一个能下载的链接:要以 http:// 或 https:// 开头",
+        "en": "This is not a downloadable link: it must start with http:// or https://",
+    },
+    "modelLibErr_badFilename": {
+        "zh": "文件名「{name}」不行:只能是一个文件名,不能带斜杠、反斜杠、冒号这类路径符号,也不能是 . 或 ..",
+        "en": "The file name “{name}” won't do: it must be a single name without slashes, backslashes or colons, and not . or ..",
+    },
+    "modelLibErr_badFolder": {
+        "zh": "目录「{name}」不行:选这台服务器上的一个模型目录(如 loras)",
+        "en": "The folder “{name}” won't do: pick one of the server's model folders (e.g. loras)",
+    },
+    "modelLibErr_instanceGone": {
+        "zh": "这个插件连接已经删掉了,下载没开始",
+        "en": "This plugin connection was deleted; the download did not start",
+    },
     "pluginErr_capabilityNoTool": {
         "zh": "「{name}」没有负责 {capability} 的工具,请到插件页更新这个插件",
         "en": "“{name}” has no tool that handles {capability}. Update the plugin from the Plugins page.",

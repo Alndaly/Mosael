@@ -1003,8 +1003,8 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 能力的地方(文档「重新解析」、工作流节点的引擎下拉、画板的能力、智能体的工具参数、素材库的操作)都能**点名你这一家**,
 而它们调的就是这个工具。插件页上这类工具的行上有一枚能力徽标,展开能看到「用在哪」。
 
-只有**目录类能力**(`generation`、`tools`)的那个工具不进工具表:它回答的是「这个连接有哪些模型 / 哪些工具」,本身
-不是一次能交给人的调用。
+只有**目录类能力**(`generation`、`tools`、`model_library`)的那个工具不进工具表:它回答的是「这个连接有哪些模型 /
+哪些工具 / 哪些模型文件」,本身不是一次能交给人的调用。
 
 | 能力 | 宿主自带 | 没定默认时 | 类别 |
 | --- | --- | --- | --- |
@@ -1017,6 +1017,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `speech` | 本机克隆、Edge、OpenAI、火山、百炼(qwen-tts / CosyVoice) | **没有默认**:引擎和音色成对选,每个入口都点名 | 调用类 |
 | `generation` | —— | 每个连接都是一家供应商(见下一节) | 目录类 |
 | `tools` | —— | 每个连接报自己的工具 | 目录类 |
+| `model_library` | —— | 每个连接报自己那台服务器上的模型文件(见下面「模型库」) | 目录类 |
 
 认领调用类 / 目录类能力的,装的时候就查:只给进程形态、有且只有一个工具认领;调用类的那个工具**入参要按契约写**
 (见下面各节 —— 宿主的入口和智能体、工作流调的是同一个工具,形状只有一种)。
@@ -1088,6 +1089,41 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 - `{"op": "speak", "text": "……", "voice": "anna", "speed": 1.0}` → `{"artifact": {"path": "…"}}`。wav / mp3 都行。
 
 配音没有「默认用哪家」:用户在每个用到它的地方(工作流节点、画板、字幕配音、AI 工作室)点名你这一家和一个音色。
+
+#### `model_library` —— 这台服务器上有哪些模型文件,缺的下到它上面
+
+决策见 [ADR 0034](adr/0034-model-library.md),范例是 `plugins/bundled/comfyui/tools/library.py`。目录类:认领它的工具
+不进工具表,插件页上那个连接多一行「模型库」。宿主按 `op` 问:
+
+- `{"op": "library"}` → 一问一答(不留调用记录,打开模型库、下完一个文件都会问一次 —— 逐个读的元数据请自己记在持久目录里):
+
+  ```jsonc
+  {
+    "folders": [{"name": "loras", "count": 350}],
+    "models": [{
+      "folder": "loras", "name": "sub\\style.safetensors",        // 目录内的相对路径
+      "size": 228456516, "modified": 1762011065.7,
+      "family": "Illustrious", "family_source": "metadata",       // 推断的底模家族、凭的是什么(metadata / filename)
+      "triggers": ["1girl"], "triggers_source": "tags",           // metadata = 作者写的;tags = 训练标签里最多的几个
+      "title": "…", "used_by": [{"id": "flows/a.json", "label": "人像"}],
+      "preview": "loras/0/sub%5Cstyle.safetensors"               // 宿主去取、缓存,不交给界面;没有就别给。可以是相对 preview_base 的一段
+    }],
+    "preview_base": "http://…/experiment/models/preview/",      // 相对预览地址的前缀(可选;几千个文件时省体积,一次回答最多 1 MB)
+    "preview_headers": {"Authorization": "…"},                  // 取预览图要带的头(可选)
+    "missing": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…",
+                 "workflows": [{"id": "…", "label": "…"}]}],    // 工作流声明了地址、这台服务器上又没有的
+    "download": {"route": "manager", "note": "给人看的一句:下载走哪条路、走不通时该做什么"}
+  }
+  ```
+- `{"op": "detail", "folder": "loras", "name": "…"}` → `{"metadata": {"键": "值"}, "tags": [{"tag": "1girl", "count": 40}]}`;
+- `{"op": "resolve", "url": "…"}` → `{"source", "url"(直链), "page", "filename", "size", "folder"(建议的目录,定不了给空串),
+  "family", "triggers", "title", "exists"(这个名字在建议的目录里已经有了), "suggested_filename", "note"}`。认不出就失败,
+  原因写给人看;
+- `{"op": "download", "url": "…", "folder": "loras", "filename": "…"}` → **流式**(宿主一定按流式协议调它,不论工具上写没写
+  `stream`):进度行、取消文件照常;结果 `{"folder", "name", "size", "route"}`。**不许覆盖已有文件**:同名的就失败、说清楚。
+  宿主已经挡掉了带路径分隔符的文件名和不是 http(s) 的链接,你写盘前仍要再查一遍。
+
+下载是宿主的一个后台任务(任务中心里看得到、能取消);成功后宿主让这个连接重新拉一遍模型和工具目录,生成表单里马上选得到。
 
 ## 替宿主做生成
 

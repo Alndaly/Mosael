@@ -363,6 +363,9 @@ def _wire_seams() -> None:
     from app.domain.plugins.manifest import GENERATION, TOOLS
 
     capabilities.register(plugin_connections.CAPABILITY)
+    from app.domain import model_library
+
+    capabilities.register(model_library.CAPABILITY)
     capabilities.register(capabilities.Capability(
         name=TOOLS, label_key="capability_tools", description_key="capability_tools", pickable=False,
         on_instance_change=dynamic_tools.refresh,
@@ -384,6 +387,7 @@ def _wire_seams() -> None:
 
     capabilities.register_use(capabilities.Use(GENERATION, "app", fragment("capUse_generationModels")))
     capabilities.register_use(capabilities.Use(TOOLS, "app", fragment("capUse_pluginTools")))
+    model_library.register_uses()
     from app.domain.agent.confirmable import registry as confirmable_registry
     from app.domain.workflows import capability_uses as workflow_capability_uses
 
