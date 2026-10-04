@@ -304,6 +304,39 @@ describe("执行脚本出错时说出脚本自己的那句话", () => {
   });
 });
 
+describe("上传:写了选择器就只认这个选择器", () => {
+  it("节点上写了选择器:找输入框和塞文件都只认它,不退回「页面上随便哪个文件框」", async () => {
+    // 实测:选择器写成 #nofile(页面上没有),节点却「成功」了 —— 文件被塞进了页面上另一个文件框。
+    const calls: Array<[string, unknown]> = [];
+    const driver = fakeDriver("https://example.com/upload", {
+      fileInputAttached: (async (selector: string, _timeout: number, opts?: unknown) => {
+        calls.push([selector, opts]);
+        return false;
+      }) as PageDriver["fileInputAttached"],
+      setFiles: (async () => {
+        throw new Error("setFiles should not be reached");
+      }) as PageDriver["setFiles"],
+    });
+    setLocale("zh-CN");
+    await expect(
+      executeBrowserAction(driver, "upload", { selector: "#nofile", path: "/tmp/a.txt", timeout_ms: 10 }),
+    ).rejects.toThrow(/文件输入框没有出现.*#nofile/s);
+    expect(calls).toEqual([["#nofile", { exact: true }]]);
+  });
+
+  it("没写选择器:照旧找页面上(含 shadow DOM 里)的文件框", async () => {
+    const calls: Array<[string, unknown]> = [];
+    const driver = fakeDriver("https://example.com/upload", {
+      fileInputAttached: (async () => true) as PageDriver["fileInputAttached"],
+      setFiles: (async (selector: string, _path: string, opts?: unknown) => {
+        calls.push([selector, opts]);
+      }) as PageDriver["setFiles"],
+    });
+    await executeBrowserAction(driver, "upload", { path: "/tmp/a.txt" });
+    expect(calls).toEqual([['input[type="file"]', { exact: false }]]);
+  });
+});
+
 describe("evaluate 的脚本预算", () => {
   it("声明了 timeout_ms 就按它给预算(长读脚本用),没声明走缺省", async () => {
     const seen: Array<number | undefined> = [];

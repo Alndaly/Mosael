@@ -56,6 +56,11 @@ export type GotoOutcome =
   | { outcome: "loaded" | "timeout" }
   | { outcome: "rejected"; errno?: number; code: string };
 
+/** 找文件框的方式:`exact` 只认给的选择器(含 shadow DOM 里的),不退回页面上随便哪个文件框。 */
+export interface FileInputLookup {
+  exact?: boolean;
+}
+
 export class PageDriver {
   private debuggerAttached = false;
   private abortSignal: AbortSignal | null = null;
@@ -1160,9 +1165,14 @@ export class PageDriver {
 
   // ---- file upload via CDP ------------------------------------------------
 
-  async setFiles(selector: string, filePath: string): Promise<void> {
+  /**
+   * 往文件框塞文件。`exact`:**只认这个选择器**(浏览器自动化的「上传文件」节点上用户点名的那一个),
+   * 找不到就是找不到。不给的是发布适配器那种「这个平台的上传框大概长这样」:没对上时退回页面上第一个
+   * 文件框(平台常把它藏进 shadow DOM)。见 findFileInputNode。
+   */
+  async setFiles(selector: string, filePath: string, opts: FileInputLookup = {}): Promise<void> {
     this.throwIfAborted();
-    const nodeId = await this.findFileInputNode(selector);
+    const nodeId = await this.findFileInputNode(selector, opts);
     this.throwIfAborted();
     await this.wc.debugger.sendCommand("DOM.setFileInputFiles", {
       files: [filePath],
@@ -1170,12 +1180,12 @@ export class PageDriver {
     });
   }
 
-  async fileInputAttached(selector = 'input[type="file"]', timeout = 8_000): Promise<boolean> {
+  async fileInputAttached(selector = 'input[type="file"]', timeout = 8_000, opts: FileInputLookup = {}): Promise<boolean> {
     const deadline = Date.now() + timeout;
     do {
       this.throwIfAborted();
       try {
-        await this.findFileInputNode(selector);
+        await this.findFileInputNode(selector, opts);
         return true;
       } catch {
         await this.wait(300);
@@ -1284,7 +1294,7 @@ export class PageDriver {
       .catch(() => undefined);
   }
 
-  private async findFileInputNode(selector: string): Promise<number> {
+  private async findFileInputNode(selector: string, { exact = false }: FileInputLookup = {}): Promise<number> {
     this.throwIfAborted();
     this.ensureDebugger();
     await this.wc.debugger.sendCommand("DOM.enable");
@@ -1302,6 +1312,17 @@ export class PageDriver {
       })) as {
         nodes: Array<{ nodeId: number; nodeName: string; attributes?: string[] }>;
       };
+      if (exact) {
+        // 点了名的选择器:文档里没有就到每个 shadow root 里按同一个选择器找,仍然只认它。
+        for (const root of flattened.nodes.filter((node) => node.nodeName === "#document-fragment")) {
+          const inShadow = (await this.wc.debugger.sendCommand("DOM.querySelector", {
+            nodeId: root.nodeId,
+            selector,
+          })) as { nodeId: number };
+          if (inShadow.nodeId) return inShadow.nodeId;
+        }
+        throw new Error(`setFiles: file input not found: ${selector}`);
+      }
       const fallback = flattened.nodes.find((node) => {
         if (node.nodeName !== "INPUT") {
           return false;

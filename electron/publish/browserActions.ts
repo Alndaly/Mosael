@@ -170,12 +170,15 @@ export async function executeBrowserAction(
     case "upload": {
       const path = s(args.path);
       if (!path) throw new Error(t("browserErr_uploadNeedsPath"));
+      //: 节点上写了选择器就**只认它**:页面上有视频框和封面框时,退回「随便哪个文件框」会把文件塞错地方而节点照报成功。
+      //: 没写才是「页面上的文件框」(含 shadow DOM 里的)。
+      const lookup = { exact: Boolean(s(args.selector)) };
       const selector = s(args.selector) || 'input[type="file"]';
       const timeout = Number(args.timeout_ms) || 15_000;
       // 文件输入框常在点了「上传」后才挂载:先等它出现,再经 CDP setFileInputFiles 塞文件(不弹系统框)。
-      const ok = await driver.fileInputAttached(selector, timeout);
+      const ok = await driver.fileInputAttached(selector, timeout, lookup);
       if (!ok) throw new Error(t("browserErr_fileInputMissing", { selector }));
-      await driver.setFiles(selector, path);
+      await driver.setFiles(selector, path, lookup);
       return { lastUrl: driver.url() };
     }
     case "press_key": {
