@@ -41,4 +41,10 @@ class NoteRevision(Base):
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     #: origin 是 restore 时:从第几版恢复的。
     restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: 归在哪一组:这一组第一版的号。连续的手动编辑合成版本记录里的一项(见 domain/notes/history)。
+    group_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: 相对这一组之前那一版:新加 / 删掉的字数(不算空白)、标题改没改。
+    chars_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chars_removed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    title_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

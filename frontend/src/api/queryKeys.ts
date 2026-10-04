@@ -152,6 +152,8 @@ export const noteKeys = {
     (revision === undefined ? (["note-history", noteId] as const) : (["note-history", noteId, revision] as const)),
   /** 某一版的内容。版本不可变,读过就一直有效;挂在 history 前缀下,随整篇的历史一起失效。 */
   revisionContent: (noteId: string, revision: number) => ["note-history", noteId, "content", revision] as const,
+  /** 一组连续编辑里的每一版。带上那一组最新那一版的号:组还在长(当前那一组)时跟着换。 */
+  historyGroup: (noteId: string, groupStart: number, last: number) => ["note-history", noteId, "group", groupStart, last] as const,
   sourceMessage: (workspaceId: string, messageId: string) => ["note-source", workspaceId, "message", messageId] as const,
 };
 

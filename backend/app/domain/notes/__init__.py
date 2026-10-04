@@ -115,8 +115,15 @@ def _ensure_cites_session(db: Session, session: AgentSession, actor: Actor) -> N
 
 def _record_revision(db: Session, note_id: str, revision: int, data: dict, *, actor: Actor,
                      origin: NoteRevisionOrigin, restored_from: int | None = None) -> None:
-    db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin,
-                        created_by=actor_id(actor), restored_from=restored_from))
+    """落一版。归在哪一组、相对这一组之前改了多少,在这里一并记下(见 notes/history)。"""
+    from app.domain.notes import history
+
+    at = now()
+    created_by = actor_id(actor)
+    start = history.group_start(db, note_id, revision, origin=origin, created_by=created_by, at=at)
+    db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin, created_by=created_by,
+                        restored_from=restored_from, group_start=start, created_at=at,
+                        **history.changes_since_group(db, note_id, start, data)))
 
 
 def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor,

@@ -110,6 +110,7 @@
   "migrate-mov-videos-become-mp4": "6d1b2a8be0f80c80",
   "migrate-named-browser-partitions-are-per-workspace": "21fd23af420b5b36",
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
+  "migrate-note-revisions-fold-consecutive-edits": "99040dbca5960ba7",
   "migrate-note-revisions-remember-where-they-came-from": "73cdc228d5d929e5",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-outbound-allowlist": "616e80417ddef903",

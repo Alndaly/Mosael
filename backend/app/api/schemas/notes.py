@@ -35,11 +35,22 @@ class NoteOut(NoteContent):
 
 
 class NoteRevisionOut(ApiModel):
-    """版本记录里的一版:哪一版、什么时候、怎么来的、谁写的。"""
+    """版本记录里的一项:连续的手动编辑合成一组(见 domain/notes/history),这一项是那一组最新的一版。
+
+    带 `group` 查的是一组里的每一版,那时每一项就是一版(saves = 1)。
+    """
 
     revision: int
     title: str
     created_at: datetime
+    #: 这一组第一版的号、一共几版、第一版是什么时候。
+    group_start: int
+    saves: int
+    started_at: datetime
+    #: 这一组相对它之前那一版:新加 / 删掉的字数(不算空白)、标题改没改。
+    chars_added: int
+    chars_removed: int
+    title_changed: bool
     origin: NoteRevisionOrigin
     #: 替谁写的(用户 id);老数据说不出是谁时为空。
     created_by: str | None

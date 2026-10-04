@@ -82,8 +82,9 @@ def append(note_id: str, body: NoteAppend, db: Tx, user: CurrentUser):
 
 
 @router.get("/notes/{note_id}/revisions", response_model=list[NoteRevisionOut])
-def revisions(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
-    return use_cases.revisions(db, user, workspace_id, note_id)
+def revisions(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser, group: int | None = Query(None, ge=1)):
+    """一组一项;`group`(那一组第一版的号)给了就列那一组里的每一版。"""
+    return use_cases.revisions(db, user, workspace_id, note_id, group)
 
 
 @router.get("/notes/{note_id}/revisions/{revision}")

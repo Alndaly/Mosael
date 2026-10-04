@@ -41,8 +41,9 @@ export const purgeNote = (workspaceId: string, noteId: string, baseRevision: num
 /** 版本记录里的一版:哪一版、什么时候、怎么来的(origin)、谁写的。 */
 export type NoteRevisionSummary = components["schemas"]["NoteRevisionOut"];
 export type NoteRevision = NoteContent & { revision: number };
-export const listNoteRevisions = (workspaceId: string, noteId: string) =>
-  api<NoteRevisionSummary[]>(`/api/notes/${noteId}/revisions?workspace_id=${encodeURIComponent(workspaceId)}`);
+/** 版本记录:连续的手动编辑合成一项(那一组最新的一版);给 `group`(那一组第一版的号)列那一组里的每一版。 */
+export const listNoteRevisions = (workspaceId: string, noteId: string, group?: number) =>
+  api<NoteRevisionSummary[]>(`/api/notes/${noteId}/revisions?${new URLSearchParams({ workspace_id: workspaceId, ...(group ? { group: String(group) } : {}) })}`);
 export const getNoteRevision = (workspaceId: string, noteId: string, revision: number) =>
   api<NoteRevision>(`/api/notes/${noteId}/revisions/${revision}?workspace_id=${encodeURIComponent(workspaceId)}`);
 /** 把某个旧修订恢复成新的一版。base_revision 是手里这份的修订号,和保存同一条乐观并发。 */

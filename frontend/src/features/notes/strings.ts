@@ -88,6 +88,10 @@ const zh = {
     //: 每一版怎么来的(后端 NoteRevisionOut.origin)。
     origins: { create: "新建", edit: "手动编辑", append: "存到笔记", agent: "智能体修改", restore: "恢复", board: "画板写入", workflow: "工作流写入" },
     restoredFrom: (n: number) => `从版本 ${n} 恢复`,
+    edits: (n: number) => `${n} 次连续编辑`,
+    chars: "字",
+    titleChanged: "改了标题",
+    propertiesChanged: "属性有改动",
   },
 };
 type Strings = typeof zh;
@@ -178,6 +182,10 @@ const en: Strings = {
     unfold: (n: number) => `Show ${n} unchanged lines`,
     origins: { create: "Created", edit: "Edited", append: "Saved to note", agent: "Changed by the assistant", restore: "Restored", board: "Written from a board", workflow: "Written by a workflow" },
     restoredFrom: (n: number) => `Restored from version ${n}`,
+    edits: (n: number) => `${n} consecutive edits`,
+    chars: "chars",
+    titleChanged: "Title changed",
+    propertiesChanged: "Properties changed",
   },
 };
 export function noteStrings(locale: string) { return locale === "en-US" ? en : zh; }
