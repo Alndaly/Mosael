@@ -12,6 +12,7 @@ from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.jobs import cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.graph_run import GraphRun
 from app.domain.workflows.run_scope import halted
 #: 整数格的解析在 numbers 里(它不碰引擎,不进 engine⇄executors 那个环);执行器照旧从这里取。
 from app.domain.workflows.executors.numbers import at_least, whole_number  # noqa: F401
@@ -163,7 +164,15 @@ def _budget_released(active: bool):
 
 
 def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
-    """跑一个内嵌子图(循环体的一次迭代 / subgraph),返回它的上下文。
+    """跑一个内嵌子图(循环体的一次迭代 / subgraph),返回它的上下文;体里有节点失败就把那个原因抛出来。"""
+    run = run_body_to_the_end(node_type, body, scope, workflow_id=workflow_id)
+    if run.error is not None:
+        raise run.error
+    return run.context
+
+
+def run_body_to_the_end(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, workflow_id: str) -> GraphRun:
+    """跑一个内嵌子图，体里有节点失败**也交回**已经落定的那些节点的产物(见 engine.GraphRun)。被叫停照旧抛出。
 
     **与主引擎同一套内核**(execute_graph):并行调度、数据边绑定、插值、条件分支语义完全一致;
     无入边的根即入口。`scope` 播种体内看得见的作用域名,**必须恰好是节点声明的 `body_scope`**
@@ -179,12 +188,12 @@ def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, wor
         # 字段固定的作用域(`loop`)逐个字段核对;`*配置字段` 的键来自这次的配置,不在这里核。
         if not any(one.startswith("*") for one in fields) and set(scope[root]) != set(fields):
             raise RuntimeError(f"{node_type} seeds {root} with {sorted(scope[root])} but declares {sorted(fields)}")
-    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
+    from app.domain.workflows.engine import run_graph  # 惰性:避开 engine↔executors 循环导入
 
-    context, cancelled = execute_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)
-    if cancelled:
+    run = run_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)
+    if run.cancelled:
         raise WorkflowDomainError("wfErr_cancelled")
-    return context
+    return run
 
 
 def provided(values: dict[str, Any]) -> dict[str, Any]:

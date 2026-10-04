@@ -238,6 +238,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfTemplateRebuiltName": {"zh": "{name}(新版模板)", "en": "{name} (new template)"},
     "wfLoop_itemSkipped": {"zh": "第 {index} 项没做成,已跳过:{reason}", "en": "Item {index} failed and was skipped: {reason}"},
+    "wfLoop_itemIncomplete": {"zh": "第 {index} 项的「{step}」没做成,已经做出来的照常交出:{reason}", "en": "Item {index}: “{step}” failed; what was already made is delivered as usual: {reason}"},
     "wfErr_sceneLayoutMissing": {"zh": "没有给布景", "en": "No layout was given"},
     "wfErr_sceneLayoutInvalid": {"zh": "布景不是一个有效的 3D 场景:{reason}", "en": "The layout is not a valid 3D scene: {reason}"},
     "wfErr_sceneNotInWorkspace": {"zh": "这个 3D 场景不存在,或不属于当前工作区", "en": "This 3D scene does not exist or is not in this workspace"},

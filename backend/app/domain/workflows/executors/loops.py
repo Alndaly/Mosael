@@ -11,13 +11,14 @@ import json
 import threading
 from concurrent.futures import ThreadPoolExecutor, wait
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
-from app.domain.workflows import WorkflowDomainError, interpolate
+from app.domain.workflows import VARIABLE_RE, WorkflowDomainError, interpolate
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import at_least, run_body, truthy, whole_number
+from app.domain.workflows.executors.common import at_least, run_body, run_body_to_the_end, truthy, whole_number
 from app.domain.workflows.run_scope import halted, shared_halt
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
@@ -53,18 +54,28 @@ def _blame_iteration(index: int, total: int, *, item: Any = _NO_ITEM) -> Iterato
     """
     try:
         yield
-    except WorkflowDomainError as exc:
-        if exc.key == "wfErr_cancelled" and halted():
-            raise
-        where = f"第 {index + 1}/{total} 次迭代"
-        if item is not _NO_ITEM:
-            where += f"({_brief(item)})"
-        raise WorkflowDomainError("wfErr_loopIterationFailed", params={"where": where, "reason": exc}) from exc
     except Exception as exc:  # noqa: BLE001 — 只加定位再原样抛出,不吞任何一种失败
-        where = f"第 {index + 1}/{total} 次迭代"
-        if item is not _NO_ITEM:
-            where += f"({_brief(item)})"
-        raise WorkflowDomainError("wfErr_loopIterationFailed", params={"where": where, "reason": exc}) from exc
+        blamed = _blamed(exc, index, total, item=item)
+        if blamed is exc:
+            raise
+        raise blamed from exc
+
+
+def _halting(exc: BaseException) -> bool:
+    """这一轮真在停时的取消 —— 不是这一项自己失败了(见 _blame_iteration)。"""
+    return isinstance(exc, WorkflowDomainError) and exc.key == "wfErr_cancelled" and halted()
+
+
+def _blamed(exc: Exception, index: int, total: int, *, item: Any = _NO_ITEM) -> Exception:
+    """给这一项的失败加上「第几项」(见 _blame_iteration);这一轮真在停时的取消原样交回。"""
+    if _halting(exc):
+        return exc
+    where = f"第 {index + 1}/{total} 次迭代"
+    if item is not _NO_ITEM:
+        where += f"({_brief(item)})"
+    blamed = WorkflowDomainError("wfErr_loopIterationFailed", params={"where": where, "reason": exc})
+    blamed.__cause__ = exc
+    return blamed
 
 
 def _brief(item: Any) -> str:
@@ -104,45 +115,102 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
     def iterate(index: int, item: Any) -> Any:
         with _blame_iteration(index, total, item=item):
-            ctx = run_body(
+            run = run_body_to_the_end(
                 "loop_foreach",
                 body,
                 {"loop": {"item": item, "index": index}, "input": shared_inputs},
                 workflow_id=scope.id,
             )
-        if output_tpl:
-            return interpolate(output_tpl, ctx)
-        # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
-        # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
-        return {nid: out for nid, out in ctx.items() if nid != "input"}
+            made = _what_was_made(run.context, body, output_tpl) if run.error is not None and skip else _NOTHING
+            if run.error is not None and (made is _NOTHING or _halting(run.error)):
+                raise run.error
+        if run.error is not None:
+            #: 体里有一步失败，可要交的东西已经做出来了(出好了图，用它出视频那一步被拒):照实交出，失败的那一步单独记下。
+            return _Incomplete(made, _blamed(run.error, index, total, item=item), _node_name(body, run.failed_node))
+        return _delivered(run.context, output_tpl)
 
-    failures: list[tuple[int, BaseException]] = []
+    failures: list[tuple[int, BaseException | _Incomplete]] = []
     if concurrency == 1 or total <= 1:
-        results = []
+        outcomes: list[tuple[int, Any]] = []
         for index, item in enumerate(items):
             _stop_if_halted()
             try:
-                results.append(iterate(index, item))
+                outcomes.append((index, iterate(index, item)))
             except Exception as exc:  # noqa: BLE001 — 只有 skip 时才记下继续,其余原样抛出
                 if not skip or halted():
                     raise
                 failures.append((index, exc))
     else:
-        results, failures = _iterate_concurrently(iterate, items, concurrency, skip=skip)
+        outcomes, failures = _iterate_concurrently(iterate, items, concurrency, skip=skip)
+    results: list[Any] = []
+    for index, outcome in outcomes:
+        if isinstance(outcome, _Incomplete):
+            results.append(outcome.made)
+            failures.append((index, outcome))
+        else:
+            results.append(outcome)
+    failures.sort(key=lambda one: one[0])
     return {
         "results": results,
         "count": len(results),
         "dropped": dropped,
-        #: 跳过的那几项是第几项(从 1 数),和给人看的一句话(一项一行;没有就是空串,可以直接拼进通知)。
+        #: 有一步失败的那几项是第几项(从 1 数),和给人看的一句话(一项一行;没有就是空串,可以直接拼进通知)。
+        #: 其中做出了要交的东西的(出好了图、视频那一步失败),那份东西照样在 results 里,这里只说哪一步没成。
         "failed": [index + 1 for index, _ in failures],
-        "failure_note": "\n".join(_skipped_line(index, exc) for index, exc in failures),
+        "failure_note": "\n".join(_failure_line(index, failure) for index, failure in failures),
     }
 
 
-def _skipped_line(index: int, exc: BaseException) -> str:
+#: `_what_was_made` 的「没有可交的」哨兵 —— None / "" 都可能是一项正经交出来的结果。
+_NOTHING = object()
+
+
+@dataclass(frozen=True)
+class _Incomplete:
+    """体里有一步失败，但这一项要交的东西已经做出来了:`made` 照样进结果,`error` / `step` 说哪一步没成。"""
+
+    made: Any
+    error: Exception
+    step: str
+
+
+def _delivered(context: dict[str, Any], output_tpl: Any) -> Any:
+    if output_tpl:
+        return interpolate(output_tpl, context)
+    # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
+    # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
+    return {nid: out for nid, out in context.items() if nid != "input"}
+
+
+def _what_was_made(context: dict[str, Any], body: dict[str, Any], output_tpl: Any) -> Any:
+    """体里有一步失败时，这一项还交得出什么。
+
+    写了 output 的:它引用的体内节点**全都**落定了才交(交的是上身图、失败的是视频那一步);引用到没跑成的那一步、
+    或者根本没引用体内节点(只交 `loop.item`),就没有可交的 —— 不拿空串顶上。不写 output 的:交已经落定的那些节点。
+    """
+    ids = {str(node.get("id")) for node in body.get("nodes") or []}
+    settled = ids & set(context)
+    if not settled:
+        return _NOTHING
+    if output_tpl:
+        wanted = {ref.split(".", 1)[0] for ref in VARIABLE_RE.findall(json.dumps(output_tpl, ensure_ascii=False))} & ids
+        if not wanted or not wanted <= settled:
+            return _NOTHING
+    return _delivered(context, output_tpl)
+
+
+def _node_name(body: dict[str, Any], node_id: str) -> str:
+    node = next((one for one in body.get("nodes") or [] if str(one.get("id")) == node_id), None)
+    return str((node or {}).get("name") or node_id)
+
+
+def _failure_line(index: int, failure: BaseException | _Incomplete) -> str:
     from app.core.i18n import tr
 
-    reason = getattr(exc, "params", {}).get("reason") or exc
+    error = failure.error if isinstance(failure, _Incomplete) else failure
+    reason = getattr(error, "params", {}).get("reason") or error
+    if isinstance(failure, _Incomplete):
+        return tr("wfLoop_itemIncomplete", index=index + 1, step=failure.step, reason=str(reason))
     return tr("wfLoop_itemSkipped", index=index + 1, reason=str(reason))
 
 
@@ -195,8 +263,8 @@ def _stopped(exc: BaseException | None) -> bool:
 
 def _iterate_concurrently(
     iterate, items: list[Any], concurrency: int, *, skip: bool = False
-) -> tuple[list[Any], list[tuple[int, BaseException]]]:
-    """几项同时跑,结果**按原顺序**交出(连同 `skip` 时跳过的那几项)。
+) -> tuple[list[tuple[int, Any]], list[tuple[int, BaseException]]]:
+    """几项同时跑,结果**按原顺序**交出,每项带着它是第几项(连同 `skip` 时跳过的那几项)。
 
     默认 fail-fast:一项失败,还没开始的不再开始;已经在跑的,**下一个节点不再开始**、正在等的
     子任务由等的一方取消(见 common.wait_until)。正在跑的那一个节点本身跑完 —— 半截的供应商调用
@@ -256,7 +324,7 @@ def _iterate_concurrently(
     for future, index in futures.items():
         if index not in failed:
             results[index] = future.result()
-    return [one for index, one in enumerate(results) if index not in failed], failures
+    return [(index, one) for index, one in enumerate(results) if index not in failed], failures
 
 
 def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skipped: int) -> BaseException:

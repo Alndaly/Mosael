@@ -47,7 +47,7 @@ def test_取消检查复用节点自己的会话_不再另开一条() -> None:
     """每个节点起步的一瞬间原先占 2 条 —— 顶层 8 × 2 + 驱动 = 17,而池子是 15。"""
     import inspect
 
-    source = inspect.getsource(wf_engine.execute_graph)
+    source = inspect.getsource(wf_engine.run_graph)  # 执行内核(execute_graph 只是在它外面抛出失败)
     assert "is_cancelled(node_db)" in source, "又变回在自己的会话里面另开一条了"
 
 

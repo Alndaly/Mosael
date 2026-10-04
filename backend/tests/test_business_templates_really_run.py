@@ -654,8 +654,10 @@ class Test独立的几项_一项失败不拖垮其余:
         graph = _pick(product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE), "product_photo",
                       asset_id=_asset(ws, "image", "开衫平铺"))
         context = _run(ws, graph, product_name="开衫", product_brief="米色针织开衫")
-        assert len(context["shoot_scenes"]["failed"]) == 1
-        assert context["output"]["output"]["scene_count"] == 3
+        assert len(context["shoot_scenes"]["failed"]) == 1, "视频没出来的那一组照样记下"
+        # 那一组的上身图已经出了、付了钱:照样交出来(交的就是上身图,带不带视频都一样)。此前整组被丢掉,输出里是 3 组。
+        assert context["output"]["output"]["scene_count"] == 4
+        assert len(context["output"]["output"]["image_asset_ids"]) == 4
         with unit_of_work() as db:
             filed = db.query(Asset).filter(Asset.project_id == context["output"]["output"]["project_id"]).count()
         assert filed == 4 + 3, "四组的图都归档了,三段视频也归档了"

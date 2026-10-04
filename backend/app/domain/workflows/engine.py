@@ -53,6 +53,7 @@ from app.domain.workflows.node_types import node_title
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
+from app.domain.workflows.graph_run import GraphRun
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
 from app.domain.workflows.run_scope import halt_scope, halted, node_scope
@@ -457,9 +458,31 @@ def execute_graph(
     db: Session | None = None,
     entry_is_root: bool = False,
 ) -> tuple[dict[str, Any], bool]:
+    """跑一张图，有节点失败就把那个原因抛出来。返回 (最终上下文, 是否被取消)。
+
+    要在失败时拿到已经落定的那些产物的，用 run_graph。
+    """
+    run = run_graph(
+        graph, wf_id=wf_id, initial_context=initial_context, params=params, job=job, db=db, entry_is_root=entry_is_root,
+    )
+    if run.error is not None:
+        raise run.error
+    return run.context, run.cancelled
+
+
+def run_graph(
+    graph: dict[str, Any],
+    *,
+    wf_id: str,
+    initial_context: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    job: Job | None = None,
+    db: Session | None = None,
+    entry_is_root: bool = False,
+) -> GraphRun:
     """依赖驱动的并行执行内核(顶层工作流与循环体/子图共用):前驱全完成才可运行,彼此独立的
     分支**同时**跑(线程池)。条件分支按 source_handle 匹配才算活跃;未被活跃入边触达的节点整段
-    跳过(Dify 语义)。返回 (最终上下文, 是否被取消)。
+    跳过(Dify 语义)。节点失败不抛出，连同失败那一刻已经落定的上下文一起交回(见 GraphRun)。
 
     - 顶层:传 job + db,发事件/进度、支持取消;只有 start 类型是入口。
     - 子图(循环体等):不传 job;`entry_is_root=True` 让无入边节点也作为入口;用 initial_context
@@ -645,6 +668,7 @@ def execute_graph(
     processed = 0
     scheduled: set[str] = set()
     error: Exception | None = None
+    failed_node = ""
     cancelled = False
 
     # 「停」信号先于线程池压上:节点提交时带走的上下文里要有它(见 workflows.run_scope)。
@@ -704,7 +728,7 @@ def execute_graph(
                         node_event("workflow.node.failed", nid,
                                    error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
                         break
-                    error = exc
+                    error, failed_node = exc, nid
                     node_event("workflow.node.failed", nid, **_failure_payload(exc))
                     # **失败让这一轮停下。** 还在跑的兄弟节点做完了也没人要:它们正在等的子任务
                     # 由等的那一方取消掉(见 executors.common.wait_until),而不是陪它们跑完。
@@ -739,9 +763,9 @@ def execute_graph(
                     node_finished(pending_nid, future.result())
 
     cancelled = cancelled or is_cancelled()
-    if error is not None and not cancelled:
-        raise error
-    return context, cancelled
+    if cancelled:
+        return GraphRun(context, True)
+    return GraphRun(context, False, error, failed_node if error is not None else "")
 
 
 def run_workflow(
@@ -760,9 +784,20 @@ def run_workflow(
     say(job, "jobMsg_workflowRunning", name=workflow.name)
     db.commit()
 
-    context, cancelled = execute_graph(graph, wf_id=workflow.id, params=params, job=job, db=db)
-    if cancelled:
+    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db)
+    context = run.context
+    if run.cancelled:
         return context
+    if run.error is not None:
+        # 失败的任务结果里照样留下**已经跑完的那些节点**的产物(出好的图、建好的项目)—— 失败原因由外层兜底
+        # 补进同一份结果(见 _run_workflow_thread)。此前只剩一句原因，付过钱的产物只能去执行历史里一条条翻。
+        job.result = {
+            "workflow_revision_id": revision.id,
+            "workflow_revision": revision.revision,
+            "workflow_graph_hash": revision.graph_hash,
+            "context": {nid: snapshot(out)[0] for nid, out in context.items()},
+        }
+        raise run.error
 
     # 「输出」节点声明的具名输出:被 call_workflow 调用时,调用方拿的就是这个契约(见 executors/subworkflow)。
     #: **图里有输出节点,结果里才有 `output` 这一格。** 此前总写一个空字典,于是调用一张没有输出节点
