@@ -60,6 +60,22 @@ export interface ViewState {
    * 用当前档案跑模板都要档案 id,而视图 id 对池档案、发布账号、RPA 会话各是一种东西。
    */
   partition?: string | null;
+  /** 这个会话开着的页面(左侧页面列表),按列表次序。 */
+  pages?: PageSummary[];
+  /** 一个会话最多同时开几个页面。 */
+  pageLimit?: number;
+  /** 最近一次因为开满了而拦下新页面的时刻(毫秒时间戳,0 是没有过);变了就提示一句。 */
+  pageLimitHitAt?: number;
+}
+
+/** 页面列表里的一项。 */
+export interface PageSummary {
+  id: string;
+  title: string;
+  url: string;
+  /** 网站图标的地址(http(s));没有是空串。 */
+  favicon: string;
+  current: boolean;
 }
 
 /** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{description,shortTitle,…平台选项}。 */

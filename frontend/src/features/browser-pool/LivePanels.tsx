@@ -136,6 +136,16 @@ export function LivePanels() {
               >
                 <MonitorPlay size={12} className="shrink-0 text-primary" />
                 <PanelTitle id={card.id} label={labels[card.id] ?? ""} />
+                {card.pages > 1 && (
+                  // 这个会话开着几个页面、当前在第几个(新窗口会进会话的页面列表并切过去)。
+                  <span
+                    data-live-panel-pages
+                    className="shrink-0 rounded bg-secondary px-1 tabular-nums text-muted-foreground"
+                    title={t("livePanelPages").replace("{page}", String(card.page)).replace("{pages}", String(card.pages))}
+                  >
+                    {card.page}/{card.pages}
+                  </span>
+                )}
               </div>
 
               {isTop && (

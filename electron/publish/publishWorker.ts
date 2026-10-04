@@ -808,6 +808,23 @@ export function viewReload(): void {
   views?.reload();
 }
 
+/** 前台会话的页面列表(渲染层左侧那一列):切换、关闭、重排、新建、让出左侧。 */
+export function switchViewPage(id: string): boolean {
+  return views?.switchVisiblePage(id) ?? false;
+}
+export function closeViewPage(id: string): boolean {
+  return views?.closeVisiblePage(id) ?? false;
+}
+export function reorderViewPages(ids: string[]): boolean {
+  return views?.reorderVisiblePages(ids) ?? false;
+}
+export function newViewPage(url: string): boolean {
+  return views?.newPage(url) ?? false;
+}
+export function setPagesInset(left: number): void {
+  views?.setPagesInset(left);
+}
+
 /** 收起内嵌视图,把窗口还给 React UI。 */
 /** 渲染层拖动/缩放悬浮面板后落到这里(几何由主进程持有:layout() 要用,还要落盘)。 */
 export function setPanelLayout(change: PanelLayoutChange): void {

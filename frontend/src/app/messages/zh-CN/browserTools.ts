@@ -66,4 +66,13 @@ export const browserTools = {
   browserToolsFileSaving: "「{name}」下好了,正在存进素材库…",
   browserToolsFileSaved: "「{name}」已存进素材库",
   browserToolsFileNoWorkspace: "「{name}」下好了,但还没进入工作区,没地方存",
+  // 左侧页面列表(一个浏览器会话里的多个页面)。
+  browserPagesTitle: "页面",
+  browserPagesNew: "新建页面",
+  browserPagesNewPlaceholder: "输入网址或要搜的词,回车打开",
+  browserPagesClose: "关闭这个页面",
+  browserPagesCollapse: "收起页面列表",
+  browserPagesExpand: "展开页面列表",
+  browserPagesLimit: "最多同时开 {n} 个页面,先关掉几个再开",
+  browserPagesUntitled: "新页面",
 } as const;

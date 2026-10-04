@@ -56,6 +56,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
+import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
 import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
@@ -162,6 +163,7 @@ function PublishViewBar() {
   };
 
   return (
+    <>
     <div
       style={{ height: PUBLISH_BAR_HEIGHT }}
       className={cn(
@@ -237,6 +239,10 @@ function PublishViewBar() {
         <ArrowLeft size={14} /> {t("publishBackToApp")}
       </button>
     </div>
+    {/* 左侧页面列表。不能放进上面那条栏里:栏的 backdrop-filter 会让 fixed 定位相对它而不是窗口。
+        key:换了一个会话就是另一份列表。 */}
+    <BrowserPageList key={state.accountId ?? ""} state={state} top={PUBLISH_BAR_HEIGHT} />
+    </>
   );
 }
 

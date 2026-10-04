@@ -272,6 +272,29 @@
     ]
   },
   {
+    "type": "browser_page",
+    "config": {
+      "session": {
+        "type": "string"
+      },
+      "operation": {
+        "type": "string"
+      },
+      "by": {
+        "type": "string"
+      },
+      "value": {
+        "type": "template"
+      }
+    },
+    "outputs": [
+      "session",
+      "url",
+      "title",
+      "count"
+    ]
+  },
+  {
     "type": "browser_screenshot",
     "config": {
       "session": {

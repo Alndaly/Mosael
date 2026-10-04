@@ -2094,6 +2094,35 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["session", "value"],
     },
+    #: 会话里开着几个页面时(新窗口、target=_blank 会进会话的页面列表并自动切过去):切到某一页,或关掉
+    #: 当前页。单独一个节点而不是并进「打开网址」:那个节点的意思是「当前页去这个地址」,再塞进「换一页」
+    #: 「关一页」,同一个表单就有三种互不相干的填法,输出也说不清是哪一页的。
+    "browser_page": {
+        "external": True,
+        "category": "wfCat_browser",
+        "label": "wfNode_browser_page",
+        "description": "wfNode_browser_page_desc",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "wfNode_browser_page_session"},
+            "operation": {
+                "type": "string", "options": ["switch", "close"], "default": "switch",
+                "label": "wfField_browser_page_operation", "description": "wfNode_browser_page_operation",
+            },
+            "by": {
+                "type": "string", "options": ["index", "title", "url"], "default": "index",
+                "active_when": {"operation": "switch"},
+                "label": "wfField_browser_page_by", "description": "wfNode_browser_page_by",
+            },
+            "value": {
+                "type": "template", "required": True, "active_when": {"operation": "switch"},
+                "description": "wfNode_browser_page_value",
+            },
+        },
+        "outputs": ["session", "url", "title", "count"],
+        "output_labels": {
+            "url": "wfOut_browser_page_url", "title": "wfOut_browser_page_title", "count": "wfOut_browser_page_count",
+        },
+    },
     #: 截这一页存进素材库。截图本身和浏览器会话顶栏的「截屏」是同一份实现(electron/publish/pageCapture);
     #: 框选要人拖,节点里换成「某个元素」。
     "browser_screenshot": {

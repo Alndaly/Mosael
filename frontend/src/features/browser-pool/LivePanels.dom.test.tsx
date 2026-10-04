@@ -34,6 +34,8 @@ const CARD: LivePanelCard = {
   radius: 12,
   muted: true,
   hovered: false,
+  pages: 1,
+  page: 1,
 };
 
 let publishPanels: ((cards: LivePanelCard[]) => void) | null;
@@ -314,5 +316,17 @@ describe("LivePanels 标题:属于哪个工作流的哪次运行", () => {
     await waitFor(() => expect(sessions.getBrowserSession).toHaveBeenCalledWith("browser-1"));
     const titleButtons = within(shell()).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
     expect(titleButtons).toEqual(["livePanelUnmute", "close"]);
+  });
+});
+
+describe("LivePanels page count", () => {
+  it("marks a session with several pages as current/total on the title bar, and nothing when there is one page", () => {
+    renderPanels(<LivePanels />);
+    show();
+    expect(shell().querySelector("[data-live-panel-pages]")).toBeNull();
+    show({ ...CARD, pages: 3, page: 2 });
+    const badge = shell().querySelector("[data-live-panel-pages]") as HTMLElement;
+    expect(badge.textContent).toBe("2/3");
+    expect(badge.getAttribute("title")).toBe("livePanelPages");
   });
 });

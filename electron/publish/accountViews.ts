@@ -1,10 +1,11 @@
 import { app, screen, session, WebContentsView, type BaseWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
+import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "./types";
 import { DownloadRouter, type DownloadNotice } from "./downloads";
 import { MediaRecorder } from "./mediaRecorder";
 import { PageDriver } from "./pageDriver";
+import { MAX_PAGES, PageList, type PageMatch } from "./pageList";
 import { panelMediaScript } from "./panelAudio";
 import {
   DEFAULT_PANEL_LAYOUT,
@@ -66,7 +67,19 @@ export interface PanelCard {
   muted: boolean;
   /** 指针正停在这张卡片的网页上(渲染层看不见那一块,见 PanelHover)。卡片外壳据此亮出缩放手柄。 */
   hovered: boolean;
+  /** 这个会话开着几个页面、当前是第几个(从 1 起)。标题条上紧凑地标一下「2/3」。 */
+  pages: number;
+  page: number;
 }
+
+/** 会话里的一个页面:一个活着的网页视图和它的驱动。只有当前页挂在窗口上,别的在后台活着。 */
+interface PageTab {
+  view: WebContentsView;
+  driver: PageDriver;
+  favicon: string;
+}
+
+const tabId = (tab: PageTab): string => String(tab.view.webContents.id);
 
 /**
  * 渲染层对面板几何的一次改动:要么拖标题条挪位置,要么拖某个手柄缩放。缩放给的是指针要的矩形
@@ -82,8 +95,15 @@ export type PanelLayoutChange = { x: number; y: number } | ({ handle: PanelHandl
  * strip that the renderer keeps clear for its own controls.
  */
 export class AccountViewManager {
+  /**
+   * 每个视图(会话)**当前页**的网页视图与驱动。一个会话可以开好几个页面(新窗口、target=_blank、
+   * 用户「新建页面」都进同一个会话的页面列表,见 tabs);这两张表永远指着当前那一页 —— 顶栏工具、
+   * 自动化的下一步、截图都作用在它上面,不用每一处都去问「是哪一页」。
+   */
   private views = new Map<string, WebContentsView>();
   private drivers = new Map<string, PageDriver>();
+  /** 每个会话的全部页面(先后次序、哪个是当前页,见 pageList)。 */
+  private tabs = new Map<string, PageList<PageTab>>();
   private appliedProxy = new Map<string, string | null>();
   // 泛化:非发布账号的视图(浏览器池通用档案)显式登记其分区与显示名;发布账号不登记,
   // 沿用 persist:mosael-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
@@ -128,9 +148,14 @@ export class AccountViewManager {
   private foregroundHidden = false;
   /** 前台视图收到过的媒体响应(「下载页面里的视频」要用,见 mediaRecorder)。 */
   readonly media = new MediaRecorder();
-  /** 弹窗(window.open 开出来的子窗口)→ 开它的那个视图。弹窗里点的下载算在那个视图头上。 */
-  private childOwners = new Map<number, string>();
   private downloadRouter: DownloadRouter | null = null;
+  /**
+   * 前台视图左侧让出多少像素给页面列表(渲染层的 DOM,原生视图盖不住它就得让开)。列表挂着时由渲染层
+   * 报来,收起成图标条时变窄。
+   */
+  private shellInsetLeft = 0;
+  /** 最近一次因为页面开满了而拦下新窗口的时刻;随状态下发,渲染层据此提示一句。 */
+  private pageLimitHitAt = 0;
 
   constructor(
     private readonly onViewChanged: (state: ViewState) => void = noop,
@@ -151,12 +176,12 @@ export class AccountViewManager {
     return this.downloadRouter;
   }
 
-  /** 这个页面是哪个视图的(弹窗算开它的那个);不是我们的视图返回 null。 */
+  /** 这个页面是哪个视图(会话)的 —— 会话里的每一页都算;不是我们的页面返回 null。 */
   private viewIdOf(wc: Electron.WebContents): string | null {
-    for (const [id, view] of this.views) {
-      if (this.alive(view) && view.webContents.id === wc.id) return id;
+    for (const [id, list] of this.tabs) {
+      if (list.list().some(({ item }) => this.alive(item.view) && item.view.webContents.id === wc.id)) return id;
     }
-    return this.childOwners.get(wc.id) ?? null;
+    return null;
   }
 
   attachWindow(window: BaseWindow, nameResolver: (accountId: string) => string | null): void {
@@ -272,6 +297,8 @@ export class AccountViewManager {
    */
   private forget(accountId: string): void {
     this.detachView(accountId);
+    // 会话里别的页面本来就没挂在窗口上;这里只清账本(关掉它们是 destroy 的事)。
+    this.tabs.delete(accountId);
     const index = this.panels.indexOf(accountId);
     if (index >= 0) this.panels.splice(index, 1);
     this.panelIdleMs.delete(accountId);
@@ -330,9 +357,12 @@ export class AccountViewManager {
    * 「现在该不该静音」。
    */
   private syncAudio(): void {
-    for (const [id, view] of this.views) {
-      if (!this.alive(view)) continue;
-      view.webContents.setAudioMuted(!this.isAudible(id));
+    for (const [id, list] of this.tabs) {
+      for (const { item } of list.list()) {
+        if (!this.alive(item.view)) continue;
+        // 后台的页面永远静音:它们看不见,不该在那儿响。
+        item.view.webContents.setAudioMuted(!(item.view === this.views.get(id) && this.isAudible(id)));
+      }
     }
   }
 
@@ -663,11 +693,12 @@ export class AccountViewManager {
   }
 
   destroy(accountId: string): void {
-    this.drivers.get(accountId)?.detach();
-    const view = this.views.get(accountId);
-    if (this.alive(view)) {
+    // 会话关掉(运行结束、取消、用户关窗)时,它开着的**每一页**都收回 —— 不只当前那一页。
+    for (const page of this.tabs.get(accountId)?.list().map(({ item }) => item) ?? []) {
+      page.driver.detach();
+      if (!this.alive(page.view)) continue;
       try {
-        view.webContents.close();
+        page.view.webContents.close();
       } catch {
         // already gone
       }
@@ -705,138 +736,349 @@ export class AccountViewManager {
 
   private ensure(accountId: string): { view: WebContentsView; driver: PageDriver } {
     let view = this.views.get(accountId);
-    // 尸体等于没有:留着它,下一次 show()/getDriver() 就会在 undefined 上取属性而炸。
+    // 尸体等于没有:留着它,下一次 show()/getDriver() 就会在 undefined 上取属性而炸。当前页没了就落到
+    // 会话里的另一页;一页都不剩才算这个会话没了。
     if (view && !this.alive(view)) {
-      this.forget(accountId);
-      view = undefined;
+      this.dropTab(accountId, view);
+      view = this.views.get(accountId);
+      if (view && !this.alive(view)) {
+        this.forget(accountId);
+        view = undefined;
+      }
     }
     if (!view) {
-      view = new WebContentsView({
-        webPreferences: {
-          partition: this.partitionFor(accountId),
-          backgroundThrottling: false,
-          // 注入「返回」悬浮按钮(点击永远发生在聚焦的账号视图内,不会被 macOS 焦点切换吞掉)。
-          preload: ACCOUNT_VIEW_PRELOAD,
-          contextIsolation: true,
-        },
-      });
-      view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
-      // 新视图默认静音:它此刻不在前台。show() 会按 syncAudio 的唯一判据放开。
-      view.webContents.setAudioMuted(true);
-      // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
-      // 每次媒体真正起播都重申网页侧状态，避免 Electron 已放行但页面仍 muted/volume=0。
-      view.webContents.on("media-started-playing", () => {
-        if (this.isAudible(accountId)) this.syncPageMedia(accountId, true);
-      });
-      view.webContents.setWindowOpenHandler(({ url }) => {
-        // **弹窗要真的开成弹窗**,不能塞进本视图导航。
-        //
-        // 第三方登录(TikTok 的「用 Google 继续」、各家的微信/QQ 授权)全靠 window.open:授权页
-        // 办完事要 postMessage 回 `window.opener`,然后自己 window.close()。把它改成在本视图里
-        // 导航,这两件事同时坏掉 —— opener 被顶掉了,回调没人接;而那句 window.close() 关掉的是
-        // 整个账号视图,用户看到的就是"转了一会儿,内嵌浏览器自己退出了"。实测 TikTok 的 Google
-        // 登录正是这样。
-        //
-        // 安全那一半保持不变:危险 scheme(javascript:/file:/data: …)一律不开 —— 当初拦的是
-        // scheme,不是"弹窗"这件事本身。
-        //
-        // 代价:平台若用新窗口打开某个页面,驱动仍然只盯着原视图。目前各适配器都是自己 goto 到
-        // 明确 URL、不依赖"页面替我导航",所以不受影响。
-        try {
-          const proto = new URL(url).protocol;
-          if (proto === "http:" || proto === "https:") {
-            return {
-              action: "allow",
-              overrideBrowserWindowOptions: {
-                width: 520,
-                height: 700,
-                autoHideMenuBar: true,
-                // 分区必须显式写死:授权拿到的 cookie 要落在**这个账号**的分区里,而不是默认会话。
-                webPreferences: {
-                  partition: this.partitionFor(accountId),
-                  preload: ACCOUNT_VIEW_PRELOAD,
-                  contextIsolation: true,
-                },
-              },
-            };
-          }
-        } catch {
-          /* 非法 URL,忽略 */
-        }
-        return { action: "deny" };
-      });
-      // 弹窗也要抹掉 UA 里的 Electron 字样 —— 授权页同样会读 UA 做风控。
-      view.webContents.on("did-create-window", (child) => {
-        child.webContents.setUserAgent(platformUserAgent(child.webContents.getUserAgent()));
-        const childId = child.webContents.id;
-        this.childOwners.set(childId, accountId);
-        child.webContents.once("destroyed", () => this.childOwners.delete(childId));
-      });
-      // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,分区里的弹窗也走它)。
-      this.downloads.watch(view.webContents.session);
-      // 视图在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 ——
-      // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。
-      const contentsId = view.webContents.id;
-      view.webContents.on("destroyed", () => {
-        this.media.forget(contentsId);
-        this.forget(accountId);
-      });
-      // 换了一页:上一页看见过的视频不属于这一页。页内跳转(单页应用)不算。
-      view.webContents.on("did-navigate", () => this.media.forget(contentsId));
-      view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-        console.warn("[mosael:view] load failed", {
-          accountId,
-          errorCode,
-          errorDescription,
-          url: validatedURL,
-        });
-      });
-      // 从内嵌视图内可靠返回:顶栏「返回」是主窗口 HTML,内嵌视图抢焦点后首次点击常被 macOS
-      // 吃掉(时灵时不灵)。键盘直接在视图 webContents 上收——无论焦点在谁那儿都稳。
-      //
-      // 但**单击 Esc 不能用**:Esc 在网页里是「关掉当前这层」的通用键 —— 弹窗、下拉、验证浮层
-      // 全靠它。我们不 preventDefault,于是一次 Esc 同时被页面和这里收走:用户想关掉 Google 登录
-      // 的验证浮层,结果整个内嵌浏览器缩回了 app,登录被打断。实测就是这么发生的。
-      //
-      // 改成**连按两次**(700ms 内):第一次纯粹留给页面,第二次才是「我要退出这个内嵌浏览器」。
-      // 网页几乎不会把连按 Esc 定义成别的操作,而用户想退出时连按两下是自然动作。
-      let lastEscapeAt = 0;
-      view.webContents.on("before-input-event", (_event, input) => {
-        if (input.type !== "keyDown" || input.key !== "Escape") return;
-        const now = Date.now();
-        if (now - lastEscapeAt <= DOUBLE_ESCAPE_MS) {
-          lastEscapeAt = 0;
-          this.hide();
-          return;
-        }
-        lastEscapeAt = now;
-      });
-      // 指针在不在这块面板的网页上 —— 渲染层看不见原生视图上的鼠标,缩放手柄要靠这个才能在
-      // 悬停网页时亮出来。只看不拦(从不 preventDefault),页面照常收到每一个事件。见 PanelHover。
-      view.webContents.on("before-mouse-event", (_event, mouse) => {
-        if (this.visibleId === accountId || !this.panels.includes(accountId)) return;
-        this.hover.observe(accountId, mouse.type);
-      });
-      // 地址/加载态变化 → 刷新工具栏(仅当前可见视图才广播)。
-      const sync = () => {
-        if (this.visibleId === accountId) this.emit();
-        // 导航后必须**重新**设一次面板缩放。Chromium 的缩放策略是 same-origin(Electron 文档原话:
-        // "The zoom policy at the Chromium level is same-origin"),所以挂面板时设的 0.3 只对当时那个
-        // 域名有效 —— 一 goto 到新域名就回到 1,页面按 1:1 渲染再被 384×240 裁掉,只能看见左上角一块。
-        // 线上就是这么表现的(百度导航栏字号正常、内容被切)。
-        this.applyPanelZoom(accountId);
-      };
-      view.webContents.on("did-navigate", sync);
-      view.webContents.on("did-navigate-in-page", sync);
-      view.webContents.on("did-start-loading", sync);
-      view.webContents.on("did-stop-loading", sync);
-      view.webContents.on("did-finish-load", sync);
-      view.webContents.on("page-title-updated", sync);
-      view.setBackgroundColor("#ffffff");
-      this.views.set(accountId, view);
-      this.drivers.set(accountId, new PageDriver(view.webContents));
+      const tab = this.createTab(accountId);
+      const list = new PageList<PageTab>();
+      list.add(tabId(tab), tab, { activate: true });
+      this.tabs.set(accountId, list);
+      this.views.set(accountId, tab.view);
+      this.drivers.set(accountId, tab.driver);
+      view = tab.view;
     }
     return { view, driver: this.drivers.get(accountId)! };
+  }
+
+  /**
+   * 给会话建一个页面。`adopt`:window.open / target=_blank 开出来的那个 —— Chromium 已经为它建好了
+   * WebContents(带着 opener 关系),这里把它收进一个视图,而不是另起一个。
+   */
+  private createTab(accountId: string, adopt?: Electron.BrowserWindowConstructorOptions): PageTab {
+    const view = adopt
+      ? // 第三方登录(TikTok 的「用 Google 继续」、各家的微信/QQ 授权)全靠 window.open:授权页办完事要
+        // postMessage 回 `window.opener`,再自己 window.close()。收进来的正是 Chromium 为这个 window.open
+        // 建的那个页面,opener 关系还在,授权照常回调;它 close() 掉的也只是这一页(见 dropTab),不是整个会话。
+        new WebContentsView(adopt as unknown as Electron.WebContentsViewConstructorOptions)
+      : new WebContentsView({
+          webPreferences: {
+            partition: this.partitionFor(accountId),
+            backgroundThrottling: false,
+            // 注入「返回」悬浮按钮(点击永远发生在聚焦的账号视图内,不会被 macOS 焦点切换吞掉)。
+            preload: ACCOUNT_VIEW_PRELOAD,
+            contextIsolation: true,
+          },
+        });
+    const tab: PageTab = { view, driver: new PageDriver(view.webContents), favicon: "" };
+    const isCurrent = () => this.views.get(accountId) === view;
+    // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
+    view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+    // 新页面默认静音:它此刻不在前台。show() / switchPage 会按 syncAudio 的唯一判据放开。
+    view.webContents.setAudioMuted(true);
+    // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
+    // 每次媒体真正起播都重申网页侧状态，避免 Electron 已放行但页面仍 muted/volume=0。
+    view.webContents.on("media-started-playing", () => {
+      if (isCurrent() && this.isAudible(accountId)) this.syncPageMedia(accountId, true);
+    });
+    view.webContents.setWindowOpenHandler((details) => this.openWindow(accountId, view, details));
+    // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,会话里的每一页都走它)。
+    this.downloads.watch(view.webContents.session);
+    // 页面在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 —— 否则当前页指着
+    // 一具尸体,顶部工具条收不回去,复用它的每一处都在 undefined 上取属性。
+    const contentsId = view.webContents.id;
+    view.webContents.on("destroyed", () => {
+      this.media.forget(contentsId);
+      this.dropTab(accountId, view);
+    });
+    // 换了一页:上一页看见过的视频不属于这一页。页内跳转(单页应用)不算。
+    view.webContents.on("did-navigate", () => this.media.forget(contentsId));
+    view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+      console.warn("[mosael:view] load failed", {
+        accountId,
+        errorCode,
+        errorDescription,
+        url: validatedURL,
+      });
+    });
+    // 从内嵌视图内可靠返回:顶栏「返回」是主窗口 HTML,内嵌视图抢焦点后首次点击常被 macOS
+    // 吃掉(时灵时不灵)。键盘直接在视图 webContents 上收——无论焦点在谁那儿都稳。
+    //
+    // 但**单击 Esc 不能用**:Esc 在网页里是「关掉当前这层」的通用键 —— 弹窗、下拉、验证浮层
+    // 全靠它。我们不 preventDefault,于是一次 Esc 同时被页面和这里收走:用户想关掉 Google 登录
+    // 的验证浮层,结果整个内嵌浏览器缩回了 app,登录被打断。实测就是这么发生的。
+    //
+    // 改成**连按两次**(700ms 内):第一次纯粹留给页面,第二次才是「我要退出这个内嵌浏览器」。
+    // 网页几乎不会把连按 Esc 定义成别的操作,而用户想退出时连按两下是自然动作。
+    let lastEscapeAt = 0;
+    view.webContents.on("before-input-event", (_event, input) => {
+      if (input.type !== "keyDown" || input.key !== "Escape") return;
+      const now = Date.now();
+      if (now - lastEscapeAt <= DOUBLE_ESCAPE_MS) {
+        lastEscapeAt = 0;
+        this.hide();
+        return;
+      }
+      lastEscapeAt = now;
+    });
+    // 指针在不在这块面板的网页上 —— 渲染层看不见原生视图上的鼠标,缩放手柄要靠这个才能在
+    // 悬停网页时亮出来。只看不拦(从不 preventDefault),页面照常收到每一个事件。见 PanelHover。
+    view.webContents.on("before-mouse-event", (_event, mouse) => {
+      if (!isCurrent() || this.visibleId === accountId || !this.panels.includes(accountId)) return;
+      this.hover.observe(accountId, mouse.type);
+    });
+    // 地址/标题/加载态变化 → 刷新工具栏和页面列表(仅当前可见的会话才广播;列表里别的页面改了标题也要刷)。
+    const sync = () => {
+      if (this.visibleId === accountId) this.emit();
+      // 导航后必须**重新**设一次面板缩放。Chromium 的缩放策略是 same-origin(Electron 文档原话:
+      // "The zoom policy at the Chromium level is same-origin"),所以挂面板时设的 0.3 只对当时那个
+      // 域名有效 —— 一 goto 到新域名就回到 1,页面按 1:1 渲染再被 384×240 裁掉,只能看见左上角一块。
+      // 线上就是这么表现的(百度导航栏字号正常、内容被切)。
+      if (isCurrent()) this.applyPanelZoom(accountId);
+    };
+    view.webContents.on("did-navigate", sync);
+    view.webContents.on("did-navigate-in-page", sync);
+    view.webContents.on("did-start-loading", sync);
+    view.webContents.on("did-stop-loading", sync);
+    view.webContents.on("did-finish-load", sync);
+    view.webContents.on("page-title-updated", sync);
+    view.webContents.on("page-favicon-updated", (_event, favicons) => {
+      tab.favicon = favicons.find((one) => /^https?:\/\//i.test(one)) ?? "";
+      if (this.visibleId === accountId) this.emit();
+    });
+    view.setBackgroundColor("#ffffff");
+    return tab;
+  }
+
+  /**
+   * 页面要开新窗口(window.open、target=_blank):**收进这个会话的页面列表并切过去**,不再弹一个
+   * 520×700 的独立小窗 —— 那个小窗盖在应用上、关掉主窗口它还在,自动化也够不着它(驱动只盯着原页面)。
+   *
+   * 危险 scheme(javascript:/file:/data: …)照旧一律不开;开满了(MAX_PAGES)也不开,并记下时刻,
+   * 前台的话由页面列表提示一句。后台打开(中键 / ⌘ 点击)的只加进列表,不切过去。
+   */
+  private openWindow(
+    accountId: string,
+    opener: WebContentsView,
+    details: Electron.HandlerDetails,
+  ): Electron.WindowOpenHandlerResponse {
+    let protocol = "";
+    try {
+      protocol = new URL(details.url).protocol;
+    } catch {
+      /* 非法 URL */
+    }
+    if (protocol !== "http:" && protocol !== "https:") return { action: "deny" };
+    const list = this.tabs.get(accountId);
+    if (!list || list.full) {
+      this.pageLimitHitAt = Date.now();
+      console.warn("[mosael:view] page limit reached, new window refused", { accountId, limit: MAX_PAGES });
+      if (this.visibleId === accountId) this.emit();
+      return { action: "deny" };
+    }
+    return {
+      action: "allow",
+      // 关掉开它的那一页时,它开出来的页面照样留着:在列表里它们是平级的页面,不是附属的弹窗
+      // (Electron 默认会把子窗口跟着 opener 一起关掉 —— 实跑里关掉一页,它开过的两页一起没了)。
+      outlivesOpener: true,
+      createWindow: (options) =>
+        this.addTab(accountId, options, {
+          activate: details.disposition !== "background-tab",
+          after: String(opener.webContents.id),
+        }).view.webContents,
+    };
+  }
+
+  /** 往会话里加一页(新窗口收进来的、用户新建的),放在 `after` 那一页后面。 */
+  private addTab(
+    accountId: string,
+    adopt: Electron.BrowserWindowConstructorOptions | undefined,
+    opts: { activate: boolean; after?: string | null },
+  ): PageTab {
+    const list = this.tabs.get(accountId)!;
+    const tab = this.createTab(accountId, adopt);
+    list.add(tabId(tab), tab, { activate: false, after: opts.after });
+    if (opts.activate) this.switchPage(accountId, tabId(tab));
+    else {
+      if (this.visibleId === accountId) this.emit();
+      this.layout(); // 面板卡片上的页数
+    }
+    return tab;
+  }
+
+  /**
+   * 切到会话里的某一页:它挂到窗口上原来那一页的位置(前台全屏或面板,缩放跟着),原来那一页摘下来
+   * 留在后台活着、静音。返回切成没有。
+   */
+  switchPage(accountId: string, pageId: string): boolean {
+    const list = this.tabs.get(accountId);
+    const tab = list?.get(pageId);
+    if (!list || !tab || !this.alive(tab.view)) return false;
+    const previous = this.views.get(accountId);
+    list.setCurrent(pageId);
+    if (previous === tab.view) return true;
+    this.views.set(accountId, tab.view);
+    this.drivers.set(accountId, tab.driver);
+    const shown = this.visibleId === accountId;
+    const panelled = !shown && this.panels.includes(accountId);
+    if (this.window && !this.window.isDestroyed() && (shown || panelled)) {
+      if (previous) {
+        try {
+          this.window.contentView.removeChildView(previous);
+        } catch {
+          // 原来那一页已经没了(关掉的正是它)
+        }
+      }
+      this.window.contentView.addChildView(tab.view);
+      if (shown) {
+        tab.view.webContents.setZoomFactor(1);
+        void tab.driver.clearMetricsOverride();
+        tab.view.setVisible(!this.foregroundHidden);
+      } else {
+        this.applyPanelZoom(accountId);
+        // addChildView 把它放到了最上面;卡片堆里排在它上面的那几张(和前台视图)要回到它上面去。
+        for (const id of this.panels.slice(this.panels.indexOf(accountId) + 1)) {
+          const above = this.views.get(id);
+          if (id !== this.visibleId && this.alive(above)) this.window.contentView.addChildView(above);
+        }
+        const front = this.visibleId ? this.views.get(this.visibleId) : null;
+        if (this.alive(front)) this.window.contentView.addChildView(front);
+      }
+    }
+    if (previous && this.alive(previous)) previous.webContents.setAudioMuted(true);
+    this.syncAudio();
+    this.layout();
+    if (shown) this.emit();
+    return true;
+  }
+
+  /**
+   * 一页没了(关掉了 / 页面自己 window.close() / 崩了):从列表里拿掉;是当前页就落到它上面那一页
+   * (关掉弹出来的授权页,回到开它的那一页);一页都不剩,这个会话就没了。
+   */
+  private dropTab(accountId: string, view: WebContentsView): void {
+    const list = this.tabs.get(accountId);
+    const entry = list?.list().find(({ item }) => item.view === view);
+    if (!list || !entry) {
+      // 不在任何列表里(还没登记就没了):老办法,整个会话当没了。
+      if (this.views.get(accountId) === view) this.forget(accountId);
+      return;
+    }
+    const wasCurrent = this.views.get(accountId) === view;
+    entry.item.driver.detach();
+    if (this.window && !this.window.isDestroyed()) {
+      try {
+        this.window.contentView.removeChildView(view);
+      } catch {
+        // 已经摘掉了
+      }
+    }
+    const next = list.remove(entry.id);
+    if (next === null || list.size === 0) {
+      this.forget(accountId);
+      return;
+    }
+    if (wasCurrent) this.switchPage(accountId, next);
+    else {
+      if (this.visibleId === accountId) this.emit();
+      this.layout();
+    }
+  }
+
+  /** 关掉会话里的一页。最后一页不关(那是关掉整个浏览器,走「返回」/「关闭浏览器」),返回关成没有。 */
+  closePage(accountId: string, pageId: string): boolean {
+    const list = this.tabs.get(accountId);
+    const tab = list?.get(pageId);
+    if (!list || !tab || list.size <= 1) return false;
+    try {
+      tab.view.webContents.close();
+    } catch {
+      // 已经没了
+    }
+    this.dropTab(accountId, tab.view); // close 会触发 destroyed → dropTab;不依赖它一定到达(幂等)
+    return true;
+  }
+
+  /** 会话里的页面,按列表次序。 */
+  pagesOf(accountId: string): PageSummary[] {
+    const list = this.tabs.get(accountId);
+    const current = this.views.get(accountId);
+    return (list?.list() ?? [])
+      .filter(({ item }) => this.alive(item.view))
+      .map(({ id, item }) => ({
+        id,
+        title: item.view.webContents.getTitle(),
+        url: item.view.webContents.getURL(),
+        favicon: item.favicon,
+        current: item.view === current,
+      }));
+  }
+
+  /** 按第几个 / 标题 / 网址找会话里的一页(自动化的「切换页面」用);找不到是 null。 */
+  findPage(accountId: string, match: PageMatch): string | null {
+    const list = this.tabs.get(accountId);
+    if (!list) return null;
+    return list.find(match, (tab) =>
+      this.alive(tab.view)
+        ? { title: tab.view.webContents.getTitle(), url: tab.view.webContents.getURL() }
+        : { title: "", url: "" },
+    );
+  }
+
+  /** 当前页的 id(自动化「关闭当前页」用)。 */
+  currentPageId(accountId: string): string | null {
+    return this.tabs.get(accountId)?.current()?.id ?? null;
+  }
+
+  // ---- 页面列表(渲染层左侧那一列):都作用在前台那个会话上,渲染层不点名要哪个会话 ----
+
+  /** 前台会话新建一页并打开地址(地址栏同一套归一:补协议、不像网址就去搜)。开满了返回 false。 */
+  newPage(rawUrl: string): boolean {
+    const id = this.visibleId;
+    const list = id ? this.tabs.get(id) : null;
+    if (!id || !list) return false;
+    if (list.full) {
+      this.pageLimitHitAt = Date.now();
+      this.emit();
+      return false;
+    }
+    const tab = this.addTab(id, undefined, { activate: true, after: list.current()?.id ?? null });
+    const url = normalizeAddress(rawUrl);
+    if (url) void tab.view.webContents.loadURL(url);
+    return true;
+  }
+
+  switchVisiblePage(pageId: string): boolean {
+    return this.visibleId ? this.switchPage(this.visibleId, pageId) : false;
+  }
+
+  closeVisiblePage(pageId: string): boolean {
+    return this.visibleId ? this.closePage(this.visibleId, pageId) : false;
+  }
+
+  /** 拖动重排前台会话的页面。给的次序要和现有的一一对上(见 PageList.reorder)。 */
+  reorderVisiblePages(ids: string[]): boolean {
+    const list = this.visibleId ? this.tabs.get(this.visibleId) : null;
+    if (!list?.reorder(ids)) return false;
+    this.emit();
+    return true;
+  }
+
+  /** 页面列表开合:前台视图左侧让出这么宽(收起成图标条时窄,展开时宽,不挂列表时是 0)。 */
+  setPagesInset(left: number): void {
+    const width = this.window && !this.window.isDestroyed() ? this.window.getContentSize()[0] : 0;
+    // 至多三分之一:列表再宽也不能把网页挤没了。
+    const next = Math.max(0, Math.min(Math.round(left), Math.floor(width / 3)));
+    if (next === this.shellInsetLeft) return;
+    this.shellInsetLeft = next;
+    this.layout();
   }
 
   private partitionFor(id: string): string {
@@ -866,9 +1108,9 @@ export class AccountViewManager {
     const visible = this.visibleId ? this.views.get(this.visibleId) : null;
     if (this.alive(visible)) {
       visible.setBounds({
-        x: 0,
+        x: this.shellInsetLeft,
         y: EMBED_HEADER_HEIGHT,
-        width: Math.max(0, width - this.shellInsetRight),
+        width: Math.max(0, width - this.shellInsetLeft - this.shellInsetRight),
         height: Math.max(0, height - EMBED_HEADER_HEIGHT),
       });
     }
@@ -892,6 +1134,8 @@ export class AccountViewManager {
         radius: PANEL.radius,
         muted: view.webContents.isAudioMuted(),
         hovered: this.hover.has(accountId),
+        pages: this.tabs.get(accountId)?.size ?? 1,
+        page: this.tabs.get(accountId)?.currentIndex() || 1,
       };
     });
     this.onPanelsChanged(cards);
@@ -909,6 +1153,9 @@ export class AccountViewManager {
       loading: wc ? wc.isLoading() : false,
       title: wc ? wc.getTitle() : "",
       partition: this.visibleId ? this.partitionFor(this.visibleId) : null,
+      pages: this.visibleId ? this.pagesOf(this.visibleId) : [],
+      pageLimit: MAX_PAGES,
+      pageLimitHitAt: this.pageLimitHitAt,
     });
   }
 }

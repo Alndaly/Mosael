@@ -173,6 +173,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_browser_http_status": {"zh": "HTTP 状态码", "en": "HTTP status code"},
     "wfOut_browser_downloaded_asset": {"zh": "下载进素材库的文件(没有下载就是空)", "en": "The downloaded file saved to the library (empty when nothing downloaded)"},
     "wfOut_browser_screenshot_asset": {"zh": "存进素材库的截图", "en": "The screenshot saved to the library"},
+    "wfOut_browser_page_url": {"zh": "现在这一页的网址", "en": "The current page's URL"},
+    "wfOut_browser_page_title": {"zh": "现在这一页的标题", "en": "The current page's title"},
+    "wfOut_browser_page_count": {"zh": "会话里开着几个页面", "en": "How many pages the session has open"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
     "dubOverlapNote": {
@@ -514,6 +517,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_upload_asset_id": {"zh": "要上传的素材(如上游导出的成片);和 file_path 只能填一个", "en": "The asset to upload (e.g. a video exported upstream); fill in this or file_path, not both"},
     "wfNode_browser_upload_file_path": {"zh": "或直接给本机绝对路径;和 asset_id 只能填一个。本机文件只有部署管理员能读,其他成员只能用管理员共享出来的文件夹里的", "en": "Or an absolute path on this computer; fill in this or asset_id, not both. Only deployment admins can read files on this computer — other members can only use files inside folders an admin has shared"},
     "wfNode_browser_upload_timeout_ms": {"zh": "等文件输入框出现的超时(毫秒,默认 15000)", "en": "How long to wait for the file input to appear (milliseconds, 15000 by default)"},
+    "wfNode_browser_page": {"zh": "浏览器·切换页面", "en": "Browser · switch page"},
+    "wfNode_browser_page_desc": {"zh": "会话里开着几个页面时(页面在新窗口打开的链接会进会话的页面列表并自动切过去),切到某一页,或关掉当前页。按第几个(最上面是 1)、标题里的字或网址里的一段找。", "en": "When the session has several pages open (a link that opens a new window joins the session's page list and becomes current), switch to one of them or close the current page. Find it by position (the top one is 1), words in its title, or part of its URL."},
+    "wfNode_browser_page_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
+    "wfNode_browser_page_operation": {"zh": "切到某一页,还是关掉当前页(只剩一页时不能关)", "en": "Switch to a page, or close the current one (the last page can't be closed)"},
+    "wfNode_browser_page_by": {"zh": "按第几个、标题,还是网址找", "en": "Find it by position, title, or URL"},
+    "wfNode_browser_page_value": {"zh": "第几个(最上面是 1),或标题 / 网址里含的那段字", "en": "The position (the top one is 1), or the words the title / URL contains"},
     "wfNode_browser_screenshot": {"zh": "浏览器·截图", "en": "Browser · screenshot"},
     "wfNode_browser_screenshot_desc": {"zh": "截下会话当前这一页,直接存进素材库(带来源网址、页面标题、截取时间,以及是哪次运行、哪个节点截的),输出素材 id。可截可见区域、整页长图,或某个元素。", "en": "Capture the session's current page straight into the library (with the page URL, title, capture time, and which run and node took it) and output the asset id. Capture the visible area, the full page, or one element."},
     "wfNode_browser_screenshot_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},

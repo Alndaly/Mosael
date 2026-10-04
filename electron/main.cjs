@@ -37,6 +37,10 @@ const {
   parseCaptureMode,
   parseImageUrls,
   parseLocale,
+  parseNewPage,
+  parsePageId,
+  parsePageOrder,
+  parsePagesInset,
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
@@ -834,6 +838,20 @@ app.whenReady().then(async () => {
     const { id } = parsePanelId(payload);
     return requirePublish().closePanel(id);
   });
+  // 前台会话的页面列表:切换、关闭、拖动重排、新建、让出左侧那一列。
+  ipcMain.handle(IPC.invoke.publishSwitchPage, (_e, payload) =>
+    requirePublish().switchViewPage(parsePageId(payload, IPC.invoke.publishSwitchPage).id),
+  );
+  ipcMain.handle(IPC.invoke.publishClosePage, (_e, payload) =>
+    requirePublish().closeViewPage(parsePageId(payload, IPC.invoke.publishClosePage).id),
+  );
+  ipcMain.handle(IPC.invoke.publishReorderPages, (_e, payload) =>
+    requirePublish().reorderViewPages(parsePageOrder(payload).ids),
+  );
+  ipcMain.handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
+  ipcMain.handle(IPC.invoke.publishPagesInset, (_e, payload) =>
+    requirePublish().setPagesInset(parsePagesInset(payload).left),
+  );
   ipcMain.handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
     const { id, muted } = parsePanelMuted(payload);
     return requirePublish().setPanelMuted(id, muted);

@@ -331,6 +331,27 @@ def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     return {"session": sid, "value": out.get("value")}
 
 
+@register("browser_page")
+def browser_page(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """在会话的几个页面之间切换,或关掉当前页(见 electron/publish/actionPage.ts)。交出现在这一页的网址、标题,
+    和会话里开着几个页面。"""
+    sid = _session_in(db, scope, config)
+    operation = "close" if str(config.get("operation") or "") == "close" else "switch"
+    args: dict[str, Any] = {"operation": operation}
+    if operation == "switch":
+        by = str(config.get("by") or "index")
+        args.update(by=by if by in ("index", "title", "url") else "index", value=str(config.get("value") or ""))
+    out = _run(sid, "page", args)
+    value = out.get("value") if isinstance(out, dict) else None
+    value = value if isinstance(value, dict) else {}
+    return {
+        "session": sid,
+        "url": str(value.get("url") or ""),
+        "title": str(value.get("title") or ""),
+        "count": int(value.get("count") or 0),
+    }
+
+
 #: 「截图」节点能截的三种(和 electron/publish/actionCapture.ts 的 SHOT_MODES 同一组)。
 SHOT_MODES = ("visible", "full", "element")
 

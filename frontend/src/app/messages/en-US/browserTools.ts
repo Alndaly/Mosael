@@ -65,4 +65,12 @@ export const browserTools = {
   browserToolsFileSaving: "“{name}” downloaded, saving it to the library…",
   browserToolsFileSaved: "“{name}” saved to the library",
   browserToolsFileNoWorkspace: "“{name}” downloaded, but there's no workspace open to save it to",
+  browserPagesTitle: "Pages",
+  browserPagesNew: "New page",
+  browserPagesNewPlaceholder: "Type an address or a search, then press Enter",
+  browserPagesClose: "Close this page",
+  browserPagesCollapse: "Collapse the page list",
+  browserPagesExpand: "Expand the page list",
+  browserPagesLimit: "At most {n} pages can be open at once; close a few first",
+  browserPagesUntitled: "New page",
 } as const;

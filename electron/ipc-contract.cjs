@@ -32,6 +32,12 @@ const IPC = Object.freeze({
     publishPanelLayout: "publish:panelLayout",
     publishClosePanel: "publish:closePanel",
     publishPanelMuted: "publish:panelMuted",
+    // 前台会话的页面列表(左侧那一列):都作用在前台那个会话上,渲染层不点名要哪个会话。
+    publishSwitchPage: "publish:switchPage",
+    publishClosePage: "publish:closePage",
+    publishReorderPages: "publish:reorderPages",
+    publishNewPage: "publish:newPage",
+    publishPagesInset: "publish:pagesInset",
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
@@ -267,6 +273,51 @@ function parseToolsInset(value) {
   return { right };
 }
 
+/** 页面列表里的一页:主进程给的 id(网页的数字编号)。 */
+function pageId(value, channel) {
+  if (typeof value !== "string" || !/^\d{1,10}$/.test(value)) throw new TypeError(`${channel}: page id is invalid`);
+  return value;
+}
+
+function parsePageId(value, channel) {
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id"], channel);
+  return { id: pageId(payload.id, channel) };
+}
+
+/** 拖动重排:整份新次序(和主进程手上的一一对上才认,见 PageList.reorder)。 */
+function parsePageOrder(value) {
+  const channel = IPC.invoke.publishReorderPages;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["ids"], channel);
+  if (!Array.isArray(payload.ids) || payload.ids.length === 0 || payload.ids.length > 50) {
+    throw new TypeError(`${channel}: ids must be a list of page ids`);
+  }
+  return { ids: payload.ids.map((id) => pageId(id, channel)) };
+}
+
+/** 新建页面:地址栏里敲的那段(主进程按地址栏同一套归一:补协议、不像网址就去搜)。 */
+function parseNewPage(value) {
+  const channel = IPC.invoke.publishNewPage;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["url"], channel);
+  const url = requiredString(payload, "url", channel);
+  if (url.length > 2000) throw new TypeError(`${channel}: url is too long`);
+  return { url };
+}
+
+/** 页面列表开合:前台视图左侧让出的像素宽。 */
+function parsePagesInset(value) {
+  const channel = IPC.invoke.publishPagesInset;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["left"], channel);
+  const left = payload.left;
+  if (typeof left !== "number" || !Number.isFinite(left) || left < 0 || left > 4000) {
+    throw new TypeError(`${channel}: left must be a number between 0 and 4000`);
+  }
+  return { left };
+}
+
 /**
  * 把一份下好的下载存进素材库:存到哪个服务器、哪个工作区、以谁的身份 —— 这些只有渲染层知道。
  * 令牌只用在这一次请求的头里(和 parseAuthToken 同一个长度上限)。
@@ -347,6 +398,10 @@ module.exports = {
   parseCaptureMode,
   parseImageUrls,
   parseLocale,
+  parseNewPage,
+  parsePageId,
+  parsePageOrder,
+  parsePagesInset,
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,

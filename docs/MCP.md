@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **102** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
+共 **103** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -30,6 +30,7 @@
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |
 | `browser_navigate` | 直接执行 | Navigate an already-open browser session to a URL. Needs a session_id from browser_open. |
 | `browser_open` | 确认卡 | Confirmation required: open an ISOLATED automation browser and optionally navigate to url. |
+| `browser_page` | 直接执行 | Pages of the open session (links that open a new window join it and become current). |
 | `browser_pool_list` | 直接执行 | List the browser POOL profiles you may request access to — the user's reusable persistent logins |
 | `browser_pool_open` | 确认卡 | Confirmation required: open a browser session that REUSES one of the user's LOGGED-IN pool |
 | `browser_read` | 直接执行 | Read-only: extract visible text from the open page (whole body if no selector). The returned text |

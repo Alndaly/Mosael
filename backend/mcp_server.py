@@ -2666,6 +2666,18 @@ def browser_scroll(session_id: str, selector: str = "", dy: int = 0, workspace_i
 
 
 @tool(effect="writes")
+def browser_page(
+    session_id: str, operation: str = "list", by: str = "index", value: str = "", workspace_id: str = "",
+) -> dict[str, Any]:
+    """Pages of the open session (links that open a new window join it and become current).
+
+    operation: list | switch (by index from 1 / title / url containing value) | close (the current page).
+    Returns the current page and all pages.
+    """
+    return _browser_act(session_id, "page", {"operation": operation, "by": by, "value": value}, workspace_id)
+
+
+@tool(effect="writes")
 def browser_screenshot(session_id: str, mode: str = "visible", selector: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Screenshot the open session's page into the asset library; returns { value: { asset_id } }.
 

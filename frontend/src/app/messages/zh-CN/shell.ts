@@ -292,6 +292,7 @@ export const shell = {
   livePanelResizeBottomLeft: "从左下角缩放浏览器",
   livePanelResizeBottomRight: "从右下角缩放浏览器",
   livePanelMute: "关闭浏览器声音",
+  livePanelPages: "第 {page} 页,共 {pages} 页",
   livePanelUnmute: "打开浏览器声音",
   livePanelRunTitle: "{workflow} · {time} 的运行",
   livePanelOpenRun: "打开这次运行",

@@ -51,7 +51,20 @@ const fake = vi.hoisted(() => {
     isAudioMuted() {
       return this.muted;
     }
-    setWindowOpenHandler() {}
+    /** 页面要开新窗口时 Electron 会问它(见 accountViews.openWindow)。 */
+    openHandler: ((details: { url: string; disposition: string }) => unknown) | null = null;
+    setWindowOpenHandler(handler: (details: { url: string; disposition: string }) => unknown) {
+      this.openHandler = handler;
+    }
+    url = "";
+    title = "";
+    loadURL(url: string) {
+      this.url = url;
+      return Promise.resolve();
+    }
+    isWaitingForResponse() {
+      return false;
+    }
     isDestroyed() {
       return this.destroyed;
     }
@@ -62,10 +75,10 @@ const fake = vi.hoisted(() => {
       this.zoom = zoom;
     }
     getURL() {
-      return "";
+      return this.url;
     }
     getTitle() {
-      return "";
+      return this.title;
     }
     isLoading() {
       return false;
@@ -76,7 +89,11 @@ const fake = vi.hoisted(() => {
     }
   }
   class WebContentsView {
-    webContents = new WebContents();
+    webContents: WebContents;
+    /** 新窗口收进来时,Electron 把它为 window.open 建好的那个 WebContents 交给视图收养。 */
+    constructor(options?: { webContents?: WebContents }) {
+      this.webContents = options?.webContents ?? new WebContents();
+    }
     bounds = { x: 0, y: 0, width: 0, height: 0 };
     visible = true;
     setVisible(visible: boolean) {
@@ -124,7 +141,7 @@ const fake = vi.hoisted(() => {
       return false;
     }
   }
-  return { WebContentsView, Window, userData: "" };
+  return { WebContentsView, WebContents, Window, userData: "" };
 });
 
 vi.mock("electron", () => ({
@@ -158,6 +175,26 @@ let cards: PanelCard[];
 
 function viewOf(id: string): FakeView {
   return (manager as unknown as { views: Map<string, FakeView> }).views.get(id)!;
+}
+
+/**
+ * 页面开新窗口:按 Electron 的顺序走一遍 —— 先问 setWindowOpenHandler 的处理器,放行的话调它给的
+ * createWindow,把 Chromium 为这个 window.open 建好的 WebContents 交进去。返回新页面(放行了的话)。
+ */
+function openWindow(opener: FakeView, url: string, disposition = "foreground-tab") {
+  const answer = opener.webContents.openHandler!({ url, disposition }) as {
+    action: string;
+    outlivesOpener?: boolean;
+    createWindow?: (options: unknown) => InstanceType<typeof fake.WebContents>;
+  };
+  if (answer.action !== "allow") return null;
+  // 列表里的页面是平级的:关掉开它的那一页,它照样留着(Electron 默认会跟着 opener 一起关)。
+  expect(answer.outlivesOpener).toBe(true);
+  const guest = new fake.WebContents();
+  guest.url = url;
+  const returned = answer.createWindow!({ webContents: guest, webPreferences: {} });
+  expect(returned).toBe(guest); // createWindow 必须交回收养的那一个
+  return guest;
 }
 
 function attach(...ids: string[]) {
@@ -417,7 +454,7 @@ describe("downloads in the embedded pages", () => {
     });
   }
 
-  it("takes over every view's downloads (no save dialog) and counts a popup's download as its opener's", async () => {
+  it("takes over every view's downloads (no save dialog), the session's other pages included", async () => {
     const notices: Array<{ state: string; name: string }> = [];
     const own = new AccountViewManager(() => undefined, () => undefined, (notice) => notices.push(notice));
     own.attachWindow(window as never, () => null);
@@ -431,11 +468,10 @@ describe("downloads in the embedded pages", () => {
     session.emit("will-download", {}, item, view.webContents);
     expect(item.savePath.startsWith(path.join(fake.userData, "web-downloads"))).toBe(true);
 
-    // 页面用 window.open 开了个弹窗,弹窗里点的下载也算在这个会话头上。
-    const popup = new fake.WebContentsView();
-    view.webContents.emit("did-create-window", popup);
+    // 页面用 window.open 开了一页(进了这个会话的页面列表),那一页里点的下载也算在这个会话头上。
+    const opened = openWindow(view, "https://example.com/gallery");
     const fromPopup = download("cover.png");
-    session.emit("will-download", {}, fromPopup, popup.webContents);
+    session.emit("will-download", {}, fromPopup, opened);
 
     fs.writeFileSync(item.savePath, "pdf");
     item.emit("done", {}, "completed");
@@ -445,5 +481,144 @@ describe("downloads in the embedded pages", () => {
     expect(collected.map((one) => one.ok && one.file.name)).toEqual(["report.pdf", "cover.png"]);
     expect(notices).toEqual([]); // 自动化的下载不打扰人
     own.destroyAll();
+  });
+});
+
+describe("several pages in one session (the page list)", () => {
+  const HEADER = 56;
+  const pageIds = (id: string) => manager.pagesOf(id).map((one) => one.id);
+
+  it("a new window (target=_blank / window.open) joins the list right after its opener and becomes the current page", () => {
+    const states: Array<Record<string, unknown>> = [];
+    const own = new AccountViewManager((state) => states.push(state as never));
+    own.attachWindow(window as never, () => null);
+    own.registerSession("pool-a", "persist:pool-a");
+    own.show("pool-a");
+    const first = (own as unknown as { views: Map<string, FakeView> }).views.get("pool-a")!;
+    first.webContents.url = "https://example.com/";
+
+    const opened = openWindow(first, "https://accounts.google.com/signin")!;
+    expect(own.pagesOf("pool-a").map((one) => [one.url, one.current])).toEqual([
+      ["https://example.com/", false],
+      ["https://accounts.google.com/signin", true],
+    ]);
+    // 不再弹独立小窗:新页面挂在窗口里原来那一页的位置,原来那一页摘下来在后台活着、静音。
+    expect(window.children.some((child) => child.webContents === opened)).toBe(true);
+    expect(window.children.includes(first)).toBe(false);
+    expect(first.webContents.destroyed).toBe(false);
+    expect(first.webContents.isAudioMuted()).toBe(true);
+    expect(own.foreground()?.webContents).toBe(opened); // 顶栏工具作用在当前页上
+    expect(states.at(-1)).toMatchObject({ pages: [{ current: false }, { current: true }], pageLimit: 10 });
+    own.destroyAll();
+  });
+
+  it("refuses dangerous schemes; a background-tab joins the list without switching", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    const first = viewOf("pool-a");
+    expect(openWindow(first, "javascript:alert(1)")).toBeNull();
+    expect(openWindow(first, "file:///etc/passwd")).toBeNull();
+    expect(pageIds("pool-a")).toHaveLength(1);
+    const background = openWindow(first, "https://example.com/later", "background-tab")!;
+    expect(manager.pagesOf("pool-a").map((one) => one.current)).toEqual([true, false]);
+    expect(manager.foreground()?.webContents).toBe(first.webContents);
+    expect(window.children.some((child) => child.webContents === background)).toBe(false);
+  });
+
+  it("switches, closes and reorders pages; closing the current page lands on the one above; the last page stays", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    const first = viewOf("pool-a");
+    const second = openWindow(first, "https://example.com/2")!;
+    const third = openWindow(viewOf("pool-a"), "https://example.com/3")!;
+    const [a, b, c] = pageIds("pool-a");
+    expect(manager.foreground()?.webContents).toBe(third);
+
+    expect(manager.switchVisiblePage(a)).toBe(true);
+    expect(manager.foreground()?.webContents).toBe(first.webContents);
+    expect(manager.reorderVisiblePages([c, a, b])).toBe(true);
+    expect(pageIds("pool-a")).toEqual([c, a, b]);
+    expect(manager.reorderVisiblePages([c, a])).toBe(false);
+
+    // 关掉当前页(a):落到它上面那一页(c)。
+    expect(manager.closeVisiblePage(a)).toBe(true);
+    expect(first.webContents.destroyed).toBe(true);
+    expect(manager.foreground()?.webContents).toBe(third);
+    // 页面自己 window.close() 也一样从列表里拿掉。
+    second.close();
+    expect(pageIds("pool-a")).toEqual([c]);
+    // 只剩一页:不关(关掉整个浏览器走「返回」/「关闭浏览器」)。
+    expect(manager.closeVisiblePage(c)).toBe(false);
+    expect(third.destroyed).toBe(false);
+  });
+
+  it("caps the pages of one session, and tells the toolbar when a new one was refused", () => {
+    const states: Array<{ pageLimitHitAt?: number; pages?: unknown[] }> = [];
+    const own = new AccountViewManager((state) => states.push(state as never));
+    own.attachWindow(window as never, () => null);
+    own.registerSession("pool-a", "persist:pool-a");
+    own.show("pool-a");
+    const current = () => (own as unknown as { views: Map<string, FakeView> }).views.get("pool-a")!;
+    for (let i = 1; i < 10; i += 1) expect(openWindow(current(), `https://example.com/${i}`)).not.toBeNull();
+    expect(own.pagesOf("pool-a")).toHaveLength(10);
+    expect(states.at(-1)?.pageLimitHitAt).toBe(0);
+    expect(openWindow(current(), "https://example.com/11")).toBeNull();
+    expect(own.newPage("example.com/12")).toBe(false);
+    expect(own.pagesOf("pool-a")).toHaveLength(10);
+    expect(states.at(-1)?.pageLimitHitAt).toBeGreaterThan(0);
+    own.destroyAll();
+  });
+
+  it("new page from the list opens the address (same normalisation as the address bar) and becomes current", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    expect(manager.newPage("example.com/new")).toBe(true);
+    const pages = manager.pagesOf("pool-a");
+    expect(pages).toHaveLength(2);
+    expect(pages[1]).toMatchObject({ url: "https://example.com/new", current: true });
+  });
+
+  it("an automation session in a panel follows its new page: the driver, the panel card (2/2) and the stacking", () => {
+    attach("rpa-a", "rpa-b");
+    const before = manager.getDriver("rpa-a");
+    const opened = openWindow(viewOf("rpa-a"), "https://example.com/next")!;
+    // 下一步自动化拿到的是新页面的驱动。
+    expect(manager.getDriver("rpa-a")).not.toBe(before);
+    expect(manager.contentsOf("rpa-a")).toBe(opened);
+    const card = cards.find((one) => one.id === "rpa-a")!;
+    expect([card.page, card.pages]).toEqual([2, 2]);
+    // rpa-b 是最上面那张卡片:rpa-a 换了页,它的网页也不能盖到 rpa-b 上面。
+    expect(window.children.at(-1)).toBe(viewOf("rpa-b"));
+    expect(viewOf("rpa-a").bounds).toEqual(viewOf("rpa-b").bounds);
+    // 切回第一页、按标题 / 网址 / 第几个找页面(「切换页面」节点用)。
+    viewOf("rpa-a").webContents.title = "下一页";
+    expect(manager.findPage("rpa-a", { title: "下一" })).toBe(manager.currentPageId("rpa-a"));
+    const first = manager.findPage("rpa-a", { index: 1 })!;
+    expect(manager.switchPage("rpa-a", first)).toBe(true);
+    expect(manager.contentsOf("rpa-a")).not.toBe(opened);
+    expect(manager.findPage("rpa-a", { url: "example.com/next" })).not.toBeNull();
+    expect(manager.findPage("rpa-a", { url: "nowhere" })).toBeNull();
+  });
+
+  it("closing the session reclaims every page it opened", () => {
+    attach("rpa-a");
+    const first = viewOf("rpa-a").webContents;
+    const second = openWindow(viewOf("rpa-a"), "https://example.com/2")!;
+    const third = openWindow(viewOf("rpa-a"), "https://example.com/3", "background-tab")!;
+    manager.destroy("rpa-a");
+    expect([first.destroyed, second.destroyed, third.destroyed]).toEqual([true, true, true]);
+    expect(manager.pagesOf("rpa-a")).toEqual([]);
+    expect(window.children).toEqual([]);
+  });
+
+  it("makes room on the left for the page list, never more than a third of the window", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setPagesInset(232);
+    expect(viewOf("pool-a").bounds).toEqual({ x: 232, y: HEADER, width: 1440 - 232, height: 900 - HEADER });
+    manager.setShellInset(360);
+    expect(viewOf("pool-a").bounds).toEqual({ x: 232, y: HEADER, width: 1440 - 232 - 360, height: 900 - HEADER });
+    manager.setPagesInset(5000);
+    expect(viewOf("pool-a").bounds.x).toBe(480);
   });
 });

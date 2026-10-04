@@ -52,7 +52,8 @@ const mocks = vi.hoisted(() => {
   );
   const paths = { userData: "" };
   const capture = vi.fn();
-  return { drivers, views, backend, pending, execute, paths, capture };
+  const page = vi.fn();
+  return { drivers, views, backend, pending, execute, paths, capture, page };
 });
 
 vi.mock("electron", () => ({ app: { getPath: () => mocks.paths.userData } }));
@@ -60,6 +61,7 @@ vi.mock("./accountViews", () => ({ sharedViews: () => mocks.views }));
 vi.mock("./browserBackend", () => ({ browserBackend: mocks.backend }));
 vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
 vi.mock("./actionCapture", () => ({ captureForAction: mocks.capture }));
+vi.mock("./actionPage", () => ({ pageForAction: mocks.page }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
 
 import { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
@@ -316,5 +318,20 @@ it("「截图」动作截这一页(交给截图那一份实现),结果里带着�
     status: "done",
     result: { value: { asset_id: "shot-1", width: 10, height: 10 } },
     last_url: "https://x.test/",
+  });
+});
+
+it("「切换页面」动作交给页面列表那一份(不走驱动),结果里是当前页", async () => {
+  mocks.page.mockReturnValueOnce({ value: { index: 2, title: "第二页", url: "https://x.test/2", count: 2 }, lastUrl: "https://x.test/2" });
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "page", args: { operation: "switch", by: "index", value: "2" } });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.execute).not.toHaveBeenCalled();
+  expect(mocks.page).toHaveBeenCalledWith(mocks.views, "s1", { operation: "switch", by: "index", value: "2" });
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "done",
+    result: { value: { index: 2, title: "第二页", url: "https://x.test/2", count: 2 } },
+    last_url: "https://x.test/2",
   });
 });

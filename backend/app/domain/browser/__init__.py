@@ -72,6 +72,8 @@ KNOWN_ACTIONS = (
     #: 截这一页并存进素材库(「截图」节点 / 智能体的 browser_screenshot)。和 screenshot 不同:那个是失败现场的
     #: 小图,只回 base64、不入库。
     "capture",
+    #: 在会话的几个页面之间切换、关掉当前页、看看开着哪些页(「切换页面」节点 / 智能体的 browser_page)。
+    "page",
 )
 
 

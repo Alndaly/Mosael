@@ -290,6 +290,7 @@ export const shell = {
   livePanelResizeBottomLeft: "Resize browser from the bottom-left corner",
   livePanelResizeBottomRight: "Resize browser from the bottom-right corner",
   livePanelMute: "Mute browser audio",
+  livePanelPages: "Page {page} of {pages}",
   livePanelUnmute: "Unmute browser audio",
   livePanelRunTitle: "{workflow} · run at {time}",
   livePanelOpenRun: "Open this run",

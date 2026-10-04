@@ -21,6 +21,11 @@ export const IPC: {
     publishPanelLayout: "publish:panelLayout";
     publishClosePanel: "publish:closePanel";
     publishPanelMuted: "publish:panelMuted";
+    publishSwitchPage: "publish:switchPage";
+    publishClosePage: "publish:closePage";
+    publishReorderPages: "publish:reorderPages";
+    publishNewPage: "publish:newPage";
+    publishPagesInset: "publish:pagesInset";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";
@@ -83,6 +88,10 @@ export function parseRegionSelection(value: unknown): {
 export function parseImageUrls(value: unknown): { urls: string[] };
 export function parseReadMode(value: unknown): { mode: "article" | "selection" };
 export function parseToolsInset(value: unknown): { right: number };
+export function parsePageId(value: unknown, channel: string): { id: string };
+export function parsePageOrder(value: unknown): { ids: string[] };
+export function parseNewPage(value: unknown): { url: string };
+export function parsePagesInset(value: unknown): { left: number };
 export function parseSaveDownload(value: unknown): {
   id: string;
   server: string;

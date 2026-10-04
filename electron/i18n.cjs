@@ -335,6 +335,26 @@ const MESSAGES = {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
   },
+  // 「切换页面」节点(见 publish/actionPage.ts)。
+  browserErr_pageNeedsTarget: {
+    zh: "要切到哪一页:填第几个、标题里的字,或网址里的一段",
+    en: "Which page to switch to: give its position, words from its title, or part of its URL",
+  },
+  browserErr_pageBadIndex: {
+    zh: "第几个页面要填正整数(最上面那个是 1),现在是:{value}",
+    en: "The page position must be a whole number (the top one is 1); got: {value}",
+  },
+  browserErr_pageWhatIndex: { zh: "第 {index} 个页面", en: "page {index}" },
+  browserErr_pageWhatTitle: { zh: "标题含「{value}」的页面", en: "a page whose title contains “{value}”" },
+  browserErr_pageWhatUrl: { zh: "网址含「{value}」的页面", en: "a page whose URL contains “{value}”" },
+  browserErr_pageNotFound: {
+    zh: "没有找到{what}:这个会话现在开着 {count} 个页面",
+    en: "Couldn't find {what}: this session has {count} pages open",
+  },
+  browserErr_pageLastOne: {
+    zh: "这是这个会话里唯一的页面,不能关;要关掉整个浏览器请用「关闭浏览器」",
+    en: "This is the session's only page, so it can't be closed; use “Close browser” to close the whole browser",
+  },
   // 「截图」节点(见 publish/actionCapture.ts)。
   browserErr_shotNeedsSelector: {
     zh: "截元素要填 CSS 选择器",

@@ -15,6 +15,21 @@ export interface PublishViewState {
   title?: string;
   /** 视图的会话分区:页面工具据此找回对应的浏览器池档案。 */
   partition?: string | null;
+  /** 这个会话开着的页面(左侧页面列表),按列表次序。 */
+  pages?: PublishPage[];
+  /** 一个会话最多同时开几个页面。 */
+  pageLimit?: number;
+  /** 最近一次因为开满了而拦下新页面的时刻(毫秒时间戳,0 是没有过)。 */
+  pageLimitHitAt?: number;
+}
+
+export interface PublishPage {
+  id: string;
+  title: string;
+  url: string;
+  /** 网站图标地址(http(s));没有是空串。 */
+  favicon: string;
+  current: boolean;
 }
 
 export interface LivePanelCard {
@@ -28,6 +43,9 @@ export interface LivePanelCard {
   muted: boolean;
   /** 指针停在这张卡片的网页(原生视图)上 —— 渲染层自己看不见那一块。 */
   hovered: boolean;
+  /** 这个会话开着几个页面、当前是第几个(从 1 起)。 */
+  pages: number;
+  page: number;
 }
 
 /** 悬浮面板的缩放手柄:四角 + 四边,按罗盘方位命名。 */
@@ -73,6 +91,12 @@ export interface MosaelPublishBridge {
   setPanelLayout(change: LivePanelLayoutChange): Promise<void>;
   closePanel(id: string): Promise<void>;
   setPanelMuted(id: string, muted: boolean): Promise<void>;
+  /** 前台会话的页面列表:切换、关闭、拖动重排(整份新次序)、新建(地址栏同一套归一)、让出左侧的像素宽。 */
+  switchPage(id: string): Promise<boolean>;
+  closePage(id: string): Promise<boolean>;
+  reorderPages(ids: string[]): Promise<boolean>;
+  newPage(url: string): Promise<boolean>;
+  setPagesInset(left: number): Promise<void>;
 }
 
 export interface MosaelBrowserBridge {

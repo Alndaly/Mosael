@@ -15,6 +15,7 @@ import { app } from "electron";
 
 import { sharedViews } from "./accountViews";
 import { captureForAction } from "./actionCapture";
+import { pageForAction } from "./actionPage";
 import { dropActionDownloads, saveActionDownloads } from "./actionDownloads";
 import { executeBrowserAction, type ActionOutcome } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
@@ -189,7 +190,8 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
     try {
       let outcome: ActionOutcome;
       try {
-        // 「截图」节点:截这一页、存进素材库(和顶栏截屏同一份实现,见 actionCapture);别的动作照旧交给驱动。
+        // 「截图」节点:截这一页、存进素材库(和顶栏截屏同一份实现,见 actionCapture);「切换页面」节点:
+        // 在会话的几个页面之间切换 / 关掉当前页(见 actionPage)。别的动作照旧交给驱动。
         outcome =
           action.action === "capture"
             ? await captureForAction({
@@ -197,7 +199,9 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
                 webContents: views.contentsOf(action.session_id),
                 args: action.args,
               })
-            : await executeBrowserAction(driver, action.action, action.args);
+            : action.action === "page"
+              ? pageForAction(views, action.session_id, action.args)
+              : await executeBrowserAction(driver, action.action, action.args);
       } catch (error) {
         await dropActionDownloads(downloads);
         throw error;

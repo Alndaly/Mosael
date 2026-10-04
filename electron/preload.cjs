@@ -125,6 +125,12 @@ const publishBridge = {
   /** 悬浮浏览器声音开关；真实状态随 onPanels 回传。 */
   setPanelMuted: (id, muted) => ipcRenderer.invoke(IPC.invoke.publishPanelMuted, { id, muted }),
   onPanels: (callback) => onEvent(IPC.event.publishPanels, callback),
+  // 前台会话的页面列表(左侧那一列):页面本身随 onViewState 的 pages 下发。
+  switchPage: (id) => ipcRenderer.invoke(IPC.invoke.publishSwitchPage, { id }),
+  closePage: (id) => ipcRenderer.invoke(IPC.invoke.publishClosePage, { id }),
+  reorderPages: (ids) => ipcRenderer.invoke(IPC.invoke.publishReorderPages, { ids }),
+  newPage: (url) => ipcRenderer.invoke(IPC.invoke.publishNewPage, { url }),
+  setPagesInset: (left) => ipcRenderer.invoke(IPC.invoke.publishPagesInset, { left }),
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 

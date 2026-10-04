@@ -31,6 +31,10 @@ const contract = require("./ipc-contract.cjs") as {
   parseReadMode: (value: unknown) => { mode: string };
   parseToolsInset: (value: unknown) => { right: number };
   parseSaveDownload: (value: unknown) => Record<string, string | null>;
+  parsePageId: (value: unknown, channel: string) => { id: string };
+  parsePageOrder: (value: unknown) => { ids: string[] };
+  parseNewPage: (value: unknown) => { url: string };
+  parsePagesInset: (value: unknown) => { left: number };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -157,6 +161,19 @@ describe("Electron IPC contract", () => {
     expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
     expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);
     expect(() => contract.parseToolsInset({ right: Number.NaN })).toThrow(/right/);
+  });
+
+  it("decodes the page list's requests: page ids are the main process's numbers, the order is a list of them", () => {
+    expect(contract.parsePageId({ id: "42" }, "publish:switchPage")).toEqual({ id: "42" });
+    expect(() => contract.parsePageId({ id: "../x" }, "publish:switchPage")).toThrow(/page id/);
+    expect(() => contract.parsePageId({ id: "1", accountId: "x" }, "publish:switchPage")).toThrow(/unexpected field accountId/);
+    expect(contract.parsePageOrder({ ids: ["3", "1", "2"] })).toEqual({ ids: ["3", "1", "2"] });
+    expect(() => contract.parsePageOrder({ ids: [] })).toThrow(/ids/);
+    expect(() => contract.parsePageOrder({ ids: [1, 2] })).toThrow(/page id/);
+    expect(contract.parseNewPage({ url: "bilibili.com" })).toEqual({ url: "bilibili.com" });
+    expect(() => contract.parseNewPage({ url: "" })).toThrow(/url/);
+    expect(contract.parsePagesInset({ left: 220 })).toEqual({ left: 220 });
+    expect(() => contract.parsePagesInset({ left: -1 })).toThrow(/left/);
   });
 
   it("decodes saving a finished download: an http(s) server, a token, a workspace, nothing else", () => {
