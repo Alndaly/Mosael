@@ -619,14 +619,14 @@
       "zh": [
         "AI 对话模型",
         "TikHub 取数(按次计费、字段全、不用登录):TikHub 插件的连接(一个平台一条),并在插件页勾选这些工具 —— 抖音:douyin_web_fetch_one_video、douyin_web_fetch_video_comments;小红书:xiaohongshu_app_v2_get_video_note_detail、xiaohongshu_app_v2_get_note_comments;B站:bilibili_web_fetch_one_video、bilibili_web_fetch_video_comments",
-        "或者用内嵌浏览器取数(不花钱,不用连接):小红书看评论一定要登录、抖音多半要 —— 在「用内嵌浏览器打开」上把会话方式改成浏览器池、选一个已登录的档案;B站不用登录",
+        "或者用内嵌浏览器取数(不花钱,不用连接):小红书看评论一定要登录、抖音多半要 —— 在「用内嵌浏览器打开」上把会话方式改成浏览器池、选一个已登录的档案;B站不登录只给前 3 条一级评论(每条下前 20 条回复),要取全评论同样换成已登录 B 站的档案。结果里会写明取到多少、平台显示多少",
         "拆口播可选:转写引擎",
         "一条视频链接(或作品编号 + 平台)"
       ],
       "en": [
         "Chat model",
         "Fetch with TikHub (billed per call, complete fields, no sign-in): a TikHub plugin connection (one per platform) with these tools enabled on the plugins page — Douyin: douyin_web_fetch_one_video, douyin_web_fetch_video_comments; Xiaohongshu: xiaohongshu_app_v2_get_video_note_detail, xiaohongshu_app_v2_get_note_comments; Bilibili: bilibili_web_fetch_one_video, bilibili_web_fetch_video_comments",
-        "Or fetch with the built-in browser (free, no connection): Xiaohongshu comments always need a sign-in and Douyin's mostly do — switch “Open in the built-in browser” to the browser pool and pick a signed-in profile; Bilibili needs none",
+        "Or fetch with the built-in browser (free, no connection): Xiaohongshu comments always need a sign-in and Douyin's mostly do — switch “Open in the built-in browser” to the browser pool and pick a signed-in profile; signed out, Bilibili gives only the first 3 top-level comments (and 20 replies under each), so use a profile signed in to Bilibili to fetch them all. The result says how many came back and how many the platform shows",
         "Optional for the speech: a transcription engine",
         "A video link (or a post id plus the platform)"
       ]
@@ -652,8 +652,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
-    "nodes": 40,
+    "version": 4,
+    "nodes": 41,
     "download": {
       "zh": "/workflows/viral_video_breakdown.zh.mosael-workflow.json",
       "en": "/workflows/viral_video_breakdown.en.mosael-workflow.json"
@@ -673,13 +673,13 @@
       "zh": [
         "AI 对话模型",
         "TikHub 取数(按次计费、字段全、不用登录):TikHub 插件的连接(一个平台一条),并在插件页勾选这些工具 —— 抖音:douyin_web_fetch_video_comments;小红书:xiaohongshu_app_v2_get_note_comments;B站:bilibili_web_fetch_video_comments",
-        "或者用内嵌浏览器取数(不花钱,不用连接):小红书看评论一定要登录、抖音多半要 —— 在「用内嵌浏览器打开」上把会话方式改成浏览器池、选一个已登录的档案;B站不用登录",
+        "或者用内嵌浏览器取数(不花钱,不用连接):小红书看评论一定要登录、抖音多半要 —— 在「用内嵌浏览器打开」上把会话方式改成浏览器池、选一个已登录的档案;B站不登录只给前 3 条一级评论(每条下前 20 条回复),要取全评论同样换成已登录 B 站的档案。结果里会写明取到多少、平台显示多少",
         "一条作品链接(或作品编号 + 平台)"
       ],
       "en": [
         "Chat model",
         "Fetch with TikHub (billed per call, complete fields, no sign-in): a TikHub plugin connection (one per platform) with these tools enabled on the plugins page — Douyin: douyin_web_fetch_video_comments; Xiaohongshu: xiaohongshu_app_v2_get_note_comments; Bilibili: bilibili_web_fetch_video_comments",
-        "Or fetch with the built-in browser (free, no connection): Xiaohongshu comments always need a sign-in and Douyin's mostly do — switch “Open in the built-in browser” to the browser pool and pick a signed-in profile; Bilibili needs none",
+        "Or fetch with the built-in browser (free, no connection): Xiaohongshu comments always need a sign-in and Douyin's mostly do — switch “Open in the built-in browser” to the browser pool and pick a signed-in profile; signed out, Bilibili gives only the first 3 top-level comments (and 20 replies under each), so use a profile signed in to Bilibili to fetch them all. The result says how many came back and how many the platform shows",
         "A post link (or a post id plus the platform)"
       ]
     },
@@ -702,8 +702,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
-    "nodes": 30,
+    "version": 3,
+    "nodes": 32,
     "download": {
       "zh": "/workflows/comment_insights.zh.mosael-workflow.json",
       "en": "/workflows/comment_insights.en.mosael-workflow.json"

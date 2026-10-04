@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "自媒体视频爆款拆解",
   "description": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,要登录的平台换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起;字段全、更稳、不用登录)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
-  "graph_hash": "b50d297b11842d19a7e58fb46748e24501ab74b061466a1f8bddd76973b284ba",
+  "graph_hash": "d90233207c1643ff9b0ac760c1d55a6110883c1217f92e629dbe18a434d8de99",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -39,7 +39,7 @@
               {
                 "value": "browser",
                 "label": "内嵌浏览器",
-                "description": "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里已登录的档案。页面上的数字是约数,发布时间常常缺"
+                "description": "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里已登录的档案。B 站评论不登录只给前 3 条一级评论(每条下前 20 条回复),要取全也换成已登录 B 站的档案。页面上的数字是约数,发布时间常常缺"
               },
               {
                 "value": "tikhub",
@@ -381,14 +381,24 @@
         },
         "config": {
           "session": "",
-          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;\n  const bili = location.href.match(BILI) || String(input.video_url || \"\").match(BILI);\n  if (bili) {\n    //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,\n    //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。\n    try {\n      const view = await (await fetch(\"https://api.bilibili.com/x/web-interface/view?bvid=\" + bili[1], { credentials: \"include\" })).json();\n      const aid = view && view.data ? view.data.aid : null;\n      const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;\n      if (aid) {\n        //: 评论有多少抓多少(上限 1000 条 / 50 页 —— 再大的楼在「评论数」参数里也读不完,\n    //: 超过的部分由 web_read 的 total 如实说出来)。页与页之间隔 400ms,不踩频控。\n    const wanted = Math.min(Number(input.comment_max) || 1000, 1000);\n        const all = [];\n        let pn = 1;\n        while (all.length < wanted && pn <= 15) {\n          const r = await (await fetch(\"https://api.bilibili.com/x/v2/reply?type=1&oid=\" + aid + \"&sort=2&ps=20&pn=\" + pn, { credentials: \"include\" })).json();\n          const replies = r && r.data && r.data.replies ? r.data.replies : [];\n          if (!replies.length) break;\n          for (const one of replies) {\n            const push = (c, prefix) => all.push({\n              author: c && c.member ? c.member.uname : \"\",\n              text: prefix + ((c && c.content ? c.content.message : \"\") || \"\").replace(/\\s+/g, \" \").trim(),\n              likes: c && typeof c.like === \"number\" ? c.like : \"\",\n              published_at: c && c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : \"\",\n            });\n            push(one, \"\");\n            //: 楼中楼:接口里每条顶层评论自带前几层回复,拍平、带 ↳ 前缀,回复也算数。\n            for (const sub of one.replies || []) push(sub, \"↳ \");\n          }\n          pn += 1;\n          if (replies.length < 20) break;\n          await wait(400);\n        }\n        if (all.length) {\n          //: 视频本身的数据也在 view 接口里(播放、点赞、时长、发布时间……)—— 一并交回,爆款拆解直接整理它。\n          //: 只带整理要用的那几格,原样的 view 返回很大,会白占运行记录。\n          const v = view.data;\n          const video = { bvid: v.bvid, aid: v.aid, title: v.title, pubdate: v.pubdate, duration: v.duration, desc: v.desc,\n                          owner: v.owner ? { name: v.owner.name, mid: v.owner.mid } : null, stat: v.stat || {} };\n          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: \"api\", total, expanded: -1,\n                   video, text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };\n        }\n      }\n    } catch (e) { /* 接口这条路不通就落回读 DOM */ }\n  }\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  const expandMax = Math.min(Number(input.expand_max) || 0, 20);\n  const expanders = [];\n  if (expandMax > 0) {\n    await wait(Number(input.expand_settle_ms) || 1200);\n    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是\n    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。\n    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;\n    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,\n    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。\n    const collect = (root) => {\n      root.querySelectorAll(\"*\").forEach((el) => {\n        if (el.shadowRoot) collect(el.shadowRoot);\n        if (expanders.length >= expandMax || el.tagName === \"A\") return;\n        const text = (el.textContent || \"\").trim();\n        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;\n        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || \"\").trim()));\n        if (!nested) expanders.push(el);\n      });\n    };\n    collect(document);\n    for (const el of expanders) {\n      el.scrollIntoView({ block: \"center\" });\n      el.click();\n      await wait(Number(input.expand_wait_ms) || 600);\n    }\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
+          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;\n  const bili = location.href.match(BILI) || String(input.video_url || \"\").match(BILI);\n  if (bili) {\n    //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,\n    //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。\n    try {\n      const getJson = async (url) => (await fetch(url, { credentials: \"include\" })).json();\n      const started = Date.now();\n      //: 时间预算要落在节点的脚本上限(timeout_ms)之内;页与页之间隔一下,不踩频控。\n      const budget = Number(input.budget_ms) || 15000;\n      const pause = input.page_pause_ms == null ? 400 : Number(input.page_pause_ms);\n      const outOfTime = () => Date.now() - started > budget;\n      const view = await getJson(\"https://api.bilibili.com/x/web-interface/view?bvid=\" + bili[1]);\n      const v = view && view.data;\n      if (v && v.aid) {\n        const total = v.stat ? Number(v.stat.reply) || 0 : 0;\n        const nav = await getJson(\"https://api.bilibili.com/x/web-interface/nav\").catch(() => null);\n        const loggedIn = Boolean(nav && nav.data && nav.data.isLogin);\n        //: 评论有多少抓多少,上限 comment_max(最多 2000 条)。\n        const wanted = Math.min(Number(input.comment_max) || 1000, 2000);\n        const seen = new Set();\n        const picked = [];\n        let stoppedBy = \"\";\n        //: 同一条评论只算一次(一级里自带的楼中楼预览、置顶,和翻出来的是同一条)。楼中楼拍平、带 ↳ 前缀。\n        const take = (c, isReply) => {\n          const id = c && (c.rpid_str || (c.rpid ? String(c.rpid) : \"\"));\n          if (!id || seen.has(id)) return;\n          seen.add(id);\n          picked.push({ isReply, comment: {\n            author: c.member ? c.member.uname : \"\",\n            text: (isReply ? \"↳ \" : \"\") + ((c.content ? c.content.message : \"\") || \"\").replace(/\\s+/g, \" \").trim(),\n            likes: typeof c.like === \"number\" ? c.like : \"\",\n            published_at: c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : \"\",\n          } });\n        };\n        const full = () => {\n          if (picked.length >= wanted) { stoppedBy = \"limit\"; return true; }\n          if (outOfTime()) { stoppedBy = \"time\"; return true; }\n          return false;\n        };\n        //: 一级评论逐页翻到平台不再给(第 1 页另带置顶)。未登录时 B 站只给 1 页 3 条 —— 照实停下,下面说清。\n        const threads = [];\n        for (let pn = 1; !(pn > 1 && full()); pn += 1) {\n          const r = await getJson(\"https://api.bilibili.com/x/v2/reply?type=1&oid=\" + v.aid + \"&sort=2&ps=20&pn=\" + pn);\n          const d = (r && r.data) || {};\n          const replies = d.replies || [];\n          const pinned = pn === 1 ? [...(d.top_replies || []), ...(d.upper && d.upper.top ? [d.upper.top] : [])] : [];\n          for (const one of [...pinned, ...replies]) {\n            take(one, false);\n            for (const sub of one.replies || []) take(sub, true);\n            threads.push(one);\n          }\n          if (replies.length < 20) break;\n          await wait(pause);\n        }\n        //: 楼中楼:一级里只自带前几条预览,回复更多的楼逐页翻 reply/reply,翻到平台不再给。\n        for (const one of threads) {\n          if (stoppedBy || full()) break;\n          if ((one.rcount || 0) <= (one.replies || []).length) continue;\n          for (let pn = 1; !full(); pn += 1) {\n            const r = await getJson(\"https://api.bilibili.com/x/v2/reply/reply?type=1&oid=\" + v.aid + \"&root=\" + (one.rpid_str || one.rpid) + \"&ps=20&pn=\" + pn);\n            const subs = (r && r.data && r.data.replies) || [];\n            for (const sub of subs) take(sub, true);\n            if (subs.length < 20) break;\n            await wait(pause);\n          }\n        }\n        const kept = picked.slice(0, wanted);\n        if (kept.length) {\n          const fetchedReplies = kept.filter((one) => one.isReply).length;\n          //: 取到的比平台说的少,说清是哪一种:没登录(平台只给前几条)、到了条数 / 时间上限、或者平台就是没给\n          //: (被删除、折叠、仅自己可见)。这几句话由模板按界面语言交进来(input.notes)。\n          const notes = input.notes || {};\n          const gap = kept.length >= total ? \"\"\n            : stoppedBy === \"limit\" ? notes.limit\n            : stoppedBy === \"time\" ? notes.time\n            : !loggedIn ? notes.login\n            : notes.platform;\n          //: 视频本身的数据也在 view 接口里(播放、点赞、时长、发布时间……)—— 一并交回,爆款拆解直接整理它。\n          //: 只带整理要用的那几格,原样的 view 返回很大,会白占运行记录。\n          const video = { bvid: v.bvid, aid: v.aid, title: v.title, pubdate: v.pubdate, duration: v.duration, desc: v.desc,\n                          owner: v.owner ? { name: v.owner.name, mid: v.owner.mid } : null, stat: v.stat || {} };\n          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: \"api\", total,\n                   fetched: kept.length, fetched_roots: kept.length - fetchedReplies, fetched_replies: fetchedReplies,\n                   logged_in: loggedIn, gap_note: gap || \"\", expanded: -1, video,\n                   text: JSON.stringify({ total, comments: kept.map((one) => one.comment) }) };\n        }\n      }\n    } catch (e) { /* 接口这条路不通就落回读 DOM */ }\n  }\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  const expandMax = Math.min(Number(input.expand_max) || 0, 20);\n  const expanders = [];\n  if (expandMax > 0) {\n    await wait(Number(input.expand_settle_ms) || 1200);\n    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是\n    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。\n    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;\n    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,\n    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。\n    const collect = (root) => {\n      root.querySelectorAll(\"*\").forEach((el) => {\n        if (el.shadowRoot) collect(el.shadowRoot);\n        if (expanders.length >= expandMax || el.tagName === \"A\") return;\n        const text = (el.textContent || \"\").trim();\n        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;\n        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || \"\").trim()));\n        if (!nested) expanders.push(el);\n      });\n    };\n    collect(document);\n    for (const el of expanders) {\n      el.scrollIntoView({ block: \"center\" });\n      el.click();\n      await wait(Number(input.expand_wait_ms) || 600);\n    }\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
           "input": {
             "settle_ms": 2500,
             "scrolls": 8,
             "pause_ms": 1200,
             "max_chars": 40000,
-            "expand_max": 6
-          }
+            "expand_max": 6,
+            "comment_max": 1000,
+            "budget_ms": 90000,
+            "page_pause_ms": 400,
+            "notes": {
+              "login": "没登录:B 站对未登录的访问只给前 3 条一级评论、每条下前 20 条回复。要取全,在「用内嵌浏览器打开」上把会话方式换成浏览器池、选一个已登录 B 站的档案。",
+              "limit": "到了这次最多取的条数,后面的没有再取。",
+              "time": "到了这次取数的时间上限,后面的没有再取。",
+              "platform": "其余的 B 站没有给(被删除、折叠或仅自己可见的评论)。"
+            }
+          },
+          "timeout_ms": 120000
         },
         "inputs": [
           "session"
@@ -450,6 +460,18 @@
           "data": "{{web_read.value.text}}",
           "kind": "comments",
           "limit": "{{start.comment_count}}"
+        }
+      },
+      {
+        "id": "web_api_coverage",
+        "type": "template",
+        "name": "评论取到多少",
+        "position": {
+          "x": 2152,
+          "y": 877
+        },
+        "config": {
+          "template": "评论条数:平台显示 {{web_read.value.total}} 条,这次取到 {{web_read.value.fetched}} 条(一级 {{web_read.value.fetched_roots}} 条、楼中楼 {{web_read.value.fetched_replies}} 条)。{{web_read.value.gap_note}}"
         }
       },
       {
@@ -617,7 +639,7 @@
           "y": 535
         },
         "config": {
-          "template": "{{dy_video_m.summary}}{{xhs_video_m.summary}}{{bili_video_m.summary}}{{web_api_video_m.summary}}{{web_video_m.summary}}\n\n### 视频明细\n\n{{dy_video_m.table}}{{xhs_video_m.table}}{{bili_video_m.table}}{{web_api_video_m.table}}{{web_video_m.table}}\n\n{{dy_comments_m.summary}}{{xhs_comments_m.summary}}{{bili_comments_m.summary}}{{web_api_comments_m.summary}}{{web_comments_m.summary}}\n\n{{dy_comments_m.table}}{{xhs_comments_m.table}}{{bili_comments_m.table}}{{web_api_comments_m.table}}{{web_comments_m.table}}"
+          "template": "{{dy_video_m.summary}}{{xhs_video_m.summary}}{{bili_video_m.summary}}{{web_api_video_m.summary}}{{web_video_m.summary}}\n\n### 视频明细\n\n{{dy_video_m.table}}{{xhs_video_m.table}}{{bili_video_m.table}}{{web_api_video_m.table}}{{web_video_m.table}}\n\n{{dy_comments_m.summary}}{{xhs_comments_m.summary}}{{bili_comments_m.summary}}{{web_api_comments_m.summary}}{{web_comments_m.summary}}\n{{web_api_coverage.text}}\n\n{{dy_comments_m.table}}{{xhs_comments_m.table}}{{bili_comments_m.table}}{{web_api_comments_m.table}}{{web_comments_m.table}}"
         }
       },
       {
@@ -735,7 +757,7 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是短视频爆款拆解专家。你会收到一条视频的数据(代码算好的)、赞最多的评论,以及带时间码的口播逐字稿\n(下载或转写不成功时为空)。拆解它为什么火,再给一份照这个套路做一条的脚本提纲。\n\n- verdict:一句话说清它火的核心原因。\n- report_markdown 用二级标题分成这几节:\n  1. 数据表现:互动率、收藏 / 转发 / 评论各占多少,说明了什么(收藏多 = 有用,转发多 = 社交货币,评论多 = 争议或共鸣);\n  2. 选题:为什么这个题有人看,击中了谁的什么需求;\n  3. 钩子(前 3 秒):引用逐字稿开头的原话分析;没有逐字稿就根据标题、简介和评论推断,并写明是推断;\n  4. 结构与节奏:按时间段拆,每段起什么作用、在哪里转折;\n  5. 情绪点:哪些地方让人想点赞、评论、转发,用评论原文佐证;\n  6. 标题与封面文案:用了什么手法;\n  7. 评论区反馈:大家在夸什么、问什么、争什么;\n  8. 可复用的套路:3–5 条,写成可以照做的规则;\n  9. 不能照搬的部分与风险(账号势能、时效、平台规则)。\n- script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):\n  3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。\n- 只根据给到的材料下结论;没给的数据不要编。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
+          "system": "你是短视频爆款拆解专家。你会收到一条视频的数据(代码算好的)、赞最多的评论,以及带时间码的口播逐字稿\n(下载或转写不成功时为空)。拆解它为什么火,再给一份照这个套路做一条的脚本提纲。\n\n- verdict:一句话说清它火的核心原因。\n- report_markdown 用二级标题分成这几节:\n  1. 数据表现:互动率、收藏 / 转发 / 评论各占多少,说明了什么(收藏多 = 有用,转发多 = 社交货币,评论多 = 争议或共鸣);\n  2. 选题:为什么这个题有人看,击中了谁的什么需求;\n  3. 钩子(前 3 秒):引用逐字稿开头的原话分析;没有逐字稿就根据标题、简介和评论推断,并写明是推断;\n  4. 结构与节奏:按时间段拆,每段起什么作用、在哪里转折;\n  5. 情绪点:哪些地方让人想点赞、评论、转发,用评论原文佐证;\n  6. 标题与封面文案:用了什么手法;\n  7. 评论区反馈:大家在夸什么、问什么、争什么;\n  8. 可复用的套路:3–5 条,写成可以照做的规则;\n  9. 不能照搬的部分与风险(账号势能、时效、平台规则)。\n- script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):\n  3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。\n- 只根据给到的材料下结论;没给的数据不要编。数据里「评论条数」那句说了评论取到多少、平台显示多少:只取到一部分时,\n  评论区反馈那一节写明是从取到的这些里看的。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
           "prompt": "视频:{{link.url}}\n平台:{{link.platform}}\n数据来源:{{start.data_source}}\n\n{{data_block.text}}\n\n口播逐字稿(带时间码 JSON,可能为空):\n{{transcript.timed_text}}\n\n没有逐字稿的原因(可能为空):{{download.error}}",
           "response_format": "json_schema",
           "json_schema_name": "viral_breakdown",
@@ -914,6 +936,12 @@
         "source_handle": "true"
       },
       {
+        "id": "web_is_api__web_api_coverage__true",
+        "source": "web_is_api",
+        "target": "web_api_coverage",
+        "source_handle": "true"
+      },
+      {
         "id": "web_is_api__web_struct__false",
         "source": "web_is_api",
         "target": "web_struct",
@@ -977,6 +1005,11 @@
       {
         "id": "web_comments_m__data_block",
         "source": "web_comments_m",
+        "target": "data_block"
+      },
+      {
+        "id": "web_api_coverage__data_block",
+        "source": "web_api_coverage",
         "target": "data_block"
       },
       {

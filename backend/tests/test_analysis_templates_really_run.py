@@ -428,7 +428,8 @@ class Test爆款拆解真跑:
                 "stat": {"view": 5531373, "like": 276830, "reply": 89327, "favorite": 127298, "share": 9100}}
         comments = [{"author": "碧诗", "text": "wwwww", "likes": 54669, "published_at": "2010-12-09"}]
         page = {"url": BILI_VIDEO, "title": "字幕君交流场所_哔哩哔哩_bilibili", "now": "2026-10-04T03:30:00+08:00",
-                "mode": "api", "total": 89327, "expanded": -1, "video": view,
+                "mode": "api", "total": 89327, "fetched": 1, "fetched_roots": 1, "fetched_replies": 0, "logged_in": True,
+                "gap_note": "", "expanded": -1, "video": view,
                 "text": json.dumps({"total": 89327, "comments": comments}, ensure_ascii=False)}
         outside = Outside(monkeypatch, {"viral_breakdown": BREAKDOWN}, page_value=page)
         context = _run(ws, viral_video_breakdown_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser",
@@ -441,6 +442,25 @@ class Test爆款拆解真跑:
         assert context["has_video"]["result"] is True and "no_video_notice" not in context
         breakdown = outside.calls["llm"][-1]
         assert "字幕君交流场所" in breakdown["prompt"] and "wwwww" in breakdown["prompt"]
+
+    def test_浏览器_B站走接口_拆解拿到的数据里写明评论取到多少平台显示多少(self, monkeypatch) -> None:
+        ws, _ = _setup(with_tikhub=False)
+        view = {"bvid": "BV1xx411c7mD", "aid": 2, "title": "字幕君交流场所", "pubdate": _stamp(9), "duration": 2055,
+                "desc": "www", "owner": {"name": "碧诗"},
+                "stat": {"view": 5531373, "like": 276830, "reply": 89327, "favorite": 127298, "share": 9100}}
+        comments = [{"author": "碧诗", "text": "wwwww", "likes": 54669, "published_at": "2010-12-09"}]
+        page = {"url": BILI_VIDEO, "title": "字幕君交流场所_哔哩哔哩_bilibili", "now": "2026-10-04T03:30:00+08:00",
+                "mode": "api", "total": 89327, "fetched": 1000, "fetched_roots": 640, "fetched_replies": 360,
+                "logged_in": True, "gap_note": "到了这次最多取的条数,后面的没有再取。", "expanded": -1, "video": view,
+                "text": json.dumps({"total": 89327, "comments": comments}, ensure_ascii=False)}
+        outside = Outside(monkeypatch, {"viral_breakdown": BREAKDOWN}, page_value=page)
+        context = _run(ws, viral_video_breakdown_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser",
+                       download_video="no")
+        line = context["web_api_coverage"]["text"]
+        assert "平台显示 89327 条" in line and "这次取到 1000 条" in line and "到了这次最多取的条数" in line
+        assert line in outside.calls["llm"][-1]["prompt"], "拆解那一步要知道评论只取到一部分"
+        [note] = _notes(ws)
+        assert line in _note_text(note)
 
     def test_读页面脚本的B站接口那一支_带回视频数据(self) -> None:
         """脚本在浏览器里跑、这里跑不了它 —— 至少钉住接口那一支交回的值里有 view 接口的视频数据。"""
@@ -488,10 +508,57 @@ class Test评论区洞察真跑:
 
     def test_浏览器没读到评论_说清是不是要登录(self, monkeypatch) -> None:
         ws, _ = _setup(with_tikhub=False)
-        outside = Outside(monkeypatch, {"comments_page": {"title": "", "comments": [], "login_wall": True, "notes": "登录后查看评论"}})
+        outside = Outside(monkeypatch, {"comments_page": {"title": "", "comment_total": "", "comments": [], "login_wall": True,
+                                                          "notes": "登录后查看评论"}})
         context = _run(ws, comment_insights_graph(chat=CHAT), video_link=XHS_NOTE, data_source="browser")
         assert "no_comments_notice" in context and "insight" not in context
         assert [one["name"] for one in outside.calls["llm"]] == ["comments_page"]
+
+
+    def test_浏览器_B站走接口_取到的比平台少_每一步都说清取到多少平台显示多少_没取到的不当成全部(self, monkeypatch) -> None:
+        """实测(2026-10,真实执行器,未登录):396 条评论的视频接口只回 3 条一级 + 5 条回复,8 条全部进了分析,
+        洞察那一步拿到的数据里只有「整理的评论:8」,提示词还说「所有评论都被读过了,不要说样本」—— 平台显示的
+        396 只躺在读页面那一步的返回里。"""
+        ws, _ = _setup(with_tikhub=False)
+        comments = [{"author": f"用户{i}", "text": ("↳ " if i >= 3 else "") + f"第 {i} 条评论", "likes": 100 - i,
+                     "published_at": "2026-10-03"} for i in range(8)]
+        gap = "没登录:B 站对未登录的访问只给前 3 条一级评论"
+        page = {"url": BILI_VIDEO, "title": "测试视频_哔哩哔哩_bilibili", "now": "2026-10-04T12:00:00+08:00", "mode": "api",
+                "total": 396, "fetched": 8, "fetched_roots": 3, "fetched_replies": 5, "logged_in": False, "gap_note": gap,
+                "expanded": -1, "video": {}, "text": json.dumps({"total": 396, "comments": comments}, ensure_ascii=False)}
+        outside = Outside(monkeypatch, {"comment_insights": INSIGHT}, page_value=page)
+        context = _run(ws, comment_insights_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser")
+
+        line = context["web_api_coverage"]["text"]
+        assert "平台显示 396 条" in line and "这次取到 8 条" in line and "一级 3 条、楼中楼 5 条" in line and gap in line
+        assert line in context["data_block"]["text"], "取到多少 / 平台显示多少要进汇合的数据"
+        batches = [call for call in outside.calls["llm"] if call["name"] == "comment_insights_batch"]
+        given = sum(len(json.loads(call["prompt"].split("这一批评论(JSON):\n", 1)[1])) for call in batches)
+        assert given == 8, "取到的每一条都要进分析"
+        [insight] = [call for call in outside.calls["llm"] if call["name"] == "comment_insights"]
+        assert line in insight["prompt"]
+        assert "所有评论都被读过了" not in insight["system"], "取到的只是一部分时,不能让模型说成全部"
+        [note] = _notes(ws)
+        assert line in _note_text(note), "笔记里也要写明"
+
+    def test_浏览器读页面那一路_说清读到几条_页面显示的总数(self, monkeypatch) -> None:
+        ws, _ = _setup(with_tikhub=False)
+        answer = {"title": "某视频", "comment_total": "1374",
+                  "comments": [{"text": "说得好", "likes": "12", "author": "甲", "published_at": ""}],
+                  "login_wall": False, "notes": ""}
+        Outside(monkeypatch, {"comments_page": answer, "comment_insights": INSIGHT})
+        context = _run(ws, comment_insights_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser")
+        line = context["web_dom_coverage"]["text"]
+        assert "读到 1 条" in line and "1374" in line and "不是全部" in line
+        assert line in context["data_block"]["text"]
+
+    def test_读页面的节点带着B站取数的上限_时间预算_和按界面语言写好的没取全原因(self) -> None:
+        graph = comment_insights_graph(chat=CHAT, locale="en")
+        web_read = next(node for node in graph["nodes"] if node["id"] == "web_read")["config"]
+        assert web_read["timeout_ms"] > web_read["input"]["budget_ms"] > 0, "翻页的时间预算要落在脚本上限之内"
+        assert web_read["input"]["comment_max"] == 2000
+        assert "Not signed in" in web_read["input"]["notes"]["login"]
+        assert graph["meta"]["template_version"] == 3
 
 
 # --------------------------------------------------------------------------------------
@@ -527,6 +594,17 @@ class Test前置检查:
         Outside(monkeypatch, {})
         with pytest.raises(WorkflowDomainError):
             _run(ws, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub")
+
+    def test_取评论的两张_内嵌浏览器那一条说的是实情_B站不登录只给前3条(self) -> None:
+        """此前写着「B站不用登录」。实测(2026-10):未登录时 B 站的评论接口(连网页自己用的那个)只给 3 条一级评论。"""
+        from app.domain.workflows.templates_analysis import ANALYSIS_TEMPLATE_CATALOG
+
+        for card in ANALYSIS_TEMPLATE_CATALOG:
+            if card["id"] == "account_analysis":
+                continue
+            [browser_way] = [one for one in card["requires"] if one["group"] == "data_source" and not one["check"]]
+            assert "B站不用登录" not in browser_way["text"]["zh"]
+            assert "前 3 条一级评论" in browser_way["text"]["zh"] and "first 3 top-level" in browser_way["text"]["en"]
 
     def test_目录里数据来源是一组_满足一条就够(self) -> None:
         from tests.util import fresh_client

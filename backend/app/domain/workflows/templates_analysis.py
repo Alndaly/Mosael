@@ -184,6 +184,11 @@ def _tool_list_en(check: str) -> str:
 #:    带登录态、分页器、楼中楼都在返回里,评论区组件被风控卡住也不受影响(实测组件空转时接口
 #:    照常返回 106 条)。接口也是一种会变的契约 —— 所以它只是**优先策略**,落空就落回读 DOM。
 #:    抖音/小红书要签名(a_bogus / x-s),不在页面里调,继续走 DOM 那条路。
+#: 6. **B 站评论要翻全,取不全要说清**(2026-10,已登录档案逐条对过 69 / 399 / 1374 条三个视频):一级评论逐页
+#:    翻到平台不再给(此前只翻 15 页,1374 条的视频只拿到 300 条一级),第 1 页另带置顶;楼中楼按楼逐页翻
+#:    reply/reply(此前只用一级里自带的 ≤3 条预览,69 条的视频只拿到 15/50 条回复)。**未登录时 B 站只给 3 条
+#:    一级评论、每条下前 20 条回复** —— 这是平台的限制,照实停下,交回平台显示的总数、取到的条数和没取全的原因
+#:    (`gap_note`,按界面语言由模板交进来),下游写进结果,不把几条当成全部去分析。
 _READ_PAGE_SCRIPT = """(async () => {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;
@@ -192,42 +197,86 @@ _READ_PAGE_SCRIPT = """(async () => {
     //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,
     //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。
     try {
-      const view = await (await fetch("https://api.bilibili.com/x/web-interface/view?bvid=" + bili[1], { credentials: "include" })).json();
-      const aid = view && view.data ? view.data.aid : null;
-      const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;
-      if (aid) {
-        //: 评论有多少抓多少(上限 1000 条 / 50 页 —— 再大的楼在「评论数」参数里也读不完,
-    //: 超过的部分由 web_read 的 total 如实说出来)。页与页之间隔 400ms,不踩频控。
-    const wanted = Math.min(Number(input.comment_max) || 1000, 1000);
-        const all = [];
-        let pn = 1;
-        while (all.length < wanted && pn <= 15) {
-          const r = await (await fetch("https://api.bilibili.com/x/v2/reply?type=1&oid=" + aid + "&sort=2&ps=20&pn=" + pn, { credentials: "include" })).json();
-          const replies = r && r.data && r.data.replies ? r.data.replies : [];
-          if (!replies.length) break;
-          for (const one of replies) {
-            const push = (c, prefix) => all.push({
-              author: c && c.member ? c.member.uname : "",
-              text: prefix + ((c && c.content ? c.content.message : "") || "").replace(/\\s+/g, " ").trim(),
-              likes: c && typeof c.like === "number" ? c.like : "",
-              published_at: c && c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : "",
-            });
-            push(one, "");
-            //: 楼中楼:接口里每条顶层评论自带前几层回复,拍平、带 ↳ 前缀,回复也算数。
-            for (const sub of one.replies || []) push(sub, "↳ ");
+      const getJson = async (url) => (await fetch(url, { credentials: "include" })).json();
+      const started = Date.now();
+      //: 时间预算要落在节点的脚本上限(timeout_ms)之内;页与页之间隔一下,不踩频控。
+      const budget = Number(input.budget_ms) || 15000;
+      const pause = input.page_pause_ms == null ? 400 : Number(input.page_pause_ms);
+      const outOfTime = () => Date.now() - started > budget;
+      const view = await getJson("https://api.bilibili.com/x/web-interface/view?bvid=" + bili[1]);
+      const v = view && view.data;
+      if (v && v.aid) {
+        const total = v.stat ? Number(v.stat.reply) || 0 : 0;
+        const nav = await getJson("https://api.bilibili.com/x/web-interface/nav").catch(() => null);
+        const loggedIn = Boolean(nav && nav.data && nav.data.isLogin);
+        //: 评论有多少抓多少,上限 comment_max(最多 2000 条)。
+        const wanted = Math.min(Number(input.comment_max) || 1000, 2000);
+        const seen = new Set();
+        const picked = [];
+        let stoppedBy = "";
+        //: 同一条评论只算一次(一级里自带的楼中楼预览、置顶,和翻出来的是同一条)。楼中楼拍平、带 ↳ 前缀。
+        const take = (c, isReply) => {
+          const id = c && (c.rpid_str || (c.rpid ? String(c.rpid) : ""));
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          picked.push({ isReply, comment: {
+            author: c.member ? c.member.uname : "",
+            text: (isReply ? "↳ " : "") + ((c.content ? c.content.message : "") || "").replace(/\\s+/g, " ").trim(),
+            likes: typeof c.like === "number" ? c.like : "",
+            published_at: c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : "",
+          } });
+        };
+        const full = () => {
+          if (picked.length >= wanted) { stoppedBy = "limit"; return true; }
+          if (outOfTime()) { stoppedBy = "time"; return true; }
+          return false;
+        };
+        //: 一级评论逐页翻到平台不再给(第 1 页另带置顶)。未登录时 B 站只给 1 页 3 条 —— 照实停下,下面说清。
+        const threads = [];
+        for (let pn = 1; !(pn > 1 && full()); pn += 1) {
+          const r = await getJson("https://api.bilibili.com/x/v2/reply?type=1&oid=" + v.aid + "&sort=2&ps=20&pn=" + pn);
+          const d = (r && r.data) || {};
+          const replies = d.replies || [];
+          const pinned = pn === 1 ? [...(d.top_replies || []), ...(d.upper && d.upper.top ? [d.upper.top] : [])] : [];
+          for (const one of [...pinned, ...replies]) {
+            take(one, false);
+            for (const sub of one.replies || []) take(sub, true);
+            threads.push(one);
           }
-          pn += 1;
           if (replies.length < 20) break;
-          await wait(400);
+          await wait(pause);
         }
-        if (all.length) {
+        //: 楼中楼:一级里只自带前几条预览,回复更多的楼逐页翻 reply/reply,翻到平台不再给。
+        for (const one of threads) {
+          if (stoppedBy || full()) break;
+          if ((one.rcount || 0) <= (one.replies || []).length) continue;
+          for (let pn = 1; !full(); pn += 1) {
+            const r = await getJson("https://api.bilibili.com/x/v2/reply/reply?type=1&oid=" + v.aid + "&root=" + (one.rpid_str || one.rpid) + "&ps=20&pn=" + pn);
+            const subs = (r && r.data && r.data.replies) || [];
+            for (const sub of subs) take(sub, true);
+            if (subs.length < 20) break;
+            await wait(pause);
+          }
+        }
+        const kept = picked.slice(0, wanted);
+        if (kept.length) {
+          const fetchedReplies = kept.filter((one) => one.isReply).length;
+          //: 取到的比平台说的少,说清是哪一种:没登录(平台只给前几条)、到了条数 / 时间上限、或者平台就是没给
+          //: (被删除、折叠、仅自己可见)。这几句话由模板按界面语言交进来(input.notes)。
+          const notes = input.notes || {};
+          const gap = kept.length >= total ? ""
+            : stoppedBy === "limit" ? notes.limit
+            : stoppedBy === "time" ? notes.time
+            : !loggedIn ? notes.login
+            : notes.platform;
           //: 视频本身的数据也在 view 接口里(播放、点赞、时长、发布时间……)—— 一并交回,爆款拆解直接整理它。
           //: 只带整理要用的那几格,原样的 view 返回很大,会白占运行记录。
-          const v = view.data;
           const video = { bvid: v.bvid, aid: v.aid, title: v.title, pubdate: v.pubdate, duration: v.duration, desc: v.desc,
                           owner: v.owner ? { name: v.owner.name, mid: v.owner.mid } : null, stat: v.stat || {} };
-          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: "api", total, expanded: -1,
-                   video, text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };
+          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: "api", total,
+                   fetched: kept.length, fetched_roots: kept.length - fetchedReplies, fetched_replies: fetchedReplies,
+                   logged_in: loggedIn, gap_note: gap || "", expanded: -1, video,
+                   text: JSON.stringify({ total, comments: kept.map((one) => one.comment) }) };
         }
       }
     } catch (e) { /* 接口这条路不通就落回读 DOM */ }
@@ -399,10 +448,12 @@ def _data_source_options(b: _Builder, check: str) -> list[dict[str, str]]:
             "label": b.text("内嵌浏览器", "Built-in browser"),
             "description": b.text(
                 "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里"
-                "已登录的档案。页面上的数字是约数,发布时间常常缺",
+                "已登录的档案。B 站评论不登录只给前 3 条一级评论(每条下前 20 条回复),要取全也换成已登录 B 站的档案。"
+                "页面上的数字是约数,发布时间常常缺",
                 "Nothing to set up and free; for pages that need a sign-in (Xiaohongshu always, Douyin mostly), switch"
-                " “Open in the built-in browser” to a signed-in browser-pool profile. Numbers on the page are rounded and"
-                " publish times are often missing",
+                " “Open in the built-in browser” to a signed-in browser-pool profile. Bilibili shows signed-out visitors only"
+                " the first 3 top-level comments (and 20 replies under each); to fetch them all, use a profile signed in to"
+                " Bilibili too. Numbers on the page are rounded and publish times are often missing",
             ),
         },
         {
@@ -469,9 +520,34 @@ def _tikhub_call(b: _Builder, node_id: str, platform: str, need: str, name: dict
     })
 
 
-def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_chars: int, expand_replies: int = 0) -> None:
+#: B 站评论接口那一支取到的比平台显示的少时,说的是哪一种(见读页面脚本的第 6 条)。
+def _comment_gap_notes(b: _Builder) -> dict[str, str]:
+    return {
+        "login": b.text(
+            "没登录:B 站对未登录的访问只给前 3 条一级评论、每条下前 20 条回复。要取全,在「用内嵌浏览器打开」上把会话方式"
+            "换成浏览器池、选一个已登录 B 站的档案。",
+            "Not signed in: Bilibili shows signed-out visitors only the first 3 top-level comments and the first 20 replies"
+            " under each. To fetch them all, switch “Open in the built-in browser” to the browser pool and pick a profile"
+            " signed in to Bilibili.",
+        ),
+        "limit": b.text("到了这次最多取的条数,后面的没有再取。", "Stopped at this run's comment limit; the rest weren't fetched."),
+        "time": b.text("到了这次取数的时间上限,后面的没有再取。", "Stopped at this run's time limit for fetching; the rest weren't fetched."),
+        "platform": b.text("其余的 B 站没有给(被删除、折叠或仅自己可见的评论)。",
+                           "Bilibili didn't return the rest (deleted, folded or private comments)."),
+    }
+
+
+#: 评论类模板读页面的脚本上限,以及留给接口那一支翻页的时间(要落在上限之内,余下的给读 DOM 那条路兜底)。
+_COMMENT_READ_TIMEOUT_MS = 120000
+_COMMENT_FETCH_BUDGET_MS = 90000
+
+
+def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_chars: int, expand_replies: int = 0,
+                  comment_max: int = 0) -> None:
     """打开 → 读页面文字 → 关掉。会话默认是具名的「自媒体分析」(登录跨次保留);要登录的平台在
-    「打开浏览器」上改成浏览器池、选一个已登录的档案。"""
+    「打开浏览器」上改成浏览器池、选一个已登录的档案。
+
+    `comment_max` 给了就是评论类模板:接口那一支最多取这么多条、按时间预算翻页,取不全时用哪几句话说明。"""
     b.node("web_open", "browser_open", {"zh": "用内嵌浏览器打开", "en": "Open in the built-in browser"}, col, row, {
         "url": "{{link.url}}", "session_mode": "named", "session_name": b.text("自媒体分析", "Social analysis"),
     })
@@ -481,13 +557,31 @@ def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_char
                "session": "{{web_open.session}}",
                "expression": _READ_PAGE_SCRIPT,
                "input": {"settle_ms": 2500, "scrolls": scrolls, "pause_ms": 1200, "max_chars": max_chars,
-                      "expand_max": expand_replies},
+                      "expand_max": expand_replies,
+                      **({"comment_max": comment_max, "budget_ms": _COMMENT_FETCH_BUDGET_MS, "page_pause_ms": 400,
+                          "notes": _comment_gap_notes(b)} if comment_max else {})},
+               **({"timeout_ms": _COMMENT_READ_TIMEOUT_MS} if comment_max else {}),
            })
     b.edge("web_open", "web_read")
     b.node("web_close", "browser_close", {"zh": "关掉浏览器", "en": "Close the browser"}, col + 2, row + 0.8, {
         "session": "{{web_read.session}}",
     })
     b.edge("web_read", "web_close")
+
+
+def _api_coverage(b: _Builder, col: float, row: float) -> str:
+    """B 站评论接口那一支:平台显示多少条、这次取到多少(一级 / 楼中楼)、没取全的原因。写进汇合的数据,
+    跟着进报告、进笔记 —— 取到 3 条就别让人以为分析的是全部 396 条。"""
+    b.node("web_api_coverage", "template", {"zh": "评论取到多少", "en": "How many comments came back"}, col, row, {
+        "template": b.text(
+            "评论条数:平台显示 {{web_read.value.total}} 条,这次取到 {{web_read.value.fetched}} 条"
+            "(一级 {{web_read.value.fetched_roots}} 条、楼中楼 {{web_read.value.fetched_replies}} 条)。{{web_read.value.gap_note}}",
+            "Comment count: the platform shows {{web_read.value.total}}; this run fetched {{web_read.value.fetched}}"
+            " ({{web_read.value.fetched_roots}} top-level, {{web_read.value.fetched_replies}} replies). {{web_read.value.gap_note}}",
+        ),
+    })
+    b.edge("web_is_api", "web_api_coverage", "true")
+    return "web_api_coverage"
 
 
 def _merge(b: _Builder, node_id: str, name: dict[str, str], col: float, row: float, template: str, sources: list[str]) -> str:
@@ -692,7 +786,8 @@ _BREAKDOWN_SYSTEM = """你是短视频爆款拆解专家。你会收到一条视
   9. 不能照搬的部分与风险(账号势能、时效、平台规则)。
 - script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):
   3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。
-- 只根据给到的材料下结论;没给的数据不要编。
+- 只根据给到的材料下结论;没给的数据不要编。数据里「评论条数」那句说了评论取到多少、平台显示多少:只取到一部分时,
+  评论区反馈那一节写明是从取到的这些里看的。
 - 用{{start.report_language}}写。
 只输出符合 JSON Schema 的对象。"""
 
@@ -739,7 +834,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
 
     tikhub_exits = _platform_chain(b, branch, col=4)
 
-    _browser_read(b, col=4, row=4.2, scrolls=8, max_chars=40000, expand_replies=6)
+    _browser_read(b, col=4, row=4.2, scrolls=8, max_chars=40000, expand_replies=6, comment_max=1000)
     #: 读页面那段脚本在 B 站视频页上优先调它自己的接口(mode=api),交回的是视频数据和评论清单,不是页面文字 ——
     #: 直连整理;只有 DOM 读来的页面文字才需要模型抄写(和评论区洞察同一个分法)。
     b.node("web_is_api", "condition", {"zh": "是接口取的吗", "en": "Came from the site API?"}, 5.6, 4.2, {
@@ -754,6 +849,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
         "data": "{{web_read.value.text}}", "kind": "comments", "limit": "{{start.comment_count}}",
     })
     b.edge("web_is_api", "web_api_comments_m", "true")
+    coverage = _api_coverage(b, 6.6, 4.3)
     b.llm("web_struct", {"zh": "把页面文字抄成视频数据和评论", "en": "Turn the page text into video data and comments"},
           6, 4.6,
           system="你会收到内嵌浏览器打开一条自媒体视频 / 笔记后读到的页面文字(往下滚过,评论区可能在里面)。"
@@ -775,8 +871,9 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
     comment_ids = [one for one in tikhub_exits if one.endswith("_comments_m")] + ["web_api_comments_m", "web_comments_m"]
     _merge(b, "data_block", {"zh": "汇合这一路的数据", "en": "Collect the data from whichever route ran"}, 8, 2.5,
            _joined(video_ids, "summary") + "\n\n### " + b.text("视频明细", "Video") + "\n\n" + _joined(video_ids, "table")
-           + "\n\n" + _joined(comment_ids, "summary") + "\n\n" + _joined(comment_ids, "table"),
-           video_ids + comment_ids)
+           + "\n\n" + _joined(comment_ids, "summary") + "\n" + _joined([coverage], "text") + "\n\n"
+           + _joined(comment_ids, "table"),
+           video_ids + comment_ids + [coverage])
     b.node("has_video", "condition", {"zh": "取到这条视频了吗", "en": "Was the video found?"}, 9, 2.5, {
         "left": _joined(video_ids, "count"), "op": "gt", "right": "0",
     })
@@ -848,7 +945,8 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
     })
     b.edge("done_notice", "output")
     #: 第 3 版:浏览器那一路在 B 站上走接口(mode=api)时直接整理接口交回的视频数据和评论,不再交给模型当页面文字抄。
-    return b.graph(VIRAL_VIDEO_BREAKDOWN, version=3)
+    #: 第 4 版:B 站评论接口翻全一级和楼中楼,汇合的数据里写明取到多少 / 平台显示多少(旧图的脚本只翻 15 页、不翻楼中楼)。
+    return b.graph(VIRAL_VIDEO_BREAKDOWN, version=4)
 
 
 # --------------------------------------------------------------------------------------
@@ -859,6 +957,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
 def _comments_page_schema() -> dict[str, Any]:
     return _object({
         "title": _string("这条作品的标题"),
+        "comment_total": _string("页面上显示的评论总数,照页面原样抄(「1.2万」也照抄);页面上没有就空字符串"),
         "comments": {"type": "array", "items": _comment_schema(), "maxItems": 150},
         "login_wall": {"type": "boolean"},
         "notes": _string("页面上异常的地方;没有就空字符串"),
@@ -893,9 +992,10 @@ def _insight_schema() -> dict[str, Any]:
     })
 
 
-_INSIGHT_SYSTEM = """你是用户研究和社区运营专家。你会收到:一份按赞排的整体统计,以及**分批覆盖全部评论**的分析笔记
-(评论太多装不下一次读完时,分批读过再交给你综合)。以分批笔记为准,统计用来校准比例;所有评论都被读过了,
-不要说「样本」。做评论区洞察。
+_INSIGHT_SYSTEM = """你是用户研究和社区运营专家。你会收到:一份按赞排的整体统计,以及**分批覆盖这次取到的全部评论**的
+分析笔记(评论太多装不下一次读完时,分批读过再交给你综合)。以分批笔记为准,统计用来校准比例。
+数据开头「评论条数」那句写着这次取到多少、平台显示多少:取到的比平台少时,在 report_markdown 开头如实写明只分析了
+取到的这些、为什么没取全,结论按这批评论下,不要说成全部评论;取全了就不必提。做评论区洞察。
 
 - verdict:一句话,评论区最值得注意的事。
 - report_markdown 用二级标题分成这几节:
@@ -947,11 +1047,8 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
     tikhub_exits = _platform_chain(b, branch, col=4)
 
     #: 评论区的预算给足:310 条评论的页面正文约 5 万字符,楼中楼展开后更多;条数上限由模型那步收口。
-    _browser_read(b, col=4, row=4.2, scrolls=7, max_chars=120000, expand_replies=8)
-    # 接口那一路一次要翻几十页,20 秒的默认预算不够 —— 声明自己的(上限见节点声明)。
-    for node in b.nodes:
-        if node["id"] == "web_read":
-            node["config"]["timeout_ms"] = 120000
+    #: 接口那一路一次要翻几十页、再逐楼翻楼中楼,带着自己的脚本上限和翻页时间预算(见 _browser_read)。
+    _browser_read(b, col=4, row=4.2, scrolls=7, max_chars=120000, expand_replies=8, comment_max=2000)
     #: 接口回来的已经是结构化清单,再让模型抄一遍只会丢条(实测 106 条抄丢成 71)——
     #: 接口路直连整理;只有 DOM 读来的页面文字才需要模型抄写。
     b.node("web_is_api", "condition", {"zh": "是接口取的吗", "en": "Came from the site API?"}, 5.6, 4.2, {
@@ -963,6 +1060,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
         "limit": "2000", "table_limit": "{{start.comment_count}}",
     })
     b.edge("web_is_api", "web_api_m", "true")
+    api_coverage = _api_coverage(b, 6.6, 4.3)
     b.llm("web_struct", {"zh": "把页面文字抄成评论清单", "en": "Turn the page text into a comment list"}, 6.6, 4.6,
           system="你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。"
                  "把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先;"
@@ -976,11 +1074,22 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
         "limit": "2000", "table_limit": "{{start.comment_count}}",
     })
     b.edge("web_struct", "web_comments_m")
+    #: 读页面那一路只看得到页面上已经加载出来的评论:说清读到几条、页面显示的总数是多少。
+    b.node("web_dom_coverage", "template", {"zh": "评论读到多少", "en": "How many comments were read"}, 8.2, 4.6, {
+        "template": b.text(
+            "评论条数:这次从页面上读到 {{web_comments_m.count}} 条,只包括页面上已经加载出来的那些,不是全部"
+            "(页面上显示的总数:{{web_struct.json.comment_total}})。",
+            "Comment count: this run read {{web_comments_m.count}} from the page, only the ones the page had loaded, not all"
+            " of them (total shown on the page: {{web_struct.json.comment_total}}).",
+        ),
+    })
+    b.edge("web_comments_m", "web_dom_coverage")
 
     ranked = [*tikhub_exits, "web_api_m", "web_comments_m"]
+    coverage = _joined([api_coverage, "web_dom_coverage"], "text")
     _merge(b, "data_block", {"zh": "汇合这一路的评论", "en": "Collect the comments from whichever route ran"}, 8, 2.5,
-           _joined(ranked, "summary") + "\n\n### " + b.text("全部评论(按赞排)", "All comments (by likes)") + "\n\n"
-           + _joined(ranked, "table"), ranked)
+           coverage + "\n\n" + _joined(ranked, "summary") + "\n\n### " + b.text("全部评论(按赞排)", "All comments (by likes)")
+           + "\n\n" + _joined(ranked, "table"), [*ranked, api_coverage, "web_dom_coverage"])
     b.node("has_comments", "condition", {"zh": "取到评论了吗", "en": "Were any comments fetched?"}, 9, 2.5, {
         "left": _joined(ranked, "count"), "op": "gt", "right": "0",
     })
@@ -1043,7 +1152,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
     b.edge("batch_analyze", "insight")
     b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 11, 2.5, {
         "title": "{{insight.json.title}}",
-        "markdown": "> {{insight.json.verdict}}\n\n{{insight.json.report_markdown}}\n\n## "
+        "markdown": "> {{insight.json.verdict}}\n\n" + coverage + "\n\n{{insight.json.report_markdown}}\n\n## "
                     + b.text("建议回复", "Suggested replies") + "\n\n{{insight.json.reply_suggestions_markdown}}"
                     + "\n\n---\n\n## " + b.text("附:评论数据", "Appendix: the comments") + "\n\n{{data_block.text}}",
         "tags": b.text("评论区洞察", "comment insights"),
@@ -1051,7 +1160,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
     b.edge("insight", "save_note")
     b.node("done_notice", "notify", {"zh": "洞察完成通知", "en": "Insights ready"}, 12, 2.5, {
         "title": b.text("评论区洞察已存成笔记", "The comment insights are saved as a note"),
-        "body": "{{insight.json.verdict}}",
+        "body": "{{insight.json.verdict}}\n" + coverage,
     })
     b.edge("save_note", "done_notice")
     b.node("output", "output", {"zh": "交付洞察与建议回复", "en": "Hand over the insights and replies"}, 13, 2.5, {
@@ -1063,7 +1172,9 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
         },
     })
     b.edge("done_notice", "output")
-    return b.graph(COMMENT_INSIGHTS)
+    #: 第 3 版:B 站评论接口翻全一级和楼中楼,结果里写明取到多少 / 平台显示多少(旧图的脚本只翻 15 页、不翻楼中楼,
+    #: 洞察的提示词还说「所有评论都被读过了」)。
+    return b.graph(COMMENT_INSIGHTS, version=3)
 
 
 # --------------------------------------------------------------------------------------
@@ -1079,10 +1190,13 @@ def _browser_requirement(*, comments: bool) -> dict[str, Any]:
         return requirement(
             None, group=_SOURCE,
             zh="或者用内嵌浏览器取数(不花钱,不用连接):小红书看评论一定要登录、抖音多半要 —— 在「用内嵌浏览器打开」"
-               "上把会话方式改成浏览器池、选一个已登录的档案;B站不用登录",
+               "上把会话方式改成浏览器池、选一个已登录的档案;B站不登录只给前 3 条一级评论(每条下前 20 条回复),"
+               "要取全评论同样换成已登录 B 站的档案。结果里会写明取到多少、平台显示多少",
             en="Or fetch with the built-in browser (free, no connection): Xiaohongshu comments always need a sign-in and"
                " Douyin's mostly do — switch “Open in the built-in browser” to the browser pool and pick a signed-in"
-               " profile; Bilibili needs none",
+               " profile; signed out, Bilibili gives only the first 3 top-level comments (and 20 replies under each), so"
+               " use a profile signed in to Bilibili to fetch them all. The result says how many came back and how many"
+               " the platform shows",
         )
     return requirement(
         None, group=_SOURCE,
