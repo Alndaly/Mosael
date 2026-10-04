@@ -281,6 +281,213 @@ def _migrate_note_revisions_guess_where_they_came_from() -> None:
         logger.info("note revisions: guessed origins for %d old revisions %s", len(guessed), counts)
 
 
+def _migrate_note_revisions_merge_consecutive_edits() -> None:
+    """老库里的碎版本在存储上真正合并,版本号重排成连着的,库里所有指向老版本号的引用改指过去。
+
+    写入时合并(domain/notes/history)只管以后;老库里每次自动保存都落了一行。这一步按同一条判据整理每一篇:
+    - 和上一版一模一样的版本(标题、正文、来源都一样:只改了属性,或一口气写了又写回去)删掉,指向它的引用改指到上一版;
+    - 连续的手动编辑(同一个人、相邻都是编辑、停笔不到 5 分钟、一版从开始写起不到 30 分钟)合成一版:留下组里最后
+      一版的内容和最后保存时间,开始时间取组里第一版的,其余的行删掉。老数据说不出是谁写的,空和空算同一个人;
+    - 其余(智能体、恢复、追加、新建、画板、工作流)单独成版;
+    - 版本号重排成从 1 起连着的,笔记的当前版本号跟着改;恢复自哪一版也换成新的号;
+    - 「相对上一版改了多少」按合并后的上一版重算;
+    - 一直并到不能再并为止(并掉一组之后,前后两组可能又挨上、满足判据)。
+    然后把库里所有指向老版本号的引用改指到新的号:任何 JSON 里 note_id 旁边的 revision / note_revision、kind 为 note
+    的来源(笔记的来源、画板文档格、改笔记确认卡的结果、任务产出、对话记录……),以及任何文字里的笔记引用链接
+    `#/notes?note=…&revision=N`(笔记正文、各版快照、对话、提示词……)。指向不存在的版本的原样不动。
+
+    排在补来历那一步之后:恢复出来的版本要单独成版。判据和算法都抄在这里,不引领域层 —— 领域那边日后改了,
+    重放这条迁移得到的还该是今天的结果。整理过的库再跑一遍什么都不变(合并后的相邻两版不再满足判据,版本号已经连着)。
+    """
+    import re
+    from datetime import datetime, timedelta
+    from difflib import SequenceMatcher
+    from urllib.parse import unquote
+
+    pause, span = timedelta(minutes=5), timedelta(minutes=30)
+    with engine.begin() as conn:
+        tables = {row[0]: row[1] or "" for row in conn.execute(text("SELECT name, sql FROM sqlite_master WHERE type = 'table'"))}
+
+        def columns(table: str) -> dict[str, str]:
+            return {row[1]: (row[2] or "").upper() for row in conn.execute(text(f'PRAGMA table_info("{table}")'))} if table in tables else {}
+
+        needed = {"snapshot", "origin", "created_by", "restored_from", "chars_added", "chars_removed", "title_changed", "started_at"}
+        if not needed <= set(columns("note_revisions")) or "revision" not in columns("notes"):
+            return
+
+        def visible(value: str) -> int:
+            return sum(1 for char in value if not char.isspace())
+
+        def changes(before: str, after: str) -> tuple[int, int]:
+            if before == after:
+                return 0, 0
+            a, b = before.splitlines(keepends=True), after.splitlines(keepends=True)
+            added = removed = 0
+            for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+                if tag == "equal":
+                    continue
+                old, new = "".join(a[i1:i2]), "".join(b[j1:j2])
+                if tag != "replace" or len(old) * len(new) > 4_000_000:
+                    removed, added = removed + visible(old), added + visible(new)
+                    continue
+                for inner, k1, k2, l1, l2 in SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+                    if inner != "equal":
+                        removed, added = removed + visible(old[k1:k2]), added + visible(new[l1:l2])
+            return added, removed
+
+        def moment(value: Any) -> datetime | None:
+            try:
+                return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+
+        def parsed(value: Any) -> dict:
+            try:
+                data = json.loads(value) if isinstance(value, str) else value
+            except ValueError:
+                return {}
+            return data if isinstance(data, dict) else {}
+
+        rows = conn.execute(text(
+            "SELECT note_id, revision, snapshot, origin, created_by, restored_from, started_at, created_at "
+            "FROM note_revisions ORDER BY note_id, revision"
+        )).all()
+        by_note: dict[str, list[Any]] = {}
+        for row in rows:
+            by_note.setdefault(row[0], []).append(row)
+        moves: dict[str, dict[int, int]] = {}
+        totals = {"before": len(rows), "after": 0, "property_only": 0, "merged": 0, "references": 0}
+        for note_id, versions in by_note.items():
+            if any(not isinstance(row[1], int) for row in versions):
+                totals["after"] += len(versions)
+                continue
+            entries: list[dict[str, Any]] = []
+            for _, revision, snapshot, origin, created_by, restored_from, started_at, created_at in versions:
+                data = parsed(snapshot)
+                entries.append({
+                    "members": [revision], "snapshot": snapshot, "data": data, "origin": origin, "created_by": created_by,
+                    "restored_from": restored_from, "started_at": started_at or created_at, "created_at": created_at,
+                    "began": moment(started_at) or moment(created_at), "saved": moment(created_at),
+                    "content": (str(data.get("title") or ""), str(data.get("markdown") or ""),
+                                json.dumps(data.get("sources") or [], ensure_ascii=False, sort_keys=True)),
+                })
+            #: 一直并到不能再并为止:一口气写完的一组,最后可能正好写回上一版的样子(打了又删),
+            #: 那一组并掉之后,前后两组又可能挨上、满足判据。一次就收到不动点,重跑才什么都不变。
+            while True:
+                kept: list[dict[str, Any]] = []
+                for entry in entries:
+                    last = kept[-1] if kept else None
+                    if last is not None and entry["content"] == last["content"]:
+                        #: 和上一版一模一样(只改了属性,或写了又写回去):这一版不留,引用改指到上一版。
+                        last["members"] += entry["members"]
+                        totals["property_only"] += len(entry["members"])
+                    elif last is not None and entry["origin"] == "edit" and last["origin"] == "edit" \
+                            and entry["created_by"] == last["created_by"] \
+                            and entry["began"] and entry["saved"] and last["began"] and last["saved"] \
+                            and entry["began"] - last["saved"] <= pause and entry["saved"] - last["began"] <= span:
+                        last.update({key: entry[key] for key in ("snapshot", "data", "content", "created_at", "saved")})
+                        last["members"] += entry["members"]
+                        totals["merged"] += len(entry["members"])
+                    else:
+                        kept.append(entry)
+                if len(kept) == len(entries):
+                    break
+                entries = kept
+            holder = {revision: index for index, entry in enumerate(kept) for revision in entry["members"]}
+            mapping = {old: index + 1 for old, index in holder.items()}
+            conn.execute(text("DELETE FROM note_revisions WHERE note_id = :note"), {"note": note_id})
+            for number, version in enumerate(kept, 1):
+                before = kept[number - 2]["data"] if number > 1 else {}
+                added, removed = changes(str(before.get("markdown") or ""), str(version["data"].get("markdown") or ""))
+                source = version["restored_from"]
+                conn.execute(text(
+                    "INSERT INTO note_revisions (note_id, revision, snapshot, origin, created_by, restored_from, chars_added, "
+                    "chars_removed, title_changed, started_at, created_at) VALUES (:note, :revision, :snapshot, :origin, :by, "
+                    ":restored, :added, :removed, :title, :started, :saved)"
+                ), {
+                    "note": note_id, "revision": number, "origin": version["origin"], "by": version["created_by"],
+                    "snapshot": version["snapshot"] if isinstance(version["snapshot"], str) else json.dumps(version["data"], ensure_ascii=False),
+                    "restored": mapping.get(source) if isinstance(source, int) else None,
+                    "added": added, "removed": removed, "started": version["started_at"], "saved": version["created_at"],
+                    "title": number > 1 and before.get("title") != version["data"].get("title"),
+                })
+            conn.execute(text("UPDATE notes SET revision = :revision WHERE id = :note"), {"revision": len(kept), "note": note_id})
+            totals["after"] += len(kept)
+            moved = {old: new for old, new in mapping.items() if old != new}
+            if moved:
+                moves[note_id] = moved
+
+        if moves:
+            link = re.compile(r"(#/notes\?note=)([^&\s\"'<>()\[\]\\]+)(&(?:amp;)?revision=)(\d+)")
+
+            def target(note_id: Any, revision: Any) -> int | None:
+                if not isinstance(note_id, str) or not isinstance(revision, int) or isinstance(revision, bool):
+                    return None
+                found = moves.get(note_id, {}).get(revision)
+                if found is not None:
+                    totals["references"] += 1
+                return found
+
+            def fix_text(value: str) -> str:
+                if "#/notes?note=" not in value:
+                    return value
+
+                def swap(match: Any) -> str:
+                    found = target(unquote(match.group(2)), int(match.group(4)))
+                    return match.group(0) if found is None else f"{match.group(1)}{match.group(2)}{match.group(3)}{found}"
+
+                return link.sub(swap, value)
+
+            def fix(value: Any) -> Any:
+                if isinstance(value, dict):
+                    out = {key: fix(item) for key, item in value.items()}
+                    if isinstance(out.get("note_id"), str):
+                        for key in ("revision", "note_revision"):
+                            found = target(out["note_id"], out.get(key))
+                            if found is not None:
+                                out[key] = found
+                    if out.get("kind") == "note":
+                        found = target(out.get("id"), out.get("revision"))
+                        if found is not None:
+                            out["revision"] = found
+                    return out
+                if isinstance(value, list):
+                    return [fix(item) for item in value]
+                return fix_text(value) if isinstance(value, str) else value
+
+            skip = {"schema_migrations", "record_references", "record_reference_index"}
+            for table, definition in tables.items():
+                if table in skip or table.startswith("sqlite_") or "WITHOUT ROWID" in definition.upper():
+                    continue
+                for column, kind in columns(table).items():
+                    if kind and not any(word in kind for word in ("TEXT", "CHAR", "JSON", "CLOB")):
+                        continue
+                    for rowid, value in conn.execute(text(
+                        f'SELECT rowid, "{column}" FROM "{table}" WHERE "{column}" LIKE :needle'
+                    ), {"needle": "%revision%"}).all():
+                        if not isinstance(value, str):
+                            continue
+                        changed = value
+                        if value.lstrip()[:1] in ("{", "["):
+                            try:
+                                data = json.loads(value)
+                            except ValueError:
+                                changed = fix_text(value)
+                            else:
+                                fixed = fix(data)
+                                if fixed != data:
+                                    changed = json.dumps(fixed, ensure_ascii=False)
+                        else:
+                            changed = fix_text(value)
+                        if changed != value:
+                            conn.execute(text(f'UPDATE "{table}" SET "{column}" = :value WHERE rowid = :rowid'),
+                                         {"value": changed, "rowid": rowid})
+        logger.info(
+            "note revisions: %(before)d rows -> %(after)d (%(property_only)d property-only removed, %(merged)d merged), "
+            "%(references)d references moved", totals,
+        )
+
+
 def _migrate_workflow_revisions() -> None:
     """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
@@ -7923,6 +8130,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_evolink_gpt_image_prices),
             #: 老版本的来历尽量补出来:要读任务、对话、运行事件,所以在 SCHEMA 之后。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_guess_where_they_came_from),
+            #: 老库里的碎版本真正合并、版本号重排、引用改指:排在补来历之后(恢复出来的版本要单独成版)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_merge_consecutive_edits),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),
