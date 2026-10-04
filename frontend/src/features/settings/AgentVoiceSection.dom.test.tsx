@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 /**
  * 「语音对话」关着的时候改引擎、音色、语速,只是改配置 —— 不能顺手把开关打开。
  * 此前自动保存写的是 `enabled || true`,恒为 true:关掉之后调一下语速,它又自己开了。
@@ -82,8 +84,9 @@ describe("试听", () => {
     fetchAgentVoicePreview.mockResolvedValue(audio);
     playBlob.mockResolvedValue(undefined);
     renderSection();
-    const preview = await screen.findByRole("button", { name: "voicePreview" });
-    await waitFor(() => expect(preview).toBeEnabled());
+    // 灰着时按钮外面多一层说明原因的壳,能点了壳就拿掉 —— 按钮会换一个元素,所以每次都重新找。
+    await waitFor(() => expect(screen.getByRole("button", { name: "voicePreview" })).toBeEnabled());
+    const preview = screen.getByRole("button", { name: "voicePreview" });
     expect(screen.getByRole("switch", { name: "agentVoiceEnabled" })).not.toBeChecked();
 
     await userEvent.setup().click(preview);
@@ -97,6 +100,6 @@ describe("试听", () => {
     const preview = await screen.findByRole("button", { name: "voicePreview" });
     await waitFor(() => expect(screen.getByRole("switch", { name: "agentVoiceEnabled" })).toBeDisabled());
     expect(preview).toBeDisabled();
-    expect(preview).toHaveAttribute("title", "agentVoicePreviewNeedsVoice");
+    expect(await readHint(preview)).toBe("voicePreviewagentVoicePreviewNeedsVoice");
   });
 });

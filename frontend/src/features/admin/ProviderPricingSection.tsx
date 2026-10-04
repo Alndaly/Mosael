@@ -25,6 +25,8 @@ import { useMultiSelect } from "@/lib/useMultiSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { SettingsEmpty } from "@/components/settings/settings-layout";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { toast } from "sonner";
@@ -397,17 +399,18 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       actions={
         <div className="flex items-center gap-1.5">
           <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={ruleList.length === 0} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setPrefillResults([]);
-              setPrefillOpen(true);
-            }}
-            title={t("pricingPrefillHint")}
-          >
-            <Sparkles size={13} /> {t("pricingPrefill")}
-          </Button>
+          <Hint label={t("pricingPrefillHint")}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPrefillResults([]);
+                setPrefillOpen(true);
+              }}
+            >
+              <Sparkles size={13} /> {t("pricingPrefill")}
+            </Button>
+          </Hint>
           <Button variant="outline" size="sm" onClick={openCreate}>
             <Plus size={13} /> {t("pricingRuleAdd")}
           </Button>
@@ -445,8 +448,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               return (
                 <li key={profile.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-3 py-2.5">
                   <div className="grid min-w-0 gap-0.5">
-                    <span className="truncate text-ui-sm font-medium">{profile.name}</span>
-                    <small className="truncate text-ui-xs text-muted-foreground">{profile.vendor}</small>
+                    <Truncate className="text-ui-sm font-medium">{profile.name}</Truncate>
+                    <Truncate as="small" className="text-ui-xs text-muted-foreground">{profile.vendor}</Truncate>
                   </div>
                   <Button
                     type="button"

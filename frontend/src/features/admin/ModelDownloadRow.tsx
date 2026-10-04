@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle2, Download, Loader2, RotateCw } from "lucide-r
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { AdminRow, AdminRowNote, AdminRowState } from "./adminLayout";
 
@@ -27,14 +29,15 @@ export type DownloadableModel = {
  *
  * 两页此前各抄了一份一模一样的卡片(连注释都是同一段),改一边忘一边是迟早的事。
  * 现在两边只在三处不同,由调用方传进来:名字旁多一项元信息(转写的引擎族)、跑不起来时的那句话、
- * 以及按钮为什么点不动的提示。
+ * 以及按钮上的说明(点不动时为什么、能点时点了会怎样)。
  */
 export function ModelDownloadRow({
   model,
   meta,
   noRuntimeText,
   busy,
-  actionTitle,
+  busyReason,
+  actionHint,
   onDownload,
 }: {
   model: DownloadableModel;
@@ -43,8 +46,10 @@ export function ModelDownloadRow({
   /** 权重在盘上、但这台机器上没有能跑它的解释器时说的那句话。 */
   noRuntimeText: string;
   busy?: boolean;
-  /** 动作按钮的 title:禁用了就要说为什么。 */
-  actionTitle?: string;
+  /** 动作按钮因为 busy 点不动时说为什么。禁用了却不给理由,看起来就是坏了。 */
+  busyReason?: string;
+  /** 能点时按钮上的补充说明(点了会先做什么)。 */
+  actionHint?: string;
   onDownload: () => void;
 }) {
   const t = useI18n();
@@ -58,9 +63,11 @@ export function ModelDownloadRow({
     : formatBytes(model.expected_bytes);
 
   const action = (icon: React.ReactNode, label: string) => (
-    <Button size="sm" variant="outline" disabled={busy} title={actionTitle} onClick={onDownload}>
-      {icon} {label}
-    </Button>
+    <Hint label={busy ? undefined : actionHint} disabledReason={busy ? busyReason : undefined}>
+      <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+        {icon} {label}
+      </Button>
+    </Hint>
   );
 
   return (
@@ -85,7 +92,7 @@ export function ModelDownloadRow({
             <AdminRowNote icon={<Loader2 size={12} className="animate-mosael-spin" />}>
               {model.downloaded_bytes > 0 && <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>}
               {model.speed_bps > 0 && <span className="tabular-nums">{formatSpeed(model.speed_bps)}</span>}
-              <span className="min-w-0 truncate">{model.message}</span>
+              <Truncate>{model.message}</Truncate>
             </AdminRowNote>
           )}
           {model.status === "failed" && (

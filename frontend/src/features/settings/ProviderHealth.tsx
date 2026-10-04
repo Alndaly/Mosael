@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { probeProviderHealth } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 
@@ -44,13 +45,14 @@ export function ProviderHealth({ profileId, className }: { profileId: string; cl
         : t("providerHealthOffline");
 
   return (
+    // 第一行说点了会怎样,第二行是探测回来的细节(哪儿不通、多慢)。
+    <Hint label={t("providerHealthRecheck")} hint={health.data?.detail}>
     <button
       type="button"
       className={cn(
         "inline-flex shrink-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground",
         className,
       )}
-      title={health.data?.detail || t("providerHealthRecheck")}
       onClick={(event) => {
         event.stopPropagation();
         void health.refetch();
@@ -68,5 +70,6 @@ export function ProviderHealth({ profileId, className }: { profileId: string; cl
       )}
       {label}
     </button>
+    </Hint>
   );
 }

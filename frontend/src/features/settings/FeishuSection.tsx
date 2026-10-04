@@ -7,7 +7,10 @@ import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { SettingsBlock, SettingsEmpty, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
@@ -170,24 +173,26 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
                   <MessageSquare size={15} />
                 </span>
-                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:font-mono [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
+                <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
-                    <strong>{bot.name}</strong>
+                    <Truncate as="strong" className="text-ui-md font-semibold">{bot.name}</Truncate>
                     <StatusBadge status={bot.status} />
                   </div>
-                  <small title={bot.status_detail || undefined}>
+                  <Truncate as="small" className="font-mono text-ui-xs text-muted-foreground">
                     {bot.app_id}
                     {bot.status_detail ? ` · ${bot.status_detail}` : ""}
-                  </small>
+                  </Truncate>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Select
                     value={bot.capability}
                     onValueChange={(capability) => patchBot.mutate({ id: bot.id, body: { capability } })}
                   >
-                    <SelectTrigger size="sm" className="w-[104px]" title={t("feishuCapability")} aria-label={t("feishuCapability")}>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <Hint label={t("feishuCapability")}>
+                      <SelectTrigger size="sm" className="w-[104px]" aria-label={t("feishuCapability")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </Hint>
                     <SelectContent>
                       {CAPABILITIES.map((capability) => (
                         <SelectItem key={capability} value={capability}>
@@ -201,15 +206,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     </SelectContent>
                   </Select>
                   <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
-                  <Button variant="ghost" size="icon-sm" loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} title={t("feishuBind")} aria-label={t("feishuBind")}>
+                  <IconButton loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} label={t("feishuBind")}>
                     <Link2 size={14} />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" loading={restartBot.isPending && restartBot.variables === bot.id} onClick={() => restartBot.mutate(bot.id)} title={t("feishuRestart")} aria-label={t("feishuRestart")}>
+                  </IconButton>
+                  <IconButton loading={restartBot.isPending && restartBot.variables === bot.id} onClick={() => restartBot.mutate(bot.id)} label={t("feishuRestart")}>
                     <RefreshCcw size={14} />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} title={t("feishuRemove")} aria-label={t("feishuRemove")}>
+                  </IconButton>
+                  <IconButton className="text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} label={t("feishuRemove")}>
                     <Trash2 size={14} />
-                  </Button>
+                  </IconButton>
                 </div>
             </SettingsListItem>
           ))}
@@ -294,17 +299,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
               <SettingsList>
                 {(bindings.data ?? []).map((binding) => (
                 <SettingsListItem className="flex items-center justify-between gap-2 text-ui-md" key={binding.open_id}>
-                  <span className="truncate">{binding.username}</span>
-                  <Button
-                    variant="ghost"
+                  <Truncate>{binding.username}</Truncate>
+                  <IconButton
                     size="icon-xs"
                     className="text-muted-foreground hover:text-destructive"
                     loading={removeBinding.isPending && removeBinding.variables === binding.open_id} onClick={() => removeBinding.mutate(binding.open_id)}
-                    title={t("feishuUnbind")}
-                    aria-label={t("feishuUnbind")}
+                    label={t("feishuUnbind")}
                   >
                     <Trash2 size={13} />
-                  </Button>
+                  </IconButton>
                 </SettingsListItem>
                 ))}
               </SettingsList>

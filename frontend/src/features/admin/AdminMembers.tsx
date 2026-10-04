@@ -10,6 +10,7 @@ import { ActionMenu } from "@/components/app/ActionMenu";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ADMIN_CARD, AdminSection } from "./adminLayout";
@@ -112,12 +113,12 @@ function AccountsSection() {
                           {Array.from(name)[0]}
                         </span>
                         <div className="grid min-w-0 gap-0.5">
-                          <span className="truncate font-medium" title={name}>{name}</span>
-                          <span className="truncate text-ui-xs text-muted-foreground" title={`@${row.username}`}>
+                          <Truncate className="font-medium">{name}</Truncate>
+                          <Truncate className="text-ui-xs text-muted-foreground">
                             @{row.username}
                             {/* 窄的时候「最近活跃」那一列藏起来了,它挪到名字下面。 */}
                             <span className="@min-[560px]/accounts:hidden"> · {seen}</span>
-                          </span>
+                          </Truncate>
                         </div>
                       </div>
                     </td>
@@ -135,7 +136,7 @@ function AccountsSection() {
                     <td className={cn(CELL, WIDE_ONLY)}>
                       {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。界面和版本是
                           **两栏**:浏览器扩展往版本里塞的是产品名,只有一栏时渲染出「vbrowser-extension」。 */}
-                      <code className="timecode block truncate text-ui-xs text-muted-foreground">
+                      <Truncate as="code" className="timecode text-ui-xs text-muted-foreground">
                         {row.client_version
                           ? `${
                               row.client_surface in SURFACE_LABEL
@@ -143,7 +144,7 @@ function AccountsSection() {
                                 : ""
                             }v${row.client_version}`
                           : t("adminUnknownVersion")}
-                      </code>
+                      </Truncate>
                     </td>
                     <td className={cn(CELL, "text-right")}>
                       <ActionMenu

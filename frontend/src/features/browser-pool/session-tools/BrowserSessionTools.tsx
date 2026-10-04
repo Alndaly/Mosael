@@ -22,6 +22,8 @@ import {
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -119,7 +121,8 @@ function SessionTools({
       size="xs"
       data-page-tool={key}
       aria-pressed={active}
-      title={t(label)}
+      // 名字平时收着(指针移进工具区或键盘切进来才展开),读屏的名字不能跟着它一起没了。
+      aria-label={t(label)}
       disabled={busy}
       onClick={onClick}
       className={cn("gap-1.5 px-1.5", active && "bg-secondary")}
@@ -159,16 +162,16 @@ function SessionTools({
           )}
         >
           {shown.tone === "busy" && <Loader2 size={12} className="flex-none animate-mosael-spin" />}
-          <span className="min-w-0 truncate" title={shown.text}>{shown.text}</span>
+          <Truncate>{shown.text}</Truncate>
           {shown.action && (
             <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-ui-xs font-medium text-primary hover:underline" onClick={shown.action.run}>
               {shown.action.label}
             </button>
           )}
           {shown.tone !== "busy" && (
-            <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-muted-foreground" onClick={() => say(null)} aria-label={t("browserToolsClose")}>
+            <IconButton unstyled type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-muted-foreground" onClick={() => say(null)} label={t("browserToolsClose")}>
               <X size={12} />
-            </button>
+            </IconButton>
           )}
         </div>
       )}
@@ -212,9 +215,9 @@ function SessionTools({
           </>
         )}
         {group && (
-          <Button type="button" variant="ghost" size="icon-xs" onClick={() => setGroup(null)} title={t("browserToolsCollapse")} aria-label={t("browserToolsCollapse")}>
+          <IconButton type="button" size="icon-xs" onClick={() => setGroup(null)} label={t("browserToolsCollapse")} shortcut="Esc">
             <X />
-          </Button>
+          </IconButton>
         )}
       </div>
       {drawer === "video" && (

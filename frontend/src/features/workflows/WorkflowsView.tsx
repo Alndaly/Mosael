@@ -396,12 +396,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           {(workflows.data ?? []).map((workflow) => (
             <ContextMenu key={workflow.id}>
               <ContextMenuTrigger asChild>
-                <div className="relative h-full">
-                  <button type="button" aria-label={workflow.name} className="h-full w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}>
-                    <WorkflowCard workflow={workflow} />
-                    {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
-                  </button>
-                  {!selectMode && <div className="absolute right-2 top-2 rounded-lg bg-panel"><ActionMenu label={`${t("studioActions")}: ${workflow.name}`} actions={cardActions(workflow)} /></div>}
+                <div className="relative h-full cursor-pointer" onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}>
+                  {/* 整张卡可点:一颗铺满卡片的透明按钮压在卡片上面(和素材库的卡片同一种做法),
+                      卡片本身不进按钮 —— <article> 不该住在 <button> 里,读屏也只念名字。点击挂在外层:
+                      卡片上的名字、说明浮在按钮上面(被截断时悬停要看得到全文),点它们照样冒泡到这里;
+                      键盘在按钮上按回车,click 同样冒泡上来。 */}
+                  <button type="button" aria-label={workflow.name} className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                  <WorkflowCard workflow={workflow} />
+                  {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
+                  {!selectMode && <div className="absolute right-2 top-2 z-10 rounded-lg bg-panel" onClick={(event) => event.stopPropagation()}><ActionMenu label={`${t("studioActions")}: ${workflow.name}`} actions={cardActions(workflow)} /></div>}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>

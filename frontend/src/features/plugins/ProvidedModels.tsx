@@ -15,6 +15,8 @@ import { SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { ROLE_COPY, type SourceRole } from "@/lib/sourceFrames";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -93,9 +95,9 @@ export function GenerationModelsRow({
   return (
     <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
       <div className="flex min-w-0 items-center gap-2">
-        <span className={cn("min-w-0 truncate text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>
+        <Truncate className={cn("text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>
           {summary}
-        </span>
+        </Truncate>
         <Button variant="outline" disabled={!models} onClick={() => setOpen(true)}>
           {t("pluginModelsView")}
         </Button>
@@ -158,9 +160,9 @@ export function ProvidedModelsDialog({
       footer={
         <div className="flex w-full items-center gap-2">
           {refreshedAt && (
-            <span className="min-w-0 truncate text-ui-xs text-muted-foreground">
+            <Truncate className="text-ui-xs text-muted-foreground">
               {t("pluginModelsRefreshed").replace("{time}", relativeTime(refreshedAt, locale))}
-            </span>
+            </Truncate>
           )}
           <span className="flex-1" />
           <Button variant="outline" loading={refreshing} onClick={onRefresh}>
@@ -224,9 +226,10 @@ function ProvidedModelItem({ model }: { model: PluginProvidedModel }) {
         />
         <span className="grid min-w-0 flex-1 gap-0.5">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-ui-sm font-medium text-foreground" title={model.id}>
-              {model.label}
-            </span>
+            {/* 显示名在前;悬停给模型 id(供应商认的那个)。 */}
+            <Hint label={model.id !== model.label ? model.id : undefined}>
+              <Truncate className="text-ui-sm font-medium text-foreground">{model.label}</Truncate>
+            </Hint>
             {kind && (
               <span className="shrink-0 rounded-full bg-secondary px-2 text-ui-2xs text-muted-foreground">{t(kind)}</span>
             )}
@@ -249,9 +252,10 @@ function ProvidedModelItem({ model }: { model: PluginProvidedModel }) {
             <ul className="m-0 grid list-none gap-1 p-0">
               {parameters.map((parameter) => (
                 <li key={parameter.key} className="flex min-w-0 items-baseline gap-2 text-ui-xs">
-                  <span className="min-w-0 truncate text-foreground" title={parameter.key}>
-                    {parameter.title || parameter.key}
-                  </span>
+                  {/* 悬停给工作流里的参数键(节点.字段),显示名就是键时不重复。 */}
+                  <Hint label={parameter.title ? parameter.key : undefined}>
+                    <Truncate className="text-foreground">{parameter.title || parameter.key}</Truncate>
+                  </Hint>
                   {PARAMETER_TYPE_LABELS[parameter.type] && (
                     <span className="shrink-0 text-muted-foreground">{t(PARAMETER_TYPE_LABELS[parameter.type])}</span>
                   )}

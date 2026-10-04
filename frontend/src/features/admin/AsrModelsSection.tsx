@@ -40,6 +40,7 @@ export function AsrModelsSection() {
             noRuntimeText={t("asrModelNoRuntime")}
             // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
             busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
+            busyReason={t("ttsThisDownloading")}
             onDownload={() => download.mutate(model.id)}
           />
         ))}

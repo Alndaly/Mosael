@@ -7,6 +7,7 @@ import { rebuildWorkflowFromTemplate, type WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { useWorkflowTemplates } from "@/features/workflows/WorkflowCommunityDialog";
 import { emitOpenEvent } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
@@ -75,18 +76,17 @@ export function TemplateUpgradeNotice({ workflowId, meta }: { workflowId: string
       <Button size="sm" variant="secondary" loading={rebuild.isPending} onClick={() => rebuild.mutate()}>
         {t("wfTemplateRebuild")}
       </Button>
-      <Button
+      <IconButton
         size="sm"
-        variant="ghost"
-        aria-label={t("wfTemplateNoticeDismiss")}
-        title={t("wfTemplateNoticeDismiss")}
+        label={t("wfTemplateNoticeDismiss")}
+        hint={t("wfTemplateNoticeDismissHint")}
         onClick={() => {
           writeDismissed(workflowId, current.version);
           setDismissed(true);
         }}
       >
         <X size={13} />
-      </Button>
+      </IconButton>
     </div>
   );
 }

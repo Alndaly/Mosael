@@ -13,6 +13,8 @@ import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { runStatusText } from "@/components/jobs/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import type { CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
 
@@ -173,18 +175,18 @@ export function WorkflowRunHistory({
         <h2>
           <History size={14} /> {t("wfHistory")}
         </h2>
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
-          aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
-          title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
-        </button>
-        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
+        </IconButton>
+        <IconButton unstyled type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
           <X size={13} />
-        </button>
+        </IconButton>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
@@ -225,7 +227,7 @@ export function WorkflowRunHistory({
             >
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">
-                <span className="truncate text-xs">{run.message || runStatusText(t, run.status)}</span>
+                <Truncate className="text-xs">{run.message || runStatusText(t, run.status)}</Truncate>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
@@ -290,12 +292,12 @@ export function WorkflowRunHistory({
                         ) : (
                           <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
                         )}
-                        <span className="min-w-0 flex-1 truncate">
+                        <Truncate className="flex-1">
                           {s.name}
                           {s.status === "running" && s.message && (
                             <span className="ml-1.5 text-ui-2xs text-muted-foreground">{s.message}</span>
                           )}
-                        </span>
+                        </Truncate>
                         {s.status === "skipped" || s.status === "cancelled" ? (
                           <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
                             {t(STEP_STATUS_LABELS[s.status])}

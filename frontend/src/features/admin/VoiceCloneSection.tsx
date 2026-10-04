@@ -299,7 +299,8 @@ export function VoiceCloneSection() {
               busy={busy}
               // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
               // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              actionTitle={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined}
+              busyReason={t("ttsThisDownloading")}
+              actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
               onDownload={() => download.mutate(model.id)}
             />
           );

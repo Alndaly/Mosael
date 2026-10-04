@@ -14,6 +14,8 @@ import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { Combobox } from "@/components/app/combobox";
 import { BulkActionBar, BulkCheckbox } from "@/components/app/bulkSelection";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -238,7 +240,7 @@ export function ProviderModelList({
           )}
           <div className="grid min-w-0 gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-ui-sm font-medium text-foreground">{row.display_name || row.id}</span>
+              <Truncate className="text-ui-sm font-medium text-foreground">{row.display_name || row.id}</Truncate>
               {/* 目录里已经没有它了:不删,别名与私有部署仍要能用,但得说出来 —— 否则用户
                   只会看到"模型突然不工作了"却不知道端点那边已经下线了它。 */}
               {!row.in_catalog && <Badge variant="outline">{unit.gone}</Badge>}
@@ -246,15 +248,16 @@ export function ProviderModelList({
             <span className="flex flex-wrap items-center gap-1">
               {/* 能力标签**就是改能力的入口**:认不出的模型现在只当对话模型(或什么都不是),要让它出图,
                   用户得一眼看到"它现在被当成什么",并且点一下就能改。自动识别的用虚线框,和"我标过的"分开。 */}
-              <button
+              <IconButton
+                unstyled
                 type="button"
                 className="flex cursor-pointer flex-wrap items-center gap-1 rounded border-0 bg-transparent p-0 hover:opacity-80"
-                aria-label={t("modelCapabilitiesEdit")}
-                title={(row.capability_ids ?? []).length === 0 ? t("modelCapabilitiesAuto") : t("modelCapabilitiesEdit")}
+                label={t("modelCapabilitiesEdit")}
+                hint={(row.capability_ids ?? []).length === 0 ? t("modelCapabilitiesAuto") : null}
                 onClick={() => setEditing(row.id)}
               >
                 <CapabilityChips ids={row.effective_capability_ids ?? []} auto={(row.capability_ids ?? []).length === 0} />
-              </button>
+              </IconButton>
               {row.context_window ? (
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {Math.round(row.context_window / 1000)}k
@@ -273,23 +276,17 @@ export function ProviderModelList({
               aria-label={t("modelEnabled")}
               onCheckedChange={(next) => patch.mutate({ modelId: row.id, body: { enabled: next } })}
             />
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t("modelSettingsTitle")}
-              onClick={() => setEditing(row.id)}
-            >
+            <IconButton size="icon-xs" label={t("modelSettingsTitle")} onClick={() => setEditing(row.id)}>
               <SlidersHorizontal size={13} />
-            </Button>
-            <Button
-              variant="ghost"
+            </IconButton>
+            <IconButton
               size="icon-xs"
-              aria-label={t("delete")}
+              label={t("delete")}
               loading={remove.isPending && remove.variables === row.id}
               onClick={() => remove.mutate(row.id)}
             >
               <Trash2 size={13} />
-            </Button>
+            </IconButton>
           </div>
           </SettingsListItem>
         ))}

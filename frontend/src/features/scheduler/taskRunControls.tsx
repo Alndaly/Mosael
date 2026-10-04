@@ -14,6 +14,7 @@ import type { ScheduledTaskRun } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
 
 /**
  * 这个任务此刻有没有一次还没跑完 —— 和后端拒绝重入的判据一致(scheduler.executors.has_active_run,
@@ -40,19 +41,19 @@ export function TaskRunControls({
   onToggle: (enabled: boolean) => void;
 }) {
   const t = useI18n();
-  // 说明挂在外层:被禁用的按钮不接收指针事件,自己身上的 title 悬停时出不来。
   const hint = blocked ? t("taskBlockedWorkflowGone") : undefined;
+  // 点不动的原因:跑不起来(工作流删了)优先;否则是任务停着。「运行中」由按钮上的字自己说。
+  const runBlockedBy = hint ?? (!enabled ? t("taskRunNeedsEnabled") : undefined);
   return (
     <div className="flex shrink-0 items-center gap-1.5">
-      <span title={hint}>
+      <Hint disabledReason={runBlockedBy}>
         <Button variant="outline" disabled={!enabled || blocked} loading={running} onClick={onRun}>
           <Play size={13} /> {running ? t("runStatus_running") : t("runNow")}
         </Button>
-      </span>
-      <label
-        title={hint}
-        className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground has-[:disabled]:cursor-not-allowed"
-      >
+      </Hint>
+      {/* 说明挂在整个标签上:开关被禁用时自己收不到悬停。 */}
+      <Hint label={hint}>
+      <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground has-[:disabled]:cursor-not-allowed">
         <span>{enabled ? t("pluginOn") : t("pluginOff")}</span>
         {/* 跑不起来时**打不开,但关得掉** —— 万一它还开着(不变式成立之前留下的),得能停下它。 */}
         <Switch
@@ -62,6 +63,7 @@ export function TaskRunControls({
           onCheckedChange={onToggle}
         />
       </label>
+      </Hint>
     </div>
   );
 }

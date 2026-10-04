@@ -5,7 +5,9 @@ import type { PricingRule } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { BulkCheckbox } from "@/components/app/bulkSelection";
 import type { useMultiSelect } from "@/lib/useMultiSelect";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { cn } from "@/lib/utils";
@@ -157,26 +159,26 @@ export function PricingRuleFilters({
           ]}
         />
         <div className="ml-auto flex items-center gap-1" role="group" aria-label={t("pricingViewLabel")}>
-          <Button
+          <IconButton
             variant="outline"
+            size="default"
             className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")}
-            aria-label={t("studioGridView")}
-            title={t("studioGridView")}
+            label={t("studioGridView")}
             aria-pressed={display === "grid"}
             onClick={() => onDisplay("grid")}
           >
             <LayoutGrid />
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
             variant="outline"
+            size="default"
             className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")}
-            aria-label={t("studioListView")}
-            title={t("studioListView")}
+            label={t("studioListView")}
             aria-pressed={display === "list"}
             onClick={() => onDisplay("list")}
           >
             <List />
-          </Button>
+          </IconButton>
         </div>
       </div>
       <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
@@ -214,16 +216,16 @@ function PriceLines({ group, labels, onEdit, onDelete, dense }: {
     <ul className={cn("m-0 grid list-none p-0", dense ? "gap-0.5" : "gap-1")}>
       {group.rules.map((rule) => (
         <li key={rule.id} className="group/price grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-md px-1.5 py-1 hover:bg-secondary/60">
-          <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</span>
+          <Truncate className="text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</Truncate>
           <span className="whitespace-nowrap text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
           {/* 动作悬停 / 键盘聚焦时才出现,触屏上常驻 —— 一张卡四条价格各顶两个图标就成了一片按钮。 */}
           <span className="flex items-center opacity-0 transition-opacity group-hover/price:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-            <Button size="icon-xs" variant="ghost" aria-label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`} title={t("pricingRuleEdit")} onClick={() => onEdit(rule)}>
+            <IconButton size="icon-xs" label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`} onClick={() => onEdit(rule)}>
               <Pencil />
-            </Button>
-            <Button size="icon-xs" variant="ghost" aria-label={`${t("delete")}: ${labels.unitLabel(rule.billing_unit)}`} title={t("delete")} onClick={() => onDelete(rule)}>
+            </IconButton>
+            <IconButton size="icon-xs" label={`${t("delete")}: ${labels.unitLabel(rule.billing_unit)}`} onClick={() => onDelete(rule)}>
               <Trash2 />
-            </Button>
+            </IconButton>
           </span>
           {rule.time_prices?.length ? (
             <small className="col-span-3 text-ui-2xs text-muted-foreground tabular-nums">{labels.schedule(rule)}</small>
@@ -260,9 +262,9 @@ function Notes({ group }: { group: RuleGroup }) {
   if (!notes.length) return null;
   const text = notes.join("\n");
   return (
-    <p className="m-0 line-clamp-2 break-words text-ui-2xs leading-[1.5] text-muted-foreground" title={text}>
+    <Truncate as="p" lines={2} text={text} className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">
       {notes.join(" · ")}
-    </p>
+    </Truncate>
   );
 }
 
@@ -287,9 +289,9 @@ export function PricingRuleGroups({
   const title = (group: RuleGroup) => group.model || t("pricingAnyModel");
   const subtitle = (group: RuleGroup) => `${labels.capabilityLabel(group.capability)} · ${labels.profileName(group)}`;
   const deleteGroupButton = (group: RuleGroup) => (
-    <Button size="icon-xs" variant="ghost" aria-label={`${t("pricingDeleteGroup")}: ${title(group)}`} title={t("pricingDeleteGroup")} onClick={() => onDeleteGroup(group)}>
+    <IconButton size="icon-xs" label={`${t("pricingDeleteGroup")}: ${title(group)}`} onClick={() => onDeleteGroup(group)}>
       <Trash2 />
-    </Button>
+    </IconButton>
   );
 
   if (display === "list") {
@@ -311,31 +313,34 @@ export function PricingRuleGroups({
             >
               {bulk.selectMode && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
               <div className="grid min-w-0 gap-0.5">
-                <strong className="truncate text-ui-sm font-semibold" title={title(group)}>{title(group)}</strong>
-                <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>
+                <Truncate as="strong" className="text-ui-sm font-semibold">{title(group)}</Truncate>
+                <Truncate as="small" className="text-ui-xs text-muted-foreground">{subtitle(group)}</Truncate>
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 {group.rules.map((rule) => (
+                  // 一块价格就是「改这一条」的入口;分时段的,悬停把时段价写出来。
+                  <Hint key={rule.id} label={t("pricingRuleEdit")} hint={rule.time_prices?.length ? labels.schedule(rule) : undefined}>
                   <button
-                    key={rule.id}
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-md border border-border bg-control px-2 py-1 text-left transition-colors hover:border-primary/40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`}
-                    title={rule.time_prices?.length ? labels.schedule(rule) : t("pricingRuleEdit")}
                     onClick={() => onEdit(rule)}
                   >
                     <span className="text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</span>
                     <span className="text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
                     {rule.time_prices?.length ? <Clock size={12} className="text-primary" aria-label={labels.schedule(rule)} /> : null}
                   </button>
+                  </Hint>
                 ))}
               </div>
               <div className="flex items-center gap-1">
                 <SourceBadges group={group} />
                 {notes ? (
-                  <span className="grid size-7 place-items-center text-muted-foreground" title={notes} aria-label={notes} role="img">
-                    <Info size={14} />
-                  </span>
+                  <Hint label={notes}>
+                    <span className="grid size-7 place-items-center text-muted-foreground" aria-label={notes} role="img">
+                      <Info size={14} />
+                    </span>
+                  </Hint>
                 ) : null}
                 {deleteGroupButton(group)}
               </div>
@@ -360,8 +365,8 @@ export function PricingRuleGroups({
             <div className="flex min-w-0 items-start gap-2">
               {bulk.selectMode && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
               <div className="grid min-w-0 gap-0.5">
-                <strong className="truncate text-ui-md font-semibold" title={title(group)}>{title(group)}</strong>
-                <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>
+                <Truncate as="strong" className="text-ui-md font-semibold">{title(group)}</Truncate>
+                <Truncate as="small" className="text-ui-xs text-muted-foreground">{subtitle(group)}</Truncate>
               </div>
             </div>
             <div className="flex items-center gap-1">

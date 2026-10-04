@@ -34,6 +34,9 @@ import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Truncate } from "@/components/ui/truncate";
 import { Input } from "@/components/ui/input";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Combobox } from "@/components/app/combobox";
@@ -71,7 +74,7 @@ function TaskMenuRunItem({ task, blocked, onRun }: { task: ScheduledTask; blocke
   const active = hasActiveRun(runs.data);
   return (
     <ContextMenuItem disabled={!task.enabled || blocked || runs.isPending || active} onSelect={onRun}>
-      <Play /> {active ? t("runStatus_running") : t("runNow")}
+      <MenuItemBody icon={<Play />} label={active ? t("runStatus_running") : t("runNow")} />
     </ContextMenuItem>
   );
 }
@@ -210,7 +213,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   >
                     <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", task.enabled && "bg-success")} />
                     <span className={DETAIL_INDEX_TEXT}>
-                      <strong>{task.name}</strong>
+                      <Truncate as="strong">{task.name}</Truncate>
                       <small>
                         {kindOf(task.kind).label} · {t(`trigger_${task.trigger_type}` as never)}
                       </small>
@@ -223,16 +226,16 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                     disabled={!task.enabled && isBlocked(task)}
                     onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}
                   >
-                    <Power /> {task.enabled ? t("pluginOff") : t("pluginOn")}
+                    <MenuItemBody icon={<Power />} label={task.enabled ? t("pluginOff") : t("pluginOn")} />
                   </ContextMenuItem>
                   {task.is_mine && (
                     <ContextMenuItem onSelect={() => menuShare.mutate({ id: task.id, shared: !task.shared })}>
-                      <Users2 /> {task.shared ? t("taskUnshare") : t("taskShare")}
+                      <MenuItemBody icon={<Users2 />} label={task.shared ? t("taskUnshare") : t("taskShare")} />
                     </ContextMenuItem>
                   )}
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(task)}>
-                    <Trash2 /> {t("delete")}
+                    <MenuItemBody icon={<Trash2 />} label={t("delete")} />
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -294,21 +297,15 @@ function WebhookUrlRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
     <div className="grid">
       <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
         <div className="flex min-w-0 max-w-[460px] items-center gap-1">
-          <code className="timecode max-w-[300px] truncate text-xs text-muted-foreground" title={url}>
+          <Truncate as="code" className="timecode max-w-[300px] text-xs text-muted-foreground">
             {url}
-          </code>
-          <Button size="icon-sm" variant="ghost" title={t("copy")} aria-label={t("copy")} onClick={() => copy(url, t("webhookCopied"))}>
+          </Truncate>
+          <IconButton label={t("copy")} onClick={() => copy(url, t("webhookCopied"))}>
             <Copy />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            title={t("webhookReset")}
-            aria-label={t("webhookReset")}
-            onClick={() => setConfirming(true)}
-          >
+          </IconButton>
+          <IconButton label={t("webhookReset")} onClick={() => setConfirming(true)}>
             <RotateCcw />
-          </Button>
+          </IconButton>
         </div>
       </SettingsRow>
       <div className="grid gap-2 pb-4">
@@ -326,10 +323,10 @@ function WebhookUrlRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
             {calls.map(([label, command]) => (
               <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5">
                 <span className="col-span-2 text-ui-xs text-muted-foreground">{label}</span>
-                <code className="timecode truncate text-xs text-foreground" title={command}>{command}</code>
-                <Button size="icon-xs" variant="ghost" title={t("copy")} aria-label={`${t("copy")}: ${label}`} onClick={() => copy(command, t("webhookApiCopied"))}>
+                <Truncate as="code" className="timecode text-xs text-foreground">{command}</Truncate>
+                <IconButton size="icon-xs" label={`${t("copy")}: ${label}`} onClick={() => copy(command, t("webhookApiCopied"))}>
                   <Copy />
-                </Button>
+                </IconButton>
               </div>
             ))}
             <small className="text-ui-xs text-muted-foreground">{t("webhookApiStatuses")}</small>
@@ -547,7 +544,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           两块等重,而真正天天看的是下面那份记录。 */}
       <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 truncate text-xl font-semibold text-foreground">{task.name}</h2>
+          <Truncate as="h2" className="m-0 text-xl font-semibold text-foreground">{task.name}</Truncate>
           <TaskRunControls
             enabled={task.enabled}
             blocked={blocked}
@@ -671,9 +668,9 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
           )}
         </div>
         {message && (
-          <small className="truncate text-ui-xs text-muted-foreground" title={message}>
+          <Truncate as="small" className="text-ui-xs text-muted-foreground">
             {message}
-          </small>
+          </Truncate>
         )}
       </div>
       {/* 停在「这一版工作流是别人改的,要主人认可」:认可那一版之后,下次运行就借得到了。 */}

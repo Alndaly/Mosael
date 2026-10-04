@@ -11,7 +11,10 @@ import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { parseServerTime, relativeTime } from "@/lib/time";
 import { formatCombo } from "@/lib/shortcuts";
@@ -269,15 +272,15 @@ function MemoryRow({
     >
       {selecting && <BulkCheckbox checked={selected} onToggle={onToggleSelected} label={t("bulkSelectRow")} />}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">
-        <p
+        {/* 收着时夹三行(悬停看全文),展开就整段铺开 —— 同一个元素,useClipped 量的一直是它。 */}
+        <Truncate
+          as="p"
           ref={ref}
-          className={cn(
-            "m-0 whitespace-pre-wrap break-words text-ui-md leading-[1.6] text-foreground",
-            !expanded && "line-clamp-3",
-          )}
+          lines={3}
+          className={cn("m-0 whitespace-pre-wrap text-ui-md leading-[1.6] text-foreground", expanded && "line-clamp-none")}
         >
           {memory.content}
-        </p>
+        </Truncate>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
           <span
             data-slot="memory-source"
@@ -292,9 +295,11 @@ function MemoryRow({
             {fromAgent ? <Bot aria-hidden /> : <UserRound aria-hidden />}
             {fromAgent ? t("agentMemoryFromAgent") : t("agentMemoryFromUser")}
           </span>
-          <time dateTime={stamp} title={absoluteTime(stamp, locale)}>
-            {t(edited ? "agentMemoryEditedAt" : "agentMemoryAddedAt").replace("{time}", relativeTime(stamp, locale))}
-          </time>
+          <Hint label={absoluteTime(stamp, locale)}>
+            <time dateTime={stamp}>
+              {t(edited ? "agentMemoryEditedAt" : "agentMemoryAddedAt").replace("{time}", relativeTime(stamp, locale))}
+            </time>
+          </Hint>
           {(clipped || expanded) && (
             <button
               type="button"
@@ -313,19 +318,12 @@ function MemoryRow({
           data-slot="memory-actions"
           className="flex items-center gap-1 opacity-0 transition-opacity group-hover/memory:opacity-100 group-focus-within/memory:opacity-100 [@media(hover:none)]:opacity-100"
         >
-          <Button variant="ghost" size="icon-sm" aria-label={t("agentMemoryEdit")} title={t("agentMemoryEdit")} onClick={onEdit}>
+          <IconButton label={t("agentMemoryEdit")} onClick={onEdit}>
             <Pencil size={13} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="hover:text-destructive"
-            aria-label={t("delete")}
-            title={t("delete")}
-            onClick={onDelete}
-          >
+          </IconButton>
+          <IconButton className="hover:text-destructive" label={t("delete")} onClick={onDelete}>
             <Trash2 size={13} />
-          </Button>
+          </IconButton>
         </div>
       )}
     </SettingsListItem>

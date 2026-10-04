@@ -4,6 +4,7 @@ import { useQueries } from "@tanstack/react-query";
 import { getAsset, type Asset } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { Truncate } from "@/components/ui/truncate";
 import type { AssetOutput } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
 
@@ -68,9 +69,14 @@ export function OutputAssets({
           key={item.key || item.assetId}
           className={cn("m-0 grid min-w-0 gap-1", !bleed && density === "node" && "px-2.5 py-2")}
         >
+          {/* 检查器里名字后面跟稳定 key(和下面文字产出那几行一样):它是 `{{节点.key}}` 里要写的那个词。
+              卡片上只报名字 —— 位置不够,key 在检查器里看。 */}
           {named && item.label && (
-            <figcaption className={cn("truncate text-ui-2xs text-muted-foreground", bleed && "px-3 pt-1.5")} title={item.key}>
-              {item.label}
+            <figcaption className={cn("flex min-w-0 items-baseline gap-1 text-ui-2xs text-muted-foreground", bleed && "px-3 pt-1.5")}>
+              <Truncate>{item.label}</Truncate>
+              {density === "panel" && item.key && item.key !== item.label && (
+                <span className="shrink-0 font-mono">{item.key}</span>
+              )}
             </figcaption>
           )}
           <AssetInlinePreview

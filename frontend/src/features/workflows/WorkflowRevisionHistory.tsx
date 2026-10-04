@@ -26,6 +26,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { parseServerTime, relativeTime } from "@/lib/time";
 
@@ -134,9 +136,9 @@ export function WorkflowRevisionHistory({
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="font-medium">v{item.revision}</span>
-                        <span className="truncate text-ui-xs text-muted-foreground">
+                        <Truncate className="text-ui-xs text-muted-foreground">
                           {sourceKey ? t(sourceKey) : item.source}
-                        </span>
+                        </Truncate>
                         {current && (
                           <Badge variant="outline" className="px-1.5 py-0 text-ui-2xs text-primary">
                             {t("wfRevisionCurrent")}
@@ -144,31 +146,30 @@ export function WorkflowRevisionHistory({
                         )}
                       </div>
                       <div className="mt-0.5 flex min-w-0 items-center gap-2 text-ui-2xs text-muted-foreground">
-                        <time title={absoluteTime(item.created_at, locale)}>
-                          {relativeTime(item.created_at, locale)}
-                        </time>
+                        <Hint label={absoluteTime(item.created_at, locale)}>
+                          <time>{relativeTime(item.created_at, locale)}</time>
+                        </Hint>
                         <span aria-hidden>·</span>
-                        <span className="truncate">
+                        <Truncate>
                           {item.created_by_name
                             ? t("wfRevisionAuthor").replace("{name}", item.created_by_name)
                             : t("wfRevisionAuthorUnknown")}
-                        </span>
+                        </Truncate>
                         {attested.length > 0 && (
                           <>
                             <span aria-hidden>·</span>
-                            <span className="truncate">{t("wfRevisionAttestedCount").replace("{n}", String(attested.length))}</span>
+                            <Truncate>{t("wfRevisionAttestedCount").replace("{n}", String(attested.length))}</Truncate>
                           </>
                         )}
                         <span aria-hidden>·</span>
-                        <span className="truncate font-mono" title={item.graph_hash}>
-                          {item.graph_hash.slice(0, 10)}
-                        </span>
+                        {/* 只摆前十位;悬停给完整的哈希。十个等宽字符不必再截。 */}
+                        <Hint label={item.graph_hash}>
+                          <span className="shrink-0 font-mono">{item.graph_hash.slice(0, 10)}</span>
+                        </Hint>
                         {item.note && (
                           <>
                             <span aria-hidden>·</span>
-                            <span className="truncate" title={item.note}>
-                              {item.note}
-                            </span>
+                            <Truncate>{item.note}</Truncate>
                           </>
                         )}
                       </div>

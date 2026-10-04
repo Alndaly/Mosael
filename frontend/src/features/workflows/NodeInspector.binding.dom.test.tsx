@@ -65,7 +65,7 @@ function renderInspector(node: WorkflowGraph["nodes"][number], edges: WorkflowGr
     </QueryClientProvider>,
   );
   const modeToggle = (key: string) =>
-    document.querySelector<HTMLButtonElement>(`[data-field-key="${key}"] button[title="wfInputModeHint"]`)!;
+    document.querySelector<HTMLButtonElement>(`[data-field-key="${key}"] button[data-input-mode]`)!;
   const applied = () => (onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).nodes.find((one) => one.id === node.id)!;
   return { onApplyGraph, modeToggle, applied };
 }

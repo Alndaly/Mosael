@@ -138,12 +138,12 @@ it("可选值清单跟着勾出来的参数出现,碎屑编辑器回车加、叉
   fireEvent.keyDown(input, { key: "Enter" });
   /* 按 chip 自己的删除按钮查,不按文字 —— 同一串文字在「默认尺寸」下拉里也有一份,
      按文字查会同时撞到两个,而这里要断言的是清单里那一档。 */
-  expect(screen.getByLabelText("genField_sizes 1536x1024")).toBeInTheDocument();
+  expect(screen.getByLabelText("genFormRemoveChip 1536x1024")).toBeInTheDocument();
   /* 叉号删得掉 —— 加进去的那一档不是单行道。 */
   fireEvent.change(input, { target: { value: "1024x1024" } });
   fireEvent.keyDown(input, { key: "Enter" });
-  fireEvent.click(screen.getByLabelText("genField_sizes 1024x1024"));
-  expect(screen.queryByLabelText("genField_sizes 1024x1024")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("genFormRemoveChip 1024x1024"));
+  expect(screen.queryByLabelText("genFormRemoveChip 1024x1024")).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText(/generationProfilesName/), { target: { value: "x" } });
   fireEvent.click(screen.getByText("save"));

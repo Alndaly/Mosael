@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import { describePermission } from "@/features/plugins/pluginPermissions";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
 import { CapabilityUseList } from "@/components/settings/CapabilityUseList";
@@ -642,9 +643,9 @@ function MarketDetail({
                   <ToolEffectBadge effects={tool.effects} />
                 </span>
                 {tool.description && (
-                  <span className="line-clamp-3 text-ui-xs leading-relaxed text-muted-foreground">
+                  <Truncate lines={3} className="text-ui-xs leading-relaxed text-muted-foreground">
                     <InlineMarkdown text={tool.description} />
-                  </span>
+                  </Truncate>
                 )}
               </li>
             ))}

@@ -4,6 +4,8 @@ import React from "react";
 import { Loader2, MonitorPlay, Square, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 
 /**
  * **没挂上悬浮面板**的自动化任务的进度条子。
@@ -55,19 +57,20 @@ export function BrowserPreview() {
         <MonitorPlay size={13} className="shrink-0 text-primary" />
         <span className="shrink-0 text-ui-sm font-semibold">{t("browserPreviewTitle")}</span>
         {frame.label && (
-          <span className="min-w-0 flex-1 truncate text-ui-xs tabular-nums text-muted-foreground">
+          <Truncate className="flex-1 text-ui-xs tabular-nums text-muted-foreground">
             {frame.label}
-          </span>
+          </Truncate>
         )}
         {!frame.label && <span className="min-w-0 flex-1" />}
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
-          aria-label={t("close")}
+          label={t("close")}
           onClick={() => setDismissedSession(frame.sessionId)}
         >
           <X size={12} />
-        </button>
+        </IconButton>
       </div>
       {frame.dataUrl ? (
         <img src={frame.dataUrl} alt="" className="block w-full bg-black" />
@@ -84,7 +87,7 @@ export function BrowserPreview() {
             )}
             <span>{settled ? t("browserPreviewNoPixelsDone") : t("browserPreviewNoPixels")}</span>
           </div>
-          {frame.url && <div className="truncate text-ui-xs text-muted-foreground/80">{frame.url}</div>}
+          {frame.url && <Truncate as="div" className="text-ui-xs text-muted-foreground/80">{frame.url}</Truncate>}
         </div>
       )}
     </div>

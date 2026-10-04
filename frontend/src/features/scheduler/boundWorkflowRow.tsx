@@ -10,6 +10,8 @@ import { AlertTriangle, GitBranch } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { gotoRecord } from "@/lib/deepLink";
 
@@ -72,22 +74,23 @@ export function BoundWorkflowRow({
           className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-ui-sm text-destructive"
         >
           <AlertTriangle size={13} className="shrink-0" />
-          <span className="truncate">{label}</span>
+          <Truncate>{label}</Truncate>
         </span>
       ) : (
         /* 按钮内容是工作流的**名字**,而用户的工作流常叫「新工作流」—— 光秃秃一个名字
            看起来像「新建工作流」动作按钮。图标 + 悬停说明把它钉回「这是当前绑定,点击去看」。 */
-        <Button
-          variant="outline"
-          className="max-w-full"
-          title={t("taskOpenWorkflow")}
-          // 打开**它绑的那一张**。此前只换到工作流页,页面停在上次看的那张 —— 点「每日剪辑」
-          // 却看到另一张图。没绑的时候没有要打开的那一条,只去列表挑一个。
-          onClick={() => gotoRecord("/workflows", "mosael:open-workflow", workflow?.id)}
-        >
-          <GitBranch size={13} />
-          <span className="truncate">{label}</span>
-        </Button>
+        <Hint label={t("taskOpenWorkflow")}>
+          <Button
+            variant="outline"
+            className="max-w-full"
+            // 打开**它绑的那一张**。此前只换到工作流页,页面停在上次看的那张 —— 点「每日剪辑」
+            // 却看到另一张图。没绑的时候没有要打开的那一条,只去列表挑一个。
+            onClick={() => gotoRecord("/workflows", "mosael:open-workflow", workflow?.id)}
+          >
+            <GitBranch size={13} />
+            <Truncate>{label}</Truncate>
+          </Button>
+        </Hint>
       )}
     </SettingsRow>
   );

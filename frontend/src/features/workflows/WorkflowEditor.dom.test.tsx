@@ -27,6 +27,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import type { Workspace, WorkflowGraph } from "@/api/client";
+import { readHint } from "@/test/hint";
 import { WithPageTrail } from "@/test/pageTrail";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
@@ -381,7 +382,8 @@ describe("⌘Enter 运行", () => {
     fireEvent.change(await screen.findByLabelText("wfNodeName"), { target: { value: "改过" } });
     await waitFor(() => expect(order).toEqual(["save-failed"]), { timeout: 3000 });
     const runButton = screen.getByRole("button", { name: "wfRun" });
-    await waitFor(() => expect(runButton.getAttribute("title")).toBe("wfRunRetriesSave"));
+    // 说明是「名字 + 补充」:补充那句是「点了先重存」,不是「保存中…」。
+    await waitFor(async () => expect(await readHint(runButton)).toBe("wfRunwfRunRetriesSave"));
     expect(runButton).not.toHaveProperty("disabled", true);
     fireEvent.click(runButton);
     await waitFor(() => expect(order).toContain("run"));
@@ -426,7 +428,7 @@ describe("⌘Enter 运行", () => {
     fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
-    const checklist = await screen.findByRole("dialog");
+    const checklist = await screen.findByRole("menu", { name: "wfChecklist" });
     expect(within(checklist).getByText("wfChecklistBlocked")).toBeTruthy();
     expect(within(checklist).getByText("template")).toBeTruthy();
   });

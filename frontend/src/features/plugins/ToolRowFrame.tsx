@@ -2,6 +2,7 @@ import type React from "react";
 import { ChevronDown, ChevronRight, Terminal } from "lucide-react";
 
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { Truncate } from "@/components/ui/truncate";
 
 /**
  * 插件工具的一行:左边一格(开放的勾,或宿主工具的锁)、名字 + 一行说明、徽标、展开箭头;点开是这一行的内容。
@@ -40,12 +41,12 @@ export function ToolRowFrame({
           onClick={() => onOpenChange(!open)}
         >
           <Terminal size={14} className="shrink-0" />
-          <div className="min-w-0 flex-1 [&>small]:block [&>small]:truncate [&>small]:text-ui-xs [&>small]:text-muted-foreground [&>strong]:block [&>strong]:truncate [&>strong]:text-ui-sm [&>strong]:font-semibold">
-            <strong>{label}</strong>
+          <div className="min-w-0 flex-1">
+            <Truncate as="strong" className="text-ui-sm font-semibold">{label}</Truncate>
             {/* 在展开按钮里:链接只留文字。 */}
-            <small>
+            <Truncate as="small" className="text-ui-xs text-muted-foreground">
               <InlineMarkdown text={description} links={false} />
-            </small>
+            </Truncate>
           </div>
           {badges}
           {open ? (

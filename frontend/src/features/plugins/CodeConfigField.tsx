@@ -7,6 +7,7 @@ import { CodeEditor } from "@/components/app/code-editor";
 import { ModalShell } from "@/components/app/modals";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -235,7 +236,7 @@ export function CodeConfigControl({
   return (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        <span className={cn("min-w-0 truncate text-ui-sm", summary.lines ? "text-foreground" : "text-muted-foreground")}>
+        <Truncate className={cn("text-ui-sm", summary.lines ? "text-foreground" : "text-muted-foreground")}>
           {summary.lines
             ? [
                 t("pluginCodeFilled").replace("{lines}", String(summary.lines)),
@@ -244,7 +245,7 @@ export function CodeConfigControl({
                 .filter(Boolean)
                 .join(" · ")
             : t("pluginCodeEmpty")}
-        </span>
+        </Truncate>
         <Button variant="outline" onClick={start} aria-label={t("pluginCodeEditTitle").replace("{label}", field.label)}>
           <Pencil size={13} />
           {t("pluginCodeEdit")}

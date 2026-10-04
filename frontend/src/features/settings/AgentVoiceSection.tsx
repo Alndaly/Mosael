@@ -123,7 +123,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
               // 没就绪的引擎(缺 Key、没装运行环境)列出来只会让人选中之后才失败。
               .filter((one) => one.ready)
               .map((one) => (
-                <SelectItem key={one.id} value={one.id}>
+                <SelectItem key={one.id} value={one.id} truncate>
                   {one.label}
                 </SelectItem>
               ))}

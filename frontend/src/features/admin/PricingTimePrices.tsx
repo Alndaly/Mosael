@@ -6,9 +6,11 @@ import { usePreferences, useI18n } from "@/app/preferences";
 import { DIALOG_FIELD } from "@/components/app/modals";
 import { AddRow } from "@/components/ui/add-row";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { TimePicker } from "@/components/ui/time-picker";
+import { Truncate } from "@/components/ui/truncate";
 
 /**
  * 计价规则的「分时段价格」:同一条规则在一周里的某几段收另一个价(后端见 domain/billing/price_schedule)。
@@ -203,16 +205,15 @@ export function TimePricesEditor({
                 <TimePicker className="w-36" ariaLabel={t("pricingTimeWindowEnd")} value={window.end} onChange={(end) => set(index, { end })} />
               </div>
             </div>
-            <Button
+            <IconButton
               type="button"
-              variant="ghost"
+              size="icon"
               className="size-10"
-              aria-label={t("pricingTimeWindowRemove")}
-              title={t("pricingTimeWindowRemove")}
+              label={t("pricingTimeWindowRemove")}
               onClick={() => onChange({ timeZone: windows.length > 1 ? timeZone : "", windows: windows.filter((_, i) => i !== index) })}
             >
               <Trash2 size={14} />
-            </Button>
+            </IconButton>
           </div>
           <label className={DIALOG_FIELD}>
             <span>{t("pricingTimeWindowAmount")}</span>
@@ -227,9 +228,9 @@ export function TimePricesEditor({
                 placeholder="0.000000"
                 onChange={(event) => set(index, { amount: event.target.value })}
               />
-              <small className="pointer-events-none absolute right-3 top-1/2 max-w-36 -translate-y-1/2 truncate text-ui-xs text-muted-foreground">
+              <Truncate as="small" className="pointer-events-none absolute right-3 top-1/2 max-w-36 -translate-y-1/2 text-ui-xs text-muted-foreground">
                 {unitHint}
-              </small>
+              </Truncate>
             </span>
           </label>
           <div className="grid gap-2">

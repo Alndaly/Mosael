@@ -20,6 +20,7 @@ import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -147,7 +148,7 @@ export function AuthPromptField({
                 onClick={() => onSubmit(id)}
               >
                 <span className="grid min-w-0 flex-1 gap-px">
-                  <span className="truncate text-ui-sm font-medium text-foreground">{label}</span>
+                  <Truncate className="text-ui-sm font-medium text-foreground">{label}</Truncate>
                   {description && <span className="text-ui-2xs text-muted-foreground">{description}</span>}
                 </span>
                 <ChevronRight size={13} className="shrink-0 text-muted-foreground" />

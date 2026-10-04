@@ -33,6 +33,7 @@ import { blurFloatingPanels } from "@/components/app/useFloatingPanel";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { usePageTrail } from "@/components/layout/pageTrail";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
@@ -66,6 +67,7 @@ import {
   WORKFLOW_CANVAS_NODE_TYPES,
 } from "@/features/workflows/workflowViewShared";
 import { saveJsonToDisk } from "@/lib/download";
+import { formatCombo } from "@/lib/shortcuts";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -706,16 +708,17 @@ export function WorkflowEditor({
             {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
             {selectedFlowIds.length >= 2 && !annotationMode && (
               <Panel position="top-center">
-                <button
-                  type="button"
-                  onClick={() => handleCollapse(selectedFlowIds)}
-                  // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
-                  // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
-                  className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
-                  title={`${t("wfCollapseHint")} ⌘G`}
-                >
-                  <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
-                </button>
+                <Hint label={t("wfCollapseHint")} shortcut={formatCombo("Mod+G")} side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => handleCollapse(selectedFlowIds)}
+                    // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
+                    // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
+                    className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                  >
+                    <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
+                  </button>
+                </Hint>
               </Panel>
             )}
             <Background gap={20} size={1.2} />

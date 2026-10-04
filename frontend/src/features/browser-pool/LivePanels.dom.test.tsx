@@ -16,6 +16,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiError } from "@/api/client";
+import { hoverHint, readHint } from "@/test/hint";
 import { LivePanels } from "./LivePanels";
 
 /** 卡片标题要问后端「这个会话是谁开的」(react-query);缺省它是发布账号那种 —— 不是会话,404。 */
@@ -295,7 +296,7 @@ describe("LivePanels 标题:属于哪个工作流的哪次运行", () => {
     const at = new Date("2026-10-04T06:32:00Z");
     const pad = (n: number) => String(n).padStart(2, "0");
     expect(title.textContent).toBe(`爆款拆解 · ${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`);
-    expect(title.getAttribute("title")).toBe("livePanelOpenRun");
+    expect(await readHint(title)).toBe("livePanelOpenRun");
     expect(sessions.getBrowserSession).toHaveBeenCalledWith("browser-1");
 
     // 按在标题上是要跳过去,不是拖:不进入拖动(拖动时全屏垫一层 grabbing 光标的遮罩)
@@ -320,13 +321,14 @@ describe("LivePanels 标题:属于哪个工作流的哪次运行", () => {
 });
 
 describe("LivePanels page count", () => {
-  it("marks a session with several pages as current/total on the title bar, and nothing when there is one page", () => {
+  it("marks a session with several pages as current/total on the title bar, and nothing when there is one page", async () => {
     renderPanels(<LivePanels />);
     show();
     expect(shell().querySelector("[data-live-panel-pages]")).toBeNull();
     show({ ...CARD, pages: 3, page: 2 });
     const badge = shell().querySelector("[data-live-panel-pages]") as HTMLElement;
     expect(badge.textContent).toBe("2/3");
-    expect(badge.getAttribute("title")).toBe("livePanelPages");
+    // 徽标不是能聚焦的控件:像用户那样把指针停上去读说明。
+    expect(await hoverHint(badge)).toBe("livePanelPages");
   });
 });

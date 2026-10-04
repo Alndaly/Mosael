@@ -12,6 +12,8 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { hoverHint, readHint } from "@/test/hint";
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
     ({
@@ -20,6 +22,7 @@ vi.mock("@/app/preferences", () => ({
       pluginOn: "启用",
       pluginOff: "停用",
       taskBlockedWorkflowGone: "绑定的工作流已删除,这个任务不能启用或运行",
+      taskRunNeedsEnabled: "任务已停用,先启用才能运行",
     })[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
@@ -34,7 +37,7 @@ function mount(enabled: boolean, blocked: boolean, running = false) {
 }
 
 describe("跑不起来的任务", () => {
-  it("停着的:开关打不开,立即运行点不动,悬停说清为什么", () => {
+  it("停着的:开关打不开,立即运行点不动,悬停说清为什么", async () => {
     const { run, toggle, onRun, onToggle } = mount(false, true);
     expect((run as HTMLButtonElement).disabled).toBe(true);
     expect((toggle as HTMLButtonElement).disabled).toBe(true);
@@ -42,8 +45,10 @@ describe("跑不起来的任务", () => {
     fireEvent.click(run);
     expect(onToggle).not.toHaveBeenCalled();
     expect(onRun).not.toHaveBeenCalled();
-    expect(run.parentElement?.getAttribute("title")).toBe("绑定的工作流已删除,这个任务不能启用或运行");
-    expect(toggle.closest("label")?.getAttribute("title")).toBe("绑定的工作流已删除,这个任务不能启用或运行");
+    expect(await readHint(run)).toBe("绑定的工作流已删除,这个任务不能启用或运行");
+    // 开关是灰的、拿不到焦点:像用户那样把指针停在整个标签上。
+    const label = toggle.closest("label")!;
+    expect(await hoverHint(label)).toBe("绑定的工作流已删除,这个任务不能启用或运行");
   });
 
   it("还开着的(不变式之前留下的):不能跑,但关得掉", () => {
@@ -62,12 +67,13 @@ describe("跑得起来的任务", () => {
     expect((toggle as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(run);
     expect(onRun).toHaveBeenCalledTimes(1);
-    expect(run.parentElement?.getAttribute("title")).toBeNull();
+    expect(run.closest("[data-hint-disabled]")).toBeNull();
   });
 
-  it("停着:能打开,但停着的时候不能立即运行(和后端 schedErr_disabled 一致)", () => {
+  it("停着:能打开,但停着的时候不能立即运行(和后端 schedErr_disabled 一致)", async () => {
     const { run, toggle, onToggle } = mount(false, false);
     expect((run as HTMLButtonElement).disabled).toBe(true);
+    expect(await readHint(run)).toBe("任务已停用,先启用才能运行");
     fireEvent.click(toggle);
     expect(onToggle).toHaveBeenCalledWith(true);
   });

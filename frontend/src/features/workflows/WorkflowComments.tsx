@@ -8,6 +8,7 @@ import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { CommentCard } from "@/features/collaboration/CommentCard";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
+import { Hint } from "@/components/ui/tooltip";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 
 type Point = { x: number; y: number; node_id?: string };
@@ -50,8 +51,10 @@ export function useWorkflowComments(workspaceId: string, workflowId: string) {
       if (typeof x !== "number" || typeof y !== "number") return null;
       return <div key={comment.id} data-workflow-comment="" className="nodrag nopan pointer-events-none absolute z-20 flex items-start gap-2" style={{ left: x, top: y }}
         onPointerDown={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-        <button style={{ pointerEvents: active ? "auto" : "none" }} tabIndex={active ? 0 : -1} className="grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border-strong bg-panel text-ui-xs text-foreground shadow-sm" aria-label={`${t("comments")} ${index + 1}`} title={comment.body}
-          onClick={() => { setDraft(null); setSelected(selected === comment.id ? null : comment.id); }}>{index + 1}</button>
+        <Hint label={comment.body}>
+          <button style={{ pointerEvents: active ? "auto" : "none" }} tabIndex={active ? 0 : -1} className="grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border-strong bg-panel text-ui-xs text-foreground shadow-sm" aria-label={`${t("comments")} ${index + 1}`}
+            onClick={() => { setDraft(null); setSelected(selected === comment.id ? null : comment.id); }}>{index + 1}</button>
+        </Hint>
         {active && selected === comment.id && <div className="-translate-y-3">
           <CommentCard comment={comment} members={members.data?.members ?? []} currentUserId={user?.id}
             onDelete={() => remove.mutateAsync(comment.id)} onClose={() => setSelected(null)} />

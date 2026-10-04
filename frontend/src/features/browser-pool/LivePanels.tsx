@@ -2,6 +2,8 @@ import React from "react";
 import { MonitorPlay, Volume2, VolumeX, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
 
 import { PanelResizeHandles } from "./PanelResizeHandles";
 import { PanelTitle } from "./PanelTitle";
@@ -138,36 +140,36 @@ export function LivePanels() {
                 <PanelTitle id={card.id} label={labels[card.id] ?? ""} />
                 {card.pages > 1 && (
                   // 这个会话开着几个页面、当前在第几个(新窗口会进会话的页面列表并切过去)。
-                  <span
-                    data-live-panel-pages
-                    className="shrink-0 rounded bg-secondary px-1 tabular-nums text-muted-foreground"
-                    title={t("livePanelPages").replace("{page}", String(card.page)).replace("{pages}", String(card.pages))}
-                  >
-                    {card.page}/{card.pages}
-                  </span>
+                  <Hint label={t("livePanelPages").replace("{page}", String(card.page)).replace("{pages}", String(card.pages))}>
+                    <span data-live-panel-pages className="shrink-0 rounded bg-secondary px-1 tabular-nums text-muted-foreground">
+                      {card.page}/{card.pages}
+                    </span>
+                  </Hint>
                 )}
               </div>
 
               {isTop && (
-                <button
+                <IconButton
+                  unstyled
                   type="button"
-                  aria-label={t(card.muted ? "livePanelUnmute" : "livePanelMute")}
+                  label={t(card.muted ? "livePanelUnmute" : "livePanelMute")}
                   aria-pressed={!card.muted}
                   className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
                   onClick={() => void window.mosaelPublish?.setPanelMuted?.(card.id, !card.muted)}
                 >
                   {card.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
-                </button>
+                </IconButton>
               )}
 
-              <button
+              <IconButton
+                unstyled
                 type="button"
-                aria-label={t("close")}
+                label={t("close")}
                 className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => void window.mosaelPublish?.closePanel?.(card.id)}
               >
                 <X size={11} />
-              </button>
+              </IconButton>
             </div>
           </div>
         );

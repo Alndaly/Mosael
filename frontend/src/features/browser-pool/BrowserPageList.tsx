@@ -2,7 +2,10 @@ import React from "react";
 import { Globe, PanelLeftClose, PanelLeftOpen, Plus, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -100,34 +103,36 @@ function PageList({
       style={{ top, width }}
     >
       <div className={cn("flex items-center gap-1 p-1.5", collapsed && "flex-col")}>
-        <button
-          type="button"
-          data-page-list-new
-          className={cn(
-            "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-ui-sm text-foreground hover:bg-secondary",
-            collapsed ? "w-7 justify-center px-0" : "min-w-0 flex-1",
-          )}
-          title={t("browserPagesNew")}
-          aria-label={t("browserPagesNew")}
-          aria-expanded={adding}
-          onClick={() => {
-            if (collapsed) toggle();
-            setAdding((was) => !was);
-          }}
-        >
-          <Plus size={14} className="shrink-0" />
-          {!collapsed && <span className="truncate">{t("browserPagesNew")}</span>}
-        </button>
-        <button
+        {/* 收起时只剩一个加号,名字靠悬停说;展开时字就写在按钮上,不再重复。 */}
+        <Hint label={collapsed ? t("browserPagesNew") : undefined} side="right">
+          <button
+            type="button"
+            data-page-list-new
+            className={cn(
+              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-ui-sm text-foreground hover:bg-secondary",
+              collapsed ? "w-7 justify-center px-0" : "min-w-0 flex-1",
+            )}
+            aria-label={t("browserPagesNew")}
+            aria-expanded={adding}
+            onClick={() => {
+              if (collapsed) toggle();
+              setAdding((was) => !was);
+            }}
+          >
+            <Plus size={14} className="shrink-0" />
+            {!collapsed && <Truncate>{t("browserPagesNew")}</Truncate>}
+          </button>
+        </Hint>
+        <IconButton
+          unstyled
           type="button"
           data-page-list-toggle
           className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
-          title={t(collapsed ? "browserPagesExpand" : "browserPagesCollapse")}
-          aria-label={t(collapsed ? "browserPagesExpand" : "browserPagesCollapse")}
+          label={t(collapsed ? "browserPagesExpand" : "browserPagesCollapse")}
           onClick={toggle}
         >
           {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        </button>
+        </IconButton>
       </div>
 
       {adding && !collapsed && (
@@ -232,11 +237,12 @@ function PageRow({
         dragging && "opacity-50",
       )}
     >
+      {/* 展开时悬停这一行,网址在标题下面露出来;收起时只剩网站图标,标题和网址都靠悬停说明。 */}
+      <Hint label={collapsed ? title : undefined} hint={collapsed ? page.url : undefined} side="right">
       <button
         type="button"
         aria-current={page.current ? "page" : undefined}
-        // 悬停看网址(列表里只放得下标题)。
-        title={`${title}\n${page.url}`}
+        aria-label={collapsed ? title : undefined}
         className={cn(
           "flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent py-1.5 text-left text-ui-sm",
           collapsed ? "justify-center px-0" : "px-2",
@@ -247,22 +253,23 @@ function PageRow({
         <Favicon src={page.favicon} />
         {!collapsed && (
           <span className="flex min-w-0 flex-col">
-            <span className="truncate">{title}</span>
-            <span className="hidden truncate text-ui-xs text-muted-foreground group-hover:block">{page.url}</span>
+            <Truncate>{title}</Truncate>
+            <Truncate className="hidden text-ui-xs text-muted-foreground group-hover:block">{page.url}</Truncate>
           </span>
         )}
       </button>
+      </Hint>
       {closable && !collapsed && (
-        <button
+        <IconButton
+          unstyled
           type="button"
           data-page-close
-          aria-label={closeLabel}
-          title={closeLabel}
+          label={closeLabel}
           className="mr-1 inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
           onClick={onClose}
         >
           <X size={12} />
-        </button>
+        </IconButton>
       )}
     </li>
   );

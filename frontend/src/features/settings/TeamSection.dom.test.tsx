@@ -11,6 +11,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import type { Workspace } from "@/api/client";
 import { workspaceKeys } from "@/api/queryKeys";
+import { readHint } from "@/test/hint";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -57,8 +58,8 @@ it("只剩一个工作区:owner 也删不了,按钮灰掉并说原因", async ()
   h.server = [{ id: "w1", name: "唯一", role: "owner" }];
   mount(h.server[0]);
   const remove = await screen.findByRole("button", { name: /deleteWorkspace/ });
-  await waitFor(() => expect(remove).toHaveAttribute("title", "workspaceDeleteLastOne"));
-  expect(remove).toBeDisabled();
+  await waitFor(() => expect(remove).toBeDisabled());
+  expect(await readHint(remove)).toBe("workspaceDeleteLastOne");
 });
 
 it("admin 能改名但看不到删除", async () => {
@@ -78,9 +79,9 @@ it("删掉当前工作区:列表缓存里立刻拿掉它(WorkspaceGate 据此落
     { id: "w2", name: "二", role: "owner" },
   ];
   const client = mount(h.server[0]);
-  const remove = await screen.findByRole("button", { name: /deleteWorkspace/ });
-  await waitFor(() => expect(remove).toBeEnabled());
-  fireEvent.click(remove);
+  // 灰着时按钮外面多一层说明原因的壳,能点了壳就拿掉 —— 按钮会换一个元素,所以每次都重新找。
+  await waitFor(() => expect(screen.getByRole("button", { name: /deleteWorkspace/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: /deleteWorkspace/ }));
   fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
   await waitFor(() => expect(h.deleteWorkspace).toHaveBeenCalledWith("w1"));
   await waitFor(() =>

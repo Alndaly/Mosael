@@ -18,9 +18,11 @@ import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import { Truncate } from "@/components/ui/truncate";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { GENERATION_KINDS, type GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
@@ -191,7 +193,6 @@ function CapabilityRefField({
         value={value ?? NONE}
         onChange={(next) => onChange(next === NONE ? null : next)}
         options={options}
-        contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
       </label>
       {/* 写一份 / 改一份都在字段**下面**,不在选择器里面。选择器里该只有能选的**值**
@@ -367,9 +368,9 @@ export function ModelSettingsDialog({
         }}
       >
         {/* 模型 id 单独一行:它常常很长(doubao-seedream-4-0-250828),挤进标题会把整行顶掉。 */}
-        <p className="m-0 truncate font-mono text-ui-sm text-muted-foreground" title={modelId}>
+        <Truncate as="p" className="m-0 font-mono text-ui-sm text-muted-foreground">
           {modelId}
-        </p>
+        </Truncate>
 
         <div className="grid gap-1.5">
           <span className="text-ui-md font-medium text-foreground">{t("modelCapabilities")}</span>
@@ -698,15 +699,16 @@ function ProfileBody({
       title={
         <span className="flex min-w-0 items-center gap-1.5">
           {/* 返回,不是关闭 —— 关掉会把用户正在配的那个模型一起丢了。 */}
-          <button
+          <IconButton
+            unstyled
             type="button"
-            aria-label={t("back")}
+            label={t("back")}
             className="-ml-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             onClick={onBack}
           >
             <ChevronLeft size={15} />
-          </button>
-          <span className="truncate">{rowId ? t("modelGenerationRefEditThis") : t("modelGenerationRefDescribeTitle")}</span>
+          </IconButton>
+          <Truncate>{rowId ? t("modelGenerationRefEditThis") : t("modelGenerationRefDescribeTitle")}</Truncate>
           <span className="rounded bg-secondary px-1 py-px text-ui-2xs font-normal text-muted-foreground">{kind}</span>
         </span>
       }

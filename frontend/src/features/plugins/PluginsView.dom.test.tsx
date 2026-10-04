@@ -51,6 +51,7 @@ vi.mock("@/app/preferences", () => ({
 import { ConnectionCard, CredentialRows, FieldInput, ToolRow } from "./PluginsView";
 import type { PluginInstance, PluginPackage } from "@/api/client";
 import { composeWithIme, watchValueWrites } from "@/test/ime";
+import { hoverHint } from "@/test/hint";
 
 function wrap(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -237,10 +238,10 @@ describe("灰着的运行按钮要说明自己为什么灰", () => {
 describe("智能体调用前要确认的工具标「需确认」", () => {
   const base = { name: "manim_still", label: "Manim 静帧", description: "", read_only: false, exposed: true, input_schema: {} };
 
-  it("有后果的标出来,悬停说清是哪一种", () => {
+  it("有后果的标出来,悬停说清是哪一种", async () => {
     wrap(<ToolRow workspaceId="w" instanceId="i1" tool={{ ...base, effects: "local-code" }} blockedReason="" onToggle={() => undefined} />);
     const badge = screen.getByText("pluginToolNeedsConfirm");
-    expect(badge.getAttribute("title")).toBe("pluginToolEffectLocalCode");
+    expect(await hoverHint(badge)).toBe("pluginToolEffectLocalCode");
   });
 
   it("none 的不标 —— 不问人就不说要问", () => {

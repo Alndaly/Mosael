@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { RangePicker, useStatRange } from "@/components/app/RangePicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import { formatCosts, microsIn } from "@/lib/money";
 import { AdminActivityChart } from "./AdminActivityChart";
 
@@ -98,7 +99,7 @@ export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () =
 function StatTile({ label, value, hint, loading }: { label: string; value?: number | string; hint?: string; loading: boolean }) {
   return (
     <div data-stat className="grid min-w-0 content-start gap-2 rounded-lg border border-border bg-panel px-5 py-4">
-      <span className="truncate text-ui-xs text-muted-foreground">{label}</span>
+      <Truncate className="text-ui-xs text-muted-foreground">{label}</Truncate>
       {loading ? (
         <Skeleton className="h-8 w-20" />
       ) : (
@@ -107,7 +108,7 @@ function StatTile({ label, value, hint, loading }: { label: string; value?: numb
           {typeof value === "number" ? value.toLocaleString() : (value ?? "—")}
         </strong>
       )}
-      <span className="min-h-4 truncate text-ui-xs leading-4 text-muted-foreground">{hint}</span>
+      <Truncate className="min-h-4 text-ui-xs leading-4 text-muted-foreground">{hint}</Truncate>
     </div>
   );
 }
@@ -162,7 +163,7 @@ function SpendByPerson({
       <ul className="m-0 grid list-none gap-3.5 p-0">
         {spend.map((row) => (
           <li key={row.user_id || "unknown"} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-ui-sm">
-            <span className="min-w-0 truncate">{row.username || t("adminNoOwner")}</span>
+            <Truncate>{row.username || t("adminNoOwner")}</Truncate>
             {/* 金额**不设固定宽、不换行**:w-24 曾装不下「0.0007 USD · 6」,调用次数被挤到第二行。 */}
             <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
               {formatCosts(row.costs, locale)} · {row.calls}

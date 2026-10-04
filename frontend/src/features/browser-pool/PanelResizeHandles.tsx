@@ -2,6 +2,7 @@ import React from "react";
 
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
 
 /**
  * 悬浮浏览器卡片四角、四边的缩放手柄。
@@ -179,10 +180,11 @@ export function PanelResizeHandles({
         />
       ))}
       {CORNERS.map((corner) => (
-        <button
+        <IconButton
+          unstyled
           key={corner}
           type="button"
-          aria-label={t(CORNER_LABEL[corner])}
+          label={t(CORNER_LABEL[corner])}
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
           data-resize-handle={corner}
           className="pointer-events-auto fixed z-[70] rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-[opacity,color] duration-150 hover:text-foreground focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[visible=true]/resize:opacity-100 group-has-[:focus-visible]/resize:opacity-100"
@@ -191,7 +193,7 @@ export function PanelResizeHandles({
           onKeyDown={(event) => keyResize(event, corner)}
         >
           <CornerArc corner={corner} radius={radius} />
-        </button>
+        </IconButton>
       ))}
     </div>
   );

@@ -2,7 +2,8 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
 
 /** 侧栏宽度。开着侧栏时网页右侧让出这么宽(主进程 setShellInset)。 */
@@ -46,11 +47,11 @@ export function ToolDrawer({
       className="fixed bottom-0 right-0 z-[200] flex flex-col border-l border-border bg-panel"
     >
       <header className="flex h-11 flex-none items-center gap-2 border-b border-border px-3">
-        <h2 className="m-0 min-w-0 flex-1 truncate text-ui-sm font-semibold">{title}</h2>
+        <Truncate as="h2" className="m-0 flex-1 text-ui-sm font-semibold">{title}</Truncate>
         {actions}
-        <Button variant="ghost" size="icon-xs" onClick={onClose} title={t("browserToolsClose")} aria-label={t("browserToolsClose")}>
+        <IconButton size="icon-xs" onClick={onClose} label={t("browserToolsClose")}>
           <X />
-        </Button>
+        </IconButton>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
       {footer && <footer className="flex flex-none items-center justify-end gap-2 border-t border-border p-3">{footer}</footer>}

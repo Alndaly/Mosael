@@ -16,8 +16,10 @@ import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
 import { ConfigNotice, Notice } from "@/components/app/ConfigNotice";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
-import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MODAL_SURFACE } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import { RefCatalogContext, refLabel } from "@/features/nodeForms/refCatalog";
@@ -529,26 +531,26 @@ export function NodeInspector({
           <span aria-hidden className="mx-1 h-4 w-px bg-border" />
         )}
         {onDrillIn && (
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground"
-            aria-label={t("wfaEnterSubgraph")}
-            title={t("wfaEnterSubgraph")}
+            label={t("wfaEnterSubgraph")}
             onClick={onDrillIn}
           >
             <Boxes size={14} />
-          </button>
+          </IconButton>
         )}
         {onDelete && (
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-            aria-label={t("delete")}
-            title={t("delete")}
+            label={t("delete")}
             onClick={onDelete}
           >
             <Trash2 size={14} />
-          </button>
+          </IconButton>
         )}
       </div>
     </NodeToolbar>
@@ -615,9 +617,9 @@ export function NodeInspector({
         </div>
         {/* 删除在上方悬浮键的操作组里 —— 一个动作只该有一个入口。 */}
         {onClose && (
-          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
+          <IconButton unstyled type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" label={t("close")} shortcut="Esc" onClick={onClose}>
             <X size={14} />
-          </button>
+          </IconButton>
         )}
       </div>
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-x-hidden overflow-y-auto p-3">
@@ -646,26 +648,20 @@ export function NodeInspector({
                       {t("wfRepoint")}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className={cn(ACTION_MENU, "w-[200px]")}>
+                  {/* 名字(「节点标题 · 输出」)是用户起的,截断;下面一行是存储写法 —— 两个节点同名时,
+                      靠它分清指的是哪一个(此前它只在原生 title 里)。 */}
+                  <MenuContent label={t("wfRepoint")} align="end">
                     {variables.map((valid) => (
-                      <button
+                      <MenuItem
                         key={valid}
-                        type="button"
-                        className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs hover:bg-muted"
-                        title={bareRef(valid)}
+                        label={refLabel(refCatalog.look(bareRef(valid)))}
+                        truncate
+                        description={bareRef(valid)}
                         onClick={() => repoint(key, ref, valid)}
-                      >
-                        {refLabel(refCatalog.look(bareRef(valid)))}
-                      </button>
+                      />
                     ))}
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
-                      onClick={() => repoint(key, ref, "")}
-                    >
-                      {t("wfRemoveRef")}
-                    </button>
-                  </PopoverContent>
+                    <MenuItem label={t("wfRemoveRef")} destructive onClick={() => repoint(key, ref, "")} />
+                  </MenuContent>
                 </Popover>
               </div>
             ))}
@@ -708,19 +704,19 @@ export function NodeInspector({
                 const look = refCatalog.look(path);
                 const name = refLabel(look);
                 return (
-                  <button
+                  <IconButton
+                    unstyled
                     key={output}
                     type="button"
                     className="cursor-copy rounded-md border-0 bg-transparent p-0"
-                    title={t("wfCopyRef").replace("{name}", name)}
-                    aria-label={t("wfCopyRef").replace("{name}", name)}
+                    label={t("wfCopyRef").replace("{name}", name)}
                     onClick={() => {
                       void navigator.clipboard.writeText(`{{${path}}}`);
                       toast.success(t("wfRefCopied"), { description: name });
                     }}
                   >
                     <RefToken path={path} look={look} className="pointer-events-none" />
-                  </button>
+                  </IconButton>
                 );
               })}
             </div>

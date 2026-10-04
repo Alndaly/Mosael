@@ -7,6 +7,7 @@ import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
@@ -110,11 +111,11 @@ export function AccountSection() {
     >
       <SettingsBlock>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
-            title={t("avatarChange")}
-            aria-label={t("avatarChange")}
+            label={t("avatarChange")}
             disabled={avatarPending}
             onClick={() => avatarInputRef.current?.click()}
           >
@@ -122,7 +123,7 @@ export function AccountSection() {
             <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
               {avatarPending ? <Loader2 size={13} className="animate-mosael-spin" /> : <Camera size={13} />}
             </span>
-          </button>
+          </IconButton>
           <input
             ref={avatarInputRef}
             type="file"

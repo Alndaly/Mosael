@@ -7,7 +7,9 @@ import type { components } from "@/api/generated/schema";
 import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 type Metric = components["schemas"]["ProviderQuotaMetricOut"];
@@ -57,10 +59,10 @@ function MetricRow({ metric }: { metric: Metric }) {
     return (
       <div className="grid gap-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-ui-xs text-foreground">
+          <Truncate className="text-ui-xs text-foreground">
             {label}
             {window && <span className="text-muted-foreground"> · {window}</span>}
-          </span>
+          </Truncate>
           <span className="timecode shrink-0 text-ui-xs text-muted-foreground">{pct.toFixed(0)}%</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-field">
@@ -83,10 +85,10 @@ function MetricRow({ metric }: { metric: Metric }) {
   const amount = (value: number) => (metric.unit === "USD" ? `$${value.toFixed(2)}` : value.toLocaleString());
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className="truncate text-ui-xs text-foreground">
+      <Truncate className="text-ui-xs text-foreground">
         {label}
         {window && <span className="text-muted-foreground"> · {window}</span>}
-      </span>
+      </Truncate>
       <span className="timecode shrink-0 text-ui-xs text-muted-foreground">
         {metric.used != null ? amount(metric.used) : "—"}
         {metric.limit != null ? ` / ${amount(metric.limit)}` : metric.unlimited ? ` · ${t("quotaUnlimited")}` : ""}
@@ -114,9 +116,9 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
       <PopoverTrigger asChild>
         {/* 与授权/登出/编辑/开关/删除同列的图标钮:额度是这一行的又一个动作,
             单独占一行的胶囊按钮会把每张卡撑高一截,行与行的节奏也就散了。 */}
-        <Button variant="ghost" size="icon" aria-label={t("quotaFetch")} title={t("quotaFetch")}>
+        <IconButton size="icon" label={t("quotaFetch")}>
           <Gauge size={13} />
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[280px] p-2.5">
         {quota.isFetching ? (
@@ -144,9 +146,9 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
             {/* 计划名与「重新查询」同处一行:标题行右侧本来就是放操作的地方,而把刷新挂在
                 列表末尾会让它跟最后一条指标黏在一起,像是那一条的附属。 */}
             <div className="flex items-center justify-between gap-2 border-b border-border pb-1.5">
-              <span className="min-w-0 truncate text-ui-2xs uppercase tracking-wide text-muted-foreground">
+              <Truncate className="text-ui-2xs uppercase tracking-wide text-muted-foreground">
                 {quota.data?.plan ? humanizePlan(quota.data.plan) : t("agentContextTitle")}
-              </span>
+              </Truncate>
               <button
                 type="button"
                 className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"

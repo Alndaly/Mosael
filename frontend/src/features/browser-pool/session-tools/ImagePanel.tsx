@@ -1,6 +1,7 @@
 import { Check, Loader2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export interface PageImageItem {
@@ -45,11 +46,12 @@ export function ImagePanel({
         const picked = selected.has(image.url);
         return (
           <li key={image.url}>
+            {/* 悬停:图的说明(没有就是地址)和原始尺寸。 */}
+            <Hint label={image.alt || image.url} hint={`${image.width}×${image.height}`}>
             <button
               type="button"
               disabled={image.state !== "ready"}
               aria-pressed={picked}
-              title={`${image.alt || image.url} · ${image.width}×${image.height}`}
               onClick={() => onToggle(image.url)}
               data-page-image={image.state}
               className={cn(
@@ -70,6 +72,7 @@ export function ImagePanel({
                 </span>
               )}
             </button>
+            </Hint>
           </li>
         );
       })}

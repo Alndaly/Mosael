@@ -36,6 +36,7 @@ import { referenceHints, toReferenceHintEdges } from "@/features/workflows/refer
 import { workflowIssueText } from "@/features/workflows/workflowCanvasModel";
 import { workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 import { NodeInspector } from "@/features/workflows/WorkflowsView";
+import { hoverHint } from "@/test/hint";
 
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单。
 export const RATCHET = true;
@@ -158,11 +159,15 @@ describe("检查器", () => {
     const stale = notice.querySelector<HTMLElement>("[data-ref-token]")!;
     expect(stale.textContent).toBe("gone · text");
     expect(stale.dataset.refProblem).toBe("node");
-    expect(stale.title).toBe(zh.wfRefMissingNode.replace("{node}", "gone"));
+    //: 悬停说为什么指不到。
+    expect(await hoverHint(stale)).toBe(zh.wfRefMissingNode.replace("{node}", "gone"));
+    fireEvent.pointerLeave(stale);
     expect(notice.textContent).not.toContain("{{");
     fireEvent.click(within(notice).getByRole("button", { name: zh.wfRepoint }));
-    const menu = await screen.findByText("填主题 · topic");
-    expect(menu.closest("[role=dialog], [data-radix-popper-content-wrapper]")?.textContent).not.toContain("{{");
+    //: 检查器正文里也有一枚同名的引用标签,按菜单找,不按字找。
+    const menu = await screen.findByRole("menu", { name: zh.wfRepoint });
+    expect(within(menu).getByText("填主题 · topic")).toBeTruthy();
+    expect(menu.textContent).not.toContain("{{");
   });
 
   it("「输出变量」那一档:显示成标签,点一下照旧复制引用,提示里也是名字", () => {

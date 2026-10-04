@@ -46,7 +46,8 @@ describe("页面列表", () => {
     expect(row("2").dataset.current).toBe("true");
     expect(row("2").querySelector("[aria-current=page]")).not.toBeNull();
     expect(row("2").querySelector("img")?.getAttribute("src")).toBe("https://accounts.google.com/favicon.ico");
-    expect(row("1").querySelector("button")?.getAttribute("title")).toBe("首页\nhttps://example.com/");
+    // 网址在标题下面那一行(悬停这一行时露出来),不靠原生 title。
+    expect(row("1").querySelector("button")?.textContent).toBe("首页https://example.com/");
     expect(row("3").textContent).toContain("browserPagesUntitled");
     fireEvent.click(row("1").querySelector("button")!);
     expect(bridge.switchPage).toHaveBeenCalledWith("1");

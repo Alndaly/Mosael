@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -60,16 +61,11 @@ export function OutboundAllowlistSection() {
               key={entry}
               leading={<Network size={15} className="shrink-0 text-muted-foreground" />}
               label={
-                <code className="timecode select-all font-normal" title={entry}>
-                  {entry}
-                </code>
+                <code className="timecode select-all font-normal">{entry}</code>
               }
             >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t("deployOutboundRemove")}
-                title={t("deployOutboundRemove")}
+              <IconButton
+                label={t("deployOutboundRemove")}
                 loading={removing === entry}
                 disabled={remove.isPending}
                 onClick={() => {
@@ -78,7 +74,7 @@ export function OutboundAllowlistSection() {
                 }}
               >
                 <X />
-              </Button>
+              </IconButton>
             </AdminRow>
           ))
         )}

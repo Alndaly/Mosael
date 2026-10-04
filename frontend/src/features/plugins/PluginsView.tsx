@@ -37,6 +37,8 @@ import { OPEN_MARKET_FOR_CAPABILITY, OPEN_PLUGIN_IN_MARKET, useOpenRequest } fro
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
@@ -243,9 +245,9 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div className="grid min-w-0 gap-0.5">
-            <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
+            <Truncate as="h2" className="m-0 text-xl font-semibold tracking-tight text-foreground">{pkg.name}</Truncate>
             {/* 谁写的、去哪儿找他:插件是别人的代码,用的时候也该看得见。 */}
-            <p className="m-0 truncate text-ui-sm text-muted-foreground">
+            <Truncate as="p" className="m-0 text-ui-sm text-muted-foreground">
               v{pkg.version}
               {pkg.author_name && (
                 <>
@@ -260,7 +262,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
                   )}
                 </>
               )}
-            </p>
+            </Truncate>
           </div>
           <span className="flex shrink-0 items-center gap-1">
             {/* 「新建连接」排在最前:它是这一页最常做的事。卸载留在最后 —— 破坏性动作
@@ -478,7 +480,7 @@ export function FieldInput({
           aria-readonly="true"
           className={cn(fieldTriggerClass(), "cursor-default text-muted-foreground", className)}
         >
-          <span className="min-w-0 truncate">{only?.label ?? value}</span>
+          <Truncate>{only?.label ?? value}</Truncate>
           <Lock className={cn(FIELD_TRIGGER_CHEVRON, "size-3.5")} />
         </div>
       );
@@ -639,15 +641,15 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
               {pkg.kind === "mcp" ? t("pluginRefreshTools") : t("pluginRefreshModels")}
             </Button>
           )}
-          <Button
+          <IconButton
             variant="outline"
             size="default"
             className="px-3 text-muted-foreground hover:text-destructive"
-            aria-label={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
+            label={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 size={13} />
-          </Button>
+          </IconButton>
         </div>
       }
     >
@@ -1102,9 +1104,9 @@ export function ToolTryForm({
           缺必填参数同理:不说的话,他会以为是插件坏了。 */}
       <div className="flex items-center justify-end gap-2">
         {(blockedReason || missingRequired) && (
-          <small className="min-w-0 truncate text-ui-xs text-muted-foreground">
+          <Truncate as="small" className="text-ui-xs text-muted-foreground">
             {blockedReason || t("pluginToolMissingRequired")}
-          </small>
+          </Truncate>
         )}
         <Button size="sm" disabled={Boolean(blockedReason) || missingRequired} loading={pending} onClick={() => onRun(config)}>
           <Play size={13} /> {t("runTool")}
@@ -1162,19 +1164,20 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
           onClick={() => setOpen((value) => !value)}
         >
           {ok ? <CheckCircle2 size={14} className="text-success" /> : <CircleAlert size={14} className="text-destructive" />}
-          <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-ui-sm [&_strong]:font-semibold">
+          <div className="min-w-0 [&_strong]:block [&_strong]:text-ui-sm [&_strong]:font-semibold">
             <strong>{invocation.tool_name}</strong>
-            <small>{invocation.status}</small>
+            <Truncate as="small" className="text-ui-xs text-muted-foreground">{invocation.status}</Truncate>
           </div>
         </button>
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="grid w-8 flex-none cursor-pointer place-items-center border-0 bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-destructive"
-          aria-label={t("delete")}
+          label={t("delete")}
           onClick={onDelete}
         >
           <Trash2 size={13} />
-        </button>
+        </IconButton>
       </div>
       {open && <ResultBlock ok={ok} body={ok ? invocation.output : { input: invocation.input, error: invocation.error }} />}
     </div>

@@ -182,7 +182,11 @@ describe("接上游的来源", () => {
     const field = renderGate(WIRED);
     const trigger = within(field).getByRole("combobox");
     expect(trigger.textContent).toBe("认出平台和编号 · 平台");
-    expect(trigger.querySelector<HTMLElement>("[data-ref-token]")?.title).toBe("link.platform");
+    //: 悬停看存下去的路径。
+    const token = trigger.querySelector<HTMLElement>("[data-ref-token]")!;
+    await user.hover(token);
+    expect((await screen.findByRole("tooltip", {}, { timeout: 2000 })).textContent).toBe("link.platform");
+    await user.unhover(token);
     expect(field.textContent).not.toContain("link.platform");
     await user.click(trigger);
     const listbox = await screen.findByRole("listbox");

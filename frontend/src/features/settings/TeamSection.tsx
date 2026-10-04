@@ -27,6 +27,9 @@ import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -109,7 +112,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             </span>
             <div className="grid min-w-0 gap-0.5">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-ui-md font-[600]">{workspace.name}</span>
+                <Truncate className="text-ui-md font-[600]">{workspace.name}</Truncate>
                 <Badge variant="outline">{roleLabel(myRole)}</Badge>
               </div>
               <span className="text-ui-xs text-muted-foreground">
@@ -124,16 +127,17 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
               </Button>
             )}
             {gate.deleteBlockedBy !== "role" && (
+              <Hint disabledReason={gate.deleteDisabled && deleteReason ? t(deleteReason) : undefined}>
               <Button
                 variant="outline"
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 disabled={gate.deleteDisabled}
-                title={deleteReason ? t(deleteReason) : undefined}
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 size={13} /> {t("deleteWorkspace")}
               </Button>
+              </Hint>
             )}
           </div>
         </div>
@@ -211,8 +215,8 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
   return (
     <SettingsListItem className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <div className="truncate text-ui-sm"><span className="font-semibold">{actor}</span> {summary}</div>
-        <div className="mt-0.5 truncate text-ui-xs text-muted-foreground">{subject} · {event.subject_id}</div>
+        <Truncate as="div" className="text-ui-sm"><span className="font-semibold">{actor}</span> {summary}</Truncate>
+        <Truncate as="div" className="mt-0.5 text-ui-xs text-muted-foreground">{subject} · {event.subject_id}</Truncate>
       </div>
       <span className="shrink-0 text-ui-xs text-muted-foreground">{relativeTime(event.created_at, locale)}</span>
     </SettingsListItem>
@@ -253,8 +257,8 @@ function MemberRow({
         <span className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))] text-xs font-semibold text-primary" aria-hidden>
           {memberName.slice(0, 1).toUpperCase()}
         </span>
-        <span className="truncate text-ui-md">{memberName}</span>
-        {memberName !== member.username && <span className="truncate text-xs text-muted-foreground">@{member.username}</span>}
+        <Truncate className="text-ui-md">{memberName}</Truncate>
+        {memberName !== member.username && <Truncate className="text-xs text-muted-foreground">@{member.username}</Truncate>}
         {isSelf && <Badge variant="secondary">{t("teamYou")}</Badge>}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
@@ -278,14 +282,9 @@ function MemberRow({
 
         {canRemove && (
           <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setConfirmOpen(true)}
-              aria-label={isSelf ? t("teamLeave") : t("teamRemove")}
-            >
+            <IconButton onClick={() => setConfirmOpen(true)} label={isSelf ? t("teamLeave") : t("teamRemove")}>
               {isSelf ? <LogOut size={14} /> : <Trash2 size={14} />}
-            </Button>
+            </IconButton>
             <ConfirmDialog
               open={confirmOpen}
               title={isSelf ? t("teamLeave") : t("teamRemove")}

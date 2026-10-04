@@ -22,6 +22,9 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -307,6 +310,13 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
             // **管只认主人**(后端 sharing.ensure_manageable):共享给我的,我能打开、能用,但改名、改代理、
             // 退出登录、删除这些动作不摆出来 —— 摆出来点了也是 403。
             const mine = p.is_mine;
+            // 主按钮(打开 / 去登录)。登录 = 把这个身份换成某个平台账号的登录态,是主人的事;别人只能打开已经登好的。
+            const openDisabled = bound ? !window.mosaelPublish || (!loggedIn && !mine) : !window.mosaelBrowser?.openLogin;
+            const openBlockedBy = !(window.mosaelPublish || window.mosaelBrowser?.openLogin)
+              ? t("publishNeedDesktop")
+              : bound && !loggedIn && !mine
+                ? t("poolOwnerOnly")
+                : undefined;
             const actions: MenuAction[] = mine
               ? [
                   { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(p) },
@@ -331,20 +341,24 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       </span>
                       {actions.length > 0 && <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={actions} />}
                       {p.proxy && (
-                        <em
-                          className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary"
-                          title={p.proxy}
-                        >
-                          <Globe size={10} /> {t("publishProxyOn")}
-                        </em>
+                        // 徽标上写「代理已开」,悬停给走的是哪个代理。
+                        <Hint label={p.proxy}>
+                          <em className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary">
+                            <Globe size={10} /> {t("publishProxyOn")}
+                          </em>
+                        </Hint>
                       )}
                       {p.shared && (
-                        <em
-                          className="rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground"
-                          title={mine ? t("poolSharedHint") : t("poolOwnerOnly")}
-                        >
-                          <Users2 size={10} className="inline align-[-1px]" />
-                        </em>
+                        // 只有一个图标的徽标:读屏的名字和悬停的说明是同一句。
+                        <Hint label={mine ? t("poolSharedHint") : t("poolOwnerOnly")}>
+                          <em
+                            role="img"
+                            aria-label={mine ? t("poolSharedHint") : t("poolOwnerOnly")}
+                            className="rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground"
+                          >
+                            <Users2 size={10} className="inline align-[-1px]" />
+                          </em>
+                        </Hint>
                       )}
                       {bound && (
                         <em
@@ -359,7 +373,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </em>
                       )}
                     </div>
-                    <strong className="truncate text-ui-md font-semibold tracking-tight">{p.name}</strong>
+                    <Truncate as="strong" className="text-ui-md font-semibold tracking-tight">{p.name}</Truncate>
                     <small className="text-ui-xs text-muted-foreground">
                       {bound
                         ? p.last_checked_at
@@ -370,28 +384,21 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                             p.start_url && hostOf(p.start_url),
                           ].filter(Boolean).join(" · ")}
                     </small>
-                    <small className={cn("truncate text-ui-xs text-destructive", !p.last_error && "invisible")}>
+                    <Truncate as="small" className={cn("text-ui-xs text-destructive", !p.last_error && "invisible")}>
                       {p.last_error ?? " "}
-                    </small>
+                    </Truncate>
                     {/* flex-wrap:同样三个按钮,中文「打开/重新登录/复检」很短,英文 Open / Log in again /
                         Recheck 就顶穿一张卡的宽度。收字号治不好:三个带文字的按钮加一个开关,
                         在一张 ~276px 的卡里**任何语言都放不下**,中文只是勉强擦过去而已。
-                        所以次要动作一律图标化 —— 它们本就是 ghost,标签退到 title/aria 上,
+                        所以次要动作一律图标化 —— 它们本就是 ghost,名字退到悬停说明和读屏上(IconButton),
                         宽度从此与语言无关。 */}
                     <div className="mt-auto flex min-h-11 items-center gap-2 border-t border-border pt-4">
                       {/* 登录态决定主按钮是什么:已登录 → 打开;其余(需登录/待人工/检测中) → 去登录。 */}
+                      <Hint disabledReason={openDisabled ? openBlockedBy : undefined}>
                       <Button
                         size="sm"
                         variant="outline"
-                        title={
-                          !(window.mosaelPublish || window.mosaelBrowser?.openLogin)
-                            ? t("publishNeedDesktop")
-                            : bound && !loggedIn && !mine
-                              ? t("poolOwnerOnly")
-                              : undefined
-                        }
-                        // 登录 = 把这个身份换成某个平台账号的登录态,是主人的事;别人只能打开已经登好的。
-                        disabled={bound ? !window.mosaelPublish || (!loggedIn && !mine) : !window.mosaelBrowser?.openLogin}
+                        disabled={openDisabled}
                         onClick={() => (loggedIn ? openPage(p) : login(p))}
                       >
                         {loggedIn || !bound ? (
@@ -404,57 +411,51 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           </>
                         )}
                       </Button>
+                      </Hint>
                       {/* 通用档案记得上次的网址,主按钮就直接接着开;要换一个站点走这里。 */}
                       {!bound && p.start_url && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          title={t("poolOpenOther")}
-                          aria-label={t("poolOpenOther")}
+                        <IconButton
+                          label={t("poolOpenOther")}
                           disabled={!window.mosaelBrowser?.openLogin}
+                          disabledReason={t("publishNeedDesktop")}
                           onClick={() => setOpenFor(p)}
                         >
                           <SquarePen />
-                        </Button>
+                        </IconButton>
                       )}
                       {/* 已登录时「重新登录」退居次要动作:换号/掉线自查还需要它,但它不该是默认那一下。 */}
                       {loggedIn && mine && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          title={t("poolRelogin")}
-                          aria-label={t("poolRelogin")}
+                        <IconButton
+                          label={t("poolRelogin")}
                           disabled={!window.mosaelPublish?.signOut}
+                          disabledReason={t("publishNeedDesktop")}
                           onClick={() => void relogin(p)}
                         >
                           {/* 不用 LogIn:那枚「箭头进门」被读成了退出登录(线上有人点它想登出)。 */}
                           <KeyRound />
-                        </Button>
+                        </IconButton>
                       )}
                       {bound && mine && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
+                        <IconButton
                           // 只在复检的是这张卡绑的账号时转圈 —— 此前一张在查,所有卡一起转。
                           loading={recheck.isPending && recheck.variables === p.bound_account_id}
-                          title={t("publishRecheck")}
-                          aria-label={t("publishRecheck")}
+                          label={t("publishRecheck")}
                           onClick={() => recheck.mutate(p.bound_account_id!)}
                         >
                           <RefreshCcw />
-                        </Button>
+                        </IconButton>
                       )}
                       <span className="flex-1" />
                       {/* 开关控制的是「智能体/发布还能不能用这个账号」—— 光一个无字开关猜不出来,
                           把作用写在悬停里(卡上没地方常驻一行说明)。 */}
-                      <span title={mine ? t("publishAccountEnabledHint") : t("poolOwnerOnly")}>
+                      <Hint label={t("publishAccountEnabledHint")} disabledReason={!mine ? t("poolOwnerOnly") : undefined}>
                         <Switch
                           checked={p.enabled}
                           disabled={!mine}
                           onCheckedChange={(next) => setEnabled.mutate({ p, enabled: next })}
                           aria-label={t("publishAccountEnabled")}
                         />
-                      </span>
+                      </Hint>
                     </div>
                   </div>
                 </ContextMenuTrigger>

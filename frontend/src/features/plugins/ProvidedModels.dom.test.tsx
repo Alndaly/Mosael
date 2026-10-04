@@ -20,6 +20,7 @@ vi.mock("@/app/preferences", () => ({
 
 import type { PluginInstance, PluginProvidedModel } from "@/api/client";
 import { GenerationModelsRow } from "./ProvidedModels";
+import { hoverHint } from "@/test/hint";
 
 const instance = { id: "i1", name: "ComfyUI · 本机" } as PluginInstance;
 
@@ -92,7 +93,10 @@ describe("插件提供的模型", () => {
     expect(within(portrait).getByText("步数")).toBeTruthy();
     expect(within(portrait).getByText("genParam_size · genParam_seed · genParam_num_images")).toBeTruthy();
     expect(within(portrait).getByText("pluginModelAdvancedParams")).toBeTruthy();
-    expect(within(portrait).getByText("模型").getAttribute("title")).toBe("4.ckpt_name");
+    // 显示名「模型」,悬停给参数键(像用户那样把指针停上去读说明)。
+    const param = within(portrait).getByText("模型");
+    expect(await hoverHint(param)).toBe("4.ckpt_name");
+    fireEvent.pointerLeave(param, { pointerType: "mouse" });
 
     fireEvent.click(screen.getByRole("button", { name: /pluginRefreshModels/ }));
     expect(onRefresh).toHaveBeenCalled();

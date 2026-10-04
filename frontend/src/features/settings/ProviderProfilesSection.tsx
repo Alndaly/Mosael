@@ -1,4 +1,3 @@
-import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -22,12 +21,15 @@ import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Truncate } from "@/components/ui/truncate";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
@@ -75,33 +77,13 @@ function fieldsForMode(fields: VendorPreset["fields"], editing: boolean) {
 }
 
 /** 溢出菜单里的一行。用 Popover 而不是 DropdownMenu:这个项目没有装后者,
- *  而 Popover 已经处理好了「Dialog 内外的 modal 差异」(见 components/ui/popover)。 */
-function MenuItem({
-  icon,
-  label,
-  destructive,
-  onSelect,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  destructive?: boolean;
-  onSelect: () => void;
-}) {
+ *  而 Popover 已经处理好了「Dialog 内外的 modal 差异」(见 components/ui/popover)。
+ *  点完要关菜单:此前菜单一直挂着 —— 「选择」这种不开对话框的动作,菜单就明晃晃地挡在
+ *  进入了选择模式的列表前面。 */
+function ClosingMenuItem(props: React.ComponentProps<typeof MenuItem>) {
   return (
-    /* 点完要关菜单:此前只有 onSelect,菜单一直挂着 —— 「选择」这种不开对话框的
-       动作,菜单就明晃晃地挡在进入了选择模式的列表前面。 */
     <PopoverClose asChild>
-      <button
-        type="button"
-        className={cn(
-          "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-ui-sm hover:bg-secondary",
-          destructive ? "text-destructive" : "text-foreground",
-        )}
-        onClick={onSelect}
-      >
-        <span className="shrink-0 opacity-70">{icon}</span>
-        {label}
-      </button>
+      <MenuItem {...props} />
     </PopoverClose>
   );
 }
@@ -496,9 +478,9 @@ export function ProviderProfilesSection({
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <KeyRound size={13} />
               </span>
-              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
-                <strong>{profile.name}</strong>
-                <small>
+              <div className="min-w-0">
+                <Truncate as="strong" className="text-ui-md font-semibold">{profile.name}</Truncate>
+                <Truncate as="small" className="text-ui-xs text-muted-foreground">
                   {vendorLabel(profile.vendor)}
                   {isOauth(profile) ? (
                     <>
@@ -524,18 +506,17 @@ export function ProviderProfilesSection({
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}
                   <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" />
-                </small>
+                </Truncate>
               </div>
               <div className="flex items-center gap-2">
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="flex items-center gap-1">
                 {/* 常用的三个留在行内:展开模型、查额度、启停。授权/编辑/删除进溢出菜单 ——
                     订阅档案原本七个图标挤成一排,每个都同等分量,反而哪个都不显眼。 */}
-                <Button
-                  variant="ghost"
+                <IconButton
                   size="icon"
-                  aria-label={t("modelListTitle")}
-                  title={t("modelListTitle")}
+                  label={t("modelListTitle")}
+                  aria-expanded={expanded.has(profile.id)}
                   onClick={() =>
                     setExpanded((prev) => {
                       const next = new Set(prev);
@@ -546,50 +527,55 @@ export function ProviderProfilesSection({
                   }
                 >
                   <ChevronDown size={13} className={cn("transition-transform", expanded.has(profile.id) && "rotate-180")} />
-                </Button>
+                </IconButton>
                 {/* 只对真有额度接口的供应商出现。没有端点的不摆这个钮 —— 亮着却只能回一句
                     "不支持",等于摆了个做不到的操作。 */}
                 {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
-                <Button variant="ghost" size="icon" loading={toggle.isPending && toggle.variables?.id === profile.id} onClick={() => toggle.mutate(profile)} aria-label="toggle">
+                <IconButton
+                  size="icon"
+                  loading={toggle.isPending && toggle.variables?.id === profile.id}
+                  onClick={() => toggle.mutate(profile)}
+                  label={profile.enabled ? t("providerDisable") : t("providerEnable")}
+                >
                   <Power size={13} />
-                </Button>
+                </IconButton>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={t("more")} title={t("more")}>
+                    <IconButton size="icon" label={t("more")}>
                       <MoreHorizontal size={13} />
-                    </Button>
+                    </IconButton>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className={cn(ACTION_MENU, "w-48")}>
+                  <MenuContent label={t("more")} align="end">
                     {/* 模型列表的动作收口在这里:行内不再各摆入口(列表底下的输入框、
                         右上角浮着的「选择」,都已撤掉)。参数组不在这里 —— 它的入口在
                         「参数按什么来」选择器里,绑定的地方才是需要它的地方。 */}
-                    <MenuItem icon={<Plus size={13} />} label={t("modelAddEntry")} onSelect={() => fireListAction(profile, "add")} />
-                    <MenuItem icon={<ListChecks size={13} />} label={t("bulkSelect")} onSelect={() => fireListAction(profile, "bulk")} />
+                    <ClosingMenuItem icon={<Plus />} label={t("modelAddEntry")} onClick={() => fireListAction(profile, "add")} />
+                    <ClosingMenuItem icon={<ListChecks />} label={t("bulkSelect")} onClick={() => fireListAction(profile, "bulk")} />
                     {isOauth(profile) && (
-                      <MenuItem
-                        icon={<LogIn size={13} />}
+                      <ClosingMenuItem
+                        icon={<LogIn />}
                         label={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
-                        onSelect={() => setAuthing(profile)}
+                        onClick={() => setAuthing(profile)}
                       />
                     )}
                     {isOauth(profile) && profile.oauth_linked && (
-                      <MenuItem
-                        icon={<LogOut size={13} />}
+                      <ClosingMenuItem
+                        icon={<LogOut />}
                         label={t("providerOauthLogout")}
-                        onSelect={() => logout.mutate(profile.id)}
+                        onClick={() => logout.mutate(profile.id)}
                       />
                     )}
-                    <MenuItem icon={<Pencil size={13} />} label={t("providerEdit")} onSelect={() => openEdit(profile)} />
+                    <ClosingMenuItem icon={<Pencil />} label={t("providerEdit")} onClick={() => openEdit(profile)} />
                     {/* 删的是**整条连接**,不是"从这个能力里移除" —— 一条连接可以同时供
                         对话与生图(能力在模型行上)。在能力分区里点「删除」很容易被读成后者,
                         所以这里点名它会连带什么消失,并且要过一次确认。 */}
-                    <MenuItem
-                      icon={<Trash2 size={13} />}
+                    <ClosingMenuItem
+                      icon={<Trash2 />}
                       label={t("providerDeleteConnection")}
                       destructive
-                      onSelect={() => setRemoving(profile)}
+                      onClick={() => setRemoving(profile)}
                     />
-                  </PopoverContent>
+                  </MenuContent>
                 </Popover>
               </div>
               </div>
@@ -644,9 +630,9 @@ export function ProviderProfilesSection({
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <Plug size={13} />
               </span>
-              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
-                <strong>{profile.name}</strong>
-                <small>{t("providerManagedByPlugin")}</small>
+              <div className="min-w-0">
+                <Truncate as="strong" className="text-ui-md font-semibold">{profile.name}</Truncate>
+                <Truncate as="small" className="text-ui-xs text-muted-foreground">{t("providerManagedByPlugin")}</Truncate>
               </div>
               <Button
                 variant="ghost"

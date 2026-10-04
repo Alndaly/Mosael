@@ -47,7 +47,7 @@ it("截断了的输出:标明全文多长;复制拿到的是按这次运行取�
     truncated: { text: FULL.length },
   });
   expect(screen.getByText("wfOutputTruncated").textContent).toBe("wfOutputTruncated");
-  fireEvent.click(screen.getByTitle("copy"));
+  fireEvent.click(screen.getByRole("button", { name: "copy" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(FULL));
   expect(transport.api).toHaveBeenCalledWith("/api/workflows/runs/job-9/outputs/llm-1/text");
 });
@@ -56,7 +56,7 @@ it("没截断的输出:不说截断,复制直接给值,不去取", async () => {
   mount({ nid: "llm-1", name: "LLM", status: "done", jobId: "job-9", outputs: { text: "短的" } });
   expect(document.querySelector("[data-output-truncated]")).toBeNull();
   expect(screen.queryByLabelText("wfOutputDownload")).toBeNull();
-  fireEvent.click(screen.getByTitle("copy"));
+  fireEvent.click(screen.getByRole("button", { name: "copy" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("短的"));
   expect(transport.api).not.toHaveBeenCalled();
 });
@@ -79,7 +79,7 @@ it("嵌套里的长文字被截了(循环 results、子图 output 里的):标明
   const item = notes[0].querySelector<HTMLElement>('[data-truncated-path="results.1.text"]')!;
   expect(item.textContent).toContain("results.1.text");
 
-  fireEvent.click(within(item).getByTitle("copy"));
+  fireEvent.click(within(item).getByRole("button", { name: "copy" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(FULL));
   expect(transport.api).toHaveBeenCalledWith("/api/workflows/runs/job-9/outputs/loop-1/results.1.text");
 

@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/tooltip";
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
@@ -92,17 +93,19 @@ export function LoginView() {
       <LoginHero />
 
       {/* 未登录也能换语言:与壳层同一偏好存储,登录后无缝延续。 */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]"
-        onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
-        title={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
-        aria-label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
-      >
-        <Languages size={14} /> {locale === "zh-CN" ? t("languageEn") : t("languageZh")}
-      </Button>
+      {/* 按钮上写的是要换成的语言名;悬停说清这一下是「切换到它」。 */}
+      <Hint label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")} side="bottom">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]"
+          onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
+          aria-label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
+        >
+          <Languages size={14} /> {locale === "zh-CN" ? t("languageEn") : t("languageZh")}
+        </Button>
+      </Hint>
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
         <div className="grid w-[min(400px,100%)] content-center gap-8 py-12">

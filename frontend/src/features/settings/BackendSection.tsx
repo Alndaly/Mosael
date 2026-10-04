@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Truncate } from "@/components/ui/truncate";
 import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
 
 export function StartupRow() {
@@ -102,14 +103,14 @@ export function BackendSection({ workspace }: { workspace: Workspace }) {
       <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
         <ServerSwitchRow />
         <SettingsRow label={t("settingsEndpoint")} description={t("settingsEndpointDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{API_BASE}</code>
+          <Truncate as="code" className="timecode max-w-[320px] text-xs text-muted-foreground">{API_BASE}</Truncate>
         </SettingsRow>
         <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{workspace.id}</code>
+          <Truncate as="code" className="timecode max-w-[320px] text-xs text-muted-foreground">{workspace.id}</Truncate>
         </SettingsRow>
         <StartupRow />
         <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">v{__APP_VERSION__}</code>
+          <Truncate as="code" className="timecode max-w-[320px] text-xs text-muted-foreground">v{__APP_VERSION__}</Truncate>
           <UpdateCheckButton />
         </SettingsRow>
       </SettingsGroup>

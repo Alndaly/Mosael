@@ -71,3 +71,23 @@ it("⋯ 里是 重命名 / 版本历史 v29 / 导出为文件,删除单独一组
   fireEvent.click(within(menu).getByRole("menuitem", { name: "rename" }));
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
 }, 20000);
+
+it("列表卡片:名字浮在整卡按钮上面(截断时悬停看得到全文),点名字照样打开;点卡片角上的 ⋯ 菜单不会顺带打开卡片", async () => {
+  localStorage.removeItem("mosael:selected:workflows");
+  apiMocks.listWorkflows.mockResolvedValue([workflow]);
+  apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([]);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} /></QueryClientProvider>);
+
+  const name = await screen.findByText(workflow.name, { selector: "strong" }, { timeout: 10000 });
+  expect(name.className).toContain("z-[2]");
+
+  fireEvent.click(screen.getByRole("button", { name: `studioActions: ${workflow.name}` }));
+  fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "rename" }));
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "canvasTools" })).toBeNull();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+  fireEvent.click(name);
+  expect(await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 })).toBeInTheDocument();
+}, 20000);

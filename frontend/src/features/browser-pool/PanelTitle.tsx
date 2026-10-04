@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getBrowserSession, isNotFound } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { gotoRecord, OPEN_WORKFLOW_RUN, workflowRunLink } from "@/lib/deepLink";
 import { formatShortDate, parseServerTime } from "@/lib/time";
 
@@ -35,18 +37,19 @@ export function PanelTitle({ id, label }: { id: string; label: string }) {
     staleTime: Infinity,
   });
   const run = owner.data?.run;
-  if (!run) return <span className="min-w-0 flex-1 truncate">{label}</span>;
+  if (!run) return <Truncate className="flex-1">{label}</Truncate>;
   const title = t("livePanelRunTitle").replace("{workflow}", run.workflow_name).replace("{time}", runTime(run.started_at));
   return (
-    <button
-      type="button"
-      title={t("livePanelOpenRun")}
-      // 标题条整条是拖动把手;按在标题上是要跳过去,不是要拖。
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={() => gotoRecord("/workflows", OPEN_WORKFLOW_RUN, workflowRunLink(run.workflow_id, run.job_id))}
-      className="pointer-events-auto min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-inherit hover:text-foreground hover:underline"
-    >
-      {title}
-    </button>
+    <Hint label={t("livePanelOpenRun")}>
+      <button
+        type="button"
+        // 标题条整条是拖动把手;按在标题上是要跳过去,不是要拖。
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => gotoRecord("/workflows", OPEN_WORKFLOW_RUN, workflowRunLink(run.workflow_id, run.job_id))}
+        className="pointer-events-auto min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-inherit hover:text-foreground hover:underline"
+      >
+        <Truncate>{title}</Truncate>
+      </button>
+    </Hint>
   );
 }

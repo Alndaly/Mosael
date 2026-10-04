@@ -3,7 +3,10 @@ import { Download, Film, Loader2, Lock, RefreshCw, ShieldAlert, X } from "lucide
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Progress } from "@/components/ui/progress";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 
 import { downloadable, type VideoCandidate, type VideoProbe } from "./videoActions";
 
@@ -108,7 +111,10 @@ export function VideoPanel({
               <li key={candidate.url} className="grid gap-1.5 rounded-lg border border-border p-2.5" data-video-candidate={candidate.kind}>
                 <span className="flex min-w-0 items-center gap-2 text-ui-sm">
                   <Film size={14} className="flex-none text-muted-foreground" />
-                  <span className="min-w-0 truncate" title={candidate.url}>{fileOf(candidate.url)}</span>
+                  {/* 显示文件名,悬停给完整地址(文件名在地址里,名字被截断时也能从这里读全)。 */}
+                  <Hint label={candidate.url}>
+                    <Truncate>{fileOf(candidate.url)}</Truncate>
+                  </Hint>
                 </span>
                 <span className="text-ui-xs text-muted-foreground">{facts.join(" · ")}</span>
                 {open ? (
@@ -134,11 +140,11 @@ export function VideoPanel({
           {downloads.map((entry) => (
             <div key={entry.jobId} className="grid gap-1.5" data-download-status={entry.status}>
               <span className="flex min-w-0 items-center gap-2 text-ui-sm">
-                <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+                <Truncate className="flex-1">{entry.title}</Truncate>
                 {entry.status === "running" && (
-                  <Button size="icon-xs" variant="ghost" onClick={() => onCancel(entry.jobId)} title={t("browserToolsDownloadCancel")} aria-label={t("browserToolsDownloadCancel")}>
+                  <IconButton size="icon-xs" onClick={() => onCancel(entry.jobId)} label={t("browserToolsDownloadCancel")}>
                     <X />
-                  </Button>
+                  </IconButton>
                 )}
               </span>
               {entry.status === "running" ? (

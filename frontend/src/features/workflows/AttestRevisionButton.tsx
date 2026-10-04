@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { attestWorkflowRevision, type RevisionAttestRequest } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
 
 /**
  * 「认可这一版」—— 运行因为「这一版是别人改的」停下时,失败现场里带着是哪条工作流的哪一版
@@ -29,15 +30,10 @@ export function AttestRevisionButton({ attest, onDone }: { attest: RevisionAttes
     ? t("wfRevisionAttestFor").replace("{name}", attest.workflow_name).replace("{version}", String(attest.revision))
     : t("wfRevisionAttest");
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      className="shrink-0"
-      title={t("wfRevisionAttestHint")}
-      loading={approve.isPending}
-      onClick={() => approve.mutate()}
-    >
-      <ShieldCheck size={13} /> {label}
-    </Button>
+    <Hint label={t("wfRevisionAttestHint")}>
+      <Button size="sm" variant="outline" className="shrink-0" loading={approve.isPending} onClick={() => approve.mutate()}>
+        <ShieldCheck size={13} /> {label}
+      </Button>
+    </Hint>
   );
 }

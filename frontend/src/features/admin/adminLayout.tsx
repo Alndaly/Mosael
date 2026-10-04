@@ -1,6 +1,7 @@
 import React from "react";
 
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -112,7 +113,7 @@ export function AdminRow({
       {leading}
       <div className="grid min-w-0 flex-1 gap-0.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="min-w-0 truncate text-ui-sm font-medium">{label}</span>
+          <Truncate className="text-ui-sm font-medium">{label}</Truncate>
           {metaItems.length > 0 && (
             <span data-admin-row-meta className="text-ui-xs tabular-nums text-muted-foreground">
               {metaItems.map((item, index) => (

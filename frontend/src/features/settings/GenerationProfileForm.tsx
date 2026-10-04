@@ -17,10 +17,12 @@ import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { AddRow } from "@/components/ui/add-row";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import type { GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -48,6 +50,7 @@ function Chips({
   numeric?: boolean;
   ariaLabel: string;
 }) {
+  const t = useI18n();
   const [text, setText] = React.useState("");
   const commit = () => {
     const raw = text.trim();
@@ -68,14 +71,16 @@ function Chips({
       {values.map((value) => (
         <span key={String(value)} className="flex items-center gap-0.5 rounded bg-secondary px-1.5 py-px text-ui-xs text-foreground">
           {String(value)}
-          <button
+          <IconButton
+            unstyled
             type="button"
-            aria-label={`${ariaLabel} ${value}`}
+            label={`${t("genFormRemoveChip")} ${value}`}
+            hint={ariaLabel}
             className="cursor-pointer text-muted-foreground hover:text-foreground"
             onClick={() => onChange(values.filter((one) => one !== value))}
           >
             <X size={11} />
-          </button>
+          </IconButton>
         </span>
       ))}
       <input
@@ -177,19 +182,18 @@ function MapRows({
             )}
           </div>
           {/* 和字段那一层同一个长相:圆框。两处不一样的话,同一屏上就有两种"删掉这一行"。 */}
-          <Button
-            variant="ghost"
+          <IconButton
             size="icon-xs"
             /* 对齐到名字那一格的中线,不是整摞的顶端:这一列是"名字 + 取值"两层,
                items-start 会把叉顶到最上面,看起来像挂在两行之间。(40-28)/2 = 6px。 */
             className="mt-1.5 rounded-full border border-border hover:border-border-strong"
             /* 带上行号:这一格自己也有一个「×」(移除整格),两个按钮同名的话,读屏念出来
                一模一样 —— 而它们一个删一行、一个删一整格。 */
-            aria-label={`${ariaLabel} ${t("genFormRemoveRow")} ${index + 1}`}
+            label={`${ariaLabel} ${t("genFormRemoveRow").replace("{n}", String(index + 1))}`}
             onClick={() => commit(rows.filter((_, i) => i !== index))}
           >
             <X size={12} />
-          </Button>
+          </IconButton>
         </div>
       ))}
       <AddRow label={addLabel} onClick={() => commit([...rows, ["", valueKind === "number" ? 1 : []]])} />
@@ -205,15 +209,16 @@ export function ProfileField({ label, children, onRemove }: { label: string; chi
       <span className="flex items-center justify-between text-ui-xs font-medium text-muted-foreground">
         {label}
         {onRemove && (
-          <button
+          <IconButton
+            unstyled
             type="button"
-            aria-label={`${label} ${t("genFormRemoveField")}`}
+            label={`${label} ${t("genFormRemoveField")}`}
             /* 包一个圆框:光秃秃一个叉在一行文字右端,既看不出是可点的,也没有可点的边界。 */
             className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-full border border-border text-faint transition-colors hover:border-border-strong hover:bg-secondary hover:text-foreground"
             onClick={onRemove}
           >
             <X size={11} />
-          </button>
+          </IconButton>
         )}
       </span>
       {children}
@@ -230,7 +235,7 @@ export function ProfileField({ label, children, onRemove }: { label: string; chi
 function DefaultRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border/60 py-1 last:border-b-0">
-      <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{label}</span>
+      <Truncate className="flex-1 text-ui-sm text-foreground">{label}</Truncate>
       {/* 不强行拉宽里面的东西:输入框和下拉本来就是 w-full,而开关是固定的 36px ——
           统一拉满会把一个「是/否」抻成 220px 的大条。justify-end 把它推到右端就够了。 */}
       <div className="flex w-[min(220px,50%)] shrink-0 justify-end">{children}</div>
@@ -432,10 +437,11 @@ export function CapabilityProfileForm({
       <ProfileField label={t("genField_parameter_keys")}>
         <div className="flex flex-wrap gap-1">
           {(schema.data?.parameters ?? []).map((parameter) => (
+            // 按钮上是人话的名字,悬停给端点认的那个参数名(两者一样时不重复)。
+            <Hint key={parameter} label={parameterLabel(parameter) !== parameter ? parameter : undefined}>
             <button
-              key={parameter}
               type="button"
-              title={parameter}
+              aria-pressed={parameters.includes(parameter)}
               onClick={() => toggleParameter(parameter)}
               className={cn(
                 "cursor-pointer rounded-md border px-1.5 py-0.5 text-ui-xs transition-colors",
@@ -446,6 +452,7 @@ export function CapabilityProfileForm({
             >
               {parameterLabel(parameter)}
             </button>
+            </Hint>
           ))}
         </div>
       </ProfileField>
@@ -543,7 +550,6 @@ export function CapabilityProfileForm({
                     options={idle.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
                     size="xs"
                     className="w-auto gap-1 text-muted-foreground"
-                    contentClassName="max-w-[min(420px,calc(100vw-32px))]"
                     align="end"
                   />
                 ) : undefined

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -81,18 +82,15 @@ export function InvitesSection({ onOpenDeployment }: { onOpenDeployment: () => v
               {invite.used ? (
                 <span aria-hidden className="size-8" />
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t("deployInviteCopy")}
-                  title={t("deployInviteCopy")}
+                <IconButton
+                  label={t("deployInviteCopy")}
                   onClick={() => {
                     void navigator.clipboard?.writeText(invite.code);
                     toast.success(t("deployInviteCopied"));
                   }}
                 >
                   <Copy />
-                </Button>
+                </IconButton>
               )}
             </AdminRow>
           ))

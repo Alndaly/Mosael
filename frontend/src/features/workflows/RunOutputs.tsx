@@ -9,6 +9,8 @@ import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
 import { assetOutputs, outputRows, STEP_STATUS_LABELS, truncatedInside, type OutputRow, type Step } from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { saveBlobToDisk } from "@/lib/download";
 
 /**
@@ -30,10 +32,11 @@ function CopyButton({ value }: { value: string | (() => Promise<string>) }) {
   const t = useI18n();
   const [done, setDone] = React.useState(false);
   return (
-    <button
+    <IconButton
+      unstyled
       type="button"
       className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
-      title={t("copy")}
+      label={t("copy")}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(typeof value === "string" ? value : await value());
@@ -46,7 +49,7 @@ function CopyButton({ value }: { value: string | (() => Promise<string>) }) {
       }}
     >
       {done ? <Check size={11} /> : <Copy size={11} />}
-    </button>
+    </IconButton>
   );
 }
 
@@ -84,11 +87,11 @@ export function outputSummary(
 function DownloadButton({ name, load }: { name: string; load: () => Promise<string> }) {
   const t = useI18n();
   return (
-    <button
+    <IconButton
+      unstyled
       type="button"
       className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
-      title={t("wfOutputDownload")}
-      aria-label={t("wfOutputDownload")}
+      label={t("wfOutputDownload")}
       onClick={async () => {
         try {
           saveBlobToDisk(new Blob([await load()], { type: "text/plain;charset=utf-8" }), `${name}.txt`);
@@ -98,7 +101,7 @@ function DownloadButton({ name, load }: { name: string; load: () => Promise<stri
       }}
     >
       <Download size={11} />
-    </button>
+    </IconButton>
   );
 }
 
@@ -124,7 +127,7 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
       <div className="flex min-w-0 items-center gap-1">
         {/* 名字在前、稳定 key 在后:前者回答"这是什么",后者是 `{{节点.key}}` 里要写的那个词。
             此前只有 key,而它是英文的 —— 同一个输出在右边接点上叫「引擎」,在这里叫 engine。 */}
-        <span className="truncate text-ui-2xs text-foreground">{row.label}</span>
+        <Truncate className="text-ui-2xs text-foreground">{row.label}</Truncate>
         {row.label !== row.key && (
           <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>
         )}
@@ -145,7 +148,7 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
           <span>{t("wfOutputNestedTruncated")}</span>
           {inside.map(({ path, chars, load }) => (
             <span key={path} className="flex min-w-0 items-center gap-1.5" data-truncated-path={path}>
-              <code className="truncate font-mono">{path}</code>
+              <Truncate as="code" className="font-mono">{path}</Truncate>
               <span className="shrink-0">{t("wfOutputNestedChars").replace("{n}", String(chars))}</span>
               <span className="ml-auto" />
               {load && <DownloadButton name={path} load={load} />}
@@ -160,9 +163,9 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
         <details className="group min-w-0">
           <summary className="flex cursor-pointer list-none items-start gap-1 marker:content-none">
             <ChevronRight size={11} className="mt-0.5 shrink-0 transition-transform group-open:rotate-90" />
-            <span className="line-clamp-2 whitespace-pre-wrap break-words text-ui-xs text-foreground group-open:hidden">
+            <Truncate lines={2} className="whitespace-pre-wrap text-ui-xs text-foreground group-open:hidden">
               {text.slice(0, INLINE_LIMIT)}…
-            </span>
+            </Truncate>
           </summary>
           <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-panel p-1.5 text-ui-2xs text-foreground">
             {text}

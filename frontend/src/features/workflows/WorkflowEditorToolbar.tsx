@@ -27,9 +27,11 @@ import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { CanvasNodeSearch, type CanvasSearchEntry, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
 import { EdgeShapeToggle, type EdgeShape } from "@/components/app/canvasEdgeShape";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuLabel } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Hint } from "@/components/ui/tooltip";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import type { CanvasMarker } from "@/features/markers/markers";
@@ -39,6 +41,7 @@ import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
 import type { WorkflowSaveState } from "@/features/workflows/useWorkflowSave";
 import type { useWorkflowComments } from "@/features/workflows/WorkflowComments";
 import { workflowIssueText } from "@/features/workflows/workflowCanvasModel";
+import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 type SetBoolean = React.Dispatch<React.SetStateAction<boolean>>;
@@ -174,12 +177,9 @@ export function workflowEditorToolbar({
       end={
         <>
           <CanvasToolbarGroup label={t("wfAgentTitle")}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <IconButton
               className={cn(agentOpen && "bg-secondary text-foreground")}
-              aria-label={t("wfAgentTitle")}
-              title={t("wfAgentTitle")}
+              label={t("wfAgentTitle")}
               aria-pressed={agentOpen}
               onClick={() => {
                 setAgentOpen((value) => !value);
@@ -187,10 +187,11 @@ export function workflowEditorToolbar({
               }}
             >
               <Bot size={14} />
-            </Button>
+            </IconButton>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("wfRun")}>
             <Popover open={checklistOpen} onOpenChange={setChecklistOpen}>
+              <Hint label={t("wfChecklist")} hint={checklistLabel}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -206,7 +207,6 @@ export function workflowEditorToolbar({
                         : "bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-success hover:bg-[color-mix(in_srgb,var(--success)_16%,transparent)] hover:text-success",
                   )}
                   aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
-                  title={checklistLabel}
                 >
                   {checklistCount > 0 ? <AlertTriangle size={13} /> : <CircleCheck size={14} />}
                   {checklistCount > 0 && (
@@ -216,29 +216,27 @@ export function workflowEditorToolbar({
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-1.5">
+              </Hint>
+              {/* 就绪检查是一张菜单:一行一个问题,点一下带人去那个节点。节点名是用户起的,单行截断;
+                  问题说明是整句话,在名字下面折行写全 —— 此前它和名字挤在一行里,被截成半句。 */}
+              <MenuContent label={t("wfChecklist")} align="end">
                 {analysis.issues.length === 0 ? (
                   <div className="flex items-center gap-1.5 p-2 text-ui-sm text-success">
                     <CircleCheck size={14} /> {t("wfChecklistReady")}
                   </div>
                 ) : (
                   <>
-                    <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-                      {analysis.errorCount
-                        ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
-                        : t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))}
-                    </div>
-                    <div className="flex max-h-80 flex-col gap-0.5 overflow-auto">
+                    <MenuLabel>{checklistLabel}</MenuLabel>
+                    <div className="grid max-h-80 content-start gap-0.5 overflow-auto">
                       {[...analysis.issues]
                         .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1))
                         .map((issue, i) => (
-                          <button
+                          <MenuItem
                             key={`${issue.nodeId}-${issue.code}-${i}`}
-                            type="button"
-                            className={cn(
-                              "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
-                              issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
-                            )}
+                            icon={<AlertTriangle className={issue.severity === "error" ? "text-destructive" : "text-warning"} />}
+                            label={issue.nodeName}
+                            truncate
+                            description={workflowIssueText(t, issue, registry, unusableReasons, refName)}
                             onClick={() => {
                               // 带人去问题所在的那一层,聚焦那个节点。已经在那一层就直接聚焦;要换层就
                               // 先记下来,等那一层的画布挂好(onInit)再聚焦。「缺开始节点」不属于哪个节点,只回主流程。
@@ -250,65 +248,48 @@ export function workflowEditorToolbar({
                               pendingFocusRef.current = { scope: scopeId(issue.path), nodeId: target };
                               enterScope(issue.path);
                             }}
-                          >
-                            <AlertTriangle size={12} />
-                            <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
-                            <span className="truncate text-ui-xs text-muted-foreground">
-                              {workflowIssueText(t, issue, registry, unusableReasons, refName)}
-                            </span>
-                          </button>
+                          />
                         ))}
                     </div>
                   </>
                 )}
-              </PopoverContent>
+              </MenuContent>
             </Popover>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("wfHistory")}
-              title={t("wfHistory")}
+            <IconButton
+              label={t("wfHistory")}
               aria-pressed={showHistory}
               className={cn(showHistory && "bg-secondary text-foreground")}
               onClick={() => setShowHistory((v) => !v)}
             >
               <History size={14} />
-            </Button>
+            </IconButton>
             {/* **在跑的时候,这颗按钮是「停止」。**
                 此前它一直是 ▶:点完之后画布上节点一个个亮起来,而工具栏里没有任何出口 ——
                 唯一能取消的地方是任务中心列表那一行的 ×,没人会想到去那儿找。
                 看着它跑的这一页就该能停下它。 */}
             {running ? (
-              <Button
-                size="icon-sm"
+              <IconButton
                 variant="outline"
                 className="hover:border-destructive/50 hover:text-destructive"
                 loading={stop.isPending}
-                aria-label={t("wfStop")}
-                title={t("jobCancelHint")}
+                label={t("wfStop")}
+                hint={t("jobCancelHint")}
                 onClick={() => stop.mutate()}
               >
                 <Square size={14} />
-              </Button>
+              </IconButton>
             ) : (
-              <Button
-                size="icon-sm"
+              <IconButton
+                variant="default"
                 disabled={!analysis.runnable}
+                disabledReason={t("wfRunBlocked")}
                 loading={run.isPending || launching}
-                aria-label={t("wfRun")}
-                title={
-                  !analysis.runnable
-                    ? t("wfRunBlocked")
-                    : save.isPending
-                      ? t("wfSaving")
-                      : dirty && save.isError
-                        ? t("wfRunRetriesSave")
-                        : t("wfRun")
-                }
+                label={t("wfRun")}
+                hint={save.isPending ? t("wfSaving") : dirty && save.isError ? t("wfRunRetriesSave") : null}
                 onClick={() => void startRun()}
               >
                 <Play size={14} />
-              </Button>
+              </IconButton>
             )}
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("more")}>
@@ -364,36 +345,30 @@ export function workflowEditorToolbar({
             <button
               type="button"
               data-wf-add-node=""
-              // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
-              // 名字进 title/aria-label,悬停仍然说得出自己是谁。
               className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
-              aria-label={t("wfAddNode")}
-              title={t("wfAddNode")}
             >
               <Plus size={15} /> {t("wfAddNode")}
             </button>
           }
         />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={`${t("undo")} ⌘Z`}
-          aria-label={t("undo")}
+        <IconButton
+          label={t("undo")}
+          shortcut={formatCombo("Mod+Z")}
           disabled={!canUndo}
+          disabledReason={t("nothingToUndo")}
           onClick={undo}
         >
           <Undo2 size={14} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={`${t("redo")} ⇧⌘Z`}
-          aria-label={t("redo")}
+        </IconButton>
+        <IconButton
+          label={t("redo")}
+          shortcut={[formatCombo("Mod+Shift+Z"), formatCombo("Mod+Y")]}
           disabled={!canRedo}
+          disabledReason={t("nothingToRedo")}
           onClick={redo}
         >
           <Redo2 size={14} />
-        </Button>
+        </IconButton>
       </CanvasToolbarGroup>
       {/* 讨论和标记钉在**主流程**的画布坐标上,体里是另一张画布 —— 在那儿摆出来,
           要么标在错的位置,要么落进体里跟着体一起被执行器忽略。 */}
@@ -401,15 +376,9 @@ export function workflowEditorToolbar({
         <>
       <CanvasToolbarGroup label={t("boardCommentMode")}>
         {workflowComments.controls(() => setMarkerMode(false))}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={t("boardDiscussionCenter")}
-          aria-label={t("boardDiscussionCenter")}
-          onClick={() => setCollaborationOpen(true)}
-        >
+        <IconButton label={t("boardDiscussionCenter")} onClick={() => setCollaborationOpen(true)}>
           <ListChecks size={14} />
-        </Button>
+        </IconButton>
       </CanvasToolbarGroup>
       <CanvasToolbarGroup label={t("markers")}>
         <AnnotationControls
@@ -441,28 +410,22 @@ export function workflowEditorToolbar({
         />
         <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
         <CanvasInputModeSwitch />
-        <Button
-          variant="ghost"
-          size="icon-sm"
+        <IconButton
           className={cn(showMinimap && "bg-secondary text-foreground")}
-          aria-label={t("wfMinimap")}
-          title={t("wfMinimap")}
+          label={t("wfMinimap")}
           aria-pressed={showMinimap}
           onClick={() => setShowMinimap(showMinimap ? "off" : "on")}
         >
           <MapIcon size={14} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t("boardsFitView")}
-          title={t("boardsFitView")}
+        </IconButton>
+        <IconButton
+          label={t("boardsFitView")}
           onClick={() => {
             if (rfRef.current) fitCanvas(rfRef.current);
           }}
         >
           <Maximize2 size={14} />
-        </Button>
+        </IconButton>
       </CanvasToolbarGroup>
     </CanvasToolbar>
   );

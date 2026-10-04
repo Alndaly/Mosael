@@ -17,6 +17,8 @@ import {
 import { getAsset } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
 import type { AssetOutput } from "@/features/workflows/runSteps";
@@ -198,10 +200,8 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
         <Handle type="target" position={Position.Left} className={cn(WORKFLOW_HANDLE_CLASS, selected && "border-primary")} style={{ top: 28 }} />
       )}
       {d.run && (
-        <span
-          className="absolute -left-1.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border border-border bg-panel px-[3px]"
-          title={d.run.error ?? (d.run.status === "running" ? d.run.message : undefined) ?? undefined}
-        >
+        <Hint label={d.run.error ?? (d.run.status === "running" ? d.run.message : undefined)}>
+        <span className="absolute -left-1.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border border-border bg-panel px-[3px]">
           {d.run.status === "running" ? (
             <Loader2 size={11} className="animate-spin text-primary" />
           ) : d.run.status === "done" ? (
@@ -214,6 +214,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
             <SkipForward size={11} className="text-muted-foreground" />
           )}
         </span>
+        </Hint>
       )}
       {/* 耗时贴在右下角:跑完一眼看出哪一步慢。 */}
       {d.run?.ms != null && (
@@ -223,14 +224,14 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
       )}
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="grid size-8 flex-none place-items-center rounded-lg bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": visual.color } as React.CSSProperties}>{kindIcon ?? visual.icon ?? <Type size={13} />}</span>
-        <span className="grid min-w-0 gap-px [&_small]:truncate [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-sm">
-          <strong>{d.label}</strong>
+        <span className="grid min-w-0 gap-px">
+          <Truncate as="strong" className="text-sm">{d.label}</Truncate>
           {/* **副标题只有一行**,而且优先说"这个节点被配成做什么"(模型名、被调的工作流),
               其次才是类型名 —— 类型名在同一屏里重复度最高,信息量最低。
               配置摘要此前是卡片里一条满宽的灰底,读起来像个禁用的输入框;它本来就是标题的
               附注,归到副标题位就不用再画一个框。
               指着某份素材时两者都不显示:图标已经说了是图还是视频,底下还有缩略图。 */}
-          {subtitle && <small title={subtitle}>{subtitle}</small>}
+          {subtitle && <Truncate as="small" className="text-ui-2xs text-muted-foreground">{subtitle}</Truncate>}
         </span>
       </div>
       {/* 配置指向的素材:**没跑之前也该看得见自己指着哪张图**。跑过之后让位给产出预览 ——
@@ -246,24 +247,26 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
       {d.runSummary && (
         // **名字在前**:此前这里只有值,于是「分离人声与背景音」跑完,卡片上孤零零一个
         // `demucs` —— 它是引擎名、是文件名还是别的什么,只能猜。名字由节点自己声明。
-        <p className={cn("m-0 line-clamp-2 whitespace-pre-wrap break-words border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
+        <Truncate as="p" lines={2} className={cn("m-0 whitespace-pre-wrap border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
           <span className="font-medium text-foreground">{d.runSummary.label}</span>
           {" "}
           {d.runSummary.text}
-        </p>
+        </Truncate>
       )}
       {badge && (
-        <span
-          className={cn(
-            "absolute -right-[7px] -top-[7px] inline-flex h-4 min-w-4 items-center gap-0.5 rounded-full px-1 text-ui-2xs font-bold leading-none text-white",
-            badge.severity === "error" ? "bg-destructive" : "bg-warning",
-          )}
-          title={badge.title}
-          aria-label={badge.title}
-        >
-          <AlertTriangle size={11} />
-          {badge.count > 1 ? badge.count : null}
-        </span>
+        <Hint label={badge.title}>
+          <span
+            role="img"
+            className={cn(
+              "absolute -right-[7px] -top-[7px] inline-flex h-4 min-w-4 items-center gap-0.5 rounded-full px-1 text-ui-2xs font-bold leading-none text-white",
+              badge.severity === "error" ? "bg-destructive" : "bg-warning",
+            )}
+            aria-label={badge.title}
+          >
+            <AlertTriangle size={11} />
+            {badge.count > 1 ? badge.count : null}
+          </span>
+        </Hint>
       )}
       {isCondition ? (
         <>
@@ -296,25 +299,24 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[var(--chart-image)]! data-[dtype=json]:border-[var(--chart-audio)]! data-[dtype=number]:border-warning! data-[dtype=sequence]:border-destructive! data-[dtype=text]:border-muted-foreground! left-[-12px]!"
                   data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
-                {/* 有声明标签走正文字体;旧服务端没发显示名时才用 mono 显示稳定键。 */}
-                <span
-                  className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}
-                  title={key}
-                >
-                  {(d.inputLabels ?? {})[key] || portLabel(key)}
-                </span>
+                {/* 有声明标签走正文字体;旧服务端没发显示名时才用 mono 显示稳定键。悬停说的是稳定键
+                    (`{{节点.key}}` 里写的那个词)。 */}
+                <Hint label={key}>
+                  <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}>
+                    {(d.inputLabels ?? {})[key] || portLabel(key)}
+                  </span>
+                </Hint>
               </div>
             ))}
           </div>
           <div className="flex min-w-0 flex-col gap-[3px]">
             {outputs.map((output) => (
               <div className="relative flex min-h-4 items-center justify-end" key={output}>
-                <span
-                  className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.outputLabels ?? {})[output] && "font-mono")}
-                  title={output}
-                >
-                  {(d.outputLabels ?? {})[output] || portLabel(output)}
-                </span>
+                <Hint label={output}>
+                  <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.outputLabels ?? {})[output] && "font-mono")}>
+                    {(d.outputLabels ?? {})[output] || portLabel(output)}
+                  </span>
+                </Hint>
                 <Handle
                   id={`out:${output}`}
                   type="source"

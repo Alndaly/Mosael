@@ -1,5 +1,6 @@
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 
 /**
  * 插件工具旁的「需确认」:智能体调它之前会先开一张确认卡。
@@ -20,12 +21,13 @@ export function ToolEffectBadge({ effects }: { effects?: string | null }) {
   // 不认识的取值按「对外」说 —— 和后端同一个保守方向(needs_card 对不认识的也要问)。
   const why = t(WHY[effects] ?? "pluginToolEffectExternal");
   return (
-    <small
-      className="whitespace-nowrap rounded-full bg-warning/15 px-1.5 py-px text-ui-2xs text-warning"
-      title={why}
-      aria-label={`${t("pluginToolNeedsConfirm")}: ${why}`}
-    >
-      {t("pluginToolNeedsConfirm")}
-    </small>
+    <Hint label={why}>
+      <small
+        className="whitespace-nowrap rounded-full bg-warning/15 px-1.5 py-px text-ui-2xs text-warning"
+        aria-label={`${t("pluginToolNeedsConfirm")}: ${why}`}
+      >
+        {t("pluginToolNeedsConfirm")}
+      </small>
+    </Hint>
   );
 }
