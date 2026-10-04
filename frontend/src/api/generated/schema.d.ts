@@ -4281,6 +4281,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/from-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start From Page
+         * @description 内嵌浏览器顶栏「用当前页开工」:建好(或打开已建的)那张分析模板,把当前页的链接填进开始节点,
+         *     数据来源选内嵌浏览器、读页面用当前这个档案(见 domain/workflows/from_page)。不替他点运行。
+         */
+        post: operations["start_from_page_api_workflows_from_page_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/rebuild-from-template": {
         parameters: {
             query?: never;
@@ -14423,6 +14444,20 @@ export interface components {
             label: string;
         };
         /**
+         * WorkflowFromPage
+         * @description 内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。
+         */
+        WorkflowFromPage: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Template Id */
+            template_id: string;
+            /** Url */
+            url: string;
+            /** Profile Id */
+            profile_id?: string | null;
+        };
+        /**
          * WorkflowImportRequest
          * @description 导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。
          */
@@ -23487,6 +23522,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_from_page_api_workflows_from_page_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowFromPage"];
             };
         };
         responses: {

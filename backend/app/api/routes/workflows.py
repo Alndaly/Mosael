@@ -18,6 +18,7 @@ from app.api.schemas import (
     WorkflowAiEditResponse,
     WorkflowCreate,
     WorkflowFieldOptionOut,
+    WorkflowFromPage,
     WorkflowTemplateCheckOut,
     WorkflowTemplateOut,
     WorkflowImportRequest,
@@ -211,6 +212,25 @@ def create(body: WorkflowCreate, db: Tx, user: CurrentUser) -> Workflow:
             created_by=user.id,
             revision_note=f"template:{body.template_id}" if body.template_id else "",
         )
+    except WorkflowDomainError as exc:
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
+
+
+@router.post("/workflows/from-page", response_model=WorkflowOut)
+def start_from_page(body: WorkflowFromPage, db: Tx, user: CurrentUser) -> Workflow:
+    """内嵌浏览器顶栏「用当前页开工」:建好(或打开已建的)那张分析模板,把当前页的链接填进开始节点,
+    数据来源选内嵌浏览器、读页面用当前这个档案(见 domain/workflows/from_page)。不替他点运行。"""
+    from app.domain import browser, sharing
+
+    try:
+        return workflow_uc.start_from_page(
+            db, user, body.workspace_id, template_id=body.template_id, url=body.url, profile_id=body.profile_id,
+            locale=get_current_locale(),
+        )
+    except sharing.NotUsableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except browser.BrowserDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 

@@ -13117,6 +13117,48 @@
         }
       }
     },
+    "/api/workflows/from-page": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Start From Page",
+        "description": "内嵌浏览器顶栏「用当前页开工」:建好(或打开已建的)那张分析模板,把当前页的链接填进开始节点,\n数据来源选内嵌浏览器、读页面用当前这个档案(见 domain/workflows/from_page)。不替他点运行。",
+        "operationId": "start_from_page_api_workflows_from_page_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowFromPage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/rebuild-from-template": {
       "post": {
         "tags": [
@@ -37686,6 +37728,47 @@
         ],
         "title": "WorkflowFieldOptionOut",
         "description": "节点字段的一个动态选项。"
+      },
+      "WorkflowFromPage": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "template_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Template Id"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 8,
+            "pattern": "^https?://",
+            "title": "Url"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "template_id",
+          "url"
+        ],
+        "title": "WorkflowFromPage",
+        "description": "内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。"
       },
       "WorkflowImportRequest": {
         "properties": {

@@ -46,7 +46,8 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { DictateButton } from "@/features/agent/DictateButton";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
-import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { AGENT_DRAFT_EVENT, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { useOpenRequest } from "@/lib/deepLink";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
@@ -101,6 +102,13 @@ export function ChatWorkspace({
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点(见 ChatComposer)。
   const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
   const draftText = React.useMemo(() => documentText(draft), [draft]);
+  // 从别处带着一段话来(内嵌浏览器顶栏「交给智能体」):填进输入框,一行一段,不替他发送。
+  useOpenRequest(AGENT_DRAFT_EVENT, (text) => {
+    setDraft({
+      type: "doc",
+      content: text.split("\n").map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
+    });
+  });
   const noteAttach = useNoteAttachments(workspace.id);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);

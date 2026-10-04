@@ -43,6 +43,26 @@ def ensure_can_browse(db: Session, user: User, workspace_id: str) -> None:
     ensure_workspace_access(db, user, workspace_id)
 
 
+def start_from_page(
+    db: Session, user: User, workspace_id: str, *, template_id: str, url: str, profile_id: str | None, locale: str | None,
+) -> Workflow:
+    """内嵌浏览器顶栏「用当前页开工」(见 workflows/from_page)。
+
+    借的是档案主人的登录态:档案要是这个人用得了的(别人的私有档案被拒,`sharing.NotUsableError`)——
+    和工作流运行时开浏览器那一步同一道闸(见 browser.usable_profile),建图时就拦,不留一张注定跑不起来的图。
+    """
+    from app.domain import browser
+    from app.domain.workflows.from_page import start_from_page as prepare
+
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    if profile_id:
+        browser.usable_profile(db, workspace_id, profile_id, actor=user.id)
+    return prepare(
+        db, workspace_id=workspace_id, template_id=template_id, url=url, profile_id=profile_id or None,
+        user_id=user.id, locale=locale,
+    )
+
+
 def list_workflows(db: Session, user: User, workspace_id: str) -> list[Workflow]:
     ensure_workspace_access(db, user, workspace_id)
     return _list(db, workspace_id)

@@ -335,6 +335,33 @@ describe("存成笔记", () => {
   });
 });
 
+describe("用当前页开工", () => {
+  it("模板:用当前页链接和当前档案建好(或打开)那张图,收起浏览器跳过去", async () => {
+    api.startWorkflowFromPage.mockResolvedValue({ id: "wf-1", name: "自媒体视频爆款拆解" });
+    show();
+    fireEvent.click(toolButton("start"));
+    fireEvent.click(choiceButton("viral_video_breakdown"));
+    await waitFor(() => expect(links.gotoRecord).toHaveBeenCalledWith("/workflows", "mosael:open-workflow", "wf-1"));
+    expect(api.startWorkflowFromPage).toHaveBeenCalledWith({
+      workspace_id: "ws", template_id: "viral_video_breakdown", url: PAGE.url, profile_id: "p1",
+    });
+    expect(hideView).toHaveBeenCalled();
+  });
+
+  it("交给智能体:新开一条对话,带上链接和标题,不替他发送", async () => {
+    agent.startNewAgentSession.mockResolvedValue({ id: "s-1" });
+    show();
+    fireEvent.click(toolButton("start"));
+    fireEvent.click(choiceButton("agent"));
+    await waitFor(() => expect(links.gotoRecord).toHaveBeenCalledWith("/ai"));
+    expect(agent.startNewAgentSession).toHaveBeenCalledWith(expect.anything(), "ws");
+    const [event, text] = links.emitOpenEvent.mock.calls[0];
+    expect(event).toBe("mosael:agent-draft");
+    expect(text).toContain(PAGE.url);
+    expect(text).toContain(PAGE.title);
+  });
+});
+
 it("选了一项就收回去,工具马上又点得到(连着截两张不用先收起)", async () => {
   show();
   fireEvent.click(toolButton("shot"));

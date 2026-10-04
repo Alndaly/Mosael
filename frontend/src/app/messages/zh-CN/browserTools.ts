@@ -10,6 +10,11 @@ export const browserTools = {
   browserToolsNote: "存成笔记",
   browserToolsNoteArticle: "整页正文",
   browserToolsNoteSelection: "选中的文字",
+  browserToolsStart: "用当前页开工",
+  browserToolsTemplateViral: "视频爆款拆解",
+  browserToolsTemplateAccount: "账号运营诊断",
+  browserToolsTemplateComments: "评论区洞察",
+  browserToolsAgent: "交给智能体",
   browserToolsCollapse: "收起",
   browserToolsClose: "关闭",
   browserToolsWorking: "正在处理…",
@@ -53,4 +58,6 @@ export const browserTools = {
   browserToolsImageUnavailable: "取不到",
   browserToolsNoteSaved: "已存成笔记",
   browserToolsNoSelection: "先在页面上选中一段文字",
+  browserToolsWorkflowReady: "已用当前页填好「{name}」,检查一下就能运行",
+  browserToolsAgentDraft: "帮我看看这个网页:",
 } as const;

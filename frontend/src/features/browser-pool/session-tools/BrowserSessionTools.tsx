@@ -1,16 +1,21 @@
 import React from "react";
 import {
   BookmarkPlus,
+  Bot,
   Camera,
   Crop,
   FileText,
   Film,
   Images,
   Loader2,
+  MessageSquareText,
   Monitor,
   PanelTop,
+  Play,
   ScanText,
   TextSelect,
+  TrendingUp,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -28,12 +33,19 @@ import type { PageInfo, PageToolsBridge } from "./pageActions";
 import { useImageTools } from "./useImageTools";
 import { useNoteTools } from "./useNoteTools";
 import { useShotTools } from "./useShotTools";
+import { PAGE_TEMPLATES, useStartTools } from "./useStartTools";
 import { useToolNotice } from "./useToolNotice";
 import { useVideoTools } from "./useVideoTools";
 import { useViewProfile } from "./viewProfile";
 
-type Group = "shot" | "note" | null;
+type Group = "shot" | "note" | "start" | null;
 type Drawer = "video" | "images" | null;
+
+const TEMPLATE_LOOK: Record<(typeof PAGE_TEMPLATES)[number], { label: MessageKey; icon: React.ReactNode }> = {
+  viral_video_breakdown: { label: "browserToolsTemplateViral", icon: <TrendingUp /> },
+  account_analysis: { label: "browserToolsTemplateAccount", icon: <UserRound /> },
+  comment_insights: { label: "browserToolsTemplateComments", icon: <MessageSquareText /> },
+};
 
 /**
  * 浏览器会话顶栏的**页面工具区**:用户在前台这一页上点出来的采集与开工动作。
@@ -83,7 +95,8 @@ function SessionTools({
   const video = useVideoTools(tools, workspaceId, page, profileId, notice);
   const images = useImageTools(tools, workspaceId, notice);
   const note = useNoteTools(tools, workspaceId, notice);
-  const busy = shot.busy || note.isPending;
+  const start = useStartTools(workspaceId, page, profileId, notice);
+  const busy = shot.busy || note.isPending || start.busy;
 
   const openDrawer = (next: Drawer) => {
     setGroup(null);
@@ -182,12 +195,20 @@ function SessionTools({
             {choice("article", <ScanText />, "browserToolsNoteArticle", () => note.mutate("article"))}
             {choice("selection", <TextSelect />, "browserToolsNoteSelection", () => note.mutate("selection"))}
           </>
+        ) : group === "start" ? (
+          <>
+            {PAGE_TEMPLATES.map((id) =>
+              choice(id, TEMPLATE_LOOK[id].icon, TEMPLATE_LOOK[id].label, () => start.template.mutate(id)),
+            )}
+            {choice("agent", <Bot />, "browserToolsAgent", () => start.agent.mutate())}
+          </>
         ) : (
           <>
             {tool("shot", <Camera />, "browserToolsShot", () => setGroup("shot"))}
             {tool("video", <Film />, "browserToolsVideo", () => openDrawer("video"), drawer === "video")}
             {tool("images", <Images />, "browserToolsImages", () => openDrawer("images"), drawer === "images")}
             {tool("note", <FileText />, "browserToolsNote", () => setGroup("note"))}
+            {tool("start", <Play />, "browserToolsStart", () => setGroup("start"))}
           </>
         )}
         {group && (

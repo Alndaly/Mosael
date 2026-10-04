@@ -54,6 +54,19 @@ export function createWorkflow(body: {
   return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * 内嵌浏览器顶栏「用当前页开工」:建好(或打开已建的)那张分析模板,当前页的链接填进开始节点,数据来源选内嵌浏览器、
+ * 读页面用当前这个浏览器档案。不替他点运行。
+ */
+export function startWorkflowFromPage(body: {
+  workspace_id: string;
+  template_id: WorkflowTemplateId;
+  url: string;
+  profile_id: string | null;
+}): Promise<Workflow> {
+  return api<Workflow>("/api/workflows/from-page", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function getWorkflow(workflowId: string): Promise<Workflow> {
   return api<Workflow>(`/api/workflows/${workflowId}`);
 }

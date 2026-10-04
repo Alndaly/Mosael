@@ -21,6 +21,15 @@ class WorkflowCreate(ApiModel):
     template_id: str | None = Field(default=None, max_length=80)
 
 
+class WorkflowFromPage(ApiModel):
+    """内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。"""
+
+    workspace_id: str
+    template_id: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=2000, pattern=r"^https?://")
+    profile_id: str | None = Field(default=None, max_length=64)
+
+
 class WorkflowUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=2000)

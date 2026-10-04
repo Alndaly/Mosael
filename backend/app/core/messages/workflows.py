@@ -257,6 +257,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_nodeIdExists": {"zh": "节点 id 已存在:{id}", "en": "A node with id {id} already exists"},
     "wfErr_unknownGraphOp": {"zh": "不支持的图操作:{kind}", "en": "Unsupported graph operation: {kind}"},
     "wfErr_unknownTemplate": {"zh": "未知的内置工作流模板:{id}", "en": "Unknown built-in workflow template: {id}"},
+    "wfErr_pageTemplate": {"zh": "「用当前页开工」只支持视频爆款拆解、账号运营诊断和评论区洞察。", "en": "“Start from this page” supports the viral video breakdown, account diagnosis and comment insights templates."},
     "wfErr_jsonSchemaMismatch": {"zh": "模型返回的 JSON 不符合 Schema:{reason}", "en": "The model's JSON does not match the schema: {reason}"},
     # ---- 工作流节点的下拉选项(wfOpt_<字段>_<值>;wfOpt__<值> 是各字段通用的是/否) ----
     "wfOpt__true": {"zh": "是", "en": "Yes"},

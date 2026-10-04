@@ -117,6 +117,20 @@ async function createAndSelect(qc: QueryClient, workspaceId: string): Promise<Ag
   return created;
 }
 
+/**
+ * 新开一条对话并设为当前 —— 给「从别处带着东西来问智能体」用(内嵌浏览器顶栏「交给智能体」)。
+ * 和会话列表上的「新建」是同一个动作,只是不在 hook 里。
+ */
+export function startNewAgentSession(qc: QueryClient, workspaceId: string): Promise<AgentSession> {
+  return createAndSelect(qc, workspaceId);
+}
+
+/**
+ * 「带着这段话去开一条新对话」的信箱事件(见 lib/deepLink 的 emitOpenEvent):发出的一方往里放草稿,
+ * AI 工作台挂上以后取走、填进输入框。不替他发送 —— 他多半还要说想让智能体做什么。
+ */
+export const AGENT_DRAFT_EVENT = "mosael:agent-draft";
+
 const ensuring = new Map<string, Promise<AgentSession>>();
 
 /**

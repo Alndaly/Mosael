@@ -10,6 +10,11 @@ export const browserTools = {
   browserToolsNote: "Save as note",
   browserToolsNoteArticle: "Whole article",
   browserToolsNoteSelection: "Selected text",
+  browserToolsStart: "Start from this page",
+  browserToolsTemplateViral: "Viral breakdown",
+  browserToolsTemplateAccount: "Account health check",
+  browserToolsTemplateComments: "Comment insights",
+  browserToolsAgent: "Ask the agent",
   browserToolsCollapse: "Collapse",
   browserToolsClose: "Close",
   browserToolsWorking: "Working…",
@@ -53,4 +58,6 @@ export const browserTools = {
   browserToolsImageUnavailable: "Unavailable",
   browserToolsNoteSaved: "Saved as a note",
   browserToolsNoSelection: "Select some text on the page first",
+  browserToolsWorkflowReady: "“{name}” is filled in with this page; check it over and run",
+  browserToolsAgentDraft: "Take a look at this page for me:",
 } as const;
