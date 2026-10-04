@@ -7,6 +7,8 @@ import {
   CircleAlert,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   Grid2x2,
   Grid3x3,
   LayoutGrid,
@@ -108,6 +110,7 @@ const plainName = (name: string) => {
 };
 
 const ACTIVE = new Set(["queued", "running"]);
+const BLUR_SETTINGS = ["on", "off"] as const;
 
 /**
  * 连接标题行上的「模型库」(收起时也在,和「刷新」并排):一颗图标按钮,悬停说它是什么;连接停着时点不了,并说为什么。
@@ -157,6 +160,10 @@ export function ModelLibraryDialog({
   const [sort, setSort] = React.useState<LibrarySort>("name");
   //: 显示方式记在本机(每台电脑屏幕不一样大);默认小卡片 —— 一屏多看几张。
   const [density, setDensity] = usePersistentTab<LibraryDensity>("model-library.density", "small", DENSITIES);
+  //: 「模糊预览图」也记在本机:这台机器的预览图里可能有不适合当众打开的,开没开是看场合的事,不跟着账号走。
+  //: 默认关 —— 设置里没有现成的「敏感内容」开关可以跟,而默认糊着会让第一次打开的人以为图坏了。
+  const [blurSetting, setBlurSetting] = usePersistentTab<"on" | "off">("model-library.blur", "off", BLUR_SETTINGS);
+  const blurred = blurSetting === "on";
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
   const [seed, setSeed] = React.useState<DownloadSeed | null>(null);
   //: 这次打开之后发起的下载(列表里的那份是打开时的快照)。
@@ -288,6 +295,17 @@ export function ModelLibraryDialog({
           }))}
         />
         <DensitySwitch value={density} onChange={setDensity} />
+        <IconButton
+          variant="outline"
+          size="default"
+          aria-pressed={blurred}
+          className={cn("px-3 text-muted-foreground", blurred && "border-primary/40 bg-accent text-primary hover:bg-accent hover:text-primary")}
+          label={t("modelLibraryBlur")}
+          hint={t("modelLibraryBlurHint")}
+          onClick={() => setBlurSetting(blurred ? "off" : "on")}
+        >
+          {blurred ? <EyeOff size={13} /> : <Eye size={13} />}
+        </IconButton>
         {actions}
       </>
     );
@@ -320,7 +338,9 @@ export function ModelLibraryDialog({
     }
     const listLabel = t("modelLibraryTitle").replace("{name}", instance.name);
     if (density === "list") {
-      return <ModelTable label={listLabel} instanceId={instance.id} models={shown} onOpen={(model) => openItem(keyOf(model))} />;
+      return (
+        <ModelTable label={listLabel} instanceId={instance.id} models={shown} blurred={blurred} onOpen={(model) => openItem(keyOf(model))} />
+      );
     }
     return (
       <ul
@@ -336,7 +356,13 @@ export function ModelLibraryDialog({
       >
         {shown.map((model) => (
           <li key={keyOf(model)} className="grid min-w-0">
-            <ModelCard instanceId={instance.id} model={model} large={density === "large"} onOpen={() => openItem(keyOf(model))} />
+            <ModelCard
+              instanceId={instance.id}
+              model={model}
+              large={density === "large"}
+              blurred={blurred}
+              onOpen={() => openItem(keyOf(model))}
+            />
           </li>
         ))}
       </ul>
@@ -377,7 +403,7 @@ export function ModelLibraryDialog({
               </Button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-              <ModelDetailPage instanceId={instance.id} model={detail} />
+              <ModelDetailPage instanceId={instance.id} model={detail} blurred={blurred} />
             </div>
           </div>
         )
@@ -612,19 +638,33 @@ const placeOf = (model: ModelFile) => {
  * 偏上取景(人像的脸在上半截)。名字一行截断、悬停看全名;底模在左、大小在右,位置固定 —— 认不出底模时左边空着,
  * 大小不跟着挪。大卡片多一行:目录(和子目录)、几张工作流在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
  */
-function ModelCard({ instanceId, model, large, onOpen }: { instanceId: string; model: ModelFile; large: boolean; onOpen: () => void }) {
+function ModelCard({
+  instanceId,
+  model,
+  large,
+  blurred,
+  onOpen,
+}: {
+  instanceId: string;
+  model: ModelFile;
+  large: boolean;
+  blurred: boolean;
+  onOpen: () => void;
+}) {
   const t = useI18n();
   const used = model.used_by?.length ?? 0;
   return (
     <article
       data-library-item={keyOf(model)}
       className={cn(
-        "relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
+        "group/thumb relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
         "hover:border-border-strong hover:bg-panel-subtle",
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
-      <ModelThumb instanceId={instanceId} model={model} className="aspect-[3/4] w-full object-[50%_20%]" />
+      <div className="overflow-hidden">
+        <ModelThumb instanceId={instanceId} model={model} blurred={blurred} className="aspect-[3/4] w-full object-[50%_20%]" />
+      </div>
       <div className={cn("grid min-w-0 content-start", large ? "gap-1.5 p-2.5" : "gap-1 p-2")}>
         <h3 className={cn("m-0 min-w-0 font-semibold leading-snug text-foreground", large ? "text-ui-sm" : "text-ui-xs")}>
           <button
@@ -670,11 +710,13 @@ function ModelTable({
   label,
   instanceId,
   models,
+  blurred,
   onOpen,
 }: {
   label: string;
   instanceId: string;
   models: ModelFile[];
+  blurred: boolean;
   onOpen: (model: ModelFile) => void;
 }) {
   const t = useI18n();
@@ -715,10 +757,12 @@ function ModelTable({
               key={keyOf(model)}
               data-library-item={keyOf(model)}
               onClick={() => onOpen(model)}
-              className="cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
+              className="group/thumb cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
             >
               <td className={cell}>
-                <ModelThumb instanceId={instanceId} model={model} compact className="size-9 rounded-md object-[50%_20%]" />
+                <span className="block size-9 overflow-hidden rounded-md">
+                  <ModelThumb instanceId={instanceId} model={model} compact blurred={blurred} className="size-9 object-[50%_20%]" />
+                </span>
               </td>
               <td className={cell}>
                 <button
@@ -810,7 +854,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function ModelDetailPage({ instanceId, model }: { instanceId: string; model: ModelFile }) {
+function ModelDetailPage({ instanceId, model, blurred }: { instanceId: string; model: ModelFile; blurred: boolean }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const meta = useQuery({
@@ -849,7 +893,9 @@ function ModelDetailPage({ instanceId, model }: { instanceId: string; model: Mod
       }
     >
       {model.has_preview && (
-        <ModelThumb instanceId={instanceId} model={model} className="max-h-[420px] w-full rounded-xl object-contain" />
+        <div className="group/thumb overflow-hidden rounded-xl">
+          <ModelThumb instanceId={instanceId} model={model} blurred={blurred} className="max-h-[420px] w-full object-contain" />
+        </div>
       )}
       {triggers.length > 0 && (
         <CatalogSection title={t("modelTriggers")} count={triggers.length}>

@@ -7,6 +7,7 @@
  * - 左边一列目录(按数量排、空的不列,缺的模型和下载记录是钉在底部的特殊项),上下方向键切换,窄窗口收成下拉;
  * - 顶上一条工具条:搜索(写着当前范围有几个)、按底模多选(只列当前目录里有的)、排序;生效的筛选一个个能去掉;
  * - 三档显示方式(大卡片 / 小卡片 / 列表),记在本机;
+ * - 「模糊预览图」开关(这台机器的预览图里可能有不适合当众打开的):默认关,打开后先模糊、悬停或点开看清,记在本机;
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
  * - 点开是详情:底模和凭的是什么、触发词(来自训练标签时说清楚)、在用的工作流、文件头里的元数据;
  * - 工作流缺的模型一键下载:下载框带着地址、目录、文件名,解析之后确认,发起的任务在模型库里看得到进度、能取消;
@@ -200,6 +201,28 @@ describe("模型库", () => {
     expect(within(anima).getAllByRole("cell")[2].textContent).toBe("loras/sub");
     fireEvent.click(within(sdxl).getByRole("button", { name: "sd_xl_base.safetensors" }));
     expect(await screen.findByRole("button", { name: "modelLibraryBack" })).toBeTruthy();
+  });
+
+  it("模糊预览图:默认关;打开后卡片和列表里的预览图都先模糊(悬停 / 聚焦时看清),占位不模糊;记在本机", async () => {
+    await openLibrary();
+    const toggle = screen.getByRole("button", { name: "modelLibraryBlur" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    const detail = () => cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
+    expect(within(detail()).getByRole("img").hasAttribute("data-blurred")).toBe(false);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    const img = within(detail()).getByRole("img");
+    expect(img.hasAttribute("data-blurred")).toBe(true);
+    // 悬停 / 键盘聚焦到这张卡时看清:靠卡片上的 group/thumb
+    expect(detail().querySelector("[data-library-item]")!.className).toContain("group/thumb");
+    expect(document.querySelectorAll("[data-placeholder][data-blurred]")).toHaveLength(0);
+    cleanup();
+
+    window.localStorage.setItem("mosael:tab:model-library.density", "list");
+    const table = await openLibraryAs("table");
+    expect(screen.getByRole("button", { name: "modelLibraryBlur" }).getAttribute("aria-pressed")).toBe("true");
+    const row = table.getAllByRole("row").find((one) => one.textContent?.includes("detail.safetensors"))!;
+    expect(row.querySelector("img")!.hasAttribute("data-blurred")).toBe(true);
   });
 
   it("底模只列当前目录里有的、带数量,可以勾几种(其中任一),勾的时候菜单不关", async () => {

@@ -317,6 +317,8 @@ export const plugins = {
   modelLibraryDensityList: "List",
   modelLibraryColPreview: "Preview",
   modelLibraryColUsed: "In use",
+  modelLibraryBlur: "Blur previews",
+  modelLibraryBlurHint: "Previews start blurred and clear up when you hover or open one. Remembered on this computer only",
   libraryClearAll: "Clear all",
   modelLibraryDownload: "Download model",
   modelLibraryRefresh: "Read again",

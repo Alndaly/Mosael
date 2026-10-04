@@ -58,17 +58,28 @@ export const normModelName = (name: string) => name.replace(/\\/g, "/").trim();
 export const modelBaseName = (name: string) => normModelName(name).split("/").pop() || name;
 export const modelSubFolder = (name: string) => normModelName(name).split("/").slice(0, -1).join("/");
 
+/**
+ * 预览图先模糊(模型库的「模糊预览图」开关)。悬停或键盘聚焦到**外面那一层**(带 `group/thumb` 的卡片、列表行、
+ * 详情里的预览框)时看清。放大一点再模糊:模糊会把边缘晕成半透明,放大后由外层的 `overflow-hidden` 裁掉。
+ */
+const BLURRED =
+  "scale-110 blur-xl transition-[filter,transform] duration-150 motion-reduce:transition-none " +
+  "group-hover/thumb:scale-100 group-hover/thumb:blur-none group-focus-within/thumb:scale-100 group-focus-within/thumb:blur-none";
+
 export function ModelThumb({
   instanceId,
   model,
   className,
   compact = false,
+  blurred = false,
 }: {
   instanceId: string;
   model: Pick<ModelFile, "folder" | "name" | "has_preview">;
   className?: string;
   /** 小图(下拉里那一格、触发器里那一枚):占位只画图标,不写目录名。 */
   compact?: boolean;
+  /** 先模糊,悬停 / 聚焦到外层 `group/thumb` 时看清。占位图标不模糊(那不是预览图)。 */
+  blurred?: boolean;
 }) {
   const t = useI18n();
   const [failed, setFailed] = React.useState(false);
@@ -94,7 +105,8 @@ export function ModelThumb({
       alt={compact ? "" : t("modelPreviewAlt").replace("{name}", modelBaseName(model.name))}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={cn("bg-secondary object-cover", className)}
+      data-blurred={blurred ? "" : undefined}
+      className={cn("bg-secondary object-cover", blurred && BLURRED, className)}
     />
   );
 }

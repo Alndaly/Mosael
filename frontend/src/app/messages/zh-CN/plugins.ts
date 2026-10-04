@@ -322,6 +322,8 @@ export const plugins = {
   modelLibraryDensityList: "列表",
   modelLibraryColPreview: "预览",
   modelLibraryColUsed: "在用",
+  modelLibraryBlur: "模糊预览图",
+  modelLibraryBlurHint: "预览图先模糊,鼠标移上去或点开时看清。只记在这台电脑上",
   libraryClearAll: "清除全部",
   modelLibraryDownload: "下载模型",
   modelLibraryRefresh: "重新读一遍",
