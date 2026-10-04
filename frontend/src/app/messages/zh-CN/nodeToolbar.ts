@@ -89,6 +89,8 @@ export const nodeToolbar = {
   wfIssueOneOfMissing: "{k} 要填一个",
   wfIssueMissingStart: "缺少开始节点,无法运行",
   wfIssueStaleVar: "引用了不存在的节点:{ref}",
+  wfIssueOutputMissing: "引用了「{source}」没有的输出:{ref}。它的输出有 {available}",
+  wfIssueFieldMissing: "{ref} 不在「{source}」声明的结构里:那一层只有 {available}",
   wfRunAlreadyRunning: "正在运行:等这一次跑完,或者先停下它",
   wfIssueBodyEmpty: "里面还没有节点:双击进去至少放一个,空的运行前会被拒",
   wfIssueOutputInBody: "「输出」节点只在最外层算数:放在循环体或子图里,调用方拿不到它的产出",

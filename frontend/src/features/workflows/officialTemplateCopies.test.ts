@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowGraph } from "@/api/client";
+import PORTS from "@/api/generated/workflow-node-ports.json";
 import { analyzeWorkflow, type AnalyzeContext, type RegistryLike } from "@/features/workflows/analyze";
 
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单。
@@ -45,5 +46,16 @@ describe("官方模板的官网副本", () => {
     const { issues } = analyzeWorkflow(graph, EVERY_TYPE_KNOWN, NOTHING_LOADED);
     const unwired = issues.filter((issue) => ["disconnected", "unwired-referenced", "missing-start"].includes(issue.code));
     expect(unwired.map((issue) => `${issue.nodeName}(${issue.nodeId})`)).toEqual([]);
+  });
+
+  //: 按后端导出的真实输出声明(api/generated/workflow-node-ports.json)查:官方模板里每一条 `{{节点.输出}}` 都指得到 ——
+  //: 「引用了没有的输出」不误报(后端 test_references_to_missing_outputs_are_refused 按真目录查同一件事)。
+  it.each(COPIES)("%s:引用的输出都是那个节点真有的", (name) => {
+    const graph = (JSON.parse(readFileSync(join(DIR, name), "utf8")) as { graph: WorkflowGraph }).graph;
+    const declared = new Map(PORTS.map((one) => [one.type, { config: one.config, outputs: one.outputs }]));
+    const real: RegistryLike = { get: (type) => declared.get(type) };
+    const { issues } = analyzeWorkflow(graph, real, NOTHING_LOADED);
+    const missing = issues.filter((issue) => issue.code === "output-missing" || issue.code === "field-missing");
+    expect(missing.map((issue) => `${issue.nodeName}: ${issue.ref}`)).toEqual([]);
   });
 });

@@ -77,6 +77,8 @@ export const nodeToolbar = {
   wfIssueOneOfMissing: "Fill in one of {k}",
   wfIssueMissingStart: "Missing start node — cannot run",
   wfIssueStaleVar: "References a node that doesn't exist: {ref}",
+  wfIssueOutputMissing: "References an output “{source}” doesn't have: {ref}. Its outputs are {available}",
+  wfIssueFieldMissing: "{ref} isn't in the structure “{source}” declares: that level only has {available}",
   wfRunAlreadyRunning: "Already running: wait for this run to finish, or stop it first",
   wfIssueBodyEmpty: "Nothing inside yet: double-click in and add at least one node — an empty body is refused before running",
   wfIssueOutputInBody: "An Output node only counts at the top level: inside a loop or subgraph, nobody receives what it produces",

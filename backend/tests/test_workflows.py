@@ -1423,7 +1423,7 @@ def test_cancel_running_workflow() -> None:
             "nodes": [
                 {"id": "start", "type": "start", "config": {"params": {}}},
                 {"id": "slow", "type": "code", "config": {"code": "import time\ntime.sleep(2)\noutput = {'ok': 1}"}},
-                {"id": "after", "type": "template", "config": {"template": "{{slow.ok}}"}},
+                {"id": "after", "type": "template", "config": {"template": "{{slow.output.ok}}"}},
             ],
             "edges": [
                 {"id": "e1", "source": "start", "target": "slow"},

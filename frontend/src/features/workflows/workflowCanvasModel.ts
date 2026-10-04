@@ -243,6 +243,16 @@ export function workflowIssueText(
       return t("wfIssueCodeTemplate");
     case "code-field-bound":
       return t("wfIssueCodeFieldBound");
+    case "output-missing":
+      return t("wfIssueOutputMissing")
+        .replace("{source}", issue.sourceName ?? "")
+        .replace("{ref}", name(issue.ref))
+        .replace("{available}", (issue.available ?? []).join(t("listSeparator")));
+    case "field-missing":
+      return t("wfIssueFieldMissing")
+        .replace("{source}", issue.sourceName ?? "")
+        .replace("{ref}", name(issue.ref))
+        .replace("{available}", (issue.available ?? []).join(t("listSeparator")));
     case "unknown-type":
       return unknownNodeTypeText(t, issue.nodeType, reasons);
     default:

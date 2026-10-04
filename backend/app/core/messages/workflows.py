@@ -45,6 +45,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{node}」的「{field}」在里面那一层解析,引用了那里看不见的 {refs}:那里只看得见 {allowed} 和里面的节点",
         "en": "“{node}”: “{field}” is resolved inside, where {refs} isn't visible — only {allowed} and the nodes inside are",
     },
+    "wfCheck_outputMissing": {
+        "zh": "「{node}」引用了「{source}」没有的输出 {ref}:它的输出有 {available}",
+        "en": "“{node}” references an output “{source}” doesn't have: {ref}. Its outputs are {available}",
+    },
+    "wfCheck_fieldMissing": {
+        "zh": "「{node}」引用的 {ref} 不在「{source}」声明的结构里:那一层只有 {available}",
+        "en": "“{node}” references {ref}, which isn't in the structure “{source}” declares: that level only has {available}",
+    },
     "wfCheck_unknownType": {"zh": "「{node}」:未知的节点类型 {type}", "en": "“{node}”: unknown node type {type}"},
     "wfCheck_badBranch": {"zh": "「{node}」的分支只能是 {branches}", "en": "“{node}”: the branch can only be {branches}"},
     "wfCheck_cycle": {

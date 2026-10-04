@@ -1,0 +1,697 @@
+{
+  "why": "`{{t.nokey}}`:节点在,而它根本没有这个输出 —— 运行时插值成空串,下游拿着空值照样往下跑(付费生成照样扣费),工作流照样报成功。画布的就绪清单(analyze.ts 的 outputReferenceProblems)和后端运行前检查(graph_rules.output_reference_problems,经 validate_graph)按同一个判据拦,跑这同一份语料。",
+  "rules": [
+    "看的是这一层会插值的 `{{节点.输出…}}`(代码字段、容器节点的 body / output / condition 不算 —— 和 reference_dependencies 同一口径)+ 数据边的 `source_output`(规范化把整格一条的引用升级成的就是数据边),算在边的目标节点头上。",
+    "根不是这一层的节点(作用域名、不存在的节点)不归这条管;只写了节点没写输出(`{{t}}`)不判。",
+    "节点类型不在目录里(插件没装)、目录没说它有哪些输出的,不判 —— 说不清它有什么。开始节点不判 —— 它的输出就是参数,由「开始节点没有这个参数」那条按这一次的参数判。",
+    "输出:节点类型声明的 outputs,`*字段` 按那一格配置的键展开。不在里面 → kind=output,available 是声明的输出(按声明顺序)。",
+    "子路径:只有输出声明了结构写在哪一格(output_schema_from,那一格是 JSON Schema,对象或 JSON 文本)才核对,其余输出底下的路径都是运行时才知道的(代码、HTTP 返回、子工作流、插件的整份返回、没给 Schema 的 JSON),不判。按段往下走:全是数字的段、schema 有 items 就进 items;有 properties 时段在里面就进去,不在里面而 additionalProperties 不是 true / 一份 schema、也没有 patternProperties → kind=field,available 是那一层的 properties(按声明顺序);其余情况(没有 properties、anyOf、$ref……)说不清,不判。",
+    "结果按节点 id、再按引用的写法排序(按码点),同一个节点同一条引用只报一次。"
+  ],
+  "node_types": {
+    "start": {
+      "config": {
+        "params": {
+          "type": "object"
+        }
+      },
+      "outputs": [
+        "*params"
+      ]
+    },
+    "template": {
+      "config": {
+        "template": {
+          "type": "template"
+        }
+      },
+      "outputs": [
+        "text"
+      ]
+    },
+    "llm": {
+      "config": {
+        "prompt": {
+          "type": "template"
+        },
+        "json_schema": {
+          "type": "object"
+        }
+      },
+      "outputs": [
+        "text",
+        "json",
+        "response_format_used"
+      ],
+      "output_schema_from": {
+        "json": "json_schema"
+      }
+    },
+    "code": {
+      "config": {
+        "code": {
+          "type": "code"
+        },
+        "input": {
+          "type": "object"
+        }
+      },
+      "outputs": [
+        "output"
+      ]
+    },
+    "http_request": {
+      "config": {
+        "url": {
+          "type": "template"
+        },
+        "body": {
+          "type": "template"
+        }
+      },
+      "outputs": [
+        "status",
+        "text",
+        "json"
+      ]
+    },
+    "loop_foreach": {
+      "config": {
+        "items": {
+          "type": "template"
+        },
+        "inputs": {
+          "type": "object"
+        },
+        "body": {
+          "type": "graph"
+        },
+        "output": {
+          "type": "template"
+        }
+      },
+      "outputs": [
+        "results",
+        "count",
+        "dropped",
+        "failed",
+        "failure_note"
+      ],
+      "body_scope": {
+        "loop": [
+          "item",
+          "index"
+        ],
+        "input": [
+          "*inputs"
+        ]
+      }
+    },
+    "plugin.demo.lookup": {
+      "config": {
+        "query": {
+          "type": "template"
+        }
+      },
+      "outputs": [
+        "title",
+        "author"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "节点在、输出不在 —— 拦,列出它有的输出",
+      "graph": {
+        "nodes": [
+          {
+            "id": "t",
+            "type": "template",
+            "config": {
+              "template": "x"
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{t.nokey}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "t",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "u",
+          "ref": "{{t.nokey}}",
+          "source": "t",
+          "kind": "output",
+          "available": [
+            "text"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "声明了的输出、整个节点 —— 放行",
+      "graph": {
+        "nodes": [
+          {
+            "id": "t",
+            "type": "template",
+            "config": {
+              "template": "x"
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{t.text}} {{t}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "t",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": []
+    },
+    {
+      "name": "大模型给了 Schema:子字段按 Schema 核对,拼错的拦,列出那一层有的",
+      "graph": {
+        "nodes": [
+          {
+            "id": "judge",
+            "type": "llm",
+            "config": {
+              "prompt": "p",
+              "json_schema": {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "shots": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prompt": {
+                          "type": "string"
+                        },
+                        "duration": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "id": "ok",
+            "type": "template",
+            "config": {
+              "template": "{{judge.json.verdict}} {{judge.json.shots.0.prompt}} {{judge.json.shots}}"
+            }
+          },
+          {
+            "id": "typo",
+            "type": "template",
+            "config": {
+              "template": "{{judge.json.verdikt}} {{judge.json.shots.0.promt}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "judge",
+            "target": "ok"
+          },
+          {
+            "id": "e2",
+            "source": "judge",
+            "target": "typo"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "typo",
+          "ref": "{{judge.json.shots.0.promt}}",
+          "source": "judge",
+          "kind": "field",
+          "available": [
+            "prompt",
+            "duration"
+          ]
+        },
+        {
+          "node": "typo",
+          "ref": "{{judge.json.verdikt}}",
+          "source": "judge",
+          "kind": "field",
+          "available": [
+            "verdict",
+            "score",
+            "shots"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Schema 写成 JSON 文本也认;没写 additionalProperties 的对象,没列出的字段照样拦",
+      "graph": {
+        "nodes": [
+          {
+            "id": "judge",
+            "type": "llm",
+            "config": {
+              "prompt": "p",
+              "json_schema": "{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}}}"
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{judge.json.title}} {{judge.json.tittle}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "judge",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "u",
+          "ref": "{{judge.json.tittle}}",
+          "source": "judge",
+          "kind": "field",
+          "available": [
+            "title"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Schema 说了允许别的字段 / 没给 Schema / 说不清的结构 —— 子字段不判",
+      "graph": {
+        "nodes": [
+          {
+            "id": "open",
+            "type": "llm",
+            "config": {
+              "prompt": "p",
+              "json_schema": {
+                "type": "object",
+                "properties": {
+                  "a": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          {
+            "id": "free",
+            "type": "llm",
+            "config": {
+              "prompt": "p"
+            }
+          },
+          {
+            "id": "union",
+            "type": "llm",
+            "config": {
+              "prompt": "p",
+              "json_schema": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{open.json.b}} {{free.json.any.deep.path}} {{union.json.x}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "open",
+            "target": "u"
+          },
+          {
+            "id": "e2",
+            "source": "free",
+            "target": "u"
+          },
+          {
+            "id": "e3",
+            "source": "union",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": []
+    },
+    {
+      "name": "动态输出底下的路径(代码、HTTP 返回)不判;顶层的输出名照样核对",
+      "graph": {
+        "nodes": [
+          {
+            "id": "c",
+            "type": "code",
+            "config": {
+              "code": "output = 1",
+              "input": {}
+            }
+          },
+          {
+            "id": "h",
+            "type": "http_request",
+            "config": {
+              "url": "https://example.com"
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{c.output.anything}} {{h.json.data.items}} {{c.result}} {{h.body}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "c",
+            "target": "u"
+          },
+          {
+            "id": "e2",
+            "source": "h",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "u",
+          "ref": "{{c.result}}",
+          "source": "c",
+          "kind": "output",
+          "available": [
+            "output"
+          ]
+        },
+        {
+          "node": "u",
+          "ref": "{{h.body}}",
+          "source": "h",
+          "kind": "output",
+          "available": [
+            "status",
+            "text",
+            "json"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "插件节点按它声明的输出核对;没装的插件节点不判",
+      "graph": {
+        "nodes": [
+          {
+            "id": "p",
+            "type": "plugin.demo.lookup",
+            "config": {
+              "query": "q"
+            }
+          },
+          {
+            "id": "gone",
+            "type": "plugin.removed.tool",
+            "config": {}
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{p.title}} {{p.titel}} {{gone.whatever}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "p",
+            "target": "u"
+          },
+          {
+            "id": "e2",
+            "source": "gone",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "u",
+          "ref": "{{p.titel}}",
+          "source": "p",
+          "kind": "output",
+          "available": [
+            "title",
+            "author"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "开始节点的参数不归这条管;引用不存在的节点不归这条管",
+      "graph": {
+        "nodes": [
+          {
+            "id": "start",
+            "type": "start",
+            "config": {
+              "params": {
+                "topic": "猫"
+              }
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": "{{start.topic}} {{start.nope}} {{ghost.text}}"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "start",
+            "target": "u"
+          }
+        ]
+      },
+      "problems": []
+    },
+    {
+      "name": "数据边的 source_output 也核对,算在边的目标节点头上",
+      "graph": {
+        "nodes": [
+          {
+            "id": "t",
+            "type": "template",
+            "config": {
+              "template": "x"
+            }
+          },
+          {
+            "id": "u",
+            "type": "template",
+            "config": {
+              "template": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "t",
+            "target": "u"
+          },
+          {
+            "id": "d1",
+            "source": "t",
+            "target": "u",
+            "kind": "data",
+            "source_output": "txt",
+            "target_input": "template"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "u",
+          "ref": "{{t.txt}}",
+          "source": "t",
+          "kind": "output",
+          "available": [
+            "text"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "代码字段不插值,容器的 body / output 属于体内 —— 这一层不判",
+      "graph": {
+        "nodes": [
+          {
+            "id": "t",
+            "type": "template",
+            "config": {
+              "template": "x"
+            }
+          },
+          {
+            "id": "c",
+            "type": "code",
+            "config": {
+              "code": "print('{{t.nokey}}')",
+              "input": {
+                "v": "{{t.text}}"
+              }
+            }
+          },
+          {
+            "id": "loop",
+            "type": "loop_foreach",
+            "config": {
+              "items": "{{t.text}}",
+              "inputs": {},
+              "output": "{{t.nokey}}",
+              "body": {
+                "nodes": [
+                  {
+                    "id": "b",
+                    "type": "template",
+                    "config": {
+                      "template": "{{t.nokey}}"
+                    }
+                  }
+                ],
+                "edges": []
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "t",
+            "target": "c"
+          },
+          {
+            "id": "e2",
+            "source": "t",
+            "target": "loop"
+          }
+        ]
+      },
+      "problems": []
+    },
+    {
+      "name": "同一个节点的同一条引用写了两遍只报一次;循环的 inputs 在这一层解析,照样核对",
+      "graph": {
+        "nodes": [
+          {
+            "id": "t",
+            "type": "template",
+            "config": {
+              "template": "x"
+            }
+          },
+          {
+            "id": "loop",
+            "type": "loop_foreach",
+            "config": {
+              "items": "{{t.texts}}",
+              "inputs": {
+                "v": "{{t.texts}}"
+              },
+              "body": {
+                "nodes": [
+                  {
+                    "id": "b",
+                    "type": "template",
+                    "config": {
+                      "template": "{{input.v}}"
+                    }
+                  }
+                ],
+                "edges": []
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "t",
+            "target": "loop"
+          }
+        ]
+      },
+      "problems": [
+        {
+          "node": "loop",
+          "ref": "{{t.texts}}",
+          "source": "t",
+          "kind": "output",
+          "available": [
+            "text"
+          ]
+        }
+      ]
+    }
+  ]
+}

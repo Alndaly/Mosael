@@ -33,6 +33,8 @@ export type IssueCode =
   | "body-empty" // 循环体 / 子图里一个节点都没有(后端 validate_body_graph 拒)
   | "output-in-body" // 「输出」节点放在体里:工作流的输出只在最外层算数
   | "scope-field-missing" // 体内引用了作用域没有的字段,如 {{loop.不存在}}(作用域只提供固定几个)
+  | "output-missing" // 引用的节点在,而它没有这个输出({{t.nokey}}):后端运行前拒(wfCheck_outputMissing)
+  | "field-missing" // 输出声明了结构(output_schema_from),引用的子字段不在里面:后端运行前拒(wfCheck_fieldMissing)
   | "unknown-type"; // 节点类型不在目录里:提供它的插件没装 / 停用了 / 工具已不存在
 
 export interface NodeIssue {
@@ -55,8 +57,11 @@ export interface NodeIssue {
   referencedBy?: string[];
   /** unwired-referenced:引用的写法(`{{props.catalog}}`),拼进文案。 */
   refs?: string[];
-  /** scope-field-missing:这个作用域实际提供的那几个(`loop.item`、`loop.index`),拼进文案。 */
+  /** scope-field-missing:这个作用域实际提供的那几个(`loop.item`、`loop.index`);output-missing:被引用的节点有的输出
+   *  (界面上的名字);field-missing:那一层结构里有的字段。拼进文案。 */
   available?: string[];
+  /** output-missing / field-missing:被引用的那个节点叫什么(同 nodeName 的取法)。 */
+  sourceName?: string;
   /** type-mismatch:期望/实际类型,拼进文案。 */
   expected?: DataType;
   actual?: DataType;
@@ -123,6 +128,10 @@ interface ConfigSpecLike {
 interface NodeMetaLike {
   /** 节点类型的显示名(按界面语言,后端发下来)。节点没起名时,就绪清单用它叫这个节点 —— 和后端运行前检查同一个取法。 */
   label?: string;
+  /** 这种节点有哪些输出(`*字段` 按那一格配置的键展开)。**由后端声明**;没给就不判引用的输出在不在。 */
+  outputs?: readonly string[];
+  /** 哪个输出的结构写在哪一格配置里(那一格是 JSON Schema):引用它的子字段按 schema 核对。 */
+  output_schema_from?: Record<string, string>;
   // registry 的 config 值在 OpenAPI 里是 unknown;取用时按 ConfigSpecLike 收窄。
   config?: Record<string, unknown>;
   /** 「这几个字段里至少要有一个」。**由后端声明**,不在这里按节点名写死 —— 见下面的说明。 */
@@ -350,6 +359,109 @@ export interface NeverRunReference {
 
 const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
+/** 一条指不到的输出引用(见 outputReferenceProblems)。 */
+export interface OutputReferenceProblem {
+  /** 引用方(写了这条引用的节点;数据边算在目标节点头上)。 */
+  node: string;
+  /** 引用的写法(`{{t.nokey}}`)。 */
+  ref: string;
+  /** 被引用的那个节点。 */
+  source: string;
+  /** output:它没有这个输出;field:输出声明了结构(output_schema_from),那一段不在结构里。 */
+  kind: "output" | "field";
+  /** output:它声明的输出(按声明顺序);field:那一层结构里有的字段(按声明顺序)。 */
+  available: string[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** 一格 JSON Schema 配置:对象原样,JSON 文本解析一次;别的说不清。 */
+function schemaOf(value: unknown): unknown {
+  if (typeof value === "string" && value.trim()) {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  return value;
+}
+
+/** 沿着 `path` 在 Schema 里往下走;走到某一段说「没有这个字段」就交回那一层有的字段,说不清就是 null。 */
+function schemaFieldProblem(schema: unknown, path: readonly string[]): string[] | null {
+  let current = schema;
+  for (const part of path) {
+    if (!isRecord(current)) return null;
+    if (/^\d+$/.test(part) && isRecord(current.items)) {
+      current = current.items;
+      continue;
+    }
+    const properties = current.properties;
+    if (!isRecord(properties)) return null;
+    if (Object.hasOwn(properties, part)) {
+      current = properties[part];
+      continue;
+    }
+    const extra = current.additionalProperties;
+    const patterns = current.patternProperties;
+    if (extra === true || isRecord(extra) || (isRecord(patterns) && Object.keys(patterns).length > 0)) return null;
+    return Object.keys(properties);
+  }
+  return null;
+}
+
+/**
+ * 一条引用(按点号拆开,根是 `node`)指得到吗。指不到交回 kind 和可选的;说不清的是 null:类型不认识(插件没装)或
+ * 目录没说它有哪些输出、开始节点(它的输出就是参数,由 start-param-missing 按参数判)、动态输出底下的路径(代码、HTTP
+ * 返回、子工作流、插件的整份返回……)。和后端 graph_rules.output_problem 同一条。
+ */
+export function outputProblem(
+  parts: readonly string[],
+  node: WorkflowNodeLike,
+  registry: RegistryLike,
+): { kind: "output" | "field"; available: string[] } | null {
+  const meta = registry.get(node.type);
+  if (!meta?.outputs || node.type === "start" || parts.length < 2) return null;
+  const config = (node.config ?? {}) as Record<string, unknown>;
+  const outputs = declaredFieldNames(meta.outputs ?? [], config);
+  if (!outputs.includes(parts[1])) return { kind: "output", available: outputs };
+  const schemaField = meta.output_schema_from?.[parts[1]];
+  if (!schemaField || parts.length < 3) return null;
+  const available = schemaFieldProblem(schemaOf(config[schemaField]), parts.slice(2));
+  return available ? { kind: "field", available } : null;
+}
+
+/**
+ * 这一层里**指不到的输出引用**:节点在,而它没有这个输出(或者输出声明了结构、那个字段不在里面)。运行时这种引用
+ * 插值成空串,下游拿着空值照样跑。和后端 graph_rules.output_reference_problems 跑同一份语料
+ * contracts/workflow-output-reference-cases.json。引用 = layerReferences + 数据边的 source_output(算在目标节点头上)。
+ */
+export function outputReferenceProblems(graph: WorkflowGraph, registry: RegistryLike): OutputReferenceProblem[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const found = new Map<string, OutputReferenceProblem>();
+  const note = (target: string, parts: string[]) => {
+    const source = byId.get(parts[0]);
+    if (!source) return;
+    const problem = outputProblem(parts, source, registry);
+    if (!problem) return;
+    const ref = `{{${parts.join(".")}}}`;
+    const key = JSON.stringify([target, ref]);
+    if (!found.has(key)) found.set(key, { node: target, ref, source: parts[0], ...problem });
+  };
+  for (const node of graph.nodes) {
+    for (const { ref } of layerReferences(node, registry)) note(node.id, ref.slice(2, -2).trim().split("."));
+  }
+  for (const edge of graph.edges) {
+    if (edge.kind === "data" && edge.source_output && byId.has(edge.target)) {
+      note(edge.target, [edge.source, ...edge.source_output.split(".")]);
+    }
+  }
+  return [...found.values()].sort((a, b) => byCodeUnit(a.node, b.node) || byCodeUnit(a.ref, b.ref));
+}
+
+
 /**
  * **会跑的节点引用了一定不会跑的节点** —— 那个引用跑起来只会是空串,而工作流照样报成功。后端运行前拦
  * (wfErr_referencesNeverRunNode),画布在被引用的节点上标 error(unwired-referenced)、把那条引用画成错误色的虚线。
@@ -500,6 +612,12 @@ function collect(
     );
     const innerScope = meta?.body_scope ?? {};
     const innerNames = new Set([...innerIds, ...bodyScope(registry, node.type)]);
+    const innerNodes =
+      innerGraph && typeof innerGraph === "object" && Array.isArray((innerGraph as WorkflowGraph).nodes)
+        ? (innerGraph as WorkflowGraph).nodes
+        : [];
+    const innerById = new Map(innerNodes.map((inner) => [inner.id, inner]));
+    const innerDisplay = layerDisplayNames(innerNodes, registry);
     // 体是空的(还没建、或一个节点都没有):后端运行前拒。刚拖出来的循环节点就是这样。
     if (bodyField && innerIds.size === 0) push("error", "body-empty", { configKey: bodyField });
 
@@ -526,6 +644,17 @@ function collect(
           if (!innerNames.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
           const available = missingScopeField(innerScope, innerIds, sourceId, refField(ref));
           if (available) push("error", "scope-field-missing", { configKey: key, ref, available });
+          // 引用体里节点的输出:输出得在、声明的结构里得有那个字段(和后端 _container_output_errors 同一条)。
+          const inner = innerById.get(sourceId);
+          const problem = inner ? outputProblem(ref.slice(2, -2).trim().split("."), inner, registry) : null;
+          if (inner && problem) {
+            push("error", problem.kind === "output" ? "output-missing" : "field-missing", {
+              configKey: key,
+              ref,
+              sourceName: innerDisplay.get(inner.id),
+              available: outputAvailable(problem, inner, registry),
+            });
+          }
         }
         continue;
       }
@@ -624,8 +753,32 @@ function collect(
     }
   }
 
-  // 数据边:软类型校验(不阻断)。目标输入是强类型槽、上游输出类型又对不上时给提醒。
+  // 节点在、输出不在(`{{t.nokey}}`),或者输出声明了结构、那个字段不在里面 —— 运行时插值成空串。后端运行前拒,这里同一个判据
+  // (outputReferenceProblems,契约 contracts/workflow-output-reference-cases.json)。挂在引用方身上。
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  for (const problem of outputReferenceProblems(graph, registry)) {
+    const target = nodeById.get(problem.node)!;
+    const source = nodeById.get(problem.source)!;
+    const ownName = layerNames.get(target.id) ?? nodeDisplayName(target, registry);
+    const located = layerReferences(target, registry).find((one) => one.ref === problem.ref);
+    const edge = graph.edges.find(
+      (one) => one.kind === "data" && one.target === target.id && `{{${one.source}.${one.source_output}}}` === problem.ref,
+    );
+    issues.push({
+      nodeId: target.id,
+      path,
+      nodeName: insideName ? `${insideName} › ${ownName}` : ownName,
+      nodeType: target.type,
+      severity: "error",
+      code: problem.kind === "output" ? "output-missing" : "field-missing",
+      configKey: located?.targetInput.split(".")[0] ?? edge?.target_input ?? undefined,
+      ref: problem.ref,
+      sourceName: layerNames.get(source.id),
+      available: outputAvailable(problem, source, registry),
+    });
+  }
+
+  // 数据边:软类型校验(不阻断)。目标输入是强类型槽、上游输出类型又对不上时给提醒。
   for (const edge of graph.edges) {
     if (edge.kind !== "data" || !edge.source_output || !edge.target_input) continue;
     const source = nodeById.get(edge.source);
@@ -663,6 +816,16 @@ function collect(
     }
   }
 
+}
+
+/** 提示里列的可选项:输出按界面上的名字(没有就用键),结构里的字段按原名。 */
+function outputAvailable(
+  problem: { kind: "output" | "field"; available: string[] },
+  source: WorkflowNodeLike,
+  registry: RegistryLike,
+): string[] {
+  if (problem.kind === "field") return problem.available;
+  return problem.available.map((key) => outputLabel(registry, source.type, key) || key);
 }
 
 export function analyzeWorkflow(

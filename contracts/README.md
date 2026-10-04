@@ -284,6 +284,23 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 浏览器,画布上什么都不说。语料钉住的几件不显眼的事:空着的不归这条管(必填的由必填说);值按文字比(默认值敲 3
 存成数字 3,和选项的值 `"3"` 是同一个)。
 
+### `workflow-output-reference-cases.json` —— 引用了一个节点没有的输出
+
+「这一层图里哪些 `{{节点.输出…}}` 指不到:节点在,而它没有这个输出;或者输出声明了结构(大模型的 JSON Schema),
+引用的子字段不在里面。」运行时这种引用插值成空串,下游拿着空值照样跑。后端运行前拦,画布在引用方身上标 error。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 运行前检查(后端) | `backend/app/domain/workflows/graph_rules.py` 的 `output_reference_problems`(经 `validate_graph`) | `backend/tests/test_workflow_output_reference_parity.py` |
+| 画布就绪检查(前端) | `frontend/src/features/workflows/analyze.ts` 的 `outputReferenceProblems` | `outputReferences.parity.test.ts` |
+
+语料钉住的是**哪些不判**:动态输出底下的路径(代码的 output、HTTP 的 json、子工作流 / 插件的整份返回、没给 Schema
+的大模型 json —— 键运行时才知道)、没装的插件节点、开始节点(它的输出就是参数,另有一条按这一次的参数判)、Schema
+允许别的字段或说不清结构的(anyOf、`additionalProperties: true`)。误报一次,用户就会学会无视这条红。
+
+**建立契约之前**:两侧都只核对「节点在不在」。上游改了输出名、或者手写时拼错一个键,画布全绿、后端照跑,
+工作流报成功而那一格是空的。
+
 ### `shared-constants.json` —— 共享常量
 
 几个「两个运行时都要认、而谁也不拥有」的值。不一致时**都不会报错**,只会悄悄错开:发布账号的

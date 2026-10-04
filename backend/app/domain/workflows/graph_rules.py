@@ -19,6 +19,7 @@ from app.domain.workflows.node_types import (
     field_name,
     layer_titles,
     node_title,
+    output_label,
     reference_label,
 )
 
@@ -439,6 +440,10 @@ def validate_graph(
             errors.extend(_unresolved_reference_errors(nodes, edges, title, known_types))
     else:
         errors.extend(tr("wfCheck_startInBody", node=title(node)) for node in starts)
+    #: 节点在、输出不在(`{{t.nokey}}`),或者输出声明了结构、那个字段不在里面 —— 运行时插值成空串。和上面那条一样只在
+    #: **运行前**查;每一层(顶层、循环体、子图)各查各的,判据和画布同一条(见 output_reference_problems)。
+    if require_config:
+        errors.extend(_output_reference_errors(graph, title, titles, known_types))
     #: **会跑的节点引用了一定不会跑的节点**(没接进流程):那个引用跑起来只会是空串,工作流照样报成功 ——
     #: 「从主题到完整视频」的「可用的 3D 道具」从模板 v8 到 v11 一次都没跑过,画布上只挂着一个黄色提醒。
     #: 只在**运行前**(require_config)拦:保存不拦,旧图照样存得下、打得开,用户才连得上它、或者按新版重建。
@@ -557,6 +562,131 @@ def _unresolved_reference_errors(
     return errors
 
 
+def declared_outputs(node: dict[str, Any], meta: dict[str, Any]) -> list[str]:
+    """这个节点有哪些输出:类型声明的 outputs,`*字段` 按那一格配置的键展开(和画布 scope.declaredFieldNames 同一条)。"""
+    config = node.get("config") if isinstance(node.get("config"), dict) else {}
+    names: list[str] = []
+    for output in meta.get("outputs") or []:
+        output = str(output)
+        if output.startswith("*"):
+            value = config.get(output[1:])
+            if isinstance(value, dict):
+                names.extend(str(key) for key in value)
+        else:
+            names.append(output)
+    return names
+
+
+def _schema_of(value: Any) -> Any:
+    """一格 JSON Schema 配置:对象原样,JSON 文本解析一次;别的说不清(None)。"""
+    if isinstance(value, str) and value.strip():
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return value
+
+
+def _schema_field_problem(schema: Any, path: list[str]) -> list[str] | None:
+    """沿着 `path` 在 JSON Schema 里往下走;走到某一段说「没有这个字段」就交回那一层有的字段,说不清就是 None。"""
+    for part in path:
+        if not isinstance(schema, dict):
+            return None
+        if part.isdigit() and isinstance(schema.get("items"), dict):
+            schema = schema["items"]
+            continue
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return None
+        if part in properties:
+            schema = properties[part]
+            continue
+        extra, patterns = schema.get("additionalProperties"), schema.get("patternProperties")
+        if extra is True or isinstance(extra, dict) or (isinstance(patterns, dict) and patterns):
+            return None
+        return [str(key) for key in properties]
+    return None
+
+
+def output_problem(parts: list[str], node: dict[str, Any], types: dict[str, dict[str, Any]]) -> tuple[str, list[str]] | None:
+    """一条引用(按点号拆开,根是 `node`)指得到吗。指不到交回 (kind, 可选的):`output` = 没有这个输出,`field` = 输出
+    声明了结构(output_schema_from)而那一段不在结构里。说不清的是 None:类型不认识(插件没装)或目录没说它有哪些输出、
+    开始节点(它的输出就是参数,另有一条按这一次的参数判)、动态输出底下的路径(代码、HTTP 返回、子工作流、插件的整份返回……)。
+    和画布 analyze.ts 的 outputProblem 同一条(契约 contracts/workflow-output-reference-cases.json)。"""
+    meta = types.get(str(node.get("type") or ""))
+    if meta is None or "outputs" not in meta or node.get("type") == "start" or len(parts) < 2:
+        return None
+    outputs = declared_outputs(node, meta)
+    if parts[1] not in outputs:
+        return "output", outputs
+    schema_field = (meta.get("output_schema_from") or {}).get(parts[1])
+    if not schema_field or len(parts) < 3:
+        return None
+    config = node.get("config") if isinstance(node.get("config"), dict) else {}
+    available = _schema_field_problem(_schema_of(config.get(schema_field)), parts[2:])
+    return ("field", available) if available is not None else None
+
+
+def output_reference_problems(graph: dict[str, Any], types: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """这一层里**指不到的输出引用**:节点在,而它没有这个输出(或者输出声明了结构、那个字段不在里面)。运行时这种引用
+    插值成空串,下游拿着空值照样跑、照样扣费,工作流照样报成功。
+
+    和画布的 analyze.ts outputReferenceProblems 跑同一份语料 contracts/workflow-output-reference-cases.json:运行前拦不拦、
+    画布标不标,是同一个判据。引用 = 这一层会插值的 `{{节点.…}}`(同 reference_dependencies 的口径)+ 数据边的
+    source_output(算在边的目标节点头上)。按节点 id、引用写法排序,同一条只报一次。
+    """
+    known = types or NODE_TYPES
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    by_id = {str(node.get("id", "")): node for node in nodes}
+    found: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def note(target: str, parts: list[str]) -> None:
+        source = by_id.get(parts[0])
+        problem = output_problem(parts, source, known) if source is not None else None
+        if problem is None:
+            return
+        ref = "{{" + ".".join(parts) + "}}"
+        found.setdefault((target, ref), {
+            "node": target, "ref": ref, "source": parts[0], "kind": problem[0], "available": problem[1],
+        })
+
+    for node in nodes:
+        for parts in _outer_references(node):
+            note(str(node.get("id", "")), parts)
+    for edge in graph.get("edges") or []:
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("source_output"):
+            target = str(edge.get("target", ""))
+            if target in by_id:
+                note(target, [str(edge.get("source", "")), *str(edge["source_output"]).split(".")])
+    return [found[key] for key in sorted(found)]
+
+
+def _output_problem_message(
+    who: str, ref: str, source: dict[str, Any], kind: str, available: list[str],
+    titles: dict[str, str], by_id: dict[str, dict[str, Any]], types: dict[str, dict[str, Any]],
+) -> str:
+    """一条指不到的输出引用说成一句话:谁引用了谁的哪个输出;可选的输出按界面上的名字列,结构里的字段按原名列。"""
+    separator = tr("punct_listSep")
+    meta = types.get(str(source.get("type") or "")) or {}
+    label = reference_label(_bare(ref), by_id, types)
+    source_title = titles.get(str(source.get("id", "")), node_title(source, types))
+    if kind == "output":
+        names = separator.join(tr(output_label(name, meta)) if name in (meta.get("outputs") or ()) else name for name in available)
+        return tr("wfCheck_outputMissing", node=who, source=source_title, ref=label, available=names)
+    return tr("wfCheck_fieldMissing", node=who, source=source_title, ref=label, available=separator.join(available))
+
+
+def _output_reference_errors(
+    graph: dict[str, Any], title: Callable[[dict[str, Any]], str], titles: dict[str, str], types: dict[str, dict[str, Any]]
+) -> list[str]:
+    by_id = {str(node.get("id", "")): node for node in graph.get("nodes") or [] if isinstance(node, dict)}
+    return [
+        _output_problem_message(title(by_id[one["node"]]), one["ref"], by_id[one["source"]], one["kind"], one["available"],
+                                titles, by_id, types)
+        for one in output_reference_problems(graph, types)
+    ]
+
+
 #: 内嵌子图类节点(循环体 / subgraph):**由节点自己声明**体内看得见什么(`body_scope`)——
 #: 作用域名 → 这个名字底下的字段。`*字段名` 表示「这个配置字段里的每个键」(和 start 的 `*params`
 #: 输出同一种写法):子图的 `{{input.*}}` 是用户自己在 `inputs` 里起的名字,只有运行时那份配置知道。
@@ -630,6 +760,27 @@ def validate_body_graph(
     if container:
         inner = {key: container[key] for key in NESTED_BODY_RAW_KEYS if key != "body" and key in container}
         errors.extend(_unresolvable_container_refs(inner, nodes, node_type, container_title))
+        errors.extend(_container_output_errors(inner, nodes, container_title, titles, known))
+    return errors
+
+
+def _container_output_errors(
+    inner: dict[str, Any], nodes: list[Any], who: str, titles: dict[str, str], types: dict[str, dict[str, Any]]
+) -> list[str]:
+    """容器自己的 output / condition 引用体里节点的输出:输出得在、声明的结构里得有那个字段(同 output_problem)。"""
+    by_id = {str(node.get("id", "")): node for node in nodes if isinstance(node, dict)}
+    errors: list[str] = []
+    seen: set[str] = set()
+    for value in inner.values():
+        for match in VARIABLE_RE.finditer(json.dumps(value, ensure_ascii=False)):
+            parts = match.group(1).strip().split(".")
+            source = by_id.get(parts[0])
+            problem = output_problem(parts, source, types) if source is not None else None
+            ref = "{{" + ".".join(parts) + "}}"
+            if problem is None or ref in seen:
+                continue
+            seen.add(ref)
+            errors.append(_output_problem_message(who, ref, source, problem[0], problem[1], titles, by_id, types))
     return errors
 
 
