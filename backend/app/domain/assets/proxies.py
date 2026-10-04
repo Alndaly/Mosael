@@ -137,7 +137,8 @@ def queue_proxy_job(db: Session, asset: Asset, *, created_by: str | None, video:
     # 经总线派发(它先提交再起线程,线程读得到这里刚写的 pending)。此前这里是一句裸的线程创建 ——
     # 线程没有 JOB_THREAD_NAME,`wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
-    dispatch_job(db, job, lambda: _run_proxy(job.id, asset.id))
+    job_id, asset_id = job.id, asset.id
+    dispatch_job(db, job, lambda: _run_proxy(job_id, asset_id))
     return job
 
 

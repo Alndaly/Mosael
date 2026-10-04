@@ -182,7 +182,8 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
         payload={"asset_id": asset.id, "subject": asset.name, "engine": engine},
         message="jobMsg_separateQueued",
     )
-    dispatch_job(db, job, lambda: _run_job(job.id, asset.id, engine))
+    job_id, asset_id = job.id, asset.id
+    dispatch_job(db, job, lambda: _run_job(job_id, asset_id, engine))
     return job
 
 

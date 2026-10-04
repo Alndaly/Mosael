@@ -115,7 +115,8 @@ def start_workflow_job(
     # 「no such table: task_events」,而且记在当时恰好在跑的那条**无关**用例头上。
     # (那正是 jobs.py 里 JOB_THREAD_NAME 的注释所断言的不变量:派发点只有一处 ——
     # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
-    dispatch_job(db, job, lambda: _run_workflow_thread(workflow.id, revision.id, job.id, params or {}))
+    workflow_id, revision_id, job_id, run_params = workflow.id, revision.id, job.id, params or {}
+    dispatch_job(db, job, lambda: _run_workflow_thread(workflow_id, revision_id, job_id, run_params))
     return job
 
 

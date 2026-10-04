@@ -396,7 +396,8 @@ def start_export(db: Session, sequence_id: str, export_params: dict | None = Non
     )
     # 「怎么跑」在这里,「由谁跑」是任务总线的决定:render 翻成 external 模式时
     # (MOSAEL_EXTERNAL_JOB_KINDS=render),任务留在 queued 等外部 worker 认领,本函数不变。
-    dispatch_job(db, job, lambda: _run_export(job.id, plan))
+    job_id = job.id
+    dispatch_job(db, job, lambda: _run_export(job_id, plan))
     return job
 
 

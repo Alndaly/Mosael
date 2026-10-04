@@ -356,7 +356,8 @@ def start_transcription(
         created_by=created_by,
         message="jobMsg_asrQueued",
     )
-    dispatch_job(db, job, lambda: _run_transcription(job.id, asset_id))
+    job_id = job.id
+    dispatch_job(db, job, lambda: _run_transcription(job_id, asset_id))
     return job
 
 

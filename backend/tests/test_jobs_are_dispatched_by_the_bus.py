@@ -83,3 +83,35 @@ def test_建了job就交给总线派发() -> None:
 def test_存量清单只减不增() -> None:
     stale = sorted(ALLOWLIST - _scan())
     assert not stale, f"已经修好了,从 ALLOWLIST 删掉:{stale}"
+
+
+def _attribute_reads_in_thread_targets() -> set[str]:
+    """`dispatch_job(db, job, lambda: ...)` 的 lambda 里读的 `x.attr`(当函数调的 `mod.f(...)` 不算)。"""
+    found: set[str] = set()
+    for path in sorted((BACKEND_ROOT / "app").rglob("*.py")):
+        rel = str(path.relative_to(BACKEND_ROOT))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        for call in ast.walk(tree):
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "dispatch_job"):
+                continue
+            if len(call.args) < 3 or not isinstance(call.args[2], ast.Lambda):
+                continue
+            target = call.args[2]
+            callees = {id(node.func) for node in ast.walk(target) if isinstance(node, ast.Call)}
+            for node in ast.walk(target):
+                if isinstance(node, ast.Attribute) and id(node) not in callees:
+                    found.add(f"{rel}:{node.lineno} {ast.unparse(node)}")
+    return found
+
+
+def test_交给线程的可调用只捏普通值_不在线程里读ORM属性() -> None:
+    """线程起来时,调用方的会话还在用:它可能已经回滚过(回滚让会话里所有对象的属性过期,
+    不看 expire_on_commit),线程里一读 `job.id` 就拿**调用方的会话**去回库加载 —— 而那个会话
+    此刻可能正在下一次提交里,炸成「This session is in 'prepared' state」。
+
+    真机上的现场是调度循环:同一轮里前一个工作流刚派发,后一个任务触发失败 `db.rollback()`,
+    前一个线程还没读到 `workflow.id`。测试里记在 test_orphaned_workflow_tasks 的下一条用例头上,
+    三次里挂一次。派发前把要用的 id 取成局部变量,lambda 只捏这些普通值。
+    """
+    offenders = sorted(_attribute_reads_in_thread_targets())
+    assert not offenders, f"这些 lambda 在任务线程里读 ORM 对象的属性,先在派发前取成局部变量:{offenders}"

@@ -59,7 +59,8 @@ def start_video_to_gif(
     # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
     # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
-    dispatch_job(db, job, lambda: _run(job.id, asset.id, fps, width, start, duration))
+    job_id, asset_id = job.id, asset.id
+    dispatch_job(db, job, lambda: _run(job_id, asset_id, fps, width, start, duration))
     return job
 
 

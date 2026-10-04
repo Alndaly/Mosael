@@ -199,7 +199,8 @@ def start_denoise_job(
         payload={"asset_id": asset.id, "subject": asset.name, "engine": engine, "strength": strength},
         message="jobMsg_denoiseQueued",
     )
-    dispatch_job(db, job, lambda: _run_job(job.id, asset.id, engine, strength))
+    job_id, asset_id = job.id, asset.id
+    dispatch_job(db, job, lambda: _run_job(job_id, asset_id, engine, strength))
     return job
 
 

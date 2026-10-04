@@ -666,6 +666,10 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
     派发处已经替它提交了一半。提交归入口(core/unit_of_work 的约定);入口提交了,线程才起来(它要读刚写的
     行);入口回滚了,任务连同它的线程都不存在。调用方要保证这次事务之后会提交 —— 等子任务的节点在
     wait_for_job(release=db) 里交还会话时提交。
+
+    **thread_target 只捏普通值。** 线程起来时调用方的会话还在用(可能回滚过、正在下一次提交),在线程里读
+    `job.id` / `asset.id` 会拿那个会话回库加载。要用的 id 在派发前取成局部变量 ——
+    tests/test_jobs_are_dispatched_by_the_bus.py 守着。
     """
     if execution_mode(job.kind) == "external":
         say(job, "jobMsg_waitingWorker")
