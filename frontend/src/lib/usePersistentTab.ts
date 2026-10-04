@@ -6,7 +6,7 @@ import React from "react";
  * 避免 storage 里的陈旧/非法值把视图带到不存在的分支。
  */
 export function usePersistentTab<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (value: T) => void] {
-  const storageKey = `mosael:tab:${key}`;
+  const storageKey = tabStorageKey(key);
   const [tab, setTab] = React.useState<T>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as T | null;
@@ -27,6 +27,20 @@ export function usePersistentTab<T extends string>(key: string, initial: T, allo
     [storageKey],
   );
   return [tab, set];
+}
+
+const tabStorageKey = (key: string) => `mosael:tab:${key}`;
+
+/**
+ * 从别处把某一页**下次打开时**停在哪个 tab 写好(模型库的「用它生成」把 AI 工作台切到「生成」页再跳过去)。
+ * 那一页挂载时照常读、照常校验;写不进存储就算了,那一页停在它自己记着的那个。
+ */
+export function writePersistentTab(key: string, value: string): void {
+  try {
+    localStorage.setItem(tabStorageKey(key), value);
+  } catch {
+    // 隐私模式 / 无 storage
+  }
 }
 
 

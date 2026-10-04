@@ -13,6 +13,7 @@
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
  * - 点开是详情:顶上一条固定头(返回、名字、目录·大小·底模、常用操作),下面左边预览、右边概要 / 在用的工作流 /
  *   元数据,两栏各自滚(窄窗口上下排、一起滚);元数据能搜,长值折叠、能展开、能复制,大段 JSON 格式化显示;
+ * - 「用它生成」:挑一张能选这个文件的工作流(在用它的排前面),带着那一格和作者写的触发词交给 AI 工作台;
  * - 工作流缺的模型一键下载:下载框带着地址、目录、文件名,解析之后确认,发起的任务在模型库里看得到进度、能取消;
  * - 同名文件不覆盖:换一个名字(给建议)之前「下载」点不了;这台服务器下不了时也点不了,并说为什么。
  */
@@ -29,9 +30,13 @@ const api = vi.hoisted(() => ({
   startModelDownload: vi.fn(),
   getJob: vi.fn(),
   cancelJob: vi.fn(),
+  listGenerationOptions: vi.fn(),
   modelPreviewUrl: (instance: string, folder: string, name: string) => `preview://${instance}/${folder}/${name}`,
 }));
 vi.mock("@/api/client", () => api);
+vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
+const handoff = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh" }),
@@ -131,6 +136,33 @@ async function openDetail(name = "detail.safetensors", metadata: Record<string, 
   return await screen.findByRole("button", { name: "modelLibraryBack" });
 }
 
+/** 这个连接上的一张工作流(生成选项):哪几格选哪个模型目录的文件、可选值是哪些。 */
+function workflow(model: string, slots: Record<string, { folder: string; options: string[] }>) {
+  return {
+    id: `p9:image:${model}`, provider_profile_id: "p9", profile_name: "ComfyUI · 192.168.3.15", provider: "plugin:dev.mosael.comfyui",
+    kind: "image", model, label: `ComfyUI · 192.168.3.15 · ${model.replace(/\.json$/, "")}`, plugin_instance_id: "i1",
+    capabilities: {
+      modes: ["text-to-image"],
+      parameter_keys: Object.keys(slots),
+      parameter_schema: Object.fromEntries(Object.entries(slots).map(([key, slot]) => [
+        key, { type: "string", title: key, enum: slot.options, "x-model-folder": slot.folder },
+      ])),
+    },
+    capabilities_known: true, adapter_available: true, is_default: false,
+  };
+}
+
+const WORKFLOWS = [
+  workflow("portrait.json", {
+    "4.ckpt_name": { folder: "checkpoints", options: ["sd_xl_base.safetensors"] },
+    "9.lora_name": { folder: "loras", options: ["detail.safetensors"] },
+  }),
+  workflow("declaring.json", { "36.lora_name": { folder: "loras", options: ["detail.safetensors", "sub\\anima_style.safetensors"] } }),
+  workflow("upscale.json", {}),
+  // 别的连接上的工作流不算
+  { ...workflow("elsewhere.json", { "1.lora_name": { folder: "loras", options: ["detail.safetensors"] } }), plugin_instance_id: "i2" },
+];
+
 //: 合并模型带的那种大段 JSON(sd_merge_models)
 const MERGE = JSON.stringify({
   sd_merge_models: {
@@ -146,6 +178,9 @@ const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 beforeEach(() => {
   window.localStorage.clear();
   clipboard.writeText.mockClear();
+  handoff.mockReset();
+  api.listGenerationOptions.mockReset();
+  api.listGenerationOptions.mockImplementation(async (kind: string) => (kind === "image" ? WORKFLOWS : []));
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
   Object.defineProperty(window, "matchMedia", { configurable: true, value: wideMatchMedia });
   Element.prototype.scrollIntoView ??= () => {};
@@ -454,6 +489,49 @@ describe("模型库", () => {
     expect(within(meta).getByText("ss_network_dim")).toBeTruthy();
     fireEvent.change(search, { target: { value: "没有这个" } });
     expect(within(meta).getByText("modelMetaNoMatch")).toBeTruthy();
+  });
+
+  it("「用它生成」:只有一张工作流能选这个文件,点了直接交给 AI 工作台 —— 带着那一格和作者写的触发词", async () => {
+    await openDetail("anima_style.safetensors");
+    // 生成选项到了之前它点不了(按钮会换一颗):每次重新找
+    const go = () => screen.getByRole("button", { name: /modelUseToGenerate/ }) as HTMLButtonElement;
+    await waitFor(() => expect(go().disabled).toBe(false));
+    fireEvent.click(go());
+    expect(handoff).toHaveBeenCalledWith({
+      providerProfileId: "p9", kind: "image", model: "declaring.json",
+      declared: { "36.lora_name": "sub\\anima_style.safetensors" }, promptWords: ["anima style"],
+    });
+  });
+
+  it("能选它的工作流不止一张:让人挑,在用它的排前面;从训练标签里猜的「触发词」不往提示词里塞", async () => {
+    await openDetail("detail.safetensors");
+    // 生成选项到了之前它点不了(按钮会换一颗):每次重新找
+    const go = () => screen.getByRole("button", { name: /modelUseToGenerate/ }) as HTMLButtonElement;
+    await waitFor(() => expect(go().disabled).toBe(false));
+    fireEvent.click(go());
+    const menu = screen.getByRole("menu", { name: "modelUseToGenerateMenu" });
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent?.startsWith("declaring") ? "declaring" : item.textContent)).toEqual([
+      "declaring", "portrait",
+    ]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "portrait" }));
+    expect(handoff).toHaveBeenCalledWith({
+      providerProfileId: "p9", kind: "image", model: "portrait.json", declared: { "9.lora_name": "detail.safetensors" }, promptWords: [],
+    });
+  });
+
+  it("没有哪张工作流能选它:点不了并说为什么;「在用的工作流」里的那几张点了也是交给 AI 工作台", async () => {
+    await openDetail("AWPainting_IL.safetensors");
+    await waitFor(() => expect(api.listGenerationOptions).toHaveBeenCalled());
+    expect((screen.getByRole("button", { name: /modelUseToGenerate/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryBack" }));
+
+    const sdxl = (await screen.findAllByRole("listitem")).find((item) => item.textContent?.includes("sd_xl_base.safetensors"))!;
+    fireEvent.click(within(sdxl).getByRole("button", { name: "sd_xl_base.safetensors" }));
+    const used = await screen.findByRole("region", { name: "modelUsedBy" });
+    fireEvent.click(await within(used).findByRole("button", { name: "portrait" }));
+    expect(handoff).toHaveBeenCalledWith({
+      providerProfileId: "p9", kind: "image", model: "portrait.json", declared: { "4.ckpt_name": "sd_xl_base.safetensors" }, promptWords: [],
+    });
   });
 
   it("点开是详情:底模和凭的是什么、触发词来自训练标签时说清楚、在用的工作流、文件头里的元数据", async () => {

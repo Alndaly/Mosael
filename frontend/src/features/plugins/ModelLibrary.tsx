@@ -17,6 +17,7 @@ import {
   Search,
   SearchX,
   Settings2,
+  Sparkles,
   TriangleAlert,
   Unplug,
   Workflow,
@@ -71,13 +72,18 @@ import {
   familyCounts,
   filterModels,
   folderEntries,
+  generationTargets,
   inFolder,
   sortModels,
+  type GenerationTarget,
   type LibraryDensity,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
 import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
 import { formatBytes } from "@/lib/bytes";
+import { GENERATION_KINDS } from "@/lib/generationCapabilities";
+import { handOffToGeneration } from "@/lib/generationHandoff";
+import { useGenerationOptions } from "@/lib/generationOptions";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -1061,6 +1067,64 @@ function MetadataSection({ entries, loading, error }: { entries: [string, string
 }
 
 /**
+ * 「用它生成」:交给 AI 工作台,选中那张工作流、那一格填上这个文件。只有一张能选它的就直接去;几张就让人挑
+ * (在用它的排前面,写着「已经在用它」);一张都没有就点不了并说为什么。
+ */
+function UseToGenerate({
+  targets,
+  loading,
+  onPick,
+}: {
+  targets: GenerationTarget[];
+  loading: boolean;
+  onPick: (target: GenerationTarget) => void;
+}) {
+  const t = useI18n();
+  if (targets.length === 0) {
+    return (
+      <Hint label={t("modelUseToGenerateDesc")} disabledReason={loading ? t("modelUseToGenerateLoading") : t("modelUseToGenerateNone")}>
+        <Button disabled>
+          <Sparkles size={13} />
+          {t("modelUseToGenerate")}
+        </Button>
+      </Hint>
+    );
+  }
+  if (targets.length === 1) {
+    return (
+      <Hint label={t("modelUseToGenerateWith").replace("{workflow}", targets[0].name)}>
+        <Button onClick={() => onPick(targets[0])}>
+          <Sparkles size={13} />
+          {t("modelUseToGenerate")}
+        </Button>
+      </Hint>
+    );
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button>
+          <Sparkles size={13} />
+          {t("modelUseToGenerate")}
+          <ChevronDown />
+        </Button>
+      </PopoverTrigger>
+      <MenuContent label={t("modelUseToGenerateMenu")} align="end">
+        {targets.map((target) => (
+          <MenuItem
+            key={target.option.id}
+            label={target.name}
+            truncate
+            description={target.uses ? t("modelUseToGenerateInUse") : undefined}
+            onClick={() => onPick(target)}
+          />
+        ))}
+      </MenuContent>
+    </Popover>
+  );
+}
+
+/**
  * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(遵循「模糊预览图」,
  * 悬停或点「看清」才清楚);右栏概要(底模和判据、触发词点一下复制、文件、改动时间)、在用的工作流、训练标签、元数据。
  */
@@ -1083,6 +1147,18 @@ function ModelDetail({
   });
   const [revealed, setRevealed] = React.useState(false);
   const [allTags, setAllTags] = React.useState(false);
+  //: 「用它生成」能交给哪几张工作流:生成选项里这个连接上、有一格能选这个文件的
+  const generation = useGenerationOptions(GENERATION_KINDS);
+  const targets = React.useMemo(() => generationTargets(generation.options, instanceId, model), [generation.options, instanceId, model]);
+  const generate = (target: GenerationTarget) =>
+    handOffToGeneration({
+      providerProfileId: target.option.provider_profile_id,
+      kind: target.option.kind,
+      model: target.option.model,
+      declared: { [target.key]: target.value },
+      // 只带作者写明的触发词;从训练标签里数出来的那几个不一定是触发词,不替人塞进提示词(生成表单里那一格下面能一键加)
+      promptWords: model.triggers_source === "metadata" ? model.triggers ?? [] : [],
+    });
   const tags = meta.data?.tags ?? [];
   const usedRef = React.useRef<HTMLElement>(null);
   const Icon = folderIcon(model.folder);
@@ -1138,6 +1214,7 @@ function ModelDetail({
       }
       actions={
         <>
+          <UseToGenerate targets={targets} loading={generation.pending} onPick={generate} />
           <CopyButton text={model.name} label={t("modelCopyName")} />
           <Hint label={t("modelUsedByJump")} disabledReason={used.length ? undefined : t("modelUsedByNone")}>
             <Button variant="outline" disabled={used.length === 0} onClick={jumpToUsed}>
@@ -1187,12 +1264,32 @@ function ModelDetail({
       <LibrarySection ref={usedRef} title={t("modelUsedBy")} count={used.length}>
         {used.length > 0 ? (
           <ul className="m-0 grid list-none gap-1 p-0">
-            {used.map((flow) => (
-              <li key={flow.id} className="flex min-w-0 items-center gap-2 text-ui-sm text-foreground">
-                <Workflow size={13} className="shrink-0 text-muted-foreground" />
-                <Truncate hint={flow.id !== flow.label ? flow.id : undefined}>{flow.label}</Truncate>
-              </li>
-            ))}
+            {used.map((flow) => {
+              //: 点了就用这张工作流生成(选中它、那一格填上这个文件);不在生成模型里的(没启用、转不过来)只列名字
+              const target = targets.find((one) => one.option.model === flow.id);
+              return (
+                <li key={flow.id} className="flex min-w-0">
+                  {target ? (
+                    <Hint label={t("modelUseToGenerateWith").replace("{workflow}", flow.label)}>
+                      <button
+                        type="button"
+                        onClick={() => generate(target)}
+                        className="-mx-2 flex h-8 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-ui-sm text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Workflow size={13} aria-hidden className="shrink-0 text-muted-foreground" />
+                        <Truncate>{flow.label}</Truncate>
+                        <Sparkles size={12} aria-hidden className="shrink-0 text-primary" />
+                      </button>
+                    </Hint>
+                  ) : (
+                    <span className="flex h-8 min-w-0 items-center gap-2 text-ui-sm text-foreground">
+                      <Workflow size={13} aria-hidden className="shrink-0 text-muted-foreground" />
+                      <Truncate hint={t("modelUsedByNotRunnable")}>{flow.label}</Truncate>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="m-0 text-ui-xs text-muted-foreground">{t("modelUsedByNone")}</p>

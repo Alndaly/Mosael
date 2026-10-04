@@ -108,6 +108,7 @@ import {
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
+import { takeGenerationHandoff } from "@/lib/generationHandoff";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import {
@@ -479,8 +480,35 @@ export function GenerateWorkspace({
   const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
   const needsDigitalHumanConsent =
     videoInputRoles.includes("driving_audio") && filledCount(generationConfig.frames, "driving_audio") > 0;
+  //: 别的页面交过来的「用这个去生成」(模型库的「用它生成」,见 lib/generationHandoff):清单和会话列表都到了再接 ——
+  //: 会话一到会把这一页的选择清回会话记着的那个(上面那条 effect),先接了也白接。选中的模型换了,参数会回到它的
+  //: 默认(下面那条 effect),所以交过来的那几格记在这里,等换完再填上。
+  const handedOver = React.useRef<{ value: string; declared: Record<string, string> } | null>(null);
   React.useEffect(() => {
-    setGenerationConfig(defaultGenerationConfig(selectedModel));
+    if (generationModelsLoading || sessions.isPending) return;
+    const handoff = takeGenerationHandoff(kinds);
+    if (!handoff) return;
+    const option = findGenerationOption(modelOptions, handoff.providerProfileId, handoff.kind, handoff.model);
+    if (!option) return;
+    if (handoff.promptWords.length > 0) setPrompt((current) => withTriggerWords(current, handoff.promptWords));
+    if (selectedModel?.value === option.value) {
+      setGenerationConfig((current) => ({ ...current, declared: { ...current.declared, ...handoff.declared } }));
+      return;
+    }
+    handedOver.current = { value: option.value, declared: handoff.declared };
+    setModelId(option.value);
+    // 只在清单 / 会话到齐的那一刻接一次;交接本身取走就没了
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generationModelsLoading, sessions.isPending, modelOptions]);
+  React.useEffect(() => {
+    const defaults = defaultGenerationConfig(selectedModel);
+    const handed = handedOver.current;
+    if (handed && handed.value === selectedModel?.value) {
+      handedOver.current = null;
+      setGenerationConfig({ ...defaults, declared: { ...defaults.declared, ...handed.declared } });
+    } else {
+      setGenerationConfig(defaults);
+    }
     setDigitalHumanConsent(false);
   }, [selectedModel?.value]);
   const modelGroups = React.useMemo(() => {

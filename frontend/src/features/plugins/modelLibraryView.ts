@@ -1,5 +1,7 @@
 import type { ModelFile, ModelLibrary } from "@/api/client";
-import { modelBaseName } from "@/components/generation/ModelThumb";
+import type { GenerationOption } from "@/api/domains/generation";
+import { modelBaseName, normModelName } from "@/components/generation/ModelThumb";
+import { declaredParameters } from "@/lib/generationCapabilities";
 
 /**
  * 模型库列表那一页「看哪些、按什么顺序」的纯函数:目录怎么排、底模有哪些、筛和排。界面(ModelLibrary)只管摆。
@@ -61,4 +63,40 @@ export function sortModels(models: readonly ModelFile[], sort: LibrarySort): Mod
   if (sort === "size") return out.sort((a, b) => (b.size ?? -1) - (a.size ?? -1) || byName(a, b));
   if (sort === "modified") return out.sort((a, b) => (b.modified ?? -1) - (a.modified ?? -1) || byName(a, b));
   return out.sort(byName);
+}
+
+/** 一张能选这个文件的工作流:哪一格(参数键)、那一格里它的原值、是不是已经在用它。 */
+export type GenerationTarget = {
+  option: GenerationOption;
+  name: string;
+  key: string;
+  value: string;
+  uses: boolean;
+};
+
+/** 生成选项给人看的名字里,连接名那一截去掉(「ComfyUI · 192.168.3.15 · portrait」→「portrait」)。 */
+function workflowName(option: GenerationOption): string {
+  const prefix = option.profile_name ? `${option.profile_name} · ` : "";
+  return prefix && option.label.startsWith(prefix) ? option.label.slice(prefix.length) : option.label;
+}
+
+/**
+ * 「用它生成」能交给哪几张工作流:**这个连接**上、有一格选的是这个文件所在目录(`x-model-folder`)、并且可选值里有它
+ * 的生成选项。已经在用它的(模型库报的 used_by)排前面,其余按名字。路径分隔符不同(Windows 上的反斜杠)也认。
+ */
+export function generationTargets(options: readonly GenerationOption[], instanceId: string, model: ModelFile): GenerationTarget[] {
+  const wanted = normModelName(model.name);
+  const usedBy = new Set((model.used_by ?? []).map((flow) => flow.id));
+  const out: GenerationTarget[] = [];
+  for (const option of options) {
+    if (option.plugin_instance_id !== instanceId) continue;
+    for (const parameter of declaredParameters(option)) {
+      if (parameter.modelFolder !== model.folder) continue;
+      const value = parameter.options.find((one) => normModelName(one) === wanted);
+      if (value === undefined) continue;
+      out.push({ option, name: workflowName(option), key: parameter.key, value, uses: usedBy.has(option.model) });
+      break;
+    }
+  }
+  return out.sort((a, b) => Number(b.uses) - Number(a.uses) || a.name.localeCompare(b.name));
 }
