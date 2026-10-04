@@ -11,8 +11,7 @@ import { cn } from "@/lib/utils";
  * 尺寸默认从 public/ 下的文件头读(见 {@link imageSize})—— 文档正文里的 `![]()` 只给得出
  * 路径,而 next/image 要真实宽高来占位,填错了图会被拉变形。
  *
- * GIF 传 `unoptimized`:next/image 的优化管线不处理动图,不加这个参数会把多帧压成一张静态图,
- * 而"看得见它在动"正是这些录屏存在的理由。
+ * 动的演示不走这里:用 {@link Loop}(静音循环的 MP4)或 {@link Recording}(可控播放)。
  */
 export function Shot({
   src,
@@ -58,7 +57,6 @@ export function Shot({
       width={size.width}
       height={size.height}
       priority={priority}
-      unoptimized={src.endsWith(".gif")}
       sizes="(min-width: 80rem) 80rem, 100vw"
       className={cn(
         "h-auto w-full",

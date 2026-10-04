@@ -7,6 +7,7 @@ import { QrCards } from "@/components/qr-cards";
 import { DownloadChoice } from "@/components/download-link";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { Loop } from "@/components/loop";
 import { Recording } from "@/components/recording";
 import { Shot } from "@/components/shot";
 import { cn } from "@/lib/utils";
@@ -113,6 +114,7 @@ export function mdxComponents(locale: Locale) {
   Steps,
   Shot,
   Recording,
+  Loop,
   QrCards,
   DownloadChoice: () => <DownloadChoice locale={locale} />,
   img: MdxImage,

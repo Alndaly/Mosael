@@ -22,14 +22,23 @@ test('every current screenshot and recording has an intact live-capture provenan
   }
 });
 
-test('all scenes have light/dark and Chinese/English recordings', () => {
+test('all scenes have light/dark and Chinese/English MP4 recordings', () => {
   for (const scene of ['scenes', 'notes', 'annotations', 'home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login']) {
     for (const locale of ['zh', 'en']) for (const theme of ['light', 'dark']) {
       const directory = `${locale === 'en' ? 'en/' : ''}${theme === 'dark' ? 'dark/' : ''}`;
-      for (const [kind, extension] of [['gifs', 'gif'], ['videos', 'mp4']]) {
-        assert.ok(manifest.captures[`${kind}/${directory}${scene}.${extension}`], `${scene}/${locale}/${theme}/${kind}`);
-      }
+      assert.ok(manifest.captures[`videos/${directory}${scene}.mp4`], `${scene}/${locale}/${theme}`);
     }
+  }
+});
+
+/**
+ * 动的演示一律是 MP4(静音循环用 <Loop>,可控播放用 <Recording>)。同一段录屏的 GIF 是 MP4 的五六倍大,
+ * 文档里再出现一个 GIF 引用,就是把这笔体积又请了回来。
+ */
+test('docs show recordings as MP4, never GIF', () => {
+  for (const file of files(docs)) {
+    if (!file.endsWith('.mdx')) continue;
+    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /\.gif\b/, path.relative(docs, file));
   }
 });
 
