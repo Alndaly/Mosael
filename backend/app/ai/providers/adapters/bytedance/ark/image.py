@@ -14,6 +14,8 @@ from app.ai.providers.contracts.generation import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    ReportedUsage,
+    provider_payload_settled,
     source_values,
     metering_from_request,
 )
@@ -82,6 +84,14 @@ class SeedreamAdapter(GenerationAdapter):
     vendor_id = "bytedance"
     media_kind = "image"
 
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        """回包 `usage.generated_images`:这一次实际生成(按张计费)了几张。"""
+        usage = raw_usage.get("usage") if isinstance(raw_usage, dict) else None
+        count = usage.get("generated_images") if isinstance(usage, dict) else None
+        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+            return ReportedUsage(units={"images": count})
+        return ReportedUsage()
+
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="ARK")
@@ -92,6 +102,8 @@ class SeedreamAdapter(GenerationAdapter):
                 response = client.post(IMAGES_PATH, json=build_image_payload(request, context))
                 response.raise_for_status()
                 payload = response.json()
+                # 同步接口:回包到手钱就扣了,先交给运行器,下面下载失败也丢不掉。
+                provider_payload_settled(payload)
                 url = extract_image_url(payload)
 
                 output_dir.mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 from app.ai.providers.contracts.generation import (
     POLL_TIMEOUT_SECONDS,
     GenerationAdapterError,
+    provider_payload_settled,
     remember_remote_task,
     remote_task_cancelled,
 )
@@ -52,8 +53,15 @@ def poll_until_ready(
         response = client.get(poll_path)
         response.raise_for_status()
         payload = response.json()
-        ready = extract(payload)
+        try:
+            ready = extract(payload)
+        except Exception:
+            # 服务商判了失败(或者说完成了却没给结果):这也是终态。有的平台失败也扣,扣了多少写在这一份里。
+            provider_payload_settled(payload)
+            raise
         if ready:
+            # **先交回包,再回产物。**调用方接下来要下载 —— 下载失败的话,这份写着用量和扣费的回包不能跟着丢。
+            provider_payload_settled(payload)
             return ready, payload
         time.sleep(interval)
     # 是哪一家超时了由调用方给(`vendor`):那句话会一路显示到用户眼前,收成一份不带名字的

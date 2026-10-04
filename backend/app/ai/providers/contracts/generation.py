@@ -330,6 +330,19 @@ def with_reported(units: dict[str, Any], reported: dict[str, Any]) -> dict[str, 
     return merged
 
 
+#: 请求侧计量里**不是数量**的那几格:给价目分档用(分辨率、尺寸、比例)。
+_REQUEST_ATTRIBUTES = ("resolution", "size", "aspect_ratio")
+
+
+def reported_on_failure(request_units: dict[str, Any], reported: dict[str, Any]) -> dict[str, Any]:
+    """失败的调用只按服务商报的计:请求侧的数量(请求了几秒、几张、按提示词估的 token)一概不算,
+    只留下给价目分档用的属性,再叠上服务商报的那几格。
+
+    成功的调用,请求了 5 秒就是 5 秒;失败的调用,请求了多少不等于扣了多少 —— 扣了多少只有服务商说了算。
+    """
+    return {**{key: request_units[key] for key in _REQUEST_ATTRIBUTES if key in request_units}, **reported}
+
+
 def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
     """Provider-neutral metering facts that can be priced even before a provider returns usage."""
     units: dict[str, Any] = {"requests": 1}
@@ -409,10 +422,13 @@ POLL_TIMEOUT_SECONDS = 6 * 3600.0
 
 @dataclass(frozen=True)
 class RemoteTaskWatch:
-    """运行器交给轮询循环的两样东西。
+    """运行器交给轮询循环的三样东西。
 
     `remember(poll_path)`:远端任务一出现就记下来 —— 从这一刻起它在花钱,丢了回执就是丢了钱。
     `is_cancelled()`:用户取消了就停下来,别再替一个没人要的结果等下去。
+    `settled(payload)`:服务商的终态回包(成功或失败)一到手就交出来 —— 那里面写着这一次用了多少、
+    扣了多少。接下来下载失败、结果地址没给全,异常往外抛,回包要是还只在适配器的局部变量里,运行器就
+    只能把一次已经扣了费的调用记成 0(见 runner._record_generation_usage)。
 
     经由 contextvar 传进 `poll_until_ready`,**不经过适配器**:七家各自把 task_id 放在局部变量
     里,让每家都记得去报,等于让每家都有机会忘记。轮询循环是它们唯一共同经过的地方。
@@ -420,6 +436,7 @@ class RemoteTaskWatch:
 
     remember: Callable[[str], None]
     is_cancelled: Callable[[], bool]
+    settled: Callable[[dict[str, Any]], None]
 
 
 _REMOTE_TASK_WATCH: ContextVar[RemoteTaskWatch | None] = ContextVar("remote_task_watch", default=None)
@@ -451,6 +468,17 @@ def remote_task_cancelled() -> bool:
     """用户取消了吗(没装 watch 时是 False)。见 `remember_remote_task`。"""
     watch = _REMOTE_TASK_WATCH.get()
     return bool(watch is not None and watch.is_cancelled())
+
+
+def provider_payload_settled(payload: dict[str, Any]) -> None:
+    """服务商这一次的终态回包到手了,交给运行器(没装 watch 时什么都不做)。
+
+    `poll_until_ready` 拿到终态时调它;**同步接口**的适配器在回包到手、开始下载之前调它 —— 那一刻钱已经
+    扣了,后面下载失败也不能让这份回包跟着异常丢掉。
+    """
+    watch = _REMOTE_TASK_WATCH.get()
+    if watch is not None and isinstance(payload, dict):
+        watch.settled(payload)
 
 
 #: 轮询到手的产物形状由那一家决定:一个地址,或者一串(图像接口的 n 一次给多张)。

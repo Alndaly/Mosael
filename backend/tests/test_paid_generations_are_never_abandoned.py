@@ -63,14 +63,14 @@ def test_开始等之前先报回执() -> None:
     """回执是远端任务号**唯一一次**离开适配器局部变量的机会。"""
     remembered: list[str] = []
     client = _PollClient([{"status": "succeeded", "url": "u"}])
-    with watching_remote_tasks(RemoteTaskWatch(remember=remembered.append, is_cancelled=lambda: False)):
+    with watching_remote_tasks(RemoteTaskWatch(remember=remembered.append, is_cancelled=lambda: False, settled=lambda _: None)):
         poll_until_ready(client, "/tasks/cgt-1", lambda p: p.get("url"), interval=0)
     assert remembered == ["/tasks/cgt-1"]
 
 
 def test_取消了就不再替它等() -> None:
     client = _PollClient([])
-    with watching_remote_tasks(RemoteTaskWatch(remember=lambda _: None, is_cancelled=lambda: True)):
+    with watching_remote_tasks(RemoteTaskWatch(remember=lambda _: None, is_cancelled=lambda: True, settled=lambda _: None)):
         with pytest.raises(GenerationAdapterError, match="已取消"):
             poll_until_ready(client, "/tasks/cgt-1", lambda p: None, interval=0)
     assert client.paths == [], "取消之后还在轮询"

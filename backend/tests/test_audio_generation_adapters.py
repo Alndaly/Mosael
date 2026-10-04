@@ -83,7 +83,7 @@ def _ctx(vendor: str, **options: Any) -> GenerationAdapterContext:
 
 def _watch(cancelled: bool = False) -> tuple[RemoteTaskWatch, list[str]]:
     receipts: list[str] = []
-    return RemoteTaskWatch(remember=receipts.append, is_cancelled=lambda: cancelled), receipts
+    return RemoteTaskWatch(remember=receipts.append, is_cancelled=lambda: cancelled, settled=lambda _: None), receipts
 
 
 def _audio(model: str, prompt: str = "city pop", **parameters: Any) -> GenerationRequest:

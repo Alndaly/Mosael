@@ -19,6 +19,7 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
     ReportedUsage,
     metering_from_request,
+    provider_payload_settled,
     source_url_values,
 )
 from app.ai.providers.adapters.shared.errors import adapter_http_error
@@ -167,6 +168,8 @@ class OpenAIImageAdapter(GenerationAdapter):
                     response = client.post("/images/generations", json=build_submit_payload(request))
                 response.raise_for_status()
                 content = response.json()
+                # 回包到手钱就扣了:先交给运行器,下面取图失败也丢不掉这份用量。
+                provider_payload_settled(content)
                 data = [one for one in (content.get("data") or []) if isinstance(one, dict)]
                 #: 两种回法:外链和内联 base64。**都要全取** —— n 是几就有几条,
                 #: 只取第一条的话后面那几张连同它们的钱一起消失。

@@ -4,6 +4,7 @@ import logging
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from app.ai.providers import (
@@ -29,6 +30,8 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapter,
     ReportedUsage,
     direct_media_url,
+    metering_from_request,
+    reported_on_failure,
     sanitize_adapter_error,
     with_reported,
 )
@@ -174,6 +177,10 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
 
         workdir = Path(tempfile.mkdtemp(prefix="mosael-gen-"))
         request: GenerationRequest | None = None
+        result: GenerationResult | None = None
+        #: 服务商的终态回包,一到手就由轮询循环 / 同步适配器交到这里(见 RemoteTaskWatch.settled)。
+        #: 远端已经生成扣了费、接着下载失败时,失败的那条账照它记,而不是记 0。
+        settled: list[dict] = []
         started = time.monotonic()
         try:
             request = GenerationRequest(
@@ -187,7 +194,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             adapter.validate_request(request)
             #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
             #: 它在花钱,回执只活在适配器的局部变量里的话,线程一死就再也找不回来。
-            with watching_remote_tasks(_remote_task_watch(db, job)):
+            with watching_remote_tasks(_remote_task_watch(db, job, settled=settled.append)):
                 if resume_from and adapter.supports_progress_callbacks:
                     # 接着取的那一段也要有进度和取消 —— 一段本地长视频重启后可能还要跑一小时。
                     result = adapter.resume(resume_from, request, context, workdir, callbacks=_job_callbacks(db, job))
@@ -271,7 +278,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             )
         except GenerationAdapterError as exc:
             if request is not None:
-                _record_generation_usage(db, generation, job, adapter, request, context, None, started, "failed")
+                _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed",
+                                         settled=settled[-1] if settled else None)
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
             # 泛化的 Generation failed,取消看起来就像出了错。
             if job.status in ("queued", "running"):
@@ -280,7 +288,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
             if request is not None:
-                _record_generation_usage(db, generation, job, adapter, request, context, None, started, "failed")
+                _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed",
+                                         settled=settled[-1] if settled else None)
             _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -308,7 +317,7 @@ def _job_callbacks(db, job: Job):
     return GenerationProgressCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
 
 
-def _remote_task_watch(db, job: Job) -> RemoteTaskWatch:
+def _remote_task_watch(db, job: Job, *, settled: Callable[[dict], None]) -> RemoteTaskWatch:
     def remember(poll_path: str) -> None:
         job.payload = {**(job.payload or {}), REMOTE_TASK_FIELD: {"poll_path": poll_path}}
         db.commit()
@@ -318,7 +327,7 @@ def _remote_task_watch(db, job: Job) -> RemoteTaskWatch:
         db.refresh(job)
         return job.status not in ("queued", "running")
 
-    return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled)
+    return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled, settled=settled)
 
 
 def _fail(db, job: Job, reason: Exception | str) -> None:
@@ -433,16 +442,55 @@ def _record_generation_usage(
     status: str,
     *,
     measured_seconds: float | None = None,
+    settled: dict | None = None,
 ) -> None:
+    """记这一次生成的账。`settled` 是失败时手里最后一份服务商终态回包(适配器没交回结果就失败了)。"""
     # 服务商在回包里报的(实际计费的 token 数、平台回报的扣费)叠在请求侧计量上,以它为准。读法由适配器
     # 说了算(GenerationAdapter.reported_usage),补算老账的迁移对着库里存的回包读的是同一个函数。
+    payload = result.raw_usage if result is not None else (settled or {})
     reported = ReportedUsage()
-    if result is not None:
+    if payload:
         try:
-            reported = adapter.reported_usage(result.raw_usage or {})
+            reported = adapter.reported_usage(payload)
         except Exception:  # noqa: BLE001 — 记账是旁路:回包读不懂,不该把一次成功的生成判成失败
             logger.warning("读不懂 %s 的回包用量,按请求侧计量记账", generation.provider, exc_info=True)
-    units = with_reported(dict(result.usage if result is not None else {}), reported.units)
+    if result is None and (reported.units or reported.cost_micros is not None):
+        # 适配器没交回结果就失败了,但服务商的终态回包到了手、报了用量或扣费 —— 远端已经生成、扣了费,
+        # 是我们这边下载失败。只按服务商报的计:请求了几秒几张不等于扣了多少。
+        units, raw = reported_on_failure(metering_from_request(request), reported.units), payload
+    else:
+        # 什么都没报的失败(请求被当场拒掉、服务商判了失败没扣钱)回包也不记:record_usage 据此记 0。
+        units = _with_request_facts(
+            with_reported(dict(result.usage if result is not None else {}), reported.units),
+            request, result, measured_seconds,
+        )
+        raw = result.raw_usage if result is not None else {}
+    with billable(
+        db,
+        capability=generation.kind,
+        operation="generation_job",
+        workspace_id=job.workspace_id,
+        provider_profile_id=context.connection_id,
+        provider=generation.provider,
+        model=generation.model,
+        source_type="generation_job",
+        source_id=generation.id,
+        job_id=job.id,
+        idempotency_key=f"generation:{generation.id}:{status}",
+        started=started,
+    ) as call:
+        call.meter(units, raw=raw)
+        if reported.cost_micros is not None:
+            call.report_cost(reported.cost_micros, reported.currency)
+        if status != "succeeded":
+            # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
+            call.mark_failed()
+
+
+def _with_request_facts(
+    units: dict, request: GenerationRequest, result: GenerationResult | None, measured_seconds: float | None
+) -> dict:
+    """补上请求侧的计量(适配器没写的那几格):请求了几张、几秒、什么分辨率。"""
     if "requests" not in units:
         units["requests"] = 1
     if request.kind == "image":
@@ -471,26 +519,7 @@ def _record_generation_usage(
         units.setdefault("audios", 1)
         if measured_seconds is not None:
             units.setdefault("audio_seconds", measured_seconds)
-    with billable(
-        db,
-        capability=generation.kind,
-        operation="generation_job",
-        workspace_id=job.workspace_id,
-        provider_profile_id=context.connection_id,
-        provider=generation.provider,
-        model=generation.model,
-        source_type="generation_job",
-        source_id=generation.id,
-        job_id=job.id,
-        idempotency_key=f"generation:{generation.id}:{status}",
-        started=started,
-    ) as call:
-        call.meter(units, raw=result.raw_usage if result is not None else {})
-        if reported.cost_micros is not None:
-            call.report_cost(reported.cost_micros, reported.currency)
-        if status != "succeeded":
-            # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
-            call.mark_failed()
+    return units
 
 def _asset_name(prompt: str, model: str) -> str:
     summary = prompt.strip().splitlines()[0][:40] if prompt.strip() else "Generation"
