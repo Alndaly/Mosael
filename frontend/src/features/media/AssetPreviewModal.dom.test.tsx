@@ -3,6 +3,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+
 const openImagePreview = vi.fn();
 let imagePreviewOpen = false;
 
@@ -59,7 +60,7 @@ describe("AssetPreviewModal", () => {
     const image = screen.getByRole("img", { name: "IMG_0665.HEIC" });
     expect(image.getAttribute("src")).toBe("/preview/heic-asset");
 
-    fireEvent.click(screen.getByTitle("assetClickToZoom"));
+    fireEvent.click(screen.getByRole("button", { name: /assetClickToZoom/ }));
     expect(openImagePreview).toHaveBeenCalledWith({
       src: "/preview/heic-asset",
       title: "IMG_0665.HEIC",

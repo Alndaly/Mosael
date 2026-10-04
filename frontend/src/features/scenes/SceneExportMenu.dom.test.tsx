@@ -18,10 +18,13 @@ it("只有 GLB 和 JSON 两项,各自交给调用方", () => {
   const onExportJson = vi.fn();
   render(<SceneExportMenu disabled={false} onExportGlb={onExportGlb} onExportJson={onExportJson} />);
   fireEvent.click(screen.getByRole("button", { name: "sceneExportFiles" }));
-  const menu = screen.getByRole("dialog");
-  expect(within(menu).getAllByRole("button").map((button) => button.textContent)).toEqual(["sceneExportGlb", "sceneExportJson"]);
-  fireEvent.click(within(menu).getByRole("button", { name: "sceneExportGlb" }));
-  fireEvent.click(within(menu).getByRole("button", { name: "sceneExportJson" }));
+  const menu = screen.getByRole("menu", { name: "sceneExportFiles" });
+  expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["sceneExportGlb", "sceneExportJson"]);
+  // 点完一项菜单就收起;再点开选另一项。
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "sceneExportGlb" }));
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "sceneExportFiles" }));
+  fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "sceneExportJson" }));
   expect(onExportGlb).toHaveBeenCalledTimes(1);
   expect(onExportJson).toHaveBeenCalledTimes(1);
 });

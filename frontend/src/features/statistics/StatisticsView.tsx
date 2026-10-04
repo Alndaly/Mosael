@@ -10,6 +10,8 @@ import { useIsDeploymentAdmin } from "@/app/auth";
 import { gotoAdmin, gotoSection } from "@/lib/deepLink";
 import { formatCosts } from "@/lib/money";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostPanel, UsageTokensChart } from "./StatisticsCharts";
@@ -161,25 +163,26 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
               const body = <>
                 <span className="col-start-2 row-start-1 inline-flex text-muted-foreground">{tile.icon}</span>
                 {/* 这里现在可能是一串钱("¥0.0004 + US$1.20"),不再只是一个小整数 —— 窄屏上要能截断。 */}
-                <strong className="col-start-1 row-start-2 truncate text-3xl font-semibold leading-tight tabular-nums" title={String(tile.value)}>{tile.value}</strong>
-                <span className="col-start-1 row-start-1 truncate text-ui-xs text-muted-foreground">
+                <Truncate as="strong" className="col-start-1 row-start-2 text-3xl font-semibold leading-tight tabular-nums">{tile.value}</Truncate>
+                <Truncate className="col-start-1 row-start-1 text-ui-xs text-muted-foreground">
                   {t(tile.key).replace("{n}", windowDays)}
                   {tile.extra && (
                     <em className="not-italic text-destructive">
                       {" · "}
                       {tile.extra.open ? (
-                        <button
-                          type="button"
-                          className="cursor-pointer border-0 bg-transparent p-0 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                          title={tile.extra.openLabel && t(tile.extra.openLabel)}
-                          onClick={tile.extra.open}
-                        >
-                          {tile.extra.text}
-                        </button>
+                        <Hint label={tile.extra.openLabel && t(tile.extra.openLabel)}>
+                          <button
+                            type="button"
+                            className="cursor-pointer border-0 bg-transparent p-0 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                            onClick={tile.extra.open}
+                          >
+                            {tile.extra.text}
+                          </button>
+                        </Hint>
                       ) : tile.extra.text}
                     </em>
                   )}
-                </span>
+                </Truncate>
               </>;
               // 不可点的就是一块读数:没有按钮角色、没有手型、悬停不变边框 —— 看起来能点却没反应,
               // 比不能点更糟。
@@ -239,12 +242,11 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
             {/* 命中率放标题行:图上看的是"哪天多哪天少",这个数回答的是"整段时间省了多少",
                 两者不该抢同一块地方。只在真有缓存时出现 —— 恒定的 0% 只是噪音。 */}
             {stats.usage_cache_hit_ratio > 0 && (
-              <span
-                className="font-normal tabular-nums text-muted-foreground"
-                title={t("homeCacheHitHint")}
-              >
-                {t("homeCacheHit")} {Math.round(stats.usage_cache_hit_ratio * 100)}%
-              </span>
+              <Hint label={t("homeCacheHitHint")}>
+                <span className="font-normal tabular-nums text-muted-foreground">
+                  {t("homeCacheHit")} {Math.round(stats.usage_cache_hit_ratio * 100)}%
+                </span>
+              </Hint>
             )}
           </h2>
           <UsageTokensChart daily={stats.usage_token_daily} />

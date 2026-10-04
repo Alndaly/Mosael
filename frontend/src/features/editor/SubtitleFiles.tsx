@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
 import { PILL } from "@/features/editor/pill";
 import { saveBlobToDisk } from "@/lib/download";
 
@@ -59,11 +60,13 @@ export function SubtitleFiles({
   return (
     <>
       <Popover open={importOpen} onOpenChange={setImportOpen}>
-        <PopoverTrigger asChild>
-          <button type="button" className={PILL} title={t("subtitleFileImportHint")}>
-            <FileUp size={12} /> {t("subtitleFileImport")}
-          </button>
-        </PopoverTrigger>
+        <Hint label={t("subtitleFileImportHint")}>
+          <PopoverTrigger asChild>
+            <button type="button" className={PILL}>
+              <FileUp size={12} /> {t("subtitleFileImport")}
+            </button>
+          </PopoverTrigger>
+        </Hint>
         <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
           <strong>{t("subtitleFileImport")}</strong>
           <label className="grid gap-1 text-xs text-muted-foreground">
@@ -75,7 +78,7 @@ export function SubtitleFiles({
               <SelectContent>
                 <SelectItem value={NEW_TRACK}>{t("subtitleFileNewTrack")}</SelectItem>
                 {tracks.map((track) => (
-                  <SelectItem key={track.id} value={track.id}>{track.name}</SelectItem>
+                  <SelectItem key={track.id} value={track.id} truncate>{track.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -108,7 +111,7 @@ export function SubtitleFiles({
       {chosenExport && (
         <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger asChild>
-            <button type="button" className={PILL} title={t("subtitleFileExport")}>
+            <button type="button" className={PILL}>
               <FileDown size={12} /> {t("subtitleFileExport")}
             </button>
           </PopoverTrigger>
@@ -123,7 +126,7 @@ export function SubtitleFiles({
                   </SelectTrigger>
                   <SelectContent>
                     {withCues.map((track) => (
-                      <SelectItem key={track.id} value={track.id}>{track.name}</SelectItem>
+                      <SelectItem key={track.id} value={track.id} truncate>{track.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

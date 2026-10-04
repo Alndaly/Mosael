@@ -2,6 +2,8 @@ import React from "react";
 import { Link2, Unlink } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
 import { cn } from "@/lib/utils";
 
@@ -87,66 +89,67 @@ export const TimelineClip = React.memo(function TimelineClip({
   );
 
   return (
-    <div
-      className={className}
-      data-clip-id={clipId}
-      style={{
-        left,
-        width,
-        // 位移归零时整个移除 transform(而不是写 translate3d(0)):过渡把 none 当
-        // 恒等值照常插值,且静止片段不留下多余的合成层。
-        transform: shiftPx !== 0 ? `translate3d(${shiftPx}px, 0, 0)` : undefined,
-        // 只在拖拽中提示合成层 — 常驻 will-change 会让每个片段都吃一层显存。
-        willChange: dragging ? "transform" : undefined,
-      }}
-      onPointerDown={(event) => {
-        if (event.button !== 0 || !clipId) return;
-        onClipSelect?.(clipId);
-        onClipPointerDown?.(event, trackId, clipId);
-      }}
-      data-selected={selected || undefined}
-      data-cut={cut || undefined}
-      data-linked={linked || undefined}
-      data-testid={clipId ? `clip-${clipId}` : undefined}
-      role="button"
-      tabIndex={clipId ? (tabbable ? 0 : -1) : undefined}
-      onFocus={() => clipId && onClipFocus?.(clipId)}
-      title={offline ? `${t("clipOffline")} · ${name}` : aiGenerated ? `${name} · ${t("clipAiGenerated")}` : name}
-    >
-      {peaks && peaks.length > 0 && (
-        <svg className="pointer-events-none absolute inset-x-px inset-y-0.5 h-[calc(100%-4px)] w-[calc(100%-2px)] [&_polygon]:fill-current [&_polygon]:opacity-30" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
-          <polygon points={waveformPolygonPoints(peaks)} />
-        </svg>
-      )}
-      <span
-        className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden left-0 rounded-l-md after:left-[3px]"
-        data-testid={clipId ? `trim-start-${clipId}` : undefined}
-        onPointerDown={(event) => {
-          if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "start");
+    // 悬停说明是片段的全名(时间线上短片段的名字只露半截),脱机 / AI 生成的状态也写在里面。
+    <Hint label={offline ? `${t("clipOffline")} · ${name}` : aiGenerated ? `${name} · ${t("clipAiGenerated")}` : name}>
+      <div
+        className={className}
+        data-clip-id={clipId}
+        style={{
+          left,
+          width,
+          // 位移归零时整个移除 transform(而不是写 translate3d(0)):过渡把 none 当
+          // 恒等值照常插值,且静止片段不留下多余的合成层。
+          transform: shiftPx !== 0 ? `translate3d(${shiftPx}px, 0, 0)` : undefined,
+          // 只在拖拽中提示合成层 — 常驻 will-change 会让每个片段都吃一层显存。
+          willChange: dragging ? "transform" : undefined,
         }}
-      />
-      <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
-        {offline && <Unlink size={11} className="shrink-0 text-destructive" aria-hidden />}
-        {linked && <Link2 size={11} className="shrink-0 opacity-70" aria-label={t("clipLinked")} />}
-        {aiGenerated && (
-          <span
-            data-ai-badge=""
-            aria-hidden
-            title={t("clipAiGenerated")}
-            className="shrink-0 rounded-[3px] border border-current px-0.5 text-[9px] font-bold leading-[11px] opacity-80"
-          >
-            AI
-          </span>
+        onPointerDown={(event) => {
+          if (event.button !== 0 || !clipId) return;
+          onClipSelect?.(clipId);
+          onClipPointerDown?.(event, trackId, clipId);
+        }}
+        data-selected={selected || undefined}
+        data-cut={cut || undefined}
+        data-linked={linked || undefined}
+        data-testid={clipId ? `clip-${clipId}` : undefined}
+        role="button"
+        tabIndex={clipId ? (tabbable ? 0 : -1) : undefined}
+        onFocus={() => clipId && onClipFocus?.(clipId)}
+      >
+        {peaks && peaks.length > 0 && (
+          <svg className="pointer-events-none absolute inset-x-px inset-y-0.5 h-[calc(100%-4px)] w-[calc(100%-2px)] [&_polygon]:fill-current [&_polygon]:opacity-30" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+            <polygon points={waveformPolygonPoints(peaks)} />
+          </svg>
         )}
-        <span className="truncate">{name}</span>
-      </span>
-      <span
-        className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
-        data-testid={clipId ? `trim-end-${clipId}` : undefined}
-        onPointerDown={(event) => {
-          if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "end");
-        }}
-      />
-    </div>
+        <span
+          className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden left-0 rounded-l-md after:left-[3px]"
+          data-testid={clipId ? `trim-start-${clipId}` : undefined}
+          onPointerDown={(event) => {
+            if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "start");
+          }}
+        />
+        <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
+          {offline && <Unlink size={11} className="shrink-0 text-destructive" aria-hidden />}
+          {linked && <Link2 size={11} className="shrink-0 opacity-70" aria-label={t("clipLinked")} />}
+          {aiGenerated && (
+            <span
+              data-ai-badge=""
+              aria-hidden
+              className="shrink-0 rounded-[3px] border border-current px-0.5 text-[9px] font-bold leading-[11px] opacity-80"
+            >
+              AI
+            </span>
+          )}
+          <Truncate>{name}</Truncate>
+        </span>
+        <span
+          className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
+          data-testid={clipId ? `trim-end-${clipId}` : undefined}
+          onPointerDown={(event) => {
+            if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "end");
+          }}
+        />
+      </div>
+    </Hint>
   );
 });

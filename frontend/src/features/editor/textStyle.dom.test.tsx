@@ -25,6 +25,7 @@ vi.stubGlobal("ResizeObserver", class {
 });
 
 import { Inspector } from "./Inspector";
+import { hoverHint } from "@/test/hint";
 
 const IDENTITY = { scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 };
 
@@ -74,9 +75,9 @@ function renderTitleInspector(textStyle: Record<string, unknown>) {
   );
 }
 
-/** 描边那一行的滑杆:标签 span 带说明 title,滑杆在它右边。 */
+/** 描边那一行的滑杆:标签 span 带悬停说明,滑杆在它右边。 */
 function strokeSlider(): HTMLElement {
-  const label = screen.getByTitle("textStrokeHint");
+  const label = screen.getByText("textStroke");
   const slider = label.parentElement?.querySelector<HTMLElement>("[role=slider]");
   if (!slider) throw new Error("描边那一行没有滑杆");
   return slider;
@@ -88,6 +89,12 @@ describe("检查器的描边滑杆", () => {
     expect(strokeSlider().getAttribute("aria-valuemax")).toBe("14");
     expect(strokeSlider().getAttribute("aria-valuenow")).toBe("6");
     expect(screen.queryByText("textStrokeCapped")).toBeNull();
+  });
+
+  it("描边的标签悬停说明描边画在哪、最粗多少", async () => {
+    renderTitleInspector({ font_size: 48, stroke_width: 6 });
+    const label = screen.getByText("textStroke");
+    expect(await hoverHint(label)).toBe("textStrokeHint");
   });
 
   it("存储值超过这个字号的上限:滑杆停在上限,并说明按上限绘制(存储值不动)", () => {

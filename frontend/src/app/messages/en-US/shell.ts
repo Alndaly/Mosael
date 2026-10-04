@@ -183,6 +183,8 @@ export const shell = {
   boardSequenceRoughCut: "Rough-cut preview · transforms and captions live in the editor",
   boardSequenceCut: "Split at the playhead",
   boardSequenceDelete: "Delete the selected clip",
+  boardSequenceCutUnavailable: "Move the playhead into the middle of a clip to split it",
+  boardSequenceDeleteUnavailable: "Select a clip on the timeline first",
   boardSequenceOpen: "Open in the editor",
   boardSequenceAdd: "Add a clip from this board or the library",
   boardSequenceExport: "Export",

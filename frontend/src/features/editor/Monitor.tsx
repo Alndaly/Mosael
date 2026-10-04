@@ -3,8 +3,9 @@ import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepFo
 
 import { type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Slider } from "@/components/ui/slider";
+import { Hint } from "@/components/ui/tooltip";
 import { clipEnd, formatFrameTimecode, frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
@@ -587,39 +588,42 @@ export function Monitor({
           不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 pb-3 pt-2 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} label={t("monStart")} shortcut="Home">
             <SkipBack size={14} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => stepFrames(-1)} aria-label={t("monFrameBack")}>
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => stepFrames(-1)} label={t("monFrameBack")} shortcut="←">
             <StepBack size={14} />
-          </Button>
-          <Button variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
+          </IconButton>
+          <IconButton variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} label={t("playPause")} shortcut={t("keySpace")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => stepFrames(1)} aria-label={t("monFrameForward")}>
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => stepFrames(1)} label={t("monFrameForward")} shortcut="→">
             <StepForward size={14} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} label={t("monEnd")} shortcut="End">
             <SkipForward size={14} />
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
             variant="ghost"
             size="icon-sm"
             className={loop ? "bg-[rgb(255_255_255/0.1)]! text-primary!" : undefined}
             onClick={toggleLoop}
-            aria-label={t("monLoop")}
+            aria-pressed={loop}
+            label={t("monLoop")}
           >
             <Repeat size={13} />
-          </Button>
-          <button type="button" className="timecode h-8 min-w-8 cursor-pointer rounded-md bg-transparent px-2 text-ui-xs text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
-            {playbackRate}x
-          </button>
+          </IconButton>
+          <Hint label={t("monRate")}>
+            <button type="button" className="timecode h-8 min-w-8 cursor-pointer rounded-md bg-transparent px-2 text-ui-xs text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
+              {playbackRate}x
+            </button>
+          </Hint>
         </div>
         <MonitorTimecode totalDuration={totalDuration} fps={fps} />
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
+          <IconButton variant="ghost" size="icon-sm" onClick={toggleMuted} aria-pressed={masterMuted} label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
-          </Button>
+          </IconButton>
           <Slider
             className="w-[68px] flex-none [--slider-range:rgba(255,255,255,0.75)] [--slider-thumb:#ffffff] [--slider-track:rgba(255,255,255,0.22)]"
             min={0}
@@ -629,9 +633,9 @@ export function Monitor({
             onValueChange={([value]) => setVolume(value)}
             aria-label={t("monVolume")}
           />
-          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
+          <IconButton variant="ghost" size="icon-sm" onClick={toggleFullscreen} label={t("monFullscreen")}>
             <Maximize2 size={13} />
-          </Button>
+          </IconButton>
         </div>
       </div>
     </div>

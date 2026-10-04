@@ -5,6 +5,8 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   FILLER_CATEGORIES,
   type FillerCategoryId,
@@ -37,12 +39,14 @@ export function FillerPicker({
   for (const match of matches) counts.set(match.category, (counts.get(match.category) ?? 0) + 1);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className={PILL} title={t("fillersHint")} disabled={matches.length === 0}>
-          <Sparkles size={12} /> {t("fillers")}
-          {chosen.length > 0 && <em>{chosen.length}</em>}
-        </button>
-      </PopoverTrigger>
+      <Hint label={t("fillersHint")} disabledReason={matches.length === 0 ? t("fillersNone") : undefined}>
+        <PopoverTrigger asChild>
+          <button type="button" className={PILL} disabled={matches.length === 0}>
+            <Sparkles size={12} /> {t("fillers")}
+            {chosen.length > 0 && <em>{chosen.length}</em>}
+          </button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent className="flex w-[300px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="start">
         <strong>{t("fillers")}</strong>
         {FILLER_CATEGORIES.filter((category) => (counts.get(category.id) ?? 0) > 0).map((category) => (
@@ -66,11 +70,11 @@ export function FillerPicker({
         ))}
         <ul aria-label={t("fillerPreview")} className="m-0 grid max-h-48 list-none gap-1 overflow-y-auto p-0 text-ui-xs">
           {chosen.slice(0, PREVIEW_LIMIT).map((match) => (
-            <li key={match.key} className="truncate text-muted-foreground">
+            <Truncate as="li" key={match.key} className="text-muted-foreground">
               …{match.before}
               <mark className="rounded-[2px] bg-[color-mix(in_oklab,#eab308_30%,transparent)] px-0.5 text-foreground">{match.word}</mark>
               {match.after}…
-            </li>
+            </Truncate>
           ))}
           {chosen.length > PREVIEW_LIMIT && (
             <li className="text-muted-foreground">{t("fillerPreviewMore").replace("{n}", String(chosen.length - PREVIEW_LIMIT))}</li>

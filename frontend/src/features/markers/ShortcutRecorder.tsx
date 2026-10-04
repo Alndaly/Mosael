@@ -2,7 +2,7 @@ import React from "react";
 import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { markerShortcutConflict, type CanvasMarker, type MarkerShortcutConflict } from "@/features/markers/markers";
 import { comboFromEvent, formatCombo, isImeKeystroke } from "@/lib/shortcuts";
@@ -85,11 +85,10 @@ export function ShortcutRecorder({
               : t("markerShortcutNone")}
         </button>
         {marker.shortcut ? (
-          <Button
+          <IconButton
             variant="secondary"
             size="icon-sm"
-            aria-label={t("markerShortcutClear")}
-            title={t("markerShortcutClear")}
+            label={t("markerShortcutClear")}
             onClick={() => {
               setRejected(null);
               setRecording(false);
@@ -97,7 +96,7 @@ export function ShortcutRecorder({
             }}
           >
             <X size={14} />
-          </Button>
+          </IconButton>
         ) : null}
       </div>
       {rejected ? (

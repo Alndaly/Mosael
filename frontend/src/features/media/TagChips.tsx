@@ -1,3 +1,5 @@
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,11 +25,15 @@ export function TagChips({ tags, max = 2, tone, className }: {
   return (
     <span className={cn("flex min-w-0 gap-1", className)} data-asset-tags>
       {shown.map((tag) => (
-        <span key={tag} className={cn(chip, "min-w-0 max-w-full truncate")} title={tag}>
+        <Truncate key={tag} className={cn(chip, "max-w-full")}>
           {tag}
-        </span>
+        </Truncate>
       ))}
-      {rest.length > 0 && <span className={cn(chip, "shrink-0 tabular-nums")} title={rest.join(", ")}>+{rest.length}</span>}
+      {rest.length > 0 && (
+        <Hint label={rest.join(", ")}>
+          <span className={cn(chip, "shrink-0 tabular-nums")}>+{rest.length}</span>
+        </Hint>
+      )}
     </span>
   );
 }

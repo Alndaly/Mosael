@@ -7,6 +7,8 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
@@ -121,9 +123,9 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
             )}
             {shown.kind === "document" && <DocumentReader assetId={shown.id} />}
             {shown.kind === "image" && (
+              // 悬停时右下角那块「点击查看大图」就是说明,不再另挂一条。
               <button
                 type="button"
-                title={t("assetClickToZoom")}
                 className="group/zoom relative grid h-full min-h-0 w-full min-w-0 cursor-zoom-in place-items-center border-0 bg-transparent p-4"
                 onClick={() => openImagePreview({ src, title: shown.name })}
               >
@@ -193,19 +195,20 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 </InfoRow>
               )}
               <InfoRow label="ID">
-                <button
-                  type="button"
-                  onClick={copyId}
-                  className="group/id inline-flex max-w-full items-center gap-1 rounded-sm text-left font-mono text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
-                  title={copied ? t("assetIdCopied") : t("assetCopyId")}
-                >
-                  <span className="truncate">{shown.id}</span>
-                  {copied ? (
-                    <Check size={12} className="shrink-0 text-success" />
-                  ) : (
-                    <Copy size={12} className={cn("shrink-0 opacity-0 transition-opacity group-hover/id:opacity-100")} />
-                  )}
-                </button>
+                <Hint label={copied ? t("assetIdCopied") : t("assetCopyId")}>
+                  <button
+                    type="button"
+                    onClick={copyId}
+                    className="group/id inline-flex max-w-full items-center gap-1 rounded-sm text-left font-mono text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Truncate>{shown.id}</Truncate>
+                    {copied ? (
+                      <Check size={12} className="shrink-0 text-success" />
+                    ) : (
+                      <Copy size={12} className={cn("shrink-0 opacity-0 transition-opacity group-hover/id:opacity-100")} />
+                    )}
+                  </button>
+                </Hint>
               </InfoRow>
             </dl>
           </div>

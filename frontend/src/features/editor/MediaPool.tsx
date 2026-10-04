@@ -5,8 +5,10 @@ import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, Im
 
 import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/components/app/TagsDialog";
 import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
@@ -106,10 +108,10 @@ export function MediaPool({
     // 见 .editor-pool-list(滚动条的位置两边各留一份,左右才对称)。
     <section aria-label={t("media")} className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] editor-pane overflow-hidden bg-workspace-panel">
       <div className="editor-pane-header flex items-center justify-between gap-2 px-3">
-        <span className="min-w-0 truncate text-ui-xs tabular-nums text-muted-foreground" data-pool-count>{countLabel}</span>
+        <Truncate className="text-ui-xs tabular-nums text-muted-foreground" data-pool-count>{countLabel}</Truncate>
         <div className="ml-auto flex shrink-0 gap-1">
           {/* Keep import and recording reachable in every panel width. */}
-          <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
+          <IconButton asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} label={t("import")}>
             <label>
               <input
                 type="file"
@@ -125,17 +127,16 @@ export function MediaPool({
               />
               <ImagePlus size={14} />
             </label>
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
             variant="ghost"
             size="icon-sm"
             className="text-muted-foreground hover:text-foreground"
             onClick={onRecord}
-            title={t("record")}
-            aria-label={t("record")}
+            label={t("record")}
           >
             <CircleDot size={14} />
-          </Button>
+          </IconButton>
         </div>
       </div>
       <div className="grid gap-2 px-3 pb-3">
@@ -150,8 +151,8 @@ export function MediaPool({
         {/* 四等分,字放不下就省略 —— 面板最窄 180px 时一格只有三十来像素,不能让字顶出格子。 */}
         <div className="grid grid-cols-4 gap-1" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
-            <button key={kind} type="button" aria-pressed={kindFilter === kind} title={kindLabel[kind]} className={cn("flex h-8 min-w-0 cursor-pointer items-center justify-center rounded-md px-1 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")} onClick={() => setKindFilter(kind)}>
-              <span className="min-w-0 truncate">{kindLabel[kind]}</span>
+            <button key={kind} type="button" aria-pressed={kindFilter === kind} className={cn("flex h-8 min-w-0 cursor-pointer items-center justify-center rounded-md px-1 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")} onClick={() => setKindFilter(kind)}>
+              <Truncate>{kindLabel[kind]}</Truncate>
             </button>
           ))}
         </div>
@@ -166,30 +167,30 @@ export function MediaPool({
             </ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => onAddToTimeline(asset)}>
-                <ListPlus /> {t("addToTimeline")}
+                <MenuItemBody icon={<ListPlus />} label={t("addToTimeline")} />
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
-                <Download /> {t("assetSaveLocal")}
+                <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => setRenaming(asset)}>
-                <Pencil /> {t("rename")}
+                <MenuItemBody icon={<Pencil />} label={t("rename")} />
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => setEditingTags(asset)}>
-                <Tag /> {t("editTags")}
+                <MenuItemBody icon={<Tag />} label={t("editTags")} />
               </ContextMenuItem>
               {kindHasSound(asset.kind) && (
                 <ContextMenuItem onSelect={() => audioActions.denoise(asset.id)}>
-                  <AudioWaveform /> {t("denoiseAction")}
+                  <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
                 </ContextMenuItem>
               )}
               {kindHasSound(asset.kind) && (
                 <ContextMenuItem disabled={audioActions.separate.isPending} onSelect={() => audioActions.separate.mutate(asset.id)}>
-                  {audioActions.separate.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
+                  <MenuItemBody icon={audioActions.separate.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
                 </ContextMenuItem>
               )}
               <ContextMenuSeparator />
               <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
-                <Trash2 /> {t("delete")}
+                <MenuItemBody icon={<Trash2 />} label={t("delete")} />
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -246,7 +247,6 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       data-pool-item={asset.id}
       className="group/pool relative grid cursor-grab select-none grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-control active:cursor-grabbing"
       onDoubleClick={onAdd}
-      title={`${asset.name} — ${t("addToTimeline")}`}
     >
       {/* 缩略图必须 absolute 铺满(而不是 h-full/w-full):容器是 grid + place-items-center,
           行高按内容 auto 算且不拉伸,百分比高度因此没有参照、退化成图片固有高度 —— 竖图会
@@ -262,8 +262,8 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
-      <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-medium">
-        <strong>{asset.name}</strong>
+      <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground">
+        <Truncate as="strong" className="text-ui-sm font-medium">{asset.name}</Truncate>
         {/* 标签和时长同一行,有没有标签行高都一样;挤不下的标签收成「+N」,面板拖到最窄时
             标签先被截掉,不把行撑出面板。 */}
         <span className="flex min-w-0 items-center gap-1.5">
@@ -271,18 +271,18 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
           <TagChips tags={tagsOf(asset)} tone="surface" className="overflow-hidden" />
         </span>
       </div>
-      <button
+      <IconButton
+        unstyled
         type="button"
         className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-popover text-muted-foreground opacity-0 transition-[opacity,color,background-color] duration-150 hover:text-primary group-hover/pool:opacity-100 group-focus-within/pool:opacity-100"
-        title={t("addToTimeline")}
-        aria-label={t("addToTimeline")}
+        label={t("addToTimeline")}
         onClick={(event) => {
           event.stopPropagation();
           onAdd();
         }}
       >
         <Plus size={13} />
-      </button>
+      </IconButton>
     </div>
   );
 }

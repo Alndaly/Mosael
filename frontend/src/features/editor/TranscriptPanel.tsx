@@ -9,6 +9,8 @@ import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type C
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
 import { EngineNotice } from "@/components/app/ConfigNotice";
 import { kindHasSound } from "@/lib/assetKinds";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
@@ -189,17 +191,18 @@ const TranscriptRow = React.memo(function TranscriptRow({
           )}
         >
           <span aria-hidden />
-          <button
-            type="button"
-            className={cn(
-              "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground hover:border-destructive hover:text-destructive",
-              selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
-            )}
-            title={t("silenceGapHint")}
-            onClick={() => actions.toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
-          >
-            <AudioLines size={10} /> {gap.duration.toFixed(1)}s
-          </button>
+          <Hint label={t("silenceGapHint")}>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground hover:border-destructive hover:text-destructive",
+                selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
+              )}
+              onClick={() => actions.toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
+            >
+              <AudioLines size={10} /> {gap.duration.toFixed(1)}s
+            </button>
+          </Hint>
         </div>
       );
     }
@@ -220,53 +223,58 @@ const TranscriptRow = React.memo(function TranscriptRow({
           <span aria-hidden className="pointer-events-none absolute bottom-[5px] left-[3px] top-[5px] w-[3px] rounded-full bg-primary" />
         )}
         <div className="flex h-6 min-w-0 items-center justify-start gap-1 whitespace-nowrap">
-          <button
-            type="button"
-            className={cn(
-              "timecode cursor-pointer border-0 bg-transparent p-0 text-ui-2xs leading-6 tabular-nums text-muted-foreground hover:text-primary",
-              active && "font-medium text-primary",
-            )}
-            title={t("seekToSentence")}
-            onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
-          >
-            {formatTimecode(sentence.timelineStart)}
-          </button>
+          <Hint label={t("seekToSentence")}>
+            <button
+              type="button"
+              className={cn(
+                "timecode cursor-pointer border-0 bg-transparent p-0 text-ui-2xs leading-6 tabular-nums text-muted-foreground hover:text-primary",
+                active && "font-medium text-primary",
+              )}
+              onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+            >
+              {formatTimecode(sentence.timelineStart)}
+            </button>
+          </Hint>
           {/* 说话人与时间码在正文首行的同一个元数据组里,不再垂直居中到多行正文中间。 */}
           {showSpeakers && sentence.speaker && (
             // 人形图标 + 从 1 数的序号:光一个 `00` 挨着时间码 `00:00.4`,读起来像时间码的一部分。
-            <span
-              className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
-              style={speakerChipStyle(sentence.speaker)}
-              title={speakerLabel(sentence.speaker, t)}
-              aria-label={speakerLabel(sentence.speaker, t)}
-            >
-              <UserRound size={9} aria-hidden className="shrink-0" />
-              {speakerShort(sentence.speaker)}
-            </span>
+            <Hint label={speakerLabel(sentence.speaker, t)}>
+              <span
+                role="img"
+                className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
+                style={speakerChipStyle(sentence.speaker)}
+                aria-label={speakerLabel(sentence.speaker, t)}
+              >
+                <UserRound size={9} aria-hidden className="shrink-0" />
+                {speakerShort(sentence.speaker)}
+              </span>
+            </Hint>
           )}
         </div>
         {/* 操作浮层不参与栅格宽度:平时完全不占正文空间,悬停或键盘聚焦时才出现。 */}
         <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           {canSplit && (
-            <button
+            <IconButton
+              unstyled
               type="button"
               className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--primary)_12%,transparent)] hover:text-primary"
-              title={t("splitSentenceOutHint")}
-              aria-label={t("splitSentenceOut")}
+              label={t("splitSentenceOut")}
+              hint={t("splitSentenceOutHint")}
               onClick={() => actions.splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
             >
               <SplitSquareVertical size={12} />
-            </button>
+            </IconButton>
           )}
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive"
-            title={t("cutSentenceHint")}
-            aria-label={t("cutSentence")}
+            label={t("cutSentence")}
+            hint={t("cutSentenceHint")}
             onClick={() => actions.cutSentence(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
           >
             <X size={12} />
-          </button>
+          </IconButton>
         </div>
         <p className="m-0 min-w-0 whitespace-normal text-ui-md leading-6 [overflow-wrap:anywhere]">
           {sentence.tokens.length > 0
@@ -309,19 +317,20 @@ const TranscriptRow = React.memo(function TranscriptRow({
                 );
               })
             : (
-                <button
-                  type="button"
-                  className={cn(
-                    "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
-                    selected.has(`${key}:all`) &&
-                      "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
-                  )}
-                  title={t("markSentenceHint")}
-                  onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
-                  onDoubleClick={() => actions.toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-                >
-                  {sentence.text}
-                </button>
+                <Hint label={t("markSentenceHint")}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                      selected.has(`${key}:all`) &&
+                        "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                    )}
+                    onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+                    onDoubleClick={() => actions.toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                  >
+                    {sentence.text}
+                  </button>
+                </Hint>
               )}
         </p>
       </div>
@@ -567,29 +576,33 @@ export function TranscriptPanel({
   // 进度按**素材**数报,不按任务数 —— 用户看的是"这条时间线转到哪了"。
   const asrProgress = queueTotal > 1 ? `${Math.min(queueTotal - queue.length + 1, queueTotal)}/${queueTotal}` : "";
   const transcribeButton = assetIds.length > 0 && (
-    <button
-      type="button"
-      className={PILL}
-      disabled={asrRunning || noAsrEngine || transcriptsLoading || allTranscribed}
-      // 已经有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数字让人知道点下去会转什么。
-      title={allTranscribed ? t("transcribeAllDone") : t("transcribePendingHint").replace("{n}", String(pendingIds.length))}
-      onClick={startAll}
+    // 已经有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数字让人知道点下去会转什么。
+    <Hint
+      label={allTranscribed ? undefined : t("transcribePendingHint").replace("{n}", String(pendingIds.length))}
+      disabledReason={allTranscribed ? t("transcribeAllDone") : undefined}
     >
-      {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
-          可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
-          不属于控件本身。 */}
-      {asrRunning ? <Loader2 size={12} className="shrink-0 animate-mosael-spin" /> : <Mic size={12} className="shrink-0" />}
-      {/* 已有逐字稿、又有没转过的素材时,**把数字写进动作里**:「转写其余 12 段」。
-          此前是「AI 转写」后面挂一个光秃秃的 12 —— 同一排「静音」「口癖」后面的数字是"点下去会选中几处",
-          它却是"还有几个素材没转写",没有悬停就读不出来,用户只能问这个数字是什么意思。 */}
-      <span className="whitespace-nowrap">
-        {asrRunning
-          ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}`
-          : projected.length > 0 && pendingIds.length > 0
-            ? t("transcribePending").replace("{n}", String(pendingIds.length))
-            : t("aiTranscribe")}
-      </span>
-    </button>
+      <button
+        type="button"
+        className={PILL}
+        disabled={asrRunning || noAsrEngine || transcriptsLoading || allTranscribed}
+        onClick={startAll}
+      >
+        {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
+            可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
+            不属于控件本身。 */}
+        {asrRunning ? <Loader2 size={12} className="shrink-0 animate-mosael-spin" /> : <Mic size={12} className="shrink-0" />}
+        {/* 已有逐字稿、又有没转过的素材时,**把数字写进动作里**:「转写其余 12 段」。
+            此前是「AI 转写」后面挂一个光秃秃的 12 —— 同一排「静音」「口癖」后面的数字是"点下去会选中几处",
+            它却是"还有几个素材没转写",没有悬停就读不出来,用户只能问这个数字是什么意思。 */}
+        <span className="whitespace-nowrap">
+          {asrRunning
+            ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}`
+            : projected.length > 0 && pendingIds.length > 0
+              ? t("transcribePending").replace("{n}", String(pendingIds.length))
+              : t("aiTranscribe")}
+        </span>
+      </button>
+    </Hint>
   );
   // 引擎没装:说清楚,并给出路 —— 管理员直达管理页「引擎」,成员被告知由部署管理员安装(EngineNotice)。
   // 按钮同时禁用 —— 点下去只会排一个注定失败的任务。
@@ -839,45 +852,54 @@ export function TranscriptPanel({
         {transcribeButton}
         <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants} className={PILL}
           label={selected.size ? s.excerpt : s.saveAll} />
-        <button
-          type="button"
-          className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
-          title={t("silencesHint")}
-          onClick={() => setShowSilences((value) => !value)}
-        >
-          <AudioLines size={12} /> {t("silences")}
-          {showSilences && silences.length > 0 && <em>{silences.length}</em>}
-        </button>
+        <Hint label={t("silencesHint")}>
+          <button
+            type="button"
+            className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
+            aria-pressed={showSilences}
+            onClick={() => setShowSilences((value) => !value)}
+          >
+            <AudioLines size={12} /> {t("silences")}
+            {showSilences && silences.length > 0 && <em>{silences.length}</em>}
+          </button>
+        </Hint>
         <FillerPicker matches={fillers} enabled={fillerKinds} onEnabledChange={setFillerKinds} onSelect={selectFillers} />
         {onSplitPoints && (
           <>
-            <button type="button" className={PILL} title={t("splitBySentenceHint")} onClick={splitBySentence}>
-              <Split size={12} /> {t("splitBySentence")}
-            </button>
-            <button
-              type="button"
-              className={PILL}
-              title={t("splitAtWordHint")}
-              onClick={splitAtPlayhead}
-              disabled={!overClip}
-            >
-              <Scissors size={12} /> {t("splitAtWord")}
-            </button>
+            <Hint label={t("splitBySentenceHint")}>
+              <button type="button" className={PILL} onClick={splitBySentence}>
+                <Split size={12} /> {t("splitBySentence")}
+              </button>
+            </Hint>
+            <Hint label={t("splitAtWordHint")} disabledReason={!overClip ? t("splitAtWordNoClip") : undefined}>
+              <button
+                type="button"
+                className={PILL}
+                onClick={splitAtPlayhead}
+                disabled={!overClip}
+              >
+                <Scissors size={12} /> {t("splitAtWord")}
+              </button>
+            </Hint>
           </>
         )}
         {/* 逐字稿这边只做一件事:**把它变成字幕**。
             翻译是字幕的事(译的是已经成型的字幕),放在字幕那一页 —— 逐字稿是"这段音频说了什么"
             的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
         {onGenerateSubtitles && (
-          <button type="button" className={PILL} disabled={generatingSubtitles} title={t("transcriptGenerateSubtitlesHint")} onClick={onGenerateSubtitles}>
-            {generatingSubtitles ? <Loader2 size={12} className="animate-mosael-spin" /> : <Captions size={12} />}
-            {t("transcriptGenerateSubtitles")}
-          </button>
+          <Hint label={t("transcriptGenerateSubtitlesHint")}>
+            <button type="button" className={PILL} disabled={generatingSubtitles} onClick={onGenerateSubtitles}>
+              {generatingSubtitles ? <Loader2 size={12} className="animate-mosael-spin" /> : <Captions size={12} />}
+              {t("transcriptGenerateSubtitles")}
+            </button>
+          </Hint>
         )}
         {showSilences && silences.length > 0 && (
-          <button type="button" className={PILL} title={t("removeAllSilences")} onClick={selectAllSilences}>
-            {t("selectAllSilences")}
-          </button>
+          <Hint label={t("removeAllSilences")}>
+            <button type="button" className={PILL} onClick={selectAllSilences}>
+              {t("selectAllSilences")}
+            </button>
+          </Hint>
         )}
         <span className="ml-auto self-center whitespace-nowrap text-ui-xs text-muted-foreground">
           {t("transcriptStats")

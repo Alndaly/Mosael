@@ -4,8 +4,10 @@ import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, Search, ListFilter,
 import type { SceneContent, SceneShot } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import { trackRows, sameKey, type SceneKey } from "./sceneTracks";
 import { SHOT_FPS } from "./encodeVideo";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -126,20 +128,20 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
       <div className="scene-dope-toolbar" role="toolbar" aria-label={t("sceneAnimTimeline")}>
         {controls}
         {controls && <span className="scene-tool-divider" aria-hidden="true" />}
-        <Button size="icon-xs" variant="outline" disabled={!selectedObject || disabled} aria-label={t("sceneAnimInsert")} title={`${t("sceneAnimInsert")} · I`} onClick={() => selectedObject && onInsert(selectedObject.id, time)}><DiamondPlus /></Button>
-        <Button size="icon-xs" variant="outline" disabled={!selectedKeys.length || disabled} title={t("sceneAnimDelete")} aria-label={t("sceneAnimDelete")} onClick={deleteKeys}><Trash2 /></Button>
+        <IconButton size="icon-xs" variant="outline" disabled={!selectedObject || disabled} disabledReason={!selectedObject && t("sceneSelectObjectFirst")} label={t("sceneAnimInsert")} shortcut="I" onClick={() => selectedObject && onInsert(selectedObject.id, time)}><DiamondPlus /></IconButton>
+        <IconButton size="icon-xs" variant="outline" disabled={!selectedKeys.length || disabled} disabledReason={!selectedKeys.length && t("sceneAnimSelectKeysFirst")} label={t("sceneAnimDelete")} shortcut="Delete" onClick={deleteKeys}><Trash2 /></IconButton>
         <div className="scene-spacer" />
         <Popover>
-          <PopoverTrigger asChild><Button size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} aria-label={t("sceneAnimSearch")} title={t("sceneAnimSearch")}><ListFilter /></Button></PopoverTrigger>
+          <PopoverTrigger asChild><IconButton size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} label={t("sceneAnimSearch")}><ListFilter /></IconButton></PopoverTrigger>
           <PopoverContent align="end" className="grid w-64 gap-3 p-3">
             <label className="scene-dope-search"><Search size={14}/><Input size="xs" className="pl-7" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
             <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
           </PopoverContent>
         </Popover>
         <span className="scene-tool-divider" aria-hidden="true" />
-        <Button size="icon-xs" variant="ghost" disabled={zoom === 1} aria-label={t("sceneAnimZoomOut")} title={t("sceneAnimZoomOut")} onClick={() => setZoom(z => Math.max(1, z - 1))}><ZoomOut /></Button>
-        <Button size="icon-xs" variant="ghost" disabled={zoom === 8} aria-label={t("sceneAnimZoomIn")} title={t("sceneAnimZoomIn")} onClick={() => setZoom(z => Math.min(8, z + 1))}><ZoomIn /></Button>
-        <Button size="icon-xs" variant="ghost" aria-label={t("sceneAnimFit")} title={t("sceneAnimFit")} onClick={() => setZoom(1)}><Scan /></Button>
+        <IconButton size="icon-xs" variant="ghost" disabled={zoom === 1} label={t("sceneAnimZoomOut")} onClick={() => setZoom(z => Math.max(1, z - 1))}><ZoomOut /></IconButton>
+        <IconButton size="icon-xs" variant="ghost" disabled={zoom === 8} label={t("sceneAnimZoomIn")} onClick={() => setZoom(z => Math.min(8, z + 1))}><ZoomIn /></IconButton>
+        <IconButton size="icon-xs" variant="ghost" label={t("sceneAnimFit")} onClick={() => setZoom(1)}><Scan /></IconButton>
       </div>
       <div className="scene-dope-scroll">
         <div className="scene-dope-sheet" style={{minWidth: 560 * zoom}}>
@@ -155,8 +157,8 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
           {rows.map(row => {
             const Icon = row.object.kind === "camera" ? Video : row.object.kind === "light" ? Lightbulb : row.object.kind === "group" ? Folder : Box;
             return <div className="scene-dope-row" key={row.object.id} data-selected={row.object.id === selectedId || undefined}>
-              <button className="scene-dope-name" title={row.object.name} aria-pressed={row.object.id === selectedId} onClick={() => {setKeys([]); onSelect(row.object.id); focus();}}>
-                <Icon size={14}/><span>{row.object.name}</span><small>{row.times.length || "—"}</small>
+              <button className="scene-dope-name" aria-pressed={row.object.id === selectedId} onClick={() => {setKeys([]); onSelect(row.object.id); focus();}}>
+                <Icon size={14}/><Truncate>{row.object.name}</Truncate><small>{row.times.length || "—"}</small>
               </button>
               <div className="scene-dope-lane"><div className="scene-dope-track" role="presentation"
                 onPointerDown={e => scrub(e, row.object.id)} onPointerMove={e => {if (e.currentTarget.hasPointerCapture?.(e.pointerId)) onSeek(pointerTime(e));}}>
@@ -165,10 +167,10 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
                   const key = {id: row.object.id, time: value};
                   const selected = selectedKeys.some(one => sameKey(one, key));
                   const displayTime = value + (drag?.keys.some(one => sameKey(one, key)) ? drag.delta : 0);
-                  return <button key={value} className="scene-dope-key" style={{left: `${at(displayTime)}%`}}
-                    aria-label={`${row.object.name} · ${value.toFixed(2)}s`} title={`${row.object.name} · ${value.toFixed(2)}s`} aria-pressed={selected}
+                  return <IconButton unstyled key={value} className="scene-dope-key" style={{left: `${at(displayTime)}%`}}
+                    label={`${row.object.name} · ${value.toFixed(2)}s`} aria-pressed={selected}
                     onPointerDown={e => dragKey(e, key)} onClick={e => {e.stopPropagation(); if (e.detail === 0) selectKey(key, e.shiftKey);}}
-                  ><i /></button>;
+                  ><i /></IconButton>;
                 })}
                 <i className="scene-dope-playhead" aria-hidden style={{left: `${at(time)}%`}} data-playing={playing || undefined}/>
               </div></div>

@@ -5,7 +5,7 @@
  * `min-width: auto`,也就是"至少和内容一样宽"。截图里就是内容整片溢出到弹层之外。
  *
  * 这个仓库修过同一个形状(见工具浏览器弹窗的注释),所以这里盯的是**每一层都锁住**:
- * 容器 `min-w-0`、可变的那一栏 `min-w-0 flex-1`、固定的那一栏 `shrink-0`、长文本 `truncate`。
+ * 容器 `min-w-0`、可变的那一栏 `min-w-0 flex-1`、固定的那一栏 `shrink-0`、长文本走 `Truncate`。
  */
 
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
@@ -28,7 +28,8 @@ describe("从链接导入弹层的横向约束", () => {
   });
 
   it("标题那一行:标题截断、计数不缩", () => {
-    expect(code).toMatch(/min-w-0 flex-1 truncate/);
+    // Truncate 自带 `block min-w-0 truncate`(见 components/ui/truncate),这里再给它 flex-1。
+    expect(code).toMatch(/<Truncate className="flex-1 /);
     expect(code).toMatch(/shrink-0 text-ui-xs/);
   });
 

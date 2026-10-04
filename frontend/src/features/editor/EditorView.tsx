@@ -59,8 +59,8 @@ import {
   type TrackStatePatch,
   type Workspace,
 } from "@/api/client";
-import { Kbd } from "@/components/ui/kbd";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { IconButton } from "@/components/ui/icon-button";
+import { formatCombo } from "@/lib/shortcuts";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -1007,62 +1007,46 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} className={cn(agentOpen === "on" && "bg-accent text-accent-foreground")}><Bot />{t("wfAgentTitle")}</Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={!sequence.can_undo} loading={undoMutation.isPending}
-                onClick={() => undoMutation.mutate()}
-                aria-label={t("undo")}
-              >
-                <Undo2 size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("undo")}<Kbd>⌘Z</Kbd></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={!sequence.can_redo} loading={redoMutation.isPending}
-                onClick={() => redoMutation.mutate()}
-                aria-label={t("redoAction")}
-              >
-                <Redo2 size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("redoAction")}<Kbd>⇧⌘Z</Kbd></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                loading={addSubtitleMutation.isPending}
-                onClick={() => addSubtitleMutation.mutate()}
-                aria-label={t("addSubtitleAtPlayhead")}
-              >
-                <Type size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                loading={addTextMutation.isPending}
-                onClick={() => addTextMutation.mutate()}
-                aria-label={t("addTextAtPlayhead")}
-              >
-                <Sparkles size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("addTextAtPlayhead")}</TooltipContent>
-          </Tooltip>
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            disabled={!sequence.can_undo} loading={undoMutation.isPending}
+            onClick={() => undoMutation.mutate()}
+            label={t("undo")}
+            shortcut={formatCombo("Mod+Z")}
+            disabledReason={!sequence.can_undo && t("nothingToUndo")}
+          >
+            <Undo2 size={14} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            disabled={!sequence.can_redo} loading={redoMutation.isPending}
+            onClick={() => redoMutation.mutate()}
+            label={t("redoAction")}
+            shortcut={formatCombo("Mod+Shift+Z")}
+            disabledReason={!sequence.can_redo && t("nothingToRedo")}
+          >
+            <Redo2 size={14} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            loading={addSubtitleMutation.isPending}
+            onClick={() => addSubtitleMutation.mutate()}
+            label={t("addSubtitleAtPlayhead")}
+          >
+            <Type size={14} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            loading={addTextMutation.isPending}
+            onClick={() => addTextMutation.mutate()}
+            label={t("addTextAtPlayhead")}
+          >
+            <Sparkles size={14} />
+          </IconButton>
           <ExportControl sequence={sequence} />
 
         </div>

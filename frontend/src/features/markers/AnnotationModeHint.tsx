@@ -1,7 +1,9 @@
 import React from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
 import { Kbd } from "@/components/ui/kbd";
+import { Truncate } from "@/components/ui/truncate";
 import { listenKeys } from "@/lib/shortcuts";
 
 /** Shared hint and Escape behavior for both annotation modes and canvases. */
@@ -19,8 +21,8 @@ export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <span className="shrink-0 font-semibold text-primary">{t(kind === "comment" ? "boardCommentMode" : "markerMode")}</span>
     <span className="mx-1.5 text-muted-foreground">·</span>
-    <span className="truncate text-muted-foreground">{t(kind === "comment" ? "boardCommentModeHint" : "markerModeHint")}</span>
+    <Truncate className="text-muted-foreground">{t(kind === "comment" ? "boardCommentModeHint" : "markerModeHint")}</Truncate>
     <Kbd className="ml-2">Esc</Kbd>
-    <button type="button" className="ml-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground" title={exitLabel} aria-label={exitLabel} onClick={onExit}><X size={14} /></button>
+    <IconButton unstyled type="button" className="ml-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground" label={exitLabel} shortcut="Esc" onClick={onExit}><X size={14} /></IconButton>
   </div>;
 }

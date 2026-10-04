@@ -6,9 +6,12 @@ import { fetchWaveform, type Asset, type Clip, type LinkOption, type Sequence, t
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { IconButton } from "@/components/ui/icon-button";
+import { KbdGroup } from "@/components/ui/kbd";
+import { MenuContent, MenuItem, MenuItemBody } from "@/components/ui/menu";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   clipDuration,
   clipEnd,
@@ -34,7 +37,7 @@ import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
-import { listenKeys } from "@/lib/shortcuts";
+import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
@@ -967,124 +970,110 @@ export function Timeline({
       <div className="editor-timeline-toolbar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
-            <button
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={t("toolSelectHint")}
-              aria-pressed={tool === "select"}
-              onClick={() => useEditorStore.getState().setTool("select")}
-            >
-              <MousePointer2 size={12} /> {t("toolSelect")}
-            </button>
-            <button
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={t("toolBladeHint")}
-              aria-pressed={tool === "blade"}
-              onClick={() => useEditorStore.getState().setTool("blade")}
-            >
-              <Slice size={12} /> {t("toolBlade")}
-            </button>
+            <Hint label={t("toolSelectHint")} shortcut="A">
+              <button
+                type="button"
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                aria-pressed={tool === "select"}
+                onClick={() => useEditorStore.getState().setTool("select")}
+              >
+                <MousePointer2 size={12} /> {t("toolSelect")}
+              </button>
+            </Hint>
+            <Hint label={t("toolBladeHint")} shortcut="B">
+              <button
+                type="button"
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                aria-pressed={tool === "blade"}
+                onClick={() => useEditorStore.getState().setTool("blade")}
+              >
+                <Slice size={12} /> {t("toolBlade")}
+              </button>
+            </Hint>
           </div>
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
-            <button
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={t("editModeOverwriteHint")}
-              aria-pressed={editMode === "overwrite"}
-              onClick={() => useEditorStore.getState().setEditMode("overwrite")}
-            >
-              <Replace size={12} /> {t("editModeOverwrite")}
-            </button>
-            <button
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={t("editModeInsertHint")}
-              aria-pressed={editMode === "insert"}
-              onClick={() => useEditorStore.getState().setEditMode("insert")}
-            >
-              <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
-            </button>
+            <Hint label={t("editModeOverwriteHint")}>
+              <button
+                type="button"
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                aria-pressed={editMode === "overwrite"}
+                onClick={() => useEditorStore.getState().setEditMode("overwrite")}
+              >
+                <Replace size={12} /> {t("editModeOverwrite")}
+              </button>
+            </Hint>
+            <Hint label={t("editModeInsertHint")}>
+              <button
+                type="button"
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                aria-pressed={editMode === "insert"}
+                onClick={() => useEditorStore.getState().setEditMode("insert")}
+              >
+                <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
+              </button>
+            </Hint>
           </div>
         </div>
         <div className="flex items-center gap-0.5">
           {toolbarExtra}
           {(onSplitClip || onDuplicateClip || onDeleteClips) && <span className="mx-[3px] h-4 w-px bg-divider" />}
           {onSplitClip && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  // **没选中东西时也能用**:切的是播放头下的那一段。这一条原本只在监视器上方
-                  // 那排里有(「在此切一刀」),而这里的剪刀灰着 —— 同一个动作两个入口、两种
-                  // 可用条件,用户只会觉得剪刀坏了。
-                  onClick={() => onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
-                  aria-label={t("splitAtPlayhead")}
-                >
-                  <Scissors size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("splitAtPlayhead")}</TooltipContent>
-            </Tooltip>
+            <IconButton
+              variant="ghost"
+              size="icon-sm"
+              // **没选中东西时也能用**:切的是播放头下的那一段。这一条原本只在监视器上方
+              // 那排里有(「在此切一刀」),而这里的剪刀灰着 —— 同一个动作两个入口、两种
+              // 可用条件,用户只会觉得剪刀坏了。
+              onClick={() => onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
+              label={t("splitAtPlayhead")}
+              shortcut="S"
+            >
+              <Scissors size={14} />
+            </IconButton>
           )}
           {onGrabFrame && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" loading={grabbingFrame} onClick={onGrabFrame} aria-label={t("editorGrabFrame")}>
-                  <Camera size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("editorGrabFrameTitle")}</TooltipContent>
-            </Tooltip>
+            <IconButton variant="ghost" size="icon-sm" loading={grabbingFrame} onClick={onGrabFrame} label={t("editorGrabFrame")} hint={t("editorGrabFrameTitle")}>
+              <Camera size={14} />
+            </IconButton>
           )}
           {onDuplicateClip && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!duplicateTarget}
-                  onClick={() => duplicateTarget && onDuplicateClip(duplicateTarget.id)}
-                  aria-label={t("duplicateClip")}
-                >
-                  <Copy size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("duplicateClip")}</TooltipContent>
-            </Tooltip>
+            <IconButton
+              variant="ghost"
+              size="icon-sm"
+              disabled={!duplicateTarget}
+              disabledReason={t("timelineSelectClipFirst")}
+              onClick={() => duplicateTarget && onDuplicateClip(duplicateTarget.id)}
+              label={t("duplicateClip")}
+              shortcut={formatCombo("Mod+D")}
+            >
+              <Copy size={14} />
+            </IconButton>
           )}
           {onRippleDeleteClips && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!selectedClipIds.length}
-                  onClick={() => onRippleDeleteClips(selectedClipIds)}
-                  aria-label={t("rippleDelete")}
-                >
-                  <Waves size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("rippleDelete")}</TooltipContent>
-            </Tooltip>
+            <IconButton
+              variant="ghost"
+              size="icon-sm"
+              disabled={!selectedClipIds.length}
+              disabledReason={t("timelineSelectClipFirst")}
+              onClick={() => onRippleDeleteClips(selectedClipIds)}
+              label={t("rippleDelete")}
+              shortcut={formatCombo("Shift+Delete")}
+            >
+              <Waves size={14} />
+            </IconButton>
           )}
           {onDeleteClips && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!selectedClipIds.length}
-                  onClick={() => onDeleteClips(selectedClipIds)}
-                  aria-label={t("deleteClip")}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("deleteClip")}</TooltipContent>
-            </Tooltip>
+            <IconButton
+              variant="ghost"
+              size="icon-sm"
+              disabled={!selectedClipIds.length}
+              disabledReason={t("timelineSelectClipFirst")}
+              onClick={() => onDeleteClips(selectedClipIds)}
+              label={t("deleteClip")}
+              shortcut="Delete"
+            >
+              <Trash2 size={14} />
+            </IconButton>
           )}
           <span className="mx-[3px] h-4 w-px bg-divider" />
           {onAddTrack && (
@@ -1092,67 +1081,50 @@ export function Timeline({
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="sm"><Plus size={14} />{t("editorAddTrack")}<ChevronDown size={12} /></Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="grid w-44 gap-1 p-1.5">
+              <MenuContent label={t("editorAddTrack")} align="end">
                 {(["video", "audio", "subtitle"] as const).map((kind) => (
                   <PopoverClose asChild key={kind}>
-                    <Button variant="ghost" size="sm" className="justify-start" title={t(kind === "video" ? "addVideoTrackHint" : kind === "audio" ? "addAudioTrackHint" : "addSubtitleTrackHint")} onClick={() => onAddTrack(kind)}>
-                      {kind === "video" ? <Film /> : kind === "audio" ? <AudioLines /> : <Type />}
-                      {t(kind === "video" ? "trackVideoShort" : kind === "audio" ? "trackAudioShort" : "trackSubtitleShort")}
-                    </Button>
+                    <MenuItem
+                      icon={kind === "video" ? <Film /> : kind === "audio" ? <AudioLines /> : <Type />}
+                      label={t(kind === "video" ? "trackVideoShort" : kind === "audio" ? "trackAudioShort" : "trackSubtitleShort")}
+                      description={t(kind === "video" ? "addVideoTrackHint" : kind === "audio" ? "addAudioTrackHint" : "addSubtitleTrackHint")}
+                      onClick={() => onAddTrack(kind)}
+                    />
                   </PopoverClose>
                 ))}
-              </PopoverContent>
+              </MenuContent>
             </Popover>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn(snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-                onClick={() => useEditorStore.getState().toggleSnap()}
-                aria-pressed={snapEnabled}
-                aria-label={t("timelineSnap")}
-              >
-                <Magnet size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("timelineSnap")}<Kbd>N</Kbd></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
-                <Minus size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("zoomOut")}<Kbd>-</Kbd></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
-                <Plus size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("zoomIn")}<Kbd>+</Kbd></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={zoomToFit} aria-label={t("zoomToFit")}>
-                <Maximize2 size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">{t("zoomToFit")}<Kbd>⇧Z</Kbd></TooltipContent>
-          </Tooltip>
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            className={cn(snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+            onClick={() => useEditorStore.getState().toggleSnap()}
+            aria-pressed={snapEnabled}
+            label={t("timelineSnap")}
+            shortcut="N"
+          >
+            <Magnet size={14} />
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => applyZoom(1 / 1.3)} label={t("zoomOut")} shortcut="-">
+            <Minus size={14} />
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={() => applyZoom(1.3)} label={t("zoomIn")} shortcut="+">
+            <Plus size={14} />
+          </IconButton>
+          <IconButton variant="ghost" size="icon-sm" onClick={zoomToFit} label={t("zoomToFit")} shortcut={formatCombo("Shift+Z")}>
+            <Maximize2 size={14} />
+          </IconButton>
           <Popover open={helpOpen} onOpenChange={setHelpOpen}>
             <PopoverTrigger asChild>
-              <Button
+              <IconButton
                 variant="ghost"
                 size="icon-sm"
                 className={cn(helpOpen && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-                aria-label={t("shortcutsHelp")}
+                label={t("shortcutsHelp")}
               >
                 <CircleHelp size={14} />
-              </Button>
+              </IconButton>
             </PopoverTrigger>
             <PopoverContent className="grid max-h-[70vh] w-[340px] gap-1.5 overflow-y-auto px-3 py-2.5 [&_strong]:mb-0.5 [&_strong]:text-xs" aria-label={t("shortcutsHelp")}>
               <strong>{t("shortcutsHelp")}</strong>
@@ -1202,31 +1174,33 @@ export function Timeline({
             <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-ui-xs font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className={cn("h-[7px] w-[7px] rounded-sm bg-[var(--track-video-border)]", track.kind === "audio" && "bg-[var(--track-audio-border)]", track.kind === "subtitle" && "bg-[var(--track-subtitle-border)]")} />
-                <span className="truncate">{track.name}</span>
+                <Truncate>{track.name}</Truncate>
                 {/* Reorder sits with the name: it answers "which layer is this", not "what does
                     this track do". That also leaves the row below wide enough for the controls. */}
                 {onMoveTrack && (
                 <span className="ml-auto inline-flex gap-px">
-                  <button
+                  <IconButton
+                    unstyled
                     type="button"
                     className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
-                    aria-label={t("trackMoveUp")}
-                    title={t("trackMoveUp")}
+                    label={t("trackMoveUp")}
+                    hint={t("trackMoveHint")}
                     disabled={trackIndex === 0}
                     onClick={() => onMoveTrack(track.id, "up")}
                   >
                     <ChevronUp size={12} />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton
+                    unstyled
                     type="button"
                     className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
-                    aria-label={t("trackMoveDown")}
-                    title={t("trackMoveDown")}
+                    label={t("trackMoveDown")}
+                    hint={t("trackMoveHint")}
                     disabled={trackIndex === tracks.length - 1}
                     onClick={() => onMoveTrack(track.id, "down")}
                   >
                     <ChevronDown size={12} />
-                  </button>
+                  </IconButton>
                 </span>
                 )}
               </div>
@@ -1285,15 +1259,15 @@ export function Timeline({
                 </span>
               )}
               {onRemoveTrack && (
-                <button
+                <IconButton
+                  unstyled
                   type="button"
                   className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 hover:bg-destructive hover:text-white group-hover/label:opacity-100"
-                  aria-label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
-                  title={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
+                  label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   onClick={() => onRemoveTrack(track.id, (track.clips ?? []).length)}
                 >
                   <X size={11} />
-                </button>
+                </IconButton>
               )}
               </div>
             </div>
@@ -1557,12 +1531,12 @@ export function Timeline({
             <ContextMenuContent>
               {onSplitClip && (
                 <ContextMenuItem onSelect={() => onSplitClip(menuClip.id)}>
-                  <Scissors /> {t("splitAtPlayhead")}
+                  <MenuItemBody icon={<Scissors />} label={t("splitAtPlayhead")} shortcut="S" />
                 </ContextMenuItem>
               )}
               {onDuplicateClip && (
                 <ContextMenuItem onSelect={() => onDuplicateClip(menuClip.id)}>
-                  <Copy /> {t("duplicateClip")}
+                  <MenuItemBody icon={<Copy />} label={t("duplicateClip")} shortcut={formatCombo("Mod+D")} />
                 </ContextMenuItem>
               )}
               {/* 按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的静图就是这么落上去的),
@@ -1570,38 +1544,38 @@ export function Timeline({
                   素材库里那两项只产出新素材、不动时间线。 */}
               {onDetachAudio && menuTrack?.kind === "video" && menuClip.asset_id && menuClip.asset_kind === "video" && (
                 <ContextMenuItem onSelect={() => onDetachAudio(menuClip.id)}>
-                  <AudioLines /> {t("detachAudio")}
+                  <MenuItemBody icon={<AudioLines />} label={t("detachAudio")} />
                 </ContextMenuItem>
               )}
               {/* 媒体片段(含脱机的 —— 换一份就重新接上)才能换素材;文字片段没有媒体。 */}
               {onReplaceMedia && (menuClip.asset_id || menuClip.offline_asset) && (
                 <ContextMenuItem onSelect={() => onReplaceMedia(menuClip.id)}>
-                  <Replace /> {t("replaceMedia")}
+                  <MenuItemBody icon={<Replace />} label={t("replaceMedia")} />
                 </ContextMenuItem>
               )}
               {onClipAudio && menuClip.asset_id && (menuClip.asset_kind === "video" || menuClip.asset_kind === "audio") && (
                 <>
                   <ContextMenuSeparator />
                   <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "denoise")}>
-                    <AudioWaveform /> {t("clipAudioDenoise")}
+                    <MenuItemBody icon={<AudioWaveform />} label={t("clipAudioDenoise")} />
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "isolate_voice")}>
-                    <Mic /> {t("clipAudioIsolateVoice")}
+                    <MenuItemBody icon={<Mic />} label={t("clipAudioIsolateVoice")} />
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "separate")}>
-                    <Split /> {t("clipAudioSeparate")}
+                    <MenuItemBody icon={<Split />} label={t("clipAudioSeparate")} />
                   </ContextMenuItem>
                 </>
               )}
               <ContextMenuSeparator />
               {onDeleteClips && (
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDeleteClips(menuTargets(menuClip.id))}>
-                  <Trash2 /> {t("deleteClip")}
+                  <MenuItemBody icon={<Trash2 />} label={t("deleteClip")} shortcut="Delete" />
                 </ContextMenuItem>
               )}
               {onRippleDeleteClips && (
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onRippleDeleteClips(menuTargets(menuClip.id))}>
-                  <Waves /> {t("rippleDelete")}
+                  <MenuItemBody icon={<Waves />} label={t("rippleDelete")} shortcut={formatCombo("Shift+Delete")} />
                 </ContextMenuItem>
               )}
             </ContextMenuContent>
@@ -1641,23 +1615,17 @@ function TrackToggle({
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100 focus-visible:opacity-100", active && cn("opacity-100", activeClassName))}
-          aria-label={label}
-          aria-pressed={active}
-          onClick={onToggle}
-        >
-          {children}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[240px]">
-        <div className="font-medium">{label}</div>
-        {hint && <div className="mt-0.5 text-muted-foreground">{hint}</div>}
-      </TooltipContent>
-    </Tooltip>
+    <IconButton
+      unstyled
+      type="button"
+      className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100 focus-visible:opacity-100", active && cn("opacity-100", activeClassName))}
+      label={label}
+      hint={hint}
+      aria-pressed={active}
+      onClick={onToggle}
+    >
+      {children}
+    </IconButton>
   );
 }
 

@@ -10,6 +10,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { gotoAdmin, gotoJob } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
@@ -141,18 +142,19 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                   </button>
                   {/* 放在单选按钮外面:禁用的按钮里不能再套按钮。 */}
                   {downloadable && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      className="mr-3 mt-2.5 shrink-0"
-                      title={one.setup_hint || undefined}
-                      onClick={() => {
-                        onClose();
-                        gotoAdmin("engines");
-                      }}
-                    >
-                      <Download size={12} /> {t("denoiseGoDownload")}
-                    </Button>
+                    <Hint label={one.setup_hint || undefined}>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        className="mr-3 mt-2.5 shrink-0"
+                        onClick={() => {
+                          onClose();
+                          gotoAdmin("engines");
+                        }}
+                      >
+                        <Download size={12} /> {t("denoiseGoDownload")}
+                      </Button>
+                    </Hint>
                   )}
                 </div>
               );

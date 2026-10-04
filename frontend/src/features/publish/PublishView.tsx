@@ -31,6 +31,8 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Truncate } from "@/components/ui/truncate";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -282,7 +284,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                     </ContextMenuTrigger>
                     <ContextMenuContent>
                       <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(task)}>
-                        <Trash2 /> {t("delete")}
+                        <MenuItemBody icon={<Trash2 />} label={t("delete")} />
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
@@ -336,9 +338,9 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 px-3 py-5 transition-colors hover:bg-panel">
       <span className={cn("grid size-11 place-items-center rounded-xl bg-panel-subtle", tone)}><Icon size={20} className={spin ? "animate-mosael-spin" : undefined} /></span>
       <div className="grid min-w-0 gap-2">
-        <strong className="truncate text-ui-md font-semibold">{task.title || task.asset_name}</strong>
-        <span className="truncate text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</span>
-        {task.status === "failed" && task.error && <p className="line-clamp-2 text-ui-sm text-destructive">{task.error}</p>}
+        <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
+        <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
+        {task.status === "failed" && task.error && <Truncate as="p" lines={2} className="text-ui-sm text-destructive">{task.error}</Truncate>}
       </div>
       <div className={cn("grid gap-2 text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
@@ -420,10 +422,10 @@ function PublishDetail({
           {/* 状态只说一次:此前这一行写着「失败」,右边还浮着一个同义的红色图标。 */}
           <p className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
             <StatusIcon status={task.status} />
-            <span className="truncate">
+            <Truncate>
               {task.account_name} · {task.platform} ·{" "}
               <span className={statusTone(task.status).tone}>{t(`batchStatus_${task.status}` as never)}</span>
-            </span>
+            </Truncate>
           </p>
         </header>
         <dl className="m-0 grid gap-2.5">

@@ -1,7 +1,9 @@
 import React from "react";
 import type { Vec3 } from "@/api/domains/scenes";
 import type { FieldSize } from "@/components/ui/control-size";
+import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
+import type { HintShortcut } from "@/components/ui/tooltip";
 import { isImeKeystroke } from "@/lib/shortcuts";
 export function Pick({
   value,
@@ -128,24 +130,31 @@ export function Tool({
   onClick,
   active,
   disabled,
+  disabledReason,
+  shortcut,
 }: {
   label: string;
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
+  /** 点不了的原因(见 IconButton);说不出来就别给。 */
+  disabledReason?: string | false | null;
+  shortcut?: HintShortcut | null;
 }) {
   return (
-    <button
+    <IconButton
+      unstyled
       type="button"
       className="scene-tool"
-      title={label}
-      aria-label={label}
+      label={label}
+      shortcut={shortcut}
       aria-pressed={active}
       disabled={disabled}
+      disabledReason={disabledReason}
       onClick={onClick}
     >
       {children}
-    </button>
+    </IconButton>
   );
 }

@@ -38,7 +38,7 @@ describe("AssetPreviewModal image-preview layering", () => {
       </ImagePreviewProvider>,
     );
 
-    fireEvent.click(screen.getByTitle("assetClickToZoom"));
+    fireEvent.click(screen.getByRole("button", { name: /assetClickToZoom/ }));
 
     const preview = await waitFor(() => {
       const element = document.querySelector<HTMLElement>(".PhotoView-Portal");

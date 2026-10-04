@@ -27,14 +27,15 @@ it("keeps only the current asset action menu open and closes it for a context me
   const user = userEvent.setup();
   for (const id of ["one", "two", "three"]) {
     await user.click(screen.getByRole("button", { name: `studioActions: ${id}` }));
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "rename" })).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByRole("menuitem", { name: "rename" })).toHaveLength(1));
     expect(screen.getByRole("button", { name: `studioActions: ${id}` })).toHaveAttribute("aria-expanded", "true");
   }
   await user.keyboard("{Escape}");
-  await waitFor(() => expect(screen.queryByRole("button", { name: "rename" })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole("menuitem", { name: "rename" })).not.toBeInTheDocument());
   await user.click(screen.getByRole("button", { name: "studioActions: one" }));
   fireEvent.contextMenu(screen.getByRole("button", { name: "two" }), { button: 2, clientX: 50, clientY: 50 });
-  await waitFor(() => expect(screen.queryByRole("button", { name: "rename" })).not.toBeInTheDocument());
+  // ⋯ 菜单(叫 studioActions 的那张)收起,只剩右键菜单里的那一个「重命名」。
+  await waitFor(() => expect(screen.queryByRole("menu", { name: "studioActions" })).not.toBeInTheDocument());
   expect(screen.getByRole("menuitem", { name: "rename" })).toBeInTheDocument();
 });
 
@@ -48,13 +49,13 @@ it("有声音的素材才能分离人声与背景音,点了就排任务", async 
   const user = userEvent.setup();
 
   await user.click(screen.getByRole("button", { name: "studioActions: still" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "rename" })).toBeInTheDocument());
-  expect(screen.queryByRole("button", { name: "separateAudio" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "denoiseAction" })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("menuitem", { name: "rename" })).toBeInTheDocument());
+  expect(screen.queryByRole("menuitem", { name: "separateAudio" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: "denoiseAction" })).not.toBeInTheDocument();
   await user.keyboard("{Escape}");
 
   await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
-  await user.click(await screen.findByRole("button", { name: "separateAudio" }));
+  await user.click(await screen.findByRole("menuitem", { name: "separateAudio" }));
   await waitFor(() => expect(separateAssetAudio).toHaveBeenCalledWith("clip"));
 });
 
@@ -68,7 +69,7 @@ it("有声音的素材能降噪:点了打开降噪对话框", async () => {
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
-  await user.click(await screen.findByRole("button", { name: "denoiseAction" }));
+  await user.click(await screen.findByRole("menuitem", { name: "denoiseAction" }));
   expect(await screen.findByRole("dialog", { name: "denoiseTitle" })).toBeInTheDocument();
 });
 

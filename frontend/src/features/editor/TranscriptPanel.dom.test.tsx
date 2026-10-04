@@ -88,7 +88,7 @@ describe("逐字稿列表", () => {
     renderPanel();
 
     await screen.findByText("第0句");
-    expect(screen.queryByTitle("说话人 1")).toBeNull();
+    expect(screen.queryByRole("img", { name: "说话人 1" })).toBeNull();
   });
 
   it("分得出两个人时才挂,而且时间码、说话人、正文在同一横向栅格里", async () => {
@@ -96,10 +96,10 @@ describe("逐字稿列表", () => {
     const { container } = renderPanel();
 
     const sentenceText = await screen.findByText("第0句");
-    await waitFor(() => expect(screen.getByTitle("说话人 1")).toBeInTheDocument());
-    const speaker = screen.getByTitle("说话人 1");
-    expect(screen.getByTitle("说话人 2")).toBeInTheDocument();
-    // 栏里放得下的是人形图标 + 序号,完整名字在 title / aria-label 上。
+    await waitFor(() => expect(screen.getByRole("img", { name: "说话人 1" })).toBeInTheDocument());
+    const speaker = screen.getByRole("img", { name: "说话人 1" });
+    expect(screen.getByRole("img", { name: "说话人 2" })).toBeInTheDocument();
+    // 栏里放得下的是人形图标 + 序号,完整名字在悬停说明 / aria-label 上。
     // 此前是一个光秃秃的 `00` 挨着时间码 `00:00.0` —— 用户问"这个绿色的 00 是什么"。
     expect(speaker.textContent).toBe("1");
     expect(speaker.querySelector("svg")).not.toBeNull();

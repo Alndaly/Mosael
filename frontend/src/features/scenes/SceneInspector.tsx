@@ -19,6 +19,7 @@ import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, groupPath, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { formatCombo } from "@/lib/shortcuts";
 export function SceneInspector({
   workspaceId,
   content,
@@ -70,7 +71,7 @@ export function SceneInspector({
                     {/* 带上上级:「添加 → 组」建出来的都叫「组」,嵌套之后一列全是「组」,
                         选哪个全靠猜。 */}
                     {groupTargets(content, object.id).map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
+                      <SelectItem key={group.id} value={group.id} truncate>
                         {groupPath(content, group.id)}
                       </SelectItem>
                     ))}
@@ -88,6 +89,7 @@ export function SceneInspector({
             <div className="scene-actions">
               <Tool
                 label={t("sceneObjectDuplicate")}
+                shortcut={formatCombo("Shift+D")}
                 onClick={() => update(duplicateObject(content, object.id, t))}
               >
                 <Copy size={15} />
@@ -115,6 +117,7 @@ export function SceneInspector({
               </Tool>
               <Tool
                 label={t("sceneObjectDelete")}
+                shortcut="X"
                 onClick={() => onRemove([object.id])}
               >
                 <Trash2 size={15} />
@@ -123,6 +126,7 @@ export function SceneInspector({
                   三个方块加一段文字,行高和重心都对不齐 —— 而它和另外三个是同一类操作。 */}
               <Tool
                 label={object.hidden ? t("sceneObjectShow") : t("sceneObjectHide")}
+                shortcut="H"
                 active={object.hidden}
                 onClick={() =>
                   objectPatch(object.id, { hidden: !object.hidden })
@@ -335,7 +339,7 @@ function FigureCast({ workspaceId, value, onChange }: {
           <SelectItem value={NO_CAST}>{t("sceneFigureCastNone")}</SelectItem>
           {missing && <SelectItem value={value}>{t("sceneFigureCastMissing")}</SelectItem>}
           {known.map((one) => (
-            <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>
+            <SelectItem key={one.id} value={one.id} truncate>{one.name}</SelectItem>
           ))}
         </SelectContent>
       </Select>

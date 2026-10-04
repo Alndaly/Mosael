@@ -1,6 +1,7 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   IDENTITY_CURVE,
@@ -175,9 +176,11 @@ export function CurveEditor({
             {c.label}
           </button>
         ))}
-        <button type="button" className="cursor-pointer border-0 bg-transparent px-1 py-0 text-ui-2xs text-muted-foreground hover:text-foreground" onClick={resetChannel} title={t("curveResetChannel")}>
-          {t("gradeReset")}
-        </button>
+        <Hint label={t("curveResetChannel")}>
+          <button type="button" className="cursor-pointer border-0 bg-transparent px-1 py-0 text-ui-2xs text-muted-foreground hover:text-foreground" onClick={resetChannel}>
+            {t("gradeReset")}
+          </button>
+        </Hint>
       </div>
       <svg
         ref={svgRef}

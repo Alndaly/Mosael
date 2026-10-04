@@ -8,6 +8,9 @@ import {
 } from "lucide-react";
 import type { SceneSummary } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Truncate } from "@/components/ui/truncate";
 import { Input } from "@/components/ui/input";
 import { ModalShell, ConfirmDialog } from "@/components/app/modals";
 import {
@@ -170,15 +173,15 @@ export function SceneList({
               <Trash2 />
               {t("sceneListDeleteSelected")}
             </Button>
-            <Button
+            <IconButton
               variant="outline"
               size="icon-sm"
-              aria-label={t("sceneListClearSelection")}
+              label={t("sceneListClearSelection")}
               disabled={busy}
               onClick={clear}
             >
               <X />
-            </Button>
+            </IconButton>
           </div>
         </div>
       )}
@@ -231,7 +234,7 @@ export function SceneList({
                     <ScenePreview data={scene.preview} className={selected.has(scene.id) ? "border-primary ring-1 ring-inset ring-primary" : undefined} />
                     {selecting && <SelectionCheck selected={selected.has(scene.id)} />}
                   </span>
-                  <span className="truncate pr-8 text-ui-md font-semibold" title={scene.name}>{scene.name}</span>
+                  <Truncate className="pr-8 text-ui-md font-semibold">{scene.name}</Truncate>
                   <span className="text-ui-sm text-muted-foreground">
                     {t("sceneListCounts").replace("{objects}", String(scene.object_count)).replace("{shots}", String(scene.shot_count))}
                   </span>
@@ -277,30 +280,25 @@ export function SceneList({
           {targets.length === 1 && (
             <>
               <ContextMenuItem onSelect={() => onOpen(targets[0].id)}>
-                <ArrowUpRight />
-                {t("sceneListOpen")}
+                <MenuItemBody icon={<ArrowUpRight />} label={t("sceneListOpen")} />
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => edit(targets[0])}>
-                <Pencil />
-                {t("rename")}
+                <MenuItemBody icon={<Pencil />} label={t("rename")} />
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
           {targets.length === 1 && (
             <ContextMenuItem onSelect={() => toggle(targets[0].id)}>
-              <CheckSquare />
-              {selected.has(targets[0].id) ? t("sceneListDeselect") : t("sceneListSelect")}
+              <MenuItemBody icon={<CheckSquare />} label={selected.has(targets[0].id) ? t("sceneListDeselect") : t("sceneListSelect")} />
             </ContextMenuItem>
           )}
           <ContextMenuItem onSelect={all}>
-            <CheckSquare />
-            {t("sceneListSelectAll")}
+            <MenuItemBody icon={<CheckSquare />} label={t("sceneListSelectAll")} />
           </ContextMenuItem>
           {selecting && (
             <ContextMenuItem onSelect={clear}>
-              <X />
-              {t("sceneListClearSelection")}
+              <MenuItemBody icon={<X />} label={t("sceneListClearSelection")} />
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -309,8 +307,7 @@ export function SceneList({
             className="text-destructive"
             onSelect={() => setRemove(targets)}
           >
-            <Trash2 />
-            {targets.length > 1 ? t("sceneListDeleteCount").replace("{n}", String(targets.length)) : t("sceneListDelete")}
+            <MenuItemBody icon={<Trash2 />} label={targets.length > 1 ? t("sceneListDeleteCount").replace("{n}", String(targets.length)) : t("sceneListDelete")} />
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

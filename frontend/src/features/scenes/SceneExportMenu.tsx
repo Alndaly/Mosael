@@ -2,7 +2,8 @@ import { Download } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
 
 /**
  * 「导出文件」:把场景**作为文件**带走 —— GLB 给别的 3D 软件,JSON 是这份场景本身。
@@ -29,14 +30,14 @@ export function SceneExportMenu({
           {t("sceneExportFiles")}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="scene-export">
-        <button type="button" onClick={onExportGlb}>
-          {t("sceneExportGlb")}
-        </button>
-        <button type="button" onClick={onExportJson}>
-          {t("sceneExportJson")}
-        </button>
-      </PopoverContent>
+      <MenuContent label={t("sceneExportFiles")} align="end">
+        <PopoverClose asChild>
+          <MenuItem label={t("sceneExportGlb")} onClick={onExportGlb} />
+        </PopoverClose>
+        <PopoverClose asChild>
+          <MenuItem label={t("sceneExportJson")} onClick={onExportJson} />
+        </PopoverClose>
+      </MenuContent>
     </Popover>
   );
 }

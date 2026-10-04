@@ -22,6 +22,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { TranscriptPanel } from "@/features/editor/TranscriptPanel";
+import { readHint } from "@/test/hint";
 
 Element.prototype.scrollIntoView = vi.fn();
 
@@ -193,7 +194,7 @@ describe("逐字稿页的转写入口", () => {
     await screen.findByText("vid 说的话");
     // 此前是「AI 转写」后面挂一个光秃秃的数字 —— 用户问"这个数字有什么意义"。
     const header = screen.getByRole("button", { name: "转写其余 1 段" });
-    expect(header).toHaveAttribute("title", "transcribePendingHint");
+    expect(await readHint(header)).toBe("transcribePendingHint");
     expect(header.querySelector("em")).toBeNull();
 
     fireEvent.click(header);
@@ -207,7 +208,7 @@ describe("逐字稿页的转写入口", () => {
     await screen.findByText("vid 说的话");
     const button = screen.getByRole("button", { name: "aiTranscribe" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", "transcribeAllDone");
+    expect(await readHint(button)).toBe("transcribeAllDone");
     fireEvent.click(button);
     expect(started).toEqual([]);
     expect(document.querySelector(".text-destructive")).toBeNull();

@@ -451,27 +451,7 @@
 .scene-dope-footer > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .scene-dope-empty { padding: 24px; text-align: center; color: var(--muted-foreground); font-size: var(--text-ui-xs); }
 
-.scene-add,
-.scene-export {
-  display: flex;
-  flex-direction: column;
-  padding: 6px !important;
-  gap: 2px;
-}
-.scene-add button,
-.scene-export button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  text-align: left;
-  font-size: var(--text-ui-sm);
-}
-.scene-add button:hover,
-.scene-export button:hover {
-  background: var(--secondary);
-}
+
 .scene-busy {
   position: absolute;
   inset: 0;

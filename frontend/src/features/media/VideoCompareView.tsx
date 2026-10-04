@@ -4,6 +4,8 @@ import { Pause, Play, Repeat, SkipBack, StepBack, StepForward, Volume2, VolumeX,
 import { assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -183,9 +185,9 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
           {t("mediaCompare")}
           <span className="ml-1.5 font-normal text-muted-foreground">{videos.length}</span>
         </span>
-        <Button variant="outline" size="sm" onClick={onClose} aria-label={t("close")}>
+        <IconButton variant="outline" size="sm" onClick={onClose} label={t("close")} shortcut="Esc">
           <X size={13} />
-        </Button>
+        </IconButton>
       </div>
 
       <div
@@ -226,19 +228,18 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
               </div>
               <div className="flex min-w-0 items-center gap-2 border-t border-border bg-panel px-2.5 py-1.5">
                 <div className="grid min-w-0 flex-1 gap-px">
-                  <span className="truncate text-ui-sm font-semibold" title={asset.name}>{asset.name}</span>
-                  <span className="timecode truncate text-ui-2xs text-muted-foreground">{metaOf(asset)}</span>
+                  <Truncate className="text-ui-sm font-semibold">{asset.name}</Truncate>
+                  <Truncate className="timecode text-ui-2xs text-muted-foreground">{metaOf(asset)}</Truncate>
                 </div>
-                <Button
+                <IconButton
                   variant={audible ? "secondary" : "ghost"}
                   size="icon-xs"
                   aria-pressed={audible}
-                  aria-label={`${t(audible ? "videoCompareMute" : "videoCompareListen")}: ${asset.name}`}
-                  title={t(audible ? "videoCompareMute" : "videoCompareListen")}
+                  label={`${t(audible ? "videoCompareMute" : "videoCompareListen")}: ${asset.name}`}
                   onClick={() => setSoundId(audible ? null : asset.id)}
                 >
                   {audible ? <Volume2 /> : <VolumeX />}
-                </Button>
+                </IconButton>
               </div>
             </div>
           );
@@ -247,18 +248,18 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
 
       {/* 一套播放控制管所有条。 */}
       <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
-        <Button variant="outline" size="sm" aria-label={t("videoCompareRestart")} title={t("videoCompareRestart")} onClick={() => seekAll(0)}>
+        <IconButton variant="outline" size="sm" label={t("videoCompareRestart")} onClick={() => seekAll(0)}>
           <SkipBack size={13} />
-        </Button>
-        <Button variant="outline" size="sm" aria-label={t("videoComparePrevFrame")} title={t("videoComparePrevFrame")} onClick={() => step(-1)}>
+        </IconButton>
+        <IconButton variant="outline" size="sm" label={t("videoComparePrevFrame")} shortcut="←" onClick={() => step(-1)}>
           <StepBack size={13} />
-        </Button>
-        <Button size="sm" aria-label={t(playing ? "videoComparePause" : "videoComparePlay")} onClick={playing ? pauseAll : playAll}>
+        </IconButton>
+        <IconButton variant="default" size="sm" label={t(playing ? "videoComparePause" : "videoComparePlay")} shortcut={t("keySpace")} onClick={playing ? pauseAll : playAll}>
           {playing ? <Pause size={13} /> : <Play size={13} />}
-        </Button>
-        <Button variant="outline" size="sm" aria-label={t("videoCompareNextFrame")} title={t("videoCompareNextFrame")} onClick={() => step(1)}>
+        </IconButton>
+        <IconButton variant="outline" size="sm" label={t("videoCompareNextFrame")} shortcut="→" onClick={() => step(1)}>
           <StepForward size={13} />
-        </Button>
+        </IconButton>
         <span className="timecode min-w-[5.5rem] text-center text-ui-xs tabular-nums text-muted-foreground">
           {formatTimecode(time)} / {formatTimecode(total)}
         </span>

@@ -6,7 +6,7 @@ import type { MessageKey } from "@/app/messages";
 import { formatBytes } from "@/lib/bytes";
 import { saveBlobToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
-import { listenKeys } from "@/lib/shortcuts";
+import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -88,12 +88,17 @@ import {
   type SceneShot,
 } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { KbdGroup } from "@/components/ui/kbd";
+import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import {
   Popover,
+  PopoverClose,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   CanvasAgentChat,
   type CanvasAgentMode,
@@ -912,11 +917,19 @@ function SceneEditor({
           <Tool
             label={t("undo")}
             onClick={undo}
+            shortcut={formatCombo("Mod+Z")}
             disabled={!history.length || !!busy}
+            disabledReason={!history.length && t("nothingToUndo")}
           >
             <RotateCcw size={16} />
           </Tool>
-          <Tool label={t("redo")} onClick={redo} disabled={!future.length || !!busy}>
+          <Tool
+            label={t("redo")}
+            onClick={redo}
+            shortcut={formatCombo("Mod+Shift+Z")}
+            disabled={!future.length || !!busy}
+            disabledReason={!future.length && t("nothingToRedo")}
+          >
             <RotateCw size={16} />
           </Tool>
           <Tool label={t("sceneHistory")} onClick={() => setRevisions(true)}>
@@ -1141,14 +1154,14 @@ function SceneEditor({
                   ["observe", "sceneViewOverview", "sceneViewOverviewHint"],
                 ] as const
               ).map(([value, label, hint]) => (
-                <button
-                  key={value}
-                  title={t(hint)}
-                  aria-pressed={viewMode === value}
-                  onClick={() => setViewMode(value)}
-                >
-                  {t(label)}
-                </button>
+                <Hint key={value} label={t(hint)}>
+                  <button
+                    aria-pressed={viewMode === value}
+                    onClick={() => setViewMode(value)}
+                  >
+                    {t(label)}
+                  </button>
+                </Hint>
               ))}
             </div>
             <div className="scene-actions">
@@ -1156,35 +1169,37 @@ function SceneEditor({
                 <>
                   {(
                     [
-                      ["translate", "sceneToolMove", Move],
-                      ["rotate", "sceneToolRotate", RotateCw],
-                      ["scale", "sceneToolScale", Scaling],
+                      ["translate", "sceneToolMove", Move, "G"],
+                      ["rotate", "sceneToolRotate", RotateCw, "R"],
+                      ["scale", "sceneToolScale", Scaling, "S"],
                     ] as const
-                  ).map(([key, label, Icon]) => (
-                    <button
-                      key={key}
-                      className="scene-labeled-tool"
-                      aria-pressed={mode === key}
-                      disabled={!selected}
-                      onClick={() => setMode(key)}
-                    >
-                      <Icon size={15} />
-                      {t(label)}
-                    </button>
+                  ).map(([key, label, Icon, shortcut]) => (
+                    <Hint key={key} label={t(label)} shortcut={shortcut} disabledReason={!selected ? t("sceneSelectObjectFirst") : undefined}>
+                      <button
+                        className="scene-labeled-tool"
+                        aria-pressed={mode === key}
+                        disabled={!selected}
+                        onClick={() => setMode(key)}
+                      >
+                        <Icon size={15} />
+                        {t(label)}
+                      </button>
+                    </Hint>
                   ))}
                   {/* 吸附跟着这三个工具走:它改的正是它们的步长(位移 0.25 米、旋转 15°、
                       缩放 0.1,见 SceneViewport 的 setTranslationSnap 一带)。所以它和它们
                       同一排、同一种控件、同一个显示条件 —— 单拎到别处会读成一个无关的开关。
                       **不跟着 disabled**:没选中物体时它照样可以先打开,下一次拖动就生效。 */}
-                  <button
-                    className="scene-labeled-tool"
-                    aria-pressed={snap}
-                    title={t("sceneSnapHint")}
-                    onClick={() => setSnap((on) => writeSceneSnap(!on))}
-                  >
-                    <Magnet size={15} />
-                    {t("sceneSnap")}
-                  </button>
+                  <Hint label={t("sceneSnapHint")}>
+                    <button
+                      className="scene-labeled-tool"
+                      aria-pressed={snap}
+                      onClick={() => setSnap((on) => writeSceneSnap(!on))}
+                    >
+                      <Magnet size={15} />
+                      {t("sceneSnap")}
+                    </button>
+                  </Hint>
                 </>
               )}
               {viewMode === "edit" && <span className="scene-tool-divider" aria-hidden="true" />}
@@ -1196,7 +1211,7 @@ function SceneEditor({
                       {t("sceneViewAngle")}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="scene-add" align="end">
+                  <MenuContent label={t("sceneViewAngle")} align="end">
                     {(
                       [
                         ["perspective", "sceneViewPerspective"],
@@ -1204,38 +1219,47 @@ function SceneEditor({
                         ["top", "sceneViewTop"],
                       ] as const
                     ).map(([key, label]) => (
-                      <button key={key} onClick={() => view.current?.view(key)}>
-                        {t(label)}
-                      </button>
+                      <PopoverClose asChild key={key}>
+                        <MenuItem label={t(label)} onClick={() => view.current?.view(key)} />
+                      </PopoverClose>
                     ))}
-                    <button onClick={() => view.current?.focus()}>
-                      {observing ? t("sceneFrameAllPaths") : t("sceneFocusSelected")}
-                    </button>
-                  </PopoverContent>
+                    <MenuSeparator />
+                    <PopoverClose asChild>
+                      <MenuItem
+                        label={observing ? t("sceneFrameAllPaths") : t("sceneFocusSelected")}
+                        shortcut="F"
+                        onClick={() => view.current?.focus()}
+                      />
+                    </PopoverClose>
+                  </MenuContent>
                 </Popover>
               )}
               <CanvasInputModeSwitch />
-              <button
-                className="scene-labeled-tool"
-                /* 它全屏的是**这个视口**,不是整个编辑器 —— 按钮本来就长在视口自己那条
-                   工具栏上,而人按它是想把画面看大。 */
-                aria-label={fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreenLabel")}
-                title={fullscreen.active ? t("sceneExitFullscreenTitle") : t("sceneFullscreenTitle")}
-                aria-pressed={fullscreen.active}
-                onClick={() => void fullscreen.toggle()}
+              {/* 它全屏的是**这个视口**,不是整个编辑器 —— 按钮本来就长在视口自己那条
+                  工具栏上,而人按它是想把画面看大。全屏时说明只剩「退出」和它的键。 */}
+              <Hint
+                label={fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreenTitle")}
+                shortcut={fullscreen.active ? "Esc" : null}
               >
-                {fullscreen.active ? (
-                  <Minimize size={15} />
-                ) : (
-                  <Maximize size={15} />
-                )}
-                {fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreen")}
-              </button>
+                <button
+                  className="scene-labeled-tool"
+                  aria-label={fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreenLabel")}
+                  aria-pressed={fullscreen.active}
+                  onClick={() => void fullscreen.toggle()}
+                >
+                  {fullscreen.active ? (
+                    <Minimize size={15} />
+                  ) : (
+                    <Maximize size={15} />
+                  )}
+                  {fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreen")}
+                </button>
+              </Hint>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="scene-tool" aria-label={t("sceneHelp")}>
+                  <IconButton unstyled className="scene-tool" label={t("sceneHelp")}>
                     <HelpCircle size={16} />
-                  </button>
+                  </IconButton>
                 </PopoverTrigger>
                 <PopoverContent className="scene-help" align="end">
                   <strong>{t("sceneHelpTitle")}</strong>
@@ -1269,7 +1293,7 @@ function SceneEditor({
                   <dl className="scene-keymap">
                     <dt><KbdGroup keys={["G", "R", "S"]} /></dt><dd>{t("sceneKeyTransform")}</dd>
                     <dt><KbdGroup keys={["I", "⌥I"]} /></dt><dd>{t("sceneKeyInsert")}</dd>
-                    <dt><KbdGroup keys={[t("sceneKeySpace")]} /></dt><dd>{t("sceneKeyPlay")}</dd>
+                    <dt><KbdGroup keys={[t("keySpace")]} /></dt><dd>{t("sceneKeyPlay")}</dd>
                     <dt><KbdGroup keys={["←", "→"]} /></dt><dd>{t("sceneKeyStep")}</dd>
                     <dt><KbdGroup keys={["↑", "↓"]} /></dt><dd>{t("sceneKeyJump")}</dd>
                     <dt><KbdGroup keys={["⇧D"]} /></dt><dd>{t("sceneKeyDuplicate")}</dd>
@@ -1351,12 +1375,12 @@ function SceneEditor({
                     setPlaying(false);
                   }}
                 />
-                <Button
+                <IconButton
                   size="icon-xs"
                   variant="outline"
-                  title={t("sceneNewShot")}
-                  aria-label={t("sceneNewShot")}
+                  label={t("sceneNewShot")}
                   disabled={draft.content.shots.length >= 32}
+                  disabledReason={t("sceneShotLimit").replace("{n}", "32")}
                   onClick={() => {
                     // 新建镜头 = 新建一台机位 + 一个用它的镜头。**它们成对出现** ——
                     // 镜头必须指向一台真实存在的相机。机位停在你当前看的那个视角上。
@@ -1377,15 +1401,15 @@ function SceneEditor({
                   }}
                 >
                   <Plus />
-                </Button>
+                </IconButton>
                 {/* 删镜头连同它的机位(见 removeShot)。此前没有这个入口,于是「新建镜头」建出来
                     的机位在物体列表里怎么都删不掉。最后一个镜头不能删 —— 场景至少要有一个。 */}
-                <Button
+                <IconButton
                   size="icon-xs"
                   variant="outline"
-                  title={t("sceneDeleteShot")}
-                  aria-label={t("sceneDeleteShot")}
+                  label={t("sceneDeleteShot")}
                   disabled={draft.content.shots.length <= 1 || !!busy}
+                  disabledReason={draft.content.shots.length <= 1 && t("sceneCantDeleteLastShot")}
                   onClick={() => {
                     const at = draft.content.shots.indexOf(shot);
                     const next = removeShot(draft.content, shot.id);
@@ -1396,20 +1420,20 @@ function SceneEditor({
                   }}
                 >
                   <Minus />
-                </Button>
+                </IconButton>
                 <span className="scene-tool-divider" aria-hidden="true" />
-                <Button size="icon-xs" variant="ghost" title={t("sceneGoToStart")} aria-label={t("sceneGoToStart")} onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst /></Button>
-                <Button
+                <IconButton size="icon-xs" variant="ghost" label={t("sceneGoToStart")} onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst /></IconButton>
+                <IconButton
                   size="icon-xs"
                   variant="ghost"
-                  title={playing ? t("scenePause") : t("scenePlayShot")}
-                  aria-label={playing ? t("scenePause") : t("scenePlayShot")}
+                  label={playing ? t("scenePause") : t("scenePlayShot")}
+                  shortcut={t("keySpace")}
                   disabled={!!busy}
                   onClick={togglePlayback}
                 >
                   {playing ? <Pause /> : <Play />}
-                </Button>
-                <Button size="icon-xs" variant="ghost" title={t("sceneGoToEnd")} aria-label={t("sceneGoToEnd")} onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast /></Button>
+                </IconButton>
+                <IconButton size="icon-xs" variant="ghost" label={t("sceneGoToEnd")} onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast /></IconButton>
                 <span className="scene-time">
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>
@@ -1448,15 +1472,14 @@ function SceneEditor({
                         才变成「全部展开」—— 一个按钮两种意思,但任何时刻它只表示其中一种,
                         而那一种正是你此刻想要的。没有组时不出现(它没有可操作的对象)。 */}
                     {groupIds.length > 0 && (
-                      <Button
+                      <IconButton
                         variant="ghost"
                         size="icon-sm"
-                        title={allCollapsed ? t("sceneExpandAllGroups") : t("sceneCollapseAllGroups")}
-                        aria-label={allCollapsed ? t("sceneExpandAllGroups") : t("sceneCollapseAllGroups")}
+                        label={allCollapsed ? t("sceneExpandAllGroups") : t("sceneCollapseAllGroups")}
                         onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groupIds))}
                       >
                         {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
-                      </Button>
+                      </IconButton>
                     )}
                     {/* 用 SearchableSelect 而不是手写弹层:物体种类只会越来越多,而手写那个
                         既不分组、又没有高度上限(十几项就把屏幕撑满)、也搜不了。这颗控件
@@ -1475,9 +1498,9 @@ function SceneEditor({
                       emptyText={t("sceneNoKindMatches")}
                       options={addOptions}
                       trigger={
-                        <Button variant="ghost" size="icon-sm" title={t("sceneAddObject")} aria-label={t("sceneAddObject")}>
+                        <IconButton variant="ghost" size="icon-sm" label={t("sceneAddObject")}>
                           <Plus size={16} />
-                        </Button>
+                        </IconButton>
                       }
                     />
                     </>
@@ -1511,9 +1534,10 @@ function SceneEditor({
                         {/* 有孩子才给折叠箭头:79 个物体摊平是一屏翻不完的列表,收起来之后
                             它就是八行。没孩子的留一块同宽的空位,名字才对得齐。 */}
                         {children ? (
-                          <button
+                          <IconButton
+                            unstyled
                             className="scene-object-twist"
-                            aria-label={t(collapsed.has(o.id) ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
+                            label={t(collapsed.has(o.id) ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
                             onClick={() =>
                               setCollapsed((was) => {
                                 const next = new Set(was);
@@ -1528,7 +1552,7 @@ function SceneEditor({
                                 transform: collapsed.has(o.id) ? undefined : "rotate(90deg)",
                               }}
                             />
-                          </button>
+                          </IconButton>
                         ) : (
                           <span className="scene-object-twist" />
                         )}
@@ -1543,29 +1567,29 @@ function SceneEditor({
                           onDoubleClick={() => view.current?.focus()}
                         >
                           <ObjectKindIcon kind={o.kind} />
-                          <span>{o.name}</span>
+                          <Truncate>{o.name}</Truncate>
                           {children > 0 && collapsed.has(o.id) && <small>{t("sceneChildCount").replace("{n}", String(children))}</small>}
                         </button>
                         {/* 显示/隐藏和删除并排,同尺寸、同一种安静的样子 —— 此前藏一个物体要先选中它,
                             再到下面的「调整对象」里找那颗眼睛;列表里只有一个「隐藏」字样的标记。 */}
-                        <button
+                        <IconButton
+                          unstyled
                           className="scene-object-visibility"
-                          aria-label={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
-                          title={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
+                          label={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
                           disabled={!!busy}
                           onClick={() => toggleHidden(o.id)}
                         >
                           {o.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                        <button
+                        </IconButton>
+                        <IconButton
+                          unstyled
                           className="scene-object-delete"
-                          aria-label={t("sceneDeleteObjectNamed").replace("{name}", o.name)}
-                          title={t("sceneDeleteNamed").replace("{name}", o.name)}
+                          label={t("sceneDeleteObjectNamed").replace("{name}", o.name)}
                           disabled={!!busy}
                           onClick={() => removeSceneObjects([o.id])}
                         >
                           <Trash2 size={14} />
-                        </button>
+                        </IconButton>
                       </div>
                     ))}
                   </div>

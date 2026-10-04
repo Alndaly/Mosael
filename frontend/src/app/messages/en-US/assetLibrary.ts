@@ -44,6 +44,7 @@ export const assetLibrary = {
   entitySpeakStart: "Start",
   entitySpeakStarted: "Started: voicing first, then the talking video; the task center will tell you when it's done",
   entityDrawRunning: "Drawing…",
+  entityDrawNeedsImage: "Add an image reference first so it can draw the same one",
   entityDrawAngles: "Fill in angles",
   entityDrawExpressions: "Generate expressions",
   entityDrawAnglesHint_character: "Draw the front, side, back and turnaround views it doesn't have yet from its references, and attach them by angle.",

@@ -17,9 +17,12 @@ import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 import { useReferenceAudioRecorder } from "./useReferenceAudioRecorder";
@@ -108,16 +111,17 @@ export function UploadVoiceDialog({
           <Button type="button" size="sm" variant="outline" disabled={upload.isPending} onClick={close}>
             {t("cancel")}
           </Button>
-          <Button
-            size="sm"
-            type="submit"
-            form={formId}
-            title={blocked}
-            disabled={Boolean(blocked) || referenceRecorder.recording || referenceRecorder.starting}
-            loading={upload.isPending}
-          >
-            {submitLabel ?? t("voiceDoClone")}
-          </Button>
+          <Hint disabledReason={blocked}>
+            <Button
+              size="sm"
+              type="submit"
+              form={formId}
+              disabled={Boolean(blocked) || referenceRecorder.recording || referenceRecorder.starting}
+              loading={upload.isPending}
+            >
+              {submitLabel ?? t("voiceDoClone")}
+            </Button>
+          </Hint>
         </>
       }
     >
@@ -197,20 +201,20 @@ export function UploadVoiceDialog({
           {file && !referenceRecorder.recording && (
             <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1.5">
               <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
+              <Truncate className="flex-1 text-ui-xs">{file.name}</Truncate>
               <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
-              <button
+              <IconButton
+                unstyled
                 type="button"
                 className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
-                aria-label={t("voiceClearFile")}
-                title={t("voiceClearFile")}
+                label={t("voiceClearFile")}
                 onClick={() => {
                   setFile(null);
                   if (fileRef.current) fileRef.current.value = "";
                 }}
               >
                 <X size={12} />
-              </button>
+              </IconButton>
             </div>
           )}
           <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", blocked && "text-destructive")}>

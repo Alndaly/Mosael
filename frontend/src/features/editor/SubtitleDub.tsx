@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { VoiceField } from "@/features/voice/SpeechVoiceFields";
 import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
@@ -176,7 +178,7 @@ export function SubtitleDub({
               {/* 「自动」排第一:中日韩俄阿印能按文字认出来,那是绝大多数情况。 */}
               <SelectItem value={NONE}>{t("subtitleDubWeightsAuto")}</SelectItem>
               {installedWeights.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
+                <SelectItem key={model.id} value={model.id} truncate>
                   {model.label}
                 </SelectItem>
               ))}
@@ -201,9 +203,9 @@ export function SubtitleDub({
       )}
       {focused ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-ui-xs">
-          <span className="min-w-0 truncate">
+          <Truncate>
             {t("subtitleDubFocused").replace("{time}", formatTimecode(focused.timeline_start))}
-          </span>
+          </Truncate>
           {onClearFocus && (
             <Button size="sm" variant="ghost" onClick={onClearFocus}>
               {t("subtitleDubFocusClear")}
@@ -219,7 +221,7 @@ export function SubtitleDub({
               </SelectTrigger>
               <SelectContent>
                 {subtitleTracks.map((track) => (
-                  <SelectItem key={track.id} value={track.id}>
+                  <SelectItem key={track.id} value={track.id} truncate>
                     {track.name} · {t("subtitleDubTrackCount").replace("{n}", String((track.clips ?? []).length))}
                   </SelectItem>
                 ))}
@@ -230,9 +232,11 @@ export function SubtitleDub({
       )}
       <VoiceField label={t("subtitleDubOriginal")}>
         <Select value={originalAudio} onValueChange={(next) => setOriginalAudio(next as OriginalAudio)}>
-          <SelectTrigger className="w-full min-w-0" aria-label={t("subtitleDubOriginal")} title={t("subtitleDubOriginalHint")}>
-            <SelectValue />
-          </SelectTrigger>
+          <Hint label={t("subtitleDubOriginalHint")}>
+            <SelectTrigger className="w-full min-w-0" aria-label={t("subtitleDubOriginal")}>
+              <SelectValue />
+            </SelectTrigger>
+          </Hint>
           <SelectContent>
             {ORIGINAL_AUDIO_MODES.map((mode) => (
               <SelectItem key={mode} value={mode}>{t(`subtitleDubOriginal_${mode}`)}</SelectItem>
@@ -248,7 +252,9 @@ export function SubtitleDub({
           </label>
         )}
         <label className="flex items-center justify-between gap-2">
-          <span title={t("subtitleDubMatchHint")}>{t("subtitleDubMatch")}</span>
+          <Hint label={t("subtitleDubMatchHint")}>
+            <span>{t("subtitleDubMatch")}</span>
+          </Hint>
           <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
         </label>
       </div>

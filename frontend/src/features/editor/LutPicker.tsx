@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Trash2, Upload } from "lucide-react";
 
 import { deleteLut, listLuts, uploadLut, type Lut } from "@/api/client";
+import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useI18n } from "@/app/preferences";
 
@@ -66,27 +67,27 @@ export function LutPicker({
           ariaLabel={t("gradeGroupLut")}
           className="min-w-0 flex-1"
         />
-        <button
+        <IconButton
+          unstyled
           type="button"
           className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
-          title={t("lutUpload")}
-          aria-label={t("lutUpload")}
+          label={t("lutUpload")}
           disabled={upload.isPending}
           onClick={() => fileRef.current?.click()}
         >
           <Upload size={12} />
-        </button>
+        </IconButton>
         {selectValue !== NONE && (
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
-            title={t("lutDelete")}
-            aria-label={t("lutDelete")}
+            label={t("lutDelete")}
             disabled={remove.isPending}
             onClick={() => remove.mutate(selectValue)}
           >
             <Trash2 size={12} />
-          </button>
+          </IconButton>
         )}
       </div>
       <input

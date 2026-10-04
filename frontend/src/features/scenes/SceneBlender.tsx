@@ -29,6 +29,7 @@ import {
 import { blenderKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import {
   Popover,
@@ -118,10 +119,10 @@ export function SceneBlender({
             <strong>{t("sceneBlenderTitle")}</strong>
             <p>{t("sceneBlenderSubtitle")}</p>
           </div>
-          <Button
+          <IconButton
             variant="ghost"
             size="icon"
-            aria-label={t("sceneBlenderRefresh")}
+            label={t("sceneBlenderRefresh")}
             disabled={busy}
             onClick={() => {
               void connections.refetch();
@@ -129,7 +130,7 @@ export function SceneBlender({
             }}
           >
             <RefreshCw size={15} />
-          </Button>
+          </IconButton>
         </div>
         {/* 四个「还用不了」的状态。**每一个都要答出「接下来做什么」** —— 见 EmptyState 的说明:
             空状态最有价值的那一半是下一步,不是"这里是空的"。此前只有缺插件那一个给了出路,

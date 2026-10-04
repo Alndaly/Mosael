@@ -8,6 +8,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Workspace } from "@/api/client";
 import { StatisticsView } from "./StatisticsView";
+import { readHint } from "@/test/hint";
 
 const mocks = vi.hoisted(() => ({ summary: vi.fn(), assets: [] as unknown[], section: vi.fn(), admin: vi.fn(), isAdmin: true }));
 vi.mock("@/api/client", async original => ({
@@ -127,7 +128,7 @@ it("sends the unpriced count to the pricing rules, and leaves the failed count a
   mocks.summary.mockResolvedValue({ ...SUMMARY, usage_unknown_cost_events: 3, jobs_failed: 2 });
   render(provider(<StatisticsView workspace={workspace} />));
   const unpriced = await screen.findByRole("button", { name: "homeStatUsageUnknownSuffix" });
-  expect(unpriced).toHaveAttribute("title", "homeChartUsageConfigurePricing");
+  expect(await readHint(unpriced)).toBe("homeChartUsageConfigurePricing");
   fireEvent.click(unpriced);
   // 价格规则在管理页的「成本规则」tab,不在设置页。
   expect(mocks.admin).toHaveBeenCalledWith("pricing");

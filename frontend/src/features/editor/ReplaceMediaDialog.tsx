@@ -5,6 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 //: 哪种轨能换上哪种素材 —— 和后端 sequences/media_swap._ACCEPTS 同一张表(后端也会拒)。
@@ -66,12 +67,12 @@ export function ReplaceMediaDialog({
                   role="option"
                   aria-selected={picked === asset.id}
                   className={cn(
-                    "w-full truncate rounded-md border border-transparent px-2 py-1.5 text-left text-ui-sm hover:bg-secondary",
+                    "w-full rounded-md border border-transparent px-2 py-1.5 text-left text-ui-sm hover:bg-secondary",
                     picked === asset.id && "border-primary bg-[color-mix(in_oklab,var(--primary)_10%,transparent)]",
                   )}
                   onClick={() => setPicked(asset.id)}
                 >
-                  {asset.name}
+                  <Truncate>{asset.name}</Truncate>
                 </button>
               </li>
             ))}

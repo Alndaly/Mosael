@@ -185,6 +185,8 @@ export const shell = {
   boardSequenceRoughCut: "粗剪预览 · 变换和字幕在剪辑里",
   boardSequenceCut: "在播放头处切开",
   boardSequenceDelete: "删掉选中的这一段",
+  boardSequenceCutUnavailable: "把播放头移到某一段的中间再切",
+  boardSequenceDeleteUnavailable: "先在时间线上点选一段",
   boardSequenceOpen: "在剪辑里打开",
   boardSequenceAdd: "加一段:从这张画板或素材库里挑",
   boardSequenceExport: "导出",

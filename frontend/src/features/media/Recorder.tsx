@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { createInputPreview } from "./inputPreview";
 import { MicrophoneLevelMeter } from "./MicrophoneLevelMeter";
@@ -641,14 +642,16 @@ export function Recorder({
                   }}
                   disabled={recording || starting}
                 >
-                  <SelectTrigger size="sm" title={t("recordCamera")} aria-label={t("recordCamera")}>
-                    <Video size={12} className="shrink-0 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
+                  <Hint label={t("recordCamera")}>
+                    <SelectTrigger size="sm" aria-label={t("recordCamera")}>
+                      <Video size={12} className="shrink-0 text-muted-foreground" />
+                      <SelectValue />
+                    </SelectTrigger>
+                  </Hint>
                   <SelectContent>
                     <SelectItem value="default">{t("recordDeviceDefault")}</SelectItem>
                     {cameras.map((device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId}>
+                      <SelectItem key={device.deviceId} value={device.deviceId} truncate>
                         {device.label || t("recordDeviceUnnamed")}
                       </SelectItem>
                     ))}
@@ -664,14 +667,16 @@ export function Recorder({
                 }}
                 disabled={recording || starting}
               >
-                <SelectTrigger size="sm" title={t("recordMic")} aria-label={t("recordMic")}>
-                  <Mic size={12} className="shrink-0 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
+                <Hint label={t("recordMic")}>
+                  <SelectTrigger size="sm" aria-label={t("recordMic")}>
+                    <Mic size={12} className="shrink-0 text-muted-foreground" />
+                    <SelectValue />
+                  </SelectTrigger>
+                </Hint>
                 <SelectContent>
                   <SelectItem value="default">{t("recordDeviceDefault")}</SelectItem>
                   {mics.map((device) => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                    <SelectItem key={device.deviceId} value={device.deviceId} truncate>
                       {device.label || t("recordDeviceUnnamed")}
                     </SelectItem>
                   ))}

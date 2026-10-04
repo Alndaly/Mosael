@@ -13,6 +13,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { renameAsset, separateAssetAudio, type Asset } from "@/api/client";
 import { MediaPool } from "./MediaPool";
+import { hoverHint } from "@/test/hint";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
@@ -59,12 +60,13 @@ it("头上写「N 个素材」;筛了之后写剩几个 / 一共几个", () => {
   expect(rowNames()).toEqual(["beach", "talk"]);
 });
 
-it("每一行带着素材的标签:露前两个,其余收成 +N;没标签的行不画", () => {
+it("每一行带着素材的标签:露前两个,其余收成 +N(悬停看收起来的那些);没标签的行不画", async () => {
   renderPool();
   const beach = document.querySelector("[data-pool-item='beach']")!;
   const chips = beach.querySelector("[data-asset-tags]")!;
   expect([...chips.children].map((one) => one.textContent)).toEqual(["sea", "dusk", "+1"]);
-  expect(chips.lastElementChild).toHaveAttribute("title", "b-roll");
+  const more = chips.lastElementChild as HTMLElement;
+  expect(await hoverHint(more)).toBe("b-roll");
   expect(document.querySelector("[data-pool-item='plain'] [data-asset-tags]")).toBeNull();
 });
 

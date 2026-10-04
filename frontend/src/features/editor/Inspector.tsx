@@ -3,10 +3,13 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, Rot
 
 import type { Asset, Clip, Font } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatFrameTimecode } from "@/domain/timeline/geometry";
 import { ColorSwatchInput } from "@/features/editor/ColorSwatchInput";
@@ -202,25 +205,25 @@ export function Inspector({
           <h2>{t("inspector")}</h2>
         )}
         <div className="flex items-center gap-0.5">
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-            title={t("deleteClip")}
-            aria-label={t("deleteClip")}
+            label={t("deleteClip")}
             onClick={() => onDeleteClip(selectedClip.id)}
           >
             <Trash2 size={13} />
-          </button>
+          </IconButton>
           {onClose && (
-            <button
+            <IconButton
+              unstyled
               type="button"
               className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
-              title={t("close")}
-              aria-label={t("close")}
+              label={t("close")}
               onClick={onClose}
             >
               <X size={13} />
-            </button>
+            </IconButton>
           )}
         </div>
       </div>
@@ -236,11 +239,11 @@ export function Inspector({
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
           <dl>
             <dt>{t("asset")}</dt>
-            <dd className="truncate" title={offlineAsset ? `${t("clipOffline")} · ${offlineAsset.name ?? ""}` : asset?.name}>
+            <Truncate as="dd">
               {offlineAsset
                 ? offlineAsset.name || t("clipOffline")
                 : asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
-            </dd>
+            </Truncate>
             <dt>{t("timelineRange")}</dt>
             <dd className="timecode">
               {timecode(selectedClip.timeline_start)} – {timecode(clipEnd(selectedClip))}
@@ -338,11 +341,12 @@ export function Inspector({
                       }}
                     />
                     <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(shownGain * 100)}%</span>
-                    <button
+                    <IconButton
+                      unstyled
                       type="button"
-                      title={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
-                      aria-label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
+                      label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
                       disabled={selectedClip.muted}
+                      disabledReason={t("clipMuted")}
                       className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent disabled:cursor-default disabled:opacity-40", onGainKf ? "text-primary" : gainKeyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
                       onClick={() => {
                         const at = progressNow();
@@ -351,7 +355,7 @@ export function Inspector({
                       }}
                     >
                       <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
-                    </button>
+                    </IconButton>
                   </div>
                 </InspectorSection>
               );
@@ -453,15 +457,15 @@ export function Inspector({
                     />
                     <span className="timecode text-right text-ui-xs text-muted-foreground">{row.fmt(shown[row.key])}</span>
                     {row.kf ? (
-                      <button
+                      <IconButton
+                        unstyled
                         type="button"
-                        title={onKf ? t("kfRemoveHere") : t("kfAddHere")}
-                        aria-label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
+                        label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
                         className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent", onKf ? "text-primary" : keyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
                         onClick={() => toggleProp(row.key as KfProp)}
                       >
                         <Diamond size={11} fill={onKf ? "currentColor" : "none"} />
-                      </button>
+                      </IconButton>
                     ) : (
                       <span />
                     )}
@@ -477,7 +481,6 @@ export function Inspector({
                       <button
                         key={tt}
                         type="button"
-                        title={`${Math.round(tt * 100)}%`}
                         className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-ui-2xs", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
                         onClick={() => seekToKeyframe(tt)}
                       >
@@ -565,37 +568,40 @@ function ColorGradePanel({
 
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:font-semibold [&_strong]:text-foreground">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span>{t("colorTarget")}</span>
-        <strong title={targetName}>{targetName}</strong>
+        <Truncate as="strong" className="flex-1 font-semibold text-foreground">{targetName}</Truncate>
         <div className="inline-flex items-center gap-1">
           {hasGrade && (
-            <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs text-muted-foreground hover:text-destructive" onClick={resetAll} title={t("gradeResetAllHint")}>
-              <RotateCcw size={11} /> {t("gradeReset")}
-            </button>
+            <Hint label={t("gradeResetAllHint")}>
+              <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs text-muted-foreground hover:text-destructive" onClick={resetAll}>
+                <RotateCcw size={11} /> {t("gradeReset")}
+              </button>
+            </Hint>
           )}
         </div>
       </div>
       <InspectorSection title={t("stylePresets")}>
         <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", isCleanColor && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-            title={t("colorPresetHint")}
-            onClick={() => applyPreset(null)}
-          >
-            {t("colorPreset_none")}
-          </button>
-          {COLOR_PRESETS.map((preset) => (
+          <Hint label={t("colorPresetHint")}>
             <button
-              key={preset.key}
               type="button"
-              className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", activePreset === preset.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-              title={t("colorPresetHint")}
-              onClick={() => applyPreset(presetColorPayload(preset))}
+              className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", isCleanColor && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+              onClick={() => applyPreset(null)}
             >
-              {t(`colorPreset_${preset.key}` as never)}
+              {t("colorPreset_none")}
             </button>
+          </Hint>
+          {COLOR_PRESETS.map((preset) => (
+            <Hint key={preset.key} label={t("colorPresetHint")}>
+              <button
+                type="button"
+                className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", activePreset === preset.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                onClick={() => applyPreset(presetColorPayload(preset))}
+              >
+                {t(`colorPreset_${preset.key}` as never)}
+              </button>
+            </Hint>
           ))}
         </div>
       </InspectorSection>
@@ -772,7 +778,9 @@ function TextStylePanel({
       </div>
       {bars.map((bar) => (
         <div key={bar.key} className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
-          <span className="text-ui-xs text-muted-foreground" title={bar.hint}>{bar.label}</span>
+          <Hint label={bar.hint}>
+            <span className="text-ui-xs text-muted-foreground">{bar.label}</span>
+          </Hint>
           <Slider
             key={`${bar.key}-${clip.id}-${style[bar.key]}-${bar.max}`}
             min={0}
@@ -786,17 +794,17 @@ function TextStylePanel({
       ))}
       {strokeCapped && <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("textStrokeCapped")}</p>}
       <div className="flex items-center gap-1">
-        <button type="button" className={iconBtn(style.bold)} onClick={() => set({ bold: !style.bold })} aria-label={t("textBold")}>
+        <IconButton unstyled type="button" className={iconBtn(style.bold)} aria-pressed={style.bold} onClick={() => set({ bold: !style.bold })} label={t("textBold")}>
           <Bold size={13} />
-        </button>
-        <button type="button" className={iconBtn(style.italic)} onClick={() => set({ italic: !style.italic })} aria-label={t("textItalic")}>
+        </IconButton>
+        <IconButton unstyled type="button" className={iconBtn(style.italic)} aria-pressed={style.italic} onClick={() => set({ italic: !style.italic })} label={t("textItalic")}>
           <Italic size={13} />
-        </button>
+        </IconButton>
         <span className="mx-0.5 h-4 w-px bg-border" />
-        {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([align, Icon]) => (
-          <button key={align} type="button" className={iconBtn(style.align === align)} onClick={() => set({ align })} aria-label={`align-${align}`}>
+        {([["left", AlignLeft, "textAlignLeft"], ["center", AlignCenter, "textAlignCenter"], ["right", AlignRight, "textAlignRight"]] as const).map(([align, Icon, labelKey]) => (
+          <IconButton key={align} unstyled type="button" className={iconBtn(style.align === align)} aria-pressed={style.align === align} onClick={() => set({ align })} label={t(labelKey)}>
             <Icon size={13} />
-          </button>
+          </IconButton>
         ))}
       </div>
     </InspectorSection>

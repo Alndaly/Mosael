@@ -6,6 +6,8 @@ import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMoney, microsIn, type CostAmount } from "@/lib/money";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -81,7 +83,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
         {/* 堆叠:成功在下、失败在上;radius 只圆数据端(顶),基线端直角 */}
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -124,12 +126,12 @@ export function UsageCostPanel({
     <>
       <h2 className="m-0 flex items-center justify-between gap-2 text-ui-sm font-semibold text-foreground">
         {title}
+        {/* 币种说明就写在面板底下(见末尾那一行),这里不再挂一条一样的悬停说明。 */}
         {currencies.length > 1 && (
           <span
             className={cn(SEGMENTED_LIST, "min-h-0 p-0.5")}
             role="radiogroup"
             aria-label={t("homeChartUsageCurrency")}
-            title={t("homeChartUsageCurrencyHint")}
           >
             {currencies.map((code) => (
               <button
@@ -241,7 +243,7 @@ export function UsageCostChart({
           content={<ChartTooltipContent valueFormatter={(value) => money(Number(value))} />}
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {maxLabel}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {maxLabel}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -294,7 +296,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
         <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
         <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend
-          content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {formatCount(maxTokens)}</span>} />}
+          content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {formatCount(maxTokens)}</span></Hint>} />}
         />
       </BarChart>
     </ChartContainer>
@@ -362,7 +364,7 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
         {segments.map((segment) => (
           <div className="flex items-center gap-2 text-ui-xs" key={segment.kind}>
             <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} />
-            <span className="truncate text-muted-foreground">{segment.name}</span>
+            <Truncate className="text-muted-foreground">{segment.name}</Truncate>
             <span className="ml-auto flex-none tabular-nums">
               <em className="not-italic text-foreground">{segment.count}</em>
               <em className="ml-1.5 not-italic text-ui-2xs text-muted-foreground">
@@ -407,7 +409,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
         <Bar dataKey="active" stackId="publish" fill="var(--color-active)" maxBarSize={14} />
         <Bar dataKey="blocked" stackId="publish" fill="var(--color-blocked)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="publish" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -547,7 +549,7 @@ export function UsageByProvider({
               className="size-2 shrink-0 rounded-[3px]"
               style={{ background: PLATFORM_COLORS[index % PLATFORM_COLORS.length] }}
             />
-            <span className="truncate">{provider}</span>
+            <Truncate>{provider}</Truncate>
             <span className="ml-auto shrink-0 tabular-nums text-foreground">{formatMoney(micros, currency, locale)}</span>
           </li>
         ))}

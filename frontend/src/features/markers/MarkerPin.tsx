@@ -5,9 +5,12 @@ import type { NodeProps } from "@xyflow/react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { useDraftText } from "@/components/ui/draft-text";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { ShortcutRecorder } from "@/features/markers/ShortcutRecorder";
 import type { CanvasMarker } from "@/features/markers/markers";
@@ -43,33 +46,34 @@ export function MarkerPin({ data, selected }: NodeProps) {
 
   return (
     <Popover open={editable && open} onOpenChange={(next) => editable && setOpen(next)}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          tabIndex={editable ? 0 : -1}
-          aria-disabled={!editable}
-          style={!editable ? { pointerEvents: "none" } : undefined}
-          data-marker-pin={marker.id}
-          title={t("markerConfigure")}
-          className={cn(
-            "flex h-7 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-panel/95 pl-2 pr-2.5 text-ui-xs text-foreground shadow-sm backdrop-blur",
-            "hover:border-action",
-            selected && "border-action ring-1 ring-action",
-          )}
-        >
-          <Flag size={12} className="shrink-0 text-action" />
-          <span className="truncate">{marker.name || t("markerUnnamed")}</span>
-          {marker.shortcut ? (
-            // 键位就印在旗子上 —— 不然「绑过了没有」只能靠回忆。
-            <Kbd className="ml-0.5">{formatCombo(marker.shortcut)}</Kbd>
-          ) : null}
-        </button>
-      </PopoverTrigger>
+      <Hint label={editable ? t("markerConfigure") : undefined}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            tabIndex={editable ? 0 : -1}
+            aria-disabled={!editable}
+            style={!editable ? { pointerEvents: "none" } : undefined}
+            data-marker-pin={marker.id}
+            className={cn(
+              "flex h-7 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-panel/95 pl-2 pr-2.5 text-ui-xs text-foreground shadow-sm backdrop-blur",
+              "hover:border-action",
+              selected && "border-action ring-1 ring-action",
+            )}
+          >
+            <Flag size={12} className="shrink-0 text-action" />
+            <Truncate>{marker.name || t("markerUnnamed")}</Truncate>
+            {marker.shortcut ? (
+              // 键位就印在旗子上 —— 不然「绑过了没有」只能靠回忆。
+              <Kbd className="ml-0.5">{formatCombo(marker.shortcut)}</Kbd>
+            ) : null}
+          </button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent align="start" className="w-72 overflow-hidden p-0" onCloseAutoFocus={onCloseAutoFocus} onClick={(event) => event.stopPropagation()}>
         <div className="flex h-11 items-center gap-2 border-b border-border px-3">
           <Flag size={14} className="text-primary" />
           <span className="flex-1 text-ui-xs font-medium">{t("markerConfigure")}</span>
-          <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setOpen(false)}><X size={14} /></Button>
+          <IconButton variant="ghost" size="icon-xs" label={t("close")} onClick={() => setOpen(false)}><X size={14} /></IconButton>
         </div>
         <div className="grid gap-3 p-3">
           <div className="grid gap-1.5">

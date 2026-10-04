@@ -7,6 +7,7 @@ import { getJob } from "@/api/domains/jobs";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { Truncate } from "@/components/ui/truncate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EXPORT_PARAMS_KEY = "mosael.export.params";
@@ -84,8 +85,8 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       {status === "running" && (
-        <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground" title={job.data?.message ?? undefined}>
-          {job.data?.message && <span className="max-w-[190px] truncate">{job.data.message}</span>}
+        <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground">
+          {job.data?.message && <Truncate className="max-w-[190px]">{job.data.message}</Truncate>}
           <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
         </span>
       )}

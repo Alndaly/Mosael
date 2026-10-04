@@ -1,8 +1,11 @@
 import { assetKeys } from "@/api/queryKeys";
-import { ACTION_MENU } from "@/components/ui/floating";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
+import { Popover, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import React from "react";
 import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -333,7 +336,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               </div>
               <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
                 <SelectTrigger className="w-auto min-w-32 border-border bg-control" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
-                <SelectContent className="max-w-none">
+                <SelectContent>
                   <SelectItem value="created">{t("sortNewest")}</SelectItem>
                   <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
                   <SelectItem value="name">{t("sortName")}</SelectItem>
@@ -345,8 +348,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
             <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
               <div role="group" className="flex gap-1" aria-label={t("studioGridView")}>
-                <Button variant="outline" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
-                <Button variant="outline" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
+                <IconButton variant="outline" size="default" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></IconButton>
+                <IconButton variant="outline" size="default" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></IconButton>
               </div>
               <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : enterSelectMode()}>
                 {selectMode ? <X /> : <Check />}{selectMode ? t("cancel") : t("mediaSelectMode")}
@@ -363,15 +366,16 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                     {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                   </Button>
                   {/* 图片:联动缩放平移;视频:联动播放。选的不是同一种、或不到两个时禁用并说明原因。 */}
-                  <Button
-                    variant="outline"
-                    size="default"
-                    disabled={comparable.length < 2}
-                    title={comparable.length < 2 ? t("mediaCompareHint") : undefined}
-                    onClick={() => setComparing(true)}
-                  >
-                    <Columns2 size={13} /> {t("mediaCompare")}
-                  </Button>
+                  <Hint disabledReason={comparable.length < 2 ? t("mediaCompareHint") : undefined}>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      disabled={comparable.length < 2}
+                      onClick={() => setComparing(true)}
+                    >
+                      <Columns2 size={13} /> {t("mediaCompare")}
+                    </Button>
+                  </Hint>
                   <Button
                     variant="outline"
                     size="default"
@@ -430,59 +434,60 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
                   {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
                   {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
-                    <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
-                    <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
-                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
-                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
-                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
-                      {kindIsVisual(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
-                      {asset.kind === "document" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)}><NotebookPen />{t("docSaveAsNote")}</Button></PopoverClose>}
-                      {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
-                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
-                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => denoise(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
-                      <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
-                    </PopoverContent></Popover>
+                    <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><IconButton variant="secondary" size="icon-xs" label={`${t("studioActions")}: ${asset.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
+                    <MenuContent label={t("studioActions")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
+                      <PopoverClose asChild><MenuItem icon={<Download />} label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset)} /></PopoverClose>
+                      <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} onClick={() => setRenaming(asset)} /></PopoverClose>
+                      <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} onClick={() => setEditingTags(asset)} /></PopoverClose>
+                      {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} onClick={() => setReferencing(asset)} /></PopoverClose>}
+                      {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
+                      {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
+                      {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
+                      {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={<AudioWaveform />} label={t("denoiseAction")} onClick={() => denoise(asset.id)} /></PopoverClose>}
+                      <MenuSeparator />
+                      <PopoverClose asChild><MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => setDeleting(asset)} /></PopoverClose>
+                    </MenuContent></Popover>
                   </div>}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
                 <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
-                  <Download /> {t("assetSaveLocal")}
+                  <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={() => setRenaming(asset)}>
-                  <Pencil /> {t("rename")}
+                  <MenuItemBody icon={<Pencil />} label={t("rename")} />
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={() => setEditingTags(asset)}>
-                  <Tag /> {t("editTags")}
+                  <MenuItemBody icon={<Tag />} label={t("editTags")} />
                 </ContextMenuItem>
                 {kindIsVisual(asset.kind) && (
                   <ContextMenuItem onSelect={() => setReferencing(asset)}>
-                    <Layers /> {t("assetSetAsReference")}
+                    <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} />
                   </ContextMenuItem>
                 )}
                 {asset.kind === "document" && (
                   <ContextMenuItem disabled={saveAsNote.isPending} onSelect={() => saveAsNote.mutate(asset.id)}>
-                    <NotebookPen /> {t("docSaveAsNote")}
+                    <MenuItemBody icon={<NotebookPen />} label={t("docSaveAsNote")} />
                   </ContextMenuItem>
                 )}
                 {asset.kind === "video" && (
                   <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
-                    {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
+                    <MenuItemBody icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} />
                   </ContextMenuItem>
                 )}
                 {kindHasSound(asset.kind) && (
                   <ContextMenuItem onSelect={() => denoise(asset.id)}>
-                    <AudioWaveform /> {t("denoiseAction")}
+                    <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
                   </ContextMenuItem>
                 )}
                 {kindHasSound(asset.kind) && (
                   <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
-                    {separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
+                    <MenuItemBody icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
                   </ContextMenuItem>
                 )}
                 <ContextMenuSeparator />
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
-                  <Trash2 /> {t("delete")}
+                  <MenuItemBody icon={<Trash2 />} label={t("delete")} />
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
@@ -589,9 +594,10 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
         <TagChips tags={tagsOf(asset)} tone="overlay" className="absolute bottom-1.5 left-1.5 max-w-[70%] flex-wrap" />
       </div>
       <div className="grid min-w-0 flex-1 gap-1.5 px-0.5">
-        <strong className="truncate text-ui-md font-semibold" title={asset.name}>
+        {/* relative z-[2]:浮在整卡那颗透明按钮上面,被截断时悬停看得到全文(点击照样冒泡到卡片)。 */}
+        <Truncate as="strong" className="relative z-[2] text-ui-md font-semibold">
           {asset.name}
-        </strong>
+        </Truncate>
         <div className="flex items-center gap-1.5">
           <span className="text-ui-xs text-muted-foreground">{t(assetKindKey(asset.kind))}</span>
           <small className="text-ui-xs text-muted-foreground">
@@ -599,11 +605,11 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
             {showsContainsAi(asset) ? ` · ${t("mediaSourceContainsAi")}` : ""}
           </small>
         </div>
-        <span className="truncate font-mono text-ui-xs tabular-nums text-muted-foreground">
+        <Truncate className="font-mono text-ui-xs tabular-nums text-muted-foreground">
           {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${asset.media_info.height}` : "—"}
           {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
-        </span>
+        </Truncate>
       </div>
     </article>
   );

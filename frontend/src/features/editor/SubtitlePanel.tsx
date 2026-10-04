@@ -4,11 +4,14 @@ import { AudioLines, Bold, ChevronDown, ChevronRight, Clock, Languages, Loader2,
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
@@ -215,18 +218,20 @@ export function SubtitlePanel({
       </div>
       <div className="flex flex-wrap justify-start gap-2 border-t border-border px-3 py-3">
         {onGenerate && (
-          <button type="button" className={PILL} title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
-            {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
-          </button>
+          <Hint label={t("subtitleGenerateHint")}>
+            <button type="button" className={PILL} onClick={onGenerate} disabled={generating}>
+              {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
+            </button>
+          </Hint>
         )}
-        <button type="button" className={PILL} title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
+        <button type="button" className={PILL} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
         {subtitles.length > 0 && onApplyTexts && (
           <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
         {subtitles.length > 0 && onDub && (
-          <button type="button" className={PILL} title={t("subtitleDub")} onClick={() => onDub()}>
+          <button type="button" className={PILL} onClick={() => onDub()}>
             <AudioLines size={12} /> {t("subtitleDub")}
           </button>
         )}
@@ -289,48 +294,49 @@ const SubtitleRow = React.memo(function SubtitleRow({
       active && "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
     )}>
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          className="timecode cursor-pointer border-0 bg-transparent p-0 pl-1 text-ui-2xs text-muted-foreground hover:text-foreground"
-          title={t("seekToSubtitle")}
-          onClick={() => actions.seek(clip)}
-        >
-          {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
-        </button>
+        <Hint label={t("seekToSubtitle")}>
+          <button
+            type="button"
+            className="timecode cursor-pointer border-0 bg-transparent p-0 pl-1 text-ui-2xs text-muted-foreground hover:text-foreground"
+            onClick={() => actions.seek(clip)}
+          >
+            {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
+          </button>
+        </Hint>
         <span className="flex shrink-0 items-center gap-1">
           {canEditTiming && (
-            <button
+            <IconButton
+              unstyled
               type="button"
               className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-              title={t("subtitleEditTiming")}
-              aria-label={t("subtitleEditTiming")}
+              label={t("subtitleEditTiming")}
               aria-pressed={editingTiming}
               onClick={() => setEditingTiming((on) => !on)}
             >
               <Clock size={12} />
-            </button>
+            </IconButton>
           )}
           {/* 给这一条配音 = 切到「配音」页、只配这一条(不改时间线上的选中)。 */}
           {canDub && (
-            <button
+            <IconButton
+              unstyled
               type="button"
               className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-              title={t("subtitleDubThis")}
-              aria-label={t("subtitleDubThis")}
+              label={t("subtitleDubThis")}
               onClick={() => actions.dub(clip.id)}
             >
               <AudioLines size={12} />
-            </button>
+            </IconButton>
           )}
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-            title={t("deleteClip")}
-            aria-label={t("deleteClip")}
+            label={t("deleteClip")}
             onClick={() => actions.remove(clip.id)}
           >
             <Trash2 size={12} />
-          </button>
+          </IconButton>
         </span>
       </div>
       {/* 原生 textarea,不走 <Textarea>:基础组件的 border-field-border 在 twMerge 里赢过
@@ -350,20 +356,21 @@ const SubtitleRow = React.memo(function SubtitleRow({
           onCancel={() => setEditingTiming(false)}
         />
       )}
-      <textarea
-        key={`sub-${clip.id}-${clip.text_override}`}
-        className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        rows={1}
-        defaultValue={clip.text_override ?? ""}
-        title={t("subtitleClearToDelete")}
-        onBlur={(event) => {
-          const value = event.target.value.trim();
-          // **清空 = 删掉这条字幕。** 此前清空之后什么都不发生(后端也不收空文本),失焦后文字原样回来,
-          // 看着像没生效。一条没有字的字幕没有意义;删掉也是一步撤销就回来。
-          if (!value) actions.remove(clip.id);
-          else if (value !== clip.text_override) actions.setText(clip.id, value);
-        }}
-      />
+      <Hint label={t("subtitleClearToDelete")}>
+        <textarea
+          key={`sub-${clip.id}-${clip.text_override}`}
+          className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          rows={1}
+          defaultValue={clip.text_override ?? ""}
+          onBlur={(event) => {
+            const value = event.target.value.trim();
+            // **清空 = 删掉这条字幕。** 此前清空之后什么都不发生(后端也不收空文本),失焦后文字原样回来,
+            // 看着像没生效。一条没有字的字幕没有意义;删掉也是一步撤销就回来。
+            if (!value) actions.remove(clip.id);
+            else if (value !== clip.text_override) actions.setText(clip.id, value);
+          }}
+        />
+      </Hint>
     </div>
   );
 });
@@ -508,7 +515,7 @@ function SubtitleTranslate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className={PILL} title={t("subtitleTranslate")}>
+        <button type="button" className={PILL}>
           <Languages size={12} /> {t("subtitleTranslate")}
         </button>
       </PopoverTrigger>
@@ -645,25 +652,23 @@ function SubtitleStyleControls({
                 />
                 {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
                 {onUploadFont && (
-                  <Button
+                  <IconButton
                     variant="ghost"
                     size="icon-xs"
                     className="shrink-0 text-muted-foreground hover:text-foreground"
                     disabled={uploadingFont}
-                    aria-label={t("subFontUpload")}
-                    title={t("subFontUpload")}
+                    label={t("subFontUpload")}
                     onClick={() => fileRef.current?.click()}
                   >
                     {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
-                  </Button>
+                  </IconButton>
                 )}
                 {s.font_id && onDeleteFont && (
-                  <Button
+                  <IconButton
                     variant="ghost"
                     size="icon-xs"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label={t("subFontRemove")}
-                    title={t("subFontRemove")}
+                    label={t("subFontRemove")}
                     onClick={() => {
                       // Point the style back at a built-in BEFORE the font goes away, so the
                       // sequence never references a font id that no longer resolves.
@@ -673,7 +678,7 @@ function SubtitleStyleControls({
                     }}
                   >
                     <Trash2 size={12} />
-                  </Button>
+                  </IconButton>
                 )}
                 {onUploadFont && (
                   <input
@@ -806,7 +811,7 @@ function StyleGroup({ label, children }: { label: string; children: React.ReactN
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid min-h-7 grid-cols-[56px_minmax(0,1fr)_36px] items-center gap-x-2" data-style-row="">
-      <span className="truncate text-ui-xs text-muted-foreground">{label}</span>
+      <Truncate className="text-ui-xs text-muted-foreground">{label}</Truncate>
       {children}
     </div>
   );
@@ -876,7 +881,7 @@ function StyleColor({
         onCommit={onCommit}
       />
       <span className="timecode text-ui-xs uppercase text-muted-foreground">{value}</span>
-      {note && <span className="ml-auto truncate text-ui-xs text-muted-foreground">{note}</span>}
+      {note && <Truncate className="ml-auto text-ui-xs text-muted-foreground">{note}</Truncate>}
     </span>
   );
 }

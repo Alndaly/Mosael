@@ -8,8 +8,10 @@ import { voiceKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Truncate } from "@/components/ui/truncate";
 import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { VoiceConsentPicker, VoiceConsentStatus } from "@/features/voice/VoiceConsent";
 import { cn } from "@/lib/utils";
@@ -152,9 +154,9 @@ function VoiceRow({
   // 试听、编辑、删除和「补授权声明」是它旁边的兄弟按钮,不嵌在里面 —— 按钮里套按钮,读屏和键盘都会乱。
   const summary = (
     <>
-      <span className={cn("min-w-0 truncate text-ui-sm text-foreground", selected && "font-medium")}>{voice.name}</span>
+      <Truncate className={cn("text-ui-sm text-foreground", selected && "font-medium")}>{voice.name}</Truncate>
       {/* 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字,读起来才有主次。 */}
-      <span className="block truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+      <Truncate className="text-ui-2xs leading-[1.5] text-muted-foreground">
         <span className="text-muted-foreground/70">{origin}</span>
         {voice.reference_text ? (
           ` · ${voice.reference_text}`
@@ -166,7 +168,7 @@ function VoiceRow({
             <span className="text-destructive">{t("voiceNoReferenceText")}</span>
           </>
         )}
-      </span>
+      </Truncate>
     </>
   );
 
@@ -256,38 +258,36 @@ function VoiceRow({
       {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
           要靠试出来 —— 而这三件事(试听、改名、删)正是来这个库的理由。 */}
       <div className="flex shrink-0 items-center gap-0.5">
-        <Button
+        <IconButton
           size="icon-xs"
           variant="ghost"
           className={cn("text-muted-foreground hover:text-foreground", playing && "text-primary")}
           // 没有参考音频(文件丢了)就没有东西可放:灰掉,而不是点了没声音。
           disabled={!voice.has_reference}
-          aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
-          title={playing ? t("voiceStopPreview") : t("voicePlay")}
+          disabledReason={t("voiceReferenceMissing")}
+          label={playing ? t("voiceStopPreview") : t("voicePlay")}
           onClick={onPlay}
         >
           {playing ? <Pause size={12} /> : <Play size={12} />}
-        </Button>
-        <Button
+        </IconButton>
+        <IconButton
           size="icon-xs"
           variant="ghost"
           className="text-muted-foreground hover:text-foreground"
-          aria-label={editing ? t("cancel") : t("voiceEdit")}
-          title={editing ? t("cancel") : t("voiceEdit")}
+          label={editing ? t("cancel") : t("voiceEdit")}
           onClick={onToggleEdit}
         >
           {editing ? <X size={12} /> : <Pencil size={12} />}
-        </Button>
-        <Button
+        </IconButton>
+        <IconButton
           size="icon-xs"
           variant="ghost"
           className="text-muted-foreground hover:text-destructive"
-          aria-label={t("delete")}
-          title={t("delete")}
+          label={t("delete")}
           onClick={onDelete}
         >
           <Trash2 size={12} />
-        </Button>
+        </IconButton>
       </div>
     </div>
   );

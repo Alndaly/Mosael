@@ -44,6 +44,7 @@ export const assetLibrary = {
   entitySpeakStart: "开始",
   entitySpeakStarted: "开始了:先配音,再做说话的视频;做完任务中心会说一声",
   entityDrawRunning: "正在画…",
+  entityDrawNeedsImage: "先挂一张图片参考,才画得出同一个",
   entityDrawAngles: "补全多角度",
   entityDrawExpressions: "生成表情",
   entityDrawAnglesHint_character: "照现有的参考图画出还没有的正面、侧面、背面、三视图,画好按角度挂回来。",

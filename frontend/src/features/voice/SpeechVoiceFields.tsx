@@ -89,7 +89,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
           </SelectTrigger>
           <SelectContent>
             {voice.engines.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
+              <SelectItem key={item.id} value={item.id} truncate>
                 {item.label}
               </SelectItem>
             ))}
@@ -109,7 +109,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
               </SelectTrigger>
               <SelectContent>
                 {voice.runtimes.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
+                  <SelectItem key={item.id} value={item.id} truncate>
                     {item.label}
                     {/* 「还没测过」不能显示成「未装好」—— 那是拿一个未知冒充结论。 */}
                     {runtimeSuffix(item)}

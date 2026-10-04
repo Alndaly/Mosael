@@ -2,9 +2,9 @@ import React from "react";
 import { Flag, List } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { CanvasMarker } from "@/features/markers/markers";
 import { formatCombo } from "@/lib/shortcuts";
@@ -32,42 +32,35 @@ export function MarkerListButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-sm"
-          aria-label={t("markers")}
-          title={t("markers")}
+          label={t("markers")}
           className={cn(markers.length > 0 && "text-foreground")}
         >
           <List size={14} />
-        </Button>
+        </IconButton>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-1">
+      {/* 高度封顶,内部滚动 —— 六十几个标记不该把弹层撑到屏幕外。 */}
+      <MenuContent label={t("markers")} align="end" className="max-h-72 overflow-y-auto">
         {markers.length === 0 ? (
           <p className="px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("markerEmpty")}</p>
         ) : (
-          // 高度封顶,内部滚动 —— 六十几个标记不该把弹层撑到屏幕外。
-          <div className="max-h-64 overflow-y-auto">
-            {markers.map((marker) => (
-              <button
-                key={marker.id}
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-ui-xs hover:bg-accent"
-                onClick={() => {
-                  setOpen(false);
-                  onJump(marker);
-                }}
-              >
-                <Flag size={12} className="shrink-0 text-action" />
-                <span className="min-w-0 flex-1 truncate">{marker.name || t("markerUnnamed")}</span>
-                {marker.shortcut ? (
-                  <Kbd>{formatCombo(marker.shortcut)}</Kbd>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          markers.map((marker) => (
+            <MenuItem
+              key={marker.id}
+              icon={<Flag className="text-action" />}
+              label={marker.name || t("markerUnnamed")}
+              truncate
+              shortcut={marker.shortcut ? formatCombo(marker.shortcut) : null}
+              onClick={() => {
+                setOpen(false);
+                onJump(marker);
+              }}
+            />
+          ))
         )}
-      </PopoverContent>
+      </MenuContent>
     </Popover>
   );
 }

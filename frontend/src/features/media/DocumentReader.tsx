@@ -23,6 +23,8 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { cn } from "@/lib/utils";
 
@@ -171,7 +173,7 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
                 >
                   {t("docSectionLabel").replace("{unit}", unit).replace("{index}", String(section.index))}
                 </button>
-                {section.title && <span className="min-w-0 truncate text-foreground">{section.title}</span>}
+                {section.title && <Truncate className="text-foreground">{section.title}</Truncate>}
               </h3>
               <div className="min-w-0 text-ui-sm [overflow-wrap:anywhere]">
                 <AgentMarkdown fullTables>{withFileUrls(section.markdown ?? "", assetId, extraction.id)}</AgentMarkdown>
@@ -187,13 +189,16 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
             {pages.map((image, index) => (
               <figure key={image} data-document-page={image} className="m-0 grid gap-1.5">
                 <figcaption className="text-ui-2xs tabular-nums text-muted-foreground">{t("docSectionLabel").replace("{unit}", t("docUnitPage")).replace("{index}", String(index + 1))}</figcaption>
-                <button
+                <IconButton
+                  unstyled
                   type="button"
                   className="block w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-white p-0 shadow-sm"
+                  label={t("docSectionLabel").replace("{unit}", t("docUnitPage")).replace("{index}", String(index + 1))}
+                  hint={t("assetClickToZoom")}
                   onClick={() => openImagePreview({ src: extractionFileUrl(assetId, extraction.id, image), title: `${index + 1}` })}
                 >
                   <img src={extractionFileUrl(assetId, extraction.id, image)} alt="" loading="lazy" className="block h-auto w-full" />
-                </button>
+                </IconButton>
               </figure>
             ))}
           </div>

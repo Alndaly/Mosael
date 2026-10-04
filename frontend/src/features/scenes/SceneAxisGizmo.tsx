@@ -11,6 +11,7 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import {
   axisLabel,
   gizmoHandles,
@@ -82,28 +83,29 @@ function GizmoBall({
   const t = useI18n();
   const front = handle.depth >= 0;
   return (
-    <button
-      type="button"
-      className="scene-axis-ball"
-      data-front={front || undefined}
-      title={t(axisLabel(handle.axis, handle.sign))}
-      aria-label={t(axisLabel(handle.axis, handle.sign))}
-      style={{
-        left: center + handle.x * RADIUS - BALL,
-        top: center + handle.y * RADIUS - BALL,
-        width: BALL * 2,
-        height: BALL * 2,
-        // 前后关系靠它:转到某个角度时,背面那个球不该盖住正面的。
-        zIndex: Math.round(handle.depth * 100) + 200,
-        // 正向是实心球,负向是空心的(和 Blender 一样);背面的一律淡一档。
-        background: handle.sign > 0 ? handle.color : "var(--panel)",
-        borderColor: handle.color,
-        opacity: front ? 1 : 0.55,
-        color: handle.sign > 0 ? "#12141a" : handle.color,
-      }}
-      onClick={() => onPick(handle.axis, handle.sign)}
-    >
-      {handle.label}
-    </button>
+    <Hint label={t(axisLabel(handle.axis, handle.sign))}>
+      <button
+        type="button"
+        className="scene-axis-ball"
+        data-front={front || undefined}
+        aria-label={t(axisLabel(handle.axis, handle.sign))}
+        style={{
+          left: center + handle.x * RADIUS - BALL,
+          top: center + handle.y * RADIUS - BALL,
+          width: BALL * 2,
+          height: BALL * 2,
+          // 前后关系靠它:转到某个角度时,背面那个球不该盖住正面的。
+          zIndex: Math.round(handle.depth * 100) + 200,
+          // 正向是实心球,负向是空心的(和 Blender 一样);背面的一律淡一档。
+          background: handle.sign > 0 ? handle.color : "var(--panel)",
+          borderColor: handle.color,
+          opacity: front ? 1 : 0.55,
+          color: handle.sign > 0 ? "#12141a" : handle.color,
+        }}
+        onClick={() => onPick(handle.axis, handle.sign)}
+      >
+        {handle.label}
+      </button>
+    </Hint>
   );
 }

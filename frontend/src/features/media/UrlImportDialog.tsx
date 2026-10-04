@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import { Truncate } from "@/components/ui/truncate";
 import { knownBestHeight, qualityHint, qualityOptions } from "@/features/media/urlImportQuality";
 import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -179,9 +180,9 @@ export function UrlImportDialog({
         {listing && (
           <>
             <div className="flex min-w-0 items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-foreground">
+              <Truncate className="flex-1 text-ui-sm font-semibold text-foreground">
                 {listing.title || t("urlImportUntitled")}
-              </span>
+              </Truncate>
               <span className="shrink-0 text-ui-xs text-muted-foreground">
                 {t("urlImportCount").replace("{n}", String(entries.length))}
               </span>
@@ -251,9 +252,9 @@ export function UrlImportDialog({
                   >
                     <Checkbox checked={checked} tabIndex={-1} aria-hidden className="pointer-events-none" />
                     <span className="grid min-w-0 gap-px">
-                      <span className="truncate text-ui-xs text-foreground">{entry.title}</span>
+                      <Truncate className="text-ui-xs text-foreground">{entry.title}</Truncate>
                       {entry.uploader && (
-                        <span className="truncate text-ui-2xs text-muted-foreground">{entry.uploader}</span>
+                        <Truncate className="text-ui-2xs text-muted-foreground">{entry.uploader}</Truncate>
                       )}
                     </span>
                     <span className="timecode text-ui-2xs text-muted-foreground">

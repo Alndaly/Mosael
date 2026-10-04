@@ -45,7 +45,7 @@ it("点开旗子就能改名、改键、删掉 —— 配置留在这一处位�
   const onChange = vi.fn();
   const onDelete = vi.fn();
   pin({}, { onChange, onDelete });
-  fireEvent.click(screen.getByTitle("markerConfigure"));
+  fireEvent.click(screen.getByRole("button", { name: /分镜起点/ }));
   fireEvent.change(await screen.findByLabelText("markerName"), { target: { value: "改过的名字" } });
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ name: "改过的名字" }));
   fireEvent.click(screen.getByRole("button", { name: /markerDelete/ }));
@@ -56,12 +56,12 @@ it("outside marker mode the pin cannot open or keep its editor focused", () => {
   const data = { marker, markers: [marker], onChange: vi.fn(), onDelete: vi.fn(), editable: true };
   const props = { data, selected: false } as unknown as React.ComponentProps<typeof MarkerPin>;
   const { rerender } = render(<MarkerPin {...props} />, { wrapper: MarkerEditors });
-  fireEvent.click(screen.getByTitle("markerConfigure"));
+  fireEvent.click(screen.getByRole("button", { name: /分镜起点/ }));
   expect(screen.getByLabelText("markerName")).toBeInTheDocument();
   rerender(<MarkerPin {...props} data={{ ...data, editable: false }} />);
   expect(screen.queryByLabelText("markerName")).not.toBeInTheDocument();
-  expect(screen.getByTitle("markerConfigure")).toHaveAttribute("tabindex", "-1");
-  fireEvent.click(screen.getByTitle("markerConfigure"));
+  expect(screen.getByRole("button", { name: /分镜起点/ })).toHaveAttribute("tabindex", "-1");
+  fireEvent.click(screen.getByRole("button", { name: /分镜起点/ }));
   expect(screen.queryByLabelText("markerName")).not.toBeInTheDocument();
 });
 
@@ -120,7 +120,7 @@ function LaggingPin({ onSaved }: { onSaved: (name: string) => void }) {
 it("名字里用拼音打中文:组词期间不被改写,上屏后名字是中文、只交出去一次", async () => {
   const saved: string[] = [];
   render(<LaggingPin onSaved={(name) => saved.push(name)} />, { wrapper: MarkerEditors });
-  fireEvent.click(screen.getByTitle("markerConfigure"));
+  fireEvent.click(screen.getByRole("button", { name: /分镜起点/ }));
   const field = (await screen.findByLabelText("markerName")) as HTMLInputElement;
   const writes = watchValueWrites(field);
   composeWithIme(field, ["分镜起点j", "分镜起点ji", "分镜起点jie", "分镜起点jiew", "分镜起点jiewe", "分镜起点jiewei"], "分镜起点结尾");

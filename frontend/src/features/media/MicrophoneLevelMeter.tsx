@@ -2,6 +2,7 @@ import React from "react";
 import { Mic } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /** Peaks quieter than this read as silence: a mute or virtual device stays grey. */
@@ -94,24 +95,25 @@ export function MicrophoneLevelMeter({ stream, className }: { stream: MediaStrea
   if (!hasMicrophone) return null;
 
   return (
-    <div
-      ref={meterRef}
-      role="meter"
-      aria-label={t("recordLevel")}
-      aria-valuemin={0}
-      aria-valuemax={1}
-      aria-valuenow={0}
-      title={t("recordLevel")}
-      className={cn("group flex items-center gap-2", className)}
-    >
-      <Mic size={11} className="shrink-0 text-muted-foreground" />
-      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
-        <div
-          ref={barRef}
-          className="h-full w-full origin-left rounded-full bg-border-strong group-data-[active=true]:bg-[var(--success)]"
-          style={{ transform: "scaleX(0)" }}
-        />
+    <Hint label={t("recordLevel")}>
+      <div
+        ref={meterRef}
+        role="meter"
+        aria-label={t("recordLevel")}
+        aria-valuemin={0}
+        aria-valuemax={1}
+        aria-valuenow={0}
+        className={cn("group flex items-center gap-2", className)}
+      >
+        <Mic size={11} className="shrink-0 text-muted-foreground" />
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
+          <div
+            ref={barRef}
+            className="h-full w-full origin-left rounded-full bg-border-strong group-data-[active=true]:bg-[var(--success)]"
+            style={{ transform: "scaleX(0)" }}
+          />
+        </div>
       </div>
-    </div>
+    </Hint>
   );
 }
