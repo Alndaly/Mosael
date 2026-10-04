@@ -6,4 +6,6 @@ export const desktop = {
   mainStaleRestart: "Restart",
   mainStaleDismiss: "Not now",
   mainStaleFiles: "Changed: {files}",
+  mainStaleBadgeHint: "Click to restart; vite and the backend keep running",
+  mainStaleCannotRestart: "Mosael wasn't started by pnpm dev, so it can't restart itself",
 } as const;

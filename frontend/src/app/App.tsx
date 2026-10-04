@@ -58,6 +58,7 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
+import { MainStaleBadge } from "@/features/desktop/MainStaleBadge";
 import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
 import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
@@ -238,6 +239,8 @@ function PublishViewBar() {
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
       )}
+      {/* 开发时主进程过期:窗口底部那条提示被网页视图盖住了,顶栏里常驻一个小标记(正式打包的应用永远没有)。 */}
+      <MainStaleBadge />
       {/* 离开这个窗口的主出口:留着字(图标认不出「回到 Mosael」),说明里补一句连按两次 Esc 也能回来。 */}
       <Hint label={t("publishBackHint")}>
         <button
