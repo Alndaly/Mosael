@@ -1,5 +1,7 @@
+import { Script } from "node:vm";
+
 import type { PageDriver } from "./pageDriver";
-import { ElementMissingError } from "./errors";
+import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "./errors";
 import { t } from "../i18n.cjs";
 
 export interface ActionOutcome {
@@ -86,6 +88,47 @@ export function scriptWithInput(expression: string, input: unknown): string {
 }
 
 /**
+ * 「执行脚本」出错时说出**脚本自己的那句话**。
+ *
+ * Electron 的 executeJavaScript 对同步抛错、语法错只回一句「Script failed to execute…去看渲染进程的控制台」
+ * (实测,electron 44)—— 用户看不到那个控制台,节点上也就只剩一句英文。脚本交回的 promise 被拒时它倒是把
+ * 原话带回来。所以:同步抛的错包一层 try,改成带原话的被拒 promise;语法错在交给页面之前先在主进程编译一遍
+ * (同一个 V8,语法判据一样),见 `checkScriptSyntax`。
+ *
+ * try 块的完成值就是块里最后一条语句的值,包了之后「最后一句是结果」照旧成立。
+ */
+export function scriptReportingErrors(script: string): string {
+  return `try {\n${script}\n} catch (__mosaelScriptError) {\n  Promise.reject(new Error(String(__mosaelScriptError)));\n}`;
+}
+
+/** 语法不通:按界面语言说清是语法错误、错在哪(V8 的原话)。不碰页面。 */
+function checkScriptSyntax(script: string): void {
+  try {
+    new Script(script, { filename: "script.js" });
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error(t("browserErr_scriptSyntax", { detail: error.message }));
+    throw error;
+  }
+}
+
+async function runScript(driver: PageDriver, args: Record<string, unknown>): Promise<unknown> {
+  //: 调用方(工作流节点)可以为自己的长脚本声明预算;不带就按缺省 20s。
+  const budget = Number(args.timeout_ms) || undefined;
+  const script = scriptWithInput(s(args.expression), args.input);
+  checkScriptSyntax(script);
+  try {
+    return await driver.evaluate(scriptReportingErrors(script), budget);
+  } catch (error) {
+    if (error instanceof ActionAbortedError) throw error;
+    if (error instanceof EvaluateTimeoutError) {
+      throw new Error(t("browserErr_scriptTimeout", { seconds: (error.budgetMs / 1000).toFixed(1) }));
+    }
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(t("browserErr_scriptThrew", { detail: brief(detail, 300) }));
+  }
+}
+
+/**
  * 把一个后端动作分派到 PageDriver:navigate/click/input/upload/press_key/extract/evaluate/wait/
  * scroll/screenshot。upload 经 CDP setFileInputFiles 塞文件(与发布上传同一套 driver.setFiles)。
  */
@@ -161,9 +204,7 @@ export async function executeBrowserAction(
       return { value: found?.value ?? null, lastUrl: driver.url() };
     }
     case "evaluate": {
-      //: 调用方(工作流节点)可以为自己的长脚本声明预算;不带就按缺省 20s。
-      const budget = Number(args.timeout_ms) || undefined;
-      return { value: await driver.evaluate(scriptWithInput(s(args.expression), args.input), budget), lastUrl: driver.url() };
+      return { value: await runScript(driver, args), lastUrl: driver.url() };
     }
     case "wait": {
       const timeout = Number(args.timeout_ms) || 15_000;

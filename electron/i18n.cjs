@@ -303,6 +303,18 @@ const MESSAGES = {
     zh: "页面上没有匹配的元素可提取:{selector};当前停在 {url}",
     en: "No element on the page matches, so there is nothing to extract: {selector}; the page is at {url}",
   },
+  browserErr_scriptSyntax: {
+    zh: "脚本有语法错误:{detail}",
+    en: "The script has a syntax error: {detail}",
+  },
+  browserErr_scriptThrew: {
+    zh: "脚本运行出错:{detail}",
+    en: "The script failed: {detail}",
+  },
+  browserErr_scriptTimeout: {
+    zh: "脚本运行超过 {seconds} 秒还没结束(在节点的「超时」里可以调大)",
+    en: "The script was still running after {seconds} seconds (raise the node's timeout if it needs longer)",
+  },
   browserErr_scrollMissing: {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",

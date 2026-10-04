@@ -1,7 +1,9 @@
+import { runInNewContext } from "node:vm";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { executeBrowserAction } from "./browserActions";
-import { ElementMissingError } from "./errors";
+import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "./errors";
 import { DEFAULT_LOCALE, setLocale } from "../i18n.cjs";
 import type { PageDriver } from "./pageDriver";
 
@@ -195,6 +197,110 @@ describe("提取和滚动:选择器没匹配到默认报错", () => {
     await expect(executeBrowserAction(driver, "scroll", { selector: "#footer", allow_missing: true })).resolves.toEqual({
       lastUrl: "https://example.com/",
     });
+  });
+});
+
+/**
+ * 照 Electron 的 executeJavaScript 实测的样子(2026-10,electron 44)跑脚本:同步抛错 / 语法错只回一句
+ * 「Script failed to execute…去看渲染进程的控制台」,脚本交回的 promise 被拒时原话带回来。
+ */
+const ELECTRON_SYNC_FAILURE =
+  "Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.";
+async function electronLikeEvaluate(code: string): Promise<unknown> {
+  let completion: unknown;
+  try {
+    completion = runInNewContext(code);
+  } catch {
+    throw new Error(ELECTRON_SYNC_FAILURE);
+  }
+  try {
+    return await completion;
+  } catch (reason) {
+    // 被拒的 promise:Electron 交回的是主进程里的一个 Error,消息是页面那边的原话。
+    const message = (reason as { message?: unknown } | null)?.message;
+    if (typeof message === "string") throw new Error(message);
+    throw reason;
+  }
+}
+
+describe("执行脚本出错时说出脚本自己的那句话", () => {
+  it("同步抛错:错误里是脚本抛的原话,不是「去看渲染进程的控制台」", async () => {
+    // 实测:工作流里一个 `throw new Error('…')` 的脚本,节点上只看得到那句英文 —— 用户既看不到那个控制台,
+    // 也不知道是哪句话错了。
+    const driver = fakeDriver("https://example.com/", { evaluate: electronLikeEvaluate as PageDriver["evaluate"] });
+    setLocale("zh-CN");
+    const error = await executeBrowserAction(driver, "evaluate", { expression: "throw new Error('故意抛的错 xyz')", input: {} })
+      .then(() => null, (e: Error) => e);
+    expect(error?.message).toMatch(/脚本运行出错.*故意抛的错 xyz/s);
+    expect(error?.message).not.toContain("renderer console");
+  });
+
+  it("读了不存在的东西(TypeError)也带上类型和原话", async () => {
+    const driver = fakeDriver("https://example.com/", { evaluate: electronLikeEvaluate as PageDriver["evaluate"] });
+    setLocale("en-US");
+    await expect(
+      executeBrowserAction(driver, "evaluate", { expression: "const el = null;\nel.textContent", input: {} }),
+    ).rejects.toThrow(/^The script failed: TypeError: Cannot read properties of null/);
+  });
+
+  it("语法错误在交给页面之前就说清是语法错", async () => {
+    const seen: string[] = [];
+    const driver = fakeDriver("https://example.com/", {
+      evaluate: (async (code: string) => {
+        seen.push(code);
+        return electronLikeEvaluate(code);
+      }) as PageDriver["evaluate"],
+    });
+    setLocale("zh-CN");
+    await expect(executeBrowserAction(driver, "evaluate", { expression: "this is not js", input: {} })).rejects.toThrow(
+      /脚本有语法错误/,
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it("包了一层之后结果照旧:最后一句的值、异步脚本的值、自己声明的 input", async () => {
+    const driver = fakeDriver("https://example.com/", { evaluate: electronLikeEvaluate as PageDriver["evaluate"] });
+    await expect(
+      executeBrowserAction(driver, "evaluate", { expression: "const a = input.n;\na * 2", input: { n: 21 } }),
+    ).resolves.toMatchObject({ value: 42 });
+    await expect(
+      executeBrowserAction(driver, "evaluate", { expression: "(async () => input.w + '!')()", input: { w: "hi" } }),
+    ).resolves.toMatchObject({ value: "hi!" });
+    await expect(
+      executeBrowserAction(driver, "evaluate", { expression: "const input = 5; input + 1", input: {} }),
+    ).resolves.toMatchObject({ value: 6 });
+  });
+
+  it("异步脚本被拒:原话照样带上", async () => {
+    const driver = fakeDriver("https://example.com/", { evaluate: electronLikeEvaluate as PageDriver["evaluate"] });
+    setLocale("zh-CN");
+    await expect(
+      executeBrowserAction(driver, "evaluate", { expression: "(async () => { throw new Error('接口回了 412') })()", input: {} }),
+    ).rejects.toThrow(/脚本运行出错.*接口回了 412/s);
+  });
+
+  it("超过预算:说脚本跑了多久还没完,不是 evaluate timeout (page not settled)", async () => {
+    const driver = fakeDriver("https://example.com/", {
+      evaluate: (async (_code: string, budget?: number) => {
+        throw new EvaluateTimeoutError(budget ?? 20_000);
+      }) as PageDriver["evaluate"],
+    });
+    setLocale("zh-CN");
+    const error = await executeBrowserAction(driver, "evaluate", { expression: "1", input: {}, timeout_ms: 3000 })
+      .then(() => null, (e: Error) => e);
+    expect(error?.message).toMatch(/脚本运行超过 3\.0 秒还没结束/);
+    expect(error?.message).not.toContain("page not settled");
+  });
+
+  it("中止(运行被停下)原样抛出,不说成脚本出错", async () => {
+    const driver = fakeDriver("https://example.com/", {
+      evaluate: (async () => {
+        throw new ActionAbortedError();
+      }) as PageDriver["evaluate"],
+    });
+    await expect(executeBrowserAction(driver, "evaluate", { expression: "1", input: {} })).rejects.toBeInstanceOf(
+      ActionAbortedError,
+    );
   });
 });
 
