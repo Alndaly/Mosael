@@ -81,6 +81,9 @@ class ProviderUsageEvent(Base):
     raw_usage: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     cost_micros: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
+    #: 这笔钱有多可信:
+    #: `unknown` 没能定价(cost_micros 为空);`estimated` 按计价规则算的;
+    #: `not_billed` 失败了、服务商什么都没回 —— 没扣钱,记 0。
     cost_confidence: Mapped[str] = mapped_column(String(24), nullable=False, default="unknown")
     #: 没能定价时**为什么**。目前只有一种:`mixed_currency` —— 这次调用对上的几条规则币种不一样
     #: (输入按人民币、输出按美元),而不同币种的钱不能相加,只好整条记成未定价。

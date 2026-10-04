@@ -774,7 +774,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             db.add(assistant_message)
             db.flush()
             if provider_vendor or provider_model:
-                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次同样花了钱。
+                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
                     capability="chat",
@@ -804,7 +804,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             db.add(assistant_message)
             db.flush()
             if provider_vendor or provider_model:
-                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次同样花了钱。
+                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
                     capability="chat",

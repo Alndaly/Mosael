@@ -332,37 +332,37 @@ def record_usage(
         return existing
 
     normalized_units = dict(units or {})
-    applied_rules: list[ProviderPricingRule] = []
+    applied_rules: tuple[ProviderPricingRule, ...] = ()
     unpriced_reason: str | None = None
     if cost_micros is None:
-        rules = _best_price_rules(
+        pricing = price_usage(
             db,
             workspace_id=workspace_id,
             provider_profile_id=provider_profile_id,
             provider=provider,
             capability=capability,
             model=model,
+            units=normalized_units,
             moment=moment,
         )
-        metered = [
-            (rule, quantity)
-            for rule in rules
-            if (quantity := _quantity_for_unit(normalized_units, rule.billing_unit)) is not None
-        ]
-        if len({rule.currency for rule, _ in metered}) > 1:
-            # **币种不一致就不定价,不挑一种算一半。**此前这里取第一条规则的币种、把其余币种的
-            # 规则静默跳过 —— 输入按人民币、输出按美元的话,账上只剩输入那一半,而且哪一半
-            # 留下取决于查询返回的顺序。少算的钱看不出是少算的,比「未定价」更坏。
+        if status == "failed" and not raw_usage:
+            # **失败了、服务商什么都没回,就是没扣钱。**请求被当场拒掉(参数不对、额度不够、
+            # 内容审核)时既没有产出也没有回包;此前照样按请求侧计量套价 —— 一次请求两张、
+            # 当场被拒的生图记了两张的钱,而那笔钱从来没被扣过。请求侧计量照旧留在账上
+            # (失败了多少次、都是什么请求),只是它不是扣费的依据。
             #
-            # 也**不**退一步去找另一币种里不那么具体的规则凑成一种:规则的具体程度是用户的
-            # 意图(给这条连接单配的价压过通用价),为了凑币种悄悄换掉它等于替用户改账。
-            # 记成未定价、写明原因,界面据此告诉他去把规则改成同一种币。
-            unpriced_reason = "mixed_currency"
-        elif metered:
-            applied_rules = [rule for rule, _ in metered]
-            cost_micros = sum(round(quantity * price_at(rule, moment)) for rule, quantity in metered)
-            currency = applied_rules[0].currency
+            # 服务商回报了用量或扣费的(有的平台失败也扣),走下面同一条路照它记。
+            # 币种跟着这个模型的价走,¥0 和这家其余的人民币账放在一起,不另起一个 $0。
+            cost_micros = 0
+            cost_confidence = "not_billed"
+            currency = pricing.currency or currency
+        elif pricing.cost_micros is not None:
+            applied_rules = pricing.rules
+            cost_micros = pricing.cost_micros
+            currency = pricing.currency or currency
             cost_confidence = "estimated"
+        else:
+            unpriced_reason = pricing.unpriced_reason
 
     event = ProviderUsageEvent(
         workspace_id=workspace_id,
@@ -392,6 +392,68 @@ def record_usage(
     _announce(db, event)
     _hold_until_durable(db, event)
     return event
+
+
+@dataclass(frozen=True)
+class Pricing:
+    """一次调用按计价规则算出来的价。
+
+    `cost_micros` 为 None = 没能定价,`unpriced_reason` 说得出原因时写原因(目前只有币种不一致)。
+    `currency` 是对上的规则的币种:定不了价时只要规则币种一致也照样给 —— 记一笔不计费的 0
+    时,它决定这个 0 归到哪个币种下。
+    """
+
+    cost_micros: int | None
+    currency: str | None
+    rules: tuple[ProviderPricingRule, ...] = ()
+    unpriced_reason: str | None = None
+
+
+def price_usage(
+    db: Session,
+    *,
+    workspace_id: str,
+    provider_profile_id: str | None,
+    provider: str,
+    capability: str,
+    model: str,
+    units: dict[str, Any],
+    moment: datetime,
+) -> Pricing:
+    """按计价规则给一份计量算价 —— **记账和补算老账共用这一处**,两边认的规则不会漂开。
+
+    每个计价单位挑一条规则(见 `_best_price_rules`),有计量的那几条按发生时刻的单价相加。
+    """
+    rules = _best_price_rules(
+        db,
+        workspace_id=workspace_id,
+        provider_profile_id=provider_profile_id,
+        provider=provider,
+        capability=capability,
+        model=model,
+        moment=moment,
+    )
+    metered = [
+        (rule, quantity) for rule in rules if (quantity := _quantity_for_unit(units, rule.billing_unit)) is not None
+    ]
+    currencies = {rule.currency for rule, _ in metered} or {rule.currency for rule in rules}
+    currency = next(iter(currencies)) if len(currencies) == 1 else None
+    if len({rule.currency for rule, _ in metered}) > 1:
+        # **币种不一致就不定价,不挑一种算一半。**此前这里取第一条规则的币种、把其余币种的
+        # 规则静默跳过 —— 输入按人民币、输出按美元的话,账上只剩输入那一半,而且哪一半
+        # 留下取决于查询返回的顺序。少算的钱看不出是少算的,比「未定价」更坏。
+        #
+        # 也**不**退一步去找另一币种里不那么具体的规则凑成一种:规则的具体程度是用户的
+        # 意图(给这条连接单配的价压过通用价),为了凑币种悄悄换掉它等于替用户改账。
+        # 记成未定价、写明原因,界面据此告诉他去把规则改成同一种币。
+        return Pricing(cost_micros=None, currency=None, unpriced_reason="mixed_currency")
+    if not metered:
+        return Pricing(cost_micros=None, currency=currency)
+    return Pricing(
+        cost_micros=sum(round(quantity * price_at(rule, moment)) for rule, quantity in metered),
+        currency=currency,
+        rules=tuple(rule for rule, _ in metered),
+    )
 
 
 def _announce(db: Session, event: ProviderUsageEvent) -> None:
@@ -888,8 +950,9 @@ def billable(
       而钱已经花了:调用方的事务结束后,这条账没进库(回滚了、或者会话没提交就关了)就由
       `_settle_usage` 补写,引用的行没活下来时引用置空(同 schema 的 SET NULL)。调用方
       照常提交或回滚,不必为账操心。
-    - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用同样花钱(很多供应商按请求计费),
-      而且"最近失败了多少次"本身就是用户想在账上看到的。
+    - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用照样记一条 ——"最近失败了多少次"
+      本身就是用户想在账上看到的;服务商回报了用量或扣费的照它计价,什么都没回的记 0
+      (`not_billed`,见 record_usage)。
     - **幂等**:`idempotency_key` 是**必填的**。重放同一次调用不会重复入账 —— 而这句话只有在
       键真的稳定时才成立,所以不再有隐式兜底。
 
