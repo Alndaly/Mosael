@@ -114,10 +114,11 @@ describe("授权是连接级别的", () => {
 
   it("授权那一行是正文第一行,排在名称和凭据之前", async () => {
     const { container } = wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
-    const content = container.querySelector('[data-slot="settings-group-content"]') as HTMLElement;
-    // 组正文的**第一项**就是它(一行设置行):名称、AppKey 都在它下面。
+    const content = container.querySelector("[data-connection] > div[id]") as HTMLElement;
+    // 连接正文的**第一项**就是它(一行设置行):名称、AppKey 都在它下面。
     const strip = content.firstElementChild as HTMLElement;
-    expect(strip.getAttribute("data-slot")).toBe("settings-row");
+    expect(strip.getAttribute("data-connection-section")).toBe("authorization");
+    expect(strip.firstElementChild?.getAttribute("data-slot")).toBe("settings-row");
     expect(strip.querySelector('[data-slot="plugin-authorization"]')).toBeTruthy();
     expect(within(strip).getByText("未授权")).toBeTruthy();
     expect(within(strip).getByRole("button", { name: "去授权" })).toBeTruthy();

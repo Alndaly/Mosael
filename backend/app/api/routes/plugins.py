@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
@@ -266,6 +268,7 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 "author_url": manifest.author.url,
                 "docs": manifest.docs,
                 "config_fields": [_field(f) for f in manifest.config],
+                "summary_field": _summary_field(manifest),
                 "credential_fields": [_field(f) for f in manifest.credentials],
                 #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
                 #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
@@ -284,6 +287,19 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
             }
         )
     return out
+
+
+_TEMPLATE_KEY = re.compile(r"\{([A-Za-z0-9_]+)(?::label)?\}")
+
+
+def _summary_field(manifest) -> str:
+    """插件页上**收起的连接**那一行摆哪一项配置(「关键地址」):名字模板里引用的第一个配置项(ComfyUI 的
+    `{server_url}`、TikHub 的 `{platform:label}`);没写模板就是第一个必填的文本配置项;都没有就是空串(不摆)。"""
+    config = {field.key: field for field in manifest.config}
+    for key in _TEMPLATE_KEY.findall(manifest.name_template or ""):
+        if key in config:
+            return key
+    return next((field.key for field in manifest.config if field.required and field.type == "string"), "")
 
 
 def _field(spec) -> dict:

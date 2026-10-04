@@ -29,8 +29,8 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge, CatalogDetail, CatalogDialog, CatalogSection } from "@/components/app/CatalogDialog";
 import { ModalShell } from "@/components/app/modals";
-import { SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Progress } from "@/components/ui/progress";
@@ -82,17 +82,28 @@ const plainName = (name: string) => {
 
 const ACTIVE = new Set(["queued", "running"]);
 
-export function ModelLibraryRow({ instance, workspaceId }: { instance: PluginInstance; workspaceId: string }) {
+/**
+ * 连接标题行上的「模型库」(收起时也在,和「刷新」并排):一颗图标按钮,悬停说它是什么;连接停着时点不了,并说为什么。
+ */
+export function ModelLibraryButton({ instance, workspaceId }: { instance: PluginInstance; workspaceId: string }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   return (
-    <SettingsRow label={t("modelLibrary")} description={t("modelLibraryDesc")}>
-      <Button variant="outline" disabled={Boolean(instance.blocked_reason)} onClick={() => setOpen(true)}>
+    <>
+      <IconButton
+        variant="outline"
+        size="default"
+        className="px-3 text-muted-foreground"
+        label={t("modelLibraryOpen")}
+        hint={t("modelLibraryDesc")}
+        disabled={Boolean(instance.blocked_reason)}
+        disabledReason={instance.blocked_reason}
+        onClick={() => setOpen(true)}
+      >
         <Library size={13} />
-        {t("modelLibraryOpen")}
-      </Button>
+      </IconButton>
       {open && <ModelLibraryDialog open={open} onOpenChange={setOpen} instance={instance} workspaceId={workspaceId} />}
-    </SettingsRow>
+    </>
   );
 }
 

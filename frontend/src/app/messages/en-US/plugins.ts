@@ -289,7 +289,6 @@ export const plugins = {
   pluginUninstallBody:
     "This deletes the plugin directory from disk, along with its permissions, credentials and invocation history. It cannot be undone.",
   // 模型库(ADR 0034)
-  modelLibrary: "Model library",
   modelLibraryDesc: "The model files on this server: previews, base models, trigger words and which workflows use them; missing models can be downloaded onto it",
   modelLibraryOpen: "Open model library",
   modelLibraryTitle: "{name} · Model library",
@@ -376,4 +375,16 @@ export const plugins = {
   modelDownloadHfTokenUnsupported: "A HuggingFace token can't be passed through ComfyUI-Manager: files that need it will fail to download.",
   modelDownloadManagerNoProgress: "There is no byte progress: only \u201cdownloading\u201d and \u201cdone / failed\u201d.",
   modelDownloadManagerCancel: "Cancelling after it starts only stops Mosael waiting; the download keeps going on that machine, and the file shows up in the library once it's done.",
+  // 连接能收起:标题行那一行
+  pluginConnExpand: "Expand “{name}”",
+  pluginConnCollapse: "Collapse “{name}”",
+  pluginCollapseAll: "Collapse all",
+  pluginExpandAll: "Expand all",
+  pluginConnStateOk: "Ready",
+  pluginConnStateOff: "Off",
+  pluginConnStateReauth: "Needs re-authorization",
+  pluginConnStatePending: "Needs permission",
+  pluginConnStateAction: "Needs attention",
+  pluginConnStateError: "Error",
+  pluginConnModels: "{n} models",
 } as const;

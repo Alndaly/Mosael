@@ -11966,6 +11966,11 @@ export interface components {
             docs: string;
             /** Config Fields */
             config_fields?: components["schemas"]["PluginFieldOut"][];
+            /**
+             * Summary Field
+             * @default
+             */
+            summary_field: string;
             /** Credential Fields */
             credential_fields?: components["schemas"]["PluginFieldOut"][];
             oauth?: components["schemas"]["PluginOAuthOut"] | null;

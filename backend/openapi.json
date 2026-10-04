@@ -32329,6 +32329,11 @@
             "type": "array",
             "title": "Config Fields"
           },
+          "summary_field": {
+            "type": "string",
+            "title": "Summary Field",
+            "default": ""
+          },
           "credential_fields": {
             "items": {
               "$ref": "#/components/schemas/PluginFieldOut"

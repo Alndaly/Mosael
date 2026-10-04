@@ -172,6 +172,8 @@ class PluginPackageOut(ApiModel):
     #: 这个插件在 Mosael 里怎么用的文档(已按看的人的语言挑好)。空 = 没写。
     docs: str = ""
     config_fields: list[PluginFieldOut] = Field(default_factory=list)
+    #: 收起的连接那一行摆哪一项配置的键(名字模板里引用的第一个配置项,没有就第一个必填的文本项);空串 = 不摆。
+    summary_field: str = ""
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
     #: 这个插件能自己走 OAuth 的话是它的声明,否则 None。界面据此决定要不要给「去授权」。
     oauth: PluginOAuthOut | None = None

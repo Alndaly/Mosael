@@ -294,7 +294,6 @@ export const plugins = {
   pluginUninstallTitle: "卸载「{name}」?",
   pluginUninstallBody: "会删掉磁盘上的插件目录,连同它的权限、凭据与调用记录。此操作不可撤销。",
   // 模型库(ADR 0034)
-  modelLibrary: "模型库",
   modelLibraryDesc: "这台服务器上的模型文件:预览、底模、触发词、哪些工作流在用;缺的模型也能直接下到它上面",
   modelLibraryOpen: "打开模型库",
   modelLibraryTitle: "{name} · 模型库",
@@ -381,4 +380,16 @@ export const plugins = {
   modelDownloadHfTokenUnsupported: "HuggingFace 令牌经 ComfyUI-Manager 带不过去:要令牌才能下的文件会下载失败。",
   modelDownloadManagerNoProgress: "看不到按字节的进度:只知道「正在下」和「下好了 / 没下成」。",
   modelDownloadManagerCancel: "下载开始后取消,只是 Mosael 不再等;那台机器上的下载还会继续,下完刷新模型库就能看到。",
+  // 连接能收起:标题行那一行
+  pluginConnExpand: "展开「{name}」",
+  pluginConnCollapse: "收起「{name}」",
+  pluginCollapseAll: "全部收起",
+  pluginExpandAll: "全部展开",
+  pluginConnStateOk: "可用",
+  pluginConnStateOff: "已停用",
+  pluginConnStateReauth: "需要重新授权",
+  pluginConnStatePending: "待授权",
+  pluginConnStateAction: "需要处理",
+  pluginConnStateError: "出错了",
+  pluginConnModels: "{n} 个模型",
 } as const;

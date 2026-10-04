@@ -345,6 +345,15 @@ def test_能力开关可以逐个改() -> None:
     assert [t["name"] for t in client.get("/api/plugins/tools").json()] == ["noisy"]
 
 
+def test_收起的连接那一行显示哪一项配置_按名字模板里引用的那一项() -> None:
+    """插件页的连接能收起(一行看清这个连接是什么):那一行除了名字,还摆一项最能代表它的配置 ——
+    名字模板里引用的第一个配置项(TikHub 的平台、ComfyUI 的服务器地址);没写模板就是第一个必填的文本配置项;都没有就不摆。"""
+    client = install(KEYED, SIMPLE)
+    listed = packages(client)
+    assert listed["dev.keyed"]["summary_field"] == "platform"
+    assert listed["dev.simple"]["summary_field"] == ""
+
+
 def test_插件升级后多要了权限_连接停用并说清楚多要了哪几项_授予后恢复() -> None:
     """升级后清单多声明了权限:已有的连接停用(这是有意的 —— 多出来的权限要人点头),但要说清楚为什么停、
     多要了哪几项、点哪里恢复;之前授予的那一项照旧算数,不用重授。"""

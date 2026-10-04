@@ -31,7 +31,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import type { Job, ModelLibrary, PluginInstance } from "@/api/client";
-import { ModelLibraryRow, freeName } from "./ModelLibrary";
+import { ModelLibraryButton, freeName } from "./ModelLibrary";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
 
@@ -80,7 +80,7 @@ function wrap(node: React.ReactNode) {
 }
 
 async function openLibrary() {
-  wrap(<ModelLibraryRow instance={instance} workspaceId="w1" />);
+  wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
   fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
   return within(await screen.findByRole("list", { name: "modelLibraryTitle" }));
 }

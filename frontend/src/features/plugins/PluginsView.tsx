@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -46,13 +46,17 @@ import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
+import { SettingsBlock, SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-trigger";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
-import { ModelLibraryRow } from "@/features/plugins/ModelLibrary";
+import { ModelLibraryButton } from "@/features/plugins/ModelLibrary";
+import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { Hint } from "@/components/ui/tooltip";
+import { useConnectionOpen } from "@/features/plugins/connectionOpen";
+import type { MessageKey } from "@/app/messages";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { ConnectionPermissionNotice, waitingForPermissions } from "@/features/plugins/ConnectionPermissions";
@@ -200,7 +204,8 @@ function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void 
   </Button>;
 }
 
-function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
+//: 导出**只为测试**:连接的展开 / 收起、「全部收起」由测试盯着(见 ConnectionCollapse.dom.test)。
+export function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
   const t = useI18n();
   const market = useQuery({ queryKey: ["plugin-market"], queryFn: () => listPluginMarket(), retry: false });
   const docs = pkg.docs || market.data?.plugins.find((entry) => entry.id === pkg.id)?.docs || "";
@@ -216,20 +221,24 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       invalidatePluginDependents(qc);
     },
   });
+  const instances = pkg.instances ?? [];
+  const instanceIds = React.useMemo(() => instances.map((one) => one.id), [instances]);
+  //: 每个连接展开还是收起,按连接记在本机(见 connectionOpen):一个连接默认展开,几个默认收起,刚建的展开。
+  const opened = useConnectionOpen(instanceIds);
   const createInstance = useMutation({
     mutationFn: () =>
       createPluginInstance(pkg.id, { config: draft }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
       setAddOpen(false);
       setDraft({});
+      if (created?.id) opened.setOpen(created.id, true);
       invalidatePluginDependents(qc);
     },
   });
 
   const canAdd = pkg.multiple || (pkg.instances ?? []).length === 0;
 
-  const instances = pkg.instances ?? [];
   const enabledCount = instances.filter((one) => one.enabled).length;
 
   return (
@@ -270,6 +279,13 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
             </Truncate>
           </div>
           <span className="flex shrink-0 items-center gap-1">
+            {/* 连接多于一个时:一键全部收起 / 展开(有一个开着就是「全部收起」)。 */}
+            {instances.length > 1 && (
+              <Button variant="ghost" size="default" className="text-muted-foreground" onClick={() => opened.setAll(!opened.anyOpen)}>
+                {opened.anyOpen ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
+                {opened.anyOpen ? t("pluginCollapseAll") : t("pluginExpandAll")}
+              </Button>
+            )}
             {/* 「新建连接」排在最前:它是这一页最常做的事。卸载留在最后 —— 破坏性动作
                 不该和常用动作贴在一起,手滑的代价不对等。 */}
             {canAdd && (
@@ -330,7 +346,14 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       {/* 连接是这一页的**主体**。有几个就是几个,新建那一条排在最后 —— 排在最前的话,
           每次进来第一眼看到的是"再建一个",而绝大多数时候用户是来改已有的那个。 */}
       {instances.map((instance) => (
-        <ConnectionCard key={instance.id} pkg={pkg} instance={instance} workspaceId={workspaceId} />
+        <ConnectionCard
+          key={instance.id}
+          pkg={pkg}
+          instance={instance}
+          workspaceId={workspaceId}
+          open={opened.isOpen(instance.id)}
+          onOpenChange={(next) => opened.setOpen(instance.id, next)}
+        />
       ))}
 
       {/* **入口在页头**(和文档/主页/卸载同一排),点开是弹窗 —— 不再是常驻的内联表单:
@@ -555,10 +578,28 @@ function FieldLine({ field, value, onChange, className, commit }: {
 }
 
 //: 导出**只为测试**:授权那一条摆在卡片的哪儿是结构,由测试盯着(见 PluginsView.dom.test)。
-export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; instance: PluginInstance; workspaceId: string }) {
+export function ConnectionCard({
+  pkg,
+  instance,
+  workspaceId,
+  open: openProp,
+  onOpenChange,
+}: {
+  pkg: PluginPackage;
+  instance: PluginInstance;
+  workspaceId: string;
+  /** 展开还是收起。不给就自己记(默认展开):单独渲染一张卡的地方(测试)不必管。 */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [ownOpen, setOwnOpen] = React.useState(true);
+  const open = openProp ?? ownOpen;
+  const setOpen = (next: boolean) => (onOpenChange ? onOpenChange(next) : setOwnOpen(next));
+  const bodyId = React.useId();
+  const bodyRef = React.useRef<HTMLDivElement>(null);
 
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -616,36 +657,91 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
     return fetchError ? t("pluginToolsFetchFailed").replace("{error}", fetchError) : t("pluginToolsNotFetched");
   })();
 
+  //: 收起时那一行说的话:这个连接此刻怎么样(可用 / 已停用 / 要处理的原因)、开了几个工具或几个模型。
+  const issue = connectionIssue(pkg, instance);
+  const summaryText = ((): string => {
+    if (generates && tools.length === 0) {
+      const models = instance.capability_status?.generation?.models;
+      return typeof models === "number" ? t("pluginConnModels").replace("{n}", String(models)) : t("pluginGenerationDesc");
+    }
+    if (hostOnly) return t("pluginHostCapabilityDesc").replace("{list}", hostCapabilities.map(labelOf).join(t("listSeparator")));
+    if (tools.length === 0) return instance.blocked_reason ? "" : noToolsText;
+    return t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length));
+  })();
+  const address = summaryAddress(pkg, instance);
+  const title = !pkg.multiple && instance.name === pkg.name ? t("pluginConnectionSettings") : instance.name;
+
+  //: 点开**这一个**连接时定位到出问题的那一项(授权那一条、缺的那一格配置、凭据……):要处理的事收起时标着,
+  //: 点开就该直接看到它。「全部展开」不做:几个连接各抢一次焦点,页面会跳到最后那个出问题的。
+  const focusIssueNext = React.useRef(false);
+  React.useEffect(() => {
+    if (!open || !focusIssueNext.current) return;
+    focusIssueNext.current = false;
+    if (!issue.target) return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = bodyRef.current?.querySelector<HTMLElement>(`[data-connection-section="${issue.target}"]`);
+      if (!section) return;
+      section.scrollIntoView({ block: "center" });
+      section.querySelector<HTMLElement>("button, input, textarea, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+    // 只在展开的那一刻跑:展开着时改别的(刷新、保存)不该把焦点拽回去
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
-    <SettingsGroup
-      className="[&_[data-slot=settings-group-title]]:text-ui-md [&_[data-slot=settings-group-description]]:text-ui-sm"
-      title={!pkg.multiple && instance.name === pkg.name ? t("pluginConnectionSettings") : instance.name}
-      description={
-        instance.blocked_reason
-          ? instance.blocked_reason
-          : generates && tools.length === 0
-            ? t("pluginGenerationDesc")
-            : hostOnly
-              ? t("pluginHostCapabilityDesc").replace(
-                  "{list}",
-                  hostCapabilities.map(labelOf).join(t("listSeparator")),
-                )
-              : tools.length === 0
-                ? noToolsText
-                : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
-      }
-      actions={
-        <div className="flex items-center gap-2">
+    <section data-connection={instance.id} className="grid min-w-0 rounded-xl border border-border bg-panel">
+      {/* **标题行就是收起 / 展开的按钮**(aria-expanded):收起时一行看清这个连接是什么、此刻怎么样;常用动作
+          (刷新、模型库、启用开关、删除)收起时也在,不用先展开。要处理的事(停用了要重新授权、缺配置)标黄,
+          下面一行写着原因。 */}
+      <header className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <Hint label={(open ? t("pluginConnCollapse") : t("pluginConnExpand")).replace("{name}", instance.name)}>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => {
+              focusIssueNext.current = !open;
+              setOpen(!open);
+            }}
+            className="flex min-w-0 flex-1 basis-[280px] cursor-pointer items-start gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight
+              size={16}
+              aria-hidden
+              className={cn("mt-0.5 shrink-0 text-muted-foreground transition-transform duration-100", open && "rotate-90")}
+            />
+            <span className="grid min-w-0 flex-1 gap-1">
+              <span className="flex min-w-0 items-baseline gap-2">
+                <Truncate className="shrink text-ui-md font-semibold text-foreground">{title}</Truncate>
+                {address && <Truncate className="timecode shrink-[2] text-ui-xs text-muted-foreground">{address}</Truncate>}
+              </span>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
+                <CatalogBadge tone={issue.tone}>{t(issue.label)}</CatalogBadge>
+                {summaryText && <span>{summaryText}</span>}
+              </span>
+              {issue.detail && <Truncate lines={2} className="text-ui-xs leading-relaxed text-warning">{issue.detail}</Truncate>}
+            </span>
+          </button>
+        </Hint>
+        <div className="flex shrink-0 items-center gap-2">
+          {(pkg.kind === "mcp" || generates) && (
+            <IconButton
+              variant="outline"
+              size="default"
+              className="px-3 text-muted-foreground"
+              label={pkg.kind === "mcp" ? t("pluginRefreshTools") : t("pluginRefreshModels")}
+              loading={refresh.isPending}
+              onClick={() => refresh.mutate()}
+            >
+              <RefreshCcw size={13} />
+            </IconButton>
+          )}
+          {(pkg.provides ?? []).includes("model_library") && <ModelLibraryButton instance={instance} workspaceId={workspaceId} />}
           <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{instance.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />
           </label>
-          {(pkg.kind === "mcp" || generates) && (
-            <Button variant="outline" size="default" loading={refresh.isPending} onClick={() => refresh.mutate()}>
-              <RefreshCcw size={13} />
-              {pkg.kind === "mcp" ? t("pluginRefreshTools") : t("pluginRefreshModels")}
-            </Button>
-          )}
           <IconButton
             variant="outline"
             size="default"
@@ -656,8 +752,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
             <Trash2 size={13} />
           </IconButton>
         </div>
-      }
-    >
+      </header>
       <ConfirmDialog
         open={confirmDelete}
         title={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
@@ -667,13 +762,25 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
         onConfirm={() => remove.mutate()}
       />
 
+      {open && (
+      <div
+        id={bodyId}
+        ref={bodyRef}
+        className="grid min-w-0 border-t border-divider px-4 [&>*+*]:border-t [&>*+*]:border-divider"
+      >
       {/* 授权是**连接级别**的:写的是这个连接的令牌,管的是这个连接能不能用 —— 所以是正文第一行,
           不在凭据组末尾;长相和下面各行同一套(见 ConnectionAuthorization)。 */}
       {pkg.oauth && instance.authorization && (
-        <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} fields={pkg.oauth.fills ?? []} />
+        <div data-connection-section="authorization">
+          <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} fields={pkg.oauth.fills ?? []} />
+        </div>
       )}
       {/* 缺权限停着(插件更新后多要了几项,或刚接上还没授):最上面说清楚为什么、点哪里恢复。 */}
-      <ConnectionPermissionNotice instance={instance} />
+      {(instance.pending_permissions ?? []).length > 0 && (
+        <div data-connection-section="permissions">
+          <ConnectionPermissionNotice instance={instance} />
+        </div>
+      )}
 
       <SettingsRow label={t("pluginConnectionName")} description={t("pluginConnectionNameDesc")}>
         <Input
@@ -688,7 +795,8 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
       </SettingsRow>
 
       {(pkg.config_fields ?? []).map((field) => (
-        <SettingsRow key={field.key} label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
+        <div key={field.key} data-connection-section={`config:${field.key}`}>
+        <SettingsRow label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
           {isCodeField(field) ? (
             /* 一段代码塞不进这一栏:这里只放摘要和「编辑」,编辑在大弹窗里(见 CodeConfigField)。 */
             <CodeConfigControl
@@ -705,10 +813,13 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
             />
           )}
         </SettingsRow>
+        </div>
       ))}
 
       {(pkg.credential_fields ?? []).length > 0 && (
-        <CredentialRows instanceId={instance.id} oauthFields={pkg.oauth?.fills ?? []} />
+        <div data-connection-section="credentials" className="grid [&>*+*]:border-t [&>*+*]:border-divider">
+          <CredentialRows instanceId={instance.id} oauthFields={pkg.oauth?.fills ?? []} />
+        </div>
       )}
 
       {/* 网络是宿主给**每个**连接的一行(不是清单里的配置),排在插件自己声明的配置与凭据之后。 */}
@@ -718,16 +829,15 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
       )}
 
       {generates && (
-        <GenerationModelsRow
-          instance={instance}
-          status={instance.capability_status?.generation}
-          refreshing={refresh.isPending}
-          onRefresh={() => refresh.mutate()}
-        />
+        <div data-connection-section="generation">
+          <GenerationModelsRow
+            instance={instance}
+            status={instance.capability_status?.generation}
+            refreshing={refresh.isPending}
+            onRefresh={() => refresh.mutate()}
+          />
+        </div>
       )}
-      {/* 模型库(ADR 0034):这个连接那台服务器上的模型文件 —— 模型文件属于一台服务器,所以放在连接上。 */}
-      {(pkg.provides ?? []).includes("model_library") && <ModelLibraryRow instance={instance} workspaceId={workspaceId} />}
-
 
       {(grants.data ?? []).map((grant) => (
         <SettingsRow
@@ -749,6 +859,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
       {/* 只提供生成的插件没有给智能体和工作流的工具(认领生成的那个工具只给宿主调),
           一张空的勾选表只会让人以为它坏了。 */}
       {(tools.length > 0 || (!generates && !hostOnly)) && (
+        <div data-connection-section="tools">
         <CapabilityPicker
           instanceId={instance.id}
           workspaceId={workspaceId}
@@ -758,11 +869,75 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
           onToggle={(choices) => setCapabilities.mutate(choices)}
           pending={setCapabilities.isPending}
         />
+        </div>
       )}
 
       <InvocationList instanceId={instance.id} />
-    </SettingsGroup>
+      </div>
+      )}
+    </section>
   );
+}
+
+type IssueTone = "success" | "warning" | "muted";
+
+/**
+ * 一个连接此刻怎么样 —— 收起的那一行上那枚标记、下面那句原因,以及展开时该定位到哪一项(`data-connection-section`)。
+ *
+ * 先后:用户自己停用的(已停用,不算出错)→ 缺必填配置(定位到那一格)→ 没授权 / 对方不认了(定位到授权那一条)→
+ * 缺权限(插件更新后多要了几项 = 需要重新授权;定位到权限那一条)→ 别的不可用原因(缺凭据,定位到凭据)→
+ * 目录没刷出来(连不上 ComfyUI 之类,定位到生成模型那一行或工具表)→ 可用。
+ */
+export function connectionIssue(
+  pkg: PluginPackage,
+  instance: PluginInstance,
+): { tone: IssueTone; label: MessageKey; detail: string; target: string } {
+  if (!instance.enabled) return { tone: "muted", label: "pluginConnStateOff", detail: "", target: "" };
+  const config = (instance.config ?? {}) as Record<string, unknown>;
+  const missing = (pkg.config_fields ?? []).find((field) => field.required && !String(config[field.key] ?? "").trim());
+  if (missing) {
+    return { tone: "warning", label: "pluginConnStateAction", detail: instance.blocked_reason ?? "", target: `config:${missing.key}` };
+  }
+  if (instance.authorization === "unauthorized" || instance.authorization === "rejected") {
+    return {
+      tone: "warning",
+      label: instance.authorization === "rejected" ? "pluginConnStateReauth" : "pluginConnStatePending",
+      detail: instance.blocked_reason ?? "",
+      target: "authorization",
+    };
+  }
+  if ((instance.pending_permissions ?? []).length > 0) {
+    return {
+      tone: "warning",
+      label: instance.permissions_added ? "pluginConnStateReauth" : "pluginConnStatePending",
+      detail: instance.blocked_reason ?? "",
+      target: "permissions",
+    };
+  }
+  if (instance.blocked_reason) {
+    return { tone: "warning", label: "pluginConnStateAction", detail: instance.blocked_reason, target: "credentials" };
+  }
+  const generationError = instance.capability_status?.generation?.error;
+  const toolsError = instance.capability_status?.tools?.error;
+  if (generationError || toolsError) {
+    return {
+      tone: "warning",
+      label: "pluginConnStateError",
+      detail: String(generationError || toolsError),
+      target: generationError ? "generation" : "tools",
+    };
+  }
+  return { tone: "success", label: "pluginConnStateOk", detail: "", target: "" };
+}
+
+/** 收起的那一行摆的那项配置(清单的 `summary_field`):枚举给选项的名字;名字里已经写着它就不重复。 */
+function summaryAddress(pkg: PluginPackage, instance: PluginInstance): string {
+  const field = (pkg.config_fields ?? []).find((one) => one.key === pkg.summary_field);
+  if (!field) return "";
+  const raw = String(((instance.config ?? {}) as Record<string, unknown>)[field.key] ?? "").trim();
+  const options = (field.options ?? []) as { value?: string; label?: string }[];
+  const shown = options.find((option) => option.value === raw)?.label ?? raw;
+  return shown && !instance.name.includes(shown) ? shown : "";
 }
 
 /**
