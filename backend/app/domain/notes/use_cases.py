@@ -123,12 +123,15 @@ def purge(db: Session, user: User, workspace_id: str, note_id: str, base_save_se
 
 
 def restore(db: Session, user: User, workspace_id: str, note_id: str, number: int, base_save_seq: int) -> Note:
+    """把某一版的**正文**(标题、正文、来源)恢复成新的一版;收藏、回收站、标签这些属性照现在的。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    notes.get_note(db, workspace_id, note_id)
+    note = notes.get_note(db, workspace_id, note_id)
     row = db.get(NoteRevision, (note_id, number))
     if row is None:
         raise NotVisible("routeErr_noteVersionNotFound")
+    current = notes.snapshot(note)
+    restored = {**current, **{key: row.snapshot.get(key, current[key]) for key in notes.VERSIONED}}
     return notes.save_note(
-        db, workspace_id, note_id, base_save_seq, NoteContent.model_validate(row.snapshot),
+        db, workspace_id, note_id, base_save_seq, NoteContent.model_validate(restored),
         actor=user.id, origin="restore", restored_from=number, restored_sources=row.snapshot["sources"],
     )

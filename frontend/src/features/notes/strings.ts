@@ -91,7 +91,6 @@ const zh = {
     edits: (n: number) => `${n} 次连续编辑`,
     chars: "字",
     titleChanged: "改了标题",
-    propertiesChanged: "属性有改动",
   },
 };
 type Strings = typeof zh;
@@ -185,7 +184,6 @@ const en: Strings = {
     edits: (n: number) => `${n} consecutive edits`,
     chars: "chars",
     titleChanged: "Title changed",
-    propertiesChanged: "Properties changed",
   },
 };
 export function noteStrings(locale: string) { return locale === "en-US" ? en : zh; }

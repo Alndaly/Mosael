@@ -281,11 +281,11 @@ function VersionHow({ item, className }: { item: NoteRevisionSummary; className?
   return <Truncate className={className}>{by ? `${origin} · ${by}` : origin}</Truncate>;
 }
 
-/** 这一组改了多少:「+120 −30 字」「改了标题」;字和标题都没动(只改了标签、收藏这些)就说「属性有改动」。 */
+/** 这一组改了多少:「+120 −30 字」「改了标题」。只改了来源的那种两样都没有,就不写。 */
 function VersionChange({ item }: { item: NoteRevisionSummary }) {
   const v = useNoteStrings().versions;
   const words = item.chars_added > 0 || item.chars_removed > 0;
-  if (!words && !item.title_changed && item.origin !== "edit") return null;
+  if (!words && !item.title_changed) return null;
   return (
     <span className="note-history-change">
       {words && (
@@ -296,7 +296,6 @@ function VersionChange({ item }: { item: NoteRevisionSummary }) {
         </span>
       )}
       {item.title_changed && <span>{v.titleChanged}</span>}
-      {!words && !item.title_changed && <span>{v.propertiesChanged}</span>}
     </span>
   );
 }

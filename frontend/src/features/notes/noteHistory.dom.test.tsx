@@ -329,13 +329,12 @@ it("引用的是组里的一版:进来时那一组已经展开、选中那一版
   expect(within(list()).getByRole("button", { name: "3 次连续编辑" })).toHaveAttribute("aria-expanded", "true");
 });
 
-it("只改了标题、只改了属性,也写出来", async () => {
+it("只改了标题也写出来", async () => {
   api.versions[0] = { ...api.versions[0], title_changed: true };
   mount();
   await waitFor(() => expect(row(3)).toBeInTheDocument());
   expect(row(3)).toHaveTextContent("改了标题");
-  expect(row(2)).toHaveTextContent("属性有改动");
-  expect(row(1)).not.toHaveTextContent("属性有改动");
+  expect(row(2)).not.toHaveTextContent("改了标题");
 });
 
 it("只有一项但它是好几次连续编辑:不算只有一个版本", async () => {

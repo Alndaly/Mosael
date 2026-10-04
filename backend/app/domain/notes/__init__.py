@@ -40,6 +40,9 @@ class NoteConflict(NoteDomainError):
 
 
 FIELDS = tuple(NoteContent.model_fields)
+#: 版本里记的是**正文**:标题、正文、来源。收藏、回收站、标签、主题、所属项目是属性 —— 改它们照样 +1 保存序号,
+#: 但不开新版;恢复某一版也只恢复这几样。
+VERSIONED = ("title", "markdown", "sources")
 
 
 def get_note(db: Session, workspace_id: str, note_id: str) -> Note:
@@ -150,9 +153,11 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, 
         raise NoteConflict("noteErr_changedElsewhere")
     data = validate_content(db, workspace_id, content, actor=actor,
                             existing_sources=note.sources + (restored_sources or []))
-    if data == snapshot(note):
+    current = snapshot(note)
+    if data == current:
         return note
-    revision = note.revision + 1
+    opens_version = any(data[key] != current[key] for key in VERSIONED)
+    revision = note.revision + 1 if opens_version else note.revision
     # 条件写:两个请求读到同一个保存序号时,只有一个落得下。
     result = db.execute(update(Note).where(Note.id == note_id, Note.save_seq == base_save_seq).values(
         **data, revision=revision, save_seq=base_save_seq + 1, updated_at=now(),
@@ -162,7 +167,8 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, 
         # 让内存里这份过期,重试(append_note)时读到的是库里最新的一版。
         db.expire(note)
         raise NoteConflict("noteErr_changedElsewhere")
-    _record_revision(db, note_id, revision, data, actor=actor, origin=origin, restored_from=restored_from)
+    if opens_version:
+        _record_revision(db, note_id, revision, data, actor=actor, origin=origin, restored_from=restored_from)
     db.flush()
     db.refresh(note)
     return note
