@@ -99,7 +99,12 @@ class ChatTarget:
     execution_surface: Literal["direct", "gateway"] = "direct"
     gateway_provider: dict[str, Any] | None = field(default=None, repr=False)
     gateway_api_base: str = ""
+    #: 第一次调用交给 sidecar 的短期服务令牌(解析目标时在调用方的会话里铸好、提交)。用完就撤(见 _chat_gateway)。
     gateway_token: str = field(default="", repr=False)
+    #: 钥匙的主人。同一个目标会被拿来调不止一次(工作流 LLM 节点 JSON 不合格时「重新生成 JSON」):上一次用过的
+    #: 令牌已经撤了，再调时以他的身份现铸一份。此前第二次照旧交那份撤掉的令牌,sidecar 刷新 OAuth 凭据时拿它
+    #: 去加锁,401「Invalid or expired session」,整条工作流失败。
+    gateway_user_id: str = ""
     #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**。`None` = 不知道(照发,被拒了再降级)。
     #: 见 domain/providers/structured_output。
     structured_output: bool | None = None
@@ -149,6 +154,7 @@ def target_for(
             gateway_api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。
             gateway_token=mint_service_session(db, profile.owner_user_id),
+            gateway_user_id=profile.owner_user_id,
             structured_output=_structured_output(db, profile, resolved),
         )
     #: **地址空着就在这儿说清楚。** 不拦的话拼出来的是 "/chat/completions",httpx 抛的是
@@ -408,6 +414,10 @@ def _chat_gateway(
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
+    from app.core.security import revoke_session
+    from app.core.unit_of_work import unit_of_work
+
+    token = _live_gateway_token(target)
     try:
         while True:
             system_prompt, prompt, images = _gateway_prompt(payload.get("messages") or [])
@@ -434,7 +444,7 @@ def _chat_gateway(
                     provider=target.gateway_provider or {},
                     model=target.model,
                     api_base=target.gateway_api_base,
-                    token=target.gateway_token,
+                    token=token,
                     options=options,
                     timeout=timeout,
                 )
@@ -445,7 +455,7 @@ def _chat_gateway(
                     else None
                 )
                 if fallback is None:
-                    raise AiChatError("aiChatErr_failed", label=label, detail=_sanitize(str(exc), target.gateway_token)) from exc
+                    raise AiChatError("aiChatErr_failed", label=label, detail=_sanitize(str(exc), token)) from exc
                 _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_rejected"))
                 payload = fallback
                 continue
@@ -457,12 +467,9 @@ def _chat_gateway(
                     continue
             break
     finally:
-        if target.gateway_token:
-            from app.core.security import revoke_session
-            from app.core.unit_of_work import unit_of_work
-
+        if token:
             with unit_of_work() as db:
-                revoke_session(db, target.gateway_token)
+                revoke_session(db, token)
     if call is not None:
         usage = result.usage or {}
         call.meter(
@@ -471,6 +478,23 @@ def _chat_gateway(
             raw=usage,
         )
     return result.text
+
+
+def _live_gateway_token(target: ChatTarget) -> str:
+    """这一次调用交给 sidecar 的令牌：目标上那份还在就用它，已经撤了(上一次调用用过)或过期了就现铸一份。
+
+    第一次调用不在这里写库 —— 令牌在解析目标时已经在调用方的会话里铸好、提交了，这里另开会话写库会撞上调用方
+    还没提交的写(SQLite 只有一个写者)。
+    """
+    from app.core.security import find_session, mint_service_session
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import now
+
+    with unit_of_work() as db:
+        held = find_session(db, target.gateway_token)
+        if held is not None and held.expires_at > now():
+            return target.gateway_token
+        return mint_service_session(db, target.gateway_user_id) if target.gateway_user_id else ""
 
 
 #: OpenAI 兼容接口的硬性要求:用 `response_format: json_object` 时,**提示词里必须出现

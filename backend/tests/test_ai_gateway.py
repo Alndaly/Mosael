@@ -135,3 +135,43 @@ def test_automation_target_resolves_oauth_identity_without_a_base_url(monkeypatc
     assert chat(target, [{"role": "user", "content": "hello"}]) == "ok"
     with SessionLocal() as db:
         assert find_session(db, target.gateway_token) is None
+
+
+def test_同一个目标调第二次_交给_sidecar_的令牌仍然有效(monkeypatch) -> None:
+    """工作流 LLM 节点 JSON 不合格时拿同一个目标再调一次(「重新生成 JSON」)。此前令牌在目标解析时铸一份、
+    第一次调用结束就撤掉,第二次 sidecar 刷新 OAuth 凭据时拿着撤掉的令牌去加锁,401「Invalid or expired
+    session」,整条工作流失败 —— 隔离环境里模特上身图连跑两次都死在这一步。"""
+    fresh_client()
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="Kimi Code",
+            vendor="kimi-coding",
+            base_url="",
+            auth_type="oauth",
+            oauth_credential={"access_token": "x"},
+            model="k3",
+            capability_ids=["chat"],
+        )
+        db.commit()
+        resolved = provider_credentials.resolve_connection(db, profile, profile.owner_user_id)
+        target = target_for(db, resolved, model="k3", surface="automation")
+
+    from app.core.security import find_session
+
+    live: list[bool] = []
+    tokens: list[str] = []
+
+    def fake_complete(**kwargs):
+        with SessionLocal() as db:
+            live.append(find_session(db, kwargs["token"]) is not None)
+        tokens.append(kwargs["token"])
+        return pi_client.GatewayResult(text="ok", usage={"input": 1, "output": 1})
+
+    monkeypatch.setattr(pi_client, "gateway_complete", fake_complete)
+    chat(target, [{"role": "user", "content": "第一次"}])
+    chat(target, [{"role": "user", "content": "重新生成 JSON"}])
+
+    assert live == [True, True]
+    with SessionLocal() as db:
+        assert all(find_session(db, token) is None for token in tokens), "两次各自用完都撤掉"
