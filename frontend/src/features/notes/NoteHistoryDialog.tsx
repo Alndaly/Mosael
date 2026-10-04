@@ -14,6 +14,7 @@ import { DiffSegments } from "@/components/app/DiffSegments";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { diffText } from "@/lib/textDiff";
@@ -160,11 +161,9 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                   {isCurrent && <span className="note-history-badge">{v.current}</span>}
                 </div>
                 <div className="note-history-actions">
-                  <Hint label={v.copy}>
-                    <button type="button" className="note-icon" aria-label={v.copy} disabled={!shown} onClick={copy}>
-                      <Copy size={16} strokeWidth={1.7} aria-hidden="true" />
-                    </button>
-                  </Hint>
+                  <IconButton label={v.copy} disabled={!shown} onClick={copy}>
+                    <Copy size={16} strokeWidth={1.7} aria-hidden="true" />
+                  </IconButton>
                   {!isCurrent && <Button size="sm" disabled={!shown} onClick={() => setConfirming(true)}>{v.restore}</Button>}
                 </div>
               </div>
