@@ -52,6 +52,7 @@ import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
+import { ModelLibraryRow } from "@/features/plugins/ModelLibrary";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
@@ -718,6 +719,8 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
           onRefresh={() => refresh.mutate()}
         />
       )}
+      {/* 模型库(ADR 0034):这个连接那台服务器上的模型文件 —— 模型文件属于一台服务器,所以放在连接上。 */}
+      {(pkg.provides ?? []).includes("model_library") && <ModelLibraryRow instance={instance} workspaceId={workspaceId} />}
 
 
       {(grants.data ?? []).map((grant) => (

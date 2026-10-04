@@ -4,7 +4,8 @@
  * 改一个接口要去界面里找字符串,而拼错一个只会在运行时变成一次 404。
  */
 import type { components } from "@/api/generated/schema";
-import { api } from "@/api/transport";
+import type { Job } from "@/api/domains/jobs";
+import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
@@ -21,6 +22,12 @@ export type PluginMarketEntry = components["schemas"]["PluginMarketEntry"];
 export type PluginMarketListing = components["schemas"]["PluginMarketOut"];
 export type PluginInstallPreview = components["schemas"]["PluginInstallPreview"];
 export type PluginProvidedModel = components["schemas"]["PluginProvidedModelOut"];
+/** 模型库(ADR 0034):认领 model_library 的连接上的模型文件、工作流缺的模型、下载走哪条路。 */
+export type ModelLibrary = components["schemas"]["ModelLibraryOut"];
+export type ModelFile = components["schemas"]["ModelFileOut"];
+export type MissingModel = components["schemas"]["MissingModelOut"];
+export type ModelDetail = components["schemas"]["ModelDetailOut"];
+export type ModelResolved = components["schemas"]["ModelResolveOut"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -83,3 +90,34 @@ export const installPlugin = (url: string, overwrite: boolean, advertisedVersion
     method: "POST",
     body: JSON.stringify({ url, overwrite, advertised_version: advertisedVersion, sha256 }),
   });
+
+
+// --- 模型库(ADR 0034) ---------------------------------------------------------
+
+/** 现问插件:这个连接上的全部模型文件(第一次要读文件头,几百个文件要几秒)。 */
+export const getModelLibrary = (instanceId: string) =>
+  api<ModelLibrary>(`/api/plugins/instances/${instanceId}/model-library`);
+
+export const getModelDetail = (instanceId: string, folder: string, name: string) =>
+  api<ModelDetail>(`/api/plugins/instances/${instanceId}/model-library/detail?${new URLSearchParams({ folder, name })}`);
+
+/** 一个链接(HuggingFace 文件、Civitai 页面或下载链接、别的直链)指的是哪个文件。 */
+export const resolveModelLink = (instanceId: string, url: string) =>
+  api<ModelResolved>(`/api/plugins/instances/${instanceId}/model-library/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+
+/** 下到这个连接的那台服务器上:一个后台任务(进度、取消都在任务上)。 */
+export const startModelDownload = (
+  instanceId: string,
+  body: { workspace_id: string; url: string; folder: string; filename: string },
+) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
+
+/** 预览图地址。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
+export function modelPreviewUrl(instanceId: string, folder: string, name: string): string {
+  const params = new URLSearchParams({ folder, name });
+  const token = getAuthToken();
+  if (token) params.set("token", token);
+  return `${API_BASE}/api/plugins/instances/${instanceId}/model-library/preview?${params}`;
+}
