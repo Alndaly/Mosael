@@ -6414,6 +6414,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workflow Library
+         * @description 现问插件:这个连接上存着的全部工作流(图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺什么)、回收目录里的;
+         *     给了 `workspace_id` 就带上这个工作区里最近一次用它生成的产出。
+         */
+        get: operations["get_workflow_library_api_plugins_instances__instance_id__workflow_library_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workflow Content
+         * @description 一张工作流的原文(导出成 JSON)。
+         */
+        get: operations["get_workflow_content_api_plugins_instances__instance_id__workflow_library_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Workflow
+         * @description 在那台服务器上复制一张(不覆盖)。
+         */
+        post: operations["copy_workflow_api_plugins_instances__instance_id__workflow_library_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Workflow
+         * @description 在那台服务器上改名 / 挪目录(不覆盖)。
+         */
+        post: operations["rename_workflow_api_plugins_instances__instance_id__workflow_library_rename_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trash Workflow
+         * @description 「删除」:挪进那台服务器上的回收目录,能恢复。
+         */
+        post: operations["trash_workflow_api_plugins_instances__instance_id__workflow_library_trash_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Workflow
+         * @description 从回收目录挪回去(原处被占了就撞名,带着新名字再来)。
+         */
+        post: operations["restore_workflow_api_plugins_instances__instance_id__workflow_library_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/capabilities": {
         parameters: {
             query?: never;
@@ -14893,6 +15014,22 @@ export interface components {
              */
             summary: string;
         };
+        /** WorkflowContentOut */
+        WorkflowContentOut: {
+            /** Path */
+            path: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowCopyRequest */
+        WorkflowCopyRequest: {
+            /** Path */
+            path: string;
+            /** New Path */
+            new_path: string;
+        };
         /** WorkflowCreate */
         WorkflowCreate: {
             /** Workspace Id */
@@ -14922,6 +15059,55 @@ export interface components {
             label: string;
         };
         /**
+         * WorkflowFileOut
+         * @description 那台服务器上存着的一张工作流。
+         */
+        WorkflowFileOut: {
+            /** Path */
+            path: string;
+            /** Label */
+            label: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /** Size */
+            size?: number | null;
+            /** Modified */
+            modified?: number | null;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count: number;
+            graph?: components["schemas"]["WorkflowGraphOut"];
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputOut"][];
+            /** Parameters */
+            parameters?: components["schemas"]["WorkflowParameterOut"][];
+            /** Outputs */
+            outputs?: components["schemas"]["WorkflowOutputOut"][];
+            /** Models */
+            models?: components["schemas"]["WorkflowModelRefOut"][];
+            /** Missing Nodes */
+            missing_nodes?: components["schemas"]["WorkflowMissingNodeOut"][];
+            /** Missing Models */
+            missing_models?: components["schemas"]["WorkflowMissingModelOut"][];
+            generation?: components["schemas"]["WorkflowGenerationRefOut"] | null;
+            last_output?: components["schemas"]["WorkflowLastOutputOut"] | null;
+        };
+        /**
          * WorkflowFromPage
          * @description 内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。
          */
@@ -14936,6 +15122,90 @@ export interface components {
             profile_id?: string | null;
         };
         /**
+         * WorkflowGenerationRefOut
+         * @description 这张工作流在 Mosael 里是哪个生成模型(用它生成要它)。
+         */
+        WorkflowGenerationRefOut: {
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /** Kind */
+            kind: string;
+            /** Model */
+            model: string;
+        };
+        /** WorkflowGraphGroupOut */
+        WorkflowGraphGroupOut: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** W */
+            w: number;
+            /** H */
+            h: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+        };
+        /**
+         * WorkflowGraphNodeOut
+         * @description 缩略图上的一个节点:位置、大小(工作流里的坐标)、种类(着色用)、是否旁路 / 静音、标题。
+         */
+        WorkflowGraphNodeOut: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** W */
+            w: number;
+            /** H */
+            h: number;
+            /**
+             * Role
+             * @default other
+             */
+            role: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /**
+         * WorkflowGraphOut
+         * @description 画缩略图用的图摘要。`links` 是节点下标对;`auto_layout`:图里没有位置(API 格式),位置是插件按依赖自动排的。
+         */
+        WorkflowGraphOut: {
+            /** Nodes */
+            nodes?: components["schemas"]["WorkflowGraphNodeOut"][];
+            /** Links */
+            links?: number[][];
+            /** Groups */
+            groups?: components["schemas"]["WorkflowGraphGroupOut"][];
+            /**
+             * Auto Layout
+             * @default false
+             */
+            auto_layout: boolean;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
          * WorkflowImportRequest
          * @description 导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。
          */
@@ -14946,6 +15216,120 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * WorkflowInputOut
+         * @description 读素材的一格:哪个节点、读什么(image / video / audio)、在生成里当什么用(参考图、首帧……)。
+         */
+        WorkflowInputOut: {
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Media
+             * @default
+             */
+            media: string;
+            /**
+             * Role
+             * @default
+             */
+            role: string;
+        };
+        /** WorkflowLastOutputOut */
+        WorkflowLastOutputOut: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** WorkflowLibraryOut */
+        WorkflowLibraryOut: {
+            /** Workflows */
+            workflows?: components["schemas"]["WorkflowFileOut"][];
+            /** Others */
+            others?: components["schemas"]["WorkflowOtherFileOut"][];
+            /** Trash */
+            trash?: components["schemas"]["WorkflowTrashedOut"][];
+            manager?: components["schemas"]["WorkflowManagerOut"];
+        };
+        /** WorkflowManagerOut */
+        WorkflowManagerOut: {
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
+        /**
+         * WorkflowMissingModelOut
+         * @description 缺的、工作流声明了下载地址的模型。
+         */
+        WorkflowMissingModelOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
+        /** WorkflowMissingNodeOut */
+        WorkflowMissingNodeOut: {
+            /** Type */
+            type: string;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Packs */
+            packs?: components["schemas"]["WorkflowNodePackOut"][];
+        };
+        /**
+         * WorkflowModelRefOut
+         * @description 它用到的一个模型文件,在不在这台服务器上。
+         */
+        WorkflowModelRefOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Present
+             * @default false
+             */
+            present: boolean;
+        };
+        /**
+         * WorkflowNodePackOut
+         * @description 一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。
+         */
+        WorkflowNodePackOut: {
+            /** Id */
+            id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Installed
+             * @default false
+             */
+            installed: boolean;
         };
         /** WorkflowNodeTypeOut */
         WorkflowNodeTypeOut: {
@@ -14999,6 +15383,19 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * WorkflowOtherFileOut
+         * @description workflows/ 里不是工作流的文件(拷进去的压缩包),和它为什么用不了。
+         */
+        WorkflowOtherFileOut: {
+            /** Path */
+            path: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /** WorkflowOut */
         WorkflowOut: {
             /** Id */
@@ -15027,6 +15424,67 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** WorkflowOutputOut */
+        WorkflowOutputOut: {
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Media
+             * @default
+             */
+            media: string;
+        };
+        /** WorkflowParameterOut */
+        WorkflowParameterOut: {
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+        };
+        /**
+         * WorkflowPathOut
+         * @description 改完之后它在哪(复制、改名、恢复是 workflows/ 里的路径,删除是回收目录里的路径)。
+         */
+        WorkflowPathOut: {
+            /** Path */
+            path: string;
+        };
+        /** WorkflowRenameRequest */
+        WorkflowRenameRequest: {
+            /** Path */
+            path: string;
+            /** New Path */
+            new_path: string;
+        };
+        /** WorkflowRestoreRequest */
+        WorkflowRestoreRequest: {
+            /** Path */
+            path: string;
+            /**
+             * New Path
+             * @default
+             */
+            new_path: string;
         };
         /** WorkflowRevisionDetailOut */
         WorkflowRevisionDetailOut: {
@@ -15162,6 +15620,25 @@ export interface components {
              * @default
              */
             group: string;
+        };
+        /** WorkflowTrashRequest */
+        WorkflowTrashRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
+         * WorkflowTrashedOut
+         * @description 回收目录里的一张(ADR 0035 §3)。
+         */
+        WorkflowTrashedOut: {
+            /** Path */
+            path: string;
+            /** Original */
+            original: string;
+            /** Label */
+            label: string;
+            /** Deleted At */
+            deleted_at?: number | null;
         };
         /**
          * WorkflowUnusableNodeOut
@@ -28464,6 +28941,212 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_library_api_plugins_instances__instance_id__workflow_library_get: {
+        parameters: {
+            query?: {
+                workspace_id?: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowLibraryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_content_api_plugins_instances__instance_id__workflow_library_content_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowContentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_workflow_api_plugins_instances__instance_id__workflow_library_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_workflow_api_plugins_instances__instance_id__workflow_library_rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trash_workflow_api_plugins_instances__instance_id__workflow_library_trash_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTrashRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_workflow_api_plugins_instances__instance_id__workflow_library_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
                 };
             };
             /** @description Validation Error */

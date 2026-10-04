@@ -40,12 +40,20 @@ from app.api.schemas import (
     PluginPermissionGrantUpdate,
     PluginProvidedModelOut,
     PluginToolOut,
+    WorkflowContentOut,
+    WorkflowCopyRequest,
+    WorkflowLibraryOut,
+    WorkflowPathOut,
+    WorkflowRenameRequest,
+    WorkflowRestoreRequest,
+    WorkflowTrashRequest,
 )
 from app.core.config import settings
 from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
 from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
 from app.domain import model_library
+from app.domain import workflow_library
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.plugins import bundled
@@ -519,6 +527,79 @@ def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, u
         )
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
+
+
+# 认领 `workflow_library` 的连接上存着哪些工作流(ADR 0035):列出、取原文、复制、改名、挪进 / 挪出回收目录。改的是那台
+# 服务器上的文件:撞名回 409(带一个建议名,不覆盖);插件那一头说的错(连不上、它自己的报错)和路径不对回 422,原话交给界面。
+
+def _workflow_library_failed(exc: Exception) -> HTTPException:
+    if isinstance(exc, workflow_library.WorkflowConflict):
+        return HTTPException(status_code=409, detail={"code": "exists", "message": str(exc), "suggestion": exc.suggestion})
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+_WORKFLOW_LIBRARY_ERRORS = (workflow_library.WorkflowLibraryError, PluginDomainError, PluginRuntimeError)
+
+
+@router.get("/plugins/instances/{instance_id}/workflow-library", response_model=WorkflowLibraryOut)
+def get_workflow_library(instance_id: str, db: DbSession, user: CurrentUser, workspace_id: str = "") -> dict:
+    """现问插件:这个连接上存着的全部工作流(图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺什么)、回收目录里的;
+    给了 `workspace_id` 就带上这个工作区里最近一次用它生成的产出。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.library(db, user, instance, workspace_id=workspace_id)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/workflow-library/content", response_model=WorkflowContentOut)
+def get_workflow_content(instance_id: str, path: str, db: DbSession, user: CurrentUser) -> dict:
+    """一张工作流的原文(导出成 JSON)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.content(db, instance, path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/copy", response_model=WorkflowPathOut)
+def copy_workflow(instance_id: str, body: WorkflowCopyRequest, db: Tx, user: CurrentUser) -> dict:
+    """在那台服务器上复制一张(不覆盖)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.copy(db, instance, body.path, body.new_path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/rename", response_model=WorkflowPathOut)
+def rename_workflow(instance_id: str, body: WorkflowRenameRequest, db: Tx, user: CurrentUser) -> dict:
+    """在那台服务器上改名 / 挪目录(不覆盖)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.rename(db, instance, body.path, body.new_path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/trash", response_model=WorkflowPathOut)
+def trash_workflow(instance_id: str, body: WorkflowTrashRequest, db: Tx, user: CurrentUser) -> dict:
+    """「删除」:挪进那台服务器上的回收目录,能恢复。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.trash(db, instance, body.path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/restore", response_model=WorkflowPathOut)
+def restore_workflow(instance_id: str, body: WorkflowRestoreRequest, db: Tx, user: CurrentUser) -> dict:
+    """从回收目录挪回去(原处被占了就撞名,带着新名字再来)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.restore(db, instance, body.path, body.new_path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
 
 
 @router.patch("/plugins/instances/{instance_id}/capabilities", response_model=PluginInstanceOut)

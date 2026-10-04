@@ -80,9 +80,14 @@ SPEECH = "speech"
 #: 一个文件的完整元数据(`detail`)、一个链接指的是什么(`resolve`)、把它下到那台服务器上(`download`,流式)。
 #: 列表、预览图、下载任务都在宿主的「模型库」里,不是给智能体调的。
 MODEL_LIBRARY = "model_library"
-#: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具 / 哪些模型文件」,本身不是一次能交给人的
-#: 调用 —— 模型、工具、模型库各自出现在该出现的地方。只有它们的工具不进工具表。
-CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS, MODEL_LIBRARY})
+#: `workflow_library`:**这个连接上存着哪些工作流**(ADR 0035)。认领它的工具按 `op` 回答:列出全部工作流(`workflows`,
+#: 连同画缩略图的图摘要、识别出的输入 / 参数 / 输出、缺的节点和模型)、一张的原文(`workflow`),并替宿主改那台机器上的
+#: 工作流文件(`copy_workflow` / `rename_workflow` / `trash_workflow` / `restore_workflow`,不覆盖、删除进回收目录)。
+#: 都在宿主的「工作流库」里,不是给智能体调的。
+WORKFLOW_LIBRARY = "workflow_library"
+#: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具 / 哪些模型文件 / 哪些工作流」,本身不是
+#: 一次能交给人的调用 —— 模型、工具、模型库、工作流库各自出现在该出现的地方。只有它们的工具不进工具表。
+CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS, MODEL_LIBRARY, WORKFLOW_LIBRARY})
 #: **调用类能力**:认领它们的工具是一个普通工具,智能体、工作流、画板照样点得到;能力只是加在它上面的一份契约
 #: (`CALL_CONTRACTS`),宿主自己的入口(文档「重新解析」、降噪按钮……)调的也是它。
 CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH})
@@ -809,6 +814,7 @@ __all__ = [
     "CALL_CONTRACTS",
     "CATALOG_CAPABILITIES",
     "MODEL_LIBRARY",
+    "WORKFLOW_LIBRARY",
     "CLAIMED_CAPABILITIES",
     "KEY_RE",
     "TRANSCRIPTION",

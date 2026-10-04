@@ -200,6 +200,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个插件连接已经删掉了,下载没开始",
         "en": "This plugin connection was deleted; the download did not start",
     },
+    "workflowLibErr_notProvided": {
+        "zh": "「{name}」不提供工作流库:它的插件没有认领 workflow_library",
+        "en": "“{name}” has no workflow library: its plugin does not provide workflow_library",
+    },
+    "workflowLibErr_badPath": {
+        "zh": "「{path}」不是一个能用的工作流路径:要以 .json 结尾,不能带 ..、反斜杠或 :*?\"<>| 这类字符,每一段不能以点开头",
+        "en": "“{path}” is not a usable workflow path: it must end in .json, without .., backslashes or characters like :*?\"<>|, and no part may start with a dot",
+    },
+    "workflowLibErr_exists": {
+        "zh": "那台服务器上已经有「{path}」了,不会覆盖。换一个名字",
+        "en": "“{path}” already exists on that server and won't be overwritten. Pick another name",
+    },
+    "workflowLibErr_badAnswer": {
+        "zh": "「{name}」的插件回的东西不对,没改成",
+        "en": "The plugin of “{name}” answered with something unexpected; nothing was changed",
+    },
     "pluginErr_capabilityNoTool": {
         "zh": "「{name}」没有负责 {capability} 的工具,请到插件页更新这个插件",
         "en": "“{name}” has no tool that handles {capability}. Update the plugin from the Plugins page.",

@@ -456,3 +456,191 @@ class ModelDownloadRequest(ApiModel):
     url: str = Field(min_length=1, max_length=4000)
     folder: str = Field(min_length=1, max_length=200)
     filename: str = Field(max_length=300)
+
+
+# --- 工作流库(ADR 0035) ---------------------------------------------------
+
+class WorkflowGraphNodeOut(ApiModel):
+    """缩略图上的一个节点:位置、大小(工作流里的坐标)、种类(着色用)、是否旁路 / 静音、标题。"""
+
+    x: float
+    y: float
+    w: float
+    h: float
+    #: input / model / sampler / text / output / note / missing / other
+    role: str = "other"
+    muted: bool = False
+    title: str = ""
+
+
+class WorkflowGraphGroupOut(ApiModel):
+    x: float
+    y: float
+    w: float
+    h: float
+    title: str = ""
+    color: str = ""
+
+
+class WorkflowGraphOut(ApiModel):
+    """画缩略图用的图摘要。`links` 是节点下标对;`auto_layout`:图里没有位置(API 格式),位置是插件按依赖自动排的。"""
+
+    nodes: list[WorkflowGraphNodeOut] = Field(default_factory=list)
+    links: list[list[int]] = Field(default_factory=list)
+    groups: list[WorkflowGraphGroupOut] = Field(default_factory=list)
+    auto_layout: bool = False
+    #: 节点太多,只画了前一部分
+    truncated: bool = False
+
+
+class WorkflowInputOut(ApiModel):
+    """读素材的一格:哪个节点、读什么(image / video / audio)、在生成里当什么用(参考图、首帧……)。"""
+
+    node: str = ""
+    title: str = ""
+    media: str = ""
+    role: str = ""
+
+
+class WorkflowParameterOut(ApiModel):
+    key: str = ""
+    title: str = ""
+    type: str = ""
+
+
+class WorkflowOutputOut(ApiModel):
+    node: str = ""
+    title: str = ""
+    media: str = ""
+
+
+class WorkflowModelRefOut(ApiModel):
+    """它用到的一个模型文件,在不在这台服务器上。"""
+
+    folder: str
+    name: str
+    present: bool = False
+
+
+class WorkflowNodePackOut(ApiModel):
+    """一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。"""
+
+    id: str
+    title: str = ""
+    installed: bool = False
+
+
+class WorkflowMissingNodeOut(ApiModel):
+    type: str
+    #: 图里有几个这种节点
+    count: int = 1
+    packs: list[WorkflowNodePackOut] = Field(default_factory=list)
+
+
+class WorkflowMissingModelOut(ApiModel):
+    """缺的、工作流声明了下载地址的模型。"""
+
+    folder: str
+    name: str
+    url: str = ""
+
+
+class WorkflowGenerationRefOut(ApiModel):
+    """这张工作流在 Mosael 里是哪个生成模型(用它生成要它)。"""
+
+    provider_profile_id: str
+    kind: str
+    model: str
+
+
+class WorkflowLastOutputOut(ApiModel):
+    asset_id: str
+    created_at: datetime
+
+
+class WorkflowFileOut(ApiModel):
+    """那台服务器上存着的一张工作流。"""
+
+    #: 相对 workflows/ 的路径(可带子目录,`/` 分隔)
+    path: str
+    label: str
+    #: 子目录;在 workflows/ 根上是空串
+    folder: str = ""
+    size: int | None = None
+    #: 秒
+    modified: float | None = None
+    #: image / video / audio;认不出(转不过来、只交出文字)是空串
+    kind: str = ""
+    #: 转不过来的原因;空串 = 没问题
+    problem: str = ""
+    node_count: int = 0
+    graph: WorkflowGraphOut = Field(default_factory=WorkflowGraphOut)
+    inputs: list[WorkflowInputOut] = Field(default_factory=list)
+    parameters: list[WorkflowParameterOut] = Field(default_factory=list)
+    outputs: list[WorkflowOutputOut] = Field(default_factory=list)
+    models: list[WorkflowModelRefOut] = Field(default_factory=list)
+    missing_nodes: list[WorkflowMissingNodeOut] = Field(default_factory=list)
+    missing_models: list[WorkflowMissingModelOut] = Field(default_factory=list)
+    generation: WorkflowGenerationRefOut | None = None
+    #: 这个工作区里最近一次用它生成的产出
+    last_output: WorkflowLastOutputOut | None = None
+
+
+class WorkflowOtherFileOut(ApiModel):
+    """workflows/ 里不是工作流的文件(拷进去的压缩包),和它为什么用不了。"""
+
+    path: str
+    reason: str = ""
+
+
+class WorkflowTrashedOut(ApiModel):
+    """回收目录里的一张(ADR 0035 §3)。"""
+
+    path: str
+    #: 原来在 workflows/ 里的相对路径
+    original: str
+    label: str
+    deleted_at: float | None = None
+
+
+class WorkflowManagerOut(ApiModel):
+    #: ComfyUI-Manager 的版本;没装是空串
+    version: str = ""
+
+
+class WorkflowLibraryOut(ApiModel):
+    workflows: list[WorkflowFileOut] = Field(default_factory=list)
+    others: list[WorkflowOtherFileOut] = Field(default_factory=list)
+    trash: list[WorkflowTrashedOut] = Field(default_factory=list)
+    manager: WorkflowManagerOut = Field(default_factory=WorkflowManagerOut)
+
+
+class WorkflowContentOut(ApiModel):
+    path: str
+    content: dict
+
+
+class WorkflowCopyRequest(ApiModel):
+    path: str = Field(min_length=1, max_length=500)
+    new_path: str = Field(min_length=1, max_length=500)
+
+
+class WorkflowRenameRequest(ApiModel):
+    path: str = Field(min_length=1, max_length=500)
+    new_path: str = Field(min_length=1, max_length=500)
+
+
+class WorkflowTrashRequest(ApiModel):
+    path: str = Field(min_length=1, max_length=500)
+
+
+class WorkflowRestoreRequest(ApiModel):
+    path: str = Field(min_length=1, max_length=600)
+    #: 原处被占了时换的名字;不给就回原处
+    new_path: str = Field(default="", max_length=500)
+
+
+class WorkflowPathOut(ApiModel):
+    """改完之后它在哪(复制、改名、恢复是 workflows/ 里的路径,删除是回收目录里的路径)。"""
+
+    path: str

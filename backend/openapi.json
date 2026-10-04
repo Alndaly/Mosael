@@ -19503,6 +19503,323 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Workflow Library",
+        "description": "现问插件:这个连接上存着的全部工作流(图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺什么)、回收目录里的;\n给了 `workspace_id` 就带上这个工作区里最近一次用它生成的产出。",
+        "operationId": "get_workflow_library_api_plugins_instances__instance_id__workflow_library_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowLibraryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/content": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Workflow Content",
+        "description": "一张工作流的原文(导出成 JSON)。",
+        "operationId": "get_workflow_content_api_plugins_instances__instance_id__workflow_library_content_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowContentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/copy": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Copy Workflow",
+        "description": "在那台服务器上复制一张(不覆盖)。",
+        "operationId": "copy_workflow_api_plugins_instances__instance_id__workflow_library_copy_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCopyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/rename": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Rename Workflow",
+        "description": "在那台服务器上改名 / 挪目录(不覆盖)。",
+        "operationId": "rename_workflow_api_plugins_instances__instance_id__workflow_library_rename_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRenameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/trash": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Trash Workflow",
+        "description": "「删除」:挪进那台服务器上的回收目录,能恢复。",
+        "operationId": "trash_workflow_api_plugins_instances__instance_id__workflow_library_trash_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTrashRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/restore": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Restore Workflow",
+        "description": "从回收目录挪回去(原处被占了就撞名,带着新名字再来)。",
+        "operationId": "restore_workflow_api_plugins_instances__instance_id__workflow_library_restore_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRestoreRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/capabilities": {
       "patch": {
         "tags": [
@@ -38675,6 +38992,47 @@
         ],
         "title": "WorkflowAiEditResponse"
       },
+      "WorkflowContentOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "WorkflowContentOut"
+      },
+      "WorkflowCopyRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "new_path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "New Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "new_path"
+        ],
+        "title": "WorkflowCopyRequest"
+      },
       "WorkflowCreate": {
         "properties": {
           "workspace_id": {
@@ -38744,6 +39102,132 @@
         "title": "WorkflowFieldOptionOut",
         "description": "节点字段的一个动态选项。"
       },
+      "WorkflowFileOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": ""
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          },
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count",
+            "default": 0
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraphOut"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowInputOut"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowParameterOut"
+            },
+            "type": "array",
+            "title": "Parameters"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowOutputOut"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowModelRefOut"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "missing_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowMissingNodeOut"
+            },
+            "type": "array",
+            "title": "Missing Nodes"
+          },
+          "missing_models": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowMissingModelOut"
+            },
+            "type": "array",
+            "title": "Missing Models"
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowGenerationRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_output": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowLastOutputOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "label"
+        ],
+        "title": "WorkflowFileOut",
+        "description": "那台服务器上存着的一张工作流。"
+      },
       "WorkflowFromPage": {
         "properties": {
           "workspace_id": {
@@ -38785,6 +39269,153 @@
         "title": "WorkflowFromPage",
         "description": "内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。"
       },
+      "WorkflowGenerationRefOut": {
+        "properties": {
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider_profile_id",
+          "kind",
+          "model"
+        ],
+        "title": "WorkflowGenerationRefOut",
+        "description": "这张工作流在 Mosael 里是哪个生成模型(用它生成要它)。"
+      },
+      "WorkflowGraphGroupOut": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "w": {
+            "type": "number",
+            "title": "W"
+          },
+          "h": {
+            "type": "number",
+            "title": "H"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "color": {
+            "type": "string",
+            "title": "Color",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "WorkflowGraphGroupOut"
+      },
+      "WorkflowGraphNodeOut": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "w": {
+            "type": "number",
+            "title": "W"
+          },
+          "h": {
+            "type": "number",
+            "title": "H"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "other"
+          },
+          "muted": {
+            "type": "boolean",
+            "title": "Muted",
+            "default": false
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "WorkflowGraphNodeOut",
+        "description": "缩略图上的一个节点:位置、大小(工作流里的坐标)、种类(着色用)、是否旁路 / 静音、标题。"
+      },
+      "WorkflowGraphOut": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowGraphNodeOut"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "links": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Links"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowGraphGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "auto_layout": {
+            "type": "boolean",
+            "title": "Auto Layout",
+            "default": false
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "WorkflowGraphOut",
+        "description": "画缩略图用的图摘要。`links` 是节点下标对;`auto_layout`:图里没有位置(API 格式),位置是插件按依赖自动排的。"
+      },
       "WorkflowImportRequest": {
         "properties": {
           "workspace_id": {
@@ -38804,6 +39435,190 @@
         ],
         "title": "WorkflowImportRequest",
         "description": "导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。"
+      },
+      "WorkflowInputOut": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "media": {
+            "type": "string",
+            "title": "Media",
+            "default": ""
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowInputOut",
+        "description": "读素材的一格:哪个节点、读什么(image / video / audio)、在生成里当什么用(参考图、首帧……)。"
+      },
+      "WorkflowLastOutputOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "created_at"
+        ],
+        "title": "WorkflowLastOutputOut"
+      },
+      "WorkflowLibraryOut": {
+        "properties": {
+          "workflows": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowFileOut"
+            },
+            "type": "array",
+            "title": "Workflows"
+          },
+          "others": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowOtherFileOut"
+            },
+            "type": "array",
+            "title": "Others"
+          },
+          "trash": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowTrashedOut"
+            },
+            "type": "array",
+            "title": "Trash"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/WorkflowManagerOut"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowLibraryOut"
+      },
+      "WorkflowManagerOut": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowManagerOut"
+      },
+      "WorkflowMissingModelOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "WorkflowMissingModelOut",
+        "description": "缺的、工作流声明了下载地址的模型。"
+      },
+      "WorkflowMissingNodeOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 1
+          },
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowNodePackOut"
+            },
+            "type": "array",
+            "title": "Packs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "WorkflowMissingNodeOut"
+      },
+      "WorkflowModelRefOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "WorkflowModelRefOut",
+        "description": "它用到的一个模型文件,在不在这台服务器上。"
+      },
+      "WorkflowNodePackOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "WorkflowNodePackOut",
+        "description": "一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。"
       },
       "WorkflowNodeTypeOut": {
         "properties": {
@@ -38898,6 +39713,25 @@
         ],
         "title": "WorkflowNodeTypeOut"
       },
+      "WorkflowOtherFileOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowOtherFileOut",
+        "description": "workflows/ 里不是工作流的文件(拷进去的压缩包),和它为什么用不了。"
+      },
       "WorkflowOut": {
         "properties": {
           "id": {
@@ -38953,6 +39787,105 @@
           "updated_at"
         ],
         "title": "WorkflowOut"
+      },
+      "WorkflowOutputOut": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "media": {
+            "type": "string",
+            "title": "Media",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowOutputOut"
+      },
+      "WorkflowParameterOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowParameterOut"
+      },
+      "WorkflowPathOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowPathOut",
+        "description": "改完之后它在哪(复制、改名、恢复是 workflows/ 里的路径,删除是回收目录里的路径)。"
+      },
+      "WorkflowRenameRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "new_path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "New Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "new_path"
+        ],
+        "title": "WorkflowRenameRequest"
+      },
+      "WorkflowRestoreRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "new_path": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "New Path",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowRestoreRequest"
       },
       "WorkflowRevisionDetailOut": {
         "properties": {
@@ -39232,6 +40165,56 @@
         ],
         "title": "WorkflowTemplateRequirementOut",
         "description": "模板的一条前置条件(见 domain/workflows/template_requirements)。"
+      },
+      "WorkflowTrashRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowTrashRequest"
+      },
+      "WorkflowTrashedOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "original": {
+            "type": "string",
+            "title": "Original"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "original",
+          "label"
+        ],
+        "title": "WorkflowTrashedOut",
+        "description": "回收目录里的一张(ADR 0035 §3)。"
       },
       "WorkflowUnusableNodeOut": {
         "properties": {

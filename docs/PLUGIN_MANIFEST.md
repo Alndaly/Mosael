@@ -1007,8 +1007,8 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 能力的地方(文档「重新解析」、工作流节点的引擎下拉、画板的能力、智能体的工具参数、素材库的操作)都能**点名你这一家**,
 而它们调的就是这个工具。插件页上这类工具的行上有一枚能力徽标,展开能看到「用在哪」。
 
-只有**目录类能力**(`generation`、`tools`、`model_library`)的那个工具不进工具表:它回答的是「这个连接有哪些模型 /
-哪些工具 / 哪些模型文件」,本身不是一次能交给人的调用。
+只有**目录类能力**(`generation`、`tools`、`model_library`、`workflow_library`)的那个工具不进工具表:它回答的是「这个
+连接有哪些模型 / 哪些工具 / 哪些模型文件 / 哪些工作流」,本身不是一次能交给人的调用。
 
 | 能力 | 宿主自带 | 没定默认时 | 类别 |
 | --- | --- | --- | --- |
@@ -1022,6 +1022,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `generation` | —— | 每个连接都是一家供应商(见下一节) | 目录类 |
 | `tools` | —— | 每个连接报自己的工具 | 目录类 |
 | `model_library` | —— | 每个连接报自己那台服务器上的模型文件(见下面「模型库」) | 目录类 |
+| `workflow_library` | —— | 每个连接报自己那台服务器上存着的工作流(见下面「工作流库」) | 目录类 |
 
 认领调用类 / 目录类能力的,装的时候就查:只给进程形态、有且只有一个工具认领;调用类的那个工具**入参要按契约写**
 (见下面各节 —— 宿主的入口和智能体、工作流调的是同一个工具,形状只有一种)。
@@ -1128,6 +1129,49 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   宿主已经挡掉了带路径分隔符的文件名和不是 http(s) 的链接,你写盘前仍要再查一遍。
 
 下载是宿主的一个后台任务(任务中心里看得到、能取消);成功后宿主让这个连接重新拉一遍模型和工具目录,生成表单里马上选得到。
+
+#### `workflow_library` —— 这台服务器上存着哪些工作流,替宿主改它们
+
+决策见 [ADR 0035](adr/0035-workflow-library.md),范例是 `plugins/bundled/comfyui/tools/workflow_library.py`。目录类:认领它的
+工具不进工具表,插件页上那个连接多一个「工作流库」。宿主按 `op` 问(都是一问一答):
+
+- `{"op": "workflows"}` → 不留调用记录(打开工作流库、改完一张都会问一次):
+
+  ```jsonc
+  {
+    "workflows": [{
+      "path": "sub/人像.json",                                     // 相对 workflows/ 的路径,`/` 分隔
+      "size": 19334, "modified": 1776098682.9,                    // 秒
+      "kind": "image",                                            // image / video / audio;认不出给空串
+      "problem": "",                                              // 转不过来的原因(给人看);没问题给空串
+      "node_count": 20,
+      "graph": {                                                  // 画缩略图用的图摘要(宿主限 400 个节点)
+        "nodes": [{"x": 0, "y": 0, "w": 300, "h": 120, "role": "model", "muted": false, "title": "…"}],
+        "links": [[0, 1]],                                        // 节点下标对
+        "groups": [{"x": 0, "y": 0, "w": 600, "h": 200, "title": "…", "color": "#3f789e"}],
+        "auto_layout": false, "truncated": false                  // 图里没有位置时自己排的;节点太多只给了前一部分
+      },
+      "inputs": [{"node": "10", "title": "…", "media": "image", "role": "reference_image"}],
+      "parameters": [{"key": "3.steps", "title": "…", "type": "integer"}],
+      "outputs": [{"node": "9", "title": "…", "media": "image"}],
+      "models": [{"folder": "checkpoints", "name": "…", "present": true}],
+      "missing_nodes": [{"type": "CR Prompt Text", "count": 2, "packs": [{"id": "…", "title": "…", "installed": false}]}],
+      "missing_models": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…"}]
+    }],
+    "others": [{"path": "pack.zip", "reason": "给人看的一句:它为什么不是工作流"}],
+    "trash": [{"path": ".mosael-trash/workflows/20261005-101500/sub/人像.json", "deleted_at": 1791000000.0}],
+    "manager": {"version": "V4.2.1"}                              // 没有节点管理器给空串
+  }
+  ```
+  `role` 是着色用的:`input` / `model` / `sampler` / `text` / `output` / `note` / `missing` / `other`。
+- `{"op": "workflow", "path": "…"}` → `{"content": {…}}`(原文);
+- `{"op": "copy_workflow", "path", "new_path"}`、`{"op": "rename_workflow", "path", "new_path"}`、
+  `{"op": "restore_workflow", "path"(回收目录里的), "new_path"}` → `{"path": "改完之后的路径"}`;**不许覆盖**:`new_path` 已经有了
+  就回 `{"conflict": true, "suggestion": "人像 (1).json"}`(宿主翻成 409、界面要求换名)。复制要给副本换一个新的图 id;
+- `{"op": "trash_workflow", "path"}` → `{"path": "回收目录里的路径"}`:**不硬删**,挪进 `.mosael-trash/workflows/<YYYYMMDD-HHMMSS>/<原路径>`。
+
+宿主先查过路径(`workflows/` 里的相对路径、`.json`、没有 `..` 和反斜杠;回收目录里的只认上面那种形状),你写之前仍要再查一遍;
+每次改成了,宿主让这个连接重新拉一遍模型和工具目录。
 
 ## 替宿主做生成
 
