@@ -6,6 +6,7 @@
  *
  * - 左边一列目录(按数量排、空的不列,缺的模型和下载记录是钉在底部的特殊项),上下方向键切换,窄窗口收成下拉;
  * - 顶上一条工具条:搜索(写着当前范围有几个)、按底模多选(只列当前目录里有的)、排序;生效的筛选一个个能去掉;
+ * - 三档显示方式(大卡片 / 小卡片 / 列表),记在本机;
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
  * - 点开是详情:底模和凭的是什么、触发词(来自训练标签时说清楚)、在用的工作流、文件头里的元数据;
  * - 工作流缺的模型一键下载:下载框带着地址、目录、文件名,解析之后确认,发起的任务在模型库里看得到进度、能取消;
@@ -14,7 +15,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -89,6 +90,12 @@ async function openLibrary() {
   return within(await screen.findByRole("list", { name: "modelLibraryTitle" }));
 }
 
+async function openLibraryAs(role: "list" | "table") {
+  wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+  fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+  return within(await screen.findByRole(role, { name: "modelLibraryTitle" }));
+}
+
 const cards = () => within(screen.getByRole("list", { name: "modelLibraryTitle" })).getAllByRole("listitem");
 const names = () => cards().map((card) => card.querySelector("[data-library-open]")?.textContent);
 const folderTab = (name: string) => within(screen.getByRole("tablist", { name: "modelLibraryFolders" })).getByRole("tab", { name });
@@ -114,6 +121,7 @@ function narrowWindow() {
 const wideMatchMedia = window.matchMedia;
 
 beforeEach(() => {
+  window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", { configurable: true, value: wideMatchMedia });
   Element.prototype.scrollIntoView ??= () => {};
   for (const fn of [api.getModelLibrary, api.getModelDetail, api.resolveModelLink, api.startModelDownload, api.getJob,
@@ -150,14 +158,48 @@ describe("模型库", () => {
     expect(screen.queryByRole("list", { name: "modelLibraryTitle" })).toBeNull();
   });
 
-  it("有预览图用宿主的地址,没有就是按目录分的占位;子目录写在卡片上", async () => {
+  it("有预览图用宿主的地址,没有就是按目录分的占位;大卡片上写着目录和子目录", async () => {
     await openLibrary();
+    fireEvent.click(screen.getByRole("radio", { name: "modelLibraryDensityLarge" }));
     fireEvent.click(folderTab("loras 3"));
     const detail = cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
     expect(within(detail).getByRole("img").getAttribute("src")).toBe("preview://i1/loras/detail.safetensors");
     const anima = cards().find((item) => item.textContent?.includes("anima_style.safetensors"))!;
     expect(anima.querySelector("[data-placeholder='loras']")).toBeTruthy();
     expect(anima.textContent).toContain("loras/sub");
+  });
+
+  it("三档显示方式:默认小卡片;选了哪一档记在本机,下次打开还是它", async () => {
+    await openLibrary();
+    const group = screen.getByRole("radiogroup", { name: "modelLibraryDensity" });
+    expect(within(group).getByRole("radio", { name: "modelLibraryDensitySmall" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("list", { name: "modelLibraryTitle" }).getAttribute("data-density")).toBe("small");
+    fireEvent.click(within(group).getByRole("radio", { name: "modelLibraryDensityList" }));
+    expect(screen.queryByRole("list", { name: "modelLibraryTitle" })).toBeNull();
+    cleanup();
+
+    await openLibraryAs("table");
+    expect(screen.getByRole("radio", { name: "modelLibraryDensityList" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("列表:一行一个文件 —— 缩略图、名字、目录、底模、大小、改动时间、几张工作流在用;点名字看详情", async () => {
+    window.localStorage.setItem("mosael:tab:model-library.density", "list");
+    api.getModelDetail.mockResolvedValue({ folder: "checkpoints", name: "sd_xl_base.safetensors", metadata: {}, tags: [] });
+    const table = await openLibraryAs("table");
+    expect(table.getAllByRole("columnheader").map((one) => one.textContent)).toEqual([
+      "modelLibraryColPreview", "modelFileName", "modelFolder", "modelFamily", "modelSize", "modelModified", "modelLibraryColUsed",
+    ]);
+    const rows = table.getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(5);
+    const sdxl = rows.find((row) => row.textContent?.includes("sd_xl_base.safetensors"))!;
+    const cells = within(sdxl).getAllByRole("cell").map((cell) => cell.textContent);
+    expect(cells.slice(1, 5)).toEqual(["sd_xl_base.safetensors", "checkpoints", "SDXL", "6.9 GB"]);
+    expect(cells[5]).toBeTruthy();
+    expect(cells[6]).toBe("1");
+    const anima = rows.find((row) => row.textContent?.includes("anima_style.safetensors"))!;
+    expect(within(anima).getAllByRole("cell")[2].textContent).toBe("loras/sub");
+    fireEvent.click(within(sdxl).getByRole("button", { name: "sd_xl_base.safetensors" }));
+    expect(await screen.findByRole("button", { name: "modelLibraryBack" })).toBeTruthy();
   });
 
   it("底模只列当前目录里有的、带数量,可以勾几种(其中任一),勾的时候菜单不关", async () => {

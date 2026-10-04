@@ -7,7 +7,10 @@ import {
   CircleAlert,
   Copy,
   Download,
+  Grid2x2,
+  Grid3x3,
   LayoutGrid,
+  List,
   Library,
   RefreshCcw,
   Search,
@@ -49,6 +52,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import {
   ALL_FOLDERS,
+  DENSITIES,
   DOWNLOADS_VIEW,
   MISSING_VIEW,
   SORTS,
@@ -58,10 +62,12 @@ import {
   folderEntries,
   inFolder,
   sortModels,
+  type LibraryDensity,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
 import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
 import { formatBytes } from "@/lib/bytes";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -149,6 +155,8 @@ export function ModelLibraryDialog({
   const [families, setFamilies] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<LibrarySort>("name");
+  //: 显示方式记在本机(每台电脑屏幕不一样大);默认小卡片 —— 一屏多看几张。
+  const [density, setDensity] = usePersistentTab<LibraryDensity>("model-library.density", "small", DENSITIES);
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
   const [seed, setSeed] = React.useState<DownloadSeed | null>(null);
   //: 这次打开之后发起的下载(列表里的那份是打开时的快照)。
@@ -279,6 +287,7 @@ export function ModelLibraryDialog({
             label: t(one === "name" ? "modelLibrarySortName" : one === "size" ? "modelLibrarySortSize" : "modelLibrarySortModified"),
           }))}
         />
+        <DensitySwitch value={density} onChange={setDensity} />
         {actions}
       </>
     );
@@ -309,15 +318,25 @@ export function ModelLibraryDialog({
         <EmptyState size="section" icon={<Library />} title={t("modelLibraryEmpty")} />
       );
     }
+    const listLabel = t("modelLibraryTitle").replace("{name}", instance.name);
+    if (density === "list") {
+      return <ModelTable label={listLabel} instanceId={instance.id} models={shown} onOpen={(model) => openItem(keyOf(model))} />;
+    }
     return (
       <ul
         role="list"
-        aria-label={t("modelLibraryTitle").replace("{name}", instance.name)}
-        className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-3 p-0"
+        aria-label={listLabel}
+        data-density={density}
+        className={cn(
+          "m-0 grid list-none gap-3 p-0",
+          density === "large"
+            ? "grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))]"
+            : "grid-cols-[repeat(auto-fill,minmax(min(100%,136px),1fr))] gap-2.5",
+        )}
       >
         {shown.map((model) => (
           <li key={keyOf(model)} className="grid min-w-0">
-            <ModelCard instanceId={instance.id} model={model} onOpen={() => openItem(keyOf(model))} />
+            <ModelCard instanceId={instance.id} model={model} large={density === "large"} onOpen={() => openItem(keyOf(model))} />
           </li>
         ))}
       </ul>
@@ -582,10 +601,19 @@ function FamilyBadge({ model }: { model: ModelFile }) {
   );
 }
 
-function ModelCard({ instanceId, model, onOpen }: { instanceId: string; model: ModelFile; onOpen: () => void }) {
-  const t = useI18n();
+/** 文件所在的位置:目录,带子目录时接上子目录(`loras/sub`)。 */
+const placeOf = (model: ModelFile) => {
   const sub = subFolder(model.name);
-  const meta = [model.folder + (sub ? `/${sub}` : ""), model.size != null ? formatBytes(model.size) : ""].filter(Boolean).join(" · ");
+  return model.folder + (sub ? `/${sub}` : "");
+};
+
+/**
+ * 一张卡。预览图一律 3:4(这台机器上的预览图大多是竖的 2:3 / 3:4,统一比例后网格整齐,也不再把竖图裁成一条),
+ * 偏上取景(人像的脸在上半截)。名字一行截断、悬停看全名;底模在左、大小在右,位置固定 —— 认不出底模时左边空着,
+ * 大小不跟着挪。大卡片多一行:目录(和子目录)、几张工作流在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
+ */
+function ModelCard({ instanceId, model, large, onOpen }: { instanceId: string; model: ModelFile; large: boolean; onOpen: () => void }) {
+  const t = useI18n();
   const used = model.used_by?.length ?? 0;
   return (
     <article
@@ -596,30 +624,163 @@ function ModelCard({ instanceId, model, onOpen }: { instanceId: string; model: M
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
-      <ModelThumb instanceId={instanceId} model={model} className="aspect-[4/3] w-full" />
-      <div className="grid min-w-0 content-start gap-1.5 p-3">
-        <h3 className="m-0 min-w-0 text-ui-sm font-semibold leading-snug text-foreground">
+      <ModelThumb instanceId={instanceId} model={model} className="aspect-[3/4] w-full object-[50%_20%]" />
+      <div className={cn("grid min-w-0 content-start", large ? "gap-1.5 p-2.5" : "gap-1 p-2")}>
+        <h3 className={cn("m-0 min-w-0 font-semibold leading-snug text-foreground", large ? "text-ui-sm" : "text-ui-xs")}>
           <button
             type="button"
             data-library-open
             className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
             onClick={onOpen}
           >
-            <Truncate>{baseName(model.name)}</Truncate>
+            <Truncate hint={large ? undefined : placeOf(model)}>{baseName(model.name)}</Truncate>
           </button>
         </h3>
-        <Truncate as="p" className="m-0 text-ui-xs text-muted-foreground">{meta}</Truncate>
-        {(model.family || used > 0 || (model.triggers?.length ?? 0) > 0) && (
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="flex h-6 min-w-0 items-center justify-between gap-2">
+          <span className="flex min-w-0">
             <FamilyBadge model={model} />
-            {used > 0 && <CatalogBadge tone="success" icon={<Workflow />}>{t("modelUsedCount").replace("{n}", String(used))}</CatalogBadge>}
-            {(model.triggers?.length ?? 0) > 0 && (
-              <CatalogBadge tone="muted">{t("modelTriggerCount").replace("{n}", String(model.triggers?.length ?? 0))}</CatalogBadge>
+          </span>
+          {model.size != null && (
+            <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.size)}</span>
+          )}
+        </div>
+        {large && (
+          <div className="flex min-w-0 items-center justify-between gap-2 text-ui-xs text-muted-foreground">
+            <Truncate>{placeOf(model)}</Truncate>
+            {used > 0 && (
+              <Hint label={t("modelUsedCount").replace("{n}", String(used))}>
+                <span className="relative z-10 inline-flex shrink-0 items-center gap-1 text-success">
+                  <Workflow size={12} aria-hidden />
+                  <span className="tabular-nums">{used}</span>
+                </span>
+              </Hint>
             )}
           </div>
         )}
       </div>
     </article>
+  );
+}
+
+/**
+ * 列表:一行一个文件,扫一大批文件时比卡片快。名字是行里那颗按钮(键盘从它进详情);整行也点得开(鼠标方便)。
+ * 列宽固定(`table-fixed`),名字在自己那一列里截断,不撑开表格;太窄时横向滚,不挤成一团。
+ */
+function ModelTable({
+  label,
+  instanceId,
+  models,
+  onOpen,
+}: {
+  label: string;
+  instanceId: string;
+  models: ModelFile[];
+  onOpen: (model: ModelFile) => void;
+}) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  //: 表头钉在顶上(滚到几百行时还看得出哪一列是什么),底色和弹窗一样。
+  const head = "sticky top-0 z-[1] border-b border-divider bg-[var(--modal-surface)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
+  const cell = "border-b border-divider px-2 py-1.5 align-middle";
+  return (
+    // 不另包一层 overflow-x:那一层会成为表头吸顶的参照,表头就钉不住了。太窄时由内容区自己横向滚。
+    <table aria-label={label} className="w-full min-w-[680px] table-fixed border-separate border-spacing-0 text-ui-sm">
+      <colgroup>
+        <col className="w-[52px]" />
+        <col />
+        <col className="w-[140px]" />
+        <col className="w-[120px]" />
+        <col className="w-[84px]" />
+        <col className="w-[108px]" />
+        <col className="w-[56px]" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th scope="col" className={head}>
+            <span className="sr-only">{t("modelLibraryColPreview")}</span>
+          </th>
+          <th scope="col" className={head}>{t("modelFileName")}</th>
+          <th scope="col" className={head}>{t("modelFolder")}</th>
+          <th scope="col" className={head}>{t("modelFamily")}</th>
+          <th scope="col" className={cn(head, "text-right")}>{t("modelSize")}</th>
+          <th scope="col" className={head}>{t("modelModified")}</th>
+          <th scope="col" className={cn(head, "text-right")}>{t("modelLibraryColUsed")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {models.map((model) => {
+          const used = model.used_by?.length ?? 0;
+          return (
+            <tr
+              key={keyOf(model)}
+              data-library-item={keyOf(model)}
+              onClick={() => onOpen(model)}
+              className="cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
+            >
+              <td className={cell}>
+                <ModelThumb instanceId={instanceId} model={model} compact className="size-9 rounded-md object-[50%_20%]" />
+              </td>
+              <td className={cell}>
+                <button
+                  type="button"
+                  data-library-open
+                  className="block max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(model);
+                  }}
+                >
+                  <Truncate>{baseName(model.name)}</Truncate>
+                </button>
+              </td>
+              <td className={cn(cell, "text-ui-xs text-muted-foreground")}>
+                <Truncate>{placeOf(model)}</Truncate>
+              </td>
+              <td className={cell}>
+                <span className="flex min-w-0">
+                  <FamilyBadge model={model} />
+                </span>
+              </td>
+              <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground")}>
+                {model.size != null ? formatBytes(model.size) : ""}
+              </td>
+              <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground")}>
+                {model.modified != null ? new Date(model.modified * 1000).toLocaleDateString(locale) : ""}
+              </td>
+              <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
+                {used > 0 ? used : ""}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+/** 三档显示方式:一组单选的图标按钮。 */
+function DensitySwitch({ value, onChange }: { value: LibraryDensity; onChange: (value: LibraryDensity) => void }) {
+  const t = useI18n();
+  const options: { value: LibraryDensity; label: string; icon: React.ReactNode }[] = [
+    { value: "large", label: t("modelLibraryDensityLarge"), icon: <Grid2x2 /> },
+    { value: "small", label: t("modelLibraryDensitySmall"), icon: <Grid3x3 /> },
+    { value: "list", label: t("modelLibraryDensityList"), icon: <List /> },
+  ];
+  return (
+    <div role="radiogroup" aria-label={t("modelLibraryDensity")} className="flex h-10 shrink-0 items-center gap-0.5 rounded-md border border-border p-1">
+      {options.map((one) => (
+        <IconButton
+          key={one.value}
+          role="radio"
+          aria-checked={value === one.value}
+          label={one.label}
+          className={cn("text-muted-foreground", value === one.value && "bg-accent text-primary hover:bg-accent hover:text-primary")}
+          onClick={() => onChange(one.value)}
+        >
+          {one.icon}
+        </IconButton>
+      ))}
+    </div>
   );
 }
 
