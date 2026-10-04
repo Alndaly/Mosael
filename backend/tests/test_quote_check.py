@@ -67,6 +67,26 @@ def test_几段文字一起核对_各自改写_合起来计数() -> None:
     assert (result.checked, result.matched, result.paraphrased) == (2, 1, 1)
 
 
+EN_COMMENTS = [{"author": "a", "text": "The second one should be Ma Chao, not Zhao Yun", "likes": 7}]
+
+
+def test_英文报告里的直引号也核对() -> None:
+    result = _check('Top comment: "The second one should be Ma Chao" — and "everyone came over from COD".', EN_COMMENTS)
+    assert result.texts["report"] == 'Top comment: "The second one should be Ma Chao" — and everyone came over from COD(转述).'
+    assert (result.checked, result.matched, result.paraphrased) == (2, 1, 1)
+
+
+def test_直引号只认像引用的那种_尺寸_代码_数字不算() -> None:
+    for text in (
+        'He is 5\'10" tall and the screen is 27" wide.',
+        "Run `print(\"hello world\")` first.",
+        '```json\n{"key": "made up value"}\n```',
+        'Version "1.8.3" shipped.',
+    ):
+        result = _check(text, EN_COMMENTS)
+        assert (result.checked, result.texts["report"]) == (0, text), text
+
+
 def test_说明这一次核对的结果() -> None:
     assert _check("「第二个应该是马超的」「编的一句话」").summary() == (
         "引用核对:加了引号的 2 处里,1 处在取回的原文里找得到;1 处找不到,已去掉引号、标为转述。"

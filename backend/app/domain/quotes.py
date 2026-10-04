@@ -7,7 +7,9 @@
 「,」)、空白和换行、B 站的表情码(`[笑哭]`,模型摘录时常顺手去掉)。用省略号删节的长评论,每一段按顺序都在
 **同一条**原文里才算 —— 两条评论各取半句拼成一句不算。
 
-只认「」和“”两种引号:书名号《》是标题,不是引用;英文直引号 "…" 在代码、数字里太常见,认它会误伤。
+认「」、“”(中英文的弯引号是同一对字)和英文直引号 "…"。书名号《》是标题,不是引用。直引号在代码、尺寸、
+版本号里太常见,只认长得像引用的那种:开引号前是行首、空白或标点,收引号后是行尾、空白或标点,里面至少有一个字母;
+代码块和行内代码里的一律不看。
 """
 
 from __future__ import annotations
@@ -20,7 +22,13 @@ from typing import Any
 
 from app.core.i18n import tr
 
-_QUOTE = re.compile(r"「([^「」\n]+)」|“([^“”\n]+)”")
+_QUOTE = re.compile(
+    r"「([^「」\n]+)」|“([^“”\n]+)”"
+    r'|(?:^|(?<=[\s(\[:：,，;；—-]))"(?!\s)([^"\n]*[^\W\d_][^"\n]*)(?<!\s)"(?=$|[\s)\].,;:!?，。；：！？、—-])',
+    re.MULTILINE,
+)
+#: 代码块和行内代码:里面的引号是字面量,不是引用。
+_CODE = re.compile(r"```.*?```|`[^`\n]+`", re.DOTALL)
 _ELLIPSIS = re.compile(r"…+|\.{3,}|⋯+")
 _EMOTE = re.compile(r"\[[^\[\]\s]{1,24}\]")
 _SPACE = re.compile(r"\s+")
@@ -93,7 +101,7 @@ def check_quotes(texts: dict[str, Any], sources: Any) -> QuoteCheck:
         return not pieces or any(_in_order(pieces, one) for one in corpus)
 
     def rewrite(match: re.Match[str]) -> str:
-        quote = match.group(1) or match.group(2)
+        quote = match.group(1) or match.group(2) or match.group(3)
         result.checked += 1
         if found(quote):
             result.matched += 1
@@ -102,6 +110,11 @@ def check_quotes(texts: dict[str, Any], sources: Any) -> QuoteCheck:
             result.unmatched.append(quote)
         return f"{quote}{mark}"
 
+    def outside_code(text: str) -> str:
+        parts = _CODE.split(text)
+        codes = _CODE.findall(text)
+        return "".join(_QUOTE.sub(rewrite, part) + (codes[i] if i < len(codes) else "") for i, part in enumerate(parts))
+
     for name, text in texts.items():
-        result.texts[name] = _QUOTE.sub(rewrite, text if isinstance(text, str) else str(text or ""))
+        result.texts[name] = outside_code(text if isinstance(text, str) else str(text or ""))
     return result

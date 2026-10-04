@@ -611,7 +611,7 @@ def _merge(b: _Builder, node_id: str, name: dict[str, str], col: float, row: flo
 
 
 def _check_quotes(b: _Builder, model: str, col: float, row: float, fields: dict[str, str], sources: dict[str, str]) -> str:
-    """模型写完报告、存笔记之前:报告里加了「」/“”的话逐条到取回的原文里找,找不到的去掉引号、标为转述
+    """模型写完报告、存笔记之前:报告里加了引号(「」、“”、英文直引号)的话逐条到取回的原文里找,找不到的去掉引号、标为转述
     (提示词写明了只引原文,实测仍有归纳出来的句子加了引号)。笔记和输出用核对过的 `{{quotes.texts.*}}`。
 
     `fields` 是交出去的名字 → 模型那步 JSON 里的字段;`sources` 是这些话该出自的原文(只放取回的数据和用户填的,

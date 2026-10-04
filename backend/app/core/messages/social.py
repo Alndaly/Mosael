@@ -27,8 +27,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_quote_check": {"zh": "核对引用", "en": "Check quotes"},
     "wfNode_quote_check_desc": {
-        "zh": "模型写的几段文字里加了「」或“”的话,逐条核对是不是原文(取回来的评论、标题、逐字稿……)里的话:全半角、空白、表情码不算改字,用省略号删节的要每一段按顺序在同一条原文里。找不到的去掉引号、后面标「(转述)」,并交出一句核对说明。",
-        "en": "Check every phrase the model put in 「」 or “” against the source material (fetched comments, titles, transcripts…): full/half-width forms, whitespace and emote codes don't count as changes, and an excerpt cut with an ellipsis must have every part, in order, in one source item. Phrases not found lose their quotes and get “(paraphrased)” after them, and a one-line summary of the check comes out.",
+        "zh": "模型写的几段文字里加了「」、“”或英文直引号的话(代码里的不算),逐条核对是不是原文(取回来的评论、标题、逐字稿……)里的话:全半角、空白、表情码不算改字,用省略号删节的要每一段按顺序在同一条原文里。找不到的去掉引号、后面标「(转述)」,并交出一句核对说明。",
+        "en": "Check every phrase the model put in 「」, “” or straight double quotes (not inside code) against the source material (fetched comments, titles, transcripts…): full/half-width forms, whitespace and emote codes don't count as changes, and an excerpt cut with an ellipsis must have every part, in order, in one source item. Phrases not found lose their quotes and get “(paraphrased)” after them, and a one-line summary of the check comes out.",
     },
     "wfNode_quote_check_texts": {
         "zh": "要核对的文字:名字 → 一段文字(接模型的输出),改写后按同样的名字交在「文字」里",
