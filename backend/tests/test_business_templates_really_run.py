@@ -504,10 +504,35 @@ class Test带货口播真跑:
         _pick(graph, "product_photo", asset_id="some-photo")
         assert "「挑一位主播(资产库里的人物)」的 资产 / 名称 要填一个" in validate_graph(graph)
 
-    def test_不出镜版_音色空着运行前就拦住(self) -> None:
-        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id=""), "product_photo", asset_id="p")
-        errors = validate_graph(graph)
-        assert "「逐拍出画面、配音并上时间线 › 念这一拍的画外音」缺少必填:音色" in errors, errors
+    def test_不出镜版_没有克隆音色时用免费的_Edge_音色念_通知和输出说清楚用的哪个_为什么(self, monkeypatch) -> None:
+        """此前没有克隆音色就跑不了(念这一拍的画外音缺音色，运行前拦住)。现在退回免费的 Edge 音色。"""
+        from app.db.models import Notification
+
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id=""),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+
+        assert {(one["engine"], one["voice"]) for one in studio.calls["synthesize_speech"]} == {
+            ("builtin:edge", "zh-CN-XiaoxiaoNeural")}
+        assert len(_clips(context["pitch_project"]["sequence_id"], "audio")) == len(BEATS), "每一拍照样有画外音"
+        said = context["output"]["output"]["voice"]
+        assert "Edge" in said and "晓晓" in said and "克隆音色" in said, said
+        with unit_of_work() as db:
+            bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any("Edge" in one and "克隆音色" in one for one in bodies), bodies
+
+    def test_不出镜版_有克隆音色时优先用它(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+
+        assert {(one["engine"], one["voice"]) for one in studio.calls["synthesize_speech"]} == {("builtin:clone", "voice-1")}
+        said = context["output"]["output"]["voice"]
+        assert "克隆音色" in said and "Edge" not in said, said
 
 
 # --------------------------------------------------------------------------------------
@@ -895,8 +920,7 @@ def _voices_in(graph: dict[str, Any]) -> list[str]:
 
 
 class Test克隆引擎没装:
-    @pytest.mark.parametrize("template_id", ["full_video_generation", "footage_montage", "translated_dub",
-                                             "product_pitch_short"])
+    @pytest.mark.parametrize("template_id", ["full_video_generation", "footage_montage", "translated_dub"])
     def test_前置检查说缺_建出来的图里也不填音色(self, monkeypatch, template_id: str) -> None:
         from app.core.db import SessionLocal
         from app.domain.workflows.templates import requirement_statuses
@@ -916,6 +940,38 @@ class Test克隆引擎没装:
         voice = make_voice(ws, "嗓子")
         _clone_engine(monkeypatch, ready=True)
         assert _voices_in(_template_workflow(client, ws, "footage_montage")["graph"]) == [voice]
+
+    @pytest.mark.parametrize("cloned", ["没有音色", "引擎没装"])
+    def test_带货口播_用不上克隆音色时建出来的图用免费的_Edge_音色(self, monkeypatch, cloned: str) -> None:
+        from tests.util import make_voice
+
+        client, ws = _template_client()
+        if cloned == "引擎没装":
+            make_voice(ws, "嗓子")
+        _clone_engine(monkeypatch, ready=cloned != "引擎没装")
+        graph = _template_workflow(client, ws, "product_pitch_short")["graph"]
+        assert _voices_in(graph) == ["zh-CN-XiaoxiaoNeural"]
+        loop = next(one for one in graph["nodes"] if one["id"] == "shoot_beats")
+        voice = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "beat_voice")
+        assert voice["config"]["engine"] == "builtin:edge"
+
+    def test_带货口播的卡片说清楚_有克隆音色优先用_没有就用免费的_Edge_音色(self) -> None:
+        from app.domain.workflows.templates import TEMPLATE_CATALOG
+
+        card = next(one for one in TEMPLATE_CATALOG if one["id"] == "product_pitch_short")
+        voice = next(one for one in card["requires"] if one["check"] == "cloned_voice")
+        assert voice["optional"] is True, "没有克隆音色也能跑"
+        for locale, edge in (("zh", "Edge"), ("en", "Edge")):
+            assert edge in card["summary"][locale] and edge in voice["text"][locale], card
+
+    def test_带货口播_克隆音色用得上时优先用它(self, monkeypatch) -> None:
+        from tests.util import make_voice
+
+        client, ws = _template_client()
+        voice = make_voice(ws, "嗓子")
+        _clone_engine(monkeypatch, ready=True)
+        graph = _template_workflow(client, ws, "product_pitch_short")["graph"]
+        assert _voices_in(graph) == [voice]
 
     def test_开始参数里填了音色而引擎跑不起来_运行前就拦_一次对话都不花(self, monkeypatch) -> None:
         """音色是开始参数经循环的 inputs 转进「念旁白」的 —— 运行前检查要认得这条路,不只看字面量。"""

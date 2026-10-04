@@ -870,6 +870,28 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
     }
 
 
+#: 带货口播没有能用的克隆音色时念画外音的那把嗓子:微软 Edge 的免费音色,不用配置、不用钥匙。
+PITCH_FALLBACK_EDGE_VOICE = "zh-CN-XiaoxiaoNeural"
+
+
+def _pitch_voice(voice_id: str) -> tuple[str, str, str]:
+    """不出镜那一版用哪把嗓子念:(引擎, 音色, 一句给人看的说明 —— 进完成通知和输出)。
+
+    `voice_id` 是建图时预填的克隆音色(templates._prefilled_voice_id:配音库里有、克隆引擎也跑得起来才填)。有就用它;
+    没有就用免费的 Edge 音色。此前没有克隆音色这张模板就跑不了:念画外音那一格空着,运行前拦住。
+    """
+    from app.ai.providers import EDGE_BUILTIN_VOICES
+    from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE
+
+    if voice_id:
+        return CLONE_ENGINE, voice_id, "配音用的是配音库里的克隆音色。"
+    name = dict(EDGE_BUILTIN_VOICES)[PITCH_FALLBACK_EDGE_VOICE].split("(")[0]
+    return EDGE_ENGINE, PITCH_FALLBACK_EDGE_VOICE, (
+        f"配音用的是免费的 Edge 音色「{name}」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。"
+        "有了克隆音色,在「念这一拍的画外音」里换上它。"
+    )
+
+
 def product_pitch_short_graph(
     *, chat: Any, image: Any, voice_id: str = "", presenter: bool = False, db: Session | None = None
 ) -> dict[str, Any]:
@@ -882,7 +904,8 @@ def product_pitch_short_graph(
     中间各拍的旁白一句没念、也没有字幕。
 
     音色直接写在「念这一拍的画外音」上(不经开始节点转一手):那一格是必填的,空着运行前就拦住,而且那里有音色选择器;
-    写成 `{{start.voice_id}}` 的话,引用本身算"填了",要等画面都出完、念第一拍时才失败。
+    写成 `{{start.voice_id}}` 的话,引用本身算"填了",要等画面都出完、念第一拍时才失败。有克隆音色优先用,没有就用
+    免费的 Edge 音色(见 _pitch_voice),用的哪把、为什么,写进完成通知和输出。
 
     `presenter`:「数字人出镜」(ADR 0028 阶段 3「带货口播升级」)—— 开场钩子和收尾号召换成资产库里的人物**出镜说**
     (`entity_speak`:脸、嗓子、授权声明都是那个人物资产的,没声明的真人当场拒),中间每一拍仍是商品画面,这一拍的口播
@@ -925,11 +948,13 @@ def product_pitch_short_graph(
         "video_track_id": "{{pitch_project.video_track_id}}",
         "audio_track_id": "{{pitch_project.audio_track_id}}",
     }
+    voice_said = ""
     if presenter:
         shoot_inputs.update({"voice_engine": "{{presenter.voice_engine}}", "voice_id": "{{presenter.voice_id}}"})
         body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}")
     else:
-        body = _beat_body(db, image, engine="builtin:clone", voice=voice_id)
+        engine, voice, voice_said = _pitch_voice(voice_id)
+        body = _beat_body(db, image, engine=engine, voice=voice)
 
     nodes: list[dict[str, Any]] = [
         {
@@ -1042,7 +1067,8 @@ def product_pitch_short_graph(
             "position": {"x": 1930, "y": 260},
             "config": {
                 "title": "带货短片已导出",
-                "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。",
+                "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
+                + (f"\n{voice_said}" if voice_said else ""),
             },
         },
         {
@@ -1057,6 +1083,8 @@ def product_pitch_short_graph(
                     "beat_count": "{{shoot_beats.count}}",
                     "caption_count": "{{beat_captions.count}}",
                     "sequence_id": "{{pitch_project.sequence_id}}",
+                    #: 这一条用哪把嗓子念的、为什么(见 _pitch_voice)。出镜版的嗓子是主播自己的,不另说。
+                    **({"voice": voice_said} if voice_said else {}),
                 }
             },
         },
@@ -1077,7 +1105,8 @@ def product_pitch_short_graph(
         ]
         return normalize_graph(
             {
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 3, "source": "official"},
+                #: v4:没有能用的克隆音色时用免费的 Edge 音色念(此前那一格空着,运行前拦住、跑不了)。
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 4, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1710,13 +1739,16 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_PITCH_SHORT,
         "name": {"zh": "商品 → 带货口播短视频", "en": "Product into a narrated short"},
         "summary": {
-            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
+            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
+            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
             requirement(REFERENCE_IMAGE_MODEL, zh="能带参考图出图的图像模型", en="Image model that takes reference images"),
-            requirement(CLONED_VOICE, zh="一把嗓子:配音库的克隆音色", en="A voice: a cloned voice from the voice library"),
+            requirement(
+                CLONED_VOICE, zh="嗓子可选:配音库的克隆音色(没有就用免费的 Edge 音色)",
+                en="Optional voice: a cloned voice from the voice library (otherwise a free Edge voice)", optional=True,
+            ),
             requirement(None, zh="一张商品图", en="A product photo"),
         ],
         "stages": {

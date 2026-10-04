@@ -318,20 +318,20 @@
       "en": "Product into a narrated short"
     },
     "summary": {
-      "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-      "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures."
+      "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
+      "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures."
     },
     "requires": {
       "zh": [
         "AI 对话模型",
         "能带参考图出图的图像模型",
-        "一把嗓子:配音库的克隆音色",
+        "嗓子可选:配音库的克隆音色(没有就用免费的 Edge 音色)",
         "一张商品图"
       ],
       "en": [
         "Chat model",
         "Image model that takes reference images",
-        "A voice: a cloned voice from the voice library",
+        "Optional voice: a cloned voice from the voice library (otherwise a free Edge voice)",
         "A product photo"
       ]
     },
@@ -352,7 +352,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
+    "version": 4,
     "nodes": 9,
     "download": {
       "zh": "/workflows/product_pitch_short.zh.mosael-workflow.json",
