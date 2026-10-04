@@ -243,6 +243,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "来源 ID 不能为空",
         "en": "The source ID can't be empty.",
     },
+    # ---- 按段改笔记(domain/notes/passages,智能体的 edit_note):读的人多半是模型,说清怎么改对 ----
+    "noteErr_passageNoOps": {
+        "zh": "edit_note 需要一个非空的 operations 列表",
+        "en": "edit_note needs a non-empty operations list.",
+    },
+    "noteErr_passageOpUnknown": {
+        "zh": "第 {index} 条的 kind 只能是 replace 或 insert,收到的是 {kind}",
+        "en": "Operation #{index}: kind must be replace or insert, got {kind}.",
+    },
+    "noteErr_passageTextMissing": {
+        "zh": "第 {index} 条缺 text(新内容;要删掉一段就给空字符串)",
+        "en": "Operation #{index} is missing text (the new content; use an empty string to delete a passage).",
+    },
+    "noteErr_passageInsertWhere": {
+        "zh": "第 {index} 条 insert 要在 after(插在这段原文后面)和 before(插在前面)里恰好给一个",
+        "en": "Operation #{index}: an insert needs exactly one of after (insert after this text) or before (insert before it).",
+    },
+    "noteErr_passageAnchorEmpty": {
+        "zh": "第 {index} 条的 {field} 是空的:要给笔记里现有的一段原文",
+        "en": "Operation #{index}: {field} is empty; give a passage that is in the note now.",
+    },
+    "noteErr_passageNotFound": {
+        "zh": "第 {index} 条的 {field} 在笔记里找不到:「{excerpt}」。原文要逐字一致(含标点、空格和 Markdown 符号),先用 read_note 读出来再照抄",
+        "en": "Operation #{index}: {field} is not in the note: “{excerpt}”. It must match exactly (punctuation, spaces and Markdown marks included); read_note first and copy it.",
+    },
+    "noteErr_passageAmbiguous": {
+        "zh": "第 {index} 条的 {field} 在笔记里出现了 {count} 次,改哪一处说不清:把原文取长一点,带上前后文,让它只出现一次",
+        "en": "Operation #{index}: {field} appears {count} times in the note, so which one is meant is unclear. Quote a longer passage with its surroundings so it appears only once.",
+    },
     "permErr_deploymentAdminOnly": {
         "zh": "这项设置属于整个部署,只有部署管理员能改",
         "en": "This setting applies to the whole deployment; only a deployment administrator can change it.",

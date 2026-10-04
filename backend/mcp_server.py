@@ -1799,6 +1799,27 @@ def append_note(note_id: str, base_revision: int, markdown: str, workspace_id: s
     )
 
 
+@tool(effect="confirms")
+def edit_note(note_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: change passages of an existing note in place.
+
+    For rewriting, shortening, translating or continuing part of it; the open editor updates live
+    and undo reverts it. Ops apply in order:
+      {"kind":"replace","find":"<current text>","text":"<new markdown; '' deletes>"}
+      {"kind":"insert","after":"<current text>","text":"..."}  (or "before")
+    Each anchor must match the note's markdown exactly once; copy it from read_note or the page context.
+    Adding at the end is append_note."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "edit_note",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"note_id": note_id, "operations": operations},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
 @tool(effect="reads")
 def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
     """Read-only: search the public web for up-to-date external information.
