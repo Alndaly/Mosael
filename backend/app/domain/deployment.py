@@ -43,3 +43,12 @@ def set_shared_host_folders(db: Session, folders: list[str]) -> None:
 def plugin_registry_url(db: Session) -> str:
     """部署管理员配的插件市场索引地址;没配是空串(用哪一份默认由 plugins.registry 决定)。"""
     return (_row(db).plugin_registry_url or "").strip()
+
+
+def outbound_allowlist(db: Session) -> list[str]:
+    """用户给的地址可以去的内网地址。解析与判定在 core/outbound_guard,推进进程在 domain/outbound_allowlist。"""
+    return [str(item) for item in (_row(db).outbound_allowlist or [])]
+
+
+def set_outbound_allowlist(db: Session, entries: list[str]) -> None:
+    _row(db).outbound_allowlist = list(entries)

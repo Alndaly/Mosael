@@ -17,8 +17,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import httpx
 from sqlalchemy.orm import Session
 
+from app.core import outbound_guard
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
@@ -58,6 +60,8 @@ def start_url_import(
         raise UrlImportError("urlImportErr_tooMany", max=MAX_ITEMS)
     if kind not in ("video", "audio"):
         raise UrlImportError("urlImportErr_badKind")
+    for item in chosen:
+        ensure_public_link(str(item["url"]))
     if profile_id:
         # 借登录态就是在用那个人的身份:别人的私有档案**建任务时**就拒(见 browser.usable_profile),
         # 不让一个注定借不到 cookie 的任务排进队列、再悄悄按公开内容下。跑的时候经 open_session 再查一次。
@@ -230,6 +234,21 @@ def failure_report(failures: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def ensure_public_link(url: str) -> None:
+    """链接要过内网守卫(core/outbound_guard):只许公网,或部署允许名单里的内网地址。
+
+    下载交给 yt-dlp,它自己连网、自己跟重定向 —— 连哪个 IP、跳到哪儿我们管不着,能做的是在交出去之前按解析结果
+    判一次:`http://169.254.169.254/…`、`http://127.0.0.1:…` 这种在这里就拦下,说清为什么、怎么放行。
+    解析不了的不在这里拦:那是链接本身的问题,yt-dlp 会报得更准。
+    """
+    try:
+        outbound_guard.check(url.strip())
+    except outbound_guard.OutboundBlocked as exc:
+        raise UrlImportError.relay(exc) from exc
+    except httpx.HTTPError:
+        return
+
+
 def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int = 0, actor: str | None):
     """这个链接后面有什么(只读元数据)。带了浏览器档案就借它的登录态去探。
 
@@ -241,6 +260,7 @@ def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int =
 
     from app.media import ytdlp
 
+    ensure_public_link(url)
     workdir = Path(tempfile.mkdtemp(prefix="mosael-probe-")) if profile_id else None
     try:
         cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if workdir is not None else None

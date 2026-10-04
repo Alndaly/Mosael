@@ -109,6 +109,7 @@
   "migrate-named-browser-partitions-are-per-workspace": "21fd23af420b5b36",
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
+  "migrate-outbound-allowlist": "616e80417ddef903",
   "migrate-partition-moves-are-settled-per-executor": "59890b00d35c0e14",
   "migrate-permission-modes": "bbacb632b8f0e565",
   "migrate-plugin-array-inputs-are-lists": "69ab494d2805bd4b",

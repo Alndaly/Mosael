@@ -5687,6 +5687,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/outbound-allowlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Outbound Allowlist
+         * @description 用户给的地址(HTTP 请求节点、智能体的 http_request / fetch_url、从链接导入)可以去的内网地址。
+         *
+         *     **只给管理员看**:这份清单就是一张内网地图(哪台 NAS、哪个端口有服务)。成员被拦下时,报错里已经说了该加哪一项、
+         *     找谁加(见 core/outbound_guard)。
+         */
+        get: operations["get_outbound_allowlist_api_admin_outbound_allowlist_get"];
+        /**
+         * Set Outbound Allowlist
+         * @description 改内网访问的允许名单。和共享文件夹同一类:部署级的决定。
+         */
+        put: operations["set_outbound_allowlist_api_admin_outbound_allowlist_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/overview": {
         parameters: {
             query?: never;
@@ -10640,6 +10667,11 @@ export interface components {
             options?: {
                 [key: string]: unknown;
             }[];
+        };
+        /** OutboundAllowlist */
+        OutboundAllowlist: {
+            /** Entries */
+            entries: string[];
         };
         /**
          * PackageSourcePresetOut
@@ -26342,6 +26374,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharedHostFolders"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outbound_allowlist_api_admin_outbound_allowlist_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundAllowlist"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_outbound_allowlist_api_admin_outbound_allowlist_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboundAllowlist"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundAllowlist"];
                 };
             };
             /** @description Validation Error */

@@ -45,6 +45,9 @@ class DeploymentConfig(Base):
     #: 管理员共享给成员的本机文件夹(真实路径列表)。这台电脑上的文件是部署主人的私有资源:
     #: 非管理员只能读素材库里的文件,或落在这些文件夹里的路径(见 domain/host_files)。
     shared_host_folders: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    #: 用户给的地址(HTTP 请求节点、智能体的 http_request / fetch_url、从链接导入)**可以**去的内网地址:
+    #: 主机名 / IP / CIDR,主机名和 IP 可带端口。空 = 只许公网(见 core/outbound_guard)。
+    outbound_allowlist: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

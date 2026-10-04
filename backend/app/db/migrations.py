@@ -1559,6 +1559,20 @@ def _migrate_shared_host_folders() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
 
 
+def _migrate_outbound_allowlist() -> None:
+    """deployment_config 新增 outbound_allowlist(用户给的地址可以去的内网地址,见 core/outbound_guard)。
+
+    空列表 = 只许公网:升级前 HTTP 请求节点、fetch_url 能打本机回环、局域网和云元数据,那正是要收的口子。
+    """
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "outbound_allowlist" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN outbound_allowlist JSON NOT NULL DEFAULT '[]'"))
+
+
 def _migrate_entity_voices_name_their_engine() -> None:
     """人物资产的音色写明是哪个配音引擎的(`attributes.voice_engine`)。
 
@@ -7413,6 +7427,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_usage_unpriced_reason,
                 _migrate_pricing_time_prices,
                 _migrate_shared_host_folders,
+                _migrate_outbound_allowlist,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。

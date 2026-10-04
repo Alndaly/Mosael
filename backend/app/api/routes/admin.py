@@ -5,10 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.core.i18n import tr
+from app.core.outbound_guard import AllowlistError
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AdminOverviewOut, AdminUserOut
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import dashboard, deployment, host_files, members
+from app.domain import dashboard, deployment, host_files, members, outbound_allowlist
 from app.db.models import AuthSession, User, WorkspaceMember
 
 router = APIRouter(tags=["admin"])
@@ -111,6 +112,33 @@ def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: Curren
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     return SharedHostFolders(folders=folders)
+
+
+class OutboundAllowlist(BaseModel):
+    entries: list[str]
+
+
+@router.get("/admin/outbound-allowlist", response_model=OutboundAllowlist)
+def get_outbound_allowlist(db: DbSession, user: CurrentUser) -> OutboundAllowlist:
+    """用户给的地址(HTTP 请求节点、智能体的 http_request / fetch_url、从链接导入)可以去的内网地址。
+
+    **只给管理员看**:这份清单就是一张内网地图(哪台 NAS、哪个端口有服务)。成员被拦下时,报错里已经说了该加哪一项、
+    找谁加(见 core/outbound_guard)。
+    """
+    ensure_deployment_admin(db, user)
+    return OutboundAllowlist(entries=outbound_allowlist.entries(db))
+
+
+@router.put("/admin/outbound-allowlist", response_model=OutboundAllowlist)
+def set_outbound_allowlist(body: OutboundAllowlist, db: DbSession, user: CurrentUser) -> OutboundAllowlist:
+    """改内网访问的允许名单。和共享文件夹同一类:部署级的决定。"""
+    ensure_deployment_admin(db, user)
+    try:
+        entries = outbound_allowlist.save(db, body.entries)
+    except AllowlistError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return OutboundAllowlist(entries=entries)
 
 
 @router.get("/admin/overview", response_model=AdminOverviewOut)

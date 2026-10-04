@@ -17,6 +17,7 @@ import { ProxySection } from "./ProxySection";
 import { RegistrationSection } from "./RegistrationSection";
 import { SeparationEnginesSection } from "./SeparationEnginesSection";
 import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
+import { OutboundAllowlistSection } from "./OutboundAllowlistSection";
 import { VoiceCloneSection } from "./VoiceCloneSection";
 
 const TABS = ["overview", "members", "pricing", "engines", "deployment"] as const;
@@ -95,6 +96,8 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
             <RegistrationSection />
             {/* 这台电脑上的文件归部署管理员;共享出来的文件夹才是成员读得到的。 */}
             <SharedHostFoldersSection />
+            {/* 用户给的地址能去哪些内网地址 —— 和代理一样回答「这台部署怎么出去」,排在它前面。 */}
+            <OutboundAllowlistSection />
             {/* 代理和重试挨着:回答的是同一个问题 —— 这台部署的 AI 调用怎么出去。 */}
             <ProxySection />
             <AiRuntimeSection />

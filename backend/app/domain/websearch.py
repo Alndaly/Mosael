@@ -7,14 +7,11 @@ pi agent can look things up on the web.
 
 from __future__ import annotations
 
-from app.core.i18n import LocalizedError
-
-import ipaddress
-import socket
-from urllib.parse import urlparse
-
 import httpx
 from bs4 import BeautifulSoup
+
+from app.core import outbound_guard
+from app.core.i18n import LocalizedError
 
 _MAX_REDIRECTS = 5
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
@@ -61,45 +58,23 @@ def search(query: str, count: int = 5) -> list[dict[str, str]]:
     return results
 
 
-def _is_public_http_url(url: str) -> bool:
-    """Block non-http(s) schemes and requests to loopback / private / link-local hosts (SSRF guard)."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return False
-    return True
-
-
 def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
-    """Fetch a page and return {title, text} — readable text, scripts/styles stripped."""
+    """Fetch a page and return {title, text} — readable text, scripts/styles stripped.
+
+    出口走 core/outbound_guard:只许公网(或部署允许名单里的内网地址),按解析出来的 IP 判、连的就是查过的那个 IP,
+    重定向每一跳重新判 —— 此前这里自己判一遍名字、再让 httpx 自己解析一遍,DNS 第二次答 127.0.0.1 就进去了。
+    """
     url = (url or "").strip()
-    if not _is_public_http_url(url):
-        raise WebSearchError("webErr_publicOnly")
-    # Follow redirects by hand, re-checking every hop. _is_public_http_url only ever saw the
-    # URL the caller supplied, so a public page answering 302 http://127.0.0.1:8800/... — or a
-    # cloud metadata address — walked straight through the guard that exists to stop exactly
-    # that. The check has to apply to wherever the request actually ends up.
     try:
-        with httpx.Client(timeout=20, headers={"User-Agent": _UA}, follow_redirects=False) as client:
-            current = url
-            for _ in range(_MAX_REDIRECTS + 1):
-                response = client.get(current)
-                if not response.is_redirect:
-                    break
-                target = str(response.next_request.url) if response.next_request else ""
-                if not _is_public_http_url(target):
-                    raise WebSearchError("webErr_redirectPrivate")
-                current = target
-            else:
-                raise WebSearchError("webErr_tooManyRedirects")
-            response.raise_for_status()
+        exchange = outbound_guard.send(
+            "GET", url, headers={"User-Agent": _UA}, timeout=20, follow_redirects=True, max_redirects=_MAX_REDIRECTS
+        )
+        response = exchange.response
+        response.raise_for_status()
+    except outbound_guard.OutboundBlocked as exc:
+        raise WebSearchError.relay(exc) from exc
+    except httpx.TooManyRedirects as exc:
+        raise WebSearchError("webErr_tooManyRedirects") from exc
     except httpx.HTTPError as exc:
         raise WebSearchError("webErr_fetchFailed", detail=str(exc)) from exc
 
@@ -108,4 +83,4 @@ def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
         tag.decompose()
     title = soup.title.get_text(strip=True) if soup.title else url
     text = " ".join((soup.body or soup).get_text(" ", strip=True).split())
-    return {"title": title, "url": str(response.url), "text": text[:max_chars]}
+    return {"title": title, "url": exchange.url, "text": text[:max_chars]}

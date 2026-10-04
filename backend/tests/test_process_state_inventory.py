@@ -130,6 +130,7 @@ def test_清单里不留已经不存在的条目() -> None:
 #: 而测试套里的问题是另一个:一条测试改了它,后面所有测试都跟着变。
 _MUST_BE_RESTORED = {
     "app/core/http_retry.py:_max_retries": "出站重试次数;一条测试 PUT 成 6,后面所有会重试的测试都退避六次",
+    "app/core/outbound_guard.py:_allowlist": "内网访问的允许名单;一条测试放行了 127.0.0.1,后面「默认拒」的测试全都跟着放行",
     "app/ai/runtime/config.py:_cached": "TTS 运行时配置的缓存:一条测试装配过之后,后面的测试读到的是它那一份",
     "app/ai/runtime/config.py:_source": "那份配置是从哪儿来的(库 / 环境变量 / 默认),同上",
 }

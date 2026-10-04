@@ -36,23 +36,23 @@ def test_as_text_的几种形状() -> None:
 
 
 def test_HTTP_请求体收到对象时发出去的是_JSON(monkeypatch) -> None:
-    sent: dict = {}
+    import httpx
 
-    class _Response:
-        status_code = 200
-        text = "{}"
+    from app.core import outbound_guard
 
-        def json(self):
-            return {}
+    sent: list[httpx.Request] = []
 
-    def fake_request(method, url, *, headers, content, timeout):
-        sent["content"] = content
-        return _Response()
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={})
 
-    monkeypatch.setattr("app.domain.workflows.executors.basic.httpx.request", fake_request)
+    monkeypatch.setattr(outbound_guard, "lookup", lambda host, port: ["93.184.216.34"])
+    monkeypatch.setattr(outbound_guard, "client", lambda **kwargs: httpx.Client(transport=httpx.MockTransport(handler)))
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.delenv(key, raising=False)
     # 数据边 / 整串引用把一个对象原样交给 body。
-    http_request(None, None, {"method": "POST", "url": "http://example.invalid", "body": {"ok": True, "n": None}})
-    assert json.loads(sent["content"]) == {"ok": True, "n": None}
+    http_request(None, None, {"method": "POST", "url": "http://api.example.com", "body": {"ok": True, "n": None}})
+    assert json.loads(sent[0].content) == {"ok": True, "n": None}
 
 
 def test_模板独占一个对象引用时产出_JSON_文本() -> None:

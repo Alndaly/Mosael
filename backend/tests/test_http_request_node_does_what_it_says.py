@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
+from app.core import outbound_guard
 from app.core.db import SessionLocal
 from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError
@@ -73,7 +74,9 @@ class _Server:
 
 @pytest.fixture
 def server():
+    """本机回环默认不许去(core/outbound_guard):这台测试服务的端口放进允许名单 —— 和部署管理员放行一个本机服务同一条路。"""
     one = _Server()
+    outbound_guard.set_allowlist([f"127.0.0.1:{one.httpd.server_port}"])
     yield one
     one.close()
 

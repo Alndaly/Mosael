@@ -77,6 +77,8 @@ vi.mock("@/api/client", async (importOriginal) => ({
     return Promise.resolve({ code: "NEW", note, used: false, expires_at: "2099-01-01T00:00:00Z" });
   },
   getSharedHostFolders: () => Promise.resolve({ folders: [] }),
+  getOutboundAllowlist: () => Promise.resolve({ entries: [] }),
+  setOutboundAllowlist: (entries: string[]) => Promise.resolve({ entries }),
   // 引擎 tab:几节各自的清单。结构测试只关心有哪几节,给空清单就够。
   listAsrModels: () => Promise.resolve([]),
   downloadAsrModel: () => Promise.resolve({}),
@@ -160,7 +162,7 @@ describe("结构", () => {
     // 只有部署管理员写得了的设置都在这里,不在设置页(见 AdminView 的说明)。
     fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
-    expect(sections(container)).toEqual(["registration", "shared-folders", "proxy", "ai-runtime", "data"]);
+    expect(sections(container)).toEqual(["registration", "shared-folders", "outbound-allowlist", "proxy", "ai-runtime", "data"]);
     // 选中的 tab 活过导航。
     expect(localStorage.getItem("mosael:tab:admin")).toBe("deployment");
   });

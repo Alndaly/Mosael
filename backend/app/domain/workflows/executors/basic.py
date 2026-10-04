@@ -8,9 +8,9 @@ import re
 import time
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
+from app.core import outbound_guard
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.numbers import at_least, whole_number
@@ -103,7 +103,11 @@ def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> di
     content = None if not body or verb == "GET" else body.encode()
     if content is not None and not any(key.lower() == "content-type" for key in headers) and _is_json(body):
         headers = {**headers, "Content-Type": "application/json"}
-    response = httpx.request(verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS)
+    #: 地址是用户 / 模板 / 模型写的:经内网守卫出去(只许公网或部署允许名单里的地址,连的是查过的那个 IP)。
+    #: 不跟随重定向,和此前一样 —— 3xx 原样交回(按非 2xx 算失败,或由 fail_on_error 关掉)。
+    response = outbound_guard.send(
+        verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS
+    ).response
     try:
         parsed: Any = response.json()
     except ValueError:
@@ -129,12 +133,15 @@ def http_request(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     此前 404、500 都是"成功":下游拿着一段错误页当数据往下跑,失败出现在隔了几个节点、看不出
     原因的地方。要自己按状态码分支的,把 fail_on_error 设成 no,读 `status`。
     """
-    result = run_http(
-        method=str(config.get("method") or "GET"),
-        url=str(config.get("url", "")),
-        headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
-        body=as_text(config.get("body")),
-    )
+    try:
+        result = run_http(
+            method=str(config.get("method") or "GET"),
+            url=str(config.get("url", "")),
+            headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
+            body=as_text(config.get("body")),
+        )
+    except outbound_guard.OutboundBlocked as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
     fail_on_error = str(config.get("fail_on_error") or "").strip()
     if not 200 <= result["status"] < 300 and (truthy(fail_on_error) if fail_on_error else True):
         raise WorkflowDomainError(

@@ -71,6 +71,8 @@
 `test_process_state_inventory` 断言会串台的那几处都在还原名单里。全量套件因此快了约 9%。
 
 - `app/core/http_retry.py:_max_retries` — 出站重试次数。调用点散在十几个适配器里,不少拿不到 db 会话。
+- `app/core/outbound_guard.py:_allowlist` — 内网访问的允许名单(部署设置里那份,见 domain/outbound_allowlist)。
+  用它的地方(fetch_url、HTTP 请求节点)不少拿不到 db 会话。
 - `app/core/logging.py:_configured` — 日志装配一次的闸。
 - `app/ai/runtime/config.py:_cached`、`app/ai/runtime/config.py:_source` — TTS 运行时配置及其来源。
 - `app/ai/sidecar/pi_client.py:_proxy_source` — 出站代理来源。

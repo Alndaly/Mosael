@@ -679,14 +679,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "搜索请求失败: {detail}",
         "en": "Search request failed: {detail}",
     },
-    "webErr_publicOnly": {
-        "zh": "只能抓取公网 http/https 页面(已拦截内网/本机地址)",
-        "en": "Only public http/https pages can be fetched (private and local addresses are blocked).",
-    },
-    "webErr_redirectPrivate": {
-        "zh": "该页面跳转到了内网/本机地址,已拦截",
-        "en": "The page redirected to a private or local address, so it was blocked.",
-    },
     "webErr_tooManyRedirects": {
         "zh": "跳转次数过多",
         "en": "Too many redirects.",
@@ -695,4 +687,31 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "抓取失败: {detail}",
         "en": "Fetch failed: {detail}",
     },
+    # ---- 内网守卫(core/outbound_guard):用户给的地址只许去公网 ----
+    "outboundErr_private": {
+        "zh": "不能访问 {host}:它解析到 {address},是{reason}。用户、模板或智能体给的地址默认只许去公网,"
+              "免得借这台服务器摸进本机和内网的服务(包括云服务器的元数据接口)。确实需要的话,请部署管理员在"
+              "「管理 → 部署设置 → 内网访问」里把「{entry}」加进允许名单(也可以写主机名、IP 或 CIDR 网段)。",
+        "en": "Can't reach {host}: it resolves to {address}, which is {reason}. Addresses given by users, templates "
+              "or the agent may only go to the public internet by default, so nobody can use this server to reach "
+              "services on this machine or the internal network (including a cloud server's metadata endpoint). "
+              "If this is intended, ask a deployment admin to add “{entry}” to the allowlist under "
+              "Admin → Deployment → Internal network access (a host name, an IP or a CIDR range also works).",
+    },
+    "outboundErr_badUrl": {
+        "zh": "不是可以访问的网址:{url}(只支持 http:// 或 https:// 开头的地址)",
+        "en": "Not a reachable web address: {url} (only http:// and https:// addresses are supported).",
+    },
+    "outboundErr_badEntry": {
+        "zh": "允许名单里这一项写不对:{entry}。每一项写一个主机名、IP 或 CIDR 网段,主机名和 IP 可以带端口,"
+              "例如 127.0.0.1:11434、nas.local、10.0.0.0/8",
+        "en": "This allowlist entry isn't valid: {entry}. Write one host name, IP or CIDR range per entry; host "
+              "names and IPs may carry a port, e.g. 127.0.0.1:11434, nas.local, 10.0.0.0/8.",
+    },
+    "outboundReason_loopback": {"zh": "本机回环地址", "en": "a loopback address on this machine"},
+    "outboundReason_private": {"zh": "局域网地址", "en": "a private network address"},
+    "outboundReason_linkLocal": {"zh": "链路本地地址", "en": "a link-local address"},
+    "outboundReason_metadata": {"zh": "云服务器的元数据地址", "en": "a cloud metadata address"},
+    "outboundReason_unspecified": {"zh": "未指定地址(等于本机)", "en": "the unspecified address (this machine)"},
+    "outboundReason_special": {"zh": "保留或特殊用途的地址", "en": "a reserved or special-purpose address"},
 }

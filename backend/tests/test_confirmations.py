@@ -446,15 +446,20 @@ def test_run_code_confirmation_cannot_see_the_backend_env() -> None:
 def test_http_request_confirmation_goes_through_the_shared_node_implementation(monkeypatch) -> None:
     import httpx as _httpx
 
-    from app.domain.workflows.executors import basic
+    from app.core import outbound_guard
 
     seen: dict[str, object] = {}
 
-    def fake_request(method, url, **kwargs):
-        seen.update(method=method, url=url, headers=kwargs.get("headers"), content=kwargs.get("content"))
-        return _httpx.Response(201, json={"ok": True}, request=_httpx.Request(method, url))
+    def handler(request: _httpx.Request) -> _httpx.Response:
+        seen.update(method=request.method, host=request.headers["host"], token=request.headers.get("x-token"),
+                    type=request.headers.get("content-type"), content=request.content)
+        return _httpx.Response(201, json={"ok": True})
 
-    monkeypatch.setattr(basic.httpx, "request", fake_request)
+    #: 出口是内网守卫(core/outbound_guard):假 DNS 答一个公网地址,传输层换成 MockTransport。
+    monkeypatch.setattr(outbound_guard, "lookup", lambda host, port: ["93.184.216.34"])
+    monkeypatch.setattr(outbound_guard, "client", lambda **kwargs: _httpx.Client(transport=_httpx.MockTransport(handler)))
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.delenv(key, raising=False)
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -479,9 +484,9 @@ def test_http_request_confirmation_goes_through_the_shared_node_implementation(m
     approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"] == {"status": 201, "text": '{"ok":true}', "json": {"ok": True}}
-    assert seen["method"] == "POST"
+    assert seen["method"] == "POST" and seen["host"] == "example.test" and seen["token"] == "t"
     # 请求体是 JSON、没给 Content-Type:共用的 run_http 替它带上(和工作流节点同一份实现)。
-    assert seen["headers"] == {"X-Token": "t", "Content-Type": "application/json"}
+    assert seen["type"] == "application/json"
     assert seen["content"] == b'{"hi":1}'
 
 

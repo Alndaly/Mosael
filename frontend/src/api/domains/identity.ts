@@ -49,6 +49,17 @@ export function setSharedHostFolders(folders: string[]): Promise<SharedHostFolde
   return api<SharedHostFolders>("/api/admin/shared-host-folders", { method: "PUT", body: JSON.stringify({ folders }) });
 }
 
+/** 内网访问的允许名单(见后端 core/outbound_guard):用户给的地址可以去的内网地址。只有部署管理员能看能改。 */
+export type OutboundAllowlist = components["schemas"]["OutboundAllowlist"];
+
+export function getOutboundAllowlist(): Promise<OutboundAllowlist> {
+  return api<OutboundAllowlist>("/api/admin/outbound-allowlist");
+}
+
+export function setOutboundAllowlist(entries: string[]): Promise<OutboundAllowlist> {
+  return api<OutboundAllowlist>("/api/admin/outbound-allowlist", { method: "PUT", body: JSON.stringify({ entries }) });
+}
+
 /**
  * 管理控制台那一页读写的东西。**入口只对部署管理员显示,但权限在后端** —— 每条路由各自
  * `ensure_deployment_admin`,这里只是给它们起名字。

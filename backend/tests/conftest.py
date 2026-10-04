@@ -159,6 +159,7 @@ def _remote_size_says_unknown(monkeypatch):
 #: 清单完整),但没做到"测试之间把它还原" —— **登记本身制造了一种已受控的错觉**。
 _SNAPSHOT_STATE = (
     ("app.core.http_retry", "_max_retries"),
+    ("app.core.outbound_guard", "_allowlist"),
     ("app.ai.runtime.config", "_cached"),
     ("app.ai.runtime.config", "_source"),
 )

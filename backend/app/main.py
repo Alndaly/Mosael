@@ -218,6 +218,10 @@ def _prepare_network() -> None:
         from app.domain import ai_runtime
 
         ai_runtime.apply_to_process(db)
+        # 内网访问的允许名单同理(见 domain/outbound_allowlist)。
+        from app.domain import outbound_allowlist
+
+        outbound_allowlist.apply_to_process(db)
 
 
 def _install_permission_handlers(app: FastAPI) -> None:
