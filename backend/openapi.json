@@ -1630,7 +1630,7 @@
           "browser-worker"
         ],
         "summary": "Upload Artifact",
-        "description": "执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。\n\n令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,\n以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。",
+        "description": "执行器在跑一条动作时交来的产物 —— 自动化里点开的下载、「截图」节点截的图 —— 直接进那个会话所在\n工作区的素材库。\n\n令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记所在页面、(下载的)\n下载地址,以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。闸各用各的那一套:\n下载走 assets/web_download,截图走 assets/web_capture(只收图片、40 MB 上限)。",
         "operationId": "upload_artifact_api_browser_worker_actions__action_id__artifact_post",
         "parameters": [
           {
@@ -25194,6 +25194,18 @@
             "type": "string",
             "maxLength": 64,
             "title": "Captured At"
+          },
+          "capture": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Capture",
+            "default": ""
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name",
+            "default": ""
           },
           "file": {
             "type": "string",

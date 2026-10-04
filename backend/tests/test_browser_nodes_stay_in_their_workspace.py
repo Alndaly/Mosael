@@ -43,6 +43,7 @@ def _wf(ws: str):
         ("browser_extract", {"selector": "h1"}),
         ("browser_wait", {"selector": "h1"}),
         ("browser_scroll", {}),
+        ("browser_screenshot", {"mode": "full"}),
         ("browser_evaluate", {"expression": "document.cookie"}),
         ("browser_upload", {"selector": "input", "file_path": "/tmp/x.mp4"}),
     ],

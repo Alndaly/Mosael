@@ -331,6 +331,26 @@ def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     return {"session": sid, "value": out.get("value")}
 
 
+#: 「截图」节点能截的三种(和 electron/publish/actionCapture.ts 的 SHOT_MODES 同一组)。
+SHOT_MODES = ("visible", "full", "element")
+
+
+@register("browser_screenshot")
+def browser_screenshot(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """截这一页存进素材库,交出素材 id。截图和入库都在执行器那一侧(见 electron/publish/actionCapture.ts):
+    截好的图经执行器通道交给后端,出处带着这次运行、这个节点(随动作参数的 origin 交过去)。"""
+    sid = _session_in(db, scope, config)
+    mode = str(config.get("mode") or "visible")
+    out = _run(sid, "capture", {
+        "mode": mode if mode in SHOT_MODES else "visible",
+        "selector": str(config.get("selector") or ""),
+        "name": str(config.get("name") or ""),
+        **_element_wait(config),
+    })
+    value = out.get("value") if isinstance(out, dict) else None
+    return {"session": sid, "asset_id": str((value or {}).get("asset_id") or "")}
+
+
 @register("browser_close")
 def browser_close(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 留空不报错:上游分支没走到「打开浏览器」时,关闭这一步本来就无事可做。

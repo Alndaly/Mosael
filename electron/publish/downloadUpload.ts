@@ -1,7 +1,7 @@
-// 把临时目录里下好的一份文件交给后端入库。两条路共用:用户点的走用户会话(/api/assets/web-download),
-// 自动化里的走执行器通道(/api/browser/worker/actions/{id}/artifact)。
+// 把一份文件交给后端入库。下载有两条路:用户点的走用户会话(/api/assets/web-download),自动化里的走执行器通道
+// (/api/browser/worker/actions/{id}/artifact);「截图」节点截的图也走执行器通道(见 actionCapture)。
 //
-// **边读边传**:文件可能有两个 G,fs.openAsBlob 给的是一个指着磁盘文件的 Blob,FormData 发的时候才去读,
+// **边读边传**:下载的文件可能有两个 G,fs.openAsBlob 给的是一个指着磁盘文件的 Blob,FormData 发的时候才去读,
 // 不先整个读进内存。照主进程的规矩走 net.fetch(为什么不用 Node 的全局 fetch 见 mainProcessHttp.test.ts):
 // 它把 FormData 编成 multipart 流,一块一块写出去。
 import fs from "node:fs";
@@ -32,15 +32,27 @@ export function provenanceFields(file: FinishedDownload): Record<string, string>
   };
 }
 
+/** 下好的一份文件(临时目录里的)。 */
 export async function uploadDownload<T>(
   url: string,
   headers: Record<string, string>,
   fields: Record<string, string>,
   file: FinishedDownload,
 ): Promise<T> {
+  return postFile<T>(url, headers, fields, await fs.openAsBlob(file.path), file.name);
+}
+
+/** multipart 发一份文件和几个表单字段;后端拒了就抛 UploadRefused(带着它那句话)。 */
+export async function postFile<T>(
+  url: string,
+  headers: Record<string, string>,
+  fields: Record<string, string>,
+  body: Blob,
+  filename: string,
+): Promise<T> {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
-  form.append("file", await fs.openAsBlob(file.path), file.name);
+  form.append("file", body, filename);
   const response = await net.fetch(url, { method: "POST", headers, body: form });
   const text = await response.text();
   if (!response.ok) throw new UploadRefused(response.status, detailOf(text) || `HTTP ${response.status}`);

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **101** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
+共 **102** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -33,6 +33,7 @@
 | `browser_pool_list` | 直接执行 | List the browser POOL profiles you may request access to — the user's reusable persistent logins |
 | `browser_pool_open` | 确认卡 | Confirmation required: open a browser session that REUSES one of the user's LOGGED-IN pool |
 | `browser_read` | 直接执行 | Read-only: extract visible text from the open page (whole body if no selector). The returned text |
+| `browser_screenshot` | 直接执行 | Screenshot the open session's page into the asset library; returns { value: { asset_id } }. |
 | `browser_scroll` | 直接执行 | Scroll the open session to an element (selector) or by dy pixels. |
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |

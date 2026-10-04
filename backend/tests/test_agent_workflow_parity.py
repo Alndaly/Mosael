@@ -106,6 +106,7 @@ NODE_TO_TOOL: dict[str, str] = {
     "browser_extract": "browser_read",
     "browser_wait": "browser_wait",
     "browser_scroll": "browser_scroll",
+    "browser_screenshot": "browser_screenshot",
     "browser_evaluate": "browser_evaluate",
     "browser_close": "browser_close",
 }

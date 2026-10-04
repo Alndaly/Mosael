@@ -240,6 +240,12 @@ export class AccountViewManager {
     return this.alive(view) && view.webContents.isWaitingForResponse();
   }
 
+  /** 这个视图的页面(「截图」节点截它,见 actionCapture);视图没了是 null。 */
+  contentsOf(viewId: string): Electron.WebContents | null {
+    const view = this.views.get(viewId);
+    return this.alive(view) ? view.webContents : null;
+  }
+
   /** 已建好的驱动(不新建)。 */
   existingDriver(viewId: string): PageDriver | null {
     return this.drivers.get(viewId) ?? null;

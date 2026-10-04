@@ -130,8 +130,8 @@ def settle_move(move_id: str, body: PartitionMoveReport, db: Tx) -> dict[str, An
     return {"ok": True}
 
 
-#: 执行器交上来的产物能是哪几种。
-ARTIFACT_KINDS = ("download",)
+#: 执行器交上来的产物能是哪几种:动作里点开的下载、「截图」节点截的图。
+ARTIFACT_KINDS = ("download", "screenshot")
 
 
 @router.post("/browser/worker/actions/{action_id}/artifact")
@@ -145,28 +145,35 @@ def upload_artifact(
     page_url: str = Form(..., max_length=2000),
     page_title: str = Form("", max_length=1000),
     captured_at: str = Form(..., max_length=64),
+    #: 截图才有:怎么截的(screenshot_visible / screenshot_full / screenshot_element)、给素材起的名字。
+    capture: str = Form("", max_length=40),
+    name: str = Form("", max_length=200),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    """执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。
+    """执行器在跑一条动作时交来的产物 —— 自动化里点开的下载、「截图」节点截的图 —— 直接进那个会话所在
+    工作区的素材库。
 
-    令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,
-    以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。
+    令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记所在页面、(下载的)
+    下载地址,以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。闸各用各的那一套:
+    下载走 assets/web_download,截图走 assets/web_capture(只收图片、40 MB 上限)。
     """
-    from app.domain.assets.web_capture import RunOrigin, WebCaptureError, web_source
-    from app.domain.assets.web_download import PAGE_DOWNLOAD, register_web_download
+    from app.domain.assets.use_cases import ActionArtifact, import_action_artifact
+    from app.domain.assets.web_capture import RunOrigin, WebCaptureError
 
     if kind not in ARTIFACT_KINDS:
         raise HTTPException(status_code=422, detail=f"unknown artifact kind {kind[:20]}")
     try:
         target = artifact_target(db, action_id, lease_token=lease_token)
-        origin = RunOrigin(run_id=target.run_id, node_id=target.node_id, browser_session_id=target.browser_session_id)
-        source = web_source(
-            page_url=page_url, page_title=page_title, captured_at=captured_at, capture=PAGE_DOWNLOAD,
-            source_url=source_url, allowed=(PAGE_DOWNLOAD,),
-        )
-        asset = register_web_download(
-            db, workspace_id=target.workspace_id, project_id=None, stream=file.file, filename=filename, source=source,
-            origin=origin,
+        asset = import_action_artifact(
+            db,
+            ActionArtifact(
+                kind=kind, workspace_id=target.workspace_id, filename=filename, source_url=source_url,
+                page_url=page_url, page_title=page_title, captured_at=captured_at, capture=capture, name=name,
+                origin=RunOrigin(
+                    run_id=target.run_id, node_id=target.node_id, browser_session_id=target.browser_session_id,
+                ),
+            ),
+            file.file,
         )
     except BrowserReportError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

@@ -6,8 +6,7 @@ import { join } from "node:path";
 
 import { net } from "electron";
 
-import type { FinishedDownload } from "./downloads";
-import { provenanceFields, uploadDownload } from "./downloadUpload";
+import { postFile } from "./downloadUpload";
 import type { PartitionMove, PartitionMoveOutcome } from "./partitionMoves";
 import { getLocale } from "../i18n.cjs";
 
@@ -131,15 +130,21 @@ export const browserBackend = {
     return gone;
   },
   /**
-   * 正在跑的这条动作交一份产物(动作里点开的下载)进素材库。令牌和回报同一道闸:只收它手上那一条。
-   * 错误照后端那句话抛(按界面语言翻好),调用方原样放进动作的失败原因。
+   * 正在跑的这条动作交一份产物(动作里点开的下载、「截图」节点截的图)进素材库。令牌和回报同一道闸:只收它
+   * 手上那一条。错误照后端那句话抛(按界面语言翻好),调用方原样放进动作的失败原因。
    */
-  uploadArtifact: (actionId: string, kind: "download", file: FinishedDownload) =>
-    uploadDownload<{ asset_id: string; name: string; kind: string }>(
+  uploadArtifact: (
+    actionId: string,
+    kind: "download" | "screenshot",
+    file: { body: Blob; filename: string },
+    fields: Record<string, string>,
+  ) =>
+    postFile<{ asset_id: string; name: string; kind: string }>(
       `${BASE}/api/browser/worker/actions/${encodeURIComponent(actionId)}/artifact`,
       { "X-Mosael-Worker-Key": readWorkerKey(), "Accept-Language": getLocale() },
-      { lease_token: holding.get(actionId) ?? "", kind, ...provenanceFields(file) },
-      file,
+      { lease_token: holding.get(actionId) ?? "", kind, ...fields },
+      file.body,
+      file.filename,
     ),
   /** 后端迁移写下、**这台电脑**还没回过话的登录分区搬家单(见 partitionMoves.ts)。 */
   partitionMoves: () =>

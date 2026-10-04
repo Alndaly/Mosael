@@ -2094,6 +2094,32 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["session", "value"],
     },
+    #: 截这一页存进素材库。截图本身和浏览器会话顶栏的「截屏」是同一份实现(electron/publish/pageCapture);
+    #: 框选要人拖,节点里换成「某个元素」。
+    "browser_screenshot": {
+        "external": True,
+        "category": "wfCat_browser",
+        "label": "wfNode_browser_screenshot",
+        "description": "wfNode_browser_screenshot_desc",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "wfNode_browser_screenshot_session"},
+            "mode": {
+                "type": "string", "options": ["visible", "full", "element"], "default": "visible",
+                "description": "wfNode_browser_screenshot_mode",
+            },
+            "selector": {
+                "type": "template", "required": True, "active_when": {"mode": "element"},
+                "description": "wfNode_browser_screenshot_selector",
+            },
+            "name": {"advanced": True, "type": "template", "description": "wfNode_browser_screenshot_name"},
+            "wait_ms": {
+                "advanced": True, "type": "number", "active_when": {"mode": "element"},
+                "description": "wfNode_browser_screenshot_wait_ms",
+            },
+        },
+        "outputs": ["session", "asset_id"],
+        "output_labels": {"asset_id": "wfOut_browser_screenshot_asset"},
+    },
     "browser_close": {
         "external": True,
         "category": "wfCat_browser",

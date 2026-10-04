@@ -14,6 +14,7 @@
 import { app } from "electron";
 
 import { sharedViews } from "./accountViews";
+import { captureForAction } from "./actionCapture";
 import { dropActionDownloads, saveActionDownloads } from "./actionDownloads";
 import { executeBrowserAction, type ActionOutcome } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
@@ -188,7 +189,15 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
     try {
       let outcome: ActionOutcome;
       try {
-        outcome = await executeBrowserAction(driver, action.action, action.args);
+        // 「截图」节点:截这一页、存进素材库(和顶栏截屏同一份实现,见 actionCapture);别的动作照旧交给驱动。
+        outcome =
+          action.action === "capture"
+            ? await captureForAction({
+                actionId: action.id,
+                webContents: views.contentsOf(action.session_id),
+                args: action.args,
+              })
+            : await executeBrowserAction(driver, action.action, action.args);
       } catch (error) {
         await dropActionDownloads(downloads);
         throw error;

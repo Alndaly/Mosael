@@ -36,6 +36,8 @@ MAX_CAPTURE_BYTES = 40 * 1024 * 1024
 #: (那一条走从链接导入的任务,见 from_url,出处字段与这里同一套)。
 CAPTURE_KINDS = ("screenshot_visible", "screenshot_full", "screenshot_region", "page_image")
 PAGE_VIDEO = "page_video"
+#: 「截图」节点截的(自动化会话里那一页):可见区域、整页长图、某个元素。框选要人拖,节点里没有。
+NODE_SCREENSHOT_KINDS = ("screenshot_visible", "screenshot_full", "screenshot_element")
 
 #: 认得的图片格式 → 落盘扩展名。和 electron/publish/pageToolsCore.sniffImage 认的是同一组。
 _EXTENSIONS = {

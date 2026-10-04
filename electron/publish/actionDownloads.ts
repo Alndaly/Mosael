@@ -2,8 +2,10 @@
 //
 // 收不进素材库的(类型不收、超过上限、下到一半断了、后端拒了)让这一步**失败并说清为什么** —— 此前
 // 浏览器弹出保存框挂在那儿,动作却报成功,工作流的下一步拿着一个不存在的文件接着跑。
+import fs from "node:fs";
+
 import { browserBackend } from "./browserBackend";
-import { UploadRefused } from "./downloadUpload";
+import { UploadRefused, provenanceFields } from "./downloadUpload";
 import { discardDownload, type DownloadCollector } from "./downloads";
 import { t } from "../i18n.cjs";
 
@@ -48,7 +50,12 @@ export async function saveActionDownloads(opts: {
       continue;
     }
     try {
-      const asset = await browserBackend.uploadArtifact(opts.actionId, "download", one.file);
+      const asset = await browserBackend.uploadArtifact(
+        opts.actionId,
+        "download",
+        { body: await fs.openAsBlob(one.file.path), filename: one.file.name },
+        provenanceFields(one.file),
+      );
       saved.push({ asset_id: asset.asset_id, name: asset.name, bytes: one.file.bytes });
     } catch (error) {
       const reason = error instanceof UploadRefused ? error.message : error instanceof Error ? error.message : String(error);

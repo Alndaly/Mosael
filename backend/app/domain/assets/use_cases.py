@@ -10,6 +10,7 @@ HTTP 路由、智能体工具、工作流节点调同一个函数,走的就是�
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Job, Transcript, User
 from app.domain.assets.deletion import Deleted, delete_asset as _delete
 from app.domain.assets.project_scope import asset_project
+from app.domain.assets.web_capture import RunOrigin
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_asset
 
 #: 标签的长度上限;更长的截断。
@@ -246,6 +248,58 @@ def import_web_download(
     check_download_name(filename)
     return register_web_download(
         db, workspace_id=workspace_id, project_id=project_id, stream=upload.file, filename=filename, source=source,
+    )
+
+
+@dataclass(frozen=True)
+class ActionArtifact:
+    """浏览器执行器在一条动作里交来的一份产物:下载的文件,或「截图」节点截的图。"""
+
+    kind: str
+    workspace_id: str
+    filename: str
+    source_url: str
+    page_url: str
+    page_title: str
+    captured_at: str
+    capture: str
+    name: str
+    origin: RunOrigin
+
+
+def import_action_artifact(db: Session, artifact: ActionArtifact, stream) -> Asset:
+    """执行器交来的产物入库(权限由调用方的执行器通道与动作租约担保,见 api/routes/browser_worker)。
+
+    下载走 web_download 的闸(大小、类型、文件名);截图走 web_capture 的闸(只收图片、40 MB),出处种类只认
+    节点截得出来的那三种。两种都再记上是哪次运行、哪个节点、哪个会话触发的。
+    """
+    from app.domain.assets.web_capture import (
+        NODE_SCREENSHOT_KINDS,
+        read_capped,
+        register_web_capture,
+        remember_run_origin,
+        web_source,
+    )
+    from app.domain.assets.web_download import PAGE_DOWNLOAD, register_web_download
+
+    if artifact.kind == "screenshot":
+        source = web_source(
+            page_url=artifact.page_url, page_title=artifact.page_title, captured_at=artifact.captured_at,
+            capture=artifact.capture, allowed=NODE_SCREENSHOT_KINDS,
+        )
+        asset = register_web_capture(
+            db, workspace_id=artifact.workspace_id, project_id=None, data=read_capped(stream), source=source,
+            name=artifact.name or source.page_title or None,
+        )
+        remember_run_origin(asset, artifact.origin)
+        return asset
+    source = web_source(
+        page_url=artifact.page_url, page_title=artifact.page_title, captured_at=artifact.captured_at,
+        capture=PAGE_DOWNLOAD, source_url=artifact.source_url, allowed=(PAGE_DOWNLOAD,),
+    )
+    return register_web_download(
+        db, workspace_id=artifact.workspace_id, project_id=None, stream=stream, filename=artifact.filename,
+        source=source, origin=artifact.origin,
     )
 
 

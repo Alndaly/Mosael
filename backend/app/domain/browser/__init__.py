@@ -69,6 +69,9 @@ WORKER_LEASE_SECONDS = 60
 KNOWN_ACTIONS = (
     "navigate", "click", "input", "extract", "wait", "scroll",
     "screenshot", "evaluate", "upload", "press_key", "close",
+    #: 截这一页并存进素材库(「截图」节点 / 智能体的 browser_screenshot)。和 screenshot 不同:那个是失败现场的
+    #: 小图,只回 base64、不入库。
+    "capture",
 )
 
 

@@ -272,6 +272,30 @@
     ]
   },
   {
+    "type": "browser_screenshot",
+    "config": {
+      "session": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "template"
+      },
+      "name": {
+        "type": "template"
+      },
+      "wait_ms": {
+        "type": "number"
+      }
+    },
+    "outputs": [
+      "session",
+      "asset_id"
+    ]
+  },
+  {
     "type": "browser_scroll",
     "config": {
       "session": {

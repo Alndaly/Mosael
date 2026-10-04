@@ -335,6 +335,23 @@ const MESSAGES = {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
   },
+  // 「截图」节点(见 publish/actionCapture.ts)。
+  browserErr_shotNeedsSelector: {
+    zh: "截元素要填 CSS 选择器",
+    en: "Capturing an element needs a CSS selector",
+  },
+  browserErr_shotElementEmpty: {
+    zh: "要截的元素没有大小(可能被藏起来了):{target}",
+    en: "The element to capture has no size (it may be hidden): {target}",
+  },
+  browserErr_shotFailed: {
+    zh: "没截到画面:页面可能还没加载完,或这个会话的窗口已经关了",
+    en: "Nothing was captured: the page may still be loading, or this session's window has closed",
+  },
+  browserErr_shotFullUnavailable: {
+    zh: "这一页截不了整页长图(开着开发者工具时也会这样),可以先截可见区域",
+    en: "This page can't be captured as a full-page image (this also happens while DevTools is open); try the visible area",
+  },
   // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 publish/downloads.ts)。
   downloadErr_type: {
     zh: "素材库不收这种文件:「{name}」。能存的是视频、音频、图片和常见文档(PDF、Word、PPT、Excel、文本……)",

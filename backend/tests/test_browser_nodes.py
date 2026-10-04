@@ -15,7 +15,7 @@ from tests.util import fresh_client
 
 BROWSER_NODES = [
     "browser_open", "browser_navigate", "browser_click", "browser_input",
-    "browser_extract", "browser_wait", "browser_scroll", "browser_evaluate", "browser_close",
+    "browser_extract", "browser_wait", "browser_scroll", "browser_evaluate", "browser_screenshot", "browser_close",
 ]
 
 

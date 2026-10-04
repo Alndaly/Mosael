@@ -726,10 +726,12 @@ export interface paths {
         put?: never;
         /**
          * Upload Artifact
-         * @description 执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。
+         * @description 执行器在跑一条动作时交来的产物 —— 自动化里点开的下载、「截图」节点截的图 —— 直接进那个会话所在
+         *     工作区的素材库。
          *
-         *     令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,
-         *     以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。
+         *     令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记所在页面、(下载的)
+         *     下载地址,以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。闸各用各的那一套:
+         *     下载走 assets/web_download,截图走 assets/web_capture(只收图片、40 MB 上限)。
          */
         post: operations["upload_artifact_api_browser_worker_actions__action_id__artifact_post"];
         delete?: never;
@@ -8731,6 +8733,16 @@ export interface components {
             page_title: string;
             /** Captured At */
             captured_at: string;
+            /**
+             * Capture
+             * @default
+             */
+            capture: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
             /** File */
             file: string;
         };

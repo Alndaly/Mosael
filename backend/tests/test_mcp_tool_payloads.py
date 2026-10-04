@@ -107,6 +107,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "browser_read": {"session_id": "no-such-session"},
     "browser_wait": {"session_id": "no-such-session", "text": "x", "timeout_ms": 1},
     "browser_scroll": {"session_id": "no-such-session", "dy": 100},
+    "browser_screenshot": {"session_id": "no-such-session", "mode": "full"},
     "browser_upload": {"session_id": "no-such-session", "selector": "#f", "asset_id": "no-such-asset"},
     "browser_evaluate": {"session_id": "no-such-session", "expression": "1"},
     "browser_close": {"session_id": "no-such-session"},

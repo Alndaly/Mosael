@@ -2666,6 +2666,15 @@ def browser_scroll(session_id: str, selector: str = "", dy: int = 0, workspace_i
 
 
 @tool(effect="writes")
+def browser_screenshot(session_id: str, mode: str = "visible", selector: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Screenshot the open session's page into the asset library; returns { value: { asset_id } }.
+
+    mode: visible | full (whole page) | element (needs selector).
+    """
+    return _browser_act(session_id, "capture", {"mode": mode, "selector": selector}, workspace_id)
+
+
+@tool(effect="writes")
 def browser_upload(session_id: str, selector: str, asset_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Put an asset's file into a page's <input type=file> — the key step when uploading a video."""
     return _browser_act(session_id, "upload", {"selector": selector, "asset_id": asset_id}, workspace_id)

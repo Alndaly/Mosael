@@ -172,6 +172,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_browser_open_notice": {"zh": "提示(如升级后这份登录要重新登录)", "en": "Notice (e.g. this sign-in must be redone after an upgrade)"},
     "wfOut_browser_http_status": {"zh": "HTTP 状态码", "en": "HTTP status code"},
     "wfOut_browser_downloaded_asset": {"zh": "下载进素材库的文件(没有下载就是空)", "en": "The downloaded file saved to the library (empty when nothing downloaded)"},
+    "wfOut_browser_screenshot_asset": {"zh": "存进素材库的截图", "en": "The screenshot saved to the library"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
     "dubOverlapNote": {
@@ -513,6 +514,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_upload_asset_id": {"zh": "要上传的素材(如上游导出的成片);和 file_path 只能填一个", "en": "The asset to upload (e.g. a video exported upstream); fill in this or file_path, not both"},
     "wfNode_browser_upload_file_path": {"zh": "或直接给本机绝对路径;和 asset_id 只能填一个。本机文件只有部署管理员能读,其他成员只能用管理员共享出来的文件夹里的", "en": "Or an absolute path on this computer; fill in this or asset_id, not both. Only deployment admins can read files on this computer — other members can only use files inside folders an admin has shared"},
     "wfNode_browser_upload_timeout_ms": {"zh": "等文件输入框出现的超时(毫秒,默认 15000)", "en": "How long to wait for the file input to appear (milliseconds, 15000 by default)"},
+    "wfNode_browser_screenshot": {"zh": "浏览器·截图", "en": "Browser · screenshot"},
+    "wfNode_browser_screenshot_desc": {"zh": "截下会话当前这一页,直接存进素材库(带来源网址、页面标题、截取时间,以及是哪次运行、哪个节点截的),输出素材 id。可截可见区域、整页长图,或某个元素。", "en": "Capture the session's current page straight into the library (with the page URL, title, capture time, and which run and node took it) and output the asset id. Capture the visible area, the full page, or one element."},
+    "wfNode_browser_screenshot_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
+    "wfNode_browser_screenshot_mode": {"zh": "截可见区域、整页长图(超过 15000 像素只截前面一段),还是某个元素", "en": "The visible area, the full page (only the first 15,000 pixels of a longer one), or one element"},
+    "wfNode_browser_screenshot_selector": {"zh": "要截的元素的 CSS 选择器(整块截下,哪怕有一部分在屏幕外)", "en": "CSS selector of the element to capture (all of it, even the part outside the screen)"},
+    "wfNode_browser_screenshot_name": {"zh": "素材叫什么(留空用页面标题)", "en": "What to call the asset (the page title when left empty)"},
+    "wfNode_browser_screenshot_wait_ms": {"zh": "元素还没出现时最多等多久再报错,默认 5000", "en": "How long to wait for the element to appear before failing; 5000 by default"},
     "wfNode_browser_extract": {"zh": "浏览器·提取", "en": "Browser · extract"},
     "wfNode_browser_extract_desc": {"zh": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。", "en": "Read an element's text or an attribute; can take every match at once. Outputs value for downstream use."},
     "wfNode_browser_extract_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},

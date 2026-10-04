@@ -1,15 +1,26 @@
 /**
- * 截屏:可见区域、整页长图、框选区域 —— 主进程这一半(几何在 pageToolsCore)。
+ * 截屏:可见区域、整页长图、某个元素、框选区域 —— 主进程这一半(几何在 pageToolsCore)。
+ *
+ * **只有这一份实现。** 顶栏的「截屏」截前台那一页,工作流的「截图」节点截自动化会话的那一页(见
+ * actionCapture),都走 captureContents;区别只在截哪个页面、截完交给谁。
  */
 import { nativeImage, type NativeImage, type WebContents } from "electron";
 
 import { sharedViews } from "./accountViews";
 import { PageToolError, foreground, pageOf } from "./pageTarget";
-import { planFullPage, regionCropRect, type PageInfo, type SelectionFraction } from "./pageToolsCore";
+import {
+  cdpClip,
+  planClip,
+  planFullPage,
+  regionCropRect,
+  type PageInfo,
+  type PageRect,
+  type SelectionFraction,
+} from "./pageToolsCore";
 
 export interface PageCapture {
-  /** PNG 字节。 */
-  bytes: Uint8Array;
+  /** PNG 字节(自己的一份拷贝,能直接装进 Blob)。 */
+  bytes: Uint8Array<ArrayBuffer>;
   width: number;
   height: number;
   /** 整页长图比上限长,只截了前面一段。 */
@@ -25,14 +36,82 @@ function asCapture(image: NativeImage, page: PageInfo, capturedAt: string, trunc
   return { bytes: new Uint8Array(image.toPNG()), width, height, truncated, page, capturedAt };
 }
 
-/** 可见区域 / 整页长图。 */
-export async function capturePage(mode: "visible" | "full"): Promise<PageCapture> {
-  const { webContents: wc } = foreground();
+/** 顶栏:前台那一页的可见区域 / 整页长图。 */
+export function capturePage(mode: "visible" | "full"): Promise<PageCapture> {
+  return captureContents(foreground().webContents, mode);
+}
+
+/** 截不到那个元素:页面上没有它,或者它没有大小(被藏起来了)。 */
+export class ElementCaptureError extends Error {
+  constructor(readonly reason: "missing" | "empty") {
+    super(`page-capture: element ${reason}`);
+    this.name = "ElementCaptureError";
+  }
+}
+
+/**
+ * 截一个页面:可见区域、整页长图、某个元素(`selector`,截它整块,哪怕有一部分在视口外)。
+ *
+ * 页面被缩放过(悬浮面板里的自动化会话缩到三成上下)时照样按屏幕原生清晰度出图(见 pageToolsCore.clipScale)
+ * —— 直接 capturePage 截出来的只有面板那么大一点。
+ */
+export async function captureContents(
+  wc: WebContents,
+  mode: "visible" | "full" | "element",
+  opts: { selector?: string } = {},
+): Promise<PageCapture> {
   const page = pageOf(wc);
   const capturedAt = new Date().toISOString();
-  if (mode === "visible") return asCapture(await wc.capturePage(), page, capturedAt);
-  const { png, truncated } = await captureFullPage(wc);
-  return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, truncated);
+  const zoom = wc.getZoomFactor();
+  if (mode === "visible" && Math.abs(zoom - 1) < 1e-3) return asCapture(await wc.capturePage(), page, capturedAt);
+  if (mode === "full") {
+    const { png, truncated } = await captureFullPage(wc, zoom);
+    return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, truncated);
+  }
+  const rect = mode === "element" ? await elementRect(wc, opts.selector ?? "") : await visibleRect(wc);
+  const ratio = Number(await wc.executeJavaScript("window.devicePixelRatio")) || 1;
+  const plan = planClip(rect, ratio, zoom);
+  if (!plan) throw new ElementCaptureError("empty");
+  const png = await cdpShot(wc, plan.clip, mode === "element");
+  return asCapture(nativeImage.createFromBuffer(png), page, capturedAt, plan.truncated);
+}
+
+/** 可见区域在文档里的位置(CSS 像素)。 */
+function visibleRect(wc: WebContents): Promise<PageRect> {
+  return wc.executeJavaScript(
+    "({ x: window.scrollX, y: window.scrollY, width: document.documentElement.clientWidth || window.innerWidth, height: document.documentElement.clientHeight || window.innerHeight })",
+  ) as Promise<PageRect>;
+}
+
+/** 元素在文档里的位置(CSS 像素);页面上没有它就抛 missing。 */
+async function elementRect(wc: WebContents, selector: string): Promise<PageRect> {
+  const rect = (await wc.executeJavaScript(
+    `(() => {
+      let el = null;
+      try { el = document.querySelector(${JSON.stringify(selector)}); } catch { return null; }
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height };
+    })()`,
+  )) as PageRect | null;
+  if (!rect) throw new ElementCaptureError("missing");
+  return rect;
+}
+
+/** CDP 截一块。debugger 的挂法同整页长图(见 captureFullPage 的说明)。 */
+async function cdpShot(wc: WebContents, clip: PageRect & { scale: number }, beyondViewport: boolean): Promise<Buffer> {
+  try {
+    if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
+    const shot = (await wc.debugger.sendCommand("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: beyondViewport,
+      fromSurface: true,
+      clip,
+    })) as { data: string };
+    return Buffer.from(shot.data, "base64");
+  } catch {
+    throw new PageToolError("capture_failed");
+  }
 }
 
 /**
@@ -45,7 +124,7 @@ export async function capturePage(mode: "visible" | "full"): Promise<PageCapture
  * debugger 可能已被 PageDriver 挂上(发布 / RPA 驱动同一个视图时),那时直接复用、不再 attach;
  * 我们挂上的也不摘 —— 摘的那一刻若驱动正在用它,它的下一条命令就会失败。
  */
-async function captureFullPage(wc: WebContents): Promise<{ png: Buffer; truncated: boolean }> {
+async function captureFullPage(wc: WebContents, zoom: number): Promise<{ png: Buffer; truncated: boolean }> {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
     const metrics = (await wc.debugger.sendCommand("Page.getLayoutMetrics")) as {
@@ -57,12 +136,12 @@ async function captureFullPage(wc: WebContents): Promise<{ png: Buffer; truncate
     const content = metrics.cssContentSize ?? metrics.contentSize;
     const layout = metrics.cssLayoutViewport ?? metrics.layoutViewport;
     const ratio = Number(await wc.executeJavaScript("window.devicePixelRatio")) || 1;
-    const plan = planFullPage(content, { width: layout.clientWidth, height: layout.clientHeight }, ratio);
+    const plan = planFullPage(content, { width: layout.clientWidth, height: layout.clientHeight }, ratio, zoom);
     const shot = (await wc.debugger.sendCommand("Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: true,
       fromSurface: true,
-      clip: { x: 0, y: 0, width: plan.width, height: plan.height, scale: plan.scale },
+      clip: cdpClip({ x: 0, y: 0, width: plan.width, height: plan.height }, plan.scale, zoom),
     })) as { data: string };
     return { png: Buffer.from(shot.data, "base64"), truncated: plan.truncated };
   } catch (error) {

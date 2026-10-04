@@ -42,6 +42,7 @@ const WF_NODE_COLORS: Record<string, string> = {
   browser_extract: "var(--primary)",
   browser_wait: "var(--primary)",
   browser_scroll: "var(--primary)",
+  browser_screenshot: "var(--primary)",
   browser_evaluate: "var(--primary)",
   browser_close: "var(--primary)",
   call_workflow: "var(--primary)",

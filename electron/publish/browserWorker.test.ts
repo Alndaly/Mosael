@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     //: 每一步开一个下载收集器(见 actionDownloads);默认这一步没有下载
     downloads: { collect: vi.fn() },
     awaitingResponse: vi.fn(() => false),
+    contentsOf: vi.fn((sessionId: string) => ({ id: `page-${sessionId}` })),
   };
   const backend = {
     claim: vi.fn(),
@@ -50,13 +51,15 @@ const mocks = vi.hoisted(() => {
       }),
   );
   const paths = { userData: "" };
-  return { drivers, views, backend, pending, execute, paths };
+  const capture = vi.fn();
+  return { drivers, views, backend, pending, execute, paths, capture };
 });
 
 vi.mock("electron", () => ({ app: { getPath: () => mocks.paths.userData } }));
 vi.mock("./accountViews", () => ({ sharedViews: () => mocks.views }));
 vi.mock("./browserBackend", () => ({ browserBackend: mocks.backend }));
 vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
+vi.mock("./actionCapture", () => ({ captureForAction: mocks.capture }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
 
 import { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
@@ -235,7 +238,18 @@ it("点开了一个下载:不弹保存框,文件交给后端进素材库,素材 
   startBrowserWorker();
   await vi.advanceTimersByTimeAsync(3_000);
 
-  expect(mocks.backend.uploadArtifact).toHaveBeenCalledWith("a1", "download", file.file);
+  expect(mocks.backend.uploadArtifact).toHaveBeenCalledWith(
+    "a1",
+    "download",
+    { body: expect.any(Blob), filename: "report.pdf" },
+    {
+      filename: "report.pdf",
+      source_url: "https://example.com/report.pdf",
+      page_url: "https://example.com/files",
+      page_title: "下载页",
+      captured_at: "2026-10-04T05:30:00.000Z",
+    },
+  );
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
     status: "done",
     result: { downloads: [{ asset_id: "asset-1", name: "report.pdf", bytes: 3 }] },
@@ -288,4 +302,19 @@ it("动作自己失败了:这一步开始的下载一并丢掉,不进素材库",
   expect(mocks.backend.uploadArtifact).not.toHaveBeenCalled();
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", { status: "failed", error: "元素未找到" });
   expect(existsSync(file.file.path)).toBe(false);
+});
+
+it("「截图」动作截这一页(交给截图那一份实现),结果里带着素材 id", async () => {
+  mocks.capture.mockResolvedValueOnce({ value: { asset_id: "shot-1", width: 10, height: 10 }, lastUrl: "https://x.test/" });
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "capture", args: { mode: "element", selector: "h1" } });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.execute).not.toHaveBeenCalled();
+  expect(mocks.capture).toHaveBeenCalledWith({ actionId: "a1", webContents: { id: "page-s1" }, args: { mode: "element", selector: "h1" } });
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "done",
+    result: { value: { asset_id: "shot-1", width: 10, height: 10 } },
+    last_url: "https://x.test/",
+  });
 });
