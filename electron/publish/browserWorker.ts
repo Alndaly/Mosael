@@ -194,11 +194,7 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
         // 在会话的几个页面之间切换 / 关掉当前页(见 actionPage)。别的动作照旧交给驱动。
         outcome =
           action.action === "capture"
-            ? await captureForAction({
-                actionId: action.id,
-                webContents: views.contentsOf(action.session_id),
-                args: action.args,
-              })
+            ? await captureForAction({ actionId: action.id, views, sessionId: action.session_id, args: action.args })
             : action.action === "page"
               ? pageForAction(views, action.session_id, action.args)
               : await executeBrowserAction(driver, action.action, action.args);

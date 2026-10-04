@@ -136,6 +136,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_browser_profile": {"zh": "浏览器池档案", "en": "Browser-pool profile"},
     "wfField_browser_page_operation": {"zh": "做什么", "en": "Action"},
     "wfField_browser_page_by": {"zh": "按什么找", "en": "Find by"},
+    "wfField_browser_screenshot_page_by": {"zh": "截哪一页", "en": "Which page"},
+    "wfField_browser_screenshot_page_value": {"zh": "找哪一页", "en": "Page to find"},
     # ---- 报错 ----
     "wfErr_socialLinkEmpty": {"zh": "没有给链接:填一个主页 / 作品链接、分享口令或编号", "en": "No link given: enter a profile or post link, a share text or an id"},
     "wfErr_socialLinkUnreadable": {

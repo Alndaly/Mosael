@@ -22,10 +22,29 @@ def _config(name: str) -> dict:
     return NODE_TYPES[name].get("config") or {}
 
 
+def _only_after_touching_advanced(config: dict, spec: dict) -> bool:
+    """它只在高级里的开关被改过之后才生效:控制它的字段都在高级里,而且按默认值它不生效。
+    这时它跟着那个开关一起出现在高级里,用户改开关的同时就看见了它 —— 不是「藏起来的必填」。"""
+    gates = spec.get("active_when") or {}
+    if not gates:
+        return False
+    for key, values in gates.items():
+        gate = config.get(key) or {}
+        allowed = values if isinstance(values, list) else [values]
+        if not gate.get("advanced") or gate.get("default") in allowed:
+            return False
+    return True
+
+
 @pytest.mark.parametrize("name", sorted(NODE_TYPES))
 def test_必填字段不能被收进高级(name: str) -> None:
     """必填却藏起来 = 用户点运行才被告知少了东西,而那个框他根本没看见。"""
-    bad = [key for key, spec in _config(name).items() if (spec or {}).get("advanced") and (spec or {}).get("required")]
+    config = _config(name)
+    bad = [
+        key for key, spec in config.items()
+        if (spec or {}).get("advanced") and (spec or {}).get("required")
+        and not _only_after_touching_advanced(config, spec)
+    ]
     assert not bad, f"{name} 把必填项收进了高级:{bad}"
 
 

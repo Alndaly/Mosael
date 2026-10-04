@@ -529,6 +529,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_screenshot_mode": {"zh": "截可见区域、整页长图(超过 15000 像素只截前面一段),还是某个元素", "en": "The visible area, the full page (only the first 15,000 pixels of a longer one), or one element"},
     "wfNode_browser_screenshot_selector": {"zh": "要截的元素的 CSS 选择器(整块截下,哪怕有一部分在屏幕外)", "en": "CSS selector of the element to capture (all of it, even the part outside the screen)"},
     "wfNode_browser_screenshot_name": {"zh": "素材叫什么(留空用页面标题)", "en": "What to call the asset (the page title when left empty)"},
+    "wfNode_browser_screenshot_page_by": {"zh": "截会话里的哪一页:当前页,或按第几个、标题、网址找(那一页不在前台也截得到)", "en": "Which page of the session to capture: the current one, or find it by position, title or URL (it doesn't have to be in front)"},
     "wfNode_browser_screenshot_wait_ms": {"zh": "元素还没出现时最多等多久再报错,默认 5000", "en": "How long to wait for the element to appear before failing; 5000 by default"},
     "wfNode_browser_extract": {"zh": "浏览器·提取", "en": "Browser · extract"},
     "wfNode_browser_extract_desc": {"zh": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。", "en": "Read an element's text or an attribute; can take every match at once. Outputs value for downstream use."},

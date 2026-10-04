@@ -2695,12 +2695,17 @@ def browser_page(
 
 
 @tool(effect="writes")
-def browser_screenshot(session_id: str, mode: str = "visible", selector: str = "", workspace_id: str = "") -> dict[str, Any]:
+def browser_screenshot(
+    session_id: str, mode: str = "visible", selector: str = "", page_by: str = "", page_value: str = "",
+    workspace_id: str = "",
+) -> dict[str, Any]:
     """Screenshot the open session's page into the asset library; returns { value: { asset_id } }.
 
-    mode: visible | full (whole page) | element (needs selector).
+    mode: visible | full (whole page) | element (needs selector). page_by (index from 1 / title / url) +
+    page_value: capture another page of the session instead of the current one, see browser_page.
     """
-    return _browser_act(session_id, "capture", {"mode": mode, "selector": selector}, workspace_id)
+    page = {"page_by": page_by, "page_value": page_value} if page_by else {}
+    return _browser_act(session_id, "capture", {"mode": mode, "selector": selector, **page}, workspace_id)
 
 
 @tool(effect="writes")

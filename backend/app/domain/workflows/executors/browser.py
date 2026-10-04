@@ -354,6 +354,8 @@ def browser_page(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 #: 「截图」节点能截的三种(和 electron/publish/actionCapture.ts 的 SHOT_MODES 同一组)。
 SHOT_MODES = ("visible", "full", "element")
+#: 截会话里的哪一页:按第几个 / 标题含 / 网址含找(同「切换页面」);不在这里的就是当前页。
+PAGE_BYS = ("index", "title", "url")
 
 
 @register("browser_screenshot")
@@ -362,10 +364,13 @@ def browser_screenshot(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     截好的图经执行器通道交给后端,出处带着这次运行、这个节点(随动作参数的 origin 交过去)。"""
     sid = _session_in(db, scope, config)
     mode = str(config.get("mode") or "visible")
+    page_by = str(config.get("page_by") or "current")
     out = _run(sid, "capture", {
         "mode": mode if mode in SHOT_MODES else "visible",
         "selector": str(config.get("selector") or ""),
         "name": str(config.get("name") or ""),
+        #: 截会话里的哪一页;当前页就不交(执行器那边按当前页截)。
+        **({"page_by": page_by, "page_value": str(config.get("page_value") or "")} if page_by in PAGE_BYS else {}),
         **_element_wait(config),
     })
     value = out.get("value") if isinstance(out, dict) else None

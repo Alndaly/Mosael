@@ -2141,6 +2141,16 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_browser_screenshot_selector",
             },
             "name": {"advanced": True, "type": "template", "description": "wfNode_browser_screenshot_name"},
+            #: 截会话里的哪一页(新窗口会进会话的页面列表):不在前台、甚至从没显示过的页面也截得到。
+            "page_by": {
+                "advanced": True, "type": "string", "options": ["current", "index", "title", "url"], "default": "current",
+                "label": "wfField_browser_screenshot_page_by", "description": "wfNode_browser_screenshot_page_by",
+            },
+            "page_value": {
+                "advanced": True, "type": "template", "required": True,
+                "active_when": {"page_by": ["index", "title", "url"]},
+                "label": "wfField_browser_screenshot_page_value", "description": "wfNode_browser_page_value",
+            },
             "wait_ms": {
                 "advanced": True, "type": "number", "active_when": {"mode": "element"},
                 "description": "wfNode_browser_screenshot_wait_ms",

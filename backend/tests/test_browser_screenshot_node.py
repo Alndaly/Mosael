@@ -94,6 +94,34 @@ def test_截图节点把截法连同运行和节点交给执行器_交回素材i
     }
 
 
+def test_截图节点能指定截会话里的哪一页_没指定就是当前页(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (calls.append(args) or {"value": {"asset_id": "a"}}))
+    client = fresh_client()
+    ws = _workspace(client)
+    with SessionLocal() as db:
+        sid = bdom.open_session(db, workspace_id=ws, actor=None).id
+        bx.browser_screenshot(db, _wf(ws), {"session": sid, "mode": "full", "page_by": "title", "page_value": "创作中心"})
+        bx.browser_screenshot(db, _wf(ws), {"session": sid, "mode": "full", "page_by": "current", "page_value": "2"})
+        bx.browser_screenshot(db, _wf(ws), {"session": sid, "mode": "full"})
+    assert calls[0]["page_by"] == "title" and calls[0]["page_value"] == "创作中心"
+    assert "page_by" not in calls[1] and "page_value" not in calls[1]
+    assert "page_by" not in calls[2]
+    spec = NODE_TYPES["browser_screenshot"]["config"]
+    assert spec["page_by"]["options"] == ["current", "index", "title", "url"]
+    assert spec["page_value"]["required"] is True
+    assert spec["page_value"]["active_when"] == {"page_by": ["index", "title", "url"]}
+
+
+def test_智能体截图也能指定哪一页(monkeypatch) -> None:
+    import inspect
+
+    import mcp_server
+
+    params = inspect.signature(mcp_server.browser_screenshot).parameters
+    assert "page_by" in params and "page_value" in params
+
+
 def test_截图节点没写截法就截可见区域(monkeypatch) -> None:
     seen: dict = {}
     monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (seen.update(args=args) or {"value": {}}))

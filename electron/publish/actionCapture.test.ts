@@ -29,12 +29,44 @@ vi.mock("./pageTarget", () => {
 });
 vi.mock("./browserBackend", () => ({ browserBackend: { uploadArtifact: mocks.upload } }));
 vi.mock("./browserActions", () => ({ ELEMENT_WAIT_MS: 5_000 }));
+vi.mock("./accountViews", () => {
+  class PageGoneError extends Error {}
+  return { PageGoneError };
+});
 
 const { captureForAction } = await import("./actionCapture");
 const { ElementCaptureError } = await import("./pageCapture");
 const { PageToolError } = await import("./pageTarget");
 
 const page = { isDestroyed: () => false, getURL: () => "https://example.com/post/1" };
+
+/**
+ * 会话的页面:withPageOnSurface 把那一页(挂没挂在窗口上都一样)交给截图;findPage 按第几个 / 标题 / 网址找。
+ * 记下截的是哪一页。
+ */
+const surface = {
+  shotPage: undefined as string | null | undefined,
+  pages: [
+    { id: "11", title: "首页", url: "https://example.com/" },
+    { id: "12", title: "一篇帖子", url: "https://example.com/post/1" },
+  ],
+  views: {
+    findPage(_session: string, match: { index?: number; title?: string; url?: string }) {
+      const hit = surface.pages.find(
+        (one, i) =>
+          (match.index === undefined || match.index === i + 1) &&
+          (!match.title || one.title.includes(match.title)) &&
+          (!match.url || one.url.includes(match.url)),
+      );
+      return hit?.id ?? null;
+    },
+    pagesOf: () => surface.pages,
+    async withPageOnSurface(_session: string, pageId: string | null, shoot: (wc: unknown) => Promise<unknown>) {
+      surface.shotPage = pageId;
+      return shoot(page);
+    },
+  },
+};
 const SHOT = {
   bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
   width: 2560,
@@ -45,9 +77,10 @@ const SHOT = {
 };
 
 const run = (args: Record<string, unknown>) =>
-  captureForAction({ actionId: "a1", webContents: page as never, args });
+  captureForAction({ actionId: "a1", views: surface.views as never, sessionId: "s1", args });
 
 beforeEach(() => {
+  surface.shotPage = undefined;
   mocks.capture.mockReset();
   mocks.upload.mockReset();
   mocks.upload.mockResolvedValue({ asset_id: "asset-1", name: "一篇帖子", kind: "image" });
@@ -79,6 +112,31 @@ describe("「截图」节点", () => {
       value: { asset_id: "asset-1", name: "一篇帖子", width: 2560, height: 1600, truncated: false },
       lastUrl: "https://example.com/post/1",
     });
+  });
+
+  it("没说截哪一页就截当前页;说了就按第几个 / 标题 / 网址找到那一页去截(不在前台也截)", async () => {
+    mocks.capture.mockResolvedValue(SHOT);
+    await run({ mode: "visible" });
+    expect(surface.shotPage).toBeNull();
+    await run({ mode: "visible", page_by: "index", page_value: "1" });
+    expect(surface.shotPage).toBe("11");
+    await run({ mode: "full", page_by: "title", page_value: "帖子" });
+    expect(surface.shotPage).toBe("12");
+    await run({ mode: "full", page_by: "url", page_value: "example.com/post" });
+    expect(surface.shotPage).toBe("12");
+  });
+
+  it("要截的那一页找不到:说清找的是哪一页、会话开着几页,不交任何东西", async () => {
+    await expect(run({ mode: "visible", page_by: "title", page_value: "不存在" })).rejects.toThrow(/标题含「不存在」.*2 个页面/);
+    await expect(run({ mode: "visible", page_by: "index", page_value: "0" })).rejects.toThrow(/正整数/);
+    expect(mocks.capture).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+
+  it("那一页在截之前没了(会话 / 页面关了):说没截到", async () => {
+    const { PageGoneError } = await import("./accountViews");
+    const gone = { ...surface.views, withPageOnSurface: async () => { throw new PageGoneError("s1", null); } };
+    await expect(captureForAction({ actionId: "a1", views: gone as never, sessionId: "s1", args: {} })).rejects.toThrow(/没截到画面/);
   });
 
   it("不认识的模式按可见区域截", async () => {

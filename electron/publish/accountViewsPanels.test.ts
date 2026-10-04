@@ -65,6 +65,10 @@ const fake = vi.hoisted(() => {
     isWaitingForResponse() {
       return false;
     }
+    /** 挂上之后等页面排好版用:这里总是已经排好了。 */
+    executeJavaScript() {
+      return Promise.resolve(1280);
+    }
     isDestroyed() {
       return this.destroyed;
     }
@@ -584,7 +588,7 @@ describe("several pages in one session (the page list)", () => {
     const opened = openWindow(viewOf("rpa-a"), "https://example.com/next")!;
     // 下一步自动化拿到的是新页面的驱动。
     expect(manager.getDriver("rpa-a")).not.toBe(before);
-    expect(manager.contentsOf("rpa-a")).toBe(opened);
+    expect(manager.pagesOf("rpa-a").find((page) => page.current)?.id).toBe(String(opened.id));
     const card = cards.find((one) => one.id === "rpa-a")!;
     expect([card.page, card.pages]).toEqual([2, 2]);
     // rpa-b 是最上面那张卡片:rpa-a 换了页,它的网页也不能盖到 rpa-b 上面。
@@ -595,7 +599,7 @@ describe("several pages in one session (the page list)", () => {
     expect(manager.findPage("rpa-a", { title: "下一" })).toBe(manager.currentPageId("rpa-a"));
     const first = manager.findPage("rpa-a", { index: 1 })!;
     expect(manager.switchPage("rpa-a", first)).toBe(true);
-    expect(manager.contentsOf("rpa-a")).not.toBe(opened);
+    expect(manager.pagesOf("rpa-a").find((page) => page.current)?.id).not.toBe(String(opened.id));
     expect(manager.findPage("rpa-a", { url: "example.com/next" })).not.toBeNull();
     expect(manager.findPage("rpa-a", { url: "nowhere" })).toBeNull();
   });
@@ -620,5 +624,95 @@ describe("several pages in one session (the page list)", () => {
     expect(viewOf("pool-a").bounds).toEqual({ x: 232, y: HEADER, width: 1440 - 232 - 360, height: 900 - HEADER });
     manager.setPagesInset(5000);
     expect(viewOf("pool-a").bounds.x).toBe(480);
+  });
+});
+
+describe("capturing a page that isn't on the window (the 5th session, a page in the background)", () => {
+  const views = () => (manager as unknown as { views: Map<string, FakeView> }).views;
+  const onWindow = (view: FakeView) => window.children.includes(view);
+  /** 窗口里用户看得见的那一块:内容区 1440×900。 */
+  const visibleToUser = (bounds: Rect) => intersects(bounds, { x: 0, y: 0, width: 1440, height: 900 });
+
+  it("mounts a never-shown session page outside the window at a desktop layout size for the capture, then puts it back", async () => {
+    attach("rpa-a", "rpa-b", "rpa-c", "rpa-d");
+    manager.registerSession("rpa-e", "ephemeral-rpa-e");
+    expect(manager.panelAttach("rpa-e")).toBe(false); // 面板满了:第 5 个没挂上
+    const fifth = views().get("rpa-e")!;
+    expect(onWindow(fifth)).toBe(false);
+    const before = { bounds: { ...fifth.bounds }, zoom: fifth.webContents.getZoomFactor(), children: [...window.children] };
+
+    let during: { onWindow: boolean; bounds: Rect; zoom: number; top: FakeView | undefined } | null = null;
+    const value = await manager.withPageOnSurface("rpa-e", null, async (wc) => {
+      expect(wc).toBe(fifth.webContents);
+      during = { onWindow: onWindow(fifth), bounds: { ...fifth.bounds }, zoom: fifth.webContents.getZoomFactor(), top: window.children.at(-1) };
+      return "shot";
+    });
+    expect(value).toBe("shot");
+    // 截的时候:挂在窗口上(Chromium 才肯排版出帧),但整块在窗口外面 —— 用户看不见、不闪;按面板那样的
+    // 桌面版布局宽度(CSS 视口 = 面板网页区 / 面板缩放)、缩放 1 出原清晰度的图。
+    expect(during!.onWindow).toBe(true);
+    expect(visibleToUser(during!.bounds)).toBe(false);
+    expect(during!.zoom).toBe(1);
+    const panelPage = viewOf("rpa-a").bounds;
+    const panelZoom = viewOf("rpa-a").webContents.getZoomFactor();
+    expect(during!.bounds.width).toBeCloseTo(panelPage.width / panelZoom, 0);
+    expect(during!.bounds.height).toBeCloseTo(panelPage.height / panelZoom, 0);
+    // 截完:原样摘下,大小、缩放、窗口里的子视图都回到截之前。
+    expect(onWindow(fifth)).toBe(false);
+    expect(fifth.bounds).toEqual(before.bounds);
+    expect(fifth.webContents.getZoomFactor()).toBe(before.zoom);
+    expect(window.children).toEqual(before.children);
+  });
+
+  it("mounts a page that sits in the background of the shown session at that session's layout size", async () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setPagesInset(220);
+    const first = viewOf("pool-a");
+    openWindow(first, "https://example.com/next"); // 新页面切到前台,第一页退到后台
+    const firstId = manager.pagesOf("pool-a")[0].id;
+    expect(onWindow(first)).toBe(false);
+    const shown = viewOf("pool-a");
+
+    await manager.withPageOnSurface("pool-a", firstId, async (wc) => {
+      expect(wc).toBe(first.webContents);
+      expect(onWindow(first)).toBe(true);
+      expect(visibleToUser(first.bounds)).toBe(false);
+      expect([first.bounds.width, first.bounds.height]).toEqual([shown.bounds.width, shown.bounds.height]);
+    });
+    expect(onWindow(first)).toBe(false);
+    expect(onWindow(shown)).toBe(true);
+    expect(manager.foreground()?.webContents).toBe(shown.webContents);
+  });
+
+  it("captures a page that's already on the window in place (no remounting)", async () => {
+    attach("rpa-a");
+    const view = viewOf("rpa-a");
+    const before = { ...view.bounds };
+    await manager.withPageOnSurface("rpa-a", null, async () => {
+      expect(view.bounds).toEqual(before);
+    });
+    expect(onWindow(view)).toBe(true);
+    expect(view.bounds).toEqual(before);
+  });
+
+  it("leaves a page on the window if it was switched to while being captured", async () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    const first = viewOf("pool-a");
+    openWindow(first, "https://example.com/next");
+    const firstId = manager.pagesOf("pool-a")[0].id;
+    await manager.withPageOnSurface("pool-a", firstId, async () => {
+      manager.switchVisiblePage(firstId); // 用户正好在这时点了它
+    });
+    expect(onWindow(first)).toBe(true);
+    expect(visibleToUser(first.bounds)).toBe(true);
+    expect(first.webContents.getZoomFactor()).toBe(1);
+  });
+
+  it("says so when the page is gone", async () => {
+    attach("rpa-a");
+    await expect(manager.withPageOnSurface("rpa-a", "999999", async () => "x")).rejects.toThrow(/page/);
+    await expect(manager.withPageOnSurface("nope", null, async () => "x")).rejects.toThrow(/page/);
   });
 });

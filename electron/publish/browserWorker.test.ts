@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => {
     //: 每一步开一个下载收集器(见 actionDownloads);默认这一步没有下载
     downloads: { collect: vi.fn() },
     awaitingResponse: vi.fn(() => false),
-    contentsOf: vi.fn((sessionId: string) => ({ id: `page-${sessionId}` })),
   };
   const backend = {
     claim: vi.fn(),
@@ -313,7 +312,7 @@ it("「截图」动作截这一页(交给截图那一份实现),结果里带着�
   await vi.advanceTimersByTimeAsync(3_000);
 
   expect(mocks.execute).not.toHaveBeenCalled();
-  expect(mocks.capture).toHaveBeenCalledWith({ actionId: "a1", webContents: { id: "page-s1" }, args: { mode: "element", selector: "h1" } });
+  expect(mocks.capture).toHaveBeenCalledWith({ actionId: "a1", views: mocks.views, sessionId: "s1", args: { mode: "element", selector: "h1" } });
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
     status: "done",
     result: { value: { asset_id: "shot-1", width: 10, height: 10 } },

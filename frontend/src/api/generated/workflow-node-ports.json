@@ -309,6 +309,12 @@
       "name": {
         "type": "template"
       },
+      "page_by": {
+        "type": "string"
+      },
+      "page_value": {
+        "type": "template"
+      },
       "wait_ms": {
         "type": "number"
       }

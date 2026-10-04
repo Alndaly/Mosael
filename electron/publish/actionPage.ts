@@ -22,9 +22,13 @@ export interface PageResult {
 
 const brief = (v: string, max = 80): string => (v.length <= max ? v : `${v.slice(0, max - 1)}…`);
 
-function matchOf(args: Record<string, unknown>): { match: PageMatch; what: string } {
-  const by = (PAGE_MATCHES as readonly string[]).includes(String(args.by)) ? String(args.by) : "index";
-  const value = String(args.value ?? "").trim();
+/**
+ * 「找哪一页」:按第几个(从 1 起)/ 标题含 / 网址含。「截图」节点截某一页时也用这一套(同样的报错)。
+ * 交回匹配条件和给人看的那半句(「第 2 个页面」「标题含「…」的页面」)。
+ */
+export function pageMatch(byArg: unknown, valueArg: unknown): { match: PageMatch; what: string } {
+  const by = (PAGE_MATCHES as readonly string[]).includes(String(byArg)) ? String(byArg) : "index";
+  const value = String(valueArg ?? "").trim();
   if (!value) throw new Error(t("browserErr_pageNeedsTarget"));
   if (by === "index") {
     const index = Number(value);
@@ -39,7 +43,7 @@ function matchOf(args: Record<string, unknown>): { match: PageMatch; what: strin
 export function pageForAction(views: AccountViewManager, sessionId: string, args: Record<string, unknown>): ActionOutcome {
   const operation = (PAGE_OPERATIONS as readonly string[]).includes(String(args.operation)) ? String(args.operation) : "switch";
   if (operation === "switch") {
-    const { match, what } = matchOf(args);
+    const { match, what } = pageMatch(args.by, args.value);
     const id = views.findPage(sessionId, match);
     if (!id) throw new Error(t("browserErr_pageNotFound", { what, count: views.pagesOf(sessionId).length }));
     views.switchPage(sessionId, id);

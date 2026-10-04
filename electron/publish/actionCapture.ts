@@ -4,6 +4,8 @@
 // 把截不到的原因说成人话、截好的图带着出处交给后端(执行器通道,和动作里的下载同一个入口,见 actionDownloads)。
 import type { WebContents } from "electron";
 
+import { PageGoneError, type AccountViewManager } from "./accountViews";
+import { pageMatch } from "./actionPage";
 import { ELEMENT_WAIT_MS, type ActionOutcome } from "./browserActions";
 import { browserBackend } from "./browserBackend";
 import { ElementCaptureError, captureContents, type PageCapture } from "./pageCapture";
@@ -63,15 +65,37 @@ async function shoot(wc: WebContents, mode: ShotMode, selector: string, waitMs: 
   }
 }
 
+/**
+ * 截会话里的一页存进素材库。`page_by` / `page_value` 指定截哪一页(第几个 / 标题含 / 网址含,同「切换页面」),
+ * 不给就是当前页。**那一页挂没挂在窗口上都截得到**:面板满了没挂上的会话、切到后台的页面,截的时候临时挂到
+ * 窗口外面(用户看不见),截完复原(见 AccountViewManager.withPageOnSurface)。
+ */
 export async function captureForAction(opts: {
   actionId: string;
-  webContents: WebContents | null;
+  views: AccountViewManager;
+  sessionId: string;
   args: Record<string, unknown>;
 }): Promise<ActionOutcome> {
-  const wc = opts.webContents;
-  if (!wc || wc.isDestroyed()) throw new Error(t("browserErr_shotFailed"));
   const { mode, selector, waitMs, name } = shotArgs(opts.args);
-  const shot = await shoot(wc, mode, selector, waitMs);
+  let pageId: string | null = null;
+  if (opts.args.page_by && opts.args.page_by !== "current") {
+    const { match, what } = pageMatch(opts.args.page_by, opts.args.page_value);
+    pageId = opts.views.findPage(opts.sessionId, match);
+    if (!pageId) {
+      throw new Error(t("browserErr_pageNotFound", { what, count: opts.views.pagesOf(opts.sessionId).length }));
+    }
+  }
+  let url = "";
+  let shot: PageCapture;
+  try {
+    shot = await opts.views.withPageOnSurface(opts.sessionId, pageId, (wc) => {
+      url = wc.getURL();
+      return shoot(wc, mode, selector, waitMs);
+    });
+  } catch (error) {
+    if (error instanceof PageGoneError) throw new Error(t("browserErr_shotFailed"));
+    throw error;
+  }
   const asset = await browserBackend.uploadArtifact(
     opts.actionId,
     "screenshot",
@@ -92,5 +116,5 @@ export async function captureForAction(opts: {
     height: shot.height,
     truncated: shot.truncated,
   };
-  return { value, lastUrl: wc.getURL() };
+  return { value, lastUrl: url };
 }

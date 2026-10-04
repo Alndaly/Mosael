@@ -35,6 +35,33 @@ const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
  *  由 contracts/shared-constants.json 钉住。 */
 export const PARTITION_PREFIX = "mosael";
 
+/** 截图时临时挂到窗口外面的页面离窗口左边多远(DIP)。 */
+const OFF_WINDOW_GAP = 64;
+
+/** 截图要的那一页已经没了(会话关了、页面关了)。 */
+export class PageGoneError extends Error {
+  constructor(viewId: string, pageId: string | null) {
+    super(`page gone: ${viewId}${pageId ? ` / ${pageId}` : ""}`);
+    this.name = "PageGoneError";
+  }
+}
+
+/**
+ * 刚挂上的页面等它按新视口排好版、画完一帧(最多等一秒;等不到就照样往下截,不卡住这一步)。
+ * 从没挂过的页面挂上之前视口是 0×0。
+ */
+async function settleLayout(wc: Electron.WebContents): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const width = Number(await wc.executeJavaScript("innerWidth").catch(() => 0));
+    if (width > 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
+  await wc
+    .executeJavaScript("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))")
+    .catch(() => undefined);
+}
+
 /** 连按两次 Esc 判定为「退出内嵌浏览器」的时间窗(见 ensure() 里的 before-input-event)。 */
 const DOUBLE_ESCAPE_MS = 700;
 
@@ -265,10 +292,70 @@ export class AccountViewManager {
     return this.alive(view) && view.webContents.isWaitingForResponse();
   }
 
-  /** 这个视图的页面(「截图」节点截它,见 actionCapture);视图没了是 null。 */
-  contentsOf(viewId: string): Electron.WebContents | null {
-    const view = this.views.get(viewId);
-    return this.alive(view) ? view.webContents : null;
+  /**
+   * 拿会话里的一页去截图(`pageId` 为 null 是当前页)—— **不管它挂没挂在窗口上**。
+   *
+   * 没挂在窗口上的页面 Chromium 不给它排版出帧:从没挂过的(面板满了没挂上的第 5 个会话、后台打开的页面)视口
+   * 是 0×0、capturePage 给空图,CDP 截图一直等不到;挂过又摘下来的(切到后台的页面)CDP 也等不到。实测见
+   * actionCapture 的说明。所以截图的时候临时把它挂上窗口,但整块放在窗口**外面**(负坐标,窗口再怎么拉大也露
+   * 不出来)、先定位置再挂 —— 用户看不见、不闪;按它本来会有的布局宽度、缩放 1 排版(这个会话当前页挂着就
+   * 照它的 CSS 视口,否则照面板的桌面版宽度),截完摘下、大小和缩放还原。截的途中用户正好切到了这一页,就让它
+   * 留在原处。已经挂在窗口上的页面原地截,不动它。
+   */
+  async withPageOnSurface<T>(viewId: string, pageId: string | null, shoot: (wc: Electron.WebContents) => Promise<T>): Promise<T> {
+    const list = this.tabs.get(viewId);
+    const tab = pageId === null ? list?.current()?.item : list?.get(pageId);
+    if (!tab || !this.alive(tab.view)) throw new PageGoneError(viewId, pageId);
+    const { view } = tab;
+    if (!this.window || this.window.isDestroyed() || this.onWindow(view)) return shoot(view.webContents);
+    const surface = this.layoutSurface(viewId);
+    const before = { bounds: view.getBounds(), zoom: view.webContents.getZoomFactor() };
+    view.setBounds({ x: -(surface.width + OFF_WINDOW_GAP), y: 0, width: surface.width, height: surface.height });
+    view.webContents.setZoomFactor(1);
+    this.window.contentView.addChildView(view);
+    try {
+      await settleLayout(view.webContents);
+      return await shoot(view.webContents);
+    } finally {
+      // 截的途中被切成了前台 / 面板上的当前页:那是用户要看的,别摘。
+      const nowShown = this.views.get(viewId) === view && (this.visibleId === viewId || this.panels.includes(viewId));
+      if (!nowShown && this.alive(view)) {
+        this.detachChild(view);
+        view.setBounds(before.bounds);
+        view.webContents.setZoomFactor(before.zoom);
+      }
+    }
+  }
+
+  /** 这个视图此刻挂在窗口上没有。 */
+  private onWindow(view: WebContentsView): boolean {
+    return Boolean(this.window && !this.window.isDestroyed() && this.window.contentView.children.includes(view));
+  }
+
+  /**
+   * 会话的页面按多大的视口排版(DIP,缩放 1):当前页挂着就照它的 CSS 视口(视图大小 / 缩放),否则照面板 ——
+   * 面板的网页区除以面板缩放,就是平台页面那套桌面版布局宽度。
+   */
+  private layoutSurface(viewId: string): { width: number; height: number } {
+    const current = this.views.get(viewId);
+    if (this.alive(current) && this.onWindow(current)) {
+      const bounds = current.getBounds();
+      const zoom = current.webContents.getZoomFactor() || 1;
+      return { width: Math.round(bounds.width / zoom), height: Math.round(bounds.height / zoom) };
+    }
+    const area = this.panelArea() ?? { width: 1440, height: 900 };
+    const page = panelStack(this.panelLayout, area, 1).page;
+    const zoom = this.panelZoom();
+    return { width: Math.round(page.width / zoom), height: Math.round(page.height / zoom) };
+  }
+
+  private detachChild(view: WebContentsView): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    try {
+      this.window.contentView.removeChildView(view);
+    } catch {
+      // 已经摘掉了
+    }
   }
 
   /** 已建好的驱动(不新建)。 */
