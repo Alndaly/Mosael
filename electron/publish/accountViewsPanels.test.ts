@@ -3,6 +3,7 @@
  * 窗口里的子视图次序、下发给渲染层的卡片矩形就是要验的东西。几何改动走的是和 main.cjs 同一条路:
  * 渲染层的载荷先过 ipc-contract 的 parsePanelLayout,再交给 setPanelLayout。
  */
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +18,9 @@ const fake = vi.hoisted(() => {
       this.handlers.set(event, [...(this.handlers.get(event) ?? []), handler]);
       return this;
     }
+    once(event: string, handler: Handler) {
+      return this.on(event, handler);
+    }
     emit(event: string, ...args: unknown[]) {
       for (const handler of this.handlers.get(event) ?? []) handler(...args);
     }
@@ -27,8 +31,13 @@ const fake = vi.hoisted(() => {
     zoom = 1;
     muted = false;
     destroyed = false;
-    /** 媒体记录器按会话挂 webRequest 观察钩子(见 mediaRecorder);这里只记下挂了几次。 */
-    session = { webRequest: { onResponseStarted: () => undefined } };
+    /**
+     * 媒体记录器按会话挂 webRequest 观察钩子(见 mediaRecorder);下载路由在会话上接 will-download
+     * (见 downloads.ts)。这里只记下挂了什么。
+     */
+    session = new (class extends Emitter {
+      webRequest = { onResponseStarted: () => undefined };
+    })();
     navigationHistory = { canGoBack: () => false, canGoForward: () => false };
     debugger = { isAttached: () => false };
     mainFrame = { routingId: 1, framesInSubtree: [], executeJavaScript: async () => undefined };
@@ -389,5 +398,52 @@ describe("the foreground view and the toolbar's page tools", () => {
     reporting.show("pool-a");
     expect(states.at(-1)).toMatchObject({ visible: true, accountId: "pool-a", partition: "persist:pool-a", title: "" });
     reporting.destroyAll();
+  });
+});
+
+describe("downloads in the embedded pages", () => {
+  /** 一份刚开始的下载(和 Electron 的 DownloadItem 同样的几个方法)。 */
+  function download(name: string) {
+    return Object.assign(new EventEmitter(), {
+      savePath: "",
+      getFilename: () => name,
+      getTotalBytes: () => 3,
+      getReceivedBytes: () => 3,
+      getURL: () => `https://example.com/${name}`,
+      setSavePath(target: string) {
+        this.savePath = target;
+      },
+      cancel() {},
+    });
+  }
+
+  it("takes over every view's downloads (no save dialog) and counts a popup's download as its opener's", async () => {
+    const notices: Array<{ state: string; name: string }> = [];
+    const own = new AccountViewManager(() => undefined, () => undefined, (notice) => notices.push(notice));
+    own.attachWindow(window as never, () => null);
+    own.registerSession("rpa-a", "ephemeral-rpa-a");
+    const view = (own as unknown as { views: Map<string, FakeView> }).views.get("rpa-a")!;
+    const session = view.webContents.session;
+
+    // 执行器在这个会话上跑一步:这期间页面里开始的下载归这一步。
+    const step = own.downloads.collect("rpa-a");
+    const item = download("report.pdf");
+    session.emit("will-download", {}, item, view.webContents);
+    expect(item.savePath.startsWith(path.join(fake.userData, "web-downloads"))).toBe(true);
+
+    // 页面用 window.open 开了个弹窗,弹窗里点的下载也算在这个会话头上。
+    const popup = new fake.WebContentsView();
+    view.webContents.emit("did-create-window", popup);
+    const fromPopup = download("cover.png");
+    session.emit("will-download", {}, fromPopup, popup.webContents);
+
+    fs.writeFileSync(item.savePath, "pdf");
+    item.emit("done", {}, "completed");
+    fs.writeFileSync(fromPopup.savePath, "png");
+    fromPopup.emit("done", {}, "completed");
+    const collected = await step.settle({ graceMs: 0 });
+    expect(collected.map((one) => one.ok && one.file.name)).toEqual(["report.pdf", "cover.png"]);
+    expect(notices).toEqual([]); // 自动化的下载不打扰人
+    own.destroyAll();
   });
 });

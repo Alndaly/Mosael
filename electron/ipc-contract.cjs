@@ -44,6 +44,7 @@ const IPC = Object.freeze({
     pageToolsFetchImages: "pageTools:fetchImages",
     pageToolsRead: "pageTools:read",
     pageToolsInset: "pageTools:inset",
+    pageToolsSaveDownload: "pageTools:saveDownload",
   }),
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
@@ -61,6 +62,8 @@ const IPC = Object.freeze({
     publishView: "publish:view",
     publishPanels: "publish:panels",
     browserFrame: "browser:frame",
+    // 用户在内嵌浏览器里点的下载:进度、下好了、没下成(见 publish/downloads.ts)。
+    pageToolsDownload: "pageTools:download",
   }),
 });
 
@@ -264,6 +267,30 @@ function parseToolsInset(value) {
   return { right };
 }
 
+/**
+ * 把一份下好的下载存进素材库:存到哪个服务器、哪个工作区、以谁的身份 —— 这些只有渲染层知道。
+ * 令牌只用在这一次请求的头里(和 parseAuthToken 同一个长度上限)。
+ */
+function parseSaveDownload(value) {
+  const channel = IPC.invoke.pageToolsSaveDownload;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id", "server", "token", "workspaceId", "projectId"], channel);
+  const id = requiredString(payload, "id", channel);
+  if (!/^[0-9a-f-]{36}$/.test(id)) throw new TypeError(`${channel}: id is invalid`);
+  const server = requiredString(payload, "server", channel);
+  if (server.length > 2000 || !/^https?:\/\/[^\s/]+/i.test(server)) {
+    throw new TypeError(`${channel}: server must be an http(s) address`);
+  }
+  const { token } = parseAuthToken(payload, channel);
+  const workspaceId = requiredString(payload, "workspaceId", channel);
+  if (workspaceId.length > 64) throw new TypeError(`${channel}: workspaceId is too long`);
+  const projectId = payload.projectId ?? null;
+  if (projectId !== null && (typeof projectId !== "string" || !projectId || projectId.length > 64)) {
+    throw new TypeError(`${channel}: projectId must be null or an id`);
+  }
+  return { id, server, token, workspaceId, projectId };
+}
+
 function parseTitleOverlay(value) {
   const channel = IPC.send.titleOverlay;
   const payload = record(value, channel);
@@ -326,6 +353,7 @@ module.exports = {
   parsePublishTarget,
   parseReadMode,
   parseRegionSelection,
+  parseSaveDownload,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,

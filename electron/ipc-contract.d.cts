@@ -32,6 +32,7 @@ export const IPC: {
     pageToolsFetchImages: "pageTools:fetchImages";
     pageToolsRead: "pageTools:read";
     pageToolsInset: "pageTools:inset";
+    pageToolsSaveDownload: "pageTools:saveDownload";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
@@ -52,6 +53,7 @@ export const IPC: {
     publishView: "publish:view";
     publishPanels: "publish:panels";
     browserFrame: "browser:frame";
+    pageToolsDownload: "pageTools:download";
   }>;
 };
 
@@ -81,3 +83,10 @@ export function parseRegionSelection(value: unknown): {
 export function parseImageUrls(value: unknown): { urls: string[] };
 export function parseReadMode(value: unknown): { mode: "article" | "selection" };
 export function parseToolsInset(value: unknown): { right: number };
+export function parseSaveDownload(value: unknown): {
+  id: string;
+  server: string;
+  token: string;
+  workspaceId: string;
+  projectId: string | null;
+};

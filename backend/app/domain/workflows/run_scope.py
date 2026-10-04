@@ -49,3 +49,23 @@ def shared_halt(halt: threading.Event) -> Iterator[None]:
 def halted() -> bool:
     """当前这一轮(或它外面任何一层)有没有立起停的信号。"""
     return any(halt.is_set() for halt in _HALTS.get())
+
+
+#: 正在跑的是哪个节点。浏览器自动化把它带进动作参数(origin),执行器交来的下载 / 截图据此记出处
+#: 「哪次运行、哪个节点」—— 执行器自己不认识工作流。
+_NODE: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_workflow_node", default="")
+
+
+@contextmanager
+def node_scope(node_id: str) -> Iterator[None]:
+    """引擎在跑一个节点时压它的 id。"""
+    token = _NODE.set(node_id)
+    try:
+        yield
+    finally:
+        _NODE.reset(token)
+
+
+def current_node() -> str:
+    """当前在跑的节点 id;不在节点里是空串。"""
+    return _NODE.get()

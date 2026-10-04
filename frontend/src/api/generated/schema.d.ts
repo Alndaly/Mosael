@@ -715,6 +715,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/worker/actions/{action_id}/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Artifact
+         * @description 执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。
+         *
+         *     令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,
+         *     以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。
+         */
+        post: operations["upload_artifact_api_browser_worker_actions__action_id__artifact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -1019,6 +1042,28 @@ export interface paths {
          *     只收图片、有大小上限、文件名由服务端定 —— 闸都在 domain/assets/web_capture。
          */
         post: operations["import_web_capture_api_assets_capture_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/web-download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Web Download
+         * @description 用户在内嵌浏览器里点下载的文件入库(不弹系统保存框,下完直接进素材库),带着出处。
+         *
+         *     大小上限、只收素材库认得的类型、文件名只取名字本身 —— 闸都在 domain/assets/web_download。
+         */
+        post: operations["import_web_download_api_assets_web_download_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8627,6 +8672,31 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_web_download_api_assets_web_download_post */
+        Body_import_web_download_api_assets_web_download_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Source Url
+             * @default
+             */
+            source_url: string;
+            /** Page Url */
+            page_url: string;
+            /**
+             * Page Title
+             * @default
+             */
+            page_title: string;
+            /** Captured At */
+            captured_at: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** File */
+            file: string;
+        };
         /** Body_stage_restore_api_settings_data_restore_stage_post */
         Body_stage_restore_api_settings_data_restore_stage_post: {
             /** File */
@@ -8636,6 +8706,31 @@ export interface components {
         Body_upload_api_scene_models_post: {
             /** Workspace Id */
             workspace_id: string;
+            /** File */
+            file: string;
+        };
+        /** Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post */
+        Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post: {
+            /** Lease Token */
+            lease_token: string;
+            /** Kind */
+            kind: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Source Url
+             * @default
+             */
+            source_url: string;
+            /** Page Url */
+            page_url: string;
+            /**
+             * Page Title
+             * @default
+             */
+            page_title: string;
+            /** Captured At */
+            captured_at: string;
             /** File */
             file: string;
         };
@@ -16204,6 +16299,43 @@ export interface operations {
             };
         };
     };
+    upload_artifact_api_browser_worker_actions__action_id__artifact_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_projects_api_projects_get: {
         parameters: {
             query: {
@@ -16890,6 +17022,39 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_web_capture_api_assets_capture_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_web_download_api_assets_web_download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_web_download_api_assets_web_download_post"];
             };
         };
         responses: {

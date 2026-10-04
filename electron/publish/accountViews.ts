@@ -2,6 +2,7 @@ import { app, screen, session, WebContentsView, type BaseWindow } from "electron
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
+import { DownloadRouter, type DownloadNotice } from "./downloads";
 import { MediaRecorder } from "./mediaRecorder";
 import { PageDriver } from "./pageDriver";
 import { panelMediaScript } from "./panelAudio";
@@ -127,11 +128,36 @@ export class AccountViewManager {
   private foregroundHidden = false;
   /** 前台视图收到过的媒体响应(「下载页面里的视频」要用,见 mediaRecorder)。 */
   readonly media = new MediaRecorder();
+  /** 弹窗(window.open 开出来的子窗口)→ 开它的那个视图。弹窗里点的下载算在那个视图头上。 */
+  private childOwners = new Map<number, string>();
+  private downloadRouter: DownloadRouter | null = null;
 
   constructor(
     private readonly onViewChanged: (state: ViewState) => void = noop,
     private readonly onPanelsChanged: (cards: PanelCard[]) => void = () => undefined,
+    private readonly onDownload: (notice: DownloadNotice) => void = () => undefined,
   ) {}
+
+  /**
+   * 视图里的下载不弹保存框、直接进素材库(见 downloads.ts)。第一次建视图时才建:临时目录在 userData 下,
+   * 建的时候清一遍上次没交出去的。
+   */
+  get downloads(): DownloadRouter {
+    this.downloadRouter ??= new DownloadRouter(
+      (wc) => this.viewIdOf(wc),
+      (notice) => this.onDownload(notice),
+      path.join(app.getPath("userData"), "web-downloads"),
+    );
+    return this.downloadRouter;
+  }
+
+  /** 这个页面是哪个视图的(弹窗算开它的那个);不是我们的视图返回 null。 */
+  private viewIdOf(wc: Electron.WebContents): string | null {
+    for (const [id, view] of this.views) {
+      if (this.alive(view) && view.webContents.id === wc.id) return id;
+    }
+    return this.childOwners.get(wc.id) ?? null;
+  }
 
   attachWindow(window: BaseWindow, nameResolver: (accountId: string) => string | null): void {
     this.window = window;
@@ -203,6 +229,15 @@ export class AccountViewManager {
   registerSession(viewId: string, partition: string): PageDriver {
     this.partitions.set(viewId, partition);
     return this.ensure(viewId).driver;
+  }
+
+  /**
+   * 这个视图的页面是不是还在等主文档的响应 —— 点了一个链接、还不知道它是新页面还是一个下载。
+   * 自动化收下载时据此多等一会儿(见 actionDownloads)。
+   */
+  awaitingResponse(viewId: string): boolean {
+    const view = this.views.get(viewId);
+    return this.alive(view) && view.webContents.isWaitingForResponse();
   }
 
   /** 已建好的驱动(不新建)。 */
@@ -727,7 +762,12 @@ export class AccountViewManager {
       // 弹窗也要抹掉 UA 里的 Electron 字样 —— 授权页同样会读 UA 做风控。
       view.webContents.on("did-create-window", (child) => {
         child.webContents.setUserAgent(platformUserAgent(child.webContents.getUserAgent()));
+        const childId = child.webContents.id;
+        this.childOwners.set(childId, accountId);
+        child.webContents.once("destroyed", () => this.childOwners.delete(childId));
       });
+      // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,分区里的弹窗也走它)。
+      this.downloads.watch(view.webContents.session);
       // 视图在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 ——
       // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。
       const contentsId = view.webContents.id;
@@ -889,8 +929,9 @@ let shared: AccountViewManager | null = null;
 export function createSharedViews(
   onViewChanged?: (state: ViewState) => void,
   onPanelsChanged?: (cards: PanelCard[]) => void,
+  onDownload?: (notice: DownloadNotice) => void,
 ): AccountViewManager {
-  shared = new AccountViewManager(onViewChanged, onPanelsChanged);
+  shared = new AccountViewManager(onViewChanged, onPanelsChanged, onDownload);
   return shared;
 }
 

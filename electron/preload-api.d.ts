@@ -158,6 +158,25 @@ export interface MosaelPageToolsBridge {
   readPage(mode: "article" | "selection"): Promise<{ page: PageToolsPage; html: string; selection: string }>;
   /** 侧栏开合:网页右侧让出这么宽(像素)。 */
   setInset(right: number): Promise<void>;
+  /** 内嵌浏览器里点的下载:进度、下好了(等着存)、没下成。返回取消订阅。 */
+  onDownload(callback: (notice: PageDownloadNotice) => void): () => void;
+  /** 把一份下好的下载存进素材库(用渲染层自己的服务器与会话)。失败时抛出一句已翻好的话。 */
+  saveDownload(request: {
+    id: string;
+    server: string;
+    token: string;
+    workspaceId: string;
+    projectId: string | null;
+  }): Promise<{ id: string; name: string; kind: string }>;
+}
+
+export interface PageDownloadNotice {
+  id: string;
+  name: string;
+  state: "progress" | "ready" | "failed";
+  receivedBytes: number;
+  totalBytes: number;
+  error?: string;
 }
 
 export interface MosaelDesktopBridge {

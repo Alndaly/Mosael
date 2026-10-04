@@ -149,5 +149,8 @@ const pageToolsBridge = {
   fetchImages: (urls) => ipcRenderer.invoke(IPC.invoke.pageToolsFetchImages, { urls }),
   readPage: (mode) => ipcRenderer.invoke(IPC.invoke.pageToolsRead, { mode }),
   setInset: (right) => ipcRenderer.invoke(IPC.invoke.pageToolsInset, { right }),
+  // 内嵌浏览器里点的下载不弹保存框:主进程报进度 / 下好了,渲染层带着自己的会话来存进素材库。
+  onDownload: (callback) => onEvent(IPC.event.pageToolsDownload, callback),
+  saveDownload: (request) => ipcRenderer.invoke(IPC.invoke.pageToolsSaveDownload, request),
 };
 contextBridge.exposeInMainWorld("mosaelPageTools", pageToolsBridge);

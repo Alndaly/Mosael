@@ -136,6 +136,23 @@
           "symbol": "BOARD_TEXT_MAX"
         }
       ]
+    },
+    {
+      "name": "web_download_max_bytes",
+      "value": 2147483648,
+      "why": "内嵌浏览器里下载进素材库的单个文件上限(2 GiB)。Electron 下载之前按它先拦(超了当场停),后端入库时按它再收一次。Electron 的大了,文件整个下完才被后端拒,用户白等一场;后端的大了,本来收得下的文件在 Electron 那边就被停掉,说的上限和真实的对不上。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/assets/web_download.py",
+          "symbol": "MAX_DOWNLOAD_BYTES"
+        },
+        {
+          "runtime": "electron",
+          "location": "electron/publish/downloadRules.ts",
+          "symbol": "MAX_DOWNLOAD_BYTES"
+        }
+      ]
     }
   ],
   "budgets": [

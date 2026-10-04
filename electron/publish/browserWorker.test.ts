@@ -4,7 +4,7 @@
  * 真跑 browserWorker 的循环,只把它够不着的外部换掉:后端(browserBackend)、视图宿主(accountViews)、
  * 动作本身(executeBrowserAction —— 用一个能控制何时结束的假动作,调度才看得见)。
  */
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => {
     panelDetach: vi.fn(),
     touchPanel: vi.fn(),
     destroy: vi.fn(),
+    //: 每一步开一个下载收集器(见 actionDownloads);默认这一步没有下载
+    downloads: { collect: vi.fn() },
+    awaitingResponse: vi.fn(() => false),
   };
   const backend = {
     claim: vi.fn(),
@@ -35,6 +38,7 @@ const mocks = vi.hoisted(() => {
     abandoned: vi.fn(async (): Promise<string[]> => []),
     partitionMoves: vi.fn(async () => [] as unknown[]),
     settlePartitionMove: vi.fn(async () => ({})),
+    uploadArtifact: vi.fn(),
   };
   const pending = new Map<string, () => void>();
   //: 和真的 PageDriver 一样:中止开关一拨,手上的动作就抛出来
@@ -56,6 +60,7 @@ vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
 
 import { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
+import { DownloadCollector, type CollectedDownload } from "./downloads";
 
 const action = (id: string, session: string, tag: string) => ({
   id, session_id: session, partition: `ephemeral-${session}`, kind: "ephemeral", action: "wait", args: { tag },
@@ -72,6 +77,7 @@ beforeEach(() => {
   mocks.backend.heartbeat.mockResolvedValue([]);
   mocks.backend.abandoned.mockResolvedValue([]);
   mocks.backend.partitionMoves.mockResolvedValue([]);
+  mocks.views.downloads.collect.mockImplementation(() => new DownloadCollector(() => undefined));
 });
 
 afterEach(() => {
@@ -196,4 +202,90 @@ it("搬家因为分区正被用着推迟了:搬成之前不在新分区上开视
   expect(mocks.backend.settlePartitionMove).not.toHaveBeenCalled();
   expect(mocks.views.registerSession).not.toHaveBeenCalled();
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", expect.objectContaining({ status: "failed" }));
+});
+
+/** 这一步做的时候,浏览器开始了这些下载(每一份都已经有了结局)。 */
+function stepDownloads(...outcomes: CollectedDownload[]) {
+  mocks.views.downloads.collect.mockImplementationOnce(() => {
+    const collector = new DownloadCollector(() => undefined);
+    for (const outcome of outcomes) collector.add(Promise.resolve(outcome), () => undefined);
+    return collector;
+  });
+}
+
+function downloaded(name: string, content = "pdf") {
+  const dir = mkdtempSync(join(mocks.paths.userData, "dl-"));
+  const path = join(dir, name);
+  writeFileSync(path, content);
+  return {
+    ok: true as const,
+    file: {
+      id: "d1", path, name, bytes: content.length, sourceUrl: `https://example.com/${name}`,
+      pageUrl: "https://example.com/files", pageTitle: "下载页", startedAt: "2026-10-04T05:30:00.000Z",
+    },
+  };
+}
+
+it("点开了一个下载:不弹保存框,文件交给后端进素材库,素材 id 放进这一步的结果,临时文件删掉", async () => {
+  const file = downloaded("report.pdf");
+  stepDownloads(file);
+  mocks.execute.mockImplementationOnce(async () => ({ lastUrl: "https://example.com/files" }));
+  mocks.backend.uploadArtifact.mockResolvedValueOnce({ asset_id: "asset-1", name: "report.pdf", kind: "document" });
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "click" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.backend.uploadArtifact).toHaveBeenCalledWith("a1", "download", file.file);
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "done",
+    result: { downloads: [{ asset_id: "asset-1", name: "report.pdf", bytes: 3 }] },
+    last_url: "https://example.com/files",
+  });
+  expect(existsSync(file.file.path)).toBe(false);
+});
+
+it("点开的下载素材库不收(类型不对 / 超过上限):这一步失败,说清为什么", async () => {
+  stepDownloads({ ok: false, name: "setup.exe", error: "素材库不收这种文件:「setup.exe」" });
+  mocks.execute.mockImplementationOnce(async () => ({ lastUrl: "https://example.com/files" }));
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "click" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.backend.uploadArtifact).not.toHaveBeenCalled();
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "failed",
+    error: expect.stringContaining("setup.exe"),
+  });
+});
+
+it("后端拒收(入库那道闸):这一步失败,带着后端那句话", async () => {
+  const file = downloaded("clip.mp4");
+  stepDownloads(file);
+  mocks.execute.mockImplementationOnce(async () => ({ lastUrl: "https://example.com/files" }));
+  const { UploadRefused } = await import("./downloadUpload");
+  mocks.backend.uploadArtifact.mockRejectedValueOnce(new UploadRefused(413, "下载的文件太大了:最多 2.0 GB。"));
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "click" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "failed",
+    error: expect.stringMatching(/clip\.mp4.*最多 2\.0 GB/),
+  });
+  expect(existsSync(file.file.path)).toBe(false);
+});
+
+it("动作自己失败了:这一步开始的下载一并丢掉,不进素材库", async () => {
+  const file = downloaded("report.pdf");
+  stepDownloads(file);
+  mocks.execute.mockImplementationOnce(async () => {
+    throw new Error("元素未找到");
+  });
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "click" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.backend.uploadArtifact).not.toHaveBeenCalled();
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", { status: "failed", error: "元素未找到" });
+  expect(existsSync(file.file.path)).toBe(false);
 });

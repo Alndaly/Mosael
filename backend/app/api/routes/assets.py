@@ -83,6 +83,35 @@ def import_web_capture(
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
+@router.post("/assets/web-download", response_model=AssetOut)
+def import_web_download(
+    db: Tx,
+    user: CurrentUser,
+    workspace_id: str = Form(...),
+    filename: str = Form(..., max_length=400),
+    #: 页面脚本拼出来的下载(blob:、data:)没有能记的地址,就空着。
+    source_url: str = Form("", max_length=2000),
+    page_url: str = Form(..., max_length=2000),
+    page_title: str = Form("", max_length=1000),
+    captured_at: str = Form(..., max_length=64),
+    project_id: str | None = Form(None),
+    file: UploadFile = File(...),
+) -> Asset:
+    """用户在内嵌浏览器里点下载的文件入库(不弹系统保存框,下完直接进素材库),带着出处。
+
+    大小上限、只收素材库认得的类型、文件名只取名字本身 —— 闸都在 domain/assets/web_download。
+    """
+    from app.domain.assets.web_capture import WebCaptureError
+
+    try:
+        return use_cases.import_web_download(
+            db, user, workspace_id, project_id=project_id, upload=file, filename=filename, source_url=source_url,
+            page_url=page_url, page_title=page_title, captured_at=captured_at,
+        )
+    except WebCaptureError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
 @router.post("/assets/probe-url", response_model=UrlProbeResponse)
 def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     """这个链接后面有什么 —— 只读元数据,不下载任何媒体流。

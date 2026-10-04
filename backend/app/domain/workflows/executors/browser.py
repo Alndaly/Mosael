@@ -18,7 +18,7 @@ from app.domain.permissions import NotVisible
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.run_scope import halted
+from app.domain.workflows.run_scope import current_node, halted
 
 
 def _session_in(db: Session, scope: RunScope, config: dict[str, Any]) -> str:
@@ -106,9 +106,25 @@ def _failure_scene(session_id: str, action: str, args: dict[str, Any]) -> dict[s
     return scene
 
 
+def _origin() -> dict[str, str]:
+    """这一步是哪次运行、哪个节点发起的。随动作参数交给执行器,它交回的下载 / 截图据此记出处(见 browser.artifact_target)。"""
+    return {"run": current_parent_job_id() or "", "node": current_node()}
+
+
+def _downloaded(result: dict[str, Any]) -> str:
+    """这一步里点开的下载进了素材库的话,它的素材 id(执行器放在结果的 downloads 里);没下载是空串。"""
+    downloads = result.get("downloads") if isinstance(result, dict) else None
+    if isinstance(downloads, list):
+        for one in downloads:
+            if isinstance(one, dict) and one.get("asset_id"):
+                return str(one["asset_id"])
+    return ""
+
+
 def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
     """跑一个动作。**这一轮停了就不再等**(workflows.run_scope:同一张图里别的节点失败了):此前在飞的
     动作只认自己的超时,兄弟节点早已失败,它还要陪着等满两分钟。"""
+    args = {**args, "origin": _origin()}
     try:
         if timeout is None:
             return browser.run_action(session_id, action, args, should_stop=halted)
@@ -175,35 +191,41 @@ def browser_open(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     #: 具名会话第一次打开、而升级时它的旧登录没能带过来:原因交在 notice 上(否则人只看到「登录没了」)
     notice = browser.login_notice(db, session)
     url = str(config.get("url") or "").strip()
-    status = _navigate(session.id, url, config) if url else None
+    status = _status(_navigate(session.id, url, config)) if url else None
     return {"session": session.id, "notice": notice, "status": status}
 
 
-def _navigate(session_id: str, url: str, config: dict[str, Any]) -> int | None:
-    """打开一个网址,交回服务器回的状态码。404 / 5xx 默认算失败 —— 执行器看得见状态码,在那边判;
+def _navigate(session_id: str, url: str, config: dict[str, Any]) -> dict[str, Any]:
+    """打开一个网址,交回执行器的结果:服务器回的状态码在 value 里(见 _status),地址本身是个文件、下载进了
+    素材库的在 downloads 里(见 _downloaded)。404 / 5xx 默认算失败 —— 执行器看得见状态码,在那边判;
     节点上打开「允许错误页」就照样往下走(检查死链、读错误页上的说明)。"""
-    out = _run(session_id, "navigate", {"url": url, "allow_error_page": _truthy(config.get("allow_error_page"))})
-    status = out.get("value")
+    return _run(session_id, "navigate", {"url": url, "allow_error_page": _truthy(config.get("allow_error_page"))})
+
+
+def _status(result: dict[str, Any]) -> int | None:
+    """打开网址时服务器回的状态码;没打开(没给网址)是 None。"""
+    status = result.get("value") if isinstance(result, dict) else None
     return status if isinstance(status, int) else None
 
 
 @register("browser_navigate")
 def browser_navigate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    return {"session": sid, "status": _navigate(sid, str(config.get("url") or ""), config)}
+    out = _navigate(sid, str(config.get("url") or ""), config)
+    return {"session": sid, "status": _status(out), "asset_id": _downloaded(out)}
 
 
 @register("browser_click")
 def browser_click(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    _run(sid, "click", {
+    out = _run(sid, "click", {
         "selector": str(config.get("selector") or ""),
         "text": str(config.get("text") or ""),
         "exact": _truthy(config.get("exact")),
         "frame": _frame(config),
         **_element_wait(config),
     })
-    return {"session": sid}
+    return {"session": sid, "asset_id": _downloaded(out)}
 
 
 @register("browser_input")

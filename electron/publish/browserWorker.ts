@@ -14,7 +14,8 @@
 import { app } from "electron";
 
 import { sharedViews } from "./accountViews";
-import { executeBrowserAction } from "./browserActions";
+import { dropActionDownloads, saveActionDownloads } from "./actionDownloads";
+import { executeBrowserAction, type ActionOutcome } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
 import { t } from "../i18n.cjs";
@@ -182,11 +183,29 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
 
     // 同一会话串行,所以这个会话的 driver 此刻只服务这一条:中止开关挂上去,跑完摘掉。
     driver.setAbortSignal(signal);
+    // 这一步里开始的下载归这一步:不弹保存框,做完交给后端入库,素材 id 放进结果(见 actionDownloads)。
+    const downloads = views.downloads.collect(action.session_id);
     try {
-      const outcome = await executeBrowserAction(driver, action.action, action.args);
+      let outcome: ActionOutcome;
+      try {
+        outcome = await executeBrowserAction(driver, action.action, action.args);
+      } catch (error) {
+        await dropActionDownloads(downloads);
+        throw error;
+      }
+      const saved = await saveActionDownloads({
+        actionId: action.id,
+        action: action.action,
+        collector: downloads,
+        signal,
+        stillLoading: () => views.awaitingResponse(action.session_id),
+      });
       await browserBackend.report(action.id, {
         status: "done",
-        result: outcome.value !== undefined ? { value: outcome.value } : {},
+        result: {
+          ...(outcome.value !== undefined ? { value: outcome.value } : {}),
+          ...(saved.length ? { downloads: saved } : {}),
+        },
         last_url: outcome.lastUrl,
       });
     } finally {

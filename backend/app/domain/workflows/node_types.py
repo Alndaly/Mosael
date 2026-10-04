@@ -1971,8 +1971,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_browser_allow_error_page",
             },
         },
-        "outputs": ["session", "status"],
-        "output_labels": {"status": "wfOut_browser_http_status"},
+        #: 状态码见「允许错误页」;打开的地址本身是个文件时(PDF、mp4 直链……)浏览器会下载它:不弹框,直接进
+        #: 素材库,交出素材 id(没下载是空串)。
+        "outputs": ["session", "status", "asset_id"],
+        "output_labels": {"status": "wfOut_browser_http_status", "asset_id": "wfOut_browser_downloaded_asset"},
     },
     "browser_click": {
         "external": True,
@@ -1988,7 +1990,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "wait_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_click_wait_ms"},
             "frame": {"advanced": True, "type": "template", "description": "wfNode_browser_frame"},
         },
-        "outputs": ["session"],
+        #: 点的是下载链接时,文件不弹框、直接进素材库,交出素材 id(没下载就是空串)。
+        "outputs": ["session", "asset_id"],
+        "output_labels": {"asset_id": "wfOut_browser_downloaded_asset"},
     },
     "browser_input": {
         "external": True,

@@ -171,6 +171,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_skipped_models": {"zh": "未渲染的导入模型", "en": "Imported models not rendered"},
     "wfOut_browser_open_notice": {"zh": "提示(如升级后这份登录要重新登录)", "en": "Notice (e.g. this sign-in must be redone after an upgrade)"},
     "wfOut_browser_http_status": {"zh": "HTTP 状态码", "en": "HTTP status code"},
+    "wfOut_browser_downloaded_asset": {"zh": "下载进素材库的文件(没有下载就是空)", "en": "The downloaded file saved to the library (empty when nothing downloaded)"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
     "dubOverlapNote": {

@@ -55,7 +55,7 @@ from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
-from app.domain.workflows.run_scope import halt_scope, halted
+from app.domain.workflows.run_scope import halt_scope, halted, node_scope
 
 logger = logging.getLogger(__name__)
 
@@ -611,10 +611,11 @@ def execute_graph(
                     #: **容器节点跑体的时候不占连接,也不占预算。** 它的活儿全在体里,体里的节点从同一份
                     #: 预算里自己拿;容器攥着不放,嵌套几层、并行几项就把预算吃光,体里的叶子永远拿不到
                     #: —— 死锁,取消也叫不醒(叶子卡在拿预算上)。和节点里的「等」同一个做法。
-                    with connection_handed_back(node_db):
+                    with connection_handed_back(node_db), node_scope(nid):
                         outputs = handler(node_db, wf, config)
                 else:
-                    outputs = handler(node_db, wf, config)
+                    with node_scope(nid):
+                        outputs = handler(node_db, wf, config)
                 # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。
                 # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/billing/usage
                 # 的 _settle_usage),这里不用为它破例。

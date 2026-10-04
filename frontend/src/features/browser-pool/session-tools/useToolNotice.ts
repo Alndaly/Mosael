@@ -5,6 +5,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
 
+import { listenDownloadNotices } from "./downloadActions";
 import { pageToolErrorCode } from "./pageActions";
 
 /** 顶栏状态条上的一句话:做到哪了 / 做好了(可点过去)/ 没做成。 */
@@ -15,6 +16,12 @@ export interface Notice {
 }
 
 const NOTICE_MS = 6_000;
+
+/** 去素材库看:收起内嵌浏览器,跳过去并打开那一份(一次存了好几份时只到素材库)。 */
+export function showSavedAsset(assetId: string | null): void {
+  void window.mosaelPublish?.hideView();
+  gotoRecord("/media", assetId ? "mosael:open-asset" : undefined, assetId ?? undefined);
+}
 
 /**
  * 页面工具的「toast」。**说在顶栏里**,不交给应用的 Toaster:内嵌浏览器亮着时网页盖住了窗口的其余部分,
@@ -32,6 +39,8 @@ export function useToolNotice() {
     if (next && next.tone !== "busy") timer.current = window.setTimeout(() => setNotice(null), NOTICE_MS);
   }, []);
   React.useEffect(() => () => window.clearTimeout(timer.current), []);
+  // 网页里点的下载(存进素材库由应用最外层的 BrowserDownloads 做):顶栏挂着时由这里说。
+  React.useEffect(() => listenDownloadNotices(say), [say]);
 
   /** 没做成:主进程的原因码翻成人话,别的错误照原文说。 */
   const failed = React.useCallback(
@@ -50,19 +59,13 @@ export function useToolNotice() {
     [say, t],
   );
 
-  /** 去素材库看:收起内嵌浏览器,跳过去并打开那一份(一次存了好几份时只到素材库)。 */
-  const showAsset = React.useCallback((assetId: string | null) => {
-    void window.mosaelPublish?.hideView();
-    gotoRecord("/media", assetId ? "mosael:open-asset" : undefined, assetId ?? undefined);
-  }, []);
-
   /** 「已存进素材库」,带一个「查看」。 */
   const savedAsset = React.useCallback(
     (assetId: string | null, text: string = t("browserToolsSavedAsset")) => {
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-      say({ tone: "done", text, action: { label: t("browserToolsView"), run: () => showAsset(assetId) } });
+      say({ tone: "done", text, action: { label: t("browserToolsView"), run: () => showSavedAsset(assetId) } });
     },
-    [qc, say, showAsset, t],
+    [qc, say, t],
   );
 
   return { notice, say, failed, savedAsset };

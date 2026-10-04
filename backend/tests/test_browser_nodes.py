@@ -44,7 +44,8 @@ def test_browser_open_navigates_and_returns_session(monkeypatch) -> None:
         sid = out["session"]
         assert sid  # 真的建了会话(隔离分区)
         assert db.get(BrowserSession, sid).partition == f"ephemeral-{sid}"
-    assert calls == [("navigate", {"url": "https://x.test", "allow_error_page": False})]
+    # 动作参数里还带着是哪次运行、哪个节点发起的(执行器交回的下载据此记出处);不在节点里时都是空串。
+    assert calls == [("navigate", {"url": "https://x.test", "allow_error_page": False, "origin": {"run": "", "node": ""}})]
 
 
 def test_打开网址_错误页默认算失败_打开开关才放行_状态码交出去(monkeypatch) -> None:
@@ -56,10 +57,10 @@ def test_打开网址_错误页默认算失败_打开开关才放行_状态码�
         opened = bx.browser_open(db, _wf(ws), {"url": "https://x.test/gone", "allow_error_page": "true"})
         assert opened["status"] == 404
         navigated = bx.browser_navigate(db, _wf(ws), {"session": opened["session"], "url": "https://x.test/a"})
-        assert navigated == {"session": opened["session"], "status": 404}
+        assert navigated == {"session": opened["session"], "status": 404, "asset_id": ""}
     assert calls == [
-        ("navigate", {"url": "https://x.test/gone", "allow_error_page": True}),
-        ("navigate", {"url": "https://x.test/a", "allow_error_page": False}),
+        ("navigate", {"url": "https://x.test/gone", "allow_error_page": True, "origin": {"run": "", "node": ""}}),
+        ("navigate", {"url": "https://x.test/a", "allow_error_page": False, "origin": {"run": "", "node": ""}}),
     ]
 
 

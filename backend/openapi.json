@@ -1624,6 +1624,61 @@
         }
       }
     },
+    "/api/browser/worker/actions/{action_id}/artifact": {
+      "post": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Upload Artifact",
+        "description": "执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。\n\n令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,\n以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。",
+        "operationId": "upload_artifact_api_browser_worker_actions__action_id__artifact_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Upload Artifact Api Browser Worker Actions  Action Id  Artifact Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/projects": {
       "post": {
         "tags": [
@@ -2562,6 +2617,48 @@
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_import_web_capture_api_assets_capture_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/web-download": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Import Web Download",
+        "description": "用户在内嵌浏览器里点下载的文件入库(不弹系统保存框,下完直接进素材库),带着出处。\n\n大小上限、只收素材库认得的类型、文件名只取名字本身 —— 闸都在 domain/assets/web_download。",
+        "operationId": "import_web_download_api_assets_web_download_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_web_download_api_assets_web_download_post"
               }
             }
           },
@@ -24966,6 +25063,66 @@
         ],
         "title": "Body_import_web_capture_api_assets_capture_post"
       },
+      "Body_import_web_download_api_assets_web_download_post": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Filename"
+          },
+          "source_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Source Url",
+            "default": ""
+          },
+          "page_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Page Url"
+          },
+          "page_title": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Page Title",
+            "default": ""
+          },
+          "captured_at": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Captured At"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "filename",
+          "page_url",
+          "captured_at",
+          "file"
+        ],
+        "title": "Body_import_web_download_api_assets_web_download_post"
+      },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {
           "file": {
@@ -24998,6 +25155,62 @@
           "file"
         ],
         "title": "Body_upload_api_scene_models_post"
+      },
+      "Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post": {
+        "properties": {
+          "lease_token": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Lease Token"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Kind"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Filename"
+          },
+          "source_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Source Url",
+            "default": ""
+          },
+          "page_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Page Url"
+          },
+          "page_title": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Page Title",
+            "default": ""
+          },
+          "captured_at": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Captured At"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lease_token",
+          "kind",
+          "filename",
+          "page_url",
+          "captured_at",
+          "file"
+        ],
+        "title": "Body_upload_artifact_api_browser_worker_actions__action_id__artifact_post"
       },
       "Body_upload_avatar_api_auth_me_avatar_post": {
         "properties": {

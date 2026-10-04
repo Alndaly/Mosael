@@ -60,4 +60,9 @@ export const browserTools = {
   browserToolsNoSelection: "Select some text on the page first",
   browserToolsWorkflowReady: "“{name}” is filled in with this page; check it over and run",
   browserToolsAgentDraft: "Take a look at this page for me:",
+  browserToolsFileDownloading: "Downloading “{name}” {p}%",
+  browserToolsFileDownloadingUnknown: "Downloading “{name}”…",
+  browserToolsFileSaving: "“{name}” downloaded, saving it to the library…",
+  browserToolsFileSaved: "“{name}” saved to the library",
+  browserToolsFileNoWorkspace: "“{name}” downloaded, but there's no workspace open to save it to",
 } as const;

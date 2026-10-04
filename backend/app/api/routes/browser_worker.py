@@ -17,12 +17,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.api.deps import Tx
 from app.domain.browser import (
+    BrowserReportError,
     abandoned_actions,
+    artifact_target,
     claim_next_action,
     pending_partition_moves,
     renew_action_leases,
@@ -126,3 +128,48 @@ def settle_move(move_id: str, body: PartitionMoveReport, db: Tx) -> dict[str, An
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"ok": True}
+
+
+#: 执行器交上来的产物能是哪几种。
+ARTIFACT_KINDS = ("download",)
+
+
+@router.post("/browser/worker/actions/{action_id}/artifact")
+def upload_artifact(
+    action_id: str,
+    db: Tx,
+    lease_token: str = Form(..., max_length=64),
+    kind: str = Form(..., max_length=20),
+    filename: str = Form(..., max_length=400),
+    source_url: str = Form("", max_length=2000),
+    page_url: str = Form(..., max_length=2000),
+    page_title: str = Form("", max_length=1000),
+    captured_at: str = Form(..., max_length=64),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """执行器在跑一条动作时交来的产物 —— 自动化里点开的下载 —— 直接进那个会话所在工作区的素材库。
+
+    令牌闸和回报同一道(见 domain/browser.artifact_target):只收它正在跑的那一条。出处记下载地址、所在页面,
+    以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。
+    """
+    from app.domain.assets.web_capture import RunOrigin, WebCaptureError, web_source
+    from app.domain.assets.web_download import PAGE_DOWNLOAD, register_web_download
+
+    if kind not in ARTIFACT_KINDS:
+        raise HTTPException(status_code=422, detail=f"unknown artifact kind {kind[:20]}")
+    try:
+        target = artifact_target(db, action_id, lease_token=lease_token)
+        origin = RunOrigin(run_id=target.run_id, node_id=target.node_id, browser_session_id=target.browser_session_id)
+        source = web_source(
+            page_url=page_url, page_title=page_title, captured_at=captured_at, capture=PAGE_DOWNLOAD,
+            source_url=source_url, allowed=(PAGE_DOWNLOAD,),
+        )
+        asset = register_web_download(
+            db, workspace_id=target.workspace_id, project_id=None, stream=file.file, filename=filename, source=source,
+            origin=origin,
+        )
+    except BrowserReportError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except WebCaptureError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return {"asset_id": asset.id, "name": asset.name, "kind": asset.kind}

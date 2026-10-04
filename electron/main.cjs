@@ -44,6 +44,7 @@ const {
   parseReadMode,
   parseRegionSelection,
   parseRestoreStage,
+  parseSaveDownload,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
@@ -698,6 +699,10 @@ function createWindow() {
         onPanels: (cards) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.publishPanels, cards);
         },
+        // 内嵌浏览器里点的下载(不弹系统保存框):进度与结果交给渲染层,由它存进素材库、在顶栏说一句。
+        onDownload: (notice) => {
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.pageToolsDownload, notice);
+        },
         // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
         // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
         // 因为内部分了两个 worker 就冒出两个窗口。
@@ -860,6 +865,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
   ipcMain.handle(IPC.invoke.pageToolsInset, (_e, payload) =>
     requirePublish().setToolsInset(parseToolsInset(payload).right),
+  );
+  ipcMain.handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
+    requirePublish().saveDownload(parseSaveDownload(payload)),
   );
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。

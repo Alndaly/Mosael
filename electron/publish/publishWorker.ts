@@ -22,6 +22,7 @@ import {
   type PanelCard,
   type PanelLayoutChange,
 } from "./accountViews";
+import type { DownloadNotice } from "./downloads";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
@@ -536,6 +537,8 @@ export function startPublishWorker(opts: {
   onFrame?: (frame: LiveViewFrame) => void;
   /** 悬浮卡片几何变化 —— 渲染层照它画圆角/阴影/标题条(原生 View 画不了)。 */
   onPanels?: (cards: PanelCard[]) => void;
+  /** 用户在内嵌浏览器里点的下载:进度、下好了、没下成(渲染层据此存进素材库并在顶栏说一句)。 */
+  onDownload?: (notice: DownloadNotice) => void;
 }): void {
   if (views) return;
   stopped = false;
@@ -544,7 +547,7 @@ export function startPublishWorker(opts: {
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
   // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
-  views = createSharedViews(opts.onViewChanged, opts.onPanels);
+  views = createSharedViews(opts.onViewChanged, opts.onPanels, opts.onDownload);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。

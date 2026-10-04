@@ -30,6 +30,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseImageUrls: (value: unknown) => { urls: string[] };
   parseReadMode: (value: unknown) => { mode: string };
   parseToolsInset: (value: unknown) => { right: number };
+  parseSaveDownload: (value: unknown) => Record<string, string | null>;
 };
 
 const ROOT = path.resolve(__dirname);
@@ -156,5 +157,22 @@ describe("Electron IPC contract", () => {
     expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
     expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);
     expect(() => contract.parseToolsInset({ right: Number.NaN })).toThrow(/right/);
+  });
+
+  it("decodes saving a finished download: an http(s) server, a token, a workspace, nothing else", () => {
+    const request = {
+      id: "0f8fad5b-d9cb-469f-a165-70867728950e",
+      server: "http://127.0.0.1:8800",
+      token: "tok",
+      workspaceId: "ws1",
+      projectId: null,
+    };
+    expect(contract.parseSaveDownload(request)).toEqual(request);
+    expect(contract.parseSaveDownload({ ...request, projectId: "p1" }).projectId).toBe("p1");
+    expect(() => contract.parseSaveDownload({ ...request, id: "../etc" })).toThrow(/id/);
+    expect(() => contract.parseSaveDownload({ ...request, server: "file:///tmp" })).toThrow(/server/);
+    expect(() => contract.parseSaveDownload({ ...request, token: "" })).toThrow(/token/);
+    expect(() => contract.parseSaveDownload({ ...request, token: "x".repeat(20_000) })).toThrow(/token/);
+    expect(() => contract.parseSaveDownload({ ...request, path: "/etc/passwd" })).toThrow(/unexpected field path/);
   });
 });

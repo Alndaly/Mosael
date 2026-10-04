@@ -75,7 +75,8 @@ def test_本工作区的会话照常用(monkeypatch) -> None:
     a, _ = _two_workspaces()
     with SessionLocal() as db:
         sid = bdom.open_session(db, workspace_id=a, actor=None).id
-        assert bx.browser_click(db, _wf(a), {"session": sid, "selector": ".go"}) == {"session": sid}
+        # asset_id:点开了下载时它进素材库的那一份;这里没下载,是空串。
+        assert bx.browser_click(db, _wf(a), {"session": sid, "selector": ".go"}) == {"session": sid, "asset_id": ""}
         bx.browser_close(db, _wf(a), {"session": sid})
     assert calls == [(sid, "click")]
     with SessionLocal() as db:

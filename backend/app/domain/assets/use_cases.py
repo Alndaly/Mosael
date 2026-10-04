@@ -218,6 +218,37 @@ def import_web_capture(
     return register_web_capture(db, workspace_id=workspace_id, project_id=project_id, data=data, source=source, name=name)
 
 
+def import_web_download(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    *,
+    project_id: str | None,
+    upload,
+    filename: str,
+    source_url: str,
+    page_url: str,
+    page_title: str,
+    captured_at: str,
+) -> Asset:
+    """用户在内嵌浏览器里点下载的文件入库,带着出处(见 assets/web_download)。
+
+    先过闸、再看出处和文件名,最后才收字节:没权限、出处不像样、类型不收的请求,一个字节都不落盘。
+    """
+    from app.domain.assets.web_download import PAGE_DOWNLOAD, check_download_name, register_web_download
+    from app.domain.assets.web_capture import web_source
+
+    ensure_workspace_perm(db, user, workspace_id, "upload")
+    source = web_source(
+        page_url=page_url, page_title=page_title, captured_at=captured_at, capture=PAGE_DOWNLOAD,
+        source_url=source_url, allowed=(PAGE_DOWNLOAD,),
+    )
+    check_download_name(filename)
+    return register_web_download(
+        db, workspace_id=workspace_id, project_id=project_id, stream=upload.file, filename=filename, source=source,
+    )
+
+
 def import_local(db: Session, user: User, workspace_id: str, *, project_id: str | None, path: Path) -> Asset:
     """登记一个**已经放行过**的本机文件(路径的闸在 host_files,由调用方先过)。"""
     from app.domain.assets.importer import register_file_asset

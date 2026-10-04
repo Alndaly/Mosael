@@ -29,7 +29,7 @@ from app.domain.assets.importer import import_binary_asset
 from app.domain.assets.source_url import remember_asset_source
 
 #: 单个文件上限。整页长图(上限 15000 CSS 像素高,高分屏两倍)量化前能有二三十 MB;再大就不是一张截图了。
-#: Electron 那一侧取页面图片用的是同一个数(electron/publish/pageTools.ts 的 MAX_IMAGE_BYTES)。
+#: Electron 那一侧取页面图片用的是同一个数(electron/publish/pageImages.ts 的 MAX_IMAGE_BYTES)。
 MAX_CAPTURE_BYTES = 40 * 1024 * 1024
 
 #: 怎么来的。截图三种对应顶栏「截屏」的三个选项;page_image 是「采集页面图片」;page_video 是「下载页面里的视频」
@@ -68,6 +68,25 @@ class WebSource:
     capture: str
     #: 页面图片自己的地址;截图为空。
     source_url: str = ""
+
+
+@dataclass(frozen=True)
+class RunOrigin:
+    """浏览器自动化里是谁触发的:哪次运行(工作流任务)、哪个节点、哪个浏览器会话。不是工作流(智能体)时为空串。"""
+
+    run_id: str = ""
+    node_id: str = ""
+    browser_session_id: str = ""
+
+
+def remember_run_origin(asset: Asset, origin: RunOrigin) -> None:
+    """自动化里存进来的素材,出处再记上是哪次运行 / 哪个节点触发的(空的不写)。"""
+    extra = {
+        "source_run_id": origin.run_id,
+        "source_node_id": origin.node_id,
+        "source_browser_session_id": origin.browser_session_id,
+    }
+    asset.media_info = {**(asset.media_info or {}), **{key: value for key, value in extra.items() if value}}
 
 
 def web_source(

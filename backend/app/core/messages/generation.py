@@ -398,6 +398,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "租约令牌不匹配:这条动作已经不归你了",
         "en": "Lease token mismatch: this action no longer belongs to you.",
     },
+    "browserErr_artifactLate": {
+        "zh": "这条动作已经结束了,它的下载 / 截图来晚了,没有收进素材库。",
+        "en": "This action has already finished; its download or screenshot arrived too late and wasn't saved to the library.",
+    },
     "browserErr_executorLost": {
         "zh": "执行器失联(租约到期)",
         "en": "Lost contact with the executor (its lease expired).",

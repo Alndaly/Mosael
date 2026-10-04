@@ -335,6 +335,31 @@ const MESSAGES = {
     zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
     en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
   },
+  // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 publish/downloads.ts)。
+  downloadErr_type: {
+    zh: "素材库不收这种文件:「{name}」。能存的是视频、音频、图片和常见文档(PDF、Word、PPT、Excel、文本……)",
+    en: "The library can't take “{name}”: you can save video, audio, images and common documents (PDF, Word, PowerPoint, Excel, text…)",
+  },
+  downloadErr_tooLarge: {
+    zh: "下载的文件太大了:最多 {maxGb} GB,已经停下",
+    en: "The download is too large: {maxGb} GB at most, so it was stopped",
+  },
+  downloadErr_interrupted: {
+    zh: "「{name}」没有下载完(连接断了,或网站拒绝了这次下载)",
+    en: "“{name}” didn't finish downloading (the connection dropped or the site refused the download)",
+  },
+  downloadErr_cancelled: {
+    zh: "「{name}」的下载取消了",
+    en: "The download of “{name}” was cancelled",
+  },
+  downloadErr_saveFailed: {
+    zh: "「{name}」下载好了,但没能存进素材库:{reason}",
+    en: "“{name}” downloaded but couldn't be saved to the library: {reason}",
+  },
+  downloadErr_gone: {
+    zh: "这份下载已经不在了(存过了,或下好之后十分钟没人存)",
+    en: "This download is no longer available (it was already saved, or nobody saved it within ten minutes)",
+  },
 };
 
 let current = DEFAULT_LOCALE;

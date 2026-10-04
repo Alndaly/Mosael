@@ -142,7 +142,8 @@
       }
     },
     "outputs": [
-      "session"
+      "session",
+      "asset_id"
     ]
   },
   {
@@ -241,7 +242,8 @@
     },
     "outputs": [
       "session",
-      "status"
+      "status",
+      "asset_id"
     ]
   },
   {

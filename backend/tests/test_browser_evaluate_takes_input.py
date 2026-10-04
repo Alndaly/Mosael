@@ -83,4 +83,5 @@ def test_执行脚本把入参原样交给执行器() -> None:
     args = _claimed_args(_in_node(ws, bx.browser_evaluate, {
         "session": sid, "expression": "input.a + 1", "input": {"a": 41},
     }))
-    assert args == {"expression": "input.a + 1", "input": {"a": 41}}
+    # origin:这一步是哪次运行、哪个节点发起的(执行器交回的下载 / 截图据此记出处);不在工作流里时都是空串。
+    assert args == {"expression": "input.a + 1", "input": {"a": 41}, "origin": {"run": "", "node": ""}}

@@ -19,6 +19,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
@@ -863,6 +864,38 @@ def report_action(
     db.flush()
     db.refresh(act)
     return act
+
+
+@dataclass(frozen=True)
+class ArtifactTarget:
+    """执行器交来的一份产物(动作里触发的下载、截图节点截的图)该进哪个工作区、记谁触发的。"""
+
+    workspace_id: str
+    browser_session_id: str
+    #: 触发它的那次运行 / 那个节点(工作流的执行器入队时放在动作参数的 origin 里);智能体等别的来源为空。
+    run_id: str
+    node_id: str
+
+
+def artifact_target(db: Session, action_id: str, *, lease_token: str | None) -> ArtifactTarget:
+    """执行器要为这条动作交一份产物:动作得是**它正在跑**的那一条(和回报同一道令牌闸,见 report_action)。
+
+    不收已经落了终态的:那时调用方已经拿到(或放弃了)结果,晚到的产物没人认领,只会在素材库里多一份来路不明的文件。
+    """
+    act = db.get(BrowserAction, action_id)
+    if act is None:
+        raise BrowserReportError("browserErr_actionNotFound")
+    if act.status != "running":
+        raise BrowserReportError("browserErr_artifactLate")
+    if act.lease_token and lease_token != act.lease_token:
+        raise BrowserReportError("browserErr_leaseMismatch")
+    origin = (act.args or {}).get("origin") or {}
+    return ArtifactTarget(
+        workspace_id=act.workspace_id,
+        browser_session_id=act.session_id,
+        run_id=str(origin.get("run") or "")[:64],
+        node_id=str(origin.get("node") or "")[:64],
+    )
 
 
 #: 执行器对一条搬家单能回报的结果(见 BrowserPartitionMoveReceipt)。

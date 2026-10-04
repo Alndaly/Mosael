@@ -6,7 +6,10 @@ import { join } from "node:path";
 
 import { net } from "electron";
 
+import type { FinishedDownload } from "./downloads";
+import { provenanceFields, uploadDownload } from "./downloadUpload";
 import type { PartitionMove, PartitionMoveOutcome } from "./partitionMoves";
+import { getLocale } from "../i18n.cjs";
 
 const BASE =
   process.env.MOSAEL_BACKEND_URL || `http://127.0.0.1:${process.env.MOSAEL_BACKEND_PORT || 8800}`;
@@ -127,6 +130,17 @@ export const browserBackend = {
     for (const id of gone) holding.delete(id);
     return gone;
   },
+  /**
+   * 正在跑的这条动作交一份产物(动作里点开的下载)进素材库。令牌和回报同一道闸:只收它手上那一条。
+   * 错误照后端那句话抛(按界面语言翻好),调用方原样放进动作的失败原因。
+   */
+  uploadArtifact: (actionId: string, kind: "download", file: FinishedDownload) =>
+    uploadDownload<{ asset_id: string; name: string; kind: string }>(
+      `${BASE}/api/browser/worker/actions/${encodeURIComponent(actionId)}/artifact`,
+      { "X-Mosael-Worker-Key": readWorkerKey(), "Accept-Language": getLocale() },
+      { lease_token: holding.get(actionId) ?? "", kind, ...provenanceFields(file) },
+      file,
+    ),
   /** 后端迁移写下、**这台电脑**还没回过话的登录分区搬家单(见 partitionMoves.ts)。 */
   partitionMoves: () =>
     req<{ moves?: PartitionMove[] }>(`/worker/partition-moves?worker=${encodeURIComponent(readWorkerId())}`).then(

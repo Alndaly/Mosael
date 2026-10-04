@@ -56,6 +56,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
+import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
 import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
 import { StartupLoading } from "@/components/layout/StartupLoading";
@@ -110,6 +111,7 @@ export function App() {
                   <AuthGate />
                   <AppToaster />
                   <PublishViewBar />
+                  <BrowserDownloads />
                   <BrowserPreview />
                   <LivePanels />
                 </ImagePreviewProvider>

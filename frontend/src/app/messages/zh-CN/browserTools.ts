@@ -60,4 +60,10 @@ export const browserTools = {
   browserToolsNoSelection: "先在页面上选中一段文字",
   browserToolsWorkflowReady: "已用当前页填好「{name}」,检查一下就能运行",
   browserToolsAgentDraft: "帮我看看这个网页:",
+  // 网页里点的下载:不弹保存框,下完直接存进素材库。
+  browserToolsFileDownloading: "正在下载「{name}」{p}%",
+  browserToolsFileDownloadingUnknown: "正在下载「{name}」…",
+  browserToolsFileSaving: "「{name}」下好了,正在存进素材库…",
+  browserToolsFileSaved: "「{name}」已存进素材库",
+  browserToolsFileNoWorkspace: "「{name}」下好了,但还没进入工作区,没地方存",
 } as const;

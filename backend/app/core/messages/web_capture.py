@@ -27,6 +27,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "文件太大了:最多 {max_mb} MB。",
         "en": "The file is too large: {max_mb} MB at most.",
     },
+    "webDownloadErr_type": {
+        "zh": "素材库不收这种文件:「{name}」。能存的是视频、音频、图片和常见文档(PDF、Word、PPT、Excel、文本……)。",
+        "en": "The library can't take “{name}”: you can save video, audio, images and common documents (PDF, Word, PowerPoint, Excel, text…).",
+    },
+    "webDownloadErr_tooLarge": {
+        "zh": "下载的文件太大了:最多 {max_gb} GB。",
+        "en": "The downloaded file is too large: {max_gb} GB at most.",
+    },
+    "webDownloadErr_empty": {
+        "zh": "「{name}」下载下来是空的,没有存。",
+        "en": "“{name}” downloaded empty and wasn't saved.",
+    },
     "pageNoteErr_empty": {
         "zh": "这一页没有读出正文,也没有选中文字。",
         "en": "No article text could be read from this page, and no text is selected.",
