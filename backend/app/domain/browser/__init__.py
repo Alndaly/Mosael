@@ -600,7 +600,12 @@ def _enqueue(
                 return outcome
             if act.status == "running" and run_deadline is None:
                 run_deadline = time.monotonic() + timeout
+            #: 认领它的执行器不再续约了(崩了、被杀了、断网了)。租约到点的判定平时由执行器认领 / 心跳时做
+            #: (expire_action_leases),而执行器没了就没人来判 —— 此前调用方因此要等满执行上限,报的还是「执行超时」。
+            executor_gone = _lease_expired(act)
             behind_own_session = act.status == "queued" and _session_running(db, act.session_id)
+        if executor_gone:
+            return _give_up(action_id, "browserErr_executorLost")
         elapsed, tick = time.monotonic() - tick, time.monotonic()
         if run_deadline is None and not behind_own_session:
             queued_for += elapsed
@@ -610,6 +615,11 @@ def _enqueue(
             return _give_up_unclaimed(action_id)
         if run_deadline is not None and time.monotonic() >= run_deadline:
             return _give_up(action_id, "browserErr_actionTimeout")
+
+
+def _lease_expired(act: BrowserAction) -> bool:
+    """在跑的这条动作,租约到点了吗(和 expire_action_leases 同一个判据:到点了)。"""
+    return act.status == "running" and act.lease_expires_at is not None and act.lease_expires_at <= now()
 
 
 def _session_running(db: Session, session_id: str) -> bool:
