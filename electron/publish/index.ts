@@ -20,6 +20,8 @@ export {
   closePanel,
   setPanelMuted,
 } from "./publishWorker";
+// 浏览器会话顶栏的页面工具:只作用于前台视图(见 pageTarget)。
+export { capturePage, beginRegionCapture, finishRegionCapture } from "./pageCapture";
 // 浏览器自动化 worker(RPA / 智能体):与发布 worker 并列的第二个拉取循环。
 export { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
 // 界面语言:本 bundle 打包了自己那份 i18n.cjs,由主进程在语言变化时转告(见 main.cjs applyLocale)。

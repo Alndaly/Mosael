@@ -34,11 +34,13 @@ const {
   parseAuthToken,
   parseBrowserLogin,
   parseBrowserProfile,
+  parseCaptureMode,
   parseLocale,
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
   parsePublishTarget,
+  parseRegionSelection,
   parseRestoreStage,
   parseSystemStatus,
   parseTaskNotice,
@@ -839,6 +841,14 @@ app.whenReady().then(async () => {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
+  // 浏览器会话顶栏的页面工具:载荷先过契约里的解析器,作用对象由主进程认(前台视图)。
+  ipcMain.handle(IPC.invoke.pageToolsCapture, (_e, payload) =>
+    requirePublish().capturePage(parseCaptureMode(payload).mode),
+  );
+  ipcMain.handle(IPC.invoke.pageToolsRegionStart, () => requirePublish().beginRegionCapture());
+  ipcMain.handle(IPC.invoke.pageToolsRegionFinish, (_e, payload) =>
+    requirePublish().finishRegionCapture(parseRegionSelection(payload).selection),
+  );
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
   ipcMain.handle(IPC.invoke.checkUpdates, async () => {

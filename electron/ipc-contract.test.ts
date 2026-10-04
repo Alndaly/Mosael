@@ -25,6 +25,8 @@ const contract = require("./ipc-contract.cjs") as {
   parseAuthToken: (value: unknown, channel: string) => { token: string };
   parseRestoreStage: (value: unknown) => { stageId: string };
   parseLocale: (value: unknown) => { locale: string };
+  parseCaptureMode: (value: unknown) => { mode: string };
+  parseRegionSelection: (value: unknown) => { selection: Record<string, number> | null };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -125,5 +127,19 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseLocale({ locale: "" })).toThrow(/locale/);
     expect(() => contract.parseLocale({ locale: "en US; rm -rf" })).toThrow(/locale/);
     expect(() => contract.parseLocale("en")).toThrow(/mosael:locale/);
+  });
+
+  it("validates page-tool payloads before handlers see them: closed option lists, bounded values, no unexpected fields", () => {
+    expect(contract.parseCaptureMode({ mode: "full" })).toEqual({ mode: "full" });
+    expect(() => contract.parseCaptureMode({ mode: "region" })).toThrow(/mode/);
+    expect(() => contract.parseCaptureMode({ mode: "visible", target: "pool-other" })).toThrow(/unexpected field target/);
+
+    expect(contract.parseRegionSelection({ selection: null })).toEqual({ selection: null });
+    expect(contract.parseRegionSelection({ selection: { x: 0.1, y: 0.2, width: 0.5, height: 0.3 } })).toEqual({
+      selection: { x: 0.1, y: 0.2, width: 0.5, height: 0.3 },
+    });
+    expect(() => contract.parseRegionSelection({ selection: { x: 0.8, y: 0, width: 0.5, height: 0.5 } })).toThrow(/inside the frame/);
+    expect(() => contract.parseRegionSelection({ selection: { x: -1, y: 0, width: 0.5, height: 0.5 } })).toThrow(/selection.x/);
+    expect(() => contract.parseRegionSelection({ selection: { x: 0, y: 0, width: 400, height: 300 } })).toThrow(/selection.width/);
   });
 });

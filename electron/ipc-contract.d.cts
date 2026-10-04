@@ -24,6 +24,9 @@ export const IPC: {
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";
+    pageToolsCapture: "pageTools:capture";
+    pageToolsRegionStart: "pageTools:regionStart";
+    pageToolsRegionFinish: "pageTools:regionFinish";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
@@ -66,3 +69,7 @@ export function parseTitleOverlay(value: unknown): { color: string; symbolColor:
 export function parseSystemStatus(value: unknown): { runningJobs: number; progress?: number | null };
 export function parseTaskNotice(value: unknown): { title: string; body: string };
 export function parseLocale(value: unknown): { locale: string };
+export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
+export function parseRegionSelection(value: unknown): {
+  selection: { x: number; y: number; width: number; height: number } | null;
+};

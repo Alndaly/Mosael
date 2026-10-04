@@ -56,6 +56,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
+import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
+import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
 import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -93,8 +95,11 @@ export function App() {
     window.addEventListener(JOBS_CREATED_EVENT, refresh);
     return () => window.removeEventListener(JOBS_CREATED_EVENT, refresh);
   }, []);
+  const [toolsWorkspace, setToolsWorkspace] = React.useState<string | null>(null);
+  const toolsHost = React.useMemo(() => ({ workspaceId: toolsWorkspace, setWorkspaceId: setToolsWorkspace }), [toolsWorkspace]);
   return (
     <QueryClientProvider client={queryClient}>
+      <BrowserToolsWorkspace.Provider value={toolsHost}>
       <PreferencesProvider>
         <AppearanceProvider>
           {/* 自定义 CSS 包在外观里面:它压过应用自带的一切样式,自然也压过外观那几个令牌。 */}
@@ -113,6 +118,7 @@ export function App() {
           </CustomCssProvider>
         </AppearanceProvider>
       </PreferencesProvider>
+      </BrowserToolsWorkspace.Provider>
     </QueryClientProvider>
   );
 }
@@ -122,10 +128,11 @@ export function App() {
  *  由 contracts/shared-constants.json 钉住。 */
 export const PUBLISH_BAR_HEIGHT = 56;
 
-/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Mosael。
+/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 页面工具 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
 function PublishViewBar() {
   const t = useI18n();
+  const { workspaceId } = React.useContext(BrowserToolsWorkspace);
   const [state, setState] = React.useState<PublishViewState>({
     visible: false,
     accountId: null,
@@ -216,6 +223,10 @@ function PublishViewBar() {
           }}
         />
       </form>
+      {workspaceId && (
+        // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
+        <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
+      )}
       <button
         type="button"
         className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
@@ -410,6 +421,12 @@ function Studio({
   const qc = useQueryClient();
   // 自动放行、飞书、别的设备批掉的卡执行完了,这边的素材库 / 时间线也要跟着刷(见 confirmationCaches)。
   useRefreshWhenCardsLand(workspace.id);
+  // 顶栏页面工具存东西进的是这个工作区(见 BrowserToolsWorkspace)。
+  const { setWorkspaceId: reportToolsWorkspace } = React.useContext(BrowserToolsWorkspace);
+  React.useEffect(() => {
+    reportToolsWorkspace(workspace.id);
+    return () => reportToolsWorkspace(null);
+  }, [workspace.id, reportToolsWorkspace]);
   const initial = React.useMemo(readHash, []);
   const [view, setView] = React.useState<StudioView>(initial.view);
   const [projectId, setProjectId] = React.useState<string | null>(

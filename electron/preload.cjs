@@ -137,3 +137,12 @@ const browserBridge = {
   clearProfile: (partition) => ipcRenderer.invoke(IPC.invoke.browserClearProfile, { partition }),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
+
+// 浏览器会话顶栏的页面工具。都作用于前台那个内嵌视图 —— 渲染层不点名要哪个视图(见 publish/pageTarget.ts)。
+/** @type {import("./preload-api").MosaelPageToolsBridge} */
+const pageToolsBridge = {
+  capture: (mode) => ipcRenderer.invoke(IPC.invoke.pageToolsCapture, { mode }),
+  beginRegion: () => ipcRenderer.invoke(IPC.invoke.pageToolsRegionStart),
+  finishRegion: (selection) => ipcRenderer.invoke(IPC.invoke.pageToolsRegionFinish, { selection }),
+};
+contextBridge.exposeInMainWorld("mosaelPageTools", pageToolsBridge);

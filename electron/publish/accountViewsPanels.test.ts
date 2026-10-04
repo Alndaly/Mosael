@@ -21,10 +21,14 @@ const fake = vi.hoisted(() => {
       for (const handler of this.handlers.get(event) ?? []) handler(...args);
     }
   }
+  let nextContentsId = 1;
   class WebContents extends Emitter {
+    id = nextContentsId++;
     zoom = 1;
     muted = false;
     destroyed = false;
+    /** 媒体记录器按会话挂 webRequest 观察钩子(见 mediaRecorder);这里只记下挂了几次。 */
+    session = { webRequest: { onResponseStarted: () => undefined } };
     navigationHistory = { canGoBack: () => false, canGoForward: () => false };
     debugger = { isAttached: () => false };
     mainFrame = { routingId: 1, framesInSubtree: [], executeJavaScript: async () => undefined };
@@ -51,6 +55,9 @@ const fake = vi.hoisted(() => {
     getURL() {
       return "";
     }
+    getTitle() {
+      return "";
+    }
     isLoading() {
       return false;
     }
@@ -62,6 +69,10 @@ const fake = vi.hoisted(() => {
   class WebContentsView {
     webContents = new WebContents();
     bounds = { x: 0, y: 0, width: 0, height: 0 };
+    visible = true;
+    setVisible(visible: boolean) {
+      this.visible = visible;
+    }
     setBounds(bounds: { x: number; y: number; width: number; height: number }) {
       this.bounds = bounds;
     }
@@ -330,5 +341,40 @@ describe("window resizing", () => {
     window.resizeTo(1000, 700);
     expect(topCard()).toEqual(before);
     expect(fs.existsSync(layoutFile())).toBe(false);
+  });
+});
+
+describe("the foreground view and the toolbar's page tools", () => {
+  const HEADER = 56;
+
+  it("hands the page tools only the foreground view, together with its partition", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    attach("rpa-b");
+    expect(manager.foreground()).toBeNull();
+    manager.show("pool-a");
+    expect(manager.foreground()).toMatchObject({ id: "pool-a", partition: "persist:pool-a" });
+    manager.hide();
+    expect(manager.foreground()).toBeNull();
+  });
+
+  it("hides the page while a region is picked, and never leaves the next foreground view hidden", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.registerSession("pool-b", "persist:pool-b");
+    manager.show("pool-a");
+    manager.setForegroundHidden(true);
+    expect(viewOf("pool-a").visible).toBe(false);
+    manager.show("pool-b");
+    expect(viewOf("pool-a").visible).toBe(true);
+    expect(viewOf("pool-b").visible).toBe(true);
+  });
+
+  it("reports the page title and the partition with the toolbar state", () => {
+    const states: Array<Record<string, unknown>> = [];
+    const reporting = new AccountViewManager((state) => states.push(state as never));
+    reporting.attachWindow(window as never, () => null);
+    reporting.registerSession("pool-a", "persist:pool-a");
+    reporting.show("pool-a");
+    expect(states.at(-1)).toMatchObject({ visible: true, accountId: "pool-a", partition: "persist:pool-a", title: "" });
+    reporting.destroyAll();
   });
 });

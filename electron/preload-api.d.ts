@@ -11,6 +11,10 @@ export interface PublishViewState {
   canGoBack?: boolean;
   canGoForward?: boolean;
   loading?: boolean;
+  /** 页面标题(页面工具把它记进出处)。 */
+  title?: string;
+  /** 视图的会话分区:页面工具据此找回对应的浏览器池档案。 */
+  partition?: string | null;
 }
 
 export interface LivePanelCard {
@@ -83,6 +87,35 @@ export interface MosaelBrowserBridge {
   }): Promise<{ ok: boolean; error?: string }>;
   /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
   clearProfile(partition: string): Promise<void>;
+}
+
+/** 页面工具作用的那一页。 */
+export interface PageToolsPage {
+  url: string;
+  title: string;
+}
+
+/** 一次截屏的结果:PNG 字节 + 出处。 */
+export interface PageCaptureResult {
+  bytes: Uint8Array;
+  width: number;
+  height: number;
+  /** 整页长图比上限长,只截了前面一段。 */
+  truncated: boolean;
+  page: PageToolsPage;
+  capturedAt: string;
+}
+
+/**
+ * 浏览器会话顶栏的页面工具。**都作用于前台那个内嵌视图**(主进程自己认是哪个)。
+ * 失败时 reject 的消息里带 `page-tools: <原因码>`(no_page / capture_failed / full_page_unavailable)。
+ */
+export interface MosaelPageToolsBridge {
+  capture(mode: "visible" | "full"): Promise<PageCaptureResult>;
+  /** 框选第一步:冻结画面并藏起网页,交回那一帧。 */
+  beginRegion(): Promise<{ frame: string; width: number; height: number }>;
+  /** 框选第二步:按比例(0–1)裁出那一块;null 是取消。网页亮回来。 */
+  finishRegion(selection: { x: number; y: number; width: number; height: number } | null): Promise<PageCaptureResult | null>;
 }
 
 export interface MosaelDesktopBridge {

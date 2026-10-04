@@ -196,6 +196,34 @@ export async function importAsset(params: {
   return api<Asset>("/api/assets/import", { method: "POST", body: form });
 }
 
+/** 网页素材怎么来的:截图三种,或页面上的一张图(见后端 domain/assets/web_capture)。 */
+export type WebCaptureKind = "screenshot_visible" | "screenshot_full" | "screenshot_region" | "page_image";
+
+/** 内嵌浏览器里截的图 / 采的页面图片入库,带着出处(来源网址、页面标题、截取时间)。 */
+export function importWebCapture(params: {
+  workspaceId: string;
+  file: Blob;
+  capture: WebCaptureKind;
+  pageUrl: string;
+  pageTitle: string;
+  capturedAt: string;
+  name: string;
+  /** 页面图片自己的地址;截图不给。 */
+  sourceUrl?: string;
+}): Promise<Asset> {
+  const form = new FormData();
+  form.set("workspace_id", params.workspaceId);
+  form.set("capture", params.capture);
+  form.set("page_url", params.pageUrl);
+  form.set("page_title", params.pageTitle);
+  form.set("captured_at", params.capturedAt);
+  form.set("name", params.name);
+  if (params.sourceUrl) form.set("source_url", params.sourceUrl);
+  // 文件名由服务端定,这里给的只是表单要求的那一格。
+  form.set("file", params.file, "capture");
+  return api<Asset>("/api/assets/capture", { method: "POST", body: form });
+}
+
 /** 这段素材的转写;**还没转写过回 null**(后端答 404),别的失败照常抛。 */
 export async function getAssetTranscript(assetId: string): Promise<Transcript | null> {
   try {

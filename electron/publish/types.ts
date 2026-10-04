@@ -53,6 +53,13 @@ export interface ViewState {
   canGoBack?: boolean;
   canGoForward?: boolean;
   loading?: boolean;
+  /** 页面标题。顶栏的页面工具把它记进出处(截图、图片、视频、笔记)。 */
+  title?: string;
+  /**
+   * 这个视图的会话分区。顶栏的页面工具据此找回它对应的浏览器池档案 —— 借登录态下载、
+   * 用当前档案跑模板都要档案 id,而视图 id 对池档案、发布账号、RPA 会话各是一种东西。
+   */
+  partition?: string | null;
 }
 
 /** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{description,shortTitle,…平台选项}。 */

@@ -1003,6 +1003,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Web Capture
+         * @description 内嵌浏览器里截的图、采的页面图片入库,带着出处(来源网址、页面标题、截取时间、怎么截的)。
+         *
+         *     只收图片、有大小上限、文件名由服务端定 —— 闸都在 domain/assets/web_capture。
+         */
+        post: operations["import_web_capture_api_assets_capture_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/probe-url": {
         parameters: {
             query?: never;
@@ -8536,6 +8558,33 @@ export interface components {
              * @default false
              */
             replace: boolean;
+        };
+        /** Body_import_web_capture_api_assets_capture_post */
+        Body_import_web_capture_api_assets_capture_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Capture */
+            capture: string;
+            /** Page Url */
+            page_url: string;
+            /**
+             * Page Title
+             * @default
+             */
+            page_title: string;
+            /** Captured At */
+            captured_at: string;
+            /**
+             * Source Url
+             * @default
+             */
+            source_url: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** File */
+            file: string;
         };
         /** Body_stage_restore_api_settings_data_restore_stage_post */
         Body_stage_restore_api_settings_data_restore_stage_post: {
@@ -16716,6 +16765,39 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_asset_api_assets_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_web_capture_api_assets_capture_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_web_capture_api_assets_capture_post"];
             };
         };
         responses: {

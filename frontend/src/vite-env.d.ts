@@ -15,4 +15,5 @@ interface Window {
   mosaelPublish?: import("../../electron/preload-api").MosaelPublishBridge;
   mosaelBrowser?: import("../../electron/preload-api").MosaelBrowserBridge;
   mosaelDesktop?: import("../../electron/preload-api").MosaelDesktopBridge;
+  mosaelPageTools?: import("../../electron/preload-api").MosaelPageToolsBridge;
 }

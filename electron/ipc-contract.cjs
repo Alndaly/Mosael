@@ -35,6 +35,10 @@ const IPC = Object.freeze({
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
+    // 浏览器会话顶栏的页面工具:只作用于前台那个内嵌视图(主进程自己认是哪个,渲染层不点名)。
+    pageToolsCapture: "pageTools:capture",
+    pageToolsRegionStart: "pageTools:regionStart",
+    pageToolsRegionFinish: "pageTools:regionFinish",
   }),
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
@@ -173,6 +177,51 @@ function parseBrowserProfile(value) {
   return { partition };
 }
 
+/** 只认这几个键,多一个就拒(理由同 parsePanelLayout:渲染层热更新、主进程不重启时两边常常不是同一版)。 */
+function onlyKeys(payload, allowed, channel) {
+  for (const key of Object.keys(payload)) {
+    if (!allowed.includes(key)) throw new TypeError(`${channel}: unexpected field ${key}`);
+  }
+}
+
+function oneOf(payload, key, options, channel) {
+  if (!options.includes(payload[key])) throw new TypeError(`${channel}: ${key} must be one of ${options.join(", ")}`);
+  return payload[key];
+}
+
+/** 截屏:可见区域 / 整页长图(框选走 regionStart / regionFinish 两步)。 */
+function parseCaptureMode(value) {
+  const channel = IPC.invoke.pageToolsCapture;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["mode"], channel);
+  return { mode: oneOf(payload, "mode", ["visible", "full"], channel) };
+}
+
+/**
+ * 框选的结果:冻结画面上的矩形,按画面的**比例**给(0–1)—— 显示尺寸只有渲染层知道,原图尺寸只有
+ * 主进程知道,比例是两边都不用猜的那个量。`selection: null` 是取消。
+ */
+function parseRegionSelection(value) {
+  const channel = IPC.invoke.pageToolsRegionFinish;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["selection"], channel);
+  if (payload.selection === null) return { selection: null };
+  const rect = record(payload.selection, channel);
+  onlyKeys(rect, ["x", "y", "width", "height"], channel);
+  const fraction = (key, min) => {
+    const n = rect[key];
+    if (typeof n !== "number" || !Number.isFinite(n) || n < min || n > 1) {
+      throw new TypeError(`${channel}: selection.${key} must be a number between ${min} and 1`);
+    }
+    return n;
+  };
+  const selection = { x: fraction("x", 0), y: fraction("y", 0), width: fraction("width", 0), height: fraction("height", 0) };
+  if (selection.x + selection.width > 1.000001 || selection.y + selection.height > 1.000001) {
+    throw new TypeError(`${channel}: selection must stay inside the frame`);
+  }
+  return { selection };
+}
+
 function parseTitleOverlay(value) {
   const channel = IPC.send.titleOverlay;
   const payload = record(value, channel);
@@ -226,11 +275,13 @@ module.exports = {
   parseRestoreStage,
   parseBrowserLogin,
   parseBrowserProfile,
+  parseCaptureMode,
   parseLocale,
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,
   parsePublishTarget,
+  parseRegionSelection,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,

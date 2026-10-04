@@ -1,0 +1,22 @@
+export const browserTools = {
+  // 浏览器会话顶栏的页面工具
+  browserToolsLabel: "页面工具",
+  browserToolsShot: "截屏",
+  browserToolsShotVisible: "可见区域",
+  browserToolsShotFull: "整页长图",
+  browserToolsShotRegion: "框选区域",
+  browserToolsCollapse: "收起",
+  browserToolsClose: "关闭",
+  browserToolsWorking: "正在处理…",
+  browserToolsSavedAsset: "已存进素材库",
+  browserToolsView: "查看",
+  browserToolsTruncated: "页面太长,只截了前 {px} 像素",
+  browserToolsShotNameVisible: "截图",
+  browserToolsShotNameFull: "整页截图",
+  browserToolsShotNameRegion: "区域截图",
+  browserToolsRegionHint: "拖出要截的区域 · Esc 取消",
+  browserToolsFailed: "没做成:{reason}",
+  browserToolsNoPage: "页面已经不在前台了",
+  browserToolsCaptureFailed: "没截到画面,页面可能还没加载完",
+  browserToolsFullPageUnavailable: "这一页截不了整页长图(开着开发者工具时也会这样),可以先截可见区域",
+} as const;

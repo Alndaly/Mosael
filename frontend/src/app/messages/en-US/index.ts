@@ -2,6 +2,7 @@
 import { agentMemory } from "./agentMemory";
 import { aiStudio } from "./aiStudio";
 import { assetLibrary } from "./assetLibrary";
+import { browserTools } from "./browserTools";
 import { bulkSelection } from "./bulkSelection";
 import { canvasMarkers } from "./canvasMarkers";
 import { community } from "./community";
@@ -29,4 +30,5 @@ export const enUS = {
   ...desktop,
   ...community,
   ...assetLibrary,
+  ...browserTools,
 } as const;

@@ -2549,6 +2549,48 @@
         }
       }
     },
+    "/api/assets/capture": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Import Web Capture",
+        "description": "内嵌浏览器里截的图、采的页面图片入库,带着出处(来源网址、页面标题、截取时间、怎么截的)。\n\n只收图片、有大小上限、文件名由服务端定 —— 闸都在 domain/assets/web_capture。",
+        "operationId": "import_web_capture_api_assets_capture_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_web_capture_api_assets_capture_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/probe-url": {
       "post": {
         "tags": [
@@ -24767,6 +24809,78 @@
           "file"
         ],
         "title": "Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post"
+      },
+      "Body_import_web_capture_api_assets_capture_post": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "capture": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Capture"
+          },
+          "page_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Page Url"
+          },
+          "page_title": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Page Title",
+            "default": ""
+          },
+          "captured_at": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Captured At"
+          },
+          "source_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Source Url",
+            "default": ""
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 400
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "capture",
+          "page_url",
+          "captured_at",
+          "file"
+        ],
+        "title": "Body_import_web_capture_api_assets_capture_post"
       },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {

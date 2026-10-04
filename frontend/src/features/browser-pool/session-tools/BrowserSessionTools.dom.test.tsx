@@ -1,0 +1,190 @@
+/** @vitest-environment jsdom */
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * 浏览器会话顶栏的页面工具,走的都是用户会点的那几下:截屏三种、下载视频(平台页 / 直链 / 受保护 / 没有)、
+ * 采集图片、存成笔记、用当前页开工、交给智能体。主进程那一侧换成假的 window.mosaelPageTools,后端接口换成
+ * 记账的假货 —— 要验的是「交给后端的是什么」:出处、档案、走哪条路。
+ */
+
+// 带占位符的几条把占位符留着,才看得出拼进去的是什么(原因、像素……)。
+const WITH_PLACEHOLDER: Record<string, string> = {
+  browserToolsFailed: "browserToolsFailed:{reason}",
+  browserToolsDownloadFailed: "browserToolsDownloadFailed:{reason}",
+  browserToolsTruncated: "browserToolsTruncated:{px}",
+};
+const t = (key: string) => WITH_PLACEHOLDER[key] ?? key;
+vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "zh-CN" }) }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+
+const api = vi.hoisted(() => ({
+  listBrowserProfiles: vi.fn(),
+  importWebCapture: vi.fn(),
+  importFromUrl: vi.fn(),
+  urlSupport: vi.fn(),
+  getJob: vi.fn(),
+  cancelJob: vi.fn(),
+  createNoteFromPage: vi.fn(),
+  startWorkflowFromPage: vi.fn(),
+}));
+vi.mock("@/api/client", () => api);
+
+const agent = vi.hoisted(() => ({ startNewAgentSession: vi.fn(), AGENT_DRAFT_EVENT: "mosael:agent-draft" }));
+vi.mock("@/features/agent/currentAgentSession", () => agent);
+
+const links = vi.hoisted(() => ({ gotoRecord: vi.fn(), emitOpenEvent: vi.fn(), openNote: vi.fn() }));
+vi.mock("@/lib/deepLink", () => links);
+
+const { BrowserSessionTools } = await import("./BrowserSessionTools");
+
+const PAGE = { url: "https://example.com/post/1", title: "一篇帖子" };
+const STATE: PublishViewState = {
+  visible: true,
+  accountId: "persist:pool-p1",
+  accountName: "我的档案",
+  url: PAGE.url,
+  title: PAGE.title,
+  partition: "persist:pool-p1",
+};
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function capture(extra: Record<string, unknown> = {}) {
+  return { bytes: PNG, width: 2560, height: 1600, truncated: false, page: PAGE, capturedAt: "2026-10-04T05:30:00.000Z", ...extra };
+}
+
+let tools: Record<string, ReturnType<typeof vi.fn>>;
+const hideView = vi.fn();
+
+beforeEach(() => {
+  for (const fn of [...Object.values(api), ...Object.values(links), agent.startNewAgentSession, hideView]) fn.mockReset();
+  api.listBrowserProfiles.mockResolvedValue([{ id: "p1", partition: "persist:pool-p1", name: "我的档案" }]);
+  api.importWebCapture.mockImplementation(async () => ({ id: "asset-1" }));
+  api.urlSupport.mockResolvedValue({ supported: false, extractor: "" });
+  tools = {
+    capture: vi.fn(async (mode: string) => capture(mode === "full" ? { truncated: true } : {})),
+    beginRegion: vi.fn(async () => ({ frame: "data:image/png;base64,AAAA", width: 2000, height: 1000 })),
+    finishRegion: vi.fn(async (selection: unknown) => (selection ? capture({ width: 1000, height: 500 }) : null)),
+    probeVideos: vi.fn(async () => ({ page: PAGE, candidates: [], drm: false, streamOnly: false })),
+    listImages: vi.fn(async () => ({ page: PAGE, images: [] })),
+    fetchImages: vi.fn(async () => []),
+    readPage: vi.fn(async (mode: string) => ({ page: PAGE, html: mode === "article" ? "<article>正文</article>" : "", selection: "" })),
+    setInset: vi.fn(async () => undefined),
+  };
+  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView } });
+  URL.createObjectURL = vi.fn(() => "blob:preview");
+  URL.revokeObjectURL = vi.fn();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+function show() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <BrowserSessionTools workspaceId="ws" state={STATE} barHeight={56} />
+    </QueryClientProvider>,
+  );
+}
+
+const toolButton = (key: string) => document.querySelector(`[data-page-tool="${key}"]`) as HTMLElement;
+const choiceButton = (key: string) => document.querySelector(`[data-page-choice="${key}"]`) as HTMLElement;
+const notice = () => document.querySelector("[data-page-tools-notice]") as HTMLElement | null;
+
+describe("截屏到素材", () => {
+  it("可见区域:截下来带着出处入库,顶栏说「已存进素材库」,点「查看」跳到那一份", async () => {
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("visible"));
+    await waitFor(() => expect(api.importWebCapture).toHaveBeenCalled());
+    expect(tools.capture).toHaveBeenCalledWith("visible");
+    const sent = api.importWebCapture.mock.calls[0][0];
+    expect(sent).toMatchObject({
+      workspaceId: "ws",
+      capture: "screenshot_visible",
+      pageUrl: PAGE.url,
+      pageTitle: PAGE.title,
+      capturedAt: "2026-10-04T05:30:00.000Z",
+      name: "一篇帖子 · browserToolsShotNameVisible",
+    });
+    expect(sent.file).toBeInstanceOf(Blob);
+    expect(sent.file.type).toBe("image/png");
+    expect(sent.sourceUrl).toBeUndefined();
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsSavedAsset"));
+    fireEvent.click(within(notice()!).getByText("browserToolsView"));
+    expect(hideView).toHaveBeenCalled();
+    expect(links.gotoRecord).toHaveBeenCalledWith("/media", "mosael:open-asset", "asset-1");
+  });
+
+  it("整页长图:超长页面截了一段时如实说", async () => {
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("full"));
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsTruncated:15000"));
+    expect(api.importWebCapture.mock.calls[0][0].capture).toBe("screenshot_full");
+  });
+
+  it("整页长图截不了时说清原因,不报一串英文", async () => {
+    tools.capture.mockRejectedValueOnce(new Error("Error invoking remote method 'pageTools:capture': PageToolError: page-tools: full_page_unavailable"));
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("full"));
+    await waitFor(() => expect(notice()).toHaveTextContent("browserToolsFullPageUnavailable"));
+    expect(api.importWebCapture).not.toHaveBeenCalled();
+  });
+
+  it("框选:冻结画面上拖出来的框按比例交给主进程,裁出来的那块入库", async () => {
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("region"));
+    const overlay = await waitFor(() => {
+      const found = document.querySelector("[data-region-overlay]") as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const image = overlay.querySelector("img")!;
+    image.getBoundingClientRect = () => ({ left: 0, top: 56, width: 1000, height: 500, right: 1000, bottom: 556, x: 0, y: 56, toJSON: () => ({}) });
+    fireEvent.pointerDown(overlay, { clientX: 100, clientY: 106, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 600, clientY: 306, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 600, clientY: 306, pointerId: 1 });
+    await waitFor(() => expect(api.importWebCapture).toHaveBeenCalled());
+    expect(tools.finishRegion).toHaveBeenCalledWith({ x: 0.1, y: 0.1, width: 0.5, height: 0.4 });
+    expect(api.importWebCapture.mock.calls[0][0].capture).toBe("screenshot_region");
+    expect(document.querySelector("[data-region-overlay]")).toBeNull();
+  });
+
+  it("框选按 Esc 取消:网页亮回来,什么都不存", async () => {
+    show();
+    fireEvent.click(toolButton("shot"));
+    fireEvent.click(choiceButton("region"));
+    await waitFor(() => expect(document.querySelector("[data-region-overlay]")).not.toBeNull());
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(tools.finishRegion).toHaveBeenCalledWith(null));
+    expect(api.importWebCapture).not.toHaveBeenCalled();
+  });
+});
+
+it("选了一项就收回去,工具马上又点得到(连着截两张不用先收起)", async () => {
+  show();
+  fireEvent.click(toolButton("shot"));
+  fireEvent.click(choiceButton("visible"));
+  expect(choiceButton("visible")).toBeNull();
+  await waitFor(() => expect(notice()).toHaveTextContent("browserToolsSavedAsset"));
+  fireEvent.click(toolButton("shot"));
+  fireEvent.click(choiceButton("full"));
+  await waitFor(() => expect(api.importWebCapture).toHaveBeenCalledTimes(2));
+});
+
+it("子选项在顶栏里原地展开(不往网页上掉),Esc 收回", () => {
+  show();
+  fireEvent.click(toolButton("shot"));
+  expect(choiceButton("visible")).not.toBeNull();
+  expect(toolButton("shot")).toBeNull();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(choiceButton("visible")).toBeNull();
+  expect(toolButton("shot")).not.toBeNull();
+});

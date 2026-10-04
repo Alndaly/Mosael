@@ -1,0 +1,22 @@
+export const browserTools = {
+  // Page tools in the browser session toolbar
+  browserToolsLabel: "Page tools",
+  browserToolsShot: "Screenshot",
+  browserToolsShotVisible: "Visible area",
+  browserToolsShotFull: "Full page",
+  browserToolsShotRegion: "Select area",
+  browserToolsCollapse: "Collapse",
+  browserToolsClose: "Close",
+  browserToolsWorking: "Working…",
+  browserToolsSavedAsset: "Saved to the library",
+  browserToolsView: "View",
+  browserToolsTruncated: "The page is very long; only the first {px} px were captured",
+  browserToolsShotNameVisible: "Screenshot",
+  browserToolsShotNameFull: "Full-page screenshot",
+  browserToolsShotNameRegion: "Area screenshot",
+  browserToolsRegionHint: "Drag over the area to capture · Esc to cancel",
+  browserToolsFailed: "Didn't work: {reason}",
+  browserToolsNoPage: "The page is no longer in front",
+  browserToolsCaptureFailed: "Nothing was captured; the page may still be loading",
+  browserToolsFullPageUnavailable: "This page can't be captured as a full page (open DevTools also prevent it); try the visible area instead",
+} as const;

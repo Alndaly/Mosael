@@ -190,6 +190,34 @@ def import_upload(db: Session, user: User, workspace_id: str, *, project_id: str
     return import_uploaded_asset(db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload)
 
 
+def import_web_capture(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    *,
+    project_id: str | None,
+    upload,
+    name: str | None,
+    capture: str,
+    page_url: str,
+    page_title: str,
+    captured_at: str,
+    source_url: str = "",
+) -> Asset:
+    """内嵌浏览器里截的图、采的页面图片,带着出处入库(见 assets/web_capture)。
+
+    先过闸、再看出处、最后才读字节:没权限或出处不像样的请求,一个字节都不落盘。
+    """
+    from app.domain.assets.web_capture import read_capped, register_web_capture, web_source
+
+    ensure_workspace_perm(db, user, workspace_id, "upload")
+    source = web_source(
+        page_url=page_url, page_title=page_title, captured_at=captured_at, capture=capture, source_url=source_url,
+    )
+    data = read_capped(upload.file)
+    return register_web_capture(db, workspace_id=workspace_id, project_id=project_id, data=data, source=source, name=name)
+
+
 def import_local(db: Session, user: User, workspace_id: str, *, project_id: str | None, path: Path) -> Asset:
     """登记一个**已经放行过**的本机文件(路径的闸在 host_files,由调用方先过)。"""
     from app.domain.assets.importer import register_file_asset

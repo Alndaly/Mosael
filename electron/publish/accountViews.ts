@@ -113,6 +113,11 @@ export class AccountViewManager {
   private window: BaseWindow | null = null;
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
+  /**
+   * 框选截图时前台视图暂时藏起来:渲染层在原处铺一张冻结的画面让人拖框(原生视图上画不了框)。
+   * 只藏不摘 —— 页面不重排、不暂停,框完原样亮回来。
+   */
+  private foregroundHidden = false;
 
   constructor(
     private readonly onViewChanged: (state: ViewState) => void = noop,
@@ -246,6 +251,7 @@ export class AccountViewManager {
       this.demote(this.visibleId);
     }
     this.hover.drop(accountId); // 亮到前台就不再是面板,手柄不该因为它亮着
+    if (this.visibleId !== accountId) this.resetShell();
     this.visibleId = accountId;
     this.layout();
     // Re-adding the same View is the current View API's z-order operation:
@@ -305,6 +311,7 @@ export class AccountViewManager {
       // 顺序要紧:先清 visibleId 再 demote。panelAttach 对「正在前台的账号」有早退保护
       // (它不该去动前台视图),先 demote 就会被这条保护挡掉,任务还在跑却收不回面板。
       const previous = this.visibleId;
+      this.resetShell();
       this.visibleId = null;
       this.demote(previous);
       this.syncAudio();
@@ -530,6 +537,28 @@ export class AccountViewManager {
     return this.alive(view) ? view.webContents : null;
   }
 
+  /**
+   * 顶栏页面工具作用的对象:**只能是前台那个视图**。渲染层不点名要哪个视图 —— 它看得见的只有
+   * 前台这一个,让它点名等于让任何一段渲染层代码都能截后台正在发布的账号页面。
+   */
+  foreground(): { id: string; webContents: Electron.WebContents; partition: string } | null {
+    const wc = this.visibleWebContents();
+    if (!wc || !this.visibleId) return null;
+    return { id: this.visibleId, webContents: wc, partition: this.partitionFor(this.visibleId) };
+  }
+
+  /** 框选截图期间藏起 / 亮回前台视图(见 foregroundHidden)。 */
+  setForegroundHidden(hidden: boolean): void {
+    this.foregroundHidden = hidden;
+    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+    if (this.alive(view)) view.setVisible(!hidden);
+  }
+
+  /** 换了前台视图 / 收起了:框选的隐藏不该留给下一个视图。 */
+  private resetShell(): void {
+    if (this.foregroundHidden) this.setForegroundHidden(false);
+  }
+
   /** 工具栏导航:全部作用于当前可见视图,内部动作发生在「已聚焦的视图」里,稳。 */
   navigate(rawUrl: string): void {
     const wc = this.visibleWebContents();
@@ -728,6 +757,7 @@ export class AccountViewManager {
       view.webContents.on("did-start-loading", sync);
       view.webContents.on("did-stop-loading", sync);
       view.webContents.on("did-finish-load", sync);
+      view.webContents.on("page-title-updated", sync);
       view.setBackgroundColor("#ffffff");
       this.views.set(accountId, view);
       this.drivers.set(accountId, new PageDriver(view.webContents));
@@ -803,6 +833,8 @@ export class AccountViewManager {
       canGoBack: wc ? wc.navigationHistory.canGoBack() : false,
       canGoForward: wc ? wc.navigationHistory.canGoForward() : false,
       loading: wc ? wc.isLoading() : false,
+      title: wc ? wc.getTitle() : "",
+      partition: this.visibleId ? this.partitionFor(this.visibleId) : null,
     });
   }
 }

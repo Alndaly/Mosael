@@ -54,6 +54,35 @@ def import_asset(
     return use_cases.import_upload(db, user, workspace_id, project_id=project_id, name=name, upload=file)
 
 
+@router.post("/assets/capture", response_model=AssetOut)
+def import_web_capture(
+    db: Tx,
+    user: CurrentUser,
+    workspace_id: str = Form(...),
+    capture: str = Form(..., max_length=40),
+    page_url: str = Form(..., max_length=2000),
+    page_title: str = Form("", max_length=1000),
+    captured_at: str = Form(..., max_length=64),
+    source_url: str = Form("", max_length=2000),
+    project_id: str | None = Form(None),
+    name: str | None = Form(None, max_length=400),
+    file: UploadFile = File(...),
+) -> Asset:
+    """内嵌浏览器里截的图、采的页面图片入库,带着出处(来源网址、页面标题、截取时间、怎么截的)。
+
+    只收图片、有大小上限、文件名由服务端定 —— 闸都在 domain/assets/web_capture。
+    """
+    from app.domain.assets.web_capture import WebCaptureError
+
+    try:
+        return use_cases.import_web_capture(
+            db, user, workspace_id, project_id=project_id, upload=file, name=name, capture=capture,
+            page_url=page_url, page_title=page_title, captured_at=captured_at, source_url=source_url,
+        )
+    except WebCaptureError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
 @router.post("/assets/probe-url", response_model=UrlProbeResponse)
 def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     """这个链接后面有什么 —— 只读元数据,不下载任何媒体流。
