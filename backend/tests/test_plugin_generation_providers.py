@@ -467,8 +467,9 @@ def test_每份产出用的参数和一句说明进生成记录(plugged) -> None
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         first, second = job.result["asset_ids"]
-        assert job.result["outputs"] == [{"asset_id": first, "parameters": {"seed": 7}},
-                                         {"asset_id": second, "parameters": {"seed": 9}}], "嵌套的值不收"
+        assert job.result["output_parameters"] == [{"asset_id": first, "parameters": {"seed": 7}},
+                                                   {"asset_id": second, "parameters": {"seed": 9}}], "嵌套的值不收"
+        assert "outputs" not in job.result, "`outputs` 是「交回了什么」:占了它,画板和任务详情就看不见这两张"
         assert job.result["note"] == "3 张里出了 2 张;第 2 张失败:显存不够"
         #: 请求里真发出去的参数(连同插件声明的默认 size),叠上这一张实际用的种子。
         assert db.get(GeneratedAsset, second).parameters == {"seed": 9, "size": "1024x1024"}

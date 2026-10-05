@@ -258,8 +258,11 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             #: 多出来那几张此前消失的地方。
             job.result = {
                 "asset_ids": asset_ids,
-                #: 每份用的参数各不一样时(每张一个种子)记一份对照,运行记录里看得到
-                **({"outputs": [{"asset_id": asset.id, "parameters": own} for asset, own in zip(assets, used, strict=True)]}
+                #: 每份用的参数各不一样时(每张一个种子)记一份对照,运行记录里看得到。**不叫 `outputs`**:那个键是
+                #: 「这个任务交回了什么」(画板 / 任务详情读它,见 boards.outputs.outputs_of),占了它,这一次的素材
+                #: 在画板上就成了「没有交回任何产出」。
+                **({"output_parameters": [{"asset_id": asset.id, "parameters": own}
+                                          for asset, own in zip(assets, used, strict=True)]}
                    if any(used) else {}),
                 **({"note": result.note} if result.note else {}),
             }

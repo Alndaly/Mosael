@@ -8043,6 +8043,32 @@ def _migrate_plugin_connection_errors_follow_the_reader() -> None:
                 )
 
 
+def _migrate_generation_results_keep_output_parameters_apart() -> None:
+    """生成任务结果里「每份用的参数」(每张一个种子)从 `outputs` 挪到 `output_parameters`。
+
+    `outputs` 是「这个任务交回了什么」(`[{type, …}]`,画板回执和任务详情都只认它);生成任务此前把
+    `[{asset_id, parameters}]` 也记在这个键下,读的人看见 `outputs` 就不再看 `asset_ids` —— ComfyUI 跑几遍的那种
+    生成在任务详情里什么都不显示。只挪认得出的那种(每一项都是带 asset_id、没有 type 的对照);幂等:挪过的不再有 `outputs`。
+    """
+    if "jobs" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT id, result FROM jobs WHERE kind = 'ai_generation' AND result LIKE '%\"outputs\"%'"
+        )).fetchall()
+        for job_id, raw in rows:
+            result = json.loads(raw) if isinstance(raw, str) else raw
+            outputs = result.get("outputs") if isinstance(result, dict) else None
+            if not isinstance(outputs, list) or not outputs or not all(
+                isinstance(one, dict) and "asset_id" in one and "type" not in one for one in outputs
+            ):
+                continue
+            moved = {key: value for key, value in result.items() if key != "outputs"}
+            moved["output_parameters"] = outputs
+            conn.execute(text("UPDATE jobs SET result = :result WHERE id = :id"),
+                         {"result": json.dumps(moved, ensure_ascii=False), "id": job_id})
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -8359,6 +8385,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_plugin_connection_errors_follow_the_reader),
             #: 语音合成的老账照现在的口径改:CosyVoice 记在厂商 alibaba 名下(对得上价目),Edge 记 0、可信度免费。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_usage_follows_todays_booking),
+            #: 生成任务结果里每份的参数挪出 `outputs`(那个键是「交回了什么」,画板和任务详情只认它)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_generation_results_keep_output_parameters_apart),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),
