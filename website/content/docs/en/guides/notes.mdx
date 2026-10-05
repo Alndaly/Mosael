@@ -57,6 +57,10 @@ says why, such as "Nothing to undo".
 A few things worth calling out:
 
 - **Images** can be pasted, dragged in, or picked from Insert; select one to edit its link and alt text in place.
+- **Tables**: **Insert table** opens a grid (8 × 8 to start, growing toward 10 × 10 as you reach its edge). The cells from the top
+  left to the one under the pointer light up, with "rows × columns" underneath; click to insert a table that size, header row first.
+  Arrow keys move, <kbd>Enter</kbd> inserts, <kbd>Esc</kbd> closes. With the cursor inside a table the same button is **Table**, and
+  opens add row, add column, delete row, delete column and delete table.
 - **Code blocks** take a language, get syntax highlighting in both light and dark themes, and have
   a copy button. They stay valid Markdown and participate in undo.
 - **Highlight** is stored as `==text==` (the same notation as Obsidian and Typora), and can wrap bold and other formatting; typing
@@ -105,6 +109,10 @@ Select some text in the body and a toolbar floats above the selection (below it 
 ![A passage selected in the body, with the selection toolbar above it](/media/screens/en/notes-selection.png)
 
 ![The selection toolbar's AI actions: Polish, Rewrite, Expand, Shorten, Translate, Summarize, Explain, Continue](/media/screens/en/notes-ai-actions.png)
+
+The toolbar waits until the selection is made: nothing appears or jumps around while you drag, and it shows when you let go of the
+mouse (also when you let go outside the text). Extending the selection with <kbd>Shift</kbd> and the arrow keys, it stays out of the
+way between presses and shows when you release <kbd>Shift</kbd>. A select-all shows it right away.
 
 It works from the keyboard too: <kbd>Tab</kbd> enters the toolbar, arrow keys and <kbd>Home</kbd> / <kbd>End</kbd> move,
 <kbd>Esc</kbd> closes it and returns to the text. In a very narrow window the toolbar keeps only **Ask AI** and **More**.
