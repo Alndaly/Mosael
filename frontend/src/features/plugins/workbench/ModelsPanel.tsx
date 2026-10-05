@@ -1,16 +1,19 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, MousePointerClick, RefreshCcw, Search } from "lucide-react";
+import { Check, Loader2, MousePointerClick, RefreshCcw, Search } from "lucide-react";
 
-import { getModelLibrary, getNodeFolders, resolveModelLink, startModelDownload, type ModelFile, type ModelResolved } from "@/api/client";
+import { getModelLibrary, getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { useImagePreview } from "@/components/app/image-preview";
 import { ModelThumb, modelBaseName } from "@/components/generation/ModelThumb";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
+import { ModelDownload } from "@/features/plugins/workbench/ModelDownload";
 import {
   comboInputs,
   folderFamilies,
@@ -20,7 +23,7 @@ import {
   type ModelSlot,
   type WorkbenchNode,
 } from "@/features/plugins/workbench/workbenchLogic";
-import { InlineConfirm, PanelNote, useJobWatch, useOnJobDone } from "@/features/plugins/workbench/workbenchParts";
+import { PANEL_ROOT, PanelEmpty, PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -30,8 +33,8 @@ const LISTED = 120;
 
 /**
  * 工作台的「模型库」面板(ADR 0038 §6):在画布上选中一个加载节点 → 问插件它那几格选的是哪个模型目录的文件 → 用模型库的数据
- * 只列那个目录的(缩略图、底模家族、触发词),能搜、能按家族筛 → 点一个,经桥填进那一格(桥先查它在下拉里)。现在那一格选的
- * 文件这台 ComfyUI 上没有,就地贴个链接下到那个目录;下完经桥刷新下拉,新文件出现在下拉里。
+ * 只列那个目录的(缩略图、底模家族、触发词),能搜、能按家族筛 → 点一行,经桥填进那一格(桥先查它在下拉里);点缩略图看大图。
+ * 现在那一格选的文件这台 ComfyUI 上没有,就地找下载地址或贴链接下到那个目录;下完经桥刷新下拉,新文件出现在下拉里。
  */
 export function ModelsPanel({
   target,
@@ -60,21 +63,14 @@ export function ModelsPanel({
   if (capabilities && (!capabilities.selection || !capabilities.setWidget)) {
     return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t("workbenchCapSelection"))}</PanelNote>;
   }
-  if (!node) {
-    return (
-      <div className="grid justify-items-center gap-2 px-4 py-10 text-center text-ui-sm text-muted-foreground">
-        <MousePointerClick size={20} aria-hidden />
-        <p className="m-0 leading-relaxed">{t("workbenchModelsPick")}</p>
-      </div>
-    );
-  }
-  if (folders.isPending && inputs.length > 0) return <LoadingState label={t("workbenchModelsLoading")} className="h-auto py-8" />;
+  if (!node) return <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsPick")}</PanelEmpty>;
+  if (folders.isPending && inputs.length > 0) return <PanelLoading label={t("workbenchModelsLoading")} />;
   if (folders.isError) return <PanelNote tone="error">{errorText(folders.error)}</PanelNote>;
   if (slots.length === 0) {
-    return <PanelNote>{t("workbenchModelsNoSlot").replace("{node}", node.title || node.type)}</PanelNote>;
+    return <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsNoSlot").replace("{node}", node.title || node.type)}</PanelEmpty>;
   }
   return (
-    <div className="grid gap-4">
+    <div className={cn(PANEL_ROOT, "gap-4")}>
       {slots.map((slot) => (
         <SlotPicker
           key={`${node.id}:${slot.widget}`}
@@ -90,6 +86,8 @@ export function ModelsPanel({
     </div>
   );
 }
+
+type Note = { tone: "info" | "warning" | "error"; text: string; refresh?: boolean };
 
 function SlotPicker({
   target,
@@ -110,11 +108,17 @@ function SlotPicker({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const { openImagePreview } = useImagePreview();
   const [query, setQuery] = React.useState("");
   const [family, setFamily] = React.useState("");
-  const [note, setNote] = React.useState<{ tone: "info" | "warning" | "error"; text: string; refresh?: boolean } | null>(null);
-  //: 模型库的「模糊预览图」记在本机,这里照着它
+  //: 填进去的结果那一句:**只在回话到了时换成新的一句**,填的过程中不先撤掉 —— 撤掉再放回来,下面整个列表会先往上
+  //: 跳、再往下跳(维护者:「每次切换模型都会导致右侧这个窗口闪烁一下」)
+  const [note, setNote] = React.useState<Note | null>(null);
+  //: 说有预览图、取的时候却没取到的那几个:缩略图换成了占位,也就没有大图可看
+  const [failed, setFailed] = React.useState<ReadonlySet<string>>(() => new Set());
+  //: 模型库的「模糊预览图」记在本机,这里照着它(读同一个开关,不另起一个)
   const [blur] = usePersistentTab<"on" | "off">("model-library.blur", "off", ["on", "off"]);
+  const blurred = blur === "on";
   const families = folderFamilies(models, slot.folder);
   const listed = folderModels(models, slot.folder, { query, family });
   const present = presentIn(models, slot.folder, slot.value);
@@ -122,7 +126,6 @@ function SlotPicker({
   const pick = useMutation({
     mutationFn: (model: ModelFile) =>
       workbenchCall({ op: "setWidget", node: node.id, widget: slot.widget, value: model.name }),
-    onMutate: () => setNote(null),
     onSuccess: (result, model) => {
       if (result.ok) setNote({ tone: "info", text: t("workbenchModelsFilled").replace("{name}", modelBaseName(model.name)) });
       else if (result.error === "notInList") setNote({ tone: "warning", text: t("workbenchModelsNotInList"), refresh: true });
@@ -137,6 +140,15 @@ function SlotPicker({
     },
   });
 
+  const previewable = (model: ModelFile) => model.has_preview && !failed.has(model.name);
+  //: 看大图:这一页列着的、有预览图的成组翻(按列表的顺序)。开着「模糊预览图」时只开点的那一张 —— 点它是明确要看这一张,
+  //: 翻到别的就等于没经同意替人把它们都看清了
+  const preview = (model: ModelFile) => {
+    const item = (one: ModelFile) => ({ src: modelPreviewUrl(target.instanceId, one.folder, one.name), title: one.title || modelBaseName(one.name) });
+    const gallery = blurred ? [item(model)] : listed.slice(0, LISTED).filter(previewable).map(item);
+    openImagePreview({ ...item(model), gallery });
+  };
+
   return (
     <section aria-label={`${slot.widget} · ${slot.folder}`} className="grid gap-2.5">
       <header className="grid gap-1">
@@ -144,7 +156,8 @@ function SlotPicker({
           <Truncate>{node.title || node.type}</Truncate>
           <span className="shrink-0 text-ui-xs font-normal text-muted-foreground">#{node.id} · {slot.widget}</span>
         </h3>
-        <div className="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted-foreground">
+        {/* 固定一行的高:「这台 ComfyUI 上没有」那枚标签比字高,一出一没整块会跟着跳 */}
+        <div className="flex h-6 min-w-0 items-center gap-1.5 text-ui-xs text-muted-foreground">
           <span className="shrink-0">{t("workbenchModelsCurrent")}</span>
           <Truncate className="min-w-0 text-foreground">{slot.value || "—"}</Truncate>
           {!loading && !error && !present && <CatalogBadge tone="warning">{t("workbenchModelsMissing")}</CatalogBadge>}
@@ -164,11 +177,12 @@ function SlotPicker({
         </PanelNote>
       )}
       {!loading && !error && !present && (
-        <DownloadBox target={target} folder={slot.folder} wanted={slot.value} canRefresh={canRefresh}
-                     onDone={() => {
-                       void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
-                       if (canRefresh) refresh.mutate();
-                     }} />
+        <ModelDownload target={target} folder={slot.folder} wanted={slot.value}
+                       doneLabel={t(canRefresh ? "workbenchDownloadDone" : "workbenchDownloadDoneManual")}
+                       onDone={() => {
+                         void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
+                         if (canRefresh) refresh.mutate();
+                       }} />
       )}
       <label className="relative">
         <Search size={13} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -203,29 +217,55 @@ function SlotPicker({
         <ul aria-label={t("workbenchModelsList").replace("{folder}", slot.folder)} className="m-0 grid list-none gap-1 p-0">
           {listed.slice(0, LISTED).map((model) => {
             const chosen = model.name.replace(/\\/g, "/") === slot.value.replace(/\\/g, "/");
+            const filling = pick.isPending && pick.variables?.name === model.name;
+            const name = model.title || modelBaseName(model.name);
+            const thumb = (
+              <ModelThumb compact instanceId={target.instanceId} model={model} blurred={blurred}
+                          onFailed={() => setFailed((current) => new Set([...current, model.name]))} />
+            );
             return (
-              <li key={model.name}>
+              <li
+                key={model.name}
+                data-model-row=""
+                className={cn(
+                  "group/thumb flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
+                  chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
+                )}
+              >
+                {previewable(model) ? (
+                  <IconButton
+                    unstyled
+                    type="button"
+                    data-model-preview=""
+                    label={t("workbenchModelsPreview").replace("{name}", name)}
+                    className="size-11 shrink-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>*]:size-full"
+                    onClick={() => preview(model)}
+                  >
+                    {thumb}
+                  </IconButton>
+                ) : (
+                  <span className="size-11 shrink-0 overflow-hidden rounded-md [&>*]:size-full">{thumb}</span>
+                )}
                 <button
                   type="button"
                   aria-pressed={chosen}
+                  aria-busy={filling || undefined}
                   disabled={pick.isPending}
-                  className={cn(
-                    "group/thumb flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border p-1.5 text-left",
-                    chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
-                  )}
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 self-stretch border-0 bg-transparent p-0 text-left disabled:cursor-default"
                   onClick={() => pick.mutate(model)}
                 >
-                  <span className="size-11 shrink-0 overflow-hidden rounded-md [&>*]:size-full">
-                    <ModelThumb compact instanceId={target.instanceId} model={model} blurred={blur === "on"} />
-                  </span>
                   <span className="grid min-w-0 flex-1 gap-0.5">
-                    <Truncate className="text-ui-xs font-medium text-foreground">{model.title || modelBaseName(model.name)}</Truncate>
+                    <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
                     <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
                       {model.family && <CatalogBadge tone="muted">{model.family}</CatalogBadge>}
                       <Truncate>{(model.triggers ?? []).slice(0, 3).join(", ") || modelBaseName(model.name)}</Truncate>
                     </span>
                   </span>
-                  {chosen && <Check size={14} aria-hidden className="shrink-0 text-primary" />}
+                  {/* 同一格:填的过程中是转圈,填好了是对勾 —— 宽度不变,这一行不跳 */}
+                  <span className="grid size-4 shrink-0 place-items-center">
+                    {filling ? <Loader2 size={14} aria-hidden className="animate-mosael-spin text-muted-foreground" />
+                      : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
+                  </span>
                 </button>
               </li>
             );
@@ -238,82 +278,5 @@ function SlotPicker({
         </ul>
       )}
     </section>
-  );
-}
-
-/** 那一格选的文件这台 ComfyUI 上没有:贴个链接(HuggingFace / Civitai / ModelScope / 直链),认一下,确认后下到这个目录。 */
-function DownloadBox({
-  target,
-  folder,
-  wanted,
-  canRefresh,
-  onDone,
-}: {
-  target: WorkbenchTarget;
-  folder: string;
-  wanted: string;
-  canRefresh: boolean;
-  onDone: () => void;
-}) {
-  const t = useI18n();
-  const [link, setLink] = React.useState("");
-  const [resolved, setResolved] = React.useState<ModelResolved | null>(null);
-  const [jobId, setJobId] = React.useState<string | null>(null);
-  const job = useJobWatch(jobId);
-  useOnJobDone(job.data, (done) => {
-    if (done.status === "succeeded") onDone();
-  });
-  const resolve = useMutation({ mutationFn: () => resolveModelLink(target.instanceId, link.trim()), onSuccess: setResolved });
-  const start = useMutation({
-    mutationFn: () =>
-      startModelDownload(target.instanceId, {
-        workspace_id: target.workspaceId,
-        url: resolved!.url,
-        folder,
-        filename: resolved!.filename || modelBaseName(wanted),
-      }),
-    onSuccess: (created) => {
-      setResolved(null);
-      setJobId(created.id);
-    },
-  });
-  if (jobId) {
-    const status = job.data?.status ?? "queued";
-    return (
-      <PanelNote tone={status === "failed" ? "error" : "info"}>
-        {status === "succeeded"
-          ? t(canRefresh ? "workbenchDownloadDone" : "workbenchDownloadDoneManual")
-          : status === "failed" ? job.data?.error || t("workbenchDownloadFailed")
-          : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
-      </PanelNote>
-    );
-  }
-  return (
-    <div className="grid gap-2 rounded-lg border border-dashed border-border p-2.5">
-      <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
-        {t("workbenchDownloadHint").replace("{name}", modelBaseName(wanted)).replace("{folder}", folder)}
-      </p>
-      <div className="flex gap-1.5">
-        <Input size="xs" className="min-w-0 flex-1" value={link} placeholder={t("workbenchDownloadLink")}
-               aria-label={t("workbenchDownloadLink")} onChange={(event) => setLink(event.target.value)} />
-        <Button variant="outline" size="xs" disabled={!/^https?:\/\//i.test(link.trim())} loading={resolve.isPending}
-                onClick={() => resolve.mutate()}>
-          {t("workbenchDownloadResolve")}
-        </Button>
-      </div>
-      {resolve.isError && <PanelNote tone="error">{errorText(resolve.error)}</PanelNote>}
-      {start.isError && <PanelNote tone="error">{errorText(start.error)}</PanelNote>}
-      {resolved && (
-        <InlineConfirm
-          title={t("workbenchDownloadConfirm").replace("{server}", target.instanceName).replace("{folder}", folder)
-            .replace("{name}", resolved.filename || modelBaseName(wanted))}
-          body={resolved.exists ? t("workbenchDownloadExists") : undefined}
-          confirmLabel={t("workbenchDownloadStart")}
-          pending={start.isPending}
-          onCancel={() => setResolved(null)}
-          onConfirm={() => start.mutate()}
-        />
-      )}
-    </div>
   );
 }

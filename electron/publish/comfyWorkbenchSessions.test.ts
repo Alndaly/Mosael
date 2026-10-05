@@ -46,7 +46,8 @@ describe("工作台会话(主进程这一侧)", () => {
     const h = harness((script) => (script === workbenchPollScript(ORIGIN) ? state : true));
     h.sessions.start(PARTITION, ORIGIN);
     await vi.waitFor(() => expect(h.emit).toHaveBeenCalledTimes(1));
-    expect(h.emit.mock.calls[0][1].workflow).toEqual({ path: "a.json", name: "a", temporary: false, modified: false });
+    expect(h.emit.mock.calls[0][1].workflow).toEqual({ path: "a.json", name: "a", temporary: false, modified: false,
+                                                      key: "workflows/a.json", revision: 0 });
     await h.tick();
     expect(h.emit, "一模一样就不再发").toHaveBeenCalledTimes(1);
     state = answer({ workflow: { path: "workflows/a.json", name: "a", temporary: false, modified: true } });

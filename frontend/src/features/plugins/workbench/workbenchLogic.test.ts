@@ -6,11 +6,18 @@ import {
   folderFamilies,
   folderModels,
   liveProgress,
+  missingByPack,
   modelSlots,
   nodeLabels,
+  nodesOfType,
+  nodesUsingModel,
   onlyResult,
   outputGroups,
+  packPage,
   presentIn,
+  runGallery,
+  runsByWorkflow,
+  withoutResult,
   type WorkbenchNode,
 } from "./workbenchLogic";
 
@@ -96,8 +103,61 @@ describe("工作台面板背后的纯函数", () => {
       { promptId: "p1", node: "3", value: 4, max: 20 });
   });
 
-  it("「以后只要这张」:只标这一个结果,应用表单别的部分不动", () => {
+  it("「只要这个节点的图」:只标这一个结果;撤销只去掉这一个;应用表单别的部分不动", () => {
     const draft = { title: "人像", description: "", items: [], results: ["9", "17"] };
     expect(onlyResult(draft, "17")).toEqual({ ...draft, results: ["17"] });
+    expect(withoutResult(draft, "9")).toEqual({ ...draft, results: ["17"] });
+    expect(withoutResult(draft, "5")).toEqual(draft);
+  });
+
+  it("看大图:一次跑出的全部产出按面板上的顺序成组,标题带来源节点和第几张", () => {
+    const groups = [{ node: "17", label: "PreviewImage", assets: ["a1", "a3"] }, { node: "", label: "", assets: ["a4"] }];
+    expect(runGallery(groups, (node) => `PreviewImage #${node}`, "不知道")).toEqual([
+      { asset: "a1", title: "PreviewImage #17 · 1/3" },
+      { asset: "a3", title: "PreviewImage #17 · 2/3" },
+      { asset: "a4", title: "不知道 · 3/3" },
+    ]);
+  });
+
+  it("运行与结果按工作流分:开着的这一张在前,别的那几张各一组(没存过的按前端里的那一张认)", () => {
+    const run = (jobId: string, workflowKey: string, workflowName = "") =>
+      ({ jobId, path: "", workflowKey, workflowName, kind: "image", startedAt: 0, labels: [] });
+    const runs = [run("j4", "workflows/b.json", "b"), run("j3", "workflows/a.json", "a"), run("j2", "workflows/Unsaved Workflow (2).json"),
+                  run("j1", "workflows/b.json", "b")];
+    const { current, others } = runsByWorkflow(runs, "workflows/a.json");
+    expect(current.map((one) => one.jobId)).toEqual(["j3"]);
+    expect(others.map((one) => [one.key, one.runs.map((r) => r.jobId)])).toEqual([
+      ["workflows/b.json", ["j4", "j1"]], ["workflows/Unsaved Workflow (2).json", ["j2"]],
+    ]);
+  });
+
+  it("定位:根图和子图里的节点都找得到;按类型找缺的节点,按 widget 里填的文件找缺的模型(路径写法不同也认)", () => {
+    const workflow = {
+      nodes: [{ id: 4, type: "CheckpointLoaderSimple", widgets_values: ["wan\\i2v.safetensors"] }, { id: 7, type: "CR Prompt Text" },
+              { id: 9, type: "VHS_LoadVideo", widgets_values: { video: "i2v.safetensors", force_rate: 0 } }, "bad"],
+      definitions: { subgraphs: [{ id: "sg-1", name: "细节", nodes: [{ id: 5, type: "CR Prompt Text" },
+                                                                    { id: 6, type: "UNETLoader", widgets_values: ["wan/i2v.safetensors"] }] }] },
+    };
+    expect(nodesOfType(workflow, "CR Prompt Text")).toEqual([
+      { node: "7", subgraph: null, subgraphName: "" }, { node: "5", subgraph: "sg-1", subgraphName: "细节" },
+    ]);
+    expect(nodesUsingModel(workflow, "wan/i2v.safetensors").map((one) => one.node)).toEqual(["4", "9", "6"]);
+    expect(nodesUsingModel(workflow, "other.safetensors")).toEqual([]);
+    expect(nodesOfType(null, "x")).toEqual([]);
+  });
+
+  it("缺的节点按节点包分组:同一个包的几种一起装,认不出包的各自一组、排在后面;包的主页", () => {
+    const pack = (id: string) => ({ id, title: id, installed: false });
+    const groups = missingByPack([
+      { type: "Unknown", packs: [] },
+      { type: "CR A", packs: [pack("comfyroll")] },
+      { type: "CR B", packs: [pack("comfyroll")] },
+      { type: "Either", packs: [pack("y"), pack("x")] },
+    ]);
+    expect(groups.map((one) => [one.packs.map((p) => p.id), one.nodes.map((n) => n.type)])).toEqual([
+      [["comfyroll"], ["CR A", "CR B"]], [["y", "x"], ["Either"]], [[], ["Unknown"]],
+    ]);
+    expect(packPage("https://github.com/acme/nodes.git")).toBe("https://github.com/acme/nodes");
+    expect(packPage("comfyui-kjnodes")).toBe("https://registry.comfy.org/nodes/comfyui-kjnodes");
   });
 });

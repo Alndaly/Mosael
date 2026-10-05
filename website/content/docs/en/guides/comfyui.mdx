@@ -414,23 +414,36 @@ beside it:
 
 - **Top bar**: the connection, the workflow name, a dot when there are unsaved changes, canvas navigation (trackpad / mouse), **Save**
   (the same as Ctrl+S on the canvas: it saves into the workflow file on that ComfyUI; an unsaved workflow asks for a name), **Run**, and
-  a button to hide or show the column on the right.
+  a button to hide or show the column on the right. Drag the column's left edge to make it wider or narrower (or use the left/right
+  arrow keys on that edge; double-click resets it); the width is remembered on this computer and the canvas makes room.
 - **Models**: select a model-loading node on the canvas (checkpoint, LoRA, VAE, ControlNet, upscaler…) and only the models in its
-  folder are listed, with previews, base model families and trigger words, searchable and filterable by family; click one to fill it
-  into that input (it checks the input's dropdown first). If the file the input points at isn't on this ComfyUI, paste a link right
-  there, check it and confirm to download it into that folder; once it's downloaded the canvas dropdowns refresh and the new file is
-  in them.
-- **Missing**: the nodes and models the graph **on the canvas right now** (unsaved changes included) is missing, in one list. **Install**
-  a missing node pack (through ComfyUI-Manager, confirmed in place; ComfyUI has to restart to load it, so save the canvas before
-  restarting); **Download** a model the workflow gives a download address for.
+  folder are listed, with previews, base model families and trigger words, searchable and filterable by family; click a row to fill it
+  into that input (it checks the input's dropdown first), click a thumbnail to view it larger (the page's previews in one gallery; with
+  “Blur previews” on, only the one you clicked). If the file the input points at isn't on this ComfyUI, **Find a download** or paste a
+  link right there, check it and confirm to download it into that folder; once it's downloaded the canvas dropdowns refresh and the new
+  file is in them.
+- **Missing**: the nodes and models the graph **on the canvas right now** (unsaved changes included) is missing, in one list that
+  follows the canvas: switch workflows or edit the graph in ComfyUI and it checks again by itself (**Check again** is still there).
+  Every item can be **located**: the node using it is selected and centered on the canvas (several places cycle on each click; a node
+  inside a subgraph opens that subgraph first, or the panel names the subgraph when the frontend can't open it). Missing nodes from the
+  same pack are grouped under one **Install** (through ComfyUI-Manager, confirmed in place; ComfyUI has to restart to load it, so save
+  the canvas before restarting); without ComfyUI-Manager the panel says it can't tell or install packs. **Download** a model the
+  workflow gives a download address for; otherwise **Find a download** searches Civitai, HuggingFace and ModelScope by the file name
+  (the full name first, then without the extension) and lists the site, repository, exact file name, size and base model, exact names
+  first and never picking a similar one for you; click one to confirm in place and download it into that folder, or paste a link right
+  there when nothing turns up. After a download or install finishes it checks again by itself.
 - **App**: the app form editor from the workflow library, bound to the graph on the canvas. **Write to canvas** changes the marks on the
   nodes on the canvas, not the file; **Save** in the top bar saves it into the workflow file, in the same save as any other change you
   make in ComfyUI.
 - **Run & results**: **Run** runs **the graph on the canvas right now (including unsaved changes)** as an ordinary generation task (it
   shows in the task center, can be cancelled, is resumed after Mosael restarts, and its results go into the asset library). The canvas
   highlights the running node as usual and the panel says which node is running and at which step; finished results are **grouped by
-  the node they came from**, labeled with the node's name, and each group has **Only this from now on**, which marks that output node as
-  this workflow's result (on the canvas; it takes effect once saved). A new workflow has to be saved once before it can run here.
+  the node they came from**, labeled with the node's name; click one to view it larger (the run's outputs in one gallery). Each group
+  has **Only this node's images**, which marks that **output node** (not this one picture): from now on, when this workflow runs from
+  AI Studio, boards or workflow nodes, only that node's images are kept and other preview nodes are ignored (on the canvas; it takes
+  effect once saved). The marked group says **Results come from this node** and can be undone; marks on other nodes are named too.
+  Switch workflows in ComfyUI and this workflow's runs come first, with the earlier ones under **Runs of other workflows**. A new
+  workflow has to be saved once before it can run here.
 
 The workbench talks to the canvas through a fixed script that Mosael's main process injects; only Mosael reads the canvas, and the page
 can't call into Mosael. If the ComfyUI frontend is too old and lacks something, that part says “This ComfyUI frontend doesn't

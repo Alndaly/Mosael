@@ -9,6 +9,7 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { buttonVariants } from "@/components/ui/button"
+import { useEmbeddedViewUp } from "@/components/ui/appChrome"
 
 const AlertDialog = AlertDialogPrimitive.Root
 
@@ -37,9 +38,11 @@ const AlertDialogContent = React.forwardRef<
 >(({ className, onEscapeKeyDown, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
+  // 内嵌网页视图亮着时不画遮罩(连同它的滚动锁),和 Dialog 同一个理由。见 appChrome 的 useEmbeddedViewUp。
+  const viewUp = useEmbeddedViewUp()
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      {!viewUp && <AlertDialogOverlay />}
       <AlertDialogPrimitive.Content
         ref={ref}
         className={cn(

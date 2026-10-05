@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { LoadingState } from "@/components/layout/LoadingState";
 import { APP_CHROME } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -11,18 +10,17 @@ import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
+import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
-import { PanelNote } from "@/features/plugins/workbench/workbenchParts";
+import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { useWorkbench, workbenchCall } from "@/features/plugins/workbench/workbenchSession";
+import { HANDLE_COLUMN } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
-
-/** 右边那一列多宽:网页右侧让出这么宽(主进程 setShellInset,最多让出一半)。 */
-export const WORKBENCH_COLUMN_WIDTH = 420;
 
 const TABS = ["models", "missing", "app", "run"] as const;
 type Tab = (typeof TABS)[number];
@@ -32,12 +30,25 @@ const BRIDGE_PATIENCE_MS = 45_000;
 const COLUMN_REGION = { side: "left" as const };
 
 /**
+ * 每个页签自己滚动(竖排的 flex,面板的根占满剩下的高 —— 空的、在读的摆在正中,见 workbenchParts)。能拿焦点:在里面点了
+ * 不能聚焦的地方(一段说明),焦点落在这一层上,方向键、PageDown 滚的就是它;内嵌网页亮着时,落在外壳外面的按键会被
+ * 吞掉(见 embeddedFocus),落在这里的不会。
+ */
+const TAB_PANEL =
+  "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-3 focus-visible:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-inset focus-visible:ring-ring";
+
+/**
  * ComfyUI 工作台(ADR 0038 §3):全屏,左边整块是那台 ComfyUI 自己的画布(内嵌视图,每个自定义节点照常能用),Mosael 的东西
- * 都画在它旁边 —— 顶栏(连接、工作流名、有没有没存的改动、操控方式、「保存」「运行」)和右边能收起的一列(模型库、缺失项、应用、
- * 运行与结果)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 56px,右边那一列开着时视图让出那么宽;要确认的事就地确认。
+ * 都画在它旁边 —— 顶栏(连接、工作流名、有没有没存的改动、操控方式、「保存」「运行」)和右边能收起、能拉宽拉窄的一列(模型库、
+ * 缺失项、应用、运行与结果)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 `barHeight`(和主进程 EMBED_HEADER_HEIGHT
+ * 同一个数,见 contracts/shared-constants.json),右边那一列开着时视图让出那么宽(见 columnWidth);要确认的事就地确认。
  *
  * 和画布通话的是主进程注入的桥(只拉不推,见 electron/publish/comfyWorkbench);这版前端缺了哪一样,那一处就说「这版 ComfyUI
  * 前端不支持 X」,画布照常是一个能用的 ComfyUI。
+ *
+ * **画布上换了一张**(在 ComfyUI 自己的标签栏、侧栏里):桥报的 `workflow.key` 变了,模型库、缺失项、应用这几个面板按它重挂
+ * (各自从头读这一张),运行与结果把这一张跑过的排在前面。同一张里改了图(`revision` 变了),缺失项过一会儿自己重新检查。
  */
 export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const t = useI18n();
@@ -49,6 +60,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const [saveNote, setSaveNote] = React.useState("");
   const run = useCanvasRun(target);
   const columnOpen = open === "open";
+  const column = useColumnWidth(columnOpen && Boolean(target));
+  const workflow = state?.workflow ?? null;
+  const workflowKey = workflow?.key ?? "";
   //: 一直没收到桥那边的回话(这版前端太旧、页面要先登录、桥注入不上):说一句,画布照常能用
   const [stuck, setStuck] = React.useState(false);
   React.useEffect(() => {
@@ -61,16 +75,14 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   React.useEffect(() => {
     setVisited((current) => (current.has(tab) ? current : new Set([...current, tab])));
   }, [tab]);
-  React.useEffect(() => {
-    void window.mosaelPageTools?.setInset(columnOpen ? WORKBENCH_COLUMN_WIDTH : 0);
-  }, [columnOpen]);
-  React.useEffect(() => () => void window.mosaelPageTools?.setInset(0), []);
+  //: 换了一张:上一张没存成的那句话不是这一张的
+  React.useEffect(() => setSaveNote(""), [workflowKey]);
 
   if (!target) return null;
   const capabilities = state?.capabilities ?? null;
   const path = savedPath(state);
-  const workflowName = state?.workflow ? state.workflow.name || path || t("workbenchUnsaved") : "";
-  const modified = Boolean(state?.workflow?.modified);
+  const workflowName = workflow ? workflow.name || path || t("workbenchUnsaved") : "";
+  const modified = Boolean(workflow?.modified);
   const canSave = capabilities?.save !== false;
   const canRun = Boolean(capabilities?.export) && Boolean(path);
   const runBlocked = !state ? t("workbenchConnecting")
@@ -80,7 +92,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const startRun = () => {
     setTab("run");
     if (!columnOpen) setOpen("open");
-    run.mutate(path);
+    run.mutate({ path, workflowKey, workflowName });
   };
   const save = async () => {
     setSaveNote("");
@@ -95,6 +107,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     run: t("workbenchTabRun"),
   };
 
+  //: 顶栏:控件一律 sm 一档(32px、text-ui-sm),居中排在栏里;文字那一段同一个字号
   const bar = (
     <div
       {...APP_CHROME}
@@ -107,19 +120,22 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     >
       <HintRegion.Provider value={BAR_REGION}>
         <Hint label={t("publishBackHint")}>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             data-publish-back=""
-            className="[-webkit-app-region:no-drag] inline-flex shrink-0 cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
+            data-bar-control=""
+            className="[-webkit-app-region:no-drag] shrink-0"
             onClick={() => void window.mosaelPublish?.hideView()}
           >
-            <ArrowLeft size={14} /> {t("publishBackToApp")}
-          </button>
+            <ArrowLeft />
+            {t("publishBackToApp")}
+          </Button>
         </Hint>
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5 px-1">
-          <span className="shrink-0 text-ui-xs font-medium text-primary">{t("workbenchTitle")}</span>
-          <Truncate className="min-w-0 shrink text-ui-xs text-muted-foreground">{target.instanceName}</Truncate>
-          {workflowName && <span aria-hidden className="text-ui-xs text-muted-foreground">/</span>}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1 text-ui-sm">
+          <span className="shrink-0 font-medium text-primary">{t("workbenchTitle")}</span>
+          <Truncate className="min-w-0 shrink text-muted-foreground">{target.instanceName}</Truncate>
+          {workflowName && <span aria-hidden className="shrink-0 text-muted-foreground">/</span>}
           {workflowName && (
             <h1 className="m-0 min-w-0 text-ui-sm font-semibold text-foreground">
               <Truncate>{workflowName}</Truncate>
@@ -127,49 +143,57 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           )}
           {modified && (
             <Hint label={t("workbenchUnsavedChanges")}>
-              <span role="img" aria-label={t("workbenchUnsavedChanges")} className="inline-block size-2 shrink-0 self-center rounded-full bg-warning" />
+              <span role="img" aria-label={t("workbenchUnsavedChanges")} className="inline-block size-2 shrink-0 rounded-full bg-warning" />
             </Hint>
           )}
-          {!state && <span className="shrink-0 text-ui-xs text-muted-foreground">{t("workbenchConnecting")}</span>}
+          {!state && <span className="shrink-0 text-muted-foreground">{t("workbenchConnecting")}</span>}
         </div>
-        <ComfyNavigationSwitch connectionId={target.instanceId} />
+        <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" />
         <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}>
-          <Button variant="outline" size="sm" className="[-webkit-app-region:no-drag] shrink-0" disabled={!state || !canSave}
-                  onClick={() => void save()}>
-            <Save size={13} />
+          <Button variant="outline" size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0"
+                  disabled={!state || !canSave} onClick={() => void save()}>
+            <Save />
             {t("workbenchSave")}
           </Button>
         </Hint>
         <Hint label={t("workbenchRunHintShort")} disabledReason={runBlocked}>
-          <Button size="sm" className="[-webkit-app-region:no-drag] shrink-0" disabled={!canRun} loading={run.isPending}
-                  onClick={startRun}>
-            <Play size={13} />
+          <Button size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0" disabled={!canRun}
+                  loading={run.isPending} onClick={startRun}>
+            <Play />
             {t("workbenchRun")}
           </Button>
         </Hint>
         <IconButton
           variant="ghost"
           size="icon-sm"
+          data-bar-control=""
           className="[-webkit-app-region:no-drag] shrink-0"
           label={columnOpen ? t("workbenchColumnHide") : t("workbenchColumnShow")}
           aria-expanded={columnOpen}
           onClick={() => setOpen(columnOpen ? "closed" : "open")}
         >
-          {columnOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+          {columnOpen ? <PanelRightClose /> : <PanelRightOpen />}
         </IconButton>
       </HintRegion.Provider>
     </div>
   );
 
-  const column = columnOpen ? (
+  const aside = columnOpen ? (
     <HintRegion.Provider value={COLUMN_REGION}>
       <aside
         {...APP_CHROME}
         data-comfy-workbench-column=""
         aria-label={t("workbenchColumn")}
-        style={{ top: barHeight, width: WORKBENCH_COLUMN_WIDTH }}
+        style={{ top: barHeight, width: column.width }}
         className="fixed bottom-0 right-0 z-[200] flex flex-col border-l border-border bg-panel"
       >
+        <div
+          {...column.handleProps}
+          aria-label={t("workbenchColumnResize")}
+          data-workbench-resize=""
+          className={cn("absolute inset-y-0 left-0 z-10 focus-visible:outline-none focus-visible:before:bg-primary", HANDLE_COLUMN,
+                        column.dragging && "before:bg-primary")}
+        />
         <div role="tablist" aria-label={t("workbenchColumn")} className="flex h-11 flex-none items-stretch gap-1 border-b border-border px-2">
           {TABS.map((one) => (
             <button
@@ -191,35 +215,51 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             </button>
           ))}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {saveNote && <p role="alert" className="m-0 mb-3 text-ui-xs text-destructive">{saveNote}</p>}
-          {!state && (stuck
-            ? <PanelNote tone="warning">{t("workbenchBridgeMissing")}</PanelNote>
-            : <LoadingState label={t("workbenchConnecting")} className="h-auto py-10" />)}
-          {state && TABS.filter((one) => visited.has(one)).map((one) => (
-            <div key={one} role="tabpanel" id={`comfy-workbench-panel-${one}`} aria-labelledby={`comfy-workbench-tab-${one}`}
-                 hidden={tab !== one}>
-              {one === "models" && <ModelsPanel target={target} node={state?.selection.node ?? null} capabilities={capabilities} />}
-              {one === "missing" && <MissingPanel target={target} canExport={capabilities ? capabilities.export : false} />}
-              {one === "app" && (
-                <AppPanel target={target} canExport={capabilities ? capabilities.export : false}
-                          canMark={capabilities ? capabilities.marks : false} />
-              )}
-              {one === "run" && (
-                <RunPanel target={target} runs={runs} events={events} canMark={Boolean(capabilities?.marks && capabilities?.export)}
-                          runError={run.error} />
-              )}
-            </div>
-          ))}
-        </div>
+        {saveNote && <p role="alert" className="m-0 flex-none px-3 pt-3 text-ui-xs text-destructive">{saveNote}</p>}
+        {!state && (
+          <div className={TAB_PANEL}>
+            {stuck ? <PanelNote tone="warning">{t("workbenchBridgeMissing")}</PanelNote> : <PanelLoading label={t("workbenchConnecting")} />}
+          </div>
+        )}
+        {state && TABS.filter((one) => visited.has(one)).map((one) => (
+          <div key={one} role="tabpanel" id={`comfy-workbench-panel-${one}`} aria-labelledby={`comfy-workbench-tab-${one}`}
+               hidden={tab !== one} tabIndex={0} data-workbench-scroll="" className={TAB_PANEL}>
+            {/* 换了一张工作流(key 变了):模型库、缺失项、应用各自重挂,从头读这一张 */}
+            {one === "models" && (
+              <ModelsPanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
+            )}
+            {one === "missing" && (
+              <MissingPanel key={workflowKey} target={target} capabilities={capabilities} active={tab === "missing"}
+                            revision={workflow?.revision ?? 0} />
+            )}
+            {one === "app" && (
+              <AppPanel key={workflowKey} target={target} canExport={capabilities ? capabilities.export : false}
+                        canMark={capabilities ? capabilities.marks : false} />
+            )}
+            {one === "run" && (
+              <RunPanel target={target} runs={runs} events={events} workflowKey={workflowKey} active={tab === "run"}
+                        canMark={Boolean(capabilities?.marks && capabilities?.export)} runError={run.error} />
+            )}
+          </div>
+        ))}
       </aside>
+      {/* 拖着那条边时网页多让出的那一截(见 columnWidth 的 DRAG_GUARD):铺一块底色,光标照样是左右拉的 */}
+      {column.dragging && (
+        <div
+          {...APP_CHROME}
+          aria-hidden
+          data-workbench-drag-guard=""
+          style={{ top: barHeight, right: column.width, width: DRAG_GUARD }}
+          className="fixed bottom-0 z-[200] cursor-col-resize bg-panel-inset"
+        />
+      )}
     </HintRegion.Provider>
   ) : null;
 
   return (
     <>
       {bar}
-      {column && createPortal(column, document.body)}
+      {aside && createPortal(aside, document.body)}
     </>
   );
 }

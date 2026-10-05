@@ -37,7 +37,7 @@ function comfyPage(origin = ORIGIN) {
       listeners.set(type, [...(listeners.get(type) ?? []), listener]),
   };
   const fire = (type: string, detail: unknown) => listeners.get(type)?.forEach((listener) => listener({ detail }));
-  const tracker = { captureCanvasState: vi.fn() };
+  const tracker = { captureCanvasState: vi.fn(), activeState: { nodes: [] } as unknown };
   const active = { path: "workflows/人像/古风.json", filename: "古风", isTemporary: false, isModified: true, changeTracker: tracker };
   const ckpt: FakeWidget = {
     name: "ckpt_name", type: "combo", value: "a.safetensors",
@@ -52,11 +52,24 @@ function comfyPage(origin = ORIGIN) {
   const sampler = { id: 3, type: "KSampler", title: "KSampler", properties: { mosael: { result: true } } as Record<string, unknown>,
                     widgets: [steps], onWidgetChanged: vi.fn() };
   const save = { id: 9, type: "SaveImage", title: "Save", properties: {} as Record<string, unknown>, widgets: [] };
-  const graph = { nodes: [loader, sampler, save], extra: { ue_links: [] } as Record<string, unknown>, setDirtyCanvas: vi.fn() };
+  //: 一张子图(根图上节点 12 是它的实例),里面一个 LoRA 加载节点 5
+  const inner = { id: 5, type: "LoraLoader", title: "LoRA", properties: {} as Record<string, unknown>, widgets: [] };
+  const subgraph = { id: "8f1c0e2a-9b7d-4c51", name: "细节", nodes: [inner] };
+  const graph = { nodes: [loader, sampler, save], extra: { ue_links: [] } as Record<string, unknown>, setDirtyCanvas: vi.fn(),
+                  subgraphs: new Map([[subgraph.id, subgraph]]) };
   const execute = vi.fn(async () => undefined);
   const app = {
     api,
-    canvas: { graph, selected_nodes: {} as Record<string, unknown> },
+    canvas: {
+      graph: graph as unknown,
+      selected_nodes: {} as Record<string, unknown>,
+      deselectAll: vi.fn(),
+      selectItems: vi.fn(),
+      centerOnNode: vi.fn(),
+      setDirty: vi.fn(),
+      openSubgraph: vi.fn(function (this: { graph: unknown }, next: unknown) { this.graph = next; }),
+      setGraph: vi.fn(function (this: { graph: unknown }, next: unknown) { this.graph = next; }),
+    },
     graph,
     rootGraph: graph,
     refreshComboInNodes: vi.fn(async () => undefined),
@@ -72,7 +85,7 @@ function comfyPage(origin = ORIGIN) {
   const window: Record<string, unknown> = { app };
   const context = vm.createContext({ window, location: { origin } });
   const run = <T = unknown>(script: string) => vm.runInContext(script, context) as Promise<T> | T;
-  return { app, window, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, execute, run };
+  return { app, window, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, subgraph, inner, execute, run };
 }
 
 async function installed(page = comfyPage()) {
@@ -112,8 +125,8 @@ describe("工作台的桥(注入的脚本)", () => {
     expect(raw).toEqual({
       version: WORKBENCH_VERSION,
       capabilities: { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true,
-                      marks: true },
-      workflow: { path: "workflows/人像/古风.json", name: "古风", temporary: false, modified: true },
+                      marks: true, changes: true, locate: true, subgraphs: true },
+      workflow: { path: "workflows/人像/古风.json", name: "古风", temporary: false, modified: true, revision: 1 },
       selection: { count: 1, node: { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint", widgets: [
         { name: "ckpt_name", type: "combo", value: "a.safetensors", combo: true }] } },
       clientId: "4f1c0e2a9b7d4c51a3e8",
@@ -122,6 +135,48 @@ describe("工作台的桥(注入的脚本)", () => {
     page.app.canvas.selected_nodes = { 4: page.loader, 3: page.sampler };
     expect(((await page.run(workbenchPollScript(ORIGIN))) as { selection: unknown }).selection,
            "选中好几个就只报个数").toEqual({ count: 2, node: null });
+  });
+
+  it("开着的是哪一张、改过几回:改动跟踪换了一份图就加一,选中节点不算;换一张也加一", async () => {
+    const page = await installed();
+    const workflow = async () => ((await page.run(workbenchPollScript(ORIGIN))) as { workflow: { path: string; revision: number } })
+      .workflow;
+    const first = await workflow();
+    expect(first.revision).toBe(1);
+    page.app.canvas.selected_nodes = { 4: page.loader };
+    expect((await workflow()).revision, "选中节点不算改动").toBe(1);
+    page.tracker.activeState = { nodes: [{ id: 4 }] };
+    expect((await workflow()).revision, "前端认了一次改动").toBe(2);
+    expect((await workflow()).revision).toBe(2);
+    // 在 ComfyUI 的标签栏里换到另一张(没存过的)
+    page.app.extensionManager.workflow.activeWorkflow = { ...page.active, path: "workflows/Unsaved Workflow (2).json",
+      filename: "Unsaved Workflow (2)", isTemporary: true, changeTracker: { ...page.tracker, activeState: {} } };
+    expect(await workflow()).toMatchObject({ path: "workflows/Unsaved Workflow (2).json", revision: 3 });
+  });
+
+  it("定位节点:选中、移到画面中间;在子图里的先进那张子图;这版前端进不了子图就说在子图里", async () => {
+    const page = await installed();
+    const canvas = page.app.canvas;
+    expect(await call(page, { op: "locate", node: "4", subgraph: null })).toEqual({ ok: true });
+    expect(canvas.selectItems).toHaveBeenLastCalledWith([page.loader]);
+    expect(canvas.centerOnNode).toHaveBeenLastCalledWith(page.loader);
+    expect(await call(page, { op: "locate", node: "5", subgraph: page.subgraph.id })).toEqual({ ok: true });
+    expect(canvas.openSubgraph).toHaveBeenCalledWith(page.subgraph);
+    expect(canvas.centerOnNode).toHaveBeenLastCalledWith(page.inner);
+    // 停在子图里时定位根图上的节点:先回根图
+    expect(await call(page, { op: "locate", node: "9", subgraph: null })).toEqual({ ok: true });
+    expect(canvas.setGraph).toHaveBeenLastCalledWith(page.graph);
+    expect(canvas.centerOnNode).toHaveBeenLastCalledWith(page.save);
+    expect(await call(page, { op: "locate", node: "77", subgraph: null })).toEqual({ error: "noNode" });
+    expect(await call(page, { op: "locate", node: "5", subgraph: "nope" })).toEqual({ error: "noNode" });
+    const old = comfyPage();
+    delete (old.app.canvas as { openSubgraph?: unknown }).openSubgraph;
+    await installed(old);
+    expect(await call(old, { op: "locate", node: "5", subgraph: old.subgraph.id })).toEqual({ error: "inSubgraph" });
+    expect(((await old.run(workbenchPollScript(ORIGIN))) as { capabilities: Record<string, boolean> }).capabilities)
+      .toMatchObject({ locate: true, subgraphs: false });
+    expect(parseWorkbenchResult({ op: "locate", node: "5", subgraph: "x" }, { error: "inSubgraph" }))
+      .toEqual({ ok: false, error: "inSubgraph" });
   });
 
   it("这版前端缺的东西在能力表里是 false(面板据此说不支持),画布照样是 ComfyUI", async () => {
@@ -218,8 +273,8 @@ describe("页面交回来的一律当提示:规整", () => {
   const poll = (overrides: Record<string, unknown> = {}) => ({
     version: WORKBENCH_VERSION,
     capabilities: { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true,
-                    marks: true, extra: true },
-    workflow: { path: "workflows/人像/古风.json", name: "古风", temporary: false, modified: true },
+                    marks: true, changes: true, locate: true, subgraphs: false, extra: true },
+    workflow: { path: "workflows/人像/古风.json", name: "古风", temporary: false, modified: true, revision: 7 },
     selection: { count: 1, node: { id: "4", type: "CheckpointLoaderSimple", title: "x", widgets: [
       { name: "ckpt_name", type: "combo", value: "a.safetensors", combo: true }, { name: "", value: 1 },
       { name: "bad", value: { evil: true } }] } },
@@ -232,7 +287,9 @@ describe("页面交回来的一律当提示:规整", () => {
   it("认得的才留:能力只认那几样、widget 的值只收标量、事件只认那几种", () => {
     const state = parseWorkbenchPoll(poll())!;
     expect(Object.keys(state.capabilities)).not.toContain("extra");
-    expect(state.workflow).toEqual({ path: "人像/古风.json", name: "古风", temporary: false, modified: true });
+    expect(state.workflow).toEqual({ path: "人像/古风.json", name: "古风", temporary: false, modified: true,
+                                     key: "workflows/人像/古风.json", revision: 7 });
+    expect(state.capabilities).toMatchObject({ changes: true, locate: true, subgraphs: false });
     expect(state.selection.node!.widgets).toEqual([
       { name: "ckpt_name", type: "combo", value: "a.safetensors", combo: true },
       { name: "bad", type: "", value: null, combo: false },
@@ -244,8 +301,11 @@ describe("页面交回来的一律当提示:规整", () => {
     expect(parseWorkbenchPoll(null)).toBeNull();
     expect(parseWorkbenchPoll(poll({ version: 99 }))).toBeNull();
     expect(parseWorkbenchPoll(poll({ capabilities: "all" }))).toBeNull();
-    expect(parseWorkbenchPoll(poll({ workflow: { path: "Unsaved Workflow.json", temporary: true } }))!.workflow)
-      .toMatchObject({ path: "", temporary: true });
+    expect(parseWorkbenchPoll(poll({ workflow: { path: "workflows/Unsaved Workflow (2).json", name: "Unsaved Workflow (2)",
+                                                 temporary: true, revision: "x" } }))!.workflow,
+           "没存过的:不能当路径用,但认得出是哪一张")
+      .toEqual({ path: "", name: "Unsaved Workflow (2)", temporary: true, modified: false,
+                 key: "workflows/Unsaved Workflow (2).json", revision: 0 });
     expect(parseWorkbenchPoll(poll({ workflow: { path: "../../etc/x.json" } }))!.workflow!.path).toBe("");
     expect(parseWorkbenchPoll(poll({ clientId: "a b;c" }))!.clientId).toBe("");
     expect(parseWorkbenchPoll(poll({ selection: { count: 1, node: { id: "x;y", widgets: [] } } }))!.selection.node).toBeNull();

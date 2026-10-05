@@ -483,6 +483,41 @@ describe("the foreground view and the toolbar's page tools", () => {
     expect(viewOf("pool-a").bounds.width).toBe(1440);
   });
 
+  it("follows the workbench column while it's dragged wider or narrower: every new inset re-lays the page at once", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    // 拖着右边那一列:渲染层每一帧报一次(拖动时多让出一截安全边,见 workbench/columnWidth)
+    for (const right of [420, 437, 512, 640, 300]) {
+      manager.setShellInset(right);
+      expect(viewOf("pool-a").bounds).toEqual({ x: 0, y: HEADER, width: 1440 - right, height: 900 - HEADER });
+    }
+    manager.setShellInset(300.6);
+    expect(viewOf("pool-a").bounds.width, "按整像素让").toBe(1440 - 301);
+  });
+
+  it("steps the page out of the window while a Mosael overlay (the image viewer) is up, and puts it back where it was", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setShellInset(420);
+    const placed = { x: 0, y: HEADER, width: 1440 - 420, height: 900 - HEADER };
+    expect(viewOf("pool-a").bounds).toEqual(placed);
+    manager.setForegroundHidden("overlay", true);
+    const page = viewOf("pool-a");
+    // 挪到窗口外、照常出帧(不是藏起来):关掉大图时回来的就是它此刻的样子
+    expect(page.visible).toBe(true);
+    expect(page.bounds.x + page.bounds.width).toBeLessThanOrEqual(0);
+    // 大图开着时列宽变了:人还在窗口外,宽度跟着变
+    manager.setShellInset(500);
+    expect(page.bounds.width).toBe(1440 - 500);
+    expect(page.bounds.x + page.bounds.width).toBeLessThanOrEqual(0);
+    // 页面列表的 cover 和大图的 overlay 各管各的:一件收了,另一件还要它让开就接着让
+    manager.setForegroundHidden("cover", true);
+    manager.setForegroundHidden("overlay", false);
+    expect(page.bounds.x + page.bounds.width).toBeLessThanOrEqual(0);
+    manager.setForegroundHidden("cover", false);
+    expect(page.bounds).toEqual({ ...placed, width: 1440 - 500 });
+  });
+
   it("hides the page while a region is picked, and never leaves the next foreground view hidden", () => {
     manager.registerSession("pool-a", "persist:pool-a");
     manager.registerSession("pool-b", "persist:pool-b");

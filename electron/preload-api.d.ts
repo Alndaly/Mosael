@@ -125,6 +125,11 @@ export interface MosaelPublishBridge {
    */
   snapshotPage(): Promise<PageSnapshot | null>;
   coverPage(covered: boolean): Promise<void>;
+  /**
+   * Mosael 自己的整窗浮层(看大图)亮着 / 收起:前台网页挪到窗口外 / 放回原处(原生视图盖在一切 DOM 上,不让开浮层
+   * 就只露出顶栏和侧栏)。渲染层按引用计数调(见 components/ui/nativeViewAside),这里只收「有 / 没有」。
+   */
+  setOverlay(up: boolean): Promise<void>;
   /** 键盘交给前台网页(顶栏、页面列表里用鼠标点完之后,接着打字的该是网页)。 */
   focusPage(): Promise<void>;
   /**

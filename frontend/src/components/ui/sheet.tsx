@@ -8,7 +8,7 @@ import { MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCRIPTION } from "./floating"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
-import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
+import { keepOpenOnAppChrome, useEmbeddedViewUp } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
 
 /**
@@ -40,14 +40,18 @@ const SheetContent = React.forwardRef<
 >(({ className, children, side = "right", showClose = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),和 Dialog 同一个理由。见 hook 注释。
   useModalTeardownGuard()
+  // 内嵌网页视图亮着时不画遮罩(连同它的滚动锁),和 Dialog 同一个理由。见 appChrome 的 useEmbeddedViewUp。
+  const viewUp = useEmbeddedViewUp()
   return (
     <SheetPortal>
-      <DialogPrimitive.Overlay
-        className={cn(
-          MODAL_OVERLAY,
-          "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none",
-        )}
-      />
+      {!viewUp && (
+        <DialogPrimitive.Overlay
+          className={cn(
+            MODAL_OVERLAY,
+            "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none",
+          )}
+        />
+      )}
       <DialogPrimitive.Content
         ref={ref}
         data-slot="sheet-content"

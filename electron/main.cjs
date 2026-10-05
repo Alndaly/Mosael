@@ -47,6 +47,7 @@ const {
   parsePageOrder,
   parsePagesInset,
   parseCoverPage,
+  parseOverlay,
   parseFloatShow,
   parseFloatHide,
   parsePanelId,
@@ -875,6 +876,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.publishCoverPage, (_e, payload) =>
     requirePublish().coverViewPage(parseCoverPage(payload).covered),
   );
+  ipcMain.handle(IPC.invoke.publishOverlay, (_e, payload) => requirePublish().overlayViewPage(parseOverlay(payload).up));
   ipcMain.handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
   // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起。只收主窗口自己发来的。
   ipcMain.on(IPC.send.floatShow, (event, payload) => {

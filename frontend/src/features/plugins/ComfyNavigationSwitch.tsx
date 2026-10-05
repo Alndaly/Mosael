@@ -1,9 +1,21 @@
 import { Info } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { CONTROL_HEIGHT, CONTROL_SQUARE } from "@/components/ui/control-size";
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
 import { navigationBridge, useComfyNavigation, type ComfyNavigation } from "@/features/plugins/comfyNavigation";
 import { cn } from "@/lib/utils";
+
+/**
+ * 两档:和它挨着的那一排控件同高、同字号 —— 工作台的顶栏是 `sm`(32px,和「保存」「运行」一样),内嵌浏览器的顶栏是
+ * `xs`(28px,和前进后退、地址栏一样)。分段的样子用全应用那一套(SEGMENTED_LIST / segmentedTriggerClass),外框比
+ * 选中的那一格多出 2px 的内边距,所以外框是那一档的高、里面每一格矮 4px。
+ */
+const SIZES = {
+  xs: { list: cn(CONTROL_HEIGHT.xs, "min-h-0 p-0.5"), item: "min-h-0 h-6 px-2 text-ui-xs", icon: CONTROL_SQUARE.xs },
+  sm: { list: cn(CONTROL_HEIGHT.sm, "min-h-0 p-0.5"), item: "min-h-0 h-7 px-2.5", icon: CONTROL_SQUARE.sm },
+} as const;
 
 /**
  * 内嵌 ComfyUI 画布的操控方式:「触控板 / 鼠标」两格(见 comfyNavigation)。挂在内嵌浏览器的顶栏(「在编辑器里打开」那个视图)
@@ -11,17 +23,27 @@ import { cn } from "@/lib/utils";
  *
  * 这版 ComfyUI 前端没有这个设置时开关藏起来,留一个说明为什么的小图标。
  */
-export function ComfyNavigationSwitch({ connectionId, className }: { connectionId: string; className?: string }) {
+export function ComfyNavigationSwitch({
+  connectionId,
+  size = "sm",
+  className,
+}: {
+  connectionId: string;
+  size?: keyof typeof SIZES;
+  className?: string;
+}) {
   const t = useI18n();
   const { mode, choose, supported } = useComfyNavigation(connectionId);
   if (!navigationBridge()) return null;
+  const scale = SIZES[size];
   if (supported === false) {
     return (
       <Hint label={t("comfyNavigationUnsupported")}>
         <span
           role="note"
           aria-label={t("comfyNavigationUnsupported")}
-          className={cn("[-webkit-app-region:no-drag] inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground", className)}
+          className={cn("[-webkit-app-region:no-drag] inline-flex shrink-0 items-center justify-center text-muted-foreground", scale.icon,
+                        className)}
         >
           <Info size={14} aria-hidden />
         </span>
@@ -37,10 +59,8 @@ export function ComfyNavigationSwitch({ connectionId, className }: { connectionI
       <div
         role="radiogroup"
         aria-label={t("comfyNavigation")}
-        className={cn(
-          "[-webkit-app-region:no-drag] inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-border p-0.5",
-          className,
-        )}
+        data-control-size={size}
+        className={cn("[-webkit-app-region:no-drag]", SEGMENTED_LIST, scale.list, className)}
       >
         {options.map((one) => (
           <button
@@ -48,10 +68,7 @@ export function ComfyNavigationSwitch({ connectionId, className }: { connectionI
             type="button"
             role="radio"
             aria-checked={mode === one.value}
-            className={cn(
-              "inline-flex h-full cursor-pointer items-center whitespace-nowrap rounded-[5px] border-0 px-2 text-ui-xs",
-              mode === one.value ? "bg-accent text-primary" : "bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )}
+            className={cn(segmentedTriggerClass(mode === one.value), scale.item)}
             onClick={() => choose(one.value)}
           >
             {one.label}

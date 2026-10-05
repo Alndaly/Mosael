@@ -271,7 +271,8 @@ function PublishViewBar() {
           }}
         />
       </form>
-      {comfyConnection && <ComfyNavigationSwitch key={comfyConnection} connectionId={comfyConnection} />}
+      {/* 和这一排的前进后退、地址栏同高(28px);工作台的顶栏用 32 那一档(见 ComfyNavigationSwitch 的 size) */}
+      {comfyConnection && <ComfyNavigationSwitch key={comfyConnection} connectionId={comfyConnection} size="xs" />}
       {workspaceId && (
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
@@ -280,14 +281,16 @@ function PublishViewBar() {
       <MainStaleBadge />
       {/* 离开这个窗口的主出口:留着字(图标认不出「回到 Mosael」),说明里补一句连按两次 Esc 也能回来。 */}
       <Hint label={t("publishBackHint")}>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="xs"
           data-publish-back=""
-          className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
+          className="[-webkit-app-region:no-drag] shrink-0"
           onClick={() => void window.mosaelPublish?.hideView()}
         >
-          <ArrowLeft size={14} /> {t("publishBackToApp")}
-        </button>
+          <ArrowLeft />
+          {t("publishBackToApp")}
+        </Button>
       </Hint>
       </HintRegion.Provider>
     </div>

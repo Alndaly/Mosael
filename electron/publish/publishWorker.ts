@@ -942,6 +942,10 @@ export function hideFloat(id?: string): void {
 export function coverViewPage(covered: boolean): void {
   views?.setForegroundHidden("cover", covered);
 }
+/** Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 ForegroundHideReason 的 "overlay")。 */
+export function overlayViewPage(up: boolean): void {
+  views?.setForegroundHidden("overlay", up);
+}
 
 /** 收起内嵌视图,把窗口还给 React UI。 */
 /** 渲染层拖动/缩放悬浮面板后落到这里(几何由主进程持有:layout() 要用,还要落盘)。 */

@@ -23,6 +23,11 @@ export interface WorkbenchTarget {
 export interface WorkbenchRun {
   jobId: string;
   path: string;
+  /** 跑的是画布上的哪一张(桥报的 `workflow.key`):面板先列开着的这一张跑过的,别的那几张收在后面 */
+  workflowKey: string;
+  workflowName: string;
+  /** 产出是什么(image / video / audio …,生成记录的 kind):看大图时视频换播放器 */
+  kind: string;
   startedAt: number;
   /** 跑的那一刻导出的图里每个节点叫什么(产出按节点分组时标名字) */
   labels: [string, string][];

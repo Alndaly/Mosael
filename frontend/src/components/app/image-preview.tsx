@@ -6,6 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { IMAGE_PREVIEW_EVENT, type ImagePreviewRequest } from "@/components/app/image-preview-request";
 import { VideoPlayer } from "@/components/app/media-playback";
 import { APP_CHROME } from "@/components/ui/appChrome";
+import { useNativeViewAside } from "@/components/ui/nativeViewAside";
 import { Truncate } from "@/components/ui/truncate";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,8 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
     const lost = !now || now === document.body || Boolean(portalHostRef.current?.contains(now));
     if (back?.isConnected && lost) back.focus({ preventScroll: true });
   }, []);
+  //: 内嵌浏览器、ComfyUI 工作台亮着时,原生网页视图盖在一切 DOM 上:大图开着的这段时间请它挪到窗口外(见 nativeViewAside)
+  useNativeViewAside(visible);
   const reset = React.useCallback(() => setImages([]), []);
 
   //: 手写 DOM 的界面(笔记编辑器里的图片、Markdown 正文里的图)从这里进来,见 image-preview-request。
@@ -162,9 +165,12 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         // `_` 换成空格,不转义的话选择器选不中任何东西。
         // 关闭后这层还会在 DOM 里留一会儿(等它自己的收尾动画),期间虽然看不见却仍然接管
         // 点击 —— 表现为「关掉大图后有一小段时间画布点不动、节点拖不了」。不可见就不该拦事件。
+        // 层级压过窗口外壳(内嵌浏览器、工作台的顶栏和侧栏是 z-200,里面的说明 z-210):大图是整窗的,从侧栏里点开的
+        // 也该盖住侧栏。开着时整块不当拖拽区 —— 顶栏是拖拽区,而关闭键、计数就摆在它那一条上(见 styles.css 的说明)。
         className={cn(
           !visible && "pointer-events-none",
-          String.raw`z-[150] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
+          visible && "[.is-desktop_&]:[-webkit-app-region:no-drag]",
+          String.raw`z-[220] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
         maskClassName="will-change-[opacity]"
         photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"

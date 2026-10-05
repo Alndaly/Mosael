@@ -55,7 +55,7 @@ export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarg
   };
   const dirty = Boolean(draft && base && !sameDraft(draft, base));
   return (
-    <div className="grid gap-3">
+    <div className="flex min-w-0 flex-1 flex-col gap-3">
       <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchAppHint")}</p>
       <div className="flex flex-wrap items-center justify-end gap-2">
         {dirty && (
@@ -82,7 +82,7 @@ export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarg
         </PanelNote>
       )}
       {read.isPending && !data ? (
-        <LoadingState label={t("workflowAppLoading")} className="h-auto py-8" />
+        <LoadingState label={t("workflowAppLoading")} className="h-auto min-h-0 flex-1" />
       ) : data && draft ? (
         <>
           <AppHead draft={draft} onChange={change} />

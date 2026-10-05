@@ -41,6 +41,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseNewPage: (value: unknown) => { url: string };
   parsePagesInset: (value: unknown) => { left: number };
   parseCoverPage: (value: unknown) => { covered: boolean };
+  parseOverlay: (value: unknown) => { up: boolean };
   parseFloatShow: (value: unknown) => {
     id: string;
     html: string;
@@ -178,6 +179,12 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "setMarks", marks: { nodes: { "12:5": {} }, extra: null } }), "只认根图上的节点").toThrow(/top-level/);
     expect(() => callOf({ op: "setMarks", marks: { nodes: { "4": "x" }, extra: null } })).toThrow(/object/);
     expect(() => callOf({ op: "setMarks", marks: { nodes: {}, extra: null, more: 1 } })).toThrow(/unexpected/);
+    expect(callOf({ op: "locate", node: "12" }).call, "根图上的节点").toEqual({ op: "locate", node: "12", subgraph: null });
+    expect(callOf({ op: "locate", node: "-3", subgraph: "8f1c0e2a-9b7d-4c51" }).call)
+      .toEqual({ op: "locate", node: "-3", subgraph: "8f1c0e2a-9b7d-4c51" });
+    expect(() => callOf({ op: "locate", node: "12; alert(1)" })).toThrow(/node/);
+    expect(() => callOf({ op: "locate", node: "12", subgraph: 'x"); alert(1)' })).toThrow(/subgraph/);
+    expect(() => callOf({ op: "locate", node: "12", zoom: 3 })).toThrow(/unexpected/);
     expect(() => contract.parseComfyWorkbenchCall({ connectionId: "../x", call: { op: "save" } })).toThrow(/connectionId/);
 
     // 挪位置:只有 x/y。
@@ -258,6 +265,9 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseNewPage({ url: "" })).toThrow(/url/);
     expect(contract.parsePagesInset({ left: 220 })).toEqual({ left: 220 });
     expect(() => contract.parsePagesInset({ left: -1 })).toThrow(/left/);
+    expect(contract.parseOverlay({ up: true })).toEqual({ up: true });
+    expect(() => contract.parseOverlay({ up: 1 })).toThrow(/up/);
+    expect(() => contract.parseOverlay({ up: false, x: 0 })).toThrow(/unexpected field x/);
     expect(contract.parseCoverPage({ covered: true })).toEqual({ covered: true });
     expect(() => contract.parseCoverPage({ covered: "yes" })).toThrow(/covered/);
     expect(() => contract.parseCoverPage({ covered: false, left: 1 })).toThrow(/unexpected field left/);

@@ -25,6 +25,7 @@ export {
   setPagesInset,
   snapshotViewPage,
   coverViewPage,
+  overlayViewPage,
   showFloat,
   focusViewPage,
   hideFloat,

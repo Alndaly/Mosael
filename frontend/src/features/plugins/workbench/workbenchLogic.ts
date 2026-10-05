@@ -1,12 +1,14 @@
 /**
  * ComfyUI 工作台(ADR 0038 §3、§6)面板背后的纯函数:桥报来的选中节点 → 哪几格选的是模型文件;模型库按目录、搜索、底模家族
- * 筛;跑完的产出按来自的节点分组、标节点名;画布上的事件 → 正在跑哪个节点、第几步;「以后只要这张」→ 应用表单草稿只标这一个结果。
+ * 筛;跑完的产出按来自的节点分组、标节点名;画布上的事件 → 正在跑哪个节点、第几步;「只要这个节点的图」→ 应用表单草稿只标这一个结果;
+ * 运行按工作流分;缺失项定位到画布上的节点、按节点包分组。
  *
  * 桥报来的东西主进程已经规整过(electron/publish/comfyWorkbench.parseWorkbenchPoll);这里仍只当提示:节点名字以导出的那张图为准,
  * 产出来自哪个节点以插件读的历史为准(任务回执里的 `source_node`)。
  */
-import type { Job, ModelFile } from "@/api/client";
+import type { Job, ModelFile, WorkflowNodePack } from "@/api/client";
 import type { AppDraft } from "@/features/plugins/workflowAppForm";
+import type { WorkbenchRun } from "@/features/plugins/workbench/workbenchSession";
 
 export type WorkbenchNode = NonNullable<ComfyWorkbenchState["selection"]["node"]>;
 
@@ -130,9 +132,122 @@ export function liveProgress(events: readonly ComfyWorkbenchEvent[], promptId?: 
   return current;
 }
 
-/** 「以后只要这张」:这张工作流的结果只标这一个输出节点(清掉别的节点上的,ADR 0038 §5)。应用表单的别的部分不动。 */
+/** 「只要这个节点的图」:这张工作流的结果只标这一个输出节点(清掉别的节点上的,ADR 0038 §5)。应用表单的别的部分不动。 */
 export function onlyResult(draft: AppDraft, node: string): AppDraft {
   return { ...draft, results: [node] };
+}
+
+/** 撤销:这个节点不再标成结果(别的节点上的标记不动)。 */
+export function withoutResult(draft: AppDraft, node: string): AppDraft {
+  return { ...draft, results: draft.results.filter((one) => one !== node) };
+}
+
+/** 一次跑出的全部产出(按回执里的顺序)交给看大图:标题带来源节点和第几张(「PreviewImage #12 · 1/2」)。 */
+export function runGallery(
+  groups: readonly OutputGroup[],
+  nodeName: (node: string) => string,
+  unknownNode: string,
+): { asset: string; title: string }[] {
+  const all = groups.flatMap((group) => group.assets.map((asset) => ({ asset, node: group.node })));
+  return all.map((one, index) => ({
+    asset: one.asset,
+    title: `${one.node ? nodeName(one.node) : unknownNode} · ${index + 1}/${all.length}`,
+  }));
+}
+
+/** 「运行与结果」按工作流分:画布上开着的这一张跑过的在前,别的那几张各一组(最近跑的那张在前),都还留着看得到。 */
+export function runsByWorkflow(
+  runs: readonly WorkbenchRun[],
+  current: string,
+): { current: WorkbenchRun[]; others: { key: string; name: string; runs: WorkbenchRun[] }[] } {
+  const others = new Map<string, { key: string; name: string; runs: WorkbenchRun[] }>();
+  const mine: WorkbenchRun[] = [];
+  for (const run of runs) {
+    if (run.workflowKey === current) {
+      mine.push(run);
+      continue;
+    }
+    const group = others.get(run.workflowKey) ?? { key: run.workflowKey, name: run.workflowName || run.path, runs: [] };
+    group.runs.push(run);
+    others.set(run.workflowKey, group);
+  }
+  return { current: mine, others: [...others.values()] };
+}
+
+// ---- 缺失项:定位到画布上的节点、按节点包分组 ---------------------------------------------------------
+
+/** 画布上的一个节点:在根图上(`subgraph` 是 null),或在某张子图里(子图的 id 和名字)。 */
+export interface CanvasSpot {
+  node: string;
+  subgraph: string | null;
+  subgraphName: string;
+}
+
+type RawNode = { id?: unknown; type?: unknown; widgets_values?: unknown };
+
+/** 导出的那张图(界面格式)里的每个节点:根图上的,和 `definitions.subgraphs` 里每张子图的。 */
+function canvasNodes(workflow: Record<string, unknown> | null | undefined): { raw: RawNode; spot: CanvasSpot }[] {
+  const out: { raw: RawNode; spot: CanvasSpot }[] = [];
+  const add = (nodes: unknown, subgraph: string | null, subgraphName: string) => {
+    for (const raw of Array.isArray(nodes) ? nodes : []) {
+      if (!raw || typeof raw !== "object") continue;
+      const node = raw as RawNode;
+      if (node.id === undefined || node.id === null) continue;
+      out.push({ raw: node, spot: { node: String(node.id), subgraph, subgraphName } });
+    }
+  };
+  add(workflow?.nodes, null, "");
+  const subgraphs = (workflow?.definitions as { subgraphs?: unknown } | undefined)?.subgraphs;
+  for (const raw of Array.isArray(subgraphs) ? subgraphs : []) {
+    const sub = raw as { id?: unknown; name?: unknown; nodes?: unknown };
+    if (typeof sub?.id !== "string") continue;
+    add(sub.nodes, sub.id, typeof sub.name === "string" && sub.name ? sub.name : sub.id);
+  }
+  return out;
+}
+
+/** 这种节点类型在画布上的每一处(缺的节点「定位」用)。 */
+export function nodesOfType(workflow: Record<string, unknown> | null | undefined, type: string): CanvasSpot[] {
+  return canvasNodes(workflow).filter(({ raw }) => raw.type === type).map(({ spot }) => spot);
+}
+
+/** 哪几个节点的 widget 里填着这个模型文件(名字按路径统一比较;只写了文件名的也认)。缺的模型「定位」用。 */
+export function nodesUsingModel(workflow: Record<string, unknown> | null | undefined, name: string): CanvasSpot[] {
+  const wanted = norm(name);
+  const base = wanted.split("/").pop() ?? wanted;
+  const matches = (value: unknown) => {
+    if (typeof value !== "string" || !value) return false;
+    const one = norm(value);
+    return one === wanted || (one.split("/").pop() ?? one) === base;
+  };
+  return canvasNodes(workflow)
+    .filter(({ raw }) => {
+      const values = raw.widgets_values;
+      const list = Array.isArray(values) ? values : values && typeof values === "object" ? Object.values(values) : [];
+      return list.some(matches);
+    })
+    .map(({ spot }) => spot);
+}
+
+/** 缺的节点按出自的节点包分:同一个包的几种节点一起装;认不出包的各自一组(`packs` 是空的)。 */
+export function missingByPack<T extends { type: string; count?: number; packs?: WorkflowNodePack[] }>(
+  nodes: readonly T[],
+): { key: string; packs: WorkflowNodePack[]; nodes: T[] }[] {
+  const groups = new Map<string, { key: string; packs: WorkflowNodePack[]; nodes: T[] }>();
+  for (const node of nodes) {
+    const packs = node.packs ?? [];
+    //: 一种节点可能出自好几个包(映射里几个包都有同名的):那几个一起当一组,装哪个由人挑
+    const key = packs.length ? packs.map((one) => one.id).sort().join("\n") : `type:${node.type}`;
+    const group = groups.get(key) ?? { key, packs, nodes: [] };
+    group.nodes.push(node);
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((left, right) => Number(left.packs.length === 0) - Number(right.packs.length === 0));
+}
+
+/** 节点包的主页:映射里只在 git 上的包,id 就是仓库地址;登记在 Comfy Registry 上的是包名。 */
+export function packPage(id: string): string {
+  return /^https?:\/\//i.test(id) ? id.replace(/\.git$/i, "") : `https://registry.comfy.org/nodes/${encodeURIComponent(id)}`;
 }
 
 /** 工作流库里认的路径(`workflows/` 下的相对路径):桥报的是去掉前缀的那一段,空串是没存过。 */

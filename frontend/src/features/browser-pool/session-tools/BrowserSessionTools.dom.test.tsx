@@ -41,6 +41,7 @@ const links = vi.hoisted(() => ({ gotoRecord: vi.fn(), emitOpenEvent: vi.fn(), o
 vi.mock("@/lib/deepLink", () => links);
 
 const { BrowserSessionTools } = await import("./BrowserSessionTools");
+const { ImagePreviewProvider } = await import("@/components/app/image-preview");
 
 const PAGE = { url: "https://example.com/post/1", title: "一篇帖子" };
 const STATE: PublishViewState = {
@@ -59,9 +60,10 @@ function capture(extra: Record<string, unknown> = {}) {
 
 let tools: Record<string, ReturnType<typeof vi.fn>>;
 const hideView = vi.fn();
+const setOverlay = vi.fn(async (_up: boolean) => undefined);
 
 beforeEach(() => {
-  for (const fn of [...Object.values(api), ...Object.values(links), agent.startNewAgentSession, hideView]) fn.mockReset();
+  for (const fn of [...Object.values(api), ...Object.values(links), agent.startNewAgentSession, hideView, setOverlay]) fn.mockReset();
   api.listBrowserProfiles.mockResolvedValue([{ id: "p1", partition: "persist:pool-p1", name: "我的档案" }]);
   api.importWebCapture.mockImplementation(async () => ({ id: "asset-1" }));
   api.urlSupport.mockResolvedValue({ supported: false, extractor: "" });
@@ -75,7 +77,7 @@ beforeEach(() => {
     readPage: vi.fn(async (mode: string) => ({ page: PAGE, html: mode === "article" ? "<article>正文</article>" : "", selection: "" })),
     setInset: vi.fn(async () => undefined),
   };
-  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView } });
+  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView, setOverlay } });
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
 });
@@ -88,7 +90,9 @@ function show(state: PublishViewState = STATE) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BrowserSessionTools workspaceId="ws" state={state} barHeight={56} />
+      <ImagePreviewProvider>
+        <BrowserSessionTools workspaceId="ws" state={state} barHeight={56} />
+      </ImagePreviewProvider>
     </QueryClientProvider>,
   );
 }
@@ -310,6 +314,39 @@ describe("采集页面图片", () => {
     });
     expect(api.importWebCapture.mock.calls[0][0].file.type).toBe("image/jpeg");
     await waitFor(() => expect(notice()).toHaveTextContent("browserToolsSavedAsset"));
+  });
+
+  it("角上的「看大图」(取到了的几张成组翻),不勾选;大图开着时网页让到窗口外,关掉放回;取不到的没有", async () => {
+    tools.listImages.mockResolvedValue({
+      page: PAGE,
+      images: [
+        { url: "https://cdn.example.com/a.jpg", width: 800, height: 600, alt: "大图" },
+        { url: "https://cdn.example.com/b.jpg", width: 800, height: 600, alt: "" },
+        { url: "https://cdn.example.com/c.jpg", width: 800, height: 600, alt: "第三张" },
+      ],
+    });
+    tools.fetchImages.mockResolvedValue([
+      { url: "https://cdn.example.com/a.jpg", ok: true, bytes: Uint8Array.from([0xff, 0xd8, 0xff]), mime: "image/jpeg" },
+      { url: "https://cdn.example.com/b.jpg", ok: false, reason: "failed" },
+      { url: "https://cdn.example.com/c.jpg", ok: true, bytes: Uint8Array.from([0xff, 0xd8, 0xff]), mime: "image/jpeg" },
+    ]);
+    let made = 0;
+    URL.createObjectURL = vi.fn(() => `blob:preview-${++made}`);
+    show();
+    fireEvent.click(toolButton("images"));
+    await waitFor(() => expect(document.querySelectorAll("[data-view-full-size]")).toHaveLength(2));
+    fireEvent.click(document.querySelectorAll<HTMLElement>("[data-view-full-size]")[1]);
+    const viewer = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>(".PhotoView-Portal");
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(viewer.textContent).toContain("第三张");
+    expect(viewer.textContent, "取到了的两张成组翻").toMatch(/2\s*\/\s*2/);
+    expect(document.querySelector('[data-page-image="ready"]')!.getAttribute("aria-pressed"), "看大图不勾选").toBe("false");
+    await waitFor(() => expect(setOverlay).toHaveBeenLastCalledWith(true));
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(setOverlay).toHaveBeenLastCalledWith(false));
   });
 });
 

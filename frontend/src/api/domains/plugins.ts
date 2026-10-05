@@ -220,7 +220,7 @@ export const getCanvasMarks = (
   });
 /** 工作台的「运行」:跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流;新建的要先存一次)。 */
 export const runCanvas = (instanceId: string, body: WorkflowCanvasRun) =>
-  api<{ generation: { id: string; job_id?: string | null }; job: Job }>(
+  api<{ generation: { id: string; job_id?: string | null; kind: string }; job: Job }>(
     `/api/plugins/instances/${instanceId}/workflow-library/run`,
     { method: "POST", body: JSON.stringify(body) },
   );

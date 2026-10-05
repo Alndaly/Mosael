@@ -44,6 +44,8 @@ const IPC = Object.freeze({
     // 页面列表展开 / 收起 / 临时展开:拍下前台网页的画面、把原生视图挪开 / 放回(列表在那张画面上变形)。
     publishSnapshotPage: "publish:snapshotPage",
     publishCoverPage: "publish:coverPage",
+    // Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 accountViews 的 ForegroundHideReason)。
+    publishOverlay: "publish:overlay",
     // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
     publishFocusPage: "publish:focusPage",
     browserOpenLogin: "browser:openLogin",
@@ -260,6 +262,8 @@ function parseComfyWorkbenchOpen(value) {
 //: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)、根图上的节点号(应用表单的标记只认根图)
 const CANVAS_NODE = /^-?\d{1,10}$/;
 const ROOT_NODE = /^\d{1,9}$/;
+//: 子图的 id(前端给的是 UUID 那样的串)
+const SUBGRAPH_ID = /^[A-Za-z0-9_-]{1,64}$/;
 //: 写进画布的标记最大多大(整份;和宿主那一侧一个节点 2 MB 的上限同一个量级)
 const MAX_MARKS_CHARS = 8 * 1024 * 1024;
 
@@ -277,7 +281,7 @@ function parseComfyWorkbenchCall(value) {
   onlyKeys(payload, ["connectionId", "call"], channel);
   const partition = comfyPartition(payload, channel);
   const call = record(payload.call, channel);
-  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks"], channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate"], channel);
   if (op === "setWidget") {
     onlyKeys(call, ["op", "node", "widget", "value"], channel);
     if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
@@ -303,6 +307,15 @@ function parseComfyWorkbenchCall(value) {
     const extra = marks.extra === null || marks.extra === undefined ? null : record(marks.extra, channel);
     if (JSON.stringify({ nodes, extra }).length > MAX_MARKS_CHARS) throw new TypeError(`${channel}: marks are too big`);
     return { partition, call: { op, marks: JSON.parse(JSON.stringify({ nodes, extra })) } };
+  }
+  if (op === "locate") {
+    onlyKeys(call, ["op", "node", "subgraph"], channel);
+    if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
+    const subgraph = call.subgraph === undefined || call.subgraph === null ? null : call.subgraph;
+    if (subgraph !== null && (typeof subgraph !== "string" || !SUBGRAPH_ID.test(subgraph))) {
+      throw new TypeError(`${channel}: subgraph must be a subgraph id`);
+    }
+    return { partition, call: { op, node: call.node, subgraph } };
   }
   onlyKeys(call, ["op"], channel);
   return { partition, call: { op } };
@@ -518,6 +531,15 @@ function parseCoverPage(value) {
   return { covered: payload.covered };
 }
 
+/** Mosael 的整窗浮层亮着 / 收起:前台网页挪开 / 放回。 */
+function parseOverlay(value) {
+  const channel = IPC.invoke.publishOverlay;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["up"], channel);
+  if (typeof payload.up !== "boolean") throw new TypeError(`${channel}: up must be a boolean`);
+  return { up: payload.up };
+}
+
 /**
  * 把一份下好的下载存进素材库:存到哪个服务器、哪个工作区、以谁的身份 —— 这些只有渲染层知道。
  * 令牌只用在这一次请求的头里(和 parseAuthToken 同一个长度上限)。
@@ -608,6 +630,7 @@ module.exports = {
   parsePageOrder,
   parsePagesInset,
   parseCoverPage,
+  parseOverlay,
   parseFloatShow,
   parseFloatHide,
   parsePanelId,

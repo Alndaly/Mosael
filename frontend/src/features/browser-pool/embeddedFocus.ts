@@ -1,3 +1,4 @@
+import { nativeViewAside } from "@/components/ui/nativeViewAside";
 import { listenKeys } from "@/lib/shortcuts";
 
 /**
@@ -35,7 +36,8 @@ export function installEmbeddedFocus(): () => void {
   const stopKeys = listenKeys(
     window,
     (event) => {
-      if (!visible || inChrome(event.target)) return;
+      // 大图这类整窗的浮层开着时网页挪到了窗口外:按键是给浮层的(Esc 关掉、左右翻页),不吞
+      if (!visible || nativeViewAside() || inChrome(event.target)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void bridge.focusPage?.();

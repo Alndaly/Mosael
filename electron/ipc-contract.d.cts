@@ -30,6 +30,7 @@ export const IPC: {
     publishPagesInset: "publish:pagesInset";
     publishSnapshotPage: "publish:snapshotPage";
     publishCoverPage: "publish:coverPage";
+    publishOverlay: "publish:overlay";
     publishFocusPage: "publish:focusPage";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
@@ -121,6 +122,7 @@ export function parsePageOrder(value: unknown): { ids: string[] };
 export function parseNewPage(value: unknown): { url: string };
 export function parsePagesInset(value: unknown): { left: number };
 export function parseCoverPage(value: unknown): { covered: boolean };
+export function parseOverlay(value: unknown): { up: boolean };
 export function parseFloatShow(value: unknown): {
   id: string;
   html: string;

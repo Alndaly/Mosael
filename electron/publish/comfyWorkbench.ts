@@ -13,12 +13,18 @@
  *
  * 用到的前端名字(1.53.10 里查过):`window.app`、`app.canvas.selected_nodes`、`node.widgets[].value / options.values / setValue`、
  * `app.refreshComboInNodes`、`app.graphToPrompt`、`app.rootGraph`、`app.api`(EventTarget,`clientId`)、
- * `app.extensionManager.workflow.activeWorkflow`(`path` / `isModified` / `isTemporary` / `changeTracker`)、
- * `app.extensionManager.command`(`Comfy.SaveWorkflow`)。每个调用先探测,缺了只关掉那一样(能力表里是 false)。
+ * `app.extensionManager.workflow.activeWorkflow`(`path` / `isModified` / `isTemporary` / `changeTracker.activeState`)、
+ * `app.extensionManager.command`(`Comfy.SaveWorkflow`)、定位节点用的 `app.canvas.selectItems / selectNode`、
+ * `centerOnNode / animateToBounds`、子图的 `rootGraph.subgraphs` 和 `canvas.openSubgraph / setGraph`。每个调用先探测,缺了只关掉
+ * 那一样(能力表里是 false)。
+ *
+ * **画布上开着的是哪一张**:用户可能在 ComfyUI 自己的标签栏 / 侧栏里换一张。轮询里的 `workflow.key` 是那一张在前端工作流仓库里的
+ * 路径(没存过的也有,形如 `workflows/Unsaved Workflow (2).json`),面板按它认「换了一张」;`revision` 是这一张的图**改过几回**
+ * —— 前端自己的改动跟踪(`changeTracker`)每认一次改动就换一份 `activeState`,桥看到换了就加一(选中节点不算改动)。
  */
 
-/** 桥的版本:页面里已经有同一版的就不再注入;形状变了加一。 */
-export const WORKBENCH_VERSION = 1;
+/** 桥的版本:页面里已经有同一版的就不再注入;形状变了加一。2:轮询报开着的是哪一张、改过几回;能定位节点。 */
+export const WORKBENCH_VERSION = 2;
 
 /** 队列里最多留几条事件(没人取的时候丢最老的)。 */
 export const MAX_EVENTS = 200;
@@ -32,7 +38,9 @@ export type WorkbenchCall =
   | { op: "refreshCombos" }
   | { op: "export" }
   | { op: "save" }
-  | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null } };
+  | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null } }
+  /** 在画布上找到这个节点:选中、移到画面中间;在子图里的先进那张子图(`subgraph` 是子图的 id,根图上的是 null)。 */
+  | { op: "locate"; node: string; subgraph: string | null };
 
 /** 页面里定义 `window.__mosaelWorkbench` 的脚本。回 installed / present(同一版已经在)/ elsewhere / notReady。 */
 export function workbenchInstallScript(origin: string): string {
@@ -130,8 +138,27 @@ export function workbenchInstallScript(origin: string): string {
       // 画布照样改了;脏标记由前端下次自己核对
     }
   };
+  //: 改动跟踪每认一次改动换一份 activeState:换了(或换了一张工作流)就加一
+  let seenWorkflow = null;
+  let seenState = null;
+  let revision = 0;
+  const revisionOf = (active) => {
+    const state = active && active.changeTracker ? active.changeTracker.activeState : undefined;
+    if (active !== seenWorkflow || state !== seenState) {
+      seenWorkflow = active;
+      seenState = state;
+      revision += 1;
+    }
+    return revision;
+  };
+  const subgraphOf = (graph, id) => {
+    const map = graph && graph.subgraphs;
+    return map && typeof map.get === "function" ? map.get(id) || null : null;
+  };
   const capabilities = () => {
     const store = workflows();
+    const canvas = app.canvas;
+    const changes = tracker();
     return {
       selection: Boolean(app.canvas && app.canvas.selected_nodes),
       setWidget: Boolean(app.canvas),
@@ -141,6 +168,9 @@ export function workbenchInstallScript(origin: string): string {
       save: hasCommand(${JSON.stringify(SAVE_COMMAND)}),
       events: listening,
       marks: Boolean(rootGraph()),
+      changes: Boolean(changes && "activeState" in changes),
+      locate: Boolean(canvas && (typeof canvas.centerOnNode === "function" || typeof canvas.animateToBounds === "function")),
+      subgraphs: Boolean(canvas && typeof canvas.openSubgraph === "function" && rootGraph() && rootGraph().subgraphs),
     };
   };
   const norm = (value) => String(value).replace(/\\\\/g, "/");
@@ -154,7 +184,7 @@ export function workbenchInstallScript(origin: string): string {
         version: VERSION,
         capabilities: capabilities(),
         workflow: active ? { path: text(active.path, 600), name: text(active.filename, 300),
-          temporary: Boolean(active.isTemporary), modified: Boolean(active.isModified) } : null,
+          temporary: Boolean(active.isTemporary), modified: Boolean(active.isModified), revision: revisionOf(active) } : null,
         selection: { count: nodes.length, node: nodes.length === 1 ? describe(nodes[0]) : null },
         clientId: text(api && (api.clientId || api.initialClientId), 100),
         events: queue.splice(0, queue.length),
@@ -221,6 +251,30 @@ export function workbenchInstallScript(origin: string): string {
       touched(graph);
       return { ok: true };
     },
+    locate(id, subgraphId) {
+      const canvas = app.canvas;
+      const root = rootGraph();
+      let graph = root;
+      if (subgraphId) {
+        const sub = subgraphOf(root, subgraphId);
+        if (!sub || !findNode(sub, id)) return { error: "noNode" };
+        if (typeof canvas.openSubgraph !== "function") return { error: "inSubgraph" };
+        if (canvas.graph !== sub) canvas.openSubgraph(sub);
+        graph = sub;
+      } else if (canvas.graph !== root && typeof canvas.setGraph === "function") {
+        // 现在停在某张子图里:先回根图
+        canvas.setGraph(root);
+      }
+      const node = findNode(graph, id);
+      if (!node) return { error: "noNode" };
+      if (typeof canvas.deselectAll === "function") canvas.deselectAll();
+      if (typeof canvas.selectItems === "function") canvas.selectItems([node]);
+      else if (typeof canvas.selectNode === "function") canvas.selectNode(node, false);
+      if (typeof canvas.centerOnNode === "function") canvas.centerOnNode(node);
+      else if (typeof canvas.animateToBounds === "function" && node.boundingRect) canvas.animateToBounds(node.boundingRect);
+      if (typeof canvas.setDirty === "function") canvas.setDirty(true, true);
+      return { ok: true };
+    },
   };
   Object.defineProperty(window, "__mosaelWorkbench", { value: Object.freeze(bridge), configurable: false, writable: false });
   return "installed";
@@ -241,6 +295,7 @@ export function workbenchCallScript(origin: string, call: WorkbenchCall): string
     export: "return await bridge.exportGraph();",
     save: "return bridge.save();",
     setMarks: "return bridge.setMarks(call.marks);",
+    locate: "return bridge.locate(call.node, call.subgraph);",
   }[call.op];
   return callShell(origin, `const call = ${data};\n    ${body}`);
 }
@@ -269,6 +324,12 @@ export interface WorkbenchCapabilities {
   save: boolean;
   events: boolean;
   marks: boolean;
+  /** 前端的改动跟踪在:轮询报的 `revision` 跟着图上的改动走(缺失项据此自己重新检查) */
+  changes: boolean;
+  /** 能在画布上定位节点(选中、移到中间) */
+  locate: boolean;
+  /** 能进子图(定位子图里的节点);没有时只能说「在子图 X 里」 */
+  subgraphs: boolean;
 }
 
 export interface WorkbenchWidget {
@@ -298,15 +359,18 @@ export interface WorkbenchEvent {
 
 export interface WorkbenchState {
   capabilities: WorkbenchCapabilities;
-  /** 画布上开着的那一张:`path` 是 `workflows/` 下的相对路径(没存过的是空串) */
-  workflow: { path: string; name: string; temporary: boolean; modified: boolean } | null;
+  /**
+   * 画布上开着的那一张:`path` 是 `workflows/` 下的相对路径(没存过的是空串);`key` 认的是**哪一张**(前端工作流仓库里的路径,
+   * 没存过的也有);`revision` 是这一张的图改过几回(只增,换一张也加一)。
+   */
+  workflow: { path: string; name: string; temporary: boolean; modified: boolean; key: string; revision: number } | null;
   selection: { count: number; node: WorkbenchNode | null };
   clientId: string;
   events: WorkbenchEvent[];
 }
 
 const CAPABILITIES: (keyof WorkbenchCapabilities)[] = ["selection", "setWidget", "refreshCombos", "export", "dirty", "save",
-  "events", "marks"];
+  "events", "marks", "changes", "locate", "subgraphs"];
 const EVENT_TYPES = new Set(["execution_start", "executing", "progress", "executed", "execution_cached", "execution_success",
   "execution_error", "execution_interrupted"]);
 
@@ -329,11 +393,14 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
   if (isRecord(raw.workflow)) {
     const path = str(raw.workflow.path, 600);
     const saved = path.startsWith("workflows/") && path.toLowerCase().endsWith(".json") && raw.workflow.temporary !== true;
+    const name = str(raw.workflow.name, 300);
     workflow = {
       path: saved ? path.slice("workflows/".length) : "",
-      name: str(raw.workflow.name, 300),
+      name,
       temporary: !saved,
       modified: raw.workflow.modified === true,
+      key: path || name,
+      revision: Math.max(0, Math.floor(num(raw.workflow.revision))),
     };
   }
   const selection = isRecord(raw.selection) ? raw.selection : {};
@@ -395,7 +462,7 @@ export type WorkbenchCallResult =
   | { ok: true; value?: string | number | boolean | null; export?: WorkbenchExport }
   | { ok: false; error: string; message?: string; nodes?: string[] };
 
-const ERRORS = new Set(["noNode", "noWidget", "notInList", "missing", "elsewhere", "failed", "notReady", "closed"]);
+const ERRORS = new Set(["noNode", "noWidget", "notInList", "missing", "elsewhere", "failed", "notReady", "closed", "inSubgraph"]);
 
 export function parseWorkbenchResult(call: WorkbenchCall, raw: unknown): WorkbenchCallResult {
   if (isRecord(raw) && typeof raw.error === "string") {

@@ -391,6 +391,11 @@ touches files on that machine:
 
 - `node_folders`: which model folder each input of the node selected on the canvas (node type + input name) picks from — the same
   table as the generation form's `x-model-folder` (`labels.model_folder`), a lookup only.
+- `search_sources`: when the workflow gives no download address for a missing model, search Civitai, HuggingFace and ModelScope by
+  its file name (the full name → without the extension → without a precision suffix) and return candidates (site, repository, exact
+  file name, size, base model, a link the download accepts); exact names come first and are marked `exact`, similar ones never are.
+  A site that fails goes into `failed` and the rest still answer; results are kept for 10 minutes in the plugin's data directory.
+  It doesn't touch the ComfyUI server.
 - `app` with `content`: reads the graph on the canvas right now (unsaved changes included); the same answer as for a file, without a
   path or modification time.
 - `app_marks`: what an app form / result marks change on the canvas (`properties.mosael` on each marked top-level node, `extra.mosael`
@@ -401,7 +406,7 @@ touches files on that machine:
   highlights the running node as usual) and the UI-format graph goes into `extra_pnginfo.workflow` (outputs dragged back into ComfyUI
   keep their layout). It follows the run by polling the history only, **without opening a WebSocket**: ComfyUI keeps one connection
   per `client_id`, and a second one would push the canvas off. Every output of the kind comes back with the node it came from
-  (`source_node`); the workbench groups them by node and offers “Only this from now on”. Resuming after a restart still goes by prompt id.
+  (`source_node`); the workbench groups them by node and offers “Only this node's images”. Resuming after a restart still goes by prompt id.
 
 Tested frontend: ComfyUI 0.38.0 / frontend 1.53.10 (read-only checks: injecting the bridge, probing, selection, export, `graphToPrompt`,
 the dirty flag, plus the trackpad / mouse setting's key and the two requests it tries to write back to the server; nothing was

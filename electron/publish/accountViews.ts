@@ -134,12 +134,16 @@ const tabId = (tab: PageTab): string => String(tab.view.webContents.id);
  */
 /**
  * 前台视图为什么暂时不在原处:框选截图(渲染层在原处铺冻结的画面让人拖框)、页面列表在网页那张画面上展开 /
- * 收起 / 临时展开(`cover`)。两件事可能同时在 —— 哪一件还要它让开,它就让开。
+ * 收起 / 临时展开(`cover`)、Mosael 自己的整窗浮层亮着(`overlay`:看大图 —— 原生视图盖在一切 DOM 上,不让开
+ * 浮层就只露出顶栏和侧栏那几条)。几件事可能同时在 —— 哪一件还要它让开,它就让开。
  *
- * 两种让法不一样:框选时**藏起来**;`cover` 是**挪到窗口外面**、照常显示 —— 网页一直在出帧,揭开时回来的就是
- * 它此刻的样子。藏起来的视图揭开那一下可能先闪一帧藏之前的画面。
+ * 两种让法不一样:框选时**藏起来**;`cover`、`overlay` 是**挪到窗口外面**、照常显示 —— 网页一直在出帧,揭开时
+ * 回来的就是它此刻的样子。藏起来的视图揭开那一下可能先闪一帧藏之前的画面。
  */
-export type ForegroundHideReason = "region" | "cover";
+export type ForegroundHideReason = "region" | "cover" | "overlay";
+
+/** 这几种原因是把视图挪到窗口外(照常出帧),不是藏起来。 */
+const OFF_WINDOW_REASONS: readonly ForegroundHideReason[] = ["cover", "overlay"];
 
 /** 前台网页此刻的画面和它在窗口里的位置(CSS 像素):渲染层照这个把画面铺回原处。 */
 export interface ForegroundSnapshot {
@@ -1299,7 +1303,8 @@ export class AccountViewManager {
     const visible = this.visibleId ? this.views.get(this.visibleId) : null;
     if (this.alive(visible)) {
       const bounds = this.foregroundBounds();
-      visible.setBounds(this.foregroundHiddenFor.has("cover") ? { ...bounds, x: -(bounds.width + OFF_WINDOW_GAP) } : bounds);
+      const offWindow = OFF_WINDOW_REASONS.some((reason) => this.foregroundHiddenFor.has(reason));
+      visible.setBounds(offWindow ? { ...bounds, x: -(bounds.width + OFF_WINDOW_GAP) } : bounds);
     }
 
     // 悬浮面板:右下角卡片堆,后挂的在上,下层的卡片往上错开、露出标题条;网页全部叠在最上面那张

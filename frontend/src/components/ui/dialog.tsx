@@ -8,7 +8,7 @@ import { FLOATING_MOTION, MODAL_SURFACE, MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCR
 
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
-import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
+import { keepOpenOnAppChrome, useEmbeddedViewUp } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
@@ -44,9 +44,11 @@ const DialogContent = React.forwardRef<
 >(({ className, children, showClose = true, showOverlay = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
+  // 内嵌网页视图亮着:遮罩看不见,只剩它的滚动锁在拦盖在上面的外壳 —— 让开(见 appChrome 的 useEmbeddedViewUp)
+  const viewUp = useEmbeddedViewUp()
   return (
   <DialogPortal>
-    {showOverlay && <DialogOverlay />}
+    {showOverlay && !viewUp && <DialogOverlay />}
     <DialogPrimitive.Content
       ref={ref}
       // **宽度由 w 定,max-w 只管不出屏幕。** 此前默认宽写在 max-w 上(32rem),调用方给的 w-[…] 再宽也被它压回

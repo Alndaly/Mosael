@@ -8,13 +8,54 @@
  * - 把 body 设成 `pointer-events: none`,外壳跟着点不动(styles.css 给外壳放开);
  * - 把焦点圈在自己里面:点地址栏,焦点马上被拽回弹窗,一个字也打不进去;
  * - 按 Esc 就关:在地址栏按 Esc 想撤销输入,底下的弹窗关了。
+ * - 锁住滚动:遮罩(Radix 的 Overlay 里那层 react-remove-scroll)在 document 上听 wheel / touchmove,落在弹窗外面的
+ *   一律 preventDefault —— 外壳里能点、能悬停,滚轮却滚不动(工作台右边那一列:「应用」面板超出一屏,滚不下去)。
  * 所以外壳挂上 `APP_CHROME`,弹窗的「点了外面」「按了 Esc」碰到它就当没发生(keepOpenOnAppChrome),焦点进出外壳
- * 不让弹窗的焦点圈套看见(installAppChromeGuards)。
+ * 不让弹窗的焦点圈套看见(installAppChromeGuards);内嵌网页视图亮着的时候,弹窗的遮罩连同它的滚动锁让开
+ * (useEmbeddedViewUp,Dialog / Sheet / AlertDialog 的 Content 照它决定画不画遮罩)。
  *
  * 全屏看图的灯箱(components/app/image-preview 的宿主)也挂它:它同样盖在弹窗上面、又在弹窗外面 —— 在大图上翻页、
  * 点关闭,不该顺手把底下那个弹窗关掉。
  */
+import * as React from "react";
+
 export const APP_CHROME = { "data-app-chrome": "" } as const;
+
+/**
+ * 内嵌网页视图此刻亮着没有(主进程的 onViewState)。
+ *
+ * 亮着时原生视图盖住了 Mosael 的整个界面:底下开着的弹窗看不见,它的遮罩也看不见 —— 遮罩这时唯一还在起作用的是它带着的
+ * **滚动锁**,而锁住的恰好是盖在上面、能看见的外壳(滚轮在外壳里被拦下)。所以亮着时弹窗不画遮罩;弹窗本身(内容、
+ * 状态、焦点)原样留着,回来时遮罩重新铺上、滚动锁重新上。为什么不把弹窗改成非模态:Radix 换 modal 会把内容整棵重挂,
+ * 回来时工作流库停在哪一张、焦点落回哪个按钮都没了。
+ */
+let viewUp = false;
+const viewListeners = new Set<() => void>();
+let stopWatchingView: (() => void) | null = null;
+
+function subscribeViewUp(listener: () => void): () => void {
+  if (!stopWatchingView && typeof window !== "undefined" && typeof window.mosaelPublish?.onViewState === "function") {
+    stopWatchingView = window.mosaelPublish.onViewState((state) => {
+      if (state.visible === viewUp) return;
+      viewUp = state.visible;
+      for (const one of viewListeners) one();
+    });
+  }
+  viewListeners.add(listener);
+  return () => viewListeners.delete(listener);
+}
+
+export function useEmbeddedViewUp(): boolean {
+  return React.useSyncExternalStore(subscribeViewUp, () => viewUp, () => false);
+}
+
+/** 测试用:忘掉看到过的视图状态和订阅(下一个测试换一座桥)。 */
+export function resetEmbeddedViewWatch(): void {
+  stopWatchingView?.();
+  stopWatchingView = null;
+  viewUp = false;
+  viewListeners.clear();
+}
 
 type OutsideEvent = Event & { detail?: { originalEvent?: Event } | number };
 

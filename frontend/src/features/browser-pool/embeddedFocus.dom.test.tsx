@@ -2,6 +2,7 @@
 import { act, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { stepNativeViewAside } from "@/components/ui/nativeViewAside";
 import { installEmbeddedFocus, pageAfterPointer } from "./embeddedFocus";
 
 /**
@@ -86,6 +87,20 @@ describe("网页亮着时,落在 Mosael 看不见的地方的按键", () => {
     fireEvent.keyDown(byId("other"), { key: "Enter" });
     expect(onOther).toHaveBeenCalledTimes(1);
     expect(focusPage).not.toHaveBeenCalled();
+  });
+
+  it("大图开着(网页挪到了窗口外):按键是给大图的 —— Esc、左右翻页不被吞,也不把键盘交给挪开的网页", () => {
+    show();
+    const release = stepNativeViewAside();
+    const onKey = vi.fn();
+    document.body.addEventListener("keydown", onKey);
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    expect(onKey).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(false);
+    expect(focusPage).not.toHaveBeenCalled();
+    release();
+    document.body.removeEventListener("keydown", onKey);
   });
 });
 
