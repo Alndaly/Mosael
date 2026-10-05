@@ -172,6 +172,25 @@ class Comfy:
             raise self._http_error(exc) from exc
         return True
 
+    def overwrite_userdata(self, path: str, value: Any) -> dict[str, Any]:
+        """**覆盖写**用户目录里已有的一份,回 ComfyUI 给的文件信息(`{path, size, modified}`)。
+
+        只有 `annotate`(改应用表单的标记,ADR 0038 §2)用它,而且调用方先核对过改动时间 —— 别的写操作一律走
+        `write_userdata` / `move_userdata`,不覆盖。"""
+        body = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+        try:
+            with self._open("POST", f"/api/userdata/{parse.quote(path, safe='')}",
+                            params={"overwrite": "true", "full_info": "true"}, body=body,
+                            headers={"Content-Type": "application/json"}) as response:
+                raw = response.read()
+        except error.HTTPError as exc:
+            raise self._http_error(exc) from exc
+        try:
+            info = json.loads(raw.decode("utf-8") or "{}")
+        except ValueError:
+            info = {}
+        return info if isinstance(info, dict) else {}
+
     def move_userdata(self, source: str, dest: str) -> bool:
         """在用户目录里挪一份(改名、挪目录、挪进 / 挪出回收目录):目标已经有了就回 False(409),**不覆盖**。"""
         path = f"/api/userdata/{parse.quote(source, safe='')}/move/{parse.quote(dest, safe='')}"

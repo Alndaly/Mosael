@@ -645,7 +645,8 @@ def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> Non
     slots = {slot["node"]: slot["role"] for slot in graph.slots(api, "image")}
     assert slots == {"10": "reference_image", "11": "mask", "12": "mask"}, "只用了 alpha 那一路的 LoadImage 是蒙版"
     model = graph.describe("inpaint.json", "inpaint", api, OBJECT_INFO)
-    assert {"role": "mask", "max": 2, "required": True} in model["inputs"]
+    assert {"role": "mask", "max": 2, "required": True, "labels": ["LoadImageMask #11", "LoadImage #12"]} in model["inputs"], \
+        "一个角色几个槽位:按槽位顺序带名字(没起名的是「类名 #节点」)"
     assert model["modes"] == ["image-to-image"]
     assert "11.channel" not in model["parameters"], "读蒙版的节点是槽位,不是参数"
     assert "inpaint" in graph.features(api)
@@ -824,9 +825,9 @@ def test_存下来的优先_预览兜底(graph) -> None:
         "9": {"images": [{"filename": "a.png", "type": "output", "subfolder": ""}]},
         "12": {"images": [{"filename": "p.png", "type": "temp", "subfolder": ""}]},
     }}
-    assert [item["filename"] for item in graph.collect_outputs(entry, "image")] == ["a.png"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "image")] == ["a.png"]
     only_preview = {"outputs": {"12": {"images": [{"filename": "p.png", "type": "temp"}]}}}
-    assert [item["filename"] for item in graph.collect_outputs(only_preview, "image")] == ["p.png"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(only_preview, "image")] == ["p.png"]
 
 
 def test_全部产出_每个节点的每个文件和文字(graph) -> None:
@@ -853,7 +854,7 @@ def test_视频要的是合成的那一段_不是第一帧(graph) -> None:
         "8": {"images": [{"filename": "frame_00001.png", "type": "output"}]},
         "12": {"gifs": [{"filename": "out.mp4", "subfolder": "video", "type": "output"}]},
     }}
-    assert [item["filename"] for item in graph.collect_outputs(entry, "video")] == ["out.mp4"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "video")] == ["out.mp4"]
 
 
 def test_视频只在预览里_也不拿存下来的第一帧顶替(graph) -> None:
@@ -863,7 +864,7 @@ def test_视频只在预览里_也不拿存下来的第一帧顶替(graph) -> No
         "8": {"images": [{"filename": "frame_00001.png", "type": "output"}]},
         "12": {"gifs": [{"filename": "out.mp4", "subfolder": "", "type": "temp"}]},
     }}
-    assert [item["filename"] for item in graph.collect_outputs(entry, "video")] == ["out.mp4"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "video")] == ["out.mp4"]
 
 
 def test_校验错误和执行错误说得出是哪个节点(graph) -> None:
@@ -1025,8 +1026,8 @@ def test_收产出时只要选中的那个节点的(graph) -> None:
         "9": {"images": [{"filename": "a.png", "type": "output"}, {"filename": "b.png", "type": "output"}]},
         "12": {"images": [{"filename": "hd.png", "type": "output"}]},
     }}
-    assert [item["filename"] for item in graph.collect_outputs(entry, "image")] == ["a.png", "b.png", "hd.png"]
-    assert [item["filename"] for item in graph.collect_outputs(entry, "image", nodes={"12"})] == ["hd.png"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "image")] == ["a.png", "b.png", "hd.png"]
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "image", nodes={"12"})] == ["hd.png"]
     assert graph.collect_outputs(entry, "image", nodes={"99"}) == [], "选中的节点什么都没交出:不拿别的顶替"
 
 

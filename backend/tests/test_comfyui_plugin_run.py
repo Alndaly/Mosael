@@ -301,7 +301,9 @@ def test_没有画布的图跑3遍_循环提交3次_每次换一个种子(comfy,
                                                        "parameters": {"num_images": 3, "seed": 100}})
     assert _submitted_seeds(comfy) == [100, 101, 102]
     assert len(comfy.state.uploads) == 1, "图只传一次,三次提交都接它"
-    assert [one["parameters"] for one in output["outputs"]] == [{"seed": 100}, {"seed": 101}, {"seed": 102}]
+    assert [one["parameters"] for one in output["outputs"]] == [
+        {"seed": 100, "source_node": "16"}, {"seed": 101, "source_node": "16"}, {"seed": 102, "source_node": "16"}], \
+        "每份带着它那一遍的种子和它来自的节点(ADR 0038 §5)"
     assert output["usage"] == {"images": 3} and output["raw"]["prompt_ids"] == ["p1", "p2", "p3"]
     assert "note" not in output
     assert [task["prompt_id"] for task in hooks.tasks] == ["p1", "p2", "p3"]

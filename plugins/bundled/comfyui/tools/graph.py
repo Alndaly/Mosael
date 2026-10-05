@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import random
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import convert
@@ -672,8 +673,11 @@ def auxiliary_view(api: dict[str, Any], node_id: str, object_info: dict[str, Any
 
 
 def final_outputs(api: dict[str, Any], nodes: list[dict[str, str]],
-                  object_info: dict[str, Any] | None = None) -> list[dict[str, str]]:
+                  object_info: dict[str, Any] | None = None, marked: frozenset[str] = frozenset()) -> list[dict[str, str]]:
     """交回的这几个节点(`generation_nodes`)里哪几个是**最终结果**,其余的是中间一步或辅助图。
+
+    **有标记就听标记**(ADR 0038 §5):用户在应用表单里把哪几个输出节点标成了结果(`marked`,「以后只要这张」),
+    就是它们 —— 保存节点也能标(两个保存节点只要高清那张)。一个都没标(或标的都不在这一种里)才按下面猜:
 
     - **中间一步**:它显示的东西被**接着做下去**(见 `_made_from`),成了另一个输出的图 —— 两遍出图的第一遍、
       修脸(FaceDetailer)和放大之前的那张、拿去当 IP-Adapter 参考的那张、喂给 ControlNet 的控制图;
@@ -684,6 +688,9 @@ def final_outputs(api: dict[str, Any], nodes: list[dict[str, str]],
     存下来的仍然压过预览(`generation_nodes`)。整张图都没有解码节点的(放大、抠图、预处理工具、合作方 API 节点)
     不挑 —— 和 `_previews_input` 同一条线。一个都挑不出来就是全部。
     """
+    picked = [node for node in nodes if node["node"] in marked]
+    if picked:
+        return picked
     if len(nodes) < 2 or any(persists(api.get(node["node"]) or {}) for node in nodes):
         return nodes
     if not any(_is_decoder(node) for node in api.values()):
@@ -793,17 +800,13 @@ def _schema(input_def: Any, value: Any) -> dict[str, Any] | None:
     return spec
 
 
-def tunable(
-    api: dict[str, Any],
-    object_info: dict[str, Any],
-    titles: dict[str, str] | None = None,
-) -> dict[str, dict[str, Any]]:
-    """这张图里**给人调的**那些字面量输入:`<节点 id>.<输入名>` → JSON Schema 片段,按常用程度排好。
+def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
+                     titles: dict[str, str]) -> list[tuple[labels.Parameter, dict[str, Any], Any]]:
+    """这张图里**给人调的**那些字面量输入:(描述好的参数, JSON Schema 片段, 人话名字),按常用程度排好。
 
     宿主自己有控件的(提示词、种子、尺寸)、画布上的批量(按工作流原样,见 counts_runs)、读素材的槽位、不该在 Mosael 里调的(文件名前缀)
     都不在这里。名字是人话(见 labels),原始的「节点 · 输入名」在 description 里。
     """
-    titles = titles or {}
     prompts = text_slots(api, object_info)
     seeds = set(seed_inputs(api))
     sized = size_node(api)
@@ -842,7 +845,236 @@ def tunable(
             found.append((described, spec))
     found.sort(key=lambda pair: pair[0].rank)
     names = labels.titled([described for described, _ in found])
-    return {described.key: {"title": names[described.key], **spec} for described, spec in found}
+    return [(described, spec, names[described.key]) for described, spec in found]
+
+
+def tunable(
+    api: dict[str, Any],
+    object_info: dict[str, Any],
+    titles: dict[str, str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """这张图里**给人调的**那些字面量输入:`<节点 id>.<输入名>` → JSON Schema 片段,按常用程度排好(见 _tunable_entries)。"""
+    return {described.key: {"title": name, **spec}
+            for described, spec, name in _tunable_entries(api, object_info, titles or {})}
+
+
+# ---------------------------------------------------------------------------
+# 能填的项(ADR 0038 §1):生成目录、工具入参、应用表单都从这一份出发
+# ---------------------------------------------------------------------------
+
+#: 能填的项分哪几种。`text` / `media` 是节点上的一格(提示词、读素材的节点),中间四种是别的字面量 widget,
+#: 最后三种是**图级**的(没有节点):种子写进每一处种子、尺寸写进画布节点、跑几遍是循环提交几次。
+ITEM_KINDS = ("text", "media", "model", "number", "choice", "toggle", "seed", "size", "runs")
+GRAPH_ITEMS = ("seed", "size", "runs")
+#: 进参数表(`<节点 id>.<输入名>`)的那几种 —— 不是主提示词的文字也进。
+VALUE_KINDS = frozenset({"text", "model", "number", "choice", "toggle"})
+
+
+def _value_kind(spec: dict[str, Any]) -> str:
+    if spec.get("x-model-folder"):
+        return "model"
+    if "enum" in spec:
+        return "choice"
+    if spec.get("type") == "boolean":
+        return "toggle"
+    if spec.get("type") in ("integer", "number"):
+        return "number"
+    return "text"
+
+
+def slot_name(slot: dict[str, str]) -> str:
+    """一个读素材的槽位叫什么:用户给节点起的名字;没起就是「LoadImage #10」(和「结果取自」里的节点名同一种写法)。"""
+    return slot["title"] if slot["title"] != slot["class_type"] else f"{slot['class_type']} #{slot['node']}"
+
+
+def _size_spec(api: dict[str, Any], sized: str | None) -> dict[str, Any]:
+    """「尺寸」:推荐的几档(`examples`),不是限制 —— 手填的任意宽高都收(宿主据此摆可以手填的下拉),每边按 8 的倍数取整。
+    这张图自己的尺寸总在里面,且是默认值。"""
+    size: dict[str, Any] = {"type": "string", "minimum": SIZE_MINIMUM, "multipleOf": SIZE_STEP}
+    own = ""
+    if sized is not None:
+        inputs = api[sized]["inputs"]
+        if isinstance(inputs.get("width"), int) and isinstance(inputs.get("height"), int):
+            own = f"{inputs['width']}x{inputs['height']}"
+    size["examples"] = ([own] if own else []) + [one for one in COMMON_SIZES if one != own]
+    if own:
+        size["default"] = own
+    return size
+
+
+def _runs_spec(api: dict[str, Any], delivering: list[dict[str, str]]) -> dict[str, Any]:
+    """「张数」是跑几遍(见 run.generate):每遍按工作流原样,换一个种子;缺省跑一遍。宿主的「N×」是跑几遍 × 一遍几张。"""
+    runs: dict[str, Any] = {"type": "integer", "minimum": 1, "maximum": MAX_RUNS, "default": 1, "x-count-unit": "runs"}
+    batch = shared_batch(api, delivering)
+    if batch is not None:
+        runs["x-batch"] = batch  # 给人看的说明里写「批量 N」:一遍每个结果节点出几张
+    return runs
+
+
+def _pair(zh: str, en: str) -> dict[str, str]:
+    return {"zh": zh, "en": en}
+
+
+def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """这张图**全部能填的项**(ADR 0038 §1)。此前生成目录、工具入参各推各的那几步收在这一处:
+
+    - 写提示词的那几格(`text`,带 `role`:prompt / negative,见 text_slots);
+    - 读素材的节点(`media`,带 `role` 和 `media`,见 slots);
+    - 图级的种子、尺寸、跑几遍(`seed` / `size` / `runs`,没有节点);
+    - 其余给人调的字面量输入(见 _tunable_entries):选模型文件的下拉(`model`,带 `folder`)、别的下拉(`choice`)、
+      开关(`toggle`)、数字(`number`)、文字(`text`,没有 `role`)。
+
+    每项 `{key, node, input, kind, title, node_title, class_type, common, schema?}`:`key` 是锚点(`<节点 id>.<输入名>`,图级的项
+    就是它的名字),`title` 是人话名字(按语言分),`schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。
+    顺序:提示词、素材、图级的项、其余按常用程度。生成目录(describe)、工具(tooling.shape_of)、应用表单(app_form)都从它出发。
+    """
+    titles = titles or {}
+    kind = kind_of(api)
+    placeholders = _placeholders_in(api)
+    found: list[dict[str, Any]] = []
+
+    def node_facts(node_id: str) -> tuple[str, str]:
+        class_type = str(api[node_id].get("class_type", ""))
+        title = titles.get(node_id) or class_type
+        return class_type, (title if title != class_type else "")
+
+    prompts = text_slots(api, object_info)
+    per_role: dict[str, int] = {}
+    per_node: dict[tuple[str, str], int] = {}
+    for (node_id, _field), role in prompts.items():
+        per_role[role] = per_role.get(role, 0) + 1
+        per_node[(node_id, role)] = per_node.get((node_id, role), 0) + 1
+    for (node_id, field), role in prompts.items():
+        class_type, custom = node_facts(node_id)
+        zh, en = ("提示词", "Prompt") if role == "prompt" else ("反向提示词", "Negative prompt")
+        if per_role[role] > 1:
+            where = custom or f"{class_type} #{node_id}"
+            if per_node[(node_id, role)] > 1:
+                where = f"{where} · {field}"
+            zh, en = f"{zh} · {where}", f"{en} · {where}"
+        value = api[node_id]["inputs"][field]
+        schema: dict[str, Any] = {"type": "string", "x-multiline": True}
+        if isinstance(value, str):
+            schema["default"] = value
+        found.append({"key": f"{node_id}.{field}", "node": node_id, "input": field, "kind": "text", "role": role,
+                      "title": _pair(zh, en), "node_title": custom, "class_type": class_type, "common": True,
+                      "schema": schema})
+
+    for slot in slots(api, kind, titles):
+        zh, en = labels.ROLE_NAMES.get(slot["role"], ("素材", "Input"))
+        found.append({"key": f"{slot['node']}.{slot['field']}", "node": slot["node"], "input": slot["field"],
+                      "kind": "media", "role": slot["role"], "media": slot["media"],
+                      "title": _pair(f"{zh} · {slot_name(slot)}", f"{en} · {slot_name(slot)}"),
+                      "node_title": slot["title"] if slot["title"] != slot["class_type"] else "",
+                      "class_type": slot["class_type"], "common": True})
+
+    if seed_inputs(api) or "seed" in placeholders:
+        found.append({"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": _pair("种子", "Seed"),
+                      "node_title": "", "class_type": "", "common": True, "schema": {"type": "integer", "minimum": 0}})
+    sized = size_node(api)
+    if sized is not None or {"width", "height"} & placeholders:
+        found.append({"key": "size", "node": "", "input": "size", "kind": "size", "title": _pair("尺寸", "Size"),
+                      "node_title": "", "class_type": "", "common": True, "schema": _size_spec(api, sized)})
+    if counts_runs(api):
+        found.append({"key": "runs", "node": "", "input": "runs", "kind": "runs", "title": _pair("跑几遍", "Runs"),
+                      "node_title": "", "class_type": "", "common": True,
+                      "schema": _runs_spec(api, generation_nodes(api, kind, object_info, titles))})
+
+    for described, spec, name in _tunable_entries(api, object_info, titles):
+        item: dict[str, Any] = {"key": described.key, "node": described.node, "input": described.input,
+                                "kind": _value_kind(spec), "title": name, "node_title": described.node_title,
+                                "class_type": described.class_type, "common": "x-advanced" not in spec, "schema": spec}
+        if spec.get("x-model-folder"):
+            item["folder"] = spec["x-model-folder"]
+        found.append(item)
+    return found
+
+
+@dataclass(frozen=True)
+class Field:
+    """表单上的一项:一条能填的项(`items` 交回的),加上作者给它的说法(应用表单,ADR 0038 §2)。"""
+
+    item: dict[str, Any]
+    #: 作者起的名字;空串 = 用这一项自己的名字
+    label: str = ""
+    #: 文字项写成宿主的提示词 / 反向提示词(缺省表单里认出来的提示词格都是)
+    main: bool = False
+    #: 只许从这几项里挑(下拉、选模型文件的项);None = 不收窄
+    choices: tuple[str, ...] | None = None
+
+    @property
+    def key(self) -> str:
+        return str(self.item["key"])
+
+    @property
+    def kind(self) -> str:
+        return str(self.item["kind"])
+
+    @property
+    def title(self) -> Any:
+        return self.label or self.item["title"]
+
+
+@dataclass(frozen=True)
+class Form:
+    """一张图的表单:生成目录、工具入参、跑的时候写哪几格,说的都是它。
+
+    没有应用表单时是**缺省的应用**(`default_form`:全部能填的项,认出来的提示词格写提示词);有的话是作者挑的那几项,
+    按作者排的顺序(见 app_form.resolve)。没挑的项照工作流原样跑:不进表单,也不被写。
+    """
+
+    fields: tuple[Field, ...]
+    #: 作者挑过(工作流里有应用表单);False = 全自动推出来的缺省
+    app: bool = False
+    title: str = ""
+    description: str = ""
+    #: 标成「结果」的输出节点(「以后只要这张」,ADR 0038 §5):「结果取自」的缺省就是它们
+    results: frozenset[str] = frozenset()
+
+    def prompts(self) -> dict[tuple[str, str], str]:
+        """写提示词的那几格(主提示词):`(节点, 输入名)` → prompt / negative。"""
+        return {(one.item["node"], one.item["input"]): "negative" if one.item.get("role") == "negative" else "prompt"
+                for one in self.fields if one.kind == "text" and one.main}
+
+    def graph_item(self, kind: str) -> Field | None:
+        return next((one for one in self.fields if one.kind == kind), None)
+
+    def media(self) -> list[Field]:
+        return [one for one in self.fields if one.kind == "media"]
+
+    def parameters(self) -> list[Field]:
+        """进参数表的那几项(`<节点 id>.<输入名>`),按表单的顺序。"""
+        return [one for one in self.fields if one.kind in VALUE_KINDS and not (one.kind == "text" and one.main)]
+
+    def slots(self) -> list[dict[str, str]]:
+        """读素材的槽位(和 `slots` 同形),按表单的顺序 —— 宿主给的第 i 份接到这个角色的第 i 个槽位上。"""
+        return [{"node": one.item["node"], "class_type": one.item["class_type"],
+                 "title": one.item.get("node_title") or one.item["class_type"], "media": one.item["media"],
+                 "field": one.item["input"], "role": one.item["role"]} for one in self.media()]
+
+    def slot_labels(self) -> dict[str, list[str]]:
+        """每个角色的槽位按顺序叫什么(宿主描述符的 `source_labels`)。
+
+        应用表单里每个槽位都有名字(作者起的,没起就是节点名);缺省的表单只在名字说得出东西时才给 —— 一个角色有几个
+        槽位、或者用户给读图节点起过名字(`YZ金鱼` 那种十个读图节点),免得给唯一的一格挂一个「LoadImage #10」。
+        """
+        named: dict[str, list[str]] = {}
+        for one, slot in zip(self.media(), self.slots(), strict=True):
+            named.setdefault(slot["role"], []).append(one.label or slot_name(slot))
+        if self.app:
+            return named
+        counts: dict[str, int] = {}
+        custom: set[str] = set()
+        for one in self.media():
+            counts[one.item["role"]] = counts.get(one.item["role"], 0) + 1
+            if one.item.get("node_title"):
+                custom.add(one.item["role"])
+        return {role: names for role, names in named.items() if counts[role] > 1 or role in custom}
+
+
+def default_form(found: list[dict[str, Any]]) -> Form:
+    """缺省的应用:全部能填的项,认出来的提示词格写宿主的提示词 / 反向提示词。"""
+    return Form(tuple(Field(item, main=item["kind"] == "text" and bool(item.get("role"))) for item in found))
 
 
 #: 「结果取自」那一项的参数键:不带点(带点的是 `<节点 id>.<输入名>`,见 run.overrides_from),选中的是节点 id。
@@ -866,12 +1098,13 @@ _NOT_FINAL_MARKS = {"control": ("控制图", "control image"), "mask": ("蒙版"
 
 
 def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
-                   object_info: dict[str, Any] | None = None) -> dict[str, Any]:
+                   object_info: dict[str, Any] | None = None, marked: frozenset[str] = frozenset()) -> dict[str, Any]:
     """「结果取自」:这一种的几个保存节点(一个都没存时是几个预览节点)各是一个选项,名字用节点标题。
 
     缺省是「最终结果」:几个预览节点里有的只是中间一步或控制图、蒙版(见 final_outputs)时,只交回最终的那几个,
     选项名里写明是哪个;别的那几个标着「中间一步」「控制图」「蒙版」。没有这种节点(几个保存节点,或几个互不相干的
-    预览)时缺省「全部」。
+    预览)时缺省「全部」。**用户标过结果**(`marked`,应用表单里的「以后只要这张」)时缺省是标了的那几个,
+    选项名「你选的结果(节点名)」—— 不再猜。
 
     每个选项跑一遍交回几张写在 `x-outputs-per-run` 上(每个节点收到的批量,见 images_per_run):宿主据此按选中的那一项、
     乘上跑几遍摆占位。
@@ -879,30 +1112,40 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
     saved = any(persists(api.get(node["node"]) or {}) for node in nodes)
     count = len(nodes)
     what = ("保存节点", "save nodes") if saved else ("预览节点", "preview nodes")
-    finals = final_outputs(api, nodes, object_info)
+    finals = final_outputs(api, nodes, object_info, marked)
     final_ids = {node["node"] for node in finals}
+    chosen = bool(final_ids & marked)
     staged = count - len(finals)
     labels: dict[str, Any] = {}
     enum: list[str] = []
     if staged:
+        head = ("你选的结果", "Your result") if chosen else ("最终结果", "Final result")
         if len(finals) == 1:
             name = _choice_name(finals[0], nodes)
-            labels[FINAL_OUTPUTS] = {"zh": f"最终结果({name})", "en": f"Final result ({name})"}
+            labels[FINAL_OUTPUTS] = {"zh": f"{head[0]}({name})", "en": f"{head[1]} ({name})"}
         else:
-            labels[FINAL_OUTPUTS] = {"zh": f"最终结果({len(finals)} 个{what[0]})",
-                                     "en": f"Final results ({len(finals)} {what[1]})"}
+            labels[FINAL_OUTPUTS] = {"zh": f"{head[0]}({len(finals)} 个{what[0]})",
+                                     "en": f"{head[1]}s ({len(finals)} {what[1]})"}
         enum.append(FINAL_OUTPUTS)
     labels[ALL_OUTPUTS] = {"zh": f"全部({count} 个{what[0]})", "en": f"All ({count} {what[1]})"}
     enum.append(ALL_OUTPUTS)
     for node in nodes:
         name = _choice_name(node, nodes)
-        if node["node"] in final_ids:
+        if node["node"] in final_ids or chosen:
             labels[node["node"]] = name
         else:
             zh, en = _NOT_FINAL_MARKS[auxiliary_view(api, node["node"], object_info)]
             labels[node["node"]] = {"zh": f"{name}({zh})", "en": f"{name} ({en})"}
         enum.append(node["node"])
-    if staged:
+    if staged and chosen:
+        description = {
+            "zh": f"这张工作流有 {count} 个{what[0]},其中 {len(finals)} 个标成了它的结果(工作流库的「应用」里标的),缺省只交回"
+                  f"它们。要每个都交回就选「全部」;只要其中一个就选它,别的{what[0]}不跑。",
+            "en": f"This workflow has {count} {what[1]}, and only the one(s) marked as its result (in the workflow "
+                  "library's App tab) come back by default. Pick All to get every one, or pick one to get only that one; "
+                  f"the other {what[1]} don't run.",
+        }
+    elif staged:
         description = {
             "zh": f"这张工作流有 {count} 个{what[0]},其中 {staged} 个不是最终结果(接着被拿去再加工的那张、ControlNet 的"
                   f"控制图、蒙版),缺省只交回最终结果。要每个都交回就选「全部」;只要其中一个就选它,别的{what[0]}不跑。",
@@ -931,12 +1174,13 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
 
 
 def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dict[str, Any] | None = None,
-                   titles: dict[str, str] | None = None, locale: str = "zh") -> set[str] | None:
+                   titles: dict[str, str] | None = None, locale: str = "zh",
+                   marked: frozenset[str] = frozenset()) -> set[str] | None:
     """「结果取自」选的那一项 → 这次交回哪几个输出节点的;None 是这一种交回的全部。
 
     **没选和选了缺省是同一件事**:宿主只发用户动过的参数(AI 工作台、智能体、工作流节点常常不带这一项),目录里
-    `outputs_per_run` 说的是缺省那一项的份数 —— 跑的时候按同一个判据(final_outputs)再判一遍,摆的占位和交回的
-    份数才对得上。选的节点已经不在了(工作流在 ComfyUI 里改过)就说清楚。
+    `outputs_per_run` 说的是缺省那一项的份数 —— 跑的时候按同一个判据(final_outputs,标过结果的听标记)再判一遍,
+    摆的占位和交回的份数才对得上。选的节点已经不在了(工作流在 ComfyUI 里改过)就说清楚。
     """
     delivering = generation_nodes(api, kind, object_info, titles)
     if choice == ALL_OUTPUTS:
@@ -949,7 +1193,7 @@ def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dic
                                  f"The node #{choice} picked in “Results from” is no longer in this workflow. "
                                  "Click Refresh models on the Plugins page and pick again."))
         return {choice}
-    finals = final_outputs(api, delivering, object_info)
+    finals = final_outputs(api, delivering, object_info, marked)
     return {node["node"] for node in finals} if len(finals) < len(delivering) else None
 
 
@@ -971,68 +1215,65 @@ def describe(
     api: dict[str, Any],
     object_info: dict[str, Any],
     titles: dict[str, str] | None = None,
+    form: Form | None = None,
 ) -> dict[str, Any]:
     """一张 API 图 → 插件目录里的一个模型(见 docs/PLUGIN_MANIFEST 的「替宿主做生成」)。
 
-    - 提示词 / 反向提示词、种子、尺寸、跑几遍对到宿主自己的控件上(`negative_prompt` / `seed` / `size` /
+    说的是这张图的表单(`form`):有应用表单就是作者挑的那几项(见 app_form.resolve),没有就是缺省的应用 —— 全部能填的项
+    (`default_form(items(…))`)。三处界面不认识「应用」,它们读的还是同一个描述符,只是短了:
+
+    - 主提示词 / 反向提示词、种子、尺寸、跑几遍对到宿主自己的控件上(`negative_prompt` / `seed` / `size` /
       `num_images`,它在这里是跑几遍 —— `x-count-unit: runs`,见 counts_runs);
-    - 其余可调的字面量输入按 `<节点 id>.<输入名>` 列成参数(见 `tunable`);
-    - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频);
-    - 粘贴的模板里的 `{{占位符}}` 一样认;
-    - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);
+    - 其余的项按 `<节点 id>.<输入名>` 列成参数,按表单的顺序、用表单上的名字(缺省按常用程度,见 `tunable`);
+    - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频),每个槽位按顺序带名字(`labels`,见 Form.slot_labels);
+    - 粘贴的模板里的 `{{占位符}}` 一样认(模板没有应用表单);
+    - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);应用表单里
+      没有主提示词的也是 `none` —— 那几格照工作流里存的那句跑;
     - 跑一遍交回几张(`outputs_per_run`,「结果取自」按缺省时)照实说:这一种里交回的节点(见 generation_nodes)各按
-      它收到的批量算(见 images_per_run),中间一步、控制图、蒙版这类预览不算(见 final_outputs);不止一个时给一项
-      「结果取自」(见 `_output_choice`)。宿主据此按跑几遍 × 一遍几张一次摆好那么多格占位。
+      它收到的批量算(见 images_per_run),中间一步、控制图、蒙版这类预览不算、标过结果的只算标了的(见 final_outputs);
+      不止一个时给一项「结果取自」(见 `_output_choice`)。宿主据此按跑几遍 × 一遍几张一次摆好那么多格占位。
     """
     titles = titles or {}
     kind = kind_of(api)
-    prompts = text_slots(api, object_info)
-    seeds = set(seed_inputs(api))
     sized = size_node(api)
     placeholders = _placeholders_in(api)
-    found_slots = slots(api, kind, titles)
+    form = form or default_form(items(api, object_info, titles))
+    #: 占位符只在内置图和粘贴的模板里有,它们没有应用表单
+    auto = set() if form.app else placeholders
+    prompts = form.prompts()
+    found_slots = form.slots()
 
     parameters: dict[str, dict[str, Any]] = {}
-    if "negative" in prompts.values() or "negative" in placeholders:
+    if "negative" in prompts.values() or "negative" in auto:
         parameters["negative_prompt"] = {"type": "string"}
-    if seeds or "seed" in placeholders:
-        parameters["seed"] = {"type": "integer", "minimum": 0}
-    if sized is not None or {"width", "height"} & placeholders:
-        # 推荐的几档(`examples`),不是限制:手填的任意宽高都收(宿主据此摆可以手填的下拉),每边按 8 的倍数取整
-        size: dict[str, Any] = {"type": "string", "minimum": SIZE_MINIMUM, "multipleOf": SIZE_STEP}
-        own = ""
-        if sized is not None:
-            inputs = api[sized]["inputs"]
-            if isinstance(inputs.get("width"), int) and isinstance(inputs.get("height"), int):
-                own = f"{inputs['width']}x{inputs['height']}"
-        choices = ([own] if own else []) + [one for one in COMMON_SIZES if one != own]
-        size["examples"] = choices
-        if own:
-            size["default"] = own
-        parameters["size"] = size
+    if form.graph_item("seed"):
+        parameters["seed"] = dict(form.graph_item("seed").item["schema"])  # type: ignore[union-attr]
+    if form.graph_item("size"):
+        parameters["size"] = dict(form.graph_item("size").item["schema"])  # type: ignore[union-attr]
     #: 跑一遍交回几张:缺省(最终结果,见 final_outputs)交回的那几个节点,各按它收到的批量(见 images_per_run);
     #: 「全部」时是这一种交回的每个节点 —— 再乘上最多跑几遍,是一次最多交回几张。
     delivering = generation_nodes(api, kind, object_info, titles)
-    finals = final_outputs(api, delivering, object_info)
+    finals = final_outputs(api, delivering, object_info, form.results)
     per_run = max(1, images_per_run(api, finals))
     max_outputs = max(1, images_per_run(api, delivering))
-    if counts_runs(api):
+    if form.graph_item("runs"):
         # 「张数」是跑几遍(见 run.generate):每遍按工作流原样,换一个种子;缺省跑一遍。宿主的「N×」是跑几遍 × 一遍几张。
         max_outputs *= MAX_RUNS
-        runs: dict[str, Any] = {"type": "integer", "minimum": 1, "maximum": MAX_RUNS, "default": 1,
-                                "x-count-unit": "runs"}
-        batch = shared_batch(api, delivering)
-        if batch is not None:
-            runs["x-batch"] = batch  # 给人看的说明里写「批量 N」:一遍每个结果节点出几张
-        parameters["num_images"] = runs
-    if "steps" in placeholders:
+        parameters["num_images"] = dict(form.graph_item("runs").item["schema"])  # type: ignore[union-attr]
+    if "steps" in auto:
         parameters["steps"] = {"type": "integer", "minimum": 1, "maximum": 200, "default": 20,
                                "title": {"zh": "步数", "en": "Steps"}}
-    if "duration_seconds" in placeholders:
+    if "duration_seconds" in auto:
         parameters["duration_seconds"] = {"type": "integer", "minimum": 1}
     if len(delivering) > 1:
-        parameters[OUTPUT_CHOICE] = _output_choice(delivering, api, object_info)
-    parameters.update(tunable(api, object_info, titles))
+        parameters[OUTPUT_CHOICE] = _output_choice(delivering, api, object_info, form.results)
+    for field in form.parameters():
+        spec = dict(field.item["schema"])
+        if field.choices is not None:
+            spec["enum"] = list(field.choices)
+        if form.app:
+            spec.pop("x-advanced", None)  # 作者挑出来的每一项都摆在第一屏
+        parameters[field.key] = {"title": field.title, **spec}
 
     counts: dict[str, int] = {}
     for slot in found_slots:
@@ -1040,7 +1281,10 @@ def describe(
     if alpha_masks(api, found_slots):
         # 局部重绘拿 alpha 当蒙版:收一份蒙版(白色是要改的地方),替掉 alpha 那一路。不给就用图自己的 alpha。
         counts["mask"] = 1
-    prompted = bool(prompts) or "prompt" in placeholders
+    named = form.slot_labels()
+    #: 图有没有提示词(判「处理一张图」的工作流)看整张图;表单收不收提示词看主提示词
+    prompted = bool(text_slots(api, object_info)) or "prompt" in placeholders
+    asks_prompt = bool(prompts) or "prompt" in auto
     image_roles = ("reference_image", "first_frame", "last_frame")
     # 没有提示词、也没有自己的画布(放大、抠图、修脸这类「处理一张图」的工作流):那张图是必须给的 ——
     # 否则 ComfyUI 会拿工作流里存着的那张示例图跑一遍,用户拿回来的不是自己的图。
@@ -1049,6 +1293,8 @@ def describe(
     first_image_marked = False
     for role, count in counts.items():
         entry: dict[str, Any] = {"role": role, "max": count}
+        if named.get(role):
+            entry["labels"] = named[role]
         if needs_image and role in image_roles and not first_image_marked:
             entry["required"] = True
             first_image_marked = True
@@ -1074,12 +1320,13 @@ def describe(
         modes = ["text-to-audio"]
     else:
         has_image = any(role in counts for role in image_roles) or "mask" in counts
-        modes = (["text-to-image"] if prompted and not needs_image else []) + (["image-to-image"] if has_image else [])
+        modes = (["text-to-image"] if asks_prompt and not needs_image else []) + (["image-to-image"] if has_image else [])
         modes = modes or ["text-to-image"]
 
     model: dict[str, Any] = {
         "id": model_id,
-        "label": label,
+        # 应用的标题换掉模型下拉里那一项的名字;模型 id 仍是文件路径
+        "label": form.title if form.app and form.title else label,
         "kind": kind,
         "modes": modes,
         "parameters": parameters,
@@ -1087,7 +1334,7 @@ def describe(
         "max_outputs": max_outputs,
         "outputs_per_run": per_run,
         # 提示词要不要写:从图里读(见 prompt_requirement)。放大这类图是 none —— 宿主不再逼人敲一句没用的话。
-        "prompt": prompt_requirement(api, prompts, placeholders),
+        "prompt": prompt_requirement(api, prompts, auto),
     }
     types = {str(node.get("class_type", "")) for node in api.values()}
     # 提示词写法:SD 1.5 / SDXL 那一路(CheckpointLoaderSimple)吃逗号分隔的标签;Flux 这类走 UNETLoader
@@ -1126,20 +1373,23 @@ def substitute_placeholders(graph: dict[str, Any], values: dict[str, Any]) -> di
 
 
 def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
-         object_info: dict[str, Any] | None = None) -> dict[str, Any]:
+         object_info: dict[str, Any] | None = None,
+         prompts: dict[tuple[str, str], str] | None = None) -> dict[str, Any]:
     """把一次请求写进 API 图(返回新图,不改入参)。
 
     `values`:提示词 / 反向 / 种子 / 宽高 —— 宿主的主控件。**只写给了的**:用户没选尺寸,这张图就用它自己的尺寸,
     而不是被一个默认的 1024 盖掉。画布上存着的 batch_size 不动:「张数」是跑几遍(见 counts_runs)。
     `overrides`:`<节点 id>.<输入名>` → 值,用户在参数表里动过的那些。只改字面量输入;节点或输入
     已经不在了就跳过(工作流可能在 ComfyUI 里改过了,不该为此报错)。
-    `object_info`:认提示词写在哪几格(见 text_slots)—— 和描述这张图时给的是同一份,目录说「收提示词」的图,
-    写进去的就是那几格。
+    `prompts`:提示词写进哪几格(表单的主提示词,见 Form.prompts);不给就是认出来的每一格(见 text_slots,
+    `object_info` 和描述这张图时给的是同一份)—— 目录说「收提示词」的图,写进去的就是那几格。有应用表单时没标
+    主提示词的那几格保留工作流里存的那句。
     """
     graph = copy.deepcopy(api)
-    for (node_id, name), role in text_slots(graph, object_info).items():
+    targets = text_slots(graph, object_info) if prompts is None else prompts
+    for (node_id, name), role in targets.items():
         text = values.get(role)
-        if text is not None:
+        if text is not None and name in ((graph.get(node_id) or {}).get("inputs") or {}):
             graph[node_id]["inputs"][name] = text
     for node_id, name in seed_inputs(graph):
         if values.get("seed") is not None:
@@ -1162,9 +1412,11 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
     return substitute_placeholders(graph, {key: value for key, value in values.items() if value is not None})
 
 
-def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]]) -> dict[str, Any]:
+def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
+                found: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """把传上去的素材接到读素材的节点上:每个角色的第 i 份给这个角色的第 i 个槽位。
 
+    槽位是表单上的那几个、按表单的顺序(`found`,见 Form.slots);不给就是图里每一个读素材的节点,按节点顺序。
     给得比槽位少,剩下的槽位用它原来那份;给得比槽位多,多的不接(宿主按槽位数限过了)。
 
     **蒙版没有自己的槽位**时(局部重绘图常见的做法:LoadImage 的 alpha 就是蒙版,用户在 ComfyUI 的
@@ -1173,7 +1425,7 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]]) 
     """
     graph = copy.deepcopy(api)
     used: dict[str, int] = {}
-    found = slots(graph, kind)
+    found = slots(graph, kind) if found is None else [slot for slot in found if slot["node"] in graph]
     for slot in found:
         names = uploaded.get(slot["role"]) or []
         index = used.get(slot["role"], 0)
@@ -1312,7 +1564,7 @@ def all_outputs(history_entry: dict[str, Any], *, include_previews: bool = False
 
 def collect_outputs(history_entry: dict[str, Any], kind: str, nodes: set[str] | None = None) -> list[dict[str, Any]]:
     """一次**生成**要交回的文件:这次要的那一种(图 / 视频 / 音频),全部;`nodes`(「结果取自」选了一个)只要那几个
-    节点的。
+    节点的。每一项和 `all_outputs` 同形(`{node, class_type, item, media}`):交回时记下它来自哪个节点(`source_node`)。
 
     存下来的优先;一个都没有才用预览 —— 只接了 PreviewImage 的图也能出东西。视频图里常常同时有逐帧的图
     和合成的视频:要的是视频那几份,不是第一帧。跑之前在图上判的是 `generation_nodes`(同一个判据):
@@ -1321,14 +1573,14 @@ def collect_outputs(history_entry: dict[str, Any], kind: str, nodes: set[str] | 
     files, _ = all_outputs(history_entry, include_previews=True)
     wanted = [one for one in files if one["media"] == kind and (nodes is None or one["node"] in nodes)]
     # 这一种里存下来的优先;一份都没存(VHS 关了 save_output)才用预览 —— 不拿别的种类顶替
-    saved = [one["item"] for one in wanted if one["item"].get("type") != "temp"]
+    saved = [one for one in wanted if one["item"].get("type") != "temp"]
     if saved or wanted:
-        return saved or [one["item"] for one in wanted]
+        return saved or wanted
     if nodes is not None:
         return []  # 选中的节点什么都没交出:不拿别的节点顶替
     # 认不出种类(没有后缀的文件名之类):照旧交回第一份,总比说「没有产出」强
     fallback = [one for one in files if one["item"].get("type") != "temp"] or files
-    return [one["item"] for one in fallback][:1]
+    return fallback[:1]
 
 
 def interrupted(status: dict[str, Any]) -> bool:

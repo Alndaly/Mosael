@@ -116,6 +116,19 @@ def model_folder(class_type: str, name: str) -> str:
     return _MODEL_FOLDER_NODES.get((class_type, name)) or _MODEL_FOLDER_INPUTS.get(name, "")
 
 
+#: 读素材的槽位按宿主的素材角色叫什么(能填的项的名字、应用表单编辑器里列的那一行,见 graph.items)。
+ROLE_NAMES: dict[str, tuple[str, str]] = {
+    "reference_image": ("参考图", "Reference image"),
+    "first_frame": ("首帧", "First frame"),
+    "last_frame": ("尾帧", "Last frame"),
+    "mask": ("蒙版", "Mask"),
+    "source_video": ("视频", "Video"),
+    "reference_video": ("参考视频", "Reference video"),
+    "driving_audio": ("驱动音频", "Driving audio"),
+    "reference_audio": ("参考音频", "Reference audio"),
+}
+
+
 @dataclass(frozen=True)
 class Parameter:
     """描述好的一个参数(还没挂到模型上)。"""
@@ -200,4 +213,4 @@ def titled(parameters: list[Parameter]) -> dict[str, dict[str, str]]:
     return out
 
 
-__all__ = ["HIDDEN_INPUTS", "KNOWN", "Known", "Parameter", "describe", "titled"]
+__all__ = ["HIDDEN_INPUTS", "KNOWN", "Known", "Parameter", "ROLE_NAMES", "describe", "titled"]

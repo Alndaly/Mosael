@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterator, NamedTuple
 
+import app_form
 import convert
 import graph
 from comfy_http import Comfy, is_workflow_path
@@ -67,9 +68,20 @@ def _parse_template(text: str, locale: str) -> dict[str, Any]:
     return parsed
 
 
-def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
-         ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
-    """模型 id → (API 图, 占位符的默认值, 节点 id → 界面上的名字)。
+class Loaded(NamedTuple):
+    """一个模型 id 背后的那张图。"""
+
+    api: dict[str, Any]
+    #: 占位符的默认值(内置图和粘贴的模板;保存的工作流有它自己的值)
+    defaults: dict[str, Any]
+    #: 节点 id → 界面上的名字
+    titles: dict[str, str]
+    #: 工作流里 Mosael 的标记(应用表单、标成结果的节点,见 app_form);内置图和模板没有
+    marks: app_form.Marks = app_form.NONE
+
+
+def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) -> Loaded:
+    """模型 id → 那张图(API 图、占位符的默认值、节点名字、应用表单的标记)。
 
     图只留 ComfyUI 真会跑的那部分(graph.live):目录说的、填进去的、提交的是同一张图 —— 悬空的画布节点不再冒充
     「尺寸」「张数」,下游被旁路的读图节点不再冒充一格输入。"""
@@ -78,13 +90,13 @@ def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
         if not found:
             raise ComfyError(say(locale, "ComfyUI 里没有任何 checkpoint 模型 —— 先在 ComfyUI 里装一个",
                                  "ComfyUI has no checkpoint models. Install one in ComfyUI first."))
-        return graph.substitute_placeholders(BUILTIN_GRAPH, {"checkpoint": found[0]}), dict(PLACEHOLDER_DEFAULTS), {}
+        return Loaded(graph.substitute_placeholders(BUILTIN_GRAPH, {"checkpoint": found[0]}), dict(PLACEHOLDER_DEFAULTS), {})
     if model_id == TEMPLATE:
         text = template_text()
         if not text:
             raise ComfyError(say(locale, "这个连接没有粘贴 API 模板", "This connection has no API template."))
         parsed = graph.live(_parse_template(text, locale), object_info)
-        return parsed, dict(PLACEHOLDER_DEFAULTS), convert.titles_of(parsed)
+        return Loaded(parsed, dict(PLACEHOLDER_DEFAULTS), convert.titles_of(parsed))
     try:
         ui_graph = comfy.fetch_workflow(model_id)
     except ComfyError as exc:
@@ -93,7 +105,7 @@ def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
                                  f"ComfyUI no longer has the workflow “{model_id}”. Click Refresh models on the Plugins page, or call list_workflows to see what exists.")) from exc
         raise
     api = graph.live(convert.to_api(ui_graph, object_info, locale), object_info)
-    return api, {}, convert.titles_of(api)
+    return Loaded(api, {}, convert.titles_of(api), app_form.read(ui_graph))
 
 
 def label_of(path: str) -> str:
@@ -112,6 +124,13 @@ class Entry(NamedTuple):
     #: ComfyUI 保存工作流时写进图里的 id(新版前端的 UUID)。**改名、挪目录都不变**,工具名靠它稳住;
     #: 老版本存的图没有,是空串。
     ident: str = ""
+    #: 工作流里 Mosael 的标记(应用表单、标成结果的节点,见 app_form)
+    marks: app_form.Marks = app_form.NONE
+
+
+def form_of(entry: Entry, object_info: dict[str, Any]) -> graph.Form:
+    """这张图的表单:有应用表单就是作者挑的那几项(对不上的不进),没有就是全部能填的项(见 app_form.resolve)。"""
+    return app_form.resolve(entry.marks, entry.api, object_info, entry.titles)[0]
 
 
 def _ident(ui_graph: Any) -> str:
@@ -127,7 +146,7 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
     不是 .json 的文件(拷进去的压缩包)也一样带着原因交出来。
     """
     if checkpoints(object_info):
-        api, _, titles = load(comfy, BUILTIN, object_info, locale)
+        api, _, titles, _ = load(comfy, BUILTIN, object_info, locale)
         yield Entry(BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, titles, "")
     text = template_text()
     if text:
@@ -147,7 +166,7 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
         if not api:
             yield Entry(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
             continue
-        yield Entry(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph))
+        yield Entry(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph), app_form.read(ui_graph))
     for path in others:
         yield Entry(path, path, {}, {}, _not_a_workflow(path, locale))
 
@@ -181,7 +200,7 @@ def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
             continue
         if not graph.media_outputs(entry.api, object_info, entry.titles):
             continue
-        model = graph.describe(entry.id, entry.label, entry.api, object_info, entry.titles)
+        model = graph.describe(entry.id, entry.label, entry.api, object_info, entry.titles, form_of(entry, object_info))
         if entry.id == BUILTIN:
             model["parameters"]["size"]["default"] = "1024x1024"
             model["prompt_dialect"] = "sd-tags"

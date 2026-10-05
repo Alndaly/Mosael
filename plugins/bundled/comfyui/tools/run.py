@@ -20,6 +20,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
+import app_form
 import graph
 import models
 from comfy_http import Comfy
@@ -599,56 +600,70 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         entry = follow_poll(comfy, prompt_id, emit, locale)
     else:
         object_info = comfy.object_info()
-        api, defaults, titles = models.load(comfy, str(request.get("model") or ""), object_info, locale)
+        model_id = str(request.get("model") or "")
+        api, defaults, titles, marks = models.load(comfy, model_id, object_info, locale)
+        form = app_form.resolve(marks, api, object_info, titles)[0]
         parameters = request.get("parameters") or {}
-        # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)
-        values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults)
+        if form.app:
+            # 有应用表单时只认表单里的键(ADR 0038 §4):画板格子、工作流节点里存着的旧键不再写进图 —— 没挑的项照工作流原样跑
+            allowed = set(graph.describe(model_id, "", api, object_info, titles, form)["parameters"])
+            parameters = {key: value for key, value in parameters.items() if key in allowed}
+        # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)。应用表单里
+        # 没挑种子的:照工作流自己的设定(固定的留着,每次随机的换一个),不再每次换一个
+        values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults,
+                             keep_seed=form.app and not form.graph_item("seed"))
         # 「张数」是跑几遍(见 graph.counts_runs),缺省一遍;每遍按工作流原样,画布上存着的 batch_size 照旧 ——
         # 宿主照目录说的「跑几遍 × 一遍几张」摆占位,做的是同一件事。
         runs = runs_from(parameters)
-        wanted = graph.chosen_outputs(api, kind, choice, object_info, titles, locale)
+        wanted = graph.chosen_outputs(api, kind, choice, object_info, titles, locale, form.results)
         if isinstance(resume, dict) and resume.get("repeat") or (runs > 1 and graph.counts_runs(api)):
             # 跑 N 遍:循环提交 N 次(重启时带着循环的回执回来,接着跑)
             return _generate_repeated(request, comfy, locale, emit, kind, wanted, runs,
-                                      (object_info, api, titles, values, parameters))
-        prompt = graph.fill(api, values, overrides_from(parameters), object_info)
+                                      (object_info, api, titles, values, parameters, form))
+        prompt = graph.fill(api, values, overrides_from(parameters), object_info, form.prompts())
         if wanted is not None:
             prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
         preflight(prompt, object_info, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
-            prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded)
+            prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
-    files = [{"item": item, "media": kind} for item in graph.collect_outputs(entry or {}, kind, wanted)]
+    files = graph.collect_outputs(entry or {}, kind, wanted)
     if not files:
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
                              "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
-    outputs = [{"path": one["path"]} for one in download(comfy, files, "comfyui")]
+    # 每份产出带上它来自的节点(ADR 0038 §5):宿主记进生成记录和素材的生成参数。不叫 `output_node` —— 那是「结果取自」
+    # 的参数键,记进去之后「用同样的参数再来一次」会被当成选了那一个节点
+    outputs = [{"path": one["path"], "parameters": {"source_node": one["node"]}}
+               for one in download(comfy, [{**one, "media": kind} for one in files], "comfyui")]
     usage = {_USAGE_UNITS.get(kind, "images"): len(outputs)}
     return {"outputs": outputs, "usage": usage, "raw": {"prompt_id": prompt_id}}
 
 
 def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str,
                        wanted: set[str] | None, runs: int,
-                       loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any]],
+                       loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any],
+                                     graph.Form],
                        ) -> dict[str, Any]:
-    """跑 N 遍:循环提交 N 次(run_repeated),每份产出带着它那一遍用的种子;有几遍没出来时说明一句。
+    """跑 N 遍:循环提交 N 次(run_repeated),每份产出带着它那一遍用的种子和它来自的节点;有几遍没出来时说明一句。
 
-    `loaded` 是 generate 已经取好的 (object_info, 图, 节点名字, 主控件的值, 参数表),不再拉第二遍。"""
-    object_info, api, titles, values, parameters = loaded
+    `loaded` 是 generate 已经取好的 (object_info, 图, 节点名字, 主控件的值, 参数表, 表单),不再拉第二遍。"""
+    object_info, api, titles, values, parameters, form = loaded
     given = int(parameters["seed"]) if _number(parameters.get("seed")) else None
     overrides = overrides_from(parameters)
     uploaded: dict[str, list[str]] | None = None
 
     def build(seed: int) -> dict[str, Any]:
         nonlocal uploaded
-        prompt = graph.fill(api, {**values, "seed": seed}, overrides, object_info)
+        prompt = graph.fill(api, {**values, "seed": seed}, overrides, object_info, form.prompts())
         if wanted is not None:
             prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
         if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
             preflight(prompt, object_info, locale)
             uploaded = upload(comfy, request.get("inputs") or [])
-        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded) if uploaded else prompt
+        if not uploaded:
+            return prompt
+        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
 
     result = run_repeated(comfy, build, runs, given, emit, locale, titles, request.get("resume"))
     if not result.runs:
@@ -656,13 +671,13 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
     files: list[dict[str, Any]] = []
     seeds: list[int] = []
     for _, entry, seed in result.runs:
-        for item in graph.collect_outputs(entry, kind, wanted):
-            files.append({"item": item, "media": kind})
+        for one in graph.collect_outputs(entry, kind, wanted):
+            files.append({**one, "media": kind})
             seeds.append(seed)
     if not files:
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
                              "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
-    outputs = [{"path": one["path"], "parameters": {"seed": seed}}
+    outputs = [{"path": one["path"], "parameters": {"seed": seed, "source_node": one["node"]}}
                for one, seed in zip(download(comfy, files, "comfyui"), seeds, strict=True)]
     output: dict[str, Any] = {
         "outputs": outputs,

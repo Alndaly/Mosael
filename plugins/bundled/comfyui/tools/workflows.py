@@ -59,7 +59,8 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
         if entry.problem:
             found.append({"id": entry.id, "label": name, "error": entry.problem})
             continue
-        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale)
+        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale,
+                            models.form_of(entry, object_info))
         if entry.id in names:
             # 跑它用的工具(输入就是它自己的节点)
             described["tool"] = names[entry.id]
@@ -72,18 +73,23 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
 
 
 def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[str, Any],
-            titles: dict[str, str], locale: str) -> dict[str, Any]:
+            titles: dict[str, str], locale: str, form: graph.Form | None = None) -> dict[str, Any]:
+    """一张图能喂什么、能调什么、会交出什么 —— 说的是它的表单(`form`,见 graph.Form):有应用表单就是作者挑的那几项、
+    作者起的名字,和这张图的工具、生成表单同一张表;没给就是全部能填的项。"""
     kind = graph.kind_of(api)
-    found_slots = graph.slots(api, kind, titles)
-    roles = set(graph.text_slots(api, object_info).values())
+    form = form or graph.default_form(graph.items(api, object_info, titles))
+    found_slots = form.slots()
+    named = {(one.item["node"], one.item["input"]): one.label for one in form.media() if one.label}
+    roles = set(form.prompts().values())
     size_node = graph.size_node(api)
     size = ""
-    if size_node is not None:
+    if size_node is not None and form.graph_item("size"):
         inputs = api[size_node]["inputs"]
         size = f"{inputs.get('width')}x{inputs.get('height')}"
     parameters = []
-    for key, spec in graph.tunable(api, object_info, titles).items():
-        entry: dict[str, Any] = {"key": key, "title": _text(spec.get("title"), locale), "type": spec["type"]}
+    for field in form.parameters():
+        spec = {**field.item["schema"], **({"enum": list(field.choices)} if field.choices is not None else {})}
+        entry: dict[str, Any] = {"key": field.key, "title": _text(field.title, locale), "type": spec["type"]}
         if "default" in spec:
             entry["default"] = spec["default"]
         if isinstance(spec.get("enum"), list):
@@ -97,14 +103,16 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
     return {
         "id": model_id,
         "label": label,
+        **({"app": {"title": form.title, "description": form.description}} if form.app else {}),
         "kind": kind,
-        "features": graph.features(api, found_slots, object_info),
+        # 图在做什么看整张图(放大、局部重绘…),不看表单挑了哪几项
+        "features": graph.features(api, object_info=object_info),
         "prompt": "prompt" in roles,
         "negative_prompt": "negative" in roles,
         "size": size,
         "inputs": [
-            {"node": slot["node"], "title": slot["title"], "class_type": slot["class_type"],
-             "media": slot["media"], "role": slot["role"]}
+            {"node": slot["node"], "title": named.get((slot["node"], slot["field"])) or slot["title"],
+             "class_type": slot["class_type"], "media": slot["media"], "role": slot["role"]}
             for slot in found_slots
         ],
         "parameters": parameters,

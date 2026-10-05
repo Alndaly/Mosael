@@ -146,17 +146,28 @@ class Shape:
         self.node_outputs: list[str] = []
         #: 这张图和哪个生成模型是同一件事(见 _mirror);不是的话 None
         self.mirror: dict[str, Any] | None = None
+        #: 提示词写进哪几格(表单的主提示词,见 graph.Form.prompts):跑的时候只写它们
+        self.prompts: dict[tuple[str, str], str] = {}
+        #: 表单上读素材的槽位(见 graph.Form.slots):给的蒙版只替这几个读图节点的 alpha 那一路
+        self.slots: list[dict[str, str]] = []
 
 
 def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
+    """入参从这张图的表单推(见 models.form_of):有应用表单就只有作者挑的那几项,用作者起的名字 —— 一张工作流的工具和
+    生成说的是同一张表;没有就是全部能填的项。"""
     api, titles = entry.api, entry.titles
     shape = Shape()
     kind = graph.kind_of(api)
-    roles = set(graph.text_slots(api, object_info).values())
+    form = models.form_of(entry, object_info)
     placeholders = graph._placeholders_in(api)  # noqa: SLF001 — 同一个插件里的模块
-    found = graph.slots(api, kind, titles)
-    described = graph.describe(entry.id, entry.label, api, object_info, titles)
+    #: 占位符只在内置图和粘贴的模板里有,它们没有应用表单
+    auto = set() if form.app else placeholders
+    shape.prompts = form.prompts()
+    roles = set(shape.prompts.values())
+    found = shape.slots = form.slots()
+    described = graph.describe(entry.id, entry.label, api, object_info, titles, form)
     required_roles = {one["role"] for one in described["inputs"] if one.get("required")}
+    labelled = {(one.item["node"], one.item["input"]): one.label for one in form.fields if one.label}
 
     def alias(node: str, name: str, key: str) -> None:
         """老的 `values` 按「节点 id 或节点标题.输入名」写(见 graph.set_value):两种写法都迁到 `key` 这一格。
@@ -166,9 +177,11 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         if title and title not in api and list(titles.values()).count(title) == 1:
             shape.rename[f"values.{title}.{name}"] = key
 
-    if "prompt" in roles or "prompt" in placeholders:
+    if "prompt" in roles or "prompt" in auto:
+        named = next((label for (node, name), role in shape.prompts.items()
+                      if role == "prompt" and (label := labelled.get((node, name)))), "")
         shape.properties["prompt"] = {
-            "type": "string", "x-multiline": True, "title": _pair("提示词", "Prompt"),
+            "type": "string", "x-multiline": True, "title": named or _pair("提示词", "Prompt"),
             "description": _pair("留空就用工作流里写好的那一句", "Leave empty to keep the workflow's own"),
         }
         shape.bindings["prompt"] = ("text", "prompt")
@@ -188,7 +201,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             zh, en = f"{zh} · {custom or slot['node']}", f"{en} · {custom or slot['node']}"
         shape.properties[key] = {
             "type": "string", "format": "asset", "x-media": "image" if media == "mask" else media,
-            "title": _pair(zh, en), "description": f"{slot['title']} · {slot['field']}",
+            "title": labelled.get((slot["node"], slot["field"])) or _pair(zh, en),
+            "description": f"{slot['title']} · {slot['field']}",
         }
         shape.bindings[key] = ("slot", slot["node"], slot["field"])
         if slot["role"] in required_roles and slot["role"] not in marked:
@@ -210,7 +224,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.bindings["mask"] = ("alpha_mask",)
         shape.rename["mask"] = "mask"
 
-    if "negative" in roles or "negative" in placeholders:
+    if "negative" in roles or "negative" in auto:
         shape.properties["negative_prompt"] = {
             "type": "string", "x-multiline": True, "x-advanced": True, "title": _pair("反向提示词", "Negative prompt"),
             "description": _pair("留空就用工作流里写好的那一句", "Leave empty to keep the workflow's own"),
@@ -218,16 +232,21 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.bindings["negative_prompt"] = ("text", "negative")
         shape.rename["negative_prompt"] = "negative_prompt"
 
-    for combined, spec in graph.tunable(api, object_info, titles).items():
-        node, _, name = combined.partition(".")
+    for field in form.parameters():
+        node, name = field.item["node"], field.item["input"]
         key = f"{name}_{safe(node)}"
         if key in shape.properties:
-            key = f"{key}_{_hash(combined)[:4]}"
-        shape.properties[key] = dict(spec)
+            key = f"{key}_{_hash(field.key)[:4]}"
+        spec = {"title": field.title, **field.item["schema"]}
+        if field.choices is not None:
+            spec["enum"] = list(field.choices)
+        if form.app:
+            spec.pop("x-advanced", None)  # 作者挑出来的每一项都摆在第一屏
+        shape.properties[key] = spec
         shape.bindings[key] = ("param", node, name, spec["type"])
         alias(node, name, key)
 
-    if "steps" in placeholders:
+    if "steps" in auto:
         # 内置文生图和粘贴的模板里的 `{{steps}}`:保存的工作流的步数是上面那样的一格参数
         shape.properties["steps"] = {
             "type": "integer", "minimum": 1, "default": models.PLACEHOLDER_DEFAULTS["steps"], "title": _pair("步数", "Steps"),
@@ -236,7 +255,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.rename["steps"] = "steps"
 
     seeds = graph.seed_inputs(api)
-    if seeds or "seed" in placeholders:
+    if form.graph_item("seed"):
         shape.properties["seed"] = {
             "type": "integer", "minimum": 0, "x-advanced": True, "title": _pair("随机种子", "Seed"),
             "description": _pair("留空照工作流里的设定:固定的用存着的那个,每次随机的换一个",
@@ -247,7 +266,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         if len(seeds) == 1:
             alias(*seeds[0], "seed")
     sized = graph.size_node(api)
-    if sized is not None or {"width", "height"} & placeholders:
+    if form.graph_item("size"):
         own = (api[sized]["inputs"] if sized is not None else {})
         for name, zh, en in (("width", "宽度", "Width"), ("height", "高度", "Height")):
             spec: dict[str, Any] = {"type": "integer", "minimum": graph.SIZE_MINIMUM, "x-advanced": True,
@@ -262,7 +281,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
                 alias(sized, name, name)
     #: 「张数」是跑几遍(graph.counts_runs),和生成那一路同一件事:每遍按工作流原样(画布上存着的 batch_size 照旧),
     #: 换一个种子,缺省一遍。键名照旧是 num_images —— 存着的工作流节点、智能体记着的入参不用改。
-    if graph.counts_runs(api):
+    if form.graph_item("runs"):
         shape.properties["num_images"] = {
             "type": "integer", "minimum": 1, "maximum": graph.MAX_RUNS, "x-advanced": True, "default": 1,
             "title": _pair("跑几遍", "Runs"),
@@ -441,11 +460,11 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
     model_id = known.get(name)
     if model_id:
         try:
-            api, _, titles = models.load(comfy, model_id, object_info, locale)
+            loaded = models.load(comfy, model_id, object_info, locale)
             ident = ""
             if model_id not in _FIXED_NAMES:
                 ident = models._ident(comfy.fetch_workflow(model_id))  # noqa: SLF001
-            entry = models.Entry(model_id, models.label_of(model_id), api, titles, "", ident)
+            entry = models.Entry(model_id, models.label_of(model_id), loaded.api, loaded.titles, "", ident, loaded.marks)
             if tool_names([entry]).get(model_id) == name:
                 return entry
         except ComfyError:
@@ -482,8 +501,8 @@ def _given(value: Any) -> bool:
 def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit: run.Emit) -> dict[str, Any]:
     object_info = comfy.object_info()
     entry = _resolve(name, comfy, object_info, locale)
-    api, defaults, titles = models.load(comfy, entry.id, object_info, locale)
-    entry = entry._replace(api=api, titles=titles)
+    api, defaults, titles, marks = models.load(comfy, entry.id, object_info, locale)
+    entry = entry._replace(api=api, titles=titles, marks=marks)
     shape = shape_of(entry, object_info)
     kind = graph.kind_of(api)
 
@@ -524,14 +543,14 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
         """这一次要提交的图:填好入参(跑几遍时换上这一遍的种子),接上传好的素材。素材只传一次。"""
         nonlocal uploads
         filled = {**values, "seed": seed} if seed is not None else values
-        prompt = graph.fill(api, filled, overrides, object_info)
+        prompt = graph.fill(api, filled, overrides, object_info, shape.prompts)
         if uploads is None:
             run.preflight(prompt, object_info, locale)
             uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
                                  + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
         for role, names in uploads.items():
             if role == "mask":
-                prompt = graph.wire_inputs(prompt, kind, {"mask": names})
+                prompt = graph.wire_inputs(prompt, kind, {"mask": names}, shape.slots)
                 continue
             node = role.removeprefix("slot:")
             if node in prompt:

@@ -137,6 +137,54 @@ PORTRAIT_UI: dict[str, Any] = {
     ],
 }
 
+#: 一张**多读图节点**的文生图(ADR 0038 的「YZ金鱼」那种:几个 LoadImage 都是参考图,在表单上分不出哪张是哪张):
+#: 三张参考图各经一个 IP-Adapter 进模型(#10 起名「人物」,#13 没起名,#14 起名「背景」),再过一个 LoRA;两个保存节点
+#: (#9 存成品、#17 存同一张的另一份)。节点上、图上带着别的扩展写的键(`ue_properties`、`extra.ue_links`):应用表单的
+#: 标记写进去之后它们得原样还在。
+def multi_reference_ui() -> dict[str, Any]:
+    def node(node_id: int, kind: str, widgets: list[Any], inputs: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
+        return {"id": node_id, "type": kind, "pos": [node_id * 40, 0], "size": [300, 120], "mode": 0,
+                "widgets_values": widgets, "inputs": inputs,
+                "properties": {"Node name for S&R": kind, "ue_properties": {"version": "7.1"}}, **extra}
+
+    return {
+        "id": "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+        "revision": 0,
+        "nodes": [
+            node(3, "KSampler", [42, "fixed", 25, 6.5, "euler", "karras", 1.0],
+                 [conn("model", 9), conn("positive", 10), conn("negative", 11), conn("latent_image", 12),
+                  widget("seed"), widget("steps"), widget("cfg"), widget("sampler_name"), widget("scheduler"),
+                  widget("denoise")], title="采样"),
+            node(4, "CheckpointLoaderSimple", ["sd_xl_base.safetensors"], [widget("ckpt_name")]),
+            node(5, "EmptyLatentImage", [1024, 1024, 1], [widget("width"), widget("height"), widget("batch_size")]),
+            node(6, "CLIPTextEncode", ["a girl in a garden"], [conn("clip", 13), widget("text")]),
+            node(7, "CLIPTextEncode", ["blurry"], [conn("clip", 14), widget("text")]),
+            node(8, "VAEDecode", [], [conn("samples", 15), conn("vae", 16)]),
+            node(9, "SaveImage", ["app"], [conn("images", 17), widget("filename_prefix")]),
+            node(10, "LoadImage", ["face.png", "image"], [widget("image")], title="人物"),
+            node(12, "IPAdapter", [], [conn("model", 1), conn("image", 2)]),
+            node(13, "LoadImage", ["style.png", "image"], [widget("image")]),
+            node(14, "LoadImage", ["bg.png", "image"], [widget("image")], title="背景"),
+            node(15, "IPAdapter", [], [conn("model", 3), conn("image", 4)]),
+            node(16, "IPAdapter", [], [conn("model", 5), conn("image", 6)]),
+            node(17, "SaveImage", ["copy"], [conn("images", 18), widget("filename_prefix")]),
+            node(20, "LoraLoader", ["detail.safetensors", 0.8, 1.0],
+                 [conn("model", 7), conn("clip", 8), widget("lora_name"), widget("strength_model"), widget("strength_clip")]),
+        ],
+        "links": [
+            [1, 4, 0, 12, 0, "MODEL"], [2, 10, 0, 12, 1, "IMAGE"], [3, 12, 0, 15, 0, "MODEL"], [4, 13, 0, 15, 1, "IMAGE"],
+            [5, 15, 0, 16, 0, "MODEL"], [6, 14, 0, 16, 1, "IMAGE"], [7, 16, 0, 20, 0, "MODEL"], [8, 4, 1, 20, 1, "CLIP"],
+            [9, 20, 0, 3, 0, "MODEL"], [10, 6, 0, 3, 1, "CONDITIONING"], [11, 7, 0, 3, 2, "CONDITIONING"],
+            [12, 5, 0, 3, 3, "LATENT"], [13, 4, 1, 6, 0, "CLIP"], [14, 4, 1, 7, 0, "CLIP"], [15, 3, 0, 8, 0, "LATENT"],
+            [16, 4, 2, 8, 1, "VAE"], [17, 8, 0, 9, 0, "IMAGE"], [18, 8, 0, 17, 0, "IMAGE"],
+        ],
+        "groups": [],
+        "config": {},
+        "extra": {"ds": {"scale": 1, "offset": [0, 0]}, "ue_links": [], "0246.VERSION": [0, 0, 4]},
+        "version": 0.4,
+    }
+
+
 #: 一张保存的**图生视频**工作流(API 格式也能存进 workflows/ —— 用户「导出 (API)」后存的就是这样)。
 WAN_API: dict[str, Any] = {
     "3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "cfg": 5.0, "sampler_name": "euler",
@@ -578,6 +626,10 @@ class State:
     log_entries: list[dict[str, str]] = field(default_factory=list)
     #: workflows/ 以外的 userdata(回收目录 `.mosael-trash/…`):键是相对用户目录的路径。
     userdata: dict[str, Any] = field(default_factory=dict)
+    #: 每张工作流的改动时间(毫秒,和 ComfyUI 0.38 的 full_info 一样);没写过的是 1。每写一次往后走一格(`touch`),
+    #: 测 `annotate` 带着读到时的改动时间、文件在这之间被改过就不写。
+    workflow_modified: dict[str, int] = field(default_factory=dict)
+    clock: int = 1791000000000
     #: Manager 的节点映射(`/v2/customnode/getmappings`):包 → [节点类型…, 附加信息];已装的包(`/v2/customnode/installed`)。
     manager_mappings: dict[str, Any] = field(default_factory=dict)
     manager_installed: dict[str, Any] = field(default_factory=dict)
@@ -596,8 +648,18 @@ class State:
     def userdata_put(self, path: str, value: Any) -> None:
         if path.startswith("workflows/"):
             self.workflows[path[len("workflows/"):]] = value
+            self.touch(path[len("workflows/"):])
         else:
             self.userdata[path] = value
+
+    def touch(self, name: str) -> int:
+        """这张工作流刚被存过(在 ComfyUI 里 Ctrl+S、别人改过):改动时间往后走一格。"""
+        self.clock += 1234
+        self.workflow_modified[name] = self.clock
+        return self.clock
+
+    def modified(self, name: str) -> int:
+        return self.workflow_modified.get(name, 1)
 
     def userdata_pop(self, path: str) -> Any:
         if path.startswith("workflows/"):
@@ -670,7 +732,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Directory not found")
         elif path == "/api/userdata" and query.get("dir") == ["workflows"]:
-            self._json([{"path": name, "size": len(json.dumps(graph)), "modified": 1}
+            self._json([{"path": name, "size": len(json.dumps(graph)), "modified": state.modified(name)}
                         for name, graph in state.workflows.items()])
         elif path == "/api/userdata":
             prefix = (query.get("dir") or [""])[0].rstrip("/") + "/"
@@ -808,7 +870,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"File already exists")
             return
         state.userdata_put(name, json.loads(raw or b"null"))
-        self._json({"path": name, "size": len(raw), "modified": 1791000000000})
+        stamp = state.modified(name[len("workflows/"):]) if name.startswith("workflows/") else 1791000000000
+        self._json({"path": name, "size": len(raw), "modified": stamp})
 
     def do_DELETE(self) -> None:  # noqa: N802
         state = self.server.state

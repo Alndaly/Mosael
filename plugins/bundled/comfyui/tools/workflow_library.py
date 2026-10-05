@@ -9,6 +9,8 @@
     {"op": "rename_workflow", "path", "new_path"}      → 改名 / 挪目录
     {"op": "trash_workflow", "path"}                   → 「删除」:挪进回收目录
     {"op": "restore_workflow", "path", "new_path"}     → 从回收目录挪回去
+    {"op": "app", "path"}                              → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、读到时的改动时间
+    {"op": "annotate", "path", "modified", "app", "results"} → 只改 `mosael` 那几处标记,**覆盖写**;改动时间对不上回 stale
 
 导入、装缺的节点包、重启在 workflow_import。
 
@@ -20,7 +22,8 @@
 
 **不覆盖、不硬删**:写和移动一律 `overwrite=false`,撞名回 `{"conflict": true, "suggestion": …}`;ComfyUI 的 `DELETE` 是硬删,
 这里从不调 —— 删除是挪进 `.mosael-trash/workflows/<删除时刻 UTC>/<原来的相对路径>`(在 `workflows/` 外面,ComfyUI 的侧栏和
-插件的模型清单都不列它)。
+插件的模型清单都不列它)。**唯一的例外是 `annotate`**(ADR 0038 §2):它覆盖写一张已有的工作流,但只改 `mosael` 那几处标记
+(app_form.apply),而且带着读到时的改动时间来 —— 那台机器上的文件在这之间被改过就不写,回 `{"stale": true}`。
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ import uuid
 from collections import Counter
 from typing import Any
 
+import app_form
 import convert
 import graph
 import labels
@@ -375,10 +379,13 @@ def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str,
     except Exception as exc:  # noqa: BLE001 — 一张转不过来,照样列出来、带着原因
         row["problem"] = str(exc) or type(exc).__name__
     if api:
-        info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info,
-                                 convert.titles_of(api), locale)
+        titles = convert.titles_of(api)
+        marks = app_form.read(source)
+        form, invalid = app_form.resolve(marks, api, object_info, titles)
+        # 识别出的输入 / 参数说的是这张图的表单:有应用表单就是作者挑的那几项(和生成、工具同一张表)
+        info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info, titles, locale, form)
         row.update({"kind": info["kind"], "inputs": info["inputs"], "parameters": info["parameters"],
-                    "outputs": info["outputs"]})
+                    "outputs": info["outputs"], "app": app_form.summary(marks, form, invalid, locale)})
     elif not row.get("problem"):
         row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
     if missing and not row.get("problem"):
@@ -463,3 +470,91 @@ def restore_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict
     if not comfy.move_userdata(found.group(0), f"workflows/{new_path}"):
         return _conflict(comfy, new_path)
     return {"path": new_path}
+
+
+# --- 应用表单(ADR 0038 §2)-----------------------------------------------------------
+
+def _modified(comfy: Comfy, path: str) -> float | None:
+    """这张工作流在那台机器上的改动时间(秒);没有这张了是 None。"""
+    for item in comfy.workflow_listing():
+        if str(item.get("path") or "") == path:
+            return _seconds(item.get("modified"))
+    return None
+
+
+def _same_time(left: float | None, right: Any) -> bool:
+    return left is not None and isinstance(right, (int, float)) and not isinstance(right, bool) and abs(left - right) < 5e-4
+
+
+def _gone(locale: str, path: str) -> ComfyError:
+    return ComfyError(say(locale, f"ComfyUI 里已经没有工作流「{path}」了", f"ComfyUI no longer has the workflow “{path}”."))
+
+
+def _read(comfy: Comfy, path: str, locale: str) -> tuple[dict[str, Any], float]:
+    """原文和**读到它时**的改动时间:取之前、取之后各看一眼改动时间,对不上(正好在这时被存了)就再取一遍。"""
+    for _ in range(3):
+        before = _modified(comfy, path)
+        if before is None:
+            raise _gone(locale, path)
+        source = comfy.fetch_workflow(path)
+        if _same_time(before, _modified(comfy, path)):
+            return source, before
+    raise ComfyError(say(locale, f"「{path}」一直在被改,过一会儿再试", f"“{path}” keeps changing; try again in a moment."))
+
+
+def _item_out(item: dict[str, Any]) -> dict[str, Any]:
+    """编辑器要的那一项:锚点、种类、名字、节点是谁、常用与否、JSON Schema 片段(下拉的全部可选值,收窄时从里面挑)。"""
+    return {key: item[key] for key in ("key", "node", "input", "kind", "role", "media", "folder", "title", "node_title",
+                                       "class_type", "common", "schema") if key in item}
+
+
+def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """一张工作流的应用表单,给编辑器用:这张图**全部能填的项**(graph.items)、交回结果的输出节点(标「以后只要这张」用)、
+    文件里的标记(对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记(`editable: false`)。"""
+    path = check_path(payload.get("path"), locale)
+    source, modified = _read(comfy, path, locale)
+    object_info = comfy.object_info()
+    api = graph.live(convert.to_api(source, object_info, locale), object_info)
+    titles = convert.titles_of(api)
+    found = graph.items(api, object_info, titles)
+    marks = app_form.read(source)
+    form, invalid = app_form.resolve(marks, api, object_info, titles, found)
+    kind = graph.kind_of(api)
+    return {
+        "path": path,
+        "modified": modified,
+        "kind": kind,
+        "editable": isinstance(source.get("nodes"), list),
+        "items": [_item_out(item) for item in found],
+        "outputs": graph.generation_nodes(api, kind, object_info, titles),
+        "app": app_form.summary(marks, form, invalid, locale),
+    }
+
+
+def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """改一张工作流的应用表单和结果标记:**只改 `mosael` 那几处**(app_form.apply),覆盖写回那台机器。
+
+    带着读到时的改动时间(`modified`)来:那台机器上的文件在这之间被改过(在 ComfyUI 里存过、别人改过)就不写,回
+    `{"stale": true, "modified": 现在的}` —— 宿主翻成 409,界面说「它刚在 ComfyUI 里改过,重新打开再改」。
+    `app`:`{title, description, items: [{node, input, label?, main?, choices?}]}`,顺序就是表单的顺序;`null` 去掉应用表单。
+    `results`:标成结果的输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的改动时间,接着改用它)。
+    """
+    path = check_path(payload.get("path"), locale)
+    app = payload.get("app")
+    if app is not None and not isinstance(app, dict):
+        raise ComfyError(say(locale, "应用表单的形状不对", "The app form is malformed."))
+    results = payload.get("results") or []
+    if not isinstance(results, list) or len(results) > app_form.MAX_RESULTS:
+        raise ComfyError(say(locale, "标成结果的节点形状不对", "The result nodes are malformed."))
+    current = _modified(comfy, path)
+    if current is None:
+        raise _gone(locale, path)
+    if not _same_time(current, payload.get("modified")):
+        return {"stale": True, "modified": current}
+    source = comfy.fetch_workflow(path)
+    if not _same_time(_modified(comfy, path), current):
+        return {"stale": True, "modified": _modified(comfy, path)}
+    updated = app_form.apply(source, app, [str(one) for one in results], locale)
+    info = comfy.overwrite_userdata(f"workflows/{path}", updated)
+    written = _seconds(info.get("modified"))
+    return {"path": path, "modified": written if written is not None else _modified(comfy, path)}

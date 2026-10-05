@@ -22,6 +22,8 @@
     {"op": "workflow", "path"}                          → 一张的原文
     {"op": "copy_workflow" | "rename_workflow" | "restore_workflow", "path", "new_path"} → 不覆盖,撞名回 conflict
     {"op": "trash_workflow", "path"}                    → 挪进回收目录(不硬删)
+    {"op": "app", "path"}                               → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、改动时间
+    {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
 
 **给智能体和工作流的工具**:
 
@@ -94,6 +96,8 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "rename_workflow": workflow_library.rename_workflow,
     "trash_workflow": workflow_library.trash_workflow,
     "restore_workflow": workflow_library.restore_workflow,
+    "app": workflow_library.app,
+    "annotate": workflow_library.annotate,
     "inspect_import": workflow_import.inspect_import,
     "save_workflow": workflow_import.save_workflow,
     "reboot": workflow_import.reboot,
