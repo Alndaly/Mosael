@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getAsset, getAssetFacets, listAssetPage, type AssetCard, type AssetPage, type Workspace } from "@/api/client";
@@ -93,23 +93,7 @@ it("搜索等停手之后才发一次请求", async () => {
   expect(vi.mocked(listAssetPage).mock.calls[0][0]).toMatchObject({ q: "beach" });
 });
 
-it("滚到底下才取下一页,带着上一页的游标", async () => {
-  vi.mocked(listAssetPage).mockImplementation(async (_query, cursor) =>
-    cursor === "c1" ? pageOf(60, 60, null, 120) : pageOf(0, 60, "c1", 120),
-  );
-  renderLibrary();
-  await screen.findByRole("button", { name: "a0" });
-  expect(listAssetPage).toHaveBeenCalledTimes(1);
-  const scroller = document.querySelector<HTMLElement>("[data-media-scroll]")!;
-  Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 20000 });
-  Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 900 });
-  scroller.scrollTop = 19500;
-  await act(async () => {
-    fireEvent.scroll(scroller);
-  });
-  await waitFor(() => expect(vi.mocked(listAssetPage).mock.calls.at(-1)?.[1]).toBe("c1"));
-  expect(await screen.findByRole("button", { name: "a119" })).toBeInTheDocument();
-});
+//: 「滚到最后几行才取下一页」在 MediaLibraryView.virtual.dom.test.tsx(取下一页跟着只画看得见的那几行走)。
 
 it("全选选的是满足条件的全部,没翻到的几页先取回来", async () => {
   vi.mocked(listAssetPage).mockImplementation(async (_query, cursor) =>

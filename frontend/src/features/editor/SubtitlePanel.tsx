@@ -30,7 +30,7 @@ import { translatedCue, translationSource } from "@/features/editor/subtitleTran
 import { SubtitleFiles } from "@/features/editor/SubtitleFiles";
 import { cueTrim, parseCueTime } from "@/features/editor/cueTiming";
 import { useEditorStore } from "@/features/editor/editorStore";
-import { useVirtualRows } from "@/features/editor/useVirtualRows";
+import { useVirtualRows } from "@/lib/useVirtualRows";
 import { ColorSwatchInput } from "@/features/editor/ColorSwatchInput";
 import { cn } from "@/lib/utils";
 

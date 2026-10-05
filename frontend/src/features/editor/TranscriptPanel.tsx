@@ -37,7 +37,7 @@ import { FillerPicker } from "@/features/editor/FillerPicker";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/features/editor/editorStore";
-import { useVirtualRows } from "@/features/editor/useVirtualRows";
+import { useVirtualRows } from "@/lib/useVirtualRows";
 import { cn } from "@/lib/utils";
 
 

@@ -42,6 +42,8 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useElementWidth } from "@/lib/useElementWidth";
+import { useVirtualRows } from "@/lib/useVirtualRows";
 import { cn } from "@/lib/utils";
 import { formatShortDate, formatTimecode } from "@/lib/time";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,8 +54,17 @@ type KindFilter = (typeof KIND_FILTERS)[number];
 const SORT_KEYS = ["created", "updated", "name", "duration"] as const satisfies readonly AssetSort[];
 type SortKey = (typeof SORT_KEYS)[number];
 
-/** 离底边还有这么远就去取下一页:人滚到底之前,下一页已经到了。 */
-const PREFETCH_PX = 1200;
+/** 网格:一张卡片至少这么宽,一行能放几张就放几张(此前的 `repeat(auto-fill, minmax(220px, 1fr))`)。 */
+const CARD_MIN_PX = 220;
+/** 网格的列间距、行间距(gap-x-6 / pb-7):算一行几张、估一行多高都要用。 */
+const GRID_GAP_X_PX = 24;
+const GRID_GAP_Y_PX = 28;
+/** 卡片缩略图下面那几行字大约多高;一行真画出来之后按量到的算,这只是还没画时的估计。 */
+const CARD_TEXT_PX = 80;
+/** 列表一行多高(128×80 的缩略图上下各 16,加一条分隔线)。 */
+const LIST_ROW_PX = 113;
+/** 已经画到倒数第几行时去取下一页:人滚到底之前,下一页已经到了。 */
+const PREFETCH_ROWS = 3;
 
 /**
  * 素材库 —— **工作区级**资源池。素材归属工作区(Asset.workspace_id 必填;project_id 可空,
@@ -111,15 +122,29 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const assets = useAssetPages(query);
   const visible = assets.items;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = assets;
-  //: 离底边不到 PREFETCH_PX 就去取下一页。滚动时问一次;一页取回来之后再问一次 —— 屏幕很高、第一页填不满时,
-  //: 没有滚动可言,只能靠这一下接着取。量不到高度(还没排版)时不取,免得一打开就把好几页全拉回来。
   const scrollerRef = React.useRef<HTMLDivElement>(null);
-  const loadMoreIfNearEnd = React.useCallback(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller || !scroller.clientHeight || !hasNextPage || isFetchingNextPage) return;
-    if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < PREFETCH_PX) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-  React.useEffect(loadMoreIfNearEnd, [loadMoreIfNearEnd, visible.length]);
+  //: 只画看得见的那几行(见 useVirtualRows)。网格按宽度分行,一行一个键 —— 行首那一份的 id 加上一行几张。
+  const rowsRef = React.useRef<HTMLDivElement | null>(null);
+  const [rowsElement, setRowsElement] = React.useState<HTMLDivElement | null>(null);
+  const attachRows = React.useCallback((element: HTMLDivElement | null) => {
+    rowsRef.current = element;
+    setRowsElement(element);
+  }, []);
+  const gridWidth = useElementWidth(rowsElement);
+  const columns = display === "list" ? 1 : Math.max(1, Math.floor((gridWidth + GRID_GAP_X_PX) / (CARD_MIN_PX + GRID_GAP_X_PX)));
+  const rows = React.useMemo(() => {
+    const out: AssetCard[][] = [];
+    for (let at = 0; at < visible.length; at += columns) out.push(visible.slice(at, at + columns));
+    return out;
+  }, [visible, columns]);
+  const rowKeys = React.useMemo(() => rows.map((row) => `${columns}:${row[0].id}`), [rows, columns]);
+  const cardWidth = gridWidth > 0 ? (gridWidth - GRID_GAP_X_PX * (columns - 1)) / columns : CARD_MIN_PX;
+  const estimate = display === "list" ? LIST_ROW_PX : Math.round((cardWidth * 9) / 16 + CARD_TEXT_PX + GRID_GAP_Y_PX);
+  const virtual = useVirtualRows({ keys: rowKeys, scrollRef: scrollerRef, listRef: rowsRef, estimate });
+  //: 画到倒数几行就去取下一页。屏幕很高、第一页填不满时,一打开就画到了最后一行,接着取 —— 不用等人滚。
+  React.useEffect(() => {
+    if (rows.length - virtual.end <= PREFETCH_ROWS && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [rows.length, virtual.end, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   //: `#/media?asset=<id>` 直接打开那一份的详情(画板上的文档格、智能体的引用胶囊跳过来):开一次就把参数摘掉 ——
   //: 否则关掉详情再回到这一页又弹出来。按 id 开,不等它出现在列表里。
@@ -255,6 +280,82 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const kindCount = (kind: KindFilter): number | undefined =>
     facets.data === undefined ? undefined : kind === "all" ? facets.data.total : (facets.data.kinds[kind] ?? 0);
 
+  /** 一张卡片(网格)或一行(列表):点开详情 / 选择模式下勾选,⋯ 和右键是同一张菜单。 */
+  const renderAsset = (asset: AssetCard) => (
+    <ContextMenu key={asset.id} onOpenChange={open => { if (open) setActionMenuId(null); }}>
+      <ContextMenuTrigger asChild>
+        <div
+          className="group relative cursor-pointer"
+          onClick={() => {
+            // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
+            if (selectMode) toggleSelected(asset.id);
+            else setPreviewingId(asset.id);
+          }}
+        >
+          <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
+          <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
+          {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
+          {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
+          {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
+            <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><IconButton variant="secondary" size="icon-xs" label={`${t("studioActions")}: ${asset.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
+            <MenuContent label={t("studioActions")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
+              <PopoverClose asChild><MenuItem icon={<Download />} label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset)} /></PopoverClose>
+              <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} onClick={() => setRenaming(asset)} /></PopoverClose>
+              <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} onClick={() => setEditingTags(asset)} /></PopoverClose>
+              {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} onClick={() => setReferencing(asset)} /></PopoverClose>}
+              {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
+              {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
+              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
+              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={<AudioWaveform />} label={t("denoiseAction")} onClick={() => denoise(asset.id)} /></PopoverClose>}
+              <MenuSeparator />
+              <PopoverClose asChild><MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => setDeleting(asset)} /></PopoverClose>
+            </MenuContent></Popover>
+          </div>}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
+          <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => setRenaming(asset)}>
+          <MenuItemBody icon={<Pencil />} label={t("rename")} />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => setEditingTags(asset)}>
+          <MenuItemBody icon={<Tag />} label={t("editTags")} />
+        </ContextMenuItem>
+        {kindIsVisual(asset.kind) && (
+          <ContextMenuItem onSelect={() => setReferencing(asset)}>
+            <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} />
+          </ContextMenuItem>
+        )}
+        {asset.kind === "document" && (
+          <ContextMenuItem disabled={saveAsNote.isPending} onSelect={() => saveAsNote.mutate(asset.id)}>
+            <MenuItemBody icon={<NotebookPen />} label={t("docSaveAsNote")} />
+          </ContextMenuItem>
+        )}
+        {asset.kind === "video" && (
+          <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
+            <MenuItemBody icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} />
+          </ContextMenuItem>
+        )}
+        {kindHasSound(asset.kind) && (
+          <ContextMenuItem onSelect={() => denoise(asset.id)}>
+            <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
+          </ContextMenuItem>
+        )}
+        {kindHasSound(asset.kind) && (
+          <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
+            <MenuItemBody icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
+          <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
     video: t("kindVideo"),
@@ -289,7 +390,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onScroll={(event) => {
           const filters = filtersRef.current;
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
-          loadMoreIfNearEnd();
         }}
       >
       <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={facets.data?.total} className="py-7 xl:py-8" actions={<>
@@ -424,81 +524,23 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
         />
       ) : visible.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} /> : (
-        <div className={cn("py-6", display === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7" : "grid divide-y divide-divider")}>
-          {visible.map((asset) => (
-            <ContextMenu key={asset.id} onOpenChange={open => { if (open) setActionMenuId(null); }}>
-              <ContextMenuTrigger asChild>
-                <div
-                  className="group relative cursor-pointer"
-                  onClick={() => {
-                    // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
-                    if (selectMode) toggleSelected(asset.id);
-                    else setPreviewingId(asset.id);
-                  }}
-                >
-                  <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
-                  <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
-                  {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
-                  {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
-                  {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
-                    <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><IconButton variant="secondary" size="icon-xs" label={`${t("studioActions")}: ${asset.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
-                    <MenuContent label={t("studioActions")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
-                      <PopoverClose asChild><MenuItem icon={<Download />} label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset)} /></PopoverClose>
-                      <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} onClick={() => setRenaming(asset)} /></PopoverClose>
-                      <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} onClick={() => setEditingTags(asset)} /></PopoverClose>
-                      {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} onClick={() => setReferencing(asset)} /></PopoverClose>}
-                      {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
-                      {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
-                      {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
-                      {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={<AudioWaveform />} label={t("denoiseAction")} onClick={() => denoise(asset.id)} /></PopoverClose>}
-                      <MenuSeparator />
-                      <PopoverClose asChild><MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => setDeleting(asset)} /></PopoverClose>
-                    </MenuContent></Popover>
-                  </div>}
-                </div>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
-                  <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => setRenaming(asset)}>
-                  <MenuItemBody icon={<Pencil />} label={t("rename")} />
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => setEditingTags(asset)}>
-                  <MenuItemBody icon={<Tag />} label={t("editTags")} />
-                </ContextMenuItem>
-                {kindIsVisual(asset.kind) && (
-                  <ContextMenuItem onSelect={() => setReferencing(asset)}>
-                    <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} />
-                  </ContextMenuItem>
-                )}
-                {asset.kind === "document" && (
-                  <ContextMenuItem disabled={saveAsNote.isPending} onSelect={() => saveAsNote.mutate(asset.id)}>
-                    <MenuItemBody icon={<NotebookPen />} label={t("docSaveAsNote")} />
-                  </ContextMenuItem>
-                )}
-                {asset.kind === "video" && (
-                  <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
-                    <MenuItemBody icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} />
-                  </ContextMenuItem>
-                )}
-                {kindHasSound(asset.kind) && (
-                  <ContextMenuItem onSelect={() => denoise(asset.id)}>
-                    <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
-                  </ContextMenuItem>
-                )}
-                {kindHasSound(asset.kind) && (
-                  <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
-                    <MenuItemBody icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
-                  </ContextMenuItem>
-                )}
-                <ContextMenuSeparator />
-                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
-                  <MenuItemBody icon={<Trash2 />} label={t("delete")} />
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
+        //: 只画看得见的那几行(加上下各一段缓冲),其余的用留白占着高度 —— 滚动条说的还是整份清单(见 useVirtualRows)。
+        //: 网格一行几张按网格的宽度算,和此前 `repeat(auto-fill, minmax(220px, 1fr))` 同一条规则。
+        <div ref={attachRows} data-media-rows className="py-6">
+          {virtual.padTop > 0 && <div data-pad-top aria-hidden="true" style={{ height: virtual.padTop }} />}
+          {rows.slice(virtual.start, virtual.end).map((row, offset) => {
+            const key = rowKeys[virtual.start + offset];
+            return display === "grid" ? (
+              <div key={key} ref={virtual.measure(key)} className="grid gap-x-6 pb-7" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+                {row.map(renderAsset)}
+              </div>
+            ) : (
+              <div key={key} ref={virtual.measure(key)} className="border-b border-divider">
+                {row.map(renderAsset)}
+              </div>
+            );
+          })}
+          <div data-pad-bottom aria-hidden="true" style={{ height: virtual.padBottom }} />
         </div>
       )}
       {assets.isFetchingNextPage && (
@@ -589,6 +631,7 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
             src={assetThumbnailUrl(asset.id)}
             alt=""
             loading="lazy"
+            decoding="async"
             className={cn("absolute inset-0 h-full w-full", asset.kind === "image" ? "object-contain" : "object-cover")}
             onError={() => setThumbFailed(true)}
           />
