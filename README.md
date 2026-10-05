@@ -65,7 +65,7 @@ Import GLB/glTF models, export a frame or camera preview, and exchange scenes wi
 
 ### Edit picture, words and sound together
 
-Work with multiple timelines and tracks: drops overwrite what they land on, video stays linked to its detached audio, ripple edits and speed changes push what follows, and the usual J / K / L, I / O and Q / W shortcuts are there. People and agents can edit the same timeline at once without overwriting each other, and ⌘Z undoes only your own step. Edit from a transcript, import and export .srt / .vtt captions, stack bilingual subtitles, and place voiceover on its own track; right-click a clip to denoise it or keep only the voice. Curves, style presets and LUTs handle color; export can normalize loudness, and anything containing AI-generated content is labelled.
+Work with multiple timelines and tracks: drops overwrite what they land on, video stays linked to its detached audio, ripple edits and speed changes push what follows, and the usual J / K / L, I / O and Q / W shortcuts are there. People and agents can edit the same timeline at once without overwriting each other, and ⌘Z undoes only your own step. Edit from a transcript, import and export .srt / .vtt captions, stack bilingual subtitles, and place voiceover on its own track; a cloned voice from your voice library speaks locally, or from a copy cloned into your own Alibaba Cloud Bailian account for CosyVoice, with no local engine to install; right-click a clip to denoise it or keep only the voice. Curves, style presets and LUTs handle color; export can normalize loudness, and anything containing AI-generated content is labelled.
 
 ![Captions and voiceover in the editor](website/public/media/screens/en/subtitle-dub.png)
 

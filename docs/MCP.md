@@ -153,6 +153,18 @@ HTTP 这一侧同一次改的形状:`GET /api/assets` 不再回整个工作区�
 种类 / 来源 / 搜索 / 标签 / 排序都在服务端做,只带卡片字段;详情另取 `GET /api/assets/{id}`);页签上的数字和标签候选在
 `GET /api/assets/facets`;剪辑台要的完整字段按时间线取 `GET /api/sequences/{id}/assets`。游标不是这份列表、这种排序给的回 422。
 
+**配音库里的嗓子也能交给 CosyVoice 念**([ADR 0037](adr/0037-cosyvoice-remote-voice-clone.md)):`list_speech_engines` 里
+`builtin:alibaba-cosyvoice` 的音色在系统音色之后多一组配音库里声明过授权的嗓子,标 `cloned: true`(`id` 是嗓子的 id);
+`generate_audio` 的 `voice`、`dub_subtitles` 的 `voice_id` 给这样一个 id 并点名这个引擎,念的就是它复刻在用户百炼账号里的副本。
+**只给音色不点名引擎时仍按本机克隆认** —— 远端念要上传参考音频、要花钱,得点名。第一次把一把嗓子传上去要用户同意,智能体替不了:
+这个账号没同意过时开卡就被拒(`voiceErr_remoteConsentRequired`),那句话请用户去配音库点「复刻到百炼」。
+HTTP 这一侧同一次改的形状:`GET /api/tts/engines` 每项多 `clones_voices`;`GET /api/tts/voices` 多一个可选的 `workspace_id`,
+带上时能复刻的引擎在系统音色后面接 `cloned: true` 的配音库嗓子;`POST /api/tts/synthesize`(以及字幕配音、对话音色)收 `voice_id`,
+和 `engine_voice` 二选一;这个账号没同意过上传时这些请求回 **409**,`detail.code = "remote_voice_consent_required"`,
+带着嗓子、连接、模型,界面据此弹确认框;同意后走新的 `POST /api/voices/{id}/remote-copies`(`{engine, provider_profile_id?, consent}`)
+排一个 `voice_enroll` 任务。`GET /api/voices` 的每一项多 `remote_copies`(只列我自己账号里的副本:连接、模型、状态)。
+`DELETE /api/voices/{id}` 不再是 204:回 **200** `{remote_failures: [...]}`,列出远端没删掉的副本(本机那一行照删),空数组 = 都删干净了。
+
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型
 没有对应工具、又没写明为什么不需要,测试就红。
 

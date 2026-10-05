@@ -449,6 +449,12 @@ speaker，且没有 Transcript 时给出明确原因。
 一起控制），不能只隐藏选择框。远程引擎使用 `/api/tts/voices` 返回的供应商目录；回归测试需要覆盖从
 本地克隆切到远程引擎后，本地音色库与创建动作全部消失。
 
+能复刻的远程引擎（百炼 CosyVoice，`clones_voices`，ADR 0037）是例外的一半：带上 `workspace_id` 时，`/api/tts/voices`
+在系统音色后面接一组 `cloned: true` 的配音库嗓子，下拉分「系统音色 / 我的克隆音色」两组；选了克隆的那一项，请求带 `voice_id`、
+`engine_voice` 留空，默认值和按字幕文字替人挑发音人都只落在系统音色上（克隆音色要上传参考音频，得是人亲手点的）。
+新入口要发这类请求时包一层 `withRemoteVoiceConsent`：后端回 409 `remote_voice_consent_required` 才弹确认框，
+不同意时什么都不传、也不报错（`isConsentDeclined`）。上面那条守卫不变：音色库的管理区仍只在本地克隆下出现。
+
 ## 19. 供应商连接表单不能重新混入模型默认
 
 `provider_profiles` 已没有 `default_model`；预设里 `storage=default_model` 仅用于创建连接时调用
