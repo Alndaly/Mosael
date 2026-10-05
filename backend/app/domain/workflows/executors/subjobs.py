@@ -746,7 +746,9 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
     limit = float(max_duration)
     if limit <= 0 or span <= limit:
         return None
-    return round(min(MAX_FIT_SPEEDUP, span / limit), 3)
+    #: **往上取**到三位小数:倍速往下取(四舍五入成 1.189)的话,放下之后比位置长出不到一毫秒,被当成「念不完」裁掉
+    #: 尾巴、还发一条「加速到 1.5 倍仍放不下」的通知 —— 真跑时那一拍只要 1.19 倍。
+    return min(MAX_FIT_SPEEDUP, math.ceil(span / limit * 1000 - 1e-9) / 1000)
 
 
 @register("timeline_add_track")

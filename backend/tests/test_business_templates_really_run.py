@@ -432,6 +432,25 @@ class Test带货口播真跑:
             bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
         assert any("第 2 段" in body and "加速" in body for body in bodies), bodies
 
+    def test_加速不到上限就放得下的那一拍_不报念不完(self, monkeypatch) -> None:
+        """真跑时一段 2.97 秒的画外音塞进 2.5 秒的那一拍:只要 1.19 倍,却收到一条「加速到 1.5 倍仍比画面长 0.001 秒,
+        超出的部分已裁掉」。倍速往下取到三位小数(1.189),放下之后比这一拍长了不到一毫秒,就被当成了念不完。"""
+        from app.db.models import Notification
+
+        ws = _workspace()
+        beats = [{**BEATS[0], "narration": "久坐一天衬衫仍透气", "seconds": 2.5}, dict(BEATS[2])]
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": beats}})
+        studio.speech_seconds["久坐一天衬衫仍透气"] = 2.9735
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        first = _clips(context["pitch_project"]["sequence_id"], "audio")[0]
+        assert _span(first) <= 2.5 + 1e-9 and first.speed < 1.5, (_span(first), first.speed)
+        assert first.src_out == pytest.approx(2.9735), "一个字都没裁"
+        with unit_of_work() as db:
+            titles = [one.title for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert not any("念不完" in title for title in titles), titles
+
     def test_最后一拍念不完_裁到这一拍的末尾_成片尾不留黑(self, monkeypatch) -> None:
         ws = _workspace()
         beats = [dict(BEATS[0]), dict(BEATS[1]), {**BEATS[2], "narration": "号" * 40, "seconds": 2.5}]
