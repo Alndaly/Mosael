@@ -47,6 +47,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 import { VoiceDock } from "@/features/agent/VoiceDock";
+import { RemoteVoiceConsentHost } from "@/features/voice/remoteVoiceConsent";
 import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
@@ -618,6 +619,9 @@ function Studio({
           creatingProject={createProject.isPending}
         />
         <ConfirmationCenter workspaceId={workspace.id} />
+        {/* 把配音库的嗓子交给远端引擎念、这个账号第一次用它时那一问(ADR 0037)。挂在应用级:配音、字幕配音、
+            画板、对话音色几处都会撞上同一个 409,确认框只有一个。 */}
+        <RemoteVoiceConsentHost />
         {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"
             的时候还叫得动。默认不浮,由设置里那个开关决定(本地偏好,见 app/preferences)。 */}
         {voiceDock && <VoiceDock workspaceId={workspace.id} onClose={() => setVoiceDock(false)} />}

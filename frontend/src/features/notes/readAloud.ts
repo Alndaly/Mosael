@@ -84,7 +84,8 @@ export function useReadAloud(workspaceId: string, strings: { readingWithVoice: s
         //: 每次开念时现问一次:设置页刚改过音色,下一次朗读就该是新的那把。
         const pref = await getAgentVoice().catch(() => null);
         if (run.current !== mine) return;
-        const chosen = pref?.engine && pref.engine_voice ? pref : null;
+        //: 选好的那把:引擎自己的音色,或者(CosyVoice)配音库里的嗓子(voice_id,ADR 0037)。
+        const chosen = pref?.engine && (pref.engine_voice || pref.voice_id) ? pref : null;
         toastId.current = toast(chosen ? strings.readingWithVoice : strings.readingWithEdge, {
           duration: Infinity,
           action: {
@@ -125,6 +126,7 @@ function saveAsAudio(workspaceId: string, text: string, chosen: AgentVoice | nul
   if (chosen.engine === CLONE_ENGINE) return synthesizeVoice(chosen.voice_id || chosen.engine_voice, { text, speed: chosen.speed });
   return synthesizeWithEngine({
     workspace_id: workspaceId, text, engine: chosen.engine, engine_voice: chosen.engine_voice,
+    ...(chosen.voice_id ? { voice_id: chosen.voice_id } : {}),
     engine_voice_resource: chosen.engine_voice_resource, speed: chosen.speed,
   });
 }

@@ -41,7 +41,7 @@ export function VoicePicker({
 }: {
   value: string;
   onChange: (value: string) => void;
-  choices: { value: string; label: string }[];
+  choices: { value: string; label: string; group?: string }[];
   ariaLabel: string;
 }) {
   // 一个引擎挂几十个音色是常态 —— 超过阈值 OptionPicker 自己换成可搜索的那一版。
@@ -72,10 +72,37 @@ const RUNTIME_SUFFIX: Record<ReturnType<typeof runtimeState>, MessageKey | null>
   unready: "voiceCloneEngineUnready",
 };
 
+//: 「自己填音色 id」那一项的值。只在引擎报不出系统音色、而下拉里又有克隆音色时出现(见 remoteVoiceChoices)。
+const TYPED_VOICE = "__typed_voice_id__";
+
+/**
+ * 远端引擎的音色下拉:系统音色在前;能复刻的引擎(CosyVoice)后面多一组「我的克隆音色」(ADR 0037)。
+ *
+ * 没有克隆音色时和从前一模一样(不分组、不多一项)。引擎报不出系统音色(百炼认不出的模型,要手填 id)而又有
+ * 克隆音色时,下拉里多一项「自己填音色 id」,选它才露出输入框 —— 不然有了克隆音色就再也填不了 id。
+ */
+function remoteVoiceChoices(voice: SpeechVoice, t: ReturnType<typeof useI18n>) {
+  const { stockVoices, clonedVoices, activeEngine } = voice;
+  const typing = Boolean(activeEngine?.needs_voice_id) && stockVoices.length === 0;
+  if (clonedVoices.length === 0) {
+    return { typing, choices: stockVoices, value: voice.engineVoice, showInput: typing };
+  }
+  const stockGroup = t("voiceGroupStock");
+  const clonedGroup = t("voiceGroupCloned");
+  const choices = [
+    ...stockVoices.map((item) => ({ ...item, group: stockGroup })),
+    ...clonedVoices.map((item) => ({ ...item, group: clonedGroup })),
+    ...(typing ? [{ value: TYPED_VOICE, label: t("voiceTypeVoiceId"), group: t("voiceGroupOther") }] : []),
+  ];
+  const value = typing && !voice.speaksClonedVoice ? TYPED_VOICE : voice.engineVoice;
+  return { typing, choices, value, showInput: typing && !voice.speaksClonedVoice };
+}
+
 /** 引擎 → (克隆引擎 + 音色 | 发音人 | 手填 id) → 语速。状态全在 `voice` 里。 */
 export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
   const t = useI18n();
-  const { engine, activeEngine, voiceChoices } = voice;
+  const { engine, activeEngine } = voice;
+  const remote = remoteVoiceChoices(voice, t);
   const runtimeSuffix = (runtime: Parameters<typeof runtimeState>[0]) => {
     const key = RUNTIME_SUFFIX[runtimeState(runtime)];
     return key ? ` · ${t(key)}` : "";
@@ -143,13 +170,18 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
         </FieldRow>
       )}
 
-      {engine !== CLONE_ENGINE && voiceChoices.length > 0 && (
+      {engine !== CLONE_ENGINE && remote.choices.length > 0 && (
         <FieldRow className="flex-nowrap">
           {/* 语速藏起来时音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
           <VoiceField label={t("voiceEngineVoice")} className="min-w-0 flex-1">
-            <VoicePicker value={voice.engineVoice} onChange={voice.setEngineVoice} choices={voiceChoices} ariaLabel={t("voiceEngineVoice")} />
+            <VoicePicker
+              value={remote.value}
+              onChange={(next) => voice.setEngineVoice(next === TYPED_VOICE ? "" : next)}
+              choices={remote.choices}
+              ariaLabel={t("voiceEngineVoice")}
+            />
           </VoiceField>
-          {voice.speedSupported && (
+          {voice.speedSupported && !remote.showInput && (
             <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
@@ -159,9 +191,10 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
 
       {/* 目录拉不到、需要手填发音人 id 的引擎。两样都没有就**整行不渲染** ——
           此前这里会剩下一个 76px 宽、孤零零的语速下拉。 */}
-      {engine !== CLONE_ENGINE && voiceChoices.length === 0 && (activeEngine?.needs_voice_id || voice.speedSupported) && (
+      {engine !== CLONE_ENGINE &&
+        (remote.showInput || (remote.choices.length === 0 && voice.speedSupported)) && (
         <FieldRow className="flex-nowrap">
-          {activeEngine?.needs_voice_id && (
+          {remote.showInput && (
             <VoiceField label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
               <Input
                 className="min-w-0"
@@ -173,15 +206,21 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
             </VoiceField>
           )}
           {voice.speedSupported && (
-            <VoiceField label={t("voiceSpeed")} className={activeEngine?.needs_voice_id ? FIELD_SPEED : "min-w-0 flex-1"}>
+            <VoiceField label={t("voiceSpeed")} className={remote.showInput ? FIELD_SPEED : "min-w-0 flex-1"}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
           )}
         </FieldRow>
       )}
 
-      {engine !== CLONE_ENGINE && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !voice.engineVoiceChoice.trim() && (
+      {engine !== CLONE_ENGINE && remote.showInput && !voice.engineVoiceChoice.trim() && (
         <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
+      )}
+      {/* 点的是配音库里的嗓子:说清念的是它在百炼上的副本,第一次用要同意上传(确认框在点生成时弹)。 */}
+      {engine !== CLONE_ENGINE && voice.speaksClonedVoice && (
+        <p data-speaks-cloned-voice="" className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">
+          {t("voiceClonedOnEngineHint")}
+        </p>
       )}
       {engine !== CLONE_ENGINE && activeEngine?.note && (
         <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>

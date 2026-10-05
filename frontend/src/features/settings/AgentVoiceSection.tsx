@@ -20,6 +20,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
@@ -39,41 +40,52 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     if (hydrated.current || !pref.data) return;
     hydrated.current = true;
     setEngine(pref.data.engine);
-    setVoice(pref.data.engine_voice);
+    //: 音色那一格:引擎自己的,或者(CosyVoice)配音库里的一把嗓子 —— 存在 voice_id 上(ADR 0037)。
+    setVoice(pref.data.engine_voice || pref.data.voice_id || "");
     setSpeed(pref.data.speed || 1);
   }, [pref.data]);
 
+  //: 带上工作区:CosyVoice 还列这个工作区配音库里的嗓子(`cloned`)。
   const voices = useQuery({
-    queryKey: ["tts-voices", engine],
-    queryFn: () => listTtsVoices(engine),
+    queryKey: ["tts-voices", engine, workspaceId],
+    queryFn: () => listTtsVoices(engine, workspaceId),
     enabled: Boolean(engine),
   });
   const voiceChoices = voices.data ?? [];
   const chosen = voiceChoices.find((one) => one.value === voice);
+  const cloned = Boolean(chosen?.cloned);
+  const hasCloned = voiceChoices.some((one) => one.cloned);
 
   const save = useMutation({
+    //: 点了配音库里的嗓子:这个账号第一次用它,先问一次要不要传上去(ADR 0037),同意了再存。
     mutationFn: (enabled: boolean) =>
-      setAgentVoice({
-        engine,
-        engine_voice: voice,
-        engine_voice_resource: chosen?.resource_id ?? "",
-        engine_model: "",
-        provider_profile_id: null,
-        voice_id: null,
-        speed,
-        enabled,
-      }),
+      withRemoteVoiceConsent(() =>
+        setAgentVoice({
+          engine,
+          engine_voice: cloned ? "" : voice,
+          engine_voice_resource: cloned ? "" : (chosen?.resource_id ?? ""),
+          engine_model: "",
+          provider_profile_id: null,
+          voice_id: cloned ? voice : null,
+          speed,
+          enabled,
+        }),
+      ),
     // 回包就是存下的那份:直接放进缓存,试听键不必等一次重新拉取才知道「屏幕上的已经存好了」。
     onSuccess: (saved) => qc.setQueryData(["agent-voice"], saved),
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      //: 不同意上传:这把嗓子没存上,屏幕上也别留着它(像是选好了),清掉让人重挑。
+      if (isConsentDeclined(error)) setVoice("");
+      else toast.error(error.message);
+    },
   });
 
   const enabled = pref.data?.enabled ?? false;
   const ready = Boolean(engine && voice);
   //: 试听念的是**存着的**那份(和对话里真念同一份),所以屏幕上的选择还没落库时先不给点 ——
   //: 否则刚换了音色就点,听到的是换之前那个。改完即存,这段空档只有一个请求那么长。
-  const persisted =
-    pref.data?.engine === engine && pref.data?.engine_voice === voice && pref.data?.speed === speed;
+  const savedVoice = pref.data?.engine_voice || pref.data?.voice_id || "";
+  const persisted = pref.data?.engine === engine && savedVoice === voice && pref.data?.speed === speed;
 
   //: **改完即存,没有保存按钮。** 但存的时机有个条件:换引擎会把音色清空(旧音色在新引擎下
   //: 不存在),那一瞬间的组合是「新引擎 + 空音色」—— 存下去等于存了一份用不了的配置。
@@ -84,13 +96,13 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     const shape = `${engine}|${voice}|${speed}`;
     if (!savedRef.current) {
       // 水合之后的第一次:记下现状,别把服务端刚给的那份再写回去。
-      savedRef.current = `${pref.data?.engine ?? ""}|${pref.data?.engine_voice ?? ""}|${pref.data?.speed ?? 1}`;
+      savedRef.current = `${pref.data?.engine ?? ""}|${savedVoice}|${pref.data?.speed ?? 1}`;
     }
     if (shape === savedRef.current) return;
     savedRef.current = shape;
     // 开关原样带上:关着的时候换音色只是改配置,不能顺手把「语音对话」重新打开。
     save.mutate(enabled);
-  }, [engine, voice, speed, ready, enabled, pref.data, save]);
+  }, [engine, voice, speed, ready, enabled, pref.data, savedVoice, save]);
 
   return (
     <SettingsGroup title={t("agentVoiceTitle")} description={t("agentVoiceDesc")}>
@@ -136,7 +148,11 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           <OptionPicker
             value={voice}
             onChange={setVoice}
-            options={voiceChoices}
+            //: 有克隆音色时分两组:系统音色、我的克隆音色(和配音面板同一个分法)。
+            options={voiceChoices.map((one) => ({
+              ...one,
+              ...(hasCloned ? { group: t(one.cloned ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
+            }))}
             ariaLabel={t("agentVoiceVoice")}
             placeholder={t("agentVoicePickVoice")}
             className={SETTINGS_FIELD_WIDTH}

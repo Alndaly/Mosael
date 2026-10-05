@@ -90,6 +90,7 @@ import { useMultiSelect } from "@/lib/useMultiSelect";
 import { EdgeShapeToggle, useEdgeShape } from "@/components/app/canvasEdgeShape";
 import { CanvasNodeSearch, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { boardSearchEntries } from "@/features/boards/boardSearch";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -917,8 +918,10 @@ function BoardDetail({
       };
       let placed: Board;
       try {
-        placed = await attempt(false);
+        //: 念出来那一格点了配音库里的嗓子、交给 CosyVoice 念,而这个账号还没同意上传:问一次,同意了再跑(ADR 0037)。
+        placed = await withRemoteVoiceConsent(() => attempt(false));
       } catch (error) {
+        if (isConsentDeclined(error)) return;
         toast.error(t(isNodeProducer(request.producer) ? "boardToolFailed" : RUN_FAILED[request.producer]), {
           description: (error as Error).message,
         });

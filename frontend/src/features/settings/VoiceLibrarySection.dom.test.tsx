@@ -9,8 +9,12 @@ const listVoices = vi.fn();
 const deleteVoice = vi.fn();
 
 vi.mock("@/api/client", () => ({
+  copyVoiceToEngine: vi.fn(),
   deleteVoice: (...args: unknown[]) => deleteVoice(...args),
+  //: 这台机器没配能复刻的引擎 —— 配音库里就不摆「复刻到百炼」。
+  listTtsEngines: async () => [],
   listVoices: (...args: unknown[]) => listVoices(...args),
+  remoteConsentRequest: () => null,
   recognizeReference: vi.fn(),
   updateVoice: vi.fn(),
   uploadVoice: vi.fn(),

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { FieldSize } from "@/components/ui/control-size";
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
@@ -23,7 +23,24 @@ export type PickerOption = {
    * 不进触发器 —— 触发器里那一枚由调用方经 `icon` 给(它知道选中的是哪一项、该多大)。
    */
   media?: React.ReactNode;
+  /**
+   * 分组标题(配音的「系统音色」「我的克隆音色」)。相邻的同名项归一组,顺序即传入顺序 —— 和 SearchableSelect
+   * 同一个约定,两个分支都分组;没有标题的那几项不分组。
+   */
+  group?: string;
 };
+
+/** 相邻的同名 `group` 归成一组(不重排)。 */
+function groupAdjacent(options: PickerOption[]): Array<[string, PickerOption[]]> {
+  const out: Array<[string, PickerOption[]]> = [];
+  for (const option of options) {
+    const heading = option.group ?? "";
+    const last = out[out.length - 1];
+    if (last && last[0] === heading) last[1].push(option);
+    else out.push([heading, [option]]);
+  }
+  return out;
+}
 
 /**
  * 「选项一多就该能搜」这条规矩的**唯一实现处**。
@@ -123,18 +140,28 @@ export function OptionPicker({
         </SelectTrigger>
       </Hint>
       <SelectContent align={align} className={contentClassName}>
-        {options.map((one) => (
-          <SelectItem
-            key={one.value}
-            value={one.value}
-            truncate
-            style={one.style}
-            description={one.description}
-            media={one.media}
-          >
-            {one.label}
-          </SelectItem>
-        ))}
+        {groupAdjacent(options).map(([heading, rows]) => {
+          const items = rows.map((one) => (
+            <SelectItem
+              key={one.value}
+              value={one.value}
+              truncate
+              style={one.style}
+              description={one.description}
+              media={one.media}
+            >
+              {one.label}
+            </SelectItem>
+          ));
+          return heading ? (
+            <SelectGroup key={heading}>
+              <SelectLabel>{heading}</SelectLabel>
+              {items}
+            </SelectGroup>
+          ) : (
+            <React.Fragment key="__ungrouped">{items}</React.Fragment>
+          );
+        })}
       </SelectContent>
     </Select>
   );

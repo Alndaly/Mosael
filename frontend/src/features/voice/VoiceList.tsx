@@ -1,19 +1,32 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Pause, Pencil, Play, ShieldAlert, Trash2, Wand2, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, CloudUpload, Pause, Pencil, Play, ShieldAlert, Trash2, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { deleteVoice, recognizeReference, updateVoice, voiceSampleUrl, type Voice } from "@/api/client";
+import {
+  copyVoiceToEngine,
+  deleteVoice,
+  listTtsEngines,
+  recognizeReference,
+  updateVoice,
+  voiceSampleUrl,
+  type RemoteCopy,
+  type Voice,
+  type VoiceDeleteResult,
+} from "@/api/client";
 import { voiceKeys } from "@/api/queryKeys";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { VoiceConsentPicker, VoiceConsentStatus } from "@/features/voice/VoiceConsent";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,12 +56,26 @@ export function VoiceList({
   const player = useSamplePlayer(voiceSampleUrl);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState<Voice | null>(null);
+  //: 能把嗓子复刻上去的引擎(百炼 CosyVoice,ADR 0037),而且这个人配好了。配好了才摆「复刻到百炼」。
+  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
+  const cloningEngine = (engines.data ?? []).find((engine) => engine.clones_voices && engine.ready)?.id ?? null;
   const remove = useMutation({
     mutationFn: (id: string) => deleteVoice(id),
-    onSuccess: () => {
+    onSuccess: (result: VoiceDeleteResult | undefined) => {
       invalidate();
-      toast.success(t("voiceDeleted"));
       setDeleting(null);
+      //: 远端那份删不掉(钥匙失效、网络)也照删本机这一行 —— 但要说出来,告诉他去百炼控制台看。
+      const left = result?.remote_failures ?? [];
+      if (left.length === 0) {
+        toast.success(t("voiceDeleted"));
+        return;
+      }
+      toast.warning(t("voiceDeletedRemoteLeft").replace("{n}", String(left.length)), {
+        description: left
+          .map((one) => `${one.connection} · ${one.target_model} · ${one.remote_voice_id}:${one.reason}`)
+          .join("\n"),
+        duration: Infinity,
+      });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -69,6 +96,7 @@ export function VoiceList({
             onToggleEdit={() => setEditing(editing === voice.id ? null : voice.id)}
             onChanged={invalidate}
             onDelete={() => setDeleting(voice)}
+            cloningEngine={cloningEngine}
           />
         ))}
       </div>
@@ -76,7 +104,10 @@ export function VoiceList({
         open={deleting !== null}
         title={t("voiceDeleteTitle")}
         // 删音色不会动已经生成的配音(那些是素材),但**这把嗓子以后配不出来了** —— 说清楚。
-        body={t("voiceDeleteBody").replace("{name}", deleting?.name ?? "")}
+        // 复刻到百炼过的,百炼上的副本也一起删(当初同意上传时就是这么说的)。
+        body={`${t("voiceDeleteBody").replace("{name}", deleting?.name ?? "")}${
+          deleting?.remote_copies?.length ? ` ${t("voiceDeleteRemoteToo")}` : ""
+        }`}
         onCancel={() => setDeleting(null)}
         pending={remove.isPending}
         onConfirm={() => {
@@ -101,6 +132,7 @@ function VoiceRow({
   onToggleEdit,
   onChanged,
   onDelete,
+  cloningEngine,
 }: {
   voice: Voice;
   selected: boolean;
@@ -111,6 +143,8 @@ function VoiceRow({
   onToggleEdit: () => void;
   onChanged: () => void;
   onDelete: () => void;
+  /** 能把嗓子复刻上去、这个人也配好了的引擎;null = 不摆「复刻到百炼」。 */
+  cloningEngine: string | null;
 }) {
   const t = useI18n();
   const [name, setName] = React.useState(voice.name);
@@ -132,6 +166,18 @@ function VoiceRow({
     mutationFn: (consent_kind: string) => updateVoice(voice.id, { consent_kind }),
     onSuccess: () => onChanged(),
     onError: (error: Error) => toast.error(error.message),
+  });
+  //: 复刻到百炼(ADR 0037):这个账号没同意过就弹确认框(说清传到哪、存多久、删嗓子会一起删),同意了排一个复刻任务。
+  //: 复刻好了任务中心说一声、这一行跟着刷新(任务改动的是配音库)。
+  const copy = useMutation({
+    mutationFn: (engine: string) => withRemoteVoiceConsent(() => copyVoiceToEngine(voice.id, { engine })),
+    onSuccess: () => {
+      onChanged();
+      toast.message(t("voiceCopyQueued").replace("{name}", voice.name));
+    },
+    onError: (error: Error) => {
+      if (!isConsentDeclined(error)) toast.error(error.message);
+    },
   });
   // 识别完服务端已经存下了参考文本,这里只是刷新。
   const recognize = useMutation({
@@ -241,6 +287,7 @@ function VoiceRow({
             ) : (
               <div className="grid min-w-0 gap-0.5">{summary}</div>
             )}
+            <VoicePlaces copies={voice.remote_copies ?? []} />
             {/* 升级前建的音色没有声明:用于数字人之前要补上(点编辑在那里选)。已声明的不多占一行。 */}
             {voice.consent_kind === "undeclared" && (
               <button
@@ -270,6 +317,21 @@ function VoiceRow({
         >
           {playing ? <Pause size={12} /> : <Play size={12} />}
         </IconButton>
+        {cloningEngine && (
+          <IconButton
+            size="icon-xs"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground"
+            //: 没声明是谁的嗓子,不往外传(和数字人同一条线)—— 灰掉并说为什么,点编辑去补。
+            disabled={voice.consent_kind === "undeclared" || copy.isPending}
+            disabledReason={voice.consent_kind === "undeclared" ? t("voiceCopyNeedsConsent") : undefined}
+            label={t("voiceCopyToBailian")}
+            data-voice-copy=""
+            onClick={() => copy.mutate(cloningEngine)}
+          >
+            <CloudUpload size={12} />
+          </IconButton>
+        )}
         <IconButton
           size="icon-xs"
           variant="ghost"
@@ -289,6 +351,47 @@ function VoiceRow({
           <Trash2 size={12} />
         </IconButton>
       </div>
+    </div>
+  );
+}
+
+//: 副本状态 → 跟在「百炼 · 模型」后面的那一小截;好好的(ok)不缀。
+const COPY_STATUS: Record<RemoteCopy["status"], MessageKey | null> = {
+  ok: null,
+  deploying: "voiceCopyDeploying",
+  failed: "voiceCopyFailed",
+  missing: "voiceCopyMissing",
+};
+
+/**
+ * 这把嗓子在哪儿能念(ADR 0037):「本机」(参考音频就是它)和我账号里的每一份远端副本 ——「百炼 · cosyvoice-v3-flash」。
+ * 没有远端副本时不多占一行:只有「本机」一种念法是默认,不值得说。
+ */
+function VoicePlaces({ copies }: { copies: RemoteCopy[] }) {
+  const t = useI18n();
+  if (copies.length === 0) return null;
+  return (
+    <div data-voice-places="" className="flex flex-wrap items-center gap-1 pt-0.5">
+      <span className="rounded-sm bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">{t("voicePlaceLocal")}</span>
+      {copies.map((one) => {
+        const suffix = COPY_STATUS[one.status];
+        const broken = one.status === "failed" || one.status === "missing";
+        return (
+          //: 失败、被删的悬停看原因(远端的原话)。
+          <Hint key={one.id} label={one.error || null}>
+            <span
+              data-voice-copy-status={one.status}
+              className={cn(
+                "rounded-sm bg-secondary px-1.5 py-px text-ui-2xs",
+                broken ? "text-warning" : "text-muted-foreground",
+              )}
+            >
+              {t("voicePlaceBailian").replace("{model}", one.target_model)}
+              {suffix ? ` · ${t(suffix)}` : ""}
+            </span>
+          </Hint>
+        );
+      })}
     </div>
   );
 }

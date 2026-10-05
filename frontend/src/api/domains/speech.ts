@@ -1,6 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
-import { API_BASE, api, apiBlob, getAuthToken } from "@/api/transport";
+import { API_BASE, ApiError, api, apiBlob, getAuthToken } from "@/api/transport";
 import { baseRevisionOf, noticeConflict, type SequenceRef } from "@/api/domains/editor";
 
 /**
@@ -21,6 +21,9 @@ export const PODCAST_ENGINE = "builtin:volcano-podcast";
 
 export type AsrModel = components["schemas"]["AsrModelOut"];
 export type Voice = components["schemas"]["VoiceOut"];
+/** 一把嗓子复刻到远端引擎上的一份副本(ADR 0037):在哪条连接、哪个模型上,现在什么状态。 */
+export type RemoteCopy = components["schemas"]["RemoteCopyOut"];
+export type VoiceDeleteResult = components["schemas"]["VoiceDeleteOut"];
 export type Transcript = components["schemas"]["TranscriptOut"];
 export type TtsEngine = components["schemas"]["TtsEngineOut"];
 export type TtsConfig = components["schemas"]["TtsConfigOut"];
@@ -79,8 +82,49 @@ export function recognizeReference(id: string): Promise<Voice> {
   return api<Voice>(`/api/voices/${id}/recognize-reference`, { method: "POST" });
 }
 
-export function deleteVoice(id: string): Promise<void> {
-  return api<void>(`/api/voices/${id}`, { method: "DELETE" });
+/** 删一把嗓子。它在远端的副本先删,删不掉的(钥匙失效、网络)列在 `remote_failures` 里 —— 本机这一行照删。 */
+export function deleteVoice(id: string): Promise<VoiceDeleteResult> {
+  return api<VoiceDeleteResult>(`/api/voices/${id}`, { method: "DELETE" });
+}
+
+/**
+ * 把一把嗓子复刻到远端引擎上(配音库的「复刻到百炼」,ADR 0037),排一个复刻任务。`consent` 是确认框里点了同意:
+ * 这个账号没同意过、又没带它,回 409(`remote_voice_consent_required`,见 `remoteConsentRequest`)。
+ */
+export function copyVoiceToEngine(
+  voiceId: string,
+  body: { engine: string; provider_profile_id?: string | null; consent?: boolean },
+): Promise<Job> {
+  return api<Job>(`/api/voices/${encodeURIComponent(voiceId)}/remote-copies`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 「要把参考音频传到这个账号里,而它还没同意过」那个 409 带的东西(后端 voices/remote.RemoteConsentRequired)。 */
+export type RemoteConsentRequest = {
+  voice_id: string;
+  voice_name: string;
+  /** 能力表里的引擎 id(`builtin:alibaba-cosyvoice`)。 */
+  engine: string;
+  provider_profile_id: string;
+  /** 那条连接叫什么。 */
+  connection: string;
+  /** 复刻到哪个模型上。 */
+  model: string;
+  message: string;
+};
+
+export const REMOTE_CONSENT_REQUIRED = "remote_voice_consent_required";
+
+/** 这次失败是不是「还没同意上传」;是就交回确认框要说的那几样,不是就是 null。 */
+export function remoteConsentRequest(error: unknown): RemoteConsentRequest | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  try {
+    const detail = (JSON.parse(error.body) as { detail?: Partial<RemoteConsentRequest> & { code?: unknown } }).detail;
+    return detail?.code === REMOTE_CONSENT_REQUIRED && detail.voice_id && detail.engine
+      ? (detail as RemoteConsentRequest)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function voiceFromSpeaker(body: {
@@ -104,8 +148,13 @@ export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 
 export type TtsVoice = components["schemas"]["TtsVoiceOut"];
 
-export function listTtsVoices(engine: string): Promise<TtsVoice[]> {
-  return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}`);
+/**
+ * 一个引擎能念的音色。带上工作区时,能复刻的引擎(CosyVoice)在系统音色后面多一组这个工作区配音库里的嗓子
+ * (`cloned`,ADR 0037):选它时请求带 `voice_id`、`engine_voice` 留空。
+ */
+export function listTtsVoices(engine: string, workspaceId?: string): Promise<TtsVoice[]> {
+  const workspace = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}${workspace}`);
 }
 
 export function generatePodcast(body: {
@@ -124,12 +173,16 @@ export function listTtsEngines(): Promise<TtsEngineChoice[]> {
   return api<TtsEngineChoice[]>("/api/tts/engines");
 }
 
-/** Synthesis through an engine-managed voice rather than a stored Voice row. */
+/**
+ * 用远端引擎念:它自己的音色(`engine_voice`),或者能复刻的引擎(CosyVoice)念配音库里的一把嗓子(`voice_id`,
+ * 念它的远端副本;这个账号第一次用时要同意上传,见 `remoteConsentRequest`)。
+ */
 export function synthesizeWithEngine(body: {
   workspace_id: string;
   text: string;
   engine: string;
   engine_voice?: string;
+  voice_id?: string;
   engine_voice_resource?: string;
   speed?: number;
   project_id?: string | null;

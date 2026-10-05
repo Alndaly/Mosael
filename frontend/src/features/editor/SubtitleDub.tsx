@@ -16,6 +16,7 @@ import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from 
 import { VoiceField } from "@/features/voice/SpeechVoiceFields";
 import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 import { formatBytes } from "@/lib/bytes";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { CLONE_ENGINE, DEFAULT_MATCH_DURATION } from "@/api/domains/speech";
@@ -110,12 +111,13 @@ export function SubtitleDub({
   });
 
   // **默认就选对**:用户还没亲手挑过发音人时,按字幕的文字挑一个念得了的。挑过就不再覆盖。
-  const { engine, engineVoiceChoice, voiceChoices, setEngineVoice } = voice;
+  // 只在引擎自己的音色里挑:配音库里的嗓子要把参考音频传上去,得是人亲手点的。
+  const { engine, engineVoiceChoice, stockVoices, setEngineVoice } = voice;
   React.useEffect(() => {
-    if (engine === CLONE_ENGINE || engineVoiceChoice || voiceChoices.length === 0) return;
-    const match = pickVoiceFor(wantScript, engine, voiceChoices);
+    if (engine === CLONE_ENGINE || engineVoiceChoice || stockVoices.length === 0) return;
+    const match = pickVoiceFor(wantScript, engine, stockVoices);
     if (match) setEngineVoice(match);
-  }, [engine, engineVoiceChoice, voiceChoices, wantScript, setEngineVoice]);
+  }, [engine, engineVoiceChoice, stockVoices, wantScript, setEngineVoice]);
 
   // 语言对不上时引擎**不会报错**,它按自己的发音规则硬念一遍。后端也会拦,但那是排队之后;
   // 文本就在眼前,这一刻就该说。
@@ -127,7 +129,7 @@ export function SubtitleDub({
       : unspeakable(
           texts,
           engine,
-          engine === CLONE_ENGINE ? "" : voice.engineVoice,
+          engine === CLONE_ENGINE || voice.speaksClonedVoice ? "" : voice.engineVoice,
           installedWeights.flatMap((model) => model.languages ?? []),
         );
   const langName = mismatch ? t(`langName_${mismatch}` as never) : "";
@@ -135,22 +137,27 @@ export function SubtitleDub({
   // 配好了没有、时间线和素材库的刷新,都归任务中心(ADR-0018);这里只管按钮忙不忙。
   const job = useWatchedJob();
   const run = useMutation({
+    // CosyVoice 念配音库里的嗓子:这个账号第一次用它,先问一次要不要传上去(ADR 0037),同意了再排这一批。
     mutationFn: () =>
-      dubSubtitles(sequence, {
-        ...voice.params,
-        clip_ids: targets.map((clip) => clip.id),
-        track_id: focused ? focused.track_id : trackId,
-        match_duration: matchDuration,
-        line,
-        original_audio: originalAudio,
-        ...(usesF5 ? { clone_model: optionalValue(weights) ?? "" } : {}),
-      }),
+      withRemoteVoiceConsent(() =>
+        dubSubtitles(sequence, {
+          ...voice.params,
+          clip_ids: targets.map((clip) => clip.id),
+          track_id: focused ? focused.track_id : trackId,
+          match_duration: matchDuration,
+          line,
+          original_audio: originalAudio,
+          ...(usesF5 ? { clone_model: optionalValue(weights) ?? "" } : {}),
+        }),
+      ),
     onSuccess: (queued) => {
       job.watch(queued.id);
       // 只确认"排上了",不假装已经配好 —— 配好由任务中心说。
       toast.success(t("subtitleDubQueued").replace("{n}", String(targets.length)));
     },
-    onError: (error: Error) => toast.error(t("subtitleDubFailed"), { description: error.message }),
+    onError: (error: Error) => {
+      if (!isConsentDeclined(error)) toast.error(t("subtitleDubFailed"), { description: error.message });
+    },
   });
 
   if (subtitles.length === 0) {
@@ -267,7 +274,7 @@ export function SubtitleDub({
               t("subtitleDubModelMissing")
                 .replaceAll("{lang}", langName)
                 .replace("{size}", (missingModel.expected_bytes / 1_000_000_000).toFixed(1))
-            : hasVoiceFor(mismatch, engine, voiceChoices)
+            : hasVoiceFor(mismatch, engine, stockVoices)
               ? t("subtitleDubLangVoice").replaceAll("{lang}", langName)
               : t("subtitleDubLangEngine").replaceAll("{lang}", langName)}
           {missingModel && !isAdmin && (

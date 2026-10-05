@@ -23,6 +23,7 @@ import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import { CLONE_ENGINE, PODCAST_ENGINE } from "@/api/domains/speech";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 import { useAssetPages } from "@/lib/assetQueries";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { gotoSettings } from "@/lib/deepLink";
@@ -119,13 +120,18 @@ function SpeechForm({ workspace, busy, onQueued }: { workspace: Workspace; busy:
       const { engine, voice_id, ...rest } = voice.params;
       return engine === CLONE_ENGINE
         ? synthesizeVoice(voice_id as string, { text, ...rest })
-        : synthesizeWithEngine({ workspace_id: workspace.id, text, engine, ...rest });
+        : // CosyVoice 念配音库里的嗓子时带 voice_id;这个账号第一次用它,先问一次要不要传上去(ADR 0037)。
+          withRemoteVoiceConsent(() =>
+            synthesizeWithEngine({ workspace_id: workspace.id, text, engine, ...(voice_id ? { voice_id } : {}), ...rest }),
+          );
     },
     onSuccess: (queued) => {
       setText("");
       onQueued(queued);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      if (!isConsentDeclined(error)) toast.error(error.message);
+    },
   });
   // 克隆要先有音色。音色库在设置里管(这一页不绑项目,没有「从说话人提取」的素材可挑)。
   const needsVoice = voice.engine === CLONE_ENGINE && voice.libraryLoaded && voice.library.length === 0;

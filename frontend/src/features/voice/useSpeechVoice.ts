@@ -7,7 +7,8 @@ import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 import { CLONE_ENGINE } from "@/api/domains/speech";
 
-/** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。 */
+/** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。
+ *  远端引擎念配音库里的嗓子(CosyVoice,ADR 0037)时带的是 `voice_id`,`engine_voice` 不带。 */
 export type SpeechParams = {
   engine: string;
   voice_id?: string;
@@ -55,10 +56,11 @@ export function useSpeechVoice(workspaceId: string) {
     refetchInterval: (query) => pollWhileUnsettled(query.state.data),
   });
   const ttsConfig = useQuery({ queryKey: ["tts-config"], queryFn: getTtsConfig, staleTime: 30_000 });
-  // 发音人按引擎现拉:火山的目录跟着账号走,不是引擎列表的一部分。
+  // 发音人按引擎现拉:火山的目录跟着账号走,不是引擎列表的一部分。带上工作区:能复刻的引擎(CosyVoice)
+  // 还列这个工作区配音库里的嗓子(`cloned`)。
   const engineVoices = useQuery({
-    queryKey: ["tts-voices", engine],
-    queryFn: () => listTtsVoices(engine),
+    queryKey: ["tts-voices", engine, workspaceId],
+    queryFn: () => listTtsVoices(engine, workspaceId),
     enabled: engine !== CLONE_ENGINE,
   });
 
@@ -79,32 +81,40 @@ export function useSpeechVoice(workspaceId: string) {
 
   const activeEngine = engines.data?.find((item) => item.id === engine);
   const voiceChoices = engineVoices.data ?? [];
+  //: 引擎自己的音色(系统音色)和配音库里的嗓子(克隆音色,只有能复刻的引擎才有)。
+  const stockVoices = voiceChoices.filter((item) => !item.cloned);
+  const clonedVoices = voiceChoices.filter((item) => item.cloned);
   // 下拉在没选时**显示**第一个,那就提交同一个 —— 否则引擎会安静地用它自己的默认音。
-  const engineVoice = engineVoiceChoice || voiceChoices[0]?.value || "";
+  // 默认落在系统音色上,**不落在克隆音色上**:那一下要把参考音频传到第三方,得是人亲手点的。
+  const engineVoice = engineVoiceChoice || stockVoices[0]?.value || "";
   const chosenVoice = voiceChoices.find((item) => item.value === engineVoice);
+  const speaksClonedVoice = Boolean(chosenVoice?.cloned);
 
   // 语速跟着**引擎能力**走:F5 吃 speed,fish 的请求里根本没有这一项;百炼的 qwen-tts 也没有。
   // 远端引擎缺这个字段时按支持处理(老引擎行为不变)。
   const speedSupported =
     engine === CLONE_ENGINE ? Boolean(cloneRuntime?.supports_speed) : activeEngine?.supports_speed !== false;
 
-  // 克隆要有音色且引擎装好;远端引擎要么有目录,要么它自己说需要手填 id 而用户填了。
+  // 克隆要有音色且引擎装好;远端引擎要么有目录,要么它自己说需要手填 id 而用户填了(或点了一把克隆音色)。
   const ready =
     engine === CLONE_ENGINE
       ? Boolean(voiceId) && cloneUsable
-      : voiceChoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoiceChoice.trim());
+      : stockVoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoiceChoice.trim());
 
   // 不支持语速时**不发** —— 发了也只会被忽略,而"传了却没用"正是那种谎。
   const params: SpeechParams =
     engine === CLONE_ENGINE
       ? { engine, voice_id: voiceId, clone_engine: cloneEngine, ...(speedSupported ? { speed } : {}) }
-      : {
-          engine,
-          engine_voice: engineVoice,
-          // 只有目录知道的资源族;不带的话火山回一个 55000000。
-          engine_voice_resource: chosenVoice?.resource_id ?? "",
-          ...(speedSupported ? { speed } : {}),
-        };
+      : speaksClonedVoice
+        ? // 远端引擎念配音库里的嗓子:和本机克隆同一个字段,宿主在合成前把它解析成远端副本(ADR 0037)。
+          { engine, voice_id: engineVoice, ...(speedSupported ? { speed } : {}) }
+        : {
+            engine,
+            engine_voice: engineVoice,
+            // 只有目录知道的资源族;不带的话火山回一个 55000000。
+            engine_voice_resource: chosenVoice?.resource_id ?? "",
+            ...(speedSupported ? { speed } : {}),
+          };
 
   return {
     engine,
@@ -121,7 +131,13 @@ export function useSpeechVoice(workspaceId: string) {
     setCloneEngine: setCloneEngineChoice,
     cloneRuntime,
     voiceChoices,
+    /** 引擎自己的音色(不含配音库里的嗓子)。按文字替人挑发音人时只在这里挑。 */
+    stockVoices,
+    /** 这个引擎念得了的配音库嗓子(只有能复刻的引擎才有)。 */
+    clonedVoices,
     engineVoice,
+    /** 选中的是配音库里的一把嗓子(由远端引擎念它的副本)。 */
+    speaksClonedVoice,
     /** 用户亲手选过/填过的那个;空 = 还没动过(可以替他挑一个合适的)。 */
     engineVoiceChoice,
     setEngineVoice: setEngineVoiceChoice,

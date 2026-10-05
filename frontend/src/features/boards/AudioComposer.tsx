@@ -37,7 +37,7 @@ function Pick({
 }: {
   value: string;
   onChange: (next: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; group?: string }[];
   ariaLabel: string;
   icon?: React.ReactNode;
 }) {
@@ -77,7 +77,10 @@ export function AudioComposer({
   const [picked, setPicked] = React.useState(item.form?.voice_id ?? "");
   //: 空串 = 还没挑过,由拉回来的引擎列表定第一个;`clone` 走配音库,其余走引擎自己的音色目录。
   const [engine, setEngine] = React.useState(item.form?.engine ?? "");
-  const [engineVoice, setEngineVoice] = React.useState(item.form?.engine_voice ?? "");
+  //: 引擎那一格的音色:引擎自己的,或者(CosyVoice)配音库里的一把嗓子 —— 表单上记在 voice_id(ADR 0037)。
+  const [engineVoice, setEngineVoice] = React.useState(
+    item.form?.engine_voice || (item.form?.engine ? (item.form?.voice_id ?? "") : ""),
+  );
 
   //: 上游的字变了就跟着换 —— 但不覆盖用户自己改过的(和便签那条同一个道理)。上一次自动填进来的那段存在表单上
   //: (`form.prefilled`),重新选中这一格、面板新挂时还认得出「这还是自动填的」。
@@ -98,18 +101,22 @@ export function AudioComposer({
   const usingClone = (activeEngine?.id ?? CLONE_ENGINE) === CLONE_ENGINE;
 
   const voices = useVoiceLibrary(workspaceId, { enabled: usingClone });
-  //: 发音人按引擎现拉 —— 火山的目录跟着账号走,不是引擎列表的一部分(和字幕面板同源)。
+  //: 发音人按引擎现拉 —— 火山的目录跟着账号走,不是引擎列表的一部分(和字幕面板同源)。带上工作区:
+  //: CosyVoice 还列配音库里的嗓子(`cloned`)。
   const engineVoices = useQuery({
-    queryKey: ["tts-voices", activeEngine?.id ?? ""],
-    queryFn: () => listTtsVoices(activeEngine?.id ?? ""),
+    queryKey: ["tts-voices", activeEngine?.id ?? "", workspaceId],
+    queryFn: () => listTtsVoices(activeEngine?.id ?? "", workspaceId),
     enabled: Boolean(activeEngine) && !usingClone,
   });
 
   const cloneOptions = voices.data ?? [];
   const current = cloneOptions.find((one: Voice) => one.id === picked) ?? cloneOptions[0] ?? null;
   const engineVoiceChoices = engineVoices.data ?? [];
+  //: 没挑过时落在第一个**系统音色**上,不落在克隆音色上:那一下要把参考音频传到第三方,得是人亲手点的。
   const activeEngineVoice =
-    engineVoiceChoices.find((one) => one.value === engineVoice) ?? engineVoiceChoices[0] ?? null;
+    engineVoiceChoices.find((one) => one.value === engineVoice) ?? engineVoiceChoices.find((one) => !one.cloned) ?? null;
+  const speaksCloned = Boolean(activeEngineVoice?.cloned);
+  const hasCloned = engineVoiceChoices.some((one) => one.cloned);
 
   //: 能不能念:克隆要有一把嗓子,引擎要有一个发音人。
   const ready = usingClone ? Boolean(current) : Boolean(activeEngineVoice);
@@ -117,9 +124,9 @@ export function AudioComposer({
   const serializedForm = JSON.stringify({
     prompt: text,
     ...(prefilled ? { prefilled } : {}),
-    voice_id: usingClone ? (current?.id ?? item.form?.voice_id ?? "") : "",
+    voice_id: usingClone ? (current?.id ?? item.form?.voice_id ?? "") : speaksCloned ? (activeEngineVoice?.value ?? "") : "",
     engine: usingClone ? "" : (activeEngine?.id ?? ""),
-    engine_voice: usingClone ? "" : (activeEngineVoice?.value ?? ""),
+    engine_voice: usingClone || speaksCloned ? "" : (activeEngineVoice?.value ?? ""),
   });
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
   React.useEffect(() => {
@@ -138,9 +145,10 @@ export function AudioComposer({
     run(() =>
       onSpeak({
         text: body,
-        voiceId: usingClone ? (current?.id ?? "") : "",
+        //: CosyVoice 念配音库里的嗓子:和克隆同一个字段,引擎音色留空(后端 producers 按 voice_slot 收)。
+        voiceId: usingClone ? (current?.id ?? "") : speaksCloned ? (activeEngineVoice?.value ?? "") : "",
         engine: usingClone ? "" : (activeEngine?.id ?? ""),
-        engineVoice: usingClone ? "" : (activeEngineVoice?.value ?? ""),
+        engineVoice: usingClone || speaksCloned ? "" : (activeEngineVoice?.value ?? ""),
       }),
     );
   };
@@ -180,7 +188,12 @@ export function AudioComposer({
                 ariaLabel={t("subtitleDubVoice")}
                 value={activeEngineVoice?.value ?? ""}
                 onChange={setEngineVoice}
-                options={engineVoiceChoices.map((one) => ({ value: one.value, label: one.label }))}
+                //: 有克隆音色时分两组:系统音色、我的克隆音色(和配音面板同一个分法)。
+                options={engineVoiceChoices.map((one) => ({
+                  value: one.value,
+                  label: one.label,
+                  ...(hasCloned ? { group: t(one.cloned ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
+                }))}
               />
             )}
           </>
