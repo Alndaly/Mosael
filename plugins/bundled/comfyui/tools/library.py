@@ -9,8 +9,16 @@
 
 - `/experiment/models`:每个模型目录在磁盘上的位置;`/experiment/models/{目录}`:文件名、目录序号、大小、改动时间;
 - `/experiment/models/preview/{目录}/{序号}/{名字}`:预览图(没有就 404)—— 地址交给宿主,宿主去取、去缓存;
-- `/view_metadata/{目录}?filename=`:safetensors 文件头里的 `__metadata__`。一次约 40ms,几百个文件第一次要读一阵:
-  读到的摘要按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在持久目录里,第二次只读目录。
+- 文件头:ComfyUI-Custom-Scripts 的 `/pysssss/view/{目录}/{名字}` 按段读(Range),只取开头 —— safetensors 的元数据和
+  张量表、GGUF 的架构名和张量表,一个文件几十毫秒(见 model_files.HeaderRoute)。没装它的退回
+  `/view_metadata/{目录}?filename=`:只有 safetensors 的 `__metadata__`,认不了权重结构。
+
+几百个文件第一次要读一阵:读到的东西按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在持久目录里,第二次只读目录。记的是
+**读到的原料**(认底模、触发词、标题要用的那几项元数据,权重认成的家族,GGUF 的架构名),家族每次列出时现推 —— 认的规矩
+改了马上生效;权重那张表(weights.py)一改,缓存的版本对不上,整份扔掉重读。
+
+同一个文件可能挂在几个目录下(ComfyUI-GGUF 的 `unet_gguf` 和 `diffusion_models` 指着同一批文件夹):按磁盘上的位置
+只列一次(见 _deduplicated)。
 
 老版本没有 `/experiment/models` 时退回 `/models/{目录}`:只有名字,没有大小和预览。
 """
@@ -18,6 +26,8 @@
 from __future__ import annotations
 
 import json
+import posixpath
+import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -25,11 +35,13 @@ from urllib import parse
 
 import install
 import models
-from families import family_of
+import weights
+from families import family_applies, family_of
 from comfy_http import Comfy
 from sources import canonical_url
 from lines import ComfyError, say
-from model_files import SKIPPED_FOLDERS, data_file, files_in, folder_info, load_json, metadata_of, save_json
+from model_files import HEADER_SUFFIXES, SKIPPED_FOLDERS, HeaderRoute, data_file, files_in, folder_info, load_json, \
+    metadata_of, save_json
 from model_files import norm as _norm
 #: 同时读几个文件头。ComfyUI 是别人的机器、可能正在出图:几个并发就够,别把它的事件循环堵满。
 METADATA_WORKERS = 4
@@ -56,17 +68,20 @@ def _tag_counts(meta: dict[str, Any]) -> Counter[str]:
     return counts
 
 
-def triggers_of(meta: dict[str, Any]) -> tuple[list[str], str]:
+def _top_tags(meta: dict[str, Any]) -> list[str]:
+    """训练标签里出现最多的几个(一样多按字母)。"""
+    counts = _tag_counts(meta)
+    return [tag for tag, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:LIST_TRIGGERS]]
+
+
+def triggers_of(meta: dict[str, Any], tags: list[str]) -> tuple[list[str], str]:
     """触发词:作者写在文件头里的(`modelspec.trigger_phrase` / `ss_trigger_words`)→ `metadata`;都没有时取训练标签里
-    出现最多的几个 → `tags`(常见词,不一定是作者指定的触发词,界面上标明)。"""
+    出现最多的几个(`tags`,见 _top_tags)→ `tags`(常见词,不一定是作者指定的触发词,界面上标明)。"""
     for key in ("modelspec.trigger_phrase", "ss_trigger_words"):
         raw = meta.get(key)
         if isinstance(raw, str) and raw.strip():
             return [one.strip() for one in raw.split(",") if one.strip()][:30], "metadata"
-    counts = _tag_counts(meta)
-    if counts:
-        return [tag for tag, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:LIST_TRIGGERS]], "tags"
-    return [], ""
+    return (tags[:LIST_TRIGGERS], "tags") if tags else ([], "")
 
 
 def _title_of(meta: dict[str, Any]) -> str:
@@ -77,18 +92,81 @@ def _title_of(meta: dict[str, Any]) -> str:
     return ""
 
 
-def summarize(folder: str, name: str, meta: dict[str, Any]) -> dict[str, Any]:
-    """一个文件的元数据 → 列表里那几格(记进缓存的就是它)。"""
-    family, family_source = family_of(folder, name, meta)
-    triggers, triggers_source = triggers_of(meta)
+def summarize(folder: str, name: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    """一个文件读到的原料(见 _inputs;没读过的是空的,只按文件名认)→ 列表里那几格。每次列出都现推。"""
+    meta = inputs.get("meta") or {}
+    found = inputs.get("weights") or weights.family_of_gguf(inputs.get("gguf") or "")
+    family, family_source = family_of(folder, name, meta, found)
+    triggers, triggers_source = triggers_of(meta, list(inputs.get("tags") or []))
     return {"family": family, "family_source": family_source, "triggers": triggers[:LIST_TRIGGERS],
             "triggers_source": triggers_source, "title": _title_of(meta)}
 
 
-# --- 持久目录里的记录 ---------------------------------------------------------
+# --- 持久目录里的记录:读到的原料 ------------------------------------------------
+
+#: 缓存的版本:格式,加上权重那张表的指纹 —— 表一改,记着的「权重认成了什么」就作废,整份重读。对不上就扔掉(缓存,不是
+#: 用户的数据)。
+CACHE_VERSION = f"inputs-1:{weights.DIGEST}"
+#: 元数据里留下的几项:认底模(families._declared / _narrowed)、触发词、标题要用的。别的在详情里现读。
+_KEPT_META = ("ss_base_model_version", "modelspec.architecture", "ss_sd_model_name", "modelspec.title", "ss_v2",
+              "ss_network_module", "ss_network_dim", "modelspec.trigger_phrase", "ss_trigger_words", "ss_output_name")
+
+
+def _inputs(meta: dict[str, Any], header: Any) -> dict[str, Any]:
+    """一个文件要记下的原料:`meta`(留下的那几项元数据)、`tags`(训练标签里最多的几个)、`weights`(权重结构认成的家族,
+    认不出是空串;**没有这一项**是还没读到文件头,下次有能用的读头地址时再读)、`gguf`(GGUF 的架构名)。"""
+    entry: dict[str, Any] = {"meta": {key: meta[key][:500] for key in _KEPT_META
+                                      if isinstance(meta.get(key), str) and meta[key].strip()}}
+    tags = _top_tags(meta)
+    if tags:
+        entry["tags"] = tags
+    if header is not None:
+        entry["weights"] = weights.family_of_weights(header.tensors)
+        if header.architecture:
+            entry["gguf"] = header.architecture[:80]
+    return entry
+
 
 def _cache_key(folder: str, item: dict[str, Any]) -> str:
     return f"{folder}\n{item.get('name')}\n{item.get('size')}\n{item.get('modified')}"
+
+
+def _readable(folder: str, name: str) -> bool:
+    """有文件头可读的:safetensors 都读(元数据里有标题、触发词);GGUF 只在讲底模的目录里读 —— 文本编码器的 GGUF 头里
+    带着整张词表,几 MB,读了也用不上。"""
+    lowered = name.lower()
+    return lowered.endswith(HEADER_SUFFIXES) and (family_applies(folder) or not lowered.endswith(".gguf"))
+
+
+# --- 同一个文件挂在几个目录下 ---------------------------------------------------
+
+def _location(paths: list[str], item: dict[str, Any]) -> str | None:
+    """文件在那台机器磁盘上的位置(比较用:斜杠统一、`.` 段去掉,Windows 路径不分大小写)。"""
+    index = int(item.get("pathIndex") or 0)
+    if index >= len(paths):
+        return None
+    base = paths[index]
+    full = posixpath.normpath(f"{base}/{item['name']}".replace("\\", "/"))
+    return full.lower() if re.match(r"^[A-Za-z]:/", full) else full
+
+
+def _deduplicated(listing: dict[str, list[dict[str, Any]]], info: dict[str, list[str]]) -> dict[str, list[dict[str, Any]]]:
+    """同一个文件只列一次。ComfyUI-GGUF 登记的 `unet_gguf` / `clip_gguf` 和 `diffusion_models` / `text_encoders` 指着同一批
+    文件夹,Impact Pack 的 `ultralytics` 包着 `ultralytics_bbox` / `ultralytics_segm`:按磁盘上的位置认,留在先登记的那个
+    目录(`/experiment/models` 的顺序:ComfyUI 自己的目录先登记,自定义节点的在后)。只有别名目录列着的照旧留在那儿。"""
+    seen: set[str] = set()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for folder, items in listing.items():
+        kept: list[dict[str, Any]] = []
+        for item in items:
+            where = _location(info.get(folder) or [], item)
+            if where is not None and where in seen:
+                continue
+            if where is not None:
+                seen.add(where)
+            kept.append(item)
+        out[folder] = kept
+    return out
 
 
 # --- 工作流:在用哪些文件、声明了哪些下载地址 ---------------------------------
@@ -187,20 +265,41 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         for folder in info:
             if folder not in SKIPPED_FOLDERS:
                 listing[folder] = files_in(comfy, folder)
+    shown = listing if info is None else _deduplicated(listing, info)
 
     cache_path = data_file(comfy, "library")
-    cache = load_json(cache_path)
+    saved = load_json(cache_path)
+    files = saved.get("files") if saved.get("version") == CACHE_VERSION else None
+    cache: dict[str, Any] = files if isinstance(files, dict) else {}
     fresh: dict[str, Any] = {}
-    wanted = [(folder, item) for folder, items in listing.items() for item in items
-              if str(item.get("name")).lower().endswith(".safetensors") and _cache_key(folder, item) not in cache]
+    route = HeaderRoute(comfy)
+    wanted = [(folder, item, cache.get(_cache_key(folder, item))) for folder, items in shown.items() for item in items
+              if _readable(folder, str(item.get("name")))]
+    # 没读过的;读过、但当时没有能用的读头地址(没装 ComfyUI-Custom-Scripts)的再试一次 —— 这一趟还是没有,第一个文件
+    # 试过就不再试
+    wanted = [job for job in wanted
+              if job[2] is None or ("weights" not in job[2] and family_applies(job[0]))]
 
-    def read(job: tuple[str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
-        folder, item = job
-        return _cache_key(folder, item), summarize(folder, item["name"], metadata_of(comfy, folder, item["name"]) or {})
+    def read(job: tuple[str, dict[str, Any], dict[str, Any] | None]) -> tuple[str, dict[str, Any]]:
+        folder, item, old = job
+        name = str(item["name"])
+        key = _cache_key(folder, item)
+        header = route.read(folder, name) if family_applies(folder) else None
+        if header is not None:
+            meta = header.meta if header.meta is not None else metadata_of(comfy, folder, name)
+            return key, _inputs(meta or {}, header)
+        if old is not None:
+            return key, old  # 元数据上次读过了;权重等有了读头的地址再认
+        return key, _inputs(metadata_of(comfy, folder, name) or {}, None)
 
-    if wanted:
+    # 第一个要读头的先单独读:顺便看清这台有没有能用的读头地址 —— 没有的话,别让几个线程一起去撞
+    first = next((job for job in wanted if family_applies(job[0])), None)
+    if first is not None:
+        fresh.update([read(first)])
+    rest = [job for job in wanted if job is not first]
+    if rest:
         with ThreadPoolExecutor(max_workers=METADATA_WORKERS) as pool:
-            fresh.update(dict(pool.map(read, wanted)))
+            fresh.update(dict(pool.map(read, rest)))
 
     workflows = _workflows(comfy)
     used_by: dict[str, list[dict[str, str]]] = {}
@@ -209,15 +308,14 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
             used_by.setdefault(value, []).append({"id": ident, "label": label})
 
     out_models: list[dict[str, Any]] = []
-    for folder, items in listing.items():
+    for folder, items in shown.items():
         for item in items:
             name = str(item["name"])
             key = _cache_key(folder, item)
-            summary = fresh.get(key) or cache.get(key)
-            if summary is None:
-                summary = summarize(folder, name, {})  # 不是 safetensors:只按文件名猜
-            else:
-                fresh[key] = summary
+            inputs = fresh.get(key) or cache.get(key)
+            if inputs is not None:
+                fresh[key] = inputs
+            summary = summarize(folder, name, inputs or {})  # 没有文件头的(.ckpt、.pt……)只按文件名认
             entry: dict[str, Any] = {"folder": folder, "name": name}
             for field in ("size", "modified"):
                 if isinstance(item.get(field), (int, float)):
@@ -230,9 +328,10 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
                 entry["preview"] = f"{parse.quote(folder, safe='')}/{int(item.get('pathIndex') or 0)}/" \
                                    f"{parse.quote(name, safe='/')}"
             out_models.append(entry)
-    if fresh != cache:
-        save_json(cache_path, fresh)
+    if fresh != cache or saved.get("version") != CACHE_VERSION:
+        save_json(cache_path, {"version": CACHE_VERSION, "files": fresh})
 
+    # 「在不在」按 ComfyUI 自己的列法:别名目录里那一份也算(工作流里的 UnetLoaderGGUF 按 unet_gguf 找)
     present = {(folder, _norm(str(item["name"]))) for folder, items in listing.items() for item in items}
     missing: dict[tuple[str, str], dict[str, Any]] = {}
     for ident, label, _used, declared in workflows:
@@ -245,7 +344,7 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
                 found["workflows"].append({"id": ident, "label": label})
 
     out: dict[str, Any] = {
-        "folders": [{"name": folder, "count": len(items)} for folder, items in listing.items()],
+        "folders": [{"name": folder, "count": len(items)} for folder, items in shown.items()],
         "models": out_models,
         "missing": list(missing.values()),
         "download": install.describe(comfy, info, listing, locale),
@@ -292,4 +391,4 @@ def detail(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]
     }
     tags = [{"tag": tag, "count": count}
             for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:DETAIL_TAGS]]
-    return {"folder": folder, "name": name, "metadata": shown, "tags": tags, **summarize(folder, name, meta)}
+    return {"folder": folder, "name": name, "metadata": shown, "tags": tags}

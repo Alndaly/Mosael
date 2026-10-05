@@ -389,7 +389,9 @@ class ModelFileOut(ApiModel):
     name: str
     size: int | None = None
     modified: float | None = None
-    #: 推断的底模家族(SDXL、Illustrious、Flux……;认不出是空串)与凭的是什么(`metadata` / `filename`)。
+    #: 推断的底模家族(SDXL、Illustrious、Flux……;认不出是空串)与凭的是什么:`metadata`(文件头里的元数据)、`weights`
+    #: (权重的结构:层的名字和尺寸)、`filename`(文件名里的关键词,不一定准)。`not_applicable`:这类文件不讲底模
+    #: (文本编码器、放大模型、检测模型……),`family` 是空串,界面写「不适用」而不是「认不出」。
     family: str = ""
     family_source: str = ""
     triggers: list[str] = Field(default_factory=list)

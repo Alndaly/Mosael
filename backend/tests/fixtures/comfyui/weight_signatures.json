@@ -1,0 +1,3932 @@
+[
+ {
+  "name": "sd15_checkpoint",
+  "note": "SD 1.5 merged checkpoint (CLIP-L in cond_stage_model)",
+  "source": "recorded",
+  "family": "SD 1.5",
+  "tensors": {
+   "alphas_cumprod": [
+    1000
+   ],
+   "cond_stage_model.transformer.text_model.encoder.layers.0.mlp.fc1.bias": [
+    3072
+   ],
+   "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.v_proj.weight": [
+    768,
+    768
+   ],
+   "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.out_proj.bias": [
+    768
+   ],
+   "first_stage_model.decoder.conv_out.weight": [
+    3,
+    128,
+    3,
+    3
+   ],
+   "first_stage_model.decoder.mid.block_1.conv1.bias": [
+    512
+   ],
+   "first_stage_model.decoder.up.0.block.0.conv1.weight": [
+    128,
+    256,
+    3,
+    3
+   ],
+   "first_stage_model.decoder.up.0.block.1.conv2.bias": [
+    128
+   ],
+   "first_stage_model.decoder.up.1.block.0.nin_shortcut.weight": [
+    256,
+    512,
+    1,
+    1
+   ],
+   "first_stage_model.decoder.up.1.block.1.norm1.weight": [
+    256
+   ],
+   "first_stage_model.encoder.down.0.block.0.conv2.bias": [
+    128
+   ],
+   "first_stage_model.encoder.down.0.block.1.norm1.weight": [
+    128
+   ],
+   "first_stage_model.encoder.down.1.block.0.norm1.bias": [
+    128
+   ],
+   "first_stage_model.encoder.down.1.block.1.norm2.weight": [
+    256
+   ],
+   "first_stage_model.encoder.mid.attn_1.v.bias": [
+    512
+   ],
+   "first_stage_model.encoder.norm_out.weight": [
+    512
+   ],
+   "model.diffusion_model.input_blocks.1.0.in_layers.0.weight": [
+    320
+   ],
+   "model.diffusion_model.input_blocks.1.1.transformer_blocks.0.attn1.to_out.0.bias": [
+    320
+   ],
+   "model.diffusion_model.input_blocks.1.1.transformer_blocks.0.norm1.bias": [
+    320
+   ],
+   "model.diffusion_model.middle_block.0.out_layers.0.weight": [
+    1280
+   ],
+   "model.diffusion_model.middle_block.1.transformer_blocks.0.attn1.to_v.weight": [
+    1280,
+    1280
+   ],
+   "model.diffusion_model.middle_block.1.transformer_blocks.0.norm2.weight": [
+    1280
+   ],
+   "model.diffusion_model.output_blocks.0.0.skip_connection.bias": [
+    1280
+   ],
+   "model.diffusion_model.time_embed.0.weight": [
+    1280,
+    320
+   ]
+  }
+ },
+ {
+  "name": "sd15_lora_kohya",
+  "note": "kohya LoRA, diffusers block names, lora_te_",
+  "source": "recorded",
+  "family": "SD 1.5",
+  "tensors": {
+   "lora_te_text_model_encoder_layers_0_mlp_fc1.alpha": [],
+   "lora_te_text_model_encoder_layers_0_self_attn_out_proj.lora_up.weight": [
+    768,
+    128
+   ],
+   "lora_te_text_model_encoder_layers_1_mlp_fc2.lora_down.weight": [
+    128,
+    3072
+   ],
+   "lora_te_text_model_encoder_layers_1_self_attn_v_proj.alpha": [],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    320,
+    128
+   ],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_k.lora_down.weight": [
+    128,
+    768
+   ],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.alpha": [],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    320,
+    128
+   ],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_attn2_to_k.lora_up.weight": [
+    320,
+    128
+   ],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_ff_net_0_proj.lora_down.weight": [
+    128,
+    320
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn1_to_out_0.alpha": [],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn2_to_k.lora_up.weight": [
+    640,
+    128
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_down.weight": [
+    128,
+    640
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn1_to_out_0.alpha": [],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn2_to_k.lora_up.weight": [
+    640,
+    128
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_ff_net_0_proj.lora_down.weight": [
+    128,
+    640
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_out_0.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn2_to_out_0.alpha": [],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_up.weight": [
+    10240,
+    128
+   ],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn1_to_out_0.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn2_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_up.weight": [
+    10240,
+    128
+   ],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_out_0.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn2_to_out_0.alpha": []
+  }
+ },
+ {
+  "name": "sd15_lora_unet_only",
+  "note": "UNet-only LoRA",
+  "source": "recorded",
+  "family": "SD 1.5",
+  "tensors": {
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_k.alpha": [],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight": [
+    16,
+    320
+   ],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_k.lora_up.weight": [
+    320,
+    16
+   ],
+   "lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.alpha": [],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_attn1_to_out_0.lora_down.weight": [
+    16,
+    320
+   ],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_attn1_to_v.lora_up.weight": [
+    320,
+    16
+   ],
+   "lora_unet_down_blocks_0_attentions_1_transformer_blocks_0_attn2_to_q.alpha": [],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn1_to_k.lora_down.weight": [
+    16,
+    640
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn1_to_q.lora_up.weight": [
+    640,
+    16
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn2_to_out_0.alpha": [],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn2_to_v.lora_down.weight": [
+    16,
+    768
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn1_to_out_0.lora_up.weight": [
+    640,
+    16
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn2_to_k.alpha": [],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn2_to_q.lora_down.weight": [
+    16,
+    640
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    1280,
+    16
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_v.alpha": [],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn2_to_out_0.lora_down.weight": [
+    16,
+    1280
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn2_to_v.lora_up.weight": [
+    1280,
+    16
+   ],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn1_to_q.alpha": [],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn2_to_k.lora_down.weight": [
+    16,
+    768
+   ],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn2_to_q.lora_up.weight": [
+    1280,
+    16
+   ],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_v.lora_down.weight": [
+    16,
+    1280
+   ],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn2_to_out_0.lora_up.weight": [
+    1280,
+    16
+   ]
+  }
+ },
+ {
+  "name": "sdxl_checkpoint",
+  "note": "SDXL merged checkpoint (conditioner.embedders)",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "conditioner.embedders.0.transformer.text_model.embeddings.position_embedding.weight": [
+    77,
+    768
+   ],
+   "conditioner.embedders.0.transformer.text_model.encoder.layers.0.self_attn.out_proj.weight": [
+    768,
+    768
+   ],
+   "conditioner.embedders.0.transformer.text_model.encoder.layers.1.self_attn.out_proj.bias": [
+    768
+   ],
+   "conditioner.embedders.1.model.transformer.resblocks.0.attn.in_proj_weight": [
+    3840,
+    1280
+   ],
+   "conditioner.embedders.1.model.transformer.resblocks.1.ln_1.weight": [
+    1280
+   ],
+   "first_stage_model.decoder.mid.attn_1.q.bias": [
+    512
+   ],
+   "first_stage_model.decoder.up.0.block.0.conv1.weight": [
+    128,
+    256,
+    3,
+    3
+   ],
+   "first_stage_model.decoder.up.0.block.1.norm1.weight": [
+    128
+   ],
+   "first_stage_model.decoder.up.1.block.1.conv2.bias": [
+    256
+   ],
+   "first_stage_model.encoder.down.0.block.0.conv2.weight": [
+    128,
+    128,
+    3,
+    3
+   ],
+   "first_stage_model.encoder.down.1.block.0.conv1.bias": [
+    256
+   ],
+   "first_stage_model.encoder.down.1.block.1.norm1.bias": [
+    256
+   ],
+   "first_stage_model.encoder.mid.attn_1.v.weight": [
+    512,
+    512,
+    1,
+    1
+   ],
+   "model.diffusion_model.input_blocks.0.0.bias": [
+    320
+   ],
+   "model.diffusion_model.middle_block.0.out_layers.0.bias": [
+    1280
+   ],
+   "model.diffusion_model.middle_block.1.transformer_blocks.0.attn2.to_out.0.weight": [
+    1280,
+    1280
+   ],
+   "model.diffusion_model.middle_block.1.transformer_blocks.1.attn1.to_v.weight": [
+    1280,
+    1280
+   ],
+   "model.diffusion_model.out.0.weight": [
+    320
+   ],
+   "model.diffusion_model.output_blocks.0.1.proj_out.weight": [
+    1280,
+    1280
+   ],
+   "model.diffusion_model.output_blocks.0.1.transformer_blocks.0.norm2.bias": [
+    1280
+   ],
+   "model.diffusion_model.output_blocks.0.1.transformer_blocks.1.ff.net.0.proj.weight": [
+    10240,
+    1280
+   ],
+   "model.diffusion_model.output_blocks.1.0.skip_connection.weight": [
+    1280,
+    2560,
+    1,
+    1
+   ],
+   "model.diffusion_model.output_blocks.1.1.transformer_blocks.0.attn2.to_q.weight": [
+    1280,
+    1280
+   ],
+   "model.diffusion_model.output_blocks.1.1.transformer_blocks.1.attn2.to_k.weight": [
+    1280,
+    2048
+   ]
+  }
+ },
+ {
+  "name": "sdxl_lora_kohya",
+  "note": "kohya SDXL LoRA (lora_te1_/lora_te2_, input_blocks)",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "lora_te1_text_model_encoder_layers_0_mlp_fc1.alpha": [],
+   "lora_te1_text_model_encoder_layers_0_self_attn_out_proj.lora_down.weight": [
+    32,
+    768
+   ],
+   "lora_te1_text_model_encoder_layers_1_mlp_fc2.alpha": [],
+   "lora_te1_text_model_encoder_layers_1_self_attn_q_proj.lora_down.weight": [
+    32,
+    768
+   ],
+   "lora_te2_text_model_encoder_layers_0_self_attn_k_proj.alpha": [],
+   "lora_te2_text_model_encoder_layers_0_self_attn_v_proj.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_te2_text_model_encoder_layers_1_self_attn_out_proj.alpha": [],
+   "lora_unet_middle_block_1_proj_in.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_0_attn1_to_q.alpha": [],
+   "lora_unet_middle_block_1_transformer_blocks_0_attn2_to_out_0.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn1_to_k.alpha": [],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn1_to_v.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn2_to_v.alpha": [],
+   "lora_unet_output_blocks_0_1_proj_out.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_output_blocks_0_1_transformer_blocks_0_attn1_to_v.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_0_attn2_to_q.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_attn1_to_out_0.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_attn2_to_k.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_ff_net_0_proj.alpha": [],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_attn1_to_k.lora_down.weight": [
+    32,
+    1280
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_attn2_to_k.alpha": [],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_attn2_to_v.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_1_attn1_to_q.alpha": [],
+   "lora_unet_output_blocks_1_1_transformer_blocks_1_attn2_to_out_0.lora_down.weight": [
+    32,
+    1280
+   ]
+  }
+ },
+ {
+  "name": "sdxl_lora_self_attention_slider",
+  "note": "slider trained without cross-attention",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "lora_unet_down_blocks_0_downsamplers_0_conv.alpha": [],
+   "lora_unet_down_blocks_0_resnets_0_time_emb_proj.lora_up.weight": [
+    320,
+    4
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    640,
+    4
+   ],
+   "lora_unet_down_blocks_1_attentions_0_transformer_blocks_1_attn1_to_k.lora_up.weight": [
+    640,
+    4
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    640,
+    4
+   ],
+   "lora_unet_down_blocks_1_attentions_1_transformer_blocks_1_attn1_to_k.lora_up.weight": [
+    640,
+    4
+   ],
+   "lora_unet_down_blocks_1_downsamplers_0_conv.lora_up.weight": [
+    640,
+    4,
+    1,
+    1
+   ],
+   "lora_unet_down_blocks_1_resnets_0_time_emb_proj.lora_up.weight": [
+    640,
+    4
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_k.lora_up.weight": [
+    1280,
+    4
+   ],
+   "lora_unet_mid_block_attentions_0_transformer_blocks_1_attn1_to_k.lora_down.weight": [
+    4,
+    1280
+   ],
+   "lora_unet_mid_block_resnets_0_conv1.lora_down.weight": [
+    4,
+    1280,
+    3,
+    3
+   ],
+   "lora_unet_mid_block_resnets_1_conv2.lora_down.weight": [
+    4,
+    1280,
+    3,
+    3
+   ],
+   "lora_unet_up_blocks_0_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight": [
+    4,
+    1280
+   ],
+   "lora_unet_up_blocks_0_attentions_0_transformer_blocks_1_attn1_to_q.lora_down.weight": [
+    4,
+    1280
+   ],
+   "lora_unet_up_blocks_0_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight": [
+    4,
+    1280
+   ],
+   "lora_unet_up_blocks_0_attentions_1_transformer_blocks_1_attn1_to_q.lora_down.weight": [
+    4,
+    1280
+   ],
+   "lora_unet_up_blocks_0_resnets_0_conv_shortcut.lora_down.weight": [
+    4,
+    2560,
+    1,
+    1
+   ],
+   "lora_unet_up_blocks_0_resnets_1_conv_shortcut.alpha": [],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn1_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_attentions_0_transformer_blocks_1_attn1_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_attentions_1_transformer_blocks_1_attn1_to_out_0.alpha": [],
+   "lora_unet_up_blocks_1_resnets_0_conv2.alpha": [],
+   "lora_unet_up_blocks_1_resnets_1_conv2.alpha": []
+  }
+ },
+ {
+  "name": "sdxl_lokr",
+  "note": "LyCORIS LoKr on SDXL",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "lora_te1_text_model_encoder_layers_0_mlp_fc1.alpha": [],
+   "lora_te1_text_model_encoder_layers_1_mlp_fc2.alpha": [],
+   "lora_te2_text_model_encoder_layers_1_mlp_fc1.alpha": [],
+   "lora_unet_middle_block_0_emb_layers_1.alpha": [],
+   "lora_unet_middle_block_1_transformer_blocks_0_attn1_to_k.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_0_attn1_to_v.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_0_attn2_to_q.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn1_to_k.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn1_to_v.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_middle_block_1_transformer_blocks_1_attn2_to_q.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_output_blocks_0_0_emb_layers_1.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_output_blocks_0_1_proj_out.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_output_blocks_0_1_transformer_blocks_0_attn1_to_v.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_0_attn2_to_q.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_attn1_to_k.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_attn1_to_v.alpha": [],
+   "lora_unet_output_blocks_0_1_transformer_blocks_1_attn2_to_q.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_output_blocks_1_0_emb_layers_1.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_output_blocks_1_1_proj_out.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_attn1_to_q.lora_down.weight": [
+    128,
+    1280
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_attn2_to_out_0.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_0_ff_net_0_proj.lora_up.weight": [
+    10240,
+    128
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_1_attn1_to_q.lora_up.weight": [
+    1280,
+    128
+   ],
+   "lora_unet_output_blocks_1_1_transformer_blocks_1_attn2_to_out_0.lora_up.weight": [
+    1280,
+    128
+   ]
+  }
+ },
+ {
+  "name": "sdxl_embedding",
+  "note": "textual inversion with clip_l + clip_g",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "clip_g": [
+    22,
+    1280
+   ],
+   "clip_l": [
+    22,
+    768
+   ]
+  }
+ },
+ {
+  "name": "sd15_embedding",
+  "note": "textual inversion emb_params [n, 768]",
+  "source": "recorded",
+  "family": "SD 1.5",
+  "tensors": {
+   "emb_params": [
+    8,
+    768
+   ]
+  }
+ },
+ {
+  "name": "sdxl_ip_adapter",
+  "note": "IP-Adapter Plus for SDXL",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "image_proj.latents": [
+    1,
+    16,
+    1280
+   ],
+   "image_proj.layers.0.0.norm1.bias": [
+    1280
+   ],
+   "image_proj.layers.0.0.norm1.weight": [
+    1280
+   ],
+   "image_proj.layers.0.0.norm2.bias": [
+    1280
+   ],
+   "image_proj.layers.0.0.norm2.weight": [
+    1280
+   ],
+   "image_proj.layers.0.0.to_out.weight": [
+    1280,
+    1280
+   ],
+   "image_proj.layers.0.0.to_q.weight": [
+    1280,
+    1280
+   ],
+   "image_proj.layers.0.1.0.bias": [
+    1280
+   ],
+   "image_proj.layers.0.1.0.weight": [
+    1280
+   ],
+   "image_proj.layers.0.1.1.weight": [
+    5120,
+    1280
+   ],
+   "image_proj.layers.1.0.norm1.weight": [
+    1280
+   ],
+   "image_proj.layers.1.0.norm2.bias": [
+    1280
+   ],
+   "image_proj.layers.1.0.norm2.weight": [
+    1280
+   ],
+   "image_proj.layers.1.0.to_kv.weight": [
+    2560,
+    1280
+   ],
+   "image_proj.layers.1.0.to_out.weight": [
+    1280,
+    1280
+   ],
+   "image_proj.layers.1.1.0.bias": [
+    1280
+   ],
+   "image_proj.layers.1.1.0.weight": [
+    1280
+   ],
+   "image_proj.layers.1.1.1.weight": [
+    5120,
+    1280
+   ],
+   "image_proj.norm_out.bias": [
+    2048
+   ],
+   "image_proj.norm_out.weight": [
+    2048
+   ],
+   "image_proj.proj_in.weight": [
+    1280,
+    1280
+   ],
+   "image_proj.proj_out.bias": [
+    2048
+   ],
+   "image_proj.proj_out.weight": [
+    2048,
+    1280
+   ],
+   "ip_adapter.1.to_k_ip.weight": [
+    640,
+    2048
+   ]
+  }
+ },
+ {
+  "name": "sdxl_controlnet",
+  "note": "diffusers SDXL ControlNet",
+  "source": "recorded",
+  "family": "SDXL",
+  "tensors": {
+   "add_embedding.linear_1.bias": [
+    1280
+   ],
+   "controlnet_cond_embedding.conv_in.weight": [
+    16,
+    3,
+    3,
+    3
+   ],
+   "conv_in.bias": [
+    320
+   ],
+   "down_blocks.0.resnets.0.norm2.bias": [
+    320
+   ],
+   "down_blocks.0.resnets.1.norm1.weight": [
+    320
+   ],
+   "down_blocks.1.attentions.0.proj_out.weight": [
+    640,
+    640
+   ],
+   "down_blocks.1.attentions.0.transformer_blocks.0.attn2.to_q.weight": [
+    640,
+    640
+   ],
+   "down_blocks.1.attentions.0.transformer_blocks.1.attn1.to_k.weight": [
+    640,
+    640
+   ],
+   "down_blocks.1.attentions.0.transformer_blocks.1.attn2.to_v.weight": [
+    640,
+    2048
+   ],
+   "down_blocks.1.attentions.1.norm.weight": [
+    640
+   ],
+   "down_blocks.1.attentions.1.transformer_blocks.0.attn1.to_v.weight": [
+    640,
+    640
+   ],
+   "down_blocks.1.attentions.1.transformer_blocks.0.norm2.bias": [
+    640
+   ],
+   "down_blocks.1.attentions.1.transformer_blocks.1.attn2.to_k.weight": [
+    640,
+    2048
+   ],
+   "down_blocks.1.attentions.1.transformer_blocks.1.norm2.bias": [
+    640
+   ],
+   "down_blocks.1.resnets.0.conv_shortcut.bias": [
+    640
+   ],
+   "down_blocks.1.resnets.1.conv1.weight": [
+    640,
+    640,
+    3,
+    3
+   ],
+   "mid_block.attentions.0.norm.weight": [
+    1280
+   ],
+   "mid_block.attentions.0.transformer_blocks.0.attn1.to_v.weight": [
+    1280,
+    1280
+   ],
+   "mid_block.attentions.0.transformer_blocks.0.norm2.bias": [
+    1280
+   ],
+   "mid_block.attentions.0.transformer_blocks.1.attn2.to_k.weight": [
+    1280,
+    2048
+   ],
+   "mid_block.attentions.0.transformer_blocks.1.norm2.weight": [
+    1280
+   ],
+   "mid_block.resnets.0.norm2.bias": [
+    1280
+   ],
+   "mid_block.resnets.1.norm2.bias": [
+    1280
+   ],
+   "transformer_layes.0.attn.in_proj_bias": [
+    960
+   ]
+  }
+ },
+ {
+  "name": "anima_checkpoint",
+  "note": "Anima (Cosmos-Predict2 + llm_adapter), ComfyUI prefix",
+  "source": "recorded",
+  "family": "Anima",
+  "tensors": {
+   "model.diffusion_model.blocks.0.adaln_modulation_cross_attn.1.weight": [
+    256,
+    2048
+   ],
+   "model.diffusion_model.blocks.0.cross_attn.k_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.blocks.0.cross_attn.q_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.blocks.0.mlp.layer1.weight": [
+    8192,
+    2048
+   ],
+   "model.diffusion_model.blocks.0.self_attn.k_proj.weight": [
+    2048,
+    2048
+   ],
+   "model.diffusion_model.blocks.0.self_attn.v_proj.weight": [
+    2048,
+    2048
+   ],
+   "model.diffusion_model.blocks.1.adaln_modulation_self_attn.1.weight": [
+    256,
+    2048
+   ],
+   "model.diffusion_model.blocks.1.cross_attn.output_proj.weight": [
+    2048,
+    2048
+   ],
+   "model.diffusion_model.blocks.1.cross_attn.v_proj.weight": [
+    2048,
+    1024
+   ],
+   "model.diffusion_model.blocks.1.self_attn.k_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.blocks.1.self_attn.q_proj.weight": [
+    2048,
+    2048
+   ],
+   "model.diffusion_model.final_layer.linear.weight": [
+    64,
+    2048
+   ],
+   "model.diffusion_model.llm_adapter.blocks.0.cross_attn.o_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.0.cross_attn.v_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.0.norm_cross_attn.weight": [
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.0.self_attn.k_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.0.self_attn.q_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.1.cross_attn.k_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.1.cross_attn.q_proj.weight": [
+    1024,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.1.mlp.0.weight": [
+    4096,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.blocks.1.self_attn.k_norm.weight": [
+    64
+   ],
+   "model.diffusion_model.llm_adapter.blocks.1.self_attn.q_norm.weight": [
+    64
+   ],
+   "model.diffusion_model.llm_adapter.embed.weight": [
+    32128,
+    1024
+   ],
+   "model.diffusion_model.llm_adapter.out_proj.weight": [
+    1024,
+    1024
+   ]
+  }
+ },
+ {
+  "name": "anima_checkpoint_original_prefix",
+  "note": "Anima with the original net. prefix",
+  "source": "recorded",
+  "family": "Anima",
+  "tensors": {
+   "net.blocks.0.adaln_modulation_cross_attn.1.weight": [
+    256,
+    2048
+   ],
+   "net.blocks.0.cross_attn.k_norm.weight": [
+    128
+   ],
+   "net.blocks.0.cross_attn.q_norm.weight": [
+    128
+   ],
+   "net.blocks.0.mlp.layer1.weight": [
+    8192,
+    2048
+   ],
+   "net.blocks.0.self_attn.k_proj.weight": [
+    2048,
+    2048
+   ],
+   "net.blocks.0.self_attn.v_proj.weight": [
+    2048,
+    2048
+   ],
+   "net.blocks.1.adaln_modulation_self_attn.1.weight": [
+    256,
+    2048
+   ],
+   "net.blocks.1.cross_attn.output_proj.weight": [
+    2048,
+    2048
+   ],
+   "net.blocks.1.cross_attn.v_proj.weight": [
+    2048,
+    1024
+   ],
+   "net.blocks.1.self_attn.k_norm.weight": [
+    128
+   ],
+   "net.blocks.1.self_attn.q_proj.weight": [
+    2048,
+    2048
+   ],
+   "net.final_layer.linear.weight": [
+    64,
+    2048
+   ],
+   "net.llm_adapter.blocks.0.cross_attn.o_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.0.cross_attn.v_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.0.norm_cross_attn.weight": [
+    1024
+   ],
+   "net.llm_adapter.blocks.0.self_attn.k_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.0.self_attn.q_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.1.cross_attn.k_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.1.cross_attn.q_proj.weight": [
+    1024,
+    1024
+   ],
+   "net.llm_adapter.blocks.1.mlp.0.weight": [
+    4096,
+    1024
+   ],
+   "net.llm_adapter.blocks.1.self_attn.k_norm.weight": [
+    64
+   ],
+   "net.llm_adapter.blocks.1.self_attn.q_norm.weight": [
+    64
+   ],
+   "net.llm_adapter.embed.weight": [
+    32128,
+    1024
+   ],
+   "net.llm_adapter.out_proj.weight": [
+    1024,
+    1024
+   ]
+  }
+ },
+ {
+  "name": "anima_lora_comfy",
+  "note": "Anima LoRA, diffusion_model. + lora_A",
+  "source": "recorded",
+  "family": "Anima",
+  "tensors": {
+   "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.0.adaln_modulation_mlp.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.0.adaln_modulation_self_attn.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.0.cross_attn.k_proj.lora_A.weight": [
+    32,
+    1024
+   ],
+   "diffusion_model.blocks.0.cross_attn.output_proj.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.0.cross_attn.q_proj.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.0.cross_attn.v_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.0.mlp.layer1.lora_B.weight": [
+    8192,
+    32
+   ],
+   "diffusion_model.blocks.0.mlp.layer2.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.k_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.output_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.q_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.1.adaln_modulation_cross_attn.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.1.adaln_modulation_mlp.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.1.adaln_modulation_self_attn.1.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.1.cross_attn.k_proj.lora_A.weight": [
+    32,
+    1024
+   ],
+   "diffusion_model.blocks.1.cross_attn.output_proj.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.1.cross_attn.q_proj.lora_A.weight": [
+    32,
+    2048
+   ],
+   "diffusion_model.blocks.1.cross_attn.v_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.1.mlp.layer1.lora_B.weight": [
+    8192,
+    32
+   ],
+   "diffusion_model.blocks.1.mlp.layer2.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.k_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.output_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.q_proj.lora_B.weight": [
+    2048,
+    32
+   ],
+   "diffusion_model.blocks.0.mlp.layer1.lora_A.weight": [
+    32,
+    2048
+   ]
+  }
+ },
+ {
+  "name": "anima_lora_kohya",
+  "note": "Anima LoRA, lora_unet_ + lora_down",
+  "source": "recorded",
+  "family": "Anima",
+  "tensors": {
+   "lora_unet_blocks_0_cross_attn_k_proj.alpha": [],
+   "lora_unet_blocks_0_cross_attn_k_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_0_cross_attn_output_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_0_cross_attn_q_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_0_cross_attn_v_proj.lora_down.weight": [
+    32,
+    1024
+   ],
+   "lora_unet_blocks_0_mlp_layer1.alpha": [],
+   "lora_unet_blocks_0_mlp_layer2.alpha": [],
+   "lora_unet_blocks_0_mlp_layer2.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_0_self_attn_k_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_0_self_attn_output_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_0_self_attn_q_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_0_self_attn_v_proj.alpha": [],
+   "lora_unet_blocks_1_cross_attn_k_proj.alpha": [],
+   "lora_unet_blocks_1_cross_attn_k_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_1_cross_attn_output_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_1_cross_attn_q_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_1_cross_attn_v_proj.lora_down.weight": [
+    32,
+    1024
+   ],
+   "lora_unet_blocks_1_mlp_layer1.alpha": [],
+   "lora_unet_blocks_1_mlp_layer2.alpha": [],
+   "lora_unet_blocks_1_mlp_layer2.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_1_self_attn_k_proj.lora_up.weight": [
+    2048,
+    32
+   ],
+   "lora_unet_blocks_1_self_attn_output_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_1_self_attn_q_proj.lora_down.weight": [
+    32,
+    2048
+   ],
+   "lora_unet_blocks_1_self_attn_v_proj.alpha": []
+  }
+ },
+ {
+  "name": "flux_unet_fp8",
+  "note": "Flux.1 UNet, fp8 scaled",
+  "source": "recorded",
+  "family": "Flux",
+  "tensors": {
+   "double_blocks.0.img_attn.norm.key_norm.scale": [
+    128
+   ],
+   "double_blocks.0.img_attn.proj.weight": [
+    3072,
+    3072
+   ],
+   "double_blocks.0.img_mlp.0.scale_input": [],
+   "double_blocks.0.img_mod.lin.weight": [
+    18432,
+    3072
+   ],
+   "double_blocks.0.txt_attn.proj.weight": [
+    3072,
+    3072
+   ],
+   "double_blocks.0.txt_mlp.0.scale_input": [],
+   "double_blocks.0.txt_mod.lin.weight": [
+    18432,
+    3072
+   ],
+   "double_blocks.1.img_attn.proj.weight": [
+    3072,
+    3072
+   ],
+   "double_blocks.1.img_mlp.0.scale_input": [],
+   "double_blocks.1.img_mod.lin.scale_weight": [],
+   "double_blocks.1.txt_attn.proj.scale_weight": [],
+   "double_blocks.1.txt_mlp.0.bias": [
+    12288
+   ],
+   "double_blocks.1.txt_mod.lin.scale_weight": [],
+   "final_layer.linear.bias": [
+    64
+   ],
+   "guidance_in.in_layer.scale_weight": [],
+   "img_in.bias": [
+    3072
+   ],
+   "single_blocks.0.linear1.scale_input": [],
+   "single_blocks.0.linear2.scale_weight": [],
+   "single_blocks.0.norm.key_norm.scale": [
+    128
+   ],
+   "single_blocks.1.linear2.bias": [
+    3072
+   ],
+   "single_blocks.1.modulation.lin.scale_weight": [],
+   "time_in.in_layer.scale_weight": [],
+   "txt_in.bias": [
+    3072
+   ],
+   "vector_in.in_layer.scale_weight": []
+  }
+ },
+ {
+  "name": "flux_lora_kohya",
+  "note": "kohya Flux LoRA",
+  "source": "recorded",
+  "family": "Flux",
+  "tensors": {
+   "lora_unet_double_blocks_0_img_attn_proj.alpha": [],
+   "lora_unet_double_blocks_0_img_attn_proj.lora_up.weight": [
+    3072,
+    2
+   ],
+   "lora_unet_double_blocks_0_img_attn_qkv.lora_up.weight": [
+    9216,
+    2
+   ],
+   "lora_unet_double_blocks_0_img_mlp_0.lora_up.weight": [
+    12288,
+    2
+   ],
+   "lora_unet_double_blocks_0_img_mod_lin.lora_up.weight": [
+    18432,
+    2
+   ],
+   "lora_unet_double_blocks_0_txt_attn_proj.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_double_blocks_0_txt_attn_qkv.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_double_blocks_0_txt_mlp_0.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_double_blocks_0_txt_mod_lin.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_double_blocks_1_img_attn_proj.alpha": [],
+   "lora_unet_double_blocks_1_img_attn_qkv.alpha": [],
+   "lora_unet_double_blocks_1_img_mlp_0.alpha": [],
+   "lora_unet_double_blocks_1_img_mod_lin.alpha": [],
+   "lora_unet_double_blocks_1_img_mod_lin.lora_up.weight": [
+    18432,
+    2
+   ],
+   "lora_unet_double_blocks_1_txt_attn_proj.lora_up.weight": [
+    3072,
+    2
+   ],
+   "lora_unet_double_blocks_1_txt_attn_qkv.lora_up.weight": [
+    9216,
+    2
+   ],
+   "lora_unet_double_blocks_1_txt_mlp_0.lora_up.weight": [
+    12288,
+    2
+   ],
+   "lora_unet_double_blocks_1_txt_mod_lin.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_single_blocks_0_linear1.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_single_blocks_0_linear2.lora_down.weight": [
+    2,
+    15360
+   ],
+   "lora_unet_single_blocks_0_modulation_lin.lora_down.weight": [
+    2,
+    3072
+   ],
+   "lora_unet_single_blocks_1_linear1.alpha": [],
+   "lora_unet_single_blocks_1_linear2.alpha": [],
+   "lora_unet_single_blocks_1_modulation_lin.alpha": []
+  }
+ },
+ {
+  "name": "flux_lora_diffusers",
+  "note": "diffusers/peft Flux LoRA (transformer.)",
+  "source": "recorded",
+  "family": "Flux",
+  "tensors": {
+   "transformer.single_transformer_blocks.0.attn.to_k.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.single_transformer_blocks.0.attn.to_q.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.single_transformer_blocks.0.attn.to_v.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.single_transformer_blocks.1.attn.to_k.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.single_transformer_blocks.1.attn.to_q.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.single_transformer_blocks.1.attn.to_v.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.0.attn.add_k_proj.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.add_q_proj.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.add_v_proj.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.to_add_out.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.to_k.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.to_out.0.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.0.attn.to_v.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.0.ff.net.0.proj.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.0.ff_context.net.0.proj.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.1.attn.add_k_proj.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.1.attn.add_q_proj.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.1.attn.add_v_proj.lora_A.weight": [
+    16,
+    3072
+   ],
+   "transformer.transformer_blocks.1.attn.to_add_out.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.1.attn.to_k.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.1.attn.to_out.0.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.1.attn.to_q.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.1.attn.to_v.lora_B.weight": [
+    3072,
+    16
+   ],
+   "transformer.transformer_blocks.1.ff.net.0.proj.lora_B.weight": [
+    12288,
+    16
+   ]
+  }
+ },
+ {
+  "name": "flux_lora_kohya_diffusers_names",
+  "note": "lora_transformer_single_transformer_blocks_*",
+  "source": "recorded",
+  "family": "Flux",
+  "tensors": {
+   "lora_te1_text_model_encoder_layers_0_mlp_fc1.alpha": [],
+   "lora_te1_text_model_encoder_layers_0_self_attn_k_proj.lora_down.weight": [
+    16,
+    768
+   ],
+   "lora_te1_text_model_encoder_layers_0_self_attn_q_proj.lora_up.weight": [
+    768,
+    16
+   ],
+   "lora_te1_text_model_encoder_layers_1_mlp_fc2.alpha": [],
+   "lora_te1_text_model_encoder_layers_1_self_attn_out_proj.lora_down.weight": [
+    16,
+    768
+   ],
+   "lora_te1_text_model_encoder_layers_1_self_attn_v_proj.lora_up.weight": [
+    768,
+    16
+   ],
+   "lora_transformer_single_transformer_blocks_0_attn_to_v.alpha": [],
+   "lora_transformer_single_transformer_blocks_1_attn_to_q.lora_down.weight": [
+    16,
+    3072
+   ],
+   "lora_transformer_transformer_blocks_0_attn_add_k_proj.lora_up.weight": [
+    3072,
+    16
+   ],
+   "lora_transformer_transformer_blocks_0_attn_to_add_out.alpha": [],
+   "lora_transformer_transformer_blocks_0_attn_to_out_0.lora_down.weight": [
+    16,
+    3072
+   ],
+   "lora_transformer_transformer_blocks_0_attn_to_v.lora_up.weight": [
+    3072,
+    16
+   ],
+   "lora_transformer_transformer_blocks_1_attn_add_v_proj.alpha": [],
+   "lora_transformer_transformer_blocks_1_attn_to_k.lora_down.weight": [
+    16,
+    3072
+   ],
+   "lora_transformer_transformer_blocks_1_attn_to_q.lora_up.weight": [
+    3072,
+    16
+   ],
+   "lora_unet_double_blocks_0_img_attn_qkv.alpha": [],
+   "lora_unet_double_blocks_0_img_mod_lin.lora_down.weight": [
+    16,
+    3072
+   ],
+   "lora_unet_double_blocks_0_txt_attn_qkv.lora_up.weight": [
+    9216,
+    16
+   ],
+   "lora_unet_double_blocks_1_img_attn_proj.alpha": [],
+   "lora_unet_double_blocks_1_img_mlp_0.lora_down.weight": [
+    16,
+    3072
+   ],
+   "lora_unet_double_blocks_1_txt_attn_proj.lora_up.weight": [
+    3072,
+    16
+   ],
+   "lora_unet_double_blocks_1_txt_mod_lin.alpha": [],
+   "lora_unet_single_blocks_0_linear2.lora_down.weight": [
+    16,
+    15360
+   ],
+   "lora_unet_single_blocks_1_linear1.lora_up.weight": [
+    21504,
+    16
+   ]
+  }
+ },
+ {
+  "name": "flux_control_lora",
+  "note": "Flux control LoRA (diffusion_model.)",
+  "source": "recorded",
+  "family": "Flux",
+  "tensors": {
+   "double_blocks.0.img_attn.norm.key_norm.scale": [
+    128
+   ],
+   "double_blocks.0.img_attn.proj.lora_B.weight": [
+    3072,
+    128
+   ],
+   "double_blocks.0.img_mlp.0.lora_B.bias": [
+    12288
+   ],
+   "double_blocks.0.img_mod.lin.lora_B.weight": [
+    18432,
+    128
+   ],
+   "double_blocks.0.txt_attn.proj.lora_B.weight": [
+    3072,
+    128
+   ],
+   "double_blocks.0.txt_mlp.0.lora_A.weight": [
+    128,
+    3072
+   ],
+   "double_blocks.0.txt_mod.lin.lora_B.weight": [
+    18432,
+    128
+   ],
+   "double_blocks.1.img_attn.proj.lora_B.bias": [
+    3072
+   ],
+   "double_blocks.1.img_mlp.0.lora_A.weight": [
+    128,
+    3072
+   ],
+   "double_blocks.1.img_mod.lin.lora_B.bias": [
+    18432
+   ],
+   "double_blocks.1.txt_attn.proj.lora_B.bias": [
+    3072
+   ],
+   "double_blocks.1.txt_attn.qkv.lora_B.weight": [
+    9216,
+    128
+   ],
+   "double_blocks.1.txt_mod.lin.lora_B.bias": [
+    18432
+   ],
+   "final_layer.adaLN_modulation.1.lora_B.weight": [
+    6144,
+    128
+   ],
+   "guidance_in.in_layer.lora_B.bias": [
+    3072
+   ],
+   "guidance_in.out_layer.lora_B.weight": [
+    3072,
+    128
+   ],
+   "single_blocks.0.linear1.lora_B.bias": [
+    21504
+   ],
+   "single_blocks.0.linear2.lora_B.weight": [
+    3072,
+    128
+   ],
+   "single_blocks.0.norm.query_norm.scale": [
+    128
+   ],
+   "single_blocks.1.linear2.lora_A.weight": [
+    128,
+    15360
+   ],
+   "single_blocks.1.modulation.lin.lora_B.weight": [
+    9216,
+    128
+   ],
+   "time_in.in_layer.lora_B.bias": [
+    3072
+   ],
+   "txt_in.lora_A.weight": [
+    128,
+    4096
+   ],
+   "vector_in.in_layer.lora_B.bias": [
+    3072
+   ]
+  }
+ },
+ {
+  "name": "flux2_klein_checkpoint",
+  "note": "Flux.2 klein 9B, fp8",
+  "source": "recorded",
+  "family": "Flux.2",
+  "tensors": {
+   "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.0.img_attn.norm.query_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.0.img_attn.qkv.weight": [
+    12288,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.0.img_mlp.0.weight": [
+    24576,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.0.txt_attn.norm.query_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.0.txt_attn.proj.weight": [
+    4096,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.0.txt_mlp.0.weight": [
+    24576,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.1.img_attn.norm.key_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.1.img_attn.proj.weight": [
+    4096,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.1.img_attn.qkv.weight": [
+    12288,
+    4096
+   ],
+   "model.diffusion_model.double_blocks.1.txt_attn.norm.key_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.1.txt_attn.norm.query_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.double_blocks.1.txt_attn.qkv.weight": [
+    12288,
+    4096
+   ],
+   "model.diffusion_model.double_stream_modulation_img.lin.weight": [
+    24576,
+    4096
+   ],
+   "model.diffusion_model.double_stream_modulation_txt.lin.weight": [
+    24576,
+    4096
+   ],
+   "model.diffusion_model.final_layer.linear.weight": [
+    128,
+    4096
+   ],
+   "model.diffusion_model.img_in.weight": [
+    4096,
+    128
+   ],
+   "model.diffusion_model.single_blocks.0.linear2.weight": [
+    4096,
+    16384
+   ],
+   "model.diffusion_model.single_blocks.0.norm.key_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.single_blocks.1.linear1.weight": [
+    36864,
+    4096
+   ],
+   "model.diffusion_model.single_blocks.1.linear2.weight": [
+    4096,
+    16384
+   ],
+   "model.diffusion_model.single_blocks.1.norm.query_norm.scale": [
+    128
+   ],
+   "model.diffusion_model.single_stream_modulation.lin.weight": [
+    12288,
+    4096
+   ],
+   "model.diffusion_model.time_in.out_layer.weight": [
+    4096,
+    4096
+   ]
+  }
+ },
+ {
+  "name": "flux2_lora_peft",
+  "note": "Flux.2 dev LoRA, base_model.model.",
+  "source": "recorded",
+  "family": "Flux.2",
+  "tensors": {
+   "base_model.model.double_blocks.0.img_attn.proj.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.double_blocks.0.img_attn.proj.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.double_blocks.0.img_attn.qkv.lora_B.weight": [
+    18432,
+    16
+   ],
+   "base_model.model.double_blocks.0.txt_attn.proj.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.double_blocks.0.txt_attn.qkv.lora_B.weight": [
+    18432,
+    16
+   ],
+   "base_model.model.double_blocks.1.img_attn.proj.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.double_blocks.1.img_attn.qkv.lora_B.weight": [
+    18432,
+    16
+   ],
+   "base_model.model.double_blocks.1.txt_attn.proj.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.double_blocks.1.txt_attn.qkv.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.double_stream_modulation_img.lin.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.double_stream_modulation_txt.lin.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.final_layer.linear.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.guidance_in.in_layer.lora_A.weight": [
+    16,
+    256
+   ],
+   "base_model.model.guidance_in.in_layer.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.guidance_in.out_layer.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.img_in.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.single_blocks.0.linear1.lora_B.weight": [
+    55296,
+    16
+   ],
+   "base_model.model.single_blocks.0.linear2.lora_B.weight": [
+    6144,
+    16
+   ],
+   "base_model.model.single_blocks.1.linear1.lora_B.weight": [
+    55296,
+    16
+   ],
+   "base_model.model.single_blocks.1.linear2.lora_A.weight": [
+    16,
+    24576
+   ],
+   "base_model.model.single_stream_modulation.lin.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.time_in.in_layer.lora_A.weight": [
+    16,
+    256
+   ],
+   "base_model.model.time_in.out_layer.lora_A.weight": [
+    16,
+    6144
+   ],
+   "base_model.model.txt_in.lora_A.weight": [
+    16,
+    15360
+   ]
+  }
+ },
+ {
+  "name": "krea2_unet_int8",
+  "note": "Krea 2, int8 comfy_quant",
+  "source": "recorded",
+  "family": "Krea 2",
+  "tensors": {
+   "blocks.0.attn.gate.comfy_quant": [
+    72
+   ],
+   "blocks.0.attn.wk.comfy_quant": [
+    72
+   ],
+   "blocks.0.attn.wo.weight_scale": [
+    6144,
+    1
+   ],
+   "blocks.0.attn.wv.weight": [
+    1536,
+    6144
+   ],
+   "blocks.0.mlp.gate.comfy_quant": [
+    72
+   ],
+   "blocks.0.mlp.up.weight_scale": [
+    16384,
+    1
+   ],
+   "blocks.1.attn.gate.weight": [
+    6144,
+    6144
+   ],
+   "blocks.1.attn.wk.weight": [
+    1536,
+    6144
+   ],
+   "blocks.1.attn.wq.comfy_quant": [
+    72
+   ],
+   "blocks.1.attn.wv.weight_scale": [
+    1536,
+    1
+   ],
+   "blocks.1.mlp.gate.weight": [
+    16384,
+    6144
+   ],
+   "blocks.1.mod.lin": [
+    36864
+   ],
+   "last.linear.bias": [
+    64
+   ],
+   "tmlp.0.weight": [
+    6144,
+    256
+   ],
+   "txtfusion.layerwise_blocks.0.attn.qknorm.qnorm.scale": [
+    128
+   ],
+   "txtfusion.layerwise_blocks.0.mlp.down.weight": [
+    2560,
+    6912
+   ],
+   "txtfusion.layerwise_blocks.1.attn.gate.weight": [
+    2560,
+    2560
+   ],
+   "txtfusion.layerwise_blocks.1.attn.wq.weight": [
+    2560,
+    2560
+   ],
+   "txtfusion.layerwise_blocks.1.postnorm.scale": [
+    2560
+   ],
+   "txtfusion.refiner_blocks.0.attn.qknorm.qnorm.scale": [
+    128
+   ],
+   "txtfusion.refiner_blocks.0.mlp.down.weight": [
+    2560,
+    6912
+   ],
+   "txtfusion.refiner_blocks.1.attn.gate.weight": [
+    2560,
+    2560
+   ],
+   "txtfusion.refiner_blocks.1.attn.wq.weight": [
+    2560,
+    2560
+   ],
+   "txtfusion.refiner_blocks.1.postnorm.scale": [
+    2560
+   ]
+  }
+ },
+ {
+  "name": "krea2_lora_kohya",
+  "note": "kohya Krea 2 LoRA",
+  "source": "recorded",
+  "family": "Krea 2",
+  "tensors": {
+   "lora_unet_blocks_0_attn_gate.alpha": [],
+   "lora_unet_blocks_0_attn_wo.alpha": [],
+   "lora_unet_blocks_0_attn_wv.lora_down.weight": [
+    32,
+    6144
+   ],
+   "lora_unet_blocks_0_mlp_gate.lora_up.weight": [
+    16384,
+    32
+   ],
+   "lora_unet_blocks_1_attn_wk.alpha": [],
+   "lora_unet_blocks_1_attn_wq.alpha": [],
+   "lora_unet_blocks_1_mlp_down.lora_down.weight": [
+    32,
+    16384
+   ],
+   "lora_unet_blocks_1_mlp_up.lora_up.weight": [
+    16384,
+    32
+   ],
+   "lora_unet_tmlp_0.alpha": [],
+   "lora_unet_txtfusion_layerwise_blocks_0_attn_gate.alpha": [],
+   "lora_unet_txtfusion_layerwise_blocks_0_attn_wo.lora_down.weight": [
+    32,
+    2560
+   ],
+   "lora_unet_txtfusion_layerwise_blocks_0_attn_wv.lora_up.weight": [
+    2560,
+    32
+   ],
+   "lora_unet_txtfusion_layerwise_blocks_0_mlp_up.alpha": [],
+   "lora_unet_txtfusion_layerwise_blocks_1_attn_wk.alpha": [],
+   "lora_unet_txtfusion_layerwise_blocks_1_attn_wq.lora_down.weight": [
+    32,
+    2560
+   ],
+   "lora_unet_txtfusion_layerwise_blocks_1_mlp_down.lora_up.weight": [
+    2560,
+    32
+   ],
+   "lora_unet_txtfusion_projector.alpha": [],
+   "lora_unet_txtfusion_refiner_blocks_0_attn_wk.alpha": [],
+   "lora_unet_txtfusion_refiner_blocks_0_attn_wq.lora_down.weight": [
+    32,
+    2560
+   ],
+   "lora_unet_txtfusion_refiner_blocks_0_mlp_down.lora_up.weight": [
+    2560,
+    32
+   ],
+   "lora_unet_txtfusion_refiner_blocks_1_attn_gate.alpha": [],
+   "lora_unet_txtfusion_refiner_blocks_1_attn_wo.alpha": [],
+   "lora_unet_txtfusion_refiner_blocks_1_attn_wv.lora_down.weight": [
+    32,
+    2560
+   ],
+   "lora_unet_txtfusion_refiner_blocks_1_mlp_gate.lora_up.weight": [
+    6912,
+    32
+   ]
+  }
+ },
+ {
+  "name": "krea2_lokr",
+  "note": "LoKr on Krea 2 (no LoRA dims to read)",
+  "source": "recorded",
+  "family": "Krea 2",
+  "tensors": {
+   "diffusion_model.blocks.0.attn.gate.alpha": [],
+   "diffusion_model.blocks.0.attn.wo.alpha": [],
+   "diffusion_model.blocks.0.attn.wv.alpha": [],
+   "diffusion_model.blocks.0.mlp.gate.alpha": [],
+   "diffusion_model.blocks.1.attn.gate.alpha": [],
+   "diffusion_model.blocks.1.attn.wo.alpha": [],
+   "diffusion_model.blocks.1.attn.wv.alpha": [],
+   "diffusion_model.blocks.1.mlp.gate.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.0.attn.gate.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.0.attn.wo.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.0.attn.wv.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.0.mlp.gate.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.1.attn.gate.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.1.attn.wo.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.1.attn.wv.alpha": [],
+   "diffusion_model.txtfusion.layerwise_blocks.1.mlp.gate.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.0.attn.gate.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.0.attn.wo.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.0.attn.wv.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.0.mlp.gate.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.1.attn.gate.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.1.attn.wo.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.1.attn.wv.alpha": [],
+   "diffusion_model.txtfusion.refiner_blocks.1.mlp.gate.alpha": []
+  }
+ },
+ {
+  "name": "minimax_h3_unet",
+  "note": "MiniMax H3 audio+video",
+  "source": "recorded",
+  "family": "MiniMax H3",
+  "tensors": {
+   "adaln_t_table": [
+    1025,
+    8
+   ],
+   "audio_patch_proj.weight": [
+    5376,
+    32
+   ],
+   "blocks.0.attn.k_norm.weight": [
+    128
+   ],
+   "blocks.0.attn.out_proj.weight_scale": [
+    5376,
+    1
+   ],
+   "blocks.0.attn.qkv_proj.weight": [
+    21504,
+    5376
+   ],
+   "blocks.0.mlp.fc1.weight": [
+    28672,
+    5376
+   ],
+   "blocks.0.mlp.fc2.weight": [
+    5376,
+    14336
+   ],
+   "blocks.0.norm1.weight": [
+    5376
+   ],
+   "blocks.1.adaln_proj.linear.weight": [
+    96768,
+    8
+   ],
+   "blocks.1.attn.out_proj.weight": [
+    5376,
+    7168
+   ],
+   "blocks.1.attn.qkv_proj.comfy_quant": [
+    72
+   ],
+   "blocks.1.mlp.fc1.comfy_quant": [
+    72
+   ],
+   "blocks.1.mlp.fc2.comfy_quant": [
+    72
+   ],
+   "blocks.1.mlp.fc2.weight_scale": [
+    5376,
+    1
+   ],
+   "condition_proj.bias": [
+    5376
+   ],
+   "final_layer.adaln_proj.linear.weight": [
+    10752,
+    8
+   ],
+   "final_layer.norm.weight": [
+    5376
+   ],
+   "rope.inv_freq": [
+    16
+   ],
+   "token_refiner.blocks.0.attn.q_norm.weight": [
+    128
+   ],
+   "token_refiner.blocks.0.mlp.fc1.weight": [
+    28672,
+    5376
+   ],
+   "token_refiner.blocks.0.norm2.weight": [
+    5376
+   ],
+   "token_refiner.blocks.1.attn.q_norm.weight": [
+    128
+   ],
+   "token_refiner.blocks.1.mlp.fc2.weight": [
+    5376,
+    14336
+   ],
+   "token_refiner.final_norm.weight": [
+    5376
+   ]
+  }
+ },
+ {
+  "name": "minimax_h3_lora_mlp_only",
+  "note": "MiniMax H3 LoRA on mlp.fc1/fc2 only",
+  "source": "recorded",
+  "family": "MiniMax H3",
+  "tensors": {
+   "diffusion_model.blocks.0.mlp.fc1.lora_A.weight": [
+    16,
+    5376
+   ],
+   "diffusion_model.blocks.0.mlp.fc1.lora_B.weight": [
+    28672,
+    16
+   ],
+   "diffusion_model.blocks.0.mlp.fc2.lora_A.weight": [
+    16,
+    14336
+   ],
+   "diffusion_model.blocks.0.mlp.fc2.lora_B.weight": [
+    5376,
+    16
+   ],
+   "diffusion_model.blocks.1.mlp.fc1.lora_A.weight": [
+    16,
+    5376
+   ],
+   "diffusion_model.blocks.1.mlp.fc1.lora_B.weight": [
+    28672,
+    16
+   ],
+   "diffusion_model.blocks.1.mlp.fc2.lora_A.weight": [
+    16,
+    14336
+   ],
+   "diffusion_model.blocks.1.mlp.fc2.lora_B.weight": [
+    5376,
+    16
+   ]
+  }
+ },
+ {
+  "name": "minimax_h3_lora_kohya",
+  "note": "kohya MiniMax H3 LoRA",
+  "source": "recorded",
+  "family": "MiniMax H3",
+  "tensors": {
+   "lora_unet_blocks_0_attn_out_proj.alpha": [],
+   "lora_unet_blocks_0_attn_out_proj.lora_down.weight": [
+    16,
+    7168
+   ],
+   "lora_unet_blocks_0_attn_out_proj.lora_up.weight": [
+    5376,
+    16
+   ],
+   "lora_unet_blocks_0_attn_qkv_proj.alpha": [],
+   "lora_unet_blocks_0_attn_qkv_proj.lora_down.weight": [
+    16,
+    5376
+   ],
+   "lora_unet_blocks_0_attn_qkv_proj.lora_up.weight": [
+    21504,
+    16
+   ],
+   "lora_unet_blocks_0_mlp_fc1.alpha": [],
+   "lora_unet_blocks_0_mlp_fc1.lora_down.weight": [
+    16,
+    5376
+   ],
+   "lora_unet_blocks_0_mlp_fc1.lora_up.weight": [
+    28672,
+    16
+   ],
+   "lora_unet_blocks_0_mlp_fc2.alpha": [],
+   "lora_unet_blocks_0_mlp_fc2.lora_down.weight": [
+    16,
+    14336
+   ],
+   "lora_unet_blocks_0_mlp_fc2.lora_up.weight": [
+    5376,
+    16
+   ],
+   "lora_unet_blocks_1_attn_out_proj.alpha": [],
+   "lora_unet_blocks_1_attn_out_proj.lora_down.weight": [
+    16,
+    7168
+   ],
+   "lora_unet_blocks_1_attn_out_proj.lora_up.weight": [
+    5376,
+    16
+   ],
+   "lora_unet_blocks_1_attn_qkv_proj.alpha": [],
+   "lora_unet_blocks_1_attn_qkv_proj.lora_down.weight": [
+    16,
+    5376
+   ],
+   "lora_unet_blocks_1_attn_qkv_proj.lora_up.weight": [
+    21504,
+    16
+   ],
+   "lora_unet_blocks_1_mlp_fc1.alpha": [],
+   "lora_unet_blocks_1_mlp_fc1.lora_down.weight": [
+    16,
+    5376
+   ],
+   "lora_unet_blocks_1_mlp_fc1.lora_up.weight": [
+    28672,
+    16
+   ],
+   "lora_unet_blocks_1_mlp_fc2.alpha": [],
+   "lora_unet_blocks_1_mlp_fc2.lora_down.weight": [
+    16,
+    14336
+   ],
+   "lora_unet_blocks_1_mlp_fc2.lora_up.weight": [
+    5376,
+    16
+   ]
+  }
+ },
+ {
+  "name": "minimax_music_unet",
+  "note": "MiniMax Music DiT",
+  "source": "recorded",
+  "family": "MiniMax Music",
+  "tensors": {
+   "cond_layer_logits": [
+    8
+   ],
+   "cond_layer_scale": [
+    1
+   ],
+   "diffusion_transformer.postprocess_conv.weight": [
+    128,
+    128,
+    1
+   ],
+   "diffusion_transformer.preprocess_conv.weight": [
+    2304,
+    2304,
+    1
+   ],
+   "diffusion_transformer.timestep_features.weight": [
+    128,
+    1
+   ],
+   "diffusion_transformer.to_timestep_embed.0.bias": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.ff.ff.0.proj.bias": [
+    16384
+   ],
+   "diffusion_transformer.transformer.layers.0.ff.ff.0.proj.weight": [
+    16384,
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.ff_norm.beta": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.ff_norm.gamma": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.pre_norm.beta": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.pre_norm.gamma": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.0.self_attn.to_qkv.weight": [
+    6144,
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.ff.ff.0.proj.bias": [
+    16384
+   ],
+   "diffusion_transformer.transformer.layers.1.ff.ff.0.proj.weight": [
+    16384,
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.ff_norm.beta": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.ff_norm.gamma": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.pre_norm.beta": [
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.self_attn.to_out.weight": [
+    2048,
+    2048
+   ],
+   "diffusion_transformer.transformer.layers.1.self_attn.to_qkv.weight": [
+    6144,
+    2048
+   ],
+   "diffusion_transformer.transformer.project_in.weight": [
+    2048,
+    2304
+   ],
+   "diffusion_transformer.transformer.project_out.weight": [
+    128,
+    2048
+   ],
+   "diffusion_transformer.transformer.rotary_pos_emb.inv_freq": [
+    16
+   ],
+   "latent_conditioners.0.bias": [
+    2048
+   ]
+  }
+ },
+ {
+  "name": "qwen_image_lora",
+  "note": "Qwen-Image LoRA, diffusion_model.",
+  "source": "recorded",
+  "family": "Qwen-Image",
+  "tensors": {
+   "diffusion_model.transformer_blocks.0.attn.add_k_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.add_q_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.add_v_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_add_out.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_k.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_out.0.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_q.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_v.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.img_mlp.net.0.proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.img_mod.1.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.txt_mlp.net.0.proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.0.txt_mod.1.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.add_k_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.add_q_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.add_v_proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_add_out.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_k.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_out.0.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_q.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_v.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.img_mlp.net.0.proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.img_mod.1.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.txt_mlp.net.0.proj.lora_A.weight": [
+    32,
+    3072
+   ],
+   "diffusion_model.transformer_blocks.1.txt_mod.1.lora_A.weight": [
+    32,
+    3072
+   ]
+  }
+ },
+ {
+  "name": "qwen_image_lokr",
+  "note": "LyCORIS LoKr, lycoris_ prefix",
+  "source": "recorded",
+  "family": "Qwen-Image",
+  "tensors": {
+   "lycoris_transformer_blocks_0_attn_add_k_proj.alpha": [],
+   "lycoris_transformer_blocks_0_attn_add_k_proj.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_0_attn_add_q_proj.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_0_attn_add_v_proj.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_0_attn_to_add_out.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_0_attn_to_k.alpha": [],
+   "lycoris_transformer_blocks_0_attn_to_out_0.alpha": [],
+   "lycoris_transformer_blocks_0_attn_to_out_0.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_0_attn_to_q.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_0_attn_to_v.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_0_img_mod_1.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_0_txt_mod_1.alpha": [],
+   "lycoris_transformer_blocks_1_attn_add_k_proj.alpha": [],
+   "lycoris_transformer_blocks_1_attn_add_k_proj.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_1_attn_add_q_proj.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_1_attn_add_v_proj.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_1_attn_to_add_out.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_1_attn_to_k.alpha": [],
+   "lycoris_transformer_blocks_1_attn_to_out_0.alpha": [],
+   "lycoris_transformer_blocks_1_attn_to_out_0.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_1_attn_to_q.lokr_w2": [
+    512,
+    512
+   ],
+   "lycoris_transformer_blocks_1_attn_to_v.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_1_img_mod_1.lokr_w1": [
+    6,
+    6
+   ],
+   "lycoris_transformer_blocks_1_txt_mod_1.alpha": []
+  }
+ },
+ {
+  "name": "qwen_image_lora_peft",
+  "note": "peft lora_A.default",
+  "source": "recorded",
+  "family": "Qwen-Image",
+  "tensors": {
+   "transformer_blocks.0.attn.add_k_proj.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.0.attn.add_k_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.attn.add_q_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.attn.add_v_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.attn.to_add_out.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.0.attn.to_k.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.0.attn.to_out.0.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.0.attn.to_out.0.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.attn.to_q.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.attn.to_v.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.0.img_mod.1.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.0.txt_mod.1.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.attn.add_k_proj.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.attn.add_k_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.attn.add_q_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.attn.add_v_proj.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.attn.to_add_out.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.attn.to_k.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.attn.to_out.0.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.attn.to_out.0.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.attn.to_q.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.attn.to_v.lora_B.default.weight": [
+    3072,
+    32
+   ],
+   "transformer_blocks.1.img_mod.1.lora_A.default.weight": [
+    32,
+    3072
+   ],
+   "transformer_blocks.1.txt_mod.1.lora_A.default.weight": [
+    32,
+    3072
+   ]
+  }
+ },
+ {
+  "name": "qwen_image2_lora",
+  "note": "Qwen-Image 2.x LoRA (gate_up MLP)",
+  "source": "recorded",
+  "family": "Qwen-Image 2",
+  "tensors": {
+   "diffusion_model.transformer_blocks.0.attn.to_k.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_k.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_out.0.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_out.0.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_q.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_q.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_v.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.0.attn.to_v.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.0.img_mlp.gate_up.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.0.img_mlp.gate_up.lora_B.weight": [
+    24576,
+    16
+   ],
+   "diffusion_model.transformer_blocks.0.img_mlp.out.lora_A.weight": [
+    16,
+    12288
+   ],
+   "diffusion_model.transformer_blocks.0.img_mlp.out.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_k.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_k.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_out.0.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_out.0.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_q.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_q.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_v.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.1.attn.to_v.lora_B.weight": [
+    4096,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.img_mlp.gate_up.lora_A.weight": [
+    16,
+    4096
+   ],
+   "diffusion_model.transformer_blocks.1.img_mlp.gate_up.lora_B.weight": [
+    24576,
+    16
+   ],
+   "diffusion_model.transformer_blocks.1.img_mlp.out.lora_A.weight": [
+    16,
+    12288
+   ],
+   "diffusion_model.transformer_blocks.1.img_mlp.out.lora_B.weight": [
+    4096,
+    16
+   ]
+  }
+ },
+ {
+  "name": "zimage_checkpoint",
+  "note": "Z-Image Turbo merged checkpoint",
+  "source": "recorded",
+  "family": "Z-Image",
+  "tensors": {
+   "model.diffusion_model.cap_embedder.0.weight": [
+    2560
+   ],
+   "model.diffusion_model.cap_pad_token": [
+    1,
+    3840
+   ],
+   "model.diffusion_model.context_refiner.0.attention.qkv.weight": [
+    11520,
+    3840
+   ],
+   "model.diffusion_model.context_refiner.0.feed_forward.w1.weight": [
+    10240,
+    3840
+   ],
+   "model.diffusion_model.context_refiner.0.ffn_norm2.weight": [
+    3840
+   ],
+   "model.diffusion_model.context_refiner.1.attention.qkv.weight": [
+    11520,
+    3840
+   ],
+   "model.diffusion_model.context_refiner.1.feed_forward.w1.weight": [
+    10240,
+    3840
+   ],
+   "model.diffusion_model.context_refiner.1.ffn_norm2.weight": [
+    3840
+   ],
+   "model.diffusion_model.final_layer.linear.weight": [
+    64,
+    3840
+   ],
+   "model.diffusion_model.layers.0.attention.k_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.layers.0.attention_norm1.weight": [
+    3840
+   ],
+   "model.diffusion_model.layers.0.feed_forward.w2.weight": [
+    3840,
+    10240
+   ],
+   "model.diffusion_model.layers.1.adaLN_modulation.0.bias": [
+    15360
+   ],
+   "model.diffusion_model.layers.1.attention.q_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.layers.1.attention_norm2.weight": [
+    3840
+   ],
+   "model.diffusion_model.layers.1.ffn_norm1.weight": [
+    3840
+   ],
+   "model.diffusion_model.noise_refiner.0.attention.k_norm.weight": [
+    128
+   ],
+   "model.diffusion_model.noise_refiner.0.attention.qkv.weight": [
+    11520,
+    3840
+   ],
+   "model.diffusion_model.noise_refiner.0.feed_forward.w2.weight": [
+    3840,
+    10240
+   ],
+   "model.diffusion_model.noise_refiner.0.ffn_norm2.weight": [
+    3840
+   ],
+   "model.diffusion_model.noise_refiner.1.attention.out.weight": [
+    3840,
+    3840
+   ],
+   "model.diffusion_model.noise_refiner.1.attention_norm2.weight": [
+    3840
+   ],
+   "model.diffusion_model.noise_refiner.1.feed_forward.w3.weight": [
+    10240,
+    3840
+   ],
+   "model.diffusion_model.t_embedder.mlp.0.weight": [
+    1024,
+    256
+   ]
+  }
+ },
+ {
+  "name": "zimage_lora",
+  "note": "Z-Image LoRA, attention.to_q/k/v",
+  "source": "recorded",
+  "family": "Z-Image",
+  "tensors": {
+   "diffusion_model.layers.0.adaLN_modulation.0.lora_A.weight": [
+    4,
+    256
+   ],
+   "diffusion_model.layers.0.adaLN_modulation.0.lora_B.weight": [
+    15360,
+    4
+   ],
+   "diffusion_model.layers.0.attention.to_k.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.0.attention.to_out.0.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.0.attention.to_out.0.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.0.attention.to_q.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.0.attention.to_v.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.0.attention.to_v.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.0.feed_forward.w1.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.0.feed_forward.w2.lora_A.weight": [
+    4,
+    10240
+   ],
+   "diffusion_model.layers.0.feed_forward.w2.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.0.feed_forward.w3.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.adaLN_modulation.0.lora_A.weight": [
+    4,
+    256
+   ],
+   "diffusion_model.layers.1.adaLN_modulation.0.lora_B.weight": [
+    15360,
+    4
+   ],
+   "diffusion_model.layers.1.attention.to_k.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.attention.to_out.0.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.attention.to_out.0.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.1.attention.to_q.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.attention.to_v.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.attention.to_v.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.1.feed_forward.w1.lora_A.weight": [
+    4,
+    3840
+   ],
+   "diffusion_model.layers.1.feed_forward.w2.lora_A.weight": [
+    4,
+    10240
+   ],
+   "diffusion_model.layers.1.feed_forward.w2.lora_B.weight": [
+    3840,
+    4
+   ],
+   "diffusion_model.layers.1.feed_forward.w3.lora_A.weight": [
+    4,
+    3840
+   ]
+  }
+ },
+ {
+  "name": "zimage_lora_refiners",
+  "note": "Z-Image LoRA on the refiners",
+  "source": "recorded",
+  "family": "Z-Image",
+  "tensors": {
+   "diffusion_model.context_refiner.0.attention.out.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.context_refiner.0.attention.qkv.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.context_refiner.0.feed_forward.w1.lora_B.weight": [
+    10240,
+    32
+   ],
+   "diffusion_model.context_refiner.0.feed_forward.w3.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.context_refiner.1.attention.out.lora_B.weight": [
+    3840,
+    32
+   ],
+   "diffusion_model.context_refiner.1.feed_forward.w1.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.context_refiner.1.feed_forward.w2.lora_B.weight": [
+    3840,
+    32
+   ],
+   "diffusion_model.context_refiner.1.feed_forward.w3.lora_B.weight": [
+    10240,
+    32
+   ],
+   "diffusion_model.layers.0.attention.out.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.layers.0.attention.qkv.lora_B.weight": [
+    11520,
+    32
+   ],
+   "diffusion_model.layers.0.feed_forward.w2.lora_A.weight": [
+    32,
+    10240
+   ],
+   "diffusion_model.layers.0.feed_forward.w3.lora_B.weight": [
+    10240,
+    32
+   ],
+   "diffusion_model.layers.1.attention.out.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.layers.1.attention.qkv.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.layers.1.feed_forward.w1.lora_B.weight": [
+    10240,
+    32
+   ],
+   "diffusion_model.layers.1.feed_forward.w3.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.noise_refiner.0.adaLN_modulation.0.lora_B.weight": [
+    15360,
+    32
+   ],
+   "diffusion_model.noise_refiner.0.attention.qkv.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.noise_refiner.0.feed_forward.w1.lora_B.weight": [
+    10240,
+    32
+   ],
+   "diffusion_model.noise_refiner.0.feed_forward.w2.lora_B.weight": [
+    3840,
+    32
+   ],
+   "diffusion_model.noise_refiner.1.adaLN_modulation.0.lora_A.weight": [
+    32,
+    256
+   ],
+   "diffusion_model.noise_refiner.1.attention.out.lora_B.weight": [
+    3840,
+    32
+   ],
+   "diffusion_model.noise_refiner.1.feed_forward.w1.lora_A.weight": [
+    32,
+    3840
+   ],
+   "diffusion_model.noise_refiner.1.feed_forward.w2.lora_B.weight": [
+    3840,
+    32
+   ]
+  }
+ },
+ {
+  "name": "zimage_controlnet",
+  "note": "Z-Image Fun ControlNet",
+  "source": "recorded",
+  "family": "Z-Image",
+  "tensors": {
+   "control_all_x_embedder.2-1.bias": [
+    3840
+   ],
+   "control_layers.0.adaLN_modulation.0.bias": [
+    15360
+   ],
+   "control_layers.0.after_proj.weight": [
+    3840,
+    3840
+   ],
+   "control_layers.0.attention.to_k.weight": [
+    3840,
+    3840
+   ],
+   "control_layers.0.attention.to_v.weight": [
+    3840,
+    3840
+   ],
+   "control_layers.0.before_proj.bias": [
+    3840
+   ],
+   "control_layers.0.feed_forward.w2.weight": [
+    3840,
+    10240
+   ],
+   "control_layers.0.ffn_norm1.weight": [
+    3840
+   ],
+   "control_layers.1.adaLN_modulation.0.weight": [
+    15360,
+    256
+   ],
+   "control_layers.1.attention.norm_k.weight": [
+    128
+   ],
+   "control_layers.1.attention.to_out.0.weight": [
+    3840,
+    3840
+   ],
+   "control_layers.1.attention_norm1.weight": [
+    3840
+   ],
+   "control_layers.1.feed_forward.w2.weight": [
+    3840,
+    10240
+   ],
+   "control_layers.1.ffn_norm1.weight": [
+    3840
+   ],
+   "control_noise_refiner.0.adaLN_modulation.0.weight": [
+    15360,
+    256
+   ],
+   "control_noise_refiner.0.attention.to_k.weight": [
+    3840,
+    3840
+   ],
+   "control_noise_refiner.0.attention.to_v.weight": [
+    3840,
+    3840
+   ],
+   "control_noise_refiner.0.feed_forward.w1.weight": [
+    10240,
+    3840
+   ],
+   "control_noise_refiner.0.ffn_norm1.weight": [
+    3840
+   ],
+   "control_noise_refiner.1.adaLN_modulation.0.bias": [
+    15360
+   ],
+   "control_noise_refiner.1.attention.norm_q.weight": [
+    128
+   ],
+   "control_noise_refiner.1.attention.to_q.weight": [
+    3840,
+    3840
+   ],
+   "control_noise_refiner.1.attention_norm2.weight": [
+    3840
+   ],
+   "control_noise_refiner.1.feed_forward.w3.weight": [
+    10240,
+    3840
+   ]
+  }
+ },
+ {
+  "name": "lumina_unet",
+  "note": "Lumina-architecture DiT, width 2304",
+  "source": "recorded",
+  "family": "Lumina",
+  "tensors": {
+   "cap_embedder.0.weight": [
+    2560
+   ],
+   "clip_text_pooled_proj.0.weight": [
+    1024
+   ],
+   "context_refiner.0.attention.out.weight": [
+    2304,
+    2304
+   ],
+   "context_refiner.0.attention_norm2.weight": [
+    2304
+   ],
+   "context_refiner.0.ffn_norm1.weight": [
+    2304
+   ],
+   "context_refiner.1.attention.out.weight": [
+    2304,
+    2304
+   ],
+   "context_refiner.1.attention_norm2.weight": [
+    2304
+   ],
+   "context_refiner.1.ffn_norm1.weight": [
+    2304
+   ],
+   "final_layer.linear.bias": [
+    64
+   ],
+   "layers.0.attention.k_norm.weight": [
+    96
+   ],
+   "layers.0.attention.qkv.weight": [
+    3840,
+    2304
+   ],
+   "layers.0.feed_forward.w2.weight": [
+    2304,
+    9216
+   ],
+   "layers.1.adaLN_modulation.1.bias": [
+    9216
+   ],
+   "layers.1.attention.q_norm.weight": [
+    96
+   ],
+   "layers.1.feed_forward.w1.weight": [
+    9216,
+    2304
+   ],
+   "layers.1.ffn_norm1.weight": [
+    2304
+   ],
+   "noise_refiner.0.attention.k_norm.weight": [
+    96
+   ],
+   "noise_refiner.0.attention_norm1.weight": [
+    2304
+   ],
+   "noise_refiner.0.feed_forward.w3.weight": [
+    9216,
+    2304
+   ],
+   "noise_refiner.1.adaLN_modulation.1.weight": [
+    9216,
+    1024
+   ],
+   "noise_refiner.1.attention.q_norm.weight": [
+    96
+   ],
+   "noise_refiner.1.feed_forward.w1.weight": [
+    9216,
+    2304
+   ],
+   "noise_refiner.1.ffn_norm2.weight": [
+    2304
+   ],
+   "time_text_embed.1.bias": [
+    1024
+   ]
+  }
+ },
+ {
+  "name": "wan_14b_unet",
+  "note": "Wan 14B (2.1 and 2.2 alike)",
+  "source": "recorded",
+  "family": "Wan",
+  "tensors": {
+   "blocks.0.cross_attn.k.bias": [
+    5120
+   ],
+   "blocks.0.cross_attn.norm_k.weight": [
+    5120
+   ],
+   "blocks.0.cross_attn.o.scale_weight": [],
+   "blocks.0.cross_attn.q.weight": [
+    5120,
+    5120
+   ],
+   "blocks.0.cross_attn.v.weight": [
+    5120,
+    5120
+   ],
+   "blocks.0.modulation": [
+    1,
+    6,
+    5120
+   ],
+   "blocks.0.self_attn.k.scale_input": [],
+   "blocks.0.self_attn.norm_q.weight": [
+    5120
+   ],
+   "blocks.0.self_attn.q.bias": [
+    5120
+   ],
+   "blocks.0.self_attn.v.bias": [
+    5120
+   ],
+   "blocks.1.cross_attn.k.scale_input": [],
+   "blocks.1.cross_attn.norm_q.weight": [
+    5120
+   ],
+   "blocks.1.cross_attn.q.bias": [
+    5120
+   ],
+   "blocks.1.cross_attn.v.bias": [
+    5120
+   ],
+   "blocks.1.ffn.0.bias": [
+    13824
+   ],
+   "blocks.1.norm3.bias": [
+    5120
+   ],
+   "blocks.1.self_attn.k.scale_weight": [],
+   "blocks.1.self_attn.o.scale_input": [],
+   "blocks.1.self_attn.q.scale_input": [],
+   "blocks.1.self_attn.v.scale_input": [],
+   "head.head.scale_weight": [],
+   "patch_embedding.weight": [
+    5120,
+    36,
+    1,
+    2,
+    2
+   ],
+   "text_embedding.0.weight": [
+    5120,
+    4096
+   ],
+   "time_embedding.0.weight": [
+    5120,
+    256
+   ]
+  }
+ },
+ {
+  "name": "wan_14b_lora",
+  "note": "Wan 14B LoRA",
+  "source": "recorded",
+  "family": "Wan",
+  "tensors": {
+   "diffusion_model.blocks.0.cross_attn.k.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.k.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.0.cross_attn.o.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.0.cross_attn.q.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.v.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.v.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.0.ffn.0.lora_B.weight": [
+    13824,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.k.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.0.self_attn.o.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.0.self_attn.o.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.q.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.0.self_attn.v.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.k.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.k.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.1.cross_attn.o.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.1.cross_attn.q.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.v.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.v.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.1.ffn.0.lora_B.weight": [
+    13824,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.k.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.self_attn.o.lora_A.weight": [
+    32,
+    5120
+   ],
+   "diffusion_model.blocks.1.self_attn.o.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.q.lora_B.weight": [
+    5120,
+    32
+   ],
+   "diffusion_model.blocks.1.self_attn.v.lora_A.weight": [
+    32,
+    5120
+   ]
+  }
+ },
+ {
+  "name": "wan21_i2v_lora",
+  "note": "Wan 2.1 i2v LoRA with the CLIP image branch",
+  "source": "recorded",
+  "family": "Wan 2.1",
+  "tensors": {
+   "diffusion_model.blocks.0.cross_attn.k.diff_b": [
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.k_img.lora_down.weight": [
+    64,
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.norm_q.diff": [
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.q.diff_b": [
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.v.lora_down.weight": [
+    64,
+    5120
+   ],
+   "diffusion_model.blocks.0.cross_attn.v_img.lora_up.weight": [
+    5120,
+    64
+   ],
+   "diffusion_model.blocks.0.norm3.diff": [
+    5120
+   ],
+   "diffusion_model.blocks.0.self_attn.k.lora_up.weight": [
+    5120,
+    64
+   ],
+   "diffusion_model.blocks.0.self_attn.o.lora_down.weight": [
+    64,
+    5120
+   ],
+   "diffusion_model.blocks.0.self_attn.q.lora_up.weight": [
+    5120,
+    64
+   ],
+   "diffusion_model.blocks.1.cross_attn.k.diff_b": [
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.k_img.lora_down.weight": [
+    64,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.o.diff_b": [
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.q.lora_down.weight": [
+    64,
+    5120
+   ],
+   "diffusion_model.blocks.1.cross_attn.v.lora_up.weight": [
+    5120,
+    64
+   ],
+   "diffusion_model.blocks.1.ffn.0.diff_b": [
+    13824
+   ],
+   "diffusion_model.blocks.1.norm3.diff_b": [
+    5120
+   ],
+   "diffusion_model.blocks.1.self_attn.norm_k.diff": [
+    5120
+   ],
+   "diffusion_model.blocks.1.self_attn.o.lora_up.weight": [
+    5120,
+    64
+   ],
+   "diffusion_model.blocks.1.self_attn.v.diff_b": [
+    5120
+   ],
+   "diffusion_model.head.head.diff_b": [
+    64
+   ],
+   "diffusion_model.img_emb.proj.1.lora_down.weight": [
+    64,
+    1280
+   ],
+   "diffusion_model.text_embedding.0.diff_b": [
+    5120
+   ],
+   "diffusion_model.time_embedding.0.lora_down.weight": [
+    64,
+    256
+   ]
+  }
+ },
+ {
+  "name": "wan_lora_kohya",
+  "note": "musubi Wan LoRA",
+  "source": "recorded",
+  "family": "Wan",
+  "tensors": {
+   "lora_unet_blocks_0_cross_attn_k.alpha": [],
+   "lora_unet_blocks_0_cross_attn_k.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_0_cross_attn_o.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_0_cross_attn_q.alpha": [],
+   "lora_unet_blocks_0_cross_attn_v.alpha": [],
+   "lora_unet_blocks_0_cross_attn_v.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_0_ffn_0.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_0_self_attn_k.alpha": [],
+   "lora_unet_blocks_0_self_attn_o.alpha": [],
+   "lora_unet_blocks_0_self_attn_o.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_0_self_attn_q.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_0_self_attn_v.alpha": [],
+   "lora_unet_blocks_1_cross_attn_k.alpha": [],
+   "lora_unet_blocks_1_cross_attn_k.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_1_cross_attn_o.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_1_cross_attn_q.alpha": [],
+   "lora_unet_blocks_1_cross_attn_v.alpha": [],
+   "lora_unet_blocks_1_cross_attn_v.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_1_ffn_0.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_1_self_attn_k.alpha": [],
+   "lora_unet_blocks_1_self_attn_o.alpha": [],
+   "lora_unet_blocks_1_self_attn_o.lora_up.weight": [
+    5120,
+    32
+   ],
+   "lora_unet_blocks_1_self_attn_q.lora_down.weight": [
+    32,
+    5120
+   ],
+   "lora_unet_blocks_1_self_attn_v.alpha": []
+  }
+ },
+ {
+  "name": "vae_flux",
+  "note": "not a base-model signature",
+  "source": "recorded",
+  "family": "",
+  "tensors": {
+   "decoder.conv_in.bias": [
+    512
+   ],
+   "decoder.mid.attn_1.k.weight": [
+    512,
+    512,
+    1,
+    1
+   ],
+   "decoder.mid.attn_1.q.bias": [
+    512
+   ],
+   "decoder.mid.block_1.conv1.weight": [
+    512,
+    512,
+    3,
+    3
+   ],
+   "decoder.mid.block_1.norm2.bias": [
+    512
+   ],
+   "decoder.up.0.block.0.conv1.weight": [
+    128,
+    256,
+    3,
+    3
+   ],
+   "decoder.up.0.block.0.norm1.weight": [
+    256
+   ],
+   "decoder.up.0.block.1.conv2.bias": [
+    128
+   ],
+   "decoder.up.0.block.1.norm2.weight": [
+    128
+   ],
+   "decoder.up.1.block.0.nin_shortcut.bias": [
+    256
+   ],
+   "decoder.up.1.block.0.norm2.weight": [
+    256
+   ],
+   "decoder.up.1.block.1.norm1.bias": [
+    256
+   ],
+   "encoder.conv_in.bias": [
+    128
+   ],
+   "encoder.down.0.block.0.conv1.weight": [
+    128,
+    128,
+    3,
+    3
+   ],
+   "encoder.down.0.block.0.norm2.bias": [
+    128
+   ],
+   "encoder.down.0.block.1.conv2.weight": [
+    128,
+    128,
+    3,
+    3
+   ],
+   "encoder.down.0.downsample.conv.bias": [
+    128
+   ],
+   "encoder.down.1.block.0.conv2.weight": [
+    256,
+    256,
+    3,
+    3
+   ],
+   "encoder.down.1.block.0.norm2.weight": [
+    256
+   ],
+   "encoder.down.1.block.1.norm1.bias": [
+    256
+   ],
+   "encoder.down.1.downsample.conv.weight": [
+    256,
+    256,
+    3,
+    3
+   ],
+   "encoder.mid.attn_1.proj_out.bias": [
+    512
+   ],
+   "encoder.mid.attn_1.v.weight": [
+    512,
+    512,
+    1,
+    1
+   ],
+   "encoder.mid.block_1.norm1.bias": [
+    512
+   ]
+  }
+ },
+ {
+  "name": "vae_wan",
+  "note": "not a base-model signature",
+  "source": "recorded",
+  "family": "",
+  "tensors": {
+   "conv1.bias": [
+    32
+   ],
+   "conv1.weight": [
+    32,
+    32,
+    1,
+    1,
+    1
+   ],
+   "conv2.bias": [
+    16
+   ],
+   "conv2.weight": [
+    16,
+    16,
+    1,
+    1,
+    1
+   ],
+   "decoder.conv1.bias": [
+    384
+   ],
+   "decoder.conv1.weight": [
+    384,
+    16,
+    3,
+    3,
+    3
+   ],
+   "decoder.head.0.gamma": [
+    96,
+    1,
+    1,
+    1
+   ],
+   "decoder.middle.0.residual.0.gamma": [
+    384,
+    1,
+    1,
+    1
+   ],
+   "decoder.middle.1.norm.gamma": [
+    384,
+    1,
+    1
+   ],
+   "decoder.middle.1.proj.bias": [
+    384
+   ],
+   "decoder.middle.1.proj.weight": [
+    384,
+    384,
+    1,
+    1
+   ],
+   "decoder.middle.1.to_qkv.bias": [
+    1152
+   ],
+   "decoder.upsamples.0.residual.0.gamma": [
+    384,
+    1,
+    1,
+    1
+   ],
+   "decoder.upsamples.1.residual.0.gamma": [
+    384,
+    1,
+    1,
+    1
+   ],
+   "encoder.conv1.bias": [
+    96
+   ],
+   "encoder.conv1.weight": [
+    96,
+    3,
+    3,
+    3,
+    3
+   ],
+   "encoder.downsamples.0.residual.0.gamma": [
+    96,
+    1,
+    1,
+    1
+   ],
+   "encoder.downsamples.1.residual.0.gamma": [
+    96,
+    1,
+    1,
+    1
+   ],
+   "encoder.head.0.gamma": [
+    384,
+    1,
+    1,
+    1
+   ],
+   "encoder.middle.0.residual.0.gamma": [
+    384,
+    1,
+    1,
+    1
+   ],
+   "encoder.middle.1.norm.gamma": [
+    384,
+    1,
+    1
+   ],
+   "encoder.middle.1.proj.bias": [
+    384
+   ],
+   "encoder.middle.1.proj.weight": [
+    384,
+    384,
+    1,
+    1
+   ],
+   "encoder.middle.1.to_qkv.bias": [
+    1152
+   ]
+  }
+ },
+ {
+  "name": "text_encoder_t5",
+  "note": "not a base-model signature",
+  "source": "recorded",
+  "family": "",
+  "tensors": {
+   "encoder.block.0.layer.0.SelfAttention.k.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.0.layer.0.SelfAttention.o.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.0.layer.0.SelfAttention.q.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.0.layer.0.SelfAttention.relative_attention_bias.weight": [
+    32,
+    64
+   ],
+   "encoder.block.0.layer.0.SelfAttention.v.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.0.layer.0.layer_norm.weight": [
+    4096
+   ],
+   "encoder.block.0.layer.1.DenseReluDense.wi_0.weight": [
+    10240,
+    4096
+   ],
+   "encoder.block.0.layer.1.DenseReluDense.wi_1.weight": [
+    10240,
+    4096
+   ],
+   "encoder.block.0.layer.1.DenseReluDense.wo.weight": [
+    4096,
+    10240
+   ],
+   "encoder.block.0.layer.1.layer_norm.weight": [
+    4096
+   ],
+   "encoder.block.1.layer.0.SelfAttention.k.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.1.layer.0.SelfAttention.o.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.1.layer.0.SelfAttention.q.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.1.layer.0.SelfAttention.v.weight": [
+    4096,
+    4096
+   ],
+   "encoder.block.1.layer.0.layer_norm.weight": [
+    4096
+   ],
+   "encoder.block.1.layer.1.DenseReluDense.wi_0.weight": [
+    10240,
+    4096
+   ],
+   "encoder.block.1.layer.1.DenseReluDense.wi_1.weight": [
+    10240,
+    4096
+   ],
+   "encoder.block.1.layer.1.DenseReluDense.wo.weight": [
+    4096,
+    10240
+   ],
+   "encoder.block.1.layer.1.layer_norm.weight": [
+    4096
+   ],
+   "encoder.embed_tokens.weight": [
+    32128,
+    4096
+   ],
+   "encoder.final_layer_norm.weight": [
+    4096
+   ],
+   "shared.weight": [
+    32128,
+    4096
+   ]
+  }
+ },
+ {
+  "name": "clip_vision",
+  "note": "not a base-model signature",
+  "source": "recorded",
+  "family": "",
+  "tensors": {
+   "vision_model.embeddings.class_embedding": [
+    1280
+   ],
+   "vision_model.embeddings.patch_embedding.weight": [
+    1280,
+    3,
+    14,
+    14
+   ],
+   "vision_model.embeddings.position_ids": [
+    1,
+    257
+   ],
+   "vision_model.encoder.layers.0.layer_norm1.weight": [
+    1280
+   ],
+   "vision_model.encoder.layers.0.layer_norm2.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.0.mlp.fc1.bias": [
+    5120
+   ],
+   "vision_model.encoder.layers.0.mlp.fc2.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.0.mlp.fc2.weight": [
+    1280,
+    5120
+   ],
+   "vision_model.encoder.layers.0.self_attn.k_proj.weight": [
+    1280,
+    1280
+   ],
+   "vision_model.encoder.layers.0.self_attn.out_proj.weight": [
+    1280,
+    1280
+   ],
+   "vision_model.encoder.layers.0.self_attn.q_proj.weight": [
+    1280,
+    1280
+   ],
+   "vision_model.encoder.layers.0.self_attn.v_proj.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.layer_norm1.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.layer_norm2.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.layer_norm2.weight": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.mlp.fc1.weight": [
+    5120,
+    1280
+   ],
+   "vision_model.encoder.layers.1.mlp.fc2.weight": [
+    1280,
+    5120
+   ],
+   "vision_model.encoder.layers.1.self_attn.k_proj.weight": [
+    1280,
+    1280
+   ],
+   "vision_model.encoder.layers.1.self_attn.out_proj.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.self_attn.q_proj.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.self_attn.v_proj.bias": [
+    1280
+   ],
+   "vision_model.encoder.layers.1.self_attn.v_proj.weight": [
+    1280,
+    1280
+   ],
+   "vision_model.post_layernorm.weight": [
+    1280
+   ],
+   "vision_model.pre_layrnorm.weight": [
+    1280
+   ]
+  }
+ }
+]

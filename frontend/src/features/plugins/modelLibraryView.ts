@@ -1,5 +1,6 @@
 import type { ModelFile, ModelLibrary } from "@/api/client";
 import type { GenerationOption } from "@/api/domains/generation";
+import type { MessageKey } from "@/app/messages";
 import { modelBaseName, normModelName } from "@/components/generation/ModelThumb";
 import { declaredParameters } from "@/lib/generationCapabilities";
 
@@ -15,6 +16,8 @@ export const MISSING_VIEW = "__missing__";
 export const DOWNLOADS_VIEW = "__downloads__";
 /** 认不出底模的那一类(筛选里叫「认不出底模」)。 */
 export const UNKNOWN_FAMILY = "__unknown__";
+/** 「底模」这件事不适用的那一类:文本编码器、放大模型、检测模型……(插件报 `family_source: "not_applicable"`)。 */
+export const NOT_APPLICABLE_FAMILY = "__not_applicable__";
 
 export const SORTS = ["name", "size", "modified"] as const;
 export type LibrarySort = (typeof SORTS)[number];
@@ -25,14 +28,38 @@ export function folderEntries(folders: readonly ModelLibraryFolder[]): ModelLibr
   return folders.filter((one) => one.count > 0).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-export const familyOf = (model: Pick<ModelFile, "family">) => model.family || UNKNOWN_FAMILY;
+type FamilyFields = Pick<ModelFile, "family" | "family_source">;
 
-/** 这一批文件里有哪几种底模、各几个:多的在前,认不出的排最后。 */
+export const familyOf = (model: FamilyFields) =>
+  model.family || (model.family_source === "not_applicable" ? NOT_APPLICABLE_FAMILY : UNKNOWN_FAMILY);
+
+/** 筛选里那两个特殊项的文案;别的就是家族名本身(null)。 */
+export function familyLabelKey(value: string): MessageKey | null {
+  if (value === UNKNOWN_FAMILY) return "modelLibraryFamilyUnknown";
+  if (value === NOT_APPLICABLE_FAMILY) return "modelLibraryFamilyNotApplicable";
+  return null;
+}
+
+/**
+ * 底模旁边那句「凭的是什么」和徽章的轻重:元数据、权重结构写在文件里(`certain`,实色),文件名是猜的(淡色);
+ * 不适用的说为什么不适用;认不出的没有。
+ */
+export function familySource(model: FamilyFields): { hint: MessageKey; certain: boolean } | null {
+  if (!model.family) return model.family_source === "not_applicable" ? { hint: "modelFamilyNotApplicableHint", certain: false } : null;
+  if (model.family_source === "filename") return { hint: "modelFamilySourceFilename", certain: false };
+  if (model.family_source === "weights") return { hint: "modelFamilySourceWeights", certain: true };
+  return { hint: "modelFamilySourceMetadata", certain: true };
+}
+
+/** 两个特殊项排最后:先「认不出」,再「不适用」。 */
+const familyRank = (value: string) => (value === UNKNOWN_FAMILY ? 1 : value === NOT_APPLICABLE_FAMILY ? 2 : 0);
+
+/** 这一批文件里有哪几种底模、各几个:多的在前,认不出的、不适用的排最后。 */
 export function familyCounts(models: readonly ModelFile[]): [string, number][] {
   const counts = new Map<string, number>();
   for (const model of models) counts.set(familyOf(model), (counts.get(familyOf(model)) ?? 0) + 1);
   return [...counts.entries()].sort(
-    (a, b) => Number(a[0] === UNKNOWN_FAMILY) - Number(b[0] === UNKNOWN_FAMILY) || b[1] - a[1] || a[0].localeCompare(b[0]),
+    (a, b) => familyRank(a[0]) - familyRank(b[0]) || b[1] - a[1] || a[0].localeCompare(b[0]),
   );
 }
 

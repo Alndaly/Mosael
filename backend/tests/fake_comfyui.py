@@ -3,7 +3,8 @@
 **测试套不连真的 ComfyUI。** 这台假的只实现插件用到的那几个接口,形状照 ComfyUI 0.3x 的真实回包:
 `/object_info`、`/api/userdata`(列工作流 / 取工作流)、`/upload/image`(multipart)、`/prompt`、
 `/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件;模型库用到的
-`/experiment/models*`、`/view_metadata/*`、`/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`;工作流库用到的
+`/experiment/models*`、`/view_metadata/*`、ComfyUI-Custom-Scripts 的 `/pysssss/view/*`(按 Range 读文件头)、
+`/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`;工作流库用到的
 userdata 写 / 移动 / 删除(照 ComfyUI 源码 app/user_manager.py 的语义:`overwrite=false` 撞名回 409、移动时建目标的父目录、
 删除是硬删)和 Manager 的 `/v2/customnode/getmappings`、`/v2/customnode/installed`。
 
@@ -617,6 +618,14 @@ class State:
     model_sizes: dict[str, int] = field(default_factory=dict)
     model_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
     model_previews: set[str] = field(default_factory=set)
+    #: ComfyUI-Custom-Scripts 的 `/pysssss/view/{目录/名字}`(模型库按段读文件头):`range` = 装了、认 Range(回 206);
+    #: `missing` = 没装(404);`ignore_range` = 不认 Range、回 200 把整个文件发过来。文件的字节在 `model_bytes`(键是
+    #: 「目录/名字」);`range_bytes_sent` 记下 ignore_range 时实际发出去了多少(对面读完头就该挂断)。
+    pysssss: str = "range"
+    model_bytes: dict[str, bytes] = field(default_factory=dict)
+    range_bytes_sent: int = 0
+    #: 每次读文件的 (目录/名字, Range 头)
+    range_requests: list[tuple[str, str]] = field(default_factory=list)
     #: ComfyUI-Manager:None = 没装,否则是 `/v2/manager/version` 回的版本。`manager_outcome`:success(真的把文件
     #: 加进那个目录)| policy(安全策略拒绝:历史里只记 failed,原因只在日志里 —— 和 V4.2.1 一样)| error。
     manager: str | None = None
@@ -689,6 +698,43 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _model_bytes(self, key: str) -> None:
+        """`/pysssss/view/{目录/名字}`:aiohttp 的 FileResponse 认 Range;`ignore_range` 时照样回 200、整个发(一块一块地,
+        对面挂断就停,记下发了多少)。"""
+        state = self.server.state
+        wanted = self.headers.get("Range") or ""
+        state.range_requests.append((key, wanted))
+        body = state.model_bytes.get(key)
+        if body is None:
+            self._json({"error": "not found"}, 404)
+            return
+        found = re.fullmatch(r"bytes=(\d+)-(\d+)", wanted)
+        if state.pysssss == "range" and found:
+            start, end = int(found.group(1)), min(int(found.group(2)), len(body) - 1)
+            if start >= len(body):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(body)}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            part = body[start:end + 1]
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+            self.send_header("Content-Length", str(len(part)))
+            self.end_headers()
+            self.wfile.write(part)
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            for at in range(0, len(body), 256 * 1024):
+                self.wfile.write(body[at:at + 256 * 1024])
+                self.wfile.flush()
+                state.range_bytes_sent = at + len(body[at:at + 256 * 1024])
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
 
     def _body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
@@ -778,6 +824,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json([{"name": name, "pathIndex": 0, "modified": 1700000000.0 + index, "created": 1700000000.0,
                              "size": state.model_sizes.get(f"{folder}/{name}", 1000)}
                             for index, name in enumerate(state.model_folders[folder])])
+        elif path.startswith("/pysssss/view/") and state.pysssss != "missing":
+            self._model_bytes(unquote(path[len("/pysssss/view/"):]))
         elif path.startswith("/view_metadata/"):
             folder = unquote(path[len("/view_metadata/"):])
             name = query.get("filename", [""])[0]

@@ -98,6 +98,23 @@ class Comfy:
                 return None
             raise self._http_error(exc) from exc
 
+    def get_range(self, path: str, start: int, end: int) -> bytes | None:
+        """读一个文件里的一段(`Range: bytes=start-end`,含两头),最多 `end - start + 1` 个字节。
+
+        对方回 206 才算数;回 200 是不认 Range、要把整个文件发过来 —— 几 GB 的模型文件不能整个下,立刻关掉连接、回
+        None。没有这个地址(404)也回 None;要的那一段整个在文件末尾之后(416)回空。"""
+        try:
+            with self._open("GET", path, headers={"Range": f"bytes={start}-{end}"}) as response:
+                if response.status != 206:
+                    return None
+                return response.read(end - start + 1)
+        except error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            if exc.code == 416:
+                return b""
+            raise self._http_error(exc) from exc
+
     def post(self, path: str, body: Any) -> Any:
         return self.request_json("POST", path, body=body)
 

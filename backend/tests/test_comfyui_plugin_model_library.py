@@ -2,7 +2,7 @@
 
 框架那一侧(宿主列表、预览缓存、下载任务)钉在 test_plugin_model_library.py;这里钉的是插件自己:
 
-- 列出:每个目录的每个文件(大小、改动时间、预览地址),推断的底模家族(先元数据、再文件名,凭的是什么写明)、
+- 列出:每个目录的每个文件(大小、改动时间、预览地址),推断的底模家族(先元数据、再权重结构、再文件名,凭的是什么写明;细则在 test_comfyui_plugin_base_models.py)、
   触发词(作者写的,或训练标签里最多的几个)、哪几张工作流在用;
 - 工作流缺的模型:声明了下载地址、节点真在用、这台服务器上又没有的才列,只认 HuggingFace / Civitai / ModelScope;
 - 逐个读的元数据记在持久目录里,第二次只读目录;
@@ -34,7 +34,7 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
 TOOLS = PLUGIN / "tools"
 _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
-            "tooling", "library", "sources", "install")
+            "tooling", "library", "sources", "install", "families", "weights", "model_files")
 
 TAGS = json.dumps({"10_style": {"1girl": 40, "solo": 35, "smile": 12, "outdoors": 3}, "5_extra": {"1girl": 5, "hat": 9}})
 
@@ -253,13 +253,14 @@ def test_列出全部模型文件_带大小_预览地址_家族_触发词(comfy,
     assert (detail["family"], detail["family_source"]) == ("Illustrious", "metadata"), "SDXL 上训练的,底模名说是 Illustrious"
     assert (detail["triggers"], detail["triggers_source"]) == (["1girl", "solo", "smile", "hat", "outdoors"], "tags")
     anima = by_key[("loras", "sub\\anima_style.safetensors")]
-    assert (anima["family"], anima["family_source"]) == ("anima", "metadata"), "表里没有的值原样显示,不往 SD1 上靠"
+    assert (anima["family"], anima["family_source"]) == ("Anima", "metadata"), "看 ss_base_model_version,不往 SD1 上靠"
     assert (anima["triggers"], anima["triggers_source"]) == (["anima style", "flat color"], "metadata")
     painting = by_key[("checkpoints", "AWPainting_IL.safetensors")]
     assert (painting["family"], painting["family_source"]) == ("Illustrious", "filename")
     noob = by_key[("loras", "chars\\noob_char.safetensors")]
     assert (noob["family"], noob["family_source"]) == ("NoobAI", "filename"), "子目录名也算"
-    assert by_key[("upscale_models", "4x-UltraSharp.pth")].get("family", "") == "", "认不出就空着,不猜"
+    upscaler = by_key[("upscale_models", "4x-UltraSharp.pth")]
+    assert (upscaler.get("family", ""), upscaler["family_source"]) == ("", "not_applicable"), "放大模型不讲底模"
     assert by_key[("checkpoints", "v1-5.ckpt")].get("family") == "SD 1.5"
 
 
@@ -490,7 +491,8 @@ def test_下载到这台服务器没有的目录_说清楚(comfy, data_dir, tmp_
     ("loras", "x.safetensors", {"ss_base_model_version": "flux1"}, ("Flux", "metadata")),
     ("loras", "x.safetensors", {"modelspec.architecture": "flux-1-dev/lora"}, ("Flux", "metadata")),
     ("loras", "x.safetensors", {"modelspec.architecture": "Krea-2/lora", "ss_base_model_version": "krea2"},
-     ("krea2", "metadata")),
+     ("Krea 2", "metadata")),
+    ("loras", "x.safetensors", {"ss_base_model_version": "mystery_v9"}, ("mystery_v9", "metadata")),
     ("loras", "pony_style.safetensors", {"ss_base_model_version": "sdxl_base_v1-0"}, ("Pony", "filename")),
     ("checkpoints", "Illustrious XL - v1.0_v1.0.safetensors", {}, ("Illustrious", "filename")),
     ("checkpoints", "AnythingXL_xl.safetensors", {}, ("SDXL", "filename")),
@@ -499,8 +501,8 @@ def test_下载到这台服务器没有的目录_说清楚(comfy, data_dir, tmp_
     ("diffusion_models", "z_image_turbo_bf16.safetensors", {}, ("Z-Image", "filename")),
     ("diffusion_models", "qwen_image_edit_fp8.safetensors", {}, ("Qwen-Image", "filename")),
     ("diffusion_models", "flux1-kontext-dev.safetensors", {}, ("Flux Kontext", "filename")),
-    ("text_encoders", "qwen3vl_4b_fp8_scaled.safetensors", {}, ("", "")),
-    ("upscale_models", "4x-UltraSharp.pth", {}, ("", "")),
+    ("text_encoders", "qwen3vl_4b_fp8_scaled.safetensors", {}, ("", "not_applicable")),
+    ("upscale_models", "4x-UltraSharp.pth", {}, ("", "not_applicable")),
 ])
 def test_底模家族_先元数据再文件名_认不出不猜(modules, folder, name, meta, expected) -> None:
     library, _ = modules
@@ -845,7 +847,8 @@ def test_ModelScope的AIGC类型定目录(modules, comfy, monkeypatch, kind, fol
     ("", ["AI-ModelScope/stable-diffusion-xl-base-1.0"], "SDXL"),
     ("UNKNOWN", ["MusePublic/489_ckpt_FLUX_1@2172"], "Flux"),
     # 表里没有的:底模仓库名原样交出(没有就类型原样),不往认得的家族上靠
-    ("KREA_2", ["krea/Krea-2-Turbo"], "Krea-2-Turbo"),
+    ("KREA_2", ["krea/Krea-2-Turbo"], "Krea 2"),
+    ("", ["someone/Mystery-Diffusion-9"], "Mystery-Diffusion-9"),
     ("IDEOGRAM_4", [], "IDEOGRAM_4"),
     ("", ["undefined", ""], ""),
     ("", [], ""),
