@@ -61,14 +61,10 @@ const fake = vi.hoisted(() => {
       this.visible = visible;
     }
   }
-  const focused: { current: { focus: () => void; isDestroyed: () => boolean } | null } = { current: null };
-  return { WebContentsView, focused };
+  return { WebContentsView };
 });
 
-vi.mock("electron", () => ({
-  WebContentsView: fake.WebContentsView,
-  webContents: { getFocusedWebContents: () => fake.focused.current },
-}));
+vi.mock("electron", () => ({ WebContentsView: fake.WebContentsView }));
 
 const { FloatLayer } = await import("./floatLayer");
 
@@ -110,7 +106,6 @@ const onWindow = (view: FakeView) => view.bounds.x + view.bounds.width > 0 && vi
 
 beforeEach(() => {
   fake.WebContentsView.created.length = 0;
-  fake.focused.current = null;
 });
 
 describe("浮层视图", () => {
@@ -193,11 +188,10 @@ describe("浮层视图", () => {
     expect(onWindow(fake.WebContentsView.created[0])).toBe(false);
   });
 
-  it("从不留着焦点:它被挂上、被点到而拿到焦点时,还给刚才拿着焦点的那个(网页或主窗口)", async () => {
+  it("从不留着焦点:它的页面加载完、被点到而拿到焦点时,还给最后拿着焦点的那个(网页或主窗口)", async () => {
     const win = makeWindow();
     const page = { focus: vi.fn(), isDestroyed: () => false };
-    fake.focused.current = page;
-    const layer = new FloatLayer(win as never);
+    const layer = new FloatLayer(win as never, () => page as never);
     await layer.show(CONTENT);
     const [view] = fake.WebContentsView.created;
     view.webContents.handlers.get("focus")!();

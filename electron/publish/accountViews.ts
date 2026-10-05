@@ -65,6 +65,26 @@ async function settleLayout(wc: Electron.WebContents): Promise<void> {
 /** 连按两次 Esc 判定为「退出内嵌浏览器」的时间窗(见 ensure() 里的 before-input-event)。 */
 const DOUBLE_ESCAPE_MS = 700;
 
+/** 焦点在这一帧的可编辑元素上吗(输入框、文本框、下拉、contenteditable)。 */
+const TYPING_PROBE = `(() => {
+  if (!document.hasFocus()) return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
+  if (el.tagName !== "INPUT") return false;
+  return !/^(button|submit|reset|checkbox|radio|image|file|range|color)$/i.test(el.type || "");
+})()`;
+
+/** 用户正在网页里打字吗:任何一帧(含 iframe)里焦点在可编辑元素上就算。问不到的帧当作没在打字。 */
+async function typingIn(wc: Electron.WebContents): Promise<boolean> {
+  const root = wc.mainFrame;
+  const frames = [root, ...(root.framesInSubtree ?? [])];
+  const answers = await Promise.all(
+    frames.map((frame) => Promise.resolve(frame.executeJavaScript(TYPING_PROBE)).then((value) => value === true, () => false)),
+  );
+  return answers.some(Boolean);
+}
+
 /**
  * 同时挂载的面板上限。挂载的视图是真在合成的页面,不是免费的 —— 智能体可能开很多路会话,全挂上去
  * 既吃 GPU 也把卡片堆推出窗口。超出上限的视图不挂载:它照样能跑(RPA 的动作走的是 DOM 事件,不
@@ -188,6 +208,8 @@ export class AccountViewManager {
    * 盖列表(原生视图盖在一切 DOM 上)。只藏不摘 —— 页面不重排、不暂停,用完原样亮回来。
    */
   private foregroundHiddenFor = new Set<ForegroundHideReason>();
+  /** 最后拿着焦点的那个(见 focusTarget)。 */
+  private lastFocused: Electron.WebContents | null = null;
   /** 前台视图收到过的媒体响应(「下载页面里的视频」要用,见 mediaRecorder)。 */
   readonly media = new MediaRecorder();
   private downloadRouter: DownloadRouter | null = null;
@@ -229,6 +251,10 @@ export class AccountViewManager {
   attachWindow(window: BaseWindow, nameResolver: (accountId: string) => string | null): void {
     this.window = window;
     this.nameOf = nameResolver;
+    const host = this.hostWebContents();
+    host?.on("focus", () => {
+      this.lastFocused = host;
+    });
     window.on("resize", () => this.fitPanelsToWindow());
     this.loadPanelLayout();
     if (!this.idleTimer) this.idleTimer = setInterval(() => this.sweepIdlePanels(), IDLE_SWEEP_MS);
@@ -438,6 +464,8 @@ export class AccountViewManager {
     // Re-adding the same View is the current View API's z-order operation:
     // Electron reorders it to the topmost child of the window content view.
     this.window.contentView.addChildView(view);
+    // 进了内嵌浏览器,键盘就在网页里(不然打的字还落在 Mosael 那边看不见的地方)。
+    view.webContents.focus();
     console.info("[mosael:view] shown", {
       accountId,
       bounds: view.getBounds(),
@@ -501,6 +529,8 @@ export class AccountViewManager {
       this.syncAudio();
       // 收回后仍获用户授权出声的面板继续播放；其余暂停以免隐藏视频继续解码、拉流。
       this.syncPageMedia(previous, this.isAudible(previous));
+      // 回到 Mosael:键盘回到 Mosael 的界面(渲染层再把焦点放回打开之前的那个按钮)。
+      this.hostWebContents()?.focus();
       this.emit();
     }
   }
@@ -731,6 +761,22 @@ export class AccountViewManager {
     return { id: this.visibleId, webContents: wc, partition: this.partitionFor(this.visibleId) };
   }
 
+  /** 最后拿着焦点的那个:某一页网页,或主窗口(浮层视图抢了焦点时还给它,见 floatLayer)。 */
+  focusTarget(): Electron.WebContents | null {
+    return this.lastFocused && !this.lastFocused.isDestroyed() ? this.lastFocused : this.hostWebContents();
+  }
+
+  /** 键盘交给前台网页(顶栏、页面列表里点完之后,接着打字的就该是网页)。 */
+  focusForeground(): void {
+    this.visibleWebContents()?.focus();
+  }
+
+  /** 主窗口自己的网页(Mosael 的界面)。 */
+  private hostWebContents(): Electron.WebContents | null {
+    const contents = (this.window as unknown as { webContents?: Electron.WebContents } | null)?.webContents;
+    return contents && !contents.isDestroyed() ? contents : null;
+  }
+
   /** 侧栏开合:前台视图右侧让出这么宽(见 shellInsetRight)。 */
   setShellInset(right: number): void {
     const width = this.window && !this.window.isDestroyed() ? this.window.getContentSize()[0] : 0;
@@ -907,6 +953,9 @@ export class AccountViewManager {
           },
         });
     const tab: PageTab = { view, driver: new PageDriver(view.webContents), favicon: "" };
+    view.webContents.on("focus", () => {
+      this.lastFocused = view.webContents;
+    });
     const isCurrent = () => this.views.get(accountId) === view;
     // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
     view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
@@ -946,13 +995,18 @@ export class AccountViewManager {
     //
     // 改成**连按两次**(700ms 内):第一次纯粹留给页面,第二次才是「我要退出这个内嵌浏览器」。
     // 网页几乎不会把连按 Esc 定义成别的操作,而用户想退出时连按两下是自然动作。
+    //
+    // **正在网页里打字时两次都留给网页**:编辑器、搜索框、表单里连按 Esc(收起补全、退出编辑)再常见不过,
+    // 这时把人拽回 Mosael 就是截走了网页的键。问一下网页焦点在不在可编辑元素上,在就不退。
     let lastEscapeAt = 0;
     view.webContents.on("before-input-event", (_event, input) => {
       if (input.type !== "keyDown" || input.key !== "Escape") return;
       const now = Date.now();
       if (now - lastEscapeAt <= DOUBLE_ESCAPE_MS) {
         lastEscapeAt = 0;
-        this.hide();
+        void typingIn(view.webContents).then((typing) => {
+          if (!typing && this.visibleId === accountId) this.hide();
+        });
         return;
       }
       lastEscapeAt = now;
@@ -1070,6 +1124,8 @@ export class AccountViewManager {
         tab.view.webContents.setZoomFactor(1);
         void tab.driver.clearMetricsOverride();
         tab.view.setVisible(!this.foregroundHiddenFor.has("region"));
+        // 切到这一页了,键盘跟着到这一页。
+        tab.view.webContents.focus();
       } else {
         this.applyPanelZoom(accountId);
         // addChildView 把它放到了最上面;卡片堆里排在它上面的那几张(和前台视图)要回到它上面去。

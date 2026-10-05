@@ -40,7 +40,12 @@ const fake = vi.hoisted(() => {
     })();
     navigationHistory = { canGoBack: () => false, canGoForward: () => false };
     debugger = { isAttached: () => false };
-    mainFrame = { routingId: 1, framesInSubtree: [], executeJavaScript: async () => undefined };
+    mainFrame = { routingId: 1, framesInSubtree: [] as unknown[], executeJavaScript: async (_code?: string): Promise<unknown> => undefined };
+    /** 系统焦点在不在这个网页上(webContents.focus())。 */
+    focused = false;
+    focus() {
+      this.focused = true;
+    }
     getUserAgent() {
       return "Mozilla/5.0 Electron/44.4.5";
     }
@@ -117,6 +122,8 @@ const fake = vi.hoisted(() => {
   }
   class Window extends Emitter {
     size: [number, number] = [1440, 900];
+    /** 主窗口自己的网页(Mosael 的界面)。 */
+    webContents = { focused: false, focus() { this.focused = true; }, isDestroyed: () => false, on: () => undefined };
     /** 子视图,按 z 序从下到上(和 Electron 的 contentView.children 一样)。 */
     children: WebContentsView[] = [];
     contentView = (() => {
@@ -395,6 +402,58 @@ describe("window resizing", () => {
     window.resizeTo(1000, 700);
     expect(topCard()).toEqual(before);
     expect(fs.existsSync(layoutFile())).toBe(false);
+  });
+});
+
+describe("keyboard focus between Mosael and the embedded page", () => {
+  const escape = (view: FakeView) => view.webContents.emit("before-input-event", {}, { type: "keyDown", key: "Escape" });
+
+  it("entering the embedded browser puts the keyboard in the page; going back puts it in Mosael", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    expect(viewOf("pool-a").webContents.focused).toBe(true);
+    manager.hide();
+    expect(window.webContents.focused).toBe(true);
+  });
+
+  it("switching to another page of the shown session puts the keyboard in that page", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    openWindow(viewOf("pool-a"), "https://example.com/next");
+    const firstId = manager.pagesOf("pool-a")[0].id;
+    manager.switchVisiblePage(firstId);
+    expect(viewOf("pool-a").webContents.focused).toBe(true);
+  });
+
+  it("hands the keyboard back to the page on request (after a click in the toolbar or the page list)", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    viewOf("pool-a").webContents.focused = false;
+    manager.focusForeground();
+    expect(viewOf("pool-a").webContents.focused).toBe(true);
+  });
+
+  it("remembers which page had the keyboard last (the float layer hands focus back to it)", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    expect(manager.focusTarget()).toBe(window.webContents);
+    viewOf("pool-a").webContents.emit("focus");
+    expect(manager.focusTarget()).toBe(viewOf("pool-a").webContents);
+  });
+
+  it("Esc twice leaves the embedded browser — but not while typing in the page (the page gets both)", async () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    const page = viewOf("pool-a");
+    page.webContents.mainFrame.executeJavaScript = async () => true; // 焦点在网页的输入框里
+    escape(page);
+    escape(page);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(manager.foreground()).not.toBeNull();
+    page.webContents.mainFrame.executeJavaScript = async () => false;
+    escape(page);
+    escape(page);
+    await vi.waitFor(() => expect(manager.foreground()).toBeNull());
   });
 });
 

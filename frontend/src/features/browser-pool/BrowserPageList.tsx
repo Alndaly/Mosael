@@ -10,6 +10,7 @@ import { APP_CHROME } from "@/components/ui/appChrome";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
+import { pageAfterPointer } from "./embeddedFocus";
 import { moveBefore } from "./pageListState";
 import { usePageListMotion } from "./usePageListMotion";
 
@@ -91,6 +92,7 @@ function PageList({
     setAddress("");
     setAdding(false);
     if (collapsed) motion.dismiss({ instant: true }); // 收回,让人看到新开的那一页
+    void bridge.focusPage(); // 接着打字的是新开的那一页
   };
 
   const drop = (movedId: string, targetId: string) => {
@@ -123,6 +125,7 @@ function PageList({
           if (event.key !== "Escape" || !shape.peek || isImeKeystroke(event)) return;
           if ((event.target as HTMLElement).closest("[data-page-list-address]")) return; // 地址框自己处理 Esc
           motion.dismiss();
+          void bridge.focusPage();
         }}
       >
         <HintRegion.Provider value={PAGE_LIST_REGION}>
@@ -149,7 +152,10 @@ function PageList({
               className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
               label={t(!collapsed ? "browserPagesCollapse" : shape.peek ? "browserPagesPin" : "browserPagesExpand")}
               hint={collapsed && shape.peek ? t("browserPagesPinHint") : undefined}
-              onClick={motion.toggle}
+              onClick={(event) => {
+                motion.toggle();
+                pageAfterPointer(event);
+              }}
             >
               {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
             </IconButton>
@@ -188,8 +194,12 @@ function PageList({
                 onSelect={() => {
                   void bridge.switchPage(page.id);
                   if (collapsed) motion.dismiss({ instant: true }); // 收回,让人看到切过去的那一页
+                  void bridge.focusPage(); // 键盘跟着到那一页
                 }}
-                onClose={() => void bridge.closePage(page.id)}
+                onClose={() => {
+                  void bridge.closePage(page.id);
+                  void bridge.focusPage();
+                }}
                 onDragStart={() => {
                   draggingRef.current = page.id;
                   setDragging(page.id);

@@ -331,7 +331,7 @@ export const publish = {
   publishProxySet: "设置代理",
   publishProxyOn: "代理",
   publishBackToApp: "返回 Mosael",
-  publishBackHint: "网页在后台留着;连按两次 Esc 也能回来",
+  publishBackHint: "网页在后台留着;没在网页里打字时,连按两次 Esc 也能回来",
   navBack: "后退",
   navForward: "前进",
   navReload: "刷新",

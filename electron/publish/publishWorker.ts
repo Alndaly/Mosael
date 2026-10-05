@@ -551,7 +551,7 @@ export function startPublishWorker(opts: {
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
   // 浮层视图(外壳里的悬停说明画在网页上面):内嵌浏览器一亮出来就先建好,收回去时收起说明。
-  floatLayer = new FloatLayer(opts.window);
+  floatLayer = new FloatLayer(opts.window, () => views?.focusTarget() ?? null);
   const onViewChanged = (state: ViewState) => {
     if (state.visible) floatLayer?.warm();
     else floatLayer?.hide();
@@ -856,6 +856,10 @@ export function setPagesInset(left: number): void {
 /** 页面列表展开、收起、临时展开:先拍下前台网页的画面(渲染层铺回原处),再把原生视图挪开 / 放回原处。 */
 export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
   return views?.snapshotForeground() ?? Promise.resolve(null);
+}
+/** 键盘交给前台网页(顶栏、页面列表里点完之后)。 */
+export function focusViewPage(): void {
+  views?.focusForeground();
 }
 /** 外壳里的悬停说明画到网页上面 / 收起(见 floatLayer)。 */
 export function showFloat(hint: FloatHint): Promise<void> {

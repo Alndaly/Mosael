@@ -30,6 +30,7 @@ export const IPC: {
     publishPagesInset: "publish:pagesInset";
     publishSnapshotPage: "publish:snapshotPage";
     publishCoverPage: "publish:coverPage";
+    publishFocusPage: "publish:focusPage";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";

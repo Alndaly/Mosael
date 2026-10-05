@@ -186,12 +186,10 @@ export function usePageListMotion(bridge: MotionBridge, keepPeekOpen: boolean) {
     };
   }, [bridge]);
 
+  /** 收回临时展开(焦点去哪由调用方定:选了一页就交给网页,键盘收起就留在按钮上)。 */
   const dismiss = React.useCallback((options: { instant?: boolean } = {}) => {
     instantClose.current = Boolean(options.instant);
     setDismissed(true);
-    setFocused(false);
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && ref.current?.contains(active)) active.blur();
   }, []);
 
   const toggle = () => {

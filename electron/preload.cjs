@@ -152,6 +152,7 @@ const publishBridge = {
   setPagesInset: (left) => invoke(IPC.invoke.publishPagesInset, { left }),
   snapshotPage: () => invoke(IPC.invoke.publishSnapshotPage),
   coverPage: (covered) => invoke(IPC.invoke.publishCoverPage, { covered }),
+  focusPage: () => invoke(IPC.invoke.publishFocusPage),
   // 外壳里的悬停说明画到网页上面(浮层视图):不等回话,跟着说明出、收。
   showFloat: (hint) => ipcRenderer.send(IPC.send.floatShow, hint),
   hideFloat: (id) => ipcRenderer.send(IPC.send.floatHide, id ? { id } : {}),

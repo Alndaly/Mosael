@@ -44,6 +44,8 @@ const IPC = Object.freeze({
     // 页面列表展开 / 收起 / 临时展开:拍下前台网页的画面、把原生视图挪开 / 放回(列表在那张画面上变形)。
     publishSnapshotPage: "publish:snapshotPage",
     publishCoverPage: "publish:coverPage",
+    // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
+    publishFocusPage: "publish:focusPage",
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",

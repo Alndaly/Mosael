@@ -30,6 +30,7 @@ const bridge = {
   reorderPages: vi.fn(async () => true),
   newPage: vi.fn(async () => true),
   setPagesInset: vi.fn(async () => undefined),
+  focusPage: vi.fn(async () => undefined),
 };
 
 beforeEach(() => {
@@ -369,5 +370,42 @@ describe("展开、收起的过渡", () => {
     } finally {
       window.matchMedia = matchMedia;
     }
+  });
+});
+
+describe("键盘焦点", () => {
+  it("选了一页、开了新页面、关了一页:键盘交给网页(接着打字的是网页)", async () => {
+    render(<BrowserPageList state={state()} top={56} />);
+    fireEvent.click(row("1").querySelector("button")!, { detail: 1 });
+    expect(bridge.focusPage).toHaveBeenCalledTimes(1);
+    fireEvent.click(row("3").querySelector("[data-page-close]")!, { detail: 1 });
+    expect(bridge.focusPage).toHaveBeenCalledTimes(2);
+    fireEvent.click(document.querySelector("[data-page-list-new]")!);
+    const input = document.querySelector("[data-page-list-address]") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "bilibili.com" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(bridge.focusPage).toHaveBeenCalledTimes(3);
+  });
+
+  it("用鼠标点收起:键盘交给网页;用键盘按的(detail 0),焦点留在按钮上", async () => {
+    render(<BrowserPageList state={state()} top={56} />);
+    const toggle = document.querySelector("[data-page-list-toggle]") as HTMLButtonElement;
+    act(() => toggle.focus());
+    fireEvent.click(toggle, { detail: 0 });
+    expect(bridge.focusPage).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(toggle);
+    await coverLoads();
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    fireEvent.click(document.querySelector("[data-page-list-toggle]")!, { detail: 1 });
+    expect(bridge.focusPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("临时展开时按 Esc:收回,键盘交给网页", async () => {
+    window.localStorage.setItem("mosael.browserPages.collapsed", "1");
+    render(<BrowserPageList state={state()} top={56} />);
+    await peekOut(() => act(() => row("2").querySelector("button")!.focus()));
+    fireEvent.keyDown(row("2").querySelector("button")!, { key: "Escape" });
+    await waitFor(() => expect(listState()).toBe("collapsed"));
+    expect(bridge.focusPage).toHaveBeenCalled();
   });
 });

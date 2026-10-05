@@ -1,4 +1,4 @@
-import { WebContentsView, webContents, type BaseWindow, type BrowserWindow } from "electron";
+import { WebContentsView, type BaseWindow, type BrowserWindow } from "electron";
 
 /** 浮层四周留的余量(CSS 像素):说明的边框、出现时的那点缩放都不被视图的边裁掉。 */
 const PAD = 6;
@@ -26,8 +26,9 @@ export interface FloatHint {
  * 画法:加载应用自己的浮层页(frontend/float-layer.html,和主窗口同源、同一套样式),渲染层把量好的说明 HTML
  * 交过来,浮层页照原样画;这块视图只有说明那么大,挪到说明该在的位置,压在所有视图最上面。
  *
- * - 不留焦点:Electron 挂上一块新视图时会把焦点给它,点到它也会 —— 那样在地址栏、网页里打的字都进了这块看不见
- *   的视图。它一拿到焦点就还给刚才拿着焦点的那个(网页或主窗口)。只有说明那么大,指针本来就在说明外面。
+ * - 不留焦点:新视图里的页面加载完时 Chromium 会把焦点给它,点到它也会 —— 那样在地址栏、网页里打的字都进了
+ *   这块看不见的视图。它一拿到焦点就还给最后拿着焦点的那个(网页或主窗口,由 `focusTarget` 说;问「此刻谁拿着
+ *   焦点」不可靠:刚交给网页的焦点,这时候可能还没算上)。只有说明那么大,指针本来就在说明外面。
  * - 收起不是藏起来,是挪到窗口外、照常出帧:藏起来的视图下次亮出来,第一帧可能还是上一条说明。
  * - 提前建好(`warm`):内嵌浏览器一亮出来就加载浮层页,第一条说明不用等页面加载。
  */
@@ -37,17 +38,18 @@ export class FloatLayer {
   /** 正在显示(或正要显示)的那一条。 */
   private current: string | null = null;
   private bounds: Rect = { x: 0, y: 0, width: 1, height: 1 };
-  /** 浮层视图拿到焦点之前拿着焦点的那个:焦点要还给它。 */
-  private previous: Electron.WebContents | null = null;
 
-  constructor(private readonly window: BaseWindow) {}
+  constructor(
+    private readonly window: BaseWindow,
+    /** 最后拿着焦点的那个(网页或主窗口):浮层视图拿到焦点时还给它。 */
+    private readonly focusTarget: () => Electron.WebContents | null = () => null,
+  ) {}
 
   warm(): void {
     this.ensure();
   }
 
   async show(hint: FloatHint): Promise<void> {
-    this.rememberFocus();
     const view = this.ensure();
     if (!view) return;
     this.current = hint.id;
@@ -100,22 +102,15 @@ export class FloatLayer {
     return contents && !contents.isDestroyed() ? contents : null;
   }
 
-  /** 记下此刻拿着焦点的那个(不是浮层视图自己)。 */
-  private rememberFocus(): void {
-    const focused = webContents.getFocusedWebContents();
-    if (focused && focused !== this.view?.webContents) this.previous = focused;
-  }
-
   private returnFocus(): void {
-    const previous = this.previous && !this.previous.isDestroyed() ? this.previous : this.host();
-    previous?.focus();
+    const target = this.focusTarget();
+    (target && !target.isDestroyed() ? target : this.host())?.focus();
   }
 
   private ensure(): WebContentsView | null {
     if (this.view && !this.view.webContents.isDestroyed()) return this.view;
     const host = this.host();
     if (!host || this.window.isDestroyed()) return null;
-    this.rememberFocus();
     const view = new WebContentsView({
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
     });

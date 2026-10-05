@@ -22,6 +22,7 @@ export {
   snapshotViewPage,
   coverViewPage,
   showFloat,
+  focusViewPage,
   hideFloat,
   republishViewState,
   embeddedViewVisible,

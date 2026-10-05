@@ -59,6 +59,8 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
+import { installEmbeddedFocus, pageAfterPointer } from "@/features/browser-pool/embeddedFocus";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import { MainStaleBadge } from "@/features/desktop/MainStaleBadge";
 import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
@@ -96,6 +98,8 @@ export function App() {
   React.useEffect(() => watchBodyPointerLock(), []);
   // 内嵌浏览器的外壳盖在开着的弹窗上面:焦点进出外壳不让弹窗的焦点圈套拽回去(见 appChrome)。
   React.useEffect(() => installAppChromeGuards(document), []);
+  // 进出内嵌浏览器时键盘焦点怎么走(回来落回打开之前的那个按钮,网页亮着时看不见的地方不收键)。
+  React.useEffect(() => installEmbeddedFocus(), []);
   // 哪个请求建了任务,所有任务列表(任务中心、AI 工作台、转写面板……)都立刻刷新 ——
   // 它们的键都以 "jobs" 开头。见 api/transport 的 JOBS_CREATED_EVENT。
   React.useEffect(() => {
@@ -162,6 +166,7 @@ function PublishViewBar() {
   }, [state.url, editing]);
   if (!state.visible) return null;
 
+  // 回车打开:和浏览器一样,键盘交给打开的那一页。
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const value = address.trim();
@@ -169,6 +174,7 @@ function PublishViewBar() {
     (
       event.currentTarget.querySelector("input") as HTMLInputElement | null
     )?.blur();
+    void window.mosaelPublish?.focusPage?.();
   };
 
   return (
@@ -189,7 +195,10 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoBack}
-          onClick={() => void window.mosaelPublish?.back()}
+          onClick={(event) => {
+            void window.mosaelPublish?.back();
+            pageAfterPointer(event);
+          }}
           label={t("navBack")}
         >
           <ChevronLeft size={16} />
@@ -199,7 +208,10 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoForward}
-          onClick={() => void window.mosaelPublish?.forward()}
+          onClick={(event) => {
+            void window.mosaelPublish?.forward();
+            pageAfterPointer(event);
+          }}
           label={t("navForward")}
         >
           <ChevronRight size={16} />
@@ -208,7 +220,10 @@ function PublishViewBar() {
           unstyled
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
-          onClick={() => void window.mosaelPublish?.reload()}
+          onClick={(event) => {
+            void window.mosaelPublish?.reload();
+            pageAfterPointer(event);
+          }}
           label={state.loading ? t("navStop") : t("navReload")}
         >
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
@@ -236,6 +251,13 @@ function PublishViewBar() {
           onBlur={() => {
             setEditing(false);
             setAddress(state.url ?? "");
+          }}
+          onKeyDown={(event) => {
+            // Esc:不改了,地址回到当前页,键盘回到网页。
+            if (event.key !== "Escape" || isImeKeystroke(event)) return;
+            setAddress(state.url ?? "");
+            event.currentTarget.blur();
+            void window.mosaelPublish?.focusPage?.();
           }}
         />
       </form>
