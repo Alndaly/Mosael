@@ -122,7 +122,7 @@ can resume).
 
 ## Model library (1.8.0)
 
-The connection's **Model library** on the Plugins page: every model file on this ComfyUI, with a tab per folder, a
+The connection's **Model library** on the Plugins page: every model file on this ComfyUI, with its folders down the left, a
 base-model filter and search. Files with a preview (a png / jpg / webp of the same name, or a cover inside the
 safetensors) show it; the others get a per-folder placeholder. Open one for its full metadata, trigger words and the
 workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
