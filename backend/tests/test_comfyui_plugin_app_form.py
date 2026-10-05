@@ -122,7 +122,11 @@ def test_能填的项_一份推导_提示词_素材_图级的项_其余按常用
     assert by_key["6.text"]["role"] == "prompt" and by_key["7.text"]["role"] == "negative"
     assert by_key["6.text"]["schema"]["default"] == "a girl in a garden"
     assert by_key["10.image"]["title"] == {"zh": "参考图 · 人物", "en": "Reference image · 人物"}, "起了名的读图节点用它的名字"
-    assert by_key["13.image"]["title"]["zh"] == "参考图 · LoadImage #13", "没起名的是「类名 #节点」"
+    assert by_key["13.image"]["title"] == {"zh": "参考图 · 加载图像 #13", "en": "Reference image · LoadImage #13"}, \
+        "没起名的是「节点名 #节点」:中文用核心节点的中文名;夹具的 object_info 没写 display_name,英文退回类名"
+    assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}
+    assert by_key["10.image"]["node_label"] == {"zh": "人物", "en": "人物"}, "用户起的标题压过 ComfyUI 给的名字"
+    assert by_key["seed"].get("node_label") is None, "图级的项没有节点"
     assert by_key["20.lora_name"]["folder"] == "loras"
     assert by_key["seed"]["node"] == "" and by_key["size"]["schema"]["default"] == "1024x1024"
     assert by_key["20.strength_clip"]["common"] is False
@@ -132,11 +136,125 @@ def test_能填的项_一份推导_提示词_素材_图级的项_其余按常用
                        for one in found if one["kind"] in graph.VALUE_KINDS and not one.get("role")}
 
 
+#: 一个自定义 LoRA 加载器(照维护者那台 ComfyUI 上 pysssss 的 `LoraLoader|pysssss` 的定义,裁掉下拉):`prompt` 是它存示例
+#: 提示词的那一格,ComfyUI 标了 hidden,界面上没有;再加一个只有 object_info 名字的自定义节点和一格标了 advanced 的。
+NAMED_INFO: dict[str, Any] = {
+    "LoraLoader|pysssss": {
+        "display_name": "Lora Loader 🐍",
+        "input": {"required": {
+            "model": ["MODEL"], "clip": ["CLIP"],
+            "lora_name": [["detail.safetensors"], {"tooltip": "The name of the LoRA."}],
+            "strength_model": ["FLOAT", {"default": 1.0, "tooltip": "How strongly to modify the diffusion model."}],
+        }, "optional": {"prompt": ["STRING", {"hidden": True}]}},
+        "output": ["MODEL", "CLIP"],
+    },
+    "FancyBlur": {
+        "display_name": "Fancy Blur ✨",
+        "input": {"required": {
+            "image": ["IMAGE"],
+            "blur_radius": ["INT", {"default": 3, "display_name": "Blur radius", "tooltip": "Bigger is softer."}],
+            "steps": ["INT", {"default": 20, "advanced": True}],
+        }},
+        "output": ["IMAGE"],
+    },
+}
+#: ComfyUI 的 `/i18n`(自定义节点包带的翻译):FancyBlur 有中文,LoRA 加载器没有。
+NAMED_I18N: dict[str, Any] = {
+    "zh": {"nodeDefs": {"FancyBlur": {"display_name": "花式模糊", "inputs": {"blur_radius": {"name": "模糊半径",
+                                                                                         "tooltip": "越大越柔"}}},
+                        "NotInstalled": {"display_name": "没装的节点"}}},
+    "en": {"nodeDefs": {"FancyBlur": {"display_name": "Fancy Blur"}}},
+    "fr": {"nodeDefs": {"FancyBlur": {"display_name": "Flou fantaisie"}}},
+}
+
+
+def _named_api() -> dict[str, Any]:
+    return {
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
+        "13": {"class_type": "LoraLoader|pysssss", "inputs": {"model": ["4", 0], "clip": ["4", 1],
+                                                               "lora_name": "detail.safetensors", "strength_model": 0.8,
+                                                               "prompt": ""}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["13", 1], "text": "a girl"}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
+        "3": {"class_type": "KSampler", "inputs": {"model": ["13", 0], "positive": ["6", 0], "negative": ["6", 0],
+                                                   "latent_image": ["5", 0], "seed": 1, "steps": 20, "cfg": 7.0,
+                                                   "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+        "20": {"class_type": "FancyBlur", "inputs": {"image": ["8", 0], "blur_radius": 3, "steps": 20}},
+        "9": {"class_type": "SaveImage", "inputs": {"images": ["20", 0], "filename_prefix": "x"}},
+    }
+
+
+def test_节点名_用户起的标题_再是ComfyUI按语言给的名字_核心节点中文_display_name_最后才是类名(plugin) -> None:
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import labels
+    finally:
+        sys.path.remove(str(TOOLS))
+    info = labels.with_i18n({**OBJECT_INFO, **NAMED_INFO}, NAMED_I18N)
+    assert "NotInstalled" not in info, "没装的节点不因为有翻译就冒出来"
+    assert labels.node_name("FancyBlur", "", info) == {"zh": "花式模糊", "en": "Fancy Blur"}, "/i18n 按语言的名字在前"
+    assert labels.node_name("FancyBlur", "FancyBlur", info) == {"zh": "花式模糊", "en": "Fancy Blur"}, "标题就是类名 = 没起名"
+    assert labels.node_name("FancyBlur", "柔焦", info) == {"zh": "柔焦", "en": "柔焦"}, "用户起的标题压过一切"
+    assert labels.node_name("LoraLoader|pysssss", "", info) == {"zh": "Lora Loader 🐍", "en": "Lora Loader 🐍"}, \
+        "没有翻译:用 object_info 的 display_name,不用类名"
+    assert labels.node_name("KSampler", "", info) == {"zh": "K 采样器", "en": "KSampler"}, "核心节点的中文名在插件里"
+    assert labels.node_name("SomethingElse", "", info) == {"zh": "SomethingElse", "en": "SomethingElse"}, "什么都没有才是类名"
+    assert labels.with_i18n(info, None) is info and labels.with_i18n(info, {"zh": "坏的"}) is info, "形状不对就不并"
+
+
+def test_能填的项_ComfyUI给的名字和说明_hidden的不列_advanced的收进高级(plugin) -> None:
+    graph, _, _ = plugin
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import labels
+    finally:
+        sys.path.remove(str(TOOLS))
+    info = labels.with_i18n({**OBJECT_INFO, **NAMED_INFO}, NAMED_I18N)
+    api = _named_api()
+    found = {one["key"]: one for one in graph.items(api, info, {})}
+    assert "13.prompt" not in found, "pysssss 存示例提示词的那一格 ComfyUI 标了 hidden:不是「LoraLoader|pysssss · Prompt」"
+    assert found["13.lora_name"]["title"] == {"zh": "LoRA", "en": "LoRA"}, "认得的输入照旧用 Mosael 的名字"
+    assert found["13.lora_name"]["node_label"] == {"zh": "Lora Loader 🐍", "en": "Lora Loader 🐍"}
+    assert found["13.lora_name"]["hint"] == {"zh": "The name of the LoRA.", "en": "The name of the LoRA."}, \
+        "ComfyUI 的 tooltip 是这一格的说明;没有中文就两种语言都用它"
+    assert found["20.blur_radius"]["title"] == {"zh": "花式模糊 · 模糊半径", "en": "Fancy Blur · Blur radius"}, \
+        "不认得的输入:节点名 + ComfyUI 给这一格的名字(中文从 /i18n,英文从 object_info 的 display_name)"
+    assert found["20.blur_radius"]["hint"] == {"zh": "越大越柔", "en": "Bigger is softer."}
+    assert found["20.steps"]["common"] is False, "ComfyUI 标了 advanced:步数在别的节点上常用,在这里也收进高级"
+    assert found["3.steps"]["common"] is True
+    assert found["4.ckpt_name"]["node_label"] == {"zh": "Checkpoint 加载器", "en": "CheckpointLoaderSimple"}
+    assert found["6.text"]["node_label"] == {"zh": "CLIP 文本编码", "en": "CLIPTextEncode"}
+    assert all("|" not in one["title"]["zh"] for one in found.values()), "类名不进名字"
+    #: 同一份名字也进「结果取自」和节点:哪个界面都是同一个说法
+    outputs = graph.output_nodes(api, info, {})
+    assert [(one["node"], one["label"]) for one in outputs] == [("9", {"zh": "保存图像", "en": "SaveImage"})]
+
+
+def test_读ComfyUI的节点定义时并上它给的各语言名字_没有i18n照旧(plugin) -> None:
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import comfy_http
+        import labels
+    finally:
+        sys.path.remove(str(TOOLS))
+    with FakeComfyUI() as server:
+        server.state.object_info = json.loads(json.dumps({**OBJECT_INFO, **NAMED_INFO}))
+        plain = comfy_http.Comfy(server.url).object_info()
+        assert labels.I18N_KEY not in plain["FancyBlur"], "老版本没有 /i18n(404):只用 object_info 自己的名字"
+        assert labels.node_name("FancyBlur", "", plain) == {"zh": "Fancy Blur ✨", "en": "Fancy Blur ✨"}
+        server.state.static["/i18n"] = ("application/json", json.dumps(NAMED_I18N).encode())
+        named = comfy_http.Comfy(server.url).object_info()
+        assert labels.node_name("FancyBlur", "", named) == {"zh": "花式模糊", "en": "Fancy Blur"}
+        assert set(named["FancyBlur"][labels.I18N_KEY]) == {"zh", "en"}, "只并界面有的两种语言"
+
+
 def test_缺省的目录_一个角色几个槽位按顺序带名字(plugin) -> None:
     graph, _, _ = plugin
     api, titles = _api(plugin, multi_reference_ui())
     model = graph.describe("multi.json", "multi", api, OBJECT_INFO, titles)
-    assert model["inputs"] == [{"role": "reference_image", "max": 3, "labels": ["人物", "LoadImage #13", "背景"]}]
+    assert model["inputs"] == [{"role": "reference_image", "max": 3,
+                                "labels": ["人物", {"zh": "加载图像 #13", "en": "LoadImage #13"}, "背景"]}]
     assert list(model["parameters"]) == [
         "negative_prompt", "seed", "size", "num_images", "output_node", "4.ckpt_name", "20.lora_name",
         "20.strength_model", "20.strength_clip", "3.steps", "3.cfg", "3.sampler_name", "3.scheduler", "3.denoise",
@@ -148,7 +266,7 @@ def test_缺省的目录_唯一一个没起名的槽位不挂名字(plugin) -> N
     graph, _, _ = plugin
     api, titles = _api(plugin, PORTRAIT_UI)
     assert graph.describe("portrait.json", "portrait", api, OBJECT_INFO, titles)["inputs"] == [
-        {"role": "reference_image", "max": 1}], "一个角色就一格、也没起名:给它挂一个「LoadImage #10」没有用"
+        {"role": "reference_image", "max": 1}], "一个角色就一格、也没起名:给它挂一个「加载图像 #10」没有用"
 
 
 # --- 应用表单:读、核对 ---------------------------------------------------------------
@@ -172,7 +290,7 @@ def test_应用表单_目录里只有作者挑的那几项_按作者排的顺序
         "#13 没挑:它照工作流原样读 style.png;槽位按表单的顺序、用作者起的名字(没起名的用节点名)"
     assert model["prompt"] == "optional"
     choice = model["parameters"]["output_node"]
-    assert choice["default"] == "final" and choice["x-enum-labels"]["final"]["zh"] == "你选的结果(SaveImage #17)"
+    assert choice["default"] == "final" and choice["x-enum-labels"]["final"]["zh"] == "你选的结果(保存图像 #17)"
     assert model["outputs_per_run"] == 1 and model["max_outputs"] == 2, "标了一个结果:缺省只交回它;没挑跑几遍就是一遍"
 
 
@@ -286,15 +404,16 @@ def test_只标了结果_听标记不再猜(plugin) -> None:
     ui, info = fixture_workflow(TWO_PASS_HAND_DEPTH)
     api, titles = _api(plugin, ui, info)
     guessed = graph.describe("hand.json", "hand", api, info, titles)
-    assert guessed["parameters"]["output_node"]["x-enum-labels"]["final"]["zh"] == "最终结果(PreviewImage #17)"
+    assert guessed["parameters"]["output_node"]["x-enum-labels"]["final"]["zh"] == "最终结果(预览图像 #17)"
     marked = app_form.apply(ui, None, ["8"])
     assert marked["extra"]["mosael"] == {"version": 1}, "只有结果标记:没有应用表单"
     _, _, marks, form, _ = _form(plugin, marked, info)
     assert marks.results == ("8",) and not form.app
     model = graph.describe("hand.json", "hand", api, info, titles, form)
     choice = model["parameters"]["output_node"]
-    assert choice["default"] == "final" and choice["x-enum-labels"]["final"]["zh"] == "你选的结果(PreviewImage #8)"
-    assert choice["x-enum-labels"]["17"] == "PreviewImage #17", "标了结果时别的节点不再标「中间一步」"
+    assert choice["default"] == "final" and choice["x-enum-labels"]["final"]["zh"] == "你选的结果(预览图像 #8)"
+    assert choice["x-enum-labels"]["17"] == {"zh": "预览图像 #17", "en": "Preview Image #17"}, \
+        "标了结果时别的节点不再标「中间一步」"
     assert model["outputs_per_run"] == 4, "第一遍那张一遍出 4 张(画布批量 4)"
     assert graph.chosen_outputs(api, "image", "", info, titles, marked=form.results) == {"8"}
     assert list(model["parameters"]) == list(guessed["parameters"]), "没有应用表单:别的项照旧全列"
@@ -363,6 +482,9 @@ def test_读应用表单_全部能填的项和读到时的改动时间(comfy) ->
     assert out["path"] == "multi.json" and out["editable"] is True and out["kind"] == "image"
     assert out["modified"] == 1.0, "列目录给的改动时间(没存过的那张在假 ComfyUI 上是 1)"
     assert [one["key"] for one in out["items"]][:5] == ["6.text", "7.text", "10.image", "13.image", "14.image"]
+    by_key = {one["key"]: one for one in out["items"]}
+    assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}, "节点给人看的名字一路带到编辑器"
+    assert "node_label" not in by_key["seed"], "图级的项没有节点"
     assert [one["node"] for one in out["outputs"]] == ["9", "17"]
     assert out["app"]["status"] == "none" and out["app"]["items"] == []
 

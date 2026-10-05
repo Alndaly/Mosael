@@ -305,7 +305,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.outputs.append(key)
         shape.node_outputs.append(key)
         shape.output_types[key] = "text" if node["media"] == "text" else ("asset" if node["media"] != "any" else "any")
-        shape.output_labels[key] = _pair(f"{zh} · {node['title']}", f"{en} · {node['title']}")
+        name = node.get("label") or {"zh": node["title"], "en": node["title"]}
+        shape.output_labels[key] = _pair(f"{zh} · {name['zh']}", f"{en} · {name['en']}")
     for key, data_type, zh, en in WIRING_OUTPUTS:
         shape.outputs.append(key)
         shape.output_types[key] = data_type

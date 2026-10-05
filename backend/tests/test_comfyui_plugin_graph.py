@@ -432,7 +432,8 @@ def test_撞名时才带上是哪个节点(graph) -> None:
     }
     parameters = graph.describe("x.json", "x", api, OBJECT_INFO, {"9": "精修"})["parameters"]
     assert parameters["3.steps"]["title"] == {"zh": "步数", "en": "Steps"}
-    assert parameters["8.steps"]["title"] == {"zh": "步数 · 第 2 个 KSampler", "en": "Steps · KSampler #2"}
+    assert parameters["8.steps"]["title"] == {"zh": "步数 · 第 2 个 K 采样器", "en": "Steps · KSampler #2"}, \
+        "撞名时带的是节点给人看的名字(中文是核心节点的中文名),不是类名"
     assert parameters["9.steps"]["title"] == {"zh": "步数 · 精修", "en": "Steps · 精修"}, "用户起了名字就用名字"
 
 
@@ -645,8 +646,9 @@ def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> Non
     slots = {slot["node"]: slot["role"] for slot in graph.slots(api, "image")}
     assert slots == {"10": "reference_image", "11": "mask", "12": "mask"}, "只用了 alpha 那一路的 LoadImage 是蒙版"
     model = graph.describe("inpaint.json", "inpaint", api, OBJECT_INFO)
-    assert {"role": "mask", "max": 2, "required": True, "labels": ["LoadImageMask #11", "LoadImage #12"]} in model["inputs"], \
-        "一个角色几个槽位:按槽位顺序带名字(没起名的是「类名 #节点」)"
+    assert {"role": "mask", "max": 2, "required": True, "labels": [
+        {"zh": "加载图像(作为蒙版) #11", "en": "LoadImageMask #11"}, {"zh": "加载图像 #12", "en": "LoadImage #12"},
+    ]} in model["inputs"], "一个角色几个槽位:按槽位顺序带名字(没起名的是「节点名 #节点」)"
     assert model["modes"] == ["image-to-image"]
     assert "11.channel" not in model["parameters"], "读蒙版的节点是槽位,不是参数"
     assert "inpaint" in graph.features(api)
@@ -1015,10 +1017,10 @@ def test_多个保存节点时_结果取自列出每一个(graph) -> None:
                                        "9": "原图", "12": "高清"}
     assert choice["x-outputs-per-run"] == {"all": 4, "9": 2, "12": 2}, "每一项跑一遍交回几张:各自的批量"
     assert "x-advanced" not in choice, "在「参数」里一眼看得到"
-    #: 节点没改标题(都叫 PreviewImage):带上节点号才分得清。
+    #: 节点没改标题(都叫「预览图像」):带上节点号才分得清。
     labels = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)["parameters"]["output_node"]["x-enum-labels"]
     assert labels == {"all": {"zh": "全部(3 个预览节点)", "en": "All (3 preview nodes)"},
-                      "13": "PreviewImage #13", "17": "PreviewImage #17", "18": "PreviewImage #18"}
+                      **{node: {"zh": f"预览图像 #{node}", "en": f"PreviewImage #{node}"} for node in ("13", "17", "18")}}
 
 
 def test_收产出时只要选中的那个节点的(graph) -> None:
@@ -1068,11 +1070,11 @@ def test_古风女孩1_缺省只交回最终结果(graph, convert) -> None:
     choice = model["parameters"]["output_node"]
     assert choice["default"] == "final" and choice["enum"] == ["final", "all", "8", "17", "18"]
     assert choice["x-enum-labels"] == {
-        "final": {"zh": "最终结果(PreviewImage #17)", "en": "Final result (PreviewImage #17)"},
+        "final": {"zh": "最终结果(预览图像 #17)", "en": "Final result (Preview Image #17)"},
         "all": {"zh": "全部(3 个预览节点)", "en": "All (3 preview nodes)"},
-        "8": {"zh": "PreviewImage #8(中间一步)", "en": "PreviewImage #8 (intermediate)"},
-        "17": "PreviewImage #17",
-        "18": {"zh": "PreviewImage #18(控制图)", "en": "PreviewImage #18 (control image)"},
+        "8": {"zh": "预览图像 #8(中间一步)", "en": "Preview Image #8 (intermediate)"},
+        "17": {"zh": "预览图像 #17", "en": "Preview Image #17"},
+        "18": {"zh": "预览图像 #18(控制图)", "en": "Preview Image #18 (control image)"},
     }
     assert choice["x-outputs-per-run"] == {"final": 4, "all": 12, "8": 4, "17": 4, "18": 4}
     assert "不是最终结果" in choice["description"]["zh"]
@@ -1211,8 +1213,8 @@ def test_从成图里算出来拿去看的蒙版和控制图_是辅助图_成图
     assert graph.auxiliary_view(depth, "11", AUX_INFO) == "control"
     assert _finals(graph, depth, AUX_INFO) == ["7"]
     labels = graph.describe("depth.json", "d", depth, {**OBJECT_INFO, **AUX_INFO})["parameters"]["output_node"]["x-enum-labels"]
-    assert labels["final"] == {"zh": "最终结果(PreviewImage #7)", "en": "Final result (PreviewImage #7)"}
-    assert labels["11"] == {"zh": "PreviewImage #11(控制图)", "en": "PreviewImage #11 (control image)"}
+    assert labels["final"] == {"zh": "最终结果(预览图像 #7)", "en": "Final result (PreviewImage #7)"}
+    assert labels["11"] == {"zh": "预览图像 #11(控制图)", "en": "PreviewImage #11 (control image)"}
 
 
 def test_整张图没有解码节点的不挑(graph) -> None:

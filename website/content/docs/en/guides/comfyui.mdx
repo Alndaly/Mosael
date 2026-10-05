@@ -331,23 +331,37 @@ every time the ComfyUI page reloads. If the ComfyUI frontend is too old to have 
 ### Apps: pick the items others fill in
 
 A workflow can have dozens of parameters while whoever fills it in only needs three or five. In a workflow's detail, click
-**Edit app form** in the **App** section:
+**Edit app form** in the **App** section and build the form the way you would build any form. At the top are the **app name**
+and a **description** (one line for whoever fills it in), with a small line below saying where it is kept. Under that:
 
-- **On the left**, everything the workflow can take, grouped into text, inputs, models, parameters and seed · size · runs,
-  and searchable. Tick an item to put it on the form, give it a name ("Portrait photo", "Style") and move it up or down; a
-  text item can be the **main prompt** (it goes into the prompt box of the AI workbench and boards; unticked, it is a text
-  field of its own); dropdowns and model pickers can be **narrowed** to the choices you tick. Nodes inside a subgraph can't
-  be added yet.
-- **Results**: when the workflow has several output nodes, mark the one you want as the result ("keep only this one from
-  now on"), and "Results from" defaults to it instead of Mosael's guess.
-- **On the right**, a preview drawn with the generation panel's own controls: it is the form the AI workbench, boards and
-  workflow nodes show for this workflow.
+- **From the workflow** (left): everything the workflow can take, **grouped by node**. A group is named after its node: the
+  title you gave it in ComfyUI, or else ComfyUI's own name for that kind of node ("KSampler", "Lora Loader 🐍"), never an
+  internal class name such as `LoraLoader|pysssss`; seed, size and runs sit in the "Whole workflow" group. Each row shows the
+  name and the value saved in the workflow; click **+** to add it to the form, and click the tick on an added row to take it
+  off again. You can search names or nodes, and hovering shows ComfyUI's description of the input plus the node number and
+  class (for troubleshooting). Nodes inside a subgraph can't be added yet.
+- **Form** (middle): each picked item is a card with an icon for its kind (text, image, model, number, choice…). **Drag** the
+  handle to reorder, or focus the handle and press ↑ ↓; **rename** an item in place ("Portrait photo", "Style"). A card's
+  **Settings** let a text item be the **main prompt** (it goes into the prompt box of the AI workbench and boards; off, it
+  is a text field of its own on the form), **narrow** a dropdown or model picker to the choices you tick, move it up or down,
+  or remove it. While the form is empty, **Start with a suggested set** picks the prompt, negative prompt, main model, seed,
+  size, runs and every image / video / audio input; adjust it from there. Leaving the form empty is fine too: people then see
+  everything that can be filled in.
+- **Results from** (below the form): when the workflow has several nodes that produce images, click **Only this node's
+  images** on the one you want. From then on, when the workflow is used in the AI workbench, boards or workflow nodes, only
+  images from the marked nodes are kept and the other preview nodes are left out; with none marked, Mosael guesses the final
+  result. A marked node says "Results come from this node" and can be undone. "Results from" can still be changed every time.
+- **Preview** (right): exactly what people will see, drawn with the generation panel's own controls; you can try filling it
+  in and nothing is saved. While the form is empty it shows what people see today (everything that can be filled in).
 
-Saving asks first, naming the server and the file, and only Mosael's marks change (`properties.mosael` on nodes,
-`extra.mosael` on the graph); nothing else in the workflow is touched. The form lives **in the workflow's own JSON**, so it
-travels with copies, exports and other ComfyUI servers, and everyone using the same ComfyUI sees the same form. If the
-workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was just saved in ComfyUI,
-Mosael doesn't write and asks you to open it again. With nothing picked, the app form is removed.
+The footer says when there are unsaved changes, and closing with changes asks first. **Save to workflow…** asks first, naming
+the server and the file: the app form is **saved inside this workflow file**, so it travels with copies, exports and other
+ComfyUI servers, and everyone using the same ComfyUI sees the same form. Only the app form changes; nothing else in the
+workflow is touched. If the workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was
+just saved in ComfyUI, Mosael doesn't write and asks you to open it again. With nothing picked, the app form is removed.
+
+The workbench's **App** panel uses the same editor; the column is narrow, so the three parts become the **Pick / Form /
+Preview** tabs. The dialog does the same in a narrow window.
 
 Once a workflow has an app form:
 
@@ -359,8 +373,10 @@ Once a workflow has an app form:
 - Several loader nodes each have a name: the corner of the AI workbench thumbnail, the hint on a board's input slot and the
   line under a workflow node's field say "Portrait", "Background", so it is clear which image goes to which node.
 - When the workflow changed in ComfyUI and an item no longer matches (the node was muted or deleted, the input became a
-  link, a narrowed choice is gone), it is left off the form; the detail lists why, and **Remove invalid items…** clears
-  them in one go.
+  link, a narrowed choice is gone), it is left off the form. The editor marks the item with the reason: when only narrowed
+  choices are gone, **Keep only the choices still there** makes it usable again; otherwise remove it, or clear them all
+  with "Remove the N invalid item(s)". The workflow's detail lists them too, and **Remove invalid items…** clears them in
+  one go.
 
 ### Importing workflows from elsewhere and completing them
 

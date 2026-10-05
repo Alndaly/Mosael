@@ -85,7 +85,7 @@ def test_入参从这张图里推(comfy, tmp_path: Path) -> None:
     assert schema["required"] == [], "有提示词、有画布:参考图可给可不给"
     node = tool["node"]
     assert node["outputs"][0] == "image_9" and node["output_types"]["image_9"] == "asset"
-    assert node["output_labels"]["image_9"] == {"zh": "图 · SaveImage", "en": "Image · SaveImage"}
+    assert node["output_labels"]["image_9"] == {"zh": "图 · 保存图像", "en": "Image · SaveImage"}, "节点用给人看的名字"
     assert {"asset_id", "asset_ids", "texts", "summary"} <= set(node["outputs"])
     generic, by_path = tool["replaces"]
     rename = generic["rename"]

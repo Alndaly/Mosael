@@ -111,7 +111,7 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
         "negative_prompt": "negative" in roles,
         "size": size,
         "inputs": [
-            {"node": slot["node"], "title": named.get((slot["node"], slot["field"])) or slot["title"],
+            {"node": slot["node"], "title": named.get((slot["node"], slot["field"])) or _text(graph.slot_name(slot), locale),
              "class_type": slot["class_type"], "media": slot["media"], "role": slot["role"]}
             for slot in found_slots
         ],

@@ -15704,6 +15704,11 @@ export interface components {
              */
             title: string;
             /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
              * Class Type
              * @default
              */
@@ -15957,6 +15962,16 @@ export interface components {
              * @default
              */
             node_title: string;
+            /**
+             * Node Label
+             * @default
+             */
+            node_label: string;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
             /**
              * Class Type
              * @default

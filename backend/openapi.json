@@ -40652,6 +40652,11 @@
             "title": "Title",
             "default": ""
           },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
           "class_type": {
             "type": "string",
             "title": "Class Type",
@@ -41168,6 +41173,16 @@
           "node_title": {
             "type": "string",
             "title": "Node Title",
+            "default": ""
+          },
+          "node_label": {
+            "type": "string",
+            "title": "Node Label",
+            "default": ""
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
             "default": ""
           },
           "class_type": {

@@ -87,8 +87,8 @@ def test_列出工作流_说清楚读什么素材_用哪个工具跑(comfy) -> N
     assert set(listed) == {"builtin:txt2img", "portrait.json", "upscale.json", "video/wan.json"}
     upscale = listed["upscale.json"]
     assert upscale["features"] == ["upscale"] and upscale["prompt"] is False
-    assert upscale["inputs"] == [{"node": "1", "title": "LoadImage", "class_type": "LoadImage", "media": "image",
-                                  "role": "reference_image"}]
+    assert upscale["inputs"] == [{"node": "1", "title": "加载图像 #1", "class_type": "LoadImage", "media": "image",
+                                  "role": "reference_image"}], "读素材的节点用给人看的名字加节点号,类名另给"
     assert upscale["tool"] == UPSCALE_TOOL and listed["builtin:txt2img"]["tool"] == "wf_builtin_txt2img"
     assert [(one["node"], one["media"]) for one in upscale["outputs"]] == [("4", "image"), ("5", "image")]
     [model_param] = upscale["parameters"]

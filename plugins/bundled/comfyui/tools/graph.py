@@ -447,7 +447,7 @@ def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = Non
 
 def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
                  titles: dict[str, str] | None = None) -> list[dict[str, str]]:
-    """会交出东西的节点 `{node, class_type, title, media}`。
+    """会交出东西的节点 `{node, class_type, title, label, media}`(`label` 是给人看的节点名,见 labels.node_name)。
 
     ComfyUI 在 object_info 里给每个节点标了是不是输出节点(`output_node`)—— 标了就信它(自定义节点也认得出,
     标着 false 的也不算);没标的(没给 object_info、没装的节点)按已知的几类认。再按已知的几类说它交出的是图、
@@ -467,6 +467,7 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
         if _previews_input(api, node_id):
             continue
         found.append({"node": node_id, "class_type": class_type, "title": titles.get(node_id) or class_type,
+                      "label": labels.node_name(class_type, titles.get(node_id, ""), object_info),
                       "media": output_media(class_type)})
     return found
 
@@ -832,13 +833,15 @@ def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
                 continue  # 尺寸是宿主的控件;一遍出几张按工作流原样(见 counts_runs),不在这里改
             if (node_id, name) in slot_fields or class_type in _LOADERS and name in ("image", "upload", "channel"):
                 continue  # 读素材的槽位
+            if labels.hidden_input(class_type, name, object_info):
+                continue  # ComfyUI 自己的界面上就没有这一格(存示例提示词这类),不是给人调的
             spec = _schema(defs.get(name), value)
             if spec is None:
                 continue
             folder = labels.model_folder(class_type, name)
             if folder and "enum" in spec:
                 spec["x-model-folder"] = folder
-            described = labels.describe(node_id, name, class_type, titles.get(node_id, ""), order)
+            described = labels.describe(node_id, name, class_type, titles.get(node_id, ""), order, object_info)
             if not described.common or class_type in _SAVE_NODE_TYPES:
                 spec["x-advanced"] = True
             spec["description"] = f"{titles.get(node_id) or class_type} · {name}"
@@ -882,9 +885,18 @@ def _value_kind(spec: dict[str, Any]) -> str:
     return "text"
 
 
-def slot_name(slot: dict[str, str]) -> str:
-    """一个读素材的槽位叫什么:用户给节点起的名字;没起就是「LoadImage #10」(和「结果取自」里的节点名同一种写法)。"""
-    return slot["title"] if slot["title"] != slot["class_type"] else f"{slot['class_type']} #{slot['node']}"
+def slot_name(slot: dict[str, Any]) -> dict[str, str]:
+    """一个读素材的槽位叫什么(`{"zh", "en"}`):用户给节点起的名字;没起就是「加载图像 #10」—— ComfyUI 给这类节点的名字
+    加节点号(和「结果取自」里的节点名同一种写法,见 labels.node_name),不是类名。"""
+    if slot["title"] != slot["class_type"]:
+        return {"zh": slot["title"], "en": slot["title"]}
+    name = slot.get("label") or labels.node_name(slot["class_type"])
+    return {"zh": f"{name['zh']} #{slot['node']}", "en": f"{name['en']} #{slot['node']}"}
+
+
+def plain(name: dict[str, str]) -> str | dict[str, str]:
+    """一个名字交出去的样子:两种语言一样(用户起的标题)就是一句,不一样才按语言分开写。"""
+    return name["zh"] if name["zh"] == name["en"] else name
 
 
 def _size_spec(api: dict[str, Any], sized: str | None) -> dict[str, Any]:
@@ -924,8 +936,10 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
     - 其余给人调的字面量输入(见 _tunable_entries):选模型文件的下拉(`model`,带 `folder`)、别的下拉(`choice`)、
       开关(`toggle`)、数字(`number`)、文字(`text`,没有 `role`)。
 
-    每项 `{key, node, input, kind, title, node_title, class_type, common, schema?}`:`key` 是锚点(`<节点 id>.<输入名>`,图级的项
-    就是它的名字),`title` 是人话名字(按语言分),`schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。
+    每项 `{key, node, input, kind, title, node_title, node_label?, hint?, class_type, common, schema?}`:`key` 是锚点
+    (`<节点 id>.<输入名>`,图级的项就是它的名字),`title` 是人话名字(按语言分),`node_label` 是节点给人看的名字(用户起的
+    标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它),`hint` 是 ComfyUI 给这一格的说明,
+    `schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。类名(`class_type`)只给排错的悬停说明用。
     顺序:提示词、素材、图级的项、其余按常用程度。生成目录(describe)、工具(tooling.shape_of)、应用表单(app_form)都从它出发。
     """
     titles = titles or {}
@@ -933,10 +947,14 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
     placeholders = _placeholders_in(api)
     found: list[dict[str, Any]] = []
 
-    def node_facts(node_id: str) -> tuple[str, str]:
+    def node_facts(node_id: str) -> tuple[str, str, dict[str, str]]:
         class_type = str(api[node_id].get("class_type", ""))
         title = titles.get(node_id) or class_type
-        return class_type, (title if title != class_type else "")
+        return class_type, (title if title != class_type else ""), labels.node_name(class_type, title, object_info)
+
+    def hinted(item: dict[str, Any], class_type: str, name: str) -> dict[str, Any]:
+        hint = labels.input_hint(class_type, name, object_info)
+        return {**item, "hint": hint} if hint else item
 
     prompts = text_slots(api, object_info)
     per_role: dict[str, int] = {}
@@ -945,28 +963,29 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
         per_role[role] = per_role.get(role, 0) + 1
         per_node[(node_id, role)] = per_node.get((node_id, role), 0) + 1
     for (node_id, field), role in prompts.items():
-        class_type, custom = node_facts(node_id)
+        class_type, custom, where = node_facts(node_id)
         zh, en = ("提示词", "Prompt") if role == "prompt" else ("反向提示词", "Negative prompt")
         if per_role[role] > 1:
-            where = custom or f"{class_type} #{node_id}"
+            at = {"zh": custom, "en": custom} if custom else {lang: f"{where[lang]} #{node_id}" for lang in ("zh", "en")}
             if per_node[(node_id, role)] > 1:
-                where = f"{where} · {field}"
-            zh, en = f"{zh} · {where}", f"{en} · {where}"
+                at = {lang: f"{at[lang]} · {field}" for lang in ("zh", "en")}
+            zh, en = f"{zh} · {at['zh']}", f"{en} · {at['en']}"
         value = api[node_id]["inputs"][field]
         schema: dict[str, Any] = {"type": "string", "x-multiline": True}
         if isinstance(value, str):
             schema["default"] = value
-        found.append({"key": f"{node_id}.{field}", "node": node_id, "input": field, "kind": "text", "role": role,
-                      "title": _pair(zh, en), "node_title": custom, "class_type": class_type, "common": True,
-                      "schema": schema})
+        found.append(hinted({"key": f"{node_id}.{field}", "node": node_id, "input": field, "kind": "text", "role": role,
+                             "title": _pair(zh, en), "node_title": custom, "node_label": where,
+                             "class_type": class_type, "common": True, "schema": schema}, class_type, field))
 
     for slot in slots(api, kind, titles):
+        _, custom, where = node_facts(slot["node"])
+        name = slot_name({**slot, "label": where})
         zh, en = labels.ROLE_NAMES.get(slot["role"], ("素材", "Input"))
         found.append({"key": f"{slot['node']}.{slot['field']}", "node": slot["node"], "input": slot["field"],
                       "kind": "media", "role": slot["role"], "media": slot["media"],
-                      "title": _pair(f"{zh} · {slot_name(slot)}", f"{en} · {slot_name(slot)}"),
-                      "node_title": slot["title"] if slot["title"] != slot["class_type"] else "",
-                      "class_type": slot["class_type"], "common": True})
+                      "title": _pair(f"{zh} · {name['zh']}", f"{en} · {name['en']}"),
+                      "node_title": custom, "node_label": where, "class_type": slot["class_type"], "common": True})
 
     if seed_inputs(api) or "seed" in placeholders:
         found.append({"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": _pair("种子", "Seed"),
@@ -983,7 +1002,10 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
     for described, spec, name in _tunable_entries(api, object_info, titles):
         item: dict[str, Any] = {"key": described.key, "node": described.node, "input": described.input,
                                 "kind": _value_kind(spec), "title": name, "node_title": described.node_title,
-                                "class_type": described.class_type, "common": "x-advanced" not in spec, "schema": spec}
+                                "node_label": described.node_label, "class_type": described.class_type,
+                                "common": "x-advanced" not in spec, "schema": spec}
+        if described.hint:
+            item["hint"] = described.hint
         if spec.get("x-model-folder"):
             item["folder"] = spec["x-model-folder"]
         found.append(item)
@@ -1049,18 +1071,19 @@ class Form:
     def slots(self) -> list[dict[str, str]]:
         """读素材的槽位(和 `slots` 同形),按表单的顺序 —— 宿主给的第 i 份接到这个角色的第 i 个槽位上。"""
         return [{"node": one.item["node"], "class_type": one.item["class_type"],
-                 "title": one.item.get("node_title") or one.item["class_type"], "media": one.item["media"],
+                 "title": one.item.get("node_title") or one.item["class_type"],
+                 **({"label": one.item["node_label"]} if one.item.get("node_label") else {}), "media": one.item["media"],
                  "field": one.item["input"], "role": one.item["role"]} for one in self.media()]
 
-    def slot_labels(self) -> dict[str, list[str]]:
-        """每个角色的槽位按顺序叫什么(宿主描述符的 `source_labels`)。
+    def slot_labels(self) -> dict[str, list[Any]]:
+        """每个角色的槽位按顺序叫什么(宿主描述符的 `source_labels`;作者起的名字是一句,节点名按语言分)。
 
         应用表单里每个槽位都有名字(作者起的,没起就是节点名);缺省的表单只在名字说得出东西时才给 —— 一个角色有几个
-        槽位、或者用户给读图节点起过名字(`YZ金鱼` 那种十个读图节点),免得给唯一的一格挂一个「LoadImage #10」。
+        槽位、或者用户给读图节点起过名字(`YZ金鱼` 那种十个读图节点),免得给唯一的一格挂一个「加载图像 #10」。
         """
-        named: dict[str, list[str]] = {}
+        named: dict[str, list[Any]] = {}
         for one, slot in zip(self.media(), self.slots(), strict=True):
-            named.setdefault(slot["role"], []).append(one.label or slot_name(slot))
+            named.setdefault(slot["role"], []).append(one.label or plain(slot_name(slot)))
         if self.app:
             return named
         counts: dict[str, int] = {}
@@ -1086,10 +1109,16 @@ ALL_OUTPUTS = "all"
 FINAL_OUTPUTS = "final"
 
 
-def _choice_name(node: dict[str, str], nodes: list[dict[str, str]]) -> str:
-    """一个节点在「结果取自」里叫什么:节点标题;几个节点同名(没改标题,都叫 SaveImage / PreviewImage)才带上节点号。"""
-    same = sum(1 for one in nodes if one["title"] == node["title"])
-    return f"{node['title']} #{node['node']}" if same > 1 else node["title"]
+def _node_label(node: dict[str, Any]) -> dict[str, str]:
+    return node.get("label") or {"zh": node["title"], "en": node["title"]}
+
+
+def _choice_name(node: dict[str, Any], nodes: list[dict[str, Any]]) -> dict[str, str]:
+    """一个节点在「结果取自」里叫什么(`{"zh", "en"}`):节点给人看的名字(用户起的标题,没起就是 ComfyUI 给这类节点的名字,
+    见 labels.node_name);几个节点同名(没改标题,都叫「保存图像」「预览图像」)才带上节点号。"""
+    name = _node_label(node)
+    same = sum(1 for one in nodes if _node_label(one) == name)
+    return {lang: f"{name[lang]} #{node['node']}" for lang in ("zh", "en")} if same > 1 else dict(name)
 
 
 #: 不是最终结果的那几个选项名后面标什么(见 final_outputs、auxiliary_view)。
@@ -1122,7 +1151,7 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
         head = ("你选的结果", "Your result") if chosen else ("最终结果", "Final result")
         if len(finals) == 1:
             name = _choice_name(finals[0], nodes)
-            labels[FINAL_OUTPUTS] = {"zh": f"{head[0]}({name})", "en": f"{head[1]} ({name})"}
+            labels[FINAL_OUTPUTS] = {"zh": f"{head[0]}({name['zh']})", "en": f"{head[1]} ({name['en']})"}
         else:
             labels[FINAL_OUTPUTS] = {"zh": f"{head[0]}({len(finals)} 个{what[0]})",
                                      "en": f"{head[1]}s ({len(finals)} {what[1]})"}
@@ -1132,10 +1161,10 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
     for node in nodes:
         name = _choice_name(node, nodes)
         if node["node"] in final_ids or chosen:
-            labels[node["node"]] = name
+            labels[node["node"]] = plain(name)
         else:
             zh, en = _NOT_FINAL_MARKS[auxiliary_view(api, node["node"], object_info)]
-            labels[node["node"]] = {"zh": f"{name}({zh})", "en": f"{name} ({en})"}
+            labels[node["node"]] = {"zh": f"{name['zh']}({zh})", "en": f"{name['en']} ({en})"}
         enum.append(node["node"])
     if staged and chosen:
         description = {

@@ -70,7 +70,8 @@ elif op == "workflows":
                                   {"x": 1, "y": 1, "w": 1, "h": 1, "color": "red;background:url(x)"}]},
              "inputs": [{"node": "10", "title": "参考图", "media": "image", "role": "reference_image"}],
              "parameters": [{"key": "3.steps", "title": "步数", "type": "integer"}],
-             "outputs": [{"node": "9", "title": "保存图像", "media": "image"}],
+             "outputs": [{"node": "9", "title": "SaveImage", "label": {"zh": "保存图像", "en": "Save Image"}, "media": "image"},
+                         {"node": "12", "title": "高清", "media": "image"}],
              "models": [{"folder": "checkpoints", "name": "sdxl.safetensors", "present": True},
                         {"folder": "vae", "name": "ae.safetensors", "present": False}, {"folder": ""}],
              "missing_nodes": [{"type": "CR Prompt Text", "count": 2,
@@ -151,13 +152,17 @@ elif op == "app":
             {"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": {"zh": "种子", "en": "Seed"},
              "schema": {"type": "integer", "minimum": 0}},
             {"key": "4.ckpt_name", "node": "4", "input": "ckpt_name", "kind": "model", "folder": "checkpoints",
-             "title": {"zh": "模型", "en": "Checkpoint"},
+             "title": {"zh": "模型", "en": "Checkpoint"}, "class_type": "CheckpointLoaderSimple",
+             "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"},
+             "hint": {"zh": "要加载的模型", "en": "The name of the checkpoint (model) to load."},
              "schema": {"type": "string", "enum": ["a.safetensors", "b.safetensors"], "x-model-folder": "checkpoints"}},
             {"key": "12:5.steps", "node": "12:5", "input": "steps", "kind": "number", "title": "步数",
              "schema": {"type": "integer", "title": {"zh": "步数", "en": "Steps"}}},
             {"key": "x", "node": "3", "input": "x", "kind": "weird", "title": "?"},
         ],
-        "outputs": [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image"}],
+        "outputs": [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image",
+                     "label": {"zh": "保存图像", "en": "Save Image"}},
+                    {"node": "12", "title": "高清", "class_type": "SaveImage", "media": "image"}],
         "app": {"status": "unsupported", "version": 2, "items": [], "results": []},
     }})
 elif op == "annotate":
@@ -251,6 +256,9 @@ def test_列出插件报的工作流_宿主规整字段_补上它在Mosael里是
     assert graph["nodes"][2]["w"] >= 20 and graph["nodes"][2]["h"] >= 20, "没有大小的节点也画得出来"
     assert graph["links"] == [[0, 1], [1, 2]], "连线只留指着节点的"
     assert [group["color"] for group in graph["groups"]] == ["#3f789e", ""], "颜色只认 #RGB,不让别的东西进样式"
+    assert portrait["outputs"] == [{"node": "9", "title": "保存图像", "media": "image"},
+                                   {"node": "12", "title": "高清", "media": "image"}], \
+        "交出什么:节点给人看的名字按语言挑好,不是类名;插件没给就用标题"
     assert portrait["models"] == [{"folder": "checkpoints", "name": "sdxl.safetensors", "present": True},
                                   {"folder": "vae", "name": "ae.safetensors", "present": False}]
     assert portrait["missing_nodes"] == [{"type": "CR Prompt Text", "count": 2, "packs": [
@@ -512,7 +520,14 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert by_key["12:5.steps"]["exposable"] is False and by_key["12:5.steps"]["spec"]["title"] == "步数", \
         "子图里面的节点照样列出来,标着这一版不能放进应用表单"
     assert by_key["seed"]["exposable"] is True
-    assert body["outputs"] == [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image"}]
+    assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器" and by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
+        "节点给人看的名字、ComfyUI 的说明也按语言挑好"
+    assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
+    assert by_key["seed"]["node_label"] == "" and by_key["seed"]["hint"] == ""
+    assert body["outputs"] == [
+        {"node": "9", "title": "SaveImage", "label": "保存图像", "class_type": "SaveImage", "media": "image"},
+        {"node": "12", "title": "高清", "label": "高清", "class_type": "SaveImage", "media": "image"},
+    ], "输出节点给人看的名字按语言挑好;插件没给就用标题"
     assert body["app"]["status"] == "unsupported" and body["app"]["version"] == "2"
     bad = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "../x.json"})
     assert bad.status_code == 422

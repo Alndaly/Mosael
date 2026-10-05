@@ -236,7 +236,9 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
         "graph": _graph(raw.get("graph")),
         "inputs": _items(raw.get("inputs"), {"node": 40, "title": 200, "media": 20, "role": 40}),
         "parameters": _items(raw.get("parameters"), {"key": 200, "title": 200, "type": 20}),
-        "outputs": _items(raw.get("outputs"), {"node": 40, "title": 200, "media": 20}),
+        # 输出节点给人看的名字(插件按语言给的 `label`:用户起的标题,没起就是 ComfyUI 给这类节点的名字),不是类名
+        "outputs": [{**one, "title": _picked(source.get("label"), 200) or one["title"]}
+                    for one, source in _outputs(raw.get("outputs"), {"node": 40, "title": 200, "media": 20})],
         "models": [
             {"folder": item["folder"], "name": item["name"], "present": bool(one.get("present"))}
             for one in raw.get("models") or [] if isinstance(one, dict)
@@ -462,9 +464,14 @@ _ITEM_KINDS = {"text", "media", "model", "number", "choice", "toggle", "seed", "
 _MAX_APP_FOUND = 1000
 
 
+def _picked(value: Any, limit: int) -> str:
+    """一段给人看的字:按看的人的语言挑好(`{"zh", "en"}`),或者本来就是一句。"""
+    return _text(pick_text(value) if isinstance(value, dict) else value, limit)
+
+
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
-    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁、常用与否、JSON Schema 片段
-    (和生成目录同一套规整,见 plugins/generation.parameters —— 预览和真的表单是同一个形状)。"""
+    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的
+    说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters —— 预览和真的表单是同一个形状)。"""
     if not isinstance(raw, dict):
         return None
     node, name, kind = _text(raw.get("node"), 40), _text(raw.get("input"), 200), _text(raw.get("kind"), 20)
@@ -474,8 +481,10 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     title = raw.get("title")
     item: dict[str, Any] = {
         "key": key, "node": node, "input": name, "kind": kind,
-        "title": _text(pick_text(title) if isinstance(title, dict) else title, 200) or key,
+        "title": _picked(title, 200) or key,
         "node_title": _text(raw.get("node_title"), 200),
+        "node_label": _picked(raw.get("node_label"), 200),
+        "hint": _picked(raw.get("hint"), 500),
         "class_type": _text(raw.get("class_type"), 200),
         "common": raw.get("common") is True,
         "role": _text(raw.get("role"), 40),
@@ -513,9 +522,18 @@ def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], p
         "kind": _text(output.get("kind"), 20),
         "editable": output.get("editable") is True,
         "items": items,
-        "outputs": _items(output.get("outputs"), {"node": 40, "title": 200, "class_type": 200, "media": 20}),
+        "outputs": [{**one, "label": _picked(source.get("label"), 200) or one["title"]}
+                    for one, source in _outputs(output.get("outputs"), {"node": 40, "title": 200, "class_type": 200,
+                                                                        "media": 20})],
         "app": _app_summary(output.get("app")) or _app_summary({"status": "none"}),
     }
+
+
+def _outputs(value: Any, keys: dict[str, int]) -> list[tuple[dict[str, str], dict[str, Any]]]:
+    """输出节点:规整过的那几格(`keys`),连同插件原样给的那一条(给人看的节点名 `label` 按语言分,要另挑)。"""
+    raw = [one for one in value if isinstance(one, dict)] if isinstance(value, list) else []
+    clean = [(_items([one], keys), one) for one in raw]
+    return [(found[0], one) for found, one in clean if found][:_MAX_LIST]
 
 
 def _too_big() -> WorkflowLibraryError:

@@ -7,16 +7,16 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
-import { AppFormEditor } from "@/features/plugins/WorkflowAppEditor";
+import { AppFormEditor, AppHead } from "@/features/plugins/appForm/AppFormEditor";
 import { initialDraft, sameDraft, type AppDraft } from "@/features/plugins/workflowAppForm";
 import { readCanvasApp, writeCanvasApp } from "@/features/plugins/workbench/canvasMarks";
 import { PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { WorkbenchCallError, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
 /**
- * 工作台的「应用」面板(ADR 0038 §2、§8):工作流库里那个应用表单编辑器,绑在**画布上现在这张**上。读:经桥导出画布(含没存的),
- * 插件列出全部能填的项和画布上的标记;写:插件算出要改的那几处标记,经桥改画布上的节点 —— 不写文件,存盘是 ComfyUI 自己的保存
- * (顶栏的「保存」或在画布里 Ctrl+S),和用户在 ComfyUI 里改别的东西是同一次保存。
+ * 工作台的「应用」面板(ADR 0038 §2、§8):工作流库里那个应用表单编辑器,绑在**画布上现在这张**上,窄版(挑项 / 表单 / 预览
+ * 三个标签)。读:经桥导出画布(含没存的),插件列出全部能填的项和画布上的标记;写:插件算出要改的那几处标记,经桥改画布上的节点
+ * —— 不写文件,存盘是 ComfyUI 自己的保存(顶栏的「保存」或在画布里 Ctrl+S),和用户在 ComfyUI 里改别的东西是同一次保存。
  */
 export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarget; canExport: boolean; canMark: boolean }) {
   const t = useI18n();
@@ -49,11 +49,21 @@ export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarg
     return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t(canExport ? "workbenchCapMarks" : "workbenchCapExport"))}</PanelNote>;
   }
   const failure = read.error ?? write.error;
+  const change = (next: AppDraft) => {
+    setWritten(false);
+    setDraft(next);
+  };
   const dirty = Boolean(draft && base && !sameDraft(draft, base));
   return (
     <div className="grid gap-3">
       <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchAppHint")}</p>
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {dirty && (
+          <span role="status" data-app-dirty="" className="mr-auto inline-flex items-center gap-1.5 text-ui-xs font-medium text-warning">
+            <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+            {t("workflowAppDirty")}
+          </span>
+        )}
         <Button variant="outline" size="xs" loading={read.isPending} onClick={() => {
           setWritten(false);
           load();
@@ -74,11 +84,10 @@ export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarg
       {read.isPending && !data ? (
         <LoadingState label={t("workflowAppLoading")} className="h-auto py-8" />
       ) : data && draft ? (
-        <AppFormEditor instance={{ id: target.instanceId }} data={data} draft={draft} stacked
-                       onChange={(next) => {
-                         setWritten(false);
-                         setDraft(next);
-                       }} />
+        <>
+          <AppHead draft={draft} onChange={change} />
+          <AppFormEditor instance={{ id: target.instanceId }} data={data} draft={draft} layout="narrow" onChange={change} />
+        </>
       ) : null}
     </div>
   );

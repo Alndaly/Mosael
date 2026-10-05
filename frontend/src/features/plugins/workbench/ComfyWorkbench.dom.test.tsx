@@ -117,12 +117,12 @@ const column = () => screen.getByRole("complementary", { name: "workbenchColumn"
 const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   path: "", modified: null, kind: "image", editable: true,
   items: [
-    { key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: "提示词", node_title: "", class_type: "CLIPTextEncode",
-      common: true, media: "", folder: "", exposable: true, spec: { type: "string", default: "a girl" } },
-    { key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_title: "采样", class_type: "KSampler", common: true,
-      role: "", media: "", folder: "", exposable: true, spec: { type: "integer", default: 20 } },
+    { key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: "提示词", node_title: "", node_label: "CLIP 文本编码",
+      hint: "", class_type: "CLIPTextEncode", common: true, media: "", folder: "", exposable: true, spec: { type: "string", default: "a girl" } },
+    { key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_title: "采样", node_label: "采样", hint: "",
+      class_type: "KSampler", common: true, role: "", media: "", folder: "", exposable: true, spec: { type: "integer", default: 20 } },
   ],
-  outputs: [{ node: "9", title: "高清", class_type: "SaveImage", media: "image" }],
+  outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" }],
   app: { status: "none", version: "", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 },
   ...overrides,
 });
@@ -253,7 +253,10 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledWith("i1", EXPORTED.workflow));
     const write = await screen.findByRole("button", { name: /workbenchAppWrite/ });
     expect(write.hasAttribute("disabled"), "没改过不用写").toBe(true);
-    fireEvent.click((await screen.findAllByRole("checkbox", { name: "workflowAppAdd" }))[1]);
+    //: 面板窄:编辑器是「挑项 / 表单 / 预览」三个标签,先到「挑项」里点「+」
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: /workflowAppTabSource/ }));
+    fireEvent.click(within(document.querySelector("[data-source-item='3.steps']") as HTMLElement)
+      .getByRole("button", { name: "workflowAppAdd" }));
     fireEvent.click(write);
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     const [, body] = api.getCanvasMarks.mock.calls[0];

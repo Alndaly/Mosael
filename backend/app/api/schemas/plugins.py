@@ -679,6 +679,11 @@ class WorkflowFillableOut(ApiModel):
     title: str
     #: 用户给节点起的名字;没起是空串
     node_title: str = ""
+    #: 节点给人看的名字(用户起的标题,没起就是 ComfyUI 给这类节点的名字,按看的人的语言);图级的项是空串
+    node_label: str = ""
+    #: ComfyUI 给这一格的说明(按看的人的语言);没有是空串
+    hint: str = ""
+    #: 节点类名:只给排错的悬停说明用,界面上不当名字
     class_type: str = ""
     #: 常用的(缺省表单里摆在第一屏的)
     common: bool = False
@@ -699,6 +704,8 @@ class WorkflowAppOutputOut(ApiModel):
 
     node: str = ""
     title: str = ""
+    #: 给人看的节点名(用户起的标题,没起就是 ComfyUI 给这类节点的名字,按看的人的语言)
+    label: str = ""
     class_type: str = ""
     media: str = ""
 

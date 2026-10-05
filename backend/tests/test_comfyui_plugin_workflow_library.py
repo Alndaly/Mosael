@@ -127,7 +127,7 @@ def test_列出_每张一个图摘要_带布局的照原样_API格式按依赖�
 def test_识别出的输入参数输出_和跑它的那个生成模型同一份(library, comfy) -> None:
     portrait = {one["path"]: one for one in _listed(library, comfy)["workflows"]}["portrait.json"]
     assert portrait["kind"] == "image" and portrait["problem"] == ""
-    assert [(one["title"], one["media"]) for one in portrait["inputs"]] == [("LoadImage", "image")]
+    assert [(one["title"], one["media"]) for one in portrait["inputs"]] == [("加载图像 #10", "image")], "不是类名"
     assert any(one["key"].endswith("steps") for one in portrait["parameters"])
     assert [(one["node"], one["media"]) for one in portrait["outputs"]] == [("9", "image")]
 

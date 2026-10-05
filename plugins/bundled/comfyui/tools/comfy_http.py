@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+import labels
 from lines import ComfyError, say
 
 #: 普通请求的上限。ComfyUI 的接口都是本地的、立即返回的;排队和生成不在这些请求里等。
@@ -131,9 +132,18 @@ class Comfy:
     # --- 接口 -------------------------------------------------------------
 
     def object_info(self) -> dict[str, Any]:
-        """全部节点的定义(输入类型、可选值、上下界)。转换、描述参数都要它。"""
+        """全部节点的定义(输入类型、可选值、上下界)。转换、描述参数都要它。
+
+        并上 ComfyUI 给节点和输入的各语言名字(`/i18n`,自定义节点包带的翻译;见 labels.with_i18n):能填的项、「结果取自」
+        里的节点名从这里来,哪个界面都是同一个名字。老版本没有 `/i18n`、或者它出了错,就只用 object_info 自己的英文名。"""
         info = self.get("/object_info")
-        return info if isinstance(info, dict) else {}
+        if not isinstance(info, dict):
+            return {}
+        try:
+            translations = self.get("/i18n")
+        except ComfyError:
+            return info
+        return labels.with_i18n(info, translations)
 
     def saved_files(self) -> tuple[list[str], list[str]]:
         """工作流目录里的文件(相对 workflows/ 的路径):(**保存**的工作流, 别的文件)。隐藏文件都不算(老版本前端的
