@@ -7942,6 +7942,40 @@ def _migrate_existing_libraries_get_the_evolink_gpt_image_prices() -> None:
             prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
 
 
+def _migrate_speech_usage_follows_todays_booking() -> None:
+    """语音合成的老账照现在的口径改:记在**连接的厂商**名下,免费的引擎记 0、可信度「免费」。
+
+    两处都是记账口径改了、老账没跟上:
+
+    - 百炼一条连接下的 CosyVoice 此前记成引擎 id `alibaba-cosyvoice`,而价目规则(「预填价格」填的、手写的)按厂商 `alibaba`
+      配 —— 永远对不上,账上永远「未定价」。改成连接的厂商(映射照 `providers.connection_vendor_for_speech_engine`)。
+    - Edge 配音从 1.9.0 起记 0、可信度 `free`(适配器的 `free_of_charge`),此前那些还是「没能定价」(费用为空):
+      在「有 N 次没价」里算着,让人去配一条根本不存在的价。只改费用为空的,已经有数的不动。
+
+    价目规则不在这里补:要不要按挂牌价给 CosyVoice 记账,由用户在成本规则里点「预填价格」时定。幂等:改过的不再满足条件。
+    """
+    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, connection_vendor_for_speech_engine
+
+    if "provider_usage_events" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for engine_id, adapter in REMOTE_SPEECH_ADAPTERS.items():
+            vendor = connection_vendor_for_speech_engine(engine_id)
+            if vendor != engine_id:
+                conn.execute(
+                    text("UPDATE provider_usage_events SET provider = :vendor WHERE provider = :engine AND capability = 'tts'"),
+                    {"vendor": vendor, "engine": engine_id},
+                )
+            if getattr(adapter, "free_of_charge", False):
+                conn.execute(
+                    text(
+                        "UPDATE provider_usage_events SET cost_micros = 0, cost_confidence = 'free' "
+                        "WHERE provider = :engine AND capability = 'tts' AND cost_micros IS NULL"
+                    ),
+                    {"engine": engine_id},
+                )
+
+
 def _migrate_plugin_connection_errors_follow_the_reader() -> None:
     """连接的出错原因(`plugin_instances.capability_status` 里各项能力的 error)只存文案 key + 参数,给人看时按读的人的语言说。
 
@@ -8323,6 +8357,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_merge_consecutive_edits),
             #: 连接的出错原因按刷新时的语言存成了死文字:认得回文案 key 的改成 key + 参数,认不回的清掉(启动时后台刷新会重新生成)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_plugin_connection_errors_follow_the_reader),
+            #: 语音合成的老账照现在的口径改:CosyVoice 记在厂商 alibaba 名下(对得上价目),Edge 记 0、可信度免费。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_usage_follows_todays_booking),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

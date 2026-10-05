@@ -755,7 +755,7 @@ def speak_to_file(
     `voice_id`:念的是配音库里的一把克隆嗓子(ADR 0037)。它在这里被解析成「这个人的连接 + 这次的模型」下的远端副本,
     还没有就建(配音任务的进度写「正在百炼上复刻这把嗓子」);每个入口都经过这里,入口不用各自认识复刻。
     """
-    from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter
+    from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter, connection_vendor_for_speech_engine
 
     if is_plugin(engine):
         return _speak_with_plugin(db, engine, text=text, voice=engine_voice, speed=speed, out_dir=out_dir)
@@ -780,7 +780,10 @@ def speak_to_file(
             operation="synthesize_speech",
             idempotency_key=once("synthesize_speech"),
             workspace_id=workspace_id,
-            provider=engine,
+            # 记**连接的厂商**,不是引擎 id:价目规则(「预填价格」填的、手写的)按厂商配,百炼一条连接下的
+            # qwen-tts 和 CosyVoice 两个引擎都该对上 `alibaba` 那几条价。此前记的是引擎 id,
+            # CosyVoice 的账永远是「未定价」。
+            provider=connection_vendor_for_speech_engine(engine),
             model=model,
             provider_profile_id=profile.id if profile else None,
             source_type=source_type,

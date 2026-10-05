@@ -421,6 +421,7 @@ def ensure_copy(
 
 def _create(adapter, account: Account, *, voice_id: str, workspace_id: str, model: str, reference) -> str:
     """传参考音频、建音色。记一条用量(`tts` / `enroll_voice`,免费):账上看得到哪天、哪把嗓子、传到了哪条连接。"""
+    from app.ai.providers import connection_vendor_for_speech_engine
     from app.domain.billing.usage import billable, once
 
     with unit_of_work() as db, billable(
@@ -429,7 +430,7 @@ def _create(adapter, account: Account, *, voice_id: str, workspace_id: str, mode
         operation="enroll_voice",
         idempotency_key=once("enroll_voice"),
         workspace_id=workspace_id,
-        provider=account.engine,
+        provider=connection_vendor_for_speech_engine(account.engine),  # 和合成同一个口径,见 voices.speak_to_file
         model=model,
         provider_profile_id=account.provider_profile_id,
         source_type="voice",
