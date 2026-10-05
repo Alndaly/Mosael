@@ -1,8 +1,8 @@
 ---
 title: Browser profiles
-description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation.
+description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation; an open profile takes screenshots, downloads videos, collects images and saves pages as notes.
 order: 13
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -35,7 +35,68 @@ site you were last on.
 General profile cards carry **no sign-in badge**: a profile can hold any site, and Mosael cannot
 tell whether you are signed into an arbitrary one, so it does not guess.
 
-When a workflow or the agent keeps a browser as a picture-in-picture panel, the speaker button in its title bar controls that page's audio. Unmuting restores both Electron audio and the page player's own mute, volume and host-paused playback state; it stays in sync when the site replaces or creates the player later. Title-bar gaps, rounded corners and panel edges also absorb pointer input instead of passing clicks through to workflow nodes underneath.
+## Once it's open: the browser session
+
+After **Open**, the whole window is this profile's browser (desktop app only). The top bar has back, forward, reload and the address
+bar on the left, and the **page tools** and **Back to Mosael** on the right; the column on the left is the session's **page list**.
+**Back to Mosael** tucks the browser away while the page stays loaded in the background; pressing <kbd>Esc</kbd> twice also brings
+you back.
+
+### Page tools in the top bar
+
+The five buttons are icons only: hover for the name and a line of explanation. A button you can't use is greyed out and its hint says
+why (no page is open yet, the previous action hasn't finished; while a page is still loading, finding videos, finding images and
+reading the text wait until it has loaded). They all act on the page in front of you, signed in as this profile.
+
+| Tool | What it does |
+| --- | --- |
+| **Screenshot** | Choose **Visible area**, **Full page** or **Select area**. A full page is drawn in one go, so a sticky header doesn't repeat on every screen; beyond 15,000 pixels only the first part is taken and you are told so. For a selection, drag a box over a frozen frame; <kbd>Esc</kbd> cancels. The screenshot goes to the media library with the page URL, page title and capture time |
+| **Download video** | Opens a column on the right listing the videos on this page. A platform page (Bilibili, Douyin, Xiaohongshu, YouTube and the like) is one card that goes through [import from link](/docs/guides/media) for the whole page; an ordinary page lists the video files, HLS streams and DASH streams found in its players and network traffic. Downloads run in the background with progress and cancel in the column and in the task center, and finish in the media library with the page they came from. DRM-protected or encrypted streams are marked as protected and can't be downloaded; Mosael doesn't try to get around that |
+| **Collect images** | Lists the images on the page that are big enough (icons and tracking pixels are filtered out); tick the ones you want and **Save to the library**, each with its page and its own image address. Sites that block hotlinking still work — images are fetched as this profile, from the page they're on |
+| **Save as note** | **Whole article** or **Selected text**. The whole article is read from the page as you see it right now (text you only see signed in included), keeping the main article and dropping navigation and sidebars; the note opens with a source line, and its sources record the URL and page title. With nothing selected you are told so instead of getting an empty note |
+| **Start from this page** | **Viral breakdown**, **Account health check**, **Comment insights**: builds the official template (or opens the one you already built), fills this page's link into the start node and sets the data source to the built-in browser using this very profile; one that a scheduled task is bound to is left alone and a new one is built. It doesn't press Run for you — the browser tucks away on that workflow, ready to check and run. **Ask the agent** starts a new conversation with "Take a look at this page for me:", the page title and the link in the input, without sending it |
+
+Confirmations appear in the top bar too, such as "Saved to the library · View" or "Saved as a note · Open"; one click tucks the
+browser away and opens the result.
+
+### Downloads on a page go straight to the media library
+
+Clicking a download link in a browser session no longer brings up the system save dialog: the file goes straight into the current
+workspace's media library with its download URL, the page it was on and the time, and the top bar says **Saved to the library** with
+**View** to jump there. Downloads that finish after you tucked the browser away are saved as well. Types the library doesn't take
+(installers, archives and so on) and files over 2 GB stop right away with the reason.
+
+### The page list
+
+A browser session can have several pages open; the column on the left lists them with the site icon and title, the address on hover
+and the current page highlighted. Click a page to switch to it, close a page (except the last one), drag to reorder; **New page** at
+the top opens an address or search words on Enter. Links a page opens in a new window (`target=_blank`, `window.open`) no longer pop
+up a small window — they join this list and become the current page; third-party sign-in pop-ups still call back, close themselves
+when done and return you to the page you were on. A session holds at most 10 pages at once, and tells you to close a few first.
+
+The list can collapse to a strip of icons, remembered on this device. While collapsed, resting the pointer on the strip expands the
+list over the page for a moment, with every page's title and address; move away and it tucks back, without pushing the page around.
+To keep it open, choose **Keep the page list expanded** in the expanded list.
+
+## The floating browser workflows and the agent use
+
+When a workflow or the agent opens a browser, it floats as a card in the bottom-right corner of the window so you can watch it work:
+
+- **The title says whose it is**: one a workflow opened reads "Workflow name · run at 10-04 16:23"; clicking the title opens that
+  workflow with its run history on that run. When the session has several pages it shows "Page 2 of 3".
+- **Resize from any corner or edge.** The handles stay hidden until the pointer rests on this browser (the page included). Resizing
+  never moves the card: dragging a corner keeps the opposite corner still, dragging an edge keeps the opposite edge still; width and
+  height stay in the page's proportion, so the card always holds a full 1280 × 800 desktop viewport. With a corner focused, arrow
+  keys resize too (hold <kbd>⇧</kbd> for bigger steps).
+- **When several are stacked**, the top card's title bar (drag, mute, close) and resize handles are never covered by the pages below;
+  the cards underneath show only their title bars while their pages keep running behind.
+- **When the app window shrinks**, cards are pulled back inside it within the same size limits and proportion, and the new position
+  and size are remembered.
+- The speaker button in the title bar controls that page's audio. Unmuting restores both Electron audio and the page player's own
+  mute, volume and host-paused playback state; it stays in sync when the site replaces or creates the player later. The title bar,
+  rounded corners and edges absorb pointer input instead of passing clicks through to workflow nodes underneath.
+- Automation keeps rendering while the Mosael window is covered by another window or on another desktop, so infinite scrolling
+  doesn't stall.
 
 ## Signing in, and staying signed in
 
@@ -133,6 +194,12 @@ A workflow's **Open browser** node has three kinds of session:
 - **Browser pool**: reuses one of the signed-in profiles above, one session per profile at a time.
 
 A session the agent opens belongs to that conversation; if nobody closes it, it is reclaimed after 15 minutes idle instead of holding the name forever. A workflow's session is kept until that run ends — a long generation between two browser steps is normal.
+
+When automation clicks a link that opens a new window, the new page joins the session's page list and **the next step already runs
+on it**; use the **Browser · switch page** node to go back or close it. Downloads automation triggers go straight to the media
+library: the **Browser · navigate** and **Browser · click** nodes gain an asset id output, and the asset's provenance records which run and which node.
+When the session ends or is cancelled, every page it opened is closed. See [Visual workflows → Browser nodes](/docs/guides/workflows)
+for the nodes.
 
 ## Where the data lives
 
