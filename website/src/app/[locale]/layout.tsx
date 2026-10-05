@@ -15,6 +15,7 @@ import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { SITE_NAME, siteVerification } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
 /**
@@ -62,33 +63,41 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/**
+ * 全站共用的那部分 `<head>`。**canonical、hreflang、Open Graph 不在这里写**:这一层写了,没写自己那份的
+ * 子页面就会整块继承,声明自己的规范地址是首页(见 src/lib/seo.ts 的说明)。每一页经 pageMetadata 自己给。
+ */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getMessages(locale);
   return {
     metadataBase: new URL(SITE.url),
+    // 404 这类没有自己 metadata 的页面落到这两条上。
     title: t.meta.title,
     description: t.meta.description,
+    applicationName: SITE_NAME,
+    authors: [{ name: "Kinda Hall", url: SITE.authorX }],
+    creator: "Kinda Hall",
+    publisher: SITE_NAME,
+    // iOS Safari 会把一串版本号或尺寸认成电话号码、给它加下划线。
+    formatDetection: { telephone: false, email: false, address: false },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
+    },
+    verification: siteVerification(process.env),
+    other: {
+      // 百度:同一套地址对电脑和手机都适用(响应式),不要另找「移动版」。
+      "applicable-device": "pc,mobile",
+    },
     icons: {
       icon: [
         { url: "/brand/mosael-icon-light.png", media: "(prefers-color-scheme: light)" },
         { url: "/brand/mosael-icon-dark.png", media: "(prefers-color-scheme: dark)" },
       ],
       apple: "/brand/mosael-icon-light.png",
-    },
-    // hreflang:两个语言版本互相指认,搜索引擎才不会把它们当重复内容处理。
-    alternates: {
-      canonical: `/${locale}`,
-      languages: Object.fromEntries(LOCALES.map((item) => [HTML_LANG[item], `/${item}`])),
-    },
-    openGraph: {
-      type: "website",
-      siteName: "Mosael",
-      title: t.meta.title,
-      description: t.meta.description,
-      locale: HTML_LANG[locale],
-      url: `/${locale}`,
     },
   };
 }
@@ -110,6 +119,12 @@ export default async function LocaleLayout({
     // suppressHydrationWarning:next-themes 会在客户端给 <html> 加 class,不加这个 React 会
     // 抱怨服务端与客户端不一致 —— 而那正是主题切换本来就要做的事。
     <html lang={HTML_LANG[current]} suppressHydrationWarning>
+      <head>
+        {/* 百度移动搜索会把页面「转码」成它自己的简化版再给手机用户看,样式和下载按钮都会丢;
+            这两条声明不要转码。对其他搜索引擎和浏览器没有作用。 */}
+        <meta httpEquiv="Cache-Control" content="no-transform" />
+        <meta httpEquiv="Cache-Control" content="no-siteapp" />
+      </head>
       <body className={`${syne.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
           {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。 */}

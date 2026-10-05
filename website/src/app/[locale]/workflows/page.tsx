@@ -6,6 +6,7 @@ import { CommunityHeader } from "@/components/community/community-header";
 import { isLocale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins, listWorkflows } from "@/lib/registry";
+import { pageMetadata } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
 type Params = Promise<{ locale: string }>;
@@ -14,7 +15,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getMessages(locale).workflows;
-  return { title: `${t.title} · Mosael`, description: t.lede };
+  return pageMetadata({ locale, path: "/workflows", title: t.seoTitle, description: t.seoDescription, keywords: t.keywords });
 }
 
 export default async function WorkflowsPage({ params }: { params: Params }) {
@@ -29,7 +30,7 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
         locale={locale}
         active="workflows"
         counts={{ plugins: listPlugins(locale).length, workflows: workflows.length }}
-        title={t.title}
+        title={t.heading}
         lede={t.lede}
         contribute={{ label: t.contribute, href: `${SITE.repo}/issues/new` }}
       />

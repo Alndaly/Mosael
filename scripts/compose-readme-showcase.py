@@ -14,6 +14,9 @@ README 顶上那张图此前是**手工拼的**:拼完就是一个死文件,截�
 截图本身**不做任何改动** —— 只有圆角、描边和投影是这里加的。
 
     python3 scripts/compose-readme-showcase.py
+
+同一张图再按 1200×630 摆进一张分享卡片(`website/public/og/mosael-<locale>.png`):官网每一页的
+Open Graph / Twitter 卡片都用它(见 website/src/lib/seo.ts 的 ogImage)。也只是缩放和留白,截图不动。
 """
 
 from __future__ import annotations
@@ -118,22 +121,49 @@ def compose(locale: str, stage_width: int) -> Image.Image:
     return out
 
 
+OG_SIZE = (1200, 630)
+
+
+def og_card(showcase: Image.Image) -> Image.Image:
+    """把叠好的截图等比缩进 1200×630,四周补同一段暖白渐变。各家分享卡片都按这个比例裁,不缩的话会被切掉两边。"""
+    inset = 0.92
+    scale = min(OG_SIZE[0] * inset / showcase.width, OG_SIZE[1] * inset / showcase.height)
+    fitted = showcase.resize((round(showcase.width * scale), round(showcase.height * scale)), Image.LANCZOS)
+    card = Image.new("RGB", OG_SIZE, BACKGROUND_TOP)
+    gradient = Image.linear_gradient("L").resize(OG_SIZE, Image.BILINEAR)
+    card = Image.composite(Image.new("RGB", OG_SIZE, BACKGROUND_BOTTOM), card, gradient)
+    card.paste(fitted, ((OG_SIZE[0] - fitted.width) // 2, (OG_SIZE[1] - fitted.height) // 2))
+    return card
+
+
+def quantize(target: Path) -> None:
+    # 和官网截图同一道量化(website/scripts/record-doc-media.py 的 PNGQUANT):分辨率不变,体积小一大截。
+    if shutil.which("pngquant"):
+        subprocess.run(["pngquant", "--quality=80-100", "--speed", "1", "--skip-if-larger", "--strip", "--force",
+                        "--ext", ".png", str(target)], check=False)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--locale", choices=["zh", "en", "both"], default="both")
     parser.add_argument("--stage-width", type=int, default=1560, help="舞台宽度(像素)")
     parser.add_argument("--out-dir", type=Path, default=ROOT / "docs/media")
+    parser.add_argument("--og-dir", type=Path, default=ROOT / "website/public/og")
+    parser.add_argument("--only", choices=["readme", "og", "both"], default="both", help="只出 README 图或分享卡片")
     args = parser.parse_args()
 
     for locale in (["zh", "en"] if args.locale == "both" else [args.locale]):
         image = compose(locale, args.stage_width)
-        target = args.out_dir / f"readme-showcase.{locale}.png"
-        image.save(target, optimize=True)
-        # 和官网截图同一道量化(website/scripts/record-doc-media.py 的 PNGQUANT):分辨率不变,体积小一大截。
-        if shutil.which("pngquant"):
-            subprocess.run(["pngquant", "--quality=80-100", "--speed", "1", "--skip-if-larger", "--strip", "--force",
-                            "--ext", ".png", str(target)], check=False)
-        print(f"{target.relative_to(ROOT)}  {image.width}×{image.height}  {target.stat().st_size // 1024} KB")
+        targets = []
+        if args.only in ("readme", "both"):
+            targets.append((args.out_dir / f"readme-showcase.{locale}.png", image))
+        if args.only in ("og", "both"):
+            args.og_dir.mkdir(parents=True, exist_ok=True)
+            targets.append((args.og_dir / f"mosael-{locale}.png", og_card(image)))
+        for target, picture in targets:
+            picture.save(target, optimize=True)
+            quantize(target)
+            print(f"{target.relative_to(ROOT)}  {picture.width}×{picture.height}  {target.stat().st_size // 1024} KB")
 
 
 if __name__ == "__main__":

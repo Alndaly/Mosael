@@ -12,8 +12,12 @@ import { toPlainText } from "@/lib/inline-markdown";
  * 正文是 `content/docs/<locale>/<section>/<slug>.mdx` 里的文件,不进数据库也不过 CMS ——
  * 文档跟着代码走,同一个 PR 里改实现和改说明,评审时能看见它们对不对得上。
  *
- * frontmatter 使用 title / description / order / updated / version 标量,所以这里手写解析而不是拉一个
- * YAML 依赖:字段一旦长出嵌套结构,该做的是换掉这段而不是往里加分支。
+ * frontmatter 使用 title / description / order / updated / version / seo_title / keywords 标量,所以这里手写
+ * 解析而不是拉一个 YAML 依赖:字段一旦长出嵌套结构,该做的是换掉这段而不是往里加分支。
+ *
+ * `seo_title` 与 `keywords` 只进 `<head>`:标题同时是侧边栏的标签和页内 h1,要短;搜索结果里那一行
+ * 要把读者会搜的词写全(「ComfyUI 桌面客户端」而不只是「用 ComfyUI 生成」),两件事分开写。
+ * `keywords` 用逗号分隔(中英文逗号都认)。
  */
 export const DOC_SECTIONS = ["start", "guides", "about"] as const;
 
@@ -31,11 +35,21 @@ export type DocMeta = {
   description: string;
   updated: string;
   version: string;
+  /** 搜索结果里的标题;没写就用 title。 */
+  seoTitle: string;
+  /** `<meta name="keywords">`,百度仍会读。 */
+  keywords: string[];
 };
 
 export type Doc = DocMeta & { body: string };
 
 const CONTENT_ROOT = path.join(process.cwd(), "content", "docs");
+
+/** 值里带冒号时 frontmatter 要加引号(`title: "A: B"`);解析器按标量读,引号在这里去掉 ——
+ * 此前英文「数字人」那篇的标题连引号一起上了页面。 */
+function unquote(value: string): string {
+  return /^(["']).*\1$/.test(value) ? value.slice(1, -1) : value;
+}
 
 function parseFrontmatter(raw: string): {
   data: Record<string, string>;
@@ -46,7 +60,7 @@ function parseFrontmatter(raw: string): {
   const data: Record<string, string> = {};
   for (const line of match[1].split("\n")) {
     const at = line.indexOf(":");
-    if (at > 0) data[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+    if (at > 0) data[line.slice(0, at).trim()] = unquote(line.slice(at + 1).trim());
   }
   return { data, body: raw.slice(match[0].length) };
 }
@@ -62,6 +76,11 @@ function readMeta(locale: Locale, section: DocSection, file: string): DocMeta {
     description: data.description ?? "",
     updated: data.updated ?? "",
     version: data.version ?? "",
+    seoTitle: data.seo_title ? toPlainText(data.seo_title) : "",
+    keywords: (data.keywords ?? "")
+      .split(/[,，]/)
+      .map((word) => word.trim())
+      .filter(Boolean),
   };
 }
 

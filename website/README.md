@@ -21,6 +21,24 @@ NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=G-YDRX2Y5WZS
 未配置该变量时不会注入 Google Analytics 脚本，也不会发送分析数据。`NEXT_PUBLIC_*`
 变量会在构建时写入前端产物，修改后需要重新构建并部署。
 
+## SEO
+
+关键词怎么分到每一页、站长平台要做的事,见仓库的 [docs/SEO.md](../docs/SEO.md)。代码这一侧:
+
+- **每一页的 `<head>` 都经 `src/lib/seo.ts` 的 `pageMetadata`**:标题、描述、关键词、canonical、hreflang
+  (`en` / `zh-CN` / `x-default`)、Open Graph、Twitter 卡片。根布局不写 canonical 和 Open Graph ——
+  写了,没写自己那份的子页面就会整块继承,声明自己的规范地址是首页。`test/seo.test.mjs` 盯着每个 page.tsx。
+- **文档页**的 `<title>` 取 frontmatter 的 `seo_title`(没有就用 `title`),`keywords` 进 `<meta name="keywords">`。
+  `title` 同时是侧边栏标签和 h1,要短;`seo_title` 写全读者会搜的词。
+- **结构化数据**在 `src/lib/structured-data.ts`:首页出 Organization、WebSite、SoftwareApplication、FAQPage,
+  文档页出 TechArticle 与面包屑,插件和工作流详情出面包屑。只写查得到的事实,没有评分和下载量。
+- **分享卡片**是 `public/og/mosael-<语言>.png`(1200×630),由仓库根的 `scripts/compose-readme-showcase.py --only og`
+  从首页三张实拍截图生成。
+- **站长验证码**从部署环境读,代码里不写真值:`SITE_VERIFICATION_GOOGLE`、`SITE_VERIFICATION_BAIDU`、
+  `SITE_VERIFICATION_BING`、`SITE_VERIFICATION_360`、`SITE_VERIFICATION_SOGOU`(见 `.env.example`),
+  没配的那家不出 meta。改了要重新构建。
+- 百度基本不跑 JS:正文、导航、hreflang、JSON-LD 都在服务端 HTML 里;`Reveal` 的淡入在没有脚本时直接给终态。
+
 ## 目录
 
 ```
@@ -44,8 +62,10 @@ src/lib/registry.ts                  插件索引 —— 构建期直接读 plug
 链接和主操作。正文依靠间距、字号与细分割线区分层级，浮层与叠放截图可使用柔和投影。装饰边框应低对比度，键盘焦点与选中状态仍需清晰。
 颜色都注册在 `@theme` 中，组件只使用 Tailwind utility。
 
-**首页按一条创作路径组织。** 核心章节依次是无限画布、3D 场景与动画、素材管理、剪辑、AI 智能体和工作流；文档与素材引用贯穿这些步骤，也不要把作者账号写成官方品牌账号。唯一的 X 链接是
-`https://x.com/KindaHuaX`。
+**首页按读者会搜的事排。** 章节依次是 AI 生成、ComfyUI、剪辑与配音、数字人与视频译配、工作流自动化、
+AI 无限画布、3D 分镜预演;后面是现成模板、支持的模型、本地优先、更多能力和常见问题。每一句都要在代码或文档里
+查得到 —— 不写用户数、评分、评价,不写「开源」(许可是专有的,见仓库 LICENSE)。也不要把作者账号写成官方
+品牌账号。唯一的 X 链接是 `https://x.com/KindaHuaX`。
 
 **文案不要写进 JSX。** JSX 会把源码里的换行 + 缩进折成一个空格,英文里正好是词间距,
 中文里就是凭空多出来的空格,而且只在浏览器里看得见。中文散文一律放 `messages.ts`。

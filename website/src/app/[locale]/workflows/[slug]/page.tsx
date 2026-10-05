@@ -10,6 +10,9 @@ import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { findWorkflow, listWorkflows } from "@/lib/registry";
+import { META_DESCRIPTION_MAX, pageMetadata } from "@/lib/seo";
+import { breadcrumbLd } from "@/lib/structured-data";
+import { JsonLd } from "@/components/json-ld";
 
 /** 每个模板 × 每种语言,构建期全出好 —— 数据来自应用内置模板导出的目录(public/workflows/catalog.json)。 */
 export function generateStaticParams() {
@@ -25,7 +28,12 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const workflow = findWorkflow(slug, locale);
   if (!workflow) return {};
-  return { title: `${workflow.name} · ${getMessages(locale).workflows.title}`, description: toPlainText(workflow.summary) };
+  return pageMetadata({
+    locale,
+    path: `/workflows/${workflow.slug}`,
+    title: `${workflow.name} · ${getMessages(locale).workflows.detailSuffix}`,
+    description: toPlainText(workflow.summary, META_DESCRIPTION_MAX),
+  });
 }
 
 export default async function WorkflowDetailPage({
@@ -44,6 +52,13 @@ export default async function WorkflowDetailPage({
 
   return (
     <>
+      <JsonLd
+        data={breadcrumbLd([
+          { name: "Mosael", path: localePath(locale) },
+          { name: t.workflows.heading, path: localePath(locale, "/workflows") },
+          { name: workflow.name, path: localePath(locale, `/workflows/${workflow.slug}`) },
+        ])}
+      />
       <DetailHeader
         locale={locale}
         section={{ label: t.workflows.title, href: "/workflows" }}

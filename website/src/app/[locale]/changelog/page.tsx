@@ -8,19 +8,20 @@ import { listReleases } from "@/lib/releases";
 import { releaseCopy } from "@/lib/release-copy";
 import { InlineMarkdown } from "@/lib/inline-markdown";
 import { HIGHLIGHT_MAX_LENGTH, releaseHighlights } from "@/lib/release-data";
+import { pageMetadata } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
 export const revalidate = 3600;
 type Params = Promise<{ locale: string }>;
 const copy = {
-  zh: { title: "更新日志", lede: "每次发布，都向更顺畅的创作靠近。查看新增功能、问题修复与升级说明。", stable: "正式版", beta: "预发版", latest: "最新发布", notes: "完整说明与下载", history: "查看更早的版本", empty: "此版本的详细变更请查看发布说明。", offline: "暂时无法同步发布记录，以下展示已保存的记录，保存于", sync: "按发布时间排列，正式版与预发版均收录。发布记录每小时同步，最近展示 30 个版本。" },
-  en: { title: "Changelog", lede: "Follow each release: new capabilities, fixes and everything you need to know before upgrading.", stable: "Stable", beta: "Pre-release", latest: "Latest release", notes: "Full notes and downloads", history: "Browse earlier releases", empty: "See the release notes for the full list of changes.", offline: "Release sync is temporarily unavailable. Showing saved records from", sync: "Published releases, newest first, including stable and pre-release versions. Synced hourly; showing the latest 30 releases." },
+  zh: { title: "更新日志", seoTitle: "Mosael 更新日志：新功能、修复与版本下载", lede: "每次发布，都向更顺畅的创作靠近。查看新增功能、问题修复与升级说明。", stable: "正式版", beta: "预发版", latest: "最新发布", notes: "完整说明与下载", history: "查看更早的版本", empty: "此版本的详细变更请查看发布说明。", offline: "暂时无法同步发布记录，以下展示已保存的记录，保存于", sync: "按发布时间排列，正式版与预发版均收录。发布记录每小时同步，最近展示 30 个版本。" },
+  en: { title: "Changelog", seoTitle: "Mosael Changelog: Release Notes and Downloads", lede: "Follow each release: new capabilities, fixes and everything you need to know before upgrading.", stable: "Stable", beta: "Pre-release", latest: "Latest release", notes: "Full notes and downloads", history: "Browse earlier releases", empty: "See the release notes for the full list of changes.", offline: "Release sync is temporarily unavailable. Showing saved records from", sync: "Published releases, newest first, including stable and pre-release versions. Synced hourly; showing the latest 30 releases." },
 };
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  return { title: `${copy[locale].title} · Mosael`, description: copy[locale].lede };
+  return pageMetadata({ locale, path: "/changelog", title: copy[locale].seoTitle, description: copy[locale].lede });
 }
 
 export default async function ChangelogPage({ params }: { params: Params }) {

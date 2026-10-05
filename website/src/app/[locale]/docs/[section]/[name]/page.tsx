@@ -9,12 +9,15 @@ import { DocsMobileNav } from "@/components/docs-mobile-nav";
 import { DOC_GROUPS } from "@/lib/docs-navigation";
 import { DocsToc } from "@/components/docs-toc";
 import { mdxComponents } from "@/components/mdx";
+import { JsonLd } from "@/components/json-ld";
 import { LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { docHref, listDocs, readDoc } from "@/lib/docs";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { mdxOptions } from "@/lib/mdx-options";
+import { pageMetadata } from "@/lib/seo";
 import { SITE } from "@/lib/site";
+import { breadcrumbLd, techArticleLd } from "@/lib/structured-data";
 import { tableOfContents } from "@/lib/toc";
 
 /** Generate every localized guide from the content directory. */
@@ -29,14 +32,14 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   if (!isLocale(locale)) return {};
   const doc = readDoc(locale, section, name);
   if (!doc) return {};
-  return {
-    title: `${doc.title} · Mosael`,
+  return pageMetadata({
+    locale,
+    path: `/docs/${section}/${name}`,
+    title: doc.seoTitle || doc.title,
     description: toPlainText(doc.description),
-    alternates: {
-      canonical: `/${locale}/docs/${section}/${name}`,
-      languages: Object.fromEntries(LOCALES.map((item) => [item, `/${item}/docs/${section}/${name}`])),
-    },
-  };
+    keywords: doc.keywords,
+    type: "article",
+  });
 }
 
 export default async function DocPage({ params }: { params: Params }) {
@@ -67,8 +70,19 @@ export default async function DocPage({ params }: { params: Params }) {
   const prev = index > 0 ? all[index - 1] : null;
   const next = index >= 0 && index < all.length - 1 ? all[index + 1] : null;
 
+  const path = docHref(locale, doc);
+  const structured = [
+    techArticleLd({ locale, path, title: doc.title, description: toPlainText(doc.description), updated: doc.updated }),
+    breadcrumbLd([
+      { name: "Mosael", path: `/${locale}` },
+      { name: t.title, path: docHref(locale, all[0]) },
+      { name: doc.title, path },
+    ]),
+  ];
+
   return (
     <div className="mx-auto grid max-w-[88rem] gap-x-10 gap-y-6 px-5 pt-0 pb-16 xl:pt-12 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+      <JsonLd data={structured} />
       <DocsMobileNav groups={groups} entries={toc} labels={t} />
       {/* sticky 要直接挂在 grid item 上,并且配 `self-start`:grid 默认把子项拉伸到整行高,
           被拉满的元素在自己的格子里没有可滑动的余量,`position: sticky` 就完全不起作用。 */}

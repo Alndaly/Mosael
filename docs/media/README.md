@@ -118,6 +118,8 @@ After recording, review the screenshots and a few frames of each recording (no m
 
 `readme-showcase.zh.png` and `readme-showcase.en.png` are composed by `scripts/compose-readme-showcase.py` from the three unaltered homepage captures the website uses (`website/public/media/homepage/{zh,en}/{boards,editor,scenes}.png`). The script reproduces the homepage's own layout — boards behind left at -2°, the editor behind right at +2°, the 3D scene in front — reading the percentages from `website/src/components/home-showcase.tsx`. Only rounded corners, a hairline border and a drop shadow are added; the screenshots themselves are untouched, and the result is quantized the same way as the screenshots. Regenerate it after re-capturing the homepage images.
 
+The same script also writes the website's share cards, `website/public/og/mosael-{zh,en}.png` (1200 × 630, used for Open Graph and Twitter previews on every page): the composed image is scaled into the card and padded with the same warm background, nothing else is added. `--only og` regenerates just the cards, `--only readme` just the README images.
+
 ## Homepage feature windows
 
 `website/public/media/homepage/{zh,en}/` contains six unaltered 2× browser captures (1440 × 940 viewport, quantized like the screenshots) from the same demo environment:

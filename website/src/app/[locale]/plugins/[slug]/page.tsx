@@ -13,6 +13,9 @@ import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { mdxOptions } from "@/lib/mdx-options";
 import { pluginDocSource } from "@/lib/plugin-doc";
 import { findPlugin, listPlugins, readPluginDoc } from "@/lib/registry";
+import { META_DESCRIPTION_MAX, pageMetadata } from "@/lib/seo";
+import { breadcrumbLd } from "@/lib/structured-data";
+import { JsonLd } from "@/components/json-ld";
 import { SITE } from "@/lib/site";
 
 /** 每个插件 × 每种语言,构建期全出好 —— 数据来自仓库里的文件,没有理由到运行时才读。 */
@@ -26,12 +29,15 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const plugin = findPlugin(slug, isLocale(locale) ? locale : undefined);
+  if (!isLocale(locale)) return {};
+  const plugin = findPlugin(slug, locale);
   if (!plugin) return {};
-  return {
-    title: `${plugin.name} · ${getMessages(isLocale(locale) ? locale : "en").plugins.title}`,
-    description: toPlainText(plugin.summary),
-  };
+  return pageMetadata({
+    locale,
+    path: `/plugins/${plugin.slug}`,
+    title: `${plugin.name} ${getMessages(locale).plugins.detailSuffix}`,
+    description: toPlainText(plugin.summary, META_DESCRIPTION_MAX),
+  });
 }
 
 export default async function PluginDetailPage({
@@ -62,6 +68,13 @@ export default async function PluginDetailPage({
 
   return (
     <>
+      <JsonLd
+        data={breadcrumbLd([
+          { name: "Mosael", path: localePath(locale) },
+          { name: t.plugins.heading, path: localePath(locale, "/plugins") },
+          { name: plugin.name, path: localePath(locale, `/plugins/${plugin.slug}`) },
+        ])}
+      />
       <DetailHeader
         locale={locale}
         section={{ label: t.plugins.title, href: "/plugins" }}
