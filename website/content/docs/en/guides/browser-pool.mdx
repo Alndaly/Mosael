@@ -39,14 +39,25 @@ tell whether you are signed into an arbitrary one, so it does not guess.
 
 After **Open**, the whole window is this profile's browser (desktop app only). The top bar has back, forward, reload and the address
 bar on the left, and the **page tools** and **Back to Mosael** on the right; the column on the left is the session's **page list**.
-**Back to Mosael** tucks the browser away while the page stays loaded in the background; pressing <kbd>Esc</kbd> twice also brings
-you back.
+**Back to Mosael** tucks the browser away while the page stays loaded in the background; when you're not typing in the page,
+pressing <kbd>Esc</kbd> twice also brings you back (with the focus in a text field on the page, <kbd>Esc</kbd> belongs to the page —
+closing a suggestion list or leaving an editor often takes a double <kbd>Esc</kbd>).
+
+**Keyboard focus follows you.** Once it opens, the focus is in the page, so you can type or scroll right away; after clicking back,
+forward or reload in the top bar with the mouse, or switching, opening or closing a page in the page list, the keyboard goes back to
+the page, as it does after pressing Enter or <kbd>Esc</kbd> in the address bar. Moving through the top bar with the keyboard keeps the
+focus there. When the browser tucks away, the focus returns to the button you had before it opened.
+
+**A dialog open underneath stays open.** Arriving from **Open in editor** in the workflow library, say: clicking the top bar, the page
+list or the address bar, or pressing <kbd>Esc</kbd> in the address bar, leaves the workflow library open underneath, and **Back to
+Mosael** returns you to the same workflow in it.
 
 ### Page tools in the top bar
 
-The five buttons are icons only: hover for the name and a line of explanation. A button you can't use is greyed out and its hint says
-why (no page is open yet, the previous action hasn't finished; while a page is still loading, finding videos, finding images and
-reading the text wait until it has loaded). They all act on the page in front of you, signed in as this profile.
+The five buttons are icons only: hover for the name and a line of explanation (drawn over the page, below the button, without covering
+the address bar). A button you can't use is greyed out and its hint gives the name, the explanation and why it can't be used (no page is
+open yet, the previous action hasn't finished; while a page is still loading, finding videos, finding images and reading the text wait
+until it has loaded). They all act on the page in front of you, signed in as this profile.
 
 | Tool | What it does |
 | --- | --- |
@@ -76,7 +87,10 @@ when done and return you to the page you were on. A session holds at most 10 pag
 
 The list can collapse to a strip of icons, remembered on this device. While collapsed, resting the pointer on the strip expands the
 list over the page for a moment, with every page's title and address; move away and it tucks back, without pushing the page around.
-To keep it open, choose **Keep the page list expanded** in the expanded list.
+To keep it open, choose **Keep the page list expanded** in the expanded list. Collapsing, expanding and peeking all take a short
+transition during which the page holds still for a moment (about 0.2 seconds) and slides with the list instead of jumping; with
+reduced motion turned on there is no transition. A truncated title in the list shows in full on hover, in a hint drawn to the right,
+over the page.
 
 ## The floating browser workflows and the agent use
 
