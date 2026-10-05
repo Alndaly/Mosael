@@ -122,3 +122,44 @@ it("没有张数的模型(视频、没有 batch_size 的工作流)不摆「N×�
   renderComposer(twoSaves());
   expect(screen.queryByRole("combobox", { name: "boardOutputCount" })).not.toBeInTheDocument();
 });
+
+/**
+ * 只接了预览节点的两遍出图(维护者的「古风女孩1」):第一遍、从它算出来的控制图、第二遍各一个预览。插件把「结果取自」的
+ * 缺省设成「最终结果」(`final`,一次一份),第一遍标着「中间一步」、控制图标着「控制图」;目录里的 `outputs_per_run` 是 1(宿主不写)。
+ */
+function twoPassPreviews(): GenerationOption {
+  const model = twoSaves();
+  return {
+    ...model,
+    label: "古风女孩1.json · ComfyUI",
+    model: "古风女孩1.json",
+    capabilities: {
+      prompt: "optional",
+      parameter_keys: ["num_images", "output_node"],
+      max_num_images: 4,
+      parameter_schema: {
+        output_node: {
+          type: "string", title: "结果取自", enum: ["final", "all", "8", "17", "18"], default: "final",
+          "x-enum-labels": {
+            final: "最终结果(PreviewImage #17)", all: "全部(3 个预览节点)",
+            "8": "PreviewImage #8(中间一步)", "17": "PreviewImage #17", "18": "PreviewImage #18(控制图)",
+          },
+          "x-outputs-per-run": { final: 1, all: 3, "8": 1, "17": 1, "18": 1 },
+        },
+      },
+    },
+  } as GenerationOption;
+}
+
+it("缺省是「最终结果」:「结果取自」写明是哪个节点,「N×」是 1×;选「全部」变成 3×", async () => {
+  renderComposer(twoPassPreviews());
+  expect(screen.getByRole("combobox", { name: "boardOutputCount" })).toHaveTextContent("1×");
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+  const pick = await screen.findByRole("combobox", { name: "结果取自" });
+  expect(pick).toHaveTextContent("最终结果(PreviewImage #17)");
+  fireEvent.click(pick);
+  fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "全部(3 个预览节点)" }));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.getByRole("combobox", { name: "boardOutputCount" })).toHaveTextContent("3×");
+});

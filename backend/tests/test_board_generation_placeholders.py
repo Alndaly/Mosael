@@ -18,7 +18,15 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
-from tests.fake_comfyui import comfyui_grants, PNG, TWO_SAVES_API, TWO_VIDEOS_API, FakeComfyUI
+from tests.fake_comfyui import (
+    PNG,
+    TWO_PASS_HAND_DEPTH,
+    TWO_SAVES_API,
+    TWO_VIDEOS_API,
+    FakeComfyUI,
+    comfyui_grants,
+    fixture_workflow,
+)
 from tests.util import fresh_client, run_on_board
 
 PACKAGE = "dev.mosael.comfyui"
@@ -174,6 +182,9 @@ def connected():
     with FakeComfyUI() as comfy:
         comfy.state.workflows["two.json"] = TWO_SAVES_API
         comfy.state.workflows["two_videos.json"] = TWO_VIDEOS_API
+        hand_depth, node_info = fixture_workflow(TWO_PASS_HAND_DEPTH)
+        comfy.state.object_info.update(node_info)
+        comfy.state.workflows["古风女孩1.json"] = hand_depth
         client = fresh_client()
         created = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}})
         assert created.status_code == 200, created.text
@@ -228,6 +239,24 @@ def test_结果取自选一个节点_就只摆一格(connected) -> None:
     assert [one["id"] for one in placed] == ["cell"]
     [cell] = _settled(client, board_id, ws)
     assert cell["run"]["status"] == "succeeded" and cell["asset_id"]
+
+
+def test_两遍出图只接了预览_点一次只摆一格_选全部摆三格(connected) -> None:
+    """维护者的「古风女孩1」:第一遍、手部深度图、第二遍各接一个预览。缺省「结果取自」是最终结果 —— 一格占位、落回第二遍
+    那一张,中间一步的两个预览不跑;选「全部」照旧三格三张。"""
+    client, comfy, ws, profile_id = connected
+    comfy.state.outputs = {node: {"images": [{"filename": f"temp_{node}.png", "subfolder": "", "type": "temp"}]}
+                           for node in ("8", "17", "18")}
+    board_id, placed = _generate(client, ws, profile_id, model="古风女孩1.json")
+    assert [one["id"] for one in placed] == ["cell"]
+    [cell] = _settled(client, board_id, ws)
+    assert cell["run"]["status"] == "succeeded" and cell["asset_id"]
+    assert not {"8", "18"} & set(comfy.posted("/prompt")[-1]["prompt"])
+
+    board_id, placed = _generate(client, ws, profile_id, model="古风女孩1.json", parameters={"output_node": "all"})
+    assert [one["id"] for one in placed] == ["cell", "cell-2", "cell-3"]
+    items = _settled(client, board_id, ws)
+    assert len(items) == 3 and all(one["run"]["status"] == "succeeded" and one.get("asset_id") for one in items)
 
 
 def test_两个节点乘两张_摆四格(connected) -> None:

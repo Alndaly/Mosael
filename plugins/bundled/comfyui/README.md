@@ -44,7 +44,7 @@ background (at startup, or when the workflow list changed).
 | Width and height of the node that creates the canvas (EmptyLatentImage, the Wan / Hunyuan video latent nodes…) | "Size" (the workflow's own size when not set; that size and a few common ones are only suggestions: any width x height is accepted, each side rounded to the nearest multiple of 8 and at least 16, the same rule as the tool's width and height, 1.7.0) |
 | The canvas node's batch_size | "Image count" (up to 4, 1 when not set); every image is returned |
 | An image workflow with no canvas of its own (inpainting, image-to-image: it starts from a loaded image) but with a seed | Still has "Image count" (1.7.0): the plugin **submits it N times**, one after another, with a new seed each time (counting up from the given seed, or random when none is given); each image's seed comes back with it (the generation record / the tool's `seeds`). Cancelling stops the run in progress and submits no more; when one run fails, the images that came out are still returned with a note saying how many of N came out and why the others didn't; after a Mosael restart it waits for the run in progress and then runs the rest. A graph without a seed (upscaling) would produce the same image N times, so it gets no image count |
-| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns (`outputs_per_run` = the node count, × the image count), so the host lays out that many placeholders up front; with more than one, the parameters get a "Results from" choice (node titles, "All" by default): pick one to get only its output, and the other save nodes don't run (1.6.0) |
+| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns (`outputs_per_run` = the number of nodes returned by default, × the image count), so the host lays out that many placeholders up front; with more than one, the parameters get a "Results from" choice (node titles): pick one to get only its output, and the other save nodes don't run (1.6.0). "All" by default; "Final result" when some previews are an intermediate step or a control image (1.12.2, see below) |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node title or "KSampler #2"; the common ones come first and the rest go under "Advanced"; the raw "node · input name" is in the description |
 | LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1) |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |
@@ -66,6 +66,29 @@ PreviewAudio has no decoder anywhere upstream, it is looking at an image a LoadI
 (OpenPose skeleton, Canny lineart, depth map) computed from it; sampling played no part. It is not an output and doesn't
 run, and the preprocessing branch feeding only it (with its loader) drops out too. Only the wiring decides, never node
 titles; a graph with no decoder at all (upscaling, background removal, partner API nodes) keeps its previews.
+
+**Only the final result comes back by default** (1.12.2): in a workflow that only has preview nodes and contains a
+decoder, "Results from" defaults to "Final result (<node title>)", so one image means one image (one per branch
+when there are several). Two kinds of preview are not the final result, and the choice marks them:
+
+- **Intermediate**: what a preview shows is **worked on further** and becomes another output's image: the first
+  pass of a two-pass workflow (latent upscale, or pixel upscale and re-sample), the image before a face detailer
+  (FaceDetailer) or an upscale model, an image used as an IP-Adapter reference, a control image fed to ControlNet.
+  For a decoded image, a second pass sampling the same latent counts too; decoding the same latent again with
+  another decoder doesn't (it still shows the same pass).
+- **Control images and masks**: what a ControlNet preprocessor (comfyui_controlnet_aux, category
+  `ControlNet Preprocessors` in object_info) computes — skeleton, depth map, lineart; MeshGraphormer's hand depth
+  map is all black when it finds no hand — and a mask (`MASK`) drawn as an image. They are never the result and never
+  turn the finished image into an intermediate one: a mask or depth map computed from the finished image just to look
+  at leaves the finished image as the result.
+
+Only the wiring and the node definitions (category, socket types) decide, never node titles. Intermediate and
+auxiliary previews don't run by default; pick "All" to get every one, or pick one node. The catalog's
+`outputs_per_run` is the count for the default, and a request without "Results from" (AI Studio only sends the
+parameters you changed, agents, workflow nodes) returns by the same rule, so placeholders and "N×" match what comes
+back. **Save nodes are never narrowed down** (the workflow author asked to keep them, first pass included), and saved
+files still win over previews; a graph with no decoder at all (upscaling, preprocessing tools, partner API nodes) is
+left alone. The workflow tool ("Workflow · name") still returns every output node as-is.
 
 There are two more models: **Built-in text-to-image** (when the server has at least one checkpoint) and **API template**
 (when the connection config has the JSON from "Export (API)" pasted in; the `{{prompt}}` `{{negative}}` `{{seed}}`

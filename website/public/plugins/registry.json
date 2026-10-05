@@ -110,7 +110,7 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.12.1",
+      "version": "1.12.2",
       "description": {
         "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流既是一个图像 / 视频生成模型,也是一个工具(「工作流 · 名字」,入参就是那张图自己的提示词、读素材的节点和可调参数,交回全部产出)。另有列出工作流与模型文件、看显卡和队列、把历史产出收进素材库、中断 / 清队列 / 释放显存。插件页上还有模型库:看这台 ComfyUI 上的模型文件(预览、底模、触发词、哪些工作流在用),把缺的模型下到它上面;还有工作流库:看这台 ComfyUI 上存着的工作流(节点图、能填什么、用到哪些模型、缺什么),在 Mosael 里复制、改名、删除(进回收站,能恢复)、导出,导入别处的工作流(JSON、带工作流的图片、压缩包、链接),缺的节点包经 ComfyUI-Manager 装上。",
         "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow is both an image / video generation model and a tool (“Workflow · name”, whose inputs are that graph's own prompts, loader nodes and tunable parameters, returning every output). Plus listing workflows and model files, GPU and queue status, importing past outputs into the asset library, and interrupt / clear queue / free VRAM. The Plugins page also has a model library: browse this ComfyUI's model files (previews, base models, trigger words, which workflows use them) and download missing models onto it; and a workflow library: browse the workflows saved on this ComfyUI (node graph, what it takes, which models it uses, what is missing) and copy, rename, delete (to a recoverable trash) or export them from Mosael, import workflows from elsewhere (JSON, images carrying a workflow, archives, links) and install missing node packs through ComfyUI-Manager."

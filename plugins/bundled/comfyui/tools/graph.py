@@ -573,6 +573,120 @@ def generation_nodes(api: dict[str, Any], kind: str, object_info: dict[str, Any]
     return saved or wanted
 
 
+def _link(value: Any) -> tuple[str, int] | None:
+    """一格输入接着的那份输出 `(节点 id, 第几个输出)`;不是连线是 None。"""
+    if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
+        return str(value[0]), value[1]
+    return None
+
+
+def _readers(api: dict[str, Any]) -> dict[tuple[str, int], set[str]]:
+    """每一份输出(`(节点 id, 第几个输出)`)→ 接着用它的那些节点。"""
+    found: dict[tuple[str, int], set[str]] = {}
+    for node_id, node in api.items():
+        for value in (node.get("inputs") or {}).values():
+            link = _link(value)
+            if link:
+                found.setdefault(link, set()).add(node_id)
+    return found
+
+
+#: 输出节点上接着「它显示的那份东西」的那一格:图、视频、音频。都没有的(自定义的输出节点)看接进来的每一根线。
+_SHOWN_INPUTS = ("images", "video", "audio")
+
+
+def _shown(api: dict[str, Any], node_id: str) -> list[tuple[str, int]]:
+    """一个输出节点**显示的那份东西**:接在 images / video / audio 上的那根线(VAE、视频旁边配的声音这类整张图共用的
+    原料不算)。"""
+    links = {name: link for name, value in ((api.get(node_id) or {}).get("inputs") or {}).items()
+             if (link := _link(value))}
+    return next(([links[name]] for name in _SHOWN_INPUTS if name in links), list(links.values()))
+
+
+def _is_decoder(node: dict[str, Any]) -> bool:
+    return _DECODE_MARK in str(node.get("class_type", ""))
+
+
+def _made_from(api: dict[str, Any], node_id: str, readers: dict[tuple[str, int], set[str]]) -> set[str]:
+    """拿这个输出显示的东西**接着做下去**的那些节点(它自己的上游里的不算)。
+
+    显示的是一张解码出来的图时,连同它解的那份潜空间(`samples`)一起算:潜空间放大的两遍出图,第二遍接着采样的是
+    那份潜空间,不是解出来的图。同一份潜空间另一个解码节点再解一遍不算「接着做」—— 看的还是同一遍。
+    """
+    mine = _upstream_closure(api, {node_id})
+    users: set[str] = set()
+    for source, slot in _shown(api, node_id):
+        users |= readers.get((source, slot), set())
+        decoder = api.get(source) or {}
+        latent = _link((decoder.get("inputs") or {}).get("samples"))
+        if latent and _is_decoder(decoder):
+            users |= {one for one in readers.get(latent, set()) if not _is_decoder(api[one])}
+    return users - mine
+
+
+#: comfyui_controlnet_aux 的预处理器在 object_info 里的类别前缀:它们算出来的是控制图(骨架、深度、线稿、法线)。
+_PREPROCESSOR_CATEGORY = "ControlNet Preprocessors"
+
+
+def _input_types(object_info: dict[str, Any], node: dict[str, Any]) -> set[str]:
+    """一个节点**接了线**的那几格输入是什么类型(IMAGE、MASK…),按 object_info 里它的定义。"""
+    defs = _input_defs(object_info, str(node.get("class_type", "")))
+    found: set[str] = set()
+    for name, value in (node.get("inputs") or {}).items():
+        definition = defs.get(name)
+        if _link(value) and isinstance(definition, list) and definition and isinstance(definition[0], str):
+            found.add(definition[0])
+    return found
+
+
+def auxiliary_view(api: dict[str, Any], node_id: str, object_info: dict[str, Any] | None) -> str:
+    """这个输出看的是**辅助图**而不是成图:`control`(ControlNet 预处理器算出来的控制图)、`mask`(把一张蒙版画成的图),
+    都不是就是空串。认的是 object_info 里节点定义的类别和插口类型,不认节点标题;没有 object_info 判不了,当成图。
+
+    MeshGraphormer 从成图里认手:没认出手时那张深度图整张是黑的 —— 它是喂给 ControlNet 的,不是谁要的结果。
+    """
+    object_info = object_info or {}
+    node = api.get(node_id) or {}
+    if "MASK" in _input_types(object_info, node):
+        return "mask"
+    for source, _ in _shown(api, node_id):
+        upstream = api.get(source) or {}
+        spec = object_info.get(str(upstream.get("class_type", "")))
+        if isinstance(spec, dict) and str(spec.get("category") or "").startswith(_PREPROCESSOR_CATEGORY):
+            return "control"
+        types = _input_types(object_info, upstream)
+        if "MASK" in types and "IMAGE" not in types:
+            return "mask"
+    return ""
+
+
+def final_outputs(api: dict[str, Any], nodes: list[dict[str, str]],
+                  object_info: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    """交回的这几个节点(`generation_nodes`)里哪几个是**最终结果**,其余的是中间一步或辅助图。
+
+    - **中间一步**:它显示的东西被**接着做下去**(见 `_made_from`),成了另一个输出的图 —— 两遍出图的第一遍、
+      修脸(FaceDetailer)和放大之前的那张、拿去当 IP-Adapter 参考的那张、喂给 ControlNet 的控制图;
+    - **辅助图**(`auxiliary_view`):控制图、蒙版。从不当结果,也不拿来判别人 —— 从成图里算一张深度图、抠一张
+      蒙版拿去看,成图照样是结果。
+
+    只看连线和节点定义,不看节点标题。只在预览节点之间挑:保存节点是工作流作者明说要存的,第一遍也存着的照样交回,
+    存下来的仍然压过预览(`generation_nodes`)。整张图都没有解码节点的(放大、抠图、预处理工具、合作方 API 节点)
+    不挑 —— 和 `_previews_input` 同一条线。一个都挑不出来就是全部。
+    """
+    if len(nodes) < 2 or any(persists(api.get(node["node"]) or {}) for node in nodes):
+        return nodes
+    if not any(_is_decoder(node) for node in api.values()):
+        return nodes
+    readers = _readers(api)
+    main = [node for node in nodes if not auxiliary_view(api, node["node"], object_info)]
+    finals = []
+    for node in main:
+        made = _made_from(api, node["node"], readers)
+        if not any(made & (_upstream_closure(api, {other["node"]}) - {other["node"]}) for other in main if other is not node):
+            finals.append(node)
+    return finals or nodes
+
+
 def output_media(class_type: str) -> str:
     """一个输出节点交出的是什么:认得的几类说 image / video / audio / text,别的(自定义的输出节点)是 any。
 
@@ -722,55 +836,119 @@ def tunable(
 
 #: 「结果取自」那一项的参数键:不带点(带点的是 `<节点 id>.<输入名>`,见 run.overrides_from),选中的是节点 id。
 OUTPUT_CHOICE = "output_node"
-#: 「全部」:这一种里存下来的每个节点各交回一份(缺省)。
+#: 「全部」:这一种里交回的每个节点各一份。
 ALL_OUTPUTS = "all"
+#: 「最终结果」:几个预览节点里有的只是中间一步或辅助图时(见 final_outputs)的缺省 —— 只交回最终的那几个。
+#: 是一个固定的值、不是节点 id:工作流在 ComfyUI 里改过、节点号变了,它照样指着「最终结果」。
+FINAL_OUTPUTS = "final"
 
 
-def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any]) -> dict[str, Any]:
-    """「结果取自」:这一种的几个保存节点(一个都没存时是几个预览节点)各是一个选项,名字用节点标题 ——
-    几个节点同名(没改标题,都叫 SaveImage / PreviewImage)才带上节点号。缺省「全部」。
+def _choice_name(node: dict[str, str], nodes: list[dict[str, str]]) -> str:
+    """一个节点在「结果取自」里叫什么:节点标题;几个节点同名(没改标题,都叫 SaveImage / PreviewImage)才带上节点号。"""
+    same = sum(1 for one in nodes if one["title"] == node["title"])
+    return f"{node['title']} #{node['node']}" if same > 1 else node["title"]
+
+
+#: 不是最终结果的那几个选项名后面标什么(见 final_outputs、auxiliary_view)。
+_NOT_FINAL_MARKS = {"control": ("控制图", "control image"), "mask": ("蒙版", "mask"),
+                    "": ("中间一步", "intermediate")}
+
+
+def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
+                   object_info: dict[str, Any] | None = None) -> dict[str, Any]:
+    """「结果取自」:这一种的几个保存节点(一个都没存时是几个预览节点)各是一个选项,名字用节点标题。
+
+    缺省是「最终结果」:几个预览节点里有的只是中间一步或控制图、蒙版(见 final_outputs)时,只交回最终的那几个,
+    选项名里写明是哪个;别的那几个标着「中间一步」「控制图」「蒙版」。没有这种节点(几个保存节点,或几个互不相干的
+    预览)时缺省「全部」。
 
     每个选项一次交回几份写在 `x-outputs-per-run` 上(张数为 1 时):宿主据此按选中的那一项摆占位。
     """
-    titles = [node["title"] for node in nodes]
     saved = any(persists(api.get(node["node"]) or {}) for node in nodes)
     count = len(nodes)
     what = ("保存节点", "save nodes") if saved else ("预览节点", "preview nodes")
-    labels: dict[str, Any] = {ALL_OUTPUTS: {"zh": f"全部({count} 个{what[0]})", "en": f"All ({count} {what[1]})"}}
+    finals = final_outputs(api, nodes, object_info)
+    final_ids = {node["node"] for node in finals}
+    staged = count - len(finals)
+    labels: dict[str, Any] = {}
+    enum: list[str] = []
+    if staged:
+        if len(finals) == 1:
+            name = _choice_name(finals[0], nodes)
+            labels[FINAL_OUTPUTS] = {"zh": f"最终结果({name})", "en": f"Final result ({name})"}
+        else:
+            labels[FINAL_OUTPUTS] = {"zh": f"最终结果({len(finals)} 个{what[0]})",
+                                     "en": f"Final results ({len(finals)} {what[1]})"}
+        enum.append(FINAL_OUTPUTS)
+    labels[ALL_OUTPUTS] = {"zh": f"全部({count} 个{what[0]})", "en": f"All ({count} {what[1]})"}
+    enum.append(ALL_OUTPUTS)
     for node in nodes:
-        title = node["title"]
-        labels[node["node"]] = f"{title} #{node['node']}" if titles.count(title) > 1 else title
-    return {
-        "type": "string",
-        "title": {"zh": "结果取自", "en": "Results from"},
-        "description": {
+        name = _choice_name(node, nodes)
+        if node["node"] in final_ids:
+            labels[node["node"]] = name
+        else:
+            zh, en = _NOT_FINAL_MARKS[auxiliary_view(api, node["node"], object_info)]
+            labels[node["node"]] = {"zh": f"{name}({zh})", "en": f"{name} ({en})"}
+        enum.append(node["node"])
+    if staged:
+        description = {
+            "zh": f"这张工作流有 {count} 个{what[0]},其中 {staged} 个不是最终结果(接着被拿去再加工的那张、ControlNet 的"
+                  f"控制图、蒙版),缺省只交回最终结果。要每个都交回就选「全部」;只要其中一个就选它,别的{what[0]}不跑。",
+            "en": f"This workflow has {count} {what[1]}, and {staged} of them are not the final result (an image that "
+                  "gets worked on further, a ControlNet control image, a mask), so only the final result comes back "
+                  f"by default. Pick All to get every one, or pick one to get only that one; the other {what[1]} "
+                  "don't run.",
+        }
+    else:
+        description = {
             "zh": f"这张工作流有 {count} 个{what[0]},一次运行各交回一份;只要其中一个的就选它,别的{what[0]}不跑。",
             "en": f"This workflow has {count} {what[1]}, and each returns its own result per run. Pick one to get only "
                   f"that one; the other {what[1]} don't run.",
-        },
-        "enum": [ALL_OUTPUTS, *(node["node"] for node in nodes)],
-        "default": ALL_OUTPUTS,
+        }
+    return {
+        "type": "string",
+        "title": {"zh": "结果取自", "en": "Results from"},
+        "description": description,
+        "enum": enum,
+        "default": FINAL_OUTPUTS if staged else ALL_OUTPUTS,
         "x-enum-labels": labels,
-        "x-outputs-per-run": {ALL_OUTPUTS: count, **{node["node"]: 1 for node in nodes}},
+        "x-outputs-per-run": {**({FINAL_OUTPUTS: len(finals)} if staged else {}), ALL_OUTPUTS: count,
+                              **{node["node"]: 1 for node in nodes}},
     }
 
 
-def keep_output(api: dict[str, Any], kind: str, node_id: str, object_info: dict[str, Any] | None = None,
-                titles: dict[str, str] | None = None, locale: str = "zh") -> dict[str, Any]:
-    """「结果取自」选了一个节点:这一种别的保存节点(没人接它的输出的)摘掉 —— ComfyUI 只跑产出节点要的那些,
-    放大那一路不要就不跑。返回新图,不改入参。选的节点已经不在了(工作流在 ComfyUI 里改过)就说清楚。"""
-    delivering = [node["node"] for node in generation_nodes(api, kind, object_info, titles)]
-    if node_id not in delivering:
-        from lines import ComfyError, say
+def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dict[str, Any] | None = None,
+                   titles: dict[str, str] | None = None, locale: str = "zh") -> set[str] | None:
+    """「结果取自」选的那一项 → 这次交回哪几个输出节点的;None 是这一种交回的全部。
 
-        raise ComfyError(say(locale, f"「结果取自」选的节点 #{node_id} 已经不在这张工作流里了 —— 到插件页点「刷新模型」再选一次",
-                             f"The node #{node_id} picked in “Results from” is no longer in this workflow. "
-                             "Click Refresh models on the Plugins page and pick again."))
+    **没选和选了缺省是同一件事**:宿主只发用户动过的参数(AI 工作台、智能体、工作流节点常常不带这一项),目录里
+    `outputs_per_run` 说的是缺省那一项的份数 —— 跑的时候按同一个判据(final_outputs)再判一遍,摆的占位和交回的
+    份数才对得上。选的节点已经不在了(工作流在 ComfyUI 里改过)就说清楚。
+    """
+    delivering = generation_nodes(api, kind, object_info, titles)
+    if choice == ALL_OUTPUTS:
+        return None
+    if choice and choice != FINAL_OUTPUTS:
+        if choice not in {node["node"] for node in delivering}:
+            from lines import ComfyError, say
+
+            raise ComfyError(say(locale, f"「结果取自」选的节点 #{choice} 已经不在这张工作流里了 —— 到插件页点「刷新模型」再选一次",
+                                 f"The node #{choice} picked in “Results from” is no longer in this workflow. "
+                                 "Click Refresh models on the Plugins page and pick again."))
+        return {choice}
+    finals = final_outputs(api, delivering, object_info)
+    return {node["node"] for node in finals} if len(finals) < len(delivering) else None
+
+
+def keep_outputs(api: dict[str, Any], kind: str, wanted: set[str], object_info: dict[str, Any] | None = None,
+                 titles: dict[str, str] | None = None) -> dict[str, Any]:
+    """只要 `wanted` 那几个节点交回的(见 chosen_outputs):这一种别的交回节点(没人接它的输出的)摘掉 —— ComfyUI
+    只跑产出节点要的那些,放大那一路不要就不跑;中间一步的预览摘掉,它上游照样为最终结果跑。返回新图,不改入参。"""
     used = _consumers(api)
     graph = copy.deepcopy(api)
-    for other in delivering:
-        if other != node_id and not used.get(other):
-            graph.pop(other, None)
+    for node in generation_nodes(api, kind, object_info, titles):
+        if node["node"] not in wanted and not used.get(node["node"]):
+            graph.pop(node["node"], None)
     return graph
 
 
@@ -789,8 +967,10 @@ def describe(
     - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频);
     - 粘贴的模板里的 `{{占位符}}` 一样认;
     - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);
-    - 一次运行交回几份(`outputs_per_run`,张数为 1 时)照实说:这一种里存下来的节点各一份(见 generation_nodes),
-      不止一个时给一项「结果取自」(见 `_output_choice`)。宿主据此一次摆好那么多格占位。
+    - 一次运行交回几份(`outputs_per_run`,张数为 1、「结果取自」按缺省时)照实说:这一种里交回的节点各一份(见
+      generation_nodes),中间一步、控制图、蒙版这类预览不算(见 final_outputs);不止一个时给一项「结果取自」(见
+      `_output_choice`)。
+      宿主据此一次摆好那么多格占位。
     """
     titles = titles or {}
     kind = kind_of(api)
@@ -819,13 +999,14 @@ def describe(
             size["default"] = own
         parameters["size"] = size
     batched = batch_input(api)
-    #: 一次运行交回几份(张数为 1 时):这一种里存下来的那几个节点各一份(见 generation_nodes)。
+    #: 一次运行交回几份(张数为 1 时):缺省(最终结果,见 final_outputs)交回的那几个节点各一份;「全部」时是这一种
+    #: 交回的每个节点(见 generation_nodes)各一份 —— 那是一次最多交回几份。
     delivering = generation_nodes(api, kind, object_info, titles)
-    per_run = max(1, len(delivering))
-    max_outputs = per_run
+    per_run = max(1, len(final_outputs(api, delivering, object_info)))
+    max_outputs = max(1, len(delivering))
     if kind == "image" and (batched is not None or repeats_for_count(api)):
         # 有画布的写 batch_size;没有画布、有种子的循环提交 N 次,每次换一个种子(见 run.generate)
-        max_outputs = per_run * MAX_BATCH
+        max_outputs *= MAX_BATCH
         # 缺省是 1:生成那一路没给张数就一次出一张(见 run.generate),不照画布上存着的 batch_size ——
         # 宿主的「N×」缺省就是 1,说的和做的得是同一件事。
         parameters["num_images"] = {"type": "integer", "minimum": 1, "maximum": MAX_BATCH, "default": 1}
@@ -835,7 +1016,7 @@ def describe(
     if "duration_seconds" in placeholders:
         parameters["duration_seconds"] = {"type": "integer", "minimum": 1}
     if len(delivering) > 1:
-        parameters[OUTPUT_CHOICE] = _output_choice(delivering, api)
+        parameters[OUTPUT_CHOICE] = _output_choice(delivering, api, object_info)
     parameters.update(tunable(api, object_info, titles))
 
     counts: dict[str, int] = {}

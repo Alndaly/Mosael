@@ -582,11 +582,13 @@ def repeat_note(result: Repeated, locale: str) -> str:
 def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
     kind = str(request.get("kind") or "image")
     resume = request.get("resume")
-    #: 「结果取自」选了一个节点(见 graph._output_choice):只要它的,别的保存节点不跑。「全部」和没选一样。
-    picked = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
-    picked = "" if picked == graph.ALL_OUTPUTS else picked
+    #: 「结果取自」(见 graph._output_choice):没选就是缺省的「最终结果」,中间一步的预览不交回、不跑;选了一个节点
+    #: 只要它的;「全部」是这一种交回的每一个。
+    choice = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
     if isinstance(resume, dict) and resume.get("prompt_id") and not resume.get("repeat"):
-        # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。
+        # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。提交的那张图已经按
+        # 「结果取自」摘过了,交回它跑出来的;选了一个节点的照旧只认它的。
+        wanted = {choice} if choice not in ("", graph.ALL_OUTPUTS, graph.FINAL_OUTPUTS) else None
         prompt_id = str(resume["prompt_id"])
         progress(emit, 0.05, say(locale, "接着等 ComfyUI 里的任务", "Resuming the ComfyUI task"))
         entry = follow_poll(comfy, prompt_id, emit, locale)
@@ -599,19 +601,20 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         # 没给张数就一次一张(目录里张数的缺省就是 1,见 graph.describe):不照画布上存着的 batch_size ——
         # 宿主照目录说的份数摆占位,做的得是同一件事。
         values.setdefault("batch", 1)
+        wanted = graph.chosen_outputs(api, kind, choice, object_info, titles, locale)
         if isinstance(resume, dict) and resume.get("repeat") or (values["batch"] > 1 and graph.repeats_for_count(api)):
             # 没有画布的图出 N 张:循环提交 N 次(重启时带着循环的回执回来,接着跑)
-            return _generate_repeated(request, comfy, locale, emit, kind, picked,
+            return _generate_repeated(request, comfy, locale, emit, kind, wanted,
                                       (object_info, api, titles, values, parameters))
         prompt = graph.fill(api, values, overrides_from(parameters), object_info)
-        if picked:
-            prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
+        if wanted is not None:
+            prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
         preflight(prompt, object_info, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
-    files = [{"item": item, "media": kind} for item in graph.collect_outputs(entry or {}, kind, {picked} if picked else None)]
+    files = [{"item": item, "media": kind} for item in graph.collect_outputs(entry or {}, kind, wanted)]
     if not files:
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
                              "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
@@ -620,7 +623,8 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     return {"outputs": outputs, "usage": usage, "raw": {"prompt_id": prompt_id}}
 
 
-def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str, picked: str,
+def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str,
+                       wanted: set[str] | None,
                        loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any]],
                        ) -> dict[str, Any]:
     """没有画布的图出 N 张:循环提交 N 次(run_repeated),每份产出带着它用的种子;有几次没出来时说明一句。
@@ -635,8 +639,8 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
     def build(seed: int) -> dict[str, Any]:
         nonlocal uploaded
         prompt = graph.fill(api, {**values, "seed": seed, "batch": 1}, overrides, object_info)
-        if picked:
-            prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
+        if wanted is not None:
+            prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
         if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
             preflight(prompt, object_info, locale)
             uploaded = upload(comfy, request.get("inputs") or [])
@@ -648,7 +652,7 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
     files: list[dict[str, Any]] = []
     seeds: list[int] = []
     for _, entry, seed in result.runs:
-        for item in graph.collect_outputs(entry, kind, {picked} if picked else None):
+        for item in graph.collect_outputs(entry, kind, wanted):
             files.append({"item": item, "media": kind})
             seeds.append(seed)
     if not files:

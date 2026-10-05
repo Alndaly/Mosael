@@ -21,6 +21,7 @@ import struct
 import threading
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -463,8 +464,8 @@ TWO_SAVES_API: dict[str, Any] = {
     "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0], "filename_prefix": "hd"}, "_meta": {"title": "高清"}},
 }
 
-#: 只接了**预览**节点的工作流(用户 ComfyUI 里「古风女孩1」那种):三个 PreviewImage,都没改标题。生成交回的就是
-#: 这三份预览。
+#: 只接了**预览**节点的工作流:三个 PreviewImage 看的是同一张图,都没改标题。谁也不是谁的中间一步,生成交回的就是
+#: 这三份预览。(维护者 ComfyUI 上真正的「古风女孩1」是两遍出图,见 `two_pass_hand_depth`。)
 PREVIEWS_ONLY_API: dict[str, Any] = {
     **{key: value for key, value in TWO_SAVES_API.items() if key not in ("9", "10", "11", "12")},
     "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
@@ -480,10 +481,27 @@ TWO_VIDEOS_API: dict[str, Any] = {
     "31": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["3", 0], "frame_rate": 32}, "_meta": {"title": "补帧"}},
 }
 
+#: 从真实工作流脱敏来的夹具(模型名、提示词、种子、画布位置换掉了,图的结构原样):`<名字>.workflow.json` 是 ComfyUI
+#: 存下来的界面格式,`<名字>.object_info.json` 是它用到的那几类节点的定义(下拉里只留夹具里用的那一项)。
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "comfyui"
+
+
+def fixture_workflow(name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(界面格式的工作流, 它用到的节点定义)。"""
+    workflow = json.loads((FIXTURES / f"{name}.workflow.json").read_text(encoding="utf-8"))
+    object_info = json.loads((FIXTURES / f"{name}.object_info.json").read_text(encoding="utf-8"))
+    return workflow, object_info
+
+
+#: 维护者 ComfyUI 上的「古风女孩1」(2026-10,1.9.1 时报的「张数 1 出了 3 张,一张几乎全黑」):两遍出图修手。
+#: 第一遍 KSampler #5 → VAEDecode #6 → PreviewImage #8;MeshGraphormer #10 从第一遍的图里算出**手部深度图**
+#: → PreviewImage #18(没认出手时整张是黑的),同时经 ControlNetApplyAdvanced #11 控制第二遍 KSampler #14
+#: → VAEDecode #16 → PreviewImage #17(最终结果)。三个预览节点都没改标题。
+TWO_PASS_HAND_DEPTH = "two_pass_hand_depth"
+
+
 def comfyui_grants() -> dict[str, bool]:
     """随应用发的 ComfyUI 插件声明的全部权限,全都授予 —— 测试里接连接时用(照清单读,清单改了这里跟着变)。"""
-    from pathlib import Path
-
     manifest = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui" / "mosael.plugin.json"
     return {permission: True for permission in json.loads(manifest.read_text(encoding="utf-8"))["permissions"]}
 

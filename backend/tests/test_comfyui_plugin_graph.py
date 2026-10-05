@@ -25,6 +25,7 @@ from tests.fake_comfyui import (
     OBJECT_INFO,
     PORTRAIT_UI,
     PREVIEWS_ONLY_API,
+    TWO_PASS_HAND_DEPTH,
     TWO_SAVES_API,
     TWO_VIDEOS_API,
     UPSCALE_API,
@@ -33,6 +34,7 @@ from tests.fake_comfyui import (
     WAN_API,
     WAN_WRAPPER_API,
     conn,
+    fixture_workflow,
     minimax_h3_ui,
     widget,
 )
@@ -1013,11 +1015,254 @@ def test_收产出时只要选中的那个节点的(graph) -> None:
 
 
 def test_只要一个节点时_别的保存节点不跑(graph) -> None:
-    kept = graph.keep_output(TWO_SAVES_API, "image", "12", OBJECT_INFO)
+    assert graph.chosen_outputs(TWO_SAVES_API, "image", "12", OBJECT_INFO) == {"12"}
+    kept = graph.keep_outputs(TWO_SAVES_API, "image", {"12"}, OBJECT_INFO)
     assert "9" not in kept and {"11", "12"} <= set(kept), "原图那个保存节点摘掉;放大那一路照跑"
     assert "9" in TWO_SAVES_API, "不改入参"
     with pytest.raises(Exception, match="结果取自"):
-        graph.keep_output(TWO_SAVES_API, "image", "99", OBJECT_INFO)
+        graph.chosen_outputs(TWO_SAVES_API, "image", "99", OBJECT_INFO)
+    assert graph.chosen_outputs(TWO_SAVES_API, "image", "all", OBJECT_INFO) is None
+    assert graph.chosen_outputs(TWO_SAVES_API, "image", "", OBJECT_INFO) is None, "两个保存节点:缺省照旧是全部"
+
+
+# --- 缺省的「结果取自」是最终结果:中间一步的预览不交回 -----------------------------------------
+#
+# 维护者在 AI 工作台选了「古风女孩1」,张数 1,出来三张,一张几乎全黑(1.9.1)。那张工作流只接了预览节点:第一遍的图、
+# 从它算出来的手部深度图(MeshGraphormer,没认出手时整张是黑的)、拿深度图控制的第二遍。三个都过了 1.7.0 的「上游有
+# 解码」,缺省「全部」于是三张都交回。用户说「结果」指的是最后那一张:**一个预览显示的东西被接着做下去、成了另一个
+# 输出的图,它就是那一个的中间一步**;ControlNet 的控制图、蒙版是**辅助图**,从不当结果。缺省都不交回。只看连线和
+# 节点定义(类别、插口类型),不看节点标题。
+
+
+def _hand_depth(graph, convert):
+    ui, info = fixture_workflow(TWO_PASS_HAND_DEPTH)
+    object_info = {**OBJECT_INFO, **info}
+    api = graph.live(convert.to_api(ui, object_info), object_info)
+    return api, object_info, convert.titles_of(api)
+
+
+def test_古风女孩1_缺省只交回最终结果(graph, convert) -> None:
+    api, info, titles = _hand_depth(graph, convert)
+    assert [node["node"] for node in graph.generation_nodes(api, "image", info, titles)] == ["8", "17", "18"]
+    model = graph.describe("古风女孩1.json", "古风女孩1", api, info, titles)
+    assert model["outputs_per_run"] == 1, "张数 1 就是一张"
+    assert model["max_outputs"] == 12, "选「全部」时三个节点 × 最多 4 张"
+    choice = model["parameters"]["output_node"]
+    assert choice["default"] == "final" and choice["enum"] == ["final", "all", "8", "17", "18"]
+    assert choice["x-enum-labels"] == {
+        "final": {"zh": "最终结果(PreviewImage #17)", "en": "Final result (PreviewImage #17)"},
+        "all": {"zh": "全部(3 个预览节点)", "en": "All (3 preview nodes)"},
+        "8": {"zh": "PreviewImage #8(中间一步)", "en": "PreviewImage #8 (intermediate)"},
+        "17": "PreviewImage #17",
+        "18": {"zh": "PreviewImage #18(控制图)", "en": "PreviewImage #18 (control image)"},
+    }
+    assert choice["x-outputs-per-run"] == {"final": 1, "all": 3, "8": 1, "17": 1, "18": 1}
+    assert "不是最终结果" in choice["description"]["zh"]
+    assert graph.auxiliary_view(api, "18", info) == "control", "MeshGraphormer 是 ControlNet 预处理器:那张黑图是控制图"
+
+
+def test_古风女孩1_没选和选了最终结果一样_全部照旧三张(graph, convert) -> None:
+    """宿主只发用户动过的参数:没带「结果取自」和选了缺省是同一件事,跑的时候按同一个判据再判一遍。"""
+    api, info, titles = _hand_depth(graph, convert)
+    assert graph.chosen_outputs(api, "image", "", info, titles) == {"17"}
+    assert graph.chosen_outputs(api, "image", "final", info, titles) == {"17"}
+    assert graph.chosen_outputs(api, "image", "all", info, titles) is None, "明说「全部」:三个都交回"
+    assert graph.chosen_outputs(api, "image", "18", info, titles) == {"18"}, "要看深度图也挑得到"
+    kept = graph.keep_outputs(api, "image", {"17"}, info, titles)
+    assert not {"8", "18"} & set(kept), "中间一步的预览不跑"
+    assert {"6", "10", "11", "14", "16", "17"} <= set(kept), "它们的上游照样为最终结果跑"
+
+
+def _txt2img(**extra) -> dict:
+    """第一遍文生图:checkpoint → KSampler #5 → VAEDecode #6 → PreviewImage #7。"""
+    return {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a cat", "clip": ["1", 1]}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry", "clip": ["1", 1]}},
+        "4": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
+        "5": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                                                    "scheduler": "normal", "denoise": 1.0, "model": ["1", 0],
+                                                    "positive": ["2", 0], "negative": ["3", 0],
+                                                    "latent_image": ["4", 0]}},
+        "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+        "7": {"class_type": "PreviewImage", "inputs": {"images": ["6", 0]}},
+        **extra,
+    }
+
+
+def _second_pass(latent: list, *, model: list | None = None, positive: list | None = None,
+                 negative: list | None = None, output: str = "PreviewImage") -> dict:
+    """第二遍:KSampler #21 → VAEDecode #22 → #23(缺省也是预览)。"""
+    return {
+        "21": {"class_type": "KSampler", "inputs": {"seed": 2, "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                                                     "scheduler": "normal", "denoise": 0.5,
+                                                     "model": model or ["1", 0], "positive": positive or ["2", 0],
+                                                     "negative": negative or ["3", 0], "latent_image": latent}},
+        "22": {"class_type": "VAEDecode", "inputs": {"samples": ["21", 0], "vae": ["1", 2]}},
+        "23": {"class_type": output, "inputs": {"images": ["22", 0]}},
+    }
+
+
+#: 判辅助图要的那几类节点定义(形状照真实的 /object_info):蒙版画成图的 MaskToImage、comfyui_controlnet_aux 的预处理器。
+AUX_INFO = {
+    "MaskToImage": {"input": {"required": {"mask": ["MASK"]}}, "output": ["IMAGE"], "category": "image/mask"},
+    "DepthAnythingPreprocessor": {"input": {"required": {"image": ["IMAGE"]}}, "output": ["IMAGE"],
+                                  "category": "ControlNet Preprocessors/Normal and Depth Estimators"},
+}
+
+
+def _finals(graph, api: dict, info: dict | None = None) -> list[str]:
+    return [node["node"] for node in graph.final_outputs(api, graph.generation_nodes(api, "image"), info)]
+
+
+def test_两遍出图_第一遍是中间一步(graph) -> None:
+    """潜空间放大(第二遍接着用第一遍的潜空间,第一遍的图只是解码出来看一眼)、像素放大后重绘(VAEEncode 回去再采样)、
+    拿第一遍的图当 IP-Adapter 参考再出一张:第一遍都是中间一步。"""
+    latent = _txt2img(**{"10": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["5", 0], "scale_by": 1.5,
+                                                                            "upscale_method": "nearest-exact"}}},
+                      **_second_pass(["10", 0]))
+    assert _finals(graph, latent) == ["23"]
+    pixels = _txt2img(**{"10": {"class_type": "ImageScaleBy", "inputs": {"image": ["6", 0], "scale_by": 1.5,
+                                                                         "upscale_method": "lanczos"}},
+                         "11": {"class_type": "VAEEncode", "inputs": {"pixels": ["10", 0], "vae": ["1", 2]}}},
+                      **_second_pass(["11", 0]))
+    assert _finals(graph, pixels) == ["23"]
+    ip_adapter = _txt2img(**{"10": {"class_type": "IPAdapterUnifiedLoader", "inputs": {"model": ["1", 0],
+                                                                                       "preset": "PLUS"}},
+                             "11": {"class_type": "IPAdapter", "inputs": {"model": ["10", 0], "ipadapter": ["10", 1],
+                                                                          "image": ["6", 0], "weight": 1.0}}},
+                          **_second_pass(["4", 0], model=["11", 0]))
+    assert _finals(graph, ip_adapter) == ["23"]
+
+
+def test_ControlNet的控制图_不论接的是读进来的图还是第一遍的图_都不是结果(graph) -> None:
+    """控制图从第一遍的图里算出来(上游有解码,1.7.0 的规矩拦不住):它接着控制了第二遍,是中间一步。
+    从读进来的图算出来的控制图照旧在 1.7.0 那一步就不算输出。"""
+    from_first = _txt2img(**{
+        "10": {"class_type": "DepthAnythingPreprocessor", "inputs": {"image": ["6", 0], "resolution": 512}},
+        "11": {"class_type": "PreviewImage", "inputs": {"images": ["10", 0]}},
+        "12": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": "depth.safetensors"}},
+        "13": {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": ["2", 0], "negative": ["3", 0],
+                                                                   "control_net": ["12", 0], "image": ["10", 0],
+                                                                   "strength": 1.0, "start_percent": 0.0,
+                                                                   "end_percent": 1.0}},
+    }, **_second_pass(["4", 0], positive=["13", 0], negative=["13", 1]))
+    assert _finals(graph, from_first) == ["23"]
+    from_loaded = _txt2img(**{
+        "10": {"class_type": "LoadImage", "inputs": {"image": "pose.png"}},
+        "11": {"class_type": "OpenposePreprocessor", "inputs": {"image": ["10", 0]}},
+        "12": {"class_type": "PreviewImage", "inputs": {"images": ["11", 0]}},
+    })
+    assert [node["node"] for node in graph.generation_nodes(from_loaded, "image")] == ["7"]
+
+
+def test_修脸和放大_之前那张是中间一步(graph) -> None:
+    """图到图的加工也是「接着做下去」:修脸(FaceDetailer)、放大模型之前的那张是中间一步,缺省只交回加工完的那张。
+    (维护者 ComfyUI 上的「beautiful girl」:原图 → 修脸 → 放大,三个预览;「controlnet」:原图 → 修脸,两个预览。)"""
+    chain = _txt2img(**{
+        "10": {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": "bbox/face_yolov8m.pt"}},
+        "11": {"class_type": "FaceDetailer", "inputs": {"image": ["6", 0], "model": ["1", 0], "clip": ["1", 1],
+                                                        "vae": ["1", 2], "positive": ["2", 0], "negative": ["3", 0],
+                                                        "bbox_detector": ["10", 0], "seed": 3, "denoise": 0.5}},
+        "12": {"class_type": "PreviewImage", "inputs": {"images": ["11", 0]}},
+        "13": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+        "14": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["13", 0], "image": ["11", 0]}},
+        "15": {"class_type": "PreviewImage", "inputs": {"images": ["14", 0]}},
+    })
+    assert _finals(graph, chain) == ["15"]
+    detailed = {key: value for key, value in chain.items() if key not in ("13", "14", "15")}
+    assert _finals(graph, detailed) == ["12"]
+
+
+def test_从成图里算出来拿去看的蒙版和控制图_是辅助图_成图照样是结果(graph) -> None:
+    """往下没接着做、只是从成图里抠一张蒙版或算一张深度图拿去看:它们是辅助图,不当结果,也不让成图变成「中间一步」。
+    (只比「上游是不是子集」的话,成图会被当成蒙版那一张的中间一步,缺省成了一张蒙版。)"""
+    masked = _txt2img(**{
+        "10": {"class_type": "GroundingDinoSAMSegment (segment anything)", "inputs": {"image": ["6", 0],
+                                                                                     "prompt": "cat"}},
+        "11": {"class_type": "MaskToImage", "inputs": {"mask": ["10", 1]}},
+        "12": {"class_type": "PreviewImage", "inputs": {"images": ["11", 0]}},
+    })
+    assert graph.auxiliary_view(masked, "12", AUX_INFO) == "mask"
+    assert _finals(graph, masked, AUX_INFO) == ["7"]
+    assert graph.chosen_outputs(masked, "image", "", AUX_INFO) == {"7"}
+    depth = _txt2img(**{
+        "10": {"class_type": "DepthAnythingPreprocessor", "inputs": {"image": ["6", 0], "resolution": 512}},
+        "11": {"class_type": "PreviewImage", "inputs": {"images": ["10", 0]}},
+    })
+    assert graph.auxiliary_view(depth, "11", AUX_INFO) == "control"
+    assert _finals(graph, depth, AUX_INFO) == ["7"]
+    labels = graph.describe("depth.json", "d", depth, {**OBJECT_INFO, **AUX_INFO})["parameters"]["output_node"]["x-enum-labels"]
+    assert labels["final"] == {"zh": "最终结果(PreviewImage #7)", "en": "Final result (PreviewImage #7)"}
+    assert labels["11"] == {"zh": "PreviewImage #11(控制图)", "en": "PreviewImage #11 (control image)"}
+
+
+def test_整张图没有解码节点的不挑(graph) -> None:
+    """放大、预处理这类工具图(没有解码节点)和 1.7.0 的规矩同一条线:不判,几个预览照旧都是结果。"""
+    tool = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": "photo.png"}},
+        "2": {"class_type": "DepthAnythingPreprocessor", "inputs": {"image": ["1", 0], "resolution": 512}},
+        "3": {"class_type": "PreviewImage", "inputs": {"images": ["2", 0]}},
+        "4": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+        "5": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["4", 0], "image": ["1", 0]}},
+        "6": {"class_type": "PreviewImage", "inputs": {"images": ["5", 0]}},
+    }
+    assert _finals(graph, tool, AUX_INFO) == ["3", "6"]
+
+
+def test_同一份潜空间解码两次_互不相干的两路_都是结果(graph) -> None:
+    twice = _txt2img(**{
+        "10": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["5", 0], "vae": ["1", 2], "tile_size": 512}},
+        "11": {"class_type": "PreviewImage", "inputs": {"images": ["10", 0]}},
+    })
+    assert _finals(graph, twice) == ["7", "11"], "看的是同一遍的结果:谁也不是谁的中间一步"
+    apart = _txt2img(**_second_pass(["4", 0], positive=["3", 0], negative=["2", 0]))
+    assert _finals(graph, apart) == ["7", "23"], "两句提示词各出一张:共用模型和画布不算接着生成"
+
+
+def test_几路都有中间一步时_最终结果是几个(graph) -> None:
+    """两路各自两遍出图:缺省交回两路各自的最后一张。"""
+    api = _txt2img(**{"10": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["5", 0], "scale_by": 1.5,
+                                                                         "upscale_method": "nearest-exact"}}},
+                   **_second_pass(["10", 0]))
+    api.update({
+        "30": {"class_type": "KSampler", "inputs": {**api["5"]["inputs"], "positive": ["3", 0], "negative": ["2", 0]}},
+        "31": {"class_type": "VAEDecode", "inputs": {"samples": ["30", 0], "vae": ["1", 2]}},
+        "32": {"class_type": "PreviewImage", "inputs": {"images": ["31", 0]}},
+        "33": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["30", 0], "scale_by": 1.5,
+                                                           "upscale_method": "nearest-exact"}},
+        "34": {"class_type": "KSampler", "inputs": {**api["21"]["inputs"], "latent_image": ["33", 0]}},
+        "35": {"class_type": "VAEDecode", "inputs": {"samples": ["34", 0], "vae": ["1", 2]}},
+        "36": {"class_type": "PreviewImage", "inputs": {"images": ["35", 0]}},
+    })
+    assert _finals(graph, api) == ["23", "36"]
+    model = graph.describe("two.json", "two", api, OBJECT_INFO)
+    choice = model["parameters"]["output_node"]
+    assert choice["default"] == "final" and model["outputs_per_run"] == 2
+    assert choice["x-enum-labels"]["final"] == {"zh": "最终结果(2 个预览节点)", "en": "Final results (2 preview nodes)"}
+    assert choice["x-outputs-per-run"]["final"] == 2 and choice["x-outputs-per-run"]["all"] == 4
+
+
+def test_保存节点不挑_存下来的照旧压过预览(graph) -> None:
+    """保存节点是工作流作者明说要存的:第一遍也存着的照样交回(缺省「全部」)。存了第一遍、只预览第二遍的,交回的是
+    存下来的那张(1.6.0 起的规矩,不因为第二遍在下游就改)。"""
+    saved_twice = _txt2img(**{"10": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["5", 0], "scale_by": 1.5,
+                                                                                 "upscale_method": "nearest-exact"}}},
+                           **_second_pass(["10", 0], output="SaveImage"))
+    saved_twice["7"] = {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": "base"}}
+    model = graph.describe("saved.json", "saved", saved_twice, OBJECT_INFO)
+    assert model["outputs_per_run"] == 2
+    assert model["parameters"]["output_node"]["default"] == "all"
+    assert "final" not in model["parameters"]["output_node"]["enum"]
+    first_saved = {**saved_twice, "23": {"class_type": "PreviewImage", "inputs": {"images": ["22", 0]}}}
+    assert [node["node"] for node in graph.generation_nodes(first_saved, "image")] == ["7"]
+    assert graph.describe("first.json", "first", first_saved, OBJECT_INFO)["outputs_per_run"] == 1
+
+
+def test_三个预览看的是同一张图_照旧全部(graph) -> None:
+    assert _finals(graph, PREVIEWS_ONLY_API) == ["13", "17", "18"]
+    choice = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)["parameters"]["output_node"]
+    assert choice["default"] == "all" and "final" not in choice["enum"]
 
 
 def test_选模型文件的参数写明是哪个模型目录的文件(graph) -> None:

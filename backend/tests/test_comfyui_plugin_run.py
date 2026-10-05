@@ -25,10 +25,12 @@ from tests.fake_comfyui import (
     INPAINT_NODE_INFO,
     MINIMAX_T2V_API,
     PNG,
+    TWO_PASS_HAND_DEPTH,
     TWO_SAVES_API,
     UPSCALE_API,
     VIDEO_NODE_INFO,
     FakeComfyUI,
+    fixture_workflow,
     minimax_h3_ui,
 )
 
@@ -374,6 +376,31 @@ def test_两个保存节点_一次交回两份_结果取自选一个就只交回
     assert output["usage"] == {"images": 1}
     viewed = [query["filename"] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
     assert viewed[-1:] == [["hd_00001_.png"]], viewed
+
+
+def test_两遍出图只接了预览_缺省只交回最终结果_全部照旧三张(comfy, tmp_path: Path) -> None:
+    """维护者的「古风女孩1」(脱敏夹具):第一遍、从它算出来的手部深度图、第二遍各接一个预览。目录说一次一张,
+    没选「结果取自」(宿主只发动过的参数)时提交的图里摘掉中间一步的两个预览、只交回第二遍那张;选「全部」照旧三张。"""
+    ui, info = fixture_workflow(TWO_PASS_HAND_DEPTH)
+    comfy.state.object_info.update(info)
+    comfy.state.workflows["古风女孩1.json"] = ui
+    comfy.state.outputs = {node: {"images": [{"filename": f"ComfyUI_temp_{node}_00001_.png", "subfolder": "",
+                                              "type": "temp"}]} for node in ("8", "17", "18")}
+    model = next(one for one in _models(comfy.url) if one["id"] == "古风女孩1.json")
+    assert model["outputs_per_run"] == 1 and model["parameters"]["output_node"]["default"] == "final"
+
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "古风女孩1.json"})
+    submitted = comfy.posted("/prompt")[0]["prompt"]
+    assert "17" in submitted and not {"8", "18"} & set(submitted), "中间一步的预览不跑"
+    assert {"6", "10", "11", "14", "16"} <= set(submitted)
+    assert submitted["7"]["inputs"]["batch_size"] == 1
+    assert len(output["outputs"]) == 1 and output["usage"] == {"images": 1}
+    viewed = [query["filename"] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
+    assert viewed == [["ComfyUI_temp_17_00001_.png"]]
+
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "古风女孩1.json", "parameters": {"output_node": "all"}})
+    assert {"8", "17", "18"} <= set(comfy.posted("/prompt")[1]["prompt"])
+    assert len(output["outputs"]) == 3 and output["usage"] == {"images": 3}
 
 
 def test_取消只停这一个任务(comfy, tmp_path: Path) -> None:

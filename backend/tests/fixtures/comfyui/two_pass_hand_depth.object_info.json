@@ -1,0 +1,634 @@
+{
+ "CLIPTextEncode": {
+  "input": {
+   "required": {
+    "text": [
+     "STRING",
+     {
+      "multiline": true,
+      "dynamicPrompts": true
+     }
+    ],
+    "clip": [
+     "CLIP"
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "text",
+    "clip"
+   ]
+  },
+  "output": [
+   "CONDITIONING"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "CONDITIONING"
+  ],
+  "name": "CLIPTextEncode",
+  "display_name": "CLIP Text Encode (Prompt)",
+  "category": "model/conditioning",
+  "output_node": false
+ },
+ "CheckpointLoader|pysssss": {
+  "input": {
+   "required": {
+    "ckpt_name": [
+     [
+      "illustrious_checkpoint.safetensors"
+     ]
+    ]
+   },
+   "optional": {
+    "prompt": [
+     "STRING",
+     {
+      "hidden": true
+     }
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "ckpt_name"
+   ],
+   "optional": [
+    "prompt"
+   ]
+  },
+  "output": [
+   "MODEL",
+   "CLIP",
+   "VAE",
+   "STRING"
+  ],
+  "output_is_list": [
+   false,
+   false,
+   false,
+   false
+  ],
+  "output_name": [
+   "MODEL",
+   "CLIP",
+   "VAE",
+   "example"
+  ],
+  "name": "CheckpointLoader|pysssss",
+  "display_name": "Checkpoint Loader 🐍",
+  "category": "model/loaders",
+  "output_node": false
+ },
+ "ControlNetApplyAdvanced": {
+  "input": {
+   "required": {
+    "positive": [
+     "CONDITIONING"
+    ],
+    "negative": [
+     "CONDITIONING"
+    ],
+    "control_net": [
+     "CONTROL_NET"
+    ],
+    "image": [
+     "IMAGE"
+    ],
+    "strength": [
+     "FLOAT",
+     {
+      "default": 1.0,
+      "min": 0.0,
+      "max": 10.0,
+      "step": 0.01
+     }
+    ],
+    "start_percent": [
+     "FLOAT",
+     {
+      "default": 0.0,
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.001
+     }
+    ],
+    "end_percent": [
+     "FLOAT",
+     {
+      "default": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.001
+     }
+    ]
+   },
+   "optional": {
+    "vae": [
+     "VAE"
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "positive",
+    "negative",
+    "control_net",
+    "image",
+    "strength",
+    "start_percent",
+    "end_percent"
+   ],
+   "optional": [
+    "vae"
+   ]
+  },
+  "output": [
+   "CONDITIONING",
+   "CONDITIONING"
+  ],
+  "output_is_list": [
+   false,
+   false
+  ],
+  "output_name": [
+   "positive",
+   "negative"
+  ],
+  "name": "ControlNetApplyAdvanced",
+  "display_name": "Apply ControlNet",
+  "category": "model/conditioning/controlnet",
+  "output_node": false
+ },
+ "ControlNetLoader": {
+  "input": {
+   "required": {
+    "control_net_name": [
+     [
+      "controlnet_union.safetensors"
+     ]
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "control_net_name"
+   ]
+  },
+  "output": [
+   "CONTROL_NET"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "CONTROL_NET"
+  ],
+  "name": "ControlNetLoader",
+  "display_name": "Load ControlNet Model",
+  "category": "model/loaders",
+  "output_node": false
+ },
+ "EmptyLatentImage": {
+  "input": {
+   "required": {
+    "width": [
+     "INT",
+     {
+      "default": 1024,
+      "min": 16,
+      "max": 16384,
+      "step": 8
+     }
+    ],
+    "height": [
+     "INT",
+     {
+      "default": 1024,
+      "min": 16,
+      "max": 16384,
+      "step": 8
+     }
+    ],
+    "batch_size": [
+     "INT",
+     {
+      "default": 1,
+      "min": 1,
+      "max": 4096
+     }
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "width",
+    "height",
+    "batch_size"
+   ]
+  },
+  "output": [
+   "LATENT"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "LATENT"
+  ],
+  "name": "EmptyLatentImage",
+  "display_name": "Empty Latent Image",
+  "category": "model/latent",
+  "output_node": false
+ },
+ "KSampler": {
+  "input": {
+   "required": {
+    "model": [
+     "MODEL"
+    ],
+    "seed": [
+     "INT",
+     {
+      "default": 0,
+      "min": 0,
+      "max": 18446744073709551615,
+      "control_after_generate": true
+     }
+    ],
+    "steps": [
+     "INT",
+     {
+      "default": 20,
+      "min": 1,
+      "max": 10000
+     }
+    ],
+    "cfg": [
+     "FLOAT",
+     {
+      "default": 8.0,
+      "min": 0.0,
+      "max": 100.0,
+      "step": 0.1,
+      "round": 0.01
+     }
+    ],
+    "sampler_name": [
+     [
+      "euler",
+      "euler_cfg_pp",
+      "euler_ancestral",
+      "euler_ancestral_cfg_pp",
+      "heun",
+      "heunpp2",
+      "exp_heun_2_x0",
+      "exp_heun_2_x0_sde",
+      "dpm_2",
+      "dpm_2_ancestral",
+      "lms",
+      "dpm_fast",
+      "dpm_adaptive",
+      "dpmpp_2s_ancestral",
+      "dpmpp_2s_ancestral_cfg_pp",
+      "dpmpp_sde",
+      "dpmpp_sde_gpu",
+      "dpmpp_2m",
+      "dpmpp_2m_cfg_pp",
+      "dpmpp_2m_sde",
+      "dpmpp_2m_sde_gpu",
+      "dpmpp_2m_sde_heun",
+      "dpmpp_2m_sde_heun_gpu",
+      "dpmpp_3m_sde",
+      "dpmpp_3m_sde_gpu",
+      "ddpm",
+      "lcm",
+      "ipndm",
+      "ipndm_v",
+      "deis",
+      "cfgpp_ud10_ab",
+      "res_multistep",
+      "res_multistep_cfg_pp",
+      "res_multistep_ancestral",
+      "res_multistep_ancestral_cfg_pp",
+      "gradient_estimation",
+      "gradient_estimation_cfg_pp",
+      "er_sde",
+      "seeds_2",
+      "seeds_3",
+      "sa_solver",
+      "sa_solver_pece",
+      "ddim",
+      "uni_pc",
+      "uni_pc_bh2"
+     ]
+    ],
+    "scheduler": [
+     [
+      "simple",
+      "sgm_uniform",
+      "karras",
+      "exponential",
+      "ddim_uniform",
+      "beta",
+      "normal",
+      "linear_quadratic",
+      "kl_optimal"
+     ]
+    ],
+    "positive": [
+     "CONDITIONING"
+    ],
+    "negative": [
+     "CONDITIONING"
+    ],
+    "latent_image": [
+     "LATENT"
+    ],
+    "denoise": [
+     "FLOAT",
+     {
+      "default": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01
+     }
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "model",
+    "seed",
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "positive",
+    "negative",
+    "latent_image",
+    "denoise"
+   ]
+  },
+  "output": [
+   "LATENT"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "LATENT"
+  ],
+  "name": "KSampler",
+  "display_name": "KSampler",
+  "category": "model/sampling",
+  "output_node": false
+ },
+ "LoraLoader|pysssss": {
+  "input": {
+   "required": {
+    "model": [
+     "MODEL"
+    ],
+    "clip": [
+     "CLIP"
+    ],
+    "lora_name": [
+     [
+      "style_lora.safetensors"
+     ]
+    ],
+    "strength_model": [
+     "FLOAT",
+     {
+      "default": 1.0,
+      "min": -100.0,
+      "max": 100.0,
+      "step": 0.01
+     }
+    ],
+    "strength_clip": [
+     "FLOAT",
+     {
+      "default": 1.0,
+      "min": -100.0,
+      "max": 100.0,
+      "step": 0.01
+     }
+    ]
+   },
+   "optional": {
+    "prompt": [
+     "STRING",
+     {
+      "hidden": true
+     }
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "model",
+    "clip",
+    "lora_name",
+    "strength_model",
+    "strength_clip"
+   ],
+   "optional": [
+    "prompt"
+   ]
+  },
+  "output": [
+   "MODEL",
+   "CLIP",
+   "STRING"
+  ],
+  "output_is_list": [
+   false,
+   false,
+   false
+  ],
+  "output_name": [
+   "MODEL",
+   "CLIP",
+   "example"
+  ],
+  "name": "LoraLoader|pysssss",
+  "display_name": "Lora Loader 🐍",
+  "category": "model/loaders",
+  "output_node": false
+ },
+ "MeshGraphormer-DepthMapPreprocessor": {
+  "input": {
+   "required": {
+    "image": [
+     "IMAGE"
+    ]
+   },
+   "optional": {
+    "mask_bbox_padding": [
+     "INT",
+     {
+      "default": 30,
+      "min": 0,
+      "max": 100
+     }
+    ],
+    "resolution": [
+     "INT",
+     {
+      "default": 512,
+      "min": 64,
+      "max": 16384,
+      "step": 64
+     }
+    ],
+    "mask_type": [
+     [
+      "based_on_depth",
+      "tight_bboxes",
+      "original"
+     ],
+     {
+      "default": "based_on_depth"
+     }
+    ],
+    "mask_expand": [
+     "INT",
+     {
+      "default": 5,
+      "min": -16384,
+      "max": 16384,
+      "step": 1
+     }
+    ],
+    "rand_seed": [
+     "INT",
+     {
+      "default": 88,
+      "min": 0,
+      "max": 18446744073709551615,
+      "step": 1
+     }
+    ],
+    "detect_thr": [
+     "FLOAT",
+     {
+      "default": 0.6,
+      "min": 0.1,
+      "max": 1,
+      "step": 0.01
+     }
+    ],
+    "presence_thr": [
+     "FLOAT",
+     {
+      "default": 0.6,
+      "min": 0.1,
+      "max": 1,
+      "step": 0.01
+     }
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "image"
+   ],
+   "optional": [
+    "mask_bbox_padding",
+    "resolution",
+    "mask_type",
+    "mask_expand",
+    "rand_seed",
+    "detect_thr",
+    "presence_thr"
+   ]
+  },
+  "output": [
+   "IMAGE",
+   "MASK"
+  ],
+  "output_is_list": [
+   false,
+   false
+  ],
+  "output_name": [
+   "IMAGE",
+   "INPAINTING_MASK"
+  ],
+  "name": "MeshGraphormer-DepthMapPreprocessor",
+  "display_name": "MeshGraphormer Hand Refiner",
+  "category": "ControlNet Preprocessors/Normal and Depth Estimators",
+  "output_node": false
+ },
+ "PreviewImage": {
+  "input": {
+   "required": {
+    "images": [
+     "IMAGE"
+    ]
+   },
+   "hidden": {
+    "prompt": "PROMPT",
+    "extra_pnginfo": "EXTRA_PNGINFO"
+   }
+  },
+  "input_order": {
+   "required": [
+    "images"
+   ],
+   "hidden": [
+    "prompt",
+    "extra_pnginfo"
+   ]
+  },
+  "output": [
+   "IMAGE"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "images"
+  ],
+  "name": "PreviewImage",
+  "display_name": "Preview Image",
+  "category": "image",
+  "output_node": true
+ },
+ "VAEDecode": {
+  "input": {
+   "required": {
+    "samples": [
+     "LATENT"
+    ],
+    "vae": [
+     "VAE"
+    ]
+   }
+  },
+  "input_order": {
+   "required": [
+    "samples",
+    "vae"
+   ]
+  },
+  "output": [
+   "IMAGE"
+  ],
+  "output_is_list": [
+   false
+  ],
+  "output_name": [
+   "IMAGE"
+  ],
+  "name": "VAEDecode",
+  "display_name": "VAE Decode",
+  "category": "model/latent",
+  "output_node": false
+ }
+}
