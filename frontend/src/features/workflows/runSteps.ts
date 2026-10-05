@@ -1,7 +1,8 @@
 import type { TaskEvent } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
-import { outputLabel, outputType, type RegistryLike } from "@/features/workflows/analyze";
+import { outputType, type RegistryLike } from "@/features/workflows/analyze";
+import { outputPortName } from "@/features/workflows/portNames";
 import { parseServerTime } from "@/lib/time";
 
 /**
@@ -142,7 +143,7 @@ export function stepsByNode(events: TaskEvent[]): Record<string, Step> {
 export interface OutputRow {
   /** 稳定 key —— 连线和 `{{node.key}}` 引用用的就是它。 */
   key: string;
-  /** 给人看的名字。节点没声明就退回 key,不在前端另起一套。 */
+  /** 给人看的名字 —— 和画布上那个输出口同一个(portNames.outputPortName)。 */
   label: string;
   type: DataType;
   value: unknown;
@@ -156,7 +157,7 @@ export function outputRows(
   if (!nodeType || !outputs) return [];
   return Object.entries(outputs).map(([key, value]) => ({
     key,
-    label: outputLabel(registry, nodeType, key) || key,
+    label: outputPortName(registry, { type: nodeType }, key),
     type: outputType(registry, nodeType, key),
     value,
   }));

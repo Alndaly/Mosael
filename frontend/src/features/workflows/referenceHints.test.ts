@@ -208,6 +208,42 @@ describe("引用 → 提示线", () => {
     ]);
   });
 
+  it("落在表单能单独填的那一格:生成参数的一项、输入素材的一行各一个口;原始 JSON 框里几处引用是那一格一个口", () => {
+    const shaped: HintRegistry = {
+      get: (type) =>
+        type === "gen"
+          ? {
+              config: {
+                parameters: { type: "object", entry_labels: "generation_parameters" },
+                source_assets: { type: "template", lines: true, entry_labels: "source_roles" },
+              },
+              outputs: ["asset_id"],
+            }
+          : type === "plan"
+            ? { config: { json_schema: { type: "object", editor: "json" } }, outputs: ["json"] }
+            : TYPES[type],
+    };
+    const hints = referenceHints(
+      graph([
+        start,
+        { id: "g", type: "gen", config: { parameters: { aspect_ratio: "{{start.ratio}}" }, source_assets: ["{{start.photo}}:first_frame"] } },
+        {
+          id: "p",
+          type: "plan",
+          config: { json_schema: { properties: { a: { description: "{{start.secs}} 秒" }, b: { description: "{{start.secs}} 秒内" } } } },
+        },
+      ]),
+      shaped,
+      top,
+    );
+    expect(hints.map((hint) => [hint.target, hint.targetHandle, hint.refs])).toEqual([
+      ["g", "in:parameters.aspect_ratio", ["{{start.ratio}}"]],
+      ["g", "in:source_assets.0", ["{{start.photo}}"]],
+      //: 此前是三个都叫 `description` 的口(这里是两个),各连一根线。
+      ["p", "in:json_schema", ["{{start.secs}}"]],
+    ]);
+  });
+
   it("代码字段里的 {{…}} 不是引用;容器的 inputs / items 在这一层画,体内的 body / output 不在这一层画", () => {
     const hints = referenceHints(
       graph(

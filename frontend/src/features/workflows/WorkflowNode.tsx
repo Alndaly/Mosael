@@ -91,11 +91,11 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   configSummary?: string;
   /** 每个输入接点收什么类型 —— 卡片按它给接点上色。 */
   inputTypes?: Record<string, string>;
-  /** 输入接点在人机界面上的名字，由节点声明提供。 */
+  /** 输入接点在人机界面上的名字(portNames:和检查器那一格同一个名字)。 */
   inputLabels?: Record<string, string>;
   /** 每个输出接点承载什么类型，由节点声明提供。 */
   outputTypes?: Record<string, string>;
-  /** 输出接点在人机界面上的名字;稳定英文 key 仍用于连线和导出。 */
+  /** 输出接点在人机界面上的名字(portNames);稳定英文 key 仍用于连线和导出。 */
   outputLabels?: Record<string, string>;
 }
 
@@ -155,7 +155,6 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
   const badge = d.badge ?? null;
   const inputs = d.inputs ?? [];
   const outputs = d.outputs ?? [];
-  const portLabel = (key: string) => key.split(".").at(-1) || key;
   //: 数据接点**谁都画**,条件节点也不例外(画哪些口见 workflowPorts)。此前它为了紧凑不上接点页脚,而官方模板里
   //: 「认出的平台 → 是抖音吗」正是一条接进 `left` 的数据边 —— 卡片上没有 `in:left`,React Flow 找不到口就不画这根线
   //: (只在控制台报 008)。真/假两路出口挂在标题层(见下),和页脚的接点互不相干。
@@ -299,12 +298,11 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[var(--chart-image)]! data-[dtype=json]:border-[var(--chart-audio)]! data-[dtype=number]:border-warning! data-[dtype=sequence]:border-destructive! data-[dtype=text]:border-muted-foreground! left-[-12px]!"
                   data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
-                {/* 有声明标签走正文字体;旧服务端没发显示名时才用 mono 显示稳定键。悬停说的是稳定键
-                    (`{{节点.key}}` 里写的那个词)。 */}
+                {/* 名字只有一处(portNames):和检查器里那一格、引用标签上说的是同一个。**不取路径的最后一段** ——
+                    此前引用写在 `parameters.aspect_ratio` 里的口叫 `aspect_ratio`,写在输入素材第一行的叫 `0`。
+                    悬停说的是稳定键(`{{节点.key}}` 里写的那个词)。 */}
                 <Hint label={key}>
-                  <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}>
-                    {(d.inputLabels ?? {})[key] || portLabel(key)}
-                  </span>
+                  <span className="whitespace-nowrap text-ui-2xs text-muted-foreground">{(d.inputLabels ?? {})[key] ?? key}</span>
                 </Hint>
               </div>
             ))}
@@ -313,9 +311,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
             {outputs.map((output) => (
               <div className="relative flex min-h-4 items-center justify-end" key={output}>
                 <Hint label={output}>
-                  <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.outputLabels ?? {})[output] && "font-mono")}>
-                    {(d.outputLabels ?? {})[output] || portLabel(output)}
-                  </span>
+                  <span className="whitespace-nowrap text-ui-2xs text-muted-foreground">{(d.outputLabels ?? {})[output] ?? output}</span>
                 </Hint>
                 <Handle
                   id={`out:${output}`}

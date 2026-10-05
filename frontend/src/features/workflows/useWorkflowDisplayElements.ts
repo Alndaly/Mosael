@@ -8,6 +8,7 @@ import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import type { CanvasMarker } from "@/features/markers/markers";
 import { worstSeverity } from "@/features/workflows/analyze";
+import type { PortNamer } from "@/features/workflows/portNames";
 import { outputSummary } from "@/features/workflows/RunOutputs";
 import { assetOutputs, outputRows } from "@/features/workflows/runSteps";
 import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
@@ -62,6 +63,7 @@ export function useWorkflowDisplayNodes({
   searchHit,
   atRoot,
   refName,
+  portNamer,
 }: {
   nodes: Node[];
   graph: WorkflowGraph;
@@ -80,6 +82,8 @@ export function useWorkflowDisplayNodes({
   atRoot: boolean;
   /** 角标说明里提到的引用怎么说:「节点标题 · 输出」(见 workflowRefNamer)。 */
   refName: (ref: string, path: ScopePath) => string;
+  /** 卡片上的接点叫什么(见 portNames)。 */
+  portNamer: PortNamer;
 }) {
   //: 认不出的插件节点为什么用不了(后端说的真实原因),角标的提示里说它。
   const unknownTypes = React.useMemo(
@@ -120,12 +124,12 @@ export function useWorkflowDisplayNodes({
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
             configAssetId: configAssetId(graphNode(node.id), registry),
-            ...workflowPortPresentation(node.data as WorkflowNodeData, registry),
+            ...workflowPortPresentation(graphNode(node.id), node.data as WorkflowNodeData, registry, portNamer),
           },
         };
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer],
   );
 }

@@ -12,6 +12,50 @@
  * 所以界面按角色一行一格,这里只管两边的翻译。往返要**稳**:解析再序列化必须回到原样,
  * 否则每打开一次检查器,配置就被悄悄改一次,而 diff 里全是噪音。
  */
+import type { MessageKey } from "@/app/messages";
+
+/** 素材角色在检查器里的排列顺序。和后端 ai/providers/base.SOURCE_ROLES 同一套。 */
+export const SOURCE_ROLE_ORDER = [
+  "first_frame",
+  "last_frame",
+  "reference_image",
+  "reference_video",
+  "reference_audio",
+  "source_video",
+  "first_clip",
+  "driving_audio",
+  "mask",
+] as const;
+
+export type SourceRole = (typeof SOURCE_ROLE_ORDER)[number];
+
+/** 素材角色叫什么。**只此一处**:检查器里按角色一行一格的标题,和画布上那一行的输入口(workflows/portNames)读的是它。 */
+export const SOURCE_ROLE_LABELS: Record<SourceRole, MessageKey> = {
+  first_frame: "genFirstFrame",
+  last_frame: "genLastFrame",
+  reference_image: "genReferenceImage",
+  reference_video: "genReferenceVideo",
+  reference_audio: "genReferenceAudio",
+  source_video: "genSourceVideo",
+  first_clip: "genFirstClip",
+  driving_audio: "genDrivingAudio",
+  mask: "genMask",
+};
+
+/**
+ * 配置里第 `index` 行在界面上叫什么:它的角色名;同一个角色挂了几行时带上是第几个(「参考图 2」)—— 同一个节点上
+ * 两个口叫同一个名字就分不出谁是谁。说不出角色的行(没写角色、角色不认识)回空串,由调用方给个带序号的名字。
+ */
+export function sourceLineName(t: (key: MessageKey) => string, value: unknown, index: number): string {
+  if (!Array.isArray(value)) return "";
+  const roles = value.map((line) => parseSourceAssetText(String(line))[0]?.role ?? "");
+  const role = roles[index] ?? "";
+  const key = (SOURCE_ROLE_LABELS as Record<string, MessageKey | undefined>)[role];
+  if (!key) return "";
+  const same = roles.filter((one) => one === role).length;
+  if (same < 2) return t(key);
+  return `${t(key)} ${roles.slice(0, index + 1).filter((one) => one === role).length}`;
+}
 
 /** 一条素材:值(素材 id 或模板串)+ 它的用途。 */
 export interface SourceAssetLine {

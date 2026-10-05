@@ -12,6 +12,7 @@ const registry = new Map<string, WorkflowNodeType>([
   ["start", meta(["*params"])],
   ["llm", meta(["text", "json"], { output_labels: { text: "文本", json: "JSON" }, output_schema_from: { json: "json_schema" } })],
   ["note_create", meta(["note_id"], { output_labels: { note_id: "笔记" } })],
+  ["output", meta(["output"], { output_labels: { output: "对外输出" }, port_maps: { values: { input: "values", output: "output" } } })],
 ]);
 
 //: 「账号运营诊断」那张图里交付节点引用的几处。
@@ -36,6 +37,7 @@ const graph: WorkflowGraph = {
     },
     { id: "web", type: "llm", config: {} },
     { id: "save_note", type: "note_create", name: "存成笔记", config: {} },
+    { id: "deliver", type: "output", name: "交付", config: { values: { note_id: "{{save_note.note_id}}" } } },
   ],
   edges: [],
 };
@@ -49,6 +51,8 @@ describe("引用长什么样", () => {
     expect(refLabel(catalog.look("web.text"))).toBe("web · 文本");
     //: 开始节点的输出就是它的参数。
     expect(catalog.look("start.post_count")).toEqual({ parts: ["start", "post_count"], problem: null });
+    //: 具名输出的每一项是画布上的一个口,名字是那一项的键 —— 和口上写的一样(portNames.outputPortName)。
+    expect(refLabel(catalog.look("deliver.output.note_id"))).toBe("交付 · note_id");
   });
 
   it("指不到东西的说清为什么:没有这个节点,或者节点在、没有这个输出", () => {

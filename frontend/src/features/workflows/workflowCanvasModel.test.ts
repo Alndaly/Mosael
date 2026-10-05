@@ -11,6 +11,7 @@ import {
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
 import type { NodeIssue } from "@/features/workflows/analyze";
+import { workflowPortNamer } from "@/features/workflows/portNames";
 
 function meta(
   type: string,
@@ -199,8 +200,10 @@ describe("workflow canvas model", () => {
 
     expect(
       workflowPortPresentation(
-        { nodeType: "timeline", inputs: ["sequence_id"], outputs: ["sequence_id", "revision"] },
+        { id: "n1", type: "timeline", config: {} },
+        { inputs: ["sequence_id"], outputs: ["sequence_id", "revision"] },
         registry,
+        workflowPortNamer({ registry, t: translate }),
       ),
     ).toEqual({
       inputTypes: { sequence_id: "sequence" },

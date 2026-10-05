@@ -1,6 +1,7 @@
 import type { WorkflowGraph } from "@/api/client";
 import { refLabel, type RefCatalog, type RefLook } from "@/features/nodeForms/refCatalog";
 import { bareRef } from "@/features/nodeForms/refDoc";
+import { outputPortName } from "@/features/workflows/portNames";
 import {
   declaredFieldNames,
   graphAtScope,
@@ -14,17 +15,23 @@ import {
  * 工作流里**一个引用指的是什么**:这一层图的节点、节点注册表的声明、容器给体播的作用域变量、上次运行交回的输出 →
  * 表单那一层的引用目录(见 nodeForms/refCatalog)。
  *
- * - 显示:`{{report.json.verdict}}` → 节点的名字(没起名的用 id)· 输出的显示名(注册表的 output_labels)· 子路径;
+ * - 显示:`{{report.json.verdict}}` → 节点的名字(没起名的用 id)· 输出口的名字(portNames.outputPortName,和画布上
+ *   那个口同一个名字)· 子路径;
  * - 指不到:根不是这一层的节点、也不是作用域名 → 没有这个节点;节点在,而输出不在它声明的输出里(通配按配置展开,
  *   开始节点的输出就是它的参数)→ 没有这个输出。节点类型不在注册表里(插件没装)的不判输出 —— 说不清它有什么;
  * - 字段:输出声明了结构写在哪一格(注册表的 output_schema_from,那一格是 JSON Schema)就按 schema 列;上次运行这个
  *   输出交回的是对象,就按交回的键列。只往对象里走、不进数组(数组要下标),最多三层。
  */
 
-/** 只读节点类型的输出声明:有哪些、叫什么、结构写在哪一格。 */
+/** 只读节点类型的输出声明:有哪些、叫什么、结构写在哪一格、哪几格按配置展开成口。 */
 interface Registry {
   get(type: string):
-    | { outputs?: readonly string[]; output_labels?: Record<string, string>; output_schema_from?: Record<string, string> }
+    | {
+        outputs?: readonly string[];
+        output_labels?: Record<string, string>;
+        output_schema_from?: Record<string, string>;
+        port_maps?: Record<string, { input?: string; output?: string }>;
+      }
     | undefined;
 }
 
@@ -60,9 +67,8 @@ export function workflowRefCatalog({
       const name = node.name?.trim() || node.id;
       if (output === undefined) return { parts: [name], problem: null };
       const outputs = meta ? declaredFieldNames(meta.outputs ?? [], node.config as Record<string, unknown> | undefined) : null;
-      const label = meta?.output_labels?.[output]?.trim() || output;
       return {
-        parts: [name, label, ...rest],
+        parts: [name, outputPortName(registry, node, [output, ...rest].join("."))],
         problem: outputs && !outputs.includes(output) ? { kind: "output", node: name, output } : null,
       };
     }

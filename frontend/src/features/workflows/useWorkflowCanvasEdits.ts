@@ -13,6 +13,7 @@ import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import type { DependencySpec } from "@/features/nodeForms/dependents";
 import { isDataConnection, isDuplicateControlEdge, withDataInputBound } from "@/features/workflows/connections";
+import { acceptsDataEdge } from "@/features/workflows/portNames";
 import type { WorkflowGraphState } from "@/features/workflows/useWorkflowGraph";
 import { toWorkflowFlowEdges, toWorkflowFlowNodes } from "@/features/workflows/workflowCanvasModel";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
@@ -319,6 +320,11 @@ export function useWorkflowCanvasEdits({
       if (!isDataConnection(srcHandle, tgtHandle) && isDuplicateControlEdge(graph.edges, source, target, srcHandle)) {
         return false;
       }
+      //: 数据边只接到收得下上游值的口上(和检查器的「接上游」同一个判据,见 portNames.acceptsDataEdge)。
+      if (isDataConnection(srcHandle, tgtHandle)) {
+        const targetType = graph.nodes.find((node) => node.id === target)?.type ?? "";
+        if (!acceptsDataEdge(registry, targetType, tgtHandle!.slice(3))) return false;
+      }
       // 从 target 出发能走回 source 即成环
       const adjacency = new Map<string, string[]>();
       for (const edge of graph.edges) {
@@ -335,7 +341,7 @@ export function useWorkflowCanvasEdits({
       }
       return true;
     },
-    [graph.edges],
+    [graph.edges, graph.nodes, registry],
   );
 
   const addNode = (type: string) => {

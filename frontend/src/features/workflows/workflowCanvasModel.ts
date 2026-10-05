@@ -6,11 +6,11 @@ import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import {
   inputType,
-  outputLabel,
   outputType,
   typesCompatible,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+import type { PortNamer } from "@/features/workflows/portNames";
 import type { ScopePath } from "@/features/workflows/scope";
 import { plainRefName } from "@/features/workflows/workflowRefCatalog";
 import { nodePorts } from "@/features/workflows/workflowPorts";
@@ -92,23 +92,19 @@ export function toWorkflowFlowNodes(graph: WorkflowGraph, registry: NodeRegistry
  * pure function with the current registry.
  */
 export function workflowPortPresentation(
-  node: Pick<WorkflowNodeData, "nodeType" | "inputs" | "outputs">,
+  node: WorkflowGraph["nodes"][number],
+  ports: Pick<WorkflowNodeData, "inputs" | "outputs">,
   registry: NodeRegistry,
+  names: PortNamer,
 ): Pick<WorkflowNodeData, "inputTypes" | "inputLabels" | "outputTypes" | "outputLabels"> {
-  const meta = registry.get(node.nodeType);
-  const inputs = node.inputs ?? [];
-  const outputs = node.outputs ?? [];
+  const inputs = ports.inputs ?? [];
+  const outputs = ports.outputs ?? [];
   return {
-    inputTypes: Object.fromEntries(inputs.map((key) => [key, inputType(registry, node.nodeType, key)])),
-    inputLabels: Object.fromEntries(
-      inputs.map((key) => {
-        const spec = meta?.config?.[key] as { label?: unknown } | undefined;
-        return [key, String(spec?.label ?? "").trim()];
-      }),
-    ),
-    outputTypes: Object.fromEntries(outputs.map((key) => [key, outputType(registry, node.nodeType, key)])),
-    //: 取名字只有一处(analyze.outputLabel)—— 接点、产出面板、节点卡片读的是同一句声明。
-    outputLabels: Object.fromEntries(outputs.map((key) => [key, outputLabel(registry, node.nodeType, key)])),
+    inputTypes: Object.fromEntries(inputs.map((key) => [key, inputType(registry, node.type, key)])),
+    //: 叫什么只问 portNames —— 引用标签、「输出变量」、就绪提示说到这个口时用的是同一个名字。
+    inputLabels: Object.fromEntries(inputs.map((key) => [key, names.input(node, key)])),
+    outputTypes: Object.fromEntries(outputs.map((key) => [key, outputType(registry, node.type, key)])),
+    outputLabels: Object.fromEntries(outputs.map((key) => [key, names.output(node, key)])),
   };
 }
 

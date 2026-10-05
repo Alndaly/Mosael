@@ -17,12 +17,12 @@ import { join } from "node:path";
 import React from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
-import PORTS from "@/api/generated/workflow-node-ports.json";
+import type { WorkflowGraph } from "@/api/client";
 import { canTakeUpstream } from "@/features/nodeForms/fieldTypes";
 import { WORKFLOW_NODE_TYPES } from "@/features/workflows/WorkflowNode";
 import { declaredFieldNames } from "@/features/workflows/scope";
 import { toWorkflowFlowNodes } from "@/features/workflows/workflowCanvasModel";
+import { builtinNodeCatalog } from "@/test/nodeCatalog";
 
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单。
 export const RATCHET = true;
@@ -36,14 +36,7 @@ beforeAll(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
-type Ports = { type: string; config: Record<string, { type?: string; editor?: string }>; outputs: string[] };
-
-const REGISTRY = new Map<string, WorkflowNodeType>(
-  (PORTS as unknown as Ports[]).map((one) => [
-    one.type,
-    { ...one, label: one.type, description: "", category: "", plugin_name: "", tool_name: "" } as WorkflowNodeType,
-  ]),
-);
+const REGISTRY = builtinNodeCatalog("zh");
 
 /** 把一层图画到画布上,交回每个节点卡片上画着的口(节点 id → handle id)。 */
 function drawnPorts(graph: WorkflowGraph): Map<string, Set<string>> {

@@ -3,6 +3,7 @@ import type { WorkflowGraph } from "@/api/client";
 import { isStrictOneOf, isWorkflowFieldActive, oneOfGroups, oneOfOverfilled } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
+import { inputPortPath, outputPortName } from "@/features/workflows/portNames";
 import { bodyKey, declaredFieldNames, type ScopePath } from "@/features/workflows/scope";
 import { readSourceAssets } from "@/features/workflows/sourceAssetLines";
 
@@ -83,17 +84,6 @@ export function outputType(registry: RegistryLike, nodeType: string, output: str
   return normalizeDataType(registry.get(nodeType)?.output_types?.[output]);
 }
 
-/**
- * 输出接点在人机界面上的名字。**只有这一处取法。**
- *
- * 没声明就给空串,由调用方决定退回什么(接点退回稳定 key 并用 mono 显示,产出面板退回 key)。
- * 前端不编第二套名字:同一个输出在接点上叫「人声」、在产出里叫 `vocals_asset_id`,是同一件
- * 东西说两种话 —— 而画布上那根线连的就是它。
- */
-export function outputLabel(registry: RegistryLike, nodeType: string, output: string): string {
-  return String(registry.get(nodeType)?.output_labels?.[output] ?? "").trim();
-}
-
 /** 软兼容:any 通配;text 槽接受一切(都能字符串化);同类型兼容;否则不兼容。 */
 export function typesCompatible(source: DataType, target: DataType): boolean {
   if (target === "any" || source === "any" || target === "text") return true;
@@ -139,6 +129,8 @@ interface NodeMetaLike {
   output_types?: Record<string, string>;
   /** 每个输出在人机界面上的名字(「人声」「背景音」),同样由后端声明并按语言发下来。 */
   output_labels?: Record<string, string>;
+  /** 按配置逐项展开成接点的那几格(「输出」节点的具名输出):配置字段 → 输入 / 输出口的根。 */
+  port_maps?: Record<string, { input?: string; output?: string }>;
   /** 内嵌子图节点(循环 / 子图)体内看得见什么:作用域名 → 字段。**由后端声明**(NODE_TYPES 的 body_scope)。 */
   body_scope?: Record<string, string[]>;
 }
@@ -198,29 +190,31 @@ export function drivesDigitalHuman(nodeType: string, config: Record<string, unkn
 export interface LocatedReference {
   ref: string;
   sourceId: string;
-  /** 这条引用住在目标配置的哪个叶子；画布据此把提示线接到属性自己的输入口。 */
+  /** 这条引用落在目标节点的哪个输入口(portNames.inputPortPath):画布据此把提示线接到那一格自己的口上。 */
   targetInput: string;
 }
 
+type PathedRef = { ref: string; sourceId: string; path: readonly string[] };
+
 /** 从任意配置值里抽出 `{{id.output}}` 引用，并保留它所在的配置路径。 */
-function extractLocatedRefs(value: unknown, path: readonly string[] = []): LocatedReference[] {
-  if (Array.isArray(value)) return value.flatMap((one, index) => extractLocatedRefs(one, [...path, String(index)]));
+function extractPathedRefs(value: unknown, path: readonly string[] = []): PathedRef[] {
+  if (Array.isArray(value)) return value.flatMap((one, index) => extractPathedRefs(one, [...path, String(index)]));
   if (value && typeof value === "object") {
-    return Object.entries(value).flatMap(([key, one]) => extractLocatedRefs(one, [...path, key]));
+    return Object.entries(value).flatMap(([key, one]) => extractPathedRefs(one, [...path, key]));
   }
   if (typeof value !== "string" || !value.includes("{{")) return [];
-  const out: LocatedReference[] = [];
+  const out: PathedRef[] = [];
   for (const match of value.matchAll(VAR_RE)) {
     const inner = match[1];
     const sourceId = inner.split(".")[0];
-    if (sourceId) out.push({ ref: `{{${inner}}}`, sourceId, targetInput: path.join(".") });
+    if (sourceId) out.push({ ref: `{{${inner}}}`, sourceId, path });
   }
   return out;
 }
 
-/** 兼容分析调用方的简洁形状；属性路径只属于画布端口定位。 */
+/** 一段配置值里的 `{{id.output}}` 引用(不管住在哪一格)。 */
 export function extractRefs(value: unknown): Array<{ ref: string; sourceId: string }> {
-  return extractLocatedRefs(value).map(({ ref, sourceId }) => ({ ref, sourceId }));
+  return extractPathedRefs(value).map(({ ref, sourceId }) => ({ ref, sourceId }));
 }
 
 /**
@@ -286,7 +280,8 @@ export function layerDisplayNames(nodes: readonly WorkflowNodeLike[], registry: 
 export function layerReferences(node: WorkflowNodeLike, registry: RegistryLike): LocatedReference[] {
   return Object.entries(node.config ?? {})
     .filter(([key]) => !isNestedScopeConfig(registry, node.type, key) && !isCodeConfig(registry, node.type, key))
-    .flatMap(([key, value]) => extractLocatedRefs(value, [key]));
+    .flatMap(([key, value]) => extractPathedRefs(value, [key]))
+    .map(({ ref, sourceId, path }) => ({ ref, sourceId, targetInput: inputPortPath(registry, node.type, path) }));
 }
 
 /**
@@ -818,14 +813,14 @@ function collect(
 
 }
 
-/** 提示里列的可选项:输出按界面上的名字(没有就用键),结构里的字段按原名。 */
+/** 提示里列的可选项:输出按接点的名字(portNames.outputPortName),结构里的字段按原名。 */
 function outputAvailable(
   problem: { kind: "output" | "field"; available: string[] },
   source: WorkflowNodeLike,
   registry: RegistryLike,
 ): string[] {
   if (problem.kind === "field") return problem.available;
-  return problem.available.map((key) => outputLabel(registry, source.type, key) || key);
+  return problem.available.map((key) => outputPortName(registry, source, key));
 }
 
 export function analyzeWorkflow(

@@ -10,11 +10,12 @@ import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { MessageKey } from "@/app/messages";
 import { FIELD_BOX, type useNodeFieldOptions } from "@/features/nodeForms/NodeConfigForm";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { generationModelOf } from "@/features/workflows/readiness";
 import {
+  SOURCE_ROLE_LABELS,
+  SOURCE_ROLE_ORDER,
   extraLines,
   parseSourceAssetText,
   readSourceAssets,
@@ -50,11 +51,7 @@ import {
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import {
-  GENERATION_BOOLEAN_LABELS,
-  GENERATION_KIND_LABELS,
-  GENERATION_PARAMETER_LABELS,
-} from "@/lib/generationParameterLabels";
+import { GENERATION_KIND_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 
 //: 节点检查器里「AI 生成素材」的专区:选模型、按模型能力铺参数、按角色挂输入素材。
 
@@ -65,31 +62,6 @@ import {
  * 2026-08 的重做里全部收进来了(当时是十五处)。控件尺寸随之统一:输入框 h-8、
  * 内边距 px-2.5,不再有 p-1.5 和 h-9 两种说法。
  */
-/** 素材角色在检查器里的排列顺序与名字。和后端 ai/providers/base.SOURCE_ROLES 同一套。 */
-const SOURCE_ROLE_ORDER = [
-  "first_frame",
-  "last_frame",
-  "reference_image",
-  "reference_video",
-  "reference_audio",
-  "source_video",
-  "first_clip",
-  "driving_audio",
-  "mask",
-] as const;
-
-const SOURCE_ROLE_LABELS: Record<(typeof SOURCE_ROLE_ORDER)[number], MessageKey> = {
-  first_frame: "genFirstFrame",
-  last_frame: "genLastFrame",
-  reference_image: "genReferenceImage",
-  reference_video: "genReferenceVideo",
-  reference_audio: "genReferenceAudio",
-  source_video: "genSourceVideo",
-  first_clip: "genFirstClip",
-  driving_audio: "genDrivingAudio",
-  mask: "genMask",
-};
-
 /** 生成节点里的一个参数控件:枚举给下拉、区间给数字框、布尔给开关。 */
 interface GenField {
   key: string;
@@ -233,27 +205,32 @@ export function useGenerateNodeSection({
    */
   const genParamKeys: GenField[] = React.useMemo(() => {
     if (!genModel) return [];
+    //: 每一格叫什么只问 generationParameterLabel —— 画布上引用写在这一格里时的输入口读的是同一个函数。
+    const label = (key: string) => generationParameterLabel(key, genModel, t) || key;
     const out: GenField[] = [];
     const ratios = aspectRatioOptions(genModel);
-    if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
+    if (ratios.length > 0) out.push({ key: "aspect_ratio", label: label("aspect_ratio"), options: ratios });
     if (genModel.kind === "image") {
       const sizes = sizeOptions(genModel);
       if (sizes.length > 0) {
-        out.push({ key: "size", label: t("wfGenSize"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
+        out.push({ key: "size", label: label("size"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
       }
       // 分辨率档(GPT Image 的 1K / 2K / 4K)决定像素预算、也就决定价钱:声明了才摆。
       const imageResolutions = videoResolutionOptions(genModel);
-      if (imageResolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: imageResolutions });
+      if (imageResolutions.length > 0) out.push({ key: "resolution", label: label("resolution"), options: imageResolutions });
       // 一次出几张。此前工作流里没有这一栏 —— 而它是图像那边最常调的一个,
       // 生成面板有、节点没有,同一个模型两处能力不一样。
       const images = maxImages(genModel);
       if (supportsParameter(genModel, "num_images") && images > 1) {
-        // ComfyUI 的工作流「张数」是跑几遍(countsRuns):标签照实叫,下面说清一遍出几张。
+        // ComfyUI 的工作流「张数」是跑几遍(countsRuns):名字由 generationParameterLabel 照实给,下面说清一遍出几张。
         const runs = Number(genParams.num_images) || 1;
-        out.push(countsRuns(genModel)
-          ? { key: "num_images", label: t("genRuns"), options: [], range: { min: 1, max: images },
-              hint: runsHint(t, genModel, genParams, runs) }
-          : { key: "num_images", label: t("wfGenNumImages"), options: [], range: { min: 1, max: images } });
+        out.push({
+          key: "num_images",
+          label: label("num_images"),
+          options: [],
+          range: { min: 1, max: images },
+          ...(countsRuns(genModel) ? { hint: runsHint(t, genModel, genParams, runs) } : {}),
+        });
       }
     } else if (genModel.kind === "audio") {
       // 音频:时长是个可选的区间(多数音乐模型按歌词长短自己定曲长),歌词是一段长文字。
@@ -262,42 +239,39 @@ export function useGenerateNodeSection({
       if (supportsParameter(genModel, "duration_seconds")) {
         out.push(
           durations.length > 0
-            ? { key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) }
-            : { key: "duration_seconds", label: t("wfGenDuration"), options: [], range: range ?? undefined },
+            ? { key: "duration_seconds", label: label("duration_seconds"), options: durations.map(String) }
+            : { key: "duration_seconds", label: label("duration_seconds"), options: [], range: range ?? undefined },
         );
       }
       if (supportsParameter(genModel, "lyrics")) {
         out.push({
           key: "lyrics",
-          label: t("genLyrics"),
+          label: label("lyrics"),
           options: [],
           declared: {
-            key: "lyrics", type: "string", label: t("genLyrics"), description: t("genLyricsHint"),
+            key: "lyrics", type: "string", label: label("lyrics"), description: t("genLyricsHint"),
             defaultValue: undefined, options: [], optionLabels: {}, multiline: true, advanced: false,
           },
         });
       }
     } else {
       const resolutions = videoResolutionOptions(genModel);
-      if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
+      if (resolutions.length > 0) out.push({ key: "resolution", label: label("resolution"), options: resolutions });
       const durations = durationChoices(genModel, String(genParams.resolution ?? ""));
       if (durations.length > 0) {
-        out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) });
+        out.push({ key: "duration_seconds", label: label("duration_seconds"), options: durations.map(String) });
       }
     }
     // 开关类。**只在模型声明了的时候出现** —— 声明即接口,这里不按 kind 猜。
     for (const key of booleanParameterKeys(genModel)) {
-      const labelKey = GENERATION_BOOLEAN_LABELS[key];
-      out.push({ key, label: labelKey ? t(labelKey) : key, options: [], toggle: true });
+      out.push({ key, label: label(key), options: [], toggle: true });
     }
     for (const [key, options] of parameterChoiceEntries(genModel)) {
-      const labelKey = GENERATION_PARAMETER_LABELS[key];
-      out.push({ key, label: labelKey ? t(labelKey) : key, options });
+      out.push({ key, label: label(key), options });
     }
     // 模型自己声明的参数(插件生成供应商:ComfyUI 每张工作流的采样器、步数……)。
     for (const parameter of declaredParameters(genModel)) {
-      const labelKey = GENERATION_PARAMETER_LABELS[parameter.key];
-      out.push({ key: parameter.key, label: labelKey ? t(labelKey) : parameter.label, options: [], declared: parameter });
+      out.push({ key: parameter.key, label: label(parameter.key), options: [], declared: parameter });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -540,7 +514,7 @@ export function generateNodeSection({
           ))}
           {supportsParameter(genModel, "seed") && (
             <div className={FIELD_BOX}>
-              <span>{t("wfGenSeed")}</span>
+              <span>{generationParameterLabel("seed", genModel, t)}</span>
               <Input
                 type="number"
                 value={String(genParams.seed ?? "")}

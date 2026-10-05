@@ -46,6 +46,7 @@ import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { useWorkflowCanvasEdits } from "@/features/workflows/useWorkflowCanvasEdits";
 import { useWorkflowDisplayEdges, useWorkflowDisplayNodes } from "@/features/workflows/useWorkflowDisplayElements";
+import { useWorkflowPortNamer } from "@/features/workflows/useWorkflowPortNamer";
 import { workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 import { useWorkflowEditorShortcuts, useWorkflowNodeZ } from "@/features/workflows/useWorkflowEditorKeys";
 import { useWorkflowGraph } from "@/features/workflows/useWorkflowGraph";
@@ -456,11 +457,14 @@ export function WorkflowEditor({
 
   //: 就绪检查的提示(画布角标、就绪清单)里提到的引用,按它所在那一层说成「节点标题 · 输出」。
   const refName = React.useMemo(() => workflowRefNamer(rootGraph, registry), [rootGraph, registry]);
+  //: 卡片上的接点叫什么:和检查器那一格同一个名字,按界面语言(见 portNames)。
+  const portNamer = useWorkflowPortNamer(rootGraph, registry);
   const displayNodes = useWorkflowDisplayNodes({
     nodes,
     graph,
     registry,
     refName,
+    portNamer,
     t,
     layerIssues,
     runByNode,

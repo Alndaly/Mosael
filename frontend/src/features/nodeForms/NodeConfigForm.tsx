@@ -83,6 +83,10 @@ export interface ConfigSpec {
   options_map?: string;
   /** 这一格不单独出现:它由那一格的控件一起编辑(开始节点的 required_params 跟着参数的每一行走)。 */
   edited_by?: string;
+  /** 值是**行的列表**(生成节点的输入素材,每行 `素材:角色`)。画布上每一行是一个输入口(见 workflows/portNames)。 */
+  lines?: boolean;
+  /** 这一格里每一项(对象的键、列表的一行)叫什么从哪里取:`generation_parameters` / `source_roles`(见 workflows/portNames)。 */
+  entry_labels?: string;
 }
 
 // Nested controls (such as MapField rows) own their dimensions and field styling.
