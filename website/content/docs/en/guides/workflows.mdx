@@ -2,7 +2,7 @@
 title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -25,7 +25,7 @@ Downloads contain no account secrets or private assets, and do not automatically
 | Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
 | Clean-up and montage | **Transcript-based video cleanup** (denoise first, then cut pauses, fillers and repetition by the transcript; for material up to about 30 minutes), **Montage from your own footage** (orders a tagged batch of your clips and adds narration and captions) |
 | Translated dubbing | **Translated dubbing with subtitles** (transcribe, translate and subtitle line by line on the original timecodes, dub each line into its slot, strip the original voice but keep the music), **Translated dubbing with lip-sync** (the same, then the speaker's lips follow the dub) |
-| Products and business | **Product photo into on-model shots**, **Product into a narrated short**, **Fabric into applications and a spec sheet** |
+| Products and business | **Product photo into on-model shots**, **Product into a narrated short** (uses a cloned voice when you have one, otherwise the free Edge voice Xiaoxiao, with nothing to set up), **Fabric into applications and a spec sheet** |
 | Digital humans | **Script into a talking-head video**, **Product into a presenter-led short** (see [Digital humans](/docs/guides/digital-humans)) |
 | Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience** (see "Analytics templates" below) |
 
@@ -62,9 +62,9 @@ start parameters and values you filled in, and keeps the old one; dismiss it and
   | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
   | 3D | Available 3D props, Build a 3D blockout scene, Build a 3D scene from text, Render blockout references |
   | Knowledge | Search notes, Read note, Save as note, Document to Markdown |
-  | Data | HTTP request, Code, Text template, JSON extract, Split into batches, Text transform, Read a social media link, Tidy post and comment data |
+  | Data | HTTP request, Code, Text template, JSON extract, Split into batches, Text transform, Read a social media link, Tidy post and comment data, Check quotes |
   | Publishing | Publish, Send notification |
-  | Browser | Open browser, navigate, click, type, upload file, extract, wait, scroll, run script, Close browser |
+  | Browser | Open browser, navigate, click, type, upload file, switch page, screenshot, extract, wait, scroll, run script, Close browser |
   | Plugins | One node per tool from your installed plugins |
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
@@ -99,7 +99,10 @@ The start node's parameters are a three-column table — **Name / Default / Requ
   raise **Concurrency** to 2–4 under Advanced; results keep their original order. **Max items** caps the list; **When an item fails**
   is either **Fail the whole loop** (the default: once any item fails **no new item starts**, items already running finish and their
   submitted generations are still collected) or **Note it and carry on** — the failures are listed under **Failed items** and in the
-  notification. Without an iteration output, each item returns everything that round produced plus the item itself (`loop.item`).
+  notification. With the latter, when a later step in an item fails, **what the item already produced is still returned**: an on-model
+  shot that was made before the provider refused the video built from it stays in the results (the item is left out only when the
+  output it hands over is the failed step itself). Without an iteration output, each item returns everything that round produced plus
+  the item itself (`loop.item`).
 - **Loop · while** stops after 50 rounds by default (adjustable, at most 1000).
 - **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
 - **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
@@ -155,8 +158,19 @@ Code fields such as **Run script** and **Code** **don't interpolate references**
 The toolbar's **Readiness** button gathers every issue and shows a count: red blocks the run, amber is advisory, and with nothing left it
 says all set — ready to run. It checks: a missing start node, missing required fields, one-of fields with nothing filled, stale references,
 references to start parameters that don't exist, values outside their options, empty loop / subgraph bodies, an Output node inside a body,
-nodes not wired into the flow, **references to nodes that will never run**, models / providers missing or without keys, type mismatches,
-references written into code, plugin nodes that can't run (with the real reason)…
+nodes not wired into the flow, **references to nodes that will never run**, **references to outputs a node doesn't have**, models /
+providers missing or without keys, type mismatches, references written into code, plugin nodes that can't run (with the real reason)…
+
+**Problems are described with the names you see on the canvas**: nodes by their title (the node type's name when untitled, with the id
+added when two in the same layer share a name), fields by their on-screen label, a node inside a loop as "Shot by shot › Generate frame",
+and the whole sentence in English when the interface is English. Pressing Run when something is missing tells you which node and field
+by name, not by node id and raw setting key.
+
+**A reference to an output the node doesn't have is stopped before the run.** A reference like `{{script.titel}}` — the node exists but
+the output name is misspelled (or the upstream output was renamed) — used to come out empty while the workflow still reported success;
+now the readiness list marks it red and Run stops, saying who references which output of whom and which outputs it does have. When an
+LLM node has a JSON Schema, sub-fields are checked against it; outputs whose keys are only known at run time (code, HTTP responses,
+sub-workflows) don't raise false alarms below them.
 
 ![The readiness list: “2 to resolve”, two required start parameters missing; click one to jump to its node](/media/screens/en/workflow-readiness-blocked.png)
 
@@ -170,18 +184,59 @@ references written into code, plugin nodes that can't run (with the real reason)
   model at all — each is reported before any node spends money.
 
 Once a run starts, Run becomes **Stop run**, and ⌘Enter during a run doesn't start another one. The run's detail dialog in the task centre
-carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step finishes, whatever it already produced
-(assets, timelines, 3D scenes) is kept, and derived sub-tasks are cancelled with it.
+carries **Cancel task** as well. Cancelling **cuts in-flight LLM, voice, translation and HTTP requests on the spot**, without retrying or
+sending new ones — a local model doesn't keep generating and a paid endpoint doesn't finish and bill anyway; a script running in a browser
+node stops too. Whatever the run already produced (assets, timelines, 3D scenes) is kept, derived sub-tasks are cancelled with it, and a
+node that fails only because of the cancellation is recorded as cancelled in the run history.
+
+When a run fails partway, **the outputs of the nodes that already finished stay in the result** instead of disappearing with the last step.
 
 ![Run history: every node of one real run and its time (asset query, tagging, text template, save as note — all local)](/media/screens/en/workflow-runs.png)
 
 A few node details:
 
 - **HTTP request** escapes upstream text inserted into a JSON body as JSON and sets `Content-Type`; **Fail on non-2xx** is on by default (switchable under Advanced).
-- **Browser · run script** gives a script 20 seconds by default; long paged reads can raise the timeout under Advanced, up to 180 seconds.
+  **Only the public internet by default**: loopback such as `http://127.0.0.1:11434`, private networks and cloud metadata addresses are
+  blocked before anything is sent, and the error says which entry a deployment admin should add under
+  [Admin → Deployment → Internal network access](/docs/guides/admin). The agent's page fetches and requests and import from link work the same way.
+- **Code**: the only thing it can hand over is `output` — when the code finishes without assigning it you're told on the spot (written as a
+  function, call it at the end: `output = main(inputs)`) instead of a "successful" empty value; `print` for debugging doesn't affect the result.
+- **JSON extract** recognises text wrapped in a ```json fence (the usual shape of a model's text output) instead of quietly returning nothing.
+- **Call workflow**: inputs wired to upstream values (references) are not checked against the sub-workflow's required fields and options
+  before the run — that happens at run time; when a sub-workflow chosen only at run time can't start, the error names which one.
+- **Check quotes** looks up every quoted passage (「」, “”, and in English straight quotes that look like quotations) in text such as a
+  report against the source: after normalising full/half width, whitespace and emoji codes it must be part of one source item, and a
+  passage shortened with an ellipsis must have each piece in order within the same item. Anything not found loses its quotes and is
+  marked "(paraphrased)"; it outputs the checked text, counts, the list not found and a one-line summary. Put the fetched data
+  (comments, video data, transcripts…) in **Sources**; what the model wrote itself doesn't count.
 - **Available 3D props** lists this workspace's 3D models as a catalogue (id, name, measured width/height/depth) to feed into the node that designs the blockout, so a set can hold real props.
 - **Video to GIF** and **Split grid** always output **new assets** and never overwrite their input.
 - LLM nodes use a **Preset** (Precise / Balanced / Creative) instead of a raw temperature, and a node's max output tokens never exceed the model's output limit.
+
+### Browser nodes
+
+- **Open browser** and **Browser · navigate** **fail** on a 404 or 5xx by default, saying what the server returned; to carry on anyway
+  (to read the text on an error page, say), turn on **Allow error pages** under Advanced. Both nodes gain an **HTTP status code** output.
+- The six nodes that find elements by selector — click, type, upload file, extract, wait, scroll — have **In frame** under Advanced: when
+  the element sits inside a same-origin iframe on the page, fill in that frame's selector. A cross-origin frame can't be reached, and you're
+  told so, with the suggestion to open its address directly with **Browser · navigate**; a selector that isn't a frame or a frame that never
+  appears each get a clear sentence too.
+- **Browser · screenshot** captures the session's current page — the visible area, the full page, or one element (by selector; an element
+  off screen is still captured whole) — straight into the media library and outputs the asset id, with the page URL, title, capture time,
+  and which run and node took it. **Which page** under Advanced captures another page of the session (by position, title or URL), even one
+  that isn't in front or was never shown.
+- **Browser · switch page**: when a clicked link opens a new window, the new page joins the session and the next step already runs on it;
+  to go back or close it, this node switches to a page by position, title or URL, or closes the current one. It outputs the current page's
+  URL, title and the page count.
+- Downloads triggered by **Browser · navigate** and **Browser · click** go straight to the media library, and the node gains an output with
+  the asset id (empty when nothing downloaded); types the library doesn't take and files over 2 GB fail the step with the reason.
+- **Browser · upload file** with a selector uses exactly that one; if it isn't on the page it says the file input didn't appear, instead of
+  putting the file into another file input on the page.
+- **Browser · run script** reports the script's own error message, and on a timeout how long it ran; it gives a script 20 seconds by
+  default, and long paged reads can raise the timeout under Advanced, up to 180 seconds.
+- If the browser executor disappears mid-step, its lease running out reports that the executor was lost, instead of waiting for the full
+  time limit. How the session shows up and resizes on the desktop is in
+  [Browser pool → the floating browser workflows and the agent use](/docs/guides/browser-pool).
 
 ## Analytics templates: accounts, viral videos, comments
 
@@ -204,6 +259,13 @@ comments, compute posting frequency and times, engagement, top posts and growth 
   each batch, and the notes are synthesised into the report. The comment-count parameter only sets how many top-liked comments go into the
   appendix table.
 - A profile that isn't signed in to a platform that requires it reports "no comments fetched" rather than inventing any.
+- **Only original words go inside quotes in the report.** Before saving the note, all three templates run a **Check quotes** step:
+  every passage in 「」 or “” is looked up in the fetched comments, video data and transcript, and anything not found (a sentence the
+  model summarised, several comments merged into one question) loses its quotes and is marked "(paraphrased)", with the result noted in
+  the data summary. The viral breakdown's script outline is new writing following the pattern, so it isn't checked.
+- Bilibili account links (the profile, the dynamic feed, a bare id) are all read as the uploads list, so the account check reads the most
+  recent posts; escapes such as `&#39;` in comment text are decoded before they reach the report; the page-reading path clicks "view more"
+  so nested replies really expand. A graph built from an older version shows **Rebuild from the new version** at the top.
 
 ## Triggers
 
