@@ -75,7 +75,7 @@ it("左边全是编辑格式(含高亮,和选区工具条一致),右边依次是
   mount();
   await waitFor(() => expect(format()).not.toBeNull());
   const toolbar = format()!;
-  for (const name of ["段落样式", "粗体", "斜体", "删除线", "高亮", "无序列表", "有序列表", "任务列表", "插入", "网页链接", "表格", "撤销", "重做"]) {
+  for (const name of ["段落样式", "粗体", "斜体", "删除线", "高亮", "无序列表", "有序列表", "任务列表", "插入", "网页链接", "插入表格", "撤销", "重做"]) {
     expect(within(toolbar).getByRole("button", { name }), name).toBeInTheDocument();
   }
   const right = header().querySelector(".note-header-actions")!;
@@ -109,16 +109,43 @@ it("宽的时候一组不收;窄了先收插入、撤销,再收列表,收进「�
 
   const toolbar = format()!;
   expect(within(toolbar).getByRole("button", { name: "粗体" })).toBeInTheDocument();
-  for (const name of ["插入", "网页链接", "表格", "撤销", "重做", "无序列表"]) {
+  for (const name of ["插入", "网页链接", "插入表格", "撤销", "重做", "无序列表"]) {
     expect(within(toolbar).queryByRole("button", { name }), name).toBeNull();
   }
   fireEvent.click(within(toolbar).getByRole("button", { name: "更多格式" }));
   const menu = await screen.findByRole("menu", { name: "更多格式" });
-  for (const name of ["无序列表", "插入 3 × 3 表格", "撤销"]) expect(within(menu).getByRole("menuitem", { name }), name).toBeInTheDocument();
+  for (const name of ["无序列表", "插入表格", "撤销"]) expect(within(menu).getByRole("menuitem", { name }), name).toBeInTheDocument();
 
   const editor = (document.querySelector(".note-prose") as unknown as { editor: Editor }).editor;
   fireEvent.click(within(menu).getByRole("menuitem", { name: "无序列表" }));
   expect(editor.isActive("bulletList")).toBe(true);
+});
+
+it("收进「更多格式」时,「插入表格」就地展开同一张格子:焦点进格子,点一格插入那么大的表格、菜单收起", async () => {
+  mount();
+  await waitFor(() => expect(format()).not.toBeNull());
+  layout.width = 320;
+  act(() => { for (const observer of layout.observers) observer([{ contentRect: { width: 320 } } as unknown as ResizeObserverEntry], {} as ResizeObserver); });
+
+  fireEvent.click(within(format()!).getByRole("button", { name: "更多格式" }));
+  const menu = await screen.findByRole("menu", { name: "更多格式" });
+  const insertTable = within(menu).getByRole("menuitem", { name: "插入表格" });
+  expect(insertTable).toHaveAttribute("aria-expanded", "false");
+  expect(within(menu).queryByRole("grid")).toBeNull();
+  fireEvent.click(insertTable);
+  expect(insertTable).toHaveAttribute("aria-expanded", "true");
+  const grid = within(menu).getByRole("grid", { name: "插入表格" });
+  expect(document.activeElement).toBe(within(grid).getByRole("gridcell", { name: "1 × 1" }));
+  //: 格子里的方向键归格子,不被菜单拿去在菜单项之间走。
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+  expect(document.activeElement).toBe(within(grid).getByRole("gridcell", { name: "2 × 1" }));
+
+  fireEvent.click(within(grid).getByRole("gridcell", { name: "4 × 5" }));
+  const editor = (document.querySelector(".note-prose") as unknown as { editor: Editor }).editor;
+  let shape = "";
+  editor.state.doc.descendants((node) => { if (node.type.name === "table" && !shape) shape = `${node.childCount} × ${node.firstChild!.childCount}`; });
+  expect(shape).toBe("4 × 5");
+  await waitFor(() => expect(screen.queryByRole("menu", { name: "更多格式" })).toBeNull());
 });
 
 it("收的先后:插入那组 → 撤销重做 → 列表 → 粗体那组;段落类型一直在", () => {

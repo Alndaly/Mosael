@@ -13,6 +13,7 @@ import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { HIGHLIGHT } from "./NoteHighlight";
 import { useNoteStrings } from "./strings";
+import { TableSizePicker, type TableSize } from "./TableSizePicker";
 
 /**
  * 笔记的格式工具栏(顶栏左边那一排):段落类型 | 粗体 斜体 删除线 高亮 | 三种列表 | 插入▾ 链接 表格 | 撤销 重做。
@@ -22,6 +23,9 @@ import { useNoteStrings } from "./strings";
  * 每组多宽:显示着的时候量下来记住;收起来的组不在页面上量不到,就用上次量的;还没量过(没有版面的测试环境)
  * 按版面的刻度估(按钮 30px、组内 2px、组间 6px + 一条线 + 6px)。头一次渲染是全部组都在的,所以一挂上就都量过了。
  * 「更多格式」用竖的 ⋮,和右边「笔记操作」那颗横的 ⋯ 分得开。
+ *
+ * **表格**:光标不在表格里时,那颗按钮叫「插入表格」,点开是一张格子(TableSizePicker),移到几行几列点下去就插入多大的;
+ * 在表格里时叫「表格」,点开是加行、加列、删行、删列、删表格。收进「更多格式」时同样:「插入表格」就地展开那张格子。
  */
 
 type GroupId = "block" | "marks" | "lists" | "insert" | "history";
@@ -84,6 +88,7 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
   }) });
   const [open, setOpen] = React.useState<"block" | "insert" | "link" | "table" | "more" | null>(null);
   const [moreLink, setMoreLink] = React.useState(false);
+  const [moreTable, setMoreTable] = React.useState(false);
   const [url, setUrl] = React.useState("");
   const root = React.useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = React.useState(Infinity);
@@ -125,10 +130,24 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
     { name: s.addReference, icon: AtSign, run: () => chain().insertContent("@").run() },
     { name: uploading ? s.uploading : s.image, description: uploading ? undefined : s.imageHint, icon: ImagePlus, disabled: uploading, run: onPickImage },
   ];
-  const tableActions: [string, () => void][] = state.table
-    ? [[s.addRow, () => chain().addRowAfter().run()], [s.addColumn, () => chain().addColumnAfter().run()],
-      [s.deleteRow, () => chain().deleteRow().run()], [s.deleteColumn, () => chain().deleteColumn().run()], [s.deleteTable, () => chain().deleteTable().run()]]
-    : [[s.insertTable, () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()]];
+  const tableEdits: [string, () => void][] = [
+    [s.addRow, () => chain().addRowAfter().run()], [s.addColumn, () => chain().addColumnAfter().run()],
+    [s.deleteRow, () => chain().deleteRow().run()], [s.deleteColumn, () => chain().deleteColumn().run()], [s.deleteTable, () => chain().deleteTable().run()],
+  ];
+  //: 插进去之后焦点归正文(光标在表格第一格):浮层收起时别把焦点先还给按钮 —— 编辑器要等下一帧才拿回焦点,
+  //: 这中间按钮上的悬停说明会闪一下(方向键选的,说明认键盘聚焦)。Esc 收起的那种照旧回到按钮。
+  const inserted = React.useRef(false);
+  const insertTable = ({ rows, cols }: TableSize) => {
+    inserted.current = true;
+    setOpen(null);
+    setMoreTable(false);
+    chain().insertTable({ rows, cols, withHeaderRow: true }).run();
+  };
+  const keepEditorFocus = (event: Event) => {
+    if (!inserted.current) return;
+    inserted.current = false;
+    event.preventDefault();
+  };
   const history: Action[] = [
     { name: s.undo, icon: Undo2, disabled: !state.undo, disabledReason: s.nothingToUndo, shortcut: "Mod+Z", run: () => chain().undo().run() },
     { name: s.redo, icon: Redo2, disabled: !state.redo, disabledReason: s.nothingToRedo, shortcut: "Mod+Shift+Z", run: () => chain().redo().run() },
@@ -200,8 +219,10 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
           <PopoverContent className="w-80 p-3">{linkForm}</PopoverContent>
         </Popover>
         <Popover open={open === "table"} onOpenChange={(next) => setOpen(next ? "table" : null)}>
-          <PopoverTrigger asChild><IconButton unstyled type="button" label={s.table} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
-          <MenuContent label={s.table} align="start">{tableActions.map(([label, run]) => item(label, label, null, run))}</MenuContent>
+          <PopoverTrigger asChild><IconButton unstyled type="button" label={state.table ? s.table : s.insertTable} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+          {state.table
+            ? <MenuContent label={s.table} align="start">{tableEdits.map(([label, run]) => item(label, label, null, run))}</MenuContent>
+            : <PopoverContent align="start" className="w-auto p-3" onCloseAutoFocus={keepEditorFocus}><TableSizePicker onPick={insertTable} /></PopoverContent>}
         </Popover>
       </>
     ),
@@ -216,7 +237,12 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
         {actionItems(inserts)}
         <MenuItem aria-expanded={moreLink} icon={<Link size={16} />} label={s.link} onClick={() => { openLink(); setMoreLink(!moreLink); }} />
         {moreLink && <div className="px-2 pb-2">{linkForm}</div>}
-        {tableActions.map(([label, run]) => item(label, label, Table2, run))}
+        {state.table ? tableEdits.map(([label, run]) => item(label, label, Table2, run)) : (
+          <>
+            <MenuItem aria-expanded={moreTable} icon={<Table2 size={16} />} label={s.insertTable} onClick={() => setMoreTable(!moreTable)} />
+            {moreTable && <div className="px-2 pb-2"><TableSizePicker autoFocus onPick={insertTable} /></div>}
+          </>
+        )}
       </>
     ),
     history: () => actionItems(history),
@@ -229,9 +255,9 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
       ))}
       {collapsed.length > 0 && (
         <div className="note-format-group">
-          <Popover open={open === "more"} onOpenChange={(next) => { setOpen(next ? "more" : null); if (!next) setMoreLink(false); }}>
+          <Popover open={open === "more"} onOpenChange={(next) => { setOpen(next ? "more" : null); if (!next) { setMoreLink(false); setMoreTable(false); } }}>
             <PopoverTrigger asChild><IconButton unstyled type="button" label={s.moreFormats}><MoreVertical size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
-            <MenuContent label={s.moreFormats} align="end">
+            <MenuContent label={s.moreFormats} align="end" onCloseAutoFocus={keepEditorFocus}>
               {collapsed.map((id, index) => (
                 <React.Fragment key={id}>
                   {index > 0 && <MenuSeparator />}
