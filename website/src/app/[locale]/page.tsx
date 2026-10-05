@@ -128,7 +128,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <h1 className="mt-7 mb-0 max-w-5xl font-display text-[clamp(2.4rem,5.2vw,5rem)] leading-[1.02] font-[720] tracking-[-0.05em]"><span className="block text-balance">{t.titleLead}</span> <span className="block bg-gradient-to-r from-[#5a43ea] via-[#a74fec] via-60% to-[#ff8b78] bg-[length:200%_auto] bg-clip-text text-balance text-transparent motion-safe:animate-gradient-pan">{t.titleAccent}</span></h1>
           <p className="mt-8 mb-0 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">{t.lede}</p>
           <div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} /></div>
-          <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms}</p>
+          <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms} · <a className="underline underline-offset-2 hover:text-foreground" href={t.commercial.href}>{t.commercial.label}</a></p>
         </Reveal>
         <Reveal className="relative mx-auto mt-10 max-w-[92rem] sm:mt-12" delay={90}>
           <div className="pointer-events-none absolute -inset-x-20 top-1/4 bottom-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(114,87,233,0.2),rgba(255,161,190,0.12)_44%,transparent_72%)]" />
@@ -226,6 +226,9 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               <div key={entry.question}>
                 <h3 className="m-0 font-display text-lg font-semibold tracking-[-0.015em]">{entry.question}</h3>
                 <p className="mt-3 mb-0 text-sm leading-7 text-muted-foreground">{entry.answer}</p>
+                {"link" in entry && entry.link && (
+                  <a className="mt-2 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline" href={entry.link.href}>{entry.link.label} →</a>
+                )}
               </div>
             ))}
           </div>
@@ -257,7 +260,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       </section>
 
       <section className="bg-[#17141f] px-5 py-24 text-center text-[#fbf9ff] sm:px-8 sm:py-36">
-        <Reveal className="mx-auto flex max-w-5xl flex-col items-center"><BrandWordmark className="w-32" /><h2 className="mt-10 mb-0 max-w-[14ch] font-display text-[clamp(3rem,7vw,6.5rem)] leading-[0.92] font-[710] tracking-[-0.06em] text-balance">{t.closingTitle}</h2><p className="mt-6 mb-0 max-w-xl text-base leading-8 text-white/60">{t.closingBody}</p><div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} inverted /></div><p className="mt-5 mb-0 text-xs text-white/42">{t.platforms}</p></Reveal>
+        <Reveal className="mx-auto flex max-w-5xl flex-col items-center"><BrandWordmark className="w-32" /><h2 className="mt-10 mb-0 max-w-[14ch] font-display text-[clamp(3rem,7vw,6.5rem)] leading-[0.92] font-[710] tracking-[-0.06em] text-balance">{t.closingTitle}</h2><p className="mt-6 mb-0 max-w-xl text-base leading-8 text-white/60">{t.closingBody}</p><div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} inverted /></div><p className="mt-5 mb-0 text-xs text-white/42">{t.platforms} · <a className="underline underline-offset-2 hover:text-white/70" href={t.commercial.href}>{t.commercial.label}</a></p></Reveal>
       </section>
     </div>
   );

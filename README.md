@@ -189,7 +189,7 @@ full list with model names is in [Model connections](https://mosael.com/en/docs/
 
 **Is Mosael free?** Downloading it and using it for personal, non-commercial work is free. AI models are billed by the
 providers you connect, at their own prices. Commercial use requires written permission from the author; the
-[LICENSE](LICENSE) is authoritative.
+[LICENSE](LICENSE) is authoritative. For a commercial license, email [1142704468@qq.com](mailto:1142704468@qq.com).
 
 **Is Mosael open source?** The source code is public here, so you can read it, learn from it and build it locally, but
 it is released under a proprietary license, not an open-source one: commercial use and redistribution are not allowed
@@ -386,8 +386,8 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 
 Mosael is **source-available, not open source**. The code is public, but all rights are reserved: you may view it and
 build and run it locally for evaluation, learning and personal non-commercial use; commercial use and redistribution
-require written permission. See [LICENSE](LICENSE). For commercial licensing, reach the maker through the
-[community and contact page](https://mosael.com/en/docs/about/contact) or [KindaHuaX on X](https://x.com/KindaHuaX).
+require written permission. See [LICENSE](LICENSE). For commercial licensing, email [1142704468@qq.com](mailto:1142704468@qq.com), or reach the maker
+through the [contact page](https://mosael.com/en/docs/about/contact#commercial-licensing) (WeChat) or [KindaHuaX on X](https://x.com/KindaHuaX).
 
 Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in
 [the media guide](docs/media/README.md).

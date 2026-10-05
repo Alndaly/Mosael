@@ -64,6 +64,7 @@ const zh = {
     ctaDownload: "下载 Mosael",
     ctaSource: "在 GitHub 查看源码",
     platforms: "个人非商业使用免费 · macOS(Apple 芯片)· Windows 10/11 x64",
+    commercial: { label: "商用请联系授权", href: "/zh/docs/about/contact#商业授权" },
     showcaseLabel: "看看 Mosael 的几个工作区",
     showcaseExplore: "了解",
     showcase: {
@@ -185,11 +186,13 @@ const zh = {
       },
       {
         question: "Mosael 免费吗？",
-        answer: "下载和个人非商业使用免费。AI 模型的费用由你接入的服务商按各自的价格直接收取，Mosael 不转卖点数。商业用途需要先取得作者的书面授权，具体以仓库里的 LICENSE 为准。",
+        answer: "下载和个人非商业使用免费。AI 模型的费用由你接入的服务商按各自的价格直接收取，Mosael 不转卖点数。商业用途需要先取得作者的书面授权，具体以仓库里的 LICENSE 为准；商业授权请发邮件到 1142704468@qq.com，或加作者微信。",
+        link: { label: "商业授权怎么联系", href: "/zh/docs/about/contact#商业授权" },
       },
       {
         question: "Mosael 是开源软件吗？",
-        answer: "源码公开在 GitHub 上，可以查看、学习和在本机构建，但它使用的是专有许可，不是开源许可：不能用于商业用途，也不能再分发源码或安装包。需要商用或再分发，请联系作者。",
+        answer: "源码公开在 GitHub 上，可以查看、学习和在本机构建，但它使用的是专有许可，不是开源许可：不能用于商业用途，也不能再分发源码或安装包。需要商用或再分发，请发邮件到 1142704468@qq.com，或加作者微信。",
+        link: { label: "商业授权怎么联系", href: "/zh/docs/about/contact#商业授权" },
       },
       {
         question: "支持哪些 AI 模型？",
@@ -383,6 +386,7 @@ const en: Messages = {
     ctaDownload: "Download Mosael",
     ctaSource: "View source on GitHub",
     platforms: "Free for personal, non-commercial use · macOS (Apple silicon) · Windows 10/11 x64",
+    commercial: { label: "Commercial license", href: "/en/docs/about/contact#commercial-licensing" },
     showcaseLabel: "Explore Mosael workspaces",
     showcaseExplore: "Explore",
     showcase: {
@@ -504,11 +508,13 @@ const en: Messages = {
       },
       {
         question: "Is Mosael free?",
-        answer: "Downloading Mosael and using it for personal, non-commercial work is free. AI models are billed by the providers you connect, at their own prices; Mosael doesn't resell credits. Commercial use requires written permission from the author — the LICENSE file in the repository is authoritative.",
+        answer: "Downloading Mosael and using it for personal, non-commercial work is free. AI models are billed by the providers you connect, at their own prices; Mosael doesn't resell credits. Commercial use requires written permission from the author — the LICENSE file in the repository is authoritative. For a commercial license, email 1142704468@qq.com or message the author on WeChat.",
+        link: { label: "How to get a commercial license", href: "/en/docs/about/contact#commercial-licensing" },
       },
       {
         question: "Is Mosael open source?",
-        answer: "The source code is public on GitHub, where you can read it, learn from it and build it locally, but it is released under a proprietary license, not an open-source one: commercial use and redistribution of the source or installers are not allowed without permission. Contact the author for a commercial license.",
+        answer: "The source code is public on GitHub, where you can read it, learn from it and build it locally, but it is released under a proprietary license, not an open-source one: commercial use and redistribution of the source or installers are not allowed without permission. For a commercial license, email 1142704468@qq.com or message the author on WeChat.",
+        link: { label: "How to get a commercial license", href: "/en/docs/about/contact#commercial-licensing" },
       },
       {
         question: "Which AI models does it support?",

@@ -168,7 +168,7 @@ ComfyUI、对象存储和 MinerU 文档解析随应用内置；Blender、Manim�
 ## 常见问题
 
 **Mosael 免费吗？** 下载和个人非商业使用免费。AI 模型的费用由你接入的服务商按各自价格收取。商业用途需要先取得作者的书面授权，
-以 [LICENSE](LICENSE) 为准。
+以 [LICENSE](LICENSE) 为准；商业授权请发邮件到 [1142704468@qq.com](mailto:1142704468@qq.com)。
 
 **Mosael 是开源软件吗？** 源码公开在这里，可以查看、学习和在本机构建，但它使用的是专有许可，不是开源许可：未经许可不能商用，
 也不能再分发。
@@ -348,7 +348,7 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 ## 许可
 
 Mosael **源码公开(source-available)，但不是开源软件**，保留所有权利：仅限评估、学习与个人非商业用途查看源码并在本机构建运行；
-未经书面授权不得商用或再分发。详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
-联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
+未经书面授权不得商用或再分发。详见 [LICENSE](LICENSE)。商业授权请发邮件到 [1142704468@qq.com](mailto:1142704468@qq.com)，
+或加[作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
 
 截图与录屏使用独立演示数据，拍摄日期、代码版本和素材署名见[实拍素材说明](docs/media/README.md)。
