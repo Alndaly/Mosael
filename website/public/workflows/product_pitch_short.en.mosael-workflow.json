@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "8f686ce36e47d97ba26fc9e9f5910ae397322df5fe436bc666c381385d299c10",
+  "graph_hash": "eb143d1f51696669a12dbf0d9f6627ad0505a5331c2ecdb713b518a9e01d27ed",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -139,7 +139,7 @@
           "y": 420
         },
         "config": {
-          "name": "{{start.product_name}} · 带货短片",
+          "name": "{{start.product_name}} · Product short",
           "width": "{{start.width}}",
           "height": "{{start.height}}",
           "fps": "{{start.fps}}"
@@ -297,8 +297,8 @@
                   "y": 320
                 },
                 "config": {
-                  "title": "带货短片:有一拍的画外音念不完",
-                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                  "title": "Product short: a beat's voice-over didn't fit",
+                  "body": "The voice-over for the “{{loop.item.caption}}” beat is still {{beat_voice_place.trimmed}} s longer than its picture at 1.5× speed, so the rest was cut. To keep the whole line, shorten that beat's narration or lengthen the beat and run again."
                 }
               }
             ],
@@ -422,8 +422,8 @@
           "y": 260
         },
         "config": {
-          "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n{{shoot_beats.results.0.beat_voice.voice_note}}\n{{fit_beats.note}}"
+          "title": "Product short exported",
+          "body": "The narrated short for {{start.product_name}} is done: {{shoot_beats.count}} beats.\n{{shoot_beats.results.0.beat_voice.voice_note}}\n{{fit_beats.note}}"
         }
       },
       {

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "af527acd58fb62e1dd28b34dbec40e02d1c391bd82fea21054c898ba5b96e52c",
+  "graph_hash": "8fa67ff31bd4b34449b18d105a49383da37b54f37fd4926dc0b8b1ba8b357a6d",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -148,7 +148,7 @@
           "y": 420
         },
         "config": {
-          "name": "{{start.product_name}} · 带货短片",
+          "name": "{{start.product_name}} · Product short",
           "width": "{{start.width}}",
           "height": "{{start.height}}",
           "fps": "{{start.fps}}"
@@ -287,8 +287,8 @@
           "y": 860
         },
         "config": {
-          "title": "带货短片没有开始:主播还没有音色",
-          "body": "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。还没花任何钱。"
+          "title": "Product short not started: the presenter has no voice",
+          "body": "“{{presenter.name}}” has no voice yet. Give it one in the asset library (a cloned voice needs a consent declaration) and run again. Nothing has been spent."
         }
       },
       {
@@ -300,8 +300,8 @@
           "y": 1020
         },
         "config": {
-          "title": "带货短片没有开始:主播还没有图",
-          "body": "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。"
+          "title": "Product short not started: the presenter has no image",
+          "body": "“{{presenter.name}}” has no front image yet. Add one in the asset library (or draw one first) and run again. Nothing has been spent."
         }
       },
       {
@@ -493,8 +493,8 @@
                   "y": 320
                 },
                 "config": {
-                  "title": "带货短片:有一拍的画外音念不完",
-                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                  "title": "Product short: a beat's voice-over didn't fit",
+                  "body": "The voice-over for the “{{loop.item.caption}}” beat is still {{beat_voice_place.trimmed}} s longer than its picture at 1.5× speed, so the rest was cut. To keep the whole line, shorten that beat's narration or lengthen the beat and run again."
                 }
               }
             ],
@@ -618,8 +618,8 @@
           "y": 260
         },
         "config": {
-          "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n{{fit_beats.note}}"
+          "title": "Product short exported",
+          "body": "The narrated short for {{start.product_name}} is done: {{shoot_beats.count}} beats.\n{{fit_beats.note}}"
         }
       },
       {

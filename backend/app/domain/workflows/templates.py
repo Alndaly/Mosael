@@ -330,6 +330,7 @@ def built_in_template_graph(
             voice_id=_prefilled_voice_id(db, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
+            locale=locale,
         ))
     if template_id == TALKING_SCRIPT_VIDEO:
         # 音色按工作区取(克隆音色存在工作区名下);说话照片模型不在图里写死,节点按描述符挑会的那一个。
@@ -376,8 +377,8 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 删掉「把这一组动起来」和「归档这一组的视频」两个节点即可(卡片的 download_note 说给下载的人听)——
         #: 循环交出的是上身图,不依赖它们。反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
         PRODUCT_ON_MODEL: product_on_model_graph(chat=blank, image=blank, video=blank, motion=True),
-        PRODUCT_PITCH_SHORT: product_pitch_short_graph(chat=blank, image=blank, voice_id=""),
-        PRODUCT_PITCH_PRESENTER: product_pitch_short_graph(chat=blank, image=blank, voice_id="", presenter=True),
+        PRODUCT_PITCH_SHORT: product_pitch_short_graph(chat=blank, image=blank, voice_id="", locale=locale),
+        PRODUCT_PITCH_PRESENTER: product_pitch_short_graph(chat=blank, image=blank, voice_id="", presenter=True, locale=locale),
         FABRIC_LOOKBOOK: fabric_lookbook_graph(chat=blank, image=blank),
         FOOTAGE_MONTAGE: footage_montage_graph(chat=blank, voice_id=""),
         TALKING_SCRIPT_VIDEO: talking_script_video_graph(voice_id=""),

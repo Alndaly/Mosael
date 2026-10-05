@@ -15,6 +15,8 @@ PLATFORM_OPTIONS 这种被后端校验、前端渲染、执行器消费的表不
 from __future__ import annotations
 
 from contextvars import ContextVar
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 # 语言清单、「这一次是谁在问」那个 ContextVar、数据自带文案的挑法,和插件包 / 工作流文件校验报错的
@@ -51,6 +53,17 @@ def set_current_locale(locale: str) -> None:
 
 def get_current_locale() -> str:
     return _current_locale.get()
+
+
+@contextmanager
+def speaking(locale: str | None) -> Iterator[None]:
+    """在这一段里按 `locale` 说话 —— 后台线程替发起的人说他的语言(工作流运行时生成的那几句:用的是哪把嗓子、
+    口播收紧了哪几段……)。线程不继承上下文变量,不设的话一律落成缺省语言。出了这一段恢复原样(线程会被复用)。"""
+    token = CURRENT_LOCALE.set(normalize_locale(locale) if locale else DEFAULT_LOCALE)
+    try:
+        yield
+    finally:
+        CURRENT_LOCALE.reset(token)
 
 
 def normalize_locale(raw: str | None) -> str:

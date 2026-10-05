@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
-from app.core.i18n import DEFAULT_LOCALE, t, tr
+from app.core.i18n import DEFAULT_LOCALE, get_current_locale, speaking, t, tr
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import (
@@ -97,6 +97,9 @@ def start_workflow_job(
         "workflow_graph_hash": revision.graph_hash,
         "params": params or {},
         "subject": workflow.name,
+        #: 发起运行的人的语言:运行时生成的那几句(用的是哪把嗓子、哪一项没做成……)照它说(见 i18n.speaking)。
+        #: 定时任务这类没有请求的,是缺省语言。
+        "locale": get_current_locale(),
     }
     if job is None:
         job = create_job(
@@ -118,7 +121,8 @@ def start_workflow_job(
     # (那正是 jobs.py 里 JOB_THREAD_NAME 的注释所断言的不变量:派发点只有一处 ——
     # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
     workflow_id, revision_id, job_id, run_params = workflow.id, revision.id, job.id, params or {}
-    dispatch_job(db, job, lambda: _run_workflow_thread(workflow_id, revision_id, job_id, run_params))
+    locale = pinned_payload["locale"]
+    dispatch_job(db, job, lambda: _run_workflow_thread(workflow_id, revision_id, job_id, run_params, locale=locale))
     return job
 
 
@@ -398,9 +402,11 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
             ) from exc
 
 
-def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any]) -> None:
+def _run_workflow_thread(
+    workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any], *, locale: str | None = None,
+) -> None:
     # 线程就是入口:正常走完提交(失败也记在任务上、正常走完),真抛出去才回滚。
-    with unit_of_work() as db:
+    with speaking(locale), unit_of_work() as db:
         job = db.get(Job, job_id)
         workflow = db.get(Workflow, workflow_id)
         revision = db.get(WorkflowRevision, revision_id)

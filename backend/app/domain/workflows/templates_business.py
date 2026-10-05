@@ -754,7 +754,7 @@ def _pitch_schema(*, presenter: bool) -> dict[str, Any]:
     )
 
 
-def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> dict[str, Any]:
+def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str, text: Any) -> dict[str, Any]:
     """逐拍的循环体:出这一拍的画面 → 按脚本给的时长铺上视频轨;同时合成这一拍的画外音 → 放在这一拍的开头。
 
     - 画面是一张图,**用 `end` 定长**(从 0 截到这一拍的 seconds)。此前写的是 `max_duration`,那只会加速、不会
@@ -854,9 +854,14 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
                 "name": {"zh": "说一声画外音被裁了", "en": "Say the voice-over was cut"},
                 "position": {"x": 1360, "y": 320},
                 "config": {
-                    "title": "带货短片:有一拍的画外音念不完",
-                    "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,"
-                            "超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。",
+                    "title": text("带货短片:有一拍的画外音念不完", "Product short: a beat's voice-over didn't fit"),
+                    "body": text(
+                        "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,"
+                        "超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。",
+                        "The voice-over for the “{{loop.item.caption}}” beat is still {{beat_voice_place.trimmed}} s longer "
+                        "than its picture at 1.5× speed, so the rest was cut. To keep the whole line, shorten that beat's "
+                        "narration or lengthen the beat and run again.",
+                    ),
                 },
             },
         ],
@@ -896,7 +901,8 @@ def _pitch_voice(voice_id: str) -> tuple[str, str]:
 
 
 def product_pitch_short_graph(
-    *, chat: Any, image: Any, voice_id: str = "", presenter: bool = False, db: Session | None = None
+    *, chat: Any, image: Any, voice_id: str = "", presenter: bool = False, db: Session | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """商品图 + 几条卖点 → 分拍口播脚本 → 每拍出一张画面、配一段画外音 → 组装 → 字幕 → 导出。
 
@@ -915,7 +921,15 @@ def product_pitch_short_graph(
     用同一个人物的嗓子念。**先取主播、再写脚本**:主播没挑(运行前拦)或挑的那个已经不在,都在任何一次付费调用之前说清。
 
     `db` 让出图尺寸读到用户对这个模型的参数声明;没有库的上下文退回内置目录。
+
+    `locale`:图里**给人看的**默认值(新项目的名字、完成通知、念不完的提醒)在建图这一刻定语言,和节点名同一条。
+    此前写死中文,官网英文副本里也是中文。
     """
+    from app.core.i18n import pick_text
+
+    def text(zh: str, en: str) -> str:
+        return pick_text({"zh": zh, "en": en}, locale)
+
     #: 时长取开始参数(和提示词里那一行同一个数):此前这里写死「20-45 秒」,开始参数填 60 秒时两句话打架。
     system = f"""你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{{{start.target_duration_seconds}}}} 秒、
 能直接拍的口播脚本，按"拍"拆开。
@@ -954,10 +968,10 @@ def product_pitch_short_graph(
     }
     if presenter:
         shoot_inputs.update({"voice_engine": "{{presenter.voice_engine}}", "voice_id": "{{presenter.voice_id}}"})
-        body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}")
+        body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}", text=text)
     else:
         engine, voice = _pitch_voice(voice_id)
-        body = _beat_body(db, image, engine=engine, voice=voice)
+        body = _beat_body(db, image, engine=engine, voice=voice, text=text)
     #: 用的是哪把嗓子:第一拍(开场钩子,总有口播)的配音节点运行时说的那一句。出镜版的嗓子是主播自己的,不另说。
     voice_said = "" if presenter else "{{shoot_beats.results.0.beat_voice.voice_note}}"
 
@@ -1035,7 +1049,7 @@ def product_pitch_short_graph(
             "name": {"zh": "建立竖屏成片时间线", "en": "Create the vertical timeline"},
             "position": {"x": 650, "y": 420},
             "config": {
-                "name": "{{start.product_name}} · 带货短片",
+                "name": text("{{start.product_name}} · 带货短片", "{{start.product_name}} · Product short"),
                 "width": "{{start.width}}",
                 "height": "{{start.height}}",
                 "fps": "{{start.fps}}",
@@ -1086,8 +1100,9 @@ def product_pitch_short_graph(
             "name": {"zh": "成片完成通知", "en": "Short is ready"},
             "position": {"x": 1930, "y": 260},
             "config": {
-                "title": "带货短片已导出",
-                "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
+                "title": text("带货短片已导出", "Product short exported"),
+                "body": text("{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。",
+                            "The narrated short for {{start.product_name}} is done: {{shoot_beats.count}} beats.")
                 + (f"\n{voice_said}" if voice_said else "")
                 + "\n{{fit_beats.note}}",
             },
@@ -1135,7 +1150,7 @@ def product_pitch_short_graph(
             },
             node_types=NODE_TYPES,
         )
-    return _with_presenter(nodes)
+    return _with_presenter(nodes, text)
 
 
 # --------------------------------------------------------------------------------------
@@ -1536,7 +1551,7 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
     )
 
 
-def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
     """带货口播换成「数字人出镜」(见 product_pitch_short_graph 的 `presenter`):加一个挑主播的节点、开场和收尾两段
     出镜说话;逐拍的循环体已经按主播的嗓子配好(见 _beat_body)。
 
@@ -1613,9 +1628,13 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             "name": {"zh": "主播还没有音色", "en": "The presenter has no voice yet"},
             "position": {"x": 40, "y": 860},
             "config": {
-                "title": "带货短片没有开始:主播还没有音色",
-                "body": "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。"
-                        "还没花任何钱。",
+                "title": text("带货短片没有开始:主播还没有音色", "Product short not started: the presenter has no voice"),
+                "body": text(
+                    "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。"
+                    "还没花任何钱。",
+                    "“{{presenter.name}}” has no voice yet. Give it one in the asset library (a cloned voice needs a "
+                    "consent declaration) and run again. Nothing has been spent.",
+                ),
             },
         },
         {
@@ -1624,8 +1643,12 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             "name": {"zh": "主播还没有图", "en": "The presenter has no image yet"},
             "position": {"x": 40, "y": 1020},
             "config": {
-                "title": "带货短片没有开始:主播还没有图",
-                "body": "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。",
+                "title": text("带货短片没有开始:主播还没有图", "Product short not started: the presenter has no image"),
+                "body": text(
+                    "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。",
+                    "“{{presenter.name}}” has no front image yet. Add one in the asset library (or draw one first) and run "
+                    "again. Nothing has been spent.",
+                ),
             },
         },
         {
