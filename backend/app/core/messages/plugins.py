@@ -236,6 +236,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{name}」的插件回的东西不对,没改成",
         "en": "The plugin of “{name}” answered with something unexpected; nothing was changed",
     },
+    "workflowLibErr_stale": {
+        "zh": "「{path}」刚在 ComfyUI 里改过,应用表单没存。重新打开再改",
+        "en": "“{path}” was just changed in ComfyUI, so the app form wasn't saved. Open it again and redo the change",
+    },
+    "workflowLibErr_badAppItem": {
+        "zh": "应用表单里的「{item}」不对:只认根图上的节点(节点号是数字)和图级的种子 / 尺寸 / 跑几遍",
+        "en": "“{item}” in the app form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
+    },
+    "workflowLibErr_appTooBig": {
+        "zh": "应用表单太大了:最多 {items} 项、每项最多 {choices} 个可选值、最多标 {results} 个结果",
+        "en": "The app form is too big: at most {items} items, {choices} choices per item and {results} result nodes",
+    },
     "pluginErr_capabilityNoTool": {
         "zh": "「{name}」没有负责 {capability} 的工具,请到插件页更新这个插件",
         "en": "“{name}” has no tool that handles {capability}. Update the plugin from the Plugins page.",

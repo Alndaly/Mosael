@@ -241,6 +241,10 @@ def test_对不上的项不进表单_说出原因(plugin) -> None:
     summary = app_form.summary(marks, form, invalid, "zh")
     assert summary["invalid"] == 4 and summary["fields"] == len(form.fields)
     assert {one["key"]: bool(one.get("problem")) for one in summary["items"]}["3.gone"] is True
+    titles = {one["key"]: one.get("title") for one in summary["items"]}
+    assert titles["10.image"] == "人物照片" and titles["14.image"] == "参考图 · 背景" and titles["3.steps"] == "步数", \
+        "有效的项带着它在表单上的名字(没起名就是这一项自己的名字);对不上的没有"
+    assert titles["3.gone"] is None
 
 
 def test_拉成连线的那一格不再能填(plugin) -> None:

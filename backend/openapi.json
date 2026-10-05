@@ -19895,6 +19895,111 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/app": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Workflow App",
+        "description": "一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。",
+        "operationId": "get_workflow_app_api_plugins_instances__instance_id__workflow_library_app_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowAppOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/annotate": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Annotate Workflow",
+        "description": "改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。那张在读到之后被改过\n就不写,回 409 `stale`。",
+        "operationId": "annotate_workflow_api_plugins_instances__instance_id__workflow_library_annotate_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowAnnotateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowAnnotateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library/inspect": {
       "post": {
         "tags": [
@@ -39936,6 +40041,341 @@
         ],
         "title": "WorkflowAiEditResponse"
       },
+      "WorkflowAnnotateOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowAnnotateOut"
+      },
+      "WorkflowAnnotateRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "modified": {
+            "type": "number",
+            "title": "Modified"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowAppIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "results": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "modified"
+        ],
+        "title": "WorkflowAnnotateRequest",
+        "description": "改一张工作流的应用表单和结果标记(只改 `mosael` 那几处,覆盖写)。"
+      },
+      "WorkflowAppIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Description",
+            "default": ""
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowAppItemIn"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowAppIn"
+      },
+      "WorkflowAppItemIn": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Node",
+            "default": ""
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Input"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Label",
+            "default": ""
+          },
+          "main": {
+            "type": "boolean",
+            "title": "Main",
+            "default": false
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "WorkflowAppItemIn",
+        "description": "要写进去的一项:顺序就是表单上的顺序。"
+      },
+      "WorkflowAppItemOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "node": {
+            "type": "string",
+            "title": "Node",
+            "default": ""
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "main": {
+            "type": "boolean",
+            "title": "Main",
+            "default": false
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "input"
+        ],
+        "title": "WorkflowAppItemOut",
+        "description": "工作流文件里应用表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。"
+      },
+      "WorkflowAppOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": ""
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowFillableOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowAppOutputOut"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "app": {
+            "$ref": "#/components/schemas/WorkflowAppSummaryOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowAppOut",
+        "description": "一张工作流的应用表单,给编辑器:全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。"
+      },
+      "WorkflowAppOutputOut": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "class_type": {
+            "type": "string",
+            "title": "Class Type",
+            "default": ""
+          },
+          "media": {
+            "type": "string",
+            "title": "Media",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowAppOutputOut",
+        "description": "交回结果的一个输出节点(标「以后只要这张」用)。"
+      },
+      "WorkflowAppSummaryOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "ok",
+              "unsupported"
+            ],
+            "title": "Status",
+            "default": "none"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "app": {
+            "type": "boolean",
+            "title": "App",
+            "default": false
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowAppItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "results": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "invalid": {
+            "type": "integer",
+            "title": "Invalid",
+            "default": 0
+          },
+          "fields": {
+            "type": "integer",
+            "title": "Fields",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "WorkflowAppSummaryOut",
+        "description": "一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。"
+      },
       "WorkflowContentOut": {
         "properties": {
           "path": {
@@ -40188,6 +40628,16 @@
             },
             "type": "array",
             "title": "Used By"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowAppSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -40197,6 +40647,98 @@
         ],
         "title": "WorkflowFileOut",
         "description": "那台服务器上存着的一张工作流。"
+      },
+      "WorkflowFillableOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "node": {
+            "type": "string",
+            "title": "Node",
+            "default": ""
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "media",
+              "model",
+              "number",
+              "choice",
+              "toggle",
+              "seed",
+              "size",
+              "runs"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "node_title": {
+            "type": "string",
+            "title": "Node Title",
+            "default": ""
+          },
+          "class_type": {
+            "type": "string",
+            "title": "Class Type",
+            "default": ""
+          },
+          "common": {
+            "type": "boolean",
+            "title": "Common",
+            "default": false
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": ""
+          },
+          "media": {
+            "type": "string",
+            "title": "Media",
+            "default": ""
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "exposable": {
+            "type": "boolean",
+            "title": "Exposable",
+            "default": true
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "input",
+          "kind",
+          "title"
+        ],
+        "title": "WorkflowFillableOut",
+        "description": "一张工作流**能填的一项**(ADR 0038 §1,插件的 `items`):应用表单编辑器从这里挑。"
       },
       "WorkflowFromPage": {
         "properties": {

@@ -35,6 +35,12 @@ export type WorkflowFileGraph = components["schemas"]["WorkflowGraphOut"];
 export type WorkflowTrashed = components["schemas"]["WorkflowTrashedOut"];
 export type WorkflowNodePack = components["schemas"]["WorkflowNodePackOut"];
 export type WorkflowImport = components["schemas"]["WorkflowLibraryImportOut"];
+/** 应用表单(ADR 0038):一张工作流能填的项、文件里的标记、要写进去的样子。 */
+export type WorkflowApp = components["schemas"]["WorkflowAppOut"];
+export type WorkflowAppSummary = components["schemas"]["WorkflowAppSummaryOut"];
+export type WorkflowFillable = components["schemas"]["WorkflowFillableOut"];
+export type WorkflowAppOutput = components["schemas"]["WorkflowAppOutputOut"];
+export type WorkflowAnnotate = components["schemas"]["WorkflowAnnotateRequest"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -163,6 +169,19 @@ export const inspectWorkflowImport = (
 /** 把导入的那张(界面格式)存进那台服务器的 workflows/。撞名回 409(带建议名),不覆盖。 */
 export const saveImportedWorkflow = (instanceId: string, path: string, content: Record<string, unknown>) =>
   workflowWrite(instanceId, "save", { path, content });
+
+/** 一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。 */
+export const getWorkflowApp = (instanceId: string, path: string) =>
+  api<WorkflowApp>(`/api/plugins/instances/${instanceId}/workflow-library/app?${new URLSearchParams({ path })}`);
+/**
+ * 改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,**覆盖写**(调之前界面上确认过)。带着读到时的
+ * 改动时间(`modified`);那张在这之间被改过就不写,回 409(`detail.code === "stale"`)。
+ */
+export const annotateWorkflow = (instanceId: string, body: WorkflowAnnotate) =>
+  api<{ path: string; modified?: number | null }>(`/api/plugins/instances/${instanceId}/workflow-library/annotate`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 
 /** 经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。 */
 export const startNodeInstall = (instanceId: string, body: { workspace_id: string; packs: string[] }) =>

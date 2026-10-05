@@ -6534,6 +6534,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library/app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workflow App
+         * @description 一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。
+         */
+        get: operations["get_workflow_app_api_plugins_instances__instance_id__workflow_library_app_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/annotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Annotate Workflow
+         * @description 改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。那张在读到之后被改过
+         *     就不写,回 409 `stale`。
+         */
+        post: operations["annotate_workflow_api_plugins_instances__instance_id__workflow_library_annotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library/inspect": {
         parameters: {
             query?: never;
@@ -15373,6 +15414,200 @@ export interface components {
              */
             summary: string;
         };
+        /** WorkflowAnnotateOut */
+        WorkflowAnnotateOut: {
+            /** Path */
+            path: string;
+            /** Modified */
+            modified?: number | null;
+        };
+        /**
+         * WorkflowAnnotateRequest
+         * @description 改一张工作流的应用表单和结果标记(只改 `mosael` 那几处,覆盖写)。
+         */
+        WorkflowAnnotateRequest: {
+            /** Path */
+            path: string;
+            /** Modified */
+            modified: number;
+            app?: components["schemas"]["WorkflowAppIn"] | null;
+            /** Results */
+            results?: string[];
+        };
+        /** WorkflowAppIn */
+        WorkflowAppIn: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Items */
+            items?: components["schemas"]["WorkflowAppItemIn"][];
+        };
+        /**
+         * WorkflowAppItemIn
+         * @description 要写进去的一项:顺序就是表单上的顺序。
+         */
+        WorkflowAppItemIn: {
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /** Input */
+            input: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Main
+             * @default false
+             */
+            main: boolean;
+            /** Choices */
+            choices?: string[] | null;
+        };
+        /**
+         * WorkflowAppItemOut
+         * @description 工作流文件里应用表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。
+         */
+        WorkflowAppItemOut: {
+            /** Key */
+            key: string;
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /** Input */
+            input: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Main
+             * @default false
+             */
+            main: boolean;
+            /** Choices */
+            choices?: string[] | null;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+        };
+        /**
+         * WorkflowAppOut
+         * @description 一张工作流的应用表单,给编辑器:全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。
+         */
+        WorkflowAppOut: {
+            /** Path */
+            path: string;
+            /** Modified */
+            modified?: number | null;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Editable
+             * @default false
+             */
+            editable: boolean;
+            /** Items */
+            items?: components["schemas"]["WorkflowFillableOut"][];
+            /** Outputs */
+            outputs?: components["schemas"]["WorkflowAppOutputOut"][];
+            app?: components["schemas"]["WorkflowAppSummaryOut"];
+        };
+        /**
+         * WorkflowAppOutputOut
+         * @description 交回结果的一个输出节点(标「以后只要这张」用)。
+         */
+        WorkflowAppOutputOut: {
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Class Type
+             * @default
+             */
+            class_type: string;
+            /**
+             * Media
+             * @default
+             */
+            media: string;
+        };
+        /**
+         * WorkflowAppSummaryOut
+         * @description 一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。
+         */
+        WorkflowAppSummaryOut: {
+            /**
+             * Status
+             * @default none
+             * @enum {string}
+             */
+            status: "none" | "ok" | "unsupported";
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * App
+             * @default false
+             */
+            app: boolean;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Items */
+            items?: components["schemas"]["WorkflowAppItemOut"][];
+            /** Results */
+            results?: string[];
+            /**
+             * Invalid
+             * @default 0
+             */
+            invalid: number;
+            /**
+             * Fields
+             * @default 0
+             */
+            fields: number;
+        };
         /** WorkflowContentOut */
         WorkflowContentOut: {
             /** Path */
@@ -15478,6 +15713,68 @@ export interface components {
             last_output?: components["schemas"]["WorkflowLastOutputOut"] | null;
             /** Used By */
             used_by?: components["schemas"]["WorkflowUseOut"][];
+            app?: components["schemas"]["WorkflowAppSummaryOut"] | null;
+        };
+        /**
+         * WorkflowFillableOut
+         * @description 一张工作流**能填的一项**(ADR 0038 §1,插件的 `items`):应用表单编辑器从这里挑。
+         */
+        WorkflowFillableOut: {
+            /** Key */
+            key: string;
+            /**
+             * Node
+             * @default
+             */
+            node: string;
+            /** Input */
+            input: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "media" | "model" | "number" | "choice" | "toggle" | "seed" | "size" | "runs";
+            /** Title */
+            title: string;
+            /**
+             * Node Title
+             * @default
+             */
+            node_title: string;
+            /**
+             * Class Type
+             * @default
+             */
+            class_type: string;
+            /**
+             * Common
+             * @default false
+             */
+            common: boolean;
+            /**
+             * Role
+             * @default
+             */
+            role: string;
+            /**
+             * Media
+             * @default
+             */
+            media: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /**
+             * Exposable
+             * @default true
+             */
+            exposable: boolean;
+            /** Spec */
+            spec?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * WorkflowFromPage
@@ -29608,6 +29905,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowContentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_app_api_plugins_instances__instance_id__workflow_library_app_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowAppOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    annotate_workflow_api_plugins_instances__instance_id__workflow_library_annotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowAnnotateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowAnnotateOut"];
                 };
             };
             /** @description Validation Error */

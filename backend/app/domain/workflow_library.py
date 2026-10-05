@@ -21,6 +21,11 @@
 **补齐缺的节点**:装节点包是一个后台任务(`node_install`,经插件交给 ComfyUI-Manager,进度照插件说的),装完要重启
 ComfyUI 才加载;重启经插件(等它停下再起来),回来以后这个连接的目录重拉一遍。包名先在这里过一遍(几个、多长、没有控制字符)。
 
+**应用表单**(ADR 0038 §2):作者从一张工作流全部能填的项里挑几项、起名、排序、收窄可选值,标哪个输出节点是结果,存进
+那张工作流自己的 JSON。读(`app_form`)给编辑器全部能填的项、文件里的标记和读到时的改动时间;写(`annotate`)是 Mosael
+**唯一覆盖写一张已有工作流**的地方:只改 `mosael` 那几处标记,带着读到时的改动时间去 —— 那台机器上的文件在这之间被改过,
+插件不写、回 stale,这里翻成 409(`WorkflowStale`)。形状先在这里过一遍(根图上的节点号、几项、多长),界面每次都先确认。
+
 **这里不认识 ComfyUI**:任何认领 `workflow_library` 的连接,插件页上都有「工作流库」。列表不存库,每次现问插件。
 """
 
@@ -34,13 +39,14 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, fragment
+from app.core.i18n import LocalizedError, fragment, pick_text
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Board, GenerationJob, Job, PluginInstance, ProviderProfile, User, Workflow
 from app.db.references import generation_model_key
 from app.domain import capabilities
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
@@ -83,6 +89,15 @@ _EDITOR_KIND = re.compile(r"[a-z][a-z0-9-]{0,39}")
 
 class WorkflowLibraryError(LocalizedError, ValueError):
     """工作流库这一侧说不行(这个连接不提供工作流库、路径不对)。带文案 key(`workflowLibErr_*`)。"""
+
+
+class WorkflowStale(WorkflowLibraryError):
+    """要改的那张在那台服务器上被改过了(改动时间和读到时的对不上):应用表单没存,重新打开再改。"""
+
+    def __init__(self, path: str, modified: float | None) -> None:
+        super().__init__("workflowLibErr_stale", path=path)
+        self.path = path
+        self.modified = modified
 
 
 class WorkflowConflict(WorkflowLibraryError):
@@ -233,6 +248,56 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
             one for one in _items(raw.get("missing_models"), {"folder": 200, "name": 1000, "url": 4000})
             if one["folder"] and one["name"]
         ],
+        "app": _app_summary(raw.get("app")),
+    }
+
+
+#: 应用表单(ADR 0038):有没有、版本认不认。
+_APP_STATUSES = {"none", "ok", "unsupported"}
+#: 一张表最多几项、一项最多几个可选值、最多标几个结果;名字、标题、说明最长多少字(和插件那一侧同一套数)。
+MAX_APP_ITEMS = 200
+MAX_APP_CHOICES = 1000
+MAX_APP_RESULTS = 64
+_MAX_APP_LABEL = 120
+_MAX_APP_DESCRIPTION = 1000
+_GRAPH_ITEMS = {"seed", "size", "runs"}
+#: 根图上的节点号(子图里面的节点 —— `12:5` 这种 —— 这一版不能放进应用表单)。
+_ROOT_NODE = re.compile(r"\d{1,9}")
+#: 一格输入的名字:不收控制字符,不太长。
+_INPUT_NAME = re.compile(r"[^\x00-\x1f]{1,200}")
+
+
+def _app_summary(raw: Any) -> dict[str, Any] | None:
+    """插件说的这张工作流的应用表单(有没有、版本、标题、每一项和对不上的原因、标成结果的节点),规整一遍。没说就是 None。"""
+    if not isinstance(raw, dict):
+        return None
+    status = _text(raw.get("status"), 20)
+    items: list[dict[str, Any]] = []
+    for one in raw.get("items") or []:
+        if not isinstance(one, dict) or len(items) >= MAX_APP_ITEMS:
+            continue
+        node, name = _text(one.get("node"), 20), _text(one.get("input"), 200)
+        if not name or (node and not _ROOT_NODE.fullmatch(node)):
+            continue
+        item: dict[str, Any] = {"key": f"{node}.{name}" if node else name, "node": node, "input": name,
+                                "label": _text(one.get("label"), _MAX_APP_LABEL), "main": one.get("main") is True,
+                                "title": _text(one.get("title"), 200), "problem": _text(one.get("problem"), 500)}
+        if isinstance(one.get("choices"), list):
+            item["choices"] = [str(choice)[:1000] for choice in one["choices"][:MAX_APP_CHOICES]
+                               if isinstance(choice, (str, int, float)) and not isinstance(choice, bool)]
+        items.append(item)
+    version = raw.get("version")
+    return {
+        "status": status if status in _APP_STATUSES else "none",
+        "version": str(version)[:20] if isinstance(version, (int, float, str)) and not isinstance(version, bool) else "",
+        "app": raw.get("app") is True,
+        "title": _text(raw.get("title"), _MAX_APP_LABEL),
+        "description": _text(raw.get("description"), _MAX_APP_DESCRIPTION),
+        "items": items,
+        "results": [_text(one, 20) for one in raw.get("results") or []
+                    if isinstance(one, str) and _ROOT_NODE.fullmatch(one)][:MAX_APP_RESULTS],
+        "invalid": int(_number(raw.get("invalid")) or 0),
+        "fields": int(_number(raw.get("fields")) or 0),
     }
 
 
@@ -388,6 +453,127 @@ def restore(db: Session, instance: PluginInstance, path: str, new_path: str = ""
     path = trash_path(path)
     target = workflow_path(new_path) if new_path else _TRASH_PATH.match(path).group("original")  # type: ignore[union-attr]
     return {"path": _write(db, instance, {"op": "restore_workflow", "path": path, "new_path": target}, wanted=target)}
+
+
+# --- 应用表单(ADR 0038 §2)----------------------------------------------------------
+
+_ITEM_KINDS = {"text", "media", "model", "number", "choice", "toggle", "seed", "size", "runs"}
+#: 编辑器一次最多列多少项(一张工作流 115 项是见过的最多的)。
+_MAX_APP_FOUND = 1000
+
+
+def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
+    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁、常用与否、JSON Schema 片段
+    (和生成目录同一套规整,见 plugins/generation.parameters —— 预览和真的表单是同一个形状)。"""
+    if not isinstance(raw, dict):
+        return None
+    node, name, kind = _text(raw.get("node"), 40), _text(raw.get("input"), 200), _text(raw.get("kind"), 20)
+    if not name or kind not in _ITEM_KINDS:
+        return None
+    key = f"{node}.{name}" if node else name
+    title = raw.get("title")
+    item: dict[str, Any] = {
+        "key": key, "node": node, "input": name, "kind": kind,
+        "title": _text(pick_text(title) if isinstance(title, dict) else title, 200) or key,
+        "node_title": _text(raw.get("node_title"), 200),
+        "class_type": _text(raw.get("class_type"), 200),
+        "common": raw.get("common") is True,
+        "role": _text(raw.get("role"), 40),
+        "media": _text(raw.get("media"), 20),
+        "folder": _text(raw.get("folder"), 64),
+        # 子图里面的节点(`12:5`)这一版不能放进应用表单(ADR 0038「这一版不做」),照样列出来、标着
+        "exposable": not node or bool(_ROOT_NODE.fullmatch(node)),
+    }
+    if isinstance(raw.get("schema"), dict):
+        schema = plugin_generation.parameters({key: raw["schema"]}, text).get(key)
+        if schema is not None:
+            item["spec"] = {field: pick_text(value) if isinstance(value, dict) and field in ("title", "description")
+                              else value for field, value in schema.items()}
+    return item
+
+
+def app_form(db: Session, instance: PluginInstance, path: str) -> dict[str, Any]:
+    """一张工作流的应用表单,给编辑器(工作流库详情里的「应用」):这张图全部能填的项、交回结果的输出节点、文件里的标记
+    (对不上的带着原因)、读到时的改动时间(存的时候带回来)。"""
+    _require(db, instance)
+    path = workflow_path(path)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "app", "path": path},
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    if not isinstance(output.get("items"), list):
+        raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
+    text = inst.manifest_for(db, instance).text
+    items = [one for one in (_app_item(raw, text) for raw in output["items"][:_MAX_APP_FOUND]) if one]
+    return {
+        "path": path,
+        "modified": _number(output.get("modified")),
+        "kind": _text(output.get("kind"), 20),
+        "editable": output.get("editable") is True,
+        "items": items,
+        "outputs": _items(output.get("outputs"), {"node": 40, "title": 200, "class_type": 200, "media": 20}),
+        "app": _app_summary(output.get("app")) or _app_summary({"status": "none"}),
+    }
+
+
+def _too_big() -> WorkflowLibraryError:
+    return WorkflowLibraryError("workflowLibErr_appTooBig", items=str(MAX_APP_ITEMS), choices=str(MAX_APP_CHOICES),
+                                results=str(MAX_APP_RESULTS))
+
+
+def _form_payload(app: dict[str, Any] | None, results: list[str]) -> dict[str, Any] | None:
+    """要写进去的应用表单先在这里过一遍:几项、每项是根图上的节点(或图级的种子 / 尺寸 / 跑几遍)、名字多长、可选值几个。"""
+    if len(results) > MAX_APP_RESULTS:
+        raise _too_big()
+    for one in results:
+        if not _ROOT_NODE.fullmatch(one):
+            raise WorkflowLibraryError("workflowLibErr_badAppItem", item=one[:200])
+    if app is None:
+        return None
+    entries = app.get("items") or []
+    if not isinstance(entries, list) or len(entries) > MAX_APP_ITEMS:
+        raise _too_big()
+    clean: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in entries:
+        node = str(entry.get("node") or "") if isinstance(entry, dict) else ""
+        name = str(entry.get("input") or "") if isinstance(entry, dict) else ""
+        key = f"{node}.{name}" if node else name
+        if not isinstance(entry, dict) or not _INPUT_NAME.fullmatch(name) or key in seen or (
+                node and not _ROOT_NODE.fullmatch(node)) or (not node and name not in _GRAPH_ITEMS):
+            raise WorkflowLibraryError("workflowLibErr_badAppItem", item=key[:200])
+        seen.add(key)
+        item: dict[str, Any] = {"node": node, "input": name, "label": _text(entry.get("label"), _MAX_APP_LABEL)}
+        if node and entry.get("main") is True:
+            item["main"] = True
+        choices = entry.get("choices")
+        if node and isinstance(choices, list) and choices:
+            if len(choices) > MAX_APP_CHOICES:
+                raise _too_big()
+            item["choices"] = [str(one)[:1000] for one in choices
+                               if isinstance(one, (str, int, float)) and not isinstance(one, bool)]
+        clean.append(item)
+    return {"title": _text(app.get("title"), _MAX_APP_LABEL),
+            "description": _text(app.get("description"), _MAX_APP_DESCRIPTION), "items": clean}
+
+
+def annotate(db: Session, instance: PluginInstance, path: str, *, modified: float, app: dict[str, Any] | None,
+             results: list[str]) -> dict[str, Any]:
+    """改那台服务器上一张工作流的应用表单和结果标记:**只改 `mosael` 那几处**,带着读到时的改动时间去(`modified`)。
+    那张在这之间被改过就不写(`WorkflowStale`,翻成 409)。成了让这个连接的目录马上重拉一遍(生成表单、工具跟着变),
+    回写完之后的改动时间(接着改用它)。界面每次都先确认:写明哪台服务器上的哪个文件、只改这几处标记。"""
+    _require(db, instance)
+    path = workflow_path(path)
+    results = [str(one) for one in results]
+    form = _form_payload(app, results)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
+                               {"op": "annotate", "path": path, "modified": modified, "app": form, "results": results},
+                               timeout=QUICK_TIMEOUT_SECONDS)
+    if output.get("stale") is True:
+        raise WorkflowStale(path, _number(output.get("modified")))
+    if _text(output.get("path"), 600) != path:
+        raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
+    # 生成选项、工具清单跟着变(只剩表单那几项、名字换成作者起的),不等那一分钟的指纹
+    host_capabilities.notify(db, instance, refresh=True)
+    return {"path": path, "modified": _number(output.get("modified"))}
 
 
 # --- 导入 ---------------------------------------------------------------------
@@ -572,6 +758,9 @@ __all__ = [
     "CAPABILITY",
     "WorkflowConflict",
     "WorkflowLibraryError",
+    "WorkflowStale",
+    "annotate",
+    "app_form",
     "content",
     "copy",
     "inspect_import",

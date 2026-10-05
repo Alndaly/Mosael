@@ -218,6 +218,10 @@ def summary(marks: Marks, form: graph.Form, invalid: list[dict[str, Any]], local
     """给人看的样子:有没有应用表单、版本、标题、说明、文件里的每一项(对不上的带着原因,按读的人的语言)、标成结果的节点。"""
     bad = {one["key"]: say(locale, one["problem"]["zh"], one["problem"]["en"])
            for one in invalid if not one.get("result") and one.get("problem")}
+    zh = (locale or "zh").lower().startswith("zh")
+    #: 有效的那几项在表单上叫什么(作者起的,没起就是这一项自己的名字),按读的人的语言
+    named = {field.key: (field.title.get("zh" if zh else "en", "") if isinstance(field.title, dict) else str(field.title))
+             for field in form.fields} if form.app else {}
     return {
         "status": marks.status,
         **({"version": marks.version} if marks.status == "unsupported" and marks.version is not None else {}),
@@ -226,6 +230,7 @@ def summary(marks: Marks, form: graph.Form, invalid: list[dict[str, Any]], local
         "description": marks.description,
         "items": [
             {"key": mark.key, "node": mark.node, "input": mark.input, "label": mark.label, "main": mark.main,
+             **({"title": named[mark.key]} if mark.key in named else {}),
              **({"choices": list(mark.choices)} if mark.choices is not None else {}),
              **({"problem": bad[mark.key]} if mark.key in bad else {})}
             for mark in marks.exposed

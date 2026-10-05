@@ -40,6 +40,9 @@ from app.api.schemas import (
     PluginPermissionGrantUpdate,
     PluginProvidedModelOut,
     PluginToolOut,
+    WorkflowAnnotateOut,
+    WorkflowAnnotateRequest,
+    WorkflowAppOut,
     WorkflowContentOut,
     WorkflowCopyRequest,
     WorkflowInstallNodesRequest,
@@ -540,6 +543,8 @@ def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, u
 def _workflow_library_failed(exc: Exception) -> HTTPException:
     if isinstance(exc, workflow_library.WorkflowConflict):
         return HTTPException(status_code=409, detail={"code": "exists", "message": str(exc), "suggestion": exc.suggestion})
+    if isinstance(exc, workflow_library.WorkflowStale):
+        return HTTPException(status_code=409, detail={"code": "stale", "message": str(exc), "modified": exc.modified})
     return HTTPException(status_code=422, detail=str(exc))
 
 
@@ -563,6 +568,30 @@ def get_workflow_content(instance_id: str, path: str, db: DbSession, user: Curre
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.content(db, instance, path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/workflow-library/app", response_model=WorkflowAppOut)
+def get_workflow_app(instance_id: str, path: str, db: DbSession, user: CurrentUser) -> dict:
+    """一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.app_form(db, instance, path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/annotate", response_model=WorkflowAnnotateOut)
+def annotate_workflow(instance_id: str, body: WorkflowAnnotateRequest, db: Tx, user: CurrentUser) -> dict:
+    """改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。那张在读到之后被改过
+    就不写,回 409 `stale`。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.annotate(
+            db, instance, body.path, modified=body.modified,
+            app=body.app.model_dump() if body.app is not None else None, results=body.results,
+        )
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

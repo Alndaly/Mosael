@@ -70,6 +70,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import { WorkflowImportDialog, importable } from "@/features/plugins/WorkflowImport";
@@ -169,6 +170,8 @@ export function WorkflowLibraryDialog({
     | null
   >(null);
   const [deleting, setDeleting] = React.useState(false);
+  //: 正在编辑哪一张的应用表单(ADR 0038):详情里「编辑应用表单」打开
+  const [editingApp, setEditingApp] = React.useState<WorkflowFile | null>(null);
   //: 正在导入(往库上拖进来的那个文件一并带上)
   const [importing, setImporting] = React.useState<{ file?: File } | null>(null);
   //: 装节点包:这次打开之后发起的任务、正在确认装哪个、正在确认重启
@@ -436,6 +439,7 @@ export function WorkflowLibraryDialog({
             restartError={restart.error ? errorText(restart.error) : ""}
             onRestart={() => setRestartAsk(true)}
             onDismissNote={editor.dismiss}
+            app={<WorkflowAppSection instance={instance} flow={detail} onEdit={() => setEditingApp(detail)} onSaved={changed} />}
             onBack={() => setDetailKey(null)}
             onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
             onRename={() => setAction({ kind: "rename", path: detail.path, initial: detail.path })}
@@ -481,6 +485,14 @@ export function WorkflowLibraryDialog({
                 setRestartAsk(false);
                 restart.mutate();
               }}
+            />
+          )}
+          {editingApp && (
+            <WorkflowAppEditor
+              instance={instance}
+              flow={editingApp}
+              onClose={() => setEditingApp(null)}
+              onSaved={changed}
             />
           )}
           {importing && (
@@ -595,7 +607,12 @@ function WorkflowCard({ flow, large, onOpen }: { flow: WorkflowFile; large: bool
           </button>
         </h3>
         <div className="flex h-6 min-w-0 items-center justify-between gap-2">
-          <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
+          <span className="flex min-w-0 items-center gap-1">
+            <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
+            {flow.app?.status === "ok" && flow.app.app && (
+              <CatalogBadge tone={(flow.app.invalid ?? 0) > 0 ? "warning" : "muted"}>{t("workflowAppBadge")}</CatalogBadge>
+            )}
+          </span>
           <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
             {t("workflowLibraryNodes").replace("{n}", String(flow.node_count))}
           </span>
@@ -756,6 +773,7 @@ function WorkflowDetail({
   restartError,
   onRestart,
   onDismissNote,
+  app,
   onBack,
   onCopy,
   onRename,
@@ -776,6 +794,8 @@ function WorkflowDetail({
   restartError: string;
   onRestart: () => void;
   onDismissNote: () => void;
+  /** 「应用」那一节(应用表单,ADR 0038),见 WorkflowAppSection */
+  app: React.ReactNode;
   onBack: () => void;
   onCopy: () => void;
   onRename: () => void;
@@ -880,6 +900,7 @@ function WorkflowDetail({
           <span className="min-w-0 break-words">{flow.problem}</span>
         </div>
       )}
+      {app}
       <WorkflowFacts
         facts={flow}
         onShowModel={onShowModel}

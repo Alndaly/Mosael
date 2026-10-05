@@ -11,7 +11,10 @@
 - 导入:要导入的东西(一段文字 / 一个文件 / 一个链接,只给一样,太大的不交)先让插件认一遍,宿主规整预览;存进去和别的
   写操作同一套(不覆盖、撞名 409、改完重拉),原文以 JSON 字符串交给插件(调用记录里只留截断的一段);
 - 装缺的节点包:一个后台任务(`node_install`),进度照插件说的,装完说要重启;包名先在宿主这里过一遍;工作流库列着这个
-  连接最近的几次;重启经插件,回来以后让这个连接的目录重拉一遍。
+  连接最近的几次;重启经插件,回来以后让这个连接的目录重拉一遍;
+- 应用表单(ADR 0038):列出来的每一张带着它的应用表单(规整过);编辑器读一张全部能填的项(名字按语言挑好、JSON Schema
+  片段和生成目录同一套规整、子图里的节点标着不能放);写之前宿主先查形状(根图上的节点、几项、可选值几个),插件说那张在
+  这之间被改过就回 409 `stale`,写成了让这个连接的目录马上重拉。
 """
 
 from __future__ import annotations
@@ -70,7 +73,13 @@ elif op == "workflows":
              "missing_nodes": [{"type": "CR Prompt Text", "count": 2,
                                 "packs": [{"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": False}]}],
              "missing_models": [{"folder": "vae", "name": "ae.safetensors",
-                                 "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors"}]},
+                                 "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors"}],
+             "app": {"status": "ok", "app": True, "title": " 人像应用 ", "description": "", "fields": 1, "invalid": 1,
+                     "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": False},
+                               {"key": "3.cfg", "node": "3", "input": "cfg", "label": "", "problem": "节点 #3 上没有「cfg」"},
+                               {"key": "12:5.text", "node": "12:5", "input": "text"},
+                               {"node": "4", "input": ""}],
+                     "results": ["9", "12:5", 7]}},
             {"path": "sub/sketch.json", "problem": "缺节点:CR Prompt Text"},
             {"path": "../outside.json"},
             {"path": "sub/.hidden.json"},
@@ -119,6 +128,32 @@ elif op == "install_nodes":
         emit({"ok": True, "output": {"installed": payload["packs"], "restart": True}})
 elif op == "reboot":
     emit({"ok": True, "output": {"back": True}})
+elif op == "app":
+    emit({"ok": True, "output": {
+        "path": payload["path"], "modified": 1776098682.9, "kind": "image", "editable": True,
+        "items": [
+            {"key": "6.text", "node": "6", "input": "text", "kind": "text", "role": "prompt",
+             "title": {"zh": "提示词", "en": "Prompt"}, "common": True,
+             "schema": {"type": "string", "x-multiline": True, "default": "a cat", "onclick": "x"}},
+            {"key": "10.image", "node": "10", "input": "image", "kind": "media", "role": "reference_image",
+             "media": "image", "title": "参考图 · 人物", "node_title": "人物", "class_type": "LoadImage", "common": True},
+            {"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": {"zh": "种子", "en": "Seed"},
+             "schema": {"type": "integer", "minimum": 0}},
+            {"key": "4.ckpt_name", "node": "4", "input": "ckpt_name", "kind": "model", "folder": "checkpoints",
+             "title": {"zh": "模型", "en": "Checkpoint"},
+             "schema": {"type": "string", "enum": ["a.safetensors", "b.safetensors"], "x-model-folder": "checkpoints"}},
+            {"key": "12:5.steps", "node": "12:5", "input": "steps", "kind": "number", "title": "步数",
+             "schema": {"type": "integer", "title": {"zh": "步数", "en": "Steps"}}},
+            {"key": "x", "node": "3", "input": "x", "kind": "weird", "title": "?"},
+        ],
+        "outputs": [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image"}],
+        "app": {"status": "unsupported", "version": 2, "items": [], "results": []},
+    }})
+elif op == "annotate":
+    if payload["modified"] == 1.0:
+        emit({"ok": True, "output": {"stale": True, "modified": 2.0}})
+    else:
+        emit({"ok": True, "output": {"path": payload["path"], "modified": 1776098699.5}})
 elif op == "trash_workflow":
     emit({"ok": True, "output": {"path": ".mosael-trash/workflows/20261005-101500/" + payload["path"]}})
 else:
@@ -434,3 +469,78 @@ def test_删除是挪进回收目录_能恢复_改完马上重拉目录(library)
     assert clash.status_code == 409
     bad = client.post(f"{base}/restore", json={"path": ".mosael-trash/elsewhere/x.json"})
     assert bad.status_code == 422, "不是回收目录里的东西不让「恢复」"
+
+
+# --- 应用表单(ADR 0038)---------------------------------------------------------------
+
+
+def test_列出来的每一张带着它的应用表单_宿主规整一遍(library) -> None:
+    client, instance_id = library
+    body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
+    portrait, sketch = body["workflows"]
+    app = portrait["app"]
+    assert (app["status"], app["app"], app["title"], app["fields"], app["invalid"]) == ("ok", True, "人像应用", 1, 1)
+    assert [one["key"] for one in app["items"]] == ["10.image", "3.cfg"], "子图里的节点、没写是哪一格的丢掉"
+    assert app["items"][0]["label"] == "人物" and app["items"][1]["problem"] == "节点 #3 上没有「cfg」"
+    assert app["results"] == ["9"], "结果标记只认根图上的节点号"
+    assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
+
+
+def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套规整(library) -> None:
+    client, instance_id = library
+    response = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "portrait.json"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["path"] == "portrait.json" and body["modified"] == 1776098682.9 and body["editable"] is True
+    by_key = {one["key"]: one for one in body["items"]}
+    assert list(by_key) == ["6.text", "10.image", "seed", "4.ckpt_name", "12:5.steps"], "认不出种类的那一项丢掉"
+    assert by_key["6.text"]["title"] == "提示词" and by_key["6.text"]["role"] == "prompt"
+    assert by_key["6.text"]["spec"] == {"type": "string", "x-multiline": True, "default": "a cat"}, "认不得的字段不留"
+    assert by_key["10.image"]["spec"] is None and by_key["10.image"]["node_title"] == "人物"
+    assert by_key["4.ckpt_name"]["spec"]["x-model-folder"] == "checkpoints" and by_key["4.ckpt_name"]["folder"] == "checkpoints"
+    assert by_key["12:5.steps"]["exposable"] is False and by_key["12:5.steps"]["spec"]["title"] == "步数", \
+        "子图里面的节点照样列出来,标着这一版不能放进应用表单"
+    assert by_key["seed"]["exposable"] is True
+    assert body["outputs"] == [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image"}]
+    assert body["app"]["status"] == "unsupported" and body["app"]["version"] == "2"
+    bad = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "../x.json"})
+    assert bad.status_code == 422
+
+
+def test_写应用表单_宿主先查形状_改动时间对不上回409_成了让目录重拉(library) -> None:
+    client, instance_id = library
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/annotate"
+    app = {"title": " 人像应用 ", "description": "", "items": [
+        {"node": "10", "input": "image", "label": " 人物 "},
+        {"node": "6", "input": "text", "main": True},
+        {"input": "seed", "main": True, "choices": ["x"]},
+        {"node": "4", "input": "ckpt_name", "choices": ["a.safetensors"]},
+    ]}
+    for bad in ({"node": "12:5", "input": "text"}, {"input": "steps"}, {"node": "10", "input": "image"}):
+        response = client.post(url, json={"path": "portrait.json", "modified": 5, "app": {**app, "items": [*app["items"], bad]}})
+        assert response.status_code == 422, (bad, response.text)
+    assert client.post(url, json={"path": "portrait.json", "modified": 5, "app": None,
+                                  "results": ["12:5"]}).status_code == 422
+    assert not [op for op in _ops() if op["op"] == "annotate"], "形状不对的不交给插件"
+
+    stale = client.post(url, json={"path": "portrait.json", "modified": 1.0, "app": app, "results": ["9"]})
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "stale" and stale.json()["detail"]["modified"] == 2.0
+
+    refreshed = len([op for op in _ops() if op["op"] == "models"])
+    done = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "app": app, "results": ["9"]})
+    assert done.status_code == 200, done.text
+    assert done.json() == {"path": "portrait.json", "modified": 1776098699.5}
+    sent = [op for op in _ops() if op["op"] == "annotate"][-1]
+    assert sent["modified"] == 1776098682.9 and sent["results"] == ["9"]
+    assert sent["app"] == {"title": "人像应用", "description": "", "items": [
+        {"node": "10", "input": "image", "label": "人物"},
+        {"node": "6", "input": "text", "label": "", "main": True},
+        {"node": "", "input": "seed", "label": ""},
+        {"node": "4", "input": "ckpt_name", "label": "", "choices": ["a.safetensors"]},
+    ]}, "名字去掉首尾空白;图级的项没有 main / choices"
+    assert len([op for op in _ops() if op["op"] == "models"]) > refreshed, "改成了:这个连接的目录马上重拉(生成表单跟着变)"
+
+    removed = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "app": None, "results": []})
+    assert removed.status_code == 200 and [op for op in _ops() if op["op"] == "annotate"][-1]["app"] is None
+

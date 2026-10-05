@@ -566,6 +566,45 @@ class WorkflowUseOut(ApiModel):
     name: str
 
 
+class WorkflowAppItemOut(ApiModel):
+    """工作流文件里应用表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。"""
+
+    #: `<节点 id>.<输入名>`,图级的项就是它的名字(seed / size / runs)
+    key: str
+    node: str = ""
+    input: str
+    #: 作者起的名字;空串 = 用这一项自己的名字
+    label: str = ""
+    #: 它在表单上叫什么(作者起的,没起就是这一项自己的名字,按看的人的语言);对不上的项没有
+    title: str = ""
+    #: 文字项写成宿主的提示词 / 反向提示词
+    main: bool = False
+    #: 只许从这几项里挑;没收窄是 None
+    choices: list[str] | None = None
+    #: 对不上的原因(节点不在会跑的那部分图里了、被拉成了连线、可选值不在下拉里了……);空串 = 有效
+    problem: str = ""
+
+
+class WorkflowAppSummaryOut(ApiModel):
+    """一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。"""
+
+    #: none(没有 Mosael 的标记)/ ok / unsupported(版本不是这一版插件认的,按「没有应用表单」处理)
+    status: Literal["none", "ok", "unsupported"] = "none"
+    #: unsupported 时文件里写的版本
+    version: str = ""
+    #: 有应用表单(没有时只可能有结果标记)
+    app: bool = False
+    title: str = ""
+    description: str = ""
+    items: list[WorkflowAppItemOut] = Field(default_factory=list)
+    #: 标成结果的输出节点(「以后只要这张」)
+    results: list[str] = Field(default_factory=list)
+    #: 对不上的有几项(含标成结果、却不再交出东西的节点)
+    invalid: int = 0
+    #: 有效的有几项
+    fields: int = 0
+
+
 class WorkflowFileOut(ApiModel):
     """那台服务器上存着的一张工作流。"""
 
@@ -594,6 +633,94 @@ class WorkflowFileOut(ApiModel):
     last_output: WorkflowLastOutputOut | None = None
     #: 这个工作区里选了它的工作流节点、画板格子
     used_by: list[WorkflowUseOut] = Field(default_factory=list)
+    #: 它的应用表单(ADR 0038);插件没说(转不过来的那几张)是 None。有应用表单时上面的 inputs / parameters 只是表单那几项
+    app: WorkflowAppSummaryOut | None = None
+
+
+class WorkflowFillableOut(ApiModel):
+    """一张工作流**能填的一项**(ADR 0038 §1,插件的 `items`):应用表单编辑器从这里挑。"""
+
+    key: str
+    #: 节点 id;图级的项(seed / size / runs)是空串
+    node: str = ""
+    input: str
+    #: text / media / model / number / choice / toggle / seed / size / runs
+    kind: Literal["text", "media", "model", "number", "choice", "toggle", "seed", "size", "runs"]
+    #: 人话名字(按看的人的语言挑好)
+    title: str
+    #: 用户给节点起的名字;没起是空串
+    node_title: str = ""
+    class_type: str = ""
+    #: 常用的(缺省表单里摆在第一屏的)
+    common: bool = False
+    #: 文字项:prompt / negative(认出来的提示词格);素材项:素材角色(reference_image、first_frame……)
+    role: str = ""
+    #: 素材项:image / mask / video / audio
+    media: str = ""
+    #: 选模型文件的项:模型目录(checkpoints、loras……)
+    folder: str = ""
+    #: 能不能放进应用表单(子图里面的节点这一版不能)
+    exposable: bool = True
+    #: 它进参数表时的 JSON Schema 片段(和生成目录同一套规整);读素材的项没有
+    spec: dict[str, Any] | None = None
+
+
+class WorkflowAppOutputOut(ApiModel):
+    """交回结果的一个输出节点(标「以后只要这张」用)。"""
+
+    node: str = ""
+    title: str = ""
+    class_type: str = ""
+    media: str = ""
+
+
+class WorkflowAppOut(ApiModel):
+    """一张工作流的应用表单,给编辑器:全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。"""
+
+    path: str
+    #: 读到它时的改动时间(秒):存的时候带回来,那台机器上在这之间被改过就不写
+    modified: float | None = None
+    kind: str = ""
+    #: API 格式的文件放不了标记
+    editable: bool = False
+    items: list[WorkflowFillableOut] = Field(default_factory=list)
+    outputs: list[WorkflowAppOutputOut] = Field(default_factory=list)
+    app: WorkflowAppSummaryOut = Field(default_factory=WorkflowAppSummaryOut)
+
+
+class WorkflowAppItemIn(ApiModel):
+    """要写进去的一项:顺序就是表单上的顺序。"""
+
+    #: 根图上的节点 id;图级的项(seed / size / runs)不给
+    node: str = Field(default="", max_length=20)
+    input: str = Field(min_length=1, max_length=200)
+    label: str = Field(default="", max_length=120)
+    main: bool = False
+    choices: list[str] | None = Field(default=None, max_length=1000)
+
+
+class WorkflowAppIn(ApiModel):
+    title: str = Field(default="", max_length=120)
+    description: str = Field(default="", max_length=1000)
+    items: list[WorkflowAppItemIn] = Field(default_factory=list, max_length=200)
+
+
+class WorkflowAnnotateRequest(ApiModel):
+    """改一张工作流的应用表单和结果标记(只改 `mosael` 那几处,覆盖写)。"""
+
+    path: str = Field(min_length=1, max_length=500)
+    #: 读到它时的改动时间(`GET …/workflow-library/app` 给的):对不上就不写,回 409
+    modified: float
+    #: 不给(null)= 去掉应用表单
+    app: WorkflowAppIn | None = None
+    #: 标成结果的输出节点
+    results: list[str] = Field(default_factory=list, max_length=64)
+
+
+class WorkflowAnnotateOut(ApiModel):
+    path: str
+    #: 写完之后的改动时间:接着改用它
+    modified: float | None = None
 
 
 class WorkflowOtherFileOut(ApiModel):
