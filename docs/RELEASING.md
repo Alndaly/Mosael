@@ -183,8 +183,11 @@ gh release view vVERSION --json isDraft,isPrerelease,publishedAt,assets,url
 
 ```bash
 curl -fsSL https://github.com/Alndaly/Mosael/releases/latest/download/registry.json \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['release']); print({e['download'].rsplit('/',2)[0] for e in d['plugins'] if e['download']})"
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['release']); print({e['download'].rsplit('/',2)[1] for e in d['plugins'] if e['download']})"
 ```
+
+第二行应当只有 `{'vVERSION'}` 一项(取的是下载地址里 tag 那一段)。此前这里取的是 `rsplit('/',2)[0]`,打出来恒为
+`…/releases/download`,看不出 tag 对不对 —— 1.9.0 发版时才发现。
 
 最终报告版本链接、对应 SHA、测试结果、公证情况和安装包是否齐全。将过程证据写入 `docs/validation/`；证据文档后续提交可以在 main 上，但已经发布的 tag 始终保留在原构建提交。
 
