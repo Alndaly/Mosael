@@ -1164,7 +1164,13 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
       "outputs": [{"node": "9", "title": "…", "media": "image"}],
       "models": [{"folder": "checkpoints", "name": "…", "present": true}],
       "missing_nodes": [{"type": "CR Prompt Text", "count": 2, "packs": [{"id": "…", "title": "…", "installed": false}]}],
-      "missing_models": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…"}]
+      "missing_models": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…"}],
+      "app": {                                                    // 可选:它的应用表单(ADR 0038),见下
+        "status": "ok", "app": true, "title": "换装", "description": "", "fields": 2, "invalid": 1,
+        "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": false},
+                  {"key": "3.cfg", "node": "3", "input": "cfg", "label": "", "problem": "给人看的原因"}],
+        "results": ["17"]
+      }
     }],
     "others": [{"path": "pack.zip", "reason": "给人看的一句:它为什么不是工作流"}],
     "trash": [{"path": ".mosael-trash/workflows/20261005-101500/sub/人像.json", "deleted_at": 1791000000.0}],
@@ -1181,6 +1187,38 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   `{"op": "restore_workflow", "path"(回收目录里的), "new_path"}` → `{"path": "改完之后的路径"}`;**不许覆盖**:`new_path` 已经有了
   就回 `{"conflict": true, "suggestion": "人像 (1).json"}`(宿主翻成 409、界面要求换名)。复制要给副本换一个新的图 id;
 - `{"op": "trash_workflow", "path"}` → `{"path": "回收目录里的路径"}`:**不硬删**,挪进 `.mosael-trash/workflows/<YYYYMMDD-HHMMSS>/<原路径>`。
+
+**应用表单**(ADR 0038 §2):作者从一张工作流全部能填的项里挑几项、起名、排序、收窄可选值、标哪个输出节点是结果,存进那张工作流
+自己的文件。`workflows` 里每一张可以带 `app`(上面那样):`status` 是 `none`(没有)/ `ok` / `unsupported`(版本不认识,带 `version`,
+按没有处理),`items` 是文件里的每一项(锚点 `node` + `input`,图级的种子 / 尺寸 / 跑几遍 `node` 是空串;对不上的带 `problem`),
+`results` 是标成结果的输出节点,`invalid` / `fields` 是对不上的和有效的各几项。宿主只认根图上的节点号(数字)。
+
+- `{"op": "app", "path"}` → 不留调用记录,给编辑器:
+
+  ```jsonc
+  {
+    "path": "换装.json", "modified": 1776098682.9,               // 读到它时的改动时间(秒),写的时候带回来
+    "kind": "image", "editable": true,                            // API 格式的文件放不了标记:false
+    "items": [{                                                   // 这张图全部能填的项
+      "key": "4.ckpt_name", "node": "4", "input": "ckpt_name",
+      "kind": "model",                                            // text / media / model / number / choice / toggle / seed / size / runs
+      "title": {"zh": "模型", "en": "Checkpoint"},                // 可以按语言分
+      "node_title": "", "class_type": "CheckpointLoaderSimple", "common": true,
+      "role": "", "media": "", "folder": "checkpoints",           // 文字项的 prompt / negative、素材项的角色和种类、模型目录
+      "schema": {"type": "string", "enum": ["…"], "x-model-folder": "checkpoints"}  // 进参数表时的 JSON Schema 片段,同 op: models
+    }],
+    "outputs": [{"node": "17", "title": "高清", "class_type": "SaveImage", "media": "image"}],  // 交回结果的输出节点
+    "app": {"status": "none", "items": [], "results": []}         // 同 workflows 里的 app
+  }
+  ```
+  宿主把 `title` / `schema` 里给人看的字按读的人的语言挑好,`schema` 过一遍和 `op: models` 同一套规整;节点号不是根图上的
+  (`12:5`)照样列出来,标着这一版不能放进应用表单。
+- `{"op": "annotate", "path", "modified", "app": {"title", "description", "items": [{"node", "input", "label", "main"?, "choices"?}]} | null,
+  "results": ["17"]}` → `{"path", "modified": 写完之后的改动时间}`。`items` 的顺序就是表单的顺序;`app: null` 去掉应用表单(结果标记照写)。
+  **只改你自己的标记**,别的一个字都不动;这是工作流库里**唯一许覆盖写**的 op:先核对 `modified` 和那台机器上的改动时间,对不上
+  (在这之间被改过)就什么都不写、回 `{"stale": true, "modified": 现在的}`,宿主翻成 409 `stale`。宿主先查过形状(根图上的节点号、
+  图级只认 `seed` / `size` / `runs`、最多 200 项、每项最多 1000 个可选值、最多 64 个结果),界面每次都先确认;写成了宿主让这个连接的
+  目录重拉一遍。
 
 **导入并补齐**(ADR 0035 §5):
 
@@ -1274,6 +1312,9 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 - `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` /
   `source_video` / `driving_audio` / `mask` …,见 `ai/providers/contracts/generation.SOURCE_ROLES`),`max` 是这个角色
   最多几份,`required: true` 是必须给(放大、抠图这类没有提示词的工作流,图就是必须的)。认不出的角色不接。
+  `labels`(可选)是这个角色的**槽位按顺序叫什么**(ComfyUI 一张工作流十个读图节点时的「人物」「背景」……,可以按语言分;
+  比 `max` 多的丢掉,某一格没有名字写空串):宿主的描述符多一格 `source_labels`(`{角色: [名字]}`,给人看时按语言挑好),
+  AI 工作台、画板、工作流节点把第 i 个名字标在第 i 格上。
 - `prompt`:这个模型**要不要提示词**。`required`(不写就是它)要写一段;`optional` 可以空着(比如图里存着一句
   默认的提示词,空着就用它);`none` **不收**提示词(放大、抠图这类「处理一份素材」的模型)—— 宿主不摆提示词框,
   智能体不写,带着提示词提交会被当场拒。认不出的值当没写。ComfyUI 插件从图里读:没有文字喂进采样器是 `none`,
@@ -1340,8 +1381,9 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 - **产出**:`outputs` 里每一项和 `artifact` 同一套规则 —— 写进 `MOSAEL_PLUGIN_OUTPUT_DIR` 给 `path`,或者给
   `url`(+ `headers` / `filename`)让宿主去下。宿主把它们交给生成执行器,登记成素材、记用量、写回执。
   一次请求里各份**实际用的参数不一样**时(ComfyUI 没有画布的图出 N 张是循环提交 N 次,每张一个种子),在那一项上写
-  `parameters`(`{"seed": 101}`,只收标量值):宿主记进那份素材的生成参数,也进这一次任务结果的 `outputs`
-  (`[{asset_id, parameters}]`),运行记录里看得到每张用的什么。
+  `parameters`(`{"seed": 101}`,只收标量值):宿主记进那份素材的生成参数,也进这一次任务结果的 `output_parameters`
+  (`[{asset_id, parameters}]`),运行记录里看得到每张用的什么。ComfyUI 插件还写 `source_node`(这份产出来自哪个输出节点,
+  ADR 0038 §5)—— 别用你目录里某个参数的键,否则「用同样的参数再来一次」会把它当成那个参数发回来。
 - **说明**(`note`,一句话,≤ 500 字,可选):比如循环里有一次失败、出来的照样交回 ——「3 张里出了 2 张;第 2 张没出来:…」。
   宿主把它当这一次任务的最后一句话(任务中心、运行记录看得到),也记进任务结果的 `note`。一张都没出来就别交回成功,报失败。
 - **取消**:宿主建一个文件,路径在环境变量 `MOSAEL_PLUGIN_CANCEL_FILE`。看到它就去停远端的活(ComfyUI 是

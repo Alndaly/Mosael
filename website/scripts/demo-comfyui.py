@@ -313,7 +313,10 @@ def build(media: Path):
                     self.wfile.write(body)
                     return
             if path == "/api/userdata" and "dir=workflows" in self.path and self.server.state.workflows:
-                self._json([{"path": name, "size": len(json.dumps(graph)), "modified": saved_at.get(name, int(time.time() * 1000))}
+                # Written since the demo started (an app form saved through Mosael, an import): the fake's own time
+                written = self.server.state.workflow_modified
+                self._json([{"path": name, "size": len(json.dumps(graph)),
+                             "modified": written.get(name) or saved_at.get(name, int(time.time() * 1000))}
                             for name, graph in self.server.state.workflows.items()])
                 return
             super().do_GET()

@@ -46,7 +46,7 @@ background (at startup, or when the workflow list changed).
 | An image workflow with a seed (with or without a canvas) | "Runs" (the parameter key is still `num_images`; up to 4, 1 when not set, 1.12.3): the plugin **submits it N times**, one after another, each run as the workflow is saved with a new seed (counting up from the given seed, or random when none is given); every output carries its run's seed (the generation record / the tool's `seeds`). What comes back is runs × images per run. Cancelling stops the run in progress and submits no more; when one run fails, what came out is still returned with a note saying how many of N runs came out and why the others didn't; after a Mosael restart it waits for the run in progress and then runs the rest. The form labels this field "Runs" and says below it how many images one run makes and how many this makes in total. A graph without a seed (upscaling) makes the same image every run, so it has no such field; neither do video graphs |
 | The save nodes of that kind (the preview nodes when nothing is saved) | How many images one run returns (`outputs_per_run` = the batch each default output node receives, summed, counting 1 where the batch can't be told; the host multiplies it by the runs and lays out that many placeholders up front); with more than one, the parameters get a "Results from" choice (node titles): pick one to get only its output, and the other save nodes don't run (1.6.0); each choice's images per run are in `x-outputs-per-run`. "All" by default; "Final result" when some previews are an intermediate step or a control image (1.12.2, see below) |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node title or "KSampler #2"; the common ones come first and the rest go under "Advanced"; the raw "node · input name" is in the description |
-| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1) |
+| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1); when a role has several loader nodes (or a node is named), each slot is named in order (the node's title, or "LoadImage #10" when unnamed) and the AI workbench, boards and workflow nodes show it (1.13.0) |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |
 | LoadVideo / VHS_LoadVideo | The video to edit (`source_video`, mode `video-edit`); one wired to a **reference** input such as `ref_videos.*` is a reference video |
 | LoadAudio / VHS_LoadAudioUpload | Driving audio (video graphs) / reference audio; one wired to a reference input is reference audio |
@@ -295,6 +295,52 @@ ComfyUI sits behind a reverse proxy that needs a login, sign in once in that emb
 - **Missing models**: those with a declared download URL download from the model library in one click (same dialog,
   same route).
 
+## App forms (1.13.0)
+
+The counterpart of RunningHub's "AI apps" (ADR 0038, first slice): the author picks the few items others should fill in
+from **everything a workflow can take**, names and orders them, narrows choices, marks which output node is the result,
+and keeps that as a short form for the workflow. The AI workbench, boards and workflow nodes all use this form when
+they pick the workflow; a workflow without an app form still lists everything automatically (the "default app").
+
+- **Where to edit it**: Workflow library → a workflow's detail → "App" → "Edit app form". On the left, everything the
+  workflow can take (prompts, nodes that load inputs, seed / size / runs, models, other parameters; grouped by kind and
+  searchable): tick an item to put it on the form, name it, move it up or down. On the right, a live preview drawn with
+  the generation panel's own controls. It works in the web build too, without the embedded canvas.
+- **What can be filled in** (`graph.items`): the derivation the generation catalog and the tool inputs used to do
+  separately is now one. Each item is anchored on `<node id>.<input name>` (the graph-level seed, size and runs have no
+  node), the same parameter keys as before, so values saved on boards and workflow nodes don't need migrating. Nodes
+  inside a subgraph can't be on an app form yet.
+- **How form items enter the catalog**: a text field marked "Main prompt" is Mosael's prompt box (several fields of the
+  same role get the same text); other text, models, numbers, dropdowns and switches are entries in the parameter form
+  with your names, in your order, all on the first screen; a narrowed dropdown only offers those choices; nodes that load
+  inputs are input slots, **each slot named in order** (your name, or the node's name); seed, size and runs use Mosael's
+  own controls. The app name replaces the model's name in the model picker.
+- **Items you don't pick run as authored**: they are not on the form and are not written — a prompt field not marked as
+  the main prompt keeps the text saved in the workflow, an unpicked seed follows the workflow's own setting (fixed stays,
+  randomize changes), and stale keys saved on a board cell are no longer written into the graph. The tool
+  ("Workflow · name") takes only the form's items as well.
+- **Results**: output nodes marked as the result are the default of "Results from" ("Your result (node name)") instead of
+  a guess; save nodes can be marked too (two save nodes, keep only the high-resolution one). "Results from" can still be
+  changed every time. Every output a generation returns carries the node it came from (`source_node` in the output's
+  parameters).
+- **Where it is kept**: in the workflow's own JSON — `properties.mosael` on nodes (`expose`: name, order, main prompt,
+  narrowed choices; `result`) and `extra.mosael` on the graph (`version`, app name, description, seed / size / runs).
+  ComfyUI's frontend saves such extension data back as is, so the form travels with copies, renumbered nodes, exports and
+  other ComfyUI servers, and a deleted node takes its marks with it; everyone using the same ComfyUI sees the same form.
+- **Writing it back**: the **only place Mosael overwrites an existing workflow** (`annotate`): only the `mosael` marks
+  change; other extensions' keys, nodes and links are left exactly as they are. Every save is confirmed first, naming the
+  server and the file. It carries the modification time read with the workflow, and if the file changed in between
+  (saved in ComfyUI) nothing is written: "it was just changed in ComfyUI, open it again". If the workflow is open in
+  ComfyUI with unsaved changes, saving it there will undo this change.
+- **Items that no longer match**: every description checks that the node is still in the part of the graph that runs
+  (not muted, not bypassed, connected to an output), that the input is still a value to fill in (not turned into a link)
+  and that narrowed choices are still in the dropdown. Items that don't match are left off the form, listed in the
+  workflow's detail and can be removed in one go.
+- **Version**: only `extra.mosael.version` `1` is read. Other versions are treated as having no app form, with a notice;
+  when the shape changes later, the plugin will ship an operation that rewrites the workflow files on that machine after
+  one confirmation — the reading side doesn't understand old versions. On a graph without `extra.mosael`, marks on nodes
+  don't count (they came along with nodes copied from another workflow).
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -315,8 +361,9 @@ ComfyUI sits behind a reverse proxy that needs a login, sign in once in that emb
   frontend's graphToPrompt: widget values ordered by the node definition (graphs saved by older frontends work too),
   muted nodes disconnected, bypassed nodes passed through, frontend-only nodes like Reroute / PrimitiveNode / Get·Set
   removed, and subgraphs expanded into "outer id:inner id";
-- `graph.py`: finds prompts / seeds / sizes / slots / output nodes, describes the graph as a model, fills the graph in
-  and collects outputs;
+- `graph.py`: finds prompts / seeds / sizes / slots / output nodes, gathers them into one list of what can be filled in
+  (`items`) and a form (`Form`), describes the graph as a model, fills the graph in and collects outputs;
+- `app_form.py`: app forms: reads, checks and writes the `mosael` marks in a workflow;
 - `labels.py`: plain names for tunable inputs, their order, whether they are common, and the few that aren't tuned in
   Mosael;
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;

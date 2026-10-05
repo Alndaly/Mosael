@@ -76,7 +76,7 @@ Mosael reads **what each workflow lets you tune and what it takes**:
 | The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: pick one node to get only its output while the other save nodes don't run. It defaults to all; when the workflow only has preview nodes and some of them are not the final result (the first pass of a two-pass workflow, the image before a face detailer or an upscale, a ControlNet control image, a mask), it defaults to **Final result**, so only the last result node comes back. Pick All to get every one. A preview node that only shows the loaded image or a preprocessor's result (an OpenPose skeleton, Canny lines, a depth map) is not an output |
 | Checkpoint, LoRA, VAE, text encoder, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI, each with a thumbnail, base model and trigger words (see "The model library shows up when generating" below) |
 | Steps, CFG, sampler, scheduler, denoise, frame count … | One entry each in the parameters panel with a plain name (“Steps”, “Sampler”); common ones first, details under Advanced |
-| LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame (also when they pass through a resize, crop or similar step first); an image-to-video workflow requires its first frame |
+| LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame (also when they pass through a resize, crop or similar step first); an image-to-video workflow requires its first frame. With several loader nodes (or named ones), each slot carries its node's name in order |
 | LoadImageMask, or a LoadImage whose only used output is its mask (alpha) | Mask (inpainting — white is the area to change) |
 | LoadVideo / VHS_LoadVideo | Video to edit (video-to-video) |
 | LoadAudio | Driving audio (in video workflows) or reference audio |
@@ -304,6 +304,40 @@ After any change the workflow library, the generation models and the tool list r
 workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved changes already open there are kept); the web
 version opens ComfyUI in a new tab and tells you which workflow to click under Workflows. Save in ComfyUI, come back to Mosael, and
 the workflow library refreshes itself, still on the same workflow. If ComfyUI sits behind a reverse proxy with login, sign in once in that built-in browser.
+
+### Apps: pick the items others fill in
+
+A workflow can have dozens of parameters while whoever fills it in only needs three or five. In a workflow's detail, click
+**Edit app form** in the **App** section:
+
+- **On the left**, everything the workflow can take, grouped into text, inputs, models, parameters and seed · size · runs,
+  and searchable. Tick an item to put it on the form, give it a name ("Portrait photo", "Style") and move it up or down; a
+  text item can be the **main prompt** (it goes into the prompt box of the AI workbench and boards; unticked, it is a text
+  field of its own); dropdowns and model pickers can be **narrowed** to the choices you tick. Nodes inside a subgraph can't
+  be added yet.
+- **Results**: when the workflow has several output nodes, mark the one you want as the result ("keep only this one from
+  now on"), and "Results from" defaults to it instead of Mosael's guess.
+- **On the right**, a preview drawn with the generation panel's own controls: it is the form the AI workbench, boards and
+  workflow nodes show for this workflow.
+
+Saving asks first, naming the server and the file, and only Mosael's marks change (`properties.mosael` on nodes,
+`extra.mosael` on the graph); nothing else in the workflow is touched. The form lives **in the workflow's own JSON**, so it
+travels with copies, exports and other ComfyUI servers, and everyone using the same ComfyUI sees the same form. If the
+workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was just saved in ComfyUI,
+Mosael doesn't write and asks you to open it again. With nothing picked, the app form is removed.
+
+Once a workflow has an app form:
+
+- The form shows only the items you picked, in your order, with your names; the tool "Workflow · name" takes only those
+  items too.
+- **Items you didn't pick run as authored**: a prompt field that isn't the main prompt keeps the text saved in the
+  workflow, an unpicked seed follows the workflow's own setting (a fixed seed stays), and values saved on a board cell
+  earlier are no longer written into the graph.
+- Several loader nodes each have a name: the corner of the AI workbench thumbnail, the hint on a board's input slot and the
+  line under a workflow node's field say "Portrait", "Background", so it is clear which image goes to which node.
+- When the workflow changed in ComfyUI and an item no longer matches (the node was muted or deleted, the input became a
+  link, a narrowed choice is gone), it is left off the form; the detail lists why, and **Remove invalid items…** clears
+  them in one go.
 
 ### Importing workflows from elsewhere and completing them
 
