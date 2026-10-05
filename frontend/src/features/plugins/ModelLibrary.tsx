@@ -51,6 +51,7 @@ import {
   type LibraryChip,
   type LibraryDensity,
   type LibraryNavItem,
+  type LibraryReturn,
 } from "@/components/app/LibraryBrowser";
 import { ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
@@ -86,7 +87,9 @@ import { formatBytes } from "@/lib/bytes";
 import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 import { handOffToGeneration } from "@/lib/generationHandoff";
 import { useGenerationOptions } from "@/lib/generationOptions";
+import { useElementWidth } from "@/lib/useElementWidth";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { useVirtualRows, type VirtualRows } from "@/lib/useVirtualRows";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -181,8 +184,15 @@ export function ModelLibraryDialog({
   const scope = React.useMemo(() => inFolder(models, special ? ALL_FOLDERS : view), [models, view, special]);
   const familyList = React.useMemo(() => familyCounts(scope), [scope]);
   //: 勾着的底模里,当前目录没有的不算数 —— 换了目录,网格不该因为上一个目录勾的东西莫名其妙是空的。
-  const activeFamilies = families.filter((one) => familyList.some(([value]) => value === one));
-  const shown = sortModels(filterModels(scope, { families: activeFamilies, query }), sort);
+  const activeFamilies = React.useMemo(
+    () => families.filter((one) => familyList.some(([value]) => value === one)),
+    [families, familyList],
+  );
+  //: 记忆化:弹窗为别的事重渲(下载进度、开关)时,网格拿到的还是同一份清单,不重新分行、开窗。
+  const shown = React.useMemo(
+    () => sortModels(filterModels(scope, { families: activeFamilies, query }), sort),
+    [scope, activeFamilies, query, sort],
+  );
   const detail = detailKey ? models.find((model) => keyOf(model) === detailKey) ?? null : null;
 
   const downloads = useDownloads(library.data, started, () => {
@@ -322,7 +332,7 @@ export function ModelLibraryDialog({
       </>
     );
 
-  const content = (openItem: (key: string) => void) => {
+  const content = (openItem: (key: string) => void, returnTo: React.RefObject<LibraryReturn | null>) => {
     //: 状态放在内容区(纵向弹性盒)里:加载中撑满剩下的高度、自己居中,出错 / 空用 EmptyState 的 m-auto ——
     //: 弹窗多高都在工具条下面那一整块的正中。
     if (library.isPending) return <LoadingState label={t("modelLibraryLoading")} className="h-auto flex-1" />;
@@ -366,33 +376,26 @@ export function ModelLibraryDialog({
     const listLabel = t("modelLibraryTitle").replace("{name}", instance.name);
     if (density === "list") {
       return (
-        <ModelTable label={listLabel} instanceId={instance.id} models={shown} blurred={blurred} onOpen={(model) => openItem(keyOf(model))} />
+        <ModelTable
+          label={listLabel}
+          instanceId={instance.id}
+          models={shown}
+          blurred={blurred}
+          onOpen={openItem}
+          returnTo={returnTo}
+        />
       );
     }
     return (
-      <ul
-        role="list"
-        aria-label={listLabel}
-        data-density={density}
-        className={cn(
-          "m-0 grid list-none gap-3 p-0",
-          density === "large"
-            ? "grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))]"
-            : "grid-cols-[repeat(auto-fill,minmax(min(100%,136px),1fr))] gap-2.5",
-        )}
-      >
-        {shown.map((model) => (
-          <li key={keyOf(model)} className="grid min-w-0">
-            <ModelCard
-              instanceId={instance.id}
-              model={model}
-              large={density === "large"}
-              blurred={blurred}
-              onOpen={() => openItem(keyOf(model))}
-            />
-          </li>
-        ))}
-      </ul>
+      <ModelGrid
+        label={listLabel}
+        instanceId={instance.id}
+        models={shown}
+        large={density === "large"}
+        blurred={blurred}
+        onOpen={openItem}
+        returnTo={returnTo}
+      />
     );
   };
 
@@ -686,11 +689,167 @@ const placeOf = (model: ModelFile) => {
 };
 
 /**
- * 一张卡。预览图一律 3:4(这台机器上的预览图大多是竖的 2:3 / 3:4,统一比例后网格整齐,也不再把竖图裁成一条),
- * 偏上取景(人像的脸在上半截)。名字一行截断、悬停看全名;底模在左、大小在右,位置固定 —— 认不出底模时左边空着,
- * 大小不跟着挪。大卡片多一行:目录(和子目录)、几张工作流在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
+ * 网格一行几张、一行多高。一张卡至少 `min` 宽,一行能放几张放几张(此前 `repeat(auto-fill, minmax(min(100%, Npx), 1fr))`
+ * 的同一条规则);列间距、行间距都是 `gap`(`className` 里写的那一份)。卡片 = 3:4 的预览图 + 下面那几行字(连同内边距、
+ * 上下边框约 `text` 高)—— 一行真画出来之后按量到的算,这只是还没画时的估计。
  */
-function ModelCard({
+const GRID = {
+  small: { min: 136, gap: 10, text: 63, className: "gap-x-2.5 pb-2.5" },
+  large: { min: 200, gap: 12, text: 96, className: "gap-x-3 pb-3" },
+} as const;
+/** 列表一行多高(36 的缩略图上下各 6,加一条分隔线);同上,只是还没画时的估计。 */
+const TABLE_ROW_PX = 49;
+/**
+ * 视口上下各多画这么高(useVirtualRows 默认 800)。多画的那几行里的图浏览器也会去要:第一次打开、宿主还没缓存时,每一张
+ * 都要那台服务器现转一次(ComfyUI 一次只转一张),多画一行,眼前这几张就多等一行。一行卡片两三百高,400 够滚轮滚一下不露白。
+ */
+const OVERSCAN_PX = 400;
+
+/** 滚的是 LibraryDialog 的内容区。从网格 / 表格自己的元素往上找:内容区在外层,它的 ref 要等这里的 layout effect 都跑完才挂上。 */
+const scrollerOf = (element: HTMLElement | null) => element?.closest<HTMLElement>("[data-library-content]") ?? null;
+
+/**
+ * 从详情回到网格 / 表格(见 LibraryDialog 的 `children`):挂上时取走 `returnTo`、滚回进详情前的位置,记下要放回焦点的
+ * 那一条。**写在 useVirtualRows 前面**:它在 layout effect 里按此刻的滚动位置开窗,位置得先还原。
+ */
+function useClaimReturn(
+  returnTo: React.RefObject<LibraryReturn | null>,
+  scrollRef: React.RefObject<HTMLElement | null>,
+  models: ModelFile[],
+): React.RefObject<string | null> {
+  const pending = React.useRef<string | null>(null);
+  React.useLayoutEffect(() => {
+    const back = returnTo.current;
+    const scroller = scrollRef.current;
+    if (!back || !scroller || !models.some((model) => keyOf(model) === back.key)) return;
+    returnTo.current = null;
+    scroller.scrollTop = back.scrollTop;
+    pending.current = back.key;
+    // 只在挂上时认领一次。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return pending;
+}
+
+/**
+ * 要放回焦点的那一条画出来了:滚进视野(多半已经在了)、放回焦点。还没画出来(行高的估计和上次量到的差得多)就先把
+ * 它那一行滚进来,画出来之后的这一次再放。`ready`:一行几张已经按真宽度算过 —— 之前按一列排的位置不作数。
+ */
+function useFocusReturned(
+  pending: React.RefObject<string | null>,
+  listRef: React.RefObject<HTMLElement | null>,
+  virtual: VirtualRows,
+  rowOf: (key: string) => number,
+  ready: boolean,
+) {
+  React.useLayoutEffect(() => {
+    const key = pending.current;
+    if (!key || !ready) return;
+    const item = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-library-item]") ?? []).find(
+      (one) => one.dataset.libraryItem === key,
+    );
+    if (item) {
+      pending.current = null;
+      item.scrollIntoView({ block: "nearest" });
+      item.querySelector<HTMLElement>("[data-library-open]")?.focus({ preventScroll: true });
+      return;
+    }
+    const row = rowOf(key);
+    if (row < 0) pending.current = null;
+    else virtual.reveal(row);
+  });
+}
+
+/**
+ * 卡片网格:**只画看得见的那几行**(上下各留一段缓冲,见 useVirtualRows),其余的用留白占着高度 —— 滚动条说的还是整份
+ * 清单。五百多个文件全挂在页面上时,一次换目录、一次悬停都要浏览器过一遍六千多个节点、解几十张原图。一行几张按网格
+ * 的宽度算,每行一个键(行首那个文件加一行几张)。卡片记忆化:换目录、搜索、下载进度这些让弹窗重渲的事,已经画着的卡
+ * 不跟着重画;悬停、看清(模糊预览图)都是每张卡自己的 CSS。
+ */
+function ModelGrid({
+  label,
+  instanceId,
+  models,
+  large,
+  blurred,
+  onOpen,
+  returnTo,
+}: {
+  label: string;
+  instanceId: string;
+  models: ModelFile[];
+  large: boolean;
+  blurred: boolean;
+  onOpen: (key: string) => void;
+  returnTo: React.RefObject<LibraryReturn | null>;
+}) {
+  const layout = large ? GRID.large : GRID.small;
+  const scrollRef = React.useRef<HTMLElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const [listElement, setListElement] = React.useState<HTMLDivElement | null>(null);
+  const attachList = React.useCallback((element: HTMLDivElement | null) => {
+    listRef.current = element;
+    scrollRef.current = scrollerOf(element);
+    setListElement(element);
+  }, []);
+  //: 量到之前(挂上后的头一次渲染)直接读一次 —— 不然先按一列排一遍、开一遍窗,下一次渲染才改对。
+  const width = useElementWidth(listElement) || (listElement?.clientWidth ?? 0);
+  const columns = Math.max(1, Math.floor((width + layout.gap) / (layout.min + layout.gap)));
+  const rows = React.useMemo(() => {
+    const out: ModelFile[][] = [];
+    for (let at = 0; at < models.length; at += columns) out.push(models.slice(at, at + columns));
+    return out;
+  }, [models, columns]);
+  const rowKeys = React.useMemo(() => rows.map((row) => `${columns}:${keyOf(row[0])}`), [rows, columns]);
+  const cardWidth = width > 0 ? (width - layout.gap * (columns - 1)) / columns : layout.min;
+  const estimate = Math.round(((cardWidth - 2) * 4) / 3 + layout.text + layout.gap);
+  const pending = useClaimReturn(returnTo, scrollRef, models);
+  const virtual = useVirtualRows({ keys: rowKeys, scrollRef, listRef, estimate, overscanPx: OVERSCAN_PX });
+  const rowOf = (key: string) => {
+    const index = models.findIndex((model) => keyOf(model) === key);
+    return index < 0 ? -1 : Math.floor(index / columns);
+  };
+  useFocusReturned(pending, listRef, virtual, rowOf, listElement !== null);
+  return (
+    <div ref={attachList} role="list" aria-label={label} data-density={large ? "large" : "small"} data-model-grid="">
+      {virtual.padTop > 0 && <div aria-hidden="true" data-pad-top="" style={{ height: virtual.padTop }} />}
+      {rows.slice(virtual.start, virtual.end).map((row, offset) => {
+        const index = virtual.start + offset;
+        const key = rowKeys[index];
+        return (
+          <div
+            key={key}
+            ref={virtual.measure(key)}
+            role="none"
+            className={cn("grid", layout.className)}
+            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          >
+            {row.map((model, column) => (
+              <div
+                key={keyOf(model)}
+                role="listitem"
+                aria-setsize={models.length}
+                aria-posinset={index * columns + column + 1}
+                className="grid min-w-0"
+              >
+                <ModelCard instanceId={instanceId} model={model} large={large} blurred={blurred} onOpen={onOpen} />
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      <div aria-hidden="true" data-pad-bottom="" style={{ height: virtual.padBottom }} />
+    </div>
+  );
+}
+
+/**
+ * 一张卡。预览图一律 3:4(这台机器上的预览图大多是竖的 2:3 / 3:4,统一比例后网格整齐,也不再把竖图裁成一条),
+ * 偏上取景(人像的脸在上半截);用的是宿主缩好的缩略图,框先占好位置,图到了淡入。名字一行截断、悬停看全名;底模在左、
+ * 大小在右,位置固定 —— 认不出底模时左边空着,大小不跟着挪。大卡片多一行:目录(和子目录)、几张工作流在用。
+ * **整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
+ */
+const ModelCard = React.memo(function ModelCard({
   instanceId,
   model,
   large,
@@ -701,7 +860,7 @@ function ModelCard({
   model: ModelFile;
   large: boolean;
   blurred: boolean;
-  onOpen: () => void;
+  onOpen: (key: string) => void;
 }) {
   const t = useI18n();
   const used = model.used_by?.length ?? 0;
@@ -714,7 +873,7 @@ function ModelCard({
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
-      <div className="overflow-hidden">
+      <div className="overflow-hidden bg-secondary">
         <ModelThumb instanceId={instanceId} model={model} blurred={blurred} className="aspect-[3/4] w-full object-[50%_20%]" />
       </div>
       <div className={cn("grid min-w-0 content-start", large ? "gap-1.5 p-2.5" : "gap-1 p-2")}>
@@ -723,7 +882,7 @@ function ModelCard({
             type="button"
             data-library-open
             className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
-            onClick={onOpen}
+            onClick={() => onOpen(keyOf(model))}
           >
             <Truncate hint={large ? undefined : placeOf(model)}>{baseName(model.name)}</Truncate>
           </button>
@@ -752,11 +911,12 @@ function ModelCard({
       </div>
     </article>
   );
-}
+});
 
 /**
  * 列表:一行一个文件,扫一大批文件时比卡片快。名字是行里那颗按钮(键盘从它进详情);整行也点得开(鼠标方便)。
- * 列宽固定(`table-fixed`),名字在自己那一列里截断,不撑开表格;太窄时横向滚,不挤成一团。
+ * 列宽固定(`table-fixed`),名字在自己那一列里截断,不撑开表格;太窄时横向滚,不挤成一团。和网格一样只画看得见的
+ * 那几行,上下用跨满一行的空行撑着高度;行记忆化。
  */
 function ModelTable({
   label,
@@ -764,18 +924,28 @@ function ModelTable({
   models,
   blurred,
   onOpen,
+  returnTo,
 }: {
   label: string;
   instanceId: string;
   models: ModelFile[];
   blurred: boolean;
-  onOpen: (model: ModelFile) => void;
+  onOpen: (key: string) => void;
+  returnTo: React.RefObject<LibraryReturn | null>;
 }) {
   const t = useI18n();
-  const { locale } = usePreferences();
+  const scrollRef = React.useRef<HTMLElement | null>(null);
+  const bodyRef = React.useRef<HTMLTableSectionElement | null>(null);
+  const attachBody = React.useCallback((element: HTMLTableSectionElement | null) => {
+    bodyRef.current = element;
+    scrollRef.current = scrollerOf(element);
+  }, []);
+  const keys = React.useMemo(() => models.map(keyOf), [models]);
+  const pending = useClaimReturn(returnTo, scrollRef, models);
+  const virtual = useVirtualRows({ keys, scrollRef, listRef: bodyRef, estimate: TABLE_ROW_PX, overscanPx: OVERSCAN_PX });
+  useFocusReturned(pending, bodyRef, virtual, (key) => keys.indexOf(key), true);
   //: 表头钉在顶上(滚到几百行时还看得出哪一列是什么),底色和弹窗一样。
   const head = "sticky top-0 z-[1] border-b border-divider bg-[var(--modal-surface)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
-  const cell = "border-b border-divider px-2 py-1.5 align-middle";
   return (
     // 不另包一层 overflow-x:那一层会成为表头吸顶的参照,表头就钉不住了。太窄时由内容区自己横向滚。
     <table aria-label={label} className="w-full min-w-[680px] table-fixed border-separate border-spacing-0 text-ui-sm">
@@ -801,58 +971,96 @@ function ModelTable({
           <th scope="col" className={cn(head, "text-right")}>{t("modelLibraryColUsed")}</th>
         </tr>
       </thead>
-      <tbody>
-        {models.map((model) => {
-          const used = model.used_by?.length ?? 0;
-          return (
-            <tr
-              key={keyOf(model)}
-              data-library-item={keyOf(model)}
-              onClick={() => onOpen(model)}
-              className="group/thumb cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
-            >
-              <td className={cell}>
-                <span className="block size-9 overflow-hidden rounded-md">
-                  <ModelThumb instanceId={instanceId} model={model} compact blurred={blurred} className="size-9 object-[50%_20%]" />
-                </span>
-              </td>
-              <td className={cell}>
-                <button
-                  type="button"
-                  data-library-open
-                  className="block max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpen(model);
-                  }}
-                >
-                  <Truncate>{baseName(model.name)}</Truncate>
-                </button>
-              </td>
-              <td className={cn(cell, "text-ui-xs text-muted-foreground")}>
-                <Truncate>{placeOf(model)}</Truncate>
-              </td>
-              <td className={cell}>
-                <span className="flex min-w-0">
-                  <FamilyBadge model={model} />
-                </span>
-              </td>
-              <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground")}>
-                {model.size != null ? formatBytes(model.size) : ""}
-              </td>
-              <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground")}>
-                {model.modified != null ? new Date(model.modified * 1000).toLocaleDateString(locale) : ""}
-              </td>
-              <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
-                {used > 0 ? used : ""}
-              </td>
-            </tr>
-          );
-        })}
+      <tbody ref={attachBody}>
+        {virtual.padTop > 0 && <TableSpacer height={virtual.padTop} />}
+        {models.slice(virtual.start, virtual.end).map((model) => (
+          <ModelRow
+            key={keyOf(model)}
+            rowRef={virtual.measure(keyOf(model))}
+            instanceId={instanceId}
+            model={model}
+            blurred={blurred}
+            onOpen={onOpen}
+          />
+        ))}
+        {virtual.padBottom > 0 && <TableSpacer height={virtual.padBottom} />}
       </tbody>
     </table>
   );
 }
+
+/** 表格里没画的那些行占着的高度:一个跨满七列的空行。 */
+function TableSpacer({ height }: { height: number }) {
+  return (
+    <tr aria-hidden="true">
+      <td colSpan={7} className="p-0" style={{ height }} />
+    </tr>
+  );
+}
+
+const TABLE_CELL = "border-b border-divider px-2 py-1.5 align-middle";
+
+const ModelRow = React.memo(function ModelRow({
+  rowRef,
+  instanceId,
+  model,
+  blurred,
+  onOpen,
+}: {
+  rowRef: (element: HTMLElement | null) => void;
+  instanceId: string;
+  model: ModelFile;
+  blurred: boolean;
+  onOpen: (key: string) => void;
+}) {
+  const { locale } = usePreferences();
+  const used = model.used_by?.length ?? 0;
+  const cell = TABLE_CELL;
+  return (
+    <tr
+      ref={rowRef}
+      data-library-item={keyOf(model)}
+      onClick={() => onOpen(keyOf(model))}
+      className="group/thumb cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
+    >
+      <td className={cell}>
+        <span className="block size-9 overflow-hidden rounded-md bg-secondary">
+          <ModelThumb instanceId={instanceId} model={model} compact blurred={blurred} className="size-9 object-[50%_20%]" />
+        </span>
+      </td>
+      <td className={cell}>
+        <button
+          type="button"
+          data-library-open
+          className="block max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(keyOf(model));
+          }}
+        >
+          <Truncate>{baseName(model.name)}</Truncate>
+        </button>
+      </td>
+      <td className={cn(cell, "text-ui-xs text-muted-foreground")}>
+        <Truncate>{placeOf(model)}</Truncate>
+      </td>
+      <td className={cell}>
+        <span className="flex min-w-0">
+          <FamilyBadge model={model} />
+        </span>
+      </td>
+      <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground")}>
+        {model.size != null ? formatBytes(model.size) : ""}
+      </td>
+      <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground")}>
+        {model.modified != null ? new Date(model.modified * 1000).toLocaleDateString(locale) : ""}
+      </td>
+      <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
+        {used > 0 ? used : ""}
+      </td>
+    </tr>
+  );
+});
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = React.useState(false);
@@ -1164,6 +1372,7 @@ function ModelDetail({
       <ModelThumb
         instanceId={instanceId}
         model={model}
+        full
         blurred={blurred && !revealed}
         onFailed={() => setPreviewFailed(true)}
         className={cn(DETAIL_PREVIEW_FRAME, "object-contain")}

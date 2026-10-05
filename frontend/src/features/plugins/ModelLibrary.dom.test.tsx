@@ -32,6 +32,7 @@ const api = vi.hoisted(() => ({
   cancelJob: vi.fn(),
   listGenerationOptions: vi.fn(),
   modelPreviewUrl: (instance: string, folder: string, name: string) => `preview://${instance}/${folder}/${name}`,
+  modelThumbnailUrl: (instance: string, folder: string, name: string) => `thumbnail://${instance}/${folder}/${name}`,
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
@@ -238,12 +239,12 @@ describe("模型库", () => {
     expect(screen.queryByRole("list", { name: "modelLibraryTitle" })).toBeNull();
   });
 
-  it("有预览图用宿主的地址,没有就是按目录分的占位;大卡片上写着目录和子目录", async () => {
+  it("有预览图用宿主缩好的缩略图(详情页才要原图),没有就是按目录分的占位;大卡片上写着目录和子目录", async () => {
     await openLibrary();
     fireEvent.click(screen.getByRole("radio", { name: "libraryDensityLarge" }));
     fireEvent.click(folderTab("loras 3"));
     const detail = cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
-    expect(within(detail).getByRole("img").getAttribute("src")).toBe("preview://i1/loras/detail.safetensors");
+    expect(within(detail).getByRole("img").getAttribute("src")).toBe("thumbnail://i1/loras/detail.safetensors");
     const anima = cards().find((item) => item.textContent?.includes("anima_style.safetensors"))!;
     expect(anima.querySelector("[data-placeholder='loras']")).toBeTruthy();
     expect(anima.textContent).toContain("loras/sub");

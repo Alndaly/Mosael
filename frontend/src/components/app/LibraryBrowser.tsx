@@ -54,6 +54,11 @@ export type LibraryNav = {
   pinned?: LibraryNavItem[];
 };
 
+/**
+ * 从详情回到列表时要回到哪儿:进详情前列表滚到的位置、点开的是哪一条。见 LibraryDialog 的 `children`。
+ */
+export type LibraryReturn = { key: string; scrollTop: number };
+
 const navName = (item: LibraryNavItem) => `${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`;
 
 /**
@@ -116,8 +121,15 @@ export function LibraryDialog({
   detail: React.ReactNode;
   onOpenItem: (key: string) => void;
   onBack: () => void;
-  /** 内容区。`openItem(key)` 打开那一条的详情 —— 卡片的打开按钮带 `data-library-open`,外层带 `data-library-item={key}`。 */
-  children: (openItem: (key: string) => void) => React.ReactNode;
+  /**
+   * 内容区。`openItem(key)` 打开那一条的详情(同一个函数,不随每次渲染变 —— 记忆化的卡片可以直接拿着它)。卡片的打开
+   * 按钮带 `data-library-open`,外层带 `data-library-item={key}`;内容区自己滚的那一块带 `data-library-content`。
+   *
+   * 从详情回来时这里还原滚动位置、把焦点放回刚才那一条。只画看得见那几行的内容区(见 useVirtualRows)挂上时那一条
+   * 可能还没画出来:它在自己的 layout effect 里先取走 `returnTo`(置空),自己滚回去、画出那几行、再放焦点 ——
+   * 取走了这里就不再管。
+   */
+  children: (openItem: (key: string) => void, returnTo: React.RefObject<LibraryReturn | null>) => React.ReactNode;
   /** 挂在弹窗里的二级弹窗(下载框)。 */
   dialogs?: React.ReactNode;
   /** 往整个库上拖文件(工作流库:拖进来就导入)。见 ModalShell 的同名参数。 */
@@ -126,27 +138,28 @@ export function LibraryDialog({
   const narrow = useMediaMatch(LIBRARY_NARROW_QUERY);
   const scrollerRef = React.useRef<HTMLDivElement>(null);
   //: 离开列表时它滚到哪儿、从哪一条点进去的 —— 回来时原样还原。
-  const listScroll = React.useRef(0);
-  const cameFrom = React.useRef<string | null>(null);
+  const returnTo = React.useRef<LibraryReturn | null>(null);
   const panelId = React.useId();
   const tabPrefix = React.useId();
 
-  const openItem = (key: string) => {
-    listScroll.current = scrollerRef.current?.scrollTop ?? 0;
-    cameFrom.current = key;
-    onOpenItem(key);
-  };
+  const openItem = React.useCallback(
+    (key: string) => {
+      returnTo.current = { key, scrollTop: scrollerRef.current?.scrollTop ?? 0 };
+      onOpenItem(key);
+    },
+    [onOpenItem],
+  );
 
   //: 回到列表:还原滚动,焦点回到刚才那一条。**用 layout effect**:换页和还原滚动要在同一帧,不然先闪一下顶部。
   React.useLayoutEffect(() => {
     if (detailKey) return;
     const scroller = scrollerRef.current;
-    const key = cameFrom.current;
-    cameFrom.current = null;
-    if (!key) return;
-    if (scroller) scroller.scrollTop = listScroll.current;
+    const back = returnTo.current;
+    returnTo.current = null;
+    if (!back) return;
+    if (scroller) scroller.scrollTop = back.scrollTop;
     const item = Array.from(scroller?.querySelectorAll<HTMLElement>("[data-library-item]") ?? []).find(
-      (one) => one.dataset.libraryItem === key,
+      (one) => one.dataset.libraryItem === back.key,
     );
     item?.querySelector<HTMLElement>("[data-library-open]")?.focus({ preventScroll: true });
   }, [detailKey]);
@@ -201,7 +214,7 @@ export function LibraryDialog({
               data-library-content=""
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-6 pb-6 pt-1"
             >
-              {children(openItem)}
+              {children(openItem, returnTo)}
             </div>
           </div>
         </div>

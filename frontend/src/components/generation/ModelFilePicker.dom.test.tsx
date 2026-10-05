@@ -13,6 +13,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   getModelLibrary: vi.fn(),
   modelPreviewUrl: (instance: string, folder: string, name: string) => `preview://${instance}/${folder}/${name}`,
+  modelThumbnailUrl: (instance: string, folder: string, name: string) => `thumbnail://${instance}/${folder}/${name}`,
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
@@ -78,7 +79,7 @@ describe("选模型文件的那一格", () => {
     const list = openList();
     const rows = within(list).getAllByRole("option");
     const styled = rows.find((row) => row.textContent?.includes("style_1.safetensors"))!;
-    expect(styled.querySelector("img")?.getAttribute("src")).toBe("preview://i1/loras/style_1.safetensors");
+    expect(styled.querySelector("img")?.getAttribute("src")).toBe("thumbnail://i1/loras/style_1.safetensors");
     expect(styled.textContent).toContain("Illustrious");
     expect(styled.textContent).toContain("1girl, watercolor");
     const anima = rows.find((row) => row.textContent?.includes("anima.safetensors"))!;
