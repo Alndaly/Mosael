@@ -88,6 +88,77 @@ it("有选区、编辑器有焦点时才出现;选区收成光标就收起", asy
   await waitFor(() => expect(toolbar()).toBeNull());
 });
 
+it("拖着鼠标选的时候不出来,松开才出来(拖出正文、在别处松开也算);再按下开始新的一段,它马上收起", async () => {
+  mount();
+  const instance = await editor();
+  act(() => { instance.view.focus(); });
+  const prose = instance.view.dom;
+
+  //: 按下左键开始拖,选区跟着指针一路变长(jsdom 没有版面,直接设选区代替拖的那几步)。编辑器有焦点、选区非空 ——
+  //: 不等松开的话这里就该出来了。
+  fireEvent.pointerDown(prose, { button: 0 });
+  select(instance, "剪辑");
+  expect(toolbar()).toBeNull();
+  select(instance, "剪辑组对了");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(instance.isFocused).toBe(true);
+  expect(toolbar()).toBeNull();
+
+  fireEvent.pointerUp(document.body, { button: 0 });
+  expect(await screen.findByRole("toolbar", { name: "选区工具" })).toBeInTheDocument();
+
+  //: 点工具条上的按钮:按下不在正文里,不算开始拖 —— 工具条不收,格式作用在这段选区上,选区不变。
+  fireEvent.pointerDown(button("粗体"), { button: 0 });
+  fireEvent.mouseDown(button("粗体"));
+  fireEvent.pointerUp(button("粗体"), { button: 0 });
+  fireEvent.click(button("粗体"));
+  expect(toolbar()).toBeInTheDocument();
+  expect(instance.getMarkdown()).toContain("**剪辑组对了**");
+  expect(instance.state.doc.textBetween(instance.state.selection.from, instance.state.selection.to)).toBe("剪辑组对了");
+
+  //: 在正文里重新按下(要选另一段了):马上收起,不等选区变。右键不算拖。
+  fireEvent.pointerDown(prose, { button: 2 });
+  expect(toolbar()).toBeInTheDocument();
+  fireEvent.pointerDown(prose, { button: 0 });
+  expect(toolbar()).toBeNull();
+  fireEvent.pointerUp(prose, { button: 0 });
+  expect(await screen.findByRole("toolbar", { name: "选区工具" })).toBeInTheDocument();
+});
+
+it("按住 Shift 用方向键扩选:连按几下中间不出来,松开 Shift 才出来;全选一下就选定,马上出来", async () => {
+  mount();
+  const instance = await editor();
+  act(() => { instance.view.focus(); });
+  const prose = instance.view.dom;
+
+  //: 每按一下方向键,浏览器把选区往外扩一格(jsdom 不会,直接设选区代替)。
+  fireEvent.keyDown(prose, { key: "Shift", shiftKey: true });
+  fireEvent.keyDown(prose, { key: "ArrowRight", shiftKey: true });
+  select(instance, "周");
+  fireEvent.keyUp(prose, { key: "ArrowRight", shiftKey: true });
+  expect(toolbar()).toBeNull();
+  fireEvent.keyDown(prose, { key: "ArrowRight", shiftKey: true });
+  select(instance, "周一");
+  fireEvent.keyUp(prose, { key: "ArrowRight", shiftKey: true });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(toolbar()).toBeNull();
+
+  fireEvent.keyUp(prose, { key: "Shift", shiftKey: false });
+  expect(await screen.findByRole("toolbar", { name: "选区工具" })).toBeInTheDocument();
+
+  //: 按着别的键(这里是快捷键)不算扩选,工具条不闪。
+  fireEvent.keyDown(prose, { key: "H", code: "KeyH", keyCode: 72, ctrlKey: true, shiftKey: true });
+  expect(toolbar()).toBeInTheDocument();
+  fireEvent.keyUp(prose, { key: "H", ctrlKey: true, shiftKey: true });
+
+  act(() => { instance.commands.setTextSelection(3); });
+  await waitFor(() => expect(toolbar()).toBeNull());
+  fireEvent.keyDown(prose, { key: "a", code: "KeyA", keyCode: 65, ctrlKey: true });
+  expect(await screen.findByRole("toolbar", { name: "选区工具" })).toBeInTheDocument();
+  expect(instance.state.selection.from).toBe(0);
+  expect(instance.state.selection.to).toBe(instance.state.doc.content.size);
+});
+
 it("摆在选区上方;贴着窗口顶部时翻到下方,并收进窗口左右边", async () => {
   mount();
   const instance = await editor();

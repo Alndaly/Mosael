@@ -14,7 +14,7 @@ import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatCombo, isImeKeystroke } from "@/lib/shortcuts";
+import { formatCombo, isImeKeystroke, listenKeys } from "@/lib/shortcuts";
 import { readNoteSelection, type NoteSelection } from "./noteSelection";
 import { HIGHLIGHT } from "./NoteHighlight";
 import type { ReadAloud } from "./readAloud";
@@ -23,7 +23,8 @@ import { useNoteStrings } from "./strings";
 /**
  * 选中文字后浮在选区旁边的工具条:格式、AI 快捷动作、问 AI、复制、转列表 / 待办、引用到对话、朗读、存到笔记。
  *
- * - **出现**:编辑器有焦点、选区非空;焦点进了工具条自己(键盘 Tab 进来、开着下拉、在填链接)也留着。
+ * - **出现**:选区选定了(见 useSelectionHeld:拖着鼠标、按住 Shift 扩选的时候不出来,松开才出来)、非空、编辑器有焦点;
+ *   焦点进了工具条自己(键盘 Tab 进来、开着下拉、在填链接)也留着。
  * - **位置**:选区上方;贴着窗口顶部(顶栏底下)放不下就翻到选区下方;左右收进窗口。上下都错开选区的那几行,
  *   不盖住选中的字。选区变了、页面滚了、窗口变了都重新摆。
  * - **键盘**:编辑器里 Tab 进工具条(这时 Tab 不再缩进列表 —— 选中了一段字时进工具条更常用),方向键 / Home / End
@@ -46,6 +47,8 @@ const EDGE = 8;
 const FALLBACK_HEIGHT = 36;
 /** 比它窄就收成「问 AI」+「更多」。 */
 const NARROW = 640;
+/** 按住 Shift 再按这些键是在扩选(见 useSelectionHeld)。 */
+const EXTEND_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
 
 type Item = {
   id: string; label: string; icon: LucideIcon; pressed?: boolean; run: () => void;
@@ -79,6 +82,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   const [linking, setLinking] = React.useState(false);
   const [url, setUrl] = React.useState("");
   const narrow = useNarrow();
+  const held = useSelectionHeld(editor);
   const bar = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => { setLinking(false); }, [range]);
   //: 收起之后回到正文(点回编辑器)就重新出现 —— 同一段选区再点一次也算「又要用它」。Esc 收起时我们自己把焦点
@@ -95,7 +99,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
     editor.view.dom.addEventListener("mousedown", pointer);
     return () => { editor.off("focus", reset); editor.view.dom.removeEventListener("mousedown", pointer); };
   }, [editor]);
-  const visible = !state.empty && dismissed !== range && (state.focused || inside || menu !== null || linking);
+  const visible = !held && !state.empty && dismissed !== range && (state.focused || inside || menu !== null || linking);
 
   const buttons = () => [...(bar.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? [])];
   const close = React.useCallback(() => {
@@ -301,6 +305,44 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
     </div>,
     document.body,
   );
+}
+
+/**
+ * **选区还在拉着的时候是 true** —— 工具条只在它为 false 时出现。
+ *
+ * - 鼠标:在正文里按下左键起,到松开为止;拖出正文、在窗口别处松开也算松开。
+ * - 键盘:按住 Shift 用方向键、Home / End、翻页键扩选起,到松开 Shift 为止(连按几下方向键,中间不出来)。
+ *
+ * 这期间选区每动一下都在变,工具条跟着冒出来、一路跳着跟,只会挡住正要选的字;松开那一下选区才算选定。
+ * 一下就选定的不经过这里:全选(Mod+A)、从对话里点回来选中一段、代码里设的选区,照常马上出现。
+ * 点工具条上的按钮不算(工具条不在正文里),选区和焦点都不动。窗口失焦(切走了,收不到松开)也算松开。
+ */
+function useSelectionHeld(editor: Editor): boolean {
+  const [pointer, setPointer] = React.useState(false);
+  const [shift, setShift] = React.useState(false);
+  React.useEffect(() => {
+    const dom = editor.view.dom;
+    const press = (event: PointerEvent) => { if (event.button === 0) setPointer(true); };
+    const release = () => setPointer(false);
+    const extend = (event: KeyboardEvent) => {
+      if (event.shiftKey && EXTEND_KEYS.has(event.key) && dom.contains(event.target as Node | null)) setShift(true);
+    };
+    const releaseShift = (event: KeyboardEvent) => { if (!event.shiftKey) setShift(false); };
+    const leave = () => { setPointer(false); setShift(false); };
+    dom.addEventListener("pointerdown", press);
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("pointercancel", release, true);
+    window.addEventListener("blur", leave);
+    const stopKeys = [listenKeys(window, extend, true), listenKeys(window, releaseShift, true, "keyup")];
+    return () => {
+      dom.removeEventListener("pointerdown", press);
+      window.removeEventListener("pointerup", release, true);
+      window.removeEventListener("pointercancel", release, true);
+      window.removeEventListener("blur", leave);
+      for (const stop of stopKeys) stop();
+    };
+  }, [editor]);
+  return pointer || shift;
 }
 
 function useNarrow(): boolean {
