@@ -578,6 +578,44 @@ describe("模型库", () => {
     expect(used.textContent).toContain("declaring");
   });
 
+  it("底模的三种判据各说各的:权重结构认出的实色、说凭的是权重;文本编码器这类写「不适用」,筛选里单列在最后", async () => {
+    const base = library();
+    api.getModelLibrary.mockResolvedValue(library({
+      folders: [...(base.folders ?? []), { name: "text_encoders", count: 1 }],
+      models: [
+        ...(base.models ?? []),
+        { folder: "checkpoints", name: "dessert.safetensors", size: 6938041004, modified: 1700000020, family: "SDXL",
+          family_source: "weights", triggers: [], triggers_source: "", title: "", has_preview: false, used_by: [] },
+        { folder: "text_encoders", name: "t5xxl.safetensors", size: 9000000000, modified: 1700000021, family: "",
+          family_source: "not_applicable", triggers: [], triggers_source: "", title: "", has_preview: false, used_by: [] },
+      ],
+    }));
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryFamilyLabel/ }));
+    const menu = screen.getByRole("menu", { name: "modelLibraryFamilyLabel" });
+    const labels = within(menu).getAllByRole("menuitemcheckbox").map((item) => item.getAttribute("aria-label"));
+    expect(labels.at(-1)).toBe("modelLibraryFamilyNotApplicable 1");
+    expect(labels.some((label) => label?.includes("__"))).toBe(false);
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+
+    api.getModelDetail.mockResolvedValue({ folder: "checkpoints", name: "dessert.safetensors", metadata: {}, tags: [] });
+    fireEvent.click(within(cards().find((item) => item.textContent?.includes("dessert.safetensors"))!)
+      .getByRole("button", { name: "dessert.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    expect(screen.getByRole("region", { name: "modelOverview" }).textContent).toContain("modelFamilySourceWeights");
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryBack" }));
+
+    api.getModelDetail.mockResolvedValue({ folder: "text_encoders", name: "t5xxl.safetensors", metadata: {}, tags: [] });
+    fireEvent.click(await screen.findByRole("tab", { name: "text_encoders 1" }));
+    fireEvent.click(within(cards()[0]).getByRole("button", { name: "t5xxl.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    const overview = screen.getByRole("region", { name: "modelOverview" }).textContent;
+    expect(overview).toContain("modelLibraryFamilyNotApplicable");
+    expect(overview).toContain("modelFamilyNotApplicableHint");
+    expect(overview).not.toContain("modelLibraryFamilyUnknown");
+  });
+
   it("元数据:能搜;长值默认折叠、能展开、能复制;大段 JSON 格式化显示,不撑宽", async () => {
     await openDetail("detail.safetensors", { ss_output_name: "detail_tweaker", ss_network_dim: "32", sd_merge_models: MERGE });
     const meta = await screen.findByRole("region", { name: "modelMetadata" });

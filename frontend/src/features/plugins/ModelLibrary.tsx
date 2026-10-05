@@ -72,8 +72,9 @@ import {
   DOWNLOADS_VIEW,
   MISSING_VIEW,
   SORTS,
-  UNKNOWN_FAMILY,
   familyCounts,
+  familyLabelKey,
+  familySource,
   filterModels,
   folderEntries,
   generationTargets,
@@ -209,7 +210,10 @@ export function ModelLibraryDialog({
     setQuery("");
     setFamilies([]);
   };
-  const familyName = (value: string) => (value === UNKNOWN_FAMILY ? t("modelLibraryFamilyUnknown") : value);
+  const familyName = (value: string) => {
+    const key = familyLabelKey(value);
+    return key ? t(key) : value;
+  };
   const scopeName = view === ALL_FOLDERS ? "" : view;
 
   const navItems: LibraryNavItem[] = [
@@ -672,11 +676,12 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
 
 function FamilyBadge({ model }: { model: ModelFile }) {
   const t = useI18n();
-  if (!model.family) return null;
+  const source = familySource(model);
+  if (!model.family || !source) return null;
   return (
-    <Hint label={model.family_source === "filename" ? t("modelFamilySourceFilename") : t("modelFamilySourceMetadata")}>
+    <Hint label={t(source.hint)}>
       <span className="inline-flex">
-        <CatalogBadge tone={model.family_source === "filename" ? "muted" : "primary"}>{model.family}</CatalogBadge>
+        <CatalogBadge tone={source.certain ? "primary" : "muted"}>{model.family}</CatalogBadge>
       </span>
     </Hint>
   );
@@ -1355,11 +1360,8 @@ function ModelDetail({
   const entries = Object.entries(meta.data?.metadata ?? {});
   const triggers = model.triggers ?? [];
   const used = model.used_by ?? [];
-  const familyNote = model.family
-    ? model.family_source === "filename"
-      ? t("modelFamilySourceFilename")
-      : t("modelFamilySourceMetadata")
-    : undefined;
+  const source = familySource(model);
+  const familyNote = source ? t(source.hint) : undefined;
   const jumpToUsed = () => {
     const section = usedRef.current;
     if (!section) return;
@@ -1435,10 +1437,12 @@ function ModelDetail({
           <OverviewRow label={t("modelFamily")} note={familyNote}>
             {model.family ? (
               <span className="flex">
-                <CatalogBadge tone={model.family_source === "filename" ? "muted" : "primary"}>{model.family}</CatalogBadge>
+                <CatalogBadge tone={source?.certain ? "primary" : "muted"}>{model.family}</CatalogBadge>
               </span>
             ) : (
-              <span className="text-muted-foreground">{t("modelLibraryFamilyUnknown")}</span>
+              <span className="text-muted-foreground">
+                {t(model.family_source === "not_applicable" ? "modelLibraryFamilyNotApplicable" : "modelLibraryFamilyUnknown")}
+              </span>
             )}
           </OverviewRow>
           {triggers.length > 0 && (
