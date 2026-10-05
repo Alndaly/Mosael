@@ -28,6 +28,8 @@ export type ModelFile = components["schemas"]["ModelFileOut"];
 export type MissingModel = components["schemas"]["MissingModelOut"];
 export type ModelDetail = components["schemas"]["ModelDetailOut"];
 export type ModelResolved = components["schemas"]["ModelResolveOut"];
+/** 按文件名找下载地址的结果:候选(同名的在前)和搜不了的站。 */
+export type ModelSearch = components["schemas"]["ModelSearchOut"];
 /** 工作流库(ADR 0035):认领 workflow_library 的连接上存着的工作流、回收目录里的。 */
 export type WorkflowLibrary = components["schemas"]["WorkflowLibraryOut"];
 export type WorkflowFile = components["schemas"]["WorkflowFileOut"];
@@ -122,6 +124,14 @@ export const resolveModelLink = (instanceId: string, url: string) =>
   api<ModelResolved>(`/api/plugins/instances/${instanceId}/model-library/resolve`, {
     method: "POST",
     body: JSON.stringify({ url }),
+  });
+
+/** 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址(工作流里只写了文件名的模型)。每个候选的 `url` 交给
+ * `resolveModelLink` 正好解析到那个文件;一个站搜不了只进 `failed`。`folder`:要放进的模型目录(排序用)。 */
+export const searchModelSources = (instanceId: string, filename: string, folder = "") =>
+  api<ModelSearch>(`/api/plugins/instances/${instanceId}/model-library/search`, {
+    method: "POST",
+    body: JSON.stringify({ filename, folder }),
   });
 
 /** 下到这个连接的那台服务器上:一个后台任务(进度、取消都在任务上)。 */

@@ -19796,6 +19796,59 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/model-library/search": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Search Model Sources",
+        "description": "按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。同名的候选在前;\n一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve` 正好解析到那个文件。",
+        "operationId": "search_model_sources_api_plugins_instances__instance_id__model_library_search_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/model-library/downloads": {
       "post": {
         "tags": [
@@ -31986,6 +32039,134 @@
           "url"
         ],
         "title": "ModelResolveRequest"
+      },
+      "ModelSearchCandidateOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "repo": {
+            "type": "string",
+            "title": "Repo",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "page": {
+            "type": "string",
+            "title": "Page",
+            "default": ""
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "base_model": {
+            "type": "string",
+            "title": "Base Model",
+            "default": ""
+          },
+          "exact": {
+            "type": "boolean",
+            "title": "Exact",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "url"
+        ],
+        "title": "ModelSearchCandidateOut",
+        "description": "一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),\n别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。"
+      },
+      "ModelSearchFailureOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ModelSearchFailureOut",
+        "description": "一个搜不了的站(超时、限流、拒绝):别的站照常交回。"
+      },
+      "ModelSearchOut": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSearchCandidateOut"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSearchFailureOut"
+            },
+            "type": "array",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "title": "ModelSearchOut"
+      },
+      "ModelSearchRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Folder",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "title": "ModelSearchRequest",
+        "description": "按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。"
       },
       "ModelTagOut": {
         "properties": {

@@ -14,6 +14,7 @@
     {"op": "library"}                      → 全部模型文件、各目录数目、工作流缺的模型、下载走哪条路(见 library)
     {"op": "detail", "folder", "name"}     → 一个文件的完整元数据
     {"op": "resolve", "url"}               → 一个链接指的是哪个文件(见 sources)
+    {"op": "search_sources", "filename", "folder"} → 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址,每个候选的链接 resolve 都认(见 model_search)
     {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
     {"op": "node_folders", "nodes"}         → 工作台:选中节点上选模型文件的那几格各是哪个模型目录(见 workbench)
 
@@ -48,6 +49,7 @@ from typing import Any, Callable
 
 import install
 import library
+import model_search
 import models
 import run
 import server
@@ -83,6 +85,8 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return library.detail(payload, comfy, locale)
     if op == "resolve":
         return sources.resolve(payload, comfy, locale)
+    if op == "search_sources":
+        return model_search.search(payload, comfy, locale)
     if op == "download":
         return install.download(payload, comfy, locale, emit)
     if op == "node_folders":

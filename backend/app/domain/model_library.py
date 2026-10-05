@@ -459,6 +459,44 @@ def resolve(db: Session, instance: PluginInstance, url: str) -> dict[str, Any]:
     }
 
 
+#: 「找下载地址」最多交给界面几个候选、几条失败。
+_MAX_CANDIDATES = 20
+_MAX_FAILED = 10
+
+
+def search_sources(db: Session, instance: PluginInstance, filename: str, folder: str = "") -> dict[str, Any]:
+    """按文件名去模型站上找下载地址(工作台「缺失项」里工作流没写地址的模型):插件去搜,交回候选(同名的在前)和搜不了的
+    站。每个候选的 `url` 是插件自己的 `resolve` 认得、正好解析到那个文件的链接 —— 界面点了就拿它去解析、再下载。
+    宿主只规整:没有 http(s) 地址或文件名的候选丢掉,长文本截断。"""
+    _require(db, instance)
+    name = _text(filename, 300)
+    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY,
+                               {"op": "search_sources", "filename": name, "folder": _text(folder, 200)},
+                               timeout=QUICK_TIMEOUT_SECONDS)
+    candidates = []
+    for one in output.get("candidates") or []:
+        if not isinstance(one, dict) or not _http(one.get("url")) or not _text(one.get("filename"), 300):
+            continue
+        size = _number(one.get("size"))
+        candidates.append({
+            "source": _text(one.get("source"), 40),
+            "repo": _text(one.get("repo"), 300),
+            "title": _text(one.get("title"), 300),
+            "filename": _text(one.get("filename"), 300),
+            "url": _http(one.get("url")),
+            "page": _http(one.get("page")),
+            "size": int(size) if size is not None else None,
+            "base_model": _text(one.get("base_model"), 120),
+            "exact": bool(one.get("exact")),
+        })
+    failed = [
+        {"source": _text(one.get("source"), 40), "message": _text(one.get("message"), 500)}
+        for one in output.get("failed") or [] if isinstance(one, dict) and _text(one.get("message"), 500)
+    ]
+    return {"filename": _text(output.get("filename"), 300) or name, "candidates": candidates[:_MAX_CANDIDATES],
+            "failed": failed[:_MAX_FAILED]}
+
+
 #: 工作台一次最多问几格(和插件那一侧同一个数)。
 MAX_NODE_FOLDERS = 64
 
@@ -640,5 +678,6 @@ __all__ = [
     "preview_source",
     "register_uses",
     "resolve",
+    "search_sources",
     "start_download",
 ]

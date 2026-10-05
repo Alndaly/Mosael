@@ -87,6 +87,22 @@ elif op == "resolve":
     else:
         emit({"ok": True, "output": {"source": "huggingface", "url": payload["url"], "filename": "tiny.safetensors",
                                      "size": 4900000, "folder": "", "exists": False, "uses_token": True}})
+elif op == "search_sources":
+    if payload["filename"] == "boom.safetensors":
+        emit({"ok": False, "error": "三个站都搜不了"})
+    else:
+        emit({"ok": True, "output": {"filename": payload["filename"], "candidates": [
+            {"source": "huggingface", "repo": "Comfy-Org/flux1-dev", "title": "Comfy-Org/flux1-dev",
+             "filename": "flux1-dev-fp8.safetensors", "size": 17246524772, "base_model": "", "exact": True,
+             "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors",
+             "page": "https://huggingface.co/Comfy-Org/flux1-dev/blob/main/flux1-dev-fp8.safetensors"},
+            {"source": "civitai", "repo": "DreamShaper", "title": "DreamShaper · 8", "filename": "dreamshaper_8.safetensors",
+             "url": "https://civitai.com/api/download/models/128713", "page": "file:///etc/passwd", "size": 2132625894.0,
+             "base_model": "SD 1.5", "exact": False},
+            {"source": "civitai", "filename": "local.safetensors", "url": "file:///etc/passwd"},
+            {"source": "civitai", "filename": "", "url": "https://civitai.com/api/download/models/1"},
+            "not a dict",
+        ], "failed": [{"source": "modelscope", "message": "ModelScope 连不上或超时了"}, {"source": "civitai"}]}})
 elif op == "download":
     cancel = Path(os.environ["MOSAEL_PLUGIN_CANCEL_FILE"])
     emit({"event": "progress", "progress": 0.25, "message": "已下载 1.2 MB / 4.9 MB"})
@@ -486,6 +502,31 @@ def test_解析链接_插件认不出的原话报给人看(library) -> None:
     assert all(one.get("url") != "file:///etc/passwd" for one in _ops())
 
 
+def test_按文件名找下载地址_插件交回候选_宿主规整(library) -> None:
+    """工作台「缺失项」里工作流没写地址的模型:插件去模型站上搜,宿主只规整 —— 没有 http(s) 地址或文件名的候选丢掉,
+    页面地址不是 http(s) 的当没给,没说原因的失败不交;插件说的错原话报给人看。"""
+    client, instance_id, _ = library
+    url = f"/api/plugins/instances/{instance_id}/model-library/search"
+    ok = client.post(url, json={"filename": "flux1-dev-fp8.safetensors", "folder": "checkpoints"})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["filename"] == "flux1-dev-fp8.safetensors"
+    assert [(one["source"], one["filename"], one["exact"]) for one in body["candidates"]] == [
+        ("huggingface", "flux1-dev-fp8.safetensors", True), ("civitai", "dreamshaper_8.safetensors", False)]
+    first, second = body["candidates"]
+    assert first["url"] == "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors"
+    assert (first["repo"], first["size"], first["page"]) == (
+        "Comfy-Org/flux1-dev", 17246524772, "https://huggingface.co/Comfy-Org/flux1-dev/blob/main/flux1-dev-fp8.safetensors")
+    assert (second["title"], second["size"], second["base_model"], second["page"]) == (
+        "DreamShaper · 8", 2132625894, "SD 1.5", ""), "不是 http(s) 的页面地址当没给"
+    assert body["failed"] == [{"source": "modelscope", "message": "ModelScope 连不上或超时了"}]
+    assert _ops()[-1] == {"op": "search_sources", "filename": "flux1-dev-fp8.safetensors", "folder": "checkpoints"}
+    bad = client.post(url, json={"filename": "boom.safetensors"})
+    assert bad.status_code == 422 and "搜不了" in bad.json()["detail"]
+    assert client.post(url, json={"filename": ""}).status_code == 422, "空文件名宿主当场拒绝"
+    assert client.post(url, json={"filename": "x" * 301}).status_code == 422
+
+
 def test_下载是一个后台任务_报进度_下完让连接的目录重新拉一遍(library) -> None:
     client, instance_id, _ = library
     workspace = _workspace(client)
@@ -556,6 +597,8 @@ def test_不提供模型库的连接_说清楚(library, tmp_path: Path) -> None:
     response = client.get(f"/api/plugins/instances/{instance_id}/model-library")
     assert response.status_code == 422
     assert "模型库" in response.json()["detail"]
+    search = client.post(f"/api/plugins/instances/{instance_id}/model-library/search", json={"filename": "x.safetensors"})
+    assert search.status_code == 422 and "模型库" in search.json()["detail"]
 
 
 def test_工作台_选中节点那一格是哪个模型目录_插件给的不像目录名就当不是(library) -> None:

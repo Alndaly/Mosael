@@ -6494,6 +6494,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/model-library/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Model Sources
+         * @description 按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。同名的候选在前;
+         *     一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve` 正好解析到那个文件。
+         */
+        post: operations["search_model_sources_api_plugins_instances__instance_id__model_library_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/model-library/downloads": {
         parameters: {
             query?: never;
@@ -11542,6 +11563,84 @@ export interface components {
         ModelResolveRequest: {
             /** Url */
             url: string;
+        };
+        /**
+         * ModelSearchCandidateOut
+         * @description 一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),
+         *     别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。
+         */
+        ModelSearchCandidateOut: {
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Repo
+             * @default
+             */
+            repo: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Filename */
+            filename: string;
+            /** Url */
+            url: string;
+            /**
+             * Page
+             * @default
+             */
+            page: string;
+            /** Size */
+            size?: number | null;
+            /**
+             * Base Model
+             * @default
+             */
+            base_model: string;
+            /**
+             * Exact
+             * @default false
+             */
+            exact: boolean;
+        };
+        /**
+         * ModelSearchFailureOut
+         * @description 一个搜不了的站(超时、限流、拒绝):别的站照常交回。
+         */
+        ModelSearchFailureOut: {
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /** Message */
+            message: string;
+        };
+        /** ModelSearchOut */
+        ModelSearchOut: {
+            /** Filename */
+            filename: string;
+            /** Candidates */
+            candidates?: components["schemas"]["ModelSearchCandidateOut"][];
+            /** Failed */
+            failed?: components["schemas"]["ModelSearchFailureOut"][];
+        };
+        /**
+         * ModelSearchRequest
+         * @description 按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。
+         */
+        ModelSearchRequest: {
+            /** Filename */
+            filename: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
         };
         /** ModelTagOut */
         ModelTagOut: {
@@ -30069,6 +30168,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelResolveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_model_sources_api_plugins_instances__instance_id__model_library_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSearchOut"];
                 };
             };
             /** @description Validation Error */

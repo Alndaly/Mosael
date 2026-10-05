@@ -462,6 +462,42 @@ class ModelResolveOut(ApiModel):
     uses_token: bool = False
 
 
+class ModelSearchRequest(ApiModel):
+    """按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。"""
+
+    filename: str = Field(min_length=1, max_length=300)
+    folder: str = Field(default="", max_length=200)
+
+
+class ModelSearchCandidateOut(ApiModel):
+    """一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),
+    别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。"""
+
+    source: str = ""
+    repo: str = ""
+    title: str = ""
+    filename: str
+    url: str
+    page: str = ""
+    size: int | None = None
+    base_model: str = ""
+    exact: bool = False
+
+
+class ModelSearchFailureOut(ApiModel):
+    """一个搜不了的站(超时、限流、拒绝):别的站照常交回。"""
+
+    source: str = ""
+    message: str
+
+
+class ModelSearchOut(ApiModel):
+    filename: str
+    #: 同名的在前,最多 20 个。
+    candidates: list[ModelSearchCandidateOut] = Field(default_factory=list)
+    failed: list[ModelSearchFailureOut] = Field(default_factory=list)
+
+
 class ModelDownloadRequest(ApiModel):
     workspace_id: str
     url: str = Field(min_length=1, max_length=4000)
