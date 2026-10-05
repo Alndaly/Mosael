@@ -6,6 +6,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { APP_CHROME } from "@/components/ui/appChrome";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,7 @@ function PageList({
   return (
     <>
       <nav
+        {...APP_CHROME}
         ref={peek.ref}
         data-page-list={!collapsed ? "expanded" : peek.open ? "peek" : "collapsed"}
         aria-label={t("browserPagesTitle")}

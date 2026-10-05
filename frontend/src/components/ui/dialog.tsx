@@ -8,6 +8,7 @@ import { FLOATING_MOTION, MODAL_SURFACE, MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCR
 
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
+import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
@@ -40,7 +41,7 @@ const DialogContent = React.forwardRef<
     showClose?: boolean
     showOverlay?: boolean
   }
->(({ className, children, showClose = true, showOverlay = true, onEscapeKeyDown, ...props }, ref) => {
+>(({ className, children, showClose = true, showOverlay = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
   return (
@@ -58,6 +59,7 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
       onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
+      onInteractOutside={keepOpenOnAppChrome(onInteractOutside)}
     >
       <HintScopeReset>{children}</HintScopeReset>
       {showClose && (

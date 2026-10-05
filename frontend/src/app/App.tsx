@@ -51,6 +51,7 @@ import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
+import { APP_CHROME } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -171,6 +172,7 @@ function PublishViewBar() {
   return (
     <>
     <div
+      {...APP_CHROME}
       style={{ height: PUBLISH_BAR_HEIGHT }}
       className={cn(
         "fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)]",
