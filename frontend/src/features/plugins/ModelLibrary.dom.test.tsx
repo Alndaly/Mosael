@@ -130,6 +130,24 @@ function narrowWindow(width = 700) {
   });
 }
 
+/** 详情左栏(并排时是左边那一栏,上下排时是整页一起滚的那一块)。 */
+const detailMedia = () =>
+  (document.querySelector("[data-library-detail-pane='media']") ?? document.querySelector("[data-library-detail-scroll='both']")) as HTMLElement;
+
+/**
+ * 详情左栏的占位是一个真的框:和卡片一样 3:4、占满这一栏的宽、高度有上限(并排 640、上下排半屏)、描着边(浅色主题下
+ * 底色和弹窗表面几乎一样),图标和字在框里居中。
+ */
+function expectPreviewFrame(frame: HTMLElement | null) {
+  expect(frame).toBeTruthy();
+  for (const name of ["aspect-[3/4]", "w-full", "max-h-[640px]", "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]",
+    "border", "grid", "place-items-center", "content-center"]) {
+    expect(frame!.classList.contains(name), name).toBe(true);
+  }
+  expect(frame!.querySelector(":scope > svg")).toBeTruthy();
+  expect(frame!.textContent).toBe("modelNoPreview");
+}
+
 async function openDetail(name = "detail.safetensors", metadata: Record<string, string> = { ss_output_name: "detail_tweaker" }) {
   api.getModelDetail.mockResolvedValue({ folder: "loras", name, metadata, tags: [{ tag: "1girl", count: 45 }] });
   await openLibrary();
@@ -481,6 +499,66 @@ describe("模型库", () => {
     expect(both.className).toContain("overflow-y-auto");
     expect(both.querySelector("img")).toBeTruthy();
     expect(both.textContent).toContain("modelOverview");
+  });
+
+  it("详情预览:有图时照旧按图自己的比例收进框里(并排 640、上下排半屏);开了「模糊预览图」先糊着,能点「看清」", async () => {
+    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+    await openDetail();
+    const img = within(detailMedia()).getByRole("img");
+    for (const name of ["object-contain", "w-full", "max-h-[640px]", "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]"]) {
+      expect(img.classList.contains(name), name).toBe(true);
+    }
+    expect(img.classList.contains("aspect-[3/4]")).toBe(false);
+    expect(img.hasAttribute("data-blurred")).toBe(true);
+    expect(within(detailMedia()).getByRole("button", { name: "modelRevealPreview" })).toBeTruthy();
+  });
+
+  it("详情预览:没有预览图是一个 3:4 的框,图标和「没有预览图」在框里居中;没有「看清」", async () => {
+    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+    await openDetail("pony_style.safetensors");
+    const media = detailMedia();
+    expect(within(media).queryByRole("img")).toBeNull();
+    expectPreviewFrame(media.querySelector<HTMLElement>("[data-detail-placeholder='loras']"));
+    expect(within(media).queryByRole("button", { name: "modelRevealPreview" })).toBeNull();
+  });
+
+  it("详情预览:说有预览图、这张却取不到 —— 换成同一个 3:4 的框,不缩成顶上一条;「看清」跟着收起", async () => {
+    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+    await openDetail();
+    const media = detailMedia();
+    fireEvent.error(within(media).getByRole("img"));
+    expect(within(media).queryByRole("img")).toBeNull();
+    expectPreviewFrame(media.querySelector<HTMLElement>("[data-detail-placeholder='loras']"));
+    //: ModelThumb 自己那个占位沿用给图片的 max-h、没有高度 —— 详情里不该是它
+    expect(media.querySelector("[data-placeholder]")).toBeNull();
+    expect(within(media).queryByRole("button", { name: "modelRevealPreview" })).toBeNull();
+  });
+
+  it("详情预览:窄窗口上下排时,取不到图换上的框也在整页一起滚的那一块里", async () => {
+    narrowWindow(800);
+    await openDetail();
+    const both = document.querySelector("[data-library-detail-scroll='both']") as HTMLElement;
+    fireEvent.error(within(both).getByRole("img"));
+    expectPreviewFrame(both.querySelector<HTMLElement>("[data-detail-placeholder='loras']"));
+  });
+
+  it("详情从这一个直接换到那一个(从工作流库跳过来):上一个取不到预览图,不影响下一个", async () => {
+    api.getModelLibrary.mockResolvedValue(library({
+      models: library().models?.map((one) => (one.name === "pony_style.safetensors" ? { ...one, has_preview: true } : one)),
+    }));
+    api.getModelDetail.mockImplementation(async (_id: string, folder: string, name: string) => ({ folder, name, metadata: {}, tags: [] }));
+    const dialog = (name: string, at: number) => (
+      <ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                          focus={{ model: { folder: "loras", name }, at }} />
+    );
+    const view = wrap(dialog("detail.safetensors", 1));
+    await screen.findByRole("heading", { name: "detail.safetensors" });
+    fireEvent.error(within(detailMedia()).getByRole("img"));
+    expect(detailMedia().querySelector("[data-detail-placeholder]")).toBeTruthy();
+
+    view.rerender(dialog("pony_style.safetensors", 2));
+    await screen.findByRole("heading", { name: "pony_style.safetensors" });
+    expect(within(detailMedia()).getByRole("img").getAttribute("src")).toBe("preview://i1/loras/pony_style.safetensors");
   });
 
   it("概要:底模和判据(弱一档的一行说明)、触发词点一下复制;「在哪些工作流里用到」跳到那一节", async () => {

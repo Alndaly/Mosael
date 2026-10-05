@@ -72,14 +72,22 @@ export function ModelThumb({
   className,
   compact = false,
   blurred = false,
+  onFailed,
 }: {
   instanceId: string;
   model: Pick<ModelFile, "folder" | "name" | "has_preview">;
+  /**
+   * 图片和占位**共用**。占位没有固有尺寸,所以这里要给出一个框(`aspect-*`、`size-*`,或外层用 `[&>*]:size-full`
+   * 撑满);只给 `max-h` + `w-full`、靠图片自己的宽高撑开的(详情页的预览框),占位就只剩一条图标那么高 ——
+   * 那种调用处用 `onFailed` 换成自己的框。
+   */
   className?: string;
   /** 小图(下拉里那一格、触发器里那一枚):占位只画图标,不写目录名。 */
   compact?: boolean;
   /** 先模糊,悬停 / 聚焦到外层 `group/thumb` 时看清。占位图标不模糊(那不是预览图)。 */
   blurred?: boolean;
+  /** 说有预览图、这张却没取到(服务器上那张没了、取的时候连接断了)。占位照样换上;要自己摆占位的调用处听这个。 */
+  onFailed?: () => void;
 }) {
   const t = useI18n();
   const [failed, setFailed] = React.useState(false);
@@ -104,7 +112,10 @@ export function ModelThumb({
       src={modelPreviewUrl(instanceId, model.folder, model.name)}
       alt={compact ? "" : t("modelPreviewAlt").replace("{name}", modelBaseName(model.name))}
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={() => {
+        setFailed(true);
+        onFailed?.();
+      }}
       data-blurred={blurred ? "" : undefined}
       className={cn("bg-secondary object-cover", blurred && BLURRED, className)}
     />

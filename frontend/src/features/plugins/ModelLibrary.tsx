@@ -422,7 +422,9 @@ export function ModelLibraryDialog({
       onBack={() => setDetailKey(null)}
       detail={
         detail && (
+          // 按文件换一份:从工作流库跳过来时详情可能直接从这一个换到那一个,上一个的「看清」「取不到预览图」不能带过去
           <ModelDetail
+            key={keyOf(detail)}
             instanceId={instance.id}
             model={detail}
             blurred={blurred}
@@ -1093,6 +1095,12 @@ function UseToGenerate({
 }
 
 /**
+ * 详情左栏的预览框:占满这一栏的宽,高度有上限 —— 并排时 640,上下排(整页一起滚)时半屏,不把概要顶到一屏以外。
+ * 预览图按自己的比例收进去(object-contain);没有预览图的占位是和卡片一样的 3:4,也受这个上限。
+ */
+const DETAIL_PREVIEW_FRAME = "max-h-[640px] w-full [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
+
+/**
  * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(遵循「模糊预览图」,
  * 悬停或点「看清」才清楚);右栏概要(底模和判据、触发词点一下复制、文件、改动时间)、在用的工作流、训练标签、元数据。
  */
@@ -1116,6 +1124,10 @@ function ModelDetail({
     queryFn: () => getModelDetail(instanceId, model.folder, model.name),
   });
   const [revealed, setRevealed] = React.useState(false);
+  //: 说有预览图、这张却没取到:和没有预览图一样,画那个 3:4 的框。这不是少见的情况 —— 新版 ComfyUI 给每个文件都报
+  //: 预览地址,有没有图要取了才知道(没有就 404),没配预览图的文件走的都是这条。不能留给 ModelThumb 自己的占位:
+  //: 它沿用给图片的 max-h,自己没有高度,缩成顶上一条图标、下面整栏空着;外面那层的「看清」按钮也没东西可看。
+  const [previewFailed, setPreviewFailed] = React.useState(false);
   const [allTags, setAllTags] = React.useState(false);
   //: 「用它生成」能交给哪几张工作流:生成选项里这个连接上、有一格能选这个文件的
   const generation = useGenerationOptions(GENERATION_KINDS);
@@ -1147,9 +1159,15 @@ function ModelDetail({
     section.querySelector<HTMLElement>("h4")?.focus({ preventScroll: true });
   };
 
-  const media = model.has_preview ? (
+  const media = model.has_preview && !previewFailed ? (
     <div className="group/thumb relative overflow-hidden rounded-xl bg-secondary">
-      <ModelThumb instanceId={instanceId} model={model} blurred={blurred && !revealed} className="max-h-[640px] w-full object-contain [[data-library-detail-scroll=both]_&]:max-h-[50dvh]" />
+      <ModelThumb
+        instanceId={instanceId}
+        model={model}
+        blurred={blurred && !revealed}
+        onFailed={() => setPreviewFailed(true)}
+        className={cn(DETAIL_PREVIEW_FRAME, "object-contain")}
+      />
       {blurred && !revealed && (
         <Button
           variant="secondary"
@@ -1163,7 +1181,14 @@ function ModelDetail({
       )}
     </div>
   ) : (
-    <div className="grid aspect-[3/4] place-items-center content-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-primary">
+    <div
+      data-detail-placeholder={model.folder}
+      className={cn(
+        DETAIL_PREVIEW_FRAME,
+        // 描一圈边:浅色主题下这层底色和弹窗表面几乎一样,没有边就只看得见一枚图标浮在栏中间,框不像框
+        "grid aspect-[3/4] place-items-center content-center gap-2 rounded-xl border border-border bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-primary",
+      )}
+    >
       <Icon className="size-10 opacity-70" />
       <span className="text-ui-xs text-muted-foreground">{t("modelNoPreview")}</span>
     </div>
