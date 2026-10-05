@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
+import { APP_CHROME } from "@/components/ui/appChrome";
 import { HintRegion } from "@/components/ui/tooltip";
 
 const DRAWER_REGION = {};
@@ -42,10 +43,11 @@ export function ToolDrawer({
     void window.mosaelPageTools?.setInset(DRAWER_WIDTH);
     return () => void window.mosaelPageTools?.setInset(0);
   }, []);
-  // 侧栏不在顶栏那条横带里(它旁边的网页让开了这一块):里面的说明照常摆,只是要压在侧栏上面。
+  // 侧栏也是窗口外壳(见 APP_CHROME):底下的弹窗不因为点它而关掉,它点得动、拿得到焦点。
   return createPortal(
     <HintRegion.Provider value={DRAWER_REGION}>
     <aside
+      {...APP_CHROME}
       data-page-tools-drawer=""
       aria-label={title}
       style={{ top, width: DRAWER_WIDTH }}

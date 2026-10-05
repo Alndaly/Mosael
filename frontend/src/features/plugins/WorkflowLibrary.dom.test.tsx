@@ -22,6 +22,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installAppChromeGuards } from "@/components/ui/appChrome";
+
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(),
   getWorkflowContent: vi.fn(),
@@ -361,6 +363,38 @@ describe("工作流库", () => {
     bridge.emit({ visible: true, accountId: "persist:pool-other", accountName: "别的", partition: "persist:pool-other" });
     bridge.emit({ visible: false, accountId: null, accountName: null });
     expect(api.refreshPluginInstance, "只在自己开的那个视图收起时刷新一次").toHaveBeenCalledTimes(1);
+  });
+
+  it("在编辑器里点了浏览器顶栏、在地址栏按了 Esc,回到 Mosael 时工作流库还开着、还停在那一张,照样刷新", async () => {
+    const uninstall = installAppChromeGuards(document);
+    try {
+      api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+      const bridge = desktop({ ok: true, outcome: "opened" });
+      await openDetail("portrait");
+      // 内嵌视图亮着时盖在最上层的浏览器顶栏(窗口外壳)。
+      const bar = document.createElement("div");
+      bar.setAttribute("data-app-chrome", "");
+      bar.innerHTML = '<button type="button">返回 Mosael</button><input aria-label="地址栏" />';
+      document.body.appendChild(bar);
+      fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+      await waitFor(() => expect(bridge.openComfyWorkflow).toHaveBeenCalled());
+      const partition = "persist:pool-comfyui-i1";
+      bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
+      const address = bar.querySelector("input")!;
+      fireEvent.pointerDown(address);
+      act(() => address.focus());
+      fireEvent.keyDown(address, { key: "Escape" });
+      fireEvent.pointerDown(bar.querySelector("button")!);
+      fireEvent.click(bar.querySelector("button")!);
+      bridge.emit({ visible: false, accountId: null, accountName: null });
+      bar.remove();
+      await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+      expect(screen.getByRole("dialog")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "workflowLibraryBack" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "workflowOpenInEditor" })).toBeTruthy();
+    } finally {
+      uninstall();
+    }
   });
 
   it("在编辑器里打开:那台机器上没找到这一张、或者没打开成,回来时看得到怎么办", async () => {

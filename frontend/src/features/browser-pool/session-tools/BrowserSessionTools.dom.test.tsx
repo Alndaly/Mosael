@@ -435,6 +435,19 @@ describe("工具区只留图标", () => {
   });
 });
 
+describe("外壳", () => {
+  it("顶栏之外弹出来的侧栏也算窗口外壳(底下的弹窗不会因为点它而关掉,点得动、拿得到焦点)", async () => {
+    show();
+    fireEvent.click(toolButton("images"));
+    const drawer = await waitFor(() => {
+      const found = document.querySelector("[data-page-tools-drawer]");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(drawer.closest("[data-app-chrome]")).not.toBeNull();
+  });
+});
+
 describe("报错怎么说、说在哪", () => {
   it("没做成时照桌面端整理好的那句话说(不露 Electron 的原话);长的折成两行,不在地址栏旁边挤成半句", async () => {
     tools.capture.mockRejectedValueOnce(new Error("这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)"));

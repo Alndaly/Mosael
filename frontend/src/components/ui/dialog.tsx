@@ -58,7 +58,7 @@ const DialogContent = React.forwardRef<
         className
       )}
       {...props}
-      onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
+      onEscapeKeyDown={escapeUnlessComposing(keepOpenOnAppChrome(onEscapeKeyDown))}
       onInteractOutside={keepOpenOnAppChrome(onInteractOutside)}
     >
       <HintScopeReset>{children}</HintScopeReset>

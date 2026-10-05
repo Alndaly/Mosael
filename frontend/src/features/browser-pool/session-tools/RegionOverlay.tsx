@@ -2,6 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 
 import { useI18n } from "@/app/preferences";
+import { APP_CHROME } from "@/components/ui/appChrome";
 import { listenKeys } from "@/lib/shortcuts";
 
 import { frameDisplaySize, selectionFraction, type Point } from "./pageActions";
@@ -51,6 +52,7 @@ export function RegionOverlay({
 
   return createPortal(
     <div
+      {...APP_CHROME}
       data-region-overlay=""
       role="dialog"
       aria-label={t("browserToolsShotRegion")}

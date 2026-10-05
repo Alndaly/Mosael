@@ -51,7 +51,7 @@ import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
-import { APP_CHROME } from "@/components/ui/appChrome";
+import { APP_CHROME, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -94,6 +94,8 @@ export function App() {
   // 卸载、或两个浮层的清理互相打架),此后整个应用只能刷新。挂在最外层 —— 留下锁的那个浮层
   // 可能是任何一处的 Select / 右键菜单 / 弹窗,盯住锁本身才兜得全。见 lib/bodyPointerLock。
   React.useEffect(() => watchBodyPointerLock(), []);
+  // 内嵌浏览器的外壳盖在开着的弹窗上面:焦点进出外壳不让弹窗的焦点圈套拽回去(见 appChrome)。
+  React.useEffect(() => installAppChromeGuards(document), []);
   // 哪个请求建了任务,所有任务列表(任务中心、AI 工作台、转写面板……)都立刻刷新 ——
   // 它们的键都以 "jobs" 开头。见 api/transport 的 JOBS_CREATED_EVENT。
   React.useEffect(() => {
