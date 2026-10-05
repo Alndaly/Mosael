@@ -60,7 +60,11 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
+| `assets/web_capture.py` / `assets/web_download.py` | 浏览器会话交来的东西入库:顶栏截屏、采集图片、下载视频(`POST /api/assets/capture`,看文件头只收图片)和网页里点的下载(`/api/assets/web-download`,只收素材库认得的类型);出处记在 `media_info`(来源页、标题、截取时间、哪种截法),不冒充 `source_url`。自动化里触发的下载和「浏览器·截图」经执行器的产物入口(`/api/browser/worker/actions/{id}/artifact`,带那条动作的租约令牌)入库,出处另记运行和节点 |
+| `model_library.py` / `workflow_library.py` | 两项**目录类能力**的宿主一侧([ADR-0034](adr/0034-model-library.md)、[ADR-0035](adr/0035-workflow-library.md)):按 `op` 问认领它的插件工具,规整回答(路径、图摘要、预览地址都先过一遍)、补上「Mosael 里谁在用它」(引用表的 `generation_model`);下载模型、装节点包是能取消的后台任务,写操作一律不覆盖、撞名 409 带建议名,改成了让这个连接的目录重拉 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
+| `core/outbound_guard.py` | **用户给的地址出站的唯一一道门**(HTTP 请求节点、智能体的 `http_request` / `fetch_url`、从链接导入):按解析出来的 IP 判,只认全局单播;直连时解析一次、就连那个 IP(Host 头和 SNI 仍按原名),防 DNS 重绑定;重定向每一跳重新判。本机回环、局域网、元数据地址要部署管理员加进 `DeploymentConfig.outbound_allowlist`(管理 → 部署设置 → 内网访问)。插件自己联网、供应商回传的产物地址不经它 |
+| `core/abort.py` | 取消的**作用域**:`dispatch_job` 给每个进程内任务建一个 `AbortScope`(登记成任务的「子进程」,取消及其级联经 `kill_job_child` 调到它),随上下文变量带进节点线程池。`RetryingClient` 和出口守卫在作用域里记下自己建的每条连接,取消时 `shutdown(SHUT_RDWR)` —— 阻塞的读当场醒来,之后不再发新请求、不再重试 |
 | `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上管理页「引擎」里那个下载源镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.mosael/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
@@ -71,8 +75,10 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 ### 任务总线是枢纽
 
 任何耗时操作都建一个 `job`,前端任务中心只认 `jobs` + `task_events`,不关心是谁在干活。这让"取消任务"能有统一语义:
-`cancel_job()` 把 job 落终态,工作流引擎**在每个节点边界重读 job 状态**决定是否停下
-——中断是节点粒度的(执行中的单个节点无法安全掐断);子工作流经父子 job 链随父级级联取消。事件统一经 `emit_job_event()` 发,
+`cancel_job()` 把 job 落终态,工作流引擎**在每个节点边界重读 job 状态**决定是否停下;节点里正在等的出站请求
+(大模型、配音、翻译、HTTP)由 `core/abort` 当场断开,子进程(ffmpeg、插件、订阅授权的 sidecar)经 `kill_job_child` 掐掉,
+浏览器动作的脚本求值和导航和中止开关赛跑 —— 所以不必等那一步自己答完;子工作流经父子 job 链随父级级联取消。
+取消之后才失败的节点按「已取消」记,一步失败时已落定的产物照样进任务结果(`GraphRun`)。事件统一经 `emit_job_event()` 发,
 TaskEvent 行只在总线创建。
 
 每种 kind 有一个**执行模式**:`in_process`(默认,守护线程)或 `external`(外部 worker 经

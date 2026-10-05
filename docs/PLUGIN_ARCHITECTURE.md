@@ -109,7 +109,10 @@ PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态�
   **这是环境变量层面的边界,不是沙箱**:插件进程和后端是同一个操作系统用户,读得到这个用户读得到的文件。
   所以:静态加密的主密钥在桌面版不放在数据目录里(见 core/secrets_at_rest),插件包只从 https 装、
   发版索引里的 sha256 装之前核对(见 domain/plugins/registry)。装一个插件等于信任它的作者 —— 只有部署管理员能装。
-- 权限逐项授权、deny-by-default;未授权的实例不出工具。
+- 权限逐项授权、deny-by-default;未授权的实例不出工具。插件**更新后多声明了权限**时同样按没授予算:那个连接先停用
+  (`instances.blocked_reason`),而不是悄悄多拿权限 —— `permissions_added` 分得出「刚接上、还没授予」和「用过、升级后多要了」,
+  后一种在连接卡片最上面说清多要了哪几项、一键授予这几项(之前授予的不动),插件列表标「待授权」。所以清单要如实申报
+  (ComfyUI 1.9.0 起把连 HuggingFace / Civitai、写本机 models 目录都写进去了,ADR 0034)。
 - 智能体、工作流、手动试跑走同一条执行路径,权限校验 / 凭据注入 / 调用留痕都在那里。
 - 同一条路上还有两件事:同时在跑的插件调用受 `jobs.PLUGIN_SLOTS` 限额(排队前先交还数据库连接);
   在任务里跑的进程类插件,进程登记在那个任务名下,**取消任务就杀掉它** —— 插件进程自成一组,超时和取消
@@ -165,8 +168,11 @@ url + 请求头让宿主去下。
 ## 插件替宿主做事:宿主能力
 
 上面三条旁路都是「插件的工具被别人调」。还有反方向的:宿主自己缺一样本事,由某一类插件补上 ——
-清单里写 `provides`,一个工具认领它。今天有两项:`public_url`(本地素材换一条公网地址)和
-`generation`(当一家生成供应商,[ADR 0020](adr/0020-plugins-can-be-generation-providers.md))。
+清单里写 `provides`,一个工具认领它。最早只有两项:`public_url`(本地素材换一条公网地址)和
+`generation`(当一家生成供应商,[ADR 0020](adr/0020-plugins-can-be-generation-providers.md));现在还有运行时报工具的 `tools`、
+能力表里那几项(文档解析、降噪、分离、转写、翻译、配音,[ADR 0032](adr/0032-plugin-capabilities-everywhere.md)),以及两项给连接带来
+目录的 `model_library` / `workflow_library`([ADR 0034](adr/0034-model-library.md)、[ADR 0035](adr/0035-workflow-library.md))。
+全表和每一项的协议见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md)。下面以生成为例。
 
 **生成这一项的形状是「插件连接就是一条供应商连接」**,而不是在生成链路里开一条插件分支:
 
