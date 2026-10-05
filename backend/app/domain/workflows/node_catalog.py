@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from app.core.i18n import MESSAGES, t
@@ -45,7 +46,9 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
             # 每个配置字段带上**它装的是什么**(素材/时间线/…)。界面据此决定给不给素材选择器、
             # 画不画缩略图、连线时类型对不对得上 —— 此前这份知识是前端自己抄的一张表,
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
-            "config": {key: translated_spec(key, with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
+            "config": distinct_field_labels(
+                {key: translated_spec(key, with_data_type(key, spec), locale) for key, spec in meta["config"].items()}
+            ),
             "outputs": list(meta["outputs"]),
             # 配置映射 → 动态属性端口。输入/输出路径都是运行时真实路径；前端只负责展开键。
             "port_maps": {
@@ -53,7 +56,7 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
             },
             "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。
-            "output_labels": {output: t(output_label(output, meta), locale) for output in meta["outputs"]},
+            "output_labels": distinct_labels({output: t(output_label(output, meta), locale) for output in meta["outputs"]}),
             "plugin_name": meta.get("plugin_name", ""),
             "tool_name": meta.get("tool_name", ""),
             # 内嵌子图节点体内看得见的作用域名 —— 画布就绪检查和后端校验读同一格(见 NESTED_BODY_TYPES)。
@@ -68,6 +71,23 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
     for item in ordered:
         item.pop("category_key", None)  # 排序用的,不该出现在响应里
     return ordered
+
+
+def distinct_labels(labels: dict[str, str]) -> dict[str, str]:
+    """同一个节点上两个口翻出来同一个名字时,各自带上自己的键。
+
+    名字是画布上分辨接点的唯一线索:两个都叫「素材」的输出口,连线的人只能挨个试。内置节点由前端的接点名棘轮
+    钉着不撞名(frontend/src/features/workflows/portsHaveHumanNames.test.ts),所以走到这一步的是插件声明的名字 ——
+    插件作者给两个输出写了同一个 title,画布上照样得分得开。带键而不是编号:键是稳定的,下游 `{{…}}` 里写的就是它。
+    """
+    counts = Counter(labels.values())
+    return {key: f"{label}({key})" if counts[label] > 1 else label for key, label in labels.items()}
+
+
+def distinct_field_labels(config: dict[str, Any]) -> dict[str, Any]:
+    """同上,用在配置字段上:检查器里每一格、画布上每个输入口叫这个名字。"""
+    labels = distinct_labels({key: spec["label"] for key, spec in config.items() if isinstance(spec, dict) and spec.get("label")})
+    return {key: {**spec, "label": labels[key]} if key in labels else spec for key, spec in config.items()}
 
 
 def with_data_type(key: str, spec: Any) -> Any:
@@ -149,4 +169,12 @@ def option_label(field: str, value: str, locale: str) -> str:
     return value
 
 
-__all__ = ["LITERAL_OPTION_FIELDS", "describe_node_types", "option_label", "translated_spec", "with_data_type"]
+__all__ = [
+    "LITERAL_OPTION_FIELDS",
+    "describe_node_types",
+    "distinct_field_labels",
+    "distinct_labels",
+    "option_label",
+    "translated_spec",
+    "with_data_type",
+]

@@ -3,52 +3,117 @@
     "type": "ai_generate",
     "config": {
       "provider_profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
       },
       "provider": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "服务商",
+          "en": "Provider"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "prompt": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
       },
       "negative_prompt": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "负向提示词",
+          "en": "Negative prompt"
+        }
       },
       "parameters": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "entry_labels": "generation_parameters",
+        "label": {
+          "zh": "生成参数",
+          "en": "Generation parameters"
+        }
       },
       "source_assets": {
-        "type": "template"
+        "type": "template",
+        "lines": true,
+        "entry_labels": "source_roles",
+        "label": {
+          "zh": "输入素材",
+          "en": "Input media"
+        }
       },
       "source_group": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "用哪一组素材",
+          "en": "Which sources to use"
+        }
       },
       "entity_ids": {
         "type": "template",
-        "editor": "id_list"
+        "editor": "id_list",
+        "label": {
+          "zh": "资产",
+          "en": "Assets"
+        }
       },
       "consent": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "授权确认",
+          "en": "Consent"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "asset_ids",
       "generation_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "generation_id": {
+        "zh": "生成任务",
+        "en": "Generation"
+      }
+    }
   },
   {
     "type": "asset",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       }
     },
     "outputs": [
@@ -59,232 +124,537 @@
       "width",
       "height",
       "fps"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      },
+      "kind": {
+        "zh": "类型",
+        "en": "Kind"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      },
+      "width": {
+        "zh": "宽度",
+        "en": "Width"
+      },
+      "height": {
+        "zh": "高度",
+        "en": "Height"
+      },
+      "fps": {
+        "zh": "帧率",
+        "en": "Frame rate"
+      }
+    }
   },
   {
     "type": "asset_query",
     "config": {
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "name_contains": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称包含",
+          "en": "Name contains"
+        }
       },
       "tags": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tags"
+        }
       },
       "limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
       }
     },
     "outputs": [
       "assets",
       "ids",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "assets": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "ids": {
+        "zh": "ID 列表",
+        "en": "IDs"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
   },
   {
     "type": "asset_tag",
     "config": {
       "asset_ids": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材列表",
+          "en": "Media list"
+        }
       },
       "tags": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tags"
+        }
       },
       "mode": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模式",
+          "en": "Mode"
+        }
       }
     },
     "outputs": [
       "updated",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "updated": {
+        "zh": "更新数量",
+        "en": "Updated"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
   },
   {
     "type": "asset_update",
     "config": {
       "asset_ids": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材列表",
+          "en": "Media list"
+        }
       },
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "project_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "项目",
+          "en": "Project"
+        }
       }
     },
     "outputs": [
       "updated",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "updated": {
+        "zh": "更新数量",
+        "en": "Updated"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
   },
   {
     "type": "browser_click",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "exact": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "精确匹配",
+          "en": "Exact match"
+        }
       },
       "wait_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "等元素出现(毫秒)",
+          "en": "Wait for the element (ms)"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session",
       "asset_id"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "asset_id": {
+        "zh": "下载进素材库的文件(没有下载就是空)",
+        "en": "The downloaded file saved to the library (empty when nothing downloaded)"
+      }
+    }
   },
   {
     "type": "browser_close",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       }
     },
-    "outputs": []
+    "outputs": [],
+    "output_labels": {}
   },
   {
     "type": "browser_evaluate",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "expression": {
-        "type": "code"
+        "type": "code",
+        "label": {
+          "zh": "表达式",
+          "en": "Expression"
+        }
       },
       "input": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参",
+          "en": "Arguments"
+        }
       },
       "timeout_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "超时(毫秒)",
+          "en": "Timeout (ms)"
+        }
       }
     },
     "outputs": [
       "session",
       "value"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "value": {
+        "zh": "值",
+        "en": "Value"
+      }
+    }
   },
   {
     "type": "browser_extract",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "attribute": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "取哪个属性",
+          "en": "Attribute"
+        }
       },
       "all": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "全部",
+          "en": "All"
+        }
       },
       "allow_missing": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "找不到时输出空",
+          "en": "Output empty when missing"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session",
       "value"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "value": {
+        "zh": "值",
+        "en": "Value"
+      }
+    }
   },
   {
     "type": "browser_input",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "value": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "值",
+          "en": "Value"
+        }
       },
       "wait_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "等元素出现(毫秒)",
+          "en": "Wait for the element (ms)"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      }
+    }
   },
   {
     "type": "browser_navigate",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "url": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "网址",
+          "en": "URL"
+        }
       },
       "allow_error_page": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "允许错误页",
+          "en": "Allow error pages"
+        }
       }
     },
     "outputs": [
       "session",
       "status",
       "asset_id"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "status": {
+        "zh": "HTTP 状态码",
+        "en": "HTTP status code"
+      },
+      "asset_id": {
+        "zh": "下载进素材库的文件(没有下载就是空)",
+        "en": "The downloaded file saved to the library (empty when nothing downloaded)"
+      }
+    }
   },
   {
     "type": "browser_open",
     "config": {
       "url": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "网址",
+          "en": "URL"
+        }
       },
       "session_mode": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "会话方式",
+          "en": "Session mode"
+        }
       },
       "session_name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "会话名称",
+          "en": "Session name"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器池档案",
+          "en": "Browser-pool profile"
+        }
       },
       "allow_error_page": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "允许错误页",
+          "en": "Allow error pages"
+        }
       }
     },
     "outputs": [
       "session",
       "notice",
       "status"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "notice": {
+        "zh": "提示(如升级后这份登录要重新登录)",
+        "en": "Notice (e.g. this sign-in must be redone after an upgrade)"
+      },
+      "status": {
+        "zh": "HTTP 状态码",
+        "en": "HTTP status code"
+      }
+    }
   },
   {
     "type": "browser_page",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "operation": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "做什么",
+          "en": "Action"
+        }
       },
       "by": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "按什么找",
+          "en": "Find by"
+        }
       },
       "value": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "值",
+          "en": "Value"
+        }
       }
     },
     "outputs": [
@@ -292,206 +662,446 @@
       "url",
       "title",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "url": {
+        "zh": "现在这一页的网址",
+        "en": "The current page's URL"
+      },
+      "title": {
+        "zh": "现在这一页的标题",
+        "en": "The current page's title"
+      },
+      "count": {
+        "zh": "会话里开着几个页面",
+        "en": "How many pages the session has open"
+      }
+    }
   },
   {
     "type": "browser_screenshot",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "mode": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模式",
+          "en": "Mode"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "page_by": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "截哪一页",
+          "en": "Which page"
+        }
       },
       "page_value": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "找哪一页",
+          "en": "Page to find"
+        }
       },
       "wait_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "等元素出现(毫秒)",
+          "en": "Wait for the element (ms)"
+        }
       }
     },
     "outputs": [
       "session",
       "asset_id"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      },
+      "asset_id": {
+        "zh": "存进素材库的截图",
+        "en": "The screenshot saved to the library"
+      }
+    }
   },
   {
     "type": "browser_scroll",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "dy": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "纵向距离",
+          "en": "Vertical distance"
+        }
       },
       "allow_missing": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "找不到时输出空",
+          "en": "Output empty when missing"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      }
+    }
   },
   {
     "type": "browser_upload",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "file_path": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文件路径",
+          "en": "File path"
+        }
       },
       "timeout_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "超时(毫秒)",
+          "en": "Timeout (ms)"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      }
+    }
   },
   {
     "type": "browser_wait",
     "config": {
       "session": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器会话",
+          "en": "Browser session"
+        }
       },
       "selector": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "元素选择器",
+          "en": "Selector"
+        }
       },
       "url_contains": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "网址包含",
+          "en": "URL contains"
+        }
       },
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "gone": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "等它消失",
+          "en": "Wait until gone"
+        }
       },
       "timeout_ms": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "超时(毫秒)",
+          "en": "Timeout (ms)"
+        }
       },
       "frame": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "在框架里",
+          "en": "In frame"
+        }
       }
     },
     "outputs": [
       "session"
-    ]
+    ],
+    "output_labels": {
+      "session": {
+        "zh": "浏览器会话",
+        "en": "Browser session"
+      }
+    }
   },
   {
     "type": "call_workflow",
     "config": {
       "workflow_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "工作流",
+          "en": "Workflow"
+        }
       },
       "inputs": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参映射",
+          "en": "Input mapping"
+        }
       }
     },
     "outputs": [
       "output"
-    ]
+    ],
+    "output_labels": {
+      "output": {
+        "zh": "对外输出",
+        "en": "Output"
+      }
+    }
   },
   {
     "type": "code",
     "config": {
       "code": {
-        "type": "code"
+        "type": "code",
+        "label": {
+          "zh": "代码",
+          "en": "Code"
+        }
       },
       "input": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参",
+          "en": "Arguments"
+        }
       }
     },
     "outputs": [
       "output"
-    ]
+    ],
+    "output_labels": {
+      "output": {
+        "zh": "对外输出",
+        "en": "Output"
+      }
+    }
   },
   {
     "type": "condition",
     "config": {
       "left": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "左值",
+          "en": "Left value"
+        }
       },
       "op": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "运算",
+          "en": "Operator"
+        }
       },
       "right": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "右值",
+          "en": "Right value"
+        }
       }
     },
     "outputs": [
       "result"
-    ]
+    ],
+    "output_labels": {
+      "result": {
+        "zh": "结果",
+        "en": "Result"
+      }
+    }
   },
   {
     "type": "delay",
     "config": {
       "seconds": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "秒数",
+          "en": "Seconds"
+        }
       }
     },
     "outputs": [
       "waited"
-    ]
+    ],
+    "output_labels": {
+      "waited": {
+        "zh": "等待结果",
+        "en": "Wait result"
+      }
+    }
   },
   {
     "type": "denoise_audio",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "strength": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "强度",
+          "en": "Strength"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "engine"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "降噪后",
+        "en": "Cleaned"
+      },
+      "engine": {
+        "zh": "引擎",
+        "en": "Engine"
+      }
+    }
   },
   {
     "type": "document_to_markdown",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "parser": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "解析方式",
+          "en": "Parser"
+        }
       },
       "first": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "从第几段",
+          "en": "From section"
+        }
       },
       "last": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "到第几段",
+          "en": "To section"
+        }
       }
     },
     "outputs": [
@@ -500,25 +1110,67 @@
       "sections",
       "total",
       "unit"
-    ]
+    ],
+    "output_labels": {
+      "markdown": {
+        "zh": "正文（Markdown）",
+        "en": "Content (Markdown)"
+      },
+      "title": {
+        "zh": "标题",
+        "en": "Title"
+      },
+      "sections": {
+        "zh": "各段",
+        "en": "Sections"
+      },
+      "total": {
+        "zh": "一共几段",
+        "en": "Section count"
+      },
+      "unit": {
+        "zh": "按什么分段",
+        "en": "Split by"
+      }
+    }
   },
   {
     "type": "dub_lipsync",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "clip_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "片段",
+          "en": "Clip"
+        }
       },
       "track_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "轨道",
+          "en": "Track"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "consent": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "授权确认",
+          "en": "Consent"
+        }
       }
     },
     "outputs": [
@@ -528,34 +1180,92 @@
       "chunk_count",
       "generated_count",
       "reused_count"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "clip_id": {
+        "zh": "片段",
+        "en": "Clip"
+      },
+      "track_id": {
+        "zh": "轨道",
+        "en": "Track"
+      },
+      "chunk_count": {
+        "zh": "切了几块",
+        "en": "Chunks"
+      },
+      "generated_count": {
+        "zh": "改了几块",
+        "en": "Chunks re-synced"
+      },
+      "reused_count": {
+        "zh": "沿用了几块",
+        "en": "Chunks reused"
+      }
+    }
   },
   {
     "type": "dub_subtitles",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "clip_ids": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "片段",
+          "en": "Clips"
+        }
       },
       "match_duration": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "压回原长度",
+          "en": "Fit to original length"
+        }
       },
       "line": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "配音文本",
+          "en": "Text to dub"
+        }
       },
       "original_audio": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "原声",
+          "en": "Original audio"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "voice": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       },
       "speed": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "语速",
+          "en": "Speed"
+        }
       }
     },
     "outputs": [
@@ -567,35 +1277,103 @@
       "overlaps",
       "overlap_seconds",
       "overlap_note"
-    ]
+    ],
+    "output_labels": {
+      "track_id": {
+        "zh": "轨道",
+        "en": "Track"
+      },
+      "done": {
+        "zh": "完成条数",
+        "en": "Done"
+      },
+      "failed": {
+        "zh": "失败条数",
+        "en": "Failed"
+      },
+      "original_audio": {
+        "zh": "原声实际处理方式",
+        "en": "What happened to the original audio"
+      },
+      "original_audio_note": {
+        "zh": "原声处理说明",
+        "en": "Original audio note"
+      },
+      "overlaps": {
+        "zh": "压到下一句上的条数",
+        "en": "Lines running into the next"
+      },
+      "overlap_seconds": {
+        "zh": "压到下一句上的秒数",
+        "en": "Seconds running into the next line"
+      },
+      "overlap_note": {
+        "zh": "念不完的说明",
+        "en": "Overrun note"
+      }
+    }
   },
   {
     "type": "edit_timeline",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "operations": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "操作",
+          "en": "Operations"
+        }
       }
     },
     "outputs": [
       "applied",
       "sequence_id",
       "revision"
-    ]
+    ],
+    "output_labels": {
+      "applied": {
+        "zh": "已应用数量",
+        "en": "Applied"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      },
+      "revision": {
+        "zh": "版本",
+        "en": "Revision"
+      }
+    }
   },
   {
     "type": "entity_angles",
     "config": {
       "entity_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "资产",
+          "en": "Asset"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "scope": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "补哪些",
+          "en": "Which angles"
+        }
       }
     },
     "outputs": [
@@ -604,19 +1382,53 @@
       "entity_id",
       "added",
       "failed"
-    ]
+    ],
+    "output_labels": {
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "entity_id": {
+        "zh": "资产",
+        "en": "Asset"
+      },
+      "added": {
+        "zh": "新挂上几张参考图",
+        "en": "References added"
+      },
+      "failed": {
+        "zh": "失败条数",
+        "en": "Failed"
+      }
+    }
   },
   {
     "type": "entity_expressions",
     "config": {
       "entity_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "资产",
+          "en": "Asset"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "expressions": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "表情",
+          "en": "Expressions"
+        }
       }
     },
     "outputs": [
@@ -625,22 +1437,60 @@
       "entity_id",
       "added",
       "failed"
-    ]
+    ],
+    "output_labels": {
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "entity_id": {
+        "zh": "资产",
+        "en": "Asset"
+      },
+      "added": {
+        "zh": "新挂上几张参考图",
+        "en": "References added"
+      },
+      "failed": {
+        "zh": "失败条数",
+        "en": "Failed"
+      }
+    }
   },
   {
     "type": "entity_get",
     "config": {
       "entity_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "资产",
+          "en": "Asset"
+        }
       },
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
       }
     },
     "outputs": [
@@ -653,56 +1503,156 @@
       "asset_id",
       "voice_engine",
       "voice_id"
-    ]
+    ],
+    "output_labels": {
+      "entity_id": {
+        "zh": "资产",
+        "en": "Asset"
+      },
+      "found": {
+        "zh": "找到了没有(1 / 0)",
+        "en": "Found (1 / 0)"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      },
+      "description": {
+        "zh": "说明",
+        "en": "Description"
+      },
+      "prompt": {
+        "zh": "提示词",
+        "en": "Prompt"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "voice_engine": {
+        "zh": "配音引擎",
+        "en": "Voice engine"
+      },
+      "voice_id": {
+        "zh": "音色",
+        "en": "Voice"
+      }
+    }
   },
   {
     "type": "entity_list",
     "config": {
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "tag": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tag"
+        }
       },
       "query": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "检索词",
+          "en": "Search query"
+        }
       },
       "limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
       }
     },
     "outputs": [
       "entities",
       "count",
       "text"
-    ]
+    ],
+    "output_labels": {
+      "entities": {
+        "zh": "资产",
+        "en": "Assets"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
   },
   {
     "type": "entity_save",
     "config": {
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "prompt": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
       },
       "description": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "说明",
+          "en": "Description"
+        }
       },
       "asset_ids": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材列表",
+          "en": "Media list"
+        }
       },
       "role": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "角度",
+          "en": "Angle"
+        }
       },
       "tags": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tags"
+        }
       },
       "if_exists": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "同名时",
+          "en": "When it exists"
+        }
       }
     },
     "outputs": [
@@ -710,70 +1660,164 @@
       "created",
       "added",
       "name"
-    ]
+    ],
+    "output_labels": {
+      "entity_id": {
+        "zh": "资产",
+        "en": "Asset"
+      },
+      "created": {
+        "zh": "新建的(1)/合并的(0)",
+        "en": "Newly created (1) / merged (0)"
+      },
+      "added": {
+        "zh": "新挂上几张参考图",
+        "en": "References added"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      }
+    }
   },
   {
     "type": "entity_speak",
     "config": {
       "entity_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "资产",
+          "en": "Asset"
+        }
       },
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "resolution": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "分辨率",
+          "en": "Resolution"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "asset_ids",
       "audio_asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "audio_asset_id": {
+        "zh": "音频",
+        "en": "Audio"
+      }
+    }
   },
   {
     "type": "export_sequence",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "resolution": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "分辨率",
+          "en": "Resolution"
+        }
       },
       "quality": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "画质",
+          "en": "Quality"
+        }
       },
       "ai_label": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "「AI 生成」标识",
+          "en": "“AI generated” label"
+        }
       }
     },
     "outputs": [
       "asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      }
+    }
   },
   {
     "type": "fit_narration",
     "config": {
       "items": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "各段",
+          "en": "Segments"
+        }
       },
       "text_field": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本字段",
+          "en": "Text field"
+        }
       },
       "seconds_field": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时长字段",
+          "en": "Length field"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "max_rewrites": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最多改几轮",
+          "en": "Rewrite rounds"
+        }
       }
     },
     "outputs": [
@@ -781,46 +1825,112 @@
       "rewritten",
       "over",
       "note"
-    ]
+    ],
+    "output_labels": {
+      "items": {
+        "zh": "要遍历的列表",
+        "en": "List to iterate"
+      },
+      "rewritten": {
+        "zh": "改短了几段",
+        "en": "Segments shortened"
+      },
+      "over": {
+        "zh": "仍然超长的段",
+        "en": "Segments still too long"
+      },
+      "note": {
+        "zh": "收紧说明",
+        "en": "Fit note"
+      }
+    }
   },
   {
     "type": "generate_subtitles",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "segments": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "分段",
+          "en": "Segments"
+        }
       },
       "texts": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "逐条文本",
+          "en": "Per-segment lines"
+        }
       },
       "keep_original": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "保留原文",
+          "en": "Keep the original"
+        }
       },
       "offset": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "起始位置",
+          "en": "Offset"
+        }
       },
       "clip_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "片段",
+          "en": "Clip"
+        }
       },
       "until": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最晚到第几秒",
+          "en": "Until (seconds)"
+        }
       },
       "track_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "轨道",
+          "en": "Track"
+        }
       },
       "start_field": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "起点字段",
+          "en": "Start field"
+        }
       },
       "end_field": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "终点字段",
+          "en": "End field"
+        }
       },
       "text_field": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本字段",
+          "en": "Text field"
+        }
       },
       "allow_empty": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "允许为空",
+          "en": "Allow empty"
+        }
       }
     },
     "outputs": [
@@ -828,45 +1938,109 @@
       "clip_ids",
       "count",
       "sequence_id"
-    ]
+    ],
+    "output_labels": {
+      "track_id": {
+        "zh": "轨道",
+        "en": "Track"
+      },
+      "clip_ids": {
+        "zh": "片段",
+        "en": "Clips"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      }
+    }
   },
   {
     "type": "http_request",
     "config": {
       "method": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "请求方法",
+          "en": "Method"
+        }
       },
       "url": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "网址",
+          "en": "URL"
+        }
       },
       "headers": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "请求头",
+          "en": "Headers"
+        }
       },
       "body": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "请求体",
+          "en": "Request body"
+        }
       },
       "fail_on_error": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "非 2xx 算失败",
+          "en": "Fail on non-2xx"
+        }
       }
     },
     "outputs": [
       "status",
       "text",
       "json"
-    ]
+    ],
+    "output_labels": {
+      "status": {
+        "zh": "状态",
+        "en": "Status"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      },
+      "json": {
+        "zh": "JSON",
+        "en": "JSON"
+      }
+    }
   },
   {
     "type": "image_grid_split",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "grid": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "切法",
+          "en": "Grid"
+        }
       },
       "gutter": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "分隔线",
+          "en": "Gutters"
+        }
       }
     },
     "outputs": [
@@ -875,72 +2049,178 @@
       "count",
       "columns",
       "source_asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "columns": {
+        "zh": "列数",
+        "en": "Columns"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      }
+    }
   },
   {
     "type": "image_speak",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "audio_asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "音频",
+          "en": "Audio"
+        }
       },
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "voice": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "resolution": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "分辨率",
+          "en": "Resolution"
+        }
       },
       "consent": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "授权确认",
+          "en": "Consent"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "asset_ids",
       "audio_asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "audio_asset_id": {
+        "zh": "音频",
+        "en": "Audio"
+      }
+    }
   },
   {
     "type": "import_url",
     "config": {
       "url": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "网址",
+          "en": "URL"
+        }
       },
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "浏览器池档案",
+          "en": "Browser-pool profile"
+        }
       },
       "max_height": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最高画质",
+          "en": "Max resolution"
+        }
       },
       "fail_on_error": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "下载失败算失败",
+          "en": "Fail when the download fails"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "name",
       "error"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      },
+      "error": {
+        "zh": "失败原因",
+        "en": "Error"
+      }
+    }
   },
   {
     "type": "inspect_sequence",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       }
     },
     "outputs": [
@@ -950,122 +2230,294 @@
       "duration",
       "video_track_id",
       "audio_track_id"
-    ]
+    ],
+    "output_labels": {
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      },
+      "revision": {
+        "zh": "版本",
+        "en": "Revision"
+      },
+      "tracks": {
+        "zh": "轨道列表",
+        "en": "Tracks"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      },
+      "video_track_id": {
+        "zh": "视频轨道",
+        "en": "Video track"
+      },
+      "audio_track_id": {
+        "zh": "音频轨道",
+        "en": "Audio track"
+      }
+    }
   },
   {
     "type": "json_extract",
     "config": {
       "source": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "来源",
+          "en": "Source"
+        }
       },
       "path": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "路径",
+          "en": "Path"
+        }
       }
     },
     "outputs": [
       "value",
       "text"
-    ]
+    ],
+    "output_labels": {
+      "value": {
+        "zh": "值",
+        "en": "Value"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
   },
   {
     "type": "list_chunk",
     "config": {
       "items": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "要遍历的列表",
+          "en": "List to iterate"
+        }
       },
       "size": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "每批多少条",
+          "en": "Batch size"
+        }
       }
     },
     "outputs": [
       "batches",
       "count",
       "total"
-    ]
+    ],
+    "output_labels": {
+      "batches": {
+        "zh": "拆出来的批",
+        "en": "Batches"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "total": {
+        "zh": "总条数",
+        "en": "Total items"
+      }
+    }
   },
   {
     "type": "llm",
     "config": {
       "prompt": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
       },
       "system": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "系统提示词",
+          "en": "System prompt"
+        }
       },
       "preset": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "预设",
+          "en": "Preset"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "temperature": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "发散程度",
+          "en": "Temperature"
+        }
       },
       "top_p": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "采样范围",
+          "en": "Top-p"
+        }
       },
       "max_tokens": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最长输出",
+          "en": "Max output"
+        }
       },
       "frequency_penalty": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "重复惩罚",
+          "en": "Frequency penalty"
+        }
       },
       "presence_penalty": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "话题惩罚",
+          "en": "Presence penalty"
+        }
       },
       "seed": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "随机种子",
+          "en": "Seed"
+        }
       },
       "stop": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "停止词",
+          "en": "Stop sequences"
+        }
       },
       "response_format": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "返回格式",
+          "en": "Response format"
+        }
       },
       "json_schema_name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "Schema 名称",
+          "en": "Schema name"
+        }
       },
       "json_schema": {
         "type": "object",
-        "editor": "json"
+        "editor": "json",
+        "label": {
+          "zh": "JSON Schema",
+          "en": "JSON Schema"
+        }
       },
       "json_schema_strict": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "严格模式",
+          "en": "Strict mode"
+        }
       }
     },
     "outputs": [
       "text",
       "json",
       "response_format_used"
-    ]
+    ],
+    "output_labels": {
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      },
+      "json": {
+        "zh": "JSON",
+        "en": "JSON"
+      },
+      "response_format_used": {
+        "zh": "实际输出档位",
+        "en": "Format actually used"
+      }
+    }
   },
   {
     "type": "loop_foreach",
     "config": {
       "items": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "要遍历的列表",
+          "en": "List to iterate"
+        }
       },
       "inputs": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参映射",
+          "en": "Input mapping"
+        }
       },
       "body": {
-        "type": "graph"
+        "type": "graph",
+        "label": {
+          "zh": "子图",
+          "en": "Subgraph"
+        }
       },
       "output": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "对外输出",
+          "en": "Output"
+        }
       },
       "concurrency": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "同时跑几项",
+          "en": "Concurrency"
+        }
       },
       "max_items": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最多取前几项",
+          "en": "Max items"
+        }
       },
       "on_item_error": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "一项失败时",
+          "en": "When an item fails"
+        }
       }
     },
     "outputs": [
@@ -1074,41 +2526,119 @@
       "dropped",
       "failed",
       "failure_note"
-    ]
+    ],
+    "output_labels": {
+      "results": {
+        "zh": "结果列表",
+        "en": "Results"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "dropped": {
+        "zh": "没跑的项数",
+        "en": "Items not run"
+      },
+      "failed": {
+        "zh": "失败的项",
+        "en": "Failed items"
+      },
+      "failure_note": {
+        "zh": "失败说明",
+        "en": "Failure note"
+      }
+    },
+    "body_scope": {
+      "loop": [
+        "item",
+        "index"
+      ],
+      "input": [
+        "*inputs"
+      ]
+    }
   },
   {
     "type": "loop_while",
     "config": {
       "body": {
-        "type": "graph"
+        "type": "graph",
+        "label": {
+          "zh": "子图",
+          "en": "Subgraph"
+        }
       },
       "condition": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "条件",
+          "en": "Condition"
+        }
       },
       "max_iterations": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最多循环几次",
+          "en": "Max iterations"
+        }
       },
       "output": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "对外输出",
+          "en": "Output"
+        }
       }
     },
     "outputs": [
       "results",
       "count",
       "iterations"
-    ]
+    ],
+    "output_labels": {
+      "results": {
+        "zh": "结果列表",
+        "en": "Results"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "iterations": {
+        "zh": "迭代次数",
+        "en": "Iterations"
+      }
+    },
+    "body_scope": {
+      "loop": [
+        "index"
+      ]
+    }
   },
   {
     "type": "note_create",
     "config": {
       "title": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标题",
+          "en": "Title"
+        }
       },
       "markdown": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "正文（Markdown）",
+          "en": "Content (Markdown)"
+        }
       },
       "tags": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tags"
+        }
       }
     },
     "outputs": [
@@ -1116,17 +2646,43 @@
       "title",
       "revision",
       "citation_url"
-    ]
+    ],
+    "output_labels": {
+      "note_id": {
+        "zh": "笔记",
+        "en": "Note"
+      },
+      "title": {
+        "zh": "标题",
+        "en": "Title"
+      },
+      "revision": {
+        "zh": "版本",
+        "en": "Revision"
+      },
+      "citation_url": {
+        "zh": "来源链接",
+        "en": "Source link"
+      }
+    }
   },
   {
     "type": "note_read",
     "config": {
       "note_id": {
         "type": "template",
-        "editor": "note_ref"
+        "editor": "note_ref",
+        "label": {
+          "zh": "笔记",
+          "en": "Note"
+        }
       },
       "revision": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "版本",
+          "en": "Revision"
+        }
       }
     },
     "outputs": [
@@ -1137,19 +2693,61 @@
       "tags",
       "revision",
       "citation_url"
-    ]
+    ],
+    "output_labels": {
+      "note_id": {
+        "zh": "笔记",
+        "en": "Note"
+      },
+      "title": {
+        "zh": "标题",
+        "en": "Title"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      },
+      "markdown": {
+        "zh": "正文（Markdown）",
+        "en": "Content (Markdown)"
+      },
+      "tags": {
+        "zh": "标签",
+        "en": "Tags"
+      },
+      "revision": {
+        "zh": "版本",
+        "en": "Revision"
+      },
+      "citation_url": {
+        "zh": "来源链接",
+        "en": "Source link"
+      }
+    }
   },
   {
     "type": "note_search",
     "config": {
       "query": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "检索词",
+          "en": "Search query"
+        }
       },
       "limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
       },
       "offset": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "起始位置",
+          "en": "Offset"
+        }
       }
     },
     "outputs": [
@@ -1158,33 +2756,79 @@
       "count",
       "has_more",
       "text"
-    ]
+    ],
+    "output_labels": {
+      "notes": {
+        "zh": "笔记列表",
+        "en": "Notes"
+      },
+      "ids": {
+        "zh": "ID 列表",
+        "en": "IDs"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "has_more": {
+        "zh": "还有更多结果",
+        "en": "More results"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
   },
   {
     "type": "notify",
     "config": {
       "title": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标题",
+          "en": "Title"
+        }
       },
       "body": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "正文",
+          "en": "Body"
+        }
       }
     },
     "outputs": [
       "sent"
-    ]
+    ],
+    "output_labels": {
+      "sent": {
+        "zh": "已发送",
+        "en": "Sent"
+      }
+    }
   },
   {
     "type": "output",
     "config": {
       "values": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "具名输出",
+          "en": "Named outputs"
+        }
       }
     },
     "outputs": [
       "output"
     ],
+    "output_labels": {
+      "output": {
+        "zh": "对外输出",
+        "en": "Output"
+      }
+    },
     "port_maps": {
       "values": {
         "input": "values",
@@ -1196,52 +2840,108 @@
     "type": "plugin_tool",
     "config": {
       "plugin_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "插件",
+          "en": "Plugin"
+        }
       },
       "tool_name": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "工具",
+          "en": "Tool"
+        }
       },
       "instance_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "连接",
+          "en": "Connection"
+        }
       },
       "input": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参",
+          "en": "Arguments"
+        }
       }
     },
     "outputs": [
       "output"
-    ]
+    ],
+    "output_labels": {
+      "output": {
+        "zh": "对外输出",
+        "en": "Output"
+      }
+    }
   },
   {
     "type": "project_create",
     "config": {
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       }
     },
     "outputs": [
       "project_id",
       "name"
-    ]
+    ],
+    "output_labels": {
+      "project_id": {
+        "zh": "项目",
+        "en": "Project"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      }
+    }
   },
   {
     "type": "project_sequence_create",
     "config": {
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "project_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "项目",
+          "en": "Project"
+        }
       },
       "width": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "宽度",
+          "en": "Width"
+        }
       },
       "height": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "高度",
+          "en": "Height"
+        }
       },
       "fps": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "帧率",
+          "en": "Frame rate"
+        }
       }
     },
     "outputs": [
@@ -1250,40 +2950,100 @@
       "video_track_id",
       "audio_track_id",
       "name"
-    ]
+    ],
+    "output_labels": {
+      "project_id": {
+        "zh": "项目",
+        "en": "Project"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      },
+      "video_track_id": {
+        "zh": "视频轨道",
+        "en": "Video track"
+      },
+      "audio_track_id": {
+        "zh": "音频轨道",
+        "en": "Audio track"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      }
+    }
   },
   {
     "type": "publish",
     "config": {
       "account_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "发布账号",
+          "en": "Publishing account"
+        }
       },
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "title": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "标题",
+          "en": "Title"
+        }
       },
       "description": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "说明",
+          "en": "Description"
+        }
       }
     },
     "outputs": [
       "post_id",
       "post_url",
       "result"
-    ]
+    ],
+    "output_labels": {
+      "post_id": {
+        "zh": "作品 ID",
+        "en": "Post ID"
+      },
+      "post_url": {
+        "zh": "作品链接",
+        "en": "Post link"
+      },
+      "result": {
+        "zh": "结果",
+        "en": "Result"
+      }
+    }
   },
   {
     "type": "quote_check",
     "config": {
       "texts": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "要核对的文字",
+          "en": "Text to check"
+        }
       },
       "sources": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "原文",
+          "en": "Sources"
+        }
       }
     },
     "outputs": [
@@ -1293,44 +3053,116 @@
       "paraphrased",
       "unmatched",
       "summary"
-    ]
+    ],
+    "output_labels": {
+      "texts": {
+        "zh": "核对后的文字",
+        "en": "Checked text"
+      },
+      "checked": {
+        "zh": "核对的引号数",
+        "en": "Quotes checked"
+      },
+      "matched": {
+        "zh": "找得到原文的",
+        "en": "Found in the sources"
+      },
+      "paraphrased": {
+        "zh": "改成转述的",
+        "en": "Turned into paraphrase"
+      },
+      "unmatched": {
+        "zh": "找不到原文的引号",
+        "en": "Quotes not found"
+      },
+      "summary": {
+        "zh": "摘要",
+        "en": "Summary"
+      }
+    }
   },
   {
     "type": "scene_create",
     "config": {
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       },
       "layout": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "布景",
+          "en": "Layout"
+        }
       }
     },
     "outputs": [
       "scene_id",
       "shot_ids",
       "shot_count"
-    ]
+    ],
+    "output_labels": {
+      "scene_id": {
+        "zh": "3D 场景",
+        "en": "3D scene"
+      },
+      "shot_ids": {
+        "zh": "镜头列表",
+        "en": "Shots"
+      },
+      "shot_count": {
+        "zh": "镜头数",
+        "en": "Shot count"
+      }
+    }
   },
   {
     "type": "scene_from_text",
     "config": {
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "max_shots": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最多几镜",
+          "en": "Max shots"
+        }
       },
       "shot_seconds": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "每镜秒数",
+          "en": "Seconds per shot"
+        }
       },
       "aspect": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "画幅",
+          "en": "Aspect ratio"
+        }
       },
       "name": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
       }
     },
     "outputs": [
@@ -1338,36 +3170,88 @@
       "shot_ids",
       "shot_count",
       "name"
-    ]
+    ],
+    "output_labels": {
+      "scene_id": {
+        "zh": "3D 场景",
+        "en": "3D scene"
+      },
+      "shot_ids": {
+        "zh": "镜头列表",
+        "en": "Shots"
+      },
+      "shot_count": {
+        "zh": "镜头数",
+        "en": "Shot count"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      }
+    }
   },
   {
     "type": "scene_props",
     "config": {
       "model_ids": {
         "type": "template",
-        "editor": "scene_models"
+        "editor": "scene_models",
+        "label": {
+          "zh": "允许用的道具",
+          "en": "Props that may be used"
+        }
       }
     },
     "outputs": [
       "catalog",
       "model_ids",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "catalog": {
+        "zh": "道具清单",
+        "en": "Prop catalogue"
+      },
+      "model_ids": {
+        "zh": "可用道具 id",
+        "en": "Usable prop ids"
+      },
+      "count": {
+        "zh": "可用道具数",
+        "en": "Usable props"
+      }
+    }
   },
   {
     "type": "scene_render",
     "config": {
       "scene_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "3D 场景",
+          "en": "3D scene"
+        }
       },
       "shot_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "镜头",
+          "en": "Shot"
+        }
       },
       "render": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "渲染内容",
+          "en": "Render"
+        }
       },
       "project_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "项目",
+          "en": "Project"
+        }
       }
     },
     "outputs": [
@@ -1377,35 +3261,95 @@
       "camera_move",
       "skipped_models",
       "model_warnings"
-    ]
+    ],
+    "output_labels": {
+      "first_frame_asset_id": {
+        "zh": "白模首帧",
+        "en": "Blockout first frame"
+      },
+      "last_frame_asset_id": {
+        "zh": "白模尾帧",
+        "en": "Blockout last frame"
+      },
+      "video_asset_id": {
+        "zh": "白模运镜视频",
+        "en": "Blockout camera move"
+      },
+      "camera_move": {
+        "zh": "镜头语言",
+        "en": "Camera language"
+      },
+      "skipped_models": {
+        "zh": "未渲染的导入模型",
+        "en": "Imported models not rendered"
+      },
+      "model_warnings": {
+        "zh": "没渲进去的是哪几件、为什么",
+        "en": "Which models were left out, and why"
+      }
+    }
   },
   {
     "type": "separate_audio",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       }
     },
     "outputs": [
       "vocals_asset_id",
       "background_asset_id",
       "engine"
-    ]
+    ],
+    "output_labels": {
+      "vocals_asset_id": {
+        "zh": "人声",
+        "en": "Voice"
+      },
+      "background_asset_id": {
+        "zh": "背景音",
+        "en": "Background"
+      },
+      "engine": {
+        "zh": "引擎",
+        "en": "Engine"
+      }
+    }
   },
   {
     "type": "social_link",
     "config": {
       "link": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "链接",
+          "en": "Link"
+        }
       },
       "platform": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "平台",
+          "en": "Platform"
+        }
       },
       "expect": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "账号还是作品",
+          "en": "Account or post"
+        }
       }
     },
     "outputs": [
@@ -1413,34 +3357,84 @@
       "kind",
       "id",
       "url"
-    ]
+    ],
+    "output_labels": {
+      "platform": {
+        "zh": "平台",
+        "en": "Platform"
+      },
+      "kind": {
+        "zh": "类型",
+        "en": "Kind"
+      },
+      "id": {
+        "zh": "编号",
+        "en": "ID"
+      },
+      "url": {
+        "zh": "网址",
+        "en": "URL"
+      }
+    }
   },
   {
     "type": "social_metrics",
     "config": {
       "data": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "数据",
+          "en": "Data"
+        }
       },
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       },
       "profile": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "账号资料",
+          "en": "Account profile"
+        }
       },
       "limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
       },
       "table_limit": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "附表条数",
+          "en": "Table rows"
+        }
       },
       "duration_unit": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "时长单位",
+          "en": "Length unit"
+        }
       },
       "utc_offset": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "时区",
+          "en": "Time zone"
+        }
       },
       "unescape_html": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "解开 HTML 转义",
+          "en": "Decode HTML escapes"
+        }
       }
     },
     "outputs": [
@@ -1450,83 +3444,196 @@
       "stats",
       "summary",
       "table"
-    ]
+    ],
+    "output_labels": {
+      "items": {
+        "zh": "要遍历的列表",
+        "en": "List to iterate"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "account": {
+        "zh": "账号",
+        "en": "Account"
+      },
+      "stats": {
+        "zh": "指标",
+        "en": "Metrics"
+      },
+      "summary": {
+        "zh": "摘要",
+        "en": "Summary"
+      },
+      "table": {
+        "zh": "数据表",
+        "en": "Table"
+      }
+    }
   },
   {
     "type": "start",
     "config": {
       "params": {
         "type": "object",
-        "editor": "start_params"
+        "editor": "start_params",
+        "label": {
+          "zh": "启动参数",
+          "en": "Start parameters"
+        }
       },
       "required_params": {
-        "type": "list"
+        "type": "list",
+        "label": {
+          "zh": "必填参数",
+          "en": "Required parameters"
+        }
       },
       "param_options": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "参数选项",
+          "en": "Parameter options"
+        }
       }
     },
     "outputs": [
       "*params"
-    ]
+    ],
+    "output_labels": {
+      "*params": {
+        "zh": "启动参数",
+        "en": "Start parameters"
+      }
+    }
   },
   {
     "type": "subgraph",
     "config": {
       "inputs": {
         "type": "object",
-        "editor": "map"
+        "editor": "map",
+        "label": {
+          "zh": "入参映射",
+          "en": "Input mapping"
+        }
       },
       "body": {
-        "type": "graph"
+        "type": "graph",
+        "label": {
+          "zh": "子图",
+          "en": "Subgraph"
+        }
       },
       "output": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "对外输出",
+          "en": "Output"
+        }
       }
     },
     "outputs": [
       "output"
-    ]
+    ],
+    "output_labels": {
+      "output": {
+        "zh": "对外输出",
+        "en": "Output"
+      }
+    },
+    "body_scope": {
+      "input": [
+        "*inputs"
+      ]
+    }
   },
   {
     "type": "synthesize_speech",
     "config": {
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "voice": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       },
       "speed": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "语速",
+          "en": "Speed"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "voice_note"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "voice_note": {
+        "zh": "用的哪把嗓子",
+        "en": "Voice used"
+      }
+    }
   },
   {
     "type": "talking_segments",
     "config": {
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "voice": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "max_seconds": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "每段最长",
+          "en": "Longest segment"
+        }
       }
     },
     "outputs": [
@@ -1535,81 +3642,189 @@
       "count",
       "duration",
       "model"
-    ]
+    ],
+    "output_labels": {
+      "segments": {
+        "zh": "分段",
+        "en": "Segments"
+      },
+      "cues": {
+        "zh": "字幕时间",
+        "en": "Subtitle cues"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      },
+      "model": {
+        "zh": "模型",
+        "en": "Model"
+      }
+    }
   },
   {
     "type": "template",
     "config": {
       "template": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "模板",
+          "en": "Template"
+        }
       }
     },
     "outputs": [
       "text"
-    ]
+    ],
+    "output_labels": {
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
   },
   {
     "type": "text_transform",
     "config": {
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "op": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "运算",
+          "en": "Operator"
+        }
       },
       "find": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "查找",
+          "en": "Find"
+        }
       },
       "replace": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "替换为",
+          "en": "Replace with"
+        }
       }
     },
     "outputs": [
       "text",
       "length"
-    ]
+    ],
+    "output_labels": {
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      },
+      "length": {
+        "zh": "长度",
+        "en": "Length"
+      }
+    }
   },
   {
     "type": "timeline_add_track",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "kind": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
       }
     },
     "outputs": [
       "track_id",
       "sequence_id"
-    ]
+    ],
+    "output_labels": {
+      "track_id": {
+        "zh": "轨道",
+        "en": "Track"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      }
+    }
   },
   {
     "type": "timeline_append",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "track_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "轨道",
+          "en": "Track"
+        }
       },
       "start": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "起始位置",
+          "en": "Start"
+        }
       },
       "end": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "结束位置",
+          "en": "End"
+        }
       },
       "at": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "落点",
+          "en": "Position"
+        }
       },
       "max_duration": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最长时长",
+          "en": "Max duration"
+        }
       },
       "trim_overflow": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "放不下就裁掉尾巴",
+          "en": "Trim what doesn't fit"
+        }
       }
     },
     "outputs": [
@@ -1619,40 +3834,104 @@
       "duration",
       "trimmed",
       "sequence_id"
-    ]
+    ],
+    "output_labels": {
+      "clip_id": {
+        "zh": "片段",
+        "en": "Clip"
+      },
+      "timeline_start": {
+        "zh": "时间线起始位置",
+        "en": "Timeline start"
+      },
+      "timeline_end": {
+        "zh": "时间线结束位置",
+        "en": "Timeline end"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      },
+      "trimmed": {
+        "zh": "裁掉的秒数",
+        "en": "Trimmed seconds"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      }
+    }
   },
   {
     "type": "timeline_clear",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       }
     },
     "outputs": [
       "removed",
       "sequence_id"
-    ]
+    ],
+    "output_labels": {
+      "removed": {
+        "zh": "移除数量",
+        "en": "Removed"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      }
+    }
   },
   {
     "type": "timeline_cut_ranges",
     "config": {
       "sequence_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
       },
       "clip_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "片段",
+          "en": "Clip"
+        }
       },
       "ranges": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "时间范围",
+          "en": "Time ranges"
+        }
       },
       "min_confidence": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最低置信度",
+          "en": "Minimum confidence"
+        }
       },
       "max_removal_ratio": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "最大删除比例",
+          "en": "Maximum removal ratio"
+        }
       },
       "segments": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "分段",
+          "en": "Segments"
+        }
       }
     },
     "outputs": [
@@ -1664,16 +3943,58 @@
       "kept_text",
       "sequence_id",
       "revision"
-    ]
+    ],
+    "output_labels": {
+      "removed": {
+        "zh": "移除数量",
+        "en": "Removed"
+      },
+      "removed_seconds": {
+        "zh": "移除时长",
+        "en": "Removed duration"
+      },
+      "ranges": {
+        "zh": "时间范围",
+        "en": "Time ranges"
+      },
+      "skipped_ranges": {
+        "zh": "超出上限没删的范围",
+        "en": "Ranges left over the cap"
+      },
+      "skipped_note": {
+        "zh": "没删的说明",
+        "en": "Note on ranges not removed"
+      },
+      "kept_text": {
+        "zh": "整理后的逐字稿",
+        "en": "Cleaned transcript"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      },
+      "revision": {
+        "zh": "版本",
+        "en": "Revision"
+      }
+    }
   },
   {
     "type": "transcribe_asset",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       }
     },
     "outputs": [
@@ -1684,114 +4005,280 @@
       "language",
       "transcript_id",
       "duration"
-    ]
+    ],
+    "output_labels": {
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      },
+      "timed_text": {
+        "zh": "带时间码文本",
+        "en": "Timed text"
+      },
+      "segments": {
+        "zh": "分段",
+        "en": "Segments"
+      },
+      "sentences": {
+        "zh": "逐句",
+        "en": "Sentences"
+      },
+      "language": {
+        "zh": "语言",
+        "en": "Language"
+      },
+      "transcript_id": {
+        "zh": "逐字稿",
+        "en": "Transcript"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      }
+    }
   },
   {
     "type": "translate",
     "config": {
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "target_lang": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "目标语言",
+          "en": "Target language"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       }
     },
     "outputs": [
       "text"
-    ]
+    ],
+    "output_labels": {
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
   },
   {
     "type": "translate_lines",
     "config": {
       "texts": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "逐条文本",
+          "en": "Per-segment lines"
+        }
       },
       "target_lang": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "目标语言",
+          "en": "Target language"
+        }
       },
       "source_lang": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "原文语言",
+          "en": "Source language"
+        }
       },
       "for_speech": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "译文要配音",
+          "en": "For dubbing"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "profile_id": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       }
     },
     "outputs": [
       "texts",
       "count"
-    ]
+    ],
+    "output_labels": {
+      "texts": {
+        "zh": "逐条文本",
+        "en": "Per-segment lines"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
   },
   {
     "type": "video_lipsync",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "audio_asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "音频",
+          "en": "Audio"
+        }
       },
       "text": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
       },
       "engine": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
       },
       "voice": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       },
       "model": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
       },
       "consent": {
-        "type": "string"
+        "type": "string",
+        "label": {
+          "zh": "授权确认",
+          "en": "Consent"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "asset_ids",
       "audio_asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "audio_asset_id": {
+        "zh": "音频",
+        "en": "Audio"
+      }
+    }
   },
   {
     "type": "video_to_gif",
     "config": {
       "asset_id": {
-        "type": "template"
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
       },
       "fps": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "帧率",
+          "en": "Frame rate"
+        }
       },
       "width": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "宽度",
+          "en": "Width"
+        }
       },
       "start": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "起始位置",
+          "en": "Start"
+        }
       },
       "duration": {
-        "type": "number"
+        "type": "number",
+        "label": {
+          "zh": "时长",
+          "en": "Duration"
+        }
       }
     },
     "outputs": [
       "asset_id",
       "source_asset_id"
-    ]
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      }
+    }
   }
 ]

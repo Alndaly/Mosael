@@ -647,7 +647,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_allow_missing": {"zh": "找不到时输出空", "en": "Output empty when missing"},
     "wfField_allow_error_page": {"zh": "允许错误页", "en": "Allow error pages"},
     "wfField_frame": {"zh": "在框架里", "en": "In frame"},
-    "wfField_asset_id": {"zh": "素材", "en": "Asset"},
+    #: 素材 / 资产两个词在英文界面上和导航一致:素材是 Media(素材库 = Media),资产是 Asset(资产库 = Assets)。
+    #: 此前素材也叫 Asset,于是「取资产」一类节点的输出里并排两个 Asset,分不出哪个是参考图、哪个是资产本身。
+    "wfField_asset_id": {"zh": "素材", "en": "Media"},
     "wfField_entity_id": {"zh": "资产", "en": "Asset"},
     "wfField_scope": {"zh": "补哪些", "en": "Which angles"},
     "wfField_expressions": {"zh": "表情", "en": "Expressions"},
@@ -658,7 +660,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_added": {"zh": "新挂上几张参考图", "en": "References added"},
     "wfField_role": {"zh": "角度", "en": "Angle"},
     "wfField_if_exists": {"zh": "同名时", "en": "When it exists"},
-    "wfField_asset_ids": {"zh": "素材", "en": "Assets"},
+    #: 一串素材和一份素材**不同名**:生成节点同时交出这两样(封面一份、这次出的全部),都叫「素材」时画布上两个口一模一样。
+    "wfField_asset_ids": {"zh": "素材列表", "en": "Media list"},
     "wfField_clip_id": {"zh": "片段", "en": "Clip"},
     "wfField_attribute": {"zh": "取哪个属性", "en": "Attribute"},
     "wfField_body": {"zh": "子图", "en": "Subgraph"},
@@ -742,7 +745,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_session_mode": {"zh": "会话方式", "en": "Session mode"},
     "wfField_session_name": {"zh": "会话名称", "en": "Session name"},
     "wfField_source": {"zh": "来源", "en": "Source"},
-    "wfField_source_assets": {"zh": "输入素材", "en": "Input assets"},
+    "wfField_source_assets": {"zh": "输入素材", "en": "Input media"},
     "wfField_start": {"zh": "起始位置", "en": "Start"},
     "wfField_stop": {"zh": "停止词", "en": "Stop sequences"},
     "wfField_system": {"zh": "系统提示词", "en": "System prompt"},
@@ -781,7 +784,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_width": {"zh": "宽度", "en": "Width"},
     # 输出接点与同名配置字段共用这组语义名。
     "wfField_applied": {"zh": "已应用数量", "en": "Applied"},
-    "wfField_assets": {"zh": "素材列表", "en": "Assets"},
+    "wfField_assets": {"zh": "素材列表", "en": "Media list"},
     "wfField_audio_track_id": {"zh": "音频轨道", "en": "Audio track"},
     "wfField_count": {"zh": "数量", "en": "Count"},
     "wfField_parser": {"zh": "解析方式", "en": "Parser"},
@@ -810,7 +813,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_done": {"zh": "完成条数", "en": "Done"},
     "wfField_failed": {"zh": "失败条数", "en": "Failed"},
     "wfField_sent": {"zh": "已发送", "en": "Sent"},
-    "wfField_source_asset_id": {"zh": "来源素材", "en": "Source asset"},
+    "wfField_source_asset_id": {"zh": "来源素材", "en": "Source media"},
     "wfField_status": {"zh": "状态", "en": "Status"},
     "wfField_timed_text": {"zh": "带时间码文本", "en": "Timed text"},
     "wfField_timeline_end": {"zh": "时间线结束位置", "en": "Timeline end"},

@@ -424,6 +424,11 @@ def reference_label(parts: list[str], nodes: dict[str, dict[str, Any]], types: d
     if len(parts) > 1:
         meta = (types or NODE_TYPES).get(str(node.get("type") or "")) or {}
         output = parts[1]
+        #: 按配置逐项展开的输出(`port_maps`,「输出」节点的每一项具名输出):画布上每一项是一个口,名字就是那一项的键 ——
+        #: 和画布 portNames.outputPortName 同一个取法,不在前面再垫一层「对外输出」。
+        mapped = {str(m.get("output")) for m in (meta.get("port_maps") or {}).values() if isinstance(m, dict) and m.get("output")}
+        if output in mapped and len(parts) > 2:
+            return " · ".join([*head, *parts[2:]])
         head.append(tr(output_label(output, meta)) if output in (meta.get("outputs") or ()) else output)
     return " · ".join([*head, *parts[2:]])
 
@@ -927,19 +932,25 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
             # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
             "negative_prompt": {"advanced": True, "type": "template", "description": "wfNode_ai_generate_negative_prompt"},
+            #: `entry_labels`:这一格里**每一项叫什么**从哪里取。引用写在某一项里时,画布上那一项自己是一个输入口 ——
+            #: 口的名字和检查器里那一格是同一个(「画面比例」),不是键名 `aspect_ratio`。名字按界面语言在前端取,
+            #: 和检查器同一处(features/workflows/portNames 的 ENTRY_NAMES;声明了它不认识的来源,前端的棘轮会红)。
             "parameters": {
                 "type": "object",
                 "description": "wfNode_ai_generate_parameters",
                 "description_params": _generation_parameters_help(),
+                "entry_labels": "generation_parameters",
             },
             # **不标 advanced。** 它是图生视频/参考生视频的唯一入口 —— 藏进高级等于把一整类
             # 用法藏起来,而判据的第二条正是"它是不是这个节点在做的事"。
             #: 值是**行的列表**,每行 `素材:角色`;某一行可以是一整串引用(一组这样的行)。
+            #: 每一行叫它的角色(「首帧」「参考图」),和检查器里按角色一行一格同一个名字 —— 不是行号 `0`。
             "source_assets": {
                 "type": "template",
                 "lines": True,
                 "description": "wfNode_ai_generate_source_assets",
                 "description_params": _source_assets_help(),
+                "entry_labels": "source_roles",
             },
             #: 首尾帧组和参考素材组互斥时用哪一组(见 generation/catalog.SOURCE_GROUPS)。
             #: 允许手填:整片流程里是逐镜决定的,值来自上游(`{{…}}`)。
