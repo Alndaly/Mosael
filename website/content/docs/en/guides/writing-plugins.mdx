@@ -2,7 +2,7 @@
 title: Writing a plugin
 description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -79,6 +79,10 @@ named after it, and a collision is treated as the same plugin.
 - **60 second** process timeout, **1MB** stdout cap, `output` must be an object.
 - Crashed, timed out, printed non-JSON — what fails is **that one invocation record**, not the app.
 - Every call is logged (input, output, duration) and visible on the Plugins page.
+- On failure, the **first line of `error` is the sentence meant for people** (what happened and what to do next); the exception,
+  errno or the other side's response goes on the following lines. The interface shows the first line as the message and keeps the
+  rest under **Details** or in a hover hint — for example "Can't reach this server. Make sure it is running and the URL is right", with
+  the address and `[Errno 61] Connection refused` on the next line.
 
 ## Taking settings and credentials
 
@@ -305,11 +309,36 @@ engines in **Settings → Capability providers**, node engine dropdowns, the edi
 | `speech` | Read text with a voice | `op`: `voices` lists voices, `speak` reads |
 | `public_url` | Turn a local asset into a time-limited public link | Takes `asset_id`, `expires`; returns `url` |
 
+A few parameter conventions worth knowing for generation models:
+
+- **When sizes are only suggestions** and any "width x height" works, give `size` `examples` (the suggested sizes), `minimum` (the
+  smallest side) and `multipleOf` (what you round to); the interface becomes a size list you can type into. Use `enum` only when the
+  list is all there is.
+- **A field that picks a model file** carries `x-model-folder` (`checkpoints`, `loras`…): when the connection also claims the model
+  library, the form shows thumbnails, base model and trigger words from it.
+- A `default` on the parameters the host has its own controls for (size, resolution, duration, audio) is sent when the caller gives
+  none; other parameters the user hasn't touched are not sent.
+- When the outputs of one request used different parameters (a new seed per image, say), put `parameters` on each output and the host
+  records them as that asset's generation parameters; add a `note` ("2 of 3 images were made; image 2 failed because …") and it becomes
+  the job's last word.
+
 Write the same `provides` on the package and on **exactly one** tool (process plugins only). A tool that claims one of these **is still an
 ordinary tool**: it sits in the Plugins page's tool table, can be ticked, and the agent and workflows can call it directly, with a capability
 badge and a **Used in** list. The host never picks a plugin on its own — users make it the default under Capability providers or name it
 where it's used. Outputs and details for each are in `docs/PLUGIN_MANIFEST.md` ("Declaring what you can do for the host"); the bundled
 `plugins/bundled/mineru` (document parsing) and `plugins/bundled/object-storage` (asset links) are full examples.
+
+**Giving a connection libraries.** When a plugin connects to a server that holds things, it can also claim two **directory
+capabilities** (the claiming tool is only called by the host and stays out of the tool table):
+
+- `model_library`: lists the model files on that server (folder, size, base model, trigger words, which workflows use them, which ones
+  workflows are missing), resolves download links and downloads models onto it. The connection's title row gains **Open model library**.
+- `workflow_library`: lists the saved workflows (node-graph summary, inputs, models used, missing nodes), copies, renames, moves them to
+  a trash folder and restores them, imports workflows from elsewhere, and installs missing node packs and restarts through a node
+  manager. The connection's title row gains **Open workflow library**.
+
+Neither may **overwrite or hard-delete** anything: a name collision answers with a suggested name, and deleting moves to a trash folder.
+The protocol is in the `model_library` and `workflow_library` sections of `docs/PLUGIN_MANIFEST.md`, and the bundled ComfyUI plugin is the example.
 
 ## Making it a workflow node
 
@@ -360,4 +389,6 @@ that ships with Mosael (ComfyUI). It is listed so people can find it, not so the
 the app marks it **Built in**, and it updates with the app.
 
 **Get `permissions` right.** People decide whether to install based on that list, and installing
-a plugin puts code that will be executed on their machine.
+a plugin puts code that will be executed on their machine. **Declare what you really do**: when an update asks for more permissions,
+the user's existing connections are switched off until they grant the new ones from the connection card — so list the sites you
+connect to and the folders you write from the first version, rather than quietly adding them later.

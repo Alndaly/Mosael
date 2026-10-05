@@ -2,7 +2,7 @@
 title: Media library
 description: Import, record and download media, then find it with previews, tags and search.
 order: 7
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -23,6 +23,9 @@ downloads from a link, and the output of renders, dubbing and AI generation. The
   them in the app just stops stalling.
 - **Record** the screen, camera, microphone, or screen and camera together; recordings land in the library.
 - **From a link** — see below.
+- **From a web page** — open a profile in the [browser pool](/docs/guides/browser-pool): the top bar's screenshot, video download and
+  image collection save straight into the media library, as do files you download on the page, each remembering which page it came from
+  and when.
 
 ### Record screen and camera together
 
@@ -83,7 +86,10 @@ export a cookie jar from somewhere else.
 Available quality depends on the site, asset and sign-in state. Use the options returned by the current probe.
 
 For multi-part videos and collections, every item in the listing carries its own title (the collection name is
-already in the header, so it is not repeated), and downloaded assets are named after it.
+already in the header, so it is not repeated), and downloaded assets are named after it. When the site withholds a few names for a
+moment (Bilibili rate-limits bursts of requests), Mosael pauses and fills them in one at a time; any still missing read "Part 2 · name
+unavailable" or "Item N · name unavailable", can still be ticked and downloaded, and the asset is named after the real title the
+download brings back — never a whole list of "Untitled".
 
 When nothing can be fetched, the message says which case it is: the **site or link type is not supported**, the
 link **really has no** video or audio, a **sign-in identity is needed** (pick a signed-in one under the identity

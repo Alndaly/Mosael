@@ -2,7 +2,7 @@
 title: Creative boards
 description: Lay out documents, media, assets, 3D scenes and timelines on an infinite canvas, connect generation inputs, and let items do their own work.
 order: 5
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -68,7 +68,7 @@ Select an item: the action bar sits above it, its panel below. Every panel looks
 
 - **Image / video** — while empty, a generation panel hangs underneath. Each row of the model dropdown reads "model · connection"; your default model from Settings is preselected, and with none set it says **Choose a model**; switching models resets the settings to the new model's defaults. Aspect ratio, resolution, duration, the generation mode (first & last frame / all-round reference) and sound are **driven by the model's description** and live under Settings. When a model can make several at once, the bottom bar gains **Results per run** (N×), and that many placeholders are laid out to the right before it runs. Image items also offer **Prompt templates**. Once there is a result, the action bar has Preview, Trim and Swap, then the item's **abilities** (next section).
 - **Reference media** — the + slot opens **Add reference material**, saying how many more each role takes; you can also drop files onto the slot or press ⌘V in the panel to paste a screenshot, and it's uploaded and attached.
-- **Note** — selecting a note **does not open the writing panel**; you usually select a note to move it or recolor it. Press **Ask AI to write** in the action bar when you want help: empty means "write it", with text it means "change it the way I say"; press it again to close. Double-click still edits by hand. The bar also has colors and **Save to notes**.
+- **Note** — selecting a note **does not open the writing panel**; you usually select a note to move it or recolor it. Press **Ask AI to write** in the action bar when you want help: empty means "write it", with text it means "change it the way I say"; press it again to close. Double-click still edits by hand. The bar also has colors and **Save to notes**. A note placed with **Add to board** from a note's selection toolbar shows "From note “…”" underneath; clicking it goes back to that note and finds the passage (see [Notes](/docs/guides/notes)).
 - **Audio** — pick a voice and the text to read (voice-over). The action bar above an empty audio item switches between ways to fill it: Voice-over, Generate (music, sound effects) once a generation model supports audio, and generators from plugins (extra ones go under "…").
 - **Group frame** — fence things off and name them; with **Move together** on, dragging the frame carries what's inside. Select a few items and press <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
 
@@ -126,7 +126,7 @@ Content tools from plugins work the same way, attached to the items whose conten
 
 A board holds **only content-to-content tools**. Flow control and data steps — calling a workflow, HTTP requests, text templates — plugin tools that only list, report or upload, and tools that **fetch things by an id from another system** (importing ComfyUI outputs by task id, the drive by fs_id) belong to [workflows](/docs/guides/workflows) and chat.
 
-**One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow that delivers images, video or audio is already a model in image and video items — the board keeps **only the Generate entry**, and "⋯" no longer lists it again: add an image (video, audio) item and pick that model; the result lands in place. When the workflow has several save nodes, the placeholders for every save node are laid out before it runs (**Results per run** shows "N per node"), and **Settings** gains **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run. A ComfyUI workflow that only returns text (tagging, prompt extraction) isn't a model and stays an item ability. See [Generating with ComfyUI](/docs/guides/comfyui).
+**One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow that delivers images, video or audio is already a model in image and video items — the board keeps **only the Generate entry**, and "⋯" no longer lists it again: add an image (video, audio) item and pick that model; the result lands in place. When the workflow has several save nodes, the placeholders for every save node are laid out before it runs (**Results per run** shows "N per node"), and **Settings** gains **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run. A ComfyUI workflow that only returns text (tagging, prompt extraction) isn't a model and stays an item ability. In a ComfyUI workflow's **Settings**, size takes any width and height you type (such as `768x1024`), the checkpoint and LoRA fields show thumbnails, base model and trigger words, and workflows without a canvas (inpainting and the like) can make several results at once. See [Generating with ComfyUI](/docs/guides/comfyui).
 
 **Whose connection**: a plugin tool runs with **the connection of whoever presses run**. On a shared board, settings a teammate saved still run with your own connection — if you have none, the panel names the plugin and links to the Plugins page to create one.
 

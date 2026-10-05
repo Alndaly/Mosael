@@ -2,7 +2,7 @@
 title: AI Studio & agents
 description: Discuss projects with an agent, use creative tools and review actions and results.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -30,7 +30,10 @@ The agent uses Mosael's MCP tools to **see your project and propose changes**: s
 Its tools reach across media, documents, assets, notes, boards, 3D scenes, editing, workflows and publishing: creating projects and
 timelines, duplicating clips, replacing media, adding a track at a given row, listing boards, checking which voice engines exist
 (`list_speech_engines`), importing media from a link, reading documents, creating assets… When it names something wrong it gets a
-real error back (a mistyped voice engine lists the ones that exist) instead of making something up.
+real error back (a mistyped voice engine lists the ones that exist) instead of making something up. It edits notes passage by passage
+(`edit_note`) instead of only rewriting the whole note or appending at the end. Its browser tools reach elements inside same-origin
+frames (iframes), save a screenshot of the current page to the media library (`browser_screenshot`), and list, switch and close the
+pages open in a session (`browser_page`).
 
 ### Confirmation cards follow the conversation
 
@@ -47,6 +50,11 @@ The tier is on the card: **Edit**, **AI cost**, **Render cost**, **Outside this 
 session** is **remembered per tier**: it only covers later cards from the same tool at the same tier or lower, and **the Outside this
 app and Permanent delete tiers never offer it** — the card says irreversible actions ask every time. If a card fails halfway, what it
 already did is rolled back rather than left half-done.
+
+**A card that changes a note shows original → new**: one block per change — a replacement draws the difference (removed text struck
+through, added text highlighted, the rest unchanged), a replacement with nothing is marked as a deletion, and an insertion shows the
+surrounding text at the anchor plus what goes in; long ones show the first 400 characters with **Show full text**, and the raw JSON is
+still under Raw data.
 
 ![After rejecting, the card collapses into a “Rejected” line on the tool call, and the model reports that the asset is still there](/media/screens/en/agent-decided.png)
 
@@ -65,6 +73,11 @@ already did is rolled back rather than left half-done.
 - **Background job receipts**: when a job the agent started (parsing an attachment, a generation) finishes, a one-line job notice appears
   in the chat (hover for "Background job receipt" and the job id) — never in your message queue; receipts that arrive while the agent is
   busy are saved up and handed over together when the turn ends. Jobs it already watched to the end send no receipt.
+- **Messages with a note excerpt**: a message sent from [Notes](/docs/guides/notes) with a selection shows an excerpt line in its bubble
+  (the note title and the start of the passage), so you can tell later which passage it was about; click it to go back to that note with
+  the passage selected.
+- **Handing a web page to the agent**: **Start from this page → Ask the agent** in a browser session's top bar starts a new conversation
+  with "Take a look at this page for me:", the page title and the link in the input, waiting for you to add a line and send.
 - **It doesn't stop at a colon**: when the model stops on a half sentence like "Let me check…:", it is prompted to continue once; likewise
   when the output was cut off, when it said it would call a tool but sent none, or when the provider paused the turn. If that still fails,
   the reason is written into the chat (for example, raise **Max output tokens** in the model settings).
@@ -180,6 +193,16 @@ tier like `720p`; some let you pick a duration, some have exactly one. So the ri
 **only what this model actually supports** — switch models and the controls switch with it.
 Manually entered models that are not in the built-in capability catalog remain usable, but Mosael does not guess their duration, resolution, or media-input rules from another model by the
 same vendor.
+
+- **Image models that declare resolution tiers and quality show both**, starting at the model's own default (Evolink's GPT Image
+  defaults to the cheapest: low quality, 1K). A line under quality gives the price difference: for token-priced GPT Image, low is about
+  a ninth of medium and high about four times medium — try low first.
+- **Models whose sizes are only suggestions** (ComfyUI workflows) let you type "width x height" into the list, such as `768x1024`; a
+  well-formed size adds a **Use** entry.
+- **The checkpoint and LoRA fields** (ComfyUI workflows) show thumbnails, base model and trigger words, and **Add to prompt** appears
+  after picking a LoRA; see [Generating with ComfyUI](/docs/guides/comfyui). Arriving from **Generate with it** in the model or workflow
+  library, the workflow is already selected and that field filled.
+- Parameters the model declares a default for and you leave alone are sent with the model's default, not left to the provider's own.
 
 ### First frame, last frame, reference
 
