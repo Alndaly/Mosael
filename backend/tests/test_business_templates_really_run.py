@@ -329,6 +329,30 @@ BEATS = [
 ]
 
 
+def _image_nodes(graph: dict[str, Any]) -> list[dict[str, Any]]:
+    found = []
+    for node in graph["nodes"]:
+        if node["type"] == "ai_generate" and node["config"].get("kind") == "image":
+            found.append(node)
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict):
+            found += _image_nodes(body)
+    return found
+
+
+@pytest.mark.parametrize("build", [
+    lambda: product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+    lambda: product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE),
+], ids=["带货口播", "模特上身图"])
+def test_竖构图只说构图_不让模型画出手机外框(build) -> None:
+    """「Vertical composition for a phone screen」让 Seedream 每张都画出一台手机,商品在手机屏幕里(真跑截图)。"""
+    for node in _image_nodes(build()):
+        prompt, negative = node["config"]["prompt"], node["config"]["negative_prompt"]
+        assert "phone" not in prompt.replace("no phone", "").lower(), prompt
+        assert "9:16" in prompt and "edge to edge" in prompt, prompt
+        assert "device frame" in negative and "phone" in negative, negative
+
+
 class Test带货口播真跑:
     def test_每一拍都配音_画面按脚本时长_画外音对齐这一拍_字幕按落点(self, monkeypatch) -> None:
         ws = _workspace()

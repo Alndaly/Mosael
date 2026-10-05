@@ -304,7 +304,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
+    "version": 4,
     "nodes": 8,
     "download": {
       "zh": "/workflows/product_on_model.zh.mosael-workflow.json",
@@ -352,7 +352,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 4,
+    "version": 5,
     "nodes": 9,
     "download": {
       "zh": "/workflows/product_pitch_short.zh.mosael-workflow.json",
@@ -548,7 +548,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 4,
+    "version": 5,
     "nodes": 21,
     "download": {
       "zh": "/workflows/product_pitch_presenter.zh.mosael-workflow.json",

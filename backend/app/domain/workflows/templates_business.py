@@ -404,8 +404,14 @@ _KEEP_PRODUCT = (
 
 _NEGATIVE_PRODUCT = (
     "different garment, altered pattern, changed colour, distorted print, redesigned collar or "
-    "sleeves, extra logos, text, watermark, deformed hands, extra limbs"
+    "sleeves, extra logos, text, watermark, deformed hands, extra limbs, "
+    "phone, smartphone, device frame, screen bezel, mockup, app interface"
 )
+
+#: 竖构图**只说构图**。此前写的是「Vertical composition for a phone screen」—— 出图模型把「手机屏幕」画了出来:
+#: Seedream 每张都是一台手机、商品在手机屏幕里(真跑截图)。正向提示词里不提设备(说「不要手机」也会招来手机),
+#: 设备、边框、界面写进负向提示词(见 _NEGATIVE_PRODUCT)。
+_VERTICAL_FRAME = "Vertical 9:16 portrait-orientation photograph, full-bleed: the scene fills the frame edge to edge."
 
 
 def _lookbook_schema(*, clip_seconds: int | None) -> dict[str, Any]:
@@ -492,7 +498,7 @@ def product_on_model_graph(
                     "Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. "
                     f"{_KEEP_PRODUCT} "
                     "The reference image is the product itself, photographed flat. "
-                    "Vertical full-length composition for a phone screen. "
+                    f"Full-length framing. {_VERTICAL_FRAME} "
                     "Photorealistic commercial fashion photography, no text, no watermark."
                 ),
                 "negative_prompt": _NEGATIVE_PRODUCT,
@@ -707,7 +713,8 @@ def product_on_model_graph(
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 3, "source": "official"},
+            #: v4:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
+            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 4, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -771,7 +778,7 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
                     "prompt": (
                         "{{loop.item.visual_prompt}} "
                         f"{_KEEP_PRODUCT} "
-                        "Vertical composition for a phone screen, photorealistic, "
+                        f"{_VERTICAL_FRAME} Photorealistic, "
                         "no text, no logo overlay, no watermark."
                     ),
                     "negative_prompt": _NEGATIVE_PRODUCT,
@@ -921,7 +928,8 @@ def product_pitch_short_graph(
 - 前三秒必须给出观看理由，不要从"大家好"开始。
 - 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。
 - visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里
-  生成文字、logo 或水印。
+  生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——
+  成片本来就在手机上看。
 - 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。
 - caption 是屏幕上的短句，不是把 narration 原样抄一遍。
 - 最多 {MAX_VARIANTS} 拍：每一拍都要出一张画面。
@@ -1106,7 +1114,8 @@ def product_pitch_short_graph(
         return normalize_graph(
             {
                 #: v4:没有能用的克隆音色时用免费的 Edge 音色念(此前那一格空着,运行前拦住、跑不了)。
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 4, "source": "official"},
+                #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 5, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1670,7 +1679,8 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 4, "source": "official"},
+            #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 5, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },

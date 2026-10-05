@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion). This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and “File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the on-model images and doesn't depend on those two.",
-  "graph_hash": "e08c8090c32f6c1a2bb4689ffbee8c910c33ac492349abf1c261e62b5518b795",
+  "graph_hash": "7cb4082ee8333dc1fc991f4e5c3d1e48fb9774c359a64f750bda040ace4051d8",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -179,8 +179,8 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Vertical full-length composition for a phone screen. Photorealistic commercial fashion photography, no text, no watermark.",
-                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
+                  "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Full-length framing. Vertical 9:16 portrait-orientation photograph, full-bleed: the scene fills the frame edge to edge. Photorealistic commercial fashion photography, no text, no watermark.",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
                   "parameters": {},
                   "source_assets": [
                     "{{input.product_asset_id}}:reference_image"
@@ -218,7 +218,7 @@
                   "model": "",
                   "kind": "video",
                   "prompt": "{{loop.item.video_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the garment must stay readable throughout.",
-                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
                   "parameters": {
                     "duration_seconds": 5,
                     "aspect_ratio": "{{input.aspect_ratio}}",
