@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **103** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
+共 **105** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -98,6 +98,7 @@
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
 | `read_document` | 直接执行 | Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB). |
 | `read_note` | 直接执行 | Read a note with its source references and immutable revision. Cite citation_url after |
+| `read_skill_file` | 直接执行 | Read-only: read one file bundled with a skill (a reference document, template, example…). |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_scene_references` | 直接执行 | Render blockout references of one shot of a 3D scene and save them as assets: |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
@@ -116,6 +117,7 @@
 | `update_asset_tags` | 直接执行 | Runs directly: replace an EXISTING media asset's tag list. |
 | `update_plan` | 直接执行 | Runs directly: publish/refresh your task plan for the current conversation. |
 | `update_workflow` | 确认卡 | Confirmation required: rename a workflow or replace its ENTIRE graph. |
+| `use_skill` | 直接执行 | Read-only: load a skill — a written procedure for one kind of task — before doing that task. |
 | `view_scene` | 直接执行 | Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view. |
 | `web_search` | 直接执行 | Read-only: search the public web for up-to-date external information. |
 

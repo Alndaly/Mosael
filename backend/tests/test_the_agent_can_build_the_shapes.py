@@ -98,17 +98,20 @@ def test_the_node_catalogue_tells_the_agent_these_exist() -> None:
 
 
 def _agent_facing_text() -> str:
-    """智能体每轮都读得到的那两处:系统提示 + edit_workflow 的工具说明。
+    """智能体动手改工作流时读得到的那几处:edit_workflow 的工具说明,和内置技能「搭工作流」的正文。
+
+    「怎么想形状」从系统提示搬进了这个技能(ADR 0040 §5):系统提示里每轮都有的是一句「新建或改动工作流之前先
+    use_skill("workflow-canvas")」,技能目录也一直在 —— 所以这里要求两件事都成立:系统提示指向它,它里面讲清楚。
 
     节点清单(list_workflow_node_types)不算:那要它先想到去列一遍,而"想不到"正是要修的东西。
     """
-    import pathlib
-
     import mcp_server
     from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
+    from app.domain.agent.skills.catalog import BUILTIN_ROOT
 
-    del pathlib
-    return SYSTEM_PROMPT_TEMPLATE + (mcp_server.edit_workflow.__doc__ or "")
+    assert 'use_skill("workflow-canvas")' in SYSTEM_PROMPT_TEMPLATE, "系统提示没指向搭工作流的技能"
+    skill = (BUILTIN_ROOT / "workflow-canvas" / "SKILL.md").read_text(encoding="utf-8")
+    return skill + (mcp_server.edit_workflow.__doc__ or "")
 
 
 def test_it_is_told_that_branches_run_side_by_side() -> None:

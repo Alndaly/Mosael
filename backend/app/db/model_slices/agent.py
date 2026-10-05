@@ -1,11 +1,11 @@
-"""智能体:会话与分组、消息、记忆,以及等着人处理的那两种卡(提问与确认)。
+"""智能体:会话与分组、消息、记忆、技能的启用索引,以及等着人处理的那两种卡(提问与确认)。
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -141,6 +141,36 @@ class AgentMemory(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     #: agent = 智能体自己记下的;user = 用户在设置里写的。用户写的排在前面注入。
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="agent")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class AgentSkill(Base):
+    """一个工作区里**某个技能开没开、从哪来**(ADR 0040 §3)。技能的内容只在文件里,这里只是索引。
+
+    启用是一个**信任决定**,所以记在库里、不记在技能文件夹里:旁挂文件会跟着文件夹被拷走,别人发来的文件夹
+    里写着「已启用」,扔进来就生效了。内置和插件的技能文件是各工作区共用的,启用却是每个工作区自己的。
+
+    没有行的技能按来源取默认(见 domain/agent/skills/catalog.default_enabled):内置开、扔进文件夹的和插件的关。
+    """
+
+    __tablename__ = "agent_skills"
+    __table_args__ = (UniqueConstraint("workspace_id", "source", "package_id", "name", name="uq_agent_skills_identity"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: builtin | workspace | plugin
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 插件技能是哪个插件包的;别的来源是空串(唯一约束里 NULL 互不相等,所以不用 NULL)。
+    package_id: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 工作区技能怎么来的:created(在设置里新建)| imported(导入)| conversation(从对话存成)| copied(复制内置 / 插件的)。
+    #: 扔进文件夹、从没在 Mosael 里登记过的没有行。
+    origin: Mapped[str] = mapped_column(String(24), nullable=False, default="created")
+    #: 导入自哪个文件(`brand.zip`、文件夹名),给人看来源用。
+    imported_from: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

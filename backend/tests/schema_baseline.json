@@ -21,6 +21,19 @@
     "updated_at",
     "workspace_id"
   ],
+  "agent_skills": [
+    "created_at",
+    "created_by",
+    "enabled",
+    "id",
+    "imported_from",
+    "name",
+    "origin",
+    "package_id",
+    "source",
+    "updated_at",
+    "workspace_id"
+  ],
   "agent_messages": [
     "content",
     "created_at",

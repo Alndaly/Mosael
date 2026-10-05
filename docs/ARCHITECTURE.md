@@ -54,7 +54,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`) |
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。webhook 凭任务级密钥触发,同一把密钥还能查那次运行的进度、取消它(`api/routes/hooks`),密钥由服务端独管、可重置。启用着的任务一定跑得起来(`ensure_runnable`):绑的工作流删了,任务随即停用。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
-| `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体 |
+| `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体。**记忆**是每轮都在的短约定(`memory.py`,封顶);**技能**是按需读的做法(`skills/`,[ADR-0040](adr/0040-agent-skills.md)):开放的 SKILL.md 文件夹,内置的在 `builtin_skills/`、工作区的在 `<数据目录>/skills/<工作区>/`、插件带的在包里的 `skills/`,启用与来源记在 `agent_skills` 表;系统提示里只有名字和一句说明(封顶、顺序固定),全文经只读工具 `use_skill` / `read_skill_file` 读,输入框的「/」把全文挂到这一轮;导入的技能是不可信指令,不改确认卡和权限档,脚本不执行。插件清单里给外部智能体看的工具目录叫**工具集**(`toolsets.py`、`/api/agent/toolsets`),和技能是两件事 |
 | `voices/`(配 `ai/runtime/`) | 语音:音色库与克隆、字幕配音(`subtitle_dub.py`)、TTS 设置的数据库那一侧(`tts_settings.py`);ASR / TTS 的引擎目录、worker 与守护进程在 `ai/runtime/`。**语言能力挂在权重上而不是引擎上**(`ai/runtime/f5_models.py` 是那张表,`ai/runtime/tts_language.py` 是合成前的那道判断)。**一把嗓子还能复刻到远端引擎**(`remote.py`,[ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md)):副本按账号(连接 + 钥匙主人)和模型挂在嗓子下面(`voice_enrollments`),`speak_to_file` 在合成前把 `voice_id` 解析成远端副本 —— 没有就建、远端没了重建一次;上传前要这个账号点过头(409 `remote_voice_consent_required`),删嗓子先删远端。「这次合成走哪条连接、哪个模型」只在 `target.py` 算一处 |
 | `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配，**查不到时不猜这个模型**(同系列不同型号的时长、角色、枚举经常不同)。但「不猜模型」不等于「什么都不知道」:请求是我们自己构造的,Adapter 说得出自己发哪几项标量参数(`parameter_surface`),那个面与模型名无关时兜底就用它 —— **只给键、不声称取值范围**;面依赖模型时才是空参数表。用户还可以给自己那条连接写一份参数组,在模型行上按 kind 指过去(见 [ADR-0015](adr/0015-generation-parameters-come-from-the-adapter.md))。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、槽位按顺序叫什么 `source_labels`(插件给的,三处界面把第 i 个名字标在第 i 格上)、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
@@ -474,7 +474,7 @@ Evolink 是「平台 Adapter」的例子：一个 `(evolink, image|video)` 协�
 
 | 调用方 | 执行面 | Adapter / Interface | 状态与工具 | 视觉输入现状 |
 | --- | --- | --- | --- | --- |
-| AI Studio 智能体 | `agent` | pi Agent Adapter | 有会话、记忆、工具循环和子智能体 | 当前消息图片在所选模型声明视觉能力时直接送入;已有素材可经工具分析 |
+| AI Studio 智能体 | `agent` | pi Agent Adapter | 有会话、记忆、技能、工具循环和子智能体 | 当前消息图片在所选模型声明视觉能力时直接送入;已有素材可经工具分析 |
 | 无限画布写作/看图 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 图片经 `browser_compatible_image` 统一格式/MIME 后发送;视频发送采样帧 |
 | 工作流 LLM 节点 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 节点目前只组装文本消息 |
 | 素材分析 API / `analyze_asset` 工具 | 普通 HTTP=`direct`;AI Studio 工具=`automation` | `analysis.service` → `ai_chat.chat` | 无状态单次分析;工具调用继承令牌绑定的智能体会话模型 | 图片先归一化;视频走原生输入或采样帧 + 转写;OAuth Gateway 使用采样帧 |

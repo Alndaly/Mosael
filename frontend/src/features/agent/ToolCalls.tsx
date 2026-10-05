@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, X } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, Sparkles, X } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, getAsset, type Asset, type Confirmation } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
@@ -455,9 +455,68 @@ export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
     // 字号挂在容器上:行的根是 <button>,而全局那条 `button { font: inherit }` 会把根上的
     // 字号吃掉(同一段坑见 agentRow.ts 里 AGENT_ROW_TEXT_CLASS 的说明)。
     <div className={cn("flex w-full min-w-0 flex-col gap-1 self-stretch", AGENT_ROW_TEXT_CLASS)}>
-      {tools.map((tool) => (
-        <ToolCallCard key={tool.id} tool={tool} />
-      ))}
+      {tools.map((tool) =>
+        // 读技能那一步不是一行原始 JSON:说「用了技能:X」,点开是它的做法(ADR 0040 §4)。失败的照普通工具行画,原因看得见。
+        tool.name === "use_skill" && tool.status !== "error" ? (
+          <SkillUseRow key={tool.id} tool={tool} />
+        ) : (
+          <ToolCallCard key={tool.id} tool={tool} />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** `use_skill` 的回包里界面要的那几样(见后端 domain/agent/skills/runtime.use_skill)。 */
+type SkillUse = { name?: string; title?: string; source?: string; instructions?: string; files?: { path: string }[] };
+
+/**
+ * 「用了技能:做带货短视频」。折叠时就这一句,点开看智能体读到的那份做法 —— 来源、正文、带的文件。
+ *
+ * 和工具行同一套形状(Marker):它也是「这一步做了什么」,只是这一步值得用人话说出来 —— 一个 `use_skill`
+ * 加一串 JSON 对用户没有意义,「它照着哪份做法在做」才有。
+ */
+function SkillUseRow({ tool }: { tool: ToolCall }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const data = React.useMemo(() => toolResultData(tool.result), [tool.result]) as SkillUse | null;
+  const requested = (tool.args as { name?: string } | undefined)?.name ?? "";
+  const title = data?.title || data?.name || requested;
+  const running = tool.status === "running";
+  const body = data?.instructions ?? "";
+  return (
+    <div className="w-full min-w-0" data-tool-call={tool.id} data-skill-use={data?.name ?? requested}>
+      <Marker
+        asChild
+        className={cn(AGENT_ROW_CLASS, "transition-colors duration-100", body && "enabled:cursor-pointer enabled:hover:bg-muted")}
+      >
+        <button type="button" onClick={() => body && setOpen((value) => !value)} aria-expanded={body ? open : undefined} disabled={!body}>
+          <MarkerIcon className="inline-flex items-center justify-center text-primary">
+            {running ? <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} /> : <Sparkles className={AGENT_ROW_ICON_CLASS} />}
+          </MarkerIcon>
+          <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
+            <Truncate className="min-w-0 flex-1 text-foreground">
+              {(running ? t("skillUsing") : t("skillUsed")).replace("{name}", title)}
+            </Truncate>
+            {data?.source && <span className="flex-none pl-1.5 text-ui-xs">{data.source}</span>}
+          </MarkerContent>
+          {body && (
+            <ChevronRight className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")} aria-hidden />
+          )}
+        </button>
+      </Marker>
+      {open && body && (
+        <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1 grid min-w-0 gap-2")} data-slot="skill-body">
+          <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden text-ui-sm">
+            <AgentMarkdown>{body}</AgentMarkdown>
+          </div>
+          {(data?.files?.length ?? 0) > 0 && (
+            <p className="m-0 text-ui-xs text-muted-foreground">
+              {t("skillUsedFiles").replace("{files}", (data?.files ?? []).map((file) => file.path).join("、"))}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

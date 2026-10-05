@@ -2,12 +2,14 @@ import React from "react";
 import { EditorContent, type JSONContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { PluginKey } from "@tiptap/pm/state";
 
 import { useI18n } from "@/app/preferences";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
+import { MAX_FORCED_SKILLS, SKILL_NODE, SkillChip, collectSkills, searchSkills, type SkillOption } from "@/features/agent/SkillChip";
 import {
   REFERENCE_MENU_LIMIT,
   REFERENCE_META,
@@ -16,6 +18,7 @@ import {
   type ReferenceKind,
 } from "@/features/agent/references";
 import { Truncate } from "@/components/ui/truncate";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { cn } from "@/lib/utils";
 
 /** 从文档里收出所有引用,按出现顺序去重。 */
@@ -99,6 +102,11 @@ export function documentText(document: JSONContent | undefined): string {
       parts.push(`@${String((node.attrs as { name?: string } | undefined)?.name ?? "")}`);
       return;
     }
+    if (node.type === SKILL_NODE) {
+      const attrs = (node.attrs ?? {}) as { title?: string; ref?: string };
+      parts.push(`/${String(attrs.title || attrs.ref || "")}`);
+      return;
+    }
     if (node.type === "text") {
       parts.push(node.text ?? "");
       return;
@@ -136,6 +144,7 @@ export function ChatComposer({
   placeholder,
   className,
   search = searchReferences,
+  skills = searchSkills,
   focusSignal,
 }: {
   workspaceId: string;
@@ -154,6 +163,8 @@ export function ChatComposer({
   /** 候选从哪儿来。默认问工作区;**留这个口子是为了测得动** —— 菜单的排版和键盘行为
    *  不该为了验证一次就得起一个后端。 */
   search?: (workspaceId: string, query: string) => Promise<AgentReference[]>;
+  /** 「/」点名技能的候选从哪儿来(ADR 0040 §4)。默认问工作区里开着的技能;同上,留口子是为了测得动。 */
+  skills?: (workspaceId: string, query: string) => Promise<SkillOption[]>;
   /** 变一次就把光标放到末尾(页面上的「问 AI」把人带到这里)。0 / 不给 = 不动。 */
   focusSignal?: number;
 }) {
@@ -165,6 +176,8 @@ export function ChatComposer({
   submitRef.current = onSubmit;
   const searchRef = React.useRef(search);
   searchRef.current = search;
+  const skillsRef = React.useRef(skills);
+  skillsRef.current = skills;
   //: handleKeyDown 在创建时装好,闭包住的是那一刻的状态 —— 用 ref 读"菜单现在开着没有"。
   const menuOpenRef = React.useRef(false);
 
@@ -174,7 +187,13 @@ export function ChatComposer({
     view: (items) => items.slice(0, REFERENCE_MENU_LIMIT),
   });
 
-  menuOpenRef.current = Boolean(menu.menu);
+  //: 「/」的那一份菜单:候选是技能,不是对象。两份菜单各管各的,回车让路的判据是「任何一份开着」。
+  const skillMenu = useSuggestionMenu<SkillOption>({
+    emptyHint: () => t("skillPickerEmpty"),
+    sameItems: (a, b) => a.length === b.length && a.every((one, at) => one.ref === b[at].ref),
+  });
+
+  menuOpenRef.current = Boolean(menu.menu || skillMenu.menu);
 
   const emitted = React.useRef(JSON.stringify(value));
   const editor = useEditor({
@@ -194,6 +213,35 @@ export function ChatComposer({
       }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
       ReferenceChip,
+      SkillChip,
+      //: 「/」点名技能。**只在行首或空格后面触发**(默认的 allowedPrefixes):正文里打网址、路径时不该弹菜单。
+      //: 两个建议插件不能共用默认的插件键 —— 共用的话后挂上的那个会把前一个的状态盖掉。
+      RefSuggestion.extend({ name: "skillSuggestion" }).configure({
+        suggestion: {
+          char: "/",
+          pluginKey: new PluginKey("skillSuggestion"),
+          items: ({ query }) => skillsRef.current(workspaceRef.current, query),
+          command: ({ editor: instance, range, props }) => {
+            const picked = props as unknown as SkillOption;
+            const already = collectSkills(instance.getJSON());
+            //: 点名有上限(每个都是整份正文挂进这一轮);同一个点两次只算一次。
+            if (already.length >= MAX_FORCED_SKILLS && !already.includes(picked.ref)) {
+              instance.chain().focus().deleteRange(range).run();
+              return;
+            }
+            instance
+              .chain()
+              .focus()
+              .deleteRange(range)
+              .insertContent([
+                { type: SKILL_NODE, attrs: { ref: picked.ref, title: picked.title } },
+                { type: "text", text: " " },
+              ])
+              .run();
+          },
+          render: skillMenu.render,
+        },
+      }),
       RefSuggestion.configure({
         suggestion: {
           char: "@",
@@ -291,6 +339,33 @@ export function ChatComposer({
           </React.Fragment>
         )}
       </menu.Portal>
+      <skillMenu.Portal className="fixed left-0 top-0 z-50 max-h-[min(360px,calc(100dvh-16px))] w-[360px] max-w-[calc(100vw-16px)] rounded-xl p-1.5">
+        {(item, index) => (
+          <React.Fragment key={item.ref}>
+            {index === 0 && (
+              <div className="px-1.5 pb-0.5 pt-1 text-ui-2xs font-semibold text-muted-foreground">{t("skillPickerTitle")}</div>
+            )}
+            <button
+              type="button"
+              data-skill-option={item.ref}
+              className={cn(
+                "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors",
+                index === (skillMenu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => skillMenu.choose(item)}
+            >
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <Truncate className="flex-none text-ui-xs font-medium text-foreground">{item.title}</Truncate>
+                <Truncate className="min-w-0 flex-1 font-mono text-ui-2xs text-muted-foreground">{item.ref}</Truncate>
+              </span>
+              <Truncate lines={2} className="text-ui-2xs text-muted-foreground">
+                <InlineMarkdown text={item.description} links={false} />
+              </Truncate>
+            </button>
+          </React.Fragment>
+        )}
+      </skillMenu.Portal>
     </>
   );
 }

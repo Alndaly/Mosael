@@ -355,7 +355,8 @@ def delete_account(db: Session, user: User) -> None:
 
 def delete_workspace(db: Session, workspace_id: str) -> None:
     """删工作区。成员和工作区里的各种资源由外键 CASCADE 带走;**文件不会** —— 3D 模型归工作区
-    (和字体、LUT 同一套),由这里显式清掉。"""
+    (和字体、LUT 同一套)、技能文件夹也归工作区,由这里显式清掉。"""
+    from app.domain.agent.skills.store import delete_workspace_files as delete_workspace_skills
     from app.domain.scenes.operations import delete_workspace_model_files
 
     workspace = db.get(Workspace, workspace_id)
@@ -364,3 +365,5 @@ def delete_workspace(db: Session, workspace_id: str) -> None:
     db.delete(workspace)
     # 文件在行真的删掉(提交成功)之后再清:回滚了的话工作区还在,它的模型文件不能先没了。
     after_commit(db, lambda: delete_workspace_model_files(workspace_id))
+    # 技能文件夹也归工作区(ADR 0040 §3):索引行由外键带走,文件夹在这里删。
+    after_commit(db, lambda: delete_workspace_skills(workspace_id))

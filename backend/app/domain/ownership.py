@@ -104,6 +104,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "SessionGroup": ("app/domain/session_groups/",),
     "AgentMessage": ("app/domain/agent/",),
     "AgentMemory": ("app/domain/agent/",),
+    #: 技能的启用索引(ADR 0040):只归技能域写,内容在文件里。
+    "AgentSkill": ("app/domain/agent/skills/",),
     "AgentQuestion": ("app/domain/agent/",),
     "ToolConfirmation": ("app/domain/agent/",),
     "FeishuBot": ("app/domain/feishu/",),

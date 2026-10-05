@@ -26,6 +26,7 @@ export * from "@/api/domains/publish";
 export * from "@/api/domains/scenes";
 export * from "@/api/domains/scheduler";
 export * from "@/api/domains/sessions";
+export * from "@/api/domains/skills";
 export * from "@/api/domains/speech";
 export * from "@/api/domains/workflows";
 export * from "@/api/domains/workspaces";

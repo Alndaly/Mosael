@@ -120,6 +120,7 @@ def post_agent_message(
             body_document=body.body_document,
             origin_session_id=body.origin_session_id,
             quote=body.quote.model_dump() if body.quote else None,
+            skills=body.skills,
         )
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

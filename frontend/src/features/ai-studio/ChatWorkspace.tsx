@@ -34,6 +34,7 @@ import { Truncate } from "@/components/ui/truncate";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { collectSkills } from "@/features/agent/SkillChip";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
@@ -217,7 +218,11 @@ export function ChatWorkspace({
   const sendMessage = useMutation({
     mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
       const targetId = (await current.ensure()).id;
-      const message = await sendAgentMessage(targetId, { content, context: noteAttach.context, references, body_document: document });
+      //: 「/」点名的技能(ADR 0040 §4)跟着这条消息走,后端把全文挂到这一轮。
+      const skills = collectSkills(document);
+      const message = await sendAgentMessage(targetId, {
+        content, context: noteAttach.context, references, body_document: document, ...(skills.length ? { skills } : {}),
+      });
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {

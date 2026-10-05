@@ -22886,6 +22886,53 @@
         }
       }
     },
+    "/api/workspaces/{workspace_id}/skills": {
+      "get": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "List Skills",
+        "description": "这个工作区看得到的全部技能:内置、我的、来自插件。「/」菜单只摆其中开着、能用的。",
+        "operationId": "list_skills_api_workspaces__workspace_id__skills_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSkillOut"
+                  },
+                  "title": "Response List Skills Api Workspaces  Workspace Id  Skills Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/session-groups": {
       "get": {
         "tags": [
@@ -24290,6 +24337,14 @@
                 "type": "null"
               }
             ]
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Skills"
           }
         },
         "type": "object",
@@ -24951,6 +25006,45 @@
         },
         "type": "object",
         "title": "AgentSessionUpdate"
+      },
+      "AgentSkillOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "title",
+          "description",
+          "source_label",
+          "enabled"
+        ],
+        "title": "AgentSkillOut",
+        "description": "列表里的一行。`ref` 是模型看到的名字(插件的带 `插件 id:`),界面也拿它当标识。"
       },
       "AgentSpeechRequest": {
         "properties": {

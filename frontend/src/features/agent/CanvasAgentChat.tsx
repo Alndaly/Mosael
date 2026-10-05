@@ -46,6 +46,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { collectSkills } from "@/features/agent/SkillChip";
 import type { AgentReference } from "@/features/agent/references";
 import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
@@ -347,8 +348,11 @@ export function CanvasAgentChat({
         throw new Error(t("composerMessageTooLong"));
       }
       const targetId = (await current.ensure()).id;
+      //: 「/」点名的技能(ADR 0040 §4):全文由后端挂到这一轮。
+      const skills = document ? collectSkills(document) : [];
       const message = await sendAgentMessage(targetId, {
         content: visibleContent, context, references, ...(document ? { body_document: document } : {}), ...(quote ? { quote } : {}),
+        ...(skills.length ? { skills } : {}),
       });
       return { message, targetId, fromPage };
     },

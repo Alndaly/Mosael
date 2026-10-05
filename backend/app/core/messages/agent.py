@@ -52,6 +52,50 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "You've reached the limit of {max} memories. Delete the ones you no longer need first.",
     },
     "agentErr_planStepsNotArray": {"zh": "steps 必须是数组", "en": "steps must be an array."},
+    # 技能(ADR 0040)。SKILL.md 本身的格式错误(skillErr_badName 之类)由 mosael_formats 的文案表给。
+    "skillErr_badWorkspace": {"zh": "找不到这个工作区", "en": "That workspace doesn't exist."},
+    "skillErr_unreadable": {"zh": "SKILL.md 读不了(不是 UTF-8 文字,或者没有权限)", "en": "SKILL.md can't be read (not UTF-8 text, or no permission)."},
+    "skillErr_reservedName": {
+        "zh": "「{name}」是内置技能的名字,工作区里的技能换个名字",
+        "en": "“{name}” is the name of a built-in skill; give the workspace skill another name.",
+    },
+    "skillErr_fileMissing": {"zh": "技能里没有文件 {path}", "en": "The skill has no file {path}."},
+    "skillErr_notFound": {
+        "zh": "没有叫「{name}」的技能。系统提示的【技能】里列着能用的;插件的技能要写成「插件 id:名字」",
+        "en": "There is no skill named “{name}”. The available ones are listed under 【技能】 in the system prompt; plugin skills are written as “plugin-id:name”.",
+    },
+    "skillErr_disabled": {
+        "zh": "技能「{name}」在这个工作区里没有启用 —— 请用户在 设置 → 智能体 → 技能 里打开",
+        "en": "The skill “{name}” isn't enabled in this workspace; ask the user to turn it on under Settings → Agent → Skills.",
+    },
+    "skillErr_broken": {"zh": "技能「{name}」现在用不了:{detail}", "en": "The skill “{name}” can't be used right now: {detail}"},
+    "skillErr_exists": {"zh": "已经有一个叫「{name}」的技能了", "en": "There is already a skill named “{name}”."},
+    "skillErr_readOnly": {
+        "zh": "「{name}」是内置或插件带的技能,不能改;可以复制成我的再改",
+        "en": "“{name}” is a built-in or plugin skill and can't be edited; copy it into your own skills first.",
+    },
+    "skillErr_skillMdViaForm": {
+        "zh": "SKILL.md 在表单里改(头和正文),这里只放别的文件",
+        "en": "Edit SKILL.md through the form (header and body); this is only for the other files.",
+    },
+    "skillErr_importGone": {
+        "zh": "这次导入已经过期或不存在了,请重新选择文件",
+        "en": "This import has expired or doesn't exist; choose the files again.",
+    },
+    "skillErr_draftNothing": {"zh": "这次对话里还没有能整理成技能的内容", "en": "This conversation has nothing to turn into a skill yet."},
+    "skillErr_draftNotJson": {
+        "zh": "模型没有按要求回一份技能草稿,请再试一次或换个模型",
+        "en": "The model didn't reply with a skill draft as asked; try again or use another model.",
+    },
+    "skillErr_draftEmpty": {"zh": "模型起草的技能是空的,请再试一次", "en": "The model drafted an empty skill; try again."},
+    "skillSource_builtin": {"zh": "Mosael 内置", "en": "built into Mosael"},
+    "skillSource_plugin": {"zh": "插件「{name}」", "en": "plugin “{name}”"},
+    "skillSource_imported": {"zh": "从 {name} 导入", "en": "imported from {name}"},
+    "skillSource_created": {"zh": "工作区成员写的", "en": "written by a workspace member"},
+    "skillSource_conversation": {"zh": "从对话存成的", "en": "saved from a conversation"},
+    "skillSource_copied": {"zh": "复制来改的", "en": "a copy made to edit"},
+    "skillSource_folder": {"zh": "直接放进数据目录的文件夹", "en": "a folder placed directly in the data directory"},
+
     "agentErr_planEmpty": {"zh": "计划至少要有一步", "en": "A plan needs at least one step."},
     # 智能体问用户的选择题(报错面向模型:要说清怎么改)
     "questionErr_listEmpty": {"zh": "questions 必须是非空数组", "en": "questions must be a non-empty array."},

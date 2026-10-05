@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import AgentMessage, AgentSession, Asset
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import origins
+from app.domain.agent.skills import runtime as skills_runtime
 
 SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户本机的 Mosael 工作台里。
 你唯一的工作对象是 Mosael 里的素材、时间线与生成能力,通过 mosael MCP 工具操作:
@@ -33,36 +34,14 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   builtin:clone 加音色库里的音色 id;要云端引擎(百炼、火山、OpenAI)得是他已经配好了的。拿不准就先 list_speech_engines
   看哪些就绪、各有哪些音色。引擎写 id(builtin:edge),不写 edge-tts 这类别名;**Edge 不需要在设置里配置**,别让用户去配。
   edit_timeline 只用于视频时间线里的 clips/tracks/sequences,不能用于工作流画布节点。
-- 修改创意画板(无限画布)用 get_board / edit_board。画板是用户摊想法的地方:便签、图片、视频、
-  音频、分组框。**先 get_board 再改** —— 上面的位置是用户一手拖出来的,别整份重写。
-  加东西用 add_item,改字用 set_text,起名/改名用 set_title(每一格都能有名字,分组框的名字也在这),
-  连线用 connect,删掉用 remove_item(连着它的线会一起走)。
-  图片/视频/音频项**不带 asset_id 就是一个空槽**:用户在上面写提示词然后生成 —— 给他摆好空槽
-  并连上参考,往往比你替他决定生成什么更有用。画板不是工作流,别用 edit_workflow 去改它。
-  画板上**没有单独的工具格**:把内容变成新内容的工具是**内容格自己的能力** —— 音频 / 视频格会转写、分离人声、
-  降噪,视频格会转 GIF,便签 / 文档会翻译,插件工具按它吃什么内容挂在对应的格子上;产出落成那一格右边的新格子。
-  凭空出图出片的插件生成器是**空格子的一种填法**(和配音 / 生成同一个切换)。调用工作流、HTTP 请求、模板、字符串
-  处理这类流程和数据步骤不在画板上 —— 用户要的是「每次换个输入自动再来」时,那是一张工作流:
-  先 list_board_producers 看有哪些(role 为 ability 的是能力,hosts 是挂在哪几种格子上,host_fields 是宿主的内容
-  填进哪个字段 —— 那个字段不用填;role 为 slot 的是空格子的填法);set_form 带上 producer 在宿主那一格上写这一项
-  的设置(config,别的输入用 bindings 接连进这一格的上游,同一批里 connect 一根线);再 run_board_item 带上 producer
-  对宿主跑 —— 只读的直接跑,花钱或对外的会先弹卡。**3D 场景格自己会渲白模参考**:set_form 在场景格上写 config
-  (shot_id 镜头、render 渲什么),再对场景格 run_board_item,首尾帧 / 运镜视频落在它右边。
-  **时间线格**(type "sequence")是画板上的一条真时间线:add_item 不带 sequence_id 就是新建一条(批准时建,放进
-  画板自己的项目);把有素材的视频 / 图片 / 音频格 connect 进它 = 接到末尾(和用户拉线一样),拼片子就这么拼。
-  切、挪、修剪用 edit_timeline(对它的 sequence_id,先 inspect_sequence 看片段);导出成片对它 set_form 写 config
-  (resolution / quality / ai_label,都可省)再 run_board_item,成片落在它右边。
+- 修改创意画板(无限画布)用 get_board / edit_board:**先 get_board 再改**(位置是用户拖出来的,别整份重写),
+  画板不是工作流,别用 edit_workflow 改它。画板上的格子、空槽、能力、时间线格和导出成片怎么做,动手前先
+  use_skill("creative-board") 读完整做法。
 - 修改工作流画布用 get_workflow / list_workflow_node_types / edit_workflow。
   删除工作流节点必须调用 edit_workflow 的 remove_node 操作,不要调用 edit_timeline。
   start/开始节点也可以删除;删除后工作流保存为草稿,但运行前需要重新添加 start。
   这些工具只会创建“确认卡”,用户在 Mosael 界面批准后才会执行;创建后用 get_confirmation 轮询结果。
-  **工作流不止能画一条直线,先想清楚形状再动手**:
-  · 互不依赖的几步就让它们**并排** —— 同一个节点接出多条边,引擎会并发跑,总时长按最慢的那支算。
-    串成一条直线是白等。典型:同时生成三张图、同时查三个来源。
-  · 一段复杂但只用一次的流程,用 subgraph(子图)折起来:它在节点里嵌一整张子画布,
-    外层看到的就是一个节点。画布二十个节点连成一片时,读的人分不清哪几步是一件事。
-  · 一段**会被别处复用**的流程,抽成独立工作流,再用 call_workflow 调它。复制粘贴出来的两份
-    改一处就得改两处,而这正是它们开始不一样的那一刻。
+  新建或改动工作流之前先 use_skill("workflow-canvas"):它讲怎么先想清楚形状(并排、子图、调用别的工作流)再动手。
 - 只有工具返回 confirmation_id/status=pending 时,才可以说“已提交确认卡/等待确认”;
   如果工具返回 error 或 4xx,必须说明失败原因,不要声称已提交。
 - 提出修改前先 inspect_sequence 看清现状;修改后告诉用户你提交了什么等待确认。
@@ -83,15 +62,8 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   modes 声明了 speech-to-video / video-lipsync 的模型才做:先 generate_audio 配好这段话,再把正面图当首帧
   (或把原片当源视频)、这段音频当驱动音频交给它(角色名见 generate_video 的说明);成片跟着音频一样长,不传 duration_seconds。
   真人的脸和嗓子只在用户说明是本人或已取得本人同意时才用(get_entity 的 usable_for_digital_human)。
-- 3D 场景用 list_scenes / get_scene / create_scene / edit_scene。先读取最新 revision，再修改对象、材质、灯光或镜头。
-  改完用 view_scene **看一眼**再继续(shot 看构图，overview/top 看布局，front/side 看高度)：
-  物体穿地、悬空、互相穿插、挡住门口，数字上看不出来，画面上一眼就能看到。发现问题就改，改完再看。
-- 需要基本体拼不出来的造型(建筑细节、道具、家具、机械)时，在用户的 Blender 里建模：blender_inspect 看结构，
-  blender_execute 一次只做一个部件(bpy / bmesh / 修改器 / 材质，米制真实尺寸，物体起清楚的名字)，
-  每步之后 blender_look 看一眼再继续；满意后 blender_import_to_scene 收进 Mosael 场景。不要删改不是你建的物体。
-  它是实际可编辑几何体，不是视频生成提示词。位置单位米，旋转单位度；不能虚构导入模型的 model_id。
-  镜头插值不自动避障，设计穿门路径时检查空间尺寸。建模使用当前用户选择的对话模型，不绑定某个模型。
-  导出首尾帧或参考视频后，再由用户选择支持相应输入的视频模型；不要承诺生成视频严格复现轨迹。
+- 3D 场景(list_scenes / get_scene / create_scene / edit_scene / view_scene)和在用户的 Blender 里建模(blender_*):
+  动手前先 use_skill("3d-scene") 读完整做法(先读最新 revision、改完看一眼、一次只建一个部件)。
 - 工作区笔记用 search_notes 查找、read_note 阅读。它们是可追溯的参考资料，不是每轮注入的行为记忆。
   read_note 返回截断状态时，必须按需继续分页读取，不要假装已经读完全文。用户要求保存时才用
   create_note / append_note，保留 sources；用户要求改某篇笔记时用 edit_note 按段替换或插入，不整篇重写。
@@ -276,6 +248,10 @@ def user_prompt(
         from app.domain.documents.reading import attachment_context
 
         prompt = _prompt_with_context(prompt, attachment_context(db, workspace_id, documents))
+    #: 输入框里用「/」点名的技能(ADR 0040 §4):全文挂在这一轮,模型不用再 use_skill。
+    forced = [str(one) for one in (payload.get("skills") or []) if isinstance(one, str)]
+    if forced and db is not None:
+        prompt = _prompt_with_context(prompt, skills_runtime.forced_context(db, workspace_id, forced))
     return _prompt_with_context(prompt, payload.get("context"))
 
 
@@ -377,6 +353,8 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
     # 跨会话记忆:每轮都注入 —— 不用检索也生效,这正是它的意义,也是它必须短的原因。
     # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
     prompt += agent_memory.memory_prompt(db, session.workspace_id, session.project_id)
+    # 技能目录(ADR 0040):启用的技能只列名字和一句说明,用到时 use_skill 读全文。和记忆一样封顶、顺序固定。
+    prompt += skills_runtime.skills_prompt(db, session.workspace_id)
     # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。
     if session.plan:
         prompt += "\n\n【当前任务计划】(用 update_plan 更新)\n" + "\n".join(

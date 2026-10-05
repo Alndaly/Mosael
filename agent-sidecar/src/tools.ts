@@ -289,6 +289,9 @@ const TOOL_LABELS: Record<string, string> = {
   run_workflow: "运行工作流",
   list_agent_sessions: "查看智能体会话",
   notify_agent_session: "通知另一个智能体",
+  // 技能(ADR 0040):两个都只读,子智能体也拿得到(判据仍是 manifest 的 read_only,不是这张表)。
+  use_skill: "使用技能",
+  read_skill_file: "读技能文件",
 };
 
 /** All Mosael tools for a turn, generated from the backend manifest. */

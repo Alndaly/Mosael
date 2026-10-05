@@ -446,10 +446,13 @@ def test_智能体给时间线格写导出设置_不认识的值开卡就拒() -
 
 
 def test_工具说明里讲清时间线格() -> None:
+    """画板的做法从系统提示搬进了内置技能「创意画板」(ADR 0040 §5):系统提示指向它,时间线格讲在它里面。"""
     import mcp_server
     from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE as SYSTEM_PROMPT
+    from app.domain.agent.skills.catalog import BUILTIN_ROOT
 
     assert "sequence" in mcp_server.edit_board.__doc__ and "TIMELINE ITEM" in mcp_server.edit_board.__doc__
     assert "sequence_export" in mcp_server.get_board.__doc__
     assert "sequence_export" in mcp_server.list_board_producers.__doc__
-    assert "时间线格" in SYSTEM_PROMPT
+    assert 'use_skill("creative-board")' in SYSTEM_PROMPT
+    assert "时间线格" in (BUILTIN_ROOT / "creative-board" / "SKILL.md").read_text(encoding="utf-8")

@@ -170,6 +170,115 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "只有真人人物才需要授权声明",
         "en": "Only a real person takes a consent claim.",
     },
+    # ---- 智能体技能(SKILL.md,ADR 0040) ----
+    "skillErr_noFrontmatter": {
+        "zh": "SKILL.md 第一行要是 ---,下面写 name 和 description,再用一行 --- 收住",
+        "en": "SKILL.md must start with a --- line, then name and description, closed by another --- line.",
+    },
+    "skillErr_frontmatterUnclosed": {
+        "zh": "SKILL.md 的头没有收尾:少了结束的那一行 ---",
+        "en": "The SKILL.md header is not closed: the ending --- line is missing.",
+    },
+    "skillErr_missingField": {
+        "zh": "SKILL.md 缺少必填字段 {field}",
+        "en": "SKILL.md is missing the required field {field}.",
+    },
+    "skillErr_fieldNotText": {
+        "zh": "SKILL.md 的 {field} 要是一段文字",
+        "en": "In SKILL.md, {field} must be text.",
+    },
+    "skillErr_metadataNotStrings": {
+        "zh": "SKILL.md 的 metadata 只能是「键: 文字」的映射",
+        "en": "In SKILL.md, metadata must map keys to text values.",
+    },
+    "skillErr_badName": {
+        "zh": "技能名「{name}」不合规范:只能用小写英文字母、数字和连字符(-),不能以连字符开头或结尾、不能连着两个,最长 {max} 个字符。中文名写在显示名里",
+        "en": "The skill name “{name}” breaks the spec: use lowercase letters, digits and single hyphens, not starting or ending with a hyphen, up to {max} characters. Put a friendly name in the display name.",
+    },
+    "skillErr_folderMismatch": {
+        "zh": "技能文件夹叫「{folder}」,SKILL.md 里的 name 却是「{name}」—— 规范要求两者一样",
+        "en": "The skill folder is “{folder}” but SKILL.md says name “{name}”; the spec requires them to match.",
+    },
+    "skillErr_tooLong": {
+        "zh": "SKILL.md 的 {field} 太长了(最多 {max} 个字符)",
+        "en": "In SKILL.md, {field} is too long (at most {max} characters).",
+    },
+    "skillErr_skillMdTooLarge": {
+        "zh": "SKILL.md 超过 {limit} KB。把详细的参考资料拆成单独的文件,正文里写「去读哪个文件」",
+        "en": "SKILL.md is larger than {limit} KB. Move detailed reference material into separate files and point to them from the body.",
+    },
+    "skillErr_yamlTab": {
+        "zh": "SKILL.md 第 {line} 行用 Tab 缩进了,YAML 只认空格",
+        "en": "Line {line} of SKILL.md is indented with a tab; YAML only allows spaces.",
+    },
+    "skillErr_yamlIndent": {
+        "zh": "SKILL.md 第 {line} 行的缩进对不上",
+        "en": "The indentation on line {line} of SKILL.md does not line up.",
+    },
+    "skillErr_yamlSyntax": {
+        "zh": "SKILL.md 第 {line} 行的 YAML 读不懂",
+        "en": "Line {line} of SKILL.md is not valid YAML.",
+    },
+    "skillErr_yamlDuplicateKey": {
+        "zh": "SKILL.md 第 {line} 行:{field} 写了两遍",
+        "en": "Line {line} of SKILL.md: {field} appears twice.",
+    },
+    "skillErr_yamlUnsupported": {
+        "zh": "SKILL.md 第 {line} 行用了 Mosael 不认的 YAML 写法(锚点、别名、标签之类),请写成普通的「键: 值」",
+        "en": "Line {line} of SKILL.md uses YAML Mosael does not accept (anchors, aliases, tags…); please write plain “key: value”.",
+    },
+    "skillErr_yamlUnterminated": {
+        "zh": "SKILL.md 第 {line} 行开头的引号或括号没有收尾",
+        "en": "The quote or bracket opened on line {line} of SKILL.md is never closed.",
+    },
+    "skillErr_badPath": {
+        "zh": "技能里的文件路径「{path}」不合法:要是技能文件夹里面的相对路径(不能有 ..、绝对路径或反斜杠,最多 8 层)",
+        "en": "The file path “{path}” is not allowed: it must be a relative path inside the skill folder (no .., absolute paths or backslashes, at most 8 levels).",
+    },
+    "skillErr_noSkillMd": {
+        "zh": "没找到 SKILL.md —— 一个技能是一个文件夹,里面要有一份 SKILL.md",
+        "en": "No SKILL.md found; a skill is a folder containing a SKILL.md.",
+    },
+    "skillErr_tooManyFiles": {
+        "zh": "一个技能最多 {limit} 个文件",
+        "en": "A skill can have at most {limit} files.",
+    },
+    "skillErr_fileTooLarge": {
+        "zh": "技能里的文件 {path} 超过 {limit} MB",
+        "en": "The skill file {path} is larger than {limit} MB.",
+    },
+    "skillErr_skillTooLarge": {
+        "zh": "一个技能合计不能超过 {limit} MB",
+        "en": "A skill can be at most {limit} MB in total.",
+    },
+    "skillErr_tooManySkills": {
+        "zh": "一次最多导入 {limit} 个技能",
+        "en": "You can import at most {limit} skills at a time.",
+    },
+    "skillErr_notUtf8": {
+        "zh": "{path} 不是 UTF-8 编码的文字",
+        "en": "{path} is not UTF-8 text.",
+    },
+    "skillErr_duplicateName": {
+        "zh": "这次导入里有两个技能都叫 {name}",
+        "en": "Two skills in this import are both named {name}.",
+    },
+    "skillErr_notZip": {
+        "zh": "这不是一个能打开的 .zip 文件",
+        "en": "This is not a .zip file that can be opened.",
+    },
+    "skillErr_symlink": {
+        "zh": "压缩包里有符号链接({path}),出于安全不收",
+        "en": "The archive contains a symbolic link ({path}), which is refused for safety.",
+    },
+    "skillErr_archiveTooLarge": {
+        "zh": "压缩包解开后超过 {limit} MB",
+        "en": "The archive unpacks to more than {limit} MB.",
+    },
+    "skillErr_pluginStrayFile": {
+        "zh": "插件的 skills/ 目录下只能放技能文件夹,{path} 不在任何一个技能里",
+        "en": "A plugin's skills/ directory may only contain skill folders; {path} is not inside one.",
+    },
 }
 
 

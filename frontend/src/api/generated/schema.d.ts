@@ -7581,6 +7581,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Skills
+         * @description 这个工作区看得到的全部技能:内置、我的、来自插件。「/」菜单只摆其中开着、能用的。
+         */
+        get: operations["list_skills_api_workspaces__workspace_id__skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session-groups": {
         parameters: {
             query?: never;
@@ -8128,6 +8148,8 @@ export interface components {
             /** Origin Session Id */
             origin_session_id?: string | null;
             quote?: components["schemas"]["AgentMessageQuoteIn"] | null;
+            /** Skills */
+            skills?: string[];
         };
         /** AgentMessageOut */
         AgentMessageOut: {
@@ -8398,6 +8420,27 @@ export interface components {
             auto_allow_tools?: components["schemas"]["SessionAllowance"][] | null;
             /** Group Id */
             group_id?: string | null;
+        };
+        /**
+         * AgentSkillOut
+         * @description 列表里的一行。`ref` 是模型看到的名字(插件的带 `插件 id:`),界面也拿它当标识。
+         */
+        AgentSkillOut: {
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Source Label */
+            source_label: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
         };
         /**
          * AgentSpeechRequest
@@ -32384,6 +32427,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_skills_api_workspaces__workspace_id__skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillOut"][];
+                };
             };
             /** @description Validation Error */
             422: {

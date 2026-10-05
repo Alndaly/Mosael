@@ -4,6 +4,7 @@ import type { JSONContent } from "@tiptap/react";
 import { ReferenceBadge } from "@/features/agent/ReferenceChip";
 import { useReferencePreview } from "@/features/agent/useReferencePreview";
 import { REFERENCE_NODE } from "@/features/agent/ReferenceChip";
+import { SKILL_NODE, SkillBadge } from "@/features/agent/SkillChip";
 import type { ReferenceKind } from "@/features/agent/references";
 
 /**
@@ -50,6 +51,10 @@ function renderInline(node: JSONContent, index: number, open: Open): React.React
       name: attrs.name ?? "",
     };
     return <ReferenceBadge key={index} {...reference} className="mx-0.5" onOpen={() => open(reference)} />;
+  }
+  if (node.type === SKILL_NODE) {
+    const attrs = (node.attrs ?? {}) as { ref?: string; title?: string };
+    return <SkillBadge key={index} title={attrs.title ?? ""} refName={attrs.ref ?? ""} className="mx-0.5" />;
   }
   if (node.type === "hardBreak") return <br key={index} />;
   return <React.Fragment key={index}>{node.text ?? ""}</React.Fragment>;

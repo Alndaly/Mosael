@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi import Depends
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.agent_skills import router as agent_skills_router
 from app.api.routes.session_groups import router as session_groups_router
 from app.api.routes.agent_credentials import router as agent_credentials_router
 from app.api.routes.agent_tools import router as agent_tools_router
@@ -74,6 +75,7 @@ from app.domain.assets import AssetProjectError
 from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
+from app.domain.agent.skills.catalog import SkillDomainError
 from app.domain.entities import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
 from app.domain.voices.remote import RemoteConsentRequired
@@ -262,6 +264,11 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(AssetFileTypeError)
     async def _asset_file_type_error(_request: Request, exc: AssetFileTypeError) -> JSONResponse:
         """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(SkillDomainError)
+    async def _skill_error(_request: Request, exc: SkillDomainError) -> JSONResponse:
+        """技能(ADR 0040):路由、导入、工具都可能抛,按它自己声明的状态码翻(404 / 409 / 422 / 502)。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(SceneDomainError)
@@ -545,6 +552,7 @@ def create_app() -> FastAPI:
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
+    app.include_router(agent_skills_router, prefix="/api", dependencies=protected)
     app.include_router(session_groups_router, prefix="/api", dependencies=protected)
     app.include_router(agent_tools_router, prefix="/api", dependencies=protected)
     app.include_router(agent_credentials_router, prefix="/api", dependencies=protected)

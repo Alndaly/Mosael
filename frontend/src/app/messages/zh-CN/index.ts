@@ -1,5 +1,6 @@
 // 中文文案表:各分区按原先的先后拼起来(键序不变)。分区与 ../en-US/ 同名文件一一对应、键集相同。
 import { agentMemory } from "./agentMemory";
+import { agentSkills } from "./agentSkills";
 import { aiStudio } from "./aiStudio";
 import { assetLibrary } from "./assetLibrary";
 import { browserTools } from "./browserTools";
@@ -20,6 +21,7 @@ export const zhCN = {
   ...shell,
   ...mediaLibrary,
   ...agentMemory,
+  ...agentSkills,
   ...bulkSelection,
   ...publish,
   ...nodeToolbar,

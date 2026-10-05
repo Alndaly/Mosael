@@ -236,6 +236,16 @@ class AgentMessageCreate(ApiModel):
     origin_session_id: str | None = Field(default=None, max_length=64)
     #: 笔记页发出的消息带着的选区摘录(见 AgentMessageQuoteIn)。落库进 payload["quote"]。
     quote: AgentMessageQuoteIn | None = None
+    #: 输入框里用「/」点名的技能(ADR 0040 §4),写模型看到的名字(插件的带 `插件 id:`)。全文挂到这一轮;
+    #: 落库进 payload["skills"],气泡照它画胶囊。最多 3 个 —— 每个都是整份正文。
+    skills: list[str] = Field(default_factory=list, max_length=3)
+
+    @field_validator("skills")
+    @classmethod
+    def _skill_refs_are_short(cls, value: list[str]) -> list[str]:
+        if any(len(one) > 240 for one in value):
+            raise ValueError("skill name too long")
+        return list(dict.fromkeys(one.strip() for one in value if one.strip()))
 
 
 class AgentMessageOut(OrmModel):

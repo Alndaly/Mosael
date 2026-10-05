@@ -39,6 +39,9 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_workflow_node_types": {},
     "list_memories": {},
     "search_notes": {"query": "灵感"},
+    # 技能(ADR 0040):内置的那几个每个工作区都有,不用造数据。
+    "use_skill": {"name": "creative-board"},
+    "read_skill_file": {"name": "creative-board", "path": "SKILL.md"},
     "read_note": {"note_id": "no-such-note"},
     "list_scenes": {},
     "list_entities": {"kind": "character"},

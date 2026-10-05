@@ -460,6 +460,7 @@ def post_user_message(
     origin_session_id: str | None = None,
     answers: dict | None = None,
     quote: dict | None = None,
+    skills: list[str] | None = None,
     steer_if_running: bool = False,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread.
@@ -478,7 +479,7 @@ def post_user_message(
     # 前两样和排队那条共用 user_prompt,免得两条路各拼各的(引用当初就是这么漏掉的)。
     prompt = user_prompt(
         content,
-        {"references": references, "context": context},
+        {"references": references, "context": context, "skills": skills},
         db=db,
         workspace_id=session.workspace_id,
     )
@@ -496,6 +497,8 @@ def post_user_message(
         **({"context": context.strip()} if context and context.strip() else {}),
         **({"answers": answers} if answers else {}),
         **({"quote": quote} if quote else {}),
+        #: 「/」点名的技能(ADR 0040 §4):排队那条路照它把全文挂上,气泡照它画胶囊。
+        **({"skills": list(skills)} if skills else {}),
         **origin_marker,
     }
     if not _claim_idle_session(db, session.id):
@@ -1048,7 +1051,9 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
     message = db.get(AgentMessage, message_id)
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
         raise HostError("agentErr_queuedMessageMissing")
-    if not steer_turn(session.id, _prompt_with_context(message.content, (message.payload or {}).get("context"))):
+    # 插话那一份和直发、排队同一个 user_prompt:引用清单、「/」点名的技能都要跟着进去。
+    payload = message.payload or {}
+    if not steer_turn(session.id, user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)):
         return False
     _unqueue(db, message)
     db.flush()
