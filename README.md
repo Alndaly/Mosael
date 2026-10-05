@@ -81,9 +81,10 @@ remember what they were made from. Spending is recorded from the usage and charg
 Connect a ComfyUI server on this computer or your LAN. Every saved workflow becomes a model you can pick in AI Studio
 and on boards, and a tool the agent and workflows can run. The **model library** lists the server's checkpoints, LoRAs
 and other files with preview images, base model and trigger words, and downloads what's missing; the **workflow
-library** imports workflows and completes missing models and custom nodes. In the next release, an **app form** shows
-only the few fields others need to fill in. Mosael doesn't replace ComfyUI's own interface — it puts your workflows next
-to cloud models, the editor and automation. [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui)
+library** organizes workflows in folders, creates and imports them, and completes missing models and custom nodes. An
+**app form** shows only the few fields others need to fill in, and the desktop **ComfyUI workbench** opens ComfyUI's own
+canvas with Mosael's model library, missing items, app form and run results docked beside it. Mosael doesn't replace
+ComfyUI's own interface — it puts your workflows next to cloud models, the editor and automation. [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui)
 
 ![ComfyUI model library with previews, base model and file size](website/public/media/screens/en/model-library.png)
 

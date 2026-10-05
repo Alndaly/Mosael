@@ -1,5 +1,21 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.2": {
+    zh: [
+      "**ComfyUI 工作台。** 桌面版里直接打开 ComfyUI 自己的画布,右边停着 Mosael 的模型库、缺失项、应用和运行结果:选中加载节点就列出那个目录的模型,点一下填进去;缺的节点按包一键装,缺的模型按文件名去 Civitai、HuggingFace、ModelScope 找;跑出来的图标明来自哪个节点。面板能拉宽,画布有「触控板 / 鼠标」两种操控,只在你这边生效。",
+      "**应用表单:把工作流做成一张简单的表。** 从工作流里挑出要别人填的几项,起名、排序、收窄可选值,也能「按推荐先挑一版」;AI 工作台、画板、工作流节点用它时只剩这几项,其余照工作流原样跑。能填的项改用人话名字,不再露节点类名。",
+      "**模型库更懂你的模型。** 底模从元数据、权重结构和文件名三处认,Krea 2、Anima、MiniMax H3 这类新底模也认得出;预览图分四档,NSFW 单独管(手动标记、元数据、Civitai、本机识别四种依据);没有预览图的按哈希去 Civitai 找,能存回 ComfyUI;只有示例视频的模型悬停就播;详情写原链接,卡片有右键菜单,打开和滚动不再卡。",
+      "**智能体技能。** 一类事的做法写成一份 SKILL.md(开放格式),智能体用到时才读;内置创意画板、搭工作流、3D 场景三个技能,系统提示每轮短了约五分之一。设置里能新建、导入(先看全文再启用)、导出,也能把一次顺手的对话「存成技能」;插件也能带技能。",
+      "**工作流库有了文件夹,带货口播每一拍能动起来。** 工作流按 ComfyUI 的文件夹分组,拖进文件夹就是移动,能直接新建,卡片有右键菜单;带货口播配了视频模型时,每一拍的画面当首帧出一段视频。另外插件详情页重做,素材、笔记、文档和运行结果里的图都能点开看大图、成组翻看。",
+    ],
+    en: [
+      "**ComfyUI workbench.** The desktop app opens ComfyUI's own canvas with Mosael's model library, missing items, app form and run results docked beside it: select a loader node to list that folder's models and fill one in with a click; install missing node packs in one go and find missing models by file name on Civitai, HuggingFace and ModelScope; every result says which node it came from. The panel is resizable, and the canvas offers trackpad or mouse controls that apply only on your side.",
+      "**App forms turn a workflow into a simple form.** Pick the few inputs others should fill in, name and order them, narrow their choices, or start from a recommended set; AI Studio, boards and workflow nodes then show only those, and everything else runs as the workflow has it. Inputs now carry readable names instead of node class names.",
+      "**The model library understands your models.** Base models are recognized from metadata, weight structure and file names, including newer ones such as Krea 2, Anima and MiniMax H3; previews have four display levels with NSFW handled separately (manual marks, metadata, Civitai and on-device detection); models without previews can be matched on Civitai by hash and saved back to ComfyUI; video-only examples play on hover; details link to the original page, cards have a context menu, and opening and scrolling no longer stutter.",
+      "**Agent skills.** Write how a kind of task is done as a SKILL.md (an open format) and the agent reads it only when needed; three built-in skills (creative boards, building workflows, 3D scenes) shrink the system prompt by about a fifth. Settings can create, import (review the full text before enabling) and export skills, or save a conversation that went well as a skill; plugins can ship skills too.",
+      "**Workflow folders and moving product beats.** Workflows are grouped by ComfyUI's folders, dragging a card onto a folder moves it, you can create new ones, and cards have a context menu; with a video model, each product-pitch beat turns its frame into a short clip. The plugin detail pages were redesigned, and images in assets, notes, documents and run results open in a full-size viewer you can page through.",
+    ],
+  },
   "v1.9.1": {
     zh: [
       "**克隆音色能交给百炼 CosyVoice 念。** 配音库里的嗓子复刻到你自己的百炼账号,选 CosyVoice 时音色下拉多一组「我的克隆音色」,配音、字幕逐句配音、AI 工作台、画板、工作流和语音对话都能挑,不装本机引擎也能用自己的嗓子配音。第一次用会问你一次要不要上传参考音频,没声明是谁的嗓子不复刻;配音库写明每把嗓子在哪儿能念,删掉嗓子时百炼上的副本一起删。",
