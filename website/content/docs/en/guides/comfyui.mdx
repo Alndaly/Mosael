@@ -1,8 +1,8 @@
 ---
 title: Generating with ComfyUI
-description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick, and a set of tools lets the agent and workflows run any workflow as-is.
+description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick and a tool the agent and workflows can run as-is, and the model and workflow libraries let you browse, download, import and complete what is on that server.
 order: 18
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -16,6 +16,9 @@ brings two things:
   nodes and tunable parameters, returning every output; plus listing workflows and model files, checking the GPU and
   queue, importing outputs from ComfyUI's history into the asset library, and interrupt / clear the queue / free VRAM.
   The agent can call them directly, and each tool is a node in the workflow node panel.
+- **Two libraries**: **Open model library** on the connection's title row shows every model file on the server and downloads
+  missing ones; **Open workflow library** shows, manages and imports the workflows saved on it, installing missing node packs
+  through ComfyUI-Manager.
 
 ## Connecting a ComfyUI server
 
@@ -27,13 +30,15 @@ brings two things:
 3. Grant the permissions it asks for and switch the connection on: `network:comfyui` (talk to this ComfyUI),
    `network:huggingface`, `network:civitai` and `network:modelscope` (the model library looks up links and downloads
    models from these sites), and `filesystem:write` (when ComfyUI runs on this computer, downloaded models are written
-   into its models folder).
+   into its models folder). These are exactly the things the plugin does; connections carried over from an earlier version
+   are switched off until you grant the new ones (see the upgrade section at the end).
 
 Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
 “N models · refreshed just now”; **View models** lists whether each one makes images or videos, which kinds of
 generation it supports, which inputs it takes and which parameters it has. When the server can't be reached the row
-says why (usually ComfyUI isn't running or the URL is wrong). Create one connection per server; each brings its own
-models and tools.
+says only what to do ("Can't reach this ComfyUI. Make sure it is running and the URL is right"), with the address and the
+raw error in the hover hint. Create one connection per server; each brings its own models and tools, and with several
+they fold into one line each (see [Plugins](/docs/guides/plugins)).
 
 Under Settings → AI image / AI video, a ComfyUI connection is shown as “Provided by a plugin”: rename it or change
 its URL on the Plugins page. Its models can be set as default models like any other.
@@ -65,15 +70,27 @@ Mosael reads **what each workflow lets you tune and what it takes**:
 | The prompt nodes upstream of the sampler / guider | Prompt and negative prompt |
 | With no sampler Mosael knows (API nodes such as MiniMax / Hailuo, Kling and Veo; packs with their own sampler such as WanVideo; MiniMax H3 wrapped in a subgraph): a multiline `prompt` on a node wired into an output | Prompt; a `negative_prompt` on the same node is the negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | Seed (random each time when left empty) |
-| Width and height of the node that creates the canvas (EmptyLatentImage, Wan / Hunyuan video latents) | Size (the workflow's own when not chosen) |
+| Width and height of the node that creates the canvas (EmptyLatentImage, Wan / Hunyuan video latents) | Size: the workflow's own when not chosen; the list holds the workflow's own and a few common sizes, and you can also type any "width x height" (such as `768x1024`), each side rounded to a multiple of 8, at least 16 |
 | The canvas node's batch_size | “Images”: how many per run (up to 4, one when not chosen), all of them collected |
-| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run |
-| Checkpoint, LoRA, VAE, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI |
+| An image workflow with no canvas but a seed (inpainting, image-to-image and others that start from a loaded image) | “Images” is there too: the plugin **runs one result to the end before submitting the next**, with a new seed each time (counting up from the seed you gave), and each result's seed is kept in its generation parameters. Cancelling stops the rest from being submitted; if one fails, the others are still returned with a note such as "2 of 3 images were made; image 2 failed because …". Upscaling and others without a seed would make the same image every time, so they have no image count |
+| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run. A preview node that only shows the loaded image or a preprocessor's result (an OpenPose skeleton, Canny lines, a depth map) is not an output |
+| Checkpoint, LoRA, VAE, text encoder, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI, each with a thumbnail, base model and trigger words (see "The model library shows up when generating" below) |
 | Steps, CFG, sampler, scheduler, denoise, frame count … | One entry each in the parameters panel with a plain name (“Steps”, “Sampler”); common ones first, details under Advanced |
-| LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame |
+| LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame (also when they pass through a resize, crop or similar step first); an image-to-video workflow requires its first frame |
 | LoadImageMask, or a LoadImage whose only used output is its mask (alpha) | Mask (inpainting — white is the area to change) |
 | LoadVideo / VHS_LoadVideo | Video to edit (video-to-video) |
 | LoadAudio | Driving audio (in video workflows) or reference audio |
+
+**Only the part of the graph ComfyUI will actually run counts**: the nodes that reach an output and everything upstream of
+them. A dangling canvas node doesn't turn into Size or Images, a loader whose downstream is entirely bypassed doesn't become an
+input, and a preview cut off upstream isn't counted among the outputs; rgthree's front-end-only nodes such as Relay and Repeater
+stay out of the graph, and the fixed seed stored in its Seed node is no longer replaced on every run.
+
+**What is missing is said in full before anything is submitted.** Mosael first checks the graph against this ComfyUI's nodes and
+model files: nodes that aren't installed and model files picked in loaders that aren't on the machine are listed together, with
+where to install them or what to swap, and nothing is submitted — no installing one only to discover the next. When some outputs
+fail validation (the face-fix or upscale branch needs a missing model, say), ComfyUI would still queue the rest; Mosael cancels
+that task and says why instead of handing back a preview as the result.
 
 When a workflow has two nodes of the same kind (two KSamplers, say), the parameter names say which is which: the node
 title if you gave it one, otherwise “KSampler #2”. Hover a parameter name to see which node and input it comes from.
@@ -101,7 +118,8 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
 - one field per loader node — “Image”, “Mask”, “Video”, “Audio” — listing only that kind of asset, with the node's
   title when you gave it one;
 - one field per tunable parameter, named and ranged as in the generation parameters, common ones first; seed, size and
-  image count under Advanced;
+  image count under Advanced — the count is 1 when left empty (not the batch_size saved on the workflow's canvas), and size
+  takes any width and height, as in generation;
 - outputs per output node: connect “Image · SaveImage” downstream directly, or use “First output” / “All outputs” /
   “Text outputs” / “Summary” / “Task id”. Those five are for wiring workflows: run it on a board and only each
   output node's own product (image, video, audio, text) lands to the right — no duplicate image, no JSON or summary notes.
@@ -155,27 +173,63 @@ tool call. Longer runs belong in generation.
 
 ## Model library: browse and download models
 
-Every ComfyUI connection on the Plugins page has a **Model library** row. It opens **every model file** on that server,
-with a tab per folder (checkpoints, loras, vae…), a base-model filter and search; files with a preview image show it.
-Open one to see its base model (SDXL, Illustrious, Flux, Wan… and whether that came from the file's metadata or its
-name), trigger words, which saved workflows use it, and all the metadata written into the file.
+**Open model library** on the connection's title row shows **every model file** on that server:
 
-**Missing models download in one click.** Models a workflow declares a download link for (as ComfyUI's official
-templates do) but that aren't on the server are listed at the top of the library; click Download. Or click Download
-model and paste a link: a HuggingFace file, a Civitai model page or download link, a ModelScope model page or file, or
-any other direct link. It is looked up first (file name, size and a suggested folder), then downloaded onto that ComfyUI
-once you confirm; you can follow the progress and cancel in the library or the task center. Once it's done you can pick
-it right away when generating. A ModelScope model page with a single model file picks that file; with several, the
-candidates are listed and you paste the address of the one you want from its Files tab.
+- **A column of folders on the left** (checkpoints, loras, vae…), sorted by file count, empty ones left out; pinned at the bottom
+  of the column are **Models missing for workflows** and **Downloads**. In a narrow window the column becomes a drop-down at the
+  start of the toolbar.
+- **A toolbar on top**: search (with the number of files in scope), a **Base model** filter (tick several; it lists only the ones
+  in the current folder, with counts), sorting (by name / size / date modified), three views (large cards / small cards / list),
+  a **Blur previews** switch, and **Download model**. Active filters sit in a row, each removable, with **Clear all**. The view and
+  the blur switch are remembered on this computer.
+- **Cards** show the preview image where there is one (an image with the same name as the model file, or the cover inside a
+  safetensors file), always 3:4; files without one get a placeholder per folder. Small cards fit a dozen or more on a screen;
+  large cards add the folder and how many workflows use it; the list has one file per row with folder, base model, size and date.
+  With **Blur previews** on, previews stay blurred until the pointer or keyboard focus rests on them — for when some previews
+  aren't fit to open in front of others.
+
+![The model library: folders on the left, search, base model, sort, view and blur previews on top, small cards below](/media/screens/en/model-library.png)
+
+**Open a model**: a fixed header shows its name and folder · size · base model, with **Copy file name**, **Used by N workflow(s)**
+and **Generate with it** on the right; below, the preview on the left and the overview, workflows and metadata on the right, each
+column scrolling on its own.
+
+- **Base model**: SDXL, Illustrious, Pony, Flux, Wan, Qwen-Image… with a lighter line saying whether it came from the file's
+  metadata or its name (the latter may be wrong).
+- **Trigger words**: the ones the author wrote into the file, copied with a click; without those, the most frequent training tags,
+  marked as not necessarily the author's trigger words.
+- **Used by workflows**: saved workflows that use it, each with a button to show it in the workflow library.
+- **Metadata**: every key and value in the file, searchable; long values fold into one line and can be expanded and copied.
+- **Generate with it**: jumps to AI Studio's generate page with a workflow that can use this file selected and that field filled.
+  When several workflows can, you choose (the ones already using it come first); when none can, the button is disabled and its hint
+  says why. Only trigger words the author wrote are added to the prompt.
+
+![Model details: preview on the left; base model and how it was recognized, trigger words, workflows and metadata on the right](/media/screens/en/model-detail.png)
+
+### Downloading models
+
+**Missing models download in one click.** Models a workflow declares a download link for (as ComfyUI's official templates do)
+but that aren't on the server are listed under **Models missing for workflows** at the bottom of the column; click Download. For
+one the workflow gives no link for, the download dialog says which file in which folder it needs, so you can find a link and paste it.
+
+Or click **Download model** and paste a link: a HuggingFace file, a Civitai model page or download link (civitai.red and
+civitai.green work too), a ModelScope model page or file, or any other direct link. **Look up** finds the file name, size and a
+suggested folder, and it downloads onto that ComfyUI once you confirm. The library switches to **Downloads** to follow the progress,
+and you can cancel there or in the task center; once it's done you can pick it right away when generating. A ModelScope model page
+with a single model file picks that file; with several, the candidates are listed and you paste the address of the one you want from
+its Files tab.
+
+![The download dialog opened from a missing model, carrying the folder and file name the workflow needs](/media/screens/en/model-download.png)
 
 Good to know:
 
 - **Existing files are never overwritten**: if the folder already has that name you're asked to pick another (with a
   suggestion). Mosael never deletes or renames model files.
-- When ComfyUI runs on **another machine**, that machine's **ComfyUI-Manager** does the download (without byte progress,
-  and it can't be stopped once started). A LAN ComfyUI started with `--listen 0.0.0.0` won't let the Manager install
-  models over the network by default: on that machine open `ComfyUI/user/__manager/config.ini`, set `network_mode` to
-  `personal_cloud` and restart ComfyUI (the library spells out the reason and this step).
+- When ComfyUI runs on **another machine**, that machine's **ComfyUI-Manager** does the download: there is no byte progress, and
+  cancelling in Mosael only stops waiting while the download carries on over there — the download dialog says so first. A LAN
+  ComfyUI started with `--listen 0.0.0.0` won't let the Manager install models over the network by default: on that machine open
+  `ComfyUI/user/__manager/config.ini`, set `network_mode` to `personal_cloud` and restart ComfyUI (the library spells out the
+  reason and this step).
 - When ComfyUI runs on **this computer**, Mosael writes straight into its models folder, with progress, cancel and a
   free-space check first.
 - For gated HuggingFace repositories, Civitai models that need a login, or private ModelScope models, enter a
@@ -183,9 +237,97 @@ Good to know:
   its own site; when a download through ComfyUI-Manager needs the Civitai token, the download dialog warns that it stays
   in that machine's task history, and that HuggingFace and ModelScope tokens can't be passed through the Manager at all.
 
-**The model library shows up when generating too.** In AI Studio, boards and the workflow generate node, the field
-that picks a checkpoint or LoRA is a list with thumbnails: each item shows its base model and first trigger words, which
-can also be searched; after picking a LoRA with trigger words, “Add to prompt” on the line below appends them.
+**When it can't be read**, the middle of the library says "Couldn't read the model library" with one sentence on what to do, and
+the raw error under **Details**; next to it are **Retry** and **Check connection settings** (closes the library, expands the
+connection and lands on the server URL field).
+
+![The unreachable server: "Couldn't read the model library", a plain first line, the raw error under Details, then Retry and Check connection settings](/media/screens/en/model-library-error.png)
+
+### The model library shows up when generating
+
+In AI Studio, boards and the workflow generate node, the field that picks a checkpoint or LoRA (or a VAE, text encoder and the
+like) is a list with thumbnails: each item shows its base model and first trigger words, which can also be searched; files without
+a preview get a placeholder per folder. After picking a LoRA with trigger words, the line below lists them and **Add to prompt**
+appends them (skipping any already there).
+
+![Picking a LoRA in AI Studio: each item with a thumbnail, base model and trigger words](/media/screens/en/ai-generate-models.png)
+
+<Recording src="/media/videos/en/model-library.mp4" poster="/media/screens/en/model-library.png" caption="Live interaction: switch folders in the model library, filter by base model, change the view and open a LoRA's details" />
+
+## Workflow library: browse and manage the server's workflows
+
+**Open workflow library** on the connection's title row looks just like the model library:
+
+- **The left column**: All, each subfolder (by count), and **Missing nodes or models** pinned at the bottom; once you have deleted
+  workflows in Mosael, a **Trash** as well.
+- **The toolbar**: search (names, paths, missing node types, models used and input / output names all count), a kind filter
+  (image / video / audio / can't be converted), sorting (name / date modified / node count), the three views, and **Import**.
+- **Each card is a thumbnail of the workflow's node graph**, drawn from the node positions, links and groups in the workflow, nodes
+  coloured by role (loading inputs, loading models, sampling, prompts, outputs…), bypassed ones faded; below it the name, kind,
+  node count and how many node types and models are missing.
+
+![The workflow library: folders and Missing nodes or models on the left, node-graph thumbnails as cards](/media/screens/en/workflow-library.png)
+
+**Open one**: a larger node graph on the left (with node titles and group names), and on the right:
+
+- **What it takes, what you can tune, what it produces** — the same as when it serves as a model or a tool; one that can't be
+  converted says why.
+- **Models it uses**: whether each is on the server; the ones that are have a button to show them in the model library.
+- **Missing nodes**: which node pack each comes from and whether that pack is installed (installed but not loaded is said separately).
+- **Missing models**: a **Download** on each row opens the model library's download dialog with the link, folder and file name
+  written in the workflow.
+- **Latest output** and **Used in Mosael by**: the workflow nodes and board items in this workspace that pick it, linked.
+
+The header has **Generate with it** (jumps to AI Studio with this workflow selected; disabled with the reason when it isn't a
+generation model), **Open in editor** and **More actions**.
+
+![Workflow details: the node graph on the left; inputs, models used, missing nodes with their packs and missing models on the right](/media/screens/en/workflow-library-detail.png)
+
+**Changing files on that machine** is under **More actions**, always confirmed first and naming the server whose `workflows/`
+folder is being changed:
+
+- **Copy… / Rename…**: the path may include subfolders, and `.json` is optional; a name that won't work (`..`, backslashes,
+  `:*?"<>|`, a leading dot) is pointed out on the spot. If that server already has the name, **nothing is overwritten** and a
+  suggestion is offered. A copy gets a free name by default and you land on the new one.
+- **Delete…**: not a real delete — the file moves into a trash folder on that machine (`.mosael-trash/workflows`), and the
+  confirmation lists what in Mosael uses it (those will say the model can't be found when they run). Deleted ones are under
+  **Trash** in the left column and can be restored, under a new name if the old place is taken. Mosael has no "empty trash" — to
+  really delete them, remove that folder on the machine.
+- **Export JSON**: downloads to this computer without touching the server.
+
+After any change the workflow library, the generation models and the tool list refresh.
+
+**Open in editor**: the desktop app opens this ComfyUI's interface in the connection's own built-in browser and opens this
+workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved changes already open there are kept); the web
+version opens ComfyUI in a new tab and tells you which workflow to click under Workflows. Save in ComfyUI, come back to Mosael, and
+the workflow library refreshes itself. If ComfyUI sits behind a reverse proxy with login, sign in once in that built-in browser.
+
+### Importing workflows from elsewhere and completing them
+
+**Import** in the toolbar (or dropping files onto the workflow library) takes:
+
+- the JSON from ComfyUI's Save / Export and from Export (API), pasted or as a file;
+- PNG / WebP images ComfyUI saved (with the workflow embedded);
+- archives (the first workflow is taken, the rest noted);
+- links: the address of the file on HuggingFace, Civitai or ModelScope, or this ComfyUI's own address; for any other site,
+  download the file first and drop it in.
+
+**Read it** shows a **preview** first: where it was found, UI format or API format (API format has no layout, so node positions are
+arranged automatically), the node graph, what it takes, missing nodes and packs, missing models, and the path it will be saved as
+(the suggested name by default, another one if that's taken). Only **Save on that server** writes it into that server's
+`workflows/`, never overwriting anything. You land on it afterwards and complete what's missing from its details.
+
+![Importing a workflow: the preview after pasting JSON — format, node graph, parameters, missing nodes and models, and the path to save as](/media/screens/en/workflow-import.png)
+
+**Installing missing node packs**: when that ComfyUI has ComfyUI-Manager, a pack that isn't installed has **Install** next to it
+under Missing nodes. The confirmation says this changes that machine (the Manager installs it into `ComfyUI/custom_nodes` with its
+Python dependencies), that ComfyUI must restart to load it, and that a restart interrupts running tasks. Installing is a background
+task with progress shown below; when it's done, **Restart ComfyUI** (also confirmed first), and the workflow library lists everything
+again once ComfyUI is back. If the Manager's security settings refuse to install or restart, you're told what to change or how to
+install by hand; without the Manager you're told to install it on that machine yourself. **Missing models** are downloaded through
+the model library (see above).
+
+<Recording src="/media/videos/en/workflow-library.mp4" poster="/media/screens/en/workflow-library.png" caption="Live interaction: filter the workflow library to workflows missing nodes or models, open one, then import a workflow JSON and look at the preview (not saved)" />
 
 ## Progress, cancel and restarts
 
@@ -211,12 +353,12 @@ Earlier versions had ComfyUI as a provider under Settings → AI image; upgradin
 
 ComfyUI connections you already have get the new tools automatically after upgrading, switched on as listed above.
 
-**Upgrading to 1.9 pauses the connection**: the plugin now declares three more permissions (`network:huggingface`,
-`network:civitai`, `filesystem:write`, see above). The top of the connection card lists them and “Grant these 3” resumes
-it right away; earlier grants are kept. The plugin list marks it “Needs permission”.
-
-**Upgrading to 1.10 pauses it again, for one more**: `network:modelscope` (the model library now also resolves and
-downloads ModelScope links). “Grant these 1” on the connection card resumes it.
+**Upgrading to this version switches the connection off once**: the plugin now declares exactly what it does, which is four more
+permissions — `network:huggingface`, `network:civitai`, `network:modelscope` (the model library looks up links and downloads models
+from these sites) and `filesystem:write` (writing into ComfyUI's models folder when it runs on this computer). The top of the
+connection card lists them and **Grant these 4** resumes it right away; earlier grants are kept. The plugin list marks it
+**Needs permission**. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
+forms (such as one image per run) follow without a manual refresh.
 
 ## Workflows it can't read: the API template
 

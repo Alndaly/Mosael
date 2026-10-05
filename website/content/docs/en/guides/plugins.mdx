@@ -2,7 +2,7 @@
 title: Using plugins
 description: Connect local tools or MCP services and configure permissions for agents and workflows.
 order: 10
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -45,6 +45,18 @@ often, not less.
 
 ![The Baidu Netdisk plugin page: no tabs, one card per connection — enable switch, authorization, name, AppKey / SecretKey, and Network at the bottom](/media/screens/en/plugin-detail.png)
 
+**Connections collapse.** When a package has several connections (a few ComfyUI servers, TikHub for several platforms), each card can
+fold into one line: the name, the key address (such as the server URL), the state (Ready, Off, Error, Needs permission…), how many
+tools are on and the usual actions all fit in it. Anything that needs you (re-authorization, missing settings) is flagged even when
+folded, and expanding goes straight to it. A single connection starts expanded, several start collapsed, and a new one opens
+expanded; which ones are folded is remembered on this device, and the page header has **Collapse all / Expand all**.
+
+![Two ComfyUI connections, both collapsed: one line each with the name, address, state and tool count; the unreachable one says only what to do](/media/screens/en/plugin-collapsed.png)
+
+**Errors lead with a plain sentence.** The error on a connection's title row and the reason the generation models row couldn't
+refresh show only their first line — what happened and what to do next; the address, errno and other raw text are in the hover
+hint, or under **Details** on the page.
+
 ## Installing one
 
 The left column of the Plugins page lists installed plugins; the header has **Scan plugins** and **Browse plugins**. The market is a grid of
@@ -75,6 +87,10 @@ don't go looking for `~/.mosael/plugins`, that path does not exist on Windows) a
 Once installed: a package with no settings comes with a connection ready to go, one with settings
 needs you to add a connection; the **permissions** the manifest declares are granted one at a
 time, and an ungranted connection stays unavailable.
+
+**When an update asks for more permissions**, existing connections are switched off first — their models and tools are unavailable
+for the moment, instead of quietly gaining access. The top of the connection card says why, and which permissions were added;
+**Grant these N** restores it at once, and what you granted before stays. The plugin list marks it **Needs permission**.
 
 **Uninstalling** removes the plugin directory from disk along with its permissions, credentials
 and call log. Clearing only the records is not enough — the next scan would install it right back,
@@ -189,6 +205,10 @@ task — progress and cancel in the task center, outputs in the asset library, u
 uninstalled (switch its connection off if you don't use it). See [Generating with ComfyUI](/docs/guides/comfyui)
 for setup. The connection card of such a plugin shows “N generation models · refreshed …”; after saving a new
 workflow in ComfyUI, click “Refresh models”.
+
+A plugin can also give a connection **libraries**: a ComfyUI connection's title row has two icon buttons, **Open model library** and
+**Open workflow library**, showing the server's model files and saved workflows — previews, downloading missing models, importing
+workflows from elsewhere and installing missing node packs all happen there; see [Generating with ComfyUI](/docs/guides/comfyui).
 
 Plugins can also register in Mosael's **capability table**, side by side with the local engines: **document parsing, noise reduction,
 vocal separation, transcription, translation, speech and asset links**. Install one and it appears under that capability in **Settings →
