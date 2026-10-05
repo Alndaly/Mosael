@@ -1,7 +1,8 @@
 import React from "react";
-import { ArrowLeft, Grid2x2, Grid3x3, List, X } from "lucide-react";
+import { Grid2x2, Grid3x3, List, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { DETAIL_HEAD, DETAIL_SCROLL, DetailBackButton } from "@/components/app/DetailHead";
 import { ModalShell } from "@/components/app/modals";
 import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -357,13 +358,8 @@ export function LibraryDetail({
   }, []);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header
-        data-library-detail-head=""
-        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-divider px-6 pb-3"
-      >
-        <IconButton ref={backRef} variant="ghost" size="icon" className="-ml-2 shrink-0" label={backLabel} onClick={onBack}>
-          <ArrowLeft />
-        </IconButton>
+      <header data-library-detail-head="" className={cn(DETAIL_HEAD, "flex flex-wrap items-center gap-x-3 gap-y-2")}>
+        <DetailBackButton ref={backRef} label={backLabel} onClick={onBack} />
         <div className="grid min-w-0 flex-1 basis-[240px] gap-1">
           <h3 className="m-0 min-w-0 text-ui-lg font-semibold leading-snug tracking-tight text-foreground">
             <Truncate>{title}</Truncate>
@@ -373,7 +369,7 @@ export function LibraryDetail({
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </header>
       {stacked ? (
-        <div data-library-detail-scroll="both" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6 pt-5">
+        <div data-library-detail-scroll="both" className={DETAIL_SCROLL}>
           <div className="grid min-w-0 gap-7">
             {media}
             {children}

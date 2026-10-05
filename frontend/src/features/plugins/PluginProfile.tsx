@@ -5,7 +5,7 @@ import type { PluginInstallPreview, PluginMarketEntry, PluginPackage } from "@/a
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
-import { CatalogBadge, CatalogIcon, CatalogSection } from "@/components/app/CatalogDialog";
+import { CatalogBackSlot, CatalogBadge, CatalogIcon, CatalogSection } from "@/components/app/CatalogDialog";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { capabilityUseIcon } from "@/components/settings/CapabilityUseList";
@@ -178,6 +178,7 @@ function FactLine({ facts }: { facts: React.ReactNode[] }) {
 
 /**
  * 页头。宽的时候三块并排:图标、身份(名字 + 状态、一句话、事实)、操作;窄了操作折到身份下面,左对齐。
+ * 在市场的详情里它是那一页的**固定头**(DETAIL_HEAD),返回键在最前面。
  * `compact` 给安装确认用:图标小一号、名字不是标题(弹窗自己有标题)、没有操作。
  */
 export function PluginHero({
@@ -216,7 +217,9 @@ export function PluginHero({
   // 简介:有一句话的摆一句话;没有(老索引、第三方插件)的,安装确认里拿介绍顶上、截三行 —— 那张卡上没有别处摆介绍。
   const summary = profile.summary || (compact ? toPlainText(profile.description) : "");
   return (
-    <header data-plugin-hero="" className={cn("flex min-w-0 flex-wrap items-start gap-x-4 gap-y-4", className)}>
+    <header data-plugin-hero="" className={cn("flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3", className)}>
+      {/* 在市场的详情里:返回键摆在最前面,和图标、名字、操作同一行(见 DetailHead)。插件页、安装确认上没有。 */}
+      <CatalogBackSlot />
       <PluginMark name={profile.name} size={compact ? "md" : "lg"} />
       <div className="grid min-w-0 flex-1 basis-[240px] content-start gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">

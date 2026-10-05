@@ -1,9 +1,10 @@
 import React from "react";
-import { ArrowLeft, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
+import { CatalogBack, useCatalogBack } from "@/components/app/catalogBack";
+import { DETAIL_HEAD, DETAIL_SCROLL, DetailBackButton } from "@/components/app/DetailHead";
 import { ModalShell } from "@/components/app/modals";
 import { CollectionTabs } from "@/components/layout/StudioPage";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
@@ -18,8 +19,9 @@ import { cn } from "@/lib/utils";
  * 1. **卡片网格**。一张卡只回答「这是什么、我有没有、要不要」:图标、名字、一行来历、三行摘要、
  *    状态、主操作。列数跟着弹窗宽度走(auto-fill),不写断点。
  * 2. **点开是一页详情**,不是侧栏。侧栏要和网格分宽度,两边都窄;详情页拿到整个弹窗宽,
- *    宽时自己分成「正文 + 侧栏信息」两栏(容器查询,不看视口)。返回键和 Esc 都退回网格,
- *    并且**回到刚才那张卡**:滚动位置和键盘焦点都还原,不从头翻。
+ *    宽时自己分成「正文 + 侧栏信息」两栏(容器查询,不看视口)。和模型库的详情(LibraryDetail)同一个骨架:
+ *    **顶上一条固定头** —— 返回键在最前面、和名字、操作同一行(见 DetailHead),下面正文自己滚。
+ *    返回键和 Esc 都退回网格,并且**回到刚才那张卡**:滚动位置和键盘焦点都还原,不从头翻。
  *
  * 状态(加载 / 出错 / 空)由调用方给 —— 两份目录各有各的说法。
  */
@@ -98,12 +100,11 @@ export function CatalogDialog<T, F extends string = string>({
   };
   const back = () => onDetailChange(null);
 
-  //: 切页之后:进详情 → 滚回顶、焦点给返回键(读屏从这一页的开头读起);回网格 → 还原滚动,
+  //: 切页之后:进详情 → 焦点给返回键(读屏从这一页的开头读起;详情自己的正文从顶上开始滚);回网格 → 还原滚动,
   //: 焦点回到刚才那张卡。**用 layout effect**:换页和还原滚动要在同一帧,不然先闪一下顶部。
   React.useLayoutEffect(() => {
     const body = scroller();
     if (detailId) {
-      if (body) body.scrollTop = 0;
       backRef.current?.focus({ preventScroll: true });
       return;
     }
@@ -123,21 +124,16 @@ export function CatalogDialog<T, F extends string = string>({
       onOpenChange={onOpenChange}
       title={title}
       className={CATALOG_DIALOG}
+      //: 详情页:正文不在弹窗这一层滚 —— 固定头不动,只有头下面那一块滚(见 CatalogDetail)。
+      bodyClassName={detail ? "flex flex-col overflow-hidden p-0 [scrollbar-gutter:auto]" : undefined}
       onEscapeKeyDown={(event) => {
         if (!detailId) return;
         event.preventDefault();
         back();
       }}
       header={
-        detail ? (
-          // 详情页的头只有一颗返回键:搜索和筛选作用于网格,在这一页上它们什么都不做。
-          <div className="flex min-w-0 items-center">
-            <Button ref={backRef} variant="ghost" className="-ml-3" onClick={back}>
-              <ArrowLeft />
-              {backLabel}
-            </Button>
-          </div>
-        ) : (
+        // 详情页上没有这一条:搜索和筛选作用于网格,在那一页上它们什么都不做;返回键在详情自己的固定头里。
+        detail ? undefined : (
           <div className="grid min-w-0 gap-3">
             {description && <p className="m-0 text-ui-sm font-normal leading-relaxed text-muted-foreground">{description}</p>}
             <div className="flex min-w-0 items-center gap-2">
@@ -169,10 +165,12 @@ export function CatalogDialog<T, F extends string = string>({
         )
       }
     >
-      <div ref={rootRef} className="min-h-full min-w-0">
+      <div ref={rootRef} className={detail ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-full min-w-0"}>
         {!detail && notice && <div className="mb-3">{notice}</div>}
         {detail ? (
-          renderDetail(detail)
+          <CatalogBack.Provider value={<DetailBackButton ref={backRef} label={backLabel} onClick={back} />}>
+            {renderDetail(detail)}
+          </CatalogBack.Provider>
         ) : items.length > 0 ? (
           <ul
             role="list"
@@ -321,8 +319,8 @@ export function CatalogFact({ icon, children, tone }: { icon: React.ReactNode; c
 }
 
 /**
- * 详情页。头部是这一条的身份 + **它的主操作**(操作贴着它作用的那个东西,不放到底栏),
- * 下面是正文;宽的时候右边另起一栏放「信息」类的东西(版本、作者、权限、前置条件)。
+ * 详情页。**顶上一条固定头**:返回键、这一条的身份、**它的主操作**(操作贴着它作用的那个东西,不放到底栏),
+ * 往下翻多长都在;下面是正文,自己滚。宽的时候正文右边另起一栏放「信息」类的东西(版本、作者、权限、前置条件)。
  */
 export function CatalogDetail({
   icon,
@@ -342,26 +340,55 @@ export function CatalogDetail({
   children: React.ReactNode;
 }) {
   return (
-    <article className="@container/catalog-detail grid min-w-0 gap-6 pb-2">
-      <header className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-3">
-        <CatalogIcon size="lg">{icon}</CatalogIcon>
-        <div className="grid min-w-0 flex-1 basis-[240px] gap-1">
-          {badges && <div className="flex min-w-0 flex-wrap items-center gap-1.5">{badges}</div>}
-          <h3 className="m-0 min-w-0 break-words text-ui-lg font-semibold leading-snug tracking-tight text-foreground">{title}</h3>
-          {meta && <p className="m-0 min-w-0 text-ui-xs text-muted-foreground">{meta}</p>}
+    <CatalogDetailFrame
+      head={
+        <header data-catalog-detail-head="" className={cn(DETAIL_HEAD, "flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3")}>
+          <CatalogBackSlot />
+          <CatalogIcon size="lg">{icon}</CatalogIcon>
+          <div className="grid min-w-0 flex-1 basis-[240px] gap-1">
+            {badges && <div className="flex min-w-0 flex-wrap items-center gap-1.5">{badges}</div>}
+            <h3 className="m-0 min-w-0 break-words text-ui-lg font-semibold leading-snug tracking-tight text-foreground">{title}</h3>
+            {meta && <p className="m-0 min-w-0 text-ui-xs text-muted-foreground">{meta}</p>}
+          </div>
+          {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        </header>
+      }
+    >
+      <div className="@container/catalog-detail min-w-0">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 @3xl/catalog-detail:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="grid min-w-0 content-start gap-7">{children}</div>
+          {aside && (
+            <aside className="grid min-w-0 content-start gap-6 border-t border-divider pt-6 @3xl/catalog-detail:border-l @3xl/catalog-detail:border-t-0 @3xl/catalog-detail:pl-6 @3xl/catalog-detail:pt-0">
+              {aside}
+            </aside>
+          )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
-      </header>
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 @3xl/catalog-detail:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="grid min-w-0 content-start gap-7">{children}</div>
-        {aside && (
-          <aside className="grid min-w-0 content-start gap-6 border-t border-divider pt-6 @3xl/catalog-detail:border-l @3xl/catalog-detail:border-t-0 @3xl/catalog-detail:pl-6 @3xl/catalog-detail:pt-0">
-            {aside}
-          </aside>
-        )}
+      </div>
+    </CatalogDetailFrame>
+  );
+}
+
+/**
+ * 详情页的骨架:固定头 + 下面自己滚的正文。头由调用方画(CatalogDetail 的,或插件市场的 PluginHero),
+ * 返回键用 {@link CatalogBackSlot} 摆在头的最前面。
+ */
+export function CatalogDetailFrame({ head, children }: { head: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <article className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {head}
+      <div data-catalog-detail-scroll="" className={DETAIL_SCROLL}>
+        {children}
       </div>
     </article>
   );
+}
+
+/**
+ * 返回键在固定头里的那一格:和图标块的中线对齐(大图标 56px、按钮 40px,往下 8px)。不在目录弹窗里渲染时什么都不画。
+ */
+export function CatalogBackSlot() {
+  const back = useCatalogBack();
+  return back ? <span className="mt-2 flex shrink-0">{back}</span> : null;
 }
 
 /** 详情页里的一节:小标题 + 内容。`action` 摆在标题行右端(「展开」「全部 8 个」这类只作用于这一节的开关)。 */

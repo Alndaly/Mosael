@@ -114,7 +114,7 @@ export const plugins = {
   pluginDocs: "Docs",
   pluginAuthor: "By",
   pluginMarketSubtitle: "Add new abilities to Mosael. See which permissions a plugin asks for and which tools it brings before you install it.",
-  pluginMarketBack: "All plugins",
+  pluginMarketBack: "Back to all plugins",
   pluginMarketFilterLabel: "Filter plugins",
   catalogFilterAll: "All",
   pluginMarketFilterInstalled: "Installed",

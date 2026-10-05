@@ -5,7 +5,8 @@ import { toast } from "sonner";
 
 import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { CatalogCard, CatalogDialog, CatalogFact } from "@/components/app/CatalogDialog";
+import { CatalogCard, CatalogDetailFrame, CatalogDialog, CatalogFact } from "@/components/app/CatalogDialog";
+import { DETAIL_HEAD } from "@/components/app/DetailHead";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -449,7 +450,8 @@ function MarketCard({
 }
 
 /**
- * 市场里一个插件的详情(版式见 PluginProfile):页头是它是谁、此刻对这台机器是什么、能做的事;下面是概览。
+ * 市场里一个插件的详情(版式见 PluginProfile):页头是它是谁、此刻对这台机器是什么、能做的事 —— 也是这一页的固定头,
+ * 返回键在它最前面(和模型库的详情同一个骨架,见 DetailHead);下面是概览,自己滚。
  *
  * 操作按状态给:没装的「安装」,有新版的「更新」;装着的(含内置)「管理」—— 关掉市场、在插件页打开它,
  * 新建连接就在那儿。卸载收进 ⋯。内置插件不给装 / 更新 / 卸载:它跟着应用走(后端也拒),
@@ -474,40 +476,43 @@ function MarketDetail({
   const docs = docsOf(profile);
   const installed = status === "installed" || status === "bundled";
   return (
-    <article className="grid min-w-0 gap-6 pb-2">
-      <PluginHero
-        profile={profile}
-        status={status}
-        className="border-b border-divider pb-6"
-        facts={[
-          status === "update" && entry.installed_version ? (
-            <span key="installed" className="tabular-nums">{t("pluginInstalled").replace("{v}", entry.installed_version)}</span>
-          ) : null,
-          status === "bundled" ? (
-            <HintedFact key="bundled" hint={t("pluginBundledHint")}>{t("pluginBundledFact")}</HintedFact>
-          ) : null,
-        ]}
-        //: 市场许了更新的版本,但点过「更新」、下下来的包并不更新:说清楚为什么这里没有「更新」。
-        note={entry.update_unreleased && status === "installed" ? <HeroNote>{t("pluginUpdateNotReleased")}</HeroNote> : undefined}
-        actions={
-          <>
-            <PickButton entry={entry} busy={busy} onPick={onPick} />
-            {installed && onManage && (
-              <Button onClick={onManage}>
-                <Settings2 />
-                {t("pluginManage")}
-              </Button>
-            )}
-            {docs && <DocsButton href={docs} />}
-            {/* 内置的卸不掉(后端也拒):卸了下次启动又会装回来。 */}
-            {entry.installed && status !== "bundled" && (
-              <MoreActions actions={[{ label: t("pluginUninstall"), icon: <Trash2 />, destructive: true, onSelect: onUninstall }]} />
-            )}
-          </>
-        }
-      />
+    <CatalogDetailFrame
+      head={
+        <PluginHero
+          profile={profile}
+          status={status}
+          className={DETAIL_HEAD}
+          facts={[
+            status === "update" && entry.installed_version ? (
+              <span key="installed" className="tabular-nums">{t("pluginInstalled").replace("{v}", entry.installed_version)}</span>
+            ) : null,
+            status === "bundled" ? (
+              <HintedFact key="bundled" hint={t("pluginBundledHint")}>{t("pluginBundledFact")}</HintedFact>
+            ) : null,
+          ]}
+          //: 市场许了更新的版本,但点过「更新」、下下来的包并不更新:说清楚为什么这里没有「更新」。
+          note={entry.update_unreleased && status === "installed" ? <HeroNote>{t("pluginUpdateNotReleased")}</HeroNote> : undefined}
+          actions={
+            <>
+              <PickButton entry={entry} busy={busy} onPick={onPick} />
+              {installed && onManage && (
+                <Button onClick={onManage}>
+                  <Settings2 />
+                  {t("pluginManage")}
+                </Button>
+              )}
+              {docs && <DocsButton href={docs} />}
+              {/* 内置的卸不掉(后端也拒):卸了下次启动又会装回来。 */}
+              {entry.installed && status !== "bundled" && (
+                <MoreActions actions={[{ label: t("pluginUninstall"), icon: <Trash2 />, destructive: true, onSelect: onUninstall }]} />
+              )}
+            </>
+          }
+        />
+      }
+    >
       <PluginOverview profile={profile} />
-    </article>
+    </CatalogDetailFrame>
   );
 }
 

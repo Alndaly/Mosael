@@ -432,7 +432,7 @@ export const publish = {
   wfCommunityNoResults: "No matching workflows",
   wfCommunityWorkflowIncludes: "Workflow includes",
   wfCommunityRequirements: "Required before running",
-  wfCommunityBack: "All workflows",
+  wfCommunityBack: "Back to all workflows",
   wfCommunityFilterLabel: "Filter workflows",
   wfCommunityFilterAdded: "Added",
   wfCommunityFilterReady: "Ready to run",

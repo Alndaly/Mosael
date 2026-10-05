@@ -452,6 +452,38 @@ describe("详情的版式", () => {
     return onManage;
   }
 
+  it("返回键在页头最前面(图标左边),不再单独一行;页头固定,概览在下面自己滚;弹窗标题还是「插件市场」", async () => {
+    const user = userEvent.setup();
+    renderWith([COMFY, OSS]);
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(within(card("ComfyUI")).getByRole("button", { name: "ComfyUI" }));
+    const dialog = screen.getByRole("dialog", { name: "pluginMarket" });
+    const hero = dialog.querySelector<HTMLElement>("[data-plugin-hero]")!;
+    const back = within(hero).getByRole("button", { name: "pluginMarketBack" });
+    expect(hero.firstElementChild?.contains(back), "返回键是页头的第一格,在图标前面").toBe(true);
+    expect(document.activeElement).toBe(back);
+    const modalHeader = dialog.querySelector<HTMLElement>("[data-slot='modal-header']")!;
+    expect(within(modalHeader).queryByRole("button", { name: "pluginMarketBack" })).toBeNull();
+    //: 页头是固定头(下面一条分隔线),概览在它下面那一块里滚。
+    expect(hero.className).toContain("border-b");
+    const scroll = dialog.querySelector<HTMLElement>("[data-catalog-detail-scroll]")!;
+    expect(scroll.contains(hero)).toBe(false);
+    expect(scroll.querySelector("[data-provides='generation']")).toBeTruthy();
+    expect(dialog.querySelector<HTMLElement>("[data-slot='modal-body']")!.className).toContain("overflow-hidden");
+    //: 返回:回到网格,焦点回到那张卡。
+    await user.click(back);
+    expect(await screen.findByRole("list", { name: "pluginMarket" })).toBeTruthy();
+    expect(document.activeElement).toBe(within(card("ComfyUI")).getByRole("button", { name: "ComfyUI" }));
+  });
+
+  it("安装确认和插件页上的页头没有返回键 —— 它们不在市场的详情里", async () => {
+    const user = userEvent.setup();
+    renderWith([OSS]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "pluginInstall" }));
+    const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
+    expect(within(confirm).queryByRole("button", { name: "pluginMarketBack" })).toBeNull();
+  });
+
   it("介绍长了先摆开头一截,「展开」看全文(带格式)", async () => {
     const user = userEvent.setup();
     renderWith([{ ...COMFY, description: `**粗体**${LONG}` }]);

@@ -126,6 +126,8 @@ describe("页头", () => {
     expect(within(facts).getByText("pluginBundledFact")).toBeTruthy();
     //: 插件 ID、运行方式不在页头。
     expect(hero().textContent).not.toContain("dev.mosael.comfyui");
+    //: 插件页靠左栏选中,没有「返回」—— 返回键只在市场的详情里。
+    expect(within(hero()).queryByRole("button", { name: "pluginMarketBack" })).toBeNull();
   });
 
   it("能做的事都是按钮:还没有连接时「新建连接」是主按钮;文档是链接;内置的没有 ⋯(卸不掉)", () => {

@@ -434,7 +434,7 @@ export const publish = {
   wfCommunityNoResults: "没有匹配的工作流",
   wfCommunityWorkflowIncludes: "工作流包含",
   wfCommunityRequirements: "运行前需要",
-  wfCommunityBack: "全部工作流",
+  wfCommunityBack: "返回全部工作流",
   wfCommunityFilterLabel: "筛选工作流",
   wfCommunityFilterAdded: "已添加",
   wfCommunityFilterReady: "条件已齐",

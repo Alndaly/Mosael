@@ -166,6 +166,27 @@ describe("工作流详情", () => {
     expect(onInstall).toHaveBeenCalledWith("translated_dub");
   });
 
+  it("详情页:返回键在固定头的最前面(和名字、主操作同一行),没有单独一行;头不动,正文在下面自己滚", async () => {
+    const user = userEvent.setup();
+    const { header, body } = renderDialog();
+    await screen.findByRole("list", { name: "wfCommunityTitle" });
+    await user.click(within(card("从主题到完整视频")).getByRole("button", { name: "从主题到完整视频" }));
+    const head = document.querySelector<HTMLElement>("[data-catalog-detail-head]")!;
+    const back = within(head).getByRole("button", { name: "wfCommunityBack" });
+    expect(head.firstElementChild?.contains(back), "返回键是固定头的第一格").toBe(true);
+    expect(within(head).getByRole("heading", { level: 3, name: "从主题到完整视频" })).toBeTruthy();
+    expect(within(header).queryByRole("button", { name: "wfCommunityBack" }), "弹窗标题下面不再单独一行返回").toBeNull();
+    expect(document.activeElement).toBe(back);
+    //: 弹窗这一层不滚,只有固定头下面那一块滚。
+    expect(body.className).toContain("overflow-hidden");
+    const scroll = document.querySelector<HTMLElement>("[data-catalog-detail-scroll]")!;
+    expect(scroll.className).toContain("overflow-y-auto");
+    expect(scroll.contains(head)).toBe(false);
+    await user.click(back);
+    expect(await screen.findByRole("list", { name: "wfCommunityTitle" })).toBeTruthy();
+    expect(document.activeElement).toBe(within(card("从主题到完整视频")).getByRole("button", { name: "从主题到完整视频" }));
+  });
+
   it("键盘打开、Esc 退回网格(不关弹窗),焦点回到那张卡", async () => {
     const user = userEvent.setup();
     const { onOpenChange } = renderDialog();

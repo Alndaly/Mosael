@@ -116,7 +116,7 @@ export const plugins = {
   pluginDocs: "文档",
   pluginAuthor: "作者",
   pluginMarketSubtitle: "给 Mosael 加上新的能力。装之前先看清楚它要哪些权限、会带来哪些工具。",
-  pluginMarketBack: "全部插件",
+  pluginMarketBack: "返回全部插件",
   pluginMarketFilterLabel: "筛选插件",
   catalogFilterAll: "全部",
   pluginMarketFilterInstalled: "已安装",
