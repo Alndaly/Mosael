@@ -5,9 +5,11 @@
   backend/.venv/bin/python website/scripts/seed-doc-demo.py down --dir /private/path/mosael-demo
 
 `up` prepares the licensed sample media, starts an isolated backend (port 8812, its own
-MOSAEL_DATA_DIR under --dir) and a frontend dev server (port 5274) pointed at it, registers a
-local demo administrator through the app's own sign-up flow and creates the sample content
-through the backend's HTTP API. It writes two private files the capture scripts read:
+MOSAEL_DATA_DIR under --dir), a frontend build served on port 5274 pointed at it and the demo
+ComfyUI (port 8813: the test suite's fake ComfyUI with invented models and workflows, see
+demo-comfyui.py), registers a local demo administrator through the app's own sign-up flow and
+creates the sample content through the backend's HTTP API. It writes two private files the
+capture scripts read:
 
   <dir>/token.json    the demo session token (a JSON string) — never commit it
   <dir>/fixture.json  workspace / project / sequence / board / workflow / scene / note / asset IDs
@@ -37,9 +39,25 @@ from pathlib import Path
 import httpx
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _demo_comfyui():
+    """The demo ComfyUI's content (model files, workflows, the import sample), for the capture script."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("demo_comfyui", Path(__file__).with_name("demo-comfyui.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+COMFY = _demo_comfyui()
 TRAILER_URL = "https://media.w3.org/2010/05/bunny/trailer.mp4"
 API_PORT = 8812
 APP_PORT = 5274
+#: The demo ComfyUI (demo-comfyui.py). The second ComfyUI connection points at a closed local port instead.
+COMFY_PORT = 8813
+CLOSED_URL = "http://127.0.0.1:9"
 USERNAME = "creator"
 DISPLAY_NAME = "Mosael Demo"
 NO_PROXY_ENV = {key: "" for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")}
@@ -58,6 +76,12 @@ EXCERPTS = [
 FRAMES = [
     ("forest-frame", "forest", 1.2), ("bunny-frame", "bunny", 1.0), ("meadow-frame", "rodents", 0.3),
     ("closeup-frame", "rodents", 2.95), ("frank-frame", "butterfly", 0.35), ("bow-frame", "ambush", 0.3),
+]
+
+#: Model previews for the demo ComfyUI, cut from the excerpts as 4:5 stills: (key, source excerpt, seconds into it).
+PREVIEWS = [
+    ("meadow", "rodents", 0.3), ("burrow", "forest", 0.4), ("butterfly", "butterfly", 0.9), ("bunny", "bunny", 1.0),
+    ("forest", "ambush", 3.6), ("closeup", "rodents", 2.95), ("ambush", "ambush", 1.5),
 ]
 
 #: Narration sentences per language; each is synthesized separately so subtitle cues match exactly.
@@ -100,8 +124,19 @@ TEXT = {
             {"key": "brief", "title": "展厅影像 · 创作要求", "tags": ["展厅", "要求"], "markdown": (
                 "# 展厅影像\n\n用一个连续镜头,串起三间不同色温的展厅。\n\n> 从暖光走到冷光,最后停在展台上的产品。\n\n"
                 "## 创作要求\n\n- 保持人物与空间的真实比例\n- 主体始终清晰,镜头缓慢推进\n- 最后一间展厅突出产品与侧光\n\n"
-                "## 镜头节奏\n\n| 段落 | 时长 | 机位 |\n| --- | --- | --- |\n| 第一间 | 3 秒 | 门口平视 |\n"
-                "| 第二间 | 3 秒 | 穿门推进 |\n| 第三间 | 4 秒 | 绕到展台侧面 |\n")},
+                "## 镜头节奏\n\n每间展厅停留三四秒,==转场一律用穿门推进==,不用硬切。\n\n"
+                "| 段落 | 时长 | 机位 |\n| --- | --- | --- |\n| 第一间 | 3 秒 | 门口平视 |\n"
+                "| 第二间 | 3 秒 | 穿门推进 |\n| 第三间 | 4 秒 | 绕到展台侧面 |\n"),
+             # Earlier versions, saved one by one so the version history has entries of every kind (see note_history).
+             "history": {
+                 "created": "# 展厅影像\n\n用一个连续镜头,串起三间展厅。\n\n## 创作要求\n\n- 主体始终清晰\n- 最后一间展厅突出产品\n",
+                 "edited": ("# 展厅影像\n\n用一个连续镜头,串起三间不同色温的展厅。\n\n> 从暖光走到冷光,最后停在展台上的产品。\n\n"
+                            "## 创作要求\n\n- 保持人物与空间的真实比例\n- 主体始终清晰,镜头缓慢推进\n- 最后一间展厅突出产品与侧光\n"),
+                 "appended": ("## 镜头节奏\n\n| 段落 | 时长 | 机位 |\n| --- | --- | --- |\n| 第一间 | 3 秒 | 门口平视 |\n"
+                              "| 第二间 | 3 秒 | 穿门推进 |\n| 第三间 | 4 秒 | 绕到展台侧面 |\n"),
+                 "tried": [("| 第三间 | 4 秒 | 绕到展台侧面 |", "| 第三间 | 6 秒 | 俯拍展台,再降到产品高度 |"),
+                           ("- 最后一间展厅突出产品与侧光\n", "- 最后一间展厅突出产品与侧光\n- 第三间加一个俯拍\n")],
+             }},
             {"key": "rhythm", "title": "剪辑节奏笔记", "tags": ["剪辑"], "markdown": (
                 "# 剪辑节奏笔记\n\n预告片的节奏是「字卡 — 画面 — 字卡」交替,每个画面停留不到两秒。\n\n"
                 "- 先放画面,再放旁白,最后对齐字幕\n- 配乐和画面放在同一个链接组\n- 片名停留时间要比一句旁白长\n\n"
@@ -182,8 +217,23 @@ TEXT = {
                 "> From warm light to cool light, ending on the product on the plinth.\n\n"
                 "## Creative brief\n\n- Keep a human sense of scale\n- Keep the subject clear; move slowly\n"
                 "- Finish with the product and a side light in the last room\n\n"
-                "## Shot rhythm\n\n| Part | Length | Camera |\n| --- | --- | --- |\n| Room one | 3 s | Eye level at the door |\n"
-                "| Room two | 3 s | Push through the doorway |\n| Room three | 4 s | Around the side of the plinth |\n")},
+                "## Shot rhythm\n\nEach room holds for three to four seconds; ==every transition is a push through a doorway==, "
+                "no hard cuts.\n\n"
+                "| Part | Length | Camera |\n| --- | --- | --- |\n| Room one | 3 s | Eye level at the door |\n"
+                "| Room two | 3 s | Push through the doorway |\n| Room three | 4 s | Around the side of the plinth |\n"),
+             "history": {
+                 "created": ("# Gallery film\n\nOne continuous camera move through three rooms.\n\n## Creative brief\n\n"
+                             "- Keep the subject clear\n- Finish with the product in the last room\n"),
+                 "edited": ("# Gallery film\n\nOne continuous camera move through three rooms with different color temperatures.\n\n"
+                            "> From warm light to cool light, ending on the product on the plinth.\n\n## Creative brief\n\n"
+                            "- Keep a human sense of scale\n- Keep the subject clear; move slowly\n"
+                            "- Finish with the product and a side light in the last room\n"),
+                 "appended": ("## Shot rhythm\n\n| Part | Length | Camera |\n| --- | --- | --- |\n| Room one | 3 s | Eye level at the door |\n"
+                              "| Room two | 3 s | Push through the doorway |\n| Room three | 4 s | Around the side of the plinth |\n"),
+                 "tried": [("| Room three | 4 s | Around the side of the plinth |", "| Room three | 6 s | Overhead, then down to product height |"),
+                           ("- Finish with the product and a side light in the last room\n",
+                            "- Finish with the product and a side light in the last room\n- Add an overhead shot in room three\n")],
+             }},
             {"key": "rhythm", "title": "Editing rhythm notes", "tags": ["editing"], "markdown": (
                 "# Editing rhythm notes\n\nThe trailer alternates title card, picture, title card; each picture stays for under two seconds.\n\n"
                 "- Lay down the pictures first, then the narration, then align the subtitles\n"
@@ -240,6 +290,9 @@ TEMPLATES = ["transcript_video_cleanup", "full_video_generation", "account_analy
 #: Example plugins from plugins/examples, copied into the demo plugins directory and picked up by the app's
 #: own "scan plugins" (the same path as dropping a plugin folder there by hand).
 EXAMPLE_PLUGINS = ["baidu-pan", "manim", "tikhub", "text-toolkit"]
+
+#: The two ComfyUI plugin connections (see Seeder.comfyui).
+COMFY_CONNECTIONS = {"demo": "演示 ComfyUI · Demo", "offline": "离线 ComfyUI · Offline"}
 
 #: The demo's generation connection: a placeholder (closed local port, placeholder key), named as such.
 PLACEHOLDER_PROVIDER = "演示占位 · Placeholder"
@@ -301,6 +354,14 @@ def prepare_media(media: Path) -> None:
         run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-to", str(end), "-i", str(trailer),
              "-vf", "scale=1280:720:flags=lanczos,fps=25", "-c:v", "libx264", "-crf", "18", "-preset", "medium",
              "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(target)])
+    previews = media / "previews"
+    previews.mkdir(exist_ok=True)
+    for key, source, at in PREVIEWS:
+        target = previews / f"{key}.jpg"
+        if not target.exists():
+            # A 4:5 still from the middle of the 16:9 frame, the shape ComfyUI's model previews usually have.
+            run(["ffmpeg", "-v", "error", "-y", "-ss", str(at), "-i", str(media / f"{source}.mp4"), "-frames:v", "1",
+                 "-vf", "crop=576:720,scale=384:480:flags=lanczos", "-q:v", "4", str(target)])
     for locale, sentences in NARRATION.items():
         target = media / f"narration-{locale}.m4a"
         timing = media / f"narration-{locale}.json"
@@ -370,10 +431,16 @@ def start_servers(base: Path) -> None:
             [str(vite), "preview", "--outDir", str(dist), "--host", "127.0.0.1", "--port", str(APP_PORT), "--strictPort"],
             cwd=ROOT / "frontend", stdout=open(logs / "frontend.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
         pids["frontend"] = frontend.pid
+    if not comfy_up():
+        comfy = subprocess.Popen(
+            [str(ROOT / "backend/.venv/bin/python"), str(Path(__file__).with_name("demo-comfyui.py")),
+             "--port", str(COMFY_PORT), "--media", str(base / "media")],
+            stdout=open(logs / "comfyui.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
+        pids["comfyui"] = comfy.pid
     if pids:
         (base / "pids.json").write_text(json.dumps({**read_pids(base), **pids}))
     for _ in range(120):
-        if healthy() and app_up():
+        if healthy() and app_up() and comfy_up():
             break
         time.sleep(1)
     else:
@@ -397,6 +464,13 @@ def app_up() -> bool:
         return False
 
 
+def comfy_up() -> bool:
+    try:
+        return httpx.get(f"http://127.0.0.1:{COMFY_PORT}/system_stats", timeout=5, trust_env=False).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
 def read_pids(base: Path) -> dict[str, int]:
     path = base / "pids.json"
     return json.loads(path.read_text()) if path.exists() else {}
@@ -412,7 +486,7 @@ def stop_servers(base: Path) -> None:
     (base / "pids.json").unlink(missing_ok=True)
     # Wait for the ports to close: `up --fresh` would otherwise see the old backend still answering and reuse it.
     for _ in range(60):
-        if not healthy() and not app_up():
+        if not healthy() and not app_up() and not comfy_up():
             return
         time.sleep(0.5)
 
@@ -471,6 +545,9 @@ class Seeder:
         ok(api.get(f"/assets/{assets['shotlist']}/extractions"))  # the library parses documents locally on first open
         out["notes"] = {}
         for note in text["notes"]:
+            if "history" in note:
+                out["notes"][note["key"]] = self.note_history(api, workspace, project, locale, note)
+                continue
             created = ok(api.post("/notes", json={"workspace_id": workspace, "title": note["title"], "markdown": note["markdown"],
                                                   "tags": note["tags"], "project_id": project}))
             out["notes"][note["key"]] = created["id"]
@@ -484,6 +561,57 @@ class Seeder:
         out["schedules"] = self.schedules(api, workspace, project, locale, out)
         ok(api.post("/browser/profiles", json={"workspace_id": workspace, "name": text["profile"]}))
         return out
+
+    def note_history(self, api: httpx.Client, workspace: str, project: str, locale: str, note: dict) -> str:
+        """The brief, saved version by version through the same endpoints the note page uses, each version with a
+        different origin: created → edited → saved to the note (append) → edited → restored from version 2 → edited
+        (the current text). Edits by one person within five minutes merge into one version; the other origins keep
+        them apart, so the version history shows one entry of each kind and what each one changed."""
+        drafts = note["history"]
+        common = {"workspace_id": workspace, "title": note["title"], "tags": note["tags"], "project_id": project}
+        current = ok(api.post("/notes", json={**common, "markdown": drafts["created"]}))
+        nid = current["id"]
+
+        def save(markdown: str, base: dict) -> dict:
+            return ok(api.patch(f"/notes/{nid}", json={**common, "markdown": markdown, "base_save_seq": base["save_seq"]}))
+
+        edited = save(drafts["edited"], current)
+        current = ok(api.post(f"/notes/{nid}/append", json={"workspace_id": workspace, "markdown": drafts["appended"]}))
+        tried = current["markdown"]
+        for before, after in drafts["tried"]:
+            tried = tried.replace(before, after)
+        current = save(tried, current)
+        current = ok(api.post(f"/notes/{nid}/restore", json={
+            "workspace_id": workspace, "base_save_seq": current["save_seq"], "revision": edited["revision"]}))
+        current = save(note["markdown"], current)
+        self.open_note(workspace, locale, nid)
+        origins = [one["origin"] for one in ok(api.get(f"/notes/{nid}/revisions", params={"workspace_id": workspace}))]
+        if origins != ["edit", "restore", "edit", "append", "edit", "create"]:
+            sys.exit(f"The brief's version history came out as {origins}")
+        return nid
+
+    def open_note(self, workspace: str, locale: str, note_id: str) -> None:
+        """Open the note once on the note page and let it save. The editor writes Markdown in its own layout (tables
+        padded, blank lines): a note written through the API is saved again on first open. Doing it here, right after
+        the last edit, folds that save into the last version instead of leaving a fresh "edited" version (and a
+        "draft pending" badge) for the recordings to find."""
+        from playwright.sync_api import sync_playwright
+
+        app = f"http://127.0.0.1:{APP_PORT}"
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.goto(app, wait_until="domcontentloaded")
+            page.evaluate("""([api, token, locale, ws]) => {
+                localStorage.setItem('mosael.server.url', api);
+                localStorage.setItem('mosael.auth.token', token);
+                localStorage.setItem('mosael.preferences', JSON.stringify({theme: 'light', locale, font: 'default'}));
+                localStorage.setItem('mosael:workspace', ws);
+            }""", [f"http://127.0.0.1:{API_PORT}", self.token, "zh-CN" if locale == "zh" else "en-US", workspace])
+            page.goto(f"{app}/#/notes?note={note_id}", wait_until="networkidle")
+            page.wait_for_timeout(2500)
+            page.locator('[data-slot="save-status"][data-state="saved"]').wait_for(timeout=30000)
+            browser.close()
 
     def wait_job(self, api: httpx.Client, job_id: str) -> dict:
         for _ in range(300):
@@ -709,6 +837,35 @@ class Seeder:
         # One connection without credentials: the plugin page shows it as not signed in, which is the truth.
         ok(api.post("/plugins/dev.mosael.baidu-pan/instances", json={"name": "演示网盘 · Demo netdisk", "config": {}}))
 
+    def comfyui(self) -> None:
+        """Two connections of the bundled ComfyUI plugin, made through the plugin page's own endpoints and granted every
+        permission its manifest asks for, no token: one to the demo ComfyUI (the test suite's fake, see demo-comfyui.py),
+        one to a closed local port, which shows the real "could not connect" state.
+
+        Both route anything that is not loopback through a closed local port (the connection's own network setting):
+        the recordings open the model library, the workflow library and the download dialog but never resolve or
+        download a link, and this makes sure nothing could reach HuggingFace, Civitai or ModelScope even by accident."""
+        api = self.api("zh")
+        grants = {permission: True for permission in
+                  json.loads((ROOT / "plugins/bundled/comfyui/mosael.plugin.json").read_text())["permissions"]}
+        ids = {}
+        for key, name, url in (("demo", COMFY_CONNECTIONS["demo"], f"http://127.0.0.1:{COMFY_PORT}"),
+                               ("offline", COMFY_CONNECTIONS["offline"], CLOSED_URL)):
+            created = ok(api.post("/plugins/dev.mosael.comfyui/instances", json={"name": name, "config": {"server_url": url}}))
+            ok(api.patch(f"/plugins/instances/{created['id']}/permissions", json={"grants": grants}))
+            ok(api.patch(f"/plugins/instances/{created['id']}", json={"network": {"mode": "proxy", "proxy_url": CLOSED_URL}}))
+            ok(api.patch(f"/plugins/instances/{created['id']}", json={"enabled": True}))
+            ids[key] = created["id"]
+        for _ in range(60):
+            package = next(one for one in ok(api.get("/plugins")) if one["id"] == "dev.mosael.comfyui")
+            demo = next(one for one in package["instances"] if one["id"] == ids["demo"])
+            if isinstance(((demo.get("capability_status") or {}).get("generation") or {}).get("models"), int):
+                break
+            time.sleep(1)
+        else:
+            sys.exit("The demo ComfyUI connection never listed its workflows; see logs/comfyui.log and logs/backend.log.")
+        self.fixture["comfyui"] = ids
+
     def placeholder_provider(self) -> None:
         """A generation connection that is configured but cannot run: its endpoint is a closed local port and its
         key is a placeholder string. Generation panels then show their configured, not-yet-run state (model picker,
@@ -857,6 +1014,7 @@ def main() -> None:
     token = register(base)
     seeder = Seeder(base, token)
     seeder.plugins()
+    seeder.comfyui()
     seeder.placeholder_provider()
     if args.local_chat:
         if not (ROOT / "agent-sidecar/dist/sidecar.cjs").exists():
@@ -866,7 +1024,7 @@ def main() -> None:
         seeder.fixture["locales"][locale] = seeder.seed_locale(locale)
         print(f"Seeded {locale} workspace", flush=True)
     write_private(fixture_path, json.dumps(seeder.fixture, ensure_ascii=False, indent=2))
-    print(f"Demo ready: app http://127.0.0.1:{APP_PORT}, api http://127.0.0.1:{API_PORT}")
+    print(f"Demo ready: app http://127.0.0.1:{APP_PORT}, api http://127.0.0.1:{API_PORT}, ComfyUI http://127.0.0.1:{COMFY_PORT}")
     print(f"Token: {base / 'token.json'}  Fixture: {fixture_path}")
 
 
