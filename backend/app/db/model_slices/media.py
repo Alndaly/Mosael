@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, validates
+from app.core.collation import name_sort_key
 from app.core.db import Base
 from app.db.model_base import new_id, now
 
@@ -19,6 +20,8 @@ class Asset(Base):
         Index("idx_assets_workspace_created", "workspace_id", "created_at"),
         #: 素材库的列表按「工作区 + 是不是中间产物」筛、按导入时间排(见 domain/assets/listing)。
         Index("idx_assets_workspace_intermediate_created", "workspace_id", "intermediate", "created_at"),
+        #: 同上,按名称排(排序键 + id,见 name_sort_key)。
+        Index("idx_assets_workspace_intermediate_name", "workspace_id", "intermediate", "name_sort_key", "id"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
@@ -27,6 +30,10 @@ class Asset(Base):
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="imported")
     name: Mapped[str] = mapped_column(String(240), nullable=False)
+    #: 按名称排序用的键:汉字换成拼音、不分大小写和重音……,和此前前端的中文排序同一个顺序(见 core/collation)。
+    #: **只在下面 `_name_sort_key` 那一处算**:新建、改名、导入都是给 `name` 赋值,赋值时它跟着变,调用方不用记得填。
+    #: 绕过 ORM 直接 `UPDATE assets SET name` 会让它变旧 —— 别那么写名字。
+    name_sort_key: Mapped[str] = mapped_column(Text, nullable=False, default="")
     original_filename: Mapped[str] = mapped_column(String(260), nullable=False, default="")
     file_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     media_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -40,6 +47,11 @@ class Asset(Base):
     intermediate: Mapped[str] = mapped_column(String(24), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+    @validates("name")
+    def _name_sort_key(self, _field: str, name: str) -> str:
+        self.name_sort_key = name_sort_key(name)
+        return name
 
 
 class Lut(Base):

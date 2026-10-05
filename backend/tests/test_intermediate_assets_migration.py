@@ -33,6 +33,8 @@ def test_老表补上一列_老素材都还在素材库_再跑一次什么都不
         db.commit()
     with engine.begin() as conn:
         conn.execute(text("DROP INDEX IF EXISTS idx_assets_workspace_intermediate_created"))
+        #: 按名称排的索引也带着 intermediate(它在后面一步建,见 migrate-assets-get-a-name-sort-key)。
+        conn.execute(text("DROP INDEX IF EXISTS idx_assets_workspace_intermediate_name"))
         conn.execute(text("ALTER TABLE assets DROP COLUMN intermediate"))
     engine.dispose()
     assert "intermediate" not in {column["name"] for column in inspect(engine).get_columns("assets")}

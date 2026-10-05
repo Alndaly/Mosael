@@ -7663,6 +7663,32 @@ def _migrate_assets_know_if_they_are_intermediate() -> None:
         ))
 
 
+def _migrate_assets_get_a_name_sort_key() -> None:
+    """素材补一列 `name_sort_key`(按名称排序用的键,见 core/collation)并给每一行算好;建素材库按名称排时用的索引。
+
+    素材库分页之后名称排序挪到了服务端,成了码位顺序,中文名不再按拼音 —— 此前浏览器里是 ICU 的中文排序。
+    新写的名字由 ORM 在赋值时算(Asset 上的 `_name_sort_key`);这一步给已有的行补上,**用的是同一个函数**:
+    键不一样的话,老素材和新素材在同一份列表里各排各的。加列必须在 SCHEMA 之前:之后 ORM 上的 Asset 指望这一列在。
+    重跑:只算还空着的(名字不会是空的,算过的键一定不空)。
+    """
+    from app.core.collation import name_sort_key
+
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(assets)"))}
+        if not columns:
+            return
+        if "name_sort_key" not in columns:
+            conn.execute(text("ALTER TABLE assets ADD COLUMN name_sort_key TEXT NOT NULL DEFAULT ''"))
+        rows = conn.execute(text("SELECT id, name FROM assets WHERE name_sort_key = ''")).all()
+        for asset_id, name in rows:
+            conn.execute(text("UPDATE assets SET name_sort_key = :key WHERE id = :id"),
+                         {"key": name_sort_key(name or ""), "id": asset_id})
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_assets_workspace_intermediate_name "
+            "ON assets (workspace_id, intermediate, name_sort_key, id)"
+        ))
+
+
 def _backfill_intermediate_assets() -> None:
     """老素材里推得出是工序零件的,标上是哪一种;推不出的留在素材库(空串)。
 
@@ -8111,6 +8137,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_assets_remember_where_they_came_from,
                 # 同上:ORM 上的 Asset 指望「是不是中间产物」这一列在。
                 _migrate_assets_know_if_they_are_intermediate,
+                # 同上:ORM 上的 Asset 指望按名称排序的键这一列在。排在上一步之后:索引里有 intermediate。
+                _migrate_assets_get_a_name_sort_key,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
                 _migrate_tool_confirmations_name_their_tool_call,
                 # 同上:ORM 上的 NoteRevision 指望来历、作者、恢复自哪一版这三列在。

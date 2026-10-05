@@ -173,9 +173,10 @@ def _any_tag(test) -> ColumnElement[bool]:
 
 
 def _sort_key(sort: str) -> tuple[ColumnElement[Any], bool]:
-    """排序键和方向。名字不分大小写升序;时长没有的当 0,排在最后。"""
+    """排序键和方向。名字按排序键升序(中文按拼音、不分大小写,和此前前端的排序一样,见 core/collation);
+    时长没有的当 0,排在最后。"""
     if sort == "name":
-        return func.lower(Asset.name), False
+        return Asset.name_sort_key, False
     if sort == "duration":
         return func.coalesce(func.json_extract(Asset.media_info, "$.duration"), 0.0), True
     if sort == "updated":
