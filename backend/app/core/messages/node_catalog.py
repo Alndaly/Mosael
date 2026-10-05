@@ -66,7 +66,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_json_extract": {"zh": "JSON 提取", "en": "JSON extract"},
     "wfNode_json_extract_desc": {"zh": "从 JSON/对象里按点路径取值,常接在 HTTP 请求或插件工具后面。", "en": "Read a value out of JSON or an object by dotted path; usually placed after an HTTP request or a plugin tool."},
     "wfNode_json_extract_source": {"zh": "一段 JSON 文本,或上游交回的 JSON", "en": "JSON text, or JSON handed back by an upstream node"},
-    "wfNode_json_extract_path": {"zh": "点路径,如 data.items.0.title;留空返回整个对象", "en": "Dotted path, e.g. data.items.0.title; leave empty to return the whole object"},
+    "wfNode_json_extract_path": {"zh": "点路径,如 data.items.0.title;* 表示这一串里的每一个(results.*.asset_id 取出每一项的 asset_id,没有的不占位);留空返回整个对象", "en": "Dotted path, e.g. data.items.0.title; * means every item of a list (results.*.asset_id collects each item's asset_id, skipping items without one); leave empty to return the whole object"},
     "wfNode_list_chunk": {"zh": "拆成几批", "en": "Split into batches"},
     "wfNode_list_chunk_desc": {"zh": "把一串拆成等长的几批,给逐个处理(循环)用;批与批不重叠、顺序不变。", "en": "Split a list into equal-size batches for item-by-item processing (loops); batches don't overlap and keep their order."},
     "wfNode_list_chunk_items": {"zh": "要拆的那一串", "en": "The list to split"},

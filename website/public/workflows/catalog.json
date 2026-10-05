@@ -305,7 +305,7 @@
     },
     "author": "Mosael",
     "version": 4,
-    "nodes": 8,
+    "nodes": 10,
     "download": {
       "zh": "/workflows/product_on_model.zh.mosael-workflow.json",
       "en": "/workflows/product_on_model.en.mosael-workflow.json"

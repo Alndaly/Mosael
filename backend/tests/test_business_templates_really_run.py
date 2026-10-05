@@ -677,6 +677,8 @@ class Test上身图真跑:
             filed = db.query(Asset).filter(Asset.project_id == project_id).all()
             assert sorted(asset.kind for asset in filed) == ["image", "image", "video", "video"]
             assert set(output["image_asset_ids"]) == {asset.id for asset in filed if asset.kind == "image"}
+            #: 视频也列进输出(此前只列图,视频要去项目里翻)。
+            assert set(output["video_asset_ids"]) == {asset.id for asset in filed if asset.kind == "video"}
             assert db.query(Sequence).filter(Sequence.project_id == project_id).count() == 0, "不剪片子,不该建空时间线"
             note = db.get(Note, output["copy_note_id"])
             assert "- 软糯不扎" in note.markdown and "**周末**" in note.markdown
@@ -701,6 +703,7 @@ class Test上身图真跑:
         context = _run(ws, graph, product_name="开衫", product_brief="米色针织开衫")
         assert {one["kind"] for one in studio.calls["ai_generate"]} == {"image"}
         assert len(context["output"]["output"]["image_asset_ids"]) == 2
+        assert "video_asset_ids" not in context["output"]["output"], "没有视频那一步,就不交一串空的视频"
 
 
 # --------------------------------------------------------------------------------------
@@ -787,6 +790,7 @@ class Test独立的几项_一项失败不拖垮其余:
         # 那一组的上身图已经出了、付了钱:照样交出来(交的就是上身图,带不带视频都一样)。此前整组被丢掉,输出里是 3 组。
         assert context["output"]["output"]["scene_count"] == 4
         assert len(context["output"]["output"]["image_asset_ids"]) == 4
+        assert len(context["output"]["output"]["video_asset_ids"]) == 3, "视频没出来的那一组不交视频"
         with unit_of_work() as db:
             filed = db.query(Asset).filter(Asset.project_id == context["output"]["output"]["project_id"]).count()
         assert filed == 4 + 3, "四组的图都归档了,三段视频也归档了"

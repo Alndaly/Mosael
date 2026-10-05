@@ -234,8 +234,24 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             data = json.loads(source)
         except ValueError:
             data = _fenced_json(source, default=source)  # not JSON — treat the raw string as the value
-    value: Any = data
-    for part in [p for p in str(config.get("path", "")).split(".") if p]:
+    value = _walk(data, [p for p in str(config.get("path", "")).split(".") if p])
+    if value is None:
+        text = ""
+    elif isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False)
+    return {"value": value, "text": text}
+
+
+def _walk(value: Any, parts: list[str]) -> Any:
+    """按点路径往下走。`*` 是「这一串里的每一个」:余下的路径对每一项各走一遍,走不到的(没有那一格)不占位 ——
+    从循环交出的一串结果里取出每一项的某一格(模特上身图的 `*.on_model_clip.asset_id`)。"""
+    for index, part in enumerate(parts):
+        if part == "*":
+            items = value if isinstance(value, list) else list(value.values()) if isinstance(value, dict) else []
+            picked = [_walk(item, parts[index + 1:]) for item in items]
+            return [one for one in picked if one not in (None, "")]
         if isinstance(value, dict):
             value = value.get(part)
         elif isinstance(value, list):
@@ -246,14 +262,8 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         else:
             value = None
         if value is None:
-            break
-    if value is None:
-        text = ""
-    elif isinstance(value, str):
-        text = value
-    else:
-        text = json.dumps(value, ensure_ascii=False)
-    return {"value": value, "text": text}
+            return None
+    return value
 
 
 @register("text_transform")

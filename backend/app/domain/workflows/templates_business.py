@@ -637,9 +637,10 @@ def product_on_model_graph(
                 "items": "{{lookbook_plan.json.scenes}}",
                 "inputs": inputs,
                 "body": {"nodes": body_nodes, "edges": body_edges},
-                #: 交出的是每一组的**上身图**,带不带视频都一样 —— 此前带视频时只交视频,图反倒不在结果里;
-                #: 视频和图一起归进了这次拍摄的项目。循环的交付也就不依赖视频那个节点(删掉它照样成立)。
-                "output": "{{on_model.asset_id}}",
+                #: 不写 output:每一组交出它的全部产物(上身图、视频),由下面两步分别取出每一组的图和视频 —— 一组的视频
+                #: 没出来,那一组的图照样交(见 loops.loop_foreach)。此前只交上身图,视频要去项目里翻。删掉视频那两个节点,
+                #: 图照样取得到(取视频那一步得到的是空的一串)。
+                "output": "",
                 "concurrency": 2,
                 #: 「要几组」是钱的闸门,不只是提示词:模型多规划了几组,也只出前这么多组。
                 "max_items": "{{start.scene_count}}",
@@ -647,6 +648,20 @@ def product_on_model_graph(
                 "on_item_error": "skip",
             },
         },
+        {
+            "id": "scene_images",
+            "type": "json_extract",
+            "name": {"zh": "取出每一组的上身图", "en": "Collect each scene's image"},
+            "position": {"x": 1290, "y": 260},
+            "config": {"source": "{{shoot_scenes.results}}", "path": "*.on_model.asset_id"},
+        },
+        *([{
+            "id": "scene_clips",
+            "type": "json_extract",
+            "name": {"zh": "取出每一组的视频", "en": "Collect each scene's clip"},
+            "position": {"x": 1290, "y": 560},
+            "config": {"source": "{{shoot_scenes.results}}", "path": "*.on_model_clip.asset_id"},
+        }] if wants_video else []),
         {
             "id": "copy_note",
             "type": "note_create",
@@ -688,7 +703,9 @@ def product_on_model_graph(
             "config": {
                 "values": {
                     "product_asset_id": "{{product_photo.asset_id}}",
-                    "image_asset_ids": "{{shoot_scenes.results}}",
+                    "image_asset_ids": "{{scene_images.value}}",
+                    #: 有视频那一步时,每一组的视频也列出来(视频没出来的那一组不在里面)。
+                    **({"video_asset_ids": "{{scene_clips.value}}"} if wants_video else {}),
                     "scene_count": "{{shoot_scenes.count}}",
                     "plan": "{{lookbook_plan.json}}",
                     "copy_note_id": "{{copy_note.note_id}}",
@@ -708,6 +725,10 @@ def product_on_model_graph(
         {"id": "project_shoot", "source": "shoot_project", "target": "shoot_scenes"},
         {"id": "plan_note", "source": "lookbook_plan", "target": "copy_note"},
         {"id": "shoot_notice", "source": "shoot_scenes", "target": "done_notice"},
+        {"id": "shoot_images", "source": "shoot_scenes", "target": "scene_images"},
+        *([{"id": "shoot_clips", "source": "shoot_scenes", "target": "scene_clips"},
+            {"id": "clips_output", "source": "scene_clips", "target": "output"}] if wants_video else []),
+        {"id": "images_output", "source": "scene_images", "target": "output"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
         {"id": "note_output", "source": "copy_note", "target": "output"},
     ]

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion). This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and “File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the on-model images and doesn't depend on those two.",
-  "graph_hash": "7cb4082ee8333dc1fc991f4e5c3d1e48fb9774c359a64f750bda040ace4051d8",
+  "graph_hash": "25f87f27a2e16e82dfe3cd2be8fce2de25940ac6da50f147272c71b38109a8db",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -271,11 +271,43 @@
               }
             ]
           },
-          "output": "{{on_model.asset_id}}",
+          "output": "",
           "concurrency": 2,
           "max_items": "{{start.scene_count}}",
           "on_item_error": "skip"
         }
+      },
+      {
+        "id": "scene_images",
+        "type": "json_extract",
+        "name": "Collect each scene's image",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "source": "",
+          "path": "*.on_model.asset_id"
+        },
+        "inputs": [
+          "source"
+        ]
+      },
+      {
+        "id": "scene_clips",
+        "type": "json_extract",
+        "name": "Collect each scene's clip",
+        "position": {
+          "x": 1290,
+          "y": 560
+        },
+        "config": {
+          "source": "",
+          "path": "*.on_model_clip.asset_id"
+        },
+        "inputs": [
+          "source"
+        ]
       },
       {
         "id": "copy_note",
@@ -315,7 +347,8 @@
         "config": {
           "values": {
             "product_asset_id": "{{product_photo.asset_id}}",
-            "image_asset_ids": "{{shoot_scenes.results}}",
+            "image_asset_ids": "{{scene_images.value}}",
+            "video_asset_ids": "{{scene_clips.value}}",
             "scene_count": "{{shoot_scenes.count}}",
             "plan": "{{lookbook_plan.json}}",
             "copy_note_id": "{{copy_note.note_id}}",
@@ -366,6 +399,16 @@
         "target": "done_notice"
       },
       {
+        "id": "clips_output",
+        "source": "scene_clips",
+        "target": "output"
+      },
+      {
+        "id": "images_output",
+        "source": "scene_images",
+        "target": "output"
+      },
+      {
         "id": "notice_output",
         "source": "done_notice",
         "target": "output"
@@ -374,6 +417,22 @@
         "id": "note_output",
         "source": "copy_note",
         "target": "output"
+      },
+      {
+        "id": "d-shoot_scenes-results-scene_images-source",
+        "source": "shoot_scenes",
+        "target": "scene_images",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "source"
+      },
+      {
+        "id": "d-shoot_scenes-results-scene_clips-source",
+        "source": "shoot_scenes",
+        "target": "scene_clips",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "source"
       }
     ]
   }
