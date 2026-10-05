@@ -214,6 +214,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "百炼语音合成失败:{detail}",
         "en": "Alibaba Cloud Bailian speech synthesis failed: {detail}",
     },
+    "providerErr_voiceEnrollFailed": {
+        "zh": "百炼声音复刻失败:{detail}",
+        "en": "Alibaba Cloud Bailian voice cloning failed: {detail}",
+    },
+    "providerErr_voiceEnrollUploadFailed": {
+        "zh": "参考音频没能传到百炼的临时存储:{detail}",
+        "en": "The reference audio couldn't be uploaded to Bailian's temporary storage: {detail}",
+    },
+    "providerErr_voiceEnrollNoVoiceId": {
+        "zh": "百炼说复刻提交了,却没有给出音色 id",
+        "en": "Bailian accepted the clone but returned no voice ID",
+    },
+    "providerErr_voiceEnrollUnsupported": {
+        "zh": "{engine} 不支持声音复刻",
+        "en": "{engine} doesn't support voice cloning",
+    },
     "providerErr_volcanoTtsKeyMissing": {
         "zh": "火山引擎语音合成需要新版控制台的 API Key",
         "en": "Volcano Engine speech synthesis needs an API key from the new console",

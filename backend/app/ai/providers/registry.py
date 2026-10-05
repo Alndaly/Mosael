@@ -1,7 +1,8 @@
 """内置供应商 Adapter 的唯一装配入口。
 
 能力契约在 ``contracts``，协议 Implementation 在 ``adapters``；这个 Module 只回答两件事：
-某个 ``(vendor, kind)`` 应使用哪个生成 Adapter，以及某个语音引擎 id 应构造哪个 Speech Adapter。
+某个 ``(vendor, kind)`` 应使用哪个生成 Adapter，以及某个语音引擎 id 应构造哪个 Speech Adapter
+(和能在这个引擎上复刻嗓子的那个 Voice Enrollment Adapter)。
 重复键在启动时直接失败，不能由后一次导入静默覆盖前一次注册。
 
 生成 Adapter 另有**动态来源**:插件可以是生成供应商(ADR 0020),而装了哪些插件是用户机器上的
@@ -16,6 +17,7 @@ from collections.abc import Callable, Iterable
 from app.ai.providers.adapters.alibaba.dashscope.audio import DashScopeAudioAdapter
 from app.ai.providers.adapters.alibaba.dashscope.image import QwenImageAdapter
 from app.ai.providers.adapters.alibaba.dashscope.speech import BailianSpeechAdapter, CosyVoiceSpeechAdapter
+from app.ai.providers.adapters.alibaba.dashscope.voice_enrollment import CosyVoiceEnrollmentAdapter
 from app.ai.providers.adapters.alibaba.dashscope.video import WanVideoAdapter
 from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.bytedance.ark.video import SeedanceAdapter
@@ -41,6 +43,7 @@ from app.ai.providers.contracts.denoise import DenoiseAdapter
 from app.ai.providers.contracts.generation import GenerationAdapter
 from app.ai.providers.contracts.separation import SeparationAdapter
 from app.ai.providers.contracts.speech import SpeechSynthesisError, SpeechAdapter
+from app.ai.providers.contracts.voice_enrollment import VoiceEnrollmentAdapter, VoiceEnrollmentError
 
 
 def _generation_adapters() -> tuple[GenerationAdapter, ...]:
@@ -142,6 +145,23 @@ def connection_vendor_for_speech_engine(engine: str) -> str:
     return _SPEECH_ENGINE_CONNECTION_VENDOR.get(engine, engine)
 
 
+#: 能把一把嗓子复刻上去的语音引擎(ADR 0037)→ 它的复刻 Adapter。复刻出来的音色由同名的 Speech Adapter 念。
+VOICE_ENROLLMENT_ADAPTERS: dict[str, type[VoiceEnrollmentAdapter]] = {
+    adapter.engine_id: adapter for adapter in (CosyVoiceEnrollmentAdapter,)
+}
+for _engine in VOICE_ENROLLMENT_ADAPTERS:
+    if _engine not in REMOTE_SPEECH_ADAPTERS:
+        raise RuntimeError(f"voice enrollment for an engine nobody speaks with: {_engine}")
+
+
+def build_voice_enrollment_adapter(engine: str, *, api_key: str, base_url: str = "") -> VoiceEnrollmentAdapter:
+    """构造能在这个语音引擎上复刻嗓子的 Adapter;这个引擎不收复刻就说出来。"""
+    adapter = VOICE_ENROLLMENT_ADAPTERS.get(engine)
+    if adapter is None:
+        raise VoiceEnrollmentError("providerErr_voiceEnrollUnsupported", engine=engine)
+    return adapter(api_key=api_key, base_url=base_url)
+
+
 def _index_separation_adapters(adapters: Iterable[SeparationAdapter]) -> dict[str, SeparationAdapter]:
     indexed: dict[str, SeparationAdapter] = {}
     for adapter in adapters:
@@ -211,6 +231,8 @@ def build_speech_adapter(
 
 __all__ = [
     "REMOTE_SPEECH_ADAPTERS",
+    "VOICE_ENROLLMENT_ADAPTERS",
+    "build_voice_enrollment_adapter",
     "DENOISE_ADAPTERS",
     "SEPARATION_ADAPTERS",
     "build_speech_adapter",

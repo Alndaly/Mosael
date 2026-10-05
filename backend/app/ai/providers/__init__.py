@@ -59,9 +59,16 @@ from app.ai.providers.contracts.speech import (
     SpeechAdapter,
     synthesize_many,
 )
+from app.ai.providers.contracts.voice_enrollment import (
+    RemoteVoice,
+    VoiceEnrollmentAdapter,
+    VoiceEnrollmentError,
+)
 from app.ai.providers.registry import (
     REMOTE_SPEECH_ADAPTERS,
+    VOICE_ENROLLMENT_ADAPTERS,
     build_speech_adapter,
+    build_voice_enrollment_adapter,
     get_generation_adapter,
     has_capability_implementation,
     connection_vendor_for_speech_engine,
@@ -84,6 +91,11 @@ __all__ = [
     "REFERENCE_IMAGE",
     "REFERENCE_VIDEO",
     "REMOTE_SPEECH_ADAPTERS",
+    "RemoteVoice",
+    "VOICE_ENROLLMENT_ADAPTERS",
+    "VoiceEnrollmentAdapter",
+    "VoiceEnrollmentError",
+    "build_voice_enrollment_adapter",
     "MAX_PARALLEL_SPEECH_REQUESTS",
     "SPEECH_REQUEST_TIMEOUT_SECONDS",
     "SOURCE_ROLES",
