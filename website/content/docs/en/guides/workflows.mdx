@@ -138,6 +138,7 @@ renamed or mistyped) or it has no such output — so you can pick another upstre
 ![References in a text template render as “node title · output” tags instead of raw double-brace references](/media/screens/en/workflow-reference-tags.png)
 
 Data ports match properties one for one: named configuration inputs and named output variables each receive their own port. Control edges express order, while data edges state exactly which property moves.
+Each port carries **the name of its field in the node's settings**, in the interface language: a reference inside the generation parameters gets a port called “Aspect ratio” or “Resolution”, one inside the input media is named after its role, “First frame” or “Reference image” (numbered when a role has several lines; a line without a role is “Input media 3”). No node has two ports with the same name — a generation node hands back “Media” (the cover) and “Media list” (everything from the run). References written inside raw JSON such as a JSON Schema share one port for the whole field.
 
 **The canvas draws each reference as a faint dotted line**: it only orders things (a node waits for whatever it references), **it never
 makes the referenced node run**, it can't be selected, and hovering it says which reference it is. When the referenced node isn't wired
