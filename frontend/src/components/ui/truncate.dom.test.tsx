@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Hint, TooltipProvider } from "./tooltip";
@@ -31,6 +31,38 @@ describe("截断的文字悬停看全文", () => {
     overflow(text, 400, 120);
     hover(text);
     expect((await screen.findByRole("tooltip")).textContent).toBe(NAME);
+  });
+
+  it("收起时浮层里还是全文 —— 淡出的那几帧不是一个空气泡", async () => {
+    // jsdom 里没有动画,Radix 的 Presence 一收起就卸载,看不到淡出那几帧。让它以为浮层有进出场动画(按 data-state
+    // 给 animationName),它就把收起中的浮层留着等动画放完 —— 那时浮层里该还是全文。此前收起时 clipped 被清成 false,
+    // 淡出的那几帧里全文先没了:下拉里划过一排被截断的名字,就是一串空气泡在闪。
+    const real = window.getComputedStyle.bind(window);
+    const spy = vi.spyOn(window, "getComputedStyle").mockImplementation((element: Element, pseudo?: string | null) => {
+      const style = real(element, pseudo);
+      if (!element.hasAttribute("data-tooltip")) return style;
+      return new Proxy(style, {
+        get(target, key) {
+          if (key === "animationName") return element.getAttribute("data-state") === "closed" ? "exit" : "enter";
+          const value = Reflect.get(target, key);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    });
+    try {
+      render(<TooltipProvider delayDuration={0}><Truncate>{NAME}</Truncate></TooltipProvider>);
+      const text = screen.getByText(NAME);
+      overflow(text, 400, 120);
+      hover(text);
+      await screen.findByRole("tooltip");
+      // 由 Radix 收起(onOpenChange(false)):鼠标往下一行划、离开说明的缓冲区时走的就是这一条;Esc 同一条。
+      fireEvent.keyDown(document, { key: "Escape" });
+      const closing = document.querySelector<HTMLElement>("[data-tooltip]");
+      expect(closing?.getAttribute("data-state"), "收起中的浮层该还挂着(在等淡出)").toBe("closed");
+      expect(closing?.textContent).toContain(NAME);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("没被截断就不出 —— 放得下的名字悬停再说一遍是噪音", async () => {

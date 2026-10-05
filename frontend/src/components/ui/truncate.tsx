@@ -88,9 +88,16 @@ const Truncate = React.forwardRef<
       <Tooltip
         open={open}
         onOpenChange={(next) => {
-          const cut = next && overflowing()
+          // **收起时不动内容**:浮层还要淡出一下(TOOLTIP_MOTION),此前这里把 clipped 清成 false,淡出的那几帧里
+          // 全文先没了,画出来一个空的小气泡。下拉列表里鼠标往下划过一排被截断的名字,每一行都留下一个正在淡出的
+          // 空气泡 —— 看上去就是提示闪了好几下。是不是被截断,只在打开那一刻量。
+          if (!next) {
+            setOpen(false)
+            return
+          }
+          const cut = overflowing()
           setClipped(cut)
-          setOpen(next && (cut || Boolean(hint)))
+          setOpen(cut || Boolean(hint))
         }}
       >
         <TooltipTrigger asChild>{element}</TooltipTrigger>
