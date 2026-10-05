@@ -143,6 +143,9 @@ class BailianSpeechAdapter:
             with RetryingClient(timeout=SPEECH_REQUEST_TIMEOUT_SECONDS) as fetcher:
                 audio = fetcher.get(url)
                 audio.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # 百炼的原话在回包正文里(「音色不存在」「模型不对」),状态行和地址说不出为什么。
+            raise SpeechSynthesisError("providerErr_bailianTtsFailed", detail=connection.failure_detail(exc.response)) from exc
         except httpx.HTTPError as exc:
             raise SpeechSynthesisError("providerErr_bailianTtsFailed", detail=str(exc)) from exc
         out_path.write_bytes(audio.content)

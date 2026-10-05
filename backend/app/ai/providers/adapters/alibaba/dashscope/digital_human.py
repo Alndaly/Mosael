@@ -5,9 +5,8 @@
 
 · **提交路径不同**:两个都走 `image2video/video-synthesis`,不是万相的 `video-generation/video-synthesis`。
 · **素材是链接字段**(`image_url` / `audio_url` / `video_url`),不收内联的 base64。本地素材先传到**百炼自己的临时存储**
-  (取上传凭证 → 表单直传 OSS → 得到 `oss://…`,48 小时有效,只对这一个模型有效),提交时带上
-  `X-DashScope-OssResourceResolve: enable`。不借用户的对象存储 —— 配音生成的音频都是本地文件,要求先配好对象存储
-  才能让人物说话,门槛就太高了。有公网直链的素材(从链接导入的)直接用直链。
+  (`dashscope/uploads`,和声音复刻共用),提交时带上 `X-DashScope-OssResourceResolve: enable`。配音生成的音频都是
+  本地文件,要求先配好对象存储才能让人物说话,门槛就太高了。有公网直链的素材(从链接导入的)直接用直链。
 · **说话照片先预检**:`wan2.2-s2v-detect` 同步判一张图能不能用(清晰、单人、正面),不过就不提交,说「没找到清晰的正脸」。
   预检只要请求成功就计费(文档原话),所以只在真要提交之前调一次。
 
@@ -19,8 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import httpx
-
+from app.ai.providers.adapters.alibaba.dashscope.uploads import OSS_RESOLVE_HEADER, TemporaryUploadError, upload_temporary
 from app.ai.providers.contracts.generation import (
     DRIVING_AUDIO,
     FIRST_FRAME,
@@ -34,9 +32,6 @@ from app.core.http_retry import RetryingClient
 
 SUBMIT_PATH = "/api/v1/services/aigc/image2video/video-synthesis"
 DETECT_PATH = "/api/v1/services/aigc/image2video/face-detect"
-UPLOAD_POLICY_PATH = "/api/v1/uploads"
-#: 用 `oss://` 临时地址提交时必须带的头(文档原话:「必须在 HTTP 请求头中显式添加」)。
-OSS_RESOLVE_HEADER = {"X-DashScope-OssResourceResolve": "enable"}
 
 S2V_MODEL_PREFIX = "wan2.2-s2v"
 S2V_DETECT_MODEL = "wan2.2-s2v-detect"
@@ -62,30 +57,12 @@ def _local_or_url(request: GenerationRequest, role: str) -> tuple[str, Path | No
     return "", None
 
 
-def upload_temporary(client: RetryingClient, model: str, path: Path) -> str:
-    """把一个本地文件传到百炼的临时存储,交回 `oss://…`。凭证 5 分钟有效、文件 48 小时有效、只绑这个模型。"""
-    policy_response = client.get(UPLOAD_POLICY_PATH, params={"action": "getPolicy", "model": model})
-    policy_response.raise_for_status()
-    policy = (policy_response.json() or {}).get("data") or {}
-    host = str(policy.get("upload_host") or "")
-    upload_dir = str(policy.get("upload_dir") or "").rstrip("/")
-    if not host or not upload_dir:
-        raise GenerationAdapterError("providerErr_uploadPolicyMissing", vendor="DashScope")
-    key = f"{upload_dir}/{path.name}"
-    #: 表单字段照文档的顺序,`file` 必须在最后。直传 OSS **不带** Authorization —— 签名在 policy 里。
-    form = {
-        "OSSAccessKeyId": str(policy.get("oss_access_key_id") or ""),
-        "Signature": str(policy.get("signature") or ""),
-        "policy": str(policy.get("policy") or ""),
-        "x-oss-object-acl": str(policy.get("x_oss_object_acl") or "private"),
-        "x-oss-forbid-overwrite": str(policy.get("x_oss_forbid_overwrite") or "true"),
-        "key": key,
-        "success_action_status": "200",
-    }
-    with path.open("rb") as handle:
-        uploaded = httpx.post(host, data=form, files={"file": (path.name, handle)}, timeout=300)
-    uploaded.raise_for_status()
-    return f"oss://{key}"
+def _upload(client: RetryingClient, model: str, path: Path) -> str:
+    """传到百炼的临时存储(凭证只绑这个生成模型)。取不到凭证说成生成那一类的错。"""
+    try:
+        return upload_temporary(client, model, path)
+    except TemporaryUploadError as exc:
+        raise GenerationAdapterError.relay(exc) from exc
 
 
 def _input_url(client: RetryingClient, request: GenerationRequest, role: str, *, required: bool = True) -> str:
@@ -95,7 +72,7 @@ def _input_url(client: RetryingClient, request: GenerationRequest, role: str, *,
     if local is not None:
         if role == SOURCE_VIDEO and str(request.model).lower() == RETALK_MODEL:
             return _upload_fitted_video(client, request.model, local)
-        return upload_temporary(client, request.model, local)
+        return _upload(client, request.model, local)
     if required:
         raise GenerationAdapterError("providerErr_sourceMissing", vendor="DashScope", role=role)
     return ""
@@ -114,7 +91,7 @@ def _upload_fitted_video(client: RetryingClient, model: str, path: Path) -> str:
             fitted = video_sides_within(path, Path(scratch) / f"{path.stem}-fit.mp4", min_side=low, max_side=high)
         except VendorFormatError as exc:
             raise GenerationAdapterError(exc.key, **exc.params) from exc
-        return upload_temporary(client, model, fitted)
+        return _upload(client, model, fitted)
 
 
 def check_portrait(client: RetryingClient, image_url: str) -> None:
@@ -170,4 +147,4 @@ def submit_talking(client: RetryingClient, request: GenerationRequest) -> str:
     return str(task_id)
 
 
-__all__ = ["build_talking_payload", "check_portrait", "is_talking_model", "submit_talking", "upload_temporary"]
+__all__ = ["build_talking_payload", "check_portrait", "is_talking_model", "submit_talking"]

@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import httpx
+
 from app.ai.providers.contracts.generation import GenerationAdapterContext, GenerationAdapterError
 from app.core.http_retry import RetryingClient
 
@@ -19,6 +21,21 @@ def native_base(base_url: str | None) -> str:
     """把连接上的 base_url 归一到原生 API 根:认得出 compatible-mode 就剥掉,自定义代理原样放行。"""
     base = (base_url or "").strip().rstrip("/")
     return base.removesuffix(_COMPATIBLE_MODE) if base else DASHSCOPE_BASE
+
+
+def failure_detail(response: httpx.Response) -> str:
+    """一个失败的回包里百炼说的那句原话:`HTTP 400 · code: message`;不是 JSON(OSS 的 XML、网关的 HTML)就只有状态码。
+
+    `raise_for_status` 抛出的那句只有状态行和地址 —— 「音色不存在」「前缀太长」这类能让人行动的原话在回包正文里。
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        body = {}
+    said = ": ".join(part for part in (str(body.get("code") or "").strip(), str(body.get("message") or "").strip()) if part)
+    return f"HTTP {response.status_code} · {said}" if said else f"HTTP {response.status_code}"
 
 
 def task_api_base(context: GenerationAdapterContext) -> str:

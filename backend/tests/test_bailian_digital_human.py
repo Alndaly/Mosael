@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from app.ai.providers.adapters.alibaba.dashscope import digital_human
+from app.ai.providers.adapters.alibaba.dashscope import uploads as temporary_storage
 from app.ai.providers.adapters.alibaba.dashscope.digital_human import (
     DETECT_PATH,
     SUBMIT_PATH,
@@ -73,7 +73,7 @@ def uploads(monkeypatch):
         sent.append({"url": url, "data": data, "file": files["file"][0]})
         return SimpleNamespace(raise_for_status=lambda: None)
 
-    monkeypatch.setattr(digital_human.httpx, "post", fake_post)
+    monkeypatch.setattr(temporary_storage.httpx, "post", fake_post)
     return sent
 
 
@@ -199,7 +199,7 @@ def test_改口型的原视频不在_640_到_2048_之间_先缩放进范围再�
         sizes.append(probe.stdout.strip())
         return SimpleNamespace(raise_for_status=lambda: None)
 
-    monkeypatch.setattr(digital_human.httpx, "post", fake_post)
+    monkeypatch.setattr(temporary_storage.httpx, "post", fake_post)
     client = FakeClient({"/api/v1/uploads": POLICY})
     payload = build_talking_payload(client, _request("videoretalk", [(SOURCE_VIDEO, source, None),
                                                                      (DRIVING_AUDIO, None, "https://x/a.mp3")]))
