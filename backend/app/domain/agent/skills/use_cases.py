@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.db.models import User
-from app.domain.agent.skills import catalog, runtime, store
+from app.db.models import AgentSession, User
+from app.domain.agent.skills import catalog, drafting, runtime, store
 from app.domain.agent.skills.catalog import CONVERSATION, CREATED, Skill, SkillDomainError
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from mosael_formats.agent_skill import SkillDoc, SkillError, bundles_from_files, read_skill_archive
@@ -107,6 +107,15 @@ def commit_import(db: Session, user: User, workspace_id: str, import_id: str, ch
     return store.commit_import(db, workspace_id, import_id, choices, user_id=user.id)
 
 
+def draft_from_session(db: Session, user: User, session_id: str) -> dict[str, str]:
+    """「存成技能」:起草,不保存。看得见这次对话、又能在这个工作区里建技能,才值得花这一次模型调用。"""
+    from app.domain.agent.sessions import readable_session
+
+    session: AgentSession = readable_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    return drafting.draft_from_session(db, session, user_id=user.id)
+
+
 # ---------------------------------------------------------------- 智能体工具
 
 
@@ -126,6 +135,7 @@ __all__ = [
     "create",
     "delete",
     "delete_file",
+    "draft_from_session",
     "export",
     "get_skill",
     "list_skills",

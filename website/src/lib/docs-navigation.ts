@@ -2,7 +2,7 @@
 export const DOC_GROUPS = [
   { id: "start", pages: ["start/intro", "start/download", "start/quickstart", "guides/providers", "guides/appearance"] },
   { id: "create", pages: ["guides/media", "guides/documents", "guides/assets", "guides/notes", "guides/boards", "guides/scenes"] },
-  { id: "produce", pages: ["guides/editing", "guides/ai-studio", "guides/digital-humans", "guides/voice"] },
+  { id: "produce", pages: ["guides/editing", "guides/ai-studio", "guides/agent-skills", "guides/digital-humans", "guides/voice"] },
   { id: "automate", pages: ["guides/workflows", "guides/scheduler", "guides/browser-pool", "guides/publishing"] },
   { id: "extend", pages: ["guides/browser-extension", "guides/plugins", "guides/comfyui", "guides/writing-plugins", "guides/remote", "guides/admin"] },
   { id: "about", pages: ["about/project", "about/contact"] },

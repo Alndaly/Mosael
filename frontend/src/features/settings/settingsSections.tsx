@@ -8,6 +8,7 @@ import {
   Palette,
   Server,
   ShieldCheck,
+  Sparkles,
   Speech,
   UserRound,
   Users,
@@ -18,6 +19,7 @@ import type { Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { AccountSection } from "@/features/settings/AccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
+import { AgentSkillsSection } from "@/features/settings/AgentSkillsSection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
 import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
@@ -181,6 +183,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "agentMemoryTitle",
         icon: <Brain size={14} />,
         render: ({ workspace }) => <AgentMemorySection workspace={workspace} />,
+      },
+      {
+        // 技能(ADR 0040):做某一类事的方法,用到时才读。和记忆挨着 —— 两者常被问「有什么不一样」,
+        // 页首的说明各自讲清楚:记忆每轮都在、必须短;技能只在做那件事时才读。
+        id: "agent-skills",
+        label: "agentSkillsTitle",
+        icon: <Sparkles size={14} />,
+        render: ({ workspace }) => <AgentSkillsSection workspace={workspace} />,
       },
       {
         id: "agent-autopilot",

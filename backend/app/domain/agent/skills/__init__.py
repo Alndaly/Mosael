@@ -3,6 +3,7 @@
 - `catalog`:有哪些技能、开没开、文件在哪(内置 / 工作区 / 插件三个来源);
 - `runtime`:系统提示里的目录、`use_skill` / `read_skill_file` 的回包、「/」点名挂上去的全文;
 - `store`:工作区技能的写(新建、改、删、开关、文件、导入、导出、复制),唯一建索引行的地方;
+- `drafting`:从一段对话起草一份 SKILL.md(「存成技能」);
 - `use_cases`:以上各件事带权限检查的入口(路由和工具调这里)。
 
 格式本身(SKILL.md 怎么读写、校验、压缩包)在 `mosael_formats.agent_skill`。

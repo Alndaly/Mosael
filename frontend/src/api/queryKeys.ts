@@ -61,6 +61,15 @@ export const workspaceKeys = {
   all: () => ["workspaces"] as const,
 };
 
+/**
+ * 智能体技能(ADR 0040):按工作区。列表和单个技能的全文挂在同一个前缀下 —— 改了一个技能,
+ * 设置页的列表、「/」菜单、打开着的编辑表单一起刷新。失效一律用 `.all()`。
+ */
+export const skillKeys = {
+  all: (workspaceId: string) => ["agent-skills", workspaceId] as const,
+  detail: (workspaceId: string, ref: string) => ["agent-skills", workspaceId, ref] as const,
+};
+
 /** 音色库(克隆出来的那些声音):按工作区,只有这一种形状。 */
 export const voiceKeys = {
   all: (workspaceId: string) => ["voices", workspaceId] as const,

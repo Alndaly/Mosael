@@ -22931,6 +22931,729 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Create Skill",
+        "operationId": "create_skill_api_workspaces__workspace_id__skills_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skills/{ref}": {
+      "get": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Get Skill",
+        "description": "一个技能的全部内容(文本文件给全文):编辑表单和「看过全文再开」都用它。",
+        "operationId": "get_skill_api_workspaces__workspace_id__skills__ref__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Update Skill",
+        "operationId": "update_skill_api_workspaces__workspace_id__skills__ref__put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Delete Skill",
+        "operationId": "delete_skill_api_workspaces__workspace_id__skills__ref__delete",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skills/{ref}/enabled": {
+      "put": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Set Skill Enabled",
+        "operationId": "set_skill_enabled_api_workspaces__workspace_id__skills__ref__enabled_put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillEnable"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skills/{ref}/copy": {
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Copy Skill",
+        "description": "内置 / 插件的技能复制一份成「我的」,换个名字就能改。",
+        "operationId": "copy_skill_api_workspaces__workspace_id__skills__ref__copy_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillCopy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skills/{ref}/export": {
+      "get": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Export Skill",
+        "description": "导出成 `.zip`:一层同名文件夹,里面就是技能文件夹原样 —— 别家导入认的就是这个形状。",
+        "operationId": "export_skill_api_workspaces__workspace_id__skills__ref__export_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skills/{ref}/files/{path}": {
+      "get": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Read Skill File",
+        "description": "技能里一个文件的原始字节(下载)。路径越界、符号链接一律 400。",
+        "operationId": "read_skill_file_api_workspaces__workspace_id__skills__ref__files__path__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Put Skill File",
+        "description": "加 / 换技能里的一个文件(SKILL.md 走表单)。",
+        "operationId": "put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Delete Skill File",
+        "operationId": "delete_skill_file_api_workspaces__workspace_id__skills__ref__files__path__delete",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skill-imports": {
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Stage Skill Import",
+        "description": "导入第一步:收一个 `.zip`(`archive`),或者一个文件夹里的全部文件(`files` 与同序的相对路径 `paths`)。\n读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。",
+        "operationId": "stage_skill_import_api_workspaces__workspace_id__skill_imports_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/skill-imports/{import_id}": {
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Commit Skill Import",
+        "description": "导入第二步:照审阅时的选择落地(装哪几个、改不改名、开不开、撞名时替不替换)。",
+        "operationId": "commit_skill_import_api_workspaces__workspace_id__skill_imports__import_id__post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillImportCommit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSkillOut"
+                  },
+                  "title": "Response Commit Skill Import Api Workspaces  Workspace Id  Skill Imports  Import Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/skill-draft": {
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Draft Skill",
+        "description": "「存成技能」:用这次对话正在用的对话模型起草一份 SKILL.md。**不保存** —— 交回编辑表单,用户改完再建。",
+        "operationId": "draft_skill_api_agent_sessions__session_id__skill_draft_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/session-groups": {
@@ -25007,11 +25730,30 @@
         "type": "object",
         "title": "AgentSessionUpdate"
       },
-      "AgentSkillOut": {
+      "AgentSkillCopy": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AgentSkillCopy"
+      },
+      "AgentSkillDetailOut": {
         "properties": {
           "ref": {
             "type": "string",
             "title": "Ref"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
           },
           "title": {
             "type": "string",
@@ -25021,13 +25763,389 @@
             "type": "string",
             "title": "Description"
           },
+          "source": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "workspace",
+              "plugin"
+            ],
+            "title": "Source"
+          },
           "source_label": {
             "type": "string",
             "title": "Source Label"
           },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "default": ""
+          },
+          "compatibility": {
+            "type": "string",
+            "title": "Compatibility",
+            "default": ""
+          },
+          "allowed_tools": {
+            "type": "string",
+            "title": "Allowed Tools",
+            "default": ""
+          },
+          "unknown_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown Fields"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Metadata"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "default": ""
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSkillFileOut"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "name",
+          "title",
+          "description",
+          "source",
+          "source_label",
+          "origin",
+          "enabled",
+          "editable"
+        ],
+        "title": "AgentSkillDetailOut"
+      },
+      "AgentSkillDraftOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "description",
+          "body"
+        ],
+        "title": "AgentSkillDraftOut",
+        "description": "「存成技能」起草出来的东西:填进编辑表单,用户改完才保存。"
+      },
+      "AgentSkillEnable": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AgentSkillEnable"
+      },
+      "AgentSkillFileOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "script": {
+            "type": "boolean",
+            "title": "Script",
+            "default": false
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "binary": {
+            "type": "boolean",
+            "title": "Binary",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "AgentSkillFileOut"
+      },
+      "AgentSkillImportChoice": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rename_to": {
+            "type": "string",
+            "title": "Rename To",
+            "default": ""
+          },
+          "enable": {
+            "type": "boolean",
+            "title": "Enable",
+            "default": false
+          },
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AgentSkillImportChoice"
+      },
+      "AgentSkillImportCommit": {
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSkillImportChoice"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Choices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "choices"
+        ],
+        "title": "AgentSkillImportCommit"
+      },
+      "AgentSkillImportFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "script": {
+            "type": "boolean",
+            "title": "Script",
+            "default": false
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "binary": {
+            "type": "boolean",
+            "title": "Binary",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "AgentSkillImportFile"
+      },
+      "AgentSkillImportItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "default": ""
+          },
+          "compatibility": {
+            "type": "string",
+            "title": "Compatibility",
+            "default": ""
+          },
+          "allowed_tools": {
+            "type": "string",
+            "title": "Allowed Tools",
+            "default": ""
+          },
+          "unknown_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown Fields"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "conflict": {
+            "type": "string",
+            "title": "Conflict",
+            "default": ""
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSkillImportFile"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AgentSkillImportItem"
+      },
+      "AgentSkillImportOut": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "title": "Import Id"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name",
+            "default": ""
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSkillImportItem"
+            },
+            "type": "array",
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "skills"
+        ],
+        "title": "AgentSkillImportOut",
+        "description": "暂存的导入,等人审阅。什么都还没装。"
+      },
+      "AgentSkillOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "workspace",
+              "plugin"
+            ],
+            "title": "Source"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
           },
           "problem": {
             "type": "string",
@@ -25038,13 +26156,69 @@
         "type": "object",
         "required": [
           "ref",
+          "name",
           "title",
           "description",
+          "source",
           "source_label",
-          "enabled"
+          "origin",
+          "enabled",
+          "editable"
         ],
         "title": "AgentSkillOut",
         "description": "列表里的一行。`ref` 是模型看到的名字(插件的带 `插件 id:`),界面也拿它当标识。"
+      },
+      "AgentSkillWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Title",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "license": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "License",
+            "default": ""
+          },
+          "compatibility": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Compatibility",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 65536,
+            "title": "Body",
+            "default": ""
+          },
+          "from_conversation": {
+            "type": "boolean",
+            "title": "From Conversation",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "AgentSkillWrite",
+        "description": "新建 / 改一个工作区技能:规范里的字段 + 显示名 + 正文。规则(名字的写法、长度)由格式包校验,这里只挡离谱的大小。"
       },
       "AgentSpeechRequest": {
         "properties": {
@@ -27172,6 +28346,20 @@
         ],
         "title": "Body_import_web_download_api_assets_web_download_post"
       },
+      "Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"
+      },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {
           "file": {
@@ -27185,6 +28373,46 @@
           "file"
         ],
         "title": "Body_stage_restore_api_settings_data_restore_stage_post"
+      },
+      "Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post": {
+        "properties": {
+          "archive": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive"
+          },
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files",
+            "default": []
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paths",
+            "default": []
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post"
       },
       "Body_upload_api_scene_models_post": {
         "properties": {

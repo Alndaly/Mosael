@@ -1,6 +1,10 @@
 import React from "react";
-import { Scissors, SlidersHorizontal } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { Scissors, SlidersHorizontal, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
+import { draftSkillFromSession } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { ContextMeter, type ContextInfo } from "@/features/agent/ContextMeter";
@@ -12,6 +16,7 @@ import { AutoApprovalTrace } from "@/features/agent/AutoApprovalTrace";
 import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/features/agent/PermissionModePicker";
 import { AnalysisModePicker } from "@/features/agent/AnalysisModePicker";
 import { ThinkingLevelPicker } from "@/features/agent/ThinkingLevelPicker";
+import { SkillEditorDialog, type SkillEditorTarget } from "@/features/agent/skills/SkillEditorDialog";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 
@@ -48,8 +53,20 @@ export function SessionSettingsMenu({
   // 默认档不显示 —— 一个"一切正常"的常驻标记只会变成背景噪音。
   const mode = permissionModeOf(session);
   const ModeIcon = PERMISSION_MODE_ICON[mode];
+  //: 「存成技能」(ADR 0040 §7):用这次对话的模型起草一份 SKILL.md,填进编辑表单,人改完才保存。
+  const [skillDraft, setSkillDraft] = React.useState<SkillEditorTarget | null>(null);
+  const draft = useMutation({
+    mutationFn: () => draftSkillFromSession(String(session?.id)),
+    onSuccess: (drafted) => {
+      setOpen(false);
+      setSkillDraft({ kind: "create", draft: drafted, fromConversation: true });
+    },
+    onError: (error) => toast.error(errorText(error)),
+  });
 
   return (
+    <>
+    <SkillEditorDialog workspaceId={workspaceId} target={skillDraft} onClose={() => setSkillDraft(null)} />
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <IconButton
@@ -115,7 +132,16 @@ export function SessionSettingsMenu({
             )}
           </div>
         )}
+        {/* 把这段对话里做成了的事存成一份做法,以后同类的事照它做。要一次模型调用,所以是按钮,不是自动的。 */}
+        {session && (
+          <div className="border-t border-border pt-2.5">
+            <Button variant="outline" size="sm" className="w-full" loading={draft.isPending} onClick={() => draft.mutate()}>
+              <Sparkles size={12} /> {t("agentSkillSaveAs")}
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
+    </>
   );
 }

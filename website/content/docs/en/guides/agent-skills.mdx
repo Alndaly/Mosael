@@ -1,0 +1,93 @@
+---
+title: Agent skills
+description: Write down how your team does a kind of task as a skill. The agent only sees its name and one-line description until it needs it; name one with / in the message box, and import or export standard SKILL.md folders.
+seo_title: "Agent skills: SKILL.md, on-demand loading, import and export"
+keywords: agent skills, Agent Skills, SKILL.md, reusable prompts, workflow
+order: 23
+updated: 2026-10-06
+version: 1.9.1
+---
+
+A **skill** is a written method for one kind of task: the steps, which tool each step uses, what to check, and optionally a few
+reference files. For example:
+
+- "Product promo shorts": look at the product photos, write three selling points, voice them, cut 9:16, end with a call to buy;
+- "Long video to vertical clips": transcribe, pick the minutes that stand on their own, crop to vertical, add subtitles;
+- "Our brand's video rules": which intro to use, which subtitle font, which colours are off-limits.
+
+## How it differs from memory and workflows
+
+| | What it is | When it enters the conversation |
+| --- | --- | --- |
+| [Memory](/docs/guides/ai-studio) | A short convention: "final videos are always 1080p vertical" | **Every turn**, which is why it must be short |
+| Skill | A method, possibly long, with reference files | Only its name and one-line description, until the agent decides to read it |
+| [Workflow](/docs/guides/workflows) | A fixed automation graph | Not at all; you run it again with new input |
+| [Notes](/docs/guides/notes) | Reference material with sources | Only when the agent searches and finds it |
+
+In short: **rules go in memory, methods go in skills, and anything to rerun automatically becomes a workflow.**
+
+## Where to manage them
+
+**Settings → Agent → Skills** lists three groups:
+
+- **Built in**: "Creative board", "Building workflows" and "3D scenes & modelling" ship with Mosael. They used to be long passages
+  in the agent's instructions on every turn; now they are read only when needed, and each turn's instructions are about a fifth shorter.
+  You can't edit them, but you can "Copy to mine" and edit the copy.
+- **This workspace**: skills you and your teammates created, imported or saved from a conversation. Shared by the workspace's members.
+- **From plugins**: skills bundled in a plugin package, installed and removed with the plugin.
+
+Each row has a switch. **Only skills that are turned on reach the agent** (and the "/" menu in the message box).
+
+### Creating and editing
+
+Click **New skill** and fill in:
+
+- **Display name**: for people, in any language;
+- **Name**: lowercase letters, digits and hyphens (`short-video-ads`); the agent calls the skill by it. It is filled in for you when the
+  display name is in English;
+- **Description**: what it does and when to use it. **The agent decides whether to use the skill from this sentence**, so include the
+  phrases that should trigger it ("use when the user asks for a promo or product video");
+- **Method**: the Markdown body, written for the agent. After saving, add long reference material, templates and examples as **files**,
+  and say in the body which file to read.
+
+### Saving a conversation as a skill
+
+When a conversation got something right, open **Session settings** next to the message box → **Save as skill**. Mosael drafts one with
+the model this conversation uses and opens it in the same editor; **nothing is saved until you do** — and this run's specific assets
+and file names don't belong in it. Drafting calls the model once and is counted in usage.
+
+### Import and export
+
+Skills use the open **Agent Skills (SKILL.md)** format, the same one Claude Code and Claude read: a folder with a `SKILL.md` (the `name`
+and `description` header, then the body) and any other files.
+
+- **Export**: **Export .zip** on any row gives you that folder, ready to import elsewhere.
+- **Import**: **Import .zip** or **Import folder**. Nothing is installed straight away: every file of every skill is shown in full, and you
+  choose which to install, whether to rename them, and whether to enable them (off by default). A name that clashes with a built-in skill
+  must be changed; a clash with one of yours can replace it.
+- Mosael's own additions stay where the spec leaves room for them: the display name is `mosael-title` under `metadata`. Other tools'
+  extra fields (Claude Code's `disable-model-invocation`, for example) are kept in the file as written; Mosael doesn't use them.
+
+Skill folders live in the data directory under `skills/<workspace id>/<name>/`, so you can open them in any editor. A folder someone drops
+there appears in the list **turned off**; enabling it shows the full content first, like an import.
+
+## Using skills in a conversation
+
+- **The agent decides**: when your request matches a skill's description, it reads the skill (`use_skill`), reads its files when needed
+  (`read_skill_file`), and follows it. The step appears as "Used skill: Product promo shorts"; expand it to see what the agent read.
+  Subagents can read skills too.
+- **You name one**: type `/` in the message box and pick a skill; it becomes a chip. When you send, that turn follows the skill directly
+  instead of waiting for the agent to think of it. Up to 3 per message. `/` only opens the menu at the start of a line or after a space,
+  so typing a URL won't.
+
+## Safety
+
+An imported skill is **someone else's words**, treated like text on a web page:
+
+- **It is not a permission**: anything that changes things still shows a confirmation card, and [permission modes](/docs/guides/ai-studio)
+  and approval rules are unchanged. A skill's `allowed-tools` pre-approves nothing.
+- **Read before enabling**: importing, enabling a plugin's skill, or enabling a dropped-in folder always shows the full content first.
+- **The source is always shown**: in the list, the "/" menu, and the copy the agent reads.
+- **Scripts never run**: scripts in a skill are kept and can be read as reference; Mosael doesn't execute them.
+- **Size limits**: `SKILL.md` up to 64 KB, a single file up to 2 MB, a skill up to 200 files and 10 MB; archives with paths outside
+  the folder or symbolic links are refused.

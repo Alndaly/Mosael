@@ -7594,7 +7594,173 @@ export interface paths {
          */
         get: operations["list_skills_api_workspaces__workspace_id__skills_get"];
         put?: never;
+        /** Create Skill */
+        post: operations["create_skill_api_workspaces__workspace_id__skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skills/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Skill
+         * @description 一个技能的全部内容(文本文件给全文):编辑表单和「看过全文再开」都用它。
+         */
+        get: operations["get_skill_api_workspaces__workspace_id__skills__ref__get"];
+        /** Update Skill */
+        put: operations["update_skill_api_workspaces__workspace_id__skills__ref__put"];
         post?: never;
+        /** Delete Skill */
+        delete: operations["delete_skill_api_workspaces__workspace_id__skills__ref__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skills/{ref}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Skill Enabled */
+        put: operations["set_skill_enabled_api_workspaces__workspace_id__skills__ref__enabled_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skills/{ref}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Skill
+         * @description 内置 / 插件的技能复制一份成「我的」,换个名字就能改。
+         */
+        post: operations["copy_skill_api_workspaces__workspace_id__skills__ref__copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skills/{ref}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Skill
+         * @description 导出成 `.zip`:一层同名文件夹,里面就是技能文件夹原样 —— 别家导入认的就是这个形状。
+         */
+        get: operations["export_skill_api_workspaces__workspace_id__skills__ref__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skills/{ref}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Skill File
+         * @description 技能里一个文件的原始字节(下载)。路径越界、符号链接一律 400。
+         */
+        get: operations["read_skill_file_api_workspaces__workspace_id__skills__ref__files__path__get"];
+        /**
+         * Put Skill File
+         * @description 加 / 换技能里的一个文件(SKILL.md 走表单)。
+         */
+        put: operations["put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"];
+        post?: never;
+        /** Delete Skill File */
+        delete: operations["delete_skill_file_api_workspaces__workspace_id__skills__ref__files__path__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skill-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Skill Import
+         * @description 导入第一步:收一个 `.zip`(`archive`),或者一个文件夹里的全部文件(`files` 与同序的相对路径 `paths`)。
+         *     读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。
+         */
+        post: operations["stage_skill_import_api_workspaces__workspace_id__skill_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/skill-imports/{import_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Skill Import
+         * @description 导入第二步:照审阅时的选择落地(装哪几个、改不改名、开不开、撞名时替不替换)。
+         */
+        post: operations["commit_skill_import_api_workspaces__workspace_id__skill_imports__import_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/sessions/{session_id}/skill-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Skill
+         * @description 「存成技能」:用这次对话正在用的对话模型起草一份 SKILL.md。**不保存** —— 交回编辑表单,用户改完再建。
+         */
+        post: operations["draft_skill_api_agent_sessions__session_id__skill_draft_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8421,6 +8587,209 @@ export interface components {
             /** Group Id */
             group_id?: string | null;
         };
+        /** AgentSkillCopy */
+        AgentSkillCopy: {
+            /** Name */
+            name: string;
+        };
+        /** AgentSkillDetailOut */
+        AgentSkillDetailOut: {
+            /** Ref */
+            ref: string;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "builtin" | "workspace" | "plugin";
+            /** Source Label */
+            source_label: string;
+            /** Origin */
+            origin: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Editable */
+            editable: boolean;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+            /**
+             * License
+             * @default
+             */
+            license: string;
+            /**
+             * Compatibility
+             * @default
+             */
+            compatibility: string;
+            /**
+             * Allowed Tools
+             * @default
+             */
+            allowed_tools: string;
+            /** Unknown Fields */
+            unknown_fields?: string[];
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            };
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /** Files */
+            files?: components["schemas"]["AgentSkillFileOut"][];
+        };
+        /**
+         * AgentSkillDraftOut
+         * @description 「存成技能」起草出来的东西:填进编辑表单,用户改完才保存。
+         */
+        AgentSkillDraftOut: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Body */
+            body: string;
+        };
+        /** AgentSkillEnable */
+        AgentSkillEnable: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** AgentSkillFileOut */
+        AgentSkillFileOut: {
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /**
+             * Script
+             * @default false
+             */
+            script: boolean;
+            /** Text */
+            text?: string | null;
+            /**
+             * Binary
+             * @default false
+             */
+            binary: boolean;
+        };
+        /** AgentSkillImportChoice */
+        AgentSkillImportChoice: {
+            /** Name */
+            name: string;
+            /**
+             * Rename To
+             * @default
+             */
+            rename_to: string;
+            /**
+             * Enable
+             * @default false
+             */
+            enable: boolean;
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+        };
+        /** AgentSkillImportCommit */
+        AgentSkillImportCommit: {
+            /** Choices */
+            choices: components["schemas"]["AgentSkillImportChoice"][];
+        };
+        /** AgentSkillImportFile */
+        AgentSkillImportFile: {
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /**
+             * Script
+             * @default false
+             */
+            script: boolean;
+            /** Text */
+            text?: string | null;
+            /**
+             * Binary
+             * @default false
+             */
+            binary: boolean;
+        };
+        /** AgentSkillImportItem */
+        AgentSkillImportItem: {
+            /** Name */
+            name: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * License
+             * @default
+             */
+            license: string;
+            /**
+             * Compatibility
+             * @default
+             */
+            compatibility: string;
+            /**
+             * Allowed Tools
+             * @default
+             */
+            allowed_tools: string;
+            /** Unknown Fields */
+            unknown_fields?: string[];
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /**
+             * Conflict
+             * @default
+             */
+            conflict: string;
+            /** Files */
+            files?: components["schemas"]["AgentSkillImportFile"][];
+        };
+        /**
+         * AgentSkillImportOut
+         * @description 暂存的导入,等人审阅。什么都还没装。
+         */
+        AgentSkillImportOut: {
+            /** Import Id */
+            import_id: string;
+            /**
+             * Source Name
+             * @default
+             */
+            source_name: string;
+            /** Skills */
+            skills: components["schemas"]["AgentSkillImportItem"][];
+        };
         /**
          * AgentSkillOut
          * @description 列表里的一行。`ref` 是模型看到的名字(插件的带 `插件 id:`),界面也拿它当标识。
@@ -8428,19 +8797,65 @@ export interface components {
         AgentSkillOut: {
             /** Ref */
             ref: string;
+            /** Name */
+            name: string;
             /** Title */
             title: string;
             /** Description */
             description: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "builtin" | "workspace" | "plugin";
             /** Source Label */
             source_label: string;
+            /** Origin */
+            origin: string;
             /** Enabled */
             enabled: boolean;
+            /** Editable */
+            editable: boolean;
             /**
              * Problem
              * @default
              */
             problem: string;
+        };
+        /**
+         * AgentSkillWrite
+         * @description 新建 / 改一个工作区技能:规范里的字段 + 显示名 + 正文。规则(名字的写法、长度)由格式包校验,这里只挡离谱的大小。
+         */
+        AgentSkillWrite: {
+            /** Name */
+            name: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * License
+             * @default
+             */
+            license: string;
+            /**
+             * Compatibility
+             * @default
+             */
+            compatibility: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * From Conversation
+             * @default false
+             */
+            from_conversation: boolean;
         };
         /**
          * AgentSpeechRequest
@@ -9465,10 +9880,35 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put */
+        Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put: {
+            /** File */
+            file: string;
+        };
         /** Body_stage_restore_api_settings_data_restore_stage_post */
         Body_stage_restore_api_settings_data_restore_stage_post: {
             /** File */
             file: string;
+        };
+        /** Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post */
+        Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post: {
+            /** Archive */
+            archive?: string | null;
+            /**
+             * Files
+             * @default []
+             */
+            files: string[];
+            /**
+             * Paths
+             * @default []
+             */
+            paths: string[];
+            /**
+             * Source Name
+             * @default
+             */
+            source_name: string;
         };
         /** Body_upload_api_scene_models_post */
         Body_upload_api_scene_models_post: {
@@ -32457,6 +32897,448 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSkillOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_skill_api_workspaces__workspace_id__skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_skill_api_workspaces__workspace_id__skills__ref__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_skill_api_workspaces__workspace_id__skills__ref__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_skill_api_workspaces__workspace_id__skills__ref__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_skill_enabled_api_workspaces__workspace_id__skills__ref__enabled_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillEnable"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_skill_api_workspaces__workspace_id__skills__ref__copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillCopy"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_skill_api_workspaces__workspace_id__skills__ref__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_skill_file_api_workspaces__workspace_id__skills__ref__files__path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_skill_file_api_workspaces__workspace_id__skills__ref__files__path__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                ref: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stage_skill_import_api_workspaces__workspace_id__skill_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_skill_import_api_workspaces__workspace_id__skill_imports__import_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillImportCommit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_skill_api_agent_sessions__session_id__skill_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillDraftOut"];
                 };
             };
             /** @description Validation Error */
