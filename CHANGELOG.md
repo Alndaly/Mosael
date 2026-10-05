@@ -5,7 +5,7 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
-## [1.9.0]
+## [1.9.0] - 2026-10-05
 
 ### 笔记有了 AI 助手和选区工具条,浏览器会话能把网页直接存进素材库,ComfyUI 插件多了模型库和工作流库
 
