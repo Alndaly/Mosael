@@ -7,6 +7,7 @@
  *
  * 走真的宿主(节点检查器)—— 它把改动交成一个 `config` 补丁,和存进图里的是同一份。
  */
+import { CONTROL_SQUARE } from "@/components/ui/control-size";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -99,12 +100,13 @@ function renderStart(config: Config) {
   return { saved, last: () => saved[saved.length - 1], panel, row };
 }
 
-it("每一行自带「必填」开关(有可访问名);勾上 → 存成参数名的列表;没有单独的必填文本框", () => {
+it("每一行自带「必填」开关(一颗 ✱,有可访问名、按下状态);点亮 → 存成参数名的列表;没有单独的必填文本框", () => {
   const { last, panel } = renderStart({ params: { account_link: "", data_source: "auto" }, required_params: [] });
   expect(document.querySelector('[data-field-key="required_params"]')).toBeNull();
-  const toggles = within(panel()).getAllByRole("checkbox");
-  expect(toggles.map((one) => one.getAttribute("aria-label"))).toEqual(["wfStartParamRequiredOf", "wfStartParamRequiredOf"]);
+  const toggles = within(panel()).getAllByRole("button", { name: "wfStartParamRequiredOf" });
+  expect(toggles.map((one) => one.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
   act(() => fireEvent.click(toggles[0]));
+  expect(toggles[0].getAttribute("aria-pressed")).toBe("true");
   expect(last()).toEqual({ params: { account_link: "", data_source: "auto" }, required_params: ["account_link"] });
   act(() => fireEvent.click(toggles[1]));
   expect(last().required_params).toEqual(["account_link", "data_source"]);
@@ -132,10 +134,22 @@ it("值那一格只是默认值:占位「默认值(可空)」,不是能挑上游
   expect(screen.queryByText("wfMapValue")).toBeNull();
 });
 
-it("必填且没有默认值的行当场标出「运行时要填」;有默认值的不标", () => {
+it("必填且没有默认值:默认值那一格的占位写「运行时填」,不另起一行字;有默认值的照常", () => {
   const { row } = renderStart({ params: { topic: "", tone: "轻松" }, required_params: ["topic", "tone"] });
-  expect(row(0).querySelector("[data-start-param-notice]")?.textContent).toBe("wfStartParamAskAtRun");
+  const value = (index: number) => within(row(index)).getByRole("textbox", { name: "wfStartParamDefaultOf" });
+  expect(value(0).getAttribute("placeholder")).toBe("wfStartParamAskAtRun");
+  expect(row(0).querySelector("[data-start-param-notice]"), "不再每行另起一句").toBeNull();
   expect(row(1).querySelector("[data-start-param-notice]")).toBeNull();
+});
+
+it("✱ 和 × 是同样大小的两颗按钮,各占一列等宽的格子 —— 间距对称", () => {
+  const { row } = renderStart({ params: { topic: "" }, required_params: ["topic"] });
+  const required = within(row(0)).getByRole("button", { name: "wfStartParamRequiredOf" });
+  const remove = within(row(0)).getByRole("button", { name: "wfStartParamRemove" });
+  //: 此前删除按钮是 icon-xs(28px)却塞在 24px 的列里、勾选框又居中在 32px 的格子里,两边留白对不上。
+  expect(required.className.split(" ")).toEqual(expect.arrayContaining([CONTROL_SQUARE.xs]));
+  expect(remove.className.split(" ")).toEqual(expect.arrayContaining([CONTROL_SQUARE.xs]));
+  expect(row(0).firstElementChild!.className).toContain("grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_28px_28px]");
 });
 
 it("名字空着、和前面重名的行就地提示,都不存", () => {
@@ -182,9 +196,10 @@ it("选项参数:默认值栏是下拉(不是文本框);选一项存成那个值
   expect(row(1).querySelector("[data-start-param-option-note]")?.textContent).toBe("不用配置");
 });
 
-it("必填、还没选:那一行标「必填,还没选」", () => {
+it("必填、还没选:下拉的占位写「运行时选」,不另起一行字", () => {
   const { row } = renderStart({ params: { data_source: "" }, required_params: ["data_source"], param_options: { data_source: SOURCES } });
-  expect(row(0).querySelector("[data-start-param-notice]")?.textContent).toBe("wfStartParamPickRequired");
+  expect(within(row(0)).getByRole("combobox", { name: "wfStartParamDefaultOf" }).textContent).toContain("wfStartParamPickAtRun");
+  expect(row(0).querySelector("[data-start-param-notice]")).toBeNull();
 });
 
 it("要的东西没备好的那一项在下拉里标「未就绪」但照样能选;选中它那一行说清运行前会被拦", async () => {

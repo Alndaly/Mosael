@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Asterisk, X } from "lucide-react";
 
 import { fetchWorkflowTemplateChecks } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,9 +8,9 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { AddRow } from "@/components/ui/add-row";
 import { IconButton } from "@/components/ui/icon-button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { cn } from "@/lib/utils";
 import { objectFromRows, rowsFromObject } from "@/features/nodeForms/MapField";
 
 /**
@@ -28,9 +28,12 @@ import { objectFromRows, rowsFromObject } from "@/features/nodeForms/MapField";
  * (`requires`,模板前置条件的检查键):此刻没备好就在选项旁标「未就绪」(不禁选),选中了就在那一行说清 ——
  * 后端运行前按同一个判据拦(engine._check_chosen_options)。选项也跟着那一行走:改名、删行时一起变。
  *
- * 几格一起交出去(`onChange` 一次给全),撤销一步退回一次改动。就地说清的几件事:必填却没有默认值的行(运行时要填)、
- * 必填却还没选的选项行;值不在选项里的行;名字空着的行(不会保存);和前面重名的行(不会保存 —— 同名时先出现的那行
- * 算数,同 MapField)。
+ * 几格一起交出去(`onChange` 一次给全),撤销一步退回一次改动。
+ *
+ * **必填是一颗 ✱**,和行尾的删除同样大小、并排:点亮就是必填,悬停说是什么。必填又没有默认值的行不再另起一行
+ * 字说「运行时要填」(每一行一句,几行下来满屏是同一句话),而是默认值那一格的占位直接写「运行时填」/「运行时选」。
+ * 另起一行说的只剩真要改的:值不在选项里、选的那项没备好、名字空着(不会保存)、和前面重名(不会保存 —— 同名时
+ * 先出现的那行算数,同 MapField)。
  */
 
 export interface ParamOption {
@@ -81,7 +84,7 @@ export function startParamsFromRows(rows: ParamRow[]): StartParams {
   return { params, required, options };
 }
 
-type Notice = "empty" | "duplicate" | "ask-at-run" | "pick-required" | "not-an-option" | "option-unavailable";
+type Notice = "empty" | "duplicate" | "not-an-option" | "option-unavailable";
 
 /** 这一行有什么要说的。`unavailable`:选项要的前置条件此刻没备好。 */
 function rowNotice(rows: ParamRow[], index: number, unavailable: (option: ParamOption) => boolean): Notice | null {
@@ -91,12 +94,11 @@ function rowNotice(rows: ParamRow[], index: number, unavailable: (option: ParamO
   if (rows.slice(0, index).some((one) => one.key.trim() === key)) return "duplicate";
   const value = row.value.trim();
   if (row.options) {
-    if (!value) return row.required ? "pick-required" : null;
+    if (!value) return null;
     const chosen = row.options.find((one) => one.value === value);
     if (!chosen) return "not-an-option";
     return unavailable(chosen) ? "option-unavailable" : null;
   }
-  if (row.required && !value) return "ask-at-run";
   return null;
 }
 
@@ -157,10 +159,6 @@ export function StartParamsField({
         return { text: t("wfStartParamNameEmpty"), tone: "text-destructive" };
       case "duplicate":
         return { text: t("wfStartParamNameDuplicate"), tone: "text-destructive" };
-      case "ask-at-run":
-        return { text: t("wfStartParamAskAtRun"), tone: "text-warning" };
-      case "pick-required":
-        return { text: t("wfStartParamPickRequired"), tone: "text-warning" };
       case "not-an-option":
         return { text: t("wfStartParamNotAnOption").replace("{value}", row.value.trim()), tone: "text-destructive" };
       case "option-unavailable":
@@ -171,11 +169,11 @@ export function StartParamsField({
   return (
     <div className="grid gap-1.5" data-start-params="">
       {rows.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto_24px] items-center gap-1 text-ui-2xs text-muted-foreground">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_28px_28px] items-center gap-1 text-ui-2xs text-muted-foreground">
           <span>{t("wfStartParamName")}</span>
           <span>{t("wfStartParamDefault")}</span>
-          <span>{t("wfStartParamRequired")}</span>
-          <span />
+          {/* ✱ 和 × 两列不写表头:按钮自己悬停说是什么。 */}
+          <span className="col-span-2" />
         </div>
       )}
       {rows.map((row, index) => {
@@ -184,7 +182,7 @@ export function StartParamsField({
         const chosen = row.options?.find((one) => one.value === row.value.trim());
         return (
           <div className="grid gap-0.5" key={index} data-start-param-row={index}>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto_24px] items-center gap-1">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_28px_28px] items-center gap-1">
               <Input
                 size="sm"
                 className="min-w-0 text-ui-xs"
@@ -201,7 +199,7 @@ export function StartParamsField({
                   className="min-w-0 text-ui-xs"
                   value={row.value.trim()}
                   ariaLabel={t("wfStartParamDefaultOf").replace("{name}", name)}
-                  placeholder={t("wfStartParamPick")}
+                  placeholder={row.required ? t("wfStartParamPickAtRun") : t("wfStartParamPick")}
                   options={row.options.map((one) => ({
                     value: one.value,
                     label: unavailable(one) ? `${one.label || one.value} · ${t("wfStartParamOptionNotReady")}` : one.label || one.value,
@@ -217,18 +215,25 @@ export function StartParamsField({
                   size="sm"
                   className="min-w-0 text-ui-xs"
                   value={row.value}
-                  placeholder={t("wfStartParamDefaultPlaceholder")}
+                  // 必填又没有默认值:运行时要填 —— 写在占位里,不另起一行字。
+                  placeholder={row.required ? t("wfStartParamAskAtRun") : t("wfStartParamDefaultPlaceholder")}
                   aria-label={t("wfStartParamDefaultOf").replace("{name}", name)}
                   onChange={(event) => patchRow(index, { value: event.target.value }, true)}
                 />
               )}
-              <span className="grid w-8 place-items-center">
-                <Checkbox
-                  checked={row.required}
-                  aria-label={t("wfStartParamRequiredOf").replace("{name}", name)}
-                  onCheckedChange={(checked) => patchRow(index, { required: checked === true }, false)}
-                />
-              </span>
+              <IconButton
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                label={t("wfStartParamRequiredOf").replace("{name}", name)}
+                hint={row.required ? t("wfStartParamRequiredOn") : t("wfStartParamRequiredOff")}
+                aria-pressed={row.required}
+                data-start-param-required={row.required ? "" : undefined}
+                className={cn(row.required ? "text-primary" : "text-muted-foreground/45 hover:text-muted-foreground")}
+                onClick={() => patchRow(index, { required: !row.required }, false)}
+              >
+                <Asterisk size={13} strokeWidth={row.required ? 2.75 : 2} />
+              </IconButton>
               <IconButton
                 type="button"
                 variant="ghost"

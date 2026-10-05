@@ -868,8 +868,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_start": {"zh": "开始", "en": "Start"},
     "wfNode_start_desc": {"zh": "工作流入口,声明输入参数(运行时可覆盖默认值)。", "en": "Workflow entry point; declares input parameters (defaults can be overridden per run)."},
     "wfNode_start_params": {
-        "zh": "一行一个启动参数:名字和默认值。勾了「必填」的,跑之前必须有值(默认值或这次运行传进来的),空着就不让运行",
-        "en": "One start parameter per row: a name and a default value. A row marked Required must have a value before a run (its default or one passed in for the run); the run is refused while it is blank",
+        "zh": "名字和默认值。点亮 ✱ 的是必填:没有默认值就在运行时填",
+        "en": "A name and a default value. Rows with ✱ lit are required: without a default, they're filled in at run time",
     },
     "wfNode_start_param_options": {
         "zh": "只能从几项里选的参数:参数名 → 选项列表,每一项是 {\"value\", \"label\", \"description\"},选它要备好什么写在 \"requires\"(模板前置条件的检查键)",

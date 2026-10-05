@@ -75,12 +75,11 @@ start parameters and values you filled in, and keeps the old one; dismiss it and
 
 ### The start node: parameters, required and options
 
-The start node's parameters are a three-column table — **Name / Default / Required** — and **Add** appends a row.
+The start node lists one parameter per row — **Name** and **Default** — with a **✱** (required) and a × (remove the row) at the end; **Add** appends a row.
 
 ![The start node’s parameter table: name / default / required, and Add](/media/screens/en/workflow-start-params.png)
 
-- **Each row has its own Required checkbox.** A required parameter without a default must be filled in at run time; until it is, the
-  run won't start — placeholder examples are never taken for real input.
+- **Light up ✱ to make a parameter required** (hover it to see what it means). A required parameter without a default shows *Filled in at run time* in its default box: it must be filled in when you run, and until it is, the run is refused — a placeholder example never runs as a real value.
 - **Option parameters**: the Default cell becomes a dropdown (**Pick one**) limited to the given options. An option whose prerequisite
   isn't set up is marked "not set up" but can still be picked; the run then says what's missing (that's how the analytics templates'
   data source works).
