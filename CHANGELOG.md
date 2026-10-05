@@ -5,6 +5,14 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### 插件清单:`skills` 改名为 `toolsets`(清单版本 7)
+
+- 写插件的人注意:清单里给别的智能体看的那段工具目录从 `skills` 改叫 `toolsets`(工具集),`GET /api/agent/skills` 改为
+  `GET /api/agent/toolsets`,`/api/agent/manifest` 里的 `skills` 也改叫 `toolsets`。「技能」从这一版起指智能体按需读的做法
+  (SKILL.md,见 ADR 0040)。
+- 不用手改:装着的插件启动时、插件目录扫描时、装老版插件包时都由清单迁移自动改名(磁盘上的清单先备份成 `.bak`)。市场里的长介绍
+  照旧取第一条工具集的说明。
+
 ### ComfyUI 应用表单:挑出给别人填的几项,存进工作流自己的文件(ComfyUI 插件 1.13.0)
 
 - **一张工作流可以有一张精简的「应用」表单。** 工作流库里点开一张 →「应用」→「编辑应用表单」:左边列出这张工作流全部能填的项

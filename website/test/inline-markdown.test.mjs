@@ -79,7 +79,7 @@ test('更新日志:GitHub 发布说明的摘录保留行内格式交给渲染', 
 const ROOT = path.join(import.meta.dirname, '../..');
 const localized = (value) => (typeof value === 'string' ? [value] : value ? Object.values(value) : []);
 
-test('插件:清单里的技能描述和工具说明,纯文本与渲染两条路都没有残留记号', () => {
+test('插件:清单里的工具集描述和工具说明,纯文本与渲染两条路都没有残留记号', () => {
   const dir = path.join(ROOT, 'plugins/examples');
   let strong = 0;
   for (const name of fs.readdirSync(dir)) {
@@ -87,7 +87,7 @@ test('插件:清单里的技能描述和工具说明,纯文本与渲染两条路
     if (!fs.existsSync(file)) continue;
     const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
     const texts = [
-      ...localized(manifest.skills?.[0]?.description),
+      ...localized(manifest.toolsets?.[0]?.description),
       ...(manifest.tools?.declare ?? []).flatMap((tool) => localized(tool.description)),
     ];
     for (const text of texts) {

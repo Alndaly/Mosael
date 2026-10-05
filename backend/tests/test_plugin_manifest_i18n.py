@@ -42,8 +42,8 @@ def _manifests() -> list[tuple[str, dict[str, Any]]]:
 def _human_texts(raw: dict[str, Any]) -> list[tuple[str, Any]]:
     """清单里所有**给人看的**字段。位置写死 —— 不扫全树,免得把 id、路径也当成文案。"""
     out: list[tuple[str, Any]] = [("name", raw.get("name"))]
-    for i, skill in enumerate(raw.get("skills") or []):
-        out.append((f"skills[{i}].description", skill.get("description")))
+    for i, toolset in enumerate(raw.get("toolsets") or []):
+        out.append((f"toolsets[{i}].description", toolset.get("description")))
     instance = raw.get("instance") or {}
     if instance.get("name_template"):
         out.append(("instance.name_template", instance["name_template"]))

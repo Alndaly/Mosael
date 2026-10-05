@@ -309,7 +309,9 @@ class ConfirmationOut(OrmModel):
         return self
 
 
-class AgentSkillOut(ApiModel):
+class AgentToolsetOut(ApiModel):
+    """一组工具是干嘛的(见 domain/agent/toolsets)。不是智能体的技能(SKILL.md,ADR 0040)。"""
+
     id: str
     name: str
     description: str
@@ -322,7 +324,7 @@ class AgentManifestOut(ApiModel):
     app: str
     version: str
     openapi_url: str
-    skills: list[AgentSkillOut]
+    toolsets: list[AgentToolsetOut]
 
 
 class AgentStreamEvent(ApiModel):

@@ -1,3 +1,3 @@
-from app.domain.agent.skills import list_agent_skills
+from app.domain.agent.toolsets import list_agent_toolsets
 
-__all__ = ["list_agent_skills"]
+__all__ = ["list_agent_toolsets"]

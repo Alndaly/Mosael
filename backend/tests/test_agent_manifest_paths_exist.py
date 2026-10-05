@@ -1,6 +1,6 @@
-"""结构性约束:**技能清单里报出去的每条路径,都得真的存在。**
+"""结构性约束:**工具集清单里报出去的每条路径,都得真的存在。**
 
-`CORE_SKILLS` 不是文档,它经 `/api/agent/manifest` 发给智能体和外部 MCP 客户端 —— 那份清单
+`CORE_TOOLSETS`(清单版本 7 之前叫 `CORE_SKILLS`)不是文档,它经 `/api/agent/manifest` 发给智能体和外部 MCP 客户端 —— 那份清单
 就是对方唯一知道「这个应用有哪些工具、打哪个地址」的来源。所以一条写错的路径不是笔误,
 是**一件功能对智能体不存在**:它照着清单发请求,拿回 404,而应用这边什么都没发生。
 
@@ -46,14 +46,14 @@ def _exists(real: dict[str, set[str]], path: str, method: str) -> bool:
     return False
 
 
-def test_核心技能声明的路径都存在() -> None:
-    from app.domain.agent.skills import CORE_SKILLS
+def test_核心工具集声明的路径都存在() -> None:
+    from app.domain.agent.toolsets import CORE_TOOLSETS
 
     real = _real_paths()
     missing = [
-        f"{skill['id']}.{tool['name']}: {tool['method']} {tool['path']}"
-        for skill in CORE_SKILLS
-        for tool in skill["tools"]
+        f"{toolset['id']}.{tool['name']}: {tool['method']} {tool['path']}"
+        for toolset in CORE_TOOLSETS
+        for tool in toolset["tools"]
         if not _exists(real, tool["path"], tool["method"])
     ]
     assert not missing, (

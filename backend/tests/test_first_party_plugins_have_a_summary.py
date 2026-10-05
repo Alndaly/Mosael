@@ -22,7 +22,7 @@ def test_清单写了中英两份一句话简介(path: Path) -> None:
     raw = json.loads(path.read_text(encoding="utf-8"))
     summary = raw.get("summary")
     assert isinstance(summary, dict) and set(summary) >= {"zh", "en"}, f"{path.parent.name} 的清单没写中英两份 summary"
-    description = (raw.get("skills") or [{}])[0].get("description") or {}
+    description = (raw.get("toolsets") or [{}])[0].get("description") or {}
     for locale in ("zh", "en"):
         text = str(summary[locale]).strip()
         assert 0 < len(text) <= SUMMARY_MAX_CHARS, f"{path.parent.name} 的 summary.{locale} 要是一句话({SUMMARY_MAX_CHARS} 字以内)"

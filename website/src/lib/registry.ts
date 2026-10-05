@@ -25,9 +25,9 @@ export type PluginEntry = {
   permissions: string[];
   /**
    * 一句话说清它是干嘛的:清单的 `summary`(应用里的市场卡片、详情页头、安装确认摆的也是它);没写的插件
-   * 退到 skills[0].description(那段是写给「这东西是干嘛的」的长介绍)。
+   * 退到 toolsets[0].description(那段是写给「这东西是干嘛的」的长介绍;清单版本 7 之前叫 skills)。
    *
-   * **原样保留行内 markdown**(技能描述是写给智能体的,里面会有 `**强调**`):要格式的地方交给
+   * **原样保留行内 markdown**(工具集描述是写给智能体的,里面会有 `**强调**`):要格式的地方交给
    * InlineMarkdown,要纯文本的地方(卡片、meta、搜索)用 toPlainText。在这里剥掉,详情页就
    * 再也拿不回格式;只剥 `**` 的话 `` ` `` 和链接照样露出来。
    */
@@ -76,7 +76,7 @@ type Manifest = {
   runtime?: { kind?: string };
   permissions?: string[];
   summary?: Text;
-  skills?: { description?: Text }[];
+  toolsets?: { description?: Text }[];
   tools?: { declare?: { name?: string; description?: Text }[] };
 };
 
@@ -116,7 +116,7 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
         version: manifest.version ?? "",
         kind: kind === "mcp" ? "mcp" : "script",
         permissions: manifest.permissions ?? [],
-        summary: textOf(manifest.summary, locale) || textOf(manifest.skills?.[0]?.description, locale),
+        summary: textOf(manifest.summary, locale) || textOf(manifest.toolsets?.[0]?.description, locale),
         source: `plugins/${folder.split(path.sep).join("/")}`,
         slug,
         tools: (manifest.tools?.declare ?? [])

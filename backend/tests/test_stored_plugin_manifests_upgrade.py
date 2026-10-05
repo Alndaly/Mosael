@@ -140,3 +140,42 @@ def test_认领调用类能力的工具_素材入参补成契约的形状() -> N
         manifest = manifest_of(db.get(PluginPackage, "dev.example.asr"))
     file = manifest.declared_tools[0]["input_schema"]["properties"]["file"]
     assert file == {"type": "string", "format": "asset", "x-media": ["audio", "video"], "x-audio": "speech"}
+
+
+#: 清单版本 6 的写法:`skills` 是给别的智能体看的工具目录。版本 7 改叫 `toolsets`(ADR 0040 §8)。
+V6_WITH_SKILLS = {
+    "id": "dev.example.tikhub", "manifest_version": 6, "name": "TikHub", "version": "0.4.0",
+    "runtime": {"kind": "mcp", "url": "https://mcp.example.com"},
+    "skills": [{"id": "tikhub", "description": {"zh": "抓取各平台的公开数据", "en": "Fetch public data"}}],
+}
+
+
+def test_v6的skills在库里和磁盘上都改名成toolsets_介绍照旧取第一条(tmp_path: Path) -> None:
+    fresh_client()
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.example.tikhub", name="TikHub", version="0.4.0",
+                             manifest={**V6_WITH_SKILLS, PATH_KEY: "/t"}))
+        db.commit()
+
+    reconcile()
+
+    with SessionLocal() as db:
+        package = db.get(PluginPackage, "dev.example.tikhub")
+        stored, manifest = dict(package.manifest), manifest_of(package)
+    assert "skills" not in stored and stored["toolsets"] == V6_WITH_SKILLS["skills"]
+    assert stored["manifest_version"] == MANIFEST_VERSION == 7
+    assert [one["id"] for one in manifest.toolsets] == ["tikhub"]
+    assert manifest.description == "抓取各平台的公开数据"
+
+    (tmp_path / "mosael.plugin.json").write_text(json.dumps(V6_WITH_SKILLS), encoding="utf-8")
+    on_disk = json.loads(migrate_directory(tmp_path).read_text(encoding="utf-8"))
+    assert "skills" not in on_disk and on_disk["toolsets"] == V6_WITH_SKILLS["skills"]
+    assert (tmp_path / "mosael.plugin.json.bak").exists(), "改用户磁盘上的文件之前留一份"
+
+
+def test_旧路由名不再存在_新名字答得上() -> None:
+    client = fresh_client()
+    assert client.get("/api/agent/skills").status_code == 404
+    body = client.get("/api/agent/toolsets").json()
+    assert "mosael.assets" in {one["id"] for one in body}
+    assert "toolsets" in client.get("/api/agent/manifest").json()

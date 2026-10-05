@@ -200,7 +200,7 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
         name=text_of(raw.get("name")),
         version=str(raw.get("version") or ""),
         summary=text_of(raw.get("summary")),
-        description=text_of((raw.get("skills") or [{}])[0].get("description")) if raw.get("skills") else "",
+        description=text_of((raw.get("toolsets") or [{}])[0].get("description")) if raw.get("toolsets") else "",
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str)],
         tools=[str(t.get("name")) for t in (declared or []) if isinstance(t, dict) and t.get("name")],
         #: 只取这一个字段,不跑整份 parse —— 这份清单还没装上,它可能是畸形的,而

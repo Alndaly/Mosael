@@ -49,7 +49,7 @@ def tool_effects(raw: dict[str, Any], tool: dict[str, Any]) -> str:
 
 def index_entry(raw: dict[str, Any], *, download: str, bundled: bool) -> dict[str, Any]:
     """一条索引。`download` 由调用方按产物给;随应用内置的插件给空串、`bundled=True`。"""
-    skills = raw.get("skills") or []
+    toolsets = raw.get("toolsets") or []
     author = raw.get("author") if isinstance(raw.get("author"), dict) else {}
     return {
         "id": raw["id"],
@@ -57,8 +57,8 @@ def index_entry(raw: dict[str, Any], *, download: str, bundled: bool) -> dict[st
         "version": raw.get("version", ""),
         # 一句话说清它是干嘛的(清单的 summary,可按语言分;原样带过去,由读的一方挑语言)。卡片和详情页头先摆它。
         "summary": raw.get("summary") or "",
-        # 描述取第一条技能的说明 —— 那句话本来就是写给"这东西是干嘛的"的。
-        "description": (skills[0].get("description") if skills and isinstance(skills[0], dict) else "") or "",
+        # 描述取第一条工具集的说明 —— 那句话本来就是写给"这东西是干嘛的"的(顶层 description 见 ADR 0040 §8)。
+        "description": (toolsets[0].get("description") if toolsets and isinstance(toolsets[0], dict) else "") or "",
         # 作者从清单来(清单里是 {name, url})。**author 仍是一个字符串** —— 已经装着的旧版本
         # 按字符串读它;改成对象的话,它们的市场里会显示一串 {'name': …}。主页另起一个键。
         "author": str(author.get("name") or ""),

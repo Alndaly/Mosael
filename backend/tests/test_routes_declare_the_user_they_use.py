@@ -10,6 +10,8 @@
     def get_agent_skills(db: DbSession) -> …:      return list_agent_skills(db, user.id)
     def get_agent_manifest(db: DbSession) -> …:    … list_agent_skills(db, user.id) …
 
+(那条路由后来改名为 `/api/agent/toolsets`,见 ADR 0040 §8;下面验的是现在的名字。)
+
 都在用一个**没有声明的 `user`**,NameError 一路抛到 Starlette 的 ServerErrorMiddleware ——
 它在 CORSMiddleware **外面**生成响应,所以那条 500 不带跨域头,浏览器只好报成 CORS。
 真正的错误被换了一张脸,于是它在控制台里躺了很久没人认出来。
@@ -67,7 +69,7 @@ def test_no_route_uses_a_user_it_never_declared() -> None:
     )
 
 
-@pytest.mark.parametrize("path", ["/api/agent/manifest", "/api/agent/skills"])
+@pytest.mark.parametrize("path", ["/api/agent/manifest", "/api/agent/toolsets"])
 def test_the_two_that_were_broken_answer(path: str) -> None:
     """按用户实际走的路验一遍:登录后请求,拿到的是内容,不是 500。"""
     client = fresh_client()

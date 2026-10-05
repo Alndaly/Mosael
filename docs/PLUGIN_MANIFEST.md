@@ -37,7 +37,7 @@
   "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
   "name": { "zh": "文本工具", "en": "Text Toolkit" },   // 给人看的文字可按语言写,见「多语言」
   "version": "1.0.0",
-  "manifest_version": 5,
+  "manifest_version": 7,
 
   "runtime": { "kind": "process", "entry": "main.py" },
 
@@ -247,7 +247,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   "id": "com.example.thing",
   "name": "示例服务",
   "version": "1.0.0",
-  "manifest_version": 5,
+  "manifest_version": 7,
 
   // 本地进程:spawn 一个子进程
   "runtime": { "kind": "mcp", "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
@@ -612,10 +612,13 @@ Markdown 渲染;`default` 是占位提示;`enum` 是下拉,`boolean` 是「是 /
 表单里填的都是文字。宿主在交给你之前**按 `input_schema` 把 `integer` / `number` / `boolean` 转回类型**
 (空字符串当没填、去掉那一格),转不了的原样给你 —— 工作流节点送来的也是这些字符串,两条路同一个规矩。
 
-### 技能
+### 工具集:`toolsets`
 
-`skills` 是给**别的智能体**看的一段高层描述(进 `/api/agent/skills`)。工具回答"能调什么",
-技能回答"这个东西是干嘛的"。
+`toolsets` 是给**别的智能体**看的一段高层描述(进 `/api/agent/toolsets` 和 `/api/agent/manifest`)。工具回答
+"能调什么",工具集回答"这一组工具是干嘛的"。第一条的 `description` 同时是市场和插件页上的长介绍(见「一句话简介」)。
+
+清单版本 7 之前它叫 `skills`。改名是因为「技能」在 Mosael 里现在指智能体按需读的**做法**(SKILL.md,见
+[ADR 0040](adr/0040-agent-skills.md))。老清单不用手改:扫描插件目录、启动、装包时由迁移链改名。
 
 ### 只读
 
@@ -814,7 +817,7 @@ SOCKS 的话,遇到 `socks5://` 自己说清楚(`plugins/bundled/mineru` 就是�
 **一句话说清这个插件是干嘛的**,纯文字,每种语言最长 140 个字(超了装的时候就报错,每种语言都查)。
 市场卡片、插件详情的页头(名字和状态下面)、安装确认先摆的都是它;官网插件目录的卡片和详情页头也是。
 
-长的介绍照旧写在第一条技能的 `description` 里:详情的「关于 / 介绍」把它折成三行,点「展开」看全文。
+长的介绍照旧写在第一条工具集的 `description` 里:详情的「关于 / 介绍」把它折成三行,点「展开」看全文。
 两者说的不是一回事 —— 一句话回答「它是什么」,介绍讲「它能做哪些事、怎么用、有什么限制」,别把一句话写成介绍的开头。
 不写 `summary` 也能装:卡片退到介绍(摊平成纯文本、截三行),页头不硬凑一句。
 
@@ -867,7 +870,7 @@ SOCKS 的话,遇到 `socks5://` 自己说清楚(`plugins/bundled/mineru` 就是�
 
 - `name`
 - `summary`
-- `skills[].description`(以及 `skills[].name`)
+- `toolsets[].description`(以及 `toolsets[].name`)
 - `instance.name_template`
 - `instance.config[]` / `instance.credentials[]` 的 `label`、`help`,以及 `options[].label`
 - `tools.declare[]` 的 `description`、`label`、`node.label`,和 `input_schema` 里各属性的 `description`
@@ -918,7 +921,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;只能用字母、数字和 `._-`,以字母或数字开头(它就是插件目录名);`name` 可写成按语言分的对象;`version` 按语义化版本写(`1.2.0`、`1.3.0-beta.1`):市场按它比先后决定「有新版」,写不成语义化版本的只能按「不相等」判 |
 | `summary` | 可选。一句话简介,纯文字,可按语言分,每种语言最长 140 字;市场卡片、详情页头、安装确认先摆它(见「一句话简介」) |
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
-| `manifest_version` | 当前是 `5`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升 |
+| `manifest_version` | 当前是 `7`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升;装包时先升再校验 |
 | `homepage` | **你的文档站**。没写 `docs` 时,界面在插件详情页、市场条目、安装确认三处的「文档」指向它;写了 `docs` 就列在详情「关于」的信息里。只认 `http(s)` |
 | `docs` | 在 Mosael 里怎么用的文档,可按语言分;有它时「文档」指向它 |
 | `author` | `{name, url}`,`name` 可按语言分;显示在名字旁边,`url` 可点 |
@@ -931,7 +934,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
 | `permissions` | 自由字符串,逐项授权 |
 | `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation` / `tools`(见「声明『我能替宿主做成什么』」「运行时报出的工具」) |
-| `skills` | 给别的智能体看的高层描述 |
+| `toolsets` | 给别的智能体看的高层描述;第一条的 `description` 是市场里的长介绍(版本 7 之前叫 `skills`) |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
 | `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。工具名以字母开头,只用字母、数字、`_`、`-`,最长 64,不能重名。每条写一个 `label`(给人看的名字,可以按语言分;不写时依次退到 `node.label`、人性化的工具名 —— **从不取 `description`**)。可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |

@@ -119,7 +119,7 @@ def _plugin_zip(plugin_id: str, version: str, name: str) -> bytes:
         "homepage": "https://example.com",
         "author": {"name": "Demo", "url": "https://example.com"},
         "runtime": {"kind": "process", "entry": "main.py"},
-        "skills": [{"name": "greet", "description": {"zh": f"{name}:示例插件", "en": f"{name}: a sample plugin"}}],
+        "toolsets": [{"name": "greet", "description": {"zh": f"{name}:示例插件", "en": f"{name}: a sample plugin"}}],
         "tools": {"declare": [{"name": "greet", "label": {"zh": "打招呼", "en": "Greet"}, "effects": "none"}]},
     }
     buffer = io.BytesIO()

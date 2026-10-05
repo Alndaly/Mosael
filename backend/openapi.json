@@ -22396,13 +22396,14 @@
         }
       }
     },
-    "/api/agent/skills": {
+    "/api/agent/toolsets": {
       "get": {
         "tags": [
           "agent"
         ],
-        "summary": "Get Agent Skills",
-        "operationId": "get_agent_skills_api_agent_skills_get",
+        "summary": "Get Agent Toolsets",
+        "description": "给别的智能体看的工具目录(见 domain/agent/toolsets)。清单版本 7 之前叫 /agent/skills。",
+        "operationId": "get_agent_toolsets_api_agent_toolsets_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -22410,10 +22411,10 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/AgentSkillOut"
+                    "$ref": "#/components/schemas/AgentToolsetOut"
                   },
                   "type": "array",
-                  "title": "Response Get Agent Skills Api Agent Skills Get"
+                  "title": "Response Get Agent Toolsets Api Agent Toolsets Get"
                 }
               }
             }
@@ -23897,12 +23898,12 @@
             "type": "string",
             "title": "Openapi Url"
           },
-          "skills": {
+          "toolsets": {
             "items": {
-              "$ref": "#/components/schemas/AgentSkillOut"
+              "$ref": "#/components/schemas/AgentToolsetOut"
             },
             "type": "array",
-            "title": "Skills"
+            "title": "Toolsets"
           }
         },
         "type": "object",
@@ -23910,7 +23911,7 @@
           "app",
           "version",
           "openapi_url",
-          "skills"
+          "toolsets"
         ],
         "title": "AgentManifestOut"
       },
@@ -24739,44 +24740,6 @@
         "type": "object",
         "title": "AgentSessionUpdate"
       },
-      "AgentSkillOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "tools": {
-            "items": {},
-            "type": "array",
-            "title": "Tools"
-          },
-          "permissions": {
-            "items": {},
-            "type": "array",
-            "title": "Permissions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "description",
-          "source"
-        ],
-        "title": "AgentSkillOut"
-      },
       "AgentSpeechRequest": {
         "properties": {
           "text": {
@@ -24823,6 +24786,45 @@
         "type": "object",
         "title": "AgentStreamEvent",
         "description": "SSE 上一帧:这一轮**到此刻为止**的全量快照(不是增量)。\n\n它此前没有 schema —— 形状由路由现场拼一个 dict,前端两个消费者各写一份 `as {...}` 断言,\n而 `as` 绕过类型检查:少写一个字段不报错,多写一个也不报错。实测两份断言**已经不一样**\n(画布那份没有 `done`)。给它一个 schema,前端就从生成类型取,不再手抄。\n\n挂在流式路由的 `response_model` 上纯粹是为了让它进 openapi:路由返回的是\n`StreamingResponse`,FastAPI 对直接返回的 Response 不做序列化,所以这条声明不影响流本身。"
+      },
+      "AgentToolsetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "tools": {
+            "items": {},
+            "type": "array",
+            "title": "Tools"
+          },
+          "permissions": {
+            "items": {},
+            "type": "array",
+            "title": "Permissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "source"
+        ],
+        "title": "AgentToolsetOut",
+        "description": "一组工具是干嘛的(见 domain/agent/toolsets)。不是智能体的技能(SKILL.md,ADR 0040)。"
       },
       "AgentVoiceOut": {
         "properties": {

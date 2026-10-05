@@ -35,13 +35,13 @@ from app.api.schemas import (
     AgentSessionCreate,
     AgentSessionOut,
     AgentSessionUpdate,
-    AgentSkillOut,
+    AgentToolsetOut,
     AgentStreamEvent,
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
-from app.domain.agent import list_agent_skills
+from app.domain.agent import list_agent_toolsets
 from app.domain import session_groups
 from app.domain.agent import questions as agent_questions
 from app.domain.agent.sessions import SHARE_KIND, readable_session, writable_session
@@ -353,9 +353,10 @@ def delete_memory(memory_id: str, db: Tx, user: CurrentUser) -> None:
     agent_use_cases.forget(db, user, memory_id)
 
 
-@router.get("/agent/skills", response_model=list[AgentSkillOut])
-def get_agent_skills(db: DbSession, user: CurrentUser) -> list[dict]:
-    return list_agent_skills(db, user.id)
+@router.get("/agent/toolsets", response_model=list[AgentToolsetOut])
+def get_agent_toolsets(db: DbSession, user: CurrentUser) -> list[dict]:
+    """给别的智能体看的工具目录(见 domain/agent/toolsets)。清单版本 7 之前叫 /agent/skills。"""
+    return list_agent_toolsets(db, user.id)
 
 
 @router.get("/agent/manifest", response_model=AgentManifestOut)
@@ -364,7 +365,7 @@ def get_agent_manifest(db: DbSession, user: CurrentUser) -> AgentManifestOut:
         app="mosael",
         version=app_version(),
         openapi_url="/openapi.json",
-        skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db, user.id)],
+        toolsets=[AgentToolsetOut.model_validate(toolset) for toolset in list_agent_toolsets(db, user.id)],
     )
 
 

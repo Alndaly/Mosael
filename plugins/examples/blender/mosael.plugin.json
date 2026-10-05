@@ -1,5 +1,5 @@
 {
-  "manifest_version": 6,
+  "manifest_version": 7,
   "id": "dev.mosael.blender",
   "name": {
     "zh": "Blender MCP",
@@ -36,7 +36,7 @@
     "filesystem:read",
     "filesystem:write"
   ],
-  "skills": [
+  "toolsets": [
     {
       "id": "blender",
       "description": {

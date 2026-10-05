@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.object-storage",
-  "manifest_version": 6,
+  "manifest_version": 7,
   "name": {
     "zh": "对象存储",
     "en": "Object Storage"
@@ -30,7 +30,7 @@
   "provides": [
     "public_url"
   ],
-  "skills": [
+  "toolsets": [
     {
       "id": "object_storage",
       "description": {

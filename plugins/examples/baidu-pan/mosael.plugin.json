@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.baidu-pan",
-  "manifest_version": 6,
+  "manifest_version": 7,
   "name": {
     "zh": "百度网盘",
     "en": "Baidu Netdisk"
@@ -27,7 +27,7 @@
   "permissions": [
     "network:baidu-pan"
   ],
-  "skills": [
+  "toolsets": [
     {
       "id": "baidu_pan",
       "description": {

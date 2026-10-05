@@ -1,5 +1,5 @@
 {
-  "manifest_version": 6,
+  "manifest_version": 7,
   "id": "dev.mosael.manim",
   "name": {
     "zh": "Manim 教学动画",
@@ -32,7 +32,7 @@
   "package_sources": [
     "pypi"
   ],
-  "skills": [
+  "toolsets": [
     {
       "id": "manim",
       "description": {

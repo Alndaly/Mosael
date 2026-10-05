@@ -52,11 +52,11 @@ def test_清单解析按当时的语言挑名字() -> None:
         i18n.CURRENT_LOCALE.reset(token)
 
 
-def test_一句话简介按语言挑_介绍取第一条技能() -> None:
+def test_一句话简介按语言挑_介绍取第一条工具集() -> None:
     raw = {
         "id": "a.b", "version": "1.0.0", "name": "n",
         "summary": {"zh": "一句话", "en": "One line"},
-        "skills": [{"id": "s", "description": {"zh": "长的介绍", "en": "A longer introduction"}}],
+        "toolsets": [{"id": "s", "description": {"zh": "长的介绍", "en": "A longer introduction"}}],
     }
     token = i18n.CURRENT_LOCALE.set("en")
     try:
@@ -290,3 +290,29 @@ def test_overrides里多标的素材_升级时去掉_升完解析得过() -> Non
     assert overrides["p"]["node"]["config"]["ok"]["format"] == "asset", "两边一致的不动"
     assert overrides["mcp_only"]["node"]["config"]["x"]["format"] == "asset", "没有声明可对照的不动"
     parse(raw, "x")
+
+
+def test_清单v7_skills改名toolsets_幂等_两个都在时以toolsets为准() -> None:
+    """ADR 0040 §8:「技能」现在指智能体按需读的做法,插件清单里那份工具目录改叫工具集。"""
+    from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION, upgrade
+
+    assert MANIFEST_VERSION == 7
+    skills = [{"id": "s", "description": {"zh": "长的介绍", "en": "A longer introduction"}}]
+    runtime = {"kind": "process", "entry": "m.py"}
+    raw = {"id": "a", "version": "1", "name": "n", "manifest_version": 6, "runtime": runtime, "skills": skills}
+    assert upgrade(raw)
+    assert raw == {"id": "a", "version": "1", "name": "n", "manifest_version": 7, "runtime": runtime, "toolsets": skills}
+    assert not upgrade(raw), "升过的不再动"
+    assert parse(raw, "x").description == "长的介绍"
+
+    both = {"id": "a", "version": "1", "name": "n", "manifest_version": 6, "skills": [{"id": "old"}],
+            "toolsets": [{"id": "new"}]}
+    upgrade(both)
+    assert "skills" not in both and both["toolsets"] == [{"id": "new"}]
+
+
+def test_当前版本的清单里不认skills这个键() -> None:
+    """只认当前形状:v7 的清单写 `skills` 就是没写工具集(读取路径里没有「老写法」那一支)。"""
+    manifest = parse({"id": "a", "version": "1", "name": "n", "manifest_version": 7,
+                      "skills": [{"id": "s", "description": "x"}]}, "x")
+    assert manifest.toolsets == [] and manifest.description == ""

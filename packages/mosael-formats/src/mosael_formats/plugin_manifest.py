@@ -95,7 +95,7 @@ CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, 
 CLAIMED_CAPABILITIES = CATALOG_CAPABILITIES | CALL_CAPABILITIES
 
 #: 清单 `summary`(一句话说清这个插件是干嘛的)最长多少字。它排在卡片和详情页头上、名字下面,两行放得下;
-#: 写成一段介绍的话卡片只剩省略号,详情页头被撑成一大块 —— 长的介绍归第一条技能的 `description`。
+#: 写成一段介绍的话卡片只剩省略号,详情页头被撑成一大块 —— 长的介绍归第一条工具集的 `description`。
 SUMMARY_MAX_CHARS = 140
 
 #: 素材入参的 `format`(宿主把素材换成暂存目录里的一份副本交给插件,见 backend 的 plugins/inputs)。
@@ -252,7 +252,9 @@ class Manifest:
     path: str
     runtime: Runtime
     permissions: list[str] = field(default_factory=list)
-    skills: list[dict[str, Any]] = field(default_factory=list)
+    #: 给**别的智能体**看的「这个插件的工具是干嘛的」目录(进 `/api/agent/toolsets`)。清单版本 7 之前叫 `skills`,
+    #: 改名是因为「技能」现在指智能体按需读的做法(SKILL.md,ADR 0040)。
+    toolsets: list[dict[str, Any]] = field(default_factory=list)
     config: list[Field] = field(default_factory=list)
     credentials: list[Field] = field(default_factory=list)
     #: 允许建多个实例(同一个包接多个端点 / 多套凭据)。
@@ -293,13 +295,15 @@ class Manifest:
     #: 注入进程(变量名见 plugin_env.PACKAGE_SOURCE_ENV),连接设置里多一行可以覆盖的下拉。
     package_sources: list[str] = field(default_factory=list)
     #: **一句话说清这个插件是干嘛的**(可以按语言分)。市场卡片、详情页头、安装确认都先摆它;长的介绍是
-    #: `description`(第一条技能的说明),在详情里折起来,点开才看全。不写就是空串,界面只摆介绍。
+    #: `description`(第一条工具集的说明),在详情里折起来,点开才看全。不写就是空串,界面只摆介绍。
     summary: str = ""
 
     @property
     def description(self) -> str:
-        """给人看的完整介绍:第一条技能的说明。市场索引、插件页和官网取的是同一个来源。"""
-        return str(self.skills[0].get("description") or "") if self.skills else ""
+        """给人看的完整介绍:第一条工具集的说明。市场索引、插件页和官网取的是同一个来源。
+
+        它该是清单顶层的一个字段(ADR 0040 §8,清单版本 8 再改):现在给人看的介绍和给智能体看的工具目录绑在一起。"""
+        return str(self.toolsets[0].get("description") or "") if self.toolsets else ""
 
     def tool_providing(self, capability: str) -> str:
         """清单里**声明自己负责** `capability` 的那个工具名(工具声明上的 `provides`);没有就是空串。
@@ -580,7 +584,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         path=path,
         runtime=runtime_of(raw),
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str) and p.strip()],
-        skills=[_humanized(s, "name", "description", pick=pick) for s in (raw.get("skills") or []) if isinstance(s, dict)],
+        toolsets=[_humanized(s, "name", "description", pick=pick) for s in (raw.get("toolsets") or []) if isinstance(s, dict)],
         config=config,
         credentials=credentials,
         multiple=instance.get("multiple") is True,

@@ -183,7 +183,7 @@ class Test清单:
             assert set(node["output_types"]) == set(node["outputs"])
             assert node["board_outputs"] == ["summary"] if tool["name"] == "word_count" else node["board_outputs"]
 
-    def test_技能里不许诺没有的工具(self) -> None:
-        skill = self.manifest()["skills"][0]["description"]
+    def test_工具集说明里不许诺没有的工具(self) -> None:
+        skill = self.manifest()["toolsets"][0]["description"]
         #: 按整词找:「subtitle lines」(断成字幕行)不是在许诺起标题。
         assert "标题" not in skill["zh"] and not re.search(r"\btitles?\b", skill["en"], re.I)

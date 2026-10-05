@@ -182,7 +182,7 @@ python3 scripts/sync-ratchet-docs.py
 | 结构性约束:**「普通 / 高级」这条分界怎么划都行,但有几种划法一定是错的。** | `backend/tests/test_advanced_split_is_sane.py` |
 | 智能体要能做**这个应用能做的事** —— 插件、工作流、剪辑,一样都不少。 | `backend/tests/test_agent_covers_everything.py` |
 | 智能体的权限恒等式(ADR 0008 D6) | `backend/tests/test_agent_identity_ratchet.py` |
-| 结构性约束:**技能清单里报出去的每条路径,都得真的存在。** | `backend/tests/test_agent_manifest_paths_exist.py` |
+| 结构性约束:**工具集清单里报出去的每条路径,都得真的存在。** | `backend/tests/test_agent_manifest_paths_exist.py` |
 | 工作流有的能力,智能体也要有。 | `backend/tests/test_agent_workflow_parity.py` |
 | 结构性约束:**`ai/` 是基础设施,不许认识业务**。 | `backend/tests/test_ai_is_infrastructure.py` |
 | 棘轮:**接口 out schema 里的每个字段,都要有人读。** | `backend/tests/test_api_fields_reach_the_screen.py` |

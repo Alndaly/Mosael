@@ -24,7 +24,7 @@ from mosael_formats.plugin_manifest import ASSET_FORMAT, CALL_CONTRACTS, unbacke
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见后端
 #: db/migrations 的 `upgrade-stored-plugin-manifests`)、装包时也先升(plugin_archive),所以**收紧清单规则时,
 #: 老清单要能被某一步改合格**。
-MANIFEST_VERSION = 6
+MANIFEST_VERSION = 7
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -234,6 +234,20 @@ def _strip_unbacked_assets(node: Any, schema: Any) -> bool:
     return bool(fields)
 
 
+def _skills_become_toolsets(raw: dict[str, Any]) -> bool:
+    """`skills` → `toolsets`(清单版本 7,ADR 0040 §8)。
+
+    那个字段说的是「这个插件的工具是干嘛的」,给**别的智能体**看的一份目录;而「技能」从这一版起是智能体按需读的
+    做法(SKILL.md)。同一个词指两件事,写插件的人和模型都会读混。只改键名,内容一个字不动;两个键都在时
+    (手改过一半的清单)以 `toolsets` 为准,丢掉老的 —— 留着它就是一个再也没人读的字段。
+    """
+    if "skills" not in raw:
+        return False
+    legacy = raw.pop("skills")
+    raw.setdefault("toolsets", legacy)
+    return True
+
+
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
 _STEPS = (
     _to_runtime_block,
@@ -245,6 +259,7 @@ _STEPS = (
     _capability_inputs_follow_contract,
     _node_config_assets_follow_schema,
     _override_node_config_assets_follow_schema,
+    _skills_become_toolsets,
 )
 
 

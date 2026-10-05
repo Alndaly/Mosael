@@ -167,7 +167,7 @@ def plugin_manifest(plugin_id: str = "dev.someone.hello", version: str = "1.0.0"
         "homepage": "https://example.test",
         "author": {"name": "Someone", "url": "https://example.test"},
         "runtime": {"kind": "process", "entry": "main.py"},
-        "skills": [{"name": "hello", "description": {"zh": "打招呼", "en": "Say hello"}}],
+        "toolsets": [{"name": "hello", "description": {"zh": "打招呼", "en": "Say hello"}}],
         "tools": {"declare": [{"name": "say_hello", "label": "Say hello", "effects": "none"}]},
         **extra,
     }

@@ -7357,15 +7357,18 @@ export interface paths {
         patch: operations["update_memory_api_agent_memories__memory_id__patch"];
         trace?: never;
     };
-    "/api/agent/skills": {
+    "/api/agent/toolsets": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Agent Skills */
-        get: operations["get_agent_skills_api_agent_skills_get"];
+        /**
+         * Get Agent Toolsets
+         * @description 给别的智能体看的工具目录(见 domain/agent/toolsets)。清单版本 7 之前叫 /agent/skills。
+         */
+        get: operations["get_agent_toolsets_api_agent_toolsets_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7981,8 +7984,8 @@ export interface components {
             version: string;
             /** Openapi Url */
             openapi_url: string;
-            /** Skills */
-            skills: components["schemas"]["AgentSkillOut"][];
+            /** Toolsets */
+            toolsets: components["schemas"]["AgentToolsetOut"][];
         };
         /** AgentMemoryCreate */
         AgentMemoryCreate: {
@@ -8315,21 +8318,6 @@ export interface components {
             /** Group Id */
             group_id?: string | null;
         };
-        /** AgentSkillOut */
-        AgentSkillOut: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Source */
-            source: string;
-            /** Tools */
-            tools?: unknown[];
-            /** Permissions */
-            permissions?: unknown[];
-        };
         /**
          * AgentSpeechRequest
          * @description 念一句话。**不产出素材** —— 见 routes/agent.speak。
@@ -8366,6 +8354,24 @@ export interface components {
             timeline?: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * AgentToolsetOut
+         * @description 一组工具是干嘛的(见 domain/agent/toolsets)。不是智能体的技能(SKILL.md,ADR 0040)。
+         */
+        AgentToolsetOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Source */
+            source: string;
+            /** Tools */
+            tools?: unknown[];
+            /** Permissions */
+            permissions?: unknown[];
         };
         /**
          * AgentVoiceOut
@@ -31839,7 +31845,7 @@ export interface operations {
             };
         };
     };
-    get_agent_skills_api_agent_skills_get: {
+    get_agent_toolsets_api_agent_toolsets_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -31854,7 +31860,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentSkillOut"][];
+                    "application/json": components["schemas"]["AgentToolsetOut"][];
                 };
             };
             /** @description Validation Error */
