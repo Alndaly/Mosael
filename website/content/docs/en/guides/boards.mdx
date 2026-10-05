@@ -39,7 +39,7 @@ Connections are not decoration. The downstream item reshapes its panel around wh
 | Note / document → note | The upstream text is sent as **material**, kept separate from your instruction |
 | Document → image / video | The backend reads the document's text to the model along the connection; one still parsing or failed to parse is reported |
 | Image → image | Attached as a reference image |
-| Image → video | One image becomes the first frame; several become references |
+| Image → video | One image becomes the first frame; several become references. When the selected model doesn't take images, the panel says the connected image won't be used |
 | Image / video → note | The model **looks at it** — images directly, video as sampled frames |
 | Audio → note | Its transcript, if one exists, becomes material |
 | Asset → image / video | The same as `@`-ing it in the prompt: its description joins the prompt and its references attach, as many as the model takes |

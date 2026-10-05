@@ -367,6 +367,33 @@ export function autoAssign(
 export type SlotSource = { role: string; assetId: string; from?: string };
 
 /**
+ * 连进来、这个模型却**一份都挂不上**的素材种类:现在这种生成方式没有收它的槽(`elsewhere`:换一种生成方式收得下)。
+ *
+ * 此前这种素材悄悄不挂(见 autoAssign):一格图连到只收提示词的模型上(比如读图节点在 ComfyUI 里旁路了的工作流),
+ * 点生成照样跑,图没用上,哪儿都没说 —— 用户只能当成「明明能参考图片,这里却不行」。挂满了、自己摘掉的不算:
+ * 那是收得下、只是这一次没用。
+ */
+export function unusedUpstreamKinds(
+  model: GenerationOption | null,
+  activeRoles: string[] | undefined,
+  upstream: { kind: string }[],
+): { kind: "image" | "video" | "audio"; elsewhere: boolean }[] {
+  if (!model) return [];
+  const now = new Set<string>(sourceSlots(model, activeRoles).map((slot) => roleAccepts(slot.role)));
+  const anyMode = new Set<string>(sourceSlots(model).map((slot) => roleAccepts(slot.role)));
+  const kinds = [...new Set(upstream.map((one) => one.kind))].filter(
+    (kind): kind is "image" | "video" | "audio" => (kind === "image" || kind === "video" || kind === "audio") && !now.has(kind),
+  );
+  return kinds.map((kind) => ({ kind, elsewhere: anyMode.has(kind) }));
+}
+
+const UNUSED_UPSTREAM_COPY: Record<"image" | "video" | "audio", { model: MessageKey; mode: MessageKey }> = {
+  image: { model: "boardUpstreamUnusedImage", mode: "boardUpstreamUnusedModeImage" },
+  video: { model: "boardUpstreamUnusedVideo", mode: "boardUpstreamUnusedModeVideo" },
+  audio: { model: "boardUpstreamUnusedAudio", mode: "boardUpstreamUnusedModeAudio" },
+};
+
+/**
  * 上游连了这些东西时,默认该用哪种生成方式。
  *
  * 照 TapNow 的直觉:**连一张图 = 拿它当首帧**(最常见的图生视频),连两张以上就说明用户
@@ -841,10 +868,23 @@ export function NodeComposer({
   //: 所以这里**摆出来**:连了一个人物进来却什么都看不到,就像连线没起作用。
   const linkedEntities = (upstreamEntities ?? []).flatMap((id) => mentionable.data?.find((one) => one.id === id) ?? []);
 
+  //: 连进来却用不上的素材:就地说一句,不让那根线看起来像是起了作用(见 unusedUpstreamKinds)。
+  const unused = unusedUpstreamKinds(current, activeMode?.roles, feed);
+
   //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length ? (
       <>
+        {unused.map(({ kind, elsewhere }) => (
+          <span
+            key={kind}
+            role="status"
+            data-upstream-unused={kind}
+            className="inline-flex min-h-8 max-w-full items-center rounded-md bg-warning/10 px-2 py-1 text-ui-xs leading-snug text-warning"
+          >
+            {t(elsewhere ? UNUSED_UPSTREAM_COPY[kind].mode : UNUSED_UPSTREAM_COPY[kind].model)}
+          </span>
+        ))}
         {upstreamScene && (
           <SceneReferencePicker
             scene={referencedScene}

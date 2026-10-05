@@ -317,3 +317,33 @@ describe("「参数」按钮只在真有参数时出现", () => {
     expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual([]);
   });
 });
+
+/**
+ * 连进来却挂不上的素材要说出来:一格图连到只收提示词的模型(读图节点在 ComfyUI 里旁路了的工作流)上,此前悄悄不挂,
+ * 点生成照样跑、图没用上。挂满了、自己摘掉的不算 —— 那是收得下、只是这一次没用。
+ */
+import { unusedUpstreamKinds } from "./NodeComposer";
+
+describe("连进来却用不上的素材", () => {
+  it("模型一个素材角色都没有:连进来的图用不上", () => {
+    const promptOnly = { capabilities: { parameter_keys: ["seed"] } } as unknown as GenerationOption;
+    expect(unusedUpstreamKinds(promptOnly, undefined, [img("a"), img("b")])).toEqual([{ kind: "image", elsewhere: false }]);
+  });
+
+  it("收得下的不算,挂满了的也不算", () => {
+    expect(unusedUpstreamKinds(seedance(), ["first_frame", "last_frame"], [img("a"), img("b"), img("c")])).toEqual([]);
+  });
+
+  it("这种生成方式不收、换一种收得下:说换一种方式", () => {
+    expect(unusedUpstreamKinds(seedance(), ["first_frame", "last_frame"], [{ kind: "video" }])).toEqual([
+      { kind: "video", elsewhere: true },
+    ]);
+    expect(unusedUpstreamKinds(seedance(), ["reference_image", "reference_video"], [{ kind: "audio" }])).toEqual([
+      { kind: "audio", elsewhere: false },
+    ]);
+  });
+
+  it("没选模型时不说", () => {
+    expect(unusedUpstreamKinds(null, undefined, [img("a")])).toEqual([]);
+  });
+});
