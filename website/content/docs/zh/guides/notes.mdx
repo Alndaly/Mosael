@@ -38,13 +38,13 @@ version: 1.8.3
 右边是文档级的：保存状态 · **Markdown** · **AI 助手** · 收藏 · 更多。窗口窄了不换行，按优先级把插入、撤销重做、列表、粗体那几组
 收进最右边的「更多格式」(竖的 ⋮)，段落样式一直在。
 
-![笔记页：顶栏左边是编辑格式，右边是保存状态、Markdown、AI 助手、收藏和更多](/media/screens/notes.png)
+![笔记页：顶栏左边是编辑格式，右边是保存状态、Markdown、AI 助手、收藏和更多；正文里「转场一律用穿门推进」是一段高亮](/media/screens/notes.png)
 
 每颗按钮悬停都有说明，带着快捷键：粗体 <kbd>⌘B</kbd>、斜体 <kbd>⌘I</kbd>、删除线 <kbd>⇧⌘S</kbd>、高亮 <kbd>⇧⌘H</kbd>、
 三种列表 <kbd>⇧⌘8</kbd> / <kbd>⇧⌘7</kbd> / <kbd>⇧⌘9</kbd>、段落样式 <kbd>⌥⌘0</kbd>–<kbd>⌥⌘6</kbd>、撤销 <kbd>⌘Z</kbd>、
 重做 <kbd>⇧⌘Z</kbd>(Windows 上把 ⌘ 换成 Ctrl)。点不了的按钮也说为什么，比如「没有可撤销的操作」。
 
-![悬停「粗体」:说明里带着快捷键键帽](/media/screens/notes-hint.png)
+![悬停「粗体」:说明里带着快捷键键帽 ⌘B](/media/screens/notes-hint.png)
 
 ![「插入」菜单：每一项名字下面一行淡色说明，如「插入图片 · 也可粘贴或拖入」](/media/screens/notes-insert-menu.png)
 
@@ -101,7 +101,7 @@ version: 1.8.3
 需要时它自己分段读)，以及你选中的那一段 —— 选区以一个小条显示在输入框上，点掉就不带。面板停靠时占一栏、左边缘可以拖宽，
 窗口放不下时改成盖在正文右侧；开没开、停靠还是浮动、多宽，都记在本机。换一篇笔记，对话不换。
 
-![AI 助手面板停靠在笔记右侧，输入框上挂着选中的那段](/media/screens/notes-agent.png)
+![AI 助手停靠在笔记右侧，输入框上挂着选中的那段；正文变窄了，格式按钮收进了「更多格式」(⋮)](/media/screens/notes-agent.png)
 
 - **总结、解释、列提纲**这类，它直接在对话里回答，不改笔记。
 - **要改正文**时(选区工具条上的润色、改写、扩写、缩写、翻译、续写，或者你自己说「把这段改得口语一些」)，它按段替换或插入，
@@ -141,11 +141,11 @@ Markdown、移入回收站、恢复或彻底删除。右键单篇有打开、重
 - 顶上那一版标着「当前版本」。「恢复此版本」会先让你确认，然后**新建一个版本**，原有的版本都还在；
   「复制这一版的内容」复制那一版的 Markdown 正文。列表里可以用上下键切换版本。
 
-![版本记录：左边按天分组的版本，每一项写着怎么来的和改了多少，顶上是当前版本](/media/screens/notes-history.png)
+![版本记录：今天的 6 个版本 —— 新建、手动编辑、存到笔记、从版本 2 恢复……每一项写着改了多少，顶上那一版标着「当前版本」](/media/screens/notes-history.png)
 
-![和上一版对比：删掉的字划线，新加的字高亮](/media/screens/notes-history-compare.png)
+![版本 4 和上一版对比：没改的几行折起来，删掉的字划线、新加的字高亮；右上角是「恢复此版本」](/media/screens/notes-history-compare.png)
 
-<Recording src="/media/videos/note-history.mp4" poster="/media/screens/notes-history.png" caption="实机操作：打开版本记录，切换版本，和上一版对比" />
+<Recording src="/media/videos/note-history.mp4" poster="/media/screens/notes-history.png" caption="实机操作：打开版本记录，选中版本 4 和上一版对比，再看版本 5(没有恢复)" />
 
 从老版本升级上来时，老库里每次自动保存都落下的碎版本会按上面的规矩合并，版本号重排成连着的；画板文档格、来源和链接里
 指着老版本号的地方一并改指过去，不会断。老版本是怎么来的，能从任务、对话和运行记录里推出来的都补上了，推不出来的记成手动编辑。
@@ -194,4 +194,4 @@ Markdown、移入回收站、恢复或彻底删除。右键单篇有打开、重
 - [剪辑与调色](/docs/guides/editing) —— 逐字稿与字幕在哪里存成笔记
 - [AI Studio](/docs/guides/ai-studio) —— 从对话里保存摘录
 
-<Recording src="/media/videos/notes.mp4" poster="/media/screens/notes.png" caption="实机操作：选中一段，打开选区工具条和 AI 动作，再切到 Markdown 源码" />
+<Recording src="/media/videos/notes.mp4" poster="/media/screens/notes.png" caption="实机操作：悬停格式按钮、打开「插入」，选中一段看选区工具条和 AI 动作，打开 AI 助手(没有发送)，再切到 Markdown 源码" />

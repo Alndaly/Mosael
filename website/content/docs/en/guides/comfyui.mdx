@@ -176,7 +176,7 @@ tool call. Longer runs belong in generation.
 **Open model library** on the connection's title row shows **every model file** on that server:
 
 - **A column of folders on the left** (checkpoints, loras, vae…), sorted by file count, empty ones left out; pinned at the bottom
-  of the column are **Models missing for workflows** and **Downloads**. In a narrow window the column becomes a drop-down at the
+  of the column are **Models missing for workflows** and **Downloads** (when there are any). In a narrow window the column becomes a drop-down at the
   start of the toolbar.
 - **A toolbar on top**: search (with the number of files in scope), a **Base model** filter (tick several; it lists only the ones
   in the current folder, with counts), sorting (by name / size / date modified), three views (large cards / small cards / list),
@@ -188,7 +188,7 @@ tool call. Longer runs belong in generation.
   With **Blur previews** on, previews stay blurred until the pointer or keyboard focus rests on them — for when some previews
   aren't fit to open in front of others.
 
-![The model library: folders on the left, search, base model, sort, view and blur previews on top, small cards below](/media/screens/en/model-library.png)
+![The model library (the demo's stand-in ComfyUI, with Big Buck Bunny frames as previews): folders and Models missing for workflows on the left; search, base model, sort, the three views, blur previews and Download model on top; small cards below, with a per-folder placeholder where there is no preview](/media/screens/en/model-library.png)
 
 **Open a model**: a fixed header shows its name and folder · size · base model, with **Copy file name**, **Used by N workflow(s)**
 and **Generate with it** on the right; below, the preview on the left and the overview, workflows and metadata on the right, each
@@ -204,7 +204,7 @@ column scrolling on its own.
   When several workflows can, you choose (the ones already using it come first); when none can, the button is disabled and its hint
   says why. Only trigger words the author wrote are added to the prompt.
 
-![Model details: preview on the left; base model and how it was recognized, trigger words, workflows and metadata on the right](/media/screens/en/model-detail.png)
+![A LoRA's details: Generate with it, Copy file name and Used by 1 workflow at the top; the preview on the left; base model and how it was recognized (the file's metadata), trigger words, workflows, training tags and metadata on the right](/media/screens/en/model-detail.png)
 
 ### Downloading models
 
@@ -219,7 +219,7 @@ and you can cancel there or in the task center; once it's done you can pick it r
 with a single model file picks that file; with several, the candidates are listed and you paste the address of the one you want from
 its Files tab.
 
-![The download dialog opened from a missing model, carrying the folder and file name the workflow needs](/media/screens/en/model-download.png)
+![Download from a missing model in a workflow's details: the workflow gives no address for it, so the dialog says which file in text_encoders it needs and waits for a link](/media/screens/en/model-download.png)
 
 Good to know:
 
@@ -250,9 +250,11 @@ like) is a list with thumbnails: each item shows its base model and first trigge
 a preview get a placeholder per folder. After picking a LoRA with trigger words, the line below lists them and **Add to prompt**
 appends them (skipping any already there).
 
-![Picking a LoRA in AI Studio: each item with a thumbnail, base model and trigger words](/media/screens/en/ai-generate-models.png)
+![A ComfyUI workflow picked in AI Studio, with the LoRA field open: each item has a thumbnail, base model and trigger words; below, the chosen one's trigger words and Add to prompt](/media/screens/en/ai-generate-models.png)
 
-<Recording src="/media/videos/en/model-library.mp4" poster="/media/screens/en/model-library.png" caption="Live interaction: switch folders in the model library, filter by base model, change the view and open a LoRA's details" />
+<Loop src="/media/videos/en/generation-models.mp4" poster="/media/screens/en/ai-generate-models.png" alt="Demo: pick a ComfyUI workflow in AI Studio, switch the LoRA in its list and press Add to prompt (nothing is generated)" />
+
+<Recording src="/media/videos/en/model-library.mp4" poster="/media/screens/en/model-library.png" caption="Live interaction: open the model library, open a LoRA's details and go back; then open the unreachable server's library and expand Details for the raw error" />
 
 ## Workflow library: browse and manage the server's workflows
 
@@ -281,7 +283,7 @@ appends them (skipping any already there).
 The header has **Generate with it** (jumps to AI Studio with this workflow selected; disabled with the reason when it isn't a
 generation model), **Open in editor** and **More actions**.
 
-![Workflow details: the node graph on the left; inputs, models used, missing nodes with their packs and missing models on the right](/media/screens/en/workflow-library-detail.png)
+![A workflow missing a node and models: the node graph on the left; the right column scrolled down a little — what you can tune, what it produces, models it uses (missing ones flagged), missing nodes (from Frame Tools, not installed, Install), missing models (one with a huggingface.co address, one without), and what in Mosael uses it](/media/screens/en/workflow-library-detail.png)
 
 **Changing files on that machine** is under **More actions**, always confirmed first and naming the server whose `workflows/`
 folder is being changed:
@@ -317,7 +319,7 @@ arranged automatically), the node graph, what it takes, missing nodes and packs,
 (the suggested name by default, another one if that's taken). Only **Save on that server** writes it into that server's
 `workflows/`, never overwriting anything. You land on it afterwards and complete what's missing from its details.
 
-![Importing a workflow: the preview after pasting JSON — format, node graph, parameters, missing nodes and models, and the path to save as](/media/screens/en/workflow-import.png)
+![Importing a workflow: the preview after pasting JSON and Read it, scrolled to its lower half — what it takes, what you can tune, what it produces, models it uses, missing nodes and models, and at the bottom the path to save as and Save on that server](/media/screens/en/workflow-import.png)
 
 **Installing missing node packs**: when that ComfyUI has ComfyUI-Manager, a pack that isn't installed has **Install** next to it
 under Missing nodes. The confirmation says this changes that machine (the Manager installs it into `ComfyUI/custom_nodes` with its
@@ -327,7 +329,7 @@ again once ComfyUI is back. If the Manager's security settings refuse to install
 install by hand; without the Manager you're told to install it on that machine yourself. **Missing models** are downloaded through
 the model library (see above).
 
-<Recording src="/media/videos/en/workflow-library.mp4" poster="/media/screens/en/workflow-library.png" caption="Live interaction: filter the workflow library to workflows missing nodes or models, open one, then import a workflow JSON and look at the preview (not saved)" />
+<Recording src="/media/videos/en/workflow-library.mp4" poster="/media/screens/en/workflow-library.png" caption="Live interaction: open the workflow library, paste a workflow JSON and look at the preview (not saved); open a workflow missing a node and models, and open the download dialog from a missing model (nothing is downloaded)" />
 
 ## Progress, cancel and restarts
 

@@ -15,7 +15,7 @@ A process plugin runs as its own child process with a **minimal environment**: `
 
 Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 
-![The Plugins page: installed packages on the left, the selected package’s (ComfyUI) connections on the right; with none yet, a New button](/media/screens/en/plugins.png)
+![The Plugins page: installed packages on the left, the selected package’s (ComfyUI) two connections on the right, both folded into one line; the unreachable one is marked Error with one sentence on what to do](/media/screens/en/plugins.png)
 
 ## Two kinds
 
@@ -35,7 +35,7 @@ Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 - A **capability** is which tools that connection exposes. You tick them one by one, and
   **none are on by default**.
 
-<Loop src="/media/videos/en/plugins.mp4" poster="/media/screens/en/plugins.png" alt="Demo: select the Baidu Netdisk plugin, look at its connection and open New connection" />
+<Loop src="/media/videos/en/plugins.mp4" poster="/media/screens/en/plugins.png" alt="Demo: from ComfyUI's two connections, switch to the Baidu Netdisk plugin, look at its connection and open New connection, then go back to ComfyUI and rest the pointer on a connection's title row" />
 
 The page lays those three out left to right: the Installed column is packages, the top right is
 this package's connections, and below that are the tools that connection exposes. **Nothing on by
@@ -51,7 +51,7 @@ tools are on and the usual actions all fit in it. Anything that needs you (re-au
 folded, and expanding goes straight to it. A single connection starts expanded, several start collapsed, and a new one opens
 expanded; which ones are folded is remembered on this device, and the page header has **Collapse all / Expand all**.
 
-![Two ComfyUI connections, both collapsed: one line each with the name, address, state and tool count; the unreachable one says only what to do](/media/screens/en/plugin-collapsed.png)
+![Two ComfyUI connections, both collapsed: one line each with the name, address, state, tool count, and refresh, the two libraries, enable and delete; the unreachable one says only what to do; the pointer rests on a title row, whose hint offers to expand it, and the header shows Expand all](/media/screens/en/plugin-collapsed.png)
 
 **Errors lead with a plain sentence.** The error on a connection's title row and the reason the generation models row couldn't
 refresh show only their first line — what happened and what to do next; the address, errno and other raw text are in the hover
