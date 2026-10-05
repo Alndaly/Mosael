@@ -94,6 +94,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path}:工具 {tool} 的 node.config 把 {field} 标成了素材,input_schema 里它却不是 —— 素材要在 input_schema 里标(\"format\": \"asset\"),运行时只看那里",
         "en": "In plugin manifest {path}, tool {tool} marks {field} as an asset in node.config but not in input_schema; mark assets in input_schema (\"format\": \"asset\"), which is what the runtime reads.",
     },
+    "pluginErr_manifestSummaryTooLong": {
+        "zh": "插件清单 {path}:summary 是一句话,最长 {max} 个字 —— 长的介绍写在第一条技能的 description 里",
+        "en": "In plugin manifest {path}, summary is one sentence of at most {max} characters; put a longer introduction in the first skill's description.",
+    },
     # ---- 插件包 ----
     "pluginErr_archiveTooLarge": {
         "zh": "插件包超过大小上限",

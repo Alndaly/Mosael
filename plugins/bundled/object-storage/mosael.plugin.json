@@ -5,8 +5,12 @@
     "zh": "对象存储",
     "en": "Object Storage"
   },
+  "summary": {
+    "zh": "把素材传到你的对象存储(OSS、COS、TOS、S3),换回一条公网直链。",
+    "en": "Upload assets to your object storage (OSS, COS, TOS, S3) and get a public link back."
+  },
   "default_locale": "zh",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"

@@ -141,6 +141,7 @@ def _market_entry(entry: dict, installed: dict[str, PluginPackage], holds: dict[
         docs=web_url(text_of(entry.get("docs"))),
         #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
         name=text_of(entry.get("name")),
+        summary=text_of(entry.get("summary")),
         description=text_of(entry.get("description")),
         permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
         runtime=str(entry.get("runtime") or "process"),
@@ -188,6 +189,7 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
         id=str(raw.get("id") or ""),
         name=text_of(raw.get("name")),
         version=str(raw.get("version") or ""),
+        summary=text_of(raw.get("summary")),
         description=text_of((raw.get("skills") or [{}])[0].get("description")) if raw.get("skills") else "",
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str)],
         tools=[str(t.get("name")) for t in (declared or []) if isinstance(t, dict) and t.get("name")],
@@ -276,6 +278,10 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 #: 就一直是什么语言;清单里若写了多语言,这里才跟得上看的人。
                 "name": manifest.name,
                 "version": package.version,
+                "summary": manifest.summary,
+                "description": manifest.description,
+                #: 和市场条目同一个形状、同一个算法(registry.market_tools):「关于」里的工具和市场里的一致。
+                "tools": market.market_tools(manifest),
                 "kind": manifest.runtime.kind,
                 "multiple": manifest.multiple,
                 "permissions": manifest.permissions,

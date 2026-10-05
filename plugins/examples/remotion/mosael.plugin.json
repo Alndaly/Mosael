@@ -5,8 +5,12 @@
     "zh": "Remotion 动画",
     "en": "Remotion Animation"
   },
+  "summary": {
+    "zh": "用代码做动画视频:知识讲解、公式、代码演示和数据图表,本机渲染,不花生成费用。",
+    "en": "Make animated videos with code: explainers, formulas, code demos and charts, rendered locally at no generation cost."
+  },
   "default_locale": "zh",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",

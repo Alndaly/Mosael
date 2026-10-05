@@ -7,7 +7,11 @@
         "zh": "百度网盘",
         "en": "Baidu Netdisk"
       },
-      "version": "0.7.3",
+      "version": "0.7.4",
+      "summary": {
+        "zh": "在百度网盘和素材库之间搬文件:从网盘导入,或把素材存到网盘。",
+        "en": "Move files between Baidu Netdisk and the asset library: import from the netdisk, or save assets to it."
+      },
       "description": {
         "zh": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
         "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
@@ -83,7 +87,11 @@
         "zh": "Blender MCP",
         "en": "Blender MCP"
       },
-      "version": "0.3.2",
+      "version": "0.3.3",
+      "summary": {
+        "zh": "让智能体操作本机 Blender:看场景、改模型和材质,和 3D 工作台互传。",
+        "en": "Let your agent work in Blender on this computer: inspect scenes, edit models and materials, and trade scenes with the 3D studio."
+      },
       "description": {
         "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.0.3 Add-on。",
         "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."
@@ -111,6 +119,10 @@
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
       "version": "1.13.0",
+      "summary": {
+        "zh": "接一台 ComfyUI:存着的工作流变成生成模型和工具,还能在 Mosael 里管它的模型和工作流。",
+        "en": "Connect a ComfyUI server: its saved workflows become generation models and tools, and you manage its models and workflows from Mosael."
+      },
       "description": {
         "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流既是一个图像 / 视频生成模型,也是一个工具(「工作流 · 名字」,入参就是那张图自己的提示词、读素材的节点和可调参数,交回全部产出)。另有列出工作流与模型文件、看显卡和队列、把历史产出收进素材库、中断 / 清队列 / 释放显存。插件页上还有模型库:看这台 ComfyUI 上的模型文件(预览、底模、触发词、哪些工作流在用),把缺的模型下到它上面;还有工作流库:看这台 ComfyUI 上存着的工作流(节点图、能填什么、用到哪些模型、缺什么),在 Mosael 里复制、改名、删除(进回收站,能恢复)、导出,导入别处的工作流(JSON、带工作流的图片、压缩包、链接),缺的节点包经 ComfyUI-Manager 装上;还能给一张工作流挑出要给别人填的几项、起名、排序,存成它的应用表单(存在工作流文件里),生成表单和它的工具就只剩这几项。",
         "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow is both an image / video generation model and a tool (“Workflow · name”, whose inputs are that graph's own prompts, loader nodes and tunable parameters, returning every output). Plus listing workflows and model files, GPU and queue status, importing past outputs into the asset library, and interrupt / clear queue / free VRAM. The Plugins page also has a model library: browse this ComfyUI's model files (previews, base models, trigger words, which workflows use them) and download missing models onto it; and a workflow library: browse the workflows saved on this ComfyUI (node graph, what it takes, which models it uses, what is missing) and copy, rename, delete (to a recoverable trash) or export them from Mosael, import workflows from elsewhere (JSON, images carrying a workflow, archives, links) and install missing node packs through ComfyUI-Manager; it can also turn a workflow into an app by picking, naming and ordering the few items others fill in (kept in the workflow file), so its generation form and tool show only those."
@@ -243,7 +255,11 @@
         "zh": "Manim 教学动画",
         "en": "Manim Teaching Animation"
       },
-      "version": "0.3.2",
+      "version": "0.3.3",
+      "summary": {
+        "zh": "用 Manim 在本机做教学动画:公式推导、几何、函数图像、算法步骤,不花生成费用。",
+        "en": "Make teaching animations with Manim on this computer: derivations, geometry, plots and algorithm steps, at no generation cost."
+      },
       "description": {
         "zh": "用 Manim(3Blue1Brown 那套数学动画的社区版)做教学动画,本机渲染、零生成费用:公式推导、几何关系、函数图像、算法步骤、代码讲解、物理示意。要「一步一步地变」而且必须讲对的内容用它;要真实画面(人物、场景、实拍感)用视频生成模型;要排版精致的图文讲解卡片、数据图表也可以用 Remotion 插件。给结构化内容(每一步的标题、旁白、要点、公式 / 函数图 / 代码)就出讲解视频,不用写代码;更自由的画面写一段 Manim 场景代码(默认不开放,要在插件页勾选)。第一次用前在插件页运行「准备 Manim 环境」。Manim 是 MIT 许可。",
         "en": "Teaching animations with Manim (the community edition of 3Blue1Brown's maths animation engine), rendered on this computer at no generation cost: derivations, geometry, function plots, algorithm steps, code walk-throughs, physics diagrams. Use it for content that must change step by step and be correct; use a video generation model for realistic footage; the Remotion plugin also suits polished text-and-chart explainer cards. Structured content (each step's title, narration, points and a formula / plot / code) becomes an explainer with no code; anything freer is a Manim scene in Python (off by default — enable it on the plugins page). Run \"Prepare Manim\" once on the plugins page first. Manim is MIT-licensed."
@@ -321,7 +337,11 @@
         "zh": "MinerU 文档解析",
         "en": "MinerU document parsing"
       },
-      "version": "1.3.0",
+      "version": "1.3.1",
+      "summary": {
+        "zh": "用 MinerU 把 PDF、Office 文档和图片解析成 Markdown,扫描件和复杂排版也认得准。",
+        "en": "Parse PDFs, Office files and images into Markdown with MinerU, accurate even on scans and complex layouts."
+      },
       "description": {
         "zh": "把 PDF、Word、PPT、Excel 和图片交给 MinerU(mineru.net)解析成 Markdown:版面分析、OCR、表格和公式识别,扫描件和复杂排版比本地解析强。在「设置 → 能力提供方 → 文档解析」里选它,或在文档详情里「用 MinerU 解析」。文档会上传到 MinerU。",
         "en": "Parse PDF, Word, PowerPoint, Excel and images into Markdown with MinerU (mineru.net): layout analysis, OCR, tables and formulas — much better than local parsing on scans and complex layouts. Choose it under Settings → Capability providers → Document parsing, or use “Parse with MinerU” on a document. Documents are uploaded to MinerU."
@@ -363,7 +383,11 @@
         "zh": "对象存储",
         "en": "Object Storage"
       },
-      "version": "1.0.4",
+      "version": "1.0.5",
+      "summary": {
+        "zh": "把素材传到你的对象存储(OSS、COS、TOS、S3),换回一条公网直链。",
+        "en": "Upload assets to your object storage (OSS, COS, TOS, S3) and get a public link back."
+      },
       "description": {
         "zh": "把素材库里的文件传到你的对象存储(阿里云 OSS / 腾讯云 COS / 火山引擎 TOS / Amazon S3 / S3 兼容服务),换回一条**公网直链** —— 有些供应商只收链接不收本地文件(方舟 Seedance 的参考视频就是一例)。也能列出桶里的对象、给已有对象签直链、把对象拉回素材库。",
         "en": "Upload assets to your object storage (Alibaba Cloud OSS / Tencent Cloud COS / Volcengine TOS / Amazon S3 / any S3-compatible service) and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also lists a bucket, signs links for existing objects and pulls objects back into the library."
@@ -441,7 +465,11 @@
         "zh": "Remotion 动画",
         "en": "Remotion Animation"
       },
-      "version": "0.3.2",
+      "version": "0.3.3",
+      "summary": {
+        "zh": "用代码做动画视频:知识讲解、公式、代码演示和数据图表,本机渲染,不花生成费用。",
+        "en": "Make animated videos with code: explainers, formulas, code demos and charts, rendered locally at no generation cost."
+      },
       "description": {
         "zh": "用代码做动画视频,零生成费用:知识点讲解、公式推导、代码演示、数据图表。要讲准确的东西(文字、公式、步骤、数字)用它;要真实画面(人物、场景、实拍感)用视频生成模型。讲解视频给内容就能出片;更自由的画面写一段 Remotion 组件代码。需要本机装有 Node.js 18+。Remotion 对个人与 3 人以内的公司免费,更大的公司需要购买 Remotion 公司许可。",
         "en": "Make animated videos with code, at no generation cost: lesson explainers, formula walk-throughs, code demos, data charts. Use it when accuracy matters (text, formulas, steps, numbers); use a video generation model for realistic footage. Explainers need only content; anything freer is a short Remotion component. Needs Node.js 18+ on this computer. Remotion is free for individuals and companies of up to 3 people; larger companies need a Remotion company license."
@@ -504,7 +532,11 @@
     {
       "id": "dev.mosael.text-toolkit",
       "name": "Text Toolkit",
-      "version": "0.3.0",
+      "version": "0.3.1",
+      "summary": {
+        "zh": "文本小工具:数字数、断字幕行、截短、清理格式、提取话题和链接,全在本机算。",
+        "en": "Small text tools: word counts, subtitle lines, shortening, cleanup, and pulling out hashtags and links, all on this computer."
+      },
       "description": {
         "zh": "文本小工具:统计字数与念完要多久,把口播稿断成字幕行,按字数截短,清理文案里多余的空格、空行和半角标点,把 Markdown 转成能直接贴的纯文本,提取 #话题#、网址、@ 提及和邮箱。纯本地计算,无需任何权限。",
         "en": "Small text utilities: count words and read-aloud time, break a script into subtitle lines, shorten text to a length, tidy stray spaces, blank lines and half-width punctuation, turn Markdown into paste-ready plain text, and pull out hashtags, links, @mentions and emails. All local, no permissions needed."
@@ -611,7 +643,11 @@
     {
       "id": "dev.mosael.tikhub",
       "name": "TikHub",
-      "version": "1.0.4",
+      "version": "1.0.5",
+      "summary": {
+        "zh": "读抖音、TikTok、小红书、B站、快手等平台的公开数据,做选题和对标分析。",
+        "en": "Read public data from Douyin, TikTok, Xiaohongshu, Bilibili, Kuaishou and more, for topic and competitor research."
+      },
       "description": {
         "zh": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
         "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."

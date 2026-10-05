@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -43,6 +43,8 @@ import { Truncate } from "@/components/ui/truncate";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
+import { DocsButton, HintedFact, MoreActions, PluginHero, PluginOverview, docsOf, profileOfPackage, type PluginStatus } from "@/features/plugins/PluginProfile";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -131,12 +133,38 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   );
   const empty = packages.isSuccess && list.length === 0;
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
+  const openInMarket = (pluginId: string) => {
+    setMarketFocus(pluginId);
+    setMarketOpen(true);
+  };
+  const marketDialog = (
+    <PluginMarketDialog
+      open={marketOpen}
+      focusId={marketFocus}
+      capability={marketCapability}
+      onOpenChange={(next) => {
+        setMarketOpen(next);
+        if (!next) {
+          setMarketFocus(null);
+          setMarketCapability(null);
+        }
+      }}
+      onChanged={() => invalidatePluginDependents(qc)}
+      //: 市场里装着的那一个点「管理」:关掉市场,在这一页选中它 —— 新建连接、设置连接都在这儿。
+      onManage={(pluginId) => {
+        setMarketOpen(false);
+        setMarketFocus(null);
+        setMarketCapability(null);
+        setSelectedId(pluginId);
+      }}
+    />
+  );
 
 
   const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
-    <PluginMarketDialog open={marketOpen} focusId={marketFocus} capability={marketCapability} onOpenChange={(next) => { setMarketOpen(next); if (!next) { setMarketFocus(null); setMarketCapability(null); } }} onChanged={() => invalidatePluginDependents(qc)} />
+    {marketDialog}
   </div>;
 
   return (
@@ -187,12 +215,12 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             )}
       </>}>
           {selected ? (
-            <PackageDetail key={selected.id} pkg={selected} workspaceId={workspaceId} />
+            <PackageDetail key={selected.id} pkg={selected} workspaceId={workspaceId} onUpdate={() => openInMarket(selected.id)} />
           ) : (
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
       </CollectionDetail>
-      <PluginMarketDialog open={marketOpen} focusId={marketFocus} capability={marketCapability} onOpenChange={(next) => { setMarketOpen(next); if (!next) { setMarketFocus(null); setMarketCapability(null); } }} onChanged={() => invalidatePluginDependents(qc)} />
+      {marketDialog}
     </div>
   );
 }
@@ -206,14 +234,39 @@ function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void 
 }
 
 //: 导出**只为测试**:连接的展开 / 收起、「全部收起」由测试盯着(见 ConnectionCollapse.dom.test)。
-export function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
+/**
+ * 插件页右边:一个装好的插件。
+ *
+ * **页头和市场详情是同一个**(PluginProfile 的 PluginHero):图标、名字、状态、一句话、版本和作者,右边是这一页
+ * 能做的事 —— 新建连接(还没有连接时是主按钮)、有新版时「更新」(打开市场里它那一页)、文档、⋯ 里的卸载。
+ * 此前名字下面那行「v0.7.3 · 作者 Mosael」和一排同样灰的文字按钮挤在一起,读不出哪个能点;插件 ID、运行方式
+ * 又单占一行小字。
+ *
+ * 下面两页:**连接**(这一页的主体,默认停在这儿)和**关于**(和市场详情同一份概览:能做什么、介绍、工具、
+ * 权限、插件 ID 这些)。连接多、展开后很长,关于是查的时候才看的 —— 摞在同一页里谁都往下挤谁。
+ */
+export function PackageDetail({
+  pkg,
+  workspaceId,
+  onUpdate,
+}: {
+  pkg: PluginPackage;
+  workspaceId: string;
+  /** 有新版时页头的「更新」:打开市场里它那一页(装之前的确认在那儿)。不给就不画。 */
+  onUpdate?: () => void;
+}) {
   const t = useI18n();
   const market = useQuery({ queryKey: ["plugin-market"], queryFn: () => listPluginMarket(), retry: false });
-  const docs = pkg.docs || market.data?.plugins.find((entry) => entry.id === pkg.id)?.docs || "";
+  const listed = market.data?.plugins.find((entry) => entry.id === pkg.id);
+  //: 装着的那一版清单里没写 docs(写 docs 之前发的版本)时,用市场索引里同一个插件的那一页 —— 文档说的是这个插件,不是这一版。
+  const profile = profileOfPackage(pkg, pkg.docs || listed?.docs || "");
+  const docs = docsOf(profile);
+  const status: PluginStatus = pkg.bundled ? "bundled" : listed?.update_available ? "update" : "installed";
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
+  const [tab, setTab] = React.useState<"connections" | "about">("connections");
 
   const uninstall = useMutation({
     mutationFn: () => removePluginPackage(pkg.id),
@@ -233,17 +286,16 @@ export function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; worksp
       // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
       setAddOpen(false);
       setDraft({});
+      setTab("connections");
       if (created?.id) opened.setOpen(created.id, true);
       invalidatePluginDependents(qc);
     },
   });
 
-  const canAdd = pkg.multiple || (pkg.instances ?? []).length === 0;
-
-  const enabledCount = instances.filter((one) => one.enabled).length;
+  const canAdd = pkg.multiple || instances.length === 0;
 
   return (
-    <div className="grid w-full min-w-0 content-start gap-6">
+    <div className="grid w-full min-w-0 content-start gap-5">
       {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。 */}
       <ConfirmDialog
         open={confirmUninstall}
@@ -255,129 +307,99 @@ export function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; worksp
       />
 
       {/* **页头,不是卡片。** 包是这一页的身份 —— 它此前和连接一样是个 SettingsGroup,
-          于是「TikHub」在屏幕上出现两次、长得一模一样,读的人分不清哪个是包哪个是连接。
-          身份该在版面顶端只出现一次,后面全是它的内容。 */}
-      <header className="grid gap-5 border-b border-divider pb-5">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <div className="grid min-w-0 gap-0.5">
-            <Truncate as="h2" className="m-0 text-xl font-semibold tracking-tight text-foreground">{pkg.name}</Truncate>
-            {/* 谁写的、去哪儿找他:插件是别人的代码,用的时候也该看得见。 */}
-            <Truncate as="p" className="m-0 text-ui-sm text-muted-foreground">
-              v{pkg.version}
-              {pkg.author_name && (
-                <>
-                  {" · "}
-                  {t("pluginAuthor")}{" "}
-                  {pkg.author_url ? (
-                    <a href={pkg.author_url} target="_blank" rel="noreferrer noopener" className="text-foreground/80 underline-offset-2 hover:underline">
-                      {pkg.author_name}
-                    </a>
-                  ) : (
-                    pkg.author_name
-                  )}
-                </>
-              )}
-            </Truncate>
-          </div>
-          <span className="flex shrink-0 items-center gap-1">
-            {/* 连接多于一个时:一键全部收起 / 展开(有一个开着就是「全部收起」)。 */}
-            {instances.length > 1 && (
-              <Button variant="ghost" size="default" className="text-muted-foreground" onClick={() => opened.setAll(!opened.anyOpen)}>
-                {opened.anyOpen ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
-                {opened.anyOpen ? t("pluginCollapseAll") : t("pluginExpandAll")}
+          于是「TikHub」在屏幕上出现两次、长得一模一样,读的人分不清哪个是包哪个是连接。 */}
+      <PluginHero
+        profile={profile}
+        status={status}
+        headingLevel={2}
+        facts={[
+          status === "update" && listed ? (
+            <span key="latest" className="tabular-nums">{t("pluginLatestVersion").replace("{v}", listed.version)}</span>
+          ) : null,
+          status === "bundled" ? (
+            <HintedFact key="bundled" hint={t("pluginBundledHint")}>{t("pluginBundledFact")}</HintedFact>
+          ) : null,
+        ]}
+        actions={
+          <>
+            {status === "update" && onUpdate && (
+              <Button onClick={onUpdate}>
+                <CircleArrowUp />
+                {t("pluginUpdate")}
               </Button>
             )}
-            {/* 「新建连接」排在最前:它是这一页最常做的事。卸载留在最后 —— 破坏性动作
-                不该和常用动作贴在一起,手滑的代价不对等。 */}
+            {/* 「新建连接」排在最前:它是这一页最常做的事;一个连接都没有时它就是主按钮。 */}
             {canAdd && (
-              <Button variant="ghost" size="default" className="text-muted-foreground" onClick={() => setAddOpen(true)}>
-                <Plus size={13} /> {t("pluginNewConnection")}
+              <Button variant={instances.length === 0 && status !== "update" ? "default" : "outline"} onClick={() => setAddOpen(true)}>
+                <Plus />
+                {t("pluginNewConnection")}
               </Button>
             )}
-            {/* 「文档」指向**这个插件在 Mosael 里怎么用**的那一页(已按语言挑好):连接是什么、
-                凭据填哪儿、工具各干什么 —— 这些百度网盘的 API 文档一个字都没有。
-                装着的那一版清单里没写(写 docs 之前发的版本),就用市场索引里同一个插件的那一页 ——
-                文档说的是这个插件,不是这一版。两边都没有就不画:此前退到通用的「插件指南」,
-                点下去看到的是怎么装插件,不是这个插件怎么用。
-                插件背后那家服务的站点(homepage)另给一颗,声明了才画。 */}
-            {docs && (
-              <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
-                <a href={docs} target="_blank" rel="noreferrer noopener">
-                  <BookOpen size={13} /> {t("pluginDocs")}
-                </a>
-              </Button>
-            )}
-            {pkg.homepage && (
-              <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
-                <a href={pkg.homepage} target="_blank" rel="noreferrer noopener">
-                  <ExternalLink size={13} /> {t("pluginHomepage")}
-                </a>
-              </Button>
-            )}
-            {/* 随应用发的插件卸不掉(后端也拒):下次启动对账又会装回来,「删了又回来」比
-                「删不了」更让人困惑。不想用就停用它的连接。 */}
+            {/* 「文档」指向**这个插件在 Mosael 里怎么用**的那一页(已按语言挑好):连接是什么、凭据填哪儿、
+                工具各干什么。两边都没有就退到它的主页;再没有就不画。 */}
+            {docs && <DocsButton href={docs} />}
+            {/* 随应用发的插件卸不掉(后端也拒):下次启动对账又会装回来,「删了又回来」比「删不了」更让人困惑。
+                不想用就停用它的连接。卸载收在 ⋯ 里 —— 破坏性动作不和常用动作贴在一起。 */}
             {!pkg.bundled && (
-              <Button
-                variant="ghost"
-                size="default"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-                loading={uninstall.isPending}
-                onClick={() => setConfirmUninstall(true)}
-              >
-                <Trash2 size={13} /> {t("pluginUninstall")}
-              </Button>
+              <MoreActions
+                actions={[{ label: t("pluginUninstall"), icon: <Trash2 />, destructive: true, onSelect: () => setConfirmUninstall(true) }]}
+              />
             )}
-          </span>
-        </div>
-        {/* 元信息一行说完 —— 它们是查故障时才看的东西,不值一整块版面。 */}
-        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
-          {/* 版本号不在这里重复:标题下面那行已经写着。 */}
-          <span className="timecode">{pkg.id}</span>
-          <span aria-hidden>·</span>
-          <span>{pkg.kind === "mcp" ? t("pluginKindMcp") : t("pluginKindProcess")}</span>
-          {enabledCount > 0 && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="text-success">{t("pluginEnabledCount").replace("{n}", String(enabledCount))}</span>
-            </>
+          </>
+        }
+      />
+
+      <Tabs value={tab} onValueChange={(next) => setTab(next as "connections" | "about")} className="grid min-w-0 gap-5">
+        <div className="flex min-w-0 items-end justify-between gap-3 border-b border-divider">
+          <TabsList aria-label={t("pluginTabsLabel")} className="border-b-0">
+            <TabsTrigger value="connections" className="gap-1.5">
+              {t("pluginTabConnections")}{" "}
+              <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{instances.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="about">{t("pluginTabAbout")}</TabsTrigger>
+          </TabsList>
+          {/* 连接多于一个时:一键全部收起 / 展开(有一个开着就是「全部收起」)。只作用于连接,所以只在那一页。 */}
+          {tab === "connections" && instances.length > 1 && (
+            <Button variant="ghost" size="sm" className="mb-1.5 text-muted-foreground" onClick={() => opened.setAll(!opened.anyOpen)}>
+              {opened.anyOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}
+              {opened.anyOpen ? t("pluginCollapseAll") : t("pluginExpandAll")}
+            </Button>
           )}
-        </p>
-      </header>
+        </div>
 
-      {/* 连接是这一页的**主体**。有几个就是几个,新建那一条排在最后 —— 排在最前的话,
-          每次进来第一眼看到的是"再建一个",而绝大多数时候用户是来改已有的那个。 */}
-      {instances.map((instance) => (
-        <ConnectionCard
-          key={instance.id}
-          pkg={pkg}
-          instance={instance}
-          workspaceId={workspaceId}
-          open={opened.isOpen(instance.id)}
-          onOpenChange={(next) => opened.setOpen(instance.id, next)}
-        />
-      ))}
-
-      {/* **入口在页头**(和文档/主页/卸载同一排),点开是弹窗 —— 不再是常驻的内联表单:
-          已经有连接时它占着版面,而"再建一个"是低频操作;一个都没有时,它和空状态还在说
-          同一件事(后者的说明几乎逐字重复前者)。
-          空的时候**两个入口都在**:页头那颗是常驻位置,空状态这颗在屏幕中央 —— 页面空着时
-          人的视线落在中央,右上角容易整个错过。同一个动作出现两次在这里是可以的:重复的是
-          按钮不是说明文字,而后者才是上一版真正的毛病(两块各写一遍"同一个插件可以接多个")。 */}
-      {instances.length === 0 ? (
-        <EmptyState
-          size="compact"
-          icon={<Plug size={15} />}
-          title={t("pluginNoConnections")}
-          body={t("pluginNoConnectionsBody")}
-          action={
-            canAdd ? (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                <Plus size={13} /> {t("pluginAddConnection")}
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : null}
+        {/* 连接是这一页的**主体**。有几个就是几个;一个都没有时空状态在中间、带「新建」—— 页面空着时
+            人的视线落在中央,页头那颗容易整个错过。重复的是按钮,不是说明文字。 */}
+        <TabsContent value="connections" className="mt-0 grid min-w-0 content-start gap-4">
+          {instances.map((instance) => (
+            <ConnectionCard
+              key={instance.id}
+              pkg={pkg}
+              instance={instance}
+              workspaceId={workspaceId}
+              open={opened.isOpen(instance.id)}
+              onOpenChange={(next) => opened.setOpen(instance.id, next)}
+            />
+          ))}
+          {instances.length === 0 ? (
+            <EmptyState
+              size="compact"
+              icon={<Plug size={15} />}
+              title={t("pluginNoConnections")}
+              body={t("pluginNoConnectionsBody")}
+              action={
+                canAdd ? (
+                  <Button size="sm" onClick={() => setAddOpen(true)}>
+                    <Plus size={13} /> {t("pluginAddConnection")}
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : null}
+        </TabsContent>
+        <TabsContent value="about" className="mt-0 min-w-0">
+          <PluginOverview profile={profile} />
+        </TabsContent>
+      </Tabs>
 
       {canAdd && (
         <NewConnectionDialog

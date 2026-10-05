@@ -5,8 +5,12 @@
     "zh": "Manim 教学动画",
     "en": "Manim Teaching Animation"
   },
+  "summary": {
+    "zh": "用 Manim 在本机做教学动画:公式推导、几何、函数图像、算法步骤,不花生成费用。",
+    "en": "Make teaching animations with Manim on this computer: derivations, geometry, plots and algorithm steps, at no generation cost."
+  },
   "default_locale": "zh",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",

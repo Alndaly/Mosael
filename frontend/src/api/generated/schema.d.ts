@@ -12014,6 +12014,11 @@ export interface components {
              */
             version: string;
             /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
              * Description
              * @default
              */
@@ -12196,6 +12201,11 @@ export interface components {
              */
             name: string;
             /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
              * Description
              * @default
              */
@@ -12365,6 +12375,18 @@ export interface components {
             name: string;
             /** Version */
             version: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Tools */
+            tools?: components["schemas"]["PluginMarketTool"][];
             /**
              * Kind
              * @default process

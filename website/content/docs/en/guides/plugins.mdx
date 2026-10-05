@@ -43,13 +43,18 @@ default** is deliberate — an MCP server routinely reports dozens of tools, and
 drowns the node panel and the agent's tool list. A model picking from forty names picks wrong more
 often, not less.
 
+At the top right is the plugin's header: its name, status (Built in / Installed / Update available), a one-line summary, the version
+and author (a link when there is one), with **New connection** and **Docs** on the right and Uninstall under **⋯**; when there is a
+newer version an **Update** button opens its page in the market. Below the header are two tabs: **Connections** (the default) and
+**About** — what it does, the introduction, tools, permissions and plugin ID, the same overview as its detail page in the market.
+
 ![The Baidu Netdisk plugin page: no tabs, one card per connection — enable switch, authorization, name, AppKey / SecretKey, and Network at the bottom](/media/screens/en/plugin-detail.png)
 
 **Connections collapse.** When a package has several connections (a few ComfyUI servers, TikHub for several platforms), each card can
 fold into one line: the name, the key address (such as the server URL), the state (Ready, Off, Error, Needs permission…), how many
 tools are on and the usual actions all fit in it. Anything that needs you (re-authorization, missing settings) is flagged even when
 folded, and expanding goes straight to it. A single connection starts expanded, several start collapsed, and a new one opens
-expanded; which ones are folded is remembered on this device, and the page header has **Collapse all / Expand all**.
+expanded; which ones are folded is remembered on this device, and the Connections tab row has **Collapse all / Expand all** on the right.
 
 ![Two ComfyUI connections, both collapsed: one line each with the name, address, state, tool count, and refresh, the two libraries, enable and delete; the unreachable one says only what to do; the pointer rests on a title row, whose hint offers to expand it, and the header shows Expand all](/media/screens/en/plugin-collapsed.png)
 
@@ -64,19 +69,21 @@ with it.
 The left column of the Plugins page lists installed plugins; the header has **Scan plugins** and **Browse plugins**. The market is a grid of
 cards: search at the top (tool names count too), filter by **All / Installed / Updates**, and **Filter by capability** — noise reduction,
 transcription, translation, speech, document parsing… only those some plugin in the market actually provides, each with a count. A card
-opens a detail page: permissions in plain words, **What it adds to Mosael** saying where each capability shows up once installed, and
-**Tools it brings**.
+opens a detail page: the header has the name, status, a one-line summary and what you can do (**Install**, **Update**, or **Manage** for one
+that is installed — it opens it on the Plugins page — plus **Docs**); below, **What it does** gives each capability a tile saying where it
+shows up once installed; the introduction is folded to three lines with **Show more**; tools are one per row with a two-line description;
+and the right column groups permissions by kind — network, files, programs — in plain words (hover one for its code).
 
 ![The plugin market: search, All / Installed / Updates, and filter by capability on the right; built-in plugins are marked Built in](/media/screens/en/plugin-market.png)
 
 **From the market**: find the one you want and hit Install. It does not go straight in — the
-package is fetched, its manifest read, and **the permissions it declares and the tools it brings
-are laid out for you** before anything lands. Installing a plugin puts code that will be executed
-on your machine; that list is worth a look.
+package is fetched, its manifest read, and **the permissions it declares (grouped by kind) and the tools it brings
+are laid out for you** before anything lands; **Docs** at the bottom left shows how it is used first. Installing a plugin
+puts code that will be executed on your machine; that list is worth a look.
 
 **Built-in plugins** (ComfyUI, Object Storage and MinerU document parsing) show up in the market too, marked **Built in**: they are
-already installed and update with the app, so there is no Install button and they cannot be
-uninstalled — select one in the left column and add a connection to start using it.
+already installed and update with the app (the header says **Updates with Mosael**), so there is no Install button and they cannot be
+uninstalled — hit **Manage** to open it on the Plugins page and add a connection to start using it.
 
 **From a link**: any zip URL works, through the same confirmation. A company intranet can host its
 own market index (plain JSON — format in [Writing a plugin](/docs/guides/writing-plugins)) and

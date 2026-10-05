@@ -2,8 +2,12 @@
   "id": "dev.mosael.text-toolkit",
   "manifest_version": 6,
   "name": "Text Toolkit",
+  "summary": {
+    "zh": "文本小工具:数字数、断字幕行、截短、清理格式、提取话题和链接,全在本机算。",
+    "en": "Small text tools: word counts, subtitle lines, shortening, cleanup, and pulling out hashtags and links, all on this computer."
+  },
   "default_locale": "zh",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"

@@ -2,6 +2,10 @@
   "id": "dev.mosael.comfyui",
   "manifest_version": 6,
   "name": "ComfyUI",
+  "summary": {
+    "zh": "接一台 ComfyUI:存着的工作流变成生成模型和工具,还能在 Mosael 里管它的模型和工作流。",
+    "en": "Connect a ComfyUI server: its saved workflows become generation models and tools, and you manage its models and workflows from Mosael."
+  },
   "default_locale": "zh",
   "version": "1.13.0",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",

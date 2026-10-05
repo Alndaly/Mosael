@@ -121,6 +121,20 @@ def _market_effects(manifest: Manifest, tool: dict[str, Any]) -> str:
     )
 
 
+def market_tools(manifest: Manifest) -> list[dict[str, Any]]:
+    """清单里声明的工具,按市场条目的形状:名字、显示名、说明和后果。市场里内置插件那一条、插件页的「关于」读的是这一份。"""
+    return [
+        {
+            "name": str(tool["name"]),
+            "label": tool.get("label") or "",
+            "description": tool.get("description") or "",
+            # 和 scripts/sync-plugin-registry.py 同一个算法(domain/effects):装之前就看得到哪些工具会先问你。
+            "effects": _market_effects(manifest, tool),
+        }
+        for tool in manifest.declared_tools
+    ]
+
+
 def bundled_entry(manifest: Manifest) -> dict[str, Any]:
     """随应用内置的插件在市场里的那一条,**由本机那份清单生成**,形状与远端索引的条目一样。
 
@@ -132,7 +146,8 @@ def bundled_entry(manifest: Manifest) -> dict[str, Any]:
         "id": manifest.id,
         "name": manifest.name,
         "version": manifest.version,
-        "description": (manifest.skills[0].get("description") if manifest.skills else "") or "",
+        "summary": manifest.summary,
+        "description": manifest.description,
         "author": manifest.author.name,
         "author_url": manifest.author.url,
         "docs": manifest.docs,
@@ -142,16 +157,7 @@ def bundled_entry(manifest: Manifest) -> dict[str, Any]:
         "permissions": list(manifest.permissions),
         "runtime": manifest.runtime.kind,
         "provides": list(manifest.provides),
-        "tools": [
-            {
-                "name": str(tool["name"]),
-                "label": tool.get("label") or "",
-                "description": tool.get("description") or "",
-                # 和 scripts/sync-plugin-registry.py 同一个算法(domain/effects):装之前就看得到哪些工具会先问你。
-                "effects": _market_effects(manifest, tool),
-            }
-            for tool in manifest.declared_tools
-        ],
+        "tools": market_tools(manifest),
         "bundled": True,
     }
 

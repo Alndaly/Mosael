@@ -32878,6 +32878,11 @@
             "title": "Version",
             "default": ""
           },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
           "description": {
             "type": "string",
             "title": "Description",
@@ -33229,6 +33234,11 @@
             "title": "Name",
             "default": ""
           },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
           "description": {
             "type": "string",
             "title": "Description",
@@ -33468,6 +33478,23 @@
           "version": {
             "type": "string",
             "title": "Version"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/PluginMarketTool"
+            },
+            "type": "array",
+            "title": "Tools"
           },
           "kind": {
             "type": "string",

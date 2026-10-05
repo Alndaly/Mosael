@@ -20,6 +20,7 @@ ENTRY_KEYS = (
     "id",
     "name",
     "version",
+    "summary",
     "description",
     "author",
     "author_url",
@@ -54,6 +55,8 @@ def index_entry(raw: dict[str, Any], *, download: str, bundled: bool) -> dict[st
         "id": raw["id"],
         "name": raw.get("name", ""),
         "version": raw.get("version", ""),
+        # 一句话说清它是干嘛的(清单的 summary,可按语言分;原样带过去,由读的一方挑语言)。卡片和详情页头先摆它。
+        "summary": raw.get("summary") or "",
         # 描述取第一条技能的说明 —— 那句话本来就是写给"这东西是干嘛的"的。
         "description": (skills[0].get("description") if skills and isinstance(skills[0], dict) else "") or "",
         # 作者从清单来(清单里是 {name, url})。**author 仍是一个字符串** —— 已经装着的旧版本

@@ -6,6 +6,9 @@
  * 返回键和 Esc 都退回网格并把焦点还给那张卡、从卡片和从详情都能装(装之前先确认权限)、
  * 搜索和筛选收窄的是卡片。随应用内置的插件(ComfyUI)搜得到、标「内置」、不给装 / 更新 / 卸载;
  * 远端索引拉不到时照样列出内置的,并说清楚为什么只有这几个。
+ *
+ * 详情的版式(PluginProfile):页头一枚状态、一句话简介、版本和作者;概览里能做什么一项一块、介绍长了先折起来、
+ * 工具一行一个(机器名悬停看)、权限按种类分组说人话(权限码悬停看)。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -15,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const OSS = {
   id: "dev.mosael.aliyun-oss", name: "阿里云 OSS", version: "0.1.2", download: "https://x/oss.zip", sha256: "abababababababababababababababababababababababababababababababab",
+  summary: "把素材传到阿里云 OSS,换回一条公网直链。",
   description: "把素材传到阿里云 OSS,换回一条**公网直链** —— 有些供应商只收链接。",
   permissions: ["network:oss"], installed: false, installed_version: "", author: "Mosael", author_url: "https://mosael.com",
   docs: "https://mosael.com/zh/plugins/aliyun-oss", homepage: "https://help.aliyun.com/zh/oss/",
@@ -163,13 +167,26 @@ describe("插件详情", () => {
     //: 说明和工具说明里的记号都按格式渲染,一个星号都不露。
     expect(dialog.textContent).not.toContain("**");
     expect(within(dialog).getByText("限时直链").tagName).toBe("STRONG");
-    expect(within(dialog).getByText("pluginPermNetwork")).toBeTruthy();
-    expect(within(dialog).getByText("network:oss")).toBeTruthy();
-    expect(within(dialog).getByText("oss_upload")).toBeTruthy();
+    //: 页头:没装的标「未安装」,一句话简介摆在名字下面,版本和作者是一行事实(作者能点就是链接)。
+    const hero = dialog.querySelector<HTMLElement>("[data-plugin-hero]")!;
+    expect(within(hero).getByText("pluginStatusAvailable")).toBeTruthy();
+    expect(within(hero).getByText(OSS.summary)).toBeTruthy();
+    expect(within(hero).getByRole("link", { name: "Mosael" }).getAttribute("href")).toBe("https://mosael.com");
+    expect(within(hero).getByRole("button", { name: "pluginInstall" })).toBeTruthy();
+    //: 权限按种类分组说人话:联网那一组里是它连的服务;权限码挂在那一条上(悬停看),不和人话抢一行。
+    const network = dialog.querySelector<HTMLElement>("[data-permission-group='network']")!;
+    expect(within(network).getByText("pluginPermGroupNetwork")).toBeTruthy();
+    expect(network.querySelector("[data-permission='network:oss']")?.textContent).toBe("oss");
+    expect(within(dialog).queryByText("network:oss")).toBeNull();
+    //: 工具一行一个,显示名在前;机器名不占一行。
+    const tool = dialog.querySelector<HTMLElement>("[data-tool='oss_upload']")!;
+    expect(tool.textContent).toContain("oss_upload");
     //: 它能替 Mosael 做什么:后端词表里的名字,和装上之后出现在哪。
     const provides = dialog.querySelector<HTMLElement>("[data-provides='public_url']")!;
     expect(provides.textContent).toContain("素材外链");
     expect(provides.querySelector("[data-capability-use]")?.textContent).toBe("生成时自动换链接");
+    //: 版本、作者在页头说过,信息里不再说第二遍。
+    expect(within(dialog).queryByText("pluginMarketVersion")).toBeNull();
     // 进详情时焦点给返回键:读屏从这一页的开头读起。
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "pluginMarketBack" }));
   });
@@ -210,7 +227,8 @@ describe("插件详情", () => {
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("MCP Sample")).getByRole("button", { name: "MCP Sample" }));
     expect(screen.getByText("pluginMarketMcpToolsBody")).toBeTruthy();
-    expect(screen.getByText("pluginPermProcess")).toBeTruthy();
+    expect(screen.getByText("pluginPermStartPrograms")).toBeTruthy();
+    expect(screen.getByText("pluginPermGroupProcess")).toBeTruthy();
   });
 });
 
@@ -222,7 +240,8 @@ describe("安装", () => {
     await user.click(within(card("阿里云 OSS")).getByRole("button", { name: "pluginInstall" }));
     expect(mocks.preview, "索引给的 sha256 一路交给后端核对").toHaveBeenCalledWith("https://x/oss.zip", "0.1.2", "abababababababababababababababababababababababababababababababab");
     const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
-    expect(within(confirm).getByText("network:oss")).toBeTruthy();
+    expect(confirm.querySelector("[data-permission='network:oss']")?.textContent).toBe("oss");
+    expect(within(confirm).getByText("oss_upload")).toBeTruthy();
     expect(mocks.install).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole("button", { name: "pluginInstall" }));
     await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/oss.zip", false, "0.1.2", "abababababababababababababababababababababababababababababababab"));
@@ -235,7 +254,9 @@ describe("安装", () => {
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("百度网盘")).getByRole("button", { name: "百度网盘" }));
     await user.click(screen.getByRole("button", { name: "pluginUpdate" }));
-    const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
+    //: 装着的再装一遍是「更新」:标题、按钮都这么说,并点明会覆盖哪一版。
+    const confirm = await screen.findByRole("dialog", { name: "pluginUpdateConfirmTitle" });
+    expect(within(confirm).getByText("pluginInstallOverwrite")).toBeTruthy();
     await user.click(within(confirm).getByRole("button", { name: "pluginUpdate" }));
     await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/pan.zip", true, "0.5.1", ""));
   });
@@ -246,7 +267,7 @@ describe("安装", () => {
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("百度网盘")).getByRole("button", { name: "pluginUpdate" }));
     //: 预览回的是 0.1.2(包里的清单),市场写的是 0.5.1。
-    const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
+    const confirm = await screen.findByRole("dialog", { name: "pluginUpdateConfirmTitle" });
     expect(within(confirm).getByText("v0.1.2")).toBeTruthy();
     expect(within(confirm).getByText("pluginInstallVersionDiffers")).toBeTruthy();
   });
@@ -256,7 +277,10 @@ describe("安装", () => {
     renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("MCP Sample")).getByRole("button", { name: "MCP Sample" }));
-    await user.click(screen.getByRole("button", { name: "pluginUninstall" }));
+    //: 卸载收在页头的 ⋯ 里,不和常用动作贴在一起。
+    expect(screen.queryByRole("button", { name: "pluginUninstall" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "pluginMore" }));
+    await user.click(await screen.findByRole("menuitem", { name: "pluginUninstall" }));
     expect(mocks.remove).not.toHaveBeenCalled();
     const confirm = await screen.findByRole("alertdialog");
     await user.click(within(confirm).getByRole("button", { name: "pluginUninstall" }));
@@ -298,9 +322,12 @@ describe("随应用内置的插件", () => {
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("ComfyUI")).getByRole("button", { name: "ComfyUI" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("pluginMarketBundledNote")).toBeTruthy();
-    expect(within(dialog).getByText("pluginMarketBundledBadge")).toBeTruthy();
-    expect(within(dialog).queryByRole("button", { name: /pluginInstall|pluginUpdate|pluginUninstall/ })).toBeNull();
+    //: 「随应用安装和更新、卸不掉」不再是一整块提示框:是状态旁边的一条事实,全句悬停看。
+    const hero = dialog.querySelector<HTMLElement>("[data-plugin-hero]")!;
+    expect(within(hero).getByText("pluginBundledFact")).toBeTruthy();
+    expect(within(hero).getByText("pluginMarketBundledBadge")).toBeTruthy();
+    expect(dialog.querySelector("[role='note']")).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /pluginInstall|pluginUpdate|pluginUninstall|pluginMore/ })).toBeNull();
   });
 
   it("远端索引拉不到:照样列出内置的,并说清楚为什么只有这一个", async () => {
@@ -407,5 +434,91 @@ describe("按能力筛", () => {
     renderMarket("public_url");
     const list = await screen.findByRole("list", { name: "pluginMarket" });
     await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(1));
+  });
+});
+
+describe("详情的版式", () => {
+  const LONG = "把一台 ComfyUI 接进 Mosael:".repeat(12);
+  const TOOLS = Array.from({ length: 8 }, (_, i) => ({ name: `tool_${i}`, label: `工具 ${i}`, description: "", effects: "none" }));
+
+  function renderWith(plugins: object[], onManage = vi.fn()) {
+    mocks.market.mockImplementation(async () => ({ plugins, index_error: "" }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PluginMarketDialog open onOpenChange={vi.fn()} onChanged={vi.fn()} onManage={onManage} />
+      </QueryClientProvider>,
+    );
+    return onManage;
+  }
+
+  it("介绍长了先摆开头一截,「展开」看全文(带格式)", async () => {
+    const user = userEvent.setup();
+    renderWith([{ ...COMFY, description: `**粗体**${LONG}` }]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "ComfyUI" }));
+    const about = () => document.querySelector<HTMLElement>("[data-plugin-about]")!;
+    expect(about().dataset.pluginAbout).toBe("folded");
+    expect(about().textContent?.endsWith("…")).toBe(true);
+    expect(about().textContent).not.toContain("**");
+    const toggle = screen.getByRole("button", { name: "pluginShowMore" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await user.click(toggle);
+    expect(about().dataset.pluginAbout).toBe("full");
+    expect(within(about()).getByText("粗体").tagName).toBe("STRONG");
+    expect(screen.getByRole("button", { name: "pluginShowLess" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("介绍短的不折,也没有「展开」", async () => {
+    const user = userEvent.setup();
+    renderWith([COMFY]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "ComfyUI" }));
+    expect(document.querySelector<HTMLElement>("[data-plugin-about]")!.dataset.pluginAbout).toBe("full");
+    expect(screen.queryByRole("button", { name: "pluginShowMore" })).toBeNull();
+  });
+
+  it("工具多于六个先摆六个,「全部 N 个」看全", async () => {
+    const user = userEvent.setup();
+    renderWith([{ ...OSS, tools: TOOLS }]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "阿里云 OSS" }));
+    expect(document.querySelectorAll("[data-tool]")).toHaveLength(6);
+    await user.click(screen.getByRole("button", { name: "pluginToolsAll" }));
+    expect(document.querySelectorAll("[data-tool]")).toHaveLength(8);
+  });
+
+  it("装着的(含内置)给「管理」:交给插件页打开它", async () => {
+    const user = userEvent.setup();
+    const onManage = renderWith([COMFY, MCP]);
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(within(card("ComfyUI")).getByRole("button", { name: "ComfyUI" }));
+    await user.click(screen.getByRole("button", { name: "pluginManage" }));
+    expect(onManage).toHaveBeenCalledWith(COMFY.id);
+  });
+
+  it("没装的不给「管理」,给「安装」", async () => {
+    const user = userEvent.setup();
+    renderWith([OSS]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "阿里云 OSS" }));
+    expect(screen.queryByRole("button", { name: "pluginManage" })).toBeNull();
+    expect(screen.getByRole("button", { name: "pluginInstall" })).toBeTruthy();
+  });
+
+  it("有新版的:页头标「可更新」,写着装着的是哪一版", async () => {
+    const user = userEvent.setup();
+    renderWith([PAN]);
+    await user.click(within(await screen.findByRole("article")).getByRole("button", { name: "百度网盘" }));
+    const hero = document.querySelector<HTMLElement>("[data-plugin-hero]")!;
+    expect(within(hero).getByText("pluginMarketHasUpdate")).toBeTruthy();
+    expect(within(hero).getByText("pluginInstalled")).toBeTruthy();
+    expect(within(hero).getByRole("button", { name: "pluginUpdate" })).toBeTruthy();
+  });
+
+  it("老索引没有一句话简介:卡片摆介绍(摊平),详情页头不硬凑一句", async () => {
+    const user = userEvent.setup();
+    renderWith([PAN]);
+    const pan = await screen.findByRole("article");
+    expect(pan.textContent).toContain(PAN.description);
+    await user.click(within(pan).getByRole("button", { name: "百度网盘" }));
+    const hero = document.querySelector<HTMLElement>("[data-plugin-hero]")!;
+    expect(hero.textContent).not.toContain(PAN.description);
   });
 });

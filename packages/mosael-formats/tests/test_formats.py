@@ -52,10 +52,28 @@ def test_清单解析按当时的语言挑名字() -> None:
         i18n.CURRENT_LOCALE.reset(token)
 
 
+def test_一句话简介按语言挑_介绍取第一条技能() -> None:
+    raw = {
+        "id": "a.b", "version": "1.0.0", "name": "n",
+        "summary": {"zh": "一句话", "en": "One line"},
+        "skills": [{"id": "s", "description": {"zh": "长的介绍", "en": "A longer introduction"}}],
+    }
+    token = i18n.CURRENT_LOCALE.set("en")
+    try:
+        manifest = parse(raw, "x")
+        assert (manifest.summary, manifest.description) == ("One line", "A longer introduction")
+    finally:
+        i18n.CURRENT_LOCALE.reset(token)
+    assert parse({"id": "a.b", "version": "1.0.0", "name": "n"}, "x").summary == ""
+
+
 @pytest.mark.parametrize(
     ("raw", "key"),
     [
         ({"version": "1"}, "pluginErr_manifestMissingField"),
+        # 一句话简介写成一段:卡片只剩省略号。**每种语言都查** —— 只查挑出来的那种,换个界面语言才露馅。
+        ({"id": "a", "version": "1", "name": "n", "summary": "长" * 141}, "pluginErr_manifestSummaryTooLong"),
+        ({"id": "a", "version": "1", "name": "n", "summary": {"zh": "短", "en": "x" * 141}}, "pluginErr_manifestSummaryTooLong"),
         ({"id": "../x", "version": "1", "name": "n"}, "pluginErr_manifestBadId"),
         ({"id": "a", "version": "1", "name": "n", "instance": {"credentials": [{"key": "MOSAEL_X"}]}},
          "pluginErr_manifestReservedKey"),
@@ -152,6 +170,9 @@ def test_索引条目和官网那份_registry_json_同形() -> None:
     }
     entry = plugin_index.index_entry(raw, download="https://x.test/a.zip", bundled=False)
     assert tuple(entry) == plugin_index.ENTRY_KEYS
+    #: 一句话简介原样带过去(可以按语言分),由读的一方挑语言;没写就是空串。
+    assert entry["summary"] == ""
+    assert plugin_index.index_entry({**raw, "summary": {"zh": "一句话"}}, download="", bundled=False)["summary"] == {"zh": "一句话"}
     assert [tool["effects"] for tool in entry["tools"]] == ["none", "paid"]
 
 

@@ -94,6 +94,10 @@ CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, 
 #: 由某一个工具认领的能力(两类合起来):只能是进程插件、恰好一个工具认领。
 CLAIMED_CAPABILITIES = CATALOG_CAPABILITIES | CALL_CAPABILITIES
 
+#: 清单 `summary`(一句话说清这个插件是干嘛的)最长多少字。它排在卡片和详情页头上、名字下面,两行放得下;
+#: 写成一段介绍的话卡片只剩省略号,详情页头被撑成一大块 —— 长的介绍归第一条技能的 `description`。
+SUMMARY_MAX_CHARS = 140
+
 #: 素材入参的 `format`(宿主把素材换成暂存目录里的一份副本交给插件,见 backend 的 plugins/inputs)。
 ASSET_FORMAT = "asset"
 #: 素材入参上可选的 `x-audio`:宿主先把声音抽成 wav 再给 —— `original` 保留原采样率和声道(要进成片的:降噪、分离),
@@ -288,6 +292,14 @@ class Manifest:
     #: 这个插件装东西要从哪几个包生态拉(`pypi`、`npm`)。声明了,宿主就按这个连接的「下载源」把镜像地址
     #: 注入进程(变量名见 plugin_env.PACKAGE_SOURCE_ENV),连接设置里多一行可以覆盖的下拉。
     package_sources: list[str] = field(default_factory=list)
+    #: **一句话说清这个插件是干嘛的**(可以按语言分)。市场卡片、详情页头、安装确认都先摆它;长的介绍是
+    #: `description`(第一条技能的说明),在详情里折起来,点开才看全。不写就是空串,界面只摆介绍。
+    summary: str = ""
+
+    @property
+    def description(self) -> str:
+        """给人看的完整介绍:第一条技能的说明。市场索引、插件页和官网取的是同一个来源。"""
+        return str(self.skills[0].get("description") or "") if self.skills else ""
 
     def tool_providing(self, capability: str) -> str:
         """清单里**声明自己负责** `capability` 的那个工具名(工具声明上的 `provides`);没有就是空串。
@@ -588,7 +600,18 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
         oauth=oauth_spec(instance.get("oauth")),
         package_sources=_package_sources(raw.get("package_sources"), path),
+        summary=_summary(raw.get("summary"), path, pick),
     )
+
+
+def _summary(raw: Any, path: str, pick: Callable[[Any], str]) -> str:
+    """`summary`:一句话,**每种语言都不超过** SUMMARY_MAX_CHARS 个字。只查挑出来的那一种的话,另一种写成一大段
+    也装得上 —— 换个界面语言才露馅。"""
+    variants = list(raw.values()) if isinstance(raw, dict) else [raw]
+    for one in variants:
+        if len(str(one or "").strip()) > SUMMARY_MAX_CHARS:
+            raise ManifestError("pluginErr_manifestSummaryTooLong", path=path, max=SUMMARY_MAX_CHARS)
+    return pick(raw).strip()
 
 
 def _package_sources(raw: Any, path: str) -> list[str]:

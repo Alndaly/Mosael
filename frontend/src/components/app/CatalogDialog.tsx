@@ -364,22 +364,28 @@ export function CatalogDetail({
   );
 }
 
-/** 详情页里的一节:小标题 + 内容。 */
+/** 详情页里的一节:小标题 + 内容。`action` 摆在标题行右端(「展开」「全部 8 个」这类只作用于这一节的开关)。 */
 export function CatalogSection({
   title,
   count,
+  action,
   children,
 }: {
   title: string;
   count?: number;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid min-w-0 gap-3">
-      <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
-        {title}
-        {count !== undefined && <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{count}</span>}
-      </h4>
+    // 读屏念这一节叫什么:只念标题,不连着后面的数量
+    <section aria-label={title} className="grid min-w-0 gap-3">
+      <div className="flex min-h-6 min-w-0 items-center justify-between gap-2">
+        <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
+          {title}
+          {count !== undefined && <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{count}</span>}
+        </h4>
+        {action}
+      </div>
       {children}
     </section>
   );

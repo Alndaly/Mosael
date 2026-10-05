@@ -2,8 +2,12 @@
   "id": "dev.mosael.tikhub",
   "manifest_version": 6,
   "name": "TikHub",
+  "summary": {
+    "zh": "读抖音、TikTok、小红书、B站、快手等平台的公开数据,做选题和对标分析。",
+    "en": "Read public data from Douyin, TikTok, Xiaohongshu, Bilibili, Kuaishou and more, for topic and competitor research."
+  },
   "default_locale": "zh",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "homepage": "https://docs.tikhub.io/",
   "author": {
     "name": "Mosael",

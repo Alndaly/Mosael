@@ -5,8 +5,12 @@
     "zh": "MinerU 文档解析",
     "en": "MinerU document parsing"
   },
+  "summary": {
+    "zh": "用 MinerU 把 PDF、Office 文档和图片解析成 Markdown,扫描件和复杂排版也认得准。",
+    "en": "Parse PDFs, Office files and images into Markdown with MinerU, accurate even on scans and complex layouts."
+  },
   "default_locale": "zh",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"

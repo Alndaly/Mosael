@@ -333,7 +333,8 @@ Mosael 会调这个工具两种操作 —— `models`(这个连接有哪些模�
 `<https://…>` 这种写法在 GitHub 上没问题，写成 `[链接](https://…)` 更保险。
 
 插件清单里还可以写 `author`（名字和链接，名字可以按语言写）和 `docs`（使用文档的地址）：插件页和市场里看得到是谁写的，「文档」直接跳到
-你那一页，而不是通用的插件指南。
+你那一页，而不是通用的插件指南。再写一句 `summary`（一句话说清它是干嘛的，纯文字、可以按语言写，140 字以内）：市场卡片、
+插件的页头和安装确认先摆它；长的介绍还是第一条技能的 `description`，在详情里折起来，点「展开」看全。
 
 ## 发出去
 
@@ -342,7 +343,7 @@ Mosael 会调这个工具两种操作 —— `models`(这个连接有哪些模�
 ```json
 {"plugins": [{
   "id": "dev.yourname.my-plugin", "name": "我的插件", "version": "0.1.0",
-  "description": "……", "author": "你", "homepage": "https://…",
+  "summary": "一句话", "description": "……", "author": "你", "homepage": "https://…",
   "download": "https://…/my-plugin.zip",
   "permissions": []
 }]}

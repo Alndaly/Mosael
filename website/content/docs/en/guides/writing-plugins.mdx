@@ -369,7 +369,9 @@ the repo), but **don't point at files that don't exist**; and while `<https://�
 GitHub, `[link](https://…)` is safer here.
 
 The manifest can also carry `author` (a name, per language if you like, and a link) and `docs` (your usage docs' address): the Plugins
-page and the market show who wrote it, and **Docs** opens your page instead of the generic plugin guide.
+page and the market show who wrote it, and **Docs** opens your page instead of the generic plugin guide. Add a `summary` too — one
+plain-text sentence saying what it is for, per language if you like, up to 140 characters: market cards, the plugin's header and the install
+confirmation lead with it, while the longer introduction stays in the first skill's `description`, folded in the detail page behind **Show more**.
 
 ## Shipping it
 
@@ -378,7 +380,7 @@ The market index is plain JSON that anyone can host — including on a company i
 ```json
 {"plugins": [{
   "id": "dev.yourname.my-plugin", "name": "My plugin", "version": "0.1.0",
-  "description": "…", "author": "You", "homepage": "https://…",
+  "summary": "One line", "description": "…", "author": "You", "homepage": "https://…",
   "download": "https://…/my-plugin.zip",
   "permissions": []
 }]}

@@ -5,8 +5,12 @@
     "zh": "百度网盘",
     "en": "Baidu Netdisk"
   },
+  "summary": {
+    "zh": "在百度网盘和素材库之间搬文件:从网盘导入,或把素材存到网盘。",
+    "en": "Move files between Baidu Netdisk and the asset library: import from the netdisk, or save assets to it."
+  },
   "default_locale": "zh",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "homepage": "https://pan.baidu.com/union/doc/",
   "author": {
     "name": "Mosael",

@@ -158,10 +158,27 @@ class PluginOAuthOut(ApiModel):
     fills: list[str] = Field(default_factory=list)
 
 
+class PluginMarketTool(ApiModel):
+    """市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"""
+
+    name: str
+    label: str = ""
+    #: 作者写的说明,**可能带 markdown**(`**公网直链**`)—— 界面负责渲染,不在这里剥。
+    description: str = ""
+    #: 后果(见 domain/effects),由清单算出来。老索引里没有这一项就是空串 —— 不猜,界面不标。
+    effects: str = ""
+
+
 class PluginPackageOut(ApiModel):
     id: str
     name: str
     version: str
+    #: 一句话说清它是干嘛的(清单的 `summary`,已按看的人的语言挑好)。空 = 作者没写。
+    summary: str = ""
+    #: 完整介绍(第一条技能的说明,可能带行内 markdown)。插件页「关于」里折起来摆。
+    description: str = ""
+    #: 清单里声明的工具(名字、显示名、说明、后果),和市场条目同一个形状。MCP 插件的工具由服务报,这里是空的。
+    tools: list[PluginMarketTool] = Field(default_factory=list)
     kind: str = "process"  # process | mcp
     multiple: bool = False
     permissions: list[str] = Field(default_factory=list)
@@ -184,22 +201,13 @@ class PluginPackageOut(ApiModel):
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 
-class PluginMarketTool(ApiModel):
-    """市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"""
-
-    name: str
-    label: str = ""
-    #: 作者写的说明,**可能带 markdown**(`**公网直链**`)—— 界面负责渲染,不在这里剥。
-    description: str = ""
-    #: 后果(见 domain/effects),由清单算出来。老索引里没有这一项就是空串 —— 不猜,界面不标。
-    effects: str = ""
-
-
 class PluginMarketEntry(ApiModel):
     """市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"""
 
     id: str
     name: str = ""
+    #: 一句话说清它是干嘛的(索引里的 `summary`)。老索引没有这一项就是空串,界面只摆 description。
+    summary: str = ""
     description: str = ""
     version: str = ""
     author: str = ""
@@ -259,6 +267,7 @@ class PluginInstallPreview(ApiModel):
     id: str
     name: str = ""
     version: str = ""
+    summary: str = ""
     description: str = ""
     permissions: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)

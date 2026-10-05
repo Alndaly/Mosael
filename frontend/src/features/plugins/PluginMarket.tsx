@@ -1,35 +1,37 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, Check, Download, ExternalLink, Link2, Package, Search, ShieldAlert, ShieldCheck, Store, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, Download, Link2, Settings2, ShieldAlert, ShieldCheck, Search, Store, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import {
-  CatalogBadge,
-  CatalogCard,
-  CatalogDetail,
-  CatalogDialog,
-  CatalogFact,
-  CatalogSection,
-} from "@/components/app/CatalogDialog";
+import { CatalogCard, CatalogDialog, CatalogFact } from "@/components/app/CatalogDialog";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Truncate } from "@/components/ui/truncate";
-import { describePermission } from "@/features/plugins/pluginPermissions";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
-import { CapabilityUseList } from "@/components/settings/CapabilityUseList";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
+import {
+  DocsButton,
+  HeroNote,
+  HintedFact,
+  MoreActions,
+  PermissionGroups,
+  PluginHero,
+  PluginOverview,
+  PluginStatusBadge,
+  docsOf,
+  profileOfMarket,
+  profileOfPreview,
+  statusOfMarket,
+  type PluginStatus,
+} from "@/features/plugins/PluginProfile";
 import { isImeKeystroke } from "@/lib/shortcuts";
-import { cn } from "@/lib/utils";
 
 type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>["plugins"][number];
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
@@ -37,22 +39,6 @@ type Filter = "all" | "installed" | "updates";
 /** 从哪个地址装,以及市场给这一条写的版本(从链接装时为空)。后者让后端认得出「许的新版还没发布」。 */
 /** `sha256`:索引给这个包写的摘要(发版索引里有),后端下载后照它核对;从链接装时为空。 */
 type PickTarget = { url: string; advertised: string; sha256?: string };
-
-/**
- * 一条市场条目此刻**要人做什么**。装过 ≠ 有新版;内置的另算一态 —— 它跟着应用装、跟着应用
- * 更新,这里什么都不用做(也做不了:没有下载地址,卸了下次启动又会装回来)。
- *
- * **有没有新版由后端说(`update_available`)**,这里不拿两个版本字符串比。此前是「不相等就是有新版」:
- * 索引许 0.2.0、下载给的还是 0.1.0 时,「更新」装回同一版,提示永远不消失;装着的比索引新也被说成
- * 有新版。后端按语义化版本比先后,并记着「点过更新、包里并不更新」的那几条(见 domain/plugins/updates)。
- */
-type Stance = "install" | "update" | "current" | "bundled";
-
-function stanceOf(entry: MarketEntry): Stance {
-  if (entry.bundled) return "bundled";
-  if (!entry.installed) return "install";
-  return entry.update_available ? "update" : "current";
-}
 
 /** 从市场里的这一条装:带上它许的版本。 */
 function pickOf(entry: MarketEntry): PickTarget {
@@ -80,13 +66,8 @@ const ANY_CAPABILITY = "__any__";
 
 function passes(entry: MarketEntry, filter: Filter): boolean {
   if (filter === "installed") return Boolean(entry.installed);
-  if (filter === "updates") return stanceOf(entry) === "update";
+  if (filter === "updates") return statusOfMarket(entry) === "update";
   return true;
-}
-
-/** 卡片和详情左上角的字标:名字的第一个字。插件没有自己的图标,编一个不如不编。 */
-function monogram(entry: MarketEntry): string {
-  return (Array.from((entry.name || entry.id).trim())[0] ?? "?").toUpperCase();
 }
 
 /**
@@ -96,8 +77,8 @@ function monogram(entry: MarketEntry): string {
  * 把包下下来读一遍清单,把它声明的权限和会带来的工具摊开给人看,确认了才真的落地。
  * 那份清单在包里面,不下下来看不到,所以这一步省不掉。
  *
- * 版式归共用的目录弹窗(components/app/CatalogDialog):卡片网格 → 点开一页详情。这里只管
- * 市场自己的事:三态(装 / 更新 / 已是最新)、权限的说法、装与卸。
+ * 版式归共用的目录弹窗(components/app/CatalogDialog):卡片网格 → 点开一页详情。详情和安装确认的页头、概览
+ * 和插件页上装好的那一个是同一套(PluginProfile)。这里只管市场自己的事:装 / 更新 / 管理、装与卸。
  *
  * **「从链接安装」收进一个按钮。** 它是逃生口:装一个来路不明的 zip,是这里风险最高的一件事,
  * 不该和搜索抢那一行的主位。
@@ -108,6 +89,7 @@ export function PluginMarketDialog({
   onChanged,
   focusId,
   capability: wantedCapability,
+  onManage,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -117,6 +99,8 @@ export function PluginMarketDialog({
   focusId?: string | null;
   /** 打开时只看能做这件事的插件(设置「能力提供方」里的「去插件市场找」)。 */
   capability?: string | null;
+  /** 装着的插件详情里的「管理」:关掉市场,在插件页打开它(新建连接在那儿)。不给就不画这颗按钮。 */
+  onManage?: (pluginId: string) => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -323,6 +307,7 @@ export function PluginMarketDialog({
           busy={busyWith(entry)}
           onPick={() => preview.mutate(pickOf(entry))}
           onUninstall={() => setRemoving(entry)}
+          onManage={onManage ? () => onManage(entry.id) : undefined}
         />
       )}
     >
@@ -402,24 +387,14 @@ function InstallFromUrl({
 /** 装 / 更新那颗按钮。已是最新、或是内置的时候**不画**:一个永远按不下去的按钮占着最显眼的位置,什么都不做。 */
 function PickButton({ entry, busy, onPick, size }: { entry: MarketEntry; busy: boolean; onPick: () => void; size?: "sm" }) {
   const t = useI18n();
-  const stance = stanceOf(entry);
-  if (stance === "current" || stance === "bundled") return null;
+  const status = statusOfMarket(entry);
+  if (status !== "available" && status !== "update") return null;
   return (
     <Button size={size} disabled={!entry.download} loading={busy} onClick={onPick}>
       <Download />
-      {stance === "update" ? t("pluginUpdate") : t("pluginInstall")}
+      {status === "update" ? t("pluginUpdate") : t("pluginInstall")}
     </Button>
   );
-}
-
-/** 状态用**标记**说,不藏在版本号那行小字里 ——「已装 v0.3.0」混在里面读不出来"这条我已经有了"。 */
-function StanceBadge({ entry }: { entry: MarketEntry }) {
-  const t = useI18n();
-  const stance = stanceOf(entry);
-  if (stance === "bundled") return <CatalogBadge tone="primary" icon={<Package />}>{t("pluginMarketBundledBadge")}</CatalogBadge>;
-  if (stance === "update") return <CatalogBadge tone="warning">{t("pluginMarketHasUpdate")}</CatalogBadge>;
-  if (stance === "current") return <CatalogBadge tone="success" icon={<Check />}>{t("pluginMarketInstalledBadge")}</CatalogBadge>;
-  return null;
 }
 
 function MarketCard({
@@ -436,15 +411,17 @@ function MarketCard({
   const t = useI18n();
   const perms = entry.permissions ?? [];
   const tools = entry.tools ?? [];
+  const status = statusOfMarket(entry);
   return (
     <CatalogCard
       id={entry.id}
-      icon={monogram(entry)}
+      icon={(Array.from((entry.name || entry.id).trim())[0] ?? "?").toUpperCase()}
       title={entry.name || entry.id}
       meta={[`v${entry.version}`, entry.author].filter(Boolean).join(" · ")}
-      badge={<StanceBadge entry={entry} />}
-      //: 说明是 markdown(`**公网直链**`)—— 卡片只放得下三行,摊平成纯文本,不起渲染器。
-      summary={toPlainText(entry.description ?? "")}
+      //: 卡片上「未安装」不标:那一张卡的「安装」按钮已经在说这件事,每张都挂一枚灰标记只是噪音。
+      badge={status === "available" ? undefined : <PluginStatusBadge status={status} />}
+      //: 先摆一句话简介;老索引没有就摆介绍 —— 介绍是 markdown(`**公网直链**`),卡片只放得下三行,摊平成纯文本。
+      summary={entry.summary || toPlainText(entry.description ?? "")}
       facts={
         <>
           {/* 权限是决定装不装的那条信息,所以卡片上就给个数;「无权限」也要说出来 ——
@@ -471,223 +448,73 @@ function MarketCard({
   );
 }
 
-/** 详情里「键:值」的一行。放在一个两列的 `<dl>` 里:键那一列按最长的键定宽,值不被挤成两行。 */
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="m-0 min-w-0 break-words text-foreground">{children}</dd>
-    </>
-  );
-}
-
-/** 链接只显示域名:整条 URL 在一栏 280px 的侧栏里只会折成三行。解析不了就原样给。 */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
-function ExternalAnchor({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-primary hover:underline">
-      {children}
-      <ExternalLink size={11} aria-hidden />
-    </a>
-  );
-}
-
+/**
+ * 市场里一个插件的详情(版式见 PluginProfile):页头是它是谁、此刻对这台机器是什么、能做的事;下面是概览。
+ *
+ * 操作按状态给:没装的「安装」,有新版的「更新」;装着的(含内置)「管理」—— 关掉市场、在插件页打开它,
+ * 新建连接就在那儿。卸载收进 ⋯。内置插件不给装 / 更新 / 卸载:它跟着应用走(后端也拒),
+ * 这件事是页头状态旁边的一条事实「随 Mosael 更新」,全句悬停看。
+ */
 function MarketDetail({
   entry,
   busy,
   onPick,
   onUninstall,
+  onManage,
 }: {
   entry: MarketEntry;
   busy: boolean;
   onPick: () => void;
   onUninstall: () => void;
+  onManage?: () => void;
 }) {
   const t = useI18n();
-  const stance = stanceOf(entry);
-  const perms = entry.permissions ?? [];
-  const tools = entry.tools ?? [];
-  const { termOf } = useCapabilityTerms();
-  const provides = entry.provides ?? [];
-  const docs = entry.docs || entry.homepage;
-
+  const status: PluginStatus = statusOfMarket(entry);
+  const profile = profileOfMarket(entry);
+  const docs = docsOf(profile);
+  const installed = status === "installed" || status === "bundled";
   return (
-    <CatalogDetail
-      icon={monogram(entry)}
-      title={entry.name || entry.id}
-      badges={stance === "install" ? undefined : <StanceBadge entry={entry} />}
-      meta={
-        <>
-          v{entry.version}
-          {entry.author && ` · ${entry.author}`}
-          {stance === "update" && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
-          {stance === "current" && ` · ${t("pluginUpToDate")}`}
-        </>
-      }
-      actions={
-        <>
-          {/* **装之前就该能读文档。** "它到底怎么用、凭据去哪儿申请"只有作者说得清 —— 而那正是
-              决定装不装的最后一问。优先插件自己的使用文档(docs),没写才退到主页。 */}
-          {docs && (
-            <Button variant="outline" asChild>
-              <a href={docs} target="_blank" rel="noreferrer noopener">
-                <BookOpen />
-                {t("pluginDocs")}
-              </a>
-            </Button>
-          )}
-          {/* 内置的卸不掉(后端也拒):卸了下次启动又会装回来。 */}
-          {entry.installed && stance !== "bundled" && (
-            <Button variant="outline" onClick={onUninstall}>
-              <Trash2 />
-              {t("pluginUninstall")}
-            </Button>
-          )}
-          <PickButton entry={entry} busy={busy} onPick={onPick} />
-        </>
-      }
-      aside={
-        <>
-          <CatalogSection title={t("pluginMarketPermissions")} count={perms.length || undefined}>
-            {perms.length === 0 ? (
-              <p className="m-0 inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-                <ShieldCheck size={13} className="shrink-0 text-success" aria-hidden />
-                {t("pluginInstallNoPerms")}
-              </p>
-            ) : (
-              <PermissionList permissions={perms} />
+    <article className="grid min-w-0 gap-6 pb-2">
+      <PluginHero
+        profile={profile}
+        status={status}
+        className="border-b border-divider pb-6"
+        facts={[
+          status === "update" && entry.installed_version ? (
+            <span key="installed" className="tabular-nums">{t("pluginInstalled").replace("{v}", entry.installed_version)}</span>
+          ) : null,
+          status === "bundled" ? (
+            <HintedFact key="bundled" hint={t("pluginBundledHint")}>{t("pluginBundledFact")}</HintedFact>
+          ) : null,
+        ]}
+        //: 市场许了更新的版本,但点过「更新」、下下来的包并不更新:说清楚为什么这里没有「更新」。
+        note={entry.update_unreleased && status === "installed" ? <HeroNote>{t("pluginUpdateNotReleased")}</HeroNote> : undefined}
+        actions={
+          <>
+            <PickButton entry={entry} busy={busy} onPick={onPick} />
+            {installed && onManage && (
+              <Button onClick={onManage}>
+                <Settings2 />
+                {t("pluginManage")}
+              </Button>
             )}
-          </CatalogSection>
-          <CatalogSection title={t("pluginMarketInfo")}>
-            <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-ui-xs">
-              <InfoRow label={t("pluginMarketVersion")}>v{entry.version}</InfoRow>
-              {entry.installed && entry.installed_version && stance !== "bundled" && (
-                <InfoRow label={t("pluginMarketInstalledVersion")}>v{entry.installed_version}</InfoRow>
-              )}
-              {entry.author && (
-                <InfoRow label={t("pluginMarketAuthor")}>
-                  {entry.author_url ? <ExternalAnchor href={entry.author_url}>{entry.author}</ExternalAnchor> : entry.author}
-                </InfoRow>
-              )}
-              <InfoRow label={t("pluginMarketRuntime")}>
-                {entry.runtime === "mcp" ? t("pluginMarketRuntimeMcp") : t("pluginMarketRuntimeProcess")}
-              </InfoRow>
-              <InfoRow label={t("pluginMarketId")}>
-                <span className="timecode break-all">{entry.id}</span>
-              </InfoRow>
-              {entry.homepage && entry.homepage !== docs && (
-                <InfoRow label={t("pluginMarketHomepage")}>
-                  <ExternalAnchor href={entry.homepage}>{hostOf(entry.homepage)}</ExternalAnchor>
-                </InfoRow>
-              )}
-            </dl>
-          </CatalogSection>
-        </>
-      }
-    >
-      {stance === "bundled" && (
-        <Alert role="note">
-          <Package size={14} aria-hidden />
-          <AlertDescription>{t("pluginMarketBundledNote")}</AlertDescription>
-        </Alert>
-      )}
-      {/* 市场许了更新的版本,但点过「更新」、下下来的包并不更新:说清楚为什么这里没有「更新」。 */}
-      {entry.update_unreleased && stance === "current" && (
-        <Alert role="note">
-          <AlertTriangle size={14} aria-hidden />
-          <AlertDescription>{t("pluginUpdateNotReleased")}</AlertDescription>
-        </Alert>
-      )}
-      {entry.description && (
-        <CatalogSection title={t("pluginMarketAbout")}>
-          {/* 说明是一段话,只带行内记号 —— 走行内渲染器,不起块级的 Streamdown。 */}
-          <p className="m-0 text-ui-sm leading-relaxed text-foreground">
-            <InlineMarkdown text={entry.description} />
-          </p>
-        </CatalogSection>
-      )}
-      {provides.length > 0 && (
-        <CatalogSection title={t("pluginMarketProvides")}>
-          {/* 每一项:它叫什么,装上之后出现在哪(后端从能力表现算,ADR 0032 §4)。 */}
-          <ul data-market-provides="" className="m-0 grid list-none gap-3 p-0 text-ui-sm text-foreground">
-            {provides.map((one) => {
-              const term = termOf(one);
-              return (
-                <li key={one} data-provides={one} className="grid gap-1.5">
-                  <span className="flex items-center gap-2 font-medium">
-                    <Check size={14} className="shrink-0 text-success" aria-hidden />
-                    {term?.label ?? one}
-                  </span>
-                  {(term?.used_by ?? []).length > 0 && <CapabilityUseList uses={term?.used_by ?? []} label={t("capabilityUsedBy")} />}
-                </li>
-              );
-            })}
-          </ul>
-        </CatalogSection>
-      )}
-      <CatalogSection title={t("pluginMarketTools")} count={tools.length || undefined}>
-        {tools.length > 0 ? (
-          <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-2 p-0">
-            {tools.map((tool) => (
-              <li key={tool.name} className="grid min-w-0 content-start gap-1 rounded-lg border border-border bg-panel-subtle px-3 py-2.5">
-                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                  <strong className="text-ui-sm font-semibold text-foreground">{tool.label || tool.name}</strong>
-                  {tool.label && <code className="timecode text-ui-2xs text-muted-foreground">{tool.name}</code>}
-                  <ToolEffectBadge effects={tool.effects} />
-                </span>
-                {tool.description && (
-                  <Truncate lines={3} className="text-ui-xs leading-relaxed text-muted-foreground">
-                    <InlineMarkdown text={tool.description} />
-                  </Truncate>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
-            {entry.runtime === "mcp" ? t("pluginMarketMcpToolsBody") : t("pluginMarketNoTools")}
-          </p>
-        )}
-      </CatalogSection>
-    </CatalogDetail>
+            {docs && <DocsButton href={docs} />}
+            {/* 内置的卸不掉(后端也拒):卸了下次启动又会装回来。 */}
+            {entry.installed && status !== "bundled" && (
+              <MoreActions actions={[{ label: t("pluginUninstall"), icon: <Trash2 />, destructive: true, onSelect: onUninstall }]} />
+            )}
+          </>
+        }
+      />
+      <PluginOverview profile={profile} />
+    </article>
   );
 }
 
 /**
- * 权限卡里「标题行」和「每一条」共用的两栏:图标一栏、文字一栏。此前标题行是 flex + gap-1.5、
- * 条目是 14px 栏 + gap-2,两处文字的左边差了几像素,看着像没对齐。
+ * 装之前的最后一眼:它是谁(和详情页同一个页头,小一号)、要什么权限(按种类分组说人话)、会带来哪些工具。
+ * 权限用醒目的形状说 —— 这是这张卡存在的理由。「文档」在左下角:决定装不装的最后一问往往是「它怎么用」。
  */
-const PERMISSION_ROW = "grid grid-cols-[14px_minmax(0,1fr)] items-start gap-2";
-
-/** 权限:先说人话,码在旁边小字留着 —— 那是和插件作者、和权限设置页对得上的唯一凭据。 */
-function PermissionList({ permissions }: { permissions: string[] }) {
-  const t = useI18n();
-  return (
-    <ul className="m-0 grid list-none gap-2.5 p-0">
-      {permissions.map((one) => {
-        const said = describePermission(t, one);
-        return (
-          <li key={one} className={cn(PERMISSION_ROW, "text-ui-xs")}>
-            <ShieldAlert size={13} className="mt-0.5 text-warning" aria-hidden />
-            <span className="grid min-w-0 gap-0.5">
-              {said && <span className="text-foreground">{said}</span>}
-              <code className={said ? "timecode text-ui-2xs text-muted-foreground" : "timecode text-foreground"}>{one}</code>
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** 装之前的最后一眼:它是谁、要什么权限、带来哪些工具。权限先说,而且用醒目的形状说 —— 这是这张卡存在的理由。 */
 function InstallConfirm({
   preview,
   advertised,
@@ -703,16 +530,18 @@ function InstallConfirm({
   onConfirm: () => void;
 }) {
   const t = useI18n();
-  const perms = preview.permissions ?? [];
-  const toolNames = preview.tools ?? [];
+  const profile = profileOfPreview(preview);
+  const perms = profile.permissions;
+  const docs = docsOf(profile);
   return (
     <ModalShell
       open
       onOpenChange={(next) => !next && onCancel()}
-      title={t("pluginInstallConfirmTitle")}
-      className="w-[min(480px,calc(100vw-32px))]"
+      title={preview.installed ? t("pluginUpdateConfirmTitle") : t("pluginInstallConfirmTitle")}
+      className="w-[min(520px,calc(100vw-32px))]"
       footer={
         <>
+          {docs && <DocsButton href={docs} variant="ghost" className="sm:mr-auto" />}
           <Button variant="outline" onClick={onCancel}>{t("cancel")}</Button>
           <Button loading={installing} onClick={onConfirm}>
             {preview.installed ? t("pluginUpdate") : t("pluginInstall")}
@@ -720,69 +549,52 @@ function InstallConfirm({
         </>
       }
     >
-      <div className="grid gap-3 text-ui-sm">
-        <div className="flex flex-wrap items-baseline gap-x-1.5">
-          <strong className="text-ui-md font-semibold">{preview.name || preview.id}</strong>
-          <small className="text-ui-xs text-muted-foreground">v{preview.version}</small>
-          {preview.author_name && (
-            <small className="text-ui-xs text-muted-foreground">
-              · {t("pluginAuthor")}{" "}
-              {preview.author_url ? (
-                <a href={preview.author_url} target="_blank" rel="noreferrer noopener" className="hover:underline">
-                  {preview.author_name}
-                </a>
-              ) : (
-                preview.author_name
-              )}
-            </small>
-          )}
-          {(preview.docs || preview.homepage) && (
-            <a
-              href={preview.docs || preview.homepage}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-0.5 text-ui-xs text-primary hover:underline"
-            >
-              <BookOpen size={11} />
-              {t("pluginDocs")}
-            </a>
-          )}
-        </div>
-        {preview.description && (
-          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground"><InlineMarkdown text={preview.description} /></p>
-        )}
+      <div className="grid gap-5 text-ui-sm">
+        <PluginHero profile={profile} compact />
         {/* 标题和列表之间比条目之间宽一档 —— 否则标题像是列表的第一条。 */}
-        <div className="grid gap-3 rounded-lg border border-border bg-panel-subtle p-3.5">
-          <span className={cn(PERMISSION_ROW, "text-ui-xs font-semibold text-foreground")}>
-            <ShieldAlert size={13} className="mt-0.5" aria-hidden />
-            {perms.length > 0 ? t("pluginInstallDeclaredPerms") : t("pluginInstallNoPerms")}
-          </span>
-          {perms.length > 0 && <PermissionList permissions={perms} />}
-        </div>
-        {toolNames.length > 0 && (
-          <div className="grid gap-2 text-ui-xs">
-            <span className="font-semibold text-foreground">{t("pluginInstallTools")}</span>
+        <section aria-label={t("pluginMarketPermissions")} className="grid gap-3 rounded-lg border border-border bg-panel-subtle p-3.5">
+          {perms.length > 0 ? (
+            <>
+              <h4 className="m-0 flex items-center gap-1.5 text-ui-xs font-semibold text-foreground">
+                <ShieldAlert size={14} className="text-warning" aria-hidden />
+                {t("pluginInstallDeclaredPerms")}
+              </h4>
+              <PermissionGroups permissions={perms} />
+            </>
+          ) : (
+            <PermissionGroups permissions={perms} />
+          )}
+        </section>
+        {profile.tools.length > 0 && (
+          <section aria-label={t("pluginInstallTools")} className="grid gap-2 text-ui-xs">
+            <h4 className="m-0 flex items-center gap-1.5 font-semibold text-foreground">
+              {t("pluginInstallTools")}
+              <span className="font-normal tabular-nums text-muted-foreground">{profile.tools.length}</span>
+            </h4>
             {/* 一个工具一枚:此前是一串用 · 连起来的等宽字,长了只能硬折行,分不清哪到哪是一个。 */}
             <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-              {toolNames.map((name) => (
-                <li key={name} className="timecode rounded-md border border-border bg-panel-subtle px-2 py-0.5 text-ui-2xs text-muted-foreground">
-                  {name}
+              {profile.tools.map((tool) => (
+                <li key={tool.name} className="timecode rounded-md bg-secondary px-2 py-0.5 text-ui-2xs text-muted-foreground">
+                  {tool.name}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
-        {advertised && preview.version && advertised !== preview.version && (
-          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
-            {t("pluginInstallVersionDiffers").replace("{listed}", advertised).replace("{actual}", preview.version)}
-          </p>
-        )}
-        {preview.installed && (
-          <p className="m-0 text-ui-xs leading-[1.55] text-warning">
-            {t("pluginInstallOverwrite").replace("{v}", preview.installed_version)}
-          </p>
-        )}
-        <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("pluginInstallWarning")}</p>
+        <div className="grid gap-1.5">
+          {advertised && preview.version && advertised !== preview.version && (
+            <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
+              {t("pluginInstallVersionDiffers").replace("{listed}", advertised).replace("{actual}", preview.version)}
+            </p>
+          )}
+          {preview.installed && (
+            <p className="m-0 flex items-start gap-1.5 text-ui-xs leading-[1.55] text-warning">
+              <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
+              {t("pluginInstallOverwrite").replace("{v}", preview.installed_version)}
+            </p>
+          )}
+          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("pluginInstallWarning")}</p>
+        </div>
       </div>
     </ModalShell>
   );

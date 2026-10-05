@@ -14,6 +14,11 @@ export type CapabilityUse = components["schemas"]["CapabilityUseOut"];
 
 const USE_ICON = { app: LayoutGrid, workflow: Workflow, agent: Bot } as const;
 
+/** 「用在哪」一条的图标:宿主界面上的入口、工作流节点的字段、智能体工具。插件详情里的能力清单也照它画。 */
+export function capabilityUseIcon(kind: string) {
+  return USE_ICON[kind as keyof typeof USE_ICON] ?? LayoutGrid;
+}
+
 export function CapabilityUseList({ uses, label }: { uses: CapabilityUse[]; label?: string }) {
   return (
     //: 标签钉在左边一列,标签组在右边自己换行 —— 条目一多,「用在哪」不会被挤到单独一行。
@@ -21,7 +26,7 @@ export function CapabilityUseList({ uses, label }: { uses: CapabilityUse[]; labe
       {label && <span className="shrink-0 text-ui-xs leading-6 text-muted-foreground">{label}</span>}
       <ul data-capability-uses="" className="m-0 flex min-w-0 flex-1 list-none flex-wrap gap-1.5 p-0">
         {uses.map((use) => {
-          const Icon = USE_ICON[use.kind as keyof typeof USE_ICON] ?? LayoutGrid;
+          const Icon = capabilityUseIcon(use.kind);
           return (
             <li
               key={`${use.kind}:${use.label}`}
