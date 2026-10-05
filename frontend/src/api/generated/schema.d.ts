@@ -6857,6 +6857,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Workflow Folder
+         * @description 在那台服务器的 workflows/ 里新建一个文件夹。已经有了回 409(带建议名)。
+         */
+        post: operations["create_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/folders/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Workflow Folder
+         * @description 文件夹改名 / 挪到别的文件夹里:里面的工作流跟着换路径。目标已经有了回 409(带建议名),不合并进去。
+         */
+        post: operations["rename_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_rename_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/folders/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trash Workflow Folder
+         * @description 删除一个文件夹:只删空的,挪进回收目录。里面还有文件回 409(`not_empty`,带着几个)。
+         */
+        post: operations["trash_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_trash_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/capabilities": {
         parameters: {
             query?: never;
@@ -16106,6 +16166,18 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** WorkflowFolderRenameRequest */
+        WorkflowFolderRenameRequest: {
+            /** Path */
+            path: string;
+            /** New Path */
+            new_path: string;
+        };
+        /** WorkflowFolderRequest */
+        WorkflowFolderRequest: {
+            /** Path */
+            path: string;
+        };
         /**
          * WorkflowFromPage
          * @description 内嵌浏览器顶栏「用当前页开工」:哪张分析模板、当前页的链接、当前视图对应的浏览器档案(没有就空着)。
@@ -16344,6 +16416,8 @@ export interface components {
         WorkflowLibraryOut: {
             /** Workflows */
             workflows?: components["schemas"]["WorkflowFileOut"][];
+            /** Folders */
+            folders?: string[];
             /** Others */
             others?: components["schemas"]["WorkflowOtherFileOut"][];
             /** Trash */
@@ -30778,6 +30852,111 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WorkflowRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowFolderRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trash_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_trash_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowFolderRequest"];
             };
         };
         responses: {

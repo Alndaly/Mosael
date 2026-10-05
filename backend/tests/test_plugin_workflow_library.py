@@ -89,6 +89,7 @@ elif op == "workflows":
             {"path": "sub/.hidden.json"},
             "not a dict",
         ],
+        "folders": ["空的/更深", "../evil", ".hidden", "x.json", 3, "a\\b"],
         "others": [{"path": "pack.zip", "reason": "这是一个压缩包"}],
         "trash": [{"path": ".mosael-trash/workflows/20261005-101500/old/one.json", "deleted_at": 1791000000.0},
                   {"path": ".mosael-trash/elsewhere/x.json"}],
@@ -172,6 +173,23 @@ elif op == "annotate":
         emit({"ok": True, "output": {"path": payload["path"], "modified": 1776098699.5}})
 elif op == "trash_workflow":
     emit({"ok": True, "output": {"path": ".mosael-trash/workflows/20261005-101500/" + payload["path"]}})
+elif op == "make_folder":
+    if payload["path"] == "taken":
+        emit({"ok": True, "output": {"conflict": True, "suggestion": "taken (1)"}})
+    elif payload["path"] == "odd":
+        emit({"ok": True, "output": {"conflict": True, "suggestion": "../odd"}})
+    else:
+        emit({"ok": True, "output": {"path": payload["path"]}})
+elif op == "rename_folder":
+    if payload["new_path"] == "taken":
+        emit({"ok": True, "output": {"conflict": True, "suggestion": "taken (1)"}})
+    else:
+        emit({"ok": True, "output": {"path": payload["new_path"]}})
+elif op == "trash_folder":
+    if payload["path"] == "full":
+        emit({"ok": True, "output": {"not_empty": True, "count": 3}})
+    else:
+        emit({"ok": True, "output": {"path": ".mosael-trash/workflows/20261005-101500/" + payload["path"]}})
 else:
     emit({"ok": False, "error": f"unknown op {op}"})
 '''
@@ -488,6 +506,64 @@ def test_删除是挪进回收目录_能恢复_改完马上重拉目录(library)
     assert clash.status_code == 409
     bad = client.post(f"{base}/restore", json={"path": ".mosael-trash/elsewhere/x.json"})
     assert bad.status_code == 422, "不是回收目录里的东西不让「恢复」"
+
+
+# --- 文件夹 ----------------------------------------------------------------------------
+
+
+def test_列出来带着文件夹树_空的也在_工作流所在的补上_名字不像样的丢掉(library) -> None:
+    client, instance_id = library
+    body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
+    assert body["folders"] == ["sub", "空的", "空的/更深"], "插件报的空文件夹连同上级;sub 是 sketch 所在的;跳出去的、隐藏的、像工作流的丢掉"
+
+
+def test_新建文件夹_名字先过一遍_撞名409带建议名_不重拉目录(library) -> None:
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    before = len([one for one in _ops() if one["op"] == "models"])
+    made = client.post(f"{base}/folders", json={"path": "人像/草稿"})
+    assert made.status_code == 200, made.text
+    assert made.json() == {"path": "人像/草稿"}
+    assert len([one for one in _ops() if one["op"] == "models"]) == before, "空文件夹什么模型都没变:不重拉"
+    clash = client.post(f"{base}/folders", json={"path": "taken"})
+    assert clash.status_code == 409 and clash.json()["detail"]["code"] == "exists"
+    assert clash.json()["detail"]["suggestion"] == "taken (1)"
+    odd = client.post(f"{base}/folders", json={"path": "odd"})
+    assert odd.status_code == 409 and odd.json()["detail"]["suggestion"] == "", "插件给的建议名不像样就不给"
+    for bad in ("../x", "a\\b", ".hidden", "a/.b", "a.json", "a//b", "a:b"):
+        response = client.post(f"{base}/folders", json={"path": bad})
+        assert response.status_code == 422, (bad, response.text)
+    assert [one["path"] for one in _ops() if one["op"] == "make_folder"] == ["人像/草稿", "taken", "odd"], \
+        "不合格的名字不交给插件"
+
+
+def test_文件夹改名_里面的工作流换了路径_重拉目录_不能挪进自己里面(library) -> None:
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    before = len([one for one in _ops() if one["op"] == "models"])
+    moved = client.post(f"{base}/folders/rename", json={"path": "sub", "new_path": "片子/草图"})
+    assert moved.status_code == 200 and moved.json() == {"path": "片子/草图"}
+    assert len([one for one in _ops() if one["op"] == "models"]) > before, "里面的工作流换了路径:生成目录马上重拉"
+    clash = client.post(f"{base}/folders/rename", json={"path": "sub", "new_path": "taken"})
+    assert clash.status_code == 409 and clash.json()["detail"]["suggestion"] == "taken (1)"
+    inside = client.post(f"{base}/folders/rename", json={"path": "sub", "new_path": "SUB/inner"})
+    assert inside.status_code == 422, "挪进它自己里面(不分大小写)"
+    same = client.post(f"{base}/folders/rename", json={"path": "sub", "new_path": "sub"})
+    assert same.json() == {"path": "sub"}
+    assert [(one["path"], one["new_path"]) for one in _ops() if one["op"] == "rename_folder"] == [
+        ("sub", "片子/草图"), ("sub", "taken")], "挪进自己里面、改成原名的不去插件"
+
+
+def test_删除文件夹_只删空的_不空回409带个数_空的挪进回收目录(library) -> None:
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    full = client.post(f"{base}/folders/trash", json={"path": "full"})
+    assert full.status_code == 409, full.text
+    detail = full.json()["detail"]
+    assert detail["code"] == "not_empty" and detail["count"] == 3 and "full" in detail["message"]
+    empty = client.post(f"{base}/folders/trash", json={"path": "空的"})
+    assert empty.status_code == 200 and empty.json() == {"path": ".mosael-trash/workflows/20261005-101500/空的"}
+    assert client.post(f"{base}/folders/trash", json={"path": "../x"}).status_code == 422
 
 
 # --- 应用表单(ADR 0038)---------------------------------------------------------------

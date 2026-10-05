@@ -271,10 +271,13 @@ appends them (skipping any already there).
 
 **Open workflow library** on the connection's title row looks just like the model library:
 
-- **The left column**: All, each subfolder (by count), and **Missing nodes or models** pinned at the bottom; once you have deleted
-  workflows in Mosael, a **Trash** as well.
+- **The left column**: All, then the **folder tree** of `workflows/` on that machine — the same folders as ComfyUI's own Workflows
+  sidebar, sorted by name, subfolders indented, each count including its subfolders; empty folders are listed too. **Missing nodes
+  or models** is pinned at the bottom, and once you have deleted workflows in Mosael, a **Trash** as well. Pick a folder to see just
+  it and what's below it; the search box then says "Search N workflows in “that folder”".
 - **The toolbar**: search (names, paths, missing node types, models used and input / output names all count), a kind filter
   (image / video / audio / can't be converted), sorting (name / date modified / node count), the three views, and **New** and **Import**.
+  They all work within the selected folder.
 - **Each card is a thumbnail of the workflow's node graph**, drawn from the node positions, links and groups in the workflow, nodes
   coloured by role (loading inputs, loading models, sampling, prompts, outputs…), bypassed ones faded; below it the name, kind,
   node count and how many node types and models are missing.
@@ -296,19 +299,49 @@ generation model), **Open in editor** and **More actions**.
 
 ![A workflow missing a node and models: the node graph on the left; the right column scrolled down a little — what you can tune, what it produces, models it uses (missing ones flagged), missing nodes (from Frame Tools, not installed, Install), missing models (one with a huggingface.co address, one without), and what in Mosael uses it](/media/screens/en/workflow-library-detail.png)
 
-**Changing files on that machine** is under **More actions**, always confirmed first and naming the server whose `workflows/`
-folder is being changed:
+**The context menu**: right-click a card (or a row in the list), click the **⋯** that appears in its corner on hover, or select it
+and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench, Open in editor | Edit app form… |
+Copy…, Rename…, Move to…, Export JSON | Copy path | Download missing models, Install missing nodes (only when something is missing;
+they open the details at that section) | Delete…. Items that can't be used right now are greyed out with the reason underneath
+(the web app has no workbench, a workflow that can't be converted has no app form to edit yet…). **More actions** in the details
+header has Copy, Rename, Move, Export, Copy path and Delete as well.
+
+**Changing files on that machine** is always confirmed first, naming the server whose `workflows/` folder is being changed:
 
 - **Copy… / Rename…**: the path may include subfolders, and `.json` is optional; a name that won't work (`..`, backslashes,
   `:*?"<>|`, a leading dot) is pointed out on the spot. If that server already has the name, **nothing is overwritten** and a
-  suggestion is offered. A copy gets a free name by default and you land on the new one.
+  suggestion is offered. A copy gets a free name by default; done from the details you land on the new one, done from the list
+  (context menu) you stay on the list.
+- **Move to…**: pick a folder (or the top of `workflows/`); the name stays. You can also drag a card onto a folder (or All) on
+  the left: dropping it opens the same confirmation with that folder already chosen. A workflow with the same name already there
+  is never overwritten — you get a suggestion; if something in Mosael uses the workflow, the confirmation says so, since after the
+  move it will say the model can't be found.
 - **Delete…**: not a real delete — the file moves into a trash folder on that machine (`.mosael-trash/workflows`), and the
   confirmation lists what in Mosael uses it (those will say the model can't be found when they run). Deleted ones are under
   **Trash** in the left column and can be restored, under a new name if the old place is taken. Mosael has no "empty trash" — to
   really delete them, remove that folder on the machine.
-- **Export JSON**: downloads to this computer without touching the server.
+- **Export JSON**: downloads to this computer without touching the server. **Copy path**: puts its path relative to `workflows/`
+  on the clipboard.
 
-After any change the workflow library, the generation models and the tool list refresh.
+**Folders**: **New folder** at the top of the left column creates one inside the selected folder (or at the top when none is
+selected); right-clicking a folder (or its **⋯** on hover, or Shift+F10) also offers New subfolder…, Rename… and Delete…. All of
+them are confirmed and go through ComfyUI's own API:
+
+- **New**: ComfyUI has no "make a folder" call, so Mosael writes a hidden placeholder file, `.mosael-folder`, into it (ComfyUI
+  creates the folder when it writes a file). ComfyUI's own sidebar only lists folders that hold a workflow, so an empty one shows
+  up there once something is moved in. An existing name (ignoring case) isn't created again; you get a suggestion.
+- **Rename**: changing the parent in the path moves it into another folder. The whole folder moves at once and the workflows in it
+  get new paths — the confirmation says how many, and which of them something in Mosael uses. An existing target is never merged
+  into (you get a suggestion), and a folder can't be moved into itself.
+- **Delete only empties**: while a folder still holds files (workflows, or something else copied in, like an archive) the menu item
+  is greyed out and says how many — move them out or delete them one by one first (each confirmed, each restorable from Trash).
+  An empty folder moves into the trash folder (ComfyUI's API can't delete folders, and Mosael never hard-deletes); nothing new
+  appears under Trash. Right before deleting, Mosael asks the machine again: if something was saved into the folder from ComfyUI
+  in the meantime, it isn't deleted and you're told how many files it now holds.
+
+After any change the workflow library, the generation models and the tool list refresh. Before each change the plugin checks the
+machine again: a workflow that's no longer there, a taken target, a folder that's no longer empty — each is reported as it is,
+nothing is forced, and the list is read again.
 
 **Open in editor**: the desktop app opens this ComfyUI's interface in the connection's own built-in browser and opens this
 workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved changes already open there are kept); the web

@@ -1196,6 +1196,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
         "results": ["17"]
       }
     }],
+    "folders": ["sub", "sub/草稿"],                                // 可选:workflows/ 里的子目录(相对 workflows/),空的也报
     "others": [{"path": "pack.zip", "reason": "给人看的一句:它为什么不是工作流"}],
     "trash": [{"path": ".mosael-trash/workflows/20261005-101500/sub/人像.json", "deleted_at": 1791000000.0}],
     "manager": {"version": "V4.2.1"},                             // 没有节点管理器给空串
@@ -1211,6 +1212,11 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   `{"op": "restore_workflow", "path"(回收目录里的), "new_path"}` → `{"path": "改完之后的路径"}`;**不许覆盖**:`new_path` 已经有了
   就回 `{"conflict": true, "suggestion": "人像 (1).json"}`(宿主翻成 409、界面要求换名)。复制要给副本换一个新的图 id;
 - `{"op": "trash_workflow", "path"}` → `{"path": "回收目录里的路径"}`:**不硬删**,挪进 `.mosael-trash/workflows/<YYYYMMDD-HHMMSS>/<原路径>`。
+- **文件夹**(工作流库左边那一列;`folders` 和工作流所在的目录宿主合在一起、补齐上级):
+  `{"op": "make_folder", "path"}`、`{"op": "rename_folder", "path", "new_path"}` → `{"path": "改完之后的文件夹"}`,已经有了回
+  `{"conflict": true, "suggestion": "草稿 (1)"}`(宿主翻成 409,不合并进去);`{"op": "trash_folder", "path"}` → `{"path": "回收目录里的路径"}`,
+  **只删空的**:里面还有文件回 `{"not_empty": true, "count": 3}`(宿主翻成 409 `not_empty`)。文件夹路径和工作流路径同一套分段规则,
+  不以 `.json` 结尾;宿主先查一遍,挪进自己里面的不交给插件。改名、删除之后宿主让目录重拉(里面的工作流换了路径),新建不拉。
 
 **应用表单**(ADR 0038 §2):作者从一张工作流全部能填的项里挑几项、起名、排序、收窄可选值、标哪个输出节点是结果,存进那张工作流
 自己的文件。`workflows` 里每一张可以带 `app`(上面那样):`status` 是 `none`(没有)/ `ok` / `unsupported`(版本不认识,带 `version`,

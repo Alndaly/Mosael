@@ -24,6 +24,9 @@
     {"op": "workflow", "path"}                          → 一张的原文
     {"op": "copy_workflow" | "rename_workflow" | "restore_workflow", "path", "new_path"} → 不覆盖,撞名回 conflict
     {"op": "trash_workflow", "path"}                    → 挪进回收目录(不硬删)
+    {"op": "make_folder", "path"}                       → 新建文件夹(写一个隐藏的占位文件;已有回 conflict)
+    {"op": "rename_folder", "path", "new_path"}         → 文件夹改名 / 挪走(整个目录一次挪;不覆盖)
+    {"op": "trash_folder", "path"}                      → 删除文件夹:只删空的,挪进回收目录;里面还有文件回 not_empty
     {"op": "app", "path"}                               → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、改动时间
     {"op": "app", "content"}                            → 同上,读的是工作台画布上现在这张(不读文件,没有改动时间)
     {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
@@ -106,6 +109,9 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "rename_workflow": workflow_library.rename_workflow,
     "trash_workflow": workflow_library.trash_workflow,
     "restore_workflow": workflow_library.restore_workflow,
+    "make_folder": workflow_library.make_folder,
+    "rename_folder": workflow_library.rename_folder,
+    "trash_folder": workflow_library.trash_folder,
     "app": workflow_library.app,
     "annotate": workflow_library.annotate,
     "app_marks": workbench.app_marks,

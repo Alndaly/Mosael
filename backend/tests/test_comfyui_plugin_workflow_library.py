@@ -231,3 +231,136 @@ def test_路径插件这边再查一遍(library, comfy, bad: str) -> None:
     with pytest.raises(ComfyError):
         module.rename_workflow({"path": "portrait.json", "new_path": bad}, Comfy(comfy.url), "zh")
     assert not [call for call in comfy.state.calls if call[0] in ("MOVE", "WRITE")]
+
+
+# --- 文件夹 ------------------------------------------------------------------------------
+#
+# 文件夹就是 workflows/ 里的子目录(和 ComfyUI 自己的侧栏同一份)。ComfyUI 没有建目录、删目录的接口:新建是写一个隐藏的
+# 占位文件;删除只删空的、挪进回收目录。改动前都现查那台机器,不照界面手里那份旧列表。
+
+
+def _folders(library, comfy) -> list[str]:
+    return _listed(library, comfy)["folders"]
+
+
+def test_列出文件夹_有文件的各级父目录_加上空的_隐藏的不算(library, comfy) -> None:
+    comfy.state.workflows["deep/a/b.json"] = {"nodes": [], "links": []}
+    comfy.state.dirs |= {"workflows/空的/更深", "workflows/.hidden", "workflows/.hidden/inner"}
+    assert _folders(library, comfy) == ["deep", "deep/a", "sub", "video", "空的", "空的/更深"], \
+        "zip 所在的根目录不算文件夹;空目录也列;隐藏的不列"
+    comfy.state.userdata_v2 = False  # 老版本 ComfyUI:只列得出有文件的那几个
+    assert _folders(library, comfy) == ["deep", "deep/a", "sub", "video"]
+
+
+def test_新建文件夹_写一个隐藏的占位文件_列得出来_工作流和别的文件里都没有它(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    assert module.make_folder({"path": "人像/草稿"}, client, "zh") == {"path": "人像/草稿"}
+    writes = [call for call in comfy.state.calls if call[0] == "WRITE"]
+    assert [call[1] for call in writes] == ["workflows/人像/草稿/.mosael-folder"]
+    assert writes[0][2]["overwrite"] is False
+    listed = _listed(library, comfy)
+    assert {"人像", "人像/草稿"} <= set(listed["folders"])
+    assert not [one for one in listed["workflows"] + listed["others"] if ".mosael-folder" in one["path"]]
+
+
+def test_新建文件夹_已经有了回建议名_不分大小写(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    assert module.make_folder({"path": "video"}, client, "zh") == {"conflict": True, "suggestion": "video (1)"}
+    assert module.make_folder({"path": "VIDEO"}, client, "zh") == {"conflict": True, "suggestion": "VIDEO (1)"}, \
+        "那台机器可能是 Windows:VIDEO 和 video 是同一个"
+    assert not [call for call in comfy.state.calls if call[0] == "WRITE"]
+
+
+@pytest.mark.parametrize("bad", ["", "../x", "a//b", ".hidden", "a/.b", "a:b", "x.json", "a /b"])
+def test_文件夹名插件这边再查一遍(library, comfy, bad: str) -> None:
+    module, Comfy = library
+    from lines import ComfyError
+
+    with pytest.raises(ComfyError):
+        module.make_folder({"path": bad}, Comfy(comfy.url), "zh")
+    with pytest.raises(ComfyError):
+        module.rename_folder({"path": "video", "new_path": bad}, Comfy(comfy.url), "zh")
+    assert not [call for call in comfy.state.calls if call[0] in ("MOVE", "WRITE")]
+
+
+def test_移动到文件夹就是改名_目标文件夹没有会建出来_这张已经不在了说清楚(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    from lines import ComfyError
+
+    assert module.rename_workflow({"path": "portrait.json", "new_path": "人像/portrait.json"}, client, "zh") == \
+        {"path": "人像/portrait.json"}
+    assert "人像" in _folders(library, comfy)
+    with pytest.raises(ComfyError, match="已经没有工作流「portrait.json」"):
+        module.rename_workflow({"path": "portrait.json", "new_path": "别处/portrait.json"}, client, "zh")
+    with pytest.raises(ComfyError, match="已经没有"):
+        module.trash_workflow({"path": "portrait.json"}, client, "zh")
+
+
+def test_文件夹改名_整个目录一次挪过去_里面的跟着走(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    comfy.state.dirs.add("workflows/video/空的子文件夹")
+    assert module.rename_folder({"path": "video", "new_path": "片子/视频"}, client, "zh") == {"path": "片子/视频"}
+    assert "片子/视频/wan.json" in comfy.state.workflows and "video/wan.json" not in comfy.state.workflows
+    moves = [call for call in comfy.state.calls if call[0] == "MOVE"]
+    assert [(call[1], call[2]["dest"], call[2]["overwrite"]) for call in moves] == [
+        ("workflows/video", "workflows/片子/视频", False)], "一个目录一次挪,不一张张挪"
+    folders = _folders(library, comfy)
+    assert {"片子", "片子/视频", "片子/视频/空的子文件夹"} <= set(folders) and "video" not in folders
+
+
+def test_文件夹改名_不覆盖_不能挪进自己里面_已经不在了说清楚(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    from lines import ComfyError
+
+    assert module.rename_folder({"path": "video", "new_path": "Sub"}, client, "zh") == \
+        {"conflict": True, "suggestion": "Sub (1)"}, "目标已经有了(不分大小写):给建议名,不合并进去"
+    with pytest.raises(ComfyError, match="自己里面"):
+        module.rename_folder({"path": "video", "new_path": "video/inner"}, client, "zh")
+    with pytest.raises(ComfyError, match="已经没有文件夹「gone」"):
+        module.rename_folder({"path": "gone", "new_path": "here"}, client, "zh")
+    assert not [call for call in comfy.state.calls if call[0] == "MOVE"]
+
+
+def test_文件夹只改大小写_不分大小写的磁盘上先挪到临时名字再挪过去(library, comfy) -> None:
+    module, Comfy = library
+    comfy.state.case_insensitive = True
+    assert module.rename_folder({"path": "video", "new_path": "Video"}, Comfy(comfy.url), "zh") == {"path": "Video"}
+    assert "Video/wan.json" in comfy.state.workflows and "video/wan.json" not in comfy.state.workflows
+    folders = _folders(library, comfy)
+    assert "Video" in folders and "video" not in folders
+    assert not [one for one in comfy.state.all_dirs() if "renaming" in one], "临时名字不留下"
+
+
+def test_删除文件夹_只删空的_挪进回收目录_回收站里不多出一条(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    module.make_folder({"path": "草稿/更深"}, client, "zh")
+    trashed = module.trash_folder({"path": "草稿"}, client, "zh")
+    assert re.fullmatch(r"\.mosael-trash/workflows/\d{8}-\d{6}(-\d+)?/草稿", trashed["path"]), "空的子文件夹一起挪走"
+    listed = _listed(library, comfy)
+    assert not {"草稿", "草稿/更深"} & set(listed["folders"])
+    assert [one["path"] for one in listed["trash"]] == [".mosael-trash/workflows/20261005-101500/old/one.json"], \
+        "占位文件不是一张工作流,回收站里不列"
+    assert not [call for call in comfy.state.calls if call[0] == "DELETE"], "从不硬删"
+
+
+def test_删除文件夹_里面还有文件就不动_现查那台机器不照旧列表(library, comfy) -> None:
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    from lines import ComfyError
+
+    assert module.trash_folder({"path": "video"}, client, "zh") == {"not_empty": True, "count": 1}
+    module.make_folder({"path": "只有压缩包"}, client, "zh")
+    comfy.state.workflows["只有压缩包/pack.zip"] = {"zip": True}  # 不是工作流,也是那台机器上的一个文件
+    assert module.trash_folder({"path": "只有压缩包"}, client, "zh") == {"not_empty": True, "count": 1}
+    module.make_folder({"path": "刚建的"}, client, "zh")
+    comfy.state.workflows["刚建的/在 ComfyUI 里刚存的.json"] = {"nodes": [], "links": []}  # 界面那份列表之后存进去的
+    assert module.trash_folder({"path": "刚建的"}, client, "zh") == {"not_empty": True, "count": 1}
+    assert not [call for call in comfy.state.calls if call[0] == "MOVE"]
+    with pytest.raises(ComfyError, match="已经没有文件夹"):
+        module.trash_folder({"path": "不存在"}, client, "zh")

@@ -298,6 +298,26 @@ overwriting**:
   original place is taken. To really delete it, remove that folder on the machine;
 - after every change the host refreshes this connection's models and tools right away.
 
+Folders (1.13.0): the left column is the tree of subfolders in `workflows/` — the same folders as ComfyUI's own workflow
+sidebar, nothing kept on the side. The listing also reports `folders` (every subfolder, relative to `workflows/`;
+`GET /api/v2/userdata?path=workflows` lists empty ones too, and an older ComfyUI without that endpoint only yields the
+folders that hold files). Three ops change them, never overwriting and always checking the machine first:
+
+- `make_folder`: ComfyUI has no "make a folder" call, so the plugin writes a hidden placeholder file, `.mosael-folder`
+  (ComfyUI creates the parent folders when writing a file; neither ComfyUI's sidebar nor the plugin lists hidden files).
+  An existing name (compared ignoring case, the machine may run Windows) answers with a clash and a free name;
+- `rename_folder`: one `move` of the whole folder (`shutil.move` on ComfyUI's side moves folders too), the workflows in it
+  get new paths; an existing target answers with a clash and is never merged into; a folder can't move into itself; a
+  case-only rename goes through a temporary name (on a case-insensitive disk the target "already exists");
+- `trash_folder`: **only empty folders** (no visible file inside; empty subfolders don't count) move into the trash folder —
+  ComfyUI can't delete folders and the plugin never hard-deletes; a folder that still holds files answers
+  `{"not_empty": true, "count": n}` and nothing is touched. Move the workflows out or delete them one by one first (each
+  confirmed, each restorable): taking a whole folder of workflows away at once is too easy to regret, and non-workflow files
+  in it (archives) would land in the trash where Trash can't list them.
+
+Moving a workflow to another folder is `rename_workflow` (a missing target folder is created); a workflow that is no longer
+there (ComfyUI answers 404) is reported as such rather than as "HTTP 404".
+
 "Open in editor" (1.11.1): the listing also reports this ComfyUI's web address. The Mosael desktop app opens its
 interface in this connection's own embedded browser and, once the page is ready, opens that workflow through the ComfyUI
 frontend's own workflow list (ComfyUI's URLs only understand templates, shares and graph ids, so they can't open a saved

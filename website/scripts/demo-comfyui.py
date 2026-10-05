@@ -11,9 +11,11 @@ the endpoints the plugin uses — loaded with:
   listing, not files: each has a size and safetensors header metadata (base model, trigger words, training tags).
   Their previews are Big Buck Bunny frames (CC BY 3.0) that the seed script cuts from the trailer excerpts;
 - five workflows (text to image with a checkpoint and LoRAs, image to video, a 4× upscale), saved the way ComfyUI saves
-  them. The image-to-video one uses a node type this server does not have (from a fictional node pack known to the
-  fake ComfyUI-Manager) and two model files it does not have: one with a huggingface.co download address declared in
-  the workflow, one without. Nothing is ever downloaded or generated: the demo only shows these states.
+  them, some in folders (`landscapes/`, `video/`, `upscale/`) next to two empty folders (`archive/`, `video/drafts/`),
+  so the workflow library's folder tree has depth, counts and empty entries. The image-to-video one uses a node type
+  this server does not have (from a fictional node pack known to the fake ComfyUI-Manager) and two model files it does
+  not have: one with a huggingface.co download address declared in the workflow, one without. Nothing is ever
+  downloaded or generated: the demo only shows these states.
 
 Nothing here touches a real ComfyUI.
 """
@@ -238,10 +240,14 @@ def workflows() -> dict[str, Any]:
     return {
         "storybook-portrait.json": storybook_portrait(),
         "watercolor-character.json": watercolor_character(),
-        "forest-light-landscape.json": FOREST_LANDSCAPE_API,
+        "landscapes/forest-light-landscape.json": FOREST_LANDSCAPE_API,
         "video/bunny-image-to-video.json": bunny_image_to_video(),
         "upscale/upscale-4x.json": UPSCALE_API,
     }
+
+
+#: Empty folders in workflows/ (relative to the user directory), the way the workflow library's "New folder" leaves them.
+EMPTY_FOLDERS = {"workflows/archive", "workflows/video/drafts"}
 
 
 #: Pasted into the workflow library's import dialog in the recordings (API format, recognized on the spot).
@@ -328,6 +334,7 @@ def build(media: Path):
             super().__init__(("127.0.0.1", port), Handler)
             state = fake.State()
             state.workflows = workflows()
+            state.dirs = set(EMPTY_FOLDERS)
             state.object_info = object_info(fake.OBJECT_INFO, fake.VIDEO_NODE_INFO)
             state.model_folders = {folder: _folder(folder) for folder in dict.fromkeys(m[0] for m in MODELS)}
             state.model_folders["diffusion_models"] = []

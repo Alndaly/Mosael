@@ -1,14 +1,17 @@
-"""工作流库(ADR 0035):这台 ComfyUI 上存着的工作流 —— 列出、取原文、复制、改名、挪进 / 挪出回收目录。
+"""工作流库(ADR 0035):这台 ComfyUI 上存着的工作流 —— 列出、取原文、复制、改名、挪进 / 挪出回收目录;文件夹。
 
 宿主按 `op` 问(见 main._generation):
 
     {"op": "workflows"}                                → 全部工作流(图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺什么)
-                                                          + 不是工作流的文件 + 回收目录里的 + Manager 的版本
+                                                          + 子目录(空的也在)+ 不是工作流的文件 + 回收目录里的 + Manager 的版本
     {"op": "workflow", "path"}                         → 一张的原文
     {"op": "copy_workflow", "path", "new_path"}        → 复制(副本换一个新的图 id)
-    {"op": "rename_workflow", "path", "new_path"}      → 改名 / 挪目录
+    {"op": "rename_workflow", "path", "new_path"}      → 改名 / 挪目录(「移动到…」、拖到左边的文件夹上也是它)
     {"op": "trash_workflow", "path"}                   → 「删除」:挪进回收目录
     {"op": "restore_workflow", "path", "new_path"}     → 从回收目录挪回去
+    {"op": "make_folder", "path"}                      → 新建文件夹(ADR 0035 后续「文件夹」)
+    {"op": "rename_folder", "path", "new_path"}        → 文件夹改名 / 挪到别的文件夹里(里面的一切跟着走)
+    {"op": "trash_folder", "path"}                     → 删除文件夹:**只删空的**(挪进回收目录);里面还有文件回 not_empty
     {"op": "app", "path"}                              → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、读到时的改动时间
     {"op": "annotate", "path", "modified", "app", "results"} → 只改 `mosael` 那几处标记,**覆盖写**;改动时间对不上回 stale
 
@@ -16,14 +19,22 @@
 
 用到的 ComfyUI 接口(0.38.0,写 / 移动照源码 app/user_manager.py 核对,见 ADR 0035 的表):
 
-- `GET /api/userdata?dir=…&recurse=true&full_info=true` 列目录;`GET /api/userdata/{file}` 取一份;
-- `POST /api/userdata/{file}?overwrite=false` 写一份(已有就 409,原子写);
-- `POST /api/userdata/{file}/move/{dest}?overwrite=false` 移动(目标已有就 409,目标的父目录会建)。
+- `GET /api/userdata?dir=…&recurse=true&full_info=true` 列文件(glob:只列文件、跳过隐藏的 —— ComfyUI 自己的工作流侧栏
+  就是照它摆出文件夹的);`GET /api/v2/userdata?path=…` 连目录一起列(空目录也在);`GET /api/userdata/{file}` 取一份;
+- `POST /api/userdata/{file}?overwrite=false` 写一份(已有就 409,原子写;父目录不存在会建);
+- `POST /api/userdata/{file}/move/{dest}?overwrite=false` 移动(`shutil.move`,目录也挪得动;目标已有就 409,目标的父目录
+  会建,源不在了 404)。
 
 **不覆盖、不硬删**:写和移动一律 `overwrite=false`,撞名回 `{"conflict": true, "suggestion": …}`;ComfyUI 的 `DELETE` 是硬删,
 这里从不调 —— 删除是挪进 `.mosael-trash/workflows/<删除时刻 UTC>/<原来的相对路径>`(在 `workflows/` 外面,ComfyUI 的侧栏和
 插件的模型清单都不列它)。**唯一的例外是 `annotate`**(ADR 0038 §2):它覆盖写一张已有的工作流,但只改 `mosael` 那几处标记
 (app_form.apply),而且带着读到时的改动时间来 —— 那台机器上的文件在这之间被改过就不写,回 `{"stale": true}`。
+
+**文件夹**就是 `workflows/` 里的子目录 —— 和 ComfyUI 自己的侧栏同一份,不另记。ComfyUI 没有「建目录」「删目录」的接口:
+新建是往里写一个隐藏的占位文件(`.mosael-folder`;写文件时 ComfyUI 把父目录建出来,ComfyUI 的侧栏和这里都不列隐藏文件);
+删除只认空的(里面没有一个看得见的文件),挪进回收目录 —— 要删的文件夹里还有东西,先挪走或一张张删(各自确认、各自能恢复),
+一下子带走一整个文件夹的工作流太容易误伤。改动前都现查一遍那台机器(源不在了、目标被占了、里面又有了东西),不照界面
+手里那份旧列表办。
 """
 
 from __future__ import annotations
@@ -42,7 +53,7 @@ import graph
 import labels
 import models
 import workflows as described
-from comfy_http import Comfy
+from comfy_http import Comfy, is_workflow_path
 from install import manager_version
 from library import TRUSTED_SOURCES, _nodes, scan_workflow
 from lines import ComfyError, say
@@ -50,6 +61,8 @@ from model_files import data_file, load_json, norm, save_json
 
 #: 回收目录(相对用户目录)。
 TRASH = ".mosael-trash/workflows"
+#: 新建的(还空着的)文件夹里那个占位文件。隐藏的:ComfyUI 的侧栏、插件、Mosael 都不列它;有了工作流以后留着也无妨。
+FOLDER_MARKER = ".mosael-folder"
 #: 只在前端的节点:后端的 object_info 里永远没有,不是「缺」(ADR 0035 §5)。
 VIRTUAL_NODES = frozenset({
     "Note", "MarkdownNote", "Reroute", "PrimitiveNode",
@@ -86,6 +99,18 @@ def check_path(path: Any, locale: str) -> str:
     return text
 
 
+def check_folder(path: Any, locale: str) -> str:
+    """`workflows/` 里的一个子目录:和工作流路径同一套分段规则,只是不以 `.json` 结尾(那像一张工作流)。"""
+    text = str(path or "").strip()
+    segments = text.split("/")
+    if not text or text.lower().endswith(".json") or len(text) > 400 or any(
+        not one or one in (".", "..") or one.startswith(".") or one != one.strip() or _BAD_SEGMENT.search(one)
+        for one in segments
+    ):
+        raise ComfyError(say(locale, f"「{text}」不是一个能用的文件夹名", f"“{text}” is not a usable folder name"))
+    return text
+
+
 def _trash_path(path: Any, locale: str) -> re.Match[str]:
     text = str(path or "").strip()
     found = _TRASH_PATH.match(text)
@@ -111,6 +136,61 @@ def _taken(comfy: Comfy) -> set[str]:
 
 def _conflict(comfy: Comfy, wanted: str) -> dict[str, Any]:
     return {"conflict": True, "suggestion": _free_name(wanted, _taken(comfy))}
+
+
+def folders(comfy: Comfy, files: list[str]) -> list[str]:
+    """`workflows/` 里的子目录(相对 `workflows/`,按名字排):有文件的那几个的各级父目录,加上 `/api/v2/userdata` 列得出的
+    (空的也在,老版本 ComfyUI 没有这个接口就只有前一半)。隐藏的(以点开头的某一段)不算。"""
+    found: set[str] = set()
+    for path in files:
+        parts = path.split("/")[:-1]
+        found.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
+    for item in comfy.userdata_tree("workflows") or []:
+        relative = str(item.get("path") or "")
+        if item.get("type") == "directory" and relative.startswith("workflows/"):
+            found.add(relative[len("workflows/"):])
+    return sorted((one for one in found if one and not any(part.startswith(".") for part in one.split("/"))),
+                  key=lambda one: (one.lower(), one))
+
+
+def _folders_now(comfy: Comfy) -> tuple[list[str], list[str]]:
+    """(那台机器上**现在**的子目录, 看得见的文件)—— 改文件夹之前现查,不照界面手里那份列表。"""
+    saved, others = comfy.saved_files()
+    files = saved + others
+    return folders(comfy, files), files
+
+
+def _free_folder(wanted: str, taken: set[str]) -> str:
+    """一个不撞名的文件夹名(不分大小写比 —— 那台机器可能是 Windows):`人像` → `人像 (1)`、`人像 (2)`……"""
+    for index in range(1, 1000):
+        candidate = f"{wanted} ({index})"
+        if candidate.lower() not in taken:
+            return candidate
+    return wanted
+
+
+def _gone_folder(locale: str, path: str) -> ComfyError:
+    return ComfyError(say(locale, f"ComfyUI 里已经没有文件夹「{path}」了", f"ComfyUI no longer has the folder “{path}”."))
+
+
+def _move(comfy: Comfy, source: str, dest: str, gone: ComfyError) -> bool:
+    """挪一份(文件或目录),不覆盖:目标被占了回 False;源不在了(ComfyUI 回 404)抛 `gone` —— 界面手里的列表旧了。"""
+    try:
+        return comfy.move_userdata(source, dest)
+    except ComfyError as exc:
+        if exc.status == 404:
+            raise gone from exc
+        raise
+
+
+def _to_trash(comfy: Comfy, path: str, gone: ComfyError, locale: str) -> str:
+    """把 `workflows/<path>`(一张或一个文件夹)挪进回收目录。同一秒删两个同名的(极少)就在时刻后面加序号,不撞。"""
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    for attempt in range(20):
+        target = f"{TRASH}/{stamp}{f'-{attempt}' if attempt else ''}/{path}"
+        if _move(comfy, f"workflows/{path}", target, gone):
+            return target
+    raise ComfyError(say(locale, "回收目录里撞名太多次,没挪成", "Too many name clashes in the trash; nothing was moved"))
 
 
 def _seconds(value: Any) -> float | None:
@@ -354,8 +434,8 @@ def _trash(comfy: Comfy) -> list[dict[str, Any]]:
     for item in comfy.userdata_listing(TRASH):
         path = f"{TRASH}/{item.get('path')}"
         found = _TRASH_PATH.match(path)
-        if found is None:
-            continue
+        if found is None or not is_workflow_path(found.group("original")):
+            continue  # 删掉的空文件夹里那个占位文件之类:不是一张工作流,回收站里不列
         deleted = calendar.timegm(time.strptime(found.group("stamp"), "%Y%m%d-%H%M%S"))
         out.append({"path": path, "deleted_at": float(deleted)})
     return sorted(out, key=lambda one: -one["deleted_at"])
@@ -421,6 +501,8 @@ def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, A
            for row, source, missing in rows]
     return {
         "workflows": out,
+        #: 左边那一列的文件夹树(ComfyUI 自己的侧栏也按子目录分),空的也列 —— 刚新建、还没挪进去东西的那种
+        "folders": folders(comfy, saved + others),
         "others": [{"path": path, "reason": models._not_a_workflow(path, locale)} for path in others],
         "trash": _trash(comfy),
         "manager": {"version": manager_version(comfy)},
@@ -445,31 +527,89 @@ def copy_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[st
 
 
 def rename_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """改名、挪到别的文件夹(「移动到…」、拖到左边的文件夹上)。目标文件夹不在会被建出来;这张已经不在了说清楚。"""
     path, new_path = check_path(payload.get("path"), locale), check_path(payload.get("new_path"), locale)
     if path == new_path:
         return {"path": path}
-    if not comfy.move_userdata(f"workflows/{path}", f"workflows/{new_path}"):
+    if not _move(comfy, f"workflows/{path}", f"workflows/{new_path}", _gone(locale, path)):
         return _conflict(comfy, new_path)
     return {"path": new_path}
 
 
 def trash_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """挪进回收目录。同一秒删两张同名的(极少)就在时刻后面加序号,不撞。"""
+    """挪进回收目录。"""
     path = check_path(payload.get("path"), locale)
-    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-    for attempt in range(20):
-        target = f"{TRASH}/{stamp}{f'-{attempt}' if attempt else ''}/{path}"
-        if comfy.move_userdata(f"workflows/{path}", target):
-            return {"path": target}
-    raise ComfyError(say(locale, "回收目录里撞名太多次,没挪成", "Too many name clashes in the trash; nothing was moved"))
+    return {"path": _to_trash(comfy, path, _gone(locale, path), locale)}
 
 
 def restore_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     found = _trash_path(payload.get("path"), locale)
     new_path = check_path(payload.get("new_path") or found.group("original"), locale)
-    if not comfy.move_userdata(found.group(0), f"workflows/{new_path}"):
+    gone = ComfyError(say(locale, "回收目录里已经没有这一张了", "That workflow is no longer in the trash."))
+    if not _move(comfy, found.group(0), f"workflows/{new_path}", gone):
         return _conflict(comfy, new_path)
     return {"path": new_path}
+
+
+# --- 文件夹 ---------------------------------------------------------------------------
+
+def make_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """新建一个文件夹(可以带上级:`人像/草稿`)。ComfyUI 没有建目录的接口:往里面写一个隐藏的占位文件,写文件时 ComfyUI
+    把父目录建出来。已经有了(不分大小写比)回 conflict 和一个建议名。"""
+    path = check_folder(payload.get("path"), locale)
+    existing, _files = _folders_now(comfy)
+    taken = {one.lower() for one in existing}
+    if path.lower() in taken:
+        return {"conflict": True, "suggestion": _free_folder(path, taken)}
+    marker = {"created_by": "Mosael", "note": "Keeps this folder while it is empty. Safe to delete."}
+    if not comfy.write_userdata(f"workflows/{path}/{FOLDER_MARKER}", marker):
+        return {"conflict": True, "suggestion": _free_folder(path, taken | {path.lower()})}
+    return {"path": path}
+
+
+def rename_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """文件夹改名,或者挪到别的文件夹里(`new_path` 带上级):整个目录一次挪过去,里面的工作流、子文件夹跟着走 —— 它们的
+    路径都变了,宿主让生成目录重拉。不覆盖:目标已经有了回 conflict。只改大小写(`video` → `Video`)在不分大小写的磁盘上
+    「目标已经有了」,先挪到一个临时名字再挪过去。"""
+    path, new_path = check_folder(payload.get("path"), locale), check_folder(payload.get("new_path"), locale)
+    if path == new_path:
+        return {"path": path}
+    if new_path.lower().startswith(path.lower() + "/"):
+        raise ComfyError(say(locale, f"不能把「{path}」挪进它自己里面", f"“{path}” can't be moved into itself."))
+    existing, _files = _folders_now(comfy)
+    taken = {one.lower() for one in existing}
+    gone = _gone_folder(locale, path)
+    if path not in existing:
+        raise gone
+    case_only = new_path.lower() == path.lower()
+    if not case_only and new_path.lower() in taken:
+        return {"conflict": True, "suggestion": _free_folder(new_path, taken)}
+    if _move(comfy, f"workflows/{path}", f"workflows/{new_path}", gone):
+        return {"path": new_path}
+    if not case_only:
+        return {"conflict": True, "suggestion": _free_folder(new_path, taken | {new_path.lower()})}
+    parent = path.rsplit("/", 1)[0] + "/" if "/" in path else ""
+    temporary = f"workflows/{parent}.mosael-renaming-{uuid.uuid4().hex[:8]}"
+    if not _move(comfy, f"workflows/{path}", temporary, gone):
+        raise ComfyError(say(locale, "临时名字撞上了,没改成,再试一次", "The temporary name clashed; nothing changed. Try again."))
+    if _move(comfy, temporary, f"workflows/{new_path}", gone):
+        return {"path": new_path}
+    _move(comfy, temporary, f"workflows/{path}", gone)  # 挪回去:什么都没变
+    return {"conflict": True, "suggestion": _free_folder(new_path, taken | {new_path.lower()})}
+
+
+def trash_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """删除一个文件夹:**只删空的**(里面没有一个看得见的文件,空的子文件夹不算),挪进回收目录 —— ComfyUI 删不了目录,
+    也不该一下子带走一整个文件夹的工作流。挪之前现查:里面有了东西(界面那份列表之后在 ComfyUI 里存进去的)回
+    `{"not_empty": true, "count": 几个文件}`,什么都不动。"""
+    path = check_folder(payload.get("path"), locale)
+    existing, files = _folders_now(comfy)
+    if path not in existing:
+        raise _gone_folder(locale, path)
+    inside = [one for one in files if one.lower().startswith(path.lower() + "/")]
+    if inside:
+        return {"not_empty": True, "count": len(inside)}
+    return {"path": _to_trash(comfy, path, _gone_folder(locale, path), locale)}
 
 
 # --- 应用表单(ADR 0038 §2)-----------------------------------------------------------

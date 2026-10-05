@@ -42,6 +42,10 @@ export type LibraryNavItem = {
   icon?: React.ReactNode;
   /** 要处理的事(缺的模型):数量标成提醒色。 */
   tone?: "warning";
+  /** 一棵树里的第几层(工作流库的文件夹):往里缩一格一层。不给就是 0。 */
+  depth?: number;
+  /** 不缩进地看也认得出是哪一个的全名(`video/草稿`):读屏念它,窄窗口的下拉里显示它。不给就用 `label`。 */
+  fullLabel?: string;
 };
 
 export type LibraryNav = {
@@ -52,6 +56,13 @@ export type LibraryNav = {
   items: LibraryNavItem[];
   /** 钉在这一列底部的特殊项(工作流缺的模型、下载记录)。 */
   pinned?: LibraryNavItem[];
+  /** 这一列顶上的一颗操作(工作流库的「新建文件夹」)。窄窗口下排在目录下拉的后面。 */
+  action?: React.ReactNode;
+  /**
+   * 给每一项再包一层(工作流库:文件夹的右键菜单、⋯、把卡片拖上来)。`tab` 是那颗页签按钮本身,原样放进去 ——
+   * 包的那一层是 `role="none"` 的容器,别换掉按钮;按钮上的方向键照旧在页签之间走。
+   */
+  renderItem?: (item: LibraryNavItem, tab: React.ReactElement) => React.ReactNode;
 };
 
 /**
@@ -59,7 +70,7 @@ export type LibraryNav = {
  */
 export type LibraryReturn = { key: string; scrollTop: number };
 
-const navName = (item: LibraryNavItem) => `${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`;
+const navName = (item: LibraryNavItem) => `${item.fullLabel ?? item.label}${item.count !== undefined ? ` ${item.count}` : ""}`;
 
 /**
  * 工具条按钮上的字在多窄时收起(见 LibraryToolbarLabel)。看的是**工具条自己**有多宽(容器查询),不是窗口:左边那一列
@@ -206,6 +217,7 @@ export function LibraryDialog({
             {/* 工具条是一个容器:按钮上的字收不收看它自己有多宽(见 LibraryToolbarLabel)。 */}
             <div data-library-toolbar="" className="@container/library-toolbar flex shrink-0 flex-wrap items-center gap-2 px-6 pb-3 pt-1">
               {navPicker}
+              {narrow && nav?.action}
               {toolbar}
             </div>
             {chips && <div className="shrink-0 px-6 pb-3">{chips}</div>}
@@ -228,6 +240,8 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
   const listRef = React.useRef<HTMLDivElement>(null);
   const all = [...nav.items, ...(nav.pinned ?? [])];
   const move = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // 只认页签上按的:包在页签外面的那一层(右键菜单、⋯ 菜单)里的方向键冒泡上来不算
+    if (event.defaultPrevented || (event.target as HTMLElement).getAttribute("role") !== "tab") return;
     const at = all.findIndex((one) => one.value === nav.value);
     const next =
       event.key === "ArrowDown" ? Math.min(all.length - 1, at + 1)
@@ -244,7 +258,7 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
   };
   const tab = (item: LibraryNavItem) => {
     const selected = item.value === nav.value;
-    return (
+    const button = (
       <button
         key={item.value}
         id={tabId(item.value)}
@@ -255,8 +269,9 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
         aria-label={navName(item)}
         tabIndex={selected ? 0 : -1}
         onClick={() => nav.onChange(item.value)}
+        style={item.depth ? { paddingInlineStart: `${10 + item.depth * 14}px` } : undefined}
         className={cn(
-          "flex h-8 min-w-0 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-ui-sm text-muted-foreground transition-colors",
+          "flex h-8 w-full min-w-0 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-ui-sm text-muted-foreground transition-colors",
           "hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           "[&_svg]:size-3.5 [&_svg]:shrink-0",
           selected && "bg-accent font-medium text-primary hover:bg-accent hover:text-primary",
@@ -271,15 +286,16 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
         )}
       </button>
     );
+    return nav.renderItem ? <React.Fragment key={item.value}>{nav.renderItem(item, button)}</React.Fragment> : button;
   };
-  return (
+  const list = (
     <div
       ref={listRef}
       role="tablist"
       aria-orientation="vertical"
       aria-label={nav.label}
       onKeyDown={move}
-      className="flex min-h-0 flex-col border-r border-divider"
+      className={cn("flex min-h-0 flex-col", nav.action ? "flex-1" : "border-r border-divider")}
     >
       <div role="none" className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto overscroll-contain px-3 pb-3 pt-1">
         {nav.items.map(tab)}
@@ -291,6 +307,13 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
       )}
     </div>
   );
+  //: 顶上那颗操作不进页签组(页签组里只该有页签)
+  return nav.action ? (
+    <div className="flex min-h-0 flex-col border-r border-divider">
+      <div className="shrink-0 px-3 pb-1">{nav.action}</div>
+      {list}
+    </div>
+  ) : list;
 }
 
 export type LibraryChip = { key: string; label: string; removeLabel: string; onRemove: () => void };

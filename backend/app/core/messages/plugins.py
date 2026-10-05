@@ -216,6 +216,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{path}」不是一个能用的工作流路径:要以 .json 结尾,不能带 ..、反斜杠或 :*?\"<>| 这类字符,每一段不能以点开头",
         "en": "“{path}” is not a usable workflow path: it must end in .json, without .., backslashes or characters like :*?\"<>|, and no part may start with a dot",
     },
+    "workflowLibErr_badFolder": {
+        "zh": "「{path}」不是一个能用的文件夹名:不能带 ..、反斜杠或 :*?\"<>| 这类字符,每一段不能以点开头,也不能以 .json 结尾",
+        "en": "“{path}” is not a usable folder name: no .., backslashes or characters like :*?\"<>|, no part may start with a dot, and it can't end in .json",
+    },
+    "workflowLibErr_folderNotEmpty": {
+        "zh": "文件夹「{path}」里还有 {count} 个文件,没有删。先把里面的工作流挪走或删掉,再删这个文件夹",
+        "en": "The folder “{path}” still holds {count} file(s), so it wasn't deleted. Move or delete the workflows in it first",
+    },
+    "workflowLibErr_folderIntoItself": {
+        "zh": "不能把文件夹「{path}」挪进它自己里面",
+        "en": "The folder “{path}” can't be moved into itself",
+    },
     "workflowLibErr_exists": {
         "zh": "那台服务器上已经有「{path}」了,不会覆盖。换一个名字",
         "en": "“{path}” already exists on that server and won't be overwritten. Pick another name",

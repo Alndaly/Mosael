@@ -14,6 +14,11 @@
 
 **不覆盖**:复制、改名、恢复撞了名,插件回 `conflict` 和一个建议名,这里翻成 409(带着建议名),界面要求换名。
 
+**文件夹**就是那台机器上 `workflows/` 里的子目录(和 ComfyUI 自己的侧栏同一份,宿主不另记):列出来的带着全部子目录
+(空的也在);新建、改名 / 挪走、删除经插件,名字先在这里过一遍(和工作流路径同一套分段规则,不以 `.json` 结尾)。删除只删
+**空的**:插件现查,里面还有文件就回 `not_empty`,这里翻成 409(`WorkflowFolderNotEmpty`,带着几个文件)—— 不一下子带走一整个
+文件夹的工作流。改名、删除之后生成目录重拉(里面的工作流换了路径);新建不重拉(什么模型都没变)。
+
 **导入**(ADR 0035 §5):要导入的东西只给一样(一段文字 / 一个文件 / 一个链接),太大的不交;插件认出来、换成界面格式,
 这里规整预览(和列出来的每一张同一套);存进去和别的写操作同一套,原文以 JSON 字符串交给插件 —— 调用记录里只留截断的
 一段,不把整张图存进记录。
@@ -100,6 +105,15 @@ class WorkflowStale(WorkflowLibraryError):
         self.modified = modified
 
 
+class WorkflowFolderNotEmpty(WorkflowLibraryError):
+    """要删的文件夹里还有文件(插件挪之前现查的):不删。先把里面的挪走或删掉(各自确认、各自能恢复)。"""
+
+    def __init__(self, path: str, count: int) -> None:
+        super().__init__("workflowLibErr_folderNotEmpty", path=path, count=str(count))
+        self.path = path
+        self.count = count
+
+
 class WorkflowConflict(WorkflowLibraryError):
     """撞名了:那台服务器上已经有这个名字。`suggestion` 是一个不撞名的建议。"""
 
@@ -135,6 +149,30 @@ def workflow_path(value: str) -> str:
     ):
         raise WorkflowLibraryError("workflowLibErr_badPath", path=text)
     return text
+
+
+def folder_path(value: str) -> str:
+    """`workflows/` 里的一个子目录:和工作流路径同一套分段规则,只是不以 `.json` 结尾(那像一张工作流)。不合格就拒。"""
+    text = (value or "").strip()
+    segments = text.split("/")
+    if not text or text.lower().endswith(".json") or len(text) > 400 or any(
+        not one or one in (".", "..") or one.startswith(".") or one != one.strip() or _BAD_SEGMENT.search(one)
+        for one in segments
+    ):
+        raise WorkflowLibraryError("workflowLibErr_badFolder", path=text)
+    return text
+
+
+def _folders(raw: Any, workflows: list[dict[str, Any]]) -> list[str]:
+    """左边那一列的文件夹:插件报的(空的也在)加上每张工作流所在的,连同各级上级;名字不像样的丢掉。按名字排。"""
+    found: set[str] = set()
+    for one in [*(raw if isinstance(raw, list) else []), *(flow["folder"] for flow in workflows)]:
+        try:
+            parts = folder_path(_text(one, 400)).split("/")
+        except WorkflowLibraryError:
+            continue
+        found.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
+    return sorted(found, key=lambda one: (one.lower(), one))[:_MAX_WORKFLOWS]
 
 
 def trash_path(value: str) -> str:
@@ -388,6 +426,7 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
     manager = output.get("manager") if isinstance(output.get("manager"), dict) else {}
     return {
         "workflows": workflows,
+        "folders": _folders(output.get("folders"), workflows),
         "others": [one for one in _items(output.get("others"), {"path": 500, "reason": 2000}) if one["path"]],
         "trash": _trash(output.get("trash")),
         "manager": {"version": _text(manager.get("version"), 40)},
@@ -412,17 +451,31 @@ def content(db: Session, instance: PluginInstance, path: str) -> dict[str, Any]:
 
 # --- 改那台机器上的文件 ---------------------------------------------------------
 
-def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wanted: str) -> str:
-    """一次写操作:交给插件,撞名翻成 WorkflowConflict;成了就让这个连接的目录重拉一遍。回改完之后的路径。"""
+def _fits(suggestion: str, *, folder: bool) -> bool:
+    """插件给的建议名像不像样(文件夹名 / 工作流路径):不像样就不给,界面让人自己换。"""
+    try:
+        (folder_path if folder else workflow_path)(suggestion)
+    except WorkflowLibraryError:
+        return False
+    return True
+
+
+def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wanted: str, folder: bool = False,
+           refresh: bool = True) -> str:
+    """一次写操作:交给插件,撞名翻成 WorkflowConflict、要删的文件夹不空翻成 WorkflowFolderNotEmpty;成了就让这个连接的
+    目录重拉一遍(`refresh`,新建空文件夹什么模型都没变就不拉)。回改完之后的路径。"""
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS)
     if output.get("conflict") is True:
         suggestion = _text(output.get("suggestion"), 500)
-        raise WorkflowConflict(wanted, suggestion if suggestion.lower().endswith(".json") else "")
+        raise WorkflowConflict(wanted, suggestion if _fits(suggestion, folder=folder) else "")
+    if output.get("not_empty") is True:
+        raise WorkflowFolderNotEmpty(wanted, max(1, int(_number(output.get("count")) or 1)))
     path = _text(output.get("path"), 600)
     if not path:
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
-    # 生成选项、工具清单里的那张跟着变(新的一张、换了名字的、删掉的),不等那一分钟的指纹
-    host_capabilities.notify(db, instance, refresh=True)
+    if refresh:
+        # 生成选项、工具清单里的那张跟着变(新的一张、换了名字的、删掉的),不等那一分钟的指纹
+        host_capabilities.notify(db, instance, refresh=True)
     return path
 
 
@@ -455,6 +508,34 @@ def restore(db: Session, instance: PluginInstance, path: str, new_path: str = ""
     path = trash_path(path)
     target = workflow_path(new_path) if new_path else _TRASH_PATH.match(path).group("original")  # type: ignore[union-attr]
     return {"path": _write(db, instance, {"op": "restore_workflow", "path": path, "new_path": target}, wanted=target)}
+
+
+# --- 文件夹 -------------------------------------------------------------------------
+
+def make_folder(db: Session, instance: PluginInstance, path: str) -> dict[str, str]:
+    """新建一个文件夹(可以带上级)。已经有了撞名 409,带一个建议名。"""
+    _require(db, instance)
+    path = folder_path(path)
+    return {"path": _write(db, instance, {"op": "make_folder", "path": path}, wanted=path, folder=True, refresh=False)}
+
+
+def rename_folder(db: Session, instance: PluginInstance, path: str, new_path: str) -> dict[str, str]:
+    """文件夹改名,或挪到别的文件夹里:里面的工作流跟着换路径(生成目录重拉)。目标已经有了撞名 409,不合并进去。"""
+    _require(db, instance)
+    path, new_path = folder_path(path), folder_path(new_path)
+    if path == new_path:
+        return {"path": path}
+    if new_path.lower().startswith(path.lower() + "/"):
+        raise WorkflowLibraryError("workflowLibErr_folderIntoItself", path=path)
+    request = {"op": "rename_folder", "path": path, "new_path": new_path}
+    return {"path": _write(db, instance, request, wanted=new_path, folder=True)}
+
+
+def trash_folder(db: Session, instance: PluginInstance, path: str) -> dict[str, str]:
+    """删除一个文件夹:只删空的,挪进回收目录(ComfyUI 删不了目录,Mosael 也不硬删)。插件现查,里面还有文件就 409。"""
+    _require(db, instance)
+    path = folder_path(path)
+    return {"path": _write(db, instance, {"op": "trash_folder", "path": path}, wanted=path, folder=True)}
 
 
 # --- 应用表单(ADR 0038 §2)----------------------------------------------------------
@@ -873,22 +954,27 @@ CAPABILITY = capabilities.Capability(
 __all__ = [
     "CAPABILITY",
     "WorkflowConflict",
+    "WorkflowFolderNotEmpty",
     "WorkflowLibraryError",
     "WorkflowStale",
     "annotate",
     "app_form",
     "content",
     "copy",
+    "folder_path",
     "inspect_import",
     "library",
+    "make_folder",
     "node_installs",
     "reboot",
     "register_uses",
     "rename",
+    "rename_folder",
     "restore",
     "save",
     "start_node_install",
     "trash",
+    "trash_folder",
     "trash_path",
     "workflow_path",
 ]

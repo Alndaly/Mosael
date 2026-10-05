@@ -185,6 +185,21 @@ class Comfy:
             raise
         return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
 
+    def userdata_tree(self, directory: str) -> list[dict[str, Any]] | None:
+        """用户目录里某个目录下的**目录和文件**(`GET /api/v2/userdata?path=…`,ComfyUI 0.3.3x 起有):一层层走下去
+        (os.walk),每项 `{name, path, type: "directory" | "file"}`,`path` 相对**用户目录**。空目录、隐藏文件都在里面 ——
+        `/api/userdata` 只列文件(glob,跳过隐藏的),列不出空目录。
+
+        回 404 的有两种:那个目录不存在,或者这版 ComfyUI 还没有这个接口 —— 分不出来,都回 None,调用方当「只知道有文件的
+        那几个目录」。"""
+        try:
+            items = self.get("/api/v2/userdata", {"path": directory})
+        except ComfyError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else None
+
     def write_userdata(self, path: str, value: Any) -> bool:
         """在用户目录里**新建**一份(相对用户目录的路径):已经有了就回 False(ComfyUI 回 409),**不覆盖**。"""
         body = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
@@ -219,7 +234,10 @@ class Comfy:
         return info if isinstance(info, dict) else {}
 
     def move_userdata(self, source: str, dest: str) -> bool:
-        """在用户目录里挪一份(改名、挪目录、挪进 / 挪出回收目录):目标已经有了就回 False(409),**不覆盖**。"""
+        """在用户目录里挪一份(改名、挪目录、挪进 / 挪出回收目录):目标已经有了就回 False(409),**不覆盖**。
+
+        ComfyUI 那边是 `shutil.move`:源是一个目录也挪得动(连同里面的一切)—— 文件夹改名、挪进回收目录走的就是它。
+        源不在了 ComfyUI 回 404,照常抛出(`status` 是 404),调用方说「已经没有了」。"""
         path = f"/api/userdata/{parse.quote(source, safe='')}/move/{parse.quote(dest, safe='')}"
         try:
             with self._open("POST", path, params={"overwrite": "false", "full_info": "true"}, body=b"",

@@ -3,21 +3,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   CircleAlert,
+  ClipboardCopy,
   Copy,
   Download,
   FileUp,
-  FolderTree,
+  Folder,
+  FolderInput,
+  FolderOpen,
+  FolderPen,
+  FolderPlus,
   Info,
   LayoutGrid,
   LayoutPanelLeft,
   MoreHorizontal,
+  PanelRightOpen,
   PencilLine,
   Plus,
+  Puzzle,
   RefreshCcw,
   RotateCcw,
   Search,
   SearchX,
   Settings2,
+  SlidersHorizontal,
   Sparkles,
   SquarePen,
   Trash2,
@@ -27,18 +35,22 @@ import {
   Workflow,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   assetThumbnailUrl,
   copyWorkflow,
+  createWorkflowFolder,
   getWorkflowContent,
   getWorkflowLibrary,
   rebootWorkflowServer,
   refreshPluginInstance,
   renameWorkflow,
+  renameWorkflowFolder,
   restoreWorkflow,
   startNodeInstall,
   trashWorkflow,
+  trashWorkflowFolder,
   type Job,
   type PluginInstance,
   type WorkflowFile,
@@ -47,6 +59,7 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { assetPreviewItem } from "@/components/app/asset-preview";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -65,17 +78,24 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger, openContextMenuFromKeyboard } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
+import {
+  FolderDeleteDialog,
+  FolderPathDialog,
+  MoveWorkflowDialog,
+  WORKFLOW_DRAG_TYPE,
+  carriesWorkflow,
+  dragWorkflow,
+} from "@/features/plugins/WorkflowFolders";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import { WorkflowImportDialog, importable } from "@/features/plugins/WorkflowImport";
 import {
@@ -101,12 +121,20 @@ import {
   TRASH_VIEW,
   WORKFLOW_KINDS,
   WORKFLOW_SORTS,
+  baseName,
+  filesIn,
   filterWorkflows,
+  folderOfView,
+  folderTree,
+  folderView,
+  freeFolderPath,
   freeWorkflowPath,
+  inFolder,
   inView,
+  joinPath,
   lacksSomething,
+  parentOf,
   sortWorkflows,
-  workflowFolders,
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
@@ -121,7 +149,8 @@ import { cn } from "@/lib/utils";
 /**
  * 工作流库(ADR 0035):一个连接**那台服务器上存着的工作流**。任何认领了 `workflow_library` 的插件连接都走这里,不认识哪一家。
  *
- * 和模型库同一套骨架(LibraryBrowser):左边一列子目录(按数量排),「缺节点或模型」钉在这一列底部;右边顶上搜索、按种类筛、
+ * 和模型库同一套骨架(LibraryBrowser):左边一列是那台机器上 `workflows/` 里的文件夹树(和 ComfyUI 自己的侧栏同一份,空的也列;
+ * 选一个只看它和它下面的),「缺节点或模型」钉在这一列底部;右边顶上搜索、按种类筛、
  * 排序、三档显示方式;一张卡是节点图的缩略预览(照插件给的图摘要画)、名字、种类、节点数、缺什么。点开是详情:能填什么 /
  * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台;「在编辑器里
  * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。和模型库互相跳(见 ConnectionLibraries):用到的模型
@@ -129,6 +158,11 @@ import { cn } from "@/lib/utils";
  *
  * 工具条上的「新建」在 ComfyUI 自己的画布上开一张新的(内嵌视图里执行它的「新建」命令,见 workflowEditor;存盘是 ComfyUI
  * 自己的,回来时刷新,新存的那张就出现在列表里);「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
+ *
+ * **文件夹**(见 WorkflowFolders):左栏顶上「新建文件夹」;文件夹上右键(或 ⋯、Shift+F10)新建子文件夹、改名、删除(只删空的);
+ * 卡片拖到左边的文件夹上就是「移动到…」那个文件夹(先确认)。**右键菜单**:卡片和列表的一行上右键、悬停 / 聚焦时出现的 ⋯、
+ * Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台 / 编辑器里打开、编辑应用表单、复制 / 改名 / 移动 / 导出、复制路径、
+ * 去补缺的模型 / 节点、删除;点不了的写着为什么。
  *
  * 列表每次打开现问插件(不存库)。
  */
@@ -179,7 +213,17 @@ export function WorkflowLibraryDialog({
     | null
   >(null);
   const [deleting, setDeleting] = React.useState(false);
-  //: 正在编辑哪一张的应用表单(ADR 0038):详情里「编辑应用表单」打开
+  //: 正在确认的文件夹改动(新建在哪个文件夹下面、给哪个改名、删哪个)
+  const [folderAsk, setFolderAsk] = React.useState<
+    { kind: "create"; parent: string } | { kind: "rename"; path: string } | { kind: "delete"; path: string } | null
+  >(null);
+  //: 正在挪哪一张(「移动到…」,或者拖到了左边哪个文件夹上)
+  const [moving, setMoving] = React.useState<{ flow: WorkflowFile; folder?: string } | null>(null);
+  //: 拖着一张卡片经过左边的哪一项(高亮它)
+  const [dropTarget, setDropTarget] = React.useState<string | null>(null);
+  //: 从菜单的「下载缺的模型」「装缺的节点」打开详情时,停到哪一节
+  const [detailFocus, setDetailFocus] = React.useState<"models" | "nodes" | null>(null);
+  //: 正在编辑哪一张的应用表单(ADR 0038):详情里「编辑应用表单」、卡片菜单里「编辑应用表单…」打开
   const [editingApp, setEditingApp] = React.useState<WorkflowFile | null>(null);
   //: 正在导入(往库上拖进来的那个文件一并带上)
   const [importing, setImporting] = React.useState<{ file?: File } | null>(null);
@@ -225,11 +269,19 @@ export function WorkflowLibraryDialog({
   const workflows = React.useMemo(() => library.data?.workflows ?? [], [library.data]);
   const trash = library.data?.trash ?? [];
   const taken = React.useMemo(() => new Set(workflows.map(keyOf)), [workflows]);
-  const folders = React.useMemo(() => workflowFolders(workflows), [workflows]);
+  const folders = React.useMemo(() => folderTree(library.data?.folders ?? [], workflows), [library.data, workflows]);
+  //: 那台机器上看得见的文件(工作流和别的文件):文件夹里有一个就不能删
+  const files = React.useMemo(
+    () => [...workflows.map(keyOf), ...(library.data?.others ?? []).map((one) => one.path)],
+    [workflows, library.data],
+  );
   const problems = workflows.filter(lacksSomething).length;
   const navItems: LibraryNavItem[] = [
     { value: ALL_WORKFLOWS, label: t("workflowLibraryAll"), count: workflows.length, icon: <LayoutGrid /> },
-    ...folders.map((one) => ({ value: one.name, label: one.name, count: one.count, icon: <FolderTree /> })),
+    ...folders.map((one) => ({
+      value: folderView(one.path), label: one.name, fullLabel: one.path, depth: one.depth, count: one.count,
+      icon: view === folderView(one.path) ? <FolderOpen /> : <Folder />,
+    })),
   ];
   const pinned: LibraryNavItem[] = [
     ...(problems > 0
@@ -238,9 +290,14 @@ export function WorkflowLibraryDialog({
     ...(trash.length > 0 ? [{ value: TRASH_VIEW, label: t("workflowLibraryTrash"), count: trash.length, icon: <Trash2 /> }] : []),
   ];
   const current = [...navItems, ...pinned].some((one) => one.value === view) ? view : ALL_WORKFLOWS;
+  //: 选中的文件夹(`""` = 没选文件夹:全部、缺东西的、回收站)
+  const selectedFolder = folderOfView(current) ?? "";
   const scope = inView(workflows, current);
   const shown = sortWorkflows(filterWorkflows(scope, { kind, query }), sort);
   const detail = detailKey ? workflows.find((flow) => keyOf(flow) === detailKey) ?? null : null;
+
+  //: 「在编辑器里打开」「在工作台里打开」「新建」开的是哪里(插件报了编辑器才有)
+  const editorTarget = library.data?.editor ?? null;
 
   const clearFilters = () => {
     setQuery("");
@@ -266,7 +323,6 @@ export function WorkflowLibraryDialog({
     </Hint>
   );
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
-  const editorTarget = library.data?.editor ?? null;
   const newButton = editorTarget ? (
     <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint"
       : embeddedCreate(editorTarget) ? "workflowNewHint" : "workflowNewHintTab")}>
@@ -276,7 +332,10 @@ export function WorkflowLibraryDialog({
       </Button>
     </Hint>
   ) : null;
-  const newNote = editor.note?.path === NEW_NOTE_PATH ? <EditorNoteLine note={editor.note} onDismiss={editor.dismiss} /> : null;
+  //: 「新建」、卡片菜单里「在编辑器里打开」之后留下的那句话:在列表上就摆在列表上(详情里的那一张摆在详情里)
+  const listNote = editor.note && (editor.note.path === NEW_NOTE_PATH || !detailKey)
+    ? <EditorNoteLine note={editor.note} onDismiss={editor.dismiss} />
+    : null;
   //: 往库上拖一个工作流文件:直接打开导入、认它(回收站那一页也一样 —— 拖进来的总是要导入的)
   const drop = useFileDrop((files) => setImporting({ file: files[0] }), importable);
 
@@ -292,6 +351,173 @@ export function WorkflowLibraryDialog({
       <RefreshCcw size={13} />
     </IconButton>
   );
+
+  //: 搜索框说的是**现在这一页**有几张:选了文件夹就说在哪个文件夹里
+  const searchLabel = selectedFolder
+    ? t("workflowLibrarySearchIn").replace("{folder}", baseName(selectedFolder)).replace("{n}", String(scope.length))
+    : t("workflowLibrarySearch").replace("{n}", String(scope.length));
+
+  // --- 文件夹 -----------------------------------------------------------------------------
+  //: 文件夹改了名、删了:选着的是它(或它里面的)就跟过去 / 退回上一级
+  const followFolder = (from: string, to: string | null) => {
+    if (!selectedFolder || (selectedFolder !== from && !inFolder(selectedFolder, from))) return;
+    if (to !== null) setView(folderView(`${to}${selectedFolder.slice(from.length)}`));
+    else setView(parentOf(from) ? folderView(parentOf(from)) : ALL_WORKFLOWS);
+  };
+  const folderActions = (path: string): MenuAction[] => {
+    const inside = filesIn(path, files);
+    return [
+      { label: t("workflowFolderNewInside"), icon: <FolderPlus />, onSelect: () => setFolderAsk({ kind: "create", parent: path }) },
+      { label: t("workflowFolderRename"), icon: <FolderPen />, onSelect: () => setFolderAsk({ kind: "rename", path }) },
+      {
+        label: t("workflowFolderDelete"), icon: <Trash2 />, destructive: true, disabled: inside > 0,
+        description: inside > 0 ? t("workflowFolderDeleteNotEmpty").replace("{n}", String(inside)) : undefined,
+        onSelect: () => setFolderAsk({ kind: "delete", path }),
+      },
+    ];
+  };
+  //: 拖一张卡片到左边「全部」(顶层)或一个文件夹上:松手就是「移动到…」那里(先确认)
+  const dropOn = (value: string, folder: string) => ({
+    onDragOver: (event: React.DragEvent) => {
+      if (!carriesWorkflow(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDropTarget(value);
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!carriesWorkflow(event)) return;
+      event.preventDefault();
+      setDropTarget(null);
+      const flow = workflows.find((one) => keyOf(one) === event.dataTransfer.getData(WORKFLOW_DRAG_TYPE));
+      if (flow && parentOf(flow.path) !== folder) setMoving({ flow, folder });
+    },
+  });
+  const renderNavItem = (item: LibraryNavItem, tab: React.ReactElement) => {
+    const folder = folderOfView(item.value);
+    if (item.value !== ALL_WORKFLOWS && folder === null) return tab;
+    const over = dropTarget === item.value;
+    const drop = dropOn(item.value, folder ?? "");
+    if (folder === null) {
+      return (
+        <div role="none" data-drop-target={over || undefined} className={cn("rounded-md", over && "ring-2 ring-primary")} {...drop}>
+          {tab}
+        </div>
+      );
+    }
+    const actions = folderActions(folder);
+    const label = t("workflowFolderActions").replace("{name}", folder);
+    return (
+      <ContextMenu>
+        <div
+          role="none"
+          data-drop-target={over || undefined}
+          className={cn("group/folder relative rounded-md", over && "ring-2 ring-primary")}
+          {...drop}
+        >
+          <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>{tab}</ContextMenuTrigger>
+          {/* 悬停 / 聚焦时出现的 ⋯(盖住数量):只有选中的那一项进 Tab 顺序,别的用右键或 Shift+F10 */}
+          <span className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-md bg-secondary opacity-0 transition-opacity focus-within:opacity-100 group-hover/folder:opacity-100 has-[[data-state=open]]:opacity-100">
+            <ActionMenu
+              label={label}
+              actions={actions}
+              trigger={
+                <IconButton variant="ghost" size="icon-xs" label={label} aria-haspopup="menu" tabIndex={item.value === current ? 0 : -1}>
+                  <MoreHorizontal />
+                </IconButton>
+              }
+            />
+          </span>
+        </div>
+        <ContextMenuContent>
+          <ActionContextMenuItems actions={actions} />
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  };
+  //: 文件夹改名的确认框多说一句:里面几张工作流跟着换路径、Mosael 里在用其中哪几张(换了路径它们跑的时候会说找不到)
+  const folderRenameNote = (path: string) => {
+    const inside = workflows.filter((flow) => inFolder(flow.path, path));
+    if (inside.length === 0) return undefined;
+    const used = inside.flatMap((flow) => (flow.used_by ?? []).map((one) => one.name));
+    return [
+      t("workflowFolderRenameNote").replace("{n}", String(inside.length)),
+      used.length > 0 ? `${t("workflowFolderRenameUsedBy")}${[...new Set(used)].join(t("listSeparator"))}` : "",
+    ].filter(Boolean).join(" ");
+  };
+  const newFolder = (
+    <Hint label={t("workflowFolderNewHint")}>
+      <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setFolderAsk({ kind: "create", parent: selectedFolder })}>
+        <FolderPlus size={13} />
+        {t("workflowFolderNew")}
+      </Button>
+    </Hint>
+  );
+
+  // --- 一张卡片的菜单(右键、⋯、Shift+F10 是同一份)------------------------------------------
+  const exportFlow = (flow: WorkflowFile) => {
+    void getWorkflowContent(instance.id, flow.path)
+      .then((found) => saveJsonToDisk(`${flow.label}.json`, found.content))
+      .catch((error: unknown) => toast.error(errorText(error)));
+  };
+  const copyPath = (flow: WorkflowFile) => {
+    void Promise.resolve()
+      .then(() => navigator.clipboard.writeText(flow.path))
+      .then(
+        () => toast.success(t("workflowPathCopied").replace("{path}", flow.path)),
+        () => toast.error(t("workflowPathCopyFailed")),
+      );
+  };
+  //: 改那台机器上这一张的几样、复制路径、删除 —— 详情头上的 ⋯ 也是这几样
+  const fileActions = (flow: WorkflowFile): MenuAction[] => [
+    { group: "file", label: t("workflowCopy"), icon: <Copy />,
+      onSelect: () => setAction({ kind: "copy", path: flow.path, initial: freeWorkflowPath(flow.path, taken) }) },
+    { group: "file", label: t("workflowRename"), icon: <PencilLine />,
+      onSelect: () => setAction({ kind: "rename", path: flow.path, initial: flow.path }) },
+    { group: "file", label: t("workflowMove"), icon: <FolderInput />, onSelect: () => setMoving({ flow }) },
+    { group: "file", label: t("workflowExport"), icon: <Download />, description: t("workflowExportDesc"), onSelect: () => exportFlow(flow) },
+    { group: "path", label: t("workflowCopyPath"), icon: <ClipboardCopy />, onSelect: () => copyPath(flow) },
+    { group: "delete", label: t("workflowDelete"), icon: <Trash2 />, destructive: true, onSelect: () => setAction({ kind: "delete", flow }) },
+  ];
+  const cardActions = (flow: WorkflowFile, openItem: (key: string) => void): MenuAction[] => {
+    const workbench = editorTarget ? embeddedWorkbench(editorTarget) : false;
+    const noEditor = t("workflowMenuNoEditor");
+    const models = flow.missing_models?.length ?? 0;
+    const nodes = flow.missing_nodes?.length ?? 0;
+    const lacking: MenuAction[] = [
+      ...(models > 0
+        ? [{ group: "fix", label: t("workflowMenuMissingModels").replace("{n}", String(models)), icon: <Boxes />,
+             onSelect: () => { setDetailFocus("models"); openItem(keyOf(flow)); } }]
+        : []),
+      ...(nodes > 0
+        ? [{ group: "fix", label: t("workflowMenuMissingNodes").replace("{n}", String(nodes)), icon: <Puzzle />,
+             onSelect: () => { setDetailFocus("nodes"); openItem(keyOf(flow)); } }]
+        : []),
+    ];
+    const file = fileActions(flow);
+    return [
+      { group: "open", label: t("workflowMenuOpen"), icon: <PanelRightOpen />, onSelect: () => openItem(keyOf(flow)) },
+      {
+        group: "open", label: t("workflowOpenInWorkbench"), icon: <LayoutPanelLeft />, disabled: !workbench || editor.opening,
+        description: !editorTarget ? noEditor : !workbench ? t("workflowMenuNoWorkbench") : undefined,
+        onSelect: () => { if (editorTarget) void editor.workbench(editorTarget, flow); },
+      },
+      {
+        group: "open", label: t("workflowOpenInEditor"), icon: <SquarePen />, disabled: !editorTarget || editor.opening,
+        description: editorTarget ? undefined : noEditor,
+        onSelect: () => { if (editorTarget) void editor.open(editorTarget, flow); },
+      },
+      {
+        group: "app", label: t("workflowMenuEditApp"), icon: <SlidersHorizontal />, disabled: !flow.app,
+        description: flow.app ? undefined : t("workflowMenuAppUnavailable"), onSelect: () => setEditingApp(flow),
+      },
+      ...file.slice(0, -1),
+      ...lacking,
+      ...file.slice(-1),
+    ];
+  };
 
   const toolbar = current === TRASH_VIEW ? (
     <>
@@ -312,8 +538,8 @@ export function WorkflowLibraryDialog({
         <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder={t("workflowLibrarySearch").replace("{n}", String(scope.length))}
-          aria-label={t("workflowLibrarySearch").replace("{n}", String(scope.length))}
+          placeholder={searchLabel}
+          aria-label={searchLabel}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -384,8 +610,20 @@ export function WorkflowLibraryDialog({
       );
     }
     const listLabel = t("workflowLibraryTitle").replace("{name}", instance.name);
+    const menuOf = (flow: WorkflowFile) => ({
+      label: t("workflowActions").replace("{name}", flow.label),
+      actions: cardActions(flow, openItem),
+    });
     if (density === "list") {
-      return <WorkflowTable label={listLabel} workflows={shown} onOpen={(flow) => openItem(keyOf(flow))} />;
+      return (
+        <WorkflowTable
+          label={listLabel}
+          workflows={shown}
+          menuOf={menuOf}
+          onDragEnd={() => setDropTarget(null)}
+          onOpen={(flow) => openItem(keyOf(flow))}
+        />
+      );
     }
     return (
       <ul
@@ -401,7 +639,13 @@ export function WorkflowLibraryDialog({
       >
         {shown.map((flow) => (
           <li key={keyOf(flow)} className="grid min-w-0">
-            <WorkflowCard flow={flow} large={density === "large"} onOpen={() => openItem(keyOf(flow))} />
+            <WorkflowCard
+              flow={flow}
+              large={density === "large"}
+              menu={menuOf(flow)}
+              onDragEnd={() => setDropTarget(null)}
+              onOpen={() => openItem(keyOf(flow))}
+            />
           </li>
         ))}
       </ul>
@@ -413,7 +657,12 @@ export function WorkflowLibraryDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t("workflowLibraryTitle").replace("{name}", instance.name)}
-      nav={library.data ? { label: t("workflowLibraryFolders"), value: current, onChange: setView, items: navItems, pinned } : undefined}
+      nav={
+        library.data
+          ? { label: t("workflowLibraryFolders"), value: current, onChange: setView, items: navItems, pinned, action: newFolder,
+              renderItem: renderNavItem }
+          : undefined
+      }
       toolbar={toolbar}
       dropzone={
         library.data
@@ -433,7 +682,7 @@ export function WorkflowLibraryDialog({
       chips={
         library.data ? (
           <>
-            {newNote}
+            {listNote}
             <LibraryFilterChips
               label={t("modelLibraryActiveFilters")}
               summary={t("workflowLibraryResultCount").replace("{n}", String(shown.length))}
@@ -467,13 +716,9 @@ export function WorkflowLibraryDialog({
             onDismissNote={editor.dismiss}
             app={<WorkflowAppSection instance={instance} flow={detail} onEdit={() => setEditingApp(detail)} onSaved={changed} />}
             onBack={() => setDetailKey(null)}
-            onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
-            onRename={() => setAction({ kind: "rename", path: detail.path, initial: detail.path })}
-            onDelete={() => setAction({ kind: "delete", flow: detail })}
-            onExport={async () => {
-              const found = await getWorkflowContent(instance.id, detail.path);
-              saveJsonToDisk(`${detail.label}.json`, found.content);
-            }}
+            actions={fileActions(detail)}
+            focusSection={detailFocus === "models" ? t("workflowMissingModels") : detailFocus === "nodes" ? t("workflowMissingNodes") : null}
+            onFocused={() => setDetailFocus(null)}
           />
         )
       }
@@ -548,7 +793,77 @@ export function WorkflowLibraryDialog({
                     : action.kind === "rename" ? await renameWorkflow(instance.id, action.path, path)
                       : await restoreWorkflow(instance.id, action.path, path);
                 changed();
-                if (action.kind !== "restore") setDetailKey(done.path);
+                //: 在详情里改的停到改完的那一张;在列表上(右键菜单)改的留在列表上
+                if (action.kind !== "restore" && detailKey) setDetailKey(done.path);
+              }}
+            />
+          )}
+          {moving && (
+            <MoveWorkflowDialog
+              path={moving.flow.path}
+              label={moving.flow.label}
+              folders={folders}
+              initialFolder={moving.folder}
+              where={t("workflowWriteWhere").replace("{server}", instance.name)}
+              usedBy={(moving.flow.used_by ?? []).map((one) => one.name)}
+              onClose={() => setMoving(null)}
+              onSubmit={async (path) => {
+                try {
+                  const done = await renameWorkflow(instance.id, moving.flow.path, path);
+                  if (detailKey === moving.flow.path) setDetailKey(done.path);
+                } finally {
+                  //: 成了要重新列;没成(那张已经不在了、目标被占了)也重新列 —— 手里这份列表旧了
+                  changed();
+                }
+              }}
+            />
+          )}
+          {folderAsk?.kind === "create" && (
+            <FolderPathDialog
+              title={t("workflowFolderNewTitle")}
+              confirmLabel={t("workflowFolderNewConfirm")}
+              where={t("workflowFolderWhere").replace("{server}", instance.name)}
+              initial={freeFolderPath(joinPath(folderAsk.parent, t("workflowFolderDefaultName")), folders.map((one) => one.path))}
+              onClose={() => setFolderAsk(null)}
+              onSubmit={async (path) => {
+                const done = await createWorkflowFolder(instance.id, path);
+                void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+                setView(folderView(done.path));
+              }}
+            />
+          )}
+          {folderAsk?.kind === "rename" && (
+            <FolderPathDialog
+              title={t("workflowFolderRenameTitle").replace("{name}", folderAsk.path)}
+              confirmLabel={t("workflowFolderRenameConfirm")}
+              where={t("workflowFolderWhere").replace("{server}", instance.name)}
+              note={folderRenameNote(folderAsk.path)}
+              initial={folderAsk.path}
+              onClose={() => setFolderAsk(null)}
+              onSubmit={async (path) => {
+                if (path === folderAsk.path) return;
+                try {
+                  const done = await renameWorkflowFolder(instance.id, folderAsk.path, path);
+                  followFolder(folderAsk.path, done.path);
+                } finally {
+                  changed();
+                }
+              }}
+            />
+          )}
+          {folderAsk?.kind === "delete" && (
+            <FolderDeleteDialog
+              path={folderAsk.path}
+              server={instance.name}
+              subfolders={folders.filter((one) => inFolder(one.path, folderAsk.path)).length}
+              onClose={() => setFolderAsk(null)}
+              onConfirm={async () => {
+                try {
+                  await trashWorkflowFolder(instance.id, folderAsk.path);
+                  followFolder(folderAsk.path, null);
+                } finally {
+                  changed();
+                }
               }}
             />
           )}
@@ -604,19 +919,50 @@ function LackBadges({ flow }: { flow: WorkflowFile }) {
   );
 }
 
+/** 一张卡片 / 一行的菜单:右键、⋯、Shift+F10 打开的是同一份(见 WorkflowLibraryDialog 的 cardActions)。 */
+type CardMenu = { label: string; actions: MenuAction[] };
+
+/** 悬停 / 聚焦时出现的 ⋯。点它不冒泡到卡片 / 那一行(列表的一行整行可点)。 */
+function CardMenuButton({ menu, className }: { menu: CardMenu; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100",
+        className,
+      )}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <ActionMenu label={menu.label} actions={menu.actions} />
+    </span>
+  );
+}
+
 /**
  * 一张卡:节点图缩略预览(4:3,整张图塞进去不裁)、名字(一行截断,悬停看全路径)、种类在左、节点数在右;缺东西的再一行。
  * 大卡片多一行:最近一次的产出、Mosael 里几处在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
+ *
+ * 右键、右上角悬停出现的 ⋯、在卡片上按 Shift+F10 / 菜单键,开的是同一份菜单;整张卡能拖,拖到左边的文件夹上就是移过去。
  */
-function WorkflowCard({ flow, large, onOpen }: { flow: WorkflowFile; large: boolean; onOpen: () => void }) {
+function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
+  flow: WorkflowFile;
+  large: boolean;
+  menu: CardMenu;
+  onOpen: () => void;
+  onDragEnd: () => void;
+}) {
   const t = useI18n();
   const used = flow.used_by?.length ?? 0;
   return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
     <article
       data-library-item={keyOf(flow)}
+      draggable
+      onDragStart={(event) => dragWorkflow(event, keyOf(flow))}
+      onDragEnd={onDragEnd}
       className={cn(
-        "relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
-        "hover:border-border-strong hover:bg-panel-subtle",
+        "group relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
+        "hover:border-border-strong hover:bg-panel-subtle data-[state=open]:border-primary",
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
@@ -651,6 +997,7 @@ function WorkflowCard({ flow, large, onOpen }: { flow: WorkflowFile; large: bool
                 src={assetThumbnailUrl(flow.last_output.asset_id)}
                 alt=""
                 loading="lazy"
+                draggable={false}
                 className="size-8 shrink-0 rounded-md bg-secondary object-cover"
               />
             ) : (
@@ -665,18 +1012,33 @@ function WorkflowCard({ flow, large, onOpen }: { flow: WorkflowFile; large: bool
           </div>
         )}
       </div>
+      <CardMenuButton menu={menu} className="absolute right-2 top-2 z-10 rounded-lg bg-panel" />
     </article>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ActionContextMenuItems actions={menu.actions} />
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
-/** 列表:一行一张,扫一大批工作流时比卡片快。名字是行里那颗按钮;整行也点得开。 */
-function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows: WorkflowFile[]; onOpen: (flow: WorkflowFile) => void }) {
+/**
+ * 列表:一行一张,扫一大批工作流时比卡片快。名字是行里那颗按钮;整行也点得开。一行和一张卡片同一份菜单(右键、行尾悬停出现
+ * 的 ⋯、Shift+F10),也能拖到左边的文件夹上。
+ */
+function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
+  label: string;
+  workflows: WorkflowFile[];
+  menuOf: (flow: WorkflowFile) => CardMenu;
+  onOpen: (flow: WorkflowFile) => void;
+  onDragEnd: () => void;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
   const head = "sticky top-0 z-[1] border-b border-divider bg-[var(--modal-surface)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
   const cell = "border-b border-divider px-2 py-1.5 align-middle";
   return (
-    <table aria-label={label} className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-ui-sm">
+    <table aria-label={label} className="w-full min-w-[760px] table-fixed border-separate border-spacing-0 text-ui-sm">
       <colgroup>
         <col className="w-[76px]" />
         <col />
@@ -686,6 +1048,7 @@ function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows:
         <col className="w-[108px]" />
         <col className="w-[120px]" />
         <col className="w-[56px]" />
+        <col className="w-[44px]" />
       </colgroup>
       <thead>
         <tr>
@@ -699,17 +1062,25 @@ function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows:
           <th scope="col" className={head}>{t("modelModified")}</th>
           <th scope="col" className={head}>{t("workflowLibraryColMissing")}</th>
           <th scope="col" className={cn(head, "text-right")}>{t("modelLibraryColUsed")}</th>
+          <th scope="col" className={head}>
+            <span className="sr-only">{t("workflowLibraryColActions")}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
         {workflows.map((flow) => {
           const used = flow.used_by?.length ?? 0;
+          const menu = menuOf(flow);
           return (
+            <ContextMenu key={keyOf(flow)}>
+              <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
             <tr
-              key={keyOf(flow)}
               data-library-item={keyOf(flow)}
+              draggable
+              onDragStart={(event) => dragWorkflow(event, keyOf(flow))}
+              onDragEnd={onDragEnd}
               onClick={() => onOpen(flow)}
-              className="cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle"
+              className="group cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle data-[state=open]:bg-panel-subtle"
             >
               <td className={cell}>
                 <WorkflowGraphView graph={flow.graph} label={t("workflowGraphLabel").replace("{name}", flow.label)}
@@ -742,7 +1113,15 @@ function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows:
               <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
                 {used > 0 ? used : ""}
               </td>
+              <td className={cn(cell, "text-right")}>
+                <CardMenuButton menu={menu} />
+              </td>
             </tr>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ActionContextMenuItems actions={menu.actions} />
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </tbody>
@@ -809,10 +1188,9 @@ function WorkflowDetail({
   onDismissNote,
   app,
   onBack,
-  onCopy,
-  onRename,
-  onDelete,
-  onExport,
+  actions,
+  focusSection,
+  onFocused,
 }: {
   flow: WorkflowFile;
   editor: WorkflowEditor | null;
@@ -833,16 +1211,28 @@ function WorkflowDetail({
   /** 「应用」那一节(应用表单,ADR 0038),见 WorkflowAppSection */
   app: React.ReactNode;
   onBack: () => void;
-  onCopy: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-  onExport: () => Promise<void>;
+  /** 头上 ⋯ 里的几样:复制、改名、移动、导出、复制路径、删除(和卡片菜单里的同一份)。 */
+  actions: MenuAction[];
+  /** 从卡片菜单的「下载缺的模型」「装缺的节点」进来:停到这一节(节的标题)。 */
+  focusSection: string | null;
+  onFocused: () => void;
 }) {
   const t = useI18n();
-  const [menu, setMenu] = React.useState(false);
-  const [exportError, setExportError] = React.useState("");
   const { locale } = usePreferences();
   const generation = flow.generation;
+
+  //: 停到那一节:滚过去,焦点给它的标题(读屏从这一节读起)
+  React.useEffect(() => {
+    if (!focusSection) return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = Array.from(document.querySelectorAll<HTMLElement>("section[aria-label]"))
+        .find((one) => one.getAttribute("aria-label") === focusSection);
+      section?.scrollIntoView({ block: "start" });
+      section?.querySelector<HTMLElement>("h4")?.focus({ preventScroll: true });
+      onFocused();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSection, onFocused]);
 
   const media = (
     <div className="grid gap-2">
@@ -908,36 +1298,21 @@ function WorkflowDetail({
             </Button>
           </Hint>
         )}
-        {/* 改那台机器上的文件:每一样都先弹确认(见 WorkflowPathDialog / ConfirmDialog);导出只是下载到本机 */}
-        <Popover open={menu} onOpenChange={setMenu}>
-          <PopoverTrigger asChild>
-            <IconButton variant="outline" size="default" className="px-3 text-muted-foreground" label={t("workflowMore")}>
+        {/* 改那台机器上的文件:每一样都先弹确认(见 WorkflowPathDialog / MoveWorkflowDialog / ConfirmDialog);导出只是下载到本机 */}
+        <ActionMenu
+          label={t("workflowMore")}
+          actions={actions}
+          trigger={
+            <IconButton variant="outline" size="default" className="px-3 text-muted-foreground" label={t("workflowMore")} aria-haspopup="menu">
               <MoreHorizontal size={14} />
             </IconButton>
-          </PopoverTrigger>
-          <MenuContent label={t("workflowMore")} align="end">
-            <MenuItem icon={<Copy />} label={t("workflowCopy")} onClick={() => { setMenu(false); onCopy(); }} />
-            <MenuItem icon={<PencilLine />} label={t("workflowRename")} onClick={() => { setMenu(false); onRename(); }} />
-            <MenuItem
-              icon={<Download />}
-              label={t("workflowExport")}
-              description={t("workflowExportDesc")}
-              onClick={() => {
-                setMenu(false);
-                setExportError("");
-                onExport().catch((error) => setExportError(errorText(error)));
-              }}
-            />
-            <MenuSeparator />
-            <MenuItem icon={<Trash2 />} label={t("workflowDelete")} destructive onClick={() => { setMenu(false); onDelete(); }} />
-          </MenuContent>
-        </Popover>
+          }
+        />
         </>
       }
       media={media}
     >
       {note && <EditorNoteLine note={note} onDismiss={onDismissNote} />}
-      {exportError && <p role="alert" className="m-0 text-ui-sm text-destructive">{exportError}</p>}
       {flow.problem && (
         <div role="alert" className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/40 bg-panel p-3 text-ui-sm text-foreground">
           <TriangleAlert size={14} aria-hidden className="mt-0.5 shrink-0 text-warning" />

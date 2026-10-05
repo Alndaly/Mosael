@@ -21,7 +21,13 @@ export type MenuAction = {
   shortcut?: HintShortcut;
   onSelect: () => void;
   destructive?: boolean;
+  /** 点不了。为什么点不了写在 `description` 里(菜单里没有悬停说明可看)。 */
   disabled?: boolean;
+  /**
+   * 分组名:和前一个条目的组不同,中间就画一条分组线(工作流卡片的「打开 | 应用 | 文件 | 路径 | 补齐 | 删除」)。
+   * 不给就和以前一样只有破坏性条目自动单独成组。
+   */
+  group?: string;
 };
 
 /**
@@ -63,7 +69,7 @@ export function ActionMenu({
       <MenuContent align={align} label={label}>
         {actions.map((action, i) => (
           <Fragment key={action.label}>
-            {startsDestructiveGroup(actions, i) && <MenuSeparator />}
+            {startsGroup(actions, i) && <MenuSeparator />}
             <PopoverClose asChild>
               <MenuItem
                 icon={action.icon}
@@ -84,9 +90,13 @@ export function ActionMenu({
   );
 }
 
-/** 第一个破坏性条目前面(且前面还有别的)才画分组线 —— ⋯ 菜单和右键菜单同一条规则。 */
-function startsDestructiveGroup(actions: MenuAction[], i: number): boolean {
-  return Boolean(actions[i].destructive) && i > 0 && !actions[i - 1].destructive;
+/**
+ * 这一条前面要不要画分组线 —— ⋯ 菜单和右键菜单同一条规则:第一个破坏性条目前面(且前面还有别的),或者分组名换了。
+ */
+function startsGroup(actions: MenuAction[], i: number): boolean {
+  if (i === 0) return false;
+  const destructive = Boolean(actions[i].destructive) && !actions[i - 1].destructive;
+  return destructive || (actions[i].group ?? "") !== (actions[i - 1].group ?? "");
 }
 
 /**
@@ -100,7 +110,7 @@ export function ActionContextMenuItems({ actions }: { actions: MenuAction[] }) {
     <>
       {actions.map((action, i) => (
         <Fragment key={action.label}>
-          {startsDestructiveGroup(actions, i) && <ContextMenuSeparator />}
+          {startsGroup(actions, i) && <ContextMenuSeparator />}
           <ContextMenuItem
             className={cn(action.destructive && MENU_ITEM_DESTRUCTIVE)}
             disabled={action.disabled}

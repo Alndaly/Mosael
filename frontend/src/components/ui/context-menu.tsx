@@ -200,7 +200,29 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
+/**
+ * 用键盘打开右键菜单:Shift+F10 和菜单键(`ContextMenu`)。Windows / Linux 上浏览器自己会发一个 `contextmenu`;macOS 上
+ * 没有这个习惯 —— 桌面版主要跑在 macOS 上,键盘用户就打不开卡片的右键菜单。
+ *
+ * 挂在 `ContextMenuTrigger asChild` 的那个子元素的 `onKeyDown` 上:在它(或它里面拿着焦点的按钮)上按下这两个键,就在它
+ * 身上补发一个 `contextmenu`,菜单开在它左上角往里一点的地方。拦下了按键的默认动作,浏览器不再另发一个;真发了也只是
+ * 再「打开」一次(Radix 的右键菜单不是开关),不会开了又关。
+ */
+function openContextMenuFromKeyboard(event: React.KeyboardEvent<HTMLElement>): void {
+  if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return
+  event.preventDefault()
+  const target = event.currentTarget
+  const box = target.getBoundingClientRect()
+  target.dispatchEvent(new MouseEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    clientX: box.left + Math.min(box.width / 2, 24),
+    clientY: box.top + Math.min(box.height / 2, 24),
+  }))
+}
+
 export {
+  openContextMenuFromKeyboard,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,

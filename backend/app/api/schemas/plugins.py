@@ -863,6 +863,8 @@ class WorkflowEditorOut(ApiModel):
 
 class WorkflowLibraryOut(ApiModel):
     workflows: list[WorkflowFileOut] = Field(default_factory=list)
+    #: workflows/ 里的子目录(相对 workflows/,按名字排,各级上级都在):左边那一列的文件夹树;空的也在
+    folders: list[str] = Field(default_factory=list)
     others: list[WorkflowOtherFileOut] = Field(default_factory=list)
     trash: list[WorkflowTrashedOut] = Field(default_factory=list)
     manager: WorkflowManagerOut = Field(default_factory=WorkflowManagerOut)
@@ -946,6 +948,17 @@ class WorkflowRestoreRequest(ApiModel):
     path: str = Field(min_length=1, max_length=600)
     #: 原处被占了时换的名字;不给就回原处
     new_path: str = Field(default="", max_length=500)
+
+
+class WorkflowFolderRequest(ApiModel):
+    #: 相对 workflows/ 的文件夹路径(可以带上级:`人像/草稿`)
+    path: str = Field(min_length=1, max_length=400)
+
+
+class WorkflowFolderRenameRequest(ApiModel):
+    path: str = Field(min_length=1, max_length=400)
+    #: 新的路径:换了最后一段是改名,换了上级是挪到别的文件夹里
+    new_path: str = Field(min_length=1, max_length=400)
 
 
 class WorkflowPathOut(ApiModel):

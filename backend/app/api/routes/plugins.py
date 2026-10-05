@@ -54,6 +54,8 @@ from app.api.schemas import (
     WorkflowCanvasRequest,
     WorkflowContentOut,
     WorkflowCopyRequest,
+    WorkflowFolderRenameRequest,
+    WorkflowFolderRequest,
     WorkflowInstallNodesRequest,
     WorkflowLibraryImportOut,
     WorkflowLibraryImportRequest,
@@ -602,12 +604,14 @@ def get_model_node_folders(instance_id: str, body: ModelNodeFoldersRequest, db: 
         raise _model_library_failed(exc) from exc
 
 
-# 认领 `workflow_library` 的连接上存着哪些工作流(ADR 0035):列出、取原文、复制、改名、挪进 / 挪出回收目录。改的是那台
+# 认领 `workflow_library` 的连接上存着哪些工作流(ADR 0035):列出、取原文、复制、改名、挪进 / 挪出回收目录、文件夹。改的是那台
 # 服务器上的文件:撞名回 409(带一个建议名,不覆盖);插件那一头说的错(连不上、它自己的报错)和路径不对回 422,原话交给界面。
 
 def _workflow_library_failed(exc: Exception) -> HTTPException:
     if isinstance(exc, workflow_library.WorkflowConflict):
         return HTTPException(status_code=409, detail={"code": "exists", "message": str(exc), "suggestion": exc.suggestion})
+    if isinstance(exc, workflow_library.WorkflowFolderNotEmpty):
+        return HTTPException(status_code=409, detail={"code": "not_empty", "message": str(exc), "count": exc.count})
     if isinstance(exc, workflow_library.WorkflowStale):
         return HTTPException(status_code=409, detail={"code": "stale", "message": str(exc), "modified": exc.modified})
     return HTTPException(status_code=422, detail=str(exc))
@@ -776,6 +780,36 @@ def restore_workflow(instance_id: str, body: WorkflowRestoreRequest, db: Tx, use
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.restore(db, instance, body.path, body.new_path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/folders", response_model=WorkflowPathOut)
+def create_workflow_folder(instance_id: str, body: WorkflowFolderRequest, db: Tx, user: CurrentUser) -> dict:
+    """在那台服务器的 workflows/ 里新建一个文件夹。已经有了回 409(带建议名)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.make_folder(db, instance, body.path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/folders/rename", response_model=WorkflowPathOut)
+def rename_workflow_folder(instance_id: str, body: WorkflowFolderRenameRequest, db: Tx, user: CurrentUser) -> dict:
+    """文件夹改名 / 挪到别的文件夹里:里面的工作流跟着换路径。目标已经有了回 409(带建议名),不合并进去。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.rename_folder(db, instance, body.path, body.new_path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/folders/trash", response_model=WorkflowPathOut)
+def trash_workflow_folder(instance_id: str, body: WorkflowFolderRequest, db: Tx, user: CurrentUser) -> dict:
+    """删除一个文件夹:只删空的,挪进回收目录。里面还有文件回 409(`not_empty`,带着几个)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.trash_folder(db, instance, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

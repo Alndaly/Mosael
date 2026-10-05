@@ -20738,6 +20738,165 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/folders": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Create Workflow Folder",
+        "description": "在那台服务器的 workflows/ 里新建一个文件夹。已经有了回 409(带建议名)。",
+        "operationId": "create_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/folders/rename": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Rename Workflow Folder",
+        "description": "文件夹改名 / 挪到别的文件夹里:里面的工作流跟着换路径。目标已经有了回 409(带建议名),不合并进去。",
+        "operationId": "rename_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_rename_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowFolderRenameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/folders/trash": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Trash Workflow Folder",
+        "description": "删除一个文件夹:只删空的,挪进回收目录。里面还有文件回 409(`not_empty`,带着几个)。",
+        "operationId": "trash_workflow_folder_api_plugins_instances__instance_id__workflow_library_folders_trash_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/capabilities": {
       "patch": {
         "tags": [
@@ -41419,6 +41578,43 @@
         "title": "WorkflowFillableOut",
         "description": "一张工作流**能填的一项**(ADR 0038 §1,插件的 `items`):应用表单编辑器从这里挑。"
       },
+      "WorkflowFolderRenameRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "new_path": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "New Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "new_path"
+        ],
+        "title": "WorkflowFolderRenameRequest"
+      },
+      "WorkflowFolderRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "WorkflowFolderRequest"
+      },
       "WorkflowFromPage": {
         "properties": {
           "workspace_id": {
@@ -41837,6 +42033,13 @@
             },
             "type": "array",
             "title": "Workflows"
+          },
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Folders"
           },
           "others": {
             "items": {

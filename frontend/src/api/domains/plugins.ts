@@ -159,7 +159,11 @@ export const getWorkflowContent = (instanceId: string, path: string) =>
     `/api/plugins/instances/${instanceId}/workflow-library/content?${new URLSearchParams({ path })}`,
   );
 
-const workflowWrite = (instanceId: string, op: "copy" | "rename" | "trash" | "restore" | "save", body: Record<string, unknown>) =>
+const workflowWrite = (
+  instanceId: string,
+  op: "copy" | "rename" | "trash" | "restore" | "save" | "folders" | "folders/rename" | "folders/trash",
+  body: Record<string, unknown>,
+) =>
   api<{ path: string }>(`/api/plugins/instances/${instanceId}/workflow-library/${op}`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -176,6 +180,14 @@ export const trashWorkflow = (instanceId: string, path: string) => workflowWrite
 /** 从回收目录挪回去;不给新名字就回原处(被占了回 409)。 */
 export const restoreWorkflow = (instanceId: string, path: string, newPath = "") =>
   workflowWrite(instanceId, "restore", { path, new_path: newPath });
+
+/** 在那台服务器的 workflows/ 里新建一个文件夹(相对 workflows/,可以带上级)。已经有了回 409(带建议名)。 */
+export const createWorkflowFolder = (instanceId: string, path: string) => workflowWrite(instanceId, "folders", { path });
+/** 文件夹改名 / 挪到别的文件夹里:里面的工作流跟着换路径。目标已经有了回 409(带建议名)。 */
+export const renameWorkflowFolder = (instanceId: string, path: string, newPath: string) =>
+  workflowWrite(instanceId, "folders/rename", { path, new_path: newPath });
+/** 删除一个文件夹:只删空的,挪进回收目录。里面还有文件回 409(`detail.code` 是 `not_empty`,带着几个)。 */
+export const trashWorkflowFolder = (instanceId: string, path: string) => workflowWrite(instanceId, "folders/trash", { path });
 
 /** 导入前先让插件认一遍(不改那台机器):一段文字(JSON 或链接)、一个文件(base64 带文件名)、一个链接,只给一样。 */
 export const inspectWorkflowImport = (

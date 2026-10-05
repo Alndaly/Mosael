@@ -47,6 +47,18 @@ describe("ActionMenu", () => {
     expect(rows).toEqual(["Rename", "Export", "|", "Delete"]);
   });
 
+  it("给了分组名:组换了就画一条分隔线,破坏性条目照旧单独成组", () => {
+    const { menu } = open([
+      { label: "Open", icon: <svg />, group: "open", onSelect: vi.fn() },
+      { label: "Edit", icon: <svg />, group: "open", onSelect: vi.fn() },
+      { label: "Copy", icon: <svg />, group: "file", onSelect: vi.fn() },
+      { label: "Move", icon: <svg />, group: "file", onSelect: vi.fn() },
+      { label: "Delete", icon: <svg />, group: "file", destructive: true, onSelect: vi.fn() },
+    ]);
+    const rows = [...menu.children].map((el) => el.getAttribute("role") === "separator" ? "|" : el.textContent);
+    expect(rows).toEqual(["Open", "Edit", "|", "Copy", "Move", "|", "Delete"]);
+  });
+
   it("只有一个破坏性条目时不画分隔线", () => {
     const { menu } = open([{ label: "Delete", icon: <svg />, destructive: true, onSelect: vi.fn() }]);
     expect(within(menu).queryByRole("separator")).toBeNull();

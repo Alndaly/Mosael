@@ -5,8 +5,9 @@
 `/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件;模型库用到的
 `/experiment/models*`、`/view_metadata/*`、ComfyUI-Custom-Scripts 的 `/pysssss/view/*`(按 Range 读文件头)、
 `/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`;工作流库用到的
-userdata 写 / 移动 / 删除(照 ComfyUI 源码 app/user_manager.py 的语义:`overwrite=false` 撞名回 409、移动时建目标的父目录、
-删除是硬删)和 Manager 的 `/v2/customnode/getmappings`、`/v2/customnode/installed`。
+userdata 写 / 移动 / 删除(照 ComfyUI 源码 app/user_manager.py 的语义:`overwrite=false` 撞名回 409、写和移动时建目标的
+父目录、移动的源可以是一个目录、删除是硬删)、连目录一起列的 `/api/v2/userdata`(空目录也在),和 Manager 的
+`/v2/customnode/getmappings`、`/v2/customnode/installed`。
 
 每次请求都记在 `server.calls` 里,测试据此断言插件发了什么(提交的图、上传的文件、停的是哪个任务)。
 """
@@ -648,6 +649,13 @@ class State:
     down_left: int = 0
     #: 别的静态地址(测「链接指着一个网页」):路径 → (Content-Type, 正文)。
     static: dict[str, tuple[str, bytes]] = field(default_factory=dict)
+    #: 用户目录里的目录(相对用户目录,如 `workflows/草稿`)。有文件的目录由文件路径推出来;这里记的是**写文件、移动时
+    #: 建出来的**(os.makedirs)—— 里面的东西挪走以后目录还在,空目录只在这里。
+    dirs: set[str] = field(default_factory=set)
+    #: 老版本 ComfyUI 没有 `/api/v2/userdata`(列不出空目录)。
+    userdata_v2: bool = True
+    #: 磁盘不分大小写(那台 ComfyUI 在 Windows 上;macOS 默认也是):`Video` 和 `video` 是同一个,「目标已存在」照这个判。
+    case_insensitive: bool = False
 
     def userdata_get(self, path: str) -> Any:
         if path.startswith("workflows/"):
@@ -655,11 +663,54 @@ class State:
         return self.userdata.get(path)
 
     def userdata_put(self, path: str, value: Any) -> None:
+        self.makedirs(path)
         if path.startswith("workflows/"):
             self.workflows[path[len("workflows/"):]] = value
             self.touch(path[len("workflows/"):])
         else:
             self.userdata[path] = value
+
+    def files(self) -> dict[str, Any]:
+        """用户目录里的全部文件(相对用户目录)。"""
+        return {**{f"workflows/{name}": value for name, value in self.workflows.items()}, **self.userdata}
+
+    def all_dirs(self) -> set[str]:
+        """全部目录:建出来的和每个文件所在的,连同它们的各级父目录。"""
+        found: set[str] = set()
+        for parts in [one.split("/") for one in self.dirs] + [name.split("/")[:-1] for name in self.files()]:
+            found.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
+        return found
+
+    def makedirs(self, path: str) -> None:
+        """写一份 / 挪一份之前 ComfyUI 建它的父目录(get_request_user_filepath 的 os.makedirs)。"""
+        parts = path.split("/")[:-1]
+        self.dirs.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
+
+    def is_dir(self, path: str) -> bool:
+        return path in self.all_dirs()
+
+    def exists(self, path: str) -> bool:
+        """`os.path.exists`:文件或目录;不分大小写的磁盘上 `Video` 也算 `video`。"""
+        if not self.case_insensitive:
+            return path in self.files() or self.is_dir(path)
+        lowered = path.lower()
+        return any(one.lower() == lowered for one in [*self.files(), *self.all_dirs()])
+
+    def move_dir(self, source: str, dest: str) -> None:
+        """`shutil.move` 一个目录:里面的文件、子目录连同它自己一起换上新的前缀。"""
+        def moved(name: str) -> str:
+            return dest + name[len(source):]
+
+        for name in [one for one in self.files() if one.startswith(source + "/")]:
+            value = self.userdata_pop(name)
+            target = moved(name)
+            if target.startswith("workflows/"):
+                self.workflows[target[len("workflows/"):]] = value
+            else:
+                self.userdata[target] = value
+        self.dirs = {moved(one) if one == source or one.startswith(source + "/") else one for one in self.dirs}
+        self.dirs.add(dest)
+        self.makedirs(dest)
 
     def touch(self, name: str) -> int:
         """这张工作流刚被存过(在 ComfyUI 里 Ctrl+S、别人改过):改动时间往后走一格。"""
@@ -771,6 +822,23 @@ class _Handler(BaseHTTPRequestHandler):
             self._json({"error": "restarting"}, 503)
         elif path == "/object_info":
             self._json(state.object_info)
+        elif path == "/api/v2/userdata" and state.userdata_v2:
+            # 连目录一起列(os.walk,一层层走下去):`path` 相对用户目录;要列的目录不存在回 404
+            base = (query.get("path") or [""])[0].strip("/")
+            if base and not state.is_dir(base):
+                self._json({"error": "Requested path not found"}, 404)
+                return
+            prefix = f"{base}/" if base else ""
+            entries: list[dict[str, Any]] = [
+                {"name": one.rsplit("/", 1)[-1], "path": one, "type": "directory"}
+                for one in sorted(state.all_dirs()) if one.startswith(prefix)
+            ]
+            entries += [
+                {"name": one.rsplit("/", 1)[-1], "path": one, "type": "file", "size": len(json.dumps(value)),
+                 "modified": state.modified(one[len("workflows/"):]) / 1000}
+                for one, value in sorted(state.files().items()) if one.startswith(prefix)
+            ]
+            self._json(entries)
         elif path == "/api/userdata" and query.get("dir") == ["workflows"] and not state.workflows:
             # 刚装好的 ComfyUI 还没存过工作流:workflows 目录不存在,ComfyUI 回 404 "Directory not found"
             self.send_response(404)
@@ -894,16 +962,20 @@ class _Handler(BaseHTTPRequestHandler):
             if ".." in source.split("/") or ".." in dest.split("/"):
                 self._json({"error": "forbidden"}, 403)
                 return
-            if state.userdata_get(source) is None:
+            directory = state.userdata_get(source) is None and state.is_dir(source)
+            if state.userdata_get(source) is None and not directory:
                 self._json({"error": "not found"}, 404)
                 return
-            if not overwrite and state.userdata_get(dest) is not None:
+            if not overwrite and state.exists(dest):
                 self.send_response(409)
                 self.send_header("Content-Length", "19")
                 self.end_headers()
                 self.wfile.write(b"File already exists")
                 return
-            state.userdata_put(dest, state.userdata_pop(source))
+            if directory:
+                state.move_dir(source, dest)
+            else:
+                state.userdata_put(dest, state.userdata_pop(source))
             self._json({"path": dest, "size": 1, "modified": 1791000000000})
             return
         name = unquote(rest)
@@ -911,7 +983,7 @@ class _Handler(BaseHTTPRequestHandler):
         if ".." in name.split("/"):
             self._json({"error": "forbidden"}, 403)
             return
-        if not overwrite and state.userdata_get(name) is not None:
+        if not overwrite and state.exists(name):
             self.send_response(409)
             self.send_header("Content-Length", "19")
             self.end_headers()
