@@ -6600,6 +6600,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/model-library/local-nsfw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Nsfw
+         * @description 本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有,识别排着几张、算过几张。全部连接共用一份。
+         */
+        get: operations["get_local_nsfw_api_model_library_local_nsfw_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/model-library/local-nsfw/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Local Nsfw
+         * @description 下载本机识别的权重(22.4 MB,钉死版本、校验 SHA-256)。往后端主机上放东西是部署级动作:只给部署管理员。
+         */
+        post: operations["install_local_nsfw_api_model_library_local_nsfw_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/model-library/node-folders": {
         parameters: {
             query?: never;
@@ -12099,6 +12139,34 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+        };
+        /**
+         * ModelLocalNsfwOut
+         * @description 本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有、下的进度,和识别的进度。
+         */
+        ModelLocalNsfwOut: {
+            /** Status */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Size Bytes
+             * @default 0
+             */
+            size_bytes: number;
+            /**
+             * Pending
+             * @default 0
+             */
+            pending: number;
+            /**
+             * Scored
+             * @default 0
+             */
+            scored: number;
         };
         /** ModelLookupFile */
         ModelLookupFile: {
@@ -31128,6 +31196,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelNsfwOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_nsfw_api_model_library_local_nsfw_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelLocalNsfwOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_local_nsfw_api_model_library_local_nsfw_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelLocalNsfwOut"];
                 };
             };
             /** @description Validation Error */

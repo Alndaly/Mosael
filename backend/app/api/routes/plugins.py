@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import get_current_locale, render_message, tr
+from app.core.i18n import get_current_locale, render_message, tr, translate_fields
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityTermOut,
@@ -21,6 +21,7 @@ from app.api.schemas import (
     ModelDetailOut,
     ModelDownloadRequest,
     ModelLibraryOut,
+    ModelLocalNsfwOut,
     ModelLookupRequest,
     ModelNsfwMarkRequest,
     ModelSavePreviewOut,
@@ -78,7 +79,10 @@ from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
 from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, User
 from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
+from app.ai.runtime import nsfw_models
+from app.ai.runtime.errors import RuntimeSetupError
 from app.domain import model_library
+from app.domain import model_nsfw_local
 from app.domain import workflow_library
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError
@@ -637,6 +641,28 @@ def mark_model_nsfw(instance_id: str, body: ModelNsfwMarkRequest, db: Tx, user: 
         return model_library.mark_nsfw(db, user, instance, body.folder, body.name, body.nsfw)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
+
+
+def _local_nsfw() -> dict:
+    row = {**nsfw_models.status(), **model_nsfw_local.status()}
+    return translate_fields(row, ("message",), get_current_locale())
+
+
+@router.get("/model-library/local-nsfw", response_model=ModelLocalNsfwOut)
+def get_local_nsfw(user: CurrentUser) -> dict:
+    """本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有,识别排着几张、算过几张。全部连接共用一份。"""
+    return _local_nsfw()
+
+
+@router.post("/model-library/local-nsfw/install", response_model=ModelLocalNsfwOut)
+def install_local_nsfw(db: DbSession, user: CurrentUser) -> dict:
+    """下载本机识别的权重(22.4 MB,钉死版本、校验 SHA-256)。往后端主机上放东西是部署级动作:只给部署管理员。"""
+    ensure_deployment_admin(db, user)
+    try:
+        nsfw_models.start_install()
+    except RuntimeSetupError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _local_nsfw()
 
 
 @router.post("/plugins/instances/{instance_id}/model-library/node-folders", response_model=ModelNodeFoldersOut)

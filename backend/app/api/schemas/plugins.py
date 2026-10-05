@@ -462,6 +462,21 @@ class ModelSavePreviewOut(ApiModel):
     saved: str = ""
 
 
+class ModelLocalNsfwOut(ApiModel):
+    """本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有、下的进度,和识别的进度。"""
+
+    #: installed / missing / installing / failed
+    status: str
+    #: 正在下、下失败时那句话(已经按读的人的语言翻好、填好参数)
+    message: str = ""
+    #: 权重文件多大(没下时告诉用户要下多少)
+    size_bytes: int = 0
+    #: 排着队等识别的缩略图
+    pending: int = 0
+    #: 识别过的(按图的内容记)
+    scored: int = 0
+
+
 class ModelFileOut(ApiModel):
     """那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。"""
 

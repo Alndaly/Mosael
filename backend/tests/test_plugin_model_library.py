@@ -983,3 +983,80 @@ def test_示例只有视频的_用视频当预览_存回的是视频本身(libra
     from app.domain import model_previews
 
     assert model_previews.server_kind(instance_id, "loras", name) == "video", "存回的是视频:列表马上标成那台服务器上的视频"
+
+
+# --- 本机识别(第四种依据) ----------------------------------------------------------------
+
+@pytest.fixture
+def local_classifier(monkeypatch):
+    """本机识别的权重「下好了」,识别换成看颜色:偏红的算 NSFW。"""
+    from PIL import Image
+
+    from app.ai.runtime import nsfw_models
+    from app.domain import model_nsfw_local
+
+    def reset() -> None:
+        model_nsfw_local.forget()
+        shutil.rmtree(nsfw_models.root(), ignore_errors=True)
+
+    reset()
+    nsfw_models.weights_path().parent.mkdir(parents=True, exist_ok=True)
+    nsfw_models.weights_path().write_bytes(b"weights")
+    seen: list[str] = []
+
+    def probability(thumbnail: Path) -> float:
+        seen.append(thumbnail.name)
+        with Image.open(thumbnail) as image:
+            if image.width < 8:
+                raise OSError("too small to tell")
+            red, green, _blue = image.convert("RGB").getpixel((4, 4))
+        return 0.91 if red > 150 and green < 100 else 0.06
+
+    monkeypatch.setattr(model_nsfw_local, "_probability", probability)
+    yield seen
+    reset()
+
+
+def _local(model: dict) -> list[dict]:
+    return [one for one in model["nsfw"]["reasons"] if one["source"] == "local"]
+
+
+def test_本机识别_看显示着的那张的缩略图_列的时候不等_下次列出就有(library, local_classifier) -> None:
+    from app.domain import model_nsfw_local
+
+    client, instance_id, _ = library
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    style = "sub\\style.safetensors"
+    assert not _local(_origin(client, instance_id, style)), "还没有缩略图:没有这条依据"
+    # 卡片露面:缩略图缩出来就排进队(显示的是 Civitai 那张分级最低的 —— 绿的)
+    client.get(f"{base}/thumbnail", params={"folder": "loras", "name": style})
+    assert model_nsfw_local.wait_idle()
+    listed = _origin(client, instance_id, style)
+    assert [(one["nsfw"], one["score"]) for one in _local(listed)] == [(False, 0.06)]
+    assert listed["nsfw"]["flagged"] is False
+
+    # 照常要作者排在前的那张(红的):看的是显示着的那张,不是别的
+    client.get(f"{base}/thumbnail", params={"folder": "loras", "name": style, "pick": "cover"})
+    assert model_nsfw_local.wait_idle()
+    cover = _origin(client, instance_id, style, pick="cover")
+    assert [(one["nsfw"], one["score"]) for one in _local(cover)] == [(True, 0.91)]
+    assert cover["nsfw"]["flagged"] is True
+    assert [one["source"] for one in cover["nsfw"]["reasons"]] == ["civitai", "local"], "依据按来源排"
+
+    # 手动标记压过本机识别
+    client.put(f"{base}/nsfw", json={"folder": "loras", "name": style, "nsfw": False})
+    marked = _origin(client, instance_id, style, pick="cover")
+    assert marked["nsfw"]["flagged"] is False and _local(marked), "标了不是:听手动的,依据照样列着"
+    assert sorted(local_classifier) == sorted(set(local_classifier)), "同一张图只识别一次"
+
+
+def test_本机识别_认不出的不说话_那台服务器上的预览图也看(library, local_classifier) -> None:
+    from app.domain import model_nsfw_local
+
+    client, instance_id, _ = library
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    # sdxl_base 那台服务器上的预览图是 1×1 的 WebP:识别不出 —— 不说是,也不当成「安全」
+    client.get(f"{base}/thumbnail", params={"folder": "checkpoints", "name": "sdxl_base.safetensors"})
+    assert model_nsfw_local.wait_idle()
+    assert local_classifier, "那台服务器上的那张缩出来也排进去"
+    assert not _local(_origin(client, instance_id, "sdxl_base.safetensors"))

@@ -2,6 +2,7 @@ import React from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { LocalNsfwRow, useLocalNsfw } from "@/components/generation/LocalNsfw";
 import {
   NSFW_MODES,
   PREVIEW_LEVELS,
@@ -27,18 +28,18 @@ const NSFW_LABELS = {
 
 /**
  * 模型预览图的两组设置(见 modelPreviewSettings):模型库的工具条、工作台的模型库面板上各一颗,改的是同一份。
- * 不是默认值时按钮点亮,一眼看得出「这台电脑上的预览图被藏过」。`extra` 是面板底下多出来的一块(本机识别那一行)。
+ * 不是默认值时按钮点亮,一眼看得出「这台电脑上的预览图被藏过」。面板底下是本机识别那一行;按钮挂着的时候顺带盯着识别的
+ * 进度(识别完了让模型库重新列一遍,见 useLocalNsfw)。
  */
 export function ModelPreviewSettingsButton({
   compact = false,
-  extra,
 }: {
   /** 小一号(工作台面板的标题行上)。 */
   compact?: boolean;
-  extra?: React.ReactNode;
 }) {
   const t = useI18n();
   const [settings, setSettings] = useModelPreviewSettings();
+  useLocalNsfw();
   const covered = settings.level !== "clear";
   return (
     <Popover>
@@ -69,7 +70,7 @@ export function ModelPreviewSettingsButton({
           onChange={(nsfw) => setSettings({ ...settings, nsfw })}
         />
         <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("modelPreviewSettingsNote")}</p>
-        {extra}
+        <LocalNsfwRow />
       </PopoverContent>
     </Popover>
   );

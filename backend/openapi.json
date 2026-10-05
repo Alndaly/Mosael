@@ -20091,6 +20091,70 @@
         }
       }
     },
+    "/api/model-library/local-nsfw": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Local Nsfw",
+        "description": "本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有,识别排着几张、算过几张。全部连接共用一份。",
+        "operationId": "get_local_nsfw_api_model_library_local_nsfw_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLocalNsfwOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-library/local-nsfw/install": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Install Local Nsfw",
+        "description": "下载本机识别的权重(22.4 MB,钉死版本、校验 SHA-256)。往后端主机上放东西是部署级动作:只给部署管理员。",
+        "operationId": "install_local_nsfw_api_model_library_local_nsfw_install_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLocalNsfwOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/model-library/node-folders": {
       "post": {
         "tags": [
@@ -33591,6 +33655,40 @@
         ],
         "title": "ModelLibraryRefOut",
         "description": "一张工作流:id 和给人看的名字。"
+      },
+      "ModelLocalNsfwOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "default": 0
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "default": 0
+          },
+          "scored": {
+            "type": "integer",
+            "title": "Scored",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ModelLocalNsfwOut",
+        "description": "本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有、下的进度,和识别的进度。"
       },
       "ModelLookupFile": {
         "properties": {

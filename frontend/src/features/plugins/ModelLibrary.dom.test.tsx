@@ -26,6 +26,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getModelLibrary: vi.fn(),
+  getLocalNsfw: vi.fn(async () => ({ status: "missing", message: "", size_bytes: 22404720, pending: 0, scored: 0 })),
+  installLocalNsfw: vi.fn(),
   getModelDetail: vi.fn(),
   resolveModelLink: vi.fn(),
   startModelDownload: vi.fn(),

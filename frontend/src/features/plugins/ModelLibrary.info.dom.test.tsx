@@ -15,12 +15,14 @@
  */
 
 import React from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getModelLibrary: vi.fn(),
+  getLocalNsfw: vi.fn(),
+  installLocalNsfw: vi.fn(),
   getModelDetail: vi.fn(),
   resolveModelLink: vi.fn(),
   startModelDownload: vi.fn(),
@@ -34,6 +36,8 @@ const api = vi.hoisted(() => ({
   modelThumbnailUrl: (instance: string, folder: string, name: string) => `thumbnail://${instance}/${folder}/${name}`,
 }));
 vi.mock("@/api/client", () => api);
+const authMe = vi.hoisted(() => vi.fn());
+vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => useQuery({ queryKey: ["auth-me"], queryFn: authMe }).data?.is_deployment_admin ?? false }));
 vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
 const handoff = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
@@ -44,7 +48,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh" }),
 }));
 
-import type { ModelFile, ModelLibrary, ModelNsfw, PluginInstance } from "@/api/client";
+import type { ModelFile, ModelLibrary, ModelLocalNsfw, ModelNsfw, PluginInstance } from "@/api/client";
 import { hoverHint, readHint } from "@/test/hint";
 import { ModelLibraryDialog } from "./ModelLibrary";
 
@@ -94,6 +98,10 @@ function workflow(id: string, options: string[]) {
 
 const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 
+function localNsfw(overrides: Partial<ModelLocalNsfw> = {}): ModelLocalNsfw {
+  return { status: "missing", message: "", size_bytes: 22404720, pending: 0, scored: 0, ...overrides };
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   for (const fn of Object.values(api)) if (typeof fn === "function" && "mockReset" in fn) (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -104,6 +112,8 @@ beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   api.getModelLibrary.mockResolvedValue(library());
+  api.getLocalNsfw.mockResolvedValue(localNsfw());
+  authMe.mockResolvedValue({ is_deployment_admin: true });
   api.listGenerationOptions.mockImplementation(async (kind: string) =>
     kind === "image" ? [workflow("portrait.json", ["clean.safetensors", "spicy.safetensors"]),
                         workflow("other.json", ["spicy.safetensors"])] : []);
@@ -507,5 +517,57 @@ describe("预览视频", () => {
     const shown = imagePreview.mock.calls[0][0];
     expect(shown.video).toBe(true);
     expect(shown.gallery.map((one: { video?: boolean }) => Boolean(one.video))).toEqual([true, false]);
+  });
+});
+
+
+describe("本机识别", () => {
+  const row = () => screen.getByRole("region", { name: "modelLocalNsfw" });
+
+  it("预览图设置里一行:没下就写多大、点了才下(部署管理员);下着时转圈;下好了说识别到哪儿", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
+    await waitFor(() => expect(row().textContent).toContain("modelLocalNsfwHint"));
+    api.installLocalNsfw.mockResolvedValue(localNsfw({ status: "installing" }));
+    api.getLocalNsfw.mockResolvedValue(localNsfw({ status: "installing" }));
+    fireEvent.click(await within(row()).findByRole("button", { name: /modelLocalNsfwDownload/ }));
+    await waitFor(() => expect(api.installLocalNsfw).toHaveBeenCalledTimes(1));
+    expect(await within(row()).findByRole("button", { name: /modelLocalNsfwInstalling/ })).toHaveProperty("disabled", true);
+
+    //: 下好了:模型库重新列一遍(排进识别的那一批要靠这一次列)
+    const listed = api.getModelLibrary.mock.calls.length;
+    api.getLocalNsfw.mockResolvedValue(localNsfw({ status: "installed", pending: 3 }));
+    await waitFor(() => expect(row().textContent).toContain("modelLocalNsfwPending"), { timeout: 4000 });
+    await waitFor(() => expect(api.getModelLibrary.mock.calls.length).toBeGreaterThan(listed));
+    //: 排着的识别完了:再列一遍,结果出现在卡片上
+    const again = api.getModelLibrary.mock.calls.length;
+    api.getLocalNsfw.mockResolvedValue(localNsfw({ status: "installed", pending: 0, scored: 3 }));
+    await waitFor(() => expect(row().textContent).toContain("modelLocalNsfwReady"), { timeout: 4000 });
+    await waitFor(() => expect(api.getModelLibrary.mock.calls.length).toBeGreaterThan(again));
+  });
+
+  it("不是部署管理员:不给下载按钮,说要谁来下", async () => {
+    authMe.mockResolvedValue({ is_deployment_admin: false });
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
+    await waitFor(() => expect(row().textContent).toContain("modelLocalNsfwAdminOnly"));
+    expect(within(row()).queryByRole("button")).toBeNull();
+  });
+
+  it("下失败了写原因、能重试", async () => {
+    api.getLocalNsfw.mockResolvedValue(localNsfw({ status: "failed", message: "SHA-256 不对" }));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
+    expect((await within(row()).findByRole("alert")).textContent).toContain("modelLocalNsfwFailed");
+    expect(await within(row()).findByRole("button", { name: /modelLocalNsfwRetry/ })).toBeTruthy();
+  });
+
+  it("本机识别那一条依据:悬停写 NSFW 的可能是几成", async () => {
+    api.getModelLibrary.mockResolvedValue(library([
+      model("spicy.safetensors", { nsfw: { flagged: true, manual: null, reasons: [{ source: "local", nsfw: true, score: 0.87 }] } as ModelNsfw }),
+    ]));
+    await open();
+    const mark = card("spicy.safetensors").querySelector("[data-nsfw-mark]")!;
+    expect(mark.getAttribute("aria-label")).toContain("modelNsfwLocal");
   });
 });

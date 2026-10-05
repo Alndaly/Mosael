@@ -232,6 +232,15 @@ class _Cached:
         return (self.thumbnail.read_bytes(), THUMBNAIL_MEDIA_TYPE) if self.thumbnail.is_file() else None
 
 
+def cached_thumbnail(instance_id: str, urls: list[str]) -> Path | None:
+    """这几处(按先后)里头一个已经缩好缩略图的那个文件;都没有就是 None。本机识别看的就是它(见 model_nsfw_local)。"""
+    for url in urls:
+        path = _Cached.of(instance_id, url).thumbnail
+        if path.is_file():
+            return path
+    return None
+
+
 def _write(path: Path, content: bytes) -> None:
     """临时文件再换上去:读的人不会读到半截。"""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -411,6 +420,10 @@ def _shrink(instance_id: str, cached: _Cached, original: tuple[bytes, str]) -> t
         logger.info("模型预览图缩不出缩略图(连接 %s),给原图:%s", instance_id, exc)
         return original
     _write(cached.thumbnail, buffer.getvalue())
+    # 本机识别看的就是这张(权重下好了才排队,见 model_nsfw_local)
+    from app.domain import model_nsfw_local
+
+    model_nsfw_local.offer(cached.thumbnail)
     return buffer.getvalue(), THUMBNAIL_MEDIA_TYPE
 
 

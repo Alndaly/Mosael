@@ -1,0 +1,8 @@
+{
+  "heads": 3,
+  "logits": [
+    -0.4820108115673065,
+    -1.4523252248764038
+  ],
+  "note": "timm 1.0.30 VisionTransformer(img_size=16, patch_size=4, embed_dim=24, depth=2, num_heads=3), random weights (seed 20261006); eval transform: bicubic short-side resize, centre crop, mean/std 0.5"
+}

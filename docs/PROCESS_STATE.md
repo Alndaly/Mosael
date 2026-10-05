@@ -95,8 +95,8 @@
   而每次分离都炸(见 `separation_models` 模块说明)。
 - 下载进度:`app/ai/runtime/tts_models.py:_store`、`app/ai/runtime/asr_models.py:_store`、
   `app/ai/runtime/f5_models.py:_store` —— 都是 `download_state.DownloadStore`。
-- `app/ai/runtime/separation_models.py:_store`、`app/ai/runtime/denoise_models.py:_store` —
-  分离引擎、降噪引擎(DeepFilterNet)的**安装进度**,都是 `install_state.InstallStore`。和上面两个 `_store`
+- `app/ai/runtime/separation_models.py:_store`、`app/ai/runtime/denoise_models.py:_store`、`app/ai/runtime/nsfw_models.py:_store` —
+  分离引擎、降噪引擎(DeepFilterNet)、本机识别 NSFW 预览图的权重的**安装进度**,都是 `install_state.InstallStore`。和上面两个 `_store`
   同一类:静息时的事实源在盘上(那个托管 venv 的解释器在不在),内存这份只在"正在装"和
   "刚失败"时有话说。重启丢掉的是"有人正在装"这句话,而那个安装线程本来就随进程一起没了 ——
   重启后状态回到 missing,再点一次即可,不会出现"页面说装好了其实没装"。
@@ -109,6 +109,7 @@
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
 - `app/domain/model_library.py:_snapshots`、`app/domain/model_library.py:_listing_locks` — 模型库(ADR 0034、ADR 0038 §9):每个连接最近一次列出的「哪个文件的预览图在那台服务器上的哪儿」(连同模型旁边的预览视频、别处的示例图、插件交的 NSFW 依据、怎么对上 Civitai 的),以及记着的地址没了时只让插件列一遍的那把锁。重启后是空的:界面要预览图时宿主先替它列一遍。多进程下各记各的,只是多列一遍。
 - `app/domain/model_previews.py:_indexes`、`app/domain/model_previews.py:_fetch_locks`、`app/domain/model_previews.py:_slots` — 模型预览图:每个连接「那台服务器上谁有预览图、是图还是视频」的索引的内存那一份(真身在磁盘上,`<数据目录>/model-previews/<连接>/server-previews.json`,说没有的十分钟内不再问)、同一个地址同时被要好几次时只去取一次(只缩一次缩略图、只转一次视频)的每地址一把锁,以及同时去取的名额(每个连接去那台服务器两张,别处的图床全进程三张)。重启后锁和名额是空的、索引从磁盘读回;预览图、缩略图、转好的预览视频本身在磁盘缓存里,不丢。多进程下各记各的,同时取的张数按进程数翻倍。
+- `app/domain/model_nsfw_local.py:_scores`、`app/domain/model_nsfw_local.py:_queue`、`app/domain/model_nsfw_local.py:_queued`、`app/domain/model_nsfw_local.py:_unreadable`、`app/domain/model_nsfw_local.py:_digests`、`app/domain/model_nsfw_local.py:_weights`、`app/domain/model_nsfw_local.py:_worker`、`app/domain/model_nsfw_local.py:_dirty` — 本机识别模型预览图(ADR 0038 §9):按缩略图内容的哈希记的结果的内存那一份(真身在磁盘上,`<数据目录>/nsfw-classifier/scores-<版本>.json`,攒几条写一次、队列空了写)、排着队的缩略图和它们的哈希、这次进程里认不出的、每个缩略图文件的哈希(按修改时间和大小复用)、读进内存的权重(二十来 MB)、那一个后台线程和还没写盘的条数。重启丢掉的是排着的队和没写盘的几条:下次列模型库时还没结果的会重新排进去。多进程下各算各的,同一张图可能被算两遍,写盘时后写的那份为准(都是同一个模型算的同一个数)。
 - `app/domain/providers/auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
 - `app/integrations/feishu/client.py:_token_cache`(租户令牌)、
   `app/integrations/feishu/inbound.py:_seen`(消息去重)、

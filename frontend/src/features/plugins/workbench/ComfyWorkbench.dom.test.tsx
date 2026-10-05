@@ -25,6 +25,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   getNodeFolders: vi.fn(),
   getModelLibrary: vi.fn(),
+  getLocalNsfw: vi.fn(async () => ({ status: "missing", message: "", size_bytes: 22404720, pending: 0, scored: 0 })),
+  installLocalNsfw: vi.fn(),
   getWorkflowLibrary: vi.fn(),
   resolveModelLink: vi.fn(),
   searchModelSources: vi.fn(),
@@ -164,6 +166,7 @@ beforeEach(() => {
   window.localStorage.clear();
   for (const fn of Object.values(api)) if (typeof fn === "function" && "mockReset" in fn) (fn as ReturnType<typeof vi.fn>).mockReset();
   api.getNodeFolders.mockResolvedValue({ folders: ["checkpoints"] });
+  api.getLocalNsfw.mockResolvedValue({ status: "missing", message: "", size_bytes: 22404720, pending: 0, scored: 0 });
   api.getModelLibrary.mockResolvedValue({
     folders: [], missing: [], downloads: [], download: { route: "local", note: "下到这台电脑上的 ComfyUI/models" },
     models: [

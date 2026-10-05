@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
-from app.domain import capabilities, model_previews
+from app.domain import capabilities, model_nsfw_local, model_previews
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import egress as plugin_egress
@@ -223,6 +223,11 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
         fields, shown = _preview_fields(instance.id, model, preview or (sidecars[0] if sidecars else ""), choices, pick)
         model.update(fields)
         signals = with_elsewhere_signal(model.pop("nsfw_signals"), shown)
+        # 本机识别:看的是显示着的那张的缩略图(别处的那张,或那台服务器上先后试的那几处里已经缩好的)
+        local = model_nsfw_local.signal(model_previews.cached_thumbnail(
+            instance.id, [shown.url] if shown else [one for one in (preview, *sidecars) if one]))
+        if local:
+            signals = [*signals, local]
         model["nsfw"] = nsfw_verdict(marks.get((model["folder"], _norm(model["name"]))), signals)
         models.append(model)
         snapshot.signals[(model["folder"], _norm(model["name"]))] = signals

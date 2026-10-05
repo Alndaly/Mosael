@@ -175,6 +175,12 @@ export const saveModelPreview = (
 export const markModelNsfw = (instanceId: string, body: { folder: string; name: string; nsfw: boolean | null }) =>
   api<ModelNsfw>(`/api/plugins/instances/${instanceId}/model-library/nsfw`, { method: "PUT", body: JSON.stringify(body) });
 
+/** 本机识别 NSFW 预览图(ADR 0038 §9):权重下了没有、识别的进度。全部连接共用一份。 */
+export type ModelLocalNsfw = components["schemas"]["ModelLocalNsfwOut"];
+export const getLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-nsfw");
+/** 下载本机识别的权重(只给部署管理员;后台下,回当时的状态)。 */
+export const installLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-nsfw/install", { method: "POST" });
+
 /** 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件(不是的为空串)。 */
 export const getNodeFolders = (instanceId: string, nodes: { class_type: string; input: string }[]) =>
   api<{ folders: string[] }>(`/api/plugins/instances/${instanceId}/model-library/node-folders`, {
