@@ -16,23 +16,34 @@ const model = (parameterKeys: string[], sourceLimits: Record<string, number> = {
 describe("输入素材槽照描述符出", () => {
   it("只声明参考图的模型不给首尾帧", () => {
     expect(sourceSlots(model(["reference_image"], { reference_image: 3 }))).toEqual([
-      { role: "reference_image", limit: 3 },
+      { role: "reference_image", limit: 3, names: [] },
     ]);
   });
 
   it("声明了首尾帧的才给首尾帧", () => {
     expect(sourceSlots(model(["first_frame", "last_frame"]))).toEqual([
-      { role: "first_frame", limit: 1 },
-      { role: "last_frame", limit: 1 },
+      { role: "first_frame", limit: 1, names: [] },
+      { role: "last_frame", limit: 1, names: [] },
     ]);
   });
 
   it("份数照 source_limits,没写的按一份", () => {
     const slots = sourceSlots(model(["reference_image", "reference_video"], { reference_image: 9 }));
     expect(slots).toEqual([
-      { role: "reference_image", limit: 9 },
-      { role: "reference_video", limit: 1 },
+      { role: "reference_image", limit: 9, names: [] },
+      { role: "reference_video", limit: 1, names: [] },
     ]);
+  });
+
+  it("槽位按顺序带名字(source_labels):ComfyUI 一张工作流几个读图节点,各叫各的", () => {
+    const named = {
+      capabilities: {
+        parameter_keys: ["reference_image"],
+        source_limits: { reference_image: 2 },
+        source_labels: { reference_image: ["人物", "背景"] },
+      },
+    } as unknown as GenerationOption;
+    expect(sourceSlots(named)).toEqual([{ role: "reference_image", limit: 2, names: ["人物", "背景"] }]);
   });
 
   it("没模型就没槽", () => {

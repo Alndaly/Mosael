@@ -98,6 +98,7 @@ export const aiStudio = {
   wfGenToggleOff: "关",
   wfGenSourcePlaceholder: "选素材,或填上游输出",
   wfGenSourceMultiHint: "可多份",
+  wfGenSourceSlotNames: "依次接到:{names}",
   wfGenSourceExtra: "其他素材",
   wfGenSourceExtraHint: "不属于上面几格的行:整组引用(一行带进一组素材,角色写在每一项里),或当前模型不认的角色 —— 换个模型可能又用得上,所以留着没删。",
   genSwapKeyframes: "对调首尾帧",

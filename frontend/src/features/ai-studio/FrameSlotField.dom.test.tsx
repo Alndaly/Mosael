@@ -44,6 +44,23 @@ describe("参考图槽位", () => {
     expect(container.querySelectorAll("input[type=file]").length).toBe(1);
   });
 
+  it("模型给了槽位名字(source_labels):填了的那一格标着它的名字,加号上写下一格叫什么", () => {
+    // ComfyUI 一张工作流有几个读图节点时,它们是「人物」「背景」,而不是几个一样的「参考图」(ADR 0038 §4)
+    const { container } = mount(
+      <FrameSlotField
+        role="reference_image"
+        slots={[{ url: "", assetId: "a", assetName: "a.png" }]}
+        limit={2}
+        names={["人物", "背景"]}
+        onChange={vi.fn()}
+        workspaceId="w"
+      />,
+    );
+    expect(container.querySelector("[data-slot-name]")?.getAttribute("data-slot-name")).toBe("人物");
+    expect(screen.getByRole("button", { name: "人物 · a.png" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "背景" })).toBeTruthy();
+  });
+
   it("加到上限就不再给加号 —— 上限是接口的硬约束,不是建议", () => {
     const { container } = mount(
       <FrameSlotField

@@ -67,7 +67,12 @@ MODELS: list[dict[str, Any]] = [
         # 选模型文件的参数写明目录(生成表单据此从模型库取缩略图);写得不像一个目录名的丢掉
         "6.unet_name": {"type": "string", "enum": ["wan.safetensors"], "x-model-folder": "diffusion_models"},
         "7.lora_name": {"type": "string", "enum": ["a.safetensors"], "x-model-folder": "../etc"},
-    }},
+    }, "inputs": [
+        # 槽位按顺序叫什么(ADR 0038 §4):名字可以按语言分;比槽位多的丢掉,认不出的角色整项不接
+        {"role": "first_frame", "max": 1, "labels": [{"zh": "起始画面", "en": "Opening shot"}]},
+        {"role": "reference_image", "max": 2, "labels": ["人物", "", "多出来的一个"]},
+        {"role": "made_up", "max": 1, "labels": ["x"]},
+    ]},
     # 音频模型(ADR 0022):歌词、纯音乐是宿主有控件的词汇,时长走宿主的时长控件。
     {
         "id": "song",
@@ -344,6 +349,10 @@ def test_接上之后_插件的模型出现在选择器里(plugged) -> None:
     assert clip["model"] == "clip.json"
     assert clip["capabilities"]["parameter_schema"]["6.unet_name"]["x-model-folder"] == "diffusion_models"
     assert "x-model-folder" not in clip["capabilities"]["parameter_schema"]["7.lora_name"]
+    # 槽位的名字(`source_labels`):按看的人的语言挑好,按槽位顺序、没名字的那一格是空串;没给名字的模型没有这一格
+    assert clip["capabilities"]["source_labels"] == {"first_frame": ["起始画面"], "reference_image": ["人物", ""]}
+    assert clip["capabilities"]["source_limits"] == {"first_frame": 1, "reference_image": 2}
+    assert "source_labels" not in caps
     # 表单要知道去哪个连接的模型库取预览图:插件连接的选项带着它的连接 id
     assert portrait["plugin_instance_id"] == instance_id == clip["plugin_instance_id"]
     [song] = _options(client, "audio")

@@ -135,6 +135,7 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         elif key not in _HOST_KEYS:
             schema[key] = dict(spec)
     limits: dict[str, int] = {}
+    labels: dict[str, list[Any]] = {}
     required: list[list[str]] = []
     for slot in model.inputs:
         role = slot["role"]
@@ -143,6 +144,9 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
             continue
         keys.append(role)
         limits[role] = int(slot["max"])
+        if slot.get("labels"):
+            # 槽位按顺序叫什么(ADR 0038 §4):三处界面的第 i 格用第 i 个名字当提示。通用的 —— 哪个插件给了都用
+            labels[role] = list(slot["labels"])
         if slot.get("required"):
             required.append([role])
     caps["parameter_keys"] = keys
@@ -150,6 +154,8 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         caps["parameter_schema"] = schema
     if limits:
         caps["source_limits"] = limits
+    if labels:
+        caps["source_labels"] = labels
     if required:
         caps["requires_source"] = required
     if model.prompt_dialect:

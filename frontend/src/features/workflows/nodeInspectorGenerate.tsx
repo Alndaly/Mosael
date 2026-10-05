@@ -48,6 +48,7 @@ import {
   pickGenerationOption,
   promptMode,
   supportsParameter,
+  sourceLabels,
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
@@ -552,6 +553,15 @@ export function generateNodeSection({
               setConfig("source_assets", writeSourceAssets(withRole(genSourceLines, role, next)))
             }
           />
+          {/* 槽位按顺序叫什么(source_labels):一格里填几份时,第 i 份接到第 i 个名字的那个节点上 */}
+          {sourceLabels(genModel, role).some(Boolean) && (
+            <small data-source-labels={role}>
+              {t("wfGenSourceSlotNames").replace(
+                "{names}",
+                sourceLabels(genModel, role).map((name, index) => name || `#${index + 1}`).join(t("listSeparator")),
+              )}
+            </small>
+          )}
         </div>
       ))}
       {genExtraSourceLines.length > 0 && (

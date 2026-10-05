@@ -87,6 +87,7 @@ import {
   pickGenerationOption,
   runsHint,
   supportsParameter,
+  sourceLabels,
   sourceLimit,
   exclusiveSourceGroups,
   hasEnoughText,
@@ -1203,6 +1204,7 @@ export function GenerateWorkspace({
                       role="reference_image"
                       slots={generationConfig.frames.reference_image}
                       limit={sourceLimit(selectedModel, "reference_image")}
+                      names={sourceLabels(selectedModel, "reference_image")}
                       onChange={(slots) =>
                         setGenerationConfig((current) => ({
                           ...current,
@@ -1241,6 +1243,10 @@ export function GenerateWorkspace({
                     }
                     workspaceId={workspace.id}
                     hint={supportsLastFrame ? t("genLastFrameHint") : t("genKeyframeHint")}
+                    names={{
+                      first: sourceLabels(selectedModel, "first_frame")[0],
+                      last: sourceLabels(selectedModel, "last_frame")[0],
+                    }}
                     disabled={lockedRoles.has("first_frame")}
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
@@ -1251,6 +1257,7 @@ export function GenerateWorkspace({
                     role={role}
                     slots={generationConfig.frames[role]}
                     limit={sourceLimit(selectedModel, role)}
+                    names={sourceLabels(selectedModel, role)}
                     onChange={(slots) => setFrames(role, slots)}
                     workspaceId={workspace.id}
                     hint={t(VIDEO_INPUT_HINTS[role])}
@@ -1267,6 +1274,7 @@ export function GenerateWorkspace({
                     role={role}
                     slots={generationConfig.frames[role]}
                     limit={sourceLimit(selectedModel, role)}
+                    names={sourceLabels(selectedModel, role)}
                     onChange={(slots) => setFrames(role, slots)}
                     workspaceId={workspace.id}
                     // 这一句只说一遍:三个参考控件挨在一起,每个都重复一次就成了噪音。
@@ -1283,6 +1291,7 @@ export function GenerateWorkspace({
                     role={role}
                     slots={generationConfig.frames[role]}
                     limit={sourceLimit(selectedModel, role)}
+                    names={sourceLabels(selectedModel, role)}
                     onChange={(slots) => setFrames(role, slots)}
                     workspaceId={workspace.id}
                     hint={t(AUDIO_SOURCE_HINTS[role])}

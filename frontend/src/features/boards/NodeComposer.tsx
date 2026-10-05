@@ -52,6 +52,7 @@ import {
   promptMode,
   sizeOptions,
   customSizeRule,
+  sourceLabels,
   sourceLimit,
   supportsParameter,
   videoResolutionOptions,
@@ -286,19 +287,20 @@ export function mergeSourceAssets(
  *
  * **认不认看 supportsParameter(描述符的 parameter_keys),能挂几份才看 sourceLimit。**
  * sourceLimit 对没声明的角色兜底返回 1,拿它当支持判定用的话,图片模型也会长出首尾帧槽。
+ * `names` 是这个角色的槽位按顺序叫什么(描述符的 `source_labels`,ADR 0038 §4):第 i 份素材的提示用第 i 个名字。
  */
 export function sourceSlots(
   model: GenerationOption | null,
   /** 当前生成方式的角色。给了就只出这一组 —— 互斥的另一组同时摆出来,挂满了才在提交时被拒。 */
   activeRoles?: string[],
-): { role: string; limit: number }[] {
+): { role: string; limit: number; names: string[] }[] {
   if (!model) return [];
   //: **八个角色全在这儿**,由描述符筛。此前只列了前五个 —— 于是声明了源视频/首段/驱动音频的
   //: 模型(比如万相的视频重绘)在画板上一个对应的格子都没有,那几种能力等于用不了。
   //: 顺序就是出格子的顺序:先首尾帧,再参考,最后那三种整段素材。
   return SOURCE_ROLES.filter((role) => supportsParameter(model, role))
     .filter((role) => !activeRoles || activeRoles.includes(role))
-    .map((role) => ({ role, limit: sourceLimit(model, role) }));
+    .map((role) => ({ role, limit: sourceLimit(model, role), names: sourceLabels(model, role) }));
 }
 
 /**
@@ -436,6 +438,12 @@ function SlotDrop({ onFiles, children }: { onFiles: (files: File[]) => void; chi
 function roleLabel(t: ReturnType<typeof useI18n>, role: string): string {
   const key = ROLE_COPY[role as SourceRole]?.label;
   return key ? t(key as Parameters<typeof t>[0]) : role;
+}
+
+/** 一个角色的第 `index` 格叫什么:模型给了槽位名字(`source_labels`)就是「参考图 · 人物」,没给就是角色名。 */
+function slotLabel(t: ReturnType<typeof useI18n>, slot: { role: string; names?: string[] }, index: number): string {
+  const named = slot.names?.[index];
+  return named ? `${roleLabel(t, slot.role)} · ${named}` : roleLabel(t, slot.role);
 }
 
 export function NodeComposer({
@@ -901,14 +909,14 @@ export function NodeComposer({
             {mergedSlots.flatMap((slot) =>
               sources
                 .filter((one) => one.role === slot.role)
-                .map((one) => {
+                .map((one, index) => {
                   const kind = assetKindById.get(one.assetId);
                   return (
                     <SourceAssetSlotPreview
                       key={one.assetId}
                       assetId={one.assetId}
                       kind={kind === "image" || kind === "video" || kind === "audio" ? kind : roleAccepts(slot.role)}
-                      label={roleLabel(t, slot.role)}
+                      label={slotLabel(t, slot, index)}
                       onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
                     />
                   );
@@ -994,8 +1002,8 @@ export function NodeComposer({
                   <ArrowLeftRight size={12} />
                 </IconButton>
               )}
-              {mine.map((one) => {
-                const label = roleLabel(t, slot.role);
+              {mine.map((one, index) => {
+                const label = slotLabel(t, slot, index);
                 // 素材库数据到了以后以真实类型为准；首屏尚未取回时按角色兜底。两条信息都来自
                 // 同一份领域契约，旧表单里即使没存 kind 也不会退回“全部当图片”。
                 const kind = assetKindById.get(one.assetId);
@@ -1017,7 +1025,7 @@ export function NodeComposer({
                   <IconButton
                     unstyled
                     type="button"
-                    label={roleLabel(t, slot.role)}
+                    label={slotLabel(t, slot, mine.length)}
                     onClick={() =>
                       onPickAsset(roleAccepts(slot.role), (assetId) =>
                         setSources((all) => [...all, { role: slot.role, assetId }]),

@@ -98,6 +98,7 @@ export const aiStudio = {
   wfGenToggleOff: "Off",
   wfGenSourcePlaceholder: "Pick an asset, or reference an upstream output",
   wfGenSourceMultiHint: "multiple allowed",
+  wfGenSourceSlotNames: "In order: {names}",
   wfGenSourceExtra: "Other assets",
   wfGenSourceExtraHint: "Lines that don't belong to a slot above: a whole-group reference (one line brings in a set of assets, each carrying its own role), or roles the current model does not accept — kept in case you switch back.",
   genSwapKeyframes: "Swap first and last",

@@ -63,7 +63,8 @@ class PluginModel:
     #: 键 → JSON Schema 片段(`type` / `enum` / `default` / `minimum` / `maximum` / `multipleOf` /
     #: `title` / `description` / `x-advanced` / `x-multiline`),只留这些。
     parameters: dict[str, dict[str, Any]] = field(default_factory=dict)
-    #: `{role, max, required, label}`。角色认不认,由宿主侧判(它才知道有哪些角色)。
+    #: `{role, max, required, labels}`:`labels` 是这个角色的槽位按顺序叫什么(ComfyUI 一张工作流十个读图节点,
+    #: 「人物」「背景」……,ADR 0038 §4),没给是空的。角色认不认,由宿主侧判(它才知道有哪些角色)。
     inputs: tuple[dict[str, Any], ...] = ()
     max_outputs: int = 1
     #: 一次运行交回几份(张数为 1、参数都按缺省时):ComfyUI 的一张工作流有几个保存节点就是几。宿主据此一次摆好
@@ -126,7 +127,7 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
         label=text(entry.get("label")).strip() or model_id,
         kind=kind,
         modes=modes,
-        parameters=_parameters(entry.get("parameters"), text),
+        parameters=parameters(entry.get("parameters"), text),
         inputs=_inputs(entry.get("inputs"), text),
         max_outputs=min(max(max_outputs, 1), 16),
         outputs_per_run=min(max(outputs_per_run, 1), _MAX_OUTPUTS_PER_RUN),
@@ -139,7 +140,9 @@ def _scalar(value: Any) -> bool:
     return isinstance(value, (str, int, float, bool)) and not (isinstance(value, float) and value != value)
 
 
-def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
+def parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
+    """插件说的参数(键 → JSON Schema 片段)收成规整的形状:认不出的键、类型整项丢掉,只留认得的那几个字段。
+    生成目录收它;工作流库的应用表单编辑器收的每一项的 `schema` 也过它 —— 预览和真的表单是同一套形状。"""
     if not isinstance(raw, dict):
         return {}
     out: dict[str, dict[str, Any]] = {}
@@ -230,12 +233,16 @@ def _inputs(raw: Any, text: Any) -> tuple[dict[str, Any], ...]:
             continue
         count = entry.get("max")
         limit = int(count) if isinstance(count, int) and not isinstance(count, bool) else 1
+        most = min(max(limit, 1), _MAX_INPUT_COUNT)
+        raw_labels = entry.get("labels")
+        labels = [_localizable(one, text, 120) for one in raw_labels[:most]] if isinstance(raw_labels, list) else []
         out.append(
             {
                 "role": role,
-                "max": min(max(limit, 1), _MAX_INPUT_COUNT),
+                "max": most,
                 "required": entry.get("required") is True,
-                "label": text(entry.get("label")).strip()[:120],
+                # 空的那一格(插件没给名字)留空串占位:名字按槽位顺序对,不能往前挪
+                "labels": labels if any(labels) else [],
             }
         )
     return tuple(out)

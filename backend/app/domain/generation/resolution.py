@@ -247,12 +247,19 @@ def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
     """描述符里**给人看的字**按看的人的语言挑好:`parameter_schema` 里的 title / description、可选值的名字
     (`x-enum-labels`)可以是 `{"zh": …, "en": …}`(插件声明的模型参数,见 ADR 0020)。
 
-    在这里挑而不是存的时候挑:目录是在后台刷新的,刷新那一刻的语言不是看的人的语言。
+    在这里挑而不是存的时候挑:目录是在后台刷新的,刷新那一刻的语言不是看的人的语言。素材槽位的名字(`source_labels`,
+    ADR 0038 §4)同理。
     """
+    locale = get_current_locale()
+    slot_names = capabilities.get("source_labels")
+    if isinstance(slot_names, dict):
+        capabilities = {**capabilities, "source_labels": {
+            role: [pick_text(one, locale) if isinstance(one, dict) else str(one) for one in names]
+            for role, names in slot_names.items() if isinstance(names, list)
+        }}
     schema = capabilities.get("parameter_schema")
     if not isinstance(schema, dict):
         return capabilities
-    locale = get_current_locale()
     readable: dict[str, Any] = {}
     for key, spec in schema.items():
         if isinstance(spec, dict):

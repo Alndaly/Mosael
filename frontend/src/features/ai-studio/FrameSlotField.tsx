@@ -71,6 +71,7 @@ function Tile({
   onClear,
   multiple,
   label,
+  name,
 }: {
   slot: FrameSlot | null;
   role: SourceRole;
@@ -79,6 +80,8 @@ function Tile({
   onClear?: () => void;
   multiple: boolean;
   label?: string;
+  /** 这一格叫什么(模型给的槽位名字,见 sourceLabels):填了的那一格角上标着它,悬停说明里也有。 */
+  name?: string;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
@@ -87,8 +90,9 @@ function Tile({
   const isAudio = copy.accept.startsWith("audio");
 
   if (slot && !isEmptySlot(slot)) {
+    const named = name ? `${name} · ${slot.assetName || t(copy.label)}` : slot.assetName || t(copy.label);
     return (
-      <div className="relative">
+      <div className="relative" data-slot-name={name || undefined}>
         {isAudio ? (
           <button type="button" className={`${TILE} cursor-zoom-in p-0`}>
             <span className="flex min-w-0 items-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
@@ -102,11 +106,16 @@ function Tile({
             unstyled
             type="button"
             className={`${TILE} cursor-zoom-in p-0`}
-            label={slot.assetName || t(copy.label)}
-            onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: slot.assetName || t(copy.label) })}
+            label={named}
+            onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named })}
           >
             <img className="block h-full w-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
           </IconButton>
+        )}
+        {name && (
+          <span className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-8px)] rounded bg-background/85 px-1 text-ui-2xs font-semibold text-foreground">
+            <Truncate>{name}</Truncate>
+          </span>
         )}
         {onClear && !disabled && (
           <IconButton
@@ -178,6 +187,7 @@ export function FrameSlotField({
   hint,
   disabled = false,
   disabledReason,
+  names = [],
 }: {
   role: SourceRole;
   slots: FrameSlot[];
@@ -187,6 +197,8 @@ export function FrameSlotField({
   hint?: string;
   disabled?: boolean;
   disabledReason?: string;
+  /** 槽位按顺序叫什么(描述符的 `source_labels`):第 i 格标第 i 个名字,加号上写下一格的名字。 */
+  names?: string[];
 }) {
   const t = useI18n();
   const copy = ROLE_COPY[role];
@@ -224,6 +236,7 @@ export function FrameSlotField({
             multiple={limit > 1}
             onPick={() => undefined}
             onClear={() => onChange(filled.filter((_, i) => i !== index))}
+            name={names[index] || undefined}
           />
         ))}
         {canAdd && (
@@ -233,7 +246,7 @@ export function FrameSlotField({
             disabled={upload.isPending}
             multiple={limit > 1}
             onPick={(files) => upload.mutate(files)}
-            label={upload.isPending ? t(copy.uploading) : undefined}
+            label={upload.isPending ? t(copy.uploading) : names[filled.length] || undefined}
           />
         )}
       </div>
@@ -256,6 +269,7 @@ export function KeyframePairField({
   disabled = false,
   disabledReason,
   showLast,
+  names = {},
 }: {
   first: FrameSlot[];
   last: FrameSlot[];
@@ -266,6 +280,8 @@ export function KeyframePairField({
   disabledReason?: string;
   /** 有些模型只认首帧 —— 那就只画左边一格,不画箭头。 */
   showLast: boolean;
+  /** 首帧 / 尾帧那一格叫什么(描述符的 `source_labels`);没给就是「首帧」「尾帧」。 */
+  names?: { first?: string; last?: string };
 }) {
   const t = useI18n();
   const firstSlot = first[0] ?? EMPTY_SLOT;
@@ -290,7 +306,8 @@ export function KeyframePairField({
             multiple={false}
             onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
             onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
-            label={t("genFirstFrame")}
+            label={names.first || t("genFirstFrame")}
+            name={names.first}
           />
           <IconButton
             type="button"
@@ -312,7 +329,8 @@ export function KeyframePairField({
             multiple={false}
             onPick={(files) => uploadLast.mutate(files.slice(0, 1))}
             onClear={() => onChange({ first, last: [{ ...EMPTY_SLOT }] })}
-            label={t("genLastFrame")}
+            label={names.last || t("genLastFrame")}
+            name={names.last}
           />
         </div>
       ) : (
@@ -324,6 +342,8 @@ export function KeyframePairField({
             multiple={false}
             onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
             onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
+            label={names.first}
+            name={names.first}
           />
         </div>
       )}

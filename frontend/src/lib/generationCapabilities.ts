@@ -107,6 +107,18 @@ export function sourceLimit(model: GenerationOption | null, role: string): numbe
 }
 
 /**
+ * 这个角色的槽位**按顺序叫什么**(描述符的 `source_labels`,ADR 0038 §4):ComfyUI 一张工作流有十个读图节点时,
+ * 它们是「人物」「背景」……而不是十个一样的「参考图」。第 i 个名字是第 i 格的提示 —— AI 工作台、画板、工作流节点
+ * 三处都照它标。没声明(多数模型)是空数组;某一格没有名字是空串。通用的:哪个插件给了都用。
+ */
+export function sourceLabels(model: GenerationOption | null, role: string): string[] {
+  const table = model?.capabilities?.source_labels;
+  if (!table || typeof table !== "object") return [];
+  const names = (table as Record<string, unknown>)[role];
+  return Array.isArray(names) ? names.map((one) => (typeof one === "string" ? one : "")) : [];
+}
+
+/**
  * 互斥的角色分组。同一次生成只能用其中一组。
  *
  * 首尾帧决定成片的第一格和最后一格;参考素材一帧都不出现在成片里,只影响风格与主体 ——
