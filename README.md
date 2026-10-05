@@ -45,7 +45,7 @@ generation, voiceover, or transcription, add a connection and model under the ap
 
 ### Collect research and plan the story
 
-Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL; PDFs, Word files, slides and spreadsheets are parsed into readable text on your machine, and scans can be re-parsed with the MinerU plugin. Every asset remembers what it was made from and how. Use tags, search and previews to find material again. Save scripts, transcripts and agent answers as notes with revision history and source references. Keep recurring characters, locations and props in the asset library — `@` one while generating and its description and reference images come along.
+Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL; PDFs, Word files, slides and spreadsheets are parsed into readable text on your machine, and scans can be re-parsed with the MinerU plugin. Every asset remembers what it was made from and how. Use tags, search and previews to find material again; open a profile in the browser pool and a page's screenshots, videos, images and text go to the library or a note in one click. Save scripts, transcripts and agent answers as notes, where selecting a passage lets the AI assistant polish, rewrite or translate it, with each change shown as original → new for your approval; version history is grouped by day and compares word by word, and sources stay traceable. Keep recurring characters, locations and props in the asset library — `@` one while generating and its description and reference images come along.
 
 Lay documents, media, assets and 3D scenes side by side on an infinite board. Connections pass text and reference media to generation; items do their own work — transcribe, translate, denoise, split a grid — and a timeline item gives you a rough cut right on the board. Comments, member mentions and position markers keep review anchored.
 
@@ -73,7 +73,7 @@ Work with multiple timelines and tracks: drops overwrite what they land on, vide
 
 ### Work with AI on your terms
 
-Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video, music & sound and voice capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Digital-human models make a face speak a voiceover or re-sync the lips of existing footage, with consent checked at every entry point. Generated results return to the media library.
+Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video, music & sound and voice capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Spending is recorded from the usage and charges providers report, with prices that can be tiered by resolution. Digital-human models make a face speak a voiceover or re-sync the lips of existing footage, with consent checked at every entry point. Generated results return to the media library.
 
 Agents can read project context and use tools across media, notes, boards, scenes, editing and workflows. Actions that need approval show a confirmation card. Sessions, tool results, citations and execution traces stay available for review; workspace assistants can dock beside the work or float above it.
 
@@ -85,7 +85,7 @@ Agents can read project context and use tools across media, notes, boards, scene
 
 Connect models, media and tools in a visual workflow. Check required inputs, run the flow, inspect node results, and catch references that can never resolve before anything runs. Official templates cover topic-to-video, translated dubbing, product shorts, talking-head scripts and account / viral-video / comment analysis. Run a flow manually, on a schedule or through a webhook; local schedules need the backend to remain running.
 
-Browser Pool manages persistent sign-ins and proxies for uploads, URL imports and browser automation. Agents ask before borrowing a profile. Publishing forms follow each destination's capabilities; review the video, account and post before submitting, then track the result. Browser uploads require a connected desktop executor.
+Browser Pool manages persistent sign-ins and proxies for uploads, URL imports and browser automation; opening a profile gives you a browser with a page list, and downloads on a page go straight to the media library. Agents ask before borrowing a profile. Publishing forms follow each destination's capabilities; review the video, account and post before submitting, then track the result. Browser uploads require a connected desktop executor.
 
 ![Visual workflow and connected nodes](website/public/media/screens/en/workflows.png)
 
@@ -95,9 +95,9 @@ Browser Pool manages persistent sign-ins and proxies for uploads, URL imports an
 
 The **Chrome video companion** opens in the browser's Side Panel to read transcripts, seek to words, translate and import media or clean video frames. Supported URLs depend on the installed yt-dlp build; page controls require a usable video player. It uses its own Mosael session and does not read Chrome cookies.
 
-**Plugins** connect local scripts or MCP services to agents and workflows, and can also take over generation, transcription, translation, voiceover, denoising or document parsing for Mosael. ComfyUI, object storage and MinerU document parsing ship with the app; Manim, Remotion, TikHub, Baidu Netdisk, Blender and more are in the plugin market. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
+**Plugins** connect local scripts or MCP services to agents and workflows, and can also take over generation, transcription, translation, voiceover, denoising or document parsing for Mosael. ComfyUI (with a model library and a workflow library to browse, download and import that server's models and workflows and install missing nodes), object storage and MinerU document parsing ship with the app; Manim, Remotion, TikHub, Baidu Netdisk, Blender and more are in the plugin market. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
 
-On a shared deployment, the deployment admin uses the **Admin** console to manage members and sign-up, install local engines, and set download mirrors, the outbound proxy and cost rules.
+On a shared deployment, the deployment admin uses the **Admin** console to manage members and sign-up, install local engines, and set download mirrors, the outbound proxy, internal network access and cost rules.
 
 [Chrome companion](browser-extension/README.md) · [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins) · [Admin console](https://mosael.com/en/docs/guides/admin)
 
@@ -157,9 +157,11 @@ system tray, and file associations require desktop mode:
 pnpm dev
 ```
 
-The desktop command starts Vite, the publishing bundle watcher, and Electron together. Restart the
-process after editing `electron/main.cjs` or `electron/preload.cjs`; the main-window DevTools shortcut
-on macOS is `Cmd+Option+I`.
+The desktop command starts Vite, the publishing bundle watcher, and Electron together. When what the main
+process loaded (`electron/main.cjs`, the preload and the bundles) changes, the running process still has the old
+code: a notice at the bottom says the main process code was updated, and **Restart** relaunches only Electron while
+Vite and the backend keep running (the browser session's top bar shows a restart badge too). The main-window DevTools
+shortcut on macOS is `Cmd+Option+I`.
 
 ### Tests and checks
 
