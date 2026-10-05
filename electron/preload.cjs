@@ -170,6 +170,8 @@ const browserBridge = {
   openComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiOpenWorkflow, opts),
   // 工作流库「新建」(见 main.cjs comfyui:newWorkflow)。
   newComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiNewWorkflow, opts),
+  // 内嵌 ComfyUI 画布的操控方式(见 main.cjs comfyui:navigation)。
+  setComfyNavigation: (opts) => invoke(IPC.invoke.comfyuiNavigation, opts),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 

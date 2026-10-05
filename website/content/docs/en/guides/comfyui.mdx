@@ -319,6 +319,13 @@ the web version opens ComfyUI in a new tab, where you click “New”. Build it,
 workflow library refreshes itself with the new workflow in it. If this ComfyUI frontend has no such command, Mosael says so and leaves the
 canvas open, so you can click “New” in ComfyUI yourself.
 
+**Canvas navigation**: the built-in browser's top bar has a **Trackpad / Mouse** switch. Trackpad pans with two-finger scrolling
+and zooms with a pinch (left-drag selects); Mouse zooms with the wheel and pans by dragging empty space (ComfyUI's own default). It
+defaults to Trackpad on a Mac and Mouse elsewhere, and each connection remembers its own choice on this computer. It **applies only to
+this connection in Mosael**: ComfyUI keeps this setting on the server, so Mosael sets it and then blocks the write back to the server.
+Switching to Trackpad on your Mac while using someone's ComfyUI on a Windows machine leaves their own setting untouched. It is set again
+every time the ComfyUI page reloads. If the ComfyUI frontend is too old to have this setting, the switch is hidden and a small icon says why.
+
 ### Apps: pick the items others fill in
 
 A workflow can have dozens of parameters while whoever fills it in only needs three or five. In a workflow's detail, click

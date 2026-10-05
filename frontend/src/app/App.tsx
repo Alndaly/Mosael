@@ -67,6 +67,8 @@ import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
 import { BrowserSessionTools } from "@/features/browser-pool/session-tools/BrowserSessionTools";
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
+import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
+import { comfyConnectionOf } from "@/features/plugins/comfyNavigation";
 import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -166,6 +168,8 @@ function PublishViewBar() {
     if (!editing) setAddress(state.url ?? "");
   }, [state.url, editing]);
   if (!state.visible) return null;
+  //: 这是一个 ComfyUI 连接的视图(工作流库「在编辑器里打开」):顶栏多一个画布操控方式的开关
+  const comfyConnection = comfyConnectionOf(state.partition);
 
   // 回车打开:和浏览器一样,键盘交给打开的那一页。
   const submit = (event: React.FormEvent) => {
@@ -262,6 +266,7 @@ function PublishViewBar() {
           }}
         />
       </form>
+      {comfyConnection && <ComfyNavigationSwitch key={comfyConnection} connectionId={comfyConnection} />}
       {workspaceId && (
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />

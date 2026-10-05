@@ -404,6 +404,12 @@ export class AccountViewManager {
     return this.drivers.get(viewId) ?? null;
   }
 
+  /** 这个会话当前那一页的网页(不新建;没了是 null)—— 要在它每次载入之后做点事的(ComfyUI 的桥、操控方式)挂监听用。 */
+  currentContents(viewId: string): Electron.WebContents | null {
+    const view = this.views.get(viewId);
+    return this.alive(view) ? view.webContents : null;
+  }
+
   /**
    * 这个视图还能用吗 —— **`views` 里有没有 ≠ 它还活着**。
    *

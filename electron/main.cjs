@@ -33,6 +33,7 @@ const {
   IPC,
   parseAuthToken,
   parseBrowserLogin,
+  parseComfyNavigation,
   parseComfyNewWorkflow,
   parseComfyWorkflow,
   parseBrowserProfile,
@@ -908,6 +909,15 @@ app.whenReady().then(async () => {
     try {
       const request = parseComfyNewWorkflow(payload);
       return { ok: true, outcome: await requirePublish().newComfyWorkflow(request) };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):写死的脚本经前端的设置仓库设好,写回服务器的那一下只在这个分区上拦下。
+  ipcMain.handle(IPC.invoke.comfyuiNavigation, async (_e, payload) => {
+    try {
+      const request = parseComfyNavigation(payload);
+      return { ok: true, outcome: await requirePublish().setComfyViewNavigation(request) };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }

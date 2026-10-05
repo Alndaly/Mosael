@@ -22,6 +22,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseBrowserProfile: (value: unknown) => { partition: string };
   parseComfyWorkflow: (value: unknown) => { partition: string; url: string; name: string; path: string };
   parseComfyNewWorkflow: (value: unknown) => { partition: string; url: string; name: string };
+  parseComfyNavigation: (value: unknown) => { partition: string; mode: string };
   parsePanelLayout: (value: unknown) => Record<string, number | string>;
   parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
@@ -134,6 +135,14 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://x", script: "alert(1)" })).toThrow(/unexpected/);
     expect(() => contract.parseComfyNewWorkflow({ connectionId: "a b", url: "http://x" })).toThrow(/connectionId/);
     expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "javascript:alert(1)" })).toThrow(/http/);
+
+    // 操控方式:分区照样由契约按连接 id 拼;只认两种方式,不收别的字段(比如一个设置键、一段脚本)。
+    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "trackpad" }))
+      .toEqual({ partition: "persist:pool-comfyui-c1", mode: "trackpad" });
+    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse" }).mode).toBe("mouse");
+    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "standard" })).toThrow(/mode/);
+    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse", key: "Comfy.X" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyNavigation({ connectionId: "../c1", mode: "mouse" })).toThrow(/connectionId/);
 
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });

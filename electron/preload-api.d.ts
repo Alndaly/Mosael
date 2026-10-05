@@ -166,6 +166,15 @@ export interface MosaelBrowserBridge {
     url: string;
     name?: string;
   }): Promise<{ ok: boolean; outcome?: "created" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
+  /**
+   * 内嵌 ComfyUI 画布的操控方式:触控板(双指平移、捏合缩放)/ 鼠标(滚轮缩放、拖动平移)。只在这个连接的视图里生效 ——
+   * 写回 ComfyUI 服务器的那一下被主进程拦下,那台机器前面的人不受影响;每次载入之后主进程再设一次。
+   * `outcome`:设好了 / 这版前端没有这个设置 / 视图不在这台 ComfyUI 上 / 前端一直没就绪。
+   */
+  setComfyNavigation(opts: {
+    connectionId: string;
+    mode: "trackpad" | "mouse";
+  }): Promise<{ ok: boolean; outcome?: "applied" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
 }
 
 /** 页面工具作用的那一页。 */

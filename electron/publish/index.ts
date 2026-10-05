@@ -7,6 +7,7 @@ export {
   openPoolLogin,
   openComfyWorkflow,
   newComfyWorkflow,
+  setComfyViewNavigation,
   openPage,
   signOutAccount,
   clearPoolProfile,

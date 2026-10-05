@@ -28,6 +28,8 @@ import { FloatLayer, type FloatHint } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
+import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
+import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "./comfyViews";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
@@ -646,10 +648,22 @@ export async function openComfyWorkflow(opts: {
   name: string;
   path: string;
 }): Promise<ComfyOpenOutcome> {
-  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
-  const driver = views?.existingDriver(opts.partition);
+  const driver = await showComfyView(opts);
   if (!driver) return "notReady";
   return openWorkflowInPage(driver, opts);
+}
+
+/** 亮出一个 ComfyUI 连接的内嵌视图(还开着就接着用):先记下来源、装上设置写回的闸,亮出来之后挂上「载入完」的监听。 */
+async function showComfyView(opts: { partition: string; url: string; name: string }) {
+  comfyViewOpening(opts.partition, opts.url);
+  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
+  comfyViewShown(opts.partition);
+  return views?.existingDriver(opts.partition) ?? null;
+}
+
+/** 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标,见 comfyNavigation):只在这个视图里生效,每次载入之后再设一次。 */
+export function setComfyViewNavigation(opts: { partition: string; mode: ComfyNavigation }): Promise<NavigationOutcome> {
+  return setComfyNavigation(opts.partition, opts.mode);
 }
 
 /**
@@ -657,8 +671,7 @@ export async function openComfyWorkflow(opts: {
  * (见 comfyEditor.comfyNewWorkflowScript)。存盘照旧是 ComfyUI 自己的,视图收起时工作流库重拉。
  */
 export async function newComfyWorkflow(opts: { partition: string; url: string; name: string }): Promise<ComfyNewOutcome> {
-  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
-  const driver = views?.existingDriver(opts.partition);
+  const driver = await showComfyView(opts);
   if (!driver) return "notReady";
   return newWorkflowInPage(driver, opts);
 }

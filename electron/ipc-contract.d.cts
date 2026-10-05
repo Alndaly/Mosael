@@ -36,6 +36,7 @@ export const IPC: {
     browserClearProfile: "browser:clearProfile";
     comfyuiOpenWorkflow: "comfyui:openWorkflow";
     comfyuiNewWorkflow: "comfyui:newWorkflow";
+    comfyuiNavigation: "comfyui:navigation";
     pageToolsCapture: "pageTools:capture";
     pageToolsRegionStart: "pageTools:regionStart";
     pageToolsRegionFinish: "pageTools:regionFinish";
@@ -89,6 +90,7 @@ export function parseBrowserLogin(value: unknown): {
 };
 export function parseComfyWorkflow(value: unknown): { partition: string; url: string; name: string; path: string };
 export function parseComfyNewWorkflow(value: unknown): { partition: string; url: string; name: string };
+export function parseComfyNavigation(value: unknown): { partition: string; mode: "trackpad" | "mouse" };
 export function parseTitleOverlay(value: unknown): { color: string; symbolColor: string };
 export function parseSystemStatus(value: unknown): { runningJobs: number; progress?: number | null };
 export function parseTaskNotice(value: unknown): { title: string; body: string };

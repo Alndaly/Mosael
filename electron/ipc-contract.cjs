@@ -53,6 +53,8 @@ const IPC = Object.freeze({
     comfyuiOpenWorkflow: "comfyui:openWorkflow",
     // 工作流库「新建」:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(ADR 0038 §8)。
     comfyuiNewWorkflow: "comfyui:newWorkflow",
+    // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):只在这个视图里生效,写回服务器的那一下由主进程拦下。
+    comfyuiNavigation: "comfyui:navigation",
     // 浏览器会话顶栏的页面工具:只作用于前台那个内嵌视图(主进程自己认是哪个,渲染层不点名)。
     pageToolsCapture: "pageTools:capture",
     pageToolsRegionStart: "pageTools:regionStart",
@@ -227,18 +229,28 @@ function parseComfyNewWorkflow(value) {
   return comfyConnection(payload, channel);
 }
 
+/** 内嵌 ComfyUI 画布的操控方式:连接 id(分区照样由这里拼)和两种方式之一。 */
+function parseComfyNavigation(value) {
+  const channel = IPC.invoke.comfyuiNavigation;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["connectionId", "mode"], channel);
+  return { partition: comfyPartition(payload, channel), mode: oneOf(payload, "mode", ["trackpad", "mouse"], channel) };
+}
+
 /** 一个 ComfyUI 连接的内嵌视图:分区按连接 id 拼(渲染层点不了别的分区)、地址只认 http(s)、名字只用来显示。 */
 function comfyConnection(payload, channel) {
+  const partition = comfyPartition(payload, channel);
+  const { url } = parseUrlRequest(payload, channel);
+  return { partition, url, name: typeof payload.name === "string" ? payload.name.trim() : "" };
+}
+
+/** 连接 id → 它的内嵌视图分区(`persist:pool-comfyui-<id>`)。id 只许是普通的 id,拼不出别的分区。 */
+function comfyPartition(payload, channel) {
   const connectionId = requiredString(payload, "connectionId", channel);
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(connectionId)) {
     throw new TypeError(`${channel}: connectionId must be a plain id`);
   }
-  const { url } = parseUrlRequest(payload, channel);
-  return {
-    partition: `persist:pool-comfyui-${connectionId}`,
-    url,
-    name: typeof payload.name === "string" ? payload.name.trim() : "",
-  };
+  return `persist:pool-comfyui-${connectionId}`;
 }
 
 /** workflows/ 里的相对路径:.json 结尾、不带 ..、隐藏段和 Windows 不收的字符(和宿主同一套规矩)。 */
@@ -513,6 +525,7 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComfyNavigation,
   parseComfyNewWorkflow,
   parseComfyWorkflow,
   parseImageUrls,
