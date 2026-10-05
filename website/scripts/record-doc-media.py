@@ -156,6 +156,10 @@ class Capture:
     def node(self, node_id: str):
         return self.page.locator(f'.react-flow__node[data-id="{node_id}"]')
 
+    def connection(self, key: str):
+        """One of the seeded ComfyUI connections on the plugin page ("demo" or "offline")."""
+        return self.page.locator(f'section[data-connection="{self.fixture["comfyui"][key]}"]')
+
     # -- outputs ------------------------------------------------------------------------------
     def path(self, kind: str, name: str) -> Path:
         p = self.out / kind
@@ -374,6 +378,28 @@ def agent(c: Capture) -> None:
     c.hold(1200)
 
 
+def generation_models(c: Capture) -> None:
+    """A demo ComfyUI workflow picked in AI Studio's generator: the LoRA field lists the connection's LoRA files with
+    their previews, base models and trigger words; picking one shows its trigger words. Nothing is generated."""
+    c.goto("ai")
+    c.tab("生成", "Generate").click()
+    c.hold(1200)
+    c.begin()
+    c.page.get_by_role("button", name=c.word("模型", "Model"), exact=True).click()
+    c.hold(1000)
+    c.page.get_by_role("option", name=re.compile("storybook-portrait")).click()
+    c.hold(1600)
+    panel = c.page.get_by_role("complementary", name=c.word("引擎参数"))
+    panel.get_by_role("combobox", name="LoRA").first.click()
+    c.hold(1300)
+    c.shot("ai-generate-models")
+    c.hold(800)
+    c.page.get_by_role("option", name=re.compile("big-bunny-character-lora")).click()
+    c.hold(1300)
+    panel.get_by_role("button", name=c.word("加进提示词", "Add to prompt")).click()
+    c.hold(1600)
+
+
 def workflows(c: Capture) -> None:
     c.goto("workflows")
     c.shot("workflow-list")
@@ -543,6 +569,47 @@ def notes(c: Capture) -> None:
     c.goto("notes?note=" + c.F["note"])
     c.shot("notes")
     c.begin()
+    # The top bar's formatting buttons: hovering one shows its name and shortcut.
+    formatting = c.page.get_by_role("toolbar", name=c.word("格式工具", "Formatting"))
+    formatting.get_by_role("button", name=c.word("粗体", "Bold"), exact=True).hover()
+    c.hold(1300)
+    c.shot("notes-hint")
+    c.page.mouse.move(980, 520)
+    c.hold(400)
+    formatting.get_by_role("button", name=c.word("插入", "Insert"), exact=True).click()
+    c.hold(1100)
+    c.shot("notes-insert-menu")
+    c.hold(600)
+    c.escape()
+    # Select the opening sentence by dragging across it: the selection toolbar appears above it.
+    sentence = c.page.locator(".ProseMirror p").filter(has_text=c.word("串起三间", "three rooms")).first
+    left, top, right, bottom = sentence.evaluate(
+        "p => { const r = document.createRange(); r.selectNodeContents(p); const b = r.getBoundingClientRect();"
+        " return [b.left, b.top, b.right, b.bottom]; }")
+    y = (top + bottom) / 2
+    c.page.mouse.move(left + 1, y)
+    c.page.mouse.down()
+    for step in range(1, 25):
+        c.page.mouse.move(left + 1 + (right - left - 2) * step / 24, y)
+        c.page.wait_for_timeout(25)
+    c.page.mouse.up()
+    c.hold(1100)
+    c.shot("notes-selection")
+    selection = c.page.get_by_role("toolbar", name=c.word("选区工具", "Selection tools"))
+    selection.get_by_role("button", name=c.word("AI 动作", "AI actions")).click()
+    c.hold(1100)
+    c.shot("notes-ai-actions")
+    c.hold(900)
+    c.escape()
+    # The assistant panel, with the selected sentence attached to the composer. Nothing is sent.
+    c.page.get_by_role("main").get_by_role("button", name=c.word("AI 助手", "AI assistant")).first.click()
+    # The composer's model picker reads the connected models (the local Ollama one) when the panel first opens.
+    c.button("对话模型").wait_for(timeout=30000)
+    c.hold(1500)
+    c.shot("notes-agent")
+    c.hold(800)
+    c.page.get_by_role("main").get_by_role("button", name=c.word("AI 助手", "AI assistant")).first.click()
+    c.hold(900)
     # The note's Markdown toggle, inside the page: pressed shows the source, pressed again goes back to editing.
     source = lambda: c.page.get_by_role("main").get_by_role("button", name="Markdown", exact=True).first.click()
     source()
@@ -550,6 +617,29 @@ def notes(c: Capture) -> None:
     c.shot("notes-markdown")
     source()
     c.hold(1000)
+
+
+def note_history(c: Capture) -> None:
+    """The brief's version history: the seed saved it version by version with different origins (see the seed's
+    note_history)."""
+    c.goto("notes?note=" + c.F["note"])
+    c.begin()
+    c.page.get_by_role("main").get_by_role("button", name=c.word("笔记操作", "Note actions")).click()
+    c.hold(800)
+    c.page.get_by_role("menuitem", name=c.word("版本记录", "Version history")).click()
+    c.hold(1600)
+    c.shot("notes-history")
+    dialog = c.page.get_by_role("dialog")
+    version = lambda n: dialog.get_by_role("button", name=re.compile(re.escape(c.word(f"版本 {n}", f"Version {n}")) + r"\b")).first
+    version(4).click()
+    c.hold(1100)
+    dialog.get_by_role("radio", name=c.word("和上一版对比", "Compare with previous")).click()
+    c.hold(1300)
+    c.shot("notes-history-compare")
+    c.hold(800)
+    version(5).click()
+    c.hold(1500)
+    c.escape()
 
 
 def scenes(c: Capture) -> None:
@@ -588,7 +678,7 @@ SEED_PRODUCT = {"zh": "产品占位球", "en": "Product placeholder"}
 
 
 def plugins(c: Capture) -> None:
-    c.goto("plugins")
+    comfyui(c)
     c.shot("plugins")
     c.begin()
     c.page.get_by_role("button", name=re.compile(c.word("百度网盘", "Baidu Netdisk"))).first.click()
@@ -596,6 +686,107 @@ def plugins(c: Capture) -> None:
     c.shot("plugin-detail")
     c.click("新建连接", hold=1200)
     c.shot("plugin-connection")
+    c.escape()
+    # ComfyUI with two connections: both collapsed, one line each. Hovering a title row says it expands.
+    c.page.get_by_role("button", name=re.compile("^ComfyUI")).first.click()
+    c.hold(1200)
+    c.connection("demo").locator("button[aria-expanded]").first.hover()
+    c.hold(1300)
+    c.shot("plugin-collapsed")
+    c.hold(900)
+
+
+def comfyui(c: Capture) -> None:
+    """The ComfyUI plugin's page (two connections, see the seed's comfyui). The offline connection is refreshed first,
+    with its own refresh button: the reason it failed is stored with the connection in the language of whoever last
+    refreshed it, and each set should show it in its own language."""
+    c.goto("plugins")
+    c.page.get_by_role("button", name=re.compile("^ComfyUI")).first.click()
+    c.connection("offline").get_by_role("button", name=c.word("刷新模型")).click()
+    c.hold(2500)
+    c.page.mouse.move(1000, 860)
+    c.hold(600)
+
+
+def library(c: Capture, key: str, zh: str) -> None:
+    """Open a connection's model or workflow library (the buttons on its title row)."""
+    c.connection(key).get_by_role("button", name=c.word(zh)).click()
+
+
+def model_library(c: Capture) -> None:
+    """The demo ComfyUI's model library (invented model files, Big Buck Bunny frames as previews), one model's
+    details, and the library of the connection that points at a closed port."""
+    comfyui(c)
+    # Read once before recording, as someone who has opened it this session: no first-read spinner on camera.
+    library(c, "demo", "打开模型库")
+    c.page.get_by_role("dialog").get_by_role("button", name=re.compile("storybook-style-lora")).first.wait_for()
+    c.hold(2500)
+    c.escape()
+    c.begin()
+    library(c, "demo", "打开模型库")
+    c.hold(1800)
+    c.shot("model-library")
+    c.page.get_by_role("dialog").get_by_role("button", name=re.compile("storybook-style-lora")).first.click()
+    c.hold(1900)
+    c.shot("model-detail")
+    c.hold(1500)
+    c.page.get_by_role("dialog").get_by_role("button", name=c.word("返回模型库"), exact=True).first.click()
+    c.hold(900)
+    c.escape()
+    library(c, "offline", "打开模型库")
+    dialog = c.page.get_by_role("dialog")
+    dialog.get_by_role("heading", name=c.word("模型库没读出来")).wait_for(timeout=30000)
+    c.hold(900)
+    dialog.get_by_text(c.word("详情", "Details"), exact=True).first.click()
+    c.hold(1100)
+    c.shot("model-library-error")
+    c.hold(800)
+    c.escape()
+
+
+def workflow_library(c: Capture) -> None:
+    """The demo ComfyUI's workflow library: the list, importing a pasted workflow (the preview step; nothing is saved),
+    a workflow with a missing node and missing models, and the download dialog for a missing model the workflow gives
+    no address for (nothing is resolved or downloaded)."""
+    comfyui(c)
+    library(c, "demo", "打开工作流库")
+    c.page.get_by_role("dialog").get_by_role("button", name=re.compile("bunny-image-to-video")).first.wait_for()
+    c.hold(2000)
+    c.escape()
+    c.begin()
+    library(c, "demo", "打开工作流库")
+    c.hold(1800)
+    c.shot("workflow-library")
+    c.page.get_by_role("dialog").get_by_role("button", name=c.word("导入", "Import"), exact=True).click()
+    c.hold(1200)
+    importer = c.page.get_by_role("dialog").last
+    importer.get_by_role("textbox").last.click()
+    # Pasted in one go, like a paste (keyboard.insert_text), not typed character by character.
+    c.page.keyboard.insert_text(SEED.COMFY.IMPORT_SAMPLE)
+    c.hold(1200)
+    importer.get_by_role("button", name=c.word("认一下")).click()
+    importer.get_by_text(c.word("工作流路径")).wait_for()
+    c.hold(1500)
+    c.page.mouse.move(720, 520)
+    for _ in range(4):
+        c.page.mouse.wheel(0, 300)
+        c.hold(350)
+    c.hold(900)
+    c.shot("workflow-import")
+    c.hold(800)
+    c.escape()
+    c.page.get_by_role("dialog").get_by_role("button", name=re.compile("bunny-image-to-video")).first.click()
+    c.hold(2000)
+    c.page.mouse.move(1000, 620)
+    c.page.mouse.wheel(0, 200)
+    c.hold(1200)
+    c.shot("workflow-library-detail")
+    name = "demo-video-umt5.safetensors"
+    c.page.get_by_role("button", name=c.word(f"去模型库下载「{name}」", f"Download “{name}” in the model library")).click()
+    c.hold(2200)
+    c.shot("model-download")
+    c.hold(900)
+    c.click("取消", "Cancel", last=True, hold=800)
     c.escape()
 
 
@@ -713,6 +904,23 @@ def admin(c: Capture) -> None:
     c.hold(900)
 
 
+def pricing(c: Capture) -> None:
+    """Cost rules prefilled for the placeholder connection from the built-in price list (its own model catalog is on
+    a closed local port, so nothing goes online); video models are priced per resolution tier. The rules are deleted
+    again after the recording (see main)."""
+    c.goto("admin")
+    c.click("成本规则", "Cost rules", hold=1200)
+    c.begin()
+    c.click("预填价格", hold=1300)
+    row = c.page.get_by_role("dialog").get_by_role("listitem").filter(has_text=SEED.PLACEHOLDER_PROVIDER)
+    row.get_by_role("button").click()
+    c.hold(2200)
+    c.page.get_by_role("dialog").get_by_role("button", name=c.word("关闭", "Close"), exact=True).first.click()
+    c.hold(1500)
+    c.shot("admin-pricing")
+    c.hold(1200)
+
+
 def login(c: Capture) -> None:
     c.page.evaluate('localStorage.removeItem("mosael.auth.token")')
     c.page.reload(wait_until="networkidle")
@@ -734,6 +942,7 @@ SCENES = {
     "subtitle-panel": subtitle_panel,
     "export": export,
     "ai-studio": ai,
+    "generation-models": generation_models,
     "agent": agent,
     "workflows": workflows,
     "workflow-editor": workflow_editor,
@@ -742,15 +951,19 @@ SCENES = {
     "board-cells": board_cells,
     "annotations": annotations,
     "notes": notes,
+    "note-history": note_history,
     "scenes": scenes,
     "entities": entities,
     "plugins": plugins,
     "plugin-market": plugin_market,
+    "model-library": model_library,
+    "workflow-library": workflow_library,
     "publishing": publishing,
     "scheduler": scheduler,
     "providers": providers,
     "appearance": appearance,
     "admin": admin,
+    "pricing": pricing,
     "login": login,
 }
 
@@ -853,6 +1066,10 @@ def main() -> None:
                         localStorage.setItem('mosael:workspace', workspace);
                         localStorage.setItem('mosael.sidebar.collapsed', 'false');
                         localStorage.setItem('mosael.editor.panels.v2', JSON.stringify(panels));
+                        // The notes list 20 px narrower than its default: at 1440 px the English labels on the
+                        // right of the note's top bar would otherwise fold the Insert / link / table group into
+                        // "More formatting", and the four sets should show the same toolbar.
+                        localStorage.setItem('mosael.sidebar.v2.notes', '240');
                     }""", [args.api, token, theme, "zh-CN" if locale == "zh" else "en-US",
                            fixture["locales"][locale]["workspace"], panels])
                     page.reload(wait_until="networkidle")
@@ -873,6 +1090,11 @@ def main() -> None:
                     encode(raw, target, c.start - origin, duration)
                     c.outputs.append(target)
                     raw.unlink(missing_ok=True)
+                    if name == "pricing":
+                        # Each language and theme prefills from an empty rule list again.
+                        api = SEED.client(token, locale)
+                        for rule in SEED.ok(api.get("/settings/provider-pricing-rules")):
+                            SEED.ok(api.delete(f"/settings/provider-pricing-rules/{rule['id']}"))
                     if name == "agent":
                         # Each language and theme starts from an empty conversation list again.
                         api = SEED.client(token, locale)
