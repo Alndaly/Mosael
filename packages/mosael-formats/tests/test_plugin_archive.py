@@ -161,3 +161,35 @@ def test_老写法的清单先升级再解析() -> None:
     package = read_plugin_archive(make_zip({"mosael.plugin.json": json.dumps(old), "main.py": "x"}))
     assert "format" not in package.raw["tools"]["declare"][0]["node"]["config"]["img"]
     assert package.manifest.declared_tools[0]["name"] == "t"
+
+
+SKILL = "---\nname: batch-upscale\ndescription: 批量放大素材的做法\nmetadata:\n  mosael-title: 批量放大\n---\n\n1. 先列出要处理的素材\n"
+
+
+def test_带技能的包_技能和清单一样装之前就校验() -> None:
+    """ADR 0040 §9:插件包里的 `skills/<名字>/SKILL.md` 装包、社区收稿时校验,不合格的包装不上。"""
+    good = make_zip({
+        "pkg/mosael.plugin.json": json.dumps(MANIFEST), "pkg/main.py": "x",
+        "pkg/skills/batch-upscale/SKILL.md": SKILL, "pkg/skills/batch-upscale/references/参数.md": "表",
+    })
+    package = read_plugin_archive(good)
+    assert "skills/batch-upscale/SKILL.md" in [one.path for one in package.files]
+
+
+@pytest.mark.parametrize(
+    ("files", "detail"),
+    [
+        ({"skills/other-name/SKILL.md": SKILL}, "batch-upscale"),
+        ({"skills/batch-upscale/notes.md": "x"}, "SKILL.md"),
+        ({"skills/README.md": "x"}, "skills/README.md"),
+        ({"skills/batch-upscale/SKILL.md": "no header"}, "---"),
+        ({"skills/Bad_Name/SKILL.md": SKILL.replace("batch-upscale", "Bad_Name")}, "Bad_Name"),
+    ],
+)
+def test_带技能的包_技能不合格就装不上(files: dict[str, str], detail: str) -> None:
+    data = make_zip({"mosael.plugin.json": json.dumps(MANIFEST), "main.py": "x", **files})
+    with pytest.raises(ArchiveError) as caught:
+        read_plugin_archive(data)
+    assert caught.value.key == "pluginErr_skillsInvalid"
+    assert detail in str(caught.value)
+

@@ -620,6 +620,45 @@ Markdown 渲染;`default` 是占位提示;`enum` 是下拉,`boolean` 是「是 /
 清单版本 7 之前它叫 `skills`。改名是因为「技能」在 Mosael 里现在指智能体按需读的**做法**(SKILL.md,见
 [ADR 0040](adr/0040-agent-skills.md))。老清单不用手改:扫描插件目录、启动、装包时由迁移链改名。
 
+### 带技能:`skills/` 目录
+
+插件包里可以带几份**技能**(ADR 0040):告诉智能体「用这个插件做某一类事该怎么做」的做法 —— 先调哪个工具、参数怎么填、
+要检查什么。工具回答「能调什么」,技能回答「怎么把这几样串起来」。格式是开放的 Agent Skills(SKILL.md),和 Claude Code
+插件的 `skills/` 目录同一个约定,**清单里不用登记**:
+
+```
+my-plugin/
+  mosael.plugin.json
+  tools/main.py
+  skills/
+    batch-upscale/
+      SKILL.md            ← 必须:YAML 头写 name、description,下面是做法
+      references/参数表.md ← 可选:智能体用 read_skill_file 按需读
+```
+
+```markdown
+---
+name: batch-upscale
+description: "用这个插件批量放大素材:先列出要处理的、按分辨率分批、跑完核对尺寸。用户说「批量放大」「超分」时用。"
+metadata:
+  mosael-title: "批量放大"
+---
+
+1. 先用 list_assets 找出要处理的素材……
+```
+
+装包(从文件安装、从市场装)和社区收稿时会校验,不合格的包装不上,报错说清是哪个技能哪一行:
+
+- `skills/` 下面只能是技能文件夹,每个文件夹里都要有 `SKILL.md`;**文件夹名就是 `name`**(宿主按目录找它,改不了名);
+- `name` 只用小写英文字母、数字和连字符,1–64 个字符;`description` 1–1024 个字符,写清「做什么、什么时候用」;中文显示名写在
+  `metadata.mosael-title`;
+- `SKILL.md` 不超过 64 KB,单个文件 2 MB,一个技能 200 个文件、合计 10 MB;不能有符号链接和越界路径;
+- YAML 头只认普通的「键: 值」、引号、`|` / `>` 块、列表和映射;锚点、别名、标签会被拒。
+
+装上之后,技能在 设置 → 智能体 → 技能 的「来自插件」一组里,模型看到的名字带上插件 id(`dev.example.myplugin:batch-upscale`,
+不会和内置的、工作区自己的撞名)。**每个工作区默认关着**,有人看过全文再开;插件卸了,技能跟着没了。里面的脚本只当参考读,
+Mosael 不执行。技能是做法不是授权:它不改变你工具的 `effects`,该开确认卡的照样开。
+
 ### 只读
 
 `read_only: true` 的工具才会给**子智能体**用,智能体调它也不开确认卡(它的后果就是 `none`,见下面「确认」)。默认不标。
@@ -935,6 +974,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `permissions` | 自由字符串,逐项授权 |
 | `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation` / `tools`(见「声明『我能替宿主做成什么』」「运行时报出的工具」) |
 | `toolsets` | 给别的智能体看的高层描述;第一条的 `description` 是市场里的长介绍(版本 7 之前叫 `skills`) |
+| 包里的 `skills/` 目录 | 不是清单字段:插件带的技能(SKILL.md 文件夹),装包时校验,见「带技能」 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
 | `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。工具名以字母开头,只用字母、数字、`_`、`-`,最长 64,不能重名。每条写一个 `label`(给人看的名字,可以按语言分;不写时依次退到 `node.label`、人性化的工具名 —— **从不取 `description`**)。可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |

@@ -131,6 +131,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单不合法:{detail}",
         "en": "Invalid plugin manifest: {detail}",
     },
+    "pluginErr_skillsInvalid": {
+        "zh": "插件带的技能不合格(skills/ 目录):{detail}",
+        "en": "A skill bundled with the plugin is invalid (skills/ directory): {detail}",
+    },
     # ---- 工作流文件 ----
     "workflowFileErr_notWorkflowFile": {
         "zh": "不是有效的 Mosael 工作流文件",

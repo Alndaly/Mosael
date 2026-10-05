@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from mosael_formats.agent_skill import SkillError, plugin_skill_files
 from mosael_formats.i18n import FormatError
 from mosael_formats.plugin_manifest import MANIFEST_FILENAME, Manifest, ManifestError, parse
 from mosael_formats.plugin_manifest_upgrade import upgrade
@@ -160,16 +161,25 @@ def read_plugin_archive(
         except (zipfile.BadZipFile, OSError) as exc:
             raise ArchiveError("pluginErr_archiveNotZip") from exc
         files: list[ArchiveFile] = []
+        #: 包里 `skills/` 下的文件(相对清单那一层):插件带的技能,和清单一样装之前就校验(ADR 0040 §9)。
+        skill_files: dict[str, bytes] = {}
         prefix = f"{root}/" if root else ""
         for info in members:
             name = info.filename.replace("\\", "/")
             if info.is_dir() or not name.startswith(prefix):
                 continue
             try:
-                digest = hashlib.sha256(archive.read(info)).hexdigest()
+                content = archive.read(info)
             except (zipfile.BadZipFile, OSError) as exc:
                 raise ArchiveError("pluginErr_archiveNotZip") from exc
-            files.append(ArchiveFile(path=name[len(prefix):], size=info.file_size, sha256=digest))
+            relative = name[len(prefix):]
+            if relative.startswith("skills/"):
+                skill_files[relative] = content
+            files.append(ArchiveFile(path=relative, size=info.file_size, sha256=hashlib.sha256(content).hexdigest()))
+    try:
+        plugin_skill_files(skill_files)
+    except SkillError as exc:
+        raise ArchiveError("pluginErr_skillsInvalid", detail=str(exc)) from exc
     files.sort(key=lambda one: one.path)
     return PluginArchive(raw=raw, manifest=manifest, manifest_member=member, root=root, files=files)
 
