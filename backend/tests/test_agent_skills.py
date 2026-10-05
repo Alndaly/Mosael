@@ -232,6 +232,23 @@ def test_扔进文件夹的技能_列出来但关着_读不了的带原因开不
     assert "dropped" in _system_prompt(ws)
 
 
+def test_读不了的原因按读的人的语言说_缓存不把第一次的语言钉死() -> None:
+    from mosael_formats.i18n import CURRENT_LOCALE
+
+    client = fresh_client()
+    ws = _workspace(client)
+    folder = catalog.workspace_dir(ws) / "mismatch"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("---\nname: other-name\ndescription: x\n---\n", encoding="utf-8")
+    chinese = _skills(ws)["mismatch"].problem
+    token = CURRENT_LOCALE.set("en")
+    try:
+        english = _skills(ws)["mismatch"].problem
+    finally:
+        CURRENT_LOCALE.reset(token)
+    assert "文件夹" in chinese and "folder" in english
+
+
 def test_工作区技能不能占内置的名字() -> None:
     client = fresh_client()
     ws = _workspace(client)

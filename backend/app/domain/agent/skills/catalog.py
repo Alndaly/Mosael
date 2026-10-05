@@ -156,24 +156,27 @@ def _folders(root: Path) -> list[tuple[str, Path]]:
 
 
 def _parse(path: Path, folder: str) -> tuple[SkillDoc | None, str]:
+    """读一份 SKILL.md:好的回 (文档, ""),读不了回 (None, 原因)。原因**此刻**才按读的人的语言说 ——
+    缓存里存的是错误本身(key + 参数),不是第一次读到时那种语言的一句话。"""
     try:
         stat = path.stat()
     except OSError:
         return None, str(SkillDomainError("skillErr_unreadable"))
-    return _parse_cached(str(path), folder, stat.st_mtime_ns, stat.st_size)
+    doc, error = _parse_cached(str(path), folder, stat.st_mtime_ns, stat.st_size)
+    return doc, str(error) if error is not None else ""
 
 
 @lru_cache(maxsize=512)
-def _parse_cached(path: str, folder: str, _mtime: int, _size: int) -> tuple[SkillDoc | None, str]:
+def _parse_cached(path: str, folder: str, _mtime: int, _size: int) -> tuple[SkillDoc | None, Exception | None]:
     """按 (路径, 修改时间, 大小) 缓存:系统提示每轮都要列一遍,而文件很少变。"""
     try:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return None, str(SkillDomainError("skillErr_unreadable"))
+        return None, SkillDomainError("skillErr_unreadable")
     try:
-        return parse_skill_md(text, folder=folder), ""
+        return parse_skill_md(text, folder=folder), None
     except SkillError as exc:
-        return None, str(exc)
+        return None, exc
 
 
 def list_skills(db: Session, workspace_id: str) -> list[Skill]:
