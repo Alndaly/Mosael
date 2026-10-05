@@ -56,10 +56,13 @@ def registered() -> dict[str, Callable[[Session], int]]:
     from app.domain.documents.extraction import reconcile_orphaned_extractions
     from app.domain.jobs import reconcile_orphaned_jobs
     from app.domain.plugins.tools import reconcile_orphaned_invocations
+    from app.domain.voices.remote import reconcile_orphaned_enrollments
 
     return {
         "jobs": reconcile_orphaned_jobs,
         "plugin_invocations": reconcile_orphaned_invocations,
+        # 克隆音色的远端副本(ADR 0037):建到一半进程没了的,记成失败、下次用到时重建。
+        "voice_enrollments": reconcile_orphaned_enrollments,
         # 浏览器那条要收的不止一张表(还有执行器视图),签名也不吃 Session ——
         # 包一层,让这份登记上的每一项长得一样。
         "browser_actions": lambda _db: reconcile_browser_state(),

@@ -221,6 +221,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_ttsRunning": {"zh": "合成《{voice}》配音中", "en": "Synthesising voiceover with “{voice}”"},
     "jobMsg_ttsDone": {"zh": "配音已生成", "en": "Voiceover generated"},
     "jobMsg_ttsFailed": {"zh": "配音生成失败", "en": "Voiceover generation failed"},
+    "jobMsg_remoteVoiceQueued": {"zh": "排队复刻《{voice}》到百炼", "en": "Queued to clone “{voice}” on Bailian"},
+    "jobMsg_remoteVoiceEnrolling": {
+        "zh": "正在百炼上复刻《{voice}》这把嗓子",
+        "en": "Cloning “{voice}” on Alibaba Cloud Bailian",
+    },
+    "jobMsg_remoteVoiceDone": {"zh": "《{voice}》已复刻到百炼({model})", "en": "“{voice}” is cloned on Bailian ({model})"},
+    "jobMsg_remoteVoiceFailed": {"zh": "《{voice}》没能复刻到百炼", "en": "Couldn't clone “{voice}” on Bailian"},
     "jobMsg_dubRunning": {"zh": "字幕配音中({done}/{total})", "en": "Dubbing subtitles ({done}/{total})"},
     "jobMsg_dubDone": {"zh": "字幕配音完成:{done} 条", "en": "Dubbed {done} subtitle(s)"},
     # 同一句、同一把嗓子已经配过的不再合成:说出来,不让人以为那几句被漏掉了。

@@ -372,6 +372,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobKind_ai_generation": {"zh": "AI 生成", "en": "AI generation"},
     "jobKind_tts": {"zh": "语音合成", "en": "Speech"},
     "jobKind_podcast": {"zh": "播客", "en": "Podcast"},
+    "jobKind_voice_enroll": {"zh": "复刻音色", "en": "Voice cloning"},
     "jobKind_url_import": {"zh": "链接导入", "en": "URL import"},
     "jobKind_video_to_gif": {"zh": "视频转 GIF", "en": "Video to GIF"},
     "jobKind_denoise_audio": {"zh": "降噪", "en": "Noise reduction"},

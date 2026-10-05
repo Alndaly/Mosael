@@ -415,15 +415,21 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
     不在建图时替人写死。"""
     from app.domain.voices import voices
     from app.domain.voices.engine_catalog import voice_note
+    from app.domain.voices.remote import RemoteConsentRequired
 
     actor = current_actor(db)
-    child = voices.start_synthesis(
-        db,
-        text=str(config.get("text", "")),
-        project_id=None,
-        created_by=actor,
-        **_speech_params(db, scope, config),
-    )
+    try:
+        child = voices.start_synthesis(
+            db,
+            text=str(config.get("text", "")),
+            project_id=None,
+            created_by=actor,
+            **_speech_params(db, scope, config),
+        )
+    except RemoteConsentRequired as exc:
+        #: 远端引擎念配音库里的嗓子、这个账号还没同意上传(ADR 0037):工作流里没人能当场点头,
+        #: 那句话说清去配音库点「复刻到百炼」。
+        raise WorkflowDomainError.from_error(exc) from exc
     final = wait_for_job(child.id, release=db)
     try:
         note = voice_note(db, engine=str(config.get("engine") or ""), voice=str(config.get("voice") or ""),

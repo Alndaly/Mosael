@@ -1,10 +1,10 @@
-"""音色:工作区里的克隆音色,以及智能体朗读用哪一个。
+"""音色:工作区里的克隆音色、它们复刻到远端引擎上的副本,以及智能体朗读用哪一个。
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -35,6 +35,51 @@ class Voice(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class VoiceEnrollment(Base):
+    """一把嗓子(`Voice`)复刻到远端引擎上的**一份副本**(ADR 0037):在谁的账号里、建在哪个模型上、百炼给的音色 id。
+
+    不把 `remote_voice_id` 直接加在 `voices` 上:一把嗓子可能在几个人的账号、几个模型上各有一份,一列装不下;
+    而且那会让「这把嗓子是什么」(参考音频、文字、授权声明)和「它在哪儿有副本」搅成一件事。
+
+    **本机的参考音频仍是唯一的来源**:副本丢了(一年没被合成用过、换了账号、换了模型)随时能从它重建,
+    所以副本不需要备份,也不需要「从远端拉回来」。
+
+    **上传的同意记在副本上**(`consented_*`):参考音频离开这台机器、进到第三方账号里,要当事人点过头。同一把嗓子、
+    同一个引擎、同一个账号(连接 + 钥匙的主人)里有任何一份副本,就算点过 —— 换了模型、副本被删了按需重建,不再问。
+    """
+
+    __tablename__ = "voice_enrollments"
+    __table_args__ = (
+        UniqueConstraint(
+            "voice_id", "engine", "provider_profile_id", "owner_user_id", "target_model",
+            name="uq_voice_enrollments_copy",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 哪把嗓子。删嗓子级联(远端那份由 voices.delete_voice 先删)。
+    voice_id: Mapped[str] = mapped_column(ForeignKey("voices.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: 复刻在哪个引擎上(和 `ai` 层语音适配器同一个裸名;这一版只有 `alibaba-cosyvoice`)。
+    engine: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: **在谁的账号里**:哪条连接、用的是谁的钥匙(钥匙归人,同一条连接下每个人一把)。
+    provider_profile_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: 建在哪个模型上。音色绑死在建它的模型上(v3-flash 上建的发给 v2 是 400),换模型就是另一份副本。
+    target_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: 远端给的音色 id;还没建出来时是空串。
+    remote_voice_id: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    #: deploying / ok / failed / missing(见 domain/voices/remote)。
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="deploying")
+    #: 失败原因的原文(远端的原话),或一个文案 key。
+    error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    consented_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    consented_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    #: 最近一次合成用到它的时间 —— 一年没被合成用过,远端会把它删掉。
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class AgentVoicePref(Base):
     """这个人在**语音对话**里用哪个音色。
 
@@ -60,7 +105,7 @@ class AgentVoicePref(Base):
     #: 手动指定的模型;留空按连接下的 tts 模型解析(见 voices.speak_to_file)。
     engine_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     provider_profile_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    #: 克隆引擎时指向 voices 表的那一行。
+    #: 念的是配音库里的一把嗓子时指向 voices 表的那一行:能复刻的远端引擎(CosyVoice)念它的副本(ADR 0037)。
     voice_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: 语速。对话里通常比配音快一点,所以它也跟着这份配置走。
     speed: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)

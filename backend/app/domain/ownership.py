@@ -114,6 +114,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginInstance": ("app/domain/plugins/",),
     "PluginCapability": ("app/domain/plugins/",),
     "AgentVoicePref": ("app/domain/voices/",),
+    #: 克隆音色在远端的副本(ADR 0037):建、重建、删都在 voices/remote。
+    "VoiceEnrollment": ("app/domain/voices/remote.py",),
     "PluginPermissionGrant": ("app/domain/plugins/",),
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),

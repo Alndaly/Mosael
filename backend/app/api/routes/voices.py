@@ -11,9 +11,11 @@ from fastapi.responses import FileResponse
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.voices.transcription import ASRError
 from app.core.i18n import get_current_locale, tr, translate_fields
-from app.db.models import Job, Voice
+from app.db.models import Job
 from app.api.schemas import (
     EngineSynthesizeRequest,
+    RemoteCopyRequest,
+    VoiceDeleteOut,
     VoicePreviewRequest,
     TtsEngineChoiceOut,
     PodcastRequest,
@@ -37,7 +39,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["voices"])
 
 
-def _voice_out(voice) -> dict:
+def _voice_out(db, voice, user_id: str, copies: list | None = None) -> dict:
+    from app.domain.voices import remote
+
+    if copies is None:
+        copies = remote.copies_by_voice(db, [voice.id], owner_user_id=user_id).get(voice.id, [])
     return {
         "id": voice.id,
         "name": voice.name,
@@ -48,13 +54,37 @@ def _voice_out(voice) -> dict:
         "consent_kind": voice.consent_kind,
         "consent_at": voice.consent_at,
         "created_at": voice.created_at,
+        "remote_copies": [_copy_out(db, copy) for copy in copies],
+    }
+
+
+def _copy_out(db, copy) -> dict:
+    from app.db.models import ProviderProfile
+    from app.domain.voices.speech import BUILTIN_PREFIX
+
+    profile = db.get(ProviderProfile, copy.provider_profile_id)
+    return {
+        "id": copy.id,
+        "engine": f"{BUILTIN_PREFIX}{copy.engine}",
+        "provider_profile_id": copy.provider_profile_id,
+        "connection": profile.name if profile is not None else "",
+        "target_model": copy.target_model,
+        "status": copy.status,
+        #: 存的是远端的原话或一个文案 key;是 key 就按读的人的语言翻。
+        "error": tr(copy.error) if copy.error else "",
+        "last_used_at": copy.last_used_at,
+        "created_at": copy.created_at,
     }
 
 
 @router.get("/voices", response_model=list[VoiceOut])
 def list_voices(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    from app.domain.voices import remote
+
     voice_uc.ensure_can_list(db, user, workspace_id)
-    return [_voice_out(v) for v in voices.list_voices(db, workspace_id)]
+    rows = voices.list_voices(db, workspace_id)
+    copies = remote.copies_by_voice(db, [voice.id for voice in rows], owner_user_id=user.id)
+    return [_voice_out(db, voice, user.id, copies.get(voice.id, [])) for voice in rows]
 
 
 @router.post("/voices/upload", response_model=VoiceOut)
@@ -81,7 +111,7 @@ def upload_voice(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
-    return _voice_out(voice)
+    return _voice_out(db, voice, user.id, [])
 
 
 @router.post("/voices/from-speaker", response_model=VoiceOut)
@@ -95,34 +125,65 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: Tx, user: CurrentUser)
         )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _voice_out(voice)
+    return _voice_out(db, voice, user.id, [])
 
 
 @router.patch("/voices/{voice_id}", response_model=VoiceOut)
 def update_voice(voice_id: str, body: VoiceUpdate, db: Tx, user: CurrentUser) -> dict:
     voice = voice_uc.usable(db, user, voice_id)
     try:
-        return _voice_out(voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
-                                              consent_kind=body.consent_kind, actor_id=user.id))
+        return _voice_out(db, voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
+                                                  consent_kind=body.consent_kind, actor_id=user.id), user.id)
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/voices/{voice_id}/recognize-reference", response_model=VoiceOut)
-def recognize_reference(voice_id: str, db: Tx, user: CurrentUser) -> Voice:
+def recognize_reference(voice_id: str, db: Tx, user: CurrentUser) -> dict:
     """转写一遍参考音频(按这个人的转写默认),把参考文本填上。"""
     voice = voice_uc.usable(db, user, voice_id)
     try:
-        return voices.recognize_reference_text(db, voice, actor_id=user.id)
+        return _voice_out(db, voices.recognize_reference_text(db, voice, actor_id=user.id), user.id)
     except (voices.VoiceError, ASRError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.delete("/voices/{voice_id}", status_code=204)
-def delete_voice(voice_id: str, db: Tx, user: CurrentUser) -> Response:
+@router.post("/voices/{voice_id}/remote-copies", response_model=JobOut)
+def copy_voice_to_engine(voice_id: str, body: RemoteCopyRequest, db: Tx, user: CurrentUser) -> Job:
+    """把这把嗓子复刻到一个远端引擎上(ADR 0037):配音库的「复刻到百炼」,或配音时确认框里点了同意。
+
+    参考音频会传到这个人自己的那家账号里,所以要他点过头:这个账号没同意过、请求又没带 `consent`,回 409(和配音那边
+    同一个确认框)。同意记在副本上,之后换模型、副本被删按需重建,不再问。复刻在任务里做(上传、建、等它就绪,
+    约十秒),这里只排上。
+    """
+    from app.domain.voices import remote
+
     voice = voice_uc.usable(db, user, voice_id)
-    voices.delete_voice(db, voice)
-    return Response(status_code=204)
+    try:
+        return remote.start_enrollment(
+            db, voice, engine=body.engine, actor_id=user.id, consent=body.consent,
+            provider_profile_id=body.provider_profile_id,
+        )
+    except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/voices/{voice_id}", response_model=VoiceDeleteOut)
+def delete_voice(voice_id: str, db: Tx, user: CurrentUser) -> dict:
+    """删一把嗓子:先删它在远端的副本,删不掉的列在回包里(本机这一行照删)。"""
+    voice = voice_uc.usable(db, user, voice_id)
+    failures = voices.delete_voice(db, voice)
+    return {
+        "remote_failures": [
+            {
+                "connection": failure.connection,
+                "target_model": failure.target_model,
+                "remote_voice_id": failure.remote_voice_id,
+                "reason": tr(failure.reason),
+            }
+            for failure in failures
+        ]
+    }
 
 
 @router.get("/voices/{voice_id}/sample")
@@ -205,11 +266,15 @@ def generate_podcast(body: PodcastRequest, db: Tx, user: CurrentUser) -> Job:
 
 
 @router.get("/tts/voices", response_model=list[TtsVoiceOut])
-def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    """The voices an engine can speak in, live where the account allows it (see engine_catalog)."""
+def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id: str = "") -> list[dict]:
+    """The voices an engine can speak in, live where the account allows it (see engine_catalog).
+
+    带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。"""
     from app.domain.voices.engine_catalog import list_engine_voices
 
-    return list_engine_voices(db, engine, user_id=user.id)
+    if workspace_id:
+        voice_uc.ensure_can_list(db, user, workspace_id)
+    return list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
 
 
 @router.post("/tts/preview")
@@ -221,6 +286,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
     """
     from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.remote import RemoteConsentRequired
     from app.domain.voices.speech import CLONE_ENGINE
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
@@ -239,7 +305,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
                 db,
                 text=body.text.strip(),
                 engine=body.engine,
-                engine_voice=body.voice,
+                engine_voice=str(params.get("engine_voice") or ""),
                 speed=1.0,
                 workspace_id=body.workspace_id,
                 user_id=user.id,
@@ -247,7 +313,11 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
                 out_dir=Path(tmp),
                 source_type="voice_preview",
                 source_id=user.id,
+                #: 能复刻的引擎点了配音库里的嗓子:念的是它的远端副本(ADR 0037)。
+                voice_id=str(params.get("voice_id") or "") or None,
             )
+        except RemoteConsentRequired:
+            raise  # 不是失败:界面据此弹「上传到哪」的确认框
         except Exception as exc:  # noqa: BLE001 — 合成失败是结果(缺 Key、音色不存在),不是服务端故障
             raise HTTPException(status_code=422, detail=str(exc)[:300]) from exc
         audio = out.read_bytes()
@@ -257,8 +327,9 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
 
 @router.post("/tts/synthesize", response_model=JobOut)
 def synthesize_with_engine(body: EngineSynthesizeRequest, db: Tx, user: CurrentUser):
-    """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
-    no Voice row to hang it off — the engine supplies the voice."""
+    """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine
+    supplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,
+    which needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037)."""
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
     try:
         return voices.start_synthesis(
@@ -269,6 +340,7 @@ def synthesize_with_engine(body: EngineSynthesizeRequest, db: Tx, user: CurrentU
             workspace_id=body.workspace_id,
             engine=body.engine,
             engine_voice=body.engine_voice,
+            voice_id=body.voice_id or None,
             engine_voice_resource=body.engine_voice_resource,
             provider_profile_id=body.provider_profile_id,
             engine_model=body.engine_model,

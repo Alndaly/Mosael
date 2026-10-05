@@ -325,6 +325,8 @@ def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir
     if not text:
         raise NothingToSay("routeErr_nothingToRead")
     pref = gate(db, user.id)
+    from app.domain.voices.remote import RemoteConsentRequired
+
     try:
         return agent_voice.speak(
             db,
@@ -334,5 +336,7 @@ def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir
             out_dir=out_dir,
             source_type=source_type,
         )
+    except RemoteConsentRequired:
+        raise  # 不是失败:这个账号还没同意上传这把嗓子,界面据它弹确认框(ADR 0037)
     except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
         raise SpeechFailed(str(exc)[:300]) from exc

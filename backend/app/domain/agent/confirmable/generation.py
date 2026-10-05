@@ -121,6 +121,7 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
     引擎,而 Edge 是内置的、免费的、什么都不用配。怎么认见 engine_catalog.pick_speech。
     """
     from app.domain.voices.engine_catalog import pick_speech
+    from app.domain.voices.remote import RemoteConsentRequired
     from app.domain.voices.speech import SpeechProviderUnavailable
     from app.domain.voices.voices import VoiceError
 
@@ -134,8 +135,20 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
             user_id=actor,
             workspace_id=workspace_id,
         )
-    except (SpeechProviderUnavailable, VoiceError) as exc:
+        _check_remote_voice(db, payload, workspace_id=workspace_id, actor=actor)
+    except (SpeechProviderUnavailable, VoiceError, RemoteConsentRequired) as exc:
         raise ConfirmationError.relay(exc) from exc
+
+
+def _check_remote_voice(db: Session, payload: dict[str, Any], *, workspace_id: str, actor: str | None) -> None:
+    """远端引擎念配音库里的嗓子(ADR 0037):开卡时就问(声明过是谁的、这个账号同意过上传),不等批准之后任务才失败。
+    没同意过的,卡开不出来,那句话告诉智能体请用户去配音库点「复刻到百炼」。"""
+    from app.domain.voices.remote import check_voice, speaks_library_voice
+
+    engine, voice = str(payload.get("engine") or ""), str(payload.get("voice") or "")
+    if speaks_library_voice(db, engine, voice):
+        check_voice(db, engine=engine, voice_id=voice, workspace_id=workspace_id, user_id=actor,
+                    engine_model=str(payload.get("model") or "").strip())
 
 def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateAudio", {"asked": _asked_for(payload)}

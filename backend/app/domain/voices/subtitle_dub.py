@@ -173,6 +173,7 @@ def start_subtitle_dub(
         # **一次只配一条字幕轨。** 双语视频常见的形态是原文一条、译文一条:两条一起配,同一秒上一句念原文、
         # 一句念译文。剪辑台此前把所有字幕轨的条目一股脑交下来,而后端照单全收(探针 P2)。
         raise DubError("dubErr_clipsAcrossSubtitleTracks")
+    _check_remote_voice(db, synthesis, workspace_id=sequence.workspace_id, created_by=created_by)
 
     job = create_job(
         db,
@@ -194,6 +195,22 @@ def start_subtitle_dub(
     job_id = job.id
     dispatch_job(db, job, lambda: _run_dub(job_id))
     return job
+
+
+def _check_remote_voice(db: Session, synthesis: dict, *, workspace_id: str, created_by: str | None) -> None:
+    """远端引擎念配音库里的嗓子(ADR 0037):**排这一批之前**问清楚(声明过是谁的、这个账号同意过上传)。
+
+    逐句的合成是在任务里排的,等到第一句才发现没同意,一整批已经排上了 —— 在这里快速失败,界面弹确认框。
+    """
+    from app.domain.voices.remote import check_voice, clones_remotely
+
+    engine, voice_id = str(synthesis.get("engine") or ""), str(synthesis.get("voice_id") or "")
+    if voice_id and clones_remotely(engine):
+        check_voice(
+            db, engine=engine, voice_id=voice_id, workspace_id=workspace_id, user_id=created_by,
+            provider_profile_id=synthesis.get("provider_profile_id") or None,
+            engine_model=str(synthesis.get("engine_model") or ""),
+        )
 
 
 def _await_child(job_id: str) -> str:

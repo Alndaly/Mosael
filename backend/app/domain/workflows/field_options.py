@@ -62,7 +62,8 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
 
 
 def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
-    """这个引擎下能用的音色。克隆 → 工作区音色库;其余 → 那个引擎自己的目录。"""
+    """这个引擎下能用的音色。克隆 → 工作区音色库;其余 → 那个引擎自己的目录 —— 能复刻的引擎(CosyVoice)后面再接
+    配音库里的嗓子(念它的远端副本,ADR 0037),名字前标「克隆」,和系统音色分得开。"""
     from app.db.models import Voice
     from app.domain.voices.engine_catalog import list_engine_voices
     from app.domain.voices.speech import CLONE_ENGINE
@@ -72,8 +73,13 @@ def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
         rows = db.scalars(select(Voice).where(Voice.workspace_id == ctx.workspace_id).order_by(Voice.created_at))
         return [{"value": row.id, "label": row.name} for row in rows]
     return [
-        {"value": str(item["value"]), "label": str(item.get("label") or item["value"])}
-        for item in list_engine_voices(db, engine, user_id=ctx.user_id)
+        {
+            "value": str(item["value"]),
+            "label": t("wfSpeechVoiceCloned", ctx.locale, name=str(item.get("label") or item["value"]))
+            if item.get("cloned")
+            else str(item.get("label") or item["value"]),
+        }
+        for item in list_engine_voices(db, engine, user_id=ctx.user_id, workspace_id=ctx.workspace_id)
     ]
 
 

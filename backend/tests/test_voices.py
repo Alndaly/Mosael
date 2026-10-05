@@ -47,8 +47,9 @@ def test_voice_upload_list_synthesize_delete() -> None:
     assert refused.status_code == 422, refused.text
     assert "引擎" in refused.json()["detail"]
 
-    # Delete.
-    assert client.delete(f"/api/voices/{voice['id']}").status_code == 204
+    # Delete. 没有远端副本,回包里也就没有删不掉的。
+    deleted = client.delete(f"/api/voices/{voice['id']}")
+    assert deleted.status_code == 200 and deleted.json() == {"remote_failures": []}, deleted.text
     assert client.get(f"/api/voices?workspace_id={ws['id']}").json() == []
 
 

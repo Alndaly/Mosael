@@ -143,21 +143,27 @@ def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
 
 @router.put("/settings/agent-voice", response_model=AgentVoiceOut)
 def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentVoiceOut:
-    """设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。"""
-    from app.domain.voices import agent_voice
+    """设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。
 
-    row = agent_voice.upsert(
-        db,
-        user.id,
-        engine=body.engine,
-        engine_voice=body.engine_voice,
-        engine_voice_resource=body.engine_voice_resource,
-        engine_model=body.engine_model,
-        provider_profile_id=body.provider_profile_id,
-        voice_id=body.voice_id,
-        speed=body.speed,
-        enabled=body.enabled,
-    )
+    远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
+    from app.domain.voices import use_cases as voice_uc
+    from app.domain.voices.voices import VoiceError
+
+    try:
+        row = voice_uc.choose_agent_voice(
+            db,
+            user,
+            engine=body.engine,
+            engine_voice=body.engine_voice,
+            engine_voice_resource=body.engine_voice_resource,
+            engine_model=body.engine_model,
+            provider_profile_id=body.provider_profile_id,
+            voice_id=body.voice_id,
+            speed=body.speed,
+            enabled=body.enabled,
+        )
+    except VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return AgentVoiceOut(
         engine=row.engine,
         engine_voice=row.engine_voice,

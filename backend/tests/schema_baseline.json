@@ -811,6 +811,22 @@
     "signature",
     "username"
   ],
+  "voice_enrollments": [
+    "consented_at",
+    "consented_by",
+    "created_at",
+    "engine",
+    "error",
+    "id",
+    "last_used_at",
+    "owner_user_id",
+    "provider_profile_id",
+    "remote_voice_id",
+    "status",
+    "target_model",
+    "updated_at",
+    "voice_id"
+  ],
   "voices": [
     "created_at",
     "id",

@@ -14,6 +14,7 @@ import {
   AudioWaveform,
   Captions,
   Clapperboard,
+  CloudUpload,
   Download,
   FileText,
   Film,
@@ -47,6 +48,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   ai_generation: Sparkles,
   tts: AudioLines,
   podcast: Radio,
+  voice_enroll: CloudUpload,
   url_import: LinkIcon,
   video_to_gif: Film,
   denoise_audio: AudioWaveform,
@@ -73,6 +75,8 @@ const RESOURCE_QUERY_KEYS: Record<string, readonly string[]> = {
   boards: ["boards"],
   //: 资产库:参考图挂上了新的(资产格的能力、详情页的「补全多角度」「生成表情」)。
   entities: ["entities"],
+  //: 配音库:一把嗓子复刻到了百炼(每一行显示它在哪儿能念)。
+  voices: ["voices"],
 };
 
 export type JobKindMeta = JobKind & { icon: LucideIcon };

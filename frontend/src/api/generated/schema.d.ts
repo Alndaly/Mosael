@@ -1910,7 +1910,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Voice */
+        /**
+         * Delete Voice
+         * @description 删一把嗓子:先删它在远端的副本,删不掉的列在回包里(本机这一行照删)。
+         */
         delete: operations["delete_voice_api_voices__voice_id__delete"];
         options?: never;
         head?: never;
@@ -1932,6 +1935,30 @@ export interface paths {
          * @description 转写一遍参考音频(按这个人的转写默认),把参考文本填上。
          */
         post: operations["recognize_reference_api_voices__voice_id__recognize_reference_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voices/{voice_id}/remote-copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Voice To Engine
+         * @description 把这把嗓子复刻到一个远端引擎上(ADR 0037):配音库的「复刻到百炼」,或配音时确认框里点了同意。
+         *
+         *     参考音频会传到这个人自己的那家账号里,所以要他点过头:这个账号没同意过、请求又没带 `consent`,回 409(和配音那边
+         *     同一个确认框)。同意记在副本上,之后换模型、副本被删按需重建,不再问。复刻在任务里做(上传、建、等它就绪,
+         *     约十秒),这里只排上。
+         */
+        post: operations["copy_voice_to_engine_api_voices__voice_id__remote_copies_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2062,6 +2089,8 @@ export interface paths {
         /**
          * List Tts Voices
          * @description The voices an engine can speak in, live where the account allows it (see engine_catalog).
+         *
+         *     带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。
          */
         get: operations["list_tts_voices_api_tts_voices_get"];
         put?: never;
@@ -2107,8 +2136,9 @@ export interface paths {
         put?: never;
         /**
          * Synthesize With Engine
-         * @description Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
-         *     no Voice row to hang it off — the engine supplies the voice.
+         * @description Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine
+         *     supplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,
+         *     which needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037).
          */
         post: operations["synthesize_with_engine_api_tts_synthesize_post"];
         delete?: never;
@@ -5538,6 +5568,8 @@ export interface paths {
         /**
          * Set Agent Voice
          * @description 设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。
+         *
+         *     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
          */
         put: operations["set_agent_voice_api_settings_agent_voice_put"];
         post?: never;
@@ -10043,7 +10075,8 @@ export interface components {
         };
         /**
          * EngineSynthesizeRequest
-         * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
+         * @description Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can
+         *     clone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037).
          */
         EngineSynthesizeRequest: {
             /** Workspace Id */
@@ -10064,6 +10097,8 @@ export interface components {
              * @default
              */
             engine_voice: string;
+            /** Voice Id */
+            voice_id?: string | null;
             /**
              * Engine Voice Resource
              * @default
@@ -13496,6 +13531,71 @@ export interface components {
             /** Open */
             open: boolean;
         };
+        /**
+         * RemoteCopyFailureOut
+         * @description 删嗓子时没删掉的一份远端副本。本机那一行照删;这一份要去那家的控制台看。
+         */
+        RemoteCopyFailureOut: {
+            /** Connection */
+            connection: string;
+            /** Target Model */
+            target_model: string;
+            /** Remote Voice Id */
+            remote_voice_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * RemoteCopyOut
+         * @description 一把嗓子复刻到远端引擎上的一份副本(ADR 0037)。只列**我自己**账号里的 —— 别人账号里那份我用不上。
+         */
+        RemoteCopyOut: {
+            /** Id */
+            id: string;
+            /** Engine */
+            engine: string;
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /**
+             * Connection
+             * @default
+             */
+            connection: string;
+            /** Target Model */
+            target_model: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "deploying" | "ok" | "failed" | "missing";
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Last Used At */
+            last_used_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * RemoteCopyRequest
+         * @description 把这把嗓子复刻到一个远端引擎上(配音库的「复刻到百炼」,或确认框里点了同意)。
+         */
+        RemoteCopyRequest: {
+            /** Engine */
+            engine: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Consent
+             * @default false
+             */
+            consent: boolean;
+        };
         /** RemoteEntryOut */
         RemoteEntryOut: {
             /** Id */
@@ -14800,6 +14900,11 @@ export interface components {
              * @default true
              */
             ready: boolean;
+            /**
+             * Clones Voices
+             * @default false
+             */
+            clones_voices: boolean;
         };
         /** TtsEngineOut */
         TtsEngineOut: {
@@ -14895,6 +15000,11 @@ export interface components {
              * @default
              */
             resource_id: string;
+            /**
+             * Cloned
+             * @default false
+             */
+            cloned: boolean;
         };
         /**
          * UnpricedUsageOut
@@ -15156,6 +15266,11 @@ export interface components {
             /** Duration */
             duration?: number | null;
         };
+        /** VoiceDeleteOut */
+        VoiceDeleteOut: {
+            /** Remote Failures */
+            remote_failures?: components["schemas"]["RemoteCopyFailureOut"][];
+        };
         /** VoiceFromSpeakerRequest */
         VoiceFromSpeakerRequest: {
             /** Asset Id */
@@ -15205,6 +15320,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Remote Copies */
+            remote_copies?: components["schemas"]["RemoteCopyOut"][];
         };
         /**
          * VoicePreviewRequest
@@ -19790,11 +19907,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VoiceDeleteOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -19860,6 +19979,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_voice_to_engine_api_voices__voice_id__remote_copies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */
@@ -20069,6 +20223,7 @@ export interface operations {
         parameters: {
             query: {
                 engine: string;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;

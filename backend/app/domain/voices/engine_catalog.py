@@ -164,6 +164,8 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
     ]
     for engine in engines:
         engine.setdefault("ready", engine_ready(db, adapter_id(str(engine["id"])), bool(engine["needs_key"]), user_id))
+        #: 能不能念配音库里的克隆音色(复刻上去),问注册表 —— 不在这张表里再写一遍是哪一家。
+        engine["clones_voices"] = _clones_remotely(str(engine["id"]))
     return engines + _plugin_engines(db, user_id)
 
 
@@ -209,14 +211,46 @@ def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
     ]
 
 
-def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, str]]:
+def list_engine_voices(db: Session, engine: str, *, user_id: str | None, workspace_id: str = "") -> list[dict[str, Any]]:
     """The voices an engine can speak in, live where the account allows it.
 
     火山's catalogue depends on the account, and a voice used with the wrong resource family
     fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
     account and each voice carries its family. Without them, the built-in list still works;
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
+
+    带了工作区、而这个引擎能复刻(CosyVoice)时,系统音色后面再接一组这个工作区配音库里的克隆音色(ADR 0037):
+    `value` 是嗓子的 id,`cloned` 为真 —— 选它时请求带 `voice_id`,宿主在合成前把它解析成远端副本。
     """
+    stock = _engine_voices(db, engine, user_id=user_id)
+    if workspace_id and _clones_remotely(engine):
+        stock = stock + cloned_voices(db, workspace_id)
+    return stock
+
+
+def _clones_remotely(engine: str) -> bool:
+    from app.domain.voices.remote import clones_remotely
+
+    return clones_remotely(engine)
+
+
+def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
+    """这个工作区配音库里**能复刻出去**的嗓子(声明过是谁的;没声明的不往外传,ADR 0028 §5)。"""
+    from sqlalchemy import select
+
+    from app.db.models import Voice
+    from app.domain.voices.consent import UNDECLARED
+
+    rows = db.scalars(
+        select(Voice)
+        .where(Voice.workspace_id == workspace_id, Voice.consent_kind != UNDECLARED)
+        .order_by(Voice.created_at)
+    )
+    return [{"value": row.id, "label": row.name, "cloned": True} for row in rows]
+
+
+def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, Any]]:
+    """引擎**自己的**音色(系统音色;火山按账号现拉)。"""
     from app.ai.providers import REMOTE_SPEECH_ADAPTERS
     from app.domain.providers.selection import resolve_connection
 
@@ -329,7 +363,8 @@ def voice_note(db: Session, *, engine: str, voice: str, workspace_id: str, user_
         return tr("wfVoice_cloned", name=row.name if row is not None else voice)
     entry = next((one for one in describe_engines(db, user_id) if one["id"] == engine), None)
     label = str(entry["label"]) if entry is not None else engine
-    named = {one["value"]: one["label"] for one in list_engine_voices(db, engine, user_id=user_id)}
+    #: 带上工作区:CosyVoice 念的可能是配音库里的嗓子(ADR 0037),那时说它的名字,不说一串 id。
+    named = {one["value"]: one["label"] for one in list_engine_voices(db, engine, user_id=user_id, workspace_id=workspace_id)}
     spoken = str(named.get(voice, voice)).split("(")[0].strip() or voice
     has_clone = cloned_voice_status(db, workspace_id) != "missing"
     return tr("wfVoice_engineCloneReady" if has_clone else "wfVoice_engineNoClone", voice=spoken, engine=fragment(label))
@@ -366,6 +401,9 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
             voices = [{"id": voice.id, "name": voice.name} for voice in list_voices(db, workspace_id)]
         else:
             voices = [{"id": str(voice), "name": labels.get(str(voice), str(voice))} for voice in engine["voices"]]
+            if _clones_remotely(str(engine["id"])):
+                #: 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,第一次要用户同意上传)。
+                voices += [{"id": one["value"], "name": one["label"], "cloned": True} for one in cloned_voices(db, workspace_id)]
         plugin = bool(engine.get("plugin"))
         found.append({
             "id": engine["id"],
@@ -405,7 +443,8 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
 
     engine, voice = (engine or "").strip(), (voice or "").strip()
     engines = speaking_engines(db, user_id, workspace_id)
-    voices_of = {one["id"]: [listed["id"] for listed in one["voices"]] for one in engines}
+    #: 只给了音色时按音色**本来的那一家**认:配音库里的嗓子本来是本机克隆的;远端引擎念它要上传、要花钱,得点名才走。
+    voices_of = {one["id"]: [listed["id"] for listed in one["voices"] if not listed.get("cloned")] for one in engines}
     usable = [one for one in engines if one["ready"]]
     if engine:
         named = capabilities.resolve_named(db, user_id, CAPABILITY, engine)
@@ -449,7 +488,8 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     字幕配音)都走这里,不各自拼。
 
     音色一格,按引擎分两种意思:克隆时是配音库里的音色 id(`voice_id`),其余是那个引擎的
-    音色(`engine_voice`)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
+    音色(`engine_voice`)—— 能复刻的引擎(CosyVoice)例外,它也念得了配音库里的嗓子,那一格是嗓子 id 时
+    同样交 `voice_id`(ADR 0037)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
     根本没有的参数。火山的音色还要一个资源族,调用方没给就**这里自己查**,不靠界面选音色时
     顺手存下。引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
     `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
@@ -470,17 +510,37 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     for key in _CLONE_OPTIONS if clone else _ENGINE_OPTIONS:
         if options.get(key):
             params[key] = options[key]
+    from app.db.models import Voice
+
     if clone:
         #: 音色 id 可能来自任何地方(上游节点的输出、模型填的参数)—— 收进这个工作区。
-        from app.db.models import Voice
-
         row = db.get(Voice, voice)
         if row is None or row.workspace_id != workspace_id:
             raise VoiceError("voiceErr_voiceNotInWorkspace")
         params["voice_id"] = voice
+    elif _clones_remotely(engine) and db.get(Voice, voice) is not None:
+        #: 能复刻的引擎(CosyVoice)点的是配音库里的一把嗓子:合成时念它的远端副本(ADR 0037)。嗓子 id 是 32 位 hex,
+        #: 和引擎自己的音色名(`longxiaochun_v2`)撞不上。
+        if db.get(Voice, voice).workspace_id != workspace_id:
+            raise VoiceError("voiceErr_voiceNotInWorkspace")
+        params["voice_id"] = voice
+        params["workspace_id"] = workspace_id
     else:
         params["engine_voice"] = voice
         params["workspace_id"] = workspace_id
         if not params.get("engine_voice_resource"):
             params["engine_voice_resource"] = voice_resource_for(db, engine, voice, user_id=user_id)
     return params
+
+
+def voice_slot(engine: str, *, voice_id: str | None, engine_voice: str) -> str:
+    """请求里分开的两格(`voice_id` / `engine_voice`)→ synthesis_params 收的那一格音色。
+
+    克隆引擎取 `voice_id`;别的引擎取它自己的音色,没给而点了配音库里的嗓子(`voice_id`)时 —— 只有能复刻的引擎
+    这样点 —— 取那把嗓子。字幕配音、画板念字、智能体的配音卡收的都是两格,各自判一遍的话,远端引擎点的嗓子会在其中一处被丢掉。
+    """
+    if (engine or CLONE_ENGINE) == CLONE_ENGINE:
+        return voice_id or ""
+    if engine_voice:
+        return engine_voice
+    return (voice_id or "") if _clones_remotely(engine) else ""

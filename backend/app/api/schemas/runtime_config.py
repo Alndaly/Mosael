@@ -79,6 +79,9 @@ class TtsEngineChoiceOut(ApiModel):
     #: 这台机器上现在就能跑吗。远程引擎恒真(能不能跑取决于档案,那是另一件事);
     #: 本地克隆按解释器探测结果给,好让界面在**挑引擎**时就说清楚。
     ready: bool = True
+    #: 这个引擎能把配音库里的嗓子复刻上去、用它念(ADR 0037;目前是百炼 CosyVoice)。配音库据此摆「复刻到百炼」,
+    #: 音色下拉据此多一组克隆音色。
+    clones_voices: bool = False
 
 
 class TtsConfigOut(ApiModel):

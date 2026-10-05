@@ -76,6 +76,7 @@ from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
 from app.domain.entities import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
+from app.domain.voices.remote import RemoteConsentRequired
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.blender.bridge import reconcile_orphaned_transfers as reconcile_blender_transfers
@@ -276,6 +277,12 @@ def _install_permission_handlers(app: FastAPI) -> None:
     async def _blender_error(_request: Request, exc: BlenderDomainError) -> JSONResponse:
         """Blender 互通:502 说的是**上游**没响应,不是调用方请求有错。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(RemoteConsentRequired)
+    async def _remote_voice_consent(_request: Request, exc: RemoteConsentRequired) -> JSONResponse:
+        """要把一把嗓子的参考音频传到第三方账号里,而这个账号还没同意过(ADR 0037)。409 带结构:界面认 `code` 弹确认框,
+        说清传到哪条连接、哪个模型。配音、字幕配音、AI 工作台、画板、对话音色都可能撞上它,翻译收在这一处。"""
+        return JSONResponse(status_code=409, content={"detail": exc.detail()})
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:

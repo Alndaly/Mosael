@@ -74,7 +74,7 @@ def test_音色清单跟着引擎变(monkeypatch) -> None:
         #: 没选引擎时按克隆算 —— 和执行体一致。
         assert field_options(db, "speech_voices", _ctx(mine, parent="")) == cloned
 
-        monkeypatch.setattr(engine_catalog, "list_engine_voices", lambda db, engine, user_id: [
+        monkeypatch.setattr(engine_catalog, "list_engine_voices", lambda db, engine, user_id, workspace_id="": [
             {"value": f"{engine}-1", "label": "晓晓", "resource_id": "res"},
         ])
         assert field_options(db, "speech_voices", _ctx(mine, parent="builtin:edge")) == [{"value": "builtin:edge-1", "label": "晓晓"}]

@@ -5018,6 +5018,7 @@
           "voices"
         ],
         "summary": "Delete Voice",
+        "description": "删一把嗓子:先删它在远端的副本,删不掉的列在回包里(本机这一行照删)。",
         "operationId": "delete_voice_api_voices__voice_id__delete",
         "parameters": [
           {
@@ -5031,8 +5032,15 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceDeleteOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5073,6 +5081,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VoiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voices/{voice_id}/remote-copies": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Copy Voice To Engine",
+        "description": "把这把嗓子复刻到一个远端引擎上(ADR 0037):配音库的「复刻到百炼」,或配音时确认框里点了同意。\n\n参考音频会传到这个人自己的那家账号里,所以要他点过头:这个账号没同意过、请求又没带 `consent`,回 409(和配音那边\n同一个确认框)。同意记在副本上,之后换模型、副本被删按需重建,不再问。复刻在任务里做(上传、建、等它就绪,\n约十秒),这里只排上。",
+        "operationId": "copy_voice_to_engine_api_voices__voice_id__remote_copies_post",
+        "parameters": [
+          {
+            "name": "voice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Voice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteCopyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
                 }
               }
             }
@@ -5347,7 +5408,7 @@
           "voices"
         ],
         "summary": "List Tts Voices",
-        "description": "The voices an engine can speak in, live where the account allows it (see engine_catalog).",
+        "description": "The voices an engine can speak in, live where the account allows it (see engine_catalog).\n\n带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。",
         "operationId": "list_tts_voices_api_tts_voices_get",
         "parameters": [
           {
@@ -5357,6 +5418,16 @@
             "schema": {
               "type": "string",
               "title": "Engine"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Workspace Id"
             }
           }
         ],
@@ -5434,7 +5505,7 @@
           "voices"
         ],
         "summary": "Synthesize With Engine",
-        "description": "Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is\nno Voice row to hang it off — the engine supplies the voice.",
+        "description": "Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine\nsupplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,\nwhich needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037).",
         "operationId": "synthesize_with_engine_api_tts_synthesize_post",
         "requestBody": {
           "content": {
@@ -17144,7 +17215,7 @@
           "settings"
         ],
         "summary": "Set Agent Voice",
-        "description": "设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。",
+        "description": "设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。\n\n远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。",
         "operationId": "set_agent_voice_api_settings_agent_voice_put",
         "requestBody": {
           "content": {
@@ -28483,6 +28554,17 @@
             "title": "Engine Voice",
             "default": ""
           },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
           "engine_voice_resource": {
             "type": "string",
             "maxLength": 60,
@@ -28515,7 +28597,7 @@
           "engine"
         ],
         "title": "EngineSynthesizeRequest",
-        "description": "Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."
+        "description": "Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can\nclone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037)."
       },
       "EntityCatalogOut": {
         "properties": {
@@ -36150,6 +36232,135 @@
         ],
         "title": "RegistrationSwitch"
       },
+      "RemoteCopyFailureOut": {
+        "properties": {
+          "connection": {
+            "type": "string",
+            "title": "Connection"
+          },
+          "target_model": {
+            "type": "string",
+            "title": "Target Model"
+          },
+          "remote_voice_id": {
+            "type": "string",
+            "title": "Remote Voice Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connection",
+          "target_model",
+          "remote_voice_id",
+          "reason"
+        ],
+        "title": "RemoteCopyFailureOut",
+        "description": "删嗓子时没删掉的一份远端副本。本机那一行照删;这一份要去那家的控制台看。"
+      },
+      "RemoteCopyOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id"
+          },
+          "connection": {
+            "type": "string",
+            "title": "Connection",
+            "default": ""
+          },
+          "target_model": {
+            "type": "string",
+            "title": "Target Model"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "deploying",
+              "ok",
+              "failed",
+              "missing"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "engine",
+          "provider_profile_id",
+          "target_model",
+          "status",
+          "created_at"
+        ],
+        "title": "RemoteCopyOut",
+        "description": "一把嗓子复刻到远端引擎上的一份副本(ADR 0037)。只列**我自己**账号里的 —— 别人账号里那份我用不上。"
+      },
+      "RemoteCopyRequest": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Engine"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "consent": {
+            "type": "boolean",
+            "title": "Consent",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine"
+        ],
+        "title": "RemoteCopyRequest",
+        "description": "把这把嗓子复刻到一个远端引擎上(配音库的「复刻到百炼」,或确认框里点了同意)。"
+      },
       "RemoteEntryOut": {
         "properties": {
           "id": {
@@ -38824,6 +39035,11 @@
             "type": "boolean",
             "title": "Ready",
             "default": true
+          },
+          "clones_voices": {
+            "type": "boolean",
+            "title": "Clones Voices",
+            "default": false
           }
         },
         "type": "object",
@@ -38957,6 +39173,11 @@
             "type": "string",
             "title": "Resource Id",
             "default": ""
+          },
+          "cloned": {
+            "type": "boolean",
+            "title": "Cloned",
+            "default": false
           }
         },
         "type": "object",
@@ -39462,6 +39683,19 @@
         "title": "VideoToGifRequest",
         "description": "Options for creating a new GIF asset from a video asset."
       },
+      "VoiceDeleteOut": {
+        "properties": {
+          "remote_failures": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteCopyFailureOut"
+            },
+            "type": "array",
+            "title": "Remote Failures"
+          }
+        },
+        "type": "object",
+        "title": "VoiceDeleteOut"
+      },
       "VoiceFromSpeakerRequest": {
         "properties": {
           "asset_id": {
@@ -39553,6 +39787,13 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "remote_copies": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteCopyOut"
+            },
+            "type": "array",
+            "title": "Remote Copies"
           }
         },
         "type": "object",

@@ -90,6 +90,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_speech_engine": {"zh": "嗓子从哪来:用配音库里克隆的,还是某个引擎现成的", "en": "Where the voice comes from: one you cloned, or a stock voice from an engine"},
     "wfNode_speech_voice": {"zh": "用哪把嗓子。清单跟着引擎变:克隆时是配音库里的音色,选了引擎就是那个引擎的音色", "en": "Which voice to use. The list follows the engine: your voice library for cloning, otherwise that engine's own voices"},
     "wfSpeechEngineClone": {"zh": "克隆音色(配音库)", "en": "Cloned voice (voice library)"},
+    "wfSpeechVoiceCloned": {"zh": "克隆 · {name}", "en": "Cloned · {name}"},
     "wfNode_synthesize_speech_speed": {"zh": "语速倍率,默认 1", "en": "Speed multiplier; 1 by default"},
     "wfNode_notify": {"zh": "发送通知", "en": "Send notification"},
     "wfNode_notify_desc": {"zh": "给工作区成员推送一条站内通知。", "en": "Push an in-app notification to the members of this workspace."},

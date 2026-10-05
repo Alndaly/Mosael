@@ -1001,10 +1001,13 @@ def generate_audio(
     list_speech_engines such as "builtin:edge" (free, built in, nothing to configure — NOT
     "edge-tts"), "builtin:clone" (a cloned voice from the workspace's voice library), or a cloud
     engine the user has connected; voice is one of that engine's voices (e.g. "zh-CN-XiaoxiaoNeural"
-    for Edge, a voice id from the library for clone). Giving only voice works when the voice
-    belongs to exactly one engine. If the user named no engine, prefer builtin:edge. model is
-    only for cloud engines with several models. Call list_speech_engines when unsure which
-    engines are ready — never tell the user to "configure" Edge.
+    for Edge, a voice id from the library for clone). builtin:alibaba-cosyvoice can also speak a
+    library voice (its voices marked cloned) through a copy on the user's Bailian account; the
+    first time, the user has to agree to upload the reference audio — if the card is refused for
+    that, ask them to click "Clone on Bailian" in the voice library. Giving only voice works when the
+    voice belongs to exactly one engine (a library voice alone means builtin:clone). If the user
+    named no engine, prefer builtin:edge. model is only for cloud engines with several models. Call
+    list_speech_engines when unsure which engines are ready — never tell the user to "configure" Edge.
 
     Do NOT use for two-host podcast/dialogue audio — use generate_podcast for that. Do NOT use
     for music, songs, background music or sound effects — use generate_sound. Do NOT use for
@@ -1028,8 +1031,9 @@ def list_speech_engines(workspace_id: str = "") -> list[dict[str, Any]]:
     Each entry: id (what to pass as `engine`, e.g. "builtin:edge"), name, ready (usable right
     now for this user), free (no key, costs nothing — Edge is always ready and free), note, and
     voices [{id, name}] (pass an id as `voice`). builtin:clone lists the cloned voices in this
-    workspace's voice library. Call before generate_audio when the user did not name an engine
-    and voice, or when a card was refused over the engine.
+    workspace's voice library; builtin:alibaba-cosyvoice lists them too, marked cloned (spoken
+    through a copy on the user's Bailian account). Call before generate_audio when the user did not
+    name an engine and voice, or when a card was refused over the engine.
     """
     from app.domain.voices import use_cases
 
@@ -2409,7 +2413,8 @@ def dub_subtitles(
     match_duration speeds each spoken line up or down so it fills the original cue's
     slot and stays in sync with the picture. `line` picks which line of a bilingual
     cue to speak: all / first / last. Voice: either voice_id (a cloned voice from the
-    user's voice library) or engine + engine_voice (a stock voice; list_speech_engines gives the
+    user's voice library; add engine "builtin:alibaba-cosyvoice" to speak it through Bailian instead
+    of the local clone engine) or engine + engine_voice (a stock voice; list_speech_engines gives the
     engine ids, e.g. "builtin:edge", and their voices). The dub is one undo step; re-dubbing
     a cue replaces its old dub. original_audio once the dub is in: duck (lowered while the dub
     speaks), mute (translated dubbing: original footage silent under the dub, music stays), keep,

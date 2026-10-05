@@ -64,7 +64,8 @@ def require_ready(db: Session, user_id: str) -> AgentVoicePref:
     """引擎和音色都选好了的那份配置 —— **不问开关**。试听只要这个:配置的时候听一下效果,
     本来就发生在打开之前。没设过就说没设,不替他挑一个。"""
     row = get_row(db, user_id)
-    if row is None or not row.engine or not row.engine_voice:
+    #: 音色是引擎自己的一个(engine_voice),或配音库里的一把嗓子由远端引擎念它的副本(voice_id,ADR 0037)。
+    if row is None or not row.engine or not (row.engine_voice or row.voice_id):
         raise AgentVoiceUnavailable("voiceErr_agentVoiceNotConfigured")
     return row
 
@@ -91,6 +92,7 @@ def speak(db: Session, row: AgentVoicePref, *, text: str, workspace_id: str, out
         voice_resource=row.engine_voice_resource,
         provider_profile_id=row.provider_profile_id,
         model_override=row.engine_model,
+        voice_id=row.voice_id,
         out_dir=out_dir,
         # 记账挂在这个人身上:不是 job,是他的一次发声。**照样要记** —— 各家 TTS 按字符计费。
         source_type=source_type,

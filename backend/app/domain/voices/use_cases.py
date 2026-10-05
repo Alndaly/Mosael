@@ -52,6 +52,49 @@ def speaking_engines(db: Session, user: User, workspace_id: str) -> list[dict]:
     return listed(db, user.id, workspace_id)
 
 
+def choose_agent_voice(
+    db: Session,
+    user: User,
+    *,
+    engine: str,
+    engine_voice: str,
+    engine_voice_resource: str,
+    engine_model: str,
+    provider_profile_id: str | None,
+    voice_id: str | None,
+    speed: float,
+    enabled: bool,
+):
+    """设**我自己**的对话音色(只有这一档,没有部署默认)。
+
+    点了配音库里的一把嗓子(只有能复刻的远端引擎这样点,ADR 0037)时,存之前问清楚:我能用这把嗓子、它声明过是谁的、
+    我这个账号同意过上传 —— 没同意就 409,设置页弹确认框;不然要等到对话里第一次开口才失败。
+    """
+    from app.domain.voices import agent_voice, remote
+
+    if voice_id:
+        if not remote.clones_remotely(engine):
+            raise voices.VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
+        voice = usable(db, user, voice_id)
+        remote.check_voice(
+            db, engine=engine, voice_id=voice.id, workspace_id=voice.workspace_id, user_id=user.id,
+            provider_profile_id=provider_profile_id, engine_model=engine_model,
+        )
+        engine_voice = engine_voice_resource = ""
+    return agent_voice.upsert(
+        db,
+        user.id,
+        engine=engine,
+        engine_voice=engine_voice,
+        engine_voice_resource=engine_voice_resource,
+        engine_model=engine_model,
+        provider_profile_id=provider_profile_id,
+        voice_id=voice_id,
+        speed=speed,
+        enabled=enabled,
+    )
+
+
 def ensure_can_speak(db: Session, user: User, workspace_id: str) -> None:
     """在这个工作区里建音色、合成、做播客。"""
     ensure_workspace_perm(db, user, workspace_id, "ai")
@@ -77,17 +120,15 @@ def dub_subtitles(
 
     `options` 是引擎那一套附加项(见 synthesis_params)。
     """
-    from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.speech import CLONE_ENGINE
+    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
     from app.domain.voices.subtitle_dub import dub_targets, start_subtitle_dub
 
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    clone = (engine or CLONE_ENGINE) == CLONE_ENGINE
     synthesis = synthesis_params(
         db,
         engine=engine,
-        voice=(voice_id or "") if clone else engine_voice,
+        voice=voice_slot(engine, voice_id=voice_id, engine_voice=engine_voice),
         speed=speed,
         user_id=user.id,
         workspace_id=sequence.workspace_id,

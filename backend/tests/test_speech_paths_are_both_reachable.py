@@ -60,7 +60,7 @@ class Test工作流节点:
 
         monkeypatch.setattr(
             engine_catalog, "list_engine_voices",
-            lambda db, engine, user_id: [{"value": "zh_female_x", "label": "x", "resource_id": "res-9"}],
+            lambda db, engine, user_id, workspace_id="": [{"value": "zh_female_x", "label": "x", "resource_id": "res-9"}],
         )
         self._run({"text": "念一句", "engine": "builtin:volcano", "voice": "zh_female_x", "speed": 1.25}, monkeypatch)
         assert captured["engine"] == "builtin:volcano"

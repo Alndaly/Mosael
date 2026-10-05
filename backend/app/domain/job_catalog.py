@@ -18,7 +18,9 @@ from typing import Literal
 Announce = Literal["always", "failures", "never"]
 
 #: 任务做完后可能变了的东西。前端把每一种映射到自己的缓存键,后端不知道 React Query。
-Resource = Literal["assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards", "entities"]
+Resource = Literal[
+    "assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards", "entities", "voices",
+]
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,8 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("ai_generation", "always", ("assets", "generations"), view="ai"),
         JobKind("tts", "always", ("assets",), view="ai"),
         JobKind("podcast", "always", ("assets",), view="ai"),
+        # 把配音库里的一把嗓子复刻到百炼(ADR 0037):上传、建、等它就绪,十来秒;改动的是配音库那一行显示的「在哪儿能念」。
+        JobKind("voice_enroll", "always", ("voices",)),
         JobKind("url_import", "always", ("assets",), view="media"),
         JobKind("video_to_gif", "always", ("assets",), view="media"),
         JobKind("denoise_audio", "always", ("assets",), view="media"),

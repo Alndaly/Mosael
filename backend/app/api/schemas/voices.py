@@ -28,6 +28,8 @@ class AgentVoiceUpdate(ApiModel):
     engine_voice_resource: str = Field(default="", max_length=200)
     engine_model: str = Field(default="", max_length=120)
     provider_profile_id: str | None = None
+    #: 配音库里的一把嗓子,由能复刻的远端引擎(CosyVoice)念它的副本(ADR 0037);给了它 `engine_voice` 就留空。
+    #: 这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
     voice_id: str | None = None
     speed: float = 1.0
     enabled: bool = True
@@ -42,6 +44,26 @@ class AgentSpeechRequest(ApiModel):
     workspace_id: str = Field(min_length=1)
 
 
+class RemoteCopyOut(ApiModel):
+    """一把嗓子复刻到远端引擎上的一份副本(ADR 0037)。只列**我自己**账号里的 —— 别人账号里那份我用不上。"""
+
+    id: str
+    #: 能力表里的引擎 id(`builtin:alibaba-cosyvoice`)。
+    engine: str
+    provider_profile_id: str
+    #: 那条连接叫什么(连接删了就是空串)。
+    connection: str = ""
+    #: 建在哪个模型上(音色绑死在建它的模型上)。
+    target_model: str
+    #: deploying / ok / failed / missing。
+    status: Literal["deploying", "ok", "failed", "missing"]
+    #: 失败原因(远端的原话,或翻好的一句)。
+    error: str = ""
+    #: 最近一次合成用到它的时间 —— 一年没被合成用过,远端会把它删掉。
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+
 class VoiceOut(ApiModel):
     id: str
     name: str
@@ -53,6 +75,34 @@ class VoiceOut(ApiModel):
     consent_kind: str = "undeclared"
     consent_at: datetime | None = None
     created_at: datetime
+    #: 它在哪儿还能念:我账号里的远端副本(本机那一种总在,参考音频就是它)。
+    remote_copies: list[RemoteCopyOut] = Field(default_factory=list)
+
+
+class RemoteCopyRequest(ApiModel):
+    """把这把嗓子复刻到一个远端引擎上(配音库的「复刻到百炼」,或确认框里点了同意)。"""
+
+    #: 能力表里的引擎 id;这一版只有 `builtin:alibaba-cosyvoice`。
+    engine: str = Field(min_length=1, max_length=80)
+    #: 哪条连接;不给就用这个人那家的第一条。
+    provider_profile_id: str | None = None
+    #: **同意把参考音频上传到这个账号**(确认框里点了同意才带)。这个账号没同意过、又没带它,回 409
+    #: `remote_voice_consent_required`,带着确认框要说的那几样;同意过的不用再带。
+    consent: bool = False
+
+
+class RemoteCopyFailureOut(ApiModel):
+    """删嗓子时没删掉的一份远端副本。本机那一行照删;这一份要去那家的控制台看。"""
+
+    connection: str
+    target_model: str
+    remote_voice_id: str
+    reason: str
+
+
+class VoiceDeleteOut(ApiModel):
+    #: 没删掉的远端副本(钥匙失效、网络)。空 = 远端也都删干净了。
+    remote_failures: list[RemoteCopyFailureOut] = Field(default_factory=list)
 
 
 class VoiceUpdate(ApiModel):
@@ -95,7 +145,8 @@ class SubtitleDubRequest(ApiModel):
     original_audio: Literal["duck", "mute", "keep", "separate"] = "duck"
     #: 配音引擎(能力表里的提供方 id:`builtin:clone`、`builtin:edge`、插件连接 id……)。
     engine: str = Field(default="builtin:clone", max_length=80)
-    #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
+    #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人 —— 能复刻的远端引擎(CosyVoice)点了配音库里的嗓子时
+    #: 也是这一格(念它的远端副本,ADR 0037),`engine_voice` 留空。
     voice_id: str | None = None
     clone_engine: str = Field(default="", max_length=40)
     #: 明说要用哪一份克隆权重(见 ai/runtime/f5_models)。空 = 按文字自动挑。
@@ -118,7 +169,8 @@ class VoicePreviewRequest(ApiModel):
 
 
 class EngineSynthesizeRequest(ApiModel):
-    """Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."""
+    """Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can
+    clone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037)."""
 
     workspace_id: str
     text: str = Field(min_length=1, max_length=2000)
@@ -126,6 +178,8 @@ class EngineSynthesizeRequest(ApiModel):
     provider_profile_id: str | None = None
     engine_model: str = Field(default="", max_length=120)
     engine_voice: str = Field(default="", max_length=120)
+    #: 配音库里的一把嗓子(和本机克隆同一个字段)。给了它 `engine_voice` 就留空。
+    voice_id: str | None = None
     #: 火山 only: the voice's resource family. Only the account's voice list knows it, and the
     #: synthesis header must agree with it or the call fails with an opaque 55000000. Blank
     #: falls back to inferring it from the voice id, which works for the built-in voices.
@@ -156,6 +210,9 @@ class TtsVoiceOut(ApiModel):
     value: str
     label: str
     resource_id: str = ""
+    #: 这一项是配音库里的一把克隆嗓子(`value` 是它的 id),由这个引擎念它的远端副本(ADR 0037)。
+    #: 选它时请求带 `voice_id`、`engine_voice` 留空。只在能复刻的引擎(CosyVoice)、带了工作区时出现。
+    cloned: bool = False
 
 
 class VoiceFromSpeakerRequest(ApiModel):

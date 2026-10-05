@@ -298,15 +298,16 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
 
 
 def _start_speak(db: Session, request: RunRequest, form: SpeakForm) -> Board:
-    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
     from app.domain.voices.speech import CLONE_ENGINE
 
     engine = form.engine.strip() or CLONE_ENGINE
-    # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色)。
+    # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色);能复刻的引擎(CosyVoice)点了
+    # 配音库里的嗓子时也是 voice_id(ADR 0037)。
     synthesis = synthesis_params(
         db,
         engine=engine,
-        voice=form.voice_id if engine == CLONE_ENGINE else form.engine_voice,
+        voice=voice_slot(engine, voice_id=form.voice_id, engine_voice=form.engine_voice),
         speed=form.speed,
         user_id=request.actor_id,
         workspace_id=request.workspace_id,

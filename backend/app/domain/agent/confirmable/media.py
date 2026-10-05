@@ -164,6 +164,7 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
     #: 引擎按名字或 id 认,只给了音色就按音色认出是哪一家,点名的引擎现在就得用得上、克隆音色得在这个工作区。
     #: 此前这里只认引擎、不看音色:一个不存在的音色(或别的工作区的克隆音色)照样开卡,用户批了之后每一句都合成失败。
     from app.domain.voices.engine_catalog import pick_speech
+    from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
     from app.domain.voices.speech import CLONE_ENGINE, SpeechProviderUnavailable
     from app.domain.voices.voices import VoiceError
 
@@ -175,10 +176,14 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
             user_id=actor,
             workspace_id=workspace_id,
         )
-    except (SpeechProviderUnavailable, VoiceError) as exc:
+        #: 配音库里的嗓子交给远端引擎念(ADR 0037):开卡时就问这个账号同意过上传没有,不等批准之后才失败。
+        remote_clone = speaks_library_voice(db, engine, voice)
+        if remote_clone:
+            check_voice(db, engine=engine, voice_id=voice, workspace_id=workspace_id, user_id=actor)
+    except (SpeechProviderUnavailable, VoiceError, RemoteConsentRequired) as exc:
         raise ConfirmationError.relay(exc) from exc
-    clone = engine == CLONE_ENGINE
-    payload.update(engine=engine, voice_id=voice if clone else "", engine_voice="" if clone else voice)
+    library = engine == CLONE_ENGINE or remote_clone
+    payload.update(engine=engine, voice_id=voice if library else "", engine_voice="" if library else voice)
 
 
 def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
@@ -205,7 +210,7 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
 
 def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
     from app.domain.voices.speech import CLONE_ENGINE
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
     from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, dub_targets, start_subtitle_dub
@@ -224,7 +229,8 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
         synthesis=synthesis_params(
             db,
             engine=engine,
-            voice=str(payload.get("voice_id" if engine == CLONE_ENGINE else "engine_voice") or ""),
+            voice=voice_slot(engine, voice_id=str(payload.get("voice_id") or ""),
+                             engine_voice=str(payload.get("engine_voice") or "")),
             speed=float(payload.get("speed") or 1.0),
             user_id=actor,
             workspace_id=confirmation.workspace_id,

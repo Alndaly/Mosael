@@ -110,6 +110,44 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个工作区的配音库里没有这个音色",
         "en": "This voice isn't in this workspace's voice library.",
     },
+    "voiceErr_remoteConsentRequired": {
+        "zh": "「{voice}」要复刻到百炼才能用 CosyVoice 念:参考音频会上传到你在连接「{connection}」里的百炼账号,建在 {model} 上。"
+              "确认一次就好 —— 在配音库里点「复刻到百炼」,或在配音时的确认框里点同意。",
+        "en": "To speak with CosyVoice, “{voice}” has to be cloned on Alibaba Cloud Bailian first: its reference audio is uploaded "
+              "to your Bailian account on the connection “{connection}”, on {model}. You only confirm once — click “Clone on Bailian” "
+              "in the voice library, or agree in the dialog when you dub.",
+    },
+    "voiceErr_remoteCloneUndeclared": {
+        "zh": "「{voice}」还没声明是谁的嗓子,不能上传到第三方复刻。先在配音库里补上授权声明。",
+        "en": "Nobody has declared whose voice “{voice}” is, so it can't be uploaded to a third party for cloning. Add the "
+              "declaration in the voice library first.",
+    },
+    "voiceErr_remoteCloneUnsupported": {
+        "zh": "{engine} 念不了配音库里的克隆音色(只有能复刻声音的引擎可以,目前是百炼 CosyVoice)",
+        "en": "{engine} can't speak cloned voices from the voice library (only engines that can clone a voice can — currently Bailian CosyVoice).",
+    },
+    "voiceErr_remoteNoConnection": {
+        "zh": "没找到你能用的百炼连接(或它没有你的 API Key)。先在设置里配好,再复刻这把嗓子。",
+        "en": "No Bailian connection you can use was found (or it has no API key of yours). Set one up in Settings, then clone this voice.",
+    },
+    "voiceErr_remoteEnrollTimeout": {
+        "zh": "百炼两分钟还没把「{voice}」复刻好。它还在那边建,过一会儿再试一次,会接着用这一份。",
+        "en": "Bailian hasn't finished cloning “{voice}” after two minutes. It's still being built there — try again in a "
+              "little while and this copy will be picked up.",
+    },
+    "voiceErr_remoteEnrollRejected": {
+        "zh": "百炼没通过这次复刻(状态 {status})。换一段更清晰的参考音频(至少 5 秒连续朗读、没有背景音)再试。",
+        "en": "Bailian rejected this clone (status {status}). Try a clearer reference recording (at least 5 seconds of continuous "
+              "speech with no background sound).",
+    },
+    "voiceErr_remoteCopyMissing": {
+        "zh": "百炼上的这份副本不在了(一年没被合成用过会被自动删除),下次用到时会重建",
+        "en": "This copy is gone from Bailian (copies unused for a year are deleted automatically); it will be rebuilt the next time it's used.",
+    },
+    "voiceErr_remoteEnrollInterrupted": {
+        "zh": "复刻做到一半应用重启了,下次用到时会重新复刻",
+        "en": "The app restarted halfway through cloning; it will be cloned again the next time it's used.",
+    },
     "voiceErr_agentVoiceNotConfigured": {
         "zh": "还没有选语音对话的音色 —— 到设置的「语音对话」里选一个。它和配音的默认音色是分开的:配音要质量,对话要快。",
         "en": "No voice is chosen for voice chat yet — pick one under Settings → Voice chat. It's separate from the default voiceover voice: voiceovers want quality, chat wants speed.",

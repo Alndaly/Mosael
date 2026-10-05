@@ -49,7 +49,8 @@ def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) ->
 
     voices = _voices(client, "builtin:volcano")
 
-    assert voices == [{"value": "zh_male_custom_bigtts", "label": "定制音色", "resource_id": "seed-icl-2.0"}]
+    #: `cloned` 只有能复刻的引擎(CosyVoice)念配音库里的嗓子时才是真(ADR 0037)。
+    assert voices == [{"value": "zh_male_custom_bigtts", "label": "定制音色", "resource_id": "seed-icl-2.0", "cloned": False}]
 
 
 def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) -> None:

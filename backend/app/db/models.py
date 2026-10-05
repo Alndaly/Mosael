@@ -39,7 +39,7 @@ from app.db.model_slices.documents import AssetExtraction  # noqa: E402,F401
 from app.db.model_slices.entities import Entity, EntityReference  # noqa: E402,F401
 from app.db.model_slices.transcripts import ClipTranscriptRef, Transcript, TranscriptSegment, TranscriptToken  # noqa: E402,F401
 from app.db.model_slices.sequences import Clip, Sequence, SequenceOperation, SequenceRevision, Track  # noqa: E402,F401
-from app.db.model_slices.voices import AgentVoicePref, Voice  # noqa: E402,F401
+from app.db.model_slices.voices import AgentVoicePref, Voice, VoiceEnrollment  # noqa: E402,F401
 from app.db.model_slices.providers import GenerationCapabilityDeclaration, GenerationCapabilityProfile, ProviderCredential, ProviderDefault, ProviderModel, ProviderProfile  # noqa: E402,F401
 from app.db.model_slices.usage import ProviderPricingRule, ProviderUsageEvent  # noqa: E402,F401
 from app.db.model_slices.runtime_config import AiRuntimeConfig, DeploymentConfig, NetworkConfig, TtsConfig  # noqa: E402,F401
