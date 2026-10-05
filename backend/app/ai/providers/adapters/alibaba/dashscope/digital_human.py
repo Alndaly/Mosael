@@ -98,12 +98,16 @@ def _input_url(client: RetryingClient, request: GenerationRequest, role: str, *,
 
 
 def check_portrait(client: RetryingClient, image_url: str) -> None:
-    """说话照片之前的预检:图里要有一张清晰、正面的人脸。不过就说人话,不提交。"""
-    response = client.post(
-        DETECT_PATH,
-        json={"model": S2V_DETECT_MODEL, "input": {"image_url": image_url}},
-        headers=OSS_RESOLVE_HEADER,
+    """说话照片之前的预检:图里要有一张清晰、正面的人脸。不过就说人话,不提交。
+
+    预检是**同步**接口:交进来的是提交任务那个客户端(带着 `X-DashScope-Async: enable`),这一次要把异步头摘掉 ——
+    带着它百炼回 403「current user api does not support asynchronous calls」(真跑撞上过,一次都没走到提交)。
+    """
+    request = client.build_request(
+        "POST", DETECT_PATH, json={"model": S2V_DETECT_MODEL, "input": {"image_url": image_url}}, headers=OSS_RESOLVE_HEADER,
     )
+    request.headers.pop("X-DashScope-Async", None)
+    response = client.send(request)
     response.raise_for_status()
     output = (response.json() or {}).get("output") or {}
     if not output.get("check_pass"):

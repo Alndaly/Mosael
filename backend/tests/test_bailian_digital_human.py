@@ -50,6 +50,14 @@ class FakeClient:
         self.calls.append(("POST", path, {"json": json, "headers": headers or {}}))
         return self._reply(path)
 
+    def build_request(self, method: str, path: str, json: dict[str, Any] | None = None,
+                      headers: dict[str, str] | None = None, **_kw):
+        return SimpleNamespace(method=method, path=path, json=json, headers=dict(headers or {}))
+
+    def send(self, request, **_kw):
+        self.calls.append((request.method, request.path, {"json": request.json, "headers": request.headers}))
+        return self._reply(request.path)
+
 
 POLICY = {"data": {"upload_host": "https://dashscope-file.oss.example.com", "upload_dir": "dashscope-instant/abc",
                    "policy": "p", "signature": "s", "oss_access_key_id": "k", "x_oss_object_acl": "private",
@@ -144,3 +152,27 @@ def test_两个模型在目录里_成片时长跟着音频_不收提示词() -> 
         assert "duration_seconds" not in caps["parameter_keys"], "时长跟着音频走的模型不收时长"
     assert WAN_22_S2V_CAPABILITIES["modes"] == ["speech-to-video"]
     assert VIDEORETALK_CAPABILITIES["modes"] == ["video-lipsync"]
+
+
+def test_人脸预检是同步接口_不带异步头() -> None:
+    """真跑「稿子 → 数字人口播」:预检(face-detect)跟着提交任务的客户端带上了 `X-DashScope-Async: enable`,
+    百炼回 403「current user api does not support asynchronous calls」,一次都没走到提交。预检是同步接口。"""
+    import httpx
+
+    from app.ai.providers.adapters.alibaba.dashscope.digital_human import check_portrait
+    from app.core.http_retry import RetryingClient
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"output": {"check_pass": True, "humanoid": True}})
+
+    client = RetryingClient(base_url="https://dashscope.example.com",
+                            headers={"Authorization": "Bearer k", "X-DashScope-Async": "enable"},
+                            transport=httpx.MockTransport(handler))
+    check_portrait(client, "oss://dashscope-instant/abc/face.png")
+    assert len(seen) == 1 and seen[0].url.path == DETECT_PATH
+    assert "x-dashscope-async" not in seen[0].headers, dict(seen[0].headers)
+    assert seen[0].headers["x-dashscope-ossresourceresolve"] == "enable", "oss:// 的临时地址照样要解析"
+    assert seen[0].headers["authorization"] == "Bearer k"
