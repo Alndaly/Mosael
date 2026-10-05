@@ -190,10 +190,17 @@ export const startNodeInstall = (instanceId: string, body: { workspace_id: strin
 export const rebootWorkflowServer = (instanceId: string) =>
   api<{ back: boolean }>(`/api/plugins/instances/${instanceId}/workflow-library/reboot`, { method: "POST" });
 
-/** 预览图地址。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
-export function modelPreviewUrl(instanceId: string, folder: string, name: string): string {
+function modelImageUrl(variant: "preview" | "thumbnail", instanceId: string, folder: string, name: string): string {
   const params = new URLSearchParams({ folder, name });
   const token = getAuthToken();
   if (token) params.set("token", token);
-  return `${API_BASE}/api/plugins/instances/${instanceId}/model-library/preview?${params}`;
+  return `${API_BASE}/api/plugins/instances/${instanceId}/model-library/${variant}?${params}`;
 }
+
+/** 预览图原图(详情页的大图)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
+export const modelPreviewUrl = (instanceId: string, folder: string, name: string) =>
+  modelImageUrl("preview", instanceId, folder, name);
+
+/** 预览图的缩略图(长边不超过 512):卡片、列表行、选模型的下拉用它 —— 一屏几十张不解原图。 */
+export const modelThumbnailUrl = (instanceId: string, folder: string, name: string) =>
+  modelImageUrl("thumbnail", instanceId, folder, name);

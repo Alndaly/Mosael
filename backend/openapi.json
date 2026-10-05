@@ -19571,8 +19571,67 @@
           "plugins"
         ],
         "summary": "Get Model Preview",
-        "description": "一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。\n`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。",
+        "description": "一个模型文件的预览图原图(详情页的大图)。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的\n占位)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。",
         "operationId": "get_model_preview_api_plugins_instances__instance_id__model_library_preview_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/thumbnail": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Model Thumbnail",
+        "description": "预览图的缩略图(长边不超过 512 的 WebP):模型库的卡片和列表、生成表单里选模型的下拉用它,一屏几十张不解原图。\n第一次要时由原图缩一次、记在原图旁边;没有预览图就 404。凭据同上走 `?token=`。",
+        "operationId": "get_model_thumbnail_api_plugins_instances__instance_id__model_library_thumbnail_get",
         "parameters": [
           {
             "name": "instance_id",

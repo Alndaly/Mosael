@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, HTTPException, Response
+import anyio.from_thread
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, render_message, tr
 from app.api.deps import CurrentUser, DbSession, Tx
@@ -59,7 +61,7 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
-from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
+from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, User
 from app.domain import model_library
 from app.domain import workflow_library
 from app.domain.plugins import PluginDomainError
@@ -496,19 +498,45 @@ def get_model_library(instance_id: str, db: DbSession, user: CurrentUser) -> dic
         raise _model_library_failed(exc) from exc
 
 
-@router.get("/plugins/instances/{instance_id}/model-library/preview")
-def get_model_preview(instance_id: str, folder: str, name: str, db: DbSession, user: CurrentUser) -> Response:
-    """一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。
-    `<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。"""
+def _model_image(
+    db: Session, user: User, request: Request, instance_id: str, folder: str, name: str, *, thumbnail: bool
+) -> Response:
+    """预览图和缩略图两个端点的身子。读库(认连接、找这张图在哪)在前头一次读完,**随后交还数据库连接**:缓存里没有时
+    要排队等那台服务器(见 model_library.PreviewSource),不攥着连接等。排到去取时浏览器已经掐了这个请求(卡片滚出去、
+    弹窗关了)就不取 —— 端点是同步的、在线程池里跑,回事件循环问一句。"""
     instance = my_instance(db, instance_id, user)
     try:
-        found = model_library.preview(db, instance, folder, name)
+        source = model_library.preview_source(db, instance, folder, name)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
-    if found is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_modelPreviewNotFound"))
-    data, kind = found
-    return Response(content=data, media_type=kind, headers={"Cache-Control": "private, max-age=3600"})
+    db.close()
+    if source is not None:
+        def wanted() -> bool:
+            return not anyio.from_thread.run(request.is_disconnected)
+
+        found = source.thumbnail(wanted) if thumbnail else source.original(wanted)
+        if found is not None:
+            data, kind = found
+            return Response(content=data, media_type=kind, headers={"Cache-Control": "private, max-age=3600"})
+    raise HTTPException(status_code=404, detail=tr("routeErr_modelPreviewNotFound"))
+
+
+@router.get("/plugins/instances/{instance_id}/model-library/preview")
+def get_model_preview(
+    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser
+) -> Response:
+    """一个模型文件的预览图原图(详情页的大图)。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的
+    占位)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。"""
+    return _model_image(db, user, request, instance_id, folder, name, thumbnail=False)
+
+
+@router.get("/plugins/instances/{instance_id}/model-library/thumbnail")
+def get_model_thumbnail(
+    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser
+) -> Response:
+    """预览图的缩略图(长边不超过 512 的 WebP):模型库的卡片和列表、生成表单里选模型的下拉用它,一屏几十张不解原图。
+    第一次要时由原图缩一次、记在原图旁边;没有预览图就 404。凭据同上走 `?token=`。"""
+    return _model_image(db, user, request, instance_id, folder, name, thumbnail=True)
 
 
 @router.get("/plugins/instances/{instance_id}/model-library/detail", response_model=ModelDetailOut)

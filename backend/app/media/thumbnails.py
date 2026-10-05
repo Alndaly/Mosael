@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from typing import IO
 
 from PIL import Image, ImageOps
 
@@ -20,14 +21,15 @@ def thumbnail_path(asset_directory: Path) -> Path:
     return asset_directory / THUMBNAIL_NAME
 
 
-def write_thumbnail(image: Image.Image, target: Path) -> None:
-    """按宽 320 等比缩小(不放大)写成 WebP;有透明就留着透明。"""
+def write_thumbnail(image: Image.Image, target: Path | IO[bytes], *, width: int = THUMBNAIL_WIDTH, height: int | None = None) -> None:
+    """等比缩小到宽不超过 `width`(给了 `height` 时高也不超过它),不放大;写成 WebP,有透明就留着透明。"""
     image = ImageOps.exif_transpose(image)
     has_alpha = image.mode in {"RGBA", "LA", "PA"} or (image.mode == "P" and "transparency" in image.info)
     image = image.convert("RGBA" if has_alpha else "RGB")
-    if image.width > THUMBNAIL_WIDTH:
-        height = max(1, round(image.height * THUMBNAIL_WIDTH / image.width))
-        image = image.resize((THUMBNAIL_WIDTH, height), Image.Resampling.LANCZOS)
+    scale = min(1.0, width / image.width, height / image.height if height else 1.0)
+    if scale < 1:
+        size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+        image = image.resize(size, Image.Resampling.LANCZOS)
     image.save(target, "WEBP", quality=82, method=4)
 
 

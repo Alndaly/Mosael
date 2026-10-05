@@ -6423,10 +6423,31 @@ export interface paths {
         };
         /**
          * Get Model Preview
-         * @description 一个模型文件的预览图。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的占位)。
-         *     `<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。
+         * @description 一个模型文件的预览图原图(详情页的大图)。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的
+         *     占位)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。
          */
         get: operations["get_model_preview_api_plugins_instances__instance_id__model_library_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Thumbnail
+         * @description 预览图的缩略图(长边不超过 512 的 WebP):模型库的卡片和列表、生成表单里选模型的下拉用它,一屏几十张不解原图。
+         *     第一次要时由原图缩一次、记在原图旁边;没有预览图就 404。凭据同上走 `?token=`。
+         */
+        get: operations["get_model_thumbnail_api_plugins_instances__instance_id__model_library_thumbnail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -29737,6 +29758,40 @@ export interface operations {
         };
     };
     get_model_preview_api_plugins_instances__instance_id__model_library_preview_get: {
+        parameters: {
+            query: {
+                folder: string;
+                name: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_thumbnail_api_plugins_instances__instance_id__model_library_thumbnail_get: {
         parameters: {
             query: {
                 folder: string;

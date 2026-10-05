@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
 import shutil
 import threading
@@ -23,10 +24,11 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -45,6 +47,7 @@ from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import MODEL_LIBRARY
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
+from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, write_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,12 @@ QUICK_TIMEOUT_SECONDS = 120
 PREVIEW_MAX_BYTES = 8 * 1024 * 1024
 #: 那台服务器上没有预览图的,记多久不再去问(作者随时可能补一张同名图进去)。
 NO_PREVIEW_SECONDS = 600
+#: 卡片、列表行、生成表单下拉里那一枚用的缩略图:长边不超过这么多像素。卡片最宽两百来点,高清屏上翻倍也够清楚;
+#: 解码一张是原图(常见 1200×1800、1800×2300)的十几分之一 —— 网格一屏几十张全解原图,滚动和悬停都卡。
+THUMBNAIL_EDGE = 512
+#: 同一个连接同时去那台服务器取几张预览图。ComfyUI 是在它唯一的事件循环里把预览图现转成 WebP 的,一次只转一张:
+#: 多发的请求只是在它那边排队,还把它别的回答(队列、进度)压在后面。
+REMOTE_FETCHES = 2
 #: 模型库里列出最近几条下载(在跑的总在里面)。
 RECENT_DOWNLOADS = 10
 
@@ -87,8 +96,12 @@ _snapshots: dict[str, _Snapshot] = {}
 _listing_locks: dict[str, threading.Lock] = {}
 #: (连接, 预览地址) → 到这个时刻之前不再去问(那边说没有)。
 _absent: dict[tuple[str, str], float] = {}
-#: (连接, 预览地址) 一把:同一张图同时被要好几次时只去取一次,别的等它落盘再读。
+#: (连接, 预览地址) 一把:同一张图同时被要好几次时只去取一次(缩略图也只缩一次),别的等它落盘再读。
 _fetch_locks: dict[tuple[str, str], threading.Lock] = {}
+#: 一个连接一个:同时去那台服务器取的预览图不超过 REMOTE_FETCHES 张。
+_remote_slots: dict[str, threading.BoundedSemaphore] = {}
+#: 排队等取图名额时,隔多久问一次要图的人还在不在。
+_WANTED_POLL_SECONDS = 0.25
 
 
 class _PreviewNotNow(Exception):
@@ -102,8 +115,10 @@ def forget(instance_id: str | None = None) -> None:
             _snapshots.clear()
             _absent.clear()
             _fetch_locks.clear()
+            _remote_slots.clear()
             return
         _snapshots.pop(instance_id, None)
+        _remote_slots.pop(instance_id, None)
         for key in [key for key in _absent if key[0] == instance_id]:
             _absent.pop(key, None)
         for key in [key for key in _fetch_locks if key[0] == instance_id]:
@@ -213,44 +228,144 @@ def _preview_dir(instance_id: str) -> Path:
     return settings.data_dir / "model-previews" / instance_id
 
 
-def preview(db: Session, instance: PluginInstance, folder: str, name: str) -> tuple[bytes, str] | None:
-    """一个模型文件的预览图(字节、类型);没有就是 None。取回来的记在磁盘上,同一个地址第二次不再去取。"""
+@dataclass(frozen=True)
+class _Cached:
+    """一张预览图在磁盘上的那几个文件。按地址记:换了服务器、换了文件(ComfyUI 的地址里带着目录序号和名字)就是另一张。
+
+    原图(`<key>`)和它的类型(`<key>.type`)是取回来的原样,详情页的大图用它;缩略图(`<key>.thumbnail.webp`)
+    由原图缩出来,卡片、列表行、下拉用它。"""
+
+    original: Path
+    kind: Path
+    thumbnail: Path
+
+    @classmethod
+    def of(cls, instance_id: str, url: str) -> _Cached:
+        target = _preview_dir(instance_id) / hashlib.sha1(url.encode("utf-8")).hexdigest()
+        return cls(target, target.with_name(f"{target.name}.type"), target.with_name(f"{target.name}.thumbnail.webp"))
+
+    def read_original(self) -> tuple[bytes, str] | None:
+        if self.original.is_file() and self.kind.is_file():
+            return self.original.read_bytes(), self.kind.read_text(encoding="utf-8")
+        return None
+
+    def read_thumbnail(self) -> tuple[bytes, str] | None:
+        return (self.thumbnail.read_bytes(), THUMBNAIL_MEDIA_TYPE) if self.thumbnail.is_file() else None
+
+
+def _write(path: Path, content: bytes) -> None:
+    """临时文件再换上去:读的人不会读到半截。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
+    partial.write_bytes(content)
+    partial.replace(path)
+
+
+def _always() -> bool:
+    return True
+
+
+def preview_source(db: Session, instance: PluginInstance, folder: str, name: str) -> PreviewSource | None:
+    """这个文件的预览图从哪儿取、记在哪儿;插件没给预览地址就是 None。**读库的只有这一步**:拿到它之后取图、缩图都不碰
+    数据库 —— 调用方(路由)接着就把连接交还,再去等(见 PreviewSource)。"""
     _require(db, instance)
     snapshot = _snapshot_for(db, instance)
     url = snapshot.previews.get((folder, name)) if snapshot else None
-    if not url:
+    if not snapshot or not url:
         return None
-    # 按地址记:换了服务器、换了文件(ComfyUI 的地址里带着目录序号和名字)就是另一张。
-    key = hashlib.sha1(url.encode("utf-8")).hexdigest()
-    target = _preview_dir(instance.id) / key
-    kind_file = target.with_suffix(".type")
-    if target.is_file() and kind_file.is_file():
-        return target.read_bytes(), kind_file.read_text(encoding="utf-8")
-    with _lock:
-        gate = _fetch_locks.setdefault((instance.id, url), threading.Lock())
-    with gate:
-        # 等锁的这段时间里,先到的那个可能已经取回落盘,或者问出了「没有」。
-        if target.is_file() and kind_file.is_file():
-            return target.read_bytes(), kind_file.read_text(encoding="utf-8")
+    route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
+    return PreviewSource(instance.id, url, dict(snapshot.headers), route, _Cached.of(instance.id, url))
+
+
+@dataclass(frozen=True)
+class PreviewSource:
+    """一张预览图:那台服务器上的地址、取它要带的头、走哪条出站,磁盘上记在哪。
+
+    缓存里没有时要排队(这张图的锁、这个连接的取图名额)、等那台服务器 —— 第一次打开模型库时一屏的请求同时到,滚一下
+    又是一屏(滚出去的那些浏览器掐了,线程还在排队)。此前每个都攥着一条数据库连接排着,连接池(5 + 10)很快就空了,
+    详情、任务列表这些请求要等满 30 秒才报错;现在等的这一段手里没有会话。"""
+
+    instance_id: str
+    url: str
+    headers: dict[str, str]
+    route: plugin_egress.Egress
+    cached: _Cached
+
+    def original(self, wanted: Callable[[], bool] = _always) -> tuple[bytes, str] | None:
+        """原图(字节、类型),详情页的大图;没有就是 None。取回来的记在磁盘上,同一个地址第二次不再去取。
+        `wanted`:要它的人还在不在(见 `_fetch`)。"""
+        hit = self.cached.read_original()
+        if hit is not None:
+            return hit
+        with self._gate():
+            return self._fetch(wanted)
+
+    def thumbnail(self, wanted: Callable[[], bool] = _always) -> tuple[bytes, str] | None:
+        """缩略图(长边不超过 THUMBNAIL_EDGE 的 WebP,透明照留),卡片、列表和选模型的下拉用;没有预览图就是 None。
+
+        第一次要的时候取原图(已经取过就用磁盘上那份)、缩一次,记在原图旁边;之后都从磁盘给。缩不出来(Pillow 不认识
+        这种图)就给原图 —— 浏览器认得的话卡片照样有图,只是大一些。`wanted` 同上。"""
+        hit = self.cached.read_thumbnail()
+        if hit is not None:
+            return hit
+        with self._gate():
+            # 等锁的这段时间里,先到的那个可能已经缩好了。
+            hit = self.cached.read_thumbnail()
+            if hit is not None:
+                return hit
+            original = self._fetch(wanted)
+            if original is None:
+                return None
+            try:
+                with Image.open(io.BytesIO(original[0])) as image:
+                    buffer = io.BytesIO()
+                    write_thumbnail(image, buffer, width=THUMBNAIL_EDGE, height=THUMBNAIL_EDGE)
+            except (OSError, ValueError, Image.DecompressionBombError) as exc:
+                logger.info("模型预览图缩不出缩略图(连接 %s),给原图:%s", self.instance_id, exc)
+                return original
+            _write(self.cached.thumbnail, buffer.getvalue())
+            return buffer.getvalue(), THUMBNAIL_MEDIA_TYPE
+
+    def _gate(self) -> threading.Lock:
+        """这张图一把锁:同时被要好几次时只去取一次、只缩一次,别的等它落盘再读。"""
         with _lock:
-            until = _absent.get((instance.id, url), 0.0)
+            return _fetch_locks.setdefault((self.instance_id, self.url), threading.Lock())
+
+    def _fetch(self, wanted: Callable[[], bool]) -> tuple[bytes, str] | None:
+        """磁盘上的原图;没有就去那台服务器取一次、落盘。拿着这张图的锁调。
+
+        去取要排队(一个连接同时取 REMOTE_FETCHES 张)。排着的时候、排到的时候都问 `wanted()`:人已经滚走了(浏览器掐了
+        这个请求)就不取,也不记成「没有」—— 一路滚过去几百张卡,每张都发过一个请求;挨个去取的话,眼前这几张要排在它们
+        后面等上几十秒。"""
+        # 等锁的这段时间里,先到的那个可能已经取回落盘,或者问出了「没有」。
+        hit = self.cached.read_original()
+        if hit is not None:
+            return hit
+        key = (self.instance_id, self.url)
+        with _lock:
+            until = _absent.get(key, 0.0)
+            slots = _remote_slots.setdefault(self.instance_id, threading.BoundedSemaphore(REMOTE_FETCHES))
         if until > time.monotonic():
             return None
+        while not slots.acquire(timeout=_WANTED_POLL_SECONDS):
+            if not wanted():
+                return None
         try:
-            fetched = _fetch_preview(db, instance, url, snapshot.headers if snapshot else {})
+            if not wanted():
+                return None
+            fetched = _fetch_preview(self.instance_id, self.route, self.url, self.headers)
         except _PreviewNotNow:
             return None
+        finally:
+            slots.release()
         if fetched is None:
             with _lock:
-                _absent[(instance.id, url)] = time.monotonic() + NO_PREVIEW_SECONDS
+                _absent[key] = time.monotonic() + NO_PREVIEW_SECONDS
             return None
         data, kind = fetched
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # 临时文件再换上去,读的人不会读到半截。类型先落,读的人见到图就有类型。
-        for path, content in ((kind_file, kind.encode("utf-8")), (target, data)):
-            partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
-            partial.write_bytes(content)
-            partial.replace(path)
+        # 类型先落,读的人见到图就有类型。
+        _write(self.cached.kind, kind.encode("utf-8"))
+        _write(self.cached.original, data)
         return data, kind
 
 
@@ -271,12 +386,13 @@ def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
     return snapshot
 
 
-def _fetch_preview(db: Session, instance: PluginInstance, url: str, headers: dict[str, str]) -> tuple[bytes, str] | None:
-    """按这个连接的出站决定去取(和插件交回 `url` 的产出同一条路)。
+def _fetch_preview(
+    instance_id: str, route: plugin_egress.Egress, url: str, headers: dict[str, str]
+) -> tuple[bytes, str] | None:
+    """按这个连接的出站决定(`route`)去取(和插件交回 `url` 的产出同一条路)。
 
     那边明确说没有(404 这类)、不是图、太大 → None,记成没有;那边一时出错(5xx、连接断了、超时)→ 抛
     _PreviewNotNow,这次不给、也不记成没有,下次照常去取。"""
-    route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
     try:
         with httpx.Client(timeout=30, headers=headers, follow_redirects=True, **route.httpx_options(url)) as client:
             with client.stream("GET", url) as response:
@@ -296,7 +412,7 @@ def _fetch_preview(db: Session, instance: PluginInstance, url: str, headers: dic
                     chunks.append(chunk)
                 return b"".join(chunks), kind
     except httpx.HTTPError as exc:
-        logger.info("模型预览图这次没取到(连接 %s):%s", instance.id, exc)
+        logger.info("模型预览图这次没取到(连接 %s):%s", instance_id, exc)
         raise _PreviewNotNow(str(exc)) from exc
 
 
@@ -491,12 +607,13 @@ __all__ = [
     "CAPABILITY",
     "KIND",
     "ModelLibraryError",
+    "PreviewSource",
     "detail",
     "downloads",
     "drop_cache",
     "forget",
     "library",
-    "preview",
+    "preview_source",
     "register_uses",
     "resolve",
     "start_download",

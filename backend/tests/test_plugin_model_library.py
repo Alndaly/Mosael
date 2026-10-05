@@ -4,7 +4,8 @@
 
 - 目录类能力:认领它的工具不进工具表,能力词表里叫得出名字;
 - 列出来的是插件报的那一份,宿主规整字段(坏条目丢掉),预览图地址不交给界面 —— 界面拿宿主的地址;
-- 预览图宿主按插件给的地址取回、记进磁盘缓存(第二次不再去取),没有的回 404;
+- 预览图宿主按插件给的地址取回、记进磁盘缓存(第二次不再去取),没有的回 404;卡片和列表要的是缩略图(由原图缩一次、
+  记在原图旁边),详情页拿到的还是原图;
 - 下载是一个后台任务:进度经流式协议报进任务,取消经取消文件传到插件,下完让这个连接的目录重新拉一遍;
 - 文件名带路径分隔符的、不是 http(s) 的链接,宿主当场拒绝,不交给插件。
 """
@@ -132,6 +133,8 @@ class _Previews:
         self.requests: list[dict[str, Any]] = []
         #: 接下来几次请求回 503(那台机器一时忙不过来)。
         self.busy = 0
+        #: `/preview/a` 回的那张图。
+        self.body, self.kind = WEBP, "image/webp"
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -145,10 +148,10 @@ class _Previews:
                     return
                 if self.path == "/preview/a":
                     self.send_response(200)
-                    self.send_header("Content-Type", "image/webp")
-                    self.send_header("Content-Length", str(len(WEBP)))
+                    self.send_header("Content-Type", outer.kind)
+                    self.send_header("Content-Length", str(len(outer.body)))
                     self.end_headers()
-                    self.wfile.write(WEBP)
+                    self.wfile.write(outer.body)
                     return
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
@@ -287,7 +290,9 @@ def test_重启后一屏预览图同时到_只替它列一遍(library) -> None:
 
     def fetch(_index: int):
         with SessionLocal() as db:
-            return model_library.preview(db, db.get(PluginInstance, instance_id), "checkpoints", "sdxl_base.safetensors")
+            source = model_library.preview_source(db, db.get(PluginInstance, instance_id), "checkpoints",
+                                                  "sdxl_base.safetensors")
+            return source.original() if source else None
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(fetch, range(8)))
@@ -307,7 +312,9 @@ def test_同一张图同时被要好几次_只去那台服务器取一次(librar
 
     def fetch(_index: int):
         with SessionLocal() as db:
-            return model_library.preview(db, db.get(PluginInstance, instance_id), "checkpoints", "sdxl_base.safetensors")
+            source = model_library.preview_source(db, db.get(PluginInstance, instance_id), "checkpoints",
+                                                  "sdxl_base.safetensors")
+            return source.original() if source else None
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(fetch, range(8)))
@@ -325,6 +332,130 @@ def test_那台机器一时忙不过来_不当成没有预览图(library) -> Non
     assert first.status_code == 404
     again = client.get(url, params={"folder": "checkpoints", "name": "sdxl_base.safetensors"})
     assert again.status_code == 200 and again.content == WEBP, "下一次照常去取"
+
+
+def _portrait_png() -> bytes:
+    """一张真尺寸的预览图:1024×1536 的 PNG,左上角一块透明。"""
+    import io
+
+    from PIL import Image
+
+    image = Image.new("RGBA", (1024, 1536), (200, 80, 40, 255))
+    image.paste((0, 0, 0, 0), (0, 0, 256, 256))
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def test_缩略图_宿主缩小一次记在原图旁边_详情拿到的还是原图(library) -> None:
+    """卡片、列表一屏几十张,每张都解一张 1024×1536 的原图,滚动和悬停都卡:网格要的是缩略图(长边 512 的 WebP,
+    透明照留),第一次要时由原图缩一次、记在原图旁边;详情页的大图还是原图,两者只去那台服务器取一次。"""
+    import io
+
+    from PIL import Image
+
+    from app.core.config import settings
+
+    client, instance_id, previews = library
+    previews.body, previews.kind = _portrait_png(), "image/png"
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+    params = {"folder": "checkpoints", "name": "sdxl_base.safetensors"}
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+
+    small = client.get(f"{base}/thumbnail", params=params)
+    assert small.status_code == 200, small.text
+    assert small.headers["content-type"] == "image/webp"
+    with Image.open(io.BytesIO(small.content)) as image:
+        assert image.size == (341, 512), "长边缩到 512,等比"
+        assert image.mode == "RGBA" and image.getpixel((10, 10))[3] == 0, "透明的地方还是透明"
+        assert image.getpixel((300, 400))[3] == 255
+    cached = list((settings.data_dir / "model-previews" / instance_id).iterdir())
+    assert sorted(path.name.split(".", 1)[-1] for path in cached if "." in path.name) == ["thumbnail.webp", "type"]
+    assert len(cached) == 3, "原图、类型、缩略图三个文件记在一起"
+
+    again = client.get(f"{base}/thumbnail", params=params)
+    assert again.content == small.content
+    full = client.get(f"{base}/preview", params=params)
+    assert full.status_code == 200 and full.headers["content-type"] == "image/png"
+    assert full.content == previews.body, "详情页的大图是原图,一个字节不差"
+    assert len(previews.requests) == 1, "缩略图从磁盘给;原图在缩的时候已经落盘,详情不再去那台服务器取"
+
+    missing = client.get(f"{base}/thumbnail", params={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert missing.status_code == 404
+    client.get(f"{base}/thumbnail", params={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert len(previews.requests) == 2, "没有预览图的记一笔,缩略图也不每次都去问"
+
+
+def test_排到去取时人已经走了_不取也不记成没有(library) -> None:
+    """一路滚过去几百张卡,每张都发过一个缩略图请求,浏览器把滚出去的那些掐掉了:宿主排到去那台服务器取原图时先问一句
+    人还在不在,不在就不取 —— 挨个去取的话,眼前这几张要排在它们后面等上几十秒。也不记成「没有预览图」:下次照常取。"""
+    client, instance_id, previews = library
+    from app.db.models import PluginInstance
+    from app.domain import model_library
+
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+    with SessionLocal() as db:
+        source = model_library.preview_source(db, db.get(PluginInstance, instance_id), "checkpoints", "sdxl_base.safetensors")
+    assert source is not None
+    assert source.thumbnail(lambda: False) is None
+    assert previews.requests == [], "人走了,不去那台服务器取"
+    back = source.thumbnail()
+    assert back is not None and back[1] == "image/webp"
+    assert len(previews.requests) == 1
+
+
+def test_排队等那台服务器的请求_不攥着数据库连接(library) -> None:
+    """第一次打开模型库,一屏的缩略图请求同时到(滚一下又是一屏):它们排队等取图名额、等那台服务器的时候,数据库连接
+    已经交还了 —— 此前每个都攥着一条排着,连接池(5 + 10)空了,详情、任务列表这些请求要等满 30 秒才报错。"""
+    client, instance_id, previews = library
+    import asyncio
+
+    import httpx
+
+    from app.core.db import engine
+    from app.domain import model_library
+    from app.main import app
+
+    previews.body, previews.kind = _portrait_png(), "image/png"
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+    slots = model_library._remote_slots.setdefault(instance_id, threading.BoundedSemaphore(model_library.REMOTE_FETCHES))
+    for _ in range(model_library.REMOTE_FETCHES):
+        slots.acquire()  # 那台服务器正忙:名额都占着
+
+    async def scenario() -> tuple[int, list[httpx.Response]]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=dict(client.headers)) as http:
+            url = f"/api/plugins/instances/{instance_id}/model-library/thumbnail"
+            params = {"folder": "checkpoints", "name": "sdxl_base.safetensors"}
+            held = engine.pool.checkedout()
+            pending = asyncio.gather(*(http.get(url, params=params) for _ in range(12)))
+            try:
+                await asyncio.sleep(0.8)
+                queued = engine.pool.checkedout() - held
+            finally:
+                for _ in range(model_library.REMOTE_FETCHES):
+                    slots.release()
+            return queued, await pending
+
+    queued, responses = asyncio.run(scenario())
+    assert queued <= 0, f"排着队的十二个请求一条连接都不该占,占了 {queued} 条"
+    assert [one.status_code for one in responses] == [200] * 12
+    assert all(one.headers["content-type"] == "image/webp" for one in responses)
+    assert len(previews.requests) == 1
+
+
+def test_缩略图_原图已经取过就直接缩_不再去取(library) -> None:
+    """升级之前缓存里只有原图:要缩略图时就地从那份缩,不重新去那台服务器取。"""
+    client, instance_id, previews = library
+    previews.body, previews.kind = _portrait_png(), "image/png"
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+    params = {"folder": "checkpoints", "name": "sdxl_base.safetensors"}
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    assert client.get(f"{base}/preview", params=params).status_code == 200
+    small = client.get(f"{base}/thumbnail", params=params)
+    assert small.status_code == 200 and small.headers["content-type"] == "image/webp"
+    assert len(small.content) < len(previews.body)
+    assert len(previews.requests) == 1
 
 
 def test_详情_原样交回插件读到的元数据(library) -> None:
