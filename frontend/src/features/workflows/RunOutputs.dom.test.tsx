@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
+//: 这里不测看大图(那是 image-preview 自己和各处接线测试的事),只给一个桩让组件挂得上。
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn(), isImagePreviewOpen: false }) }));
 
 /**
  * 检查器里那一栏「输出变量」列的是**名字**(`{{llm-1.text}}`)。名字回答"我怎么引用它",
@@ -11,7 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/api/client", () => ({ api: vi.fn(), assetFileUrl: (id: string) => `/f/${id}` }));
-vi.mock("@/components/app/asset-preview", () => ({
+vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/asset-preview")>()),
   AssetInlinePreview: ({ assetId }: { assetId: string }) => <img data-testid="asset" alt="" src={`/t/${assetId}`} />,
 }));
 

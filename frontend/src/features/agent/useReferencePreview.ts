@@ -1,8 +1,9 @@
 import { toast } from "sonner";
 
-import { assetFileUrl, type Asset } from "@/api/client";
+import type { Asset } from "@/api/client";
 import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
+import { assetPreviewItem } from "@/components/app/asset-preview";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { gotoRecord, locateNotePassage, noteHref } from "@/lib/deepLink";
@@ -88,7 +89,9 @@ export function useReferencePreview() {
       openAsset(asset.id);
       return;
     }
-    openImagePreview({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" });
+    //: 图走预览地址(HEIC 这类原图浏览器解不了),视频走原文件 —— 和别处点开的是同一份。
+    const item = assetPreviewItem(asset);
+    if (item) openImagePreview(item);
   };
   /** `modal` 由调用方挂进树里:素材详情是一个弹窗,得有地方渲染它。 */
   return { open, modal };

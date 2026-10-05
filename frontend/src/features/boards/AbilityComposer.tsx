@@ -364,7 +364,7 @@ function AbilityHost({ item, tool }: { item: BoardItem; tool: BoardProducerInfo 
             name={sourceName(t, item)}
             kind="image"
             plain
-            previewOnClick={false}
+            preview="off"
             lazy={false}
             imageFallback={<KindIcon size={16} strokeWidth={1.4} />}
             className="h-full w-full object-cover"

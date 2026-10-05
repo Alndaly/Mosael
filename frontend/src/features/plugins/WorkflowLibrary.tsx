@@ -47,7 +47,9 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { assetPreviewItem } from "@/components/app/asset-preview";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { useImagePreview } from "@/components/app/image-preview";
 import {
   LIBRARY_DENSITIES,
   LibraryDensitySwitch,
@@ -108,6 +110,7 @@ import {
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
+import { useAssetDetails } from "@/lib/assetQueries";
 import { gotoRecord } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
@@ -969,12 +972,7 @@ function WorkflowDetail({
       {flow.last_output && (
         <LibrarySection title={t("workflowLastOutput")}>
           <div className="flex min-w-0 items-center gap-3">
-            <img
-              src={assetThumbnailUrl(flow.last_output.asset_id)}
-              alt={t("workflowLastOutputAlt").replace("{name}", flow.label)}
-              loading="lazy"
-              className="size-24 shrink-0 rounded-lg bg-secondary object-cover"
-            />
+            <LastOutputThumb assetId={flow.last_output.asset_id} label={t("workflowLastOutputAlt").replace("{name}", flow.label)} />
             <span className="text-ui-xs tabular-nums text-muted-foreground">
               {new Date(flow.last_output.created_at).toLocaleString(locale)}
             </span>
@@ -1017,6 +1015,30 @@ function WorkflowDetail({
  * 回收站:Mosael 删除的工作流(挪进那台机器的 `.mosael-trash/workflows/` 了)。能恢复;Mosael 不提供清空 ——
  * 真要删掉,在那台机器上删那个目录(ADR 0035 §3)。
  */
+/**
+ * 详情里「最近一次产出」那张缩略图:点开看大图。是图还是视频要问一次素材(工作流库只记了 id 和时间)——
+ * 视频在灯箱里换成播放器;还没问回来、或者素材已经删了,就只是一张不能点的缩略图。
+ */
+function LastOutputThumb({ assetId, label }: { assetId: string; label: string }) {
+  const t = useI18n();
+  const { openImagePreview } = useImagePreview();
+  const asset = useAssetDetails([assetId]).byId.get(assetId);
+  const item = asset ? assetPreviewItem(asset) : null;
+  const thumb = <img src={assetThumbnailUrl(assetId)} alt={label} loading="lazy" className="size-24 rounded-lg bg-secondary object-cover" />;
+  if (!item) return <span className="shrink-0">{thumb}</span>;
+  return (
+    <IconButton
+      unstyled
+      type="button"
+      label={t("viewFullSizeOf").replace("{name}", item.title || label)}
+      className="shrink-0 cursor-zoom-in rounded-lg border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => openImagePreview(item)}
+    >
+      {thumb}
+    </IconButton>
+  );
+}
+
 function TrashList({ items, onRestore }: { items: WorkflowTrashed[]; onRestore: (one: WorkflowTrashed) => void }) {
   const t = useI18n();
   const { locale } = usePreferences();

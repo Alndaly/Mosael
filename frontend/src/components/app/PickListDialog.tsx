@@ -3,6 +3,7 @@ import { Loader2, Search } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
+import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +18,8 @@ export type PickRow = {
   /** 一行纯文字 —— 调用方负责去掉 Markdown 这类记号,这里只管截断。 */
   subtitle?: string;
   meta?: string;
+  /** 行首那一小块能放大看(挑素材时的图和视频):给了就在它上面压一颗「看大图」。点这一行仍然是挑。 */
+  preview?: () => void;
 };
 
 /**
@@ -168,7 +171,7 @@ export function PickListDialog<T>({
         <div ref={list} id="pick-list" role="listbox" aria-label={title} className="grid content-start gap-0.5">
           {items.map((item, index) => {
             const one = row(item);
-            return (
+            const option = (
               <button
                 key={itemKey(item)}
                 type="button"
@@ -190,6 +193,14 @@ export function PickListDialog<T>({
                   <span className="shrink-0 self-start pt-0.5 text-ui-2xs tabular-nums text-muted-foreground">{one.meta}</span>
                 ) : null}
               </button>
+            );
+            if (!one.preview) return option;
+            //: 按钮不能套按钮:「看大图」和这一行并排放在一个容器里,盖在行首那块缩略图上。
+            return (
+              <div key={itemKey(item)} className="group/preview relative grid">
+                {option}
+                <ViewFullSizeButton name={one.title} onOpen={one.preview} className="left-2.5 top-1/2 -translate-y-1/2" />
+              </div>
             );
           })}
           {wantsMore || loadingMore ? (

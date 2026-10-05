@@ -1,6 +1,8 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
+import { useImagePreview } from "@/components/app/image-preview";
+import { IconButton } from "@/components/ui/icon-button";
 
 type Details = Record<string, unknown>;
 
@@ -10,6 +12,7 @@ const SCENE_KEYS = ["action", "selector", "url", "url_contains", "text", "expres
 /** 工作流失败现场的统一呈现：历史面板、任务详情和节点检查器共用同一份数据语义。 */
 export function WorkflowFailureDetails({ details }: { details: Details | undefined }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   if (!details || Object.keys(details).length === 0) return null;
 
   const rawResponse = typeof details.raw_response === "string" ? details.raw_response : null;
@@ -77,12 +80,18 @@ export function WorkflowFailureDetails({ details }: { details: Details | undefin
       {screenshot && (
         <div className="grid min-w-0 gap-1">
           <span className="font-semibold text-muted-foreground">{t("jobDetailScreenshot")}</span>
-          {/* 失败那一刻的画面。截图在执行器侧就缩到了 480 宽,这里按容器宽度显示即可。 */}
-          <img
-            src={screenshot}
-            alt={t("jobDetailScreenshot")}
-            className="min-w-0 max-w-full rounded-md border border-border"
-          />
+          {/* 失败那一刻的画面。截图在执行器侧就缩到了 480 宽,这里按容器宽度显示即可;窄栏里看不清字,点开看大图。 */}
+          <IconButton
+            unstyled
+            type="button"
+            label={t("viewFullSizeOf").replace("{name}", t("jobDetailScreenshot"))}
+            className="block w-fit min-w-0 max-w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-transparent p-0"
+            onClick={() =>
+              openImagePreview({ src: screenshot, title: pageUrl ? `${t("jobDetailScreenshot")} · ${pageUrl}` : t("jobDetailScreenshot") })
+            }
+          >
+            <img src={screenshot} alt={t("jobDetailScreenshot")} className="block min-w-0 max-w-full" />
+          </IconButton>
         </div>
       )}
       {parseError && (

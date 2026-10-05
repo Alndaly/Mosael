@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
+const openImagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));
 
 /**
  * 浏览器节点失败之后,人最想知道的是**当时页面长什么样**。
@@ -29,6 +31,19 @@ describe("失败现场", () => {
     expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,AAAA");
     expect(screen.getByText("#login")).toBeInTheDocument();
     expect(screen.getByText("https://x.test/login")).toBeInTheDocument();
+  });
+
+  it("截图缩在窄栏里看不清字:点开看大图,标题带上停在哪一页", () => {
+    render(
+      <WorkflowFailureDetails
+        details={{ action: "wait", page_url: "https://x.test/login", screenshot: "data:image/png;base64,AAAA" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "viewFullSizeOf" }));
+    expect(openImagePreview).toHaveBeenCalledWith({
+      src: "data:image/png;base64,AAAA",
+      title: "jobDetailScreenshot · https://x.test/login",
+    });
   });
 
   it("没截到图时,现场的其余部分照常显示", () => {

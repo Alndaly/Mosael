@@ -3,7 +3,8 @@ import { useQueries } from "@tanstack/react-query";
 
 import { getAsset, type Asset } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
-import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { AssetInlinePreview, assetGallery } from "@/components/app/asset-preview";
+import type { ImagePreviewItem } from "@/components/app/image-preview";
 import { Truncate } from "@/components/ui/truncate";
 import type { AssetOutput } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
@@ -31,10 +32,13 @@ export function OutputAssets({
   items,
   density,
   className,
+  gallery,
 }: {
   items: AssetOutput[];
   density: "node" | "panel";
   className?: string;
+  /** 点开大图后左右翻的那一组。执行历史给的是**这一整次运行**的产出(一步一步往下翻);不给就是这一步自己的几份。 */
+  gallery?: ImagePreviewItem[];
 }) {
   // 最多两份:画布上的卡片是张名片,不是相册。检查器里也够用 —— 再多的走执行历史。
   const shown = items.slice(0, 2);
@@ -54,6 +58,7 @@ export function OutputAssets({
 
   // **并排只给画面**:缩略图并排看得清,而音频条并排之后每条只剩一半宽,进度条几乎点不中。
   const sideBySide = ready.length > 1 && ready.every((pair) => pair.asset.kind !== "audio");
+  const group = gallery ?? assetGallery(ready.map((pair) => pair.asset));
   // 名字在**分不清的时候**才占一行:一份产出时节点标题已经说了它是什么;两份摆在一起,
   // 「哪个是哪个」就是这一刻唯一要回答的问题。检查器里一律带 —— 那儿每一行本来就报名字。
   const named = density === "panel" || ready.length > 1;
@@ -85,6 +90,9 @@ export function OutputAssets({
             kind={asset.kind}
             lazy={false}
             plain
+            //: 画布上点一下是「选中这个节点」(检查器跟着出来),看大图走角上那颗;检查器、历史里点图就开。
+            preview={density === "node" ? "button" : "click"}
+            gallery={group}
             className={PREVIEW_CLASS[asset.kind]?.[density]}
           />
         </figure>

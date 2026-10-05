@@ -3,7 +3,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Search, Tag, Trash2 } from "lucide-react";
 
-import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type AssetCard } from "@/api/client";
+import { assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
@@ -15,6 +15,7 @@ import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
 import { TagChips } from "@/features/media/TagChips";
 import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags";
 import { useImagePreview } from "@/components/app/image-preview";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -24,7 +25,7 @@ import { useAssetFacets, useAssetPages } from "@/lib/assetQueries";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useReachEnd } from "@/lib/useReachEnd";
 import { useDraggable } from "@dnd-kit/core";
-import { assetKindKey, kindHasSound, MEDIA_KINDS } from "@/lib/assetKinds";
+import { assetKindKey, kindHasSound, kindIsVisual, MEDIA_KINDS } from "@/lib/assetKinds";
 import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
@@ -77,6 +78,13 @@ export function MediaPool({
     tag_match: tagMatch,
   });
   const visibleAssets = pool.items;
+  //: 点缩略图看大图,左右翻的是**眼下这份清单**(同样的类型、标签、搜索筛过的那些)里的图和视频。
+  const { openImagePreview } = useImagePreview();
+  const gallery = React.useMemo(() => assetGallery(visibleAssets), [visibleAssets]);
+  const preview = (asset: AssetCard) => {
+    const item = assetPreviewItem(asset);
+    if (item) openImagePreview({ ...item, gallery });
+  };
   const end = useReachEnd<HTMLDivElement>(
     pool.hasNextPage ? () => void (pool.isFetchingNextPage || pool.fetchNextPage()) : undefined,
     visibleAssets.length,
@@ -175,7 +183,7 @@ export function MediaPool({
           <ContextMenu key={asset.id}>
             <ContextMenuTrigger asChild>
               <div>
-                <PoolItem asset={asset} onAdd={() => onAddToTimeline(asset)} />
+                <PoolItem asset={asset} onAdd={() => onAddToTimeline(asset)} onPreview={() => preview(asset)} />
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
@@ -245,9 +253,8 @@ export function MediaPool({
   );
 }
 
-function PoolItem({ asset, onAdd }: { asset: AssetCard; onAdd: () => void }) {
+function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => void; onPreview: () => void }) {
   const t = useI18n();
-  const { openImagePreview } = useImagePreview();
   // dnd-kit(指针驱动):原生 HTML5 拖拽在 Electron + Radix 包裹下不可靠,这里全面换掉。
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `asset-${asset.id}`, data: { asset } });
   const [thumbFailed, setThumbFailed] = React.useState(false);
@@ -266,16 +273,27 @@ function PoolItem({ asset, onAdd }: { asset: AssetCard; onAdd: () => void }) {
           行高按内容 auto 算且不拉伸,百分比高度因此没有参照、退化成图片固有高度 —— 竖图会
           撑成 64×96 溢出 36px 的框,被 overflow-hidden 从下方切掉,只剩顶部(实测如此)。
           absolute inset-0 让图精确等于框,object-cover 才真的从中心裁切。 */}
-      <div
-        className={cn("relative grid aspect-video place-items-center overflow-hidden rounded-sm bg-panel-inset text-muted-foreground [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
-        onClick={(event) => {
-          if (asset.kind !== "image") return;
-          event.stopPropagation();
-          openImagePreview({ src: assetPreviewUrl(asset.id), title: asset.name });
-        }}
-      >
-        {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
-      </div>
+      {/* 图和视频的缩略图是一颗「看大图」按钮(键盘走得到、读屏念得出);这一行别处的点击、拖动、双击照旧。
+          拖动不受它影响:起拖要挪够 6px,原地点一下才是点。 */}
+      {kindIsVisual(asset.kind) ? (
+        <IconButton
+          unstyled
+          type="button"
+          label={t("viewFullSizeOf").replace("{name}", asset.name)}
+          data-pool-preview={asset.id}
+          className={cn(POOL_THUMB, "cursor-zoom-in p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPreview();
+          }}
+        >
+          {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
+        </IconButton>
+      ) : (
+        <div className={POOL_THUMB}>
+          {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
+        </div>
+      )}
       <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground">
         <Truncate as="strong" className="text-ui-sm font-medium">{asset.name}</Truncate>
         {/* 标签和时长同一行,有没有标签行高都一样;挤不下的标签收成「+N」,面板拖到最窄时
@@ -300,6 +318,10 @@ function PoolItem({ asset, onAdd }: { asset: AssetCard; onAdd: () => void }) {
     </div>
   );
 }
+
+/** 缩略图那一格。见 PoolItem 里那段:absolute 铺满才裁得对。 */
+const POOL_THUMB =
+  "relative grid aspect-video place-items-center overflow-hidden rounded-sm border-0 bg-panel-inset text-muted-foreground [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover";
 
 function kindIcon(kind: string) {
   if (kind === "audio") return <FileAudio size={16} />;

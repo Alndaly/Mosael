@@ -36,7 +36,8 @@ vi.mock("@/app/preferences", () => ({
       boardNoteSourceFrom: "来自笔记「{title}」",
     })[key] ?? key,
 }));
-vi.mock("@/components/app/asset-preview", () => ({
+vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/asset-preview")>()),
   AssetInlinePreview: () => <div data-testid="asset-preview" />,
 }));
 vi.mock("@/features/boards/BoardPlayer", () => ({

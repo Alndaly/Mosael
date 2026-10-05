@@ -159,7 +159,15 @@
 /* Node tools stay attached to their content, with the same quiet surfaces as the page. */
 .note-image-node { margin:24px 0; min-width:0; }
 .note-prose .note-image-node img { margin:0 auto; cursor:pointer; }
-.note-image-node.is-selected > img { outline:1px solid color-mix(in srgb,var(--primary) 45%,transparent); outline-offset:4px; }
+.note-image-node.is-selected .note-image-frame > img { outline:1px solid color-mix(in srgb,var(--primary) 45%,transparent); outline-offset:4px; }
+/* 图和「看大图」的框:按图片收紧、居中,按钮压在图的右上角;悬停或键盘走到时露出来(没有悬停的设备上一直在)。 */
+.note-image-frame { position:relative; display:block; width:fit-content; max-width:100%; margin:0 auto; }
+.note-image-frame[hidden] { display:none; }
+/* 带上框的类名:后面那条通用的 .note-node-button(透明底、灰字)压不过它。 */
+.note-image-frame .note-image-zoom { position:absolute; top:8px; right:8px; color:#e8eaed; background:rgba(10,12,15,0.72); backdrop-filter:blur(4px); opacity:0; cursor:zoom-in; transition:opacity 150ms; }
+.note-image-frame .note-image-zoom:hover { color:#fff; background:rgba(10,12,15,0.86); }
+.note-image-frame:hover .note-image-zoom,.note-image-frame .note-image-zoom:focus-visible { opacity:1; }
+@media (hover:none) { .note-image-frame .note-image-zoom { opacity:1; } }
 .note-image-edit { margin-top:12px; padding:10px 12px; border-radius:10px; background:var(--workspace-subtle); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 6%,transparent); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.5; }
 .note-image-node img[hidden],.note-image-edit[hidden],.note-image-unavailable[hidden],.note-code-header [hidden] { display:none; }
 .note-image-link-row { display:flex; align-items:center; gap:8px; }

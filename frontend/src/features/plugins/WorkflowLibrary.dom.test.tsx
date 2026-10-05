@@ -21,6 +21,8 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const openImagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));
 
 import { installAppChromeGuards } from "@/components/ui/appChrome";
 
@@ -36,6 +38,9 @@ const api = vi.hoisted(() => ({
   rebootWorkflowServer: vi.fn(),
   getJob: vi.fn(),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
+  assetPreviewUrl: (id: string) => `preview://${id}`,
+  assetFileUrl: (id: string) => `file://${id}`,
+  getAsset: vi.fn(async (id: string) => ({ id, kind: id.startsWith("v") ? "video" : "image", name: `产出 ${id}` })),
 }));
 const saved = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/download", () => ({ saveJsonToDisk: saved }));
@@ -237,6 +242,9 @@ describe("工作流库", () => {
     expect(within(usedModels).getByText("gone.safetensors").closest("li")?.textContent).toContain("workflowModelMissing");
     const last = screen.getByRole("region", { name: "workflowLastOutput" });
     expect(within(last).getByRole("img").getAttribute("src")).toBe("thumb://a1");
+    //: 最近的产出点开看大图(问过素材才知道是图还是视频,视频在灯箱里换成播放器)。
+    fireEvent.click(await within(last).findByRole("button", { name: "viewFullSizeOf" }));
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "preview://a1", title: "产出 a1" });
     const media = document.querySelector("[data-library-detail-pane='media'] svg[data-workflow-graph]");
     expect(media).toBeTruthy();
     expect(media?.textContent).toContain("Load Checkpoint");

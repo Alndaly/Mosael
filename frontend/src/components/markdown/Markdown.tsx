@@ -3,6 +3,7 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 
 import { WrapText } from "lucide-react";
 
+import { requestImagePreview } from "@/components/app/image-preview-request";
 import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -115,6 +116,9 @@ const COMPONENTS: Components = { pre: CodeCard, a: CitationLink };
 export function AgentMarkdown({ children, fullTables = false }: { children: string; fullTables?: boolean }) {
   const t = useI18n();
   return (
+    // 正文里的图(回复里贴的图、文档解析出的插图)点开看大图,左右翻的是**这一段**里的全部图。
+    // 不接管 Streamdown 自己的图片组件(它带着加载失败的说明和悬停下载),只在外面接住点在图上的那一下。
+    <div className="contents [&_img[data-streamdown=image]]:cursor-zoom-in" onClick={previewMarkdownImage}>
     <Streamdown
       tableMaxHeight={fullTables ? Number.POSITIVE_INFINITY : undefined}
       className="min-w-0 max-w-full [&_:is(p,ul,ol,table)]:mx-0 [&_:is(p,ul,ol,table)]:mt-0 [&_:is(p,ul,ol,table)]:mb-2.5 [&_:is(p,ul,ol,table):last-child]:mb-0 [&_:is(h1,h2)]:mt-4 [&_:is(h1,h2)]:mb-2 [&_:is(h1,h2)]:text-[15px] [&_:is(h1,h2)]:font-[650] [&_:is(h1,h2)]:tracking-[-0.01em] [&_:is(h3,h4)]:mt-3 [&_:is(h3,h4)]:mb-1.5 [&_:is(h3,h4)]:text-ui-md [&_:is(h3,h4)]:font-[650] [&_:is(h1,h2,h3,h4):first-child]:mt-0 [&_table]:w-full [&_table]:border-collapse [&_table]:text-ui-sm [&_:is(th,td)]:border [&_:is(th,td)]:border-border [&_:is(th,td)]:px-2 [&_:is(th,td)]:py-1.5 [&_:is(th,td)]:text-left [&_th]:bg-secondary [&_th]:font-semibold [&_code]:rounded-sm [&_code]:bg-panel-inset [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_pre_code]:rounded-none [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-[inherit] [&_:is(ul,ol)]:pl-[18px] [&_div:has(>div>table)]:my-2.5 [&_div:has(>div>table)]:rounded-none [&_div:has(>div>table)]:border-0 [&_div:has(>div>table)]:bg-transparent [&_div:has(>div>table)]:p-0 [&_div:has(>table)]:rounded-none [&_div:has(>table)]:border-0 [&_div:has(>table)]:bg-transparent"
@@ -125,5 +129,19 @@ export function AgentMarkdown({ children, fullTables = false }: { children: stri
     >
       {children}
     </Streamdown>
+    </div>
   );
+}
+
+/** Streamdown 给正文图片挂的记号(它自己的图片组件)。 */
+const MARKDOWN_IMAGE = 'img[data-streamdown="image"]';
+
+/** 点在正文图片上:开灯箱,画廊是这一段 Markdown 里的全部图(按出现的先后)。点在别处(含图上的下载钮)不管。 */
+function previewMarkdownImage(event: React.MouseEvent<HTMLDivElement>) {
+  const target = event.target;
+  if (!(target instanceof HTMLImageElement) || !target.matches(MARKDOWN_IMAGE) || !target.src) return;
+  const gallery = [...event.currentTarget.querySelectorAll<HTMLImageElement>(MARKDOWN_IMAGE)]
+    .filter((image) => image.src)
+    .map((image) => ({ src: image.src, title: image.alt || undefined }));
+  requestImagePreview(target, { src: target.src, title: target.alt || undefined, gallery });
 }

@@ -4,7 +4,7 @@ import { noteStrings } from "./strings";
 export function nodeLabels(locale: string) {
   return noteStrings(locale).node;
 }
-export function nodeIcon(name: "copy" | "check" | "close" | "link") {
+export function nodeIcon(name: "copy" | "check" | "close" | "link" | "expand") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
@@ -21,6 +21,7 @@ export function nodeIcon(name: "copy" | "check" | "close" | "link") {
       check: "m5 12 4 4L19 6",
       close: "m6 6 12 12M6 18 18 6",
       link: "M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2",
+      expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
     }[name],
   );
   svg.append(path);

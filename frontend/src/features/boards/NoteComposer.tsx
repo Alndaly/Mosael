@@ -17,9 +17,12 @@ import { Truncate } from "@/components/ui/truncate";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useAssetDetails, useMentionCandidates } from "@/lib/assetQueries";
 
-import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
+import { assetThumbnailUrl } from "@/api/client";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
 import { useImagePreview } from "@/components/app/image-preview";
+import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
@@ -135,6 +138,15 @@ export function NoteComposer({
     () => referencedIds.flatMap((id) => details.byId.get(id) ?? []),
     [referencedIds, details.byId],
   );
+  //: 点开一张,灯箱里左右翻的是**这一格引到的全部**图和视频。音频没有画面,开素材详情(里面有完整的播放器)——
+  //: 此前它也被塞进灯箱,当成一张图去加载,开出来一片空白。
+  const gallery = React.useMemo(() => assetGallery(referenced), [referenced]);
+  const [listening, setListening] = React.useState<string | null>(null);
+  const openReferenced = (asset: (typeof referenced)[number]) => {
+    const item = assetPreviewItem(asset);
+    if (item) openImagePreview({ ...item, gallery });
+    else setListening(asset.id);
+  };
 
   //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
   const { submitting, run } = useSubmitting();
@@ -189,14 +201,8 @@ export function NoteComposer({
                   unstyled
                   type="button"
                   label={asset.name || asset.original_filename || t(asset.kind === "video" ? "boardKindVideo" : asset.kind === "audio" ? "boardKindAudio" : "boardKindImage")}
-                  onClick={() =>
-                    openImagePreview({
-                      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
-                      title: asset.name || "",
-                      ...(asset.kind === "video" ? { video: true } : {}),
-                    })
-                  }
-                  className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
+                  onClick={() => openReferenced(asset)}
+                  className={cn("block h-8 w-8 overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong", asset.kind === "audio" ? "cursor-pointer" : "cursor-zoom-in")}
                 >
                   {asset.kind === "image" ? (
                     <img src={assetThumbnailUrl(asset.id)} alt="" className="h-full w-full object-cover" />
@@ -221,6 +227,7 @@ export function NoteComposer({
                 )}
               </span>
             ))}
+            <AssetPreviewModalById id={listening} onClose={() => setListening(null)} />
           </>
         ) : null
       }

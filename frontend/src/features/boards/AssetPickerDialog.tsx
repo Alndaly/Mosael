@@ -3,6 +3,8 @@ import { FileUp, Image as ImageIcon, Music, Upload } from "lucide-react";
 
 import { assetThumbnailUrl, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
 import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boards/boardNodes";
@@ -86,6 +88,13 @@ export function AssetPickerDialog({
     );
   }, [boardAssets.byId, kinds, library.text]);
   const images: readonly PickerRow[] = boardOnly ? onBoardItems : library.items;
+  //: 点一行是挑;看大图走行首缩略图上那颗,左右翻的是眼下这份清单里的图和视频(同样的筛选、同样的搜索词)。
+  const { openImagePreview } = useImagePreview();
+  const gallery = React.useMemo(() => assetGallery(images), [images]);
+  const previewOf = (asset: PickerRow) => {
+    const item = assetPreviewItem(asset);
+    return item ? () => openImagePreview({ ...item, gallery }) : undefined;
+  };
 
   //: 直接传一个:只收这一格要的那一种;收不了的就地说一句(拖进图片槽的一段视频)。
   const upload = useAssetUpload(workspaceId);
@@ -196,6 +205,7 @@ export function AssetPickerDialog({
         title: asset.name || asset.original_filename || "",
         //: 三种混着列时写明是哪一种 —— 同名的一张图和一段视频,光看名字分不出。
         subtitle: [mixed ? kindLabel(asset.kind) : "", describe(asset)].filter(Boolean).join(" · "),
+        preview: previewOf(asset),
       })}
       onPick={(asset) => {
         const placed = placedAsset(asset);

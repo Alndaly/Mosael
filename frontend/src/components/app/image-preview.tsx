@@ -3,8 +3,11 @@ import { ExternalLink } from "lucide-react";
 import { PhotoSlider } from "react-photo-view";
 
 import { useI18n } from "@/app/preferences";
+import { IMAGE_PREVIEW_EVENT, type ImagePreviewRequest } from "@/components/app/image-preview-request";
 import { VideoPlayer } from "@/components/app/media-playback";
+import { APP_CHROME } from "@/components/ui/appChrome";
 import { Truncate } from "@/components/ui/truncate";
+import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 export type ImagePreviewItem = {
@@ -38,8 +41,17 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   const [visible, setVisible] = React.useState(false);
   //: 打开那一刻的视口大小 —— 视频那一项按它出盒子(见下面 width/height 那段)。
   const [viewport, setViewport] = React.useState({ width: 1280, height: 720 });
+  //: 是从哪儿点开的。关掉之后焦点回到那里 —— 用鼠标点遮罩关掉时,焦点已经掉到 body 上,
+  //: 键盘用户得从页面开头重新 Tab 一遍才回得到刚才那张图。
+  const opener = React.useRef<HTMLElement | null>(null);
+  const shown = React.useRef(false);
+  React.useEffect(() => {
+    shown.current = visible;
+  }, [visible]);
 
   const openImagePreview = React.useCallback((next: ImagePreviewState) => {
+    //: 已经开着时再点(回车又按了一下那颗按钮)不换来处:此刻的焦点可能已经不在原处了。
+    if (!shown.current) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setViewport({ width: window.innerWidth, height: window.innerHeight });
     //: 单张时**把这一项整个带过去**,别逐字段重建 —— 漏掉哪个字段不会报错,只会让那个
     //: 功能悄悄失效(video 标记就是这么丢的:灯箱开了,里面什么都没有)。
@@ -50,8 +62,43 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
     setIndex(at >= 0 ? at : 0);
     setVisible(true);
   }, []);
-  const close = React.useCallback(() => setVisible(false), []);
+  const close = React.useCallback(() => {
+    setVisible(false);
+    const back = opener.current;
+    opener.current = null;
+    const now = document.activeElement;
+    //: 只在焦点**丢了**的时候还回去(落在 body 上,或者落在灯箱自己身上)。用户在灯箱开着时
+    //: 已经把焦点挪去了别处,那是他的选择,不抢。
+    const lost = !now || now === document.body || Boolean(portalHostRef.current?.contains(now));
+    if (back?.isConnected && lost) back.focus({ preventScroll: true });
+  }, []);
   const reset = React.useCallback(() => setImages([]), []);
+
+  //: 手写 DOM 的界面(笔记编辑器里的图片、Markdown 正文里的图)从这里进来,见 image-preview-request。
+  React.useEffect(() => {
+    const onRequest = (event: Event) => openImagePreview((event as CustomEvent<ImagePreviewRequest>).detail);
+    document.addEventListener(IMAGE_PREVIEW_EVENT, onRequest);
+    return () => document.removeEventListener(IMAGE_PREVIEW_EVENT, onRequest);
+  }, [openImagePreview]);
+
+  //: **Esc 先只关灯箱。** 灯箱常常是从一个弹窗、画板面板、检查器里点开的,它们各自也听 Esc:
+  //: Radix 弹窗在 document 的捕获阶段听,画板的面板、工作流检查器在 window 上听,灯箱自己在 window
+  //: 的冒泡阶段听 —— 一下 Esc 就把灯箱和底下那一层一起关掉,用户得重新打开刚才那个弹窗。
+  //: 在 window 的捕获阶段(整条事件路径的第一站)接住并就此打住,底下谁都收不到这一下;
+  //: 灯箱关掉之后,下一下 Esc 才轮到它们。
+  React.useEffect(() => {
+    if (!visible) return;
+    return listenKeys(
+      window,
+      (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        close();
+      },
+      true,
+    );
+  }, [visible, close]);
 
   const value = React.useMemo<ImagePreviewContextValue>(
     () => ({ openImagePreview, isImagePreviewOpen: visible }),
@@ -64,9 +111,12 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
       {/* Radix Dialog 会把 body 设成 pointer-events:none，只给自己的 Content 恢复交互。
        * 灯箱若直接 portal 到 body，保留下层 Dialog 后就会“看得见但点不动”。专用宿主明确
        * 恢复顶层交互；关闭动画开始时立即禁用，避免透明 Portal 短暂挡住应用。 */}
+      {/* 宿主也是「窗口外壳」(APP_CHROME):在大图上点的每一下(翻页、关闭、点遮罩)都发生在底下那个弹窗**外面**,
+          没有它,Radix 会把这一下当成「点了弹窗外面」把弹窗一起关掉;焦点落进来(「打开原图」)也不被弹窗拽回去。 */}
       <div
         ref={portalHostRef}
         data-image-preview-portal-host
+        {...APP_CHROME}
         style={{ pointerEvents: visible ? "auto" : "none" }}
       />
       <PhotoSlider

@@ -167,7 +167,12 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
       ) : asset.data.kind === "video" ? (
         //: 不用原生 controls —— 全站共享的 VideoPlayer(画板节点、大图灯箱同一副面孔)。
         //: 卡片尺寸与图/音频对齐(240×135):播放器悬停出控件,静止时压一枚大播放键。
-        <VideoPlayer assetSrc={src} className="h-[135px] w-[240px] rounded-lg border border-border" />
+        //: 播放器右下角的「全屏」开的是同一个灯箱(和这一批的图一起左右翻),不是浏览器原生全屏。
+        <VideoPlayer
+          assetSrc={src}
+          className="h-[135px] w-[240px] rounded-lg border border-border"
+          onExpand={() => openImagePreview({ src, title: asset.data.name, video: true, gallery })}
+        />
       ) : asset.data.kind === "audio" ? (
         //: 不用原生 controls(各家各样、不吃主题)—— 全站共享的音频条,画板节点也是它。
         //: **卡片轮廓与图/视频对齐**(同宽同高):音频没有画面,但一条 40px 的瘦条夹在一排

@@ -40,6 +40,7 @@ vi.mock("@/api/client", () => ({
   stopAgentSession: vi.fn(),
   importAsset: mocks.importAsset,
   assetFileUrl: (id: string) => `/file/${id}`,
+  assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
 }));
 //: 报错文案带上 {name} 占位符:被拒绝的文件必须报出是哪一个(同 composerAttachments 的测试)。

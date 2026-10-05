@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { NodeToolbar, Position, type Node } from "@xyflow/react";
 import { BookOpen, BookPlus, ChevronDown, Copy, Download, NotebookPen, ExternalLink, Group, Maximize2, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type BoardItem, type BoardProducer, type BoardProducerInfo } from "@/api/client";
+import { entityKeys, getEntity, type BoardItem, type BoardProducer, type BoardProducerInfo } from "@/api/client";
 import { noteKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { saveDocumentAsNote } from "@/api/domains/documents";
@@ -26,6 +26,7 @@ import { SequenceToolbarActions } from "@/features/boards/SequenceCell";
 import { canAskWriter, canOpenOnDemand, slotProducers } from "@/features/boards/boardComposers";
 import { NOTE_COLORS, noteColorClass, isMediaKind, kindIcon, SPAWNABLE_KINDS, type MediaKind, type NoteColor } from "@/features/boards/boardNodes";
 import { itemIsRunning } from "@/features/boards/boardItemState";
+import { boardPreviewGallery } from "@/features/boards/boardPreview";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import type { BoardPickAsset } from "@/features/boards/boardCanvasModel";
@@ -152,6 +153,8 @@ export function ItemToolbar({
   const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
   const overflow = abilities.filter((one) => !direct.includes(one));
   const slots = single && item && !itemIsRunning(item) ? slotProducers(item, producers) : [];
+  //: 看大图看的是**选中的这几格**:框选了一排图,灯箱里就左右翻这一排(按画板上的位置排);只选一格就是那一张。
+  const previews = boardPreviewGallery(selected.flatMap((node) => (node.data as { item?: BoardItem }).item ?? []));
   return (
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
     //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
@@ -207,22 +210,14 @@ export function ItemToolbar({
         <ToolbarCluster data-board-abilities="">
           {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
               选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
-          {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
+          {/* 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。 */}
+          {previews.length > 0 && (
             <ToolbarIcon
               name="preview"
               icon={Maximize2}
               label={t("boardPreview")}
               hint={t("boardPreviewTitle")}
-              onClick={() =>
-                openImagePreview({
-                  src: item.kind === "image"
-                    ? assetPreviewUrl(item.asset_id as string)
-                    : assetFileUrl(item.asset_id as string),
-                  title: item.title || item.text || "",
-                  //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
-                  video: item.kind === "video",
-                })
-              }
+              onClick={() => openImagePreview({ ...previews[0], gallery: previews })}
             />
           )}
           {/* 剪一段:视听素材才有时间轴,一张图截不出「第 3 秒」。 */}

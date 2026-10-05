@@ -13,6 +13,8 @@ import { parseServerTime } from "@/lib/time";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { runStatusText } from "@/components/jobs/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
+import { assetGallery } from "@/components/app/asset-preview";
+import { useAssetDetails } from "@/lib/assetQueries";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
@@ -144,6 +146,19 @@ export function WorkflowRunHistory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledKey]);
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
+  //: 这次运行的**全部**画面产出,按步骤先后。点开哪一步的图,灯箱里左右翻的都是这一整次运行 ——
+  //: 一次「出图 → 放大 → 换背景」跑完,要对照的正是这三张,不是每步各看各的。
+  //: 详情和各步预览取的是同一份缓存(assetKeys.detail),不多发请求。
+  const stepAssets = React.useMemo(
+    () => steps.flatMap((step) => assetOutputs(outputRows(registry, nodeTypeById[step.nid] ?? "", step.outputs))),
+    [steps, registry, nodeTypeById],
+  );
+  const runAssetIds = React.useMemo(() => stepAssets.map((output) => output.assetId), [stepAssets]);
+  const runAssets = useAssetDetails(runAssetIds);
+  const runGallery = React.useMemo(
+    () => assetGallery([...new Set(runAssetIds)].flatMap((id) => runAssets.byId.get(id) ?? [])),
+    [runAssetIds, runAssets.byId],
+  );
   //: 这次运行派生的子任务(出片、配音、导出…)。循环体里的那些只在这里看得见。
   const children = useJobChildren(viewedRunId, Boolean(selected && RUNNING.has(selected.status)));
   React.useEffect(() => {
@@ -358,6 +373,7 @@ export function WorkflowRunHistory({
                         <OutputAssets
                           items={assetOutputs(outputRows(registry, nodeTypeById[s.nid] ?? "", s.outputs))}
                           density="panel"
+                          gallery={runGallery}
                           className="mx-1.5 mb-1 mt-0.5 gap-1.5"
                         />
                       )}

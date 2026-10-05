@@ -146,6 +146,9 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
   const unit = t(UNIT_LABEL[extraction.unit] ?? "docUnitSection");
   const notes = (extraction.notes ?? []).flatMap((note) => (NOTES[note] ? [NOTES[note]] : []));
   const pages = extraction.page_images ?? [];
+  const pageLabel = (index: number) => t("docSectionLabel").replace("{unit}", t("docUnitPage")).replace("{index}", String(index + 1));
+  //: 点开一页,灯箱里左右翻的是这份文档的**每一页**(按页码),标题就是「第 n 页」。
+  const pageGallery = pages.map((image, index) => ({ src: extractionFileUrl(assetId, extraction.id, image), title: pageLabel(index) }));
   const pagesRef = React.useRef<HTMLDivElement | null>(null);
   //: 点一段的标题,原版那一栏滚到那一页(PDF / PPT 的段就是页)。
   const showPage = (image: string | null | undefined) => {
@@ -188,16 +191,16 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
           <div className="grid gap-4">
             {pages.map((image, index) => (
               <figure key={image} data-document-page={image} className="m-0 grid gap-1.5">
-                <figcaption className="text-ui-2xs tabular-nums text-muted-foreground">{t("docSectionLabel").replace("{unit}", t("docUnitPage")).replace("{index}", String(index + 1))}</figcaption>
+                <figcaption className="text-ui-2xs tabular-nums text-muted-foreground">{pageLabel(index)}</figcaption>
                 <IconButton
                   unstyled
                   type="button"
                   className="block w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-white p-0 shadow-sm"
-                  label={t("docSectionLabel").replace("{unit}", t("docUnitPage")).replace("{index}", String(index + 1))}
+                  label={pageLabel(index)}
                   hint={t("assetClickToZoom")}
-                  onClick={() => openImagePreview({ src: extractionFileUrl(assetId, extraction.id, image), title: `${index + 1}` })}
+                  onClick={() => openImagePreview({ ...pageGallery[index], gallery: pageGallery })}
                 >
-                  <img src={extractionFileUrl(assetId, extraction.id, image)} alt="" loading="lazy" className="block h-auto w-full" />
+                  <img src={pageGallery[index].src} alt="" loading="lazy" className="block h-auto w-full" />
                 </IconButton>
               </figure>
             ))}

@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
+//: 这里不测看大图(那是 image-preview 自己和各处接线测试的事),只给一个桩让组件挂得上。
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn(), isImagePreviewOpen: false }) }));
 
 /**
  * 产出素材怎么摆。
@@ -21,7 +23,8 @@ vi.mock("@/api/transport", async (importOriginal) => ({
     return { id, name: `素材 ${id}`, kind: id.startsWith("img") ? "image" : "audio" };
   }),
 }));
-vi.mock("@/components/app/asset-preview", () => ({
+vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/asset-preview")>()),
   AssetInlinePreview: ({ assetId, kind, className }: { assetId: string; kind: string; className?: string }) => (
     <div data-testid="preview" data-asset={assetId} data-kind={kind} data-cls={className ?? ""} />
   ),

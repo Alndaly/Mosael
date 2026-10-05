@@ -206,7 +206,7 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                   ) : shown ? (
                     <>
                       <h1 className="note-history-title">{shown.title || s.untitled}</h1>
-                      <NoteReader markdown={shown.markdown} />
+                      <NoteReader markdown={shown.markdown} previewImages />
                     </>
                   ) : content.isError ? (
                     <p className="note-history-status">{v.loadFailed}</p>

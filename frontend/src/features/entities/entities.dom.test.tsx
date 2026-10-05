@@ -371,6 +371,30 @@ describe("参考图墙", () => {
     expect(opened.gallery.map((one: { src: string }) => one.src)).toContain("/preview/a-front");
   });
 
+  it("点封面放大看:翻的也是整面墙(和墙上点开同一组、同一个先后),从封面那张开始", async () => {
+    lightbox.openImagePreview.mockClear();
+    await openDetail({ display_cover_asset_id: "a-side" });
+    const hero = document.querySelector("[data-entity-hero]") as HTMLElement;
+    fireEvent.click(within(hero).getByRole("button", { name: "imagePreviewTitle" }));
+    expect(lightbox.openImagePreview).toHaveBeenCalledWith({
+      src: "/preview/a-side",
+      title: "侧面.png",
+      video: false,
+      gallery: [
+        { src: "/preview/a-front", title: "正面.png", video: false },
+        { src: "/preview/a-side", title: "侧面.png", video: false },
+      ],
+    });
+  });
+
+  it("封面不在墙上(变体沿用母本的封面):只看这一张,不塞进别人的画廊(那样会从第一张而不是封面开始)", async () => {
+    lightbox.openImagePreview.mockClear();
+    await openDetail({ display_cover_asset_id: "parent-cover" });
+    const hero = document.querySelector("[data-entity-hero]") as HTMLElement;
+    fireEvent.click(within(hero).getByRole("button", { name: "imagePreviewTitle" }));
+    expect(lightbox.openImagePreview).toHaveBeenCalledWith({ src: "/preview/parent-cover", title: "张三" });
+  });
+
   it("设封面、往后挪、移出 —— 各发各的请求", async () => {
     api.updateEntity.mockResolvedValue(entity({ cover_asset_id: "a-side", display_cover_asset_id: "a-side" }));
     api.reorderEntityReferences.mockResolvedValue(entity());

@@ -42,7 +42,7 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
-import { ReferenceWall } from "@/features/entities/ReferenceWall";
+import { ReferenceWall, referenceGallery } from "@/features/entities/ReferenceWall";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 import { CLONE_ENGINE } from "@/api/domains/speech";
 
@@ -166,6 +166,13 @@ export function EntityDetail({
   };
   const tabCount: Partial<Record<DetailTab, number>> = { references: data.references.length, variants: variantCount };
   const cover = data.display_cover_asset_id;
+  //: 封面点开,左右翻的是**这个资产的整面参考图墙**(和墙上点开是同一组、同一个先后),从封面那张开始。
+  //: 封面若不在墙上(变体沿用母本的封面),就只看这一张 —— 塞进别人的画廊,会从第一张而不是封面开始。
+  const openCover = (id: string) => {
+    const wall = referenceGallery(data.references);
+    const at = data.references.findIndex((ref) => ref.asset_id === id);
+    openImagePreview(at >= 0 ? { ...wall[at], gallery: wall } : { src: assetPreviewUrl(id), title: data.name });
+  };
 
   return (
     <div className="grid min-w-0 gap-7" data-entity-detail={data.id}>
@@ -174,11 +181,7 @@ export function EntityDetail({
         <IconButton
           unstyled
           type="button"
-          onClick={() =>
-            cover
-              ? openImagePreview({ src: assetPreviewUrl(cover), title: data.name })
-              : setTab("references")
-          }
+          onClick={() => (cover ? openCover(cover) : setTab("references"))}
           label={t(cover ? "imagePreviewTitle" : "entityReferences")}
           className={cn("relative grid aspect-[4/5] w-full max-w-[180px] place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", cover ? "cursor-zoom-in" : "cursor-pointer")}
         >

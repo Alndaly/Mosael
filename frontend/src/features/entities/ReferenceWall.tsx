@@ -74,6 +74,15 @@ function referable(file: File): boolean {
  * - 把文件拖到墙上:先导进素材库,再挂成参考图(参考图**就是**素材库里的素材,不另存一份);
  * - 换角度、设封面、移出(素材本身不动)。
  */
+/** 一面参考图墙在灯箱里的样子:按墙上的先后,图是图、视频就地播放。墙上点开和资产封面点开用的是同一组。 */
+export function referenceGallery(refs: readonly Pick<EntityReference, "asset_id" | "asset_kind" | "asset_name">[]): ImagePreviewItem[] {
+  return refs.map((ref) => ({
+    src: ref.asset_kind === "image" ? assetPreviewUrl(ref.asset_id) : assetFileUrl(ref.asset_id),
+    title: ref.asset_name,
+    video: ref.asset_kind !== "image",
+  }));
+}
+
 export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -84,11 +93,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
   const refs = order.map((id) => byId.get(id)).filter((one): one is EntityReference => Boolean(one));
   const { openImagePreview } = useImagePreview();
   //: 点一张放大看;灯箱里左右翻的是这一面墙上的全部(按墙上的先后),视频就地播放。
-  const gallery: ImagePreviewItem[] = refs.map((ref) => ({
-    src: ref.asset_kind === "image" ? assetPreviewUrl(ref.asset_id) : assetFileUrl(ref.asset_id),
-    title: ref.asset_name,
-    video: ref.asset_kind !== "image",
-  }));
+  const gallery = referenceGallery(refs);
   const preview = (index: number) => openImagePreview({ ...gallery[index], gallery });
 
   const settle = (next: Entity) => {

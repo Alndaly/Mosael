@@ -10,6 +10,9 @@
  * - 按 Esc 就关:在地址栏按 Esc 想撤销输入,底下的弹窗关了。
  * 所以外壳挂上 `APP_CHROME`,弹窗的「点了外面」「按了 Esc」碰到它就当没发生(keepOpenOnAppChrome),焦点进出外壳
  * 不让弹窗的焦点圈套看见(installAppChromeGuards)。
+ *
+ * 全屏看图的灯箱(components/app/image-preview 的宿主)也挂它:它同样盖在弹窗上面、又在弹窗外面 —— 在大图上翻页、
+ * 点关闭,不该顺手把底下那个弹窗关掉。
  */
 export const APP_CHROME = { "data-app-chrome": "" } as const;
 

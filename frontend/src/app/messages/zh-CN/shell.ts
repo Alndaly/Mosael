@@ -300,6 +300,7 @@ export const shell = {
   livePanelOpenRun: "打开这次运行",
   imagePreviewTitle: "图片预览",
   openOriginal: "打开原图",
+  viewFullSizeOf: "看大图:{name}",
   rename: "重命名",
   delete: "删除",
   deleteConfirmTitle: "确认删除？",

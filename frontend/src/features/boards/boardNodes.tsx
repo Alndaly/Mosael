@@ -686,7 +686,7 @@ export function ImageNode({ data, selected }: NodeProps) {
           name={item.text || ""}
           kind="image"
           plain
-          previewOnClick={false}
+          preview="off"
           lazy={false}
           className={cn("h-full w-full overflow-hidden object-cover", CELL_INNER_RADIUS)}
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}

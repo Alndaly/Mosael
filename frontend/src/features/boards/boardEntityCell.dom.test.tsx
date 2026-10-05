@@ -42,7 +42,8 @@ vi.mock("@xyflow/react", () => ({
   Position: { Left: "left", Right: "right", Bottom: "bottom" },
   useStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
 }));
-vi.mock("@/components/app/asset-preview", () => ({ AssetInlinePreview: () => <div /> }));
+vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/asset-preview")>()), AssetInlinePreview: () => <div /> }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
 vi.mock("@/features/boards/BoardPlayer", () => ({ BoardAudio: () => <div />, BoardVideo: () => <div /> }));
 

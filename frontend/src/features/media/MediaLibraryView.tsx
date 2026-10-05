@@ -40,6 +40,9 @@ import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags"
 import { TagChips } from "./TagChips";
 import { TagsDialog } from "@/components/app/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
+import { useImagePreview } from "@/components/app/image-preview";
+import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -304,12 +307,20 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const kindCount = (kind: KindFilter): number | undefined =>
     facets.data === undefined ? undefined : kind === "all" ? facets.data.total : (facets.data.kinds[kind] ?? 0);
 
-  /** 一张卡片(网格)或一行(列表):点开详情 / 选择模式下勾选,⋯ 和右键是同一张菜单。 */
+  //: 「看大图」左右翻的是**眼下这一格网格**:同样的筛选、同样的排序、已经翻到的那几页里的图和视频。
+  const { openImagePreview } = useImagePreview();
+  const gallery = React.useMemo(() => assetGallery(visible), [visible]);
+  const viewFullSize = (asset: AssetCard) => {
+    const item = assetPreviewItem(asset);
+    if (item) openImagePreview({ ...item, gallery });
+  };
+
+  /** 一张卡片(网格)或一行(列表):点开详情 / 选择模式下勾选,⋯ 和右键是同一张菜单;图和视频角上还有一颗「看大图」。 */
   const renderAsset = (asset: AssetCard) => (
     <ContextMenu key={asset.id} onOpenChange={open => { if (open) setActionMenuId(null); }}>
       <ContextMenuTrigger asChild>
         <div
-          className="group relative cursor-pointer"
+          className="group group/preview relative cursor-pointer"
           onClick={() => {
             // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
             if (selectMode) toggleSelected(asset.id);
@@ -319,6 +330,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           {/* 读屏念的名字:逐句配音的一句名字都一样,带上念的那句话才分得清。 */}
         <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.media_info.line_text ? `${asset.name}: ${asset.media_info.line_text}` : asset.name} />
           <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
+          {/* 点卡片是开详情(看尺寸、来源、标签)、勾选模式里是勾选;看大图是另一件事,单独一颗,摆在缩略图左上角。 */}
+          {kindIsVisual(asset.kind) && (
+            <ViewFullSizeButton name={asset.name} onOpen={() => viewFullSize(asset)} className={display === "list" ? "left-1.5 top-5" : "left-2 top-2"} />
+          )}
           {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
           {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
           {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>

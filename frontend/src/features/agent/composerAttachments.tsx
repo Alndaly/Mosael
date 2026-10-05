@@ -1,11 +1,12 @@
 import React from "react";
 import { FileText, FileUp, Music } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
+import { assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
-import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import type { ComposerChip } from "@/lib/composerChip";
 import { useFileDrop, type FileDrop } from "@/lib/useFileDrop";
@@ -197,10 +198,8 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
   const { openImagePreview } = useImagePreview();
   const { openAsset, modal: assetModal } = useAssetPreviewModal();
   const chips = React.useMemo<ComposerChip[]>(() => {
-    // 图和视频一起进画廊:点开任意一张都能左右翻,不必关掉再点下一张。
-    const gallery: ImagePreviewItem[] = media
-      .filter((asset) => asset.kind === "image" || asset.kind === "video")
-      .map((asset) => ({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
+    // 图和视频一起进画廊:点开任意一张都能左右翻,不必关掉再点下一张。图走预览地址(HEIC 原图浏览器解不了)。
+    const gallery = assetGallery(media);
     return [
       ...media.map((asset, index) => ({
         id: asset.id,
@@ -212,13 +211,10 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
         onOpen:
           asset.kind === "audio" || asset.kind === "document"
             ? () => openAsset(asset.id)
-            : () =>
-                openImagePreview({
-                  src: assetFileUrl(asset.id),
-                  title: asset.name,
-                  video: asset.kind === "video",
-                  gallery,
-                }),
+            : () => {
+                const item = assetPreviewItem(asset);
+                if (item) openImagePreview({ ...item, gallery });
+              },
         onRemove: () => removeMedia(index),
       })),
       ...files.map((file, index) => ({

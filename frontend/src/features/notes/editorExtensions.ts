@@ -50,7 +50,8 @@ export const notePlaceholder =
   ({ node }: { node: { type: { name: string } } }) =>
     node.type.name === "paragraph" ? text : "";
 
-export function noteExtensions(readonly = false, locale = "zh-CN") {
-  return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale), createNoteCodeBlock(locale),
+/** `previewImages`:正文里的图能点开看大图(笔记页、版本记录)。画板上的笔记卡片不开,见 createNoteImage。 */
+export function noteExtensions(readonly = false, locale = "zh-CN", { previewImages = false }: { previewImages?: boolean } = {}) {
+  return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale, { preview: previewImages }), createNoteCodeBlock(locale),
     TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), NoteHighlight, NoteMarkdown];
 }

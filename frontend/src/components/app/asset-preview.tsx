@@ -7,6 +7,26 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
+import { ViewFullSizeButton } from "@/components/app/view-full-size";
+
+/**
+ * 一份素材在灯箱里是哪一项 —— 图走预览地址(HEIC 这类浏览器解不了的原图,后端转好了一份),视频走原文件、
+ * 标上 `video`(同一个灯箱换成播放器)。音频、文档没有画面,不进灯箱:返回 null。
+ *
+ * **点开的那一项和画廊里的那一项必须是同一个地址**:灯箱按 src 找「从第几张开始」,对不上就从第一张开始 ——
+ * 点的是第三张,打开的却是第一张。所以缩略图点开时也走这里,不各写一份。
+ */
+export function assetPreviewItem(asset: { id: string; kind: string; name?: string | null; original_filename?: string | null }): ImagePreviewItem | null {
+  const title = asset.name || asset.original_filename || undefined;
+  if (asset.kind === "image") return { src: assetPreviewUrl(asset.id), title };
+  if (asset.kind === "video") return { src: assetFileUrl(asset.id), title, video: true };
+  return null;
+}
+
+/** 一组素材里能进灯箱的那些,按原来的先后。 */
+export function assetGallery(assets: readonly Parameters<typeof assetPreviewItem>[0][]): ImagePreviewItem[] {
+  return assets.flatMap((asset) => assetPreviewItem(asset) ?? []);
+}
 
 /**
  * 一个素材的行内预览:图出图、视频出播放器、音频出音轨,其余退回文件胶囊。
@@ -24,7 +44,7 @@ export function AssetInlinePreview({
   className,
   lazy = true,
   plain = false,
-  previewOnClick = true,
+  preview = "click",
   onNaturalSize,
   gallery,
   imageFallback,
@@ -37,9 +57,15 @@ export function AssetInlinePreview({
   className?: string;
   /** 去掉自带的边框与黑底。画布节点里由外层容器统一收边,元素各带一圈边框会显得碎。 */
   plain?: boolean;
-  /** 点一下开大图预览。**画布上要关掉** —— 那里点一下的意思是「选中这个节点」,
-   *  被预览抢走的话,节点的操作条和表单就都弹不出来了。 */
-  previewOnClick?: boolean;
+  /**
+   * 怎么开大图。
+   * - `click`:点图就开(对话气泡、检查器 —— 那里点一下没有别的意思)。
+   * - `button`:图不接管点击,角上压一颗「看大图」(工作流画布上的节点 —— 点一下的意思是「选中这个节点」,
+   *   被预览抢走的话,节点的检查器就弹不出来了)。
+   * - `off`:不开(画板的图片格:看大图走操作条上的「预览」;能力面板里那张认脸用的小图)。
+   * 视频三种都由播放器自己的「全屏」那颗来开,`off` 时它退回浏览器原生全屏。
+   */
+  preview?: "click" | "button" | "off";
   /** 懒加载。**画布节点里必须关掉**:React Flow 的视口是 transform 变换过的,浏览器据此
    *  判断"还没进视野"而迟迟不发请求,图片就一直是 0×0,节点上看着像没产出。 */
   lazy?: boolean;
@@ -83,7 +109,15 @@ export function AssetInlinePreview({
     );
     //: **不点开预览的时候连按钮都不要**。只把 onClick 摘掉的话,外面那层按钮和它的放大镜
     //: 光标还在 —— 鼠标一悬上去就说「这儿能点开」,点了却什么都不发生。
-    if (!previewOnClick) return <Hint label={name}>{picture}</Hint>;
+    if (preview === "off") return <Hint label={name}>{picture}</Hint>;
+    if (preview === "button") {
+      return (
+        <span className="group/preview relative block min-w-0">
+          <Hint label={name}>{picture}</Hint>
+          <ViewFullSizeButton name={name} onOpen={openPreview} className="right-1.5 top-1.5" />
+        </span>
+      );
+    }
     return (
       <Hint label={name}>
         <button
@@ -107,7 +141,7 @@ export function AssetInlinePreview({
         compact
         className={cn("max-w-full", className ?? "h-[160px] w-[260px] rounded-lg")}
         onNaturalSize={onNaturalSize}
-        onExpand={previewOnClick ? openPreview : undefined}
+        onExpand={preview === "off" ? undefined : openPreview}
       />
     );
   }

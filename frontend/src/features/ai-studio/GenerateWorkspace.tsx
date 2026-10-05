@@ -54,7 +54,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { useImagePreview } from "@/components/app/image-preview";
+import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import { VideoPlayer } from "@/components/app/media-playback";
 import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import {
@@ -576,20 +577,23 @@ export function GenerateWorkspace({
   // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
   //: **每条生成摊平成它的全部产出** —— 一次出四张时,画廊里就该有四张;只收封面的话,
   //: 用户左右翻着翻着会发现刚看到的那三张翻不到。
-  const sessionGallery = React.useMemo(
+  //: 视频生成的那几条也在里面(灯箱同一个,那一项换成播放器):一个出视频的会话,左右翻的就是这几段片子。
+  const sessionGallery = React.useMemo<ImagePreviewItem[]>(
     () =>
       ordered
-        .filter((generation) => generation.kind === "image")
+        .filter((generation) => generation.kind === "image" || generation.kind === "video")
         .flatMap((generation) => {
+          const title = String(generation.request.prompt ?? generation.model);
+          if (generation.kind === "video") {
+            //: 和下面那张播放器一样只放封面那一份(result_asset_id)。
+            return generation.result_asset_id ? [{ src: assetFileUrl(generation.result_asset_id), title, video: true }] : [];
+          }
           const ids = generation.result_asset_ids?.length
             ? generation.result_asset_ids
             : generation.result_asset_id
               ? [generation.result_asset_id]
               : [];
-          return ids.map((assetId) => ({
-            src: assetPreviewUrl(assetId),
-            title: String(generation.request.prompt ?? generation.model),
-          }));
+          return ids.map((assetId) => ({ src: assetPreviewUrl(assetId), title }));
         }),
     [ordered],
   );
@@ -1424,6 +1428,30 @@ export function GenerateWorkspace({
   );
 }
 
+/**
+ * 生成出来的那段视频。框按片子自己的比例(元数据回来之前先按 16:9),最高 420px —— 竖屏片子在框里左右留黑,
+ * 不把气泡撑得一屏高。
+ */
+function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src: string) => void }) {
+  const [ratio, setRatio] = React.useState(16 / 9);
+  const src = assetFileUrl(assetId);
+  return (
+    <div
+      data-generated-video={assetId}
+      className="max-h-[420px] w-full max-w-[min(560px,100%)] overflow-hidden rounded-lg border border-border"
+      style={{ aspectRatio: ratio }}
+    >
+      <VideoPlayer
+        key={assetId}
+        assetSrc={src}
+        onNaturalSize={(width, height) => setRatio(width / height)}
+        onExpand={() => onExpand(src)}
+        className="bg-[#05070a]"
+      />
+    </div>
+  );
+}
+
 function GenerationTurn({
   generation,
   job,
@@ -1431,7 +1459,7 @@ function GenerationTurn({
 }: {
   generation: GenerationJob;
   job: Job | null;
-  gallery?: Array<{ src: string; title?: string }>;
+  gallery?: ImagePreviewItem[];
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -1499,12 +1527,10 @@ function GenerationTurn({
           //: 一次可能交回几首(Suno 一次两首):每一首一个播放器,而不是只放封面那一首。
           <GeneratedAudioList assetIds={outputs} title={prompt.split("\n")[0]?.slice(0, 60) || generation.model} />
         ) : generation.result_asset_id && generation.kind === "video" ? (
-          <video
-            className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-lg border border-border bg-[#05070a]"
-            src={assetFileUrl(generation.result_asset_id)}
-            poster={assetThumbnailUrl(generation.result_asset_id)}
-            controls
-            preload="metadata"
+          //: 全站共用的播放器(不是原生 controls):右下角那颗「全屏」开的是同一个灯箱,和本会话的其他产出一起左右翻。
+          <GeneratedVideo
+            assetId={generation.result_asset_id}
+            onExpand={(src) => openImagePreview({ src, title: String(generation.request.prompt ?? generation.model), video: true, gallery })}
           />
         ) : outputs.length > 0 ? (
           //: **照 result_asset_ids 出图,不是只出封面。** 图像接口的 n 选了几就出几张,

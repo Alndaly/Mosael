@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -230,6 +230,27 @@ describe("出图按高度定尺寸,不铺满", () => {
       expect(button.className).not.toMatch(/flex-\[1_1/);
       expect(button.querySelector("img")!.className.split(" ")).toEqual(expect.arrayContaining(["h-[220px]", "w-auto"]));
     }
+  });
+
+  //: 出视频的那一条:共用播放器(不是原生 controls),它的「全屏」开同一个灯箱,和本会话的其他产出一起翻。
+  it("视频那一条的「全屏」开灯箱,画廊里有本会话的图和这段视频", async () => {
+    const clip = { ...done(["v1"]), id: "g2", kind: "video", request: { prompt: "海浪" }, created_at: "2026-10-05T00:02:00Z" };
+    renderStudio({ generations: [done(["a1", "a2"]), clip] });
+    const player = await waitFor(() => {
+      const found = document.querySelector('[data-generated-video="v1"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(player.querySelector("video[controls]"), "不是浏览器原生那条控件").toBeNull();
+    fireEvent.click(within(player).getByRole("button", { name: "boardFullscreen" }));
+    const lightbox = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".PhotoView-Portal");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(lightbox.textContent).toContain("3 / 3");
+    expect(lightbox.textContent).toContain("海浪");
+    expect(lightbox.querySelector("video")).not.toBeNull();
   });
 
   it("一张:最高 360px,宽跟着比例走", async () => {

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -12,6 +12,7 @@ const importAsset = vi.fn();
 vi.mock("@/api/client", () => ({
   importAsset: (...args: unknown[]) => importAsset(...args),
   assetFileUrl: (id: string) => `/file/${id}`,
+  assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
 }));
 const openImagePreview = vi.fn();
@@ -66,6 +67,9 @@ describe("附件分流", () => {
     expect(screen.getByRole("button", { name: "scene.srt" })).toBeTruthy();
     // 图片带缩略图,点开走全局灯箱;文本附件点开看到的是它真正带上去的那段字。
     expect(screen.getByRole("button", { name: "shot.png" }).querySelector("img")).toHaveAttribute("src", "/thumb/a1");
+    //: 灯箱里给的是预览地址(HEIC 原图浏览器解不了),画廊是这条消息挂着的图和视频。
+    fireEvent.click(screen.getByRole("button", { name: "shot.png" }));
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a1", title: "shot.png", gallery: [{ src: "/preview/a1", title: "shot.png" }] });
   });
 
   it("读不了的类型明确拒绝,而不是静默丢掉", async () => {

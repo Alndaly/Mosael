@@ -8,10 +8,13 @@ import { getNoteSourceMessage, type NoteSource } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
+import { useImagePreview } from "@/components/app/image-preview";
+import { IconButton } from "@/components/ui/icon-button";
 import { useNoteStrings } from "./strings";
 
 export function SourceLink({ source, workspaceId }: { source: NoteSource; workspaceId: string }) {
   const s = useNoteStrings();
+  const { openImagePreview } = useImagePreview();
   const [open, setOpen] = React.useState(false);
   const asset = useQuery({ queryKey: assetKeys.detail(source.id), queryFn: () => getAsset(source.id), enabled: open && source.kind === "asset" });
   const detail = useQuery({ queryKey: noteKeys.sourceMessage(workspaceId, source.id),
@@ -21,7 +24,7 @@ export function SourceLink({ source, workspaceId }: { source: NoteSource; worksp
   if (source.kind === "board") return <button type="button" onClick={() => gotoRecord("/boards", "mosael:open-board", source.id)} className="text-primary">{source.label || s.source}</button>;
   return <><button type="button" className="inline-flex max-w-full items-center gap-1 text-primary" onClick={() => setOpen(true)}><Play size={12} />{source.label || s.source}{source.start != null && <span className="whitespace-nowrap"> · {Math.floor(source.start / 60)}:{String(Math.floor(source.start % 60)).padStart(2, "0")}</span>}</button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-3xl"><DialogTitle className="pr-8 break-words">{source.label || s.source}</DialogTitle>
-      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <img src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /> : asset.data.kind === "audio" ? <audio controls src={assetFileUrl(source.id)} className="my-6 w-full" onLoadedMetadata={e => { e.currentTarget.currentTime = source.start || 0; }} onTimeUpdate={e => { if (source.end != null && e.currentTarget.currentTime >= source.end) e.currentTarget.pause(); }} /> : <video controls autoPlay={false} src={assetFileUrl(source.id)} className="max-h-[65vh] w-full" onLoadedMetadata={e => { e.currentTarget.currentTime = source.start || 0; }} onTimeUpdate={e => { if (source.end != null && e.currentTarget.currentTime >= source.end) e.currentTarget.pause(); }} /> : <p>{s.loading}</p>}
+      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <IconButton unstyled type="button" label={s.node.preview} className="block w-fit max-w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={() => openImagePreview({ src: assetPreviewUrl(source.id), title: source.label || asset.data?.name })}><img src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /></IconButton> : asset.data.kind === "audio" ? <audio controls src={assetFileUrl(source.id)} className="my-6 w-full" onLoadedMetadata={e => { e.currentTarget.currentTime = source.start || 0; }} onTimeUpdate={e => { if (source.end != null && e.currentTarget.currentTime >= source.end) e.currentTarget.pause(); }} /> : <video controls autoPlay={false} src={assetFileUrl(source.id)} className="max-h-[65vh] w-full" onLoadedMetadata={e => { e.currentTarget.currentTime = source.start || 0; }} onTimeUpdate={e => { if (source.end != null && e.currentTarget.currentTime >= source.end) e.currentTarget.pause(); }} /> : <p>{s.loading}</p>}
       {source.quote && <blockquote className="text-sm text-muted-foreground">{source.quote}</blockquote>}
     </DialogContent></Dialog></>;
 }

@@ -21,8 +21,11 @@ vi.mock("@/api/domains/jobs", () => ({ cancelJob }));
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => [{ capability: "document_parse", options: [
   { id: "builtin:local", name: "本地解析", builtin: true, missing: [] }] }]) }));
 vi.mock("@/features/media/useSaveDocumentAsNote", () => ({ useSaveDocumentAsNote: () => ({ mutate: vi.fn(), isPending: false }) }));
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
+vi.mock("@/app/preferences", () => ({
+  useI18n: () => (key: string) => ({ docSectionLabel: "第 {index} {unit}", docUnitPage: "页" } as Record<string, string>)[key] ?? key,
+}));
+const openImagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview }) }));
 
 import { DocumentReader, withFileUrls } from "./DocumentReader";
 
@@ -41,6 +44,7 @@ function mount() {
 beforeEach(() => {
   docs.listExtractions.mockReset();
   docs.extractionSections.mockReset();
+  openImagePreview.mockReset();
 });
 
 it("左边按段排全文,右边原版每一页;插图地址换成带令牌的;提醒只显示认得的", async () => {
@@ -57,6 +61,21 @@ it("左边按段排全文,右边原版每一页;插图地址换成带令牌的;�
   const notes = document.querySelector("[data-document-notes]")?.textContent ?? "";
   expect(notes).toContain("docNote_noPageImages");
   expect(notes).not.toContain("unknownNote");
+});
+
+it("原版那一栏点开一页,灯箱里左右翻的是这份文档的每一页,标题是「第 n 页」", async () => {
+  docs.listExtractions.mockResolvedValue([{ ...done, page_images: ["pages/001.png", "pages/002.png"] }]);
+  docs.extractionSections.mockResolvedValue({ total: 0, unit: "slide", sections: [] });
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "第 2 页" }));
+  expect(openImagePreview).toHaveBeenCalledWith({
+    src: "/f/a/x1/pages/002.png?token=t",
+    title: "第 2 页",
+    gallery: [
+      { src: "/f/a/x1/pages/001.png?token=t", title: "第 1 页" },
+      { src: "/f/a/x1/pages/002.png?token=t", title: "第 2 页" },
+    ],
+  });
 });
 
 it("解析失败说原因", async () => {

@@ -3,6 +3,9 @@ import { Check, Film, ImageIcon, Search } from "lucide-react";
 
 import { assetThumbnailUrl, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
+import { useImagePreview } from "@/components/app/image-preview";
+import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -55,6 +58,13 @@ export function LibraryPickerDialog({
     items.length,
   );
   const toggle = (id: string) => setPicked((current) => (current.includes(id) ? current.filter((one) => one !== id) : [...current, id]));
+  //: 点格子是勾选;看大图走格子角上那颗,左右翻的是眼下筛出来的这一屏(搜索词、图片 / 视频)。
+  const { openImagePreview } = useImagePreview();
+  const gallery = React.useMemo(() => assetGallery(items), [items]);
+  const preview = (asset: AssetCard) => {
+    const item = assetPreviewItem(asset);
+    if (item) openImagePreview({ ...item, gallery });
+  };
   const filterLabel: Record<KindFilter, string> = { all: t("entityLibraryAll"), image: t("entityLibraryImages"), video: t("entityLibraryVideos") };
 
   return (
@@ -137,6 +147,7 @@ export function LibraryPickerDialog({
               attached={attached.has(asset.id)}
               order={picked.indexOf(asset.id)}
               onToggle={() => toggle(asset.id)}
+              onPreview={() => preview(asset)}
             />
           ))}
           {/* 末尾一条线:进了视野就接着取下一页。占满一整行,不挤进格子里。 */}
@@ -148,44 +159,48 @@ export function LibraryPickerDialog({
 }
 
 /** 一格素材。选中时右上角是挑的先后(1、2、3 —— 挂上去就是这个顺序)。 */
-function Tile({ asset, attached, order, onToggle }: { asset: AssetCard; attached: boolean; order: number; onToggle: () => void }) {
+function Tile({ asset, attached, order, onToggle, onPreview }: { asset: AssetCard; attached: boolean; order: number; onToggle: () => void; onPreview: () => void }) {
   const t = useI18n();
   const selected = order >= 0;
   const name = asset.name || asset.original_filename || "";
   return (
     <li className="grid min-w-0 gap-1.5">
-      <button
-        type="button"
-        role="option"
-        aria-selected={selected}
-        aria-disabled={attached || undefined}
-        aria-label={name}
-        disabled={attached}
-        onClick={onToggle}
-        data-library-asset={asset.id}
-        className={cn(
-          "relative grid aspect-square cursor-pointer place-items-center overflow-hidden rounded-lg border bg-panel-inset p-0 text-muted-foreground transition-[border-color,box-shadow]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
-          selected ? "border-primary ring-2 ring-primary" : "border-border hover:border-border-strong",
-        )}
-      >
-        {asset.kind === "image" ? (
-          <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" className={cn("absolute inset-0 size-full object-cover", attached && "opacity-40")} />
-        ) : (
-          <Film size={22} strokeWidth={1.4} />
-        )}
-        {selected && (
-          <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-action text-ui-2xs font-semibold text-action-foreground">
-            {order + 1}
-          </span>
-        )}
-        {attached && (
-          <span className="absolute inset-x-1.5 bottom-1.5 inline-flex items-center justify-center gap-1 rounded-md bg-background/85 py-0.5 text-ui-2xs text-foreground backdrop-blur">
-            <Check size={11} />
-            {t("entityLibraryAttached")}
-          </span>
-        )}
-      </button>
+      <div className="group/preview relative">
+        <button
+          type="button"
+          role="option"
+          aria-selected={selected}
+          aria-disabled={attached || undefined}
+          aria-label={name}
+          disabled={attached}
+          onClick={onToggle}
+          data-library-asset={asset.id}
+          className={cn(
+            "relative grid aspect-square w-full cursor-pointer place-items-center overflow-hidden rounded-lg border bg-panel-inset p-0 text-muted-foreground transition-[border-color,box-shadow]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+            selected ? "border-primary ring-2 ring-primary" : "border-border hover:border-border-strong",
+          )}
+        >
+          {asset.kind === "image" ? (
+            <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" className={cn("absolute inset-0 size-full object-cover", attached && "opacity-40")} />
+          ) : (
+            <Film size={22} strokeWidth={1.4} />
+          )}
+          {selected && (
+            <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-action text-ui-2xs font-semibold text-action-foreground">
+              {order + 1}
+            </span>
+          )}
+          {attached && (
+            <span className="absolute inset-x-1.5 bottom-1.5 inline-flex items-center justify-center gap-1 rounded-md bg-background/85 py-0.5 text-ui-2xs text-foreground backdrop-blur">
+              <Check size={11} />
+              {t("entityLibraryAttached")}
+            </span>
+          )}
+        </button>
+        {/* 已经挂上的那张也能看大图 —— 不能再选,不等于不能看。 */}
+        <ViewFullSizeButton name={name} onOpen={onPreview} className="left-1.5 top-1.5" />
+      </div>
       <Truncate className="px-0.5 text-ui-xs text-muted-foreground">
         {name}
       </Truncate>

@@ -25,7 +25,8 @@ vi.mock("@/app/preferences", () => ({
       boardRenameHint: "双击重命名",
     })[key] ?? key,
 }));
-vi.mock("@/components/app/asset-preview", () => ({ AssetInlinePreview: () => null }));
+vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/asset-preview")>()), AssetInlinePreview: () => null }));
 vi.mock("@/features/boards/BoardPlayer", () => ({ BoardAudio: () => null, BoardVideo: () => null }));
 
 import { BOARD_NODE_TYPES, type BoardNodeData } from "./boardNodes";

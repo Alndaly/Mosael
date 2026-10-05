@@ -683,6 +683,35 @@ describe("选中之后挂什么", () => {
     expect(document.querySelector('[role="dialog"]'), "点了才弹").not.toBeNull();
   });
 
+  //: 看大图看的是**选中的这几格**:框选一排图之后点「预览」,灯箱里左右翻的就是这一排(按画板上的位置),
+  //: 不是只有一张、也不是整张画板。
+  it("多选几张图时操作条上仍有「预览」,灯箱里翻的是选中的这几张,从左边那张开始", async () => {
+    const picture = (id: string, x: number, title: string) =>
+      ({ id, kind: "image" as const, x, y: 0, width: 200, height: 160, asset_id: `asset-${id}`, title });
+    mount({ items: [picture("right", 400, "右边那张"), picture("left", 0, "左边那张"), note("n1", "不进灯箱")], edges: [], markers: [] });
+    select("right");
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true }));
+    });
+    for (const id of ["left", "n1"]) {
+      act(() => {
+        document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+      });
+    }
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" }));
+    });
+    expect(document.querySelectorAll(".react-flow__node.selected")).toHaveLength(3);
+
+    act(() => toolbarButton("boardPreview")!.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    const lightbox = document.querySelector(".PhotoView-Portal");
+    expect(lightbox?.textContent).toContain("1 / 2");
+    expect(lightbox?.textContent).toContain("左边那张");
+  });
+
   it("没有字的便签不给「保存到笔记」—— 存不出东西", () => {
     mount({ items: [note("n1", "  ")], edges: [], markers: [] });
     select("n1");
