@@ -1,4 +1,5 @@
 import * as React from "react";
+import { defaultFilter } from "cmdk";
 import { Check, ChevronDown } from "lucide-react";
 
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -39,6 +40,72 @@ type Option = {
  * 时列表明明可滚、滚动条也在,滚轮却完全无效(拖滚动条/方向键仍可用,是这个故障的特征组合)。
  * 加了之后 Popover 自建滚动锁并把自己的内容作为放行区;对话框外的行为也一致(与原生 select 相同)。
  */
+/**
+ * 列表一次先画这么多行,滚到离底部不到 `MORE_WITHIN_PX` 时再接一批。
+ *
+ * ComfyUI 的 checkpoint / LoRA 清单动辄几百项,每行一张缩略图、一个会量自己截没截断的名字(Truncate)。此前一打开
+ * 就全挂上,而 cmdk 自己过滤时每敲一个字要给全部项打分、再把每一行的 DOM 挨个挪一遍来排序 —— 300 项实测一个字
+ * 1–1.6 秒。现在过滤和排序在这里做(同一个打分函数 `defaultFilter`,顺序和以前一样),cmdk 只管键盘和选中,
+ * 列表只画前一段:看得见的那几十行之外的不挂。方向键走到最后一行时 cmdk 把它滚进视口,滚动接着画下一批。
+ */
+export const RENDER_BATCH = 60;
+const MORE_WITHIN_PX = 240;
+
+type Group = [string, Option[]];
+
+/** 相邻的同名 group 归一组,不重排(顺序由提供选项的一方定,见下面 groups 那段说明)。 */
+function groupAdjacent(items: Option[]): Group[] {
+  const out: Group[] = [];
+  for (const item of items) {
+    const heading = item.group ?? "";
+    const last = out[out.length - 1];
+    if (last && last[0] === heading) last[1].push(item);
+    else out.push([heading, [item]]);
+  }
+  return out;
+}
+
+/**
+ * 按搜索词过滤、排序:和 cmdk 自己过滤时同一个打分(`defaultFilter`,按 value 和 keywords 打),同一种排法 ——
+ * 组内按分数高低,组按组里最高的那一项;分数一样的保持原来的先后。
+ */
+function filterGroups(items: Option[], query: string): Group[] {
+  if (!query) return groupAdjacent(items);
+  const byHeading = new Map<string, { best: number; order: number; rows: Array<{ item: Option; score: number; index: number }> }>();
+  items.forEach((item, index) => {
+    const score = defaultFilter(item.value, query, keywordsOf(item));
+    if (score <= 0) return;
+    const heading = item.group ?? "";
+    const group = byHeading.get(heading) ?? { best: 0, order: byHeading.size, rows: [] };
+    group.rows.push({ item, score, index });
+    group.best = Math.max(group.best, score);
+    byHeading.set(heading, group);
+  });
+  return [...byHeading.entries()]
+    .sort(([, a], [, b]) => b.best - a.best || a.order - b.order)
+    .map(([heading, group]) => [
+      heading,
+      group.rows.sort((a, b) => b.score - a.score || a.index - b.index).map((row) => row.item),
+    ]);
+}
+
+/** 能搜到这一项的字:标签、描述(用户记得住「发抖音」却未必记得节点叫「发布」)和调用方给的关键词。 */
+function keywordsOf(item: Option): string[] {
+  return [item.label, item.description ?? "", ...(item.keywords ?? [])].filter(Boolean);
+}
+
+/** 只留前 `limit` 行(跨组计数),组标题跟着它的第一行走。 */
+function firstRows(groups: Group[], limit: number): Group[] {
+  const out: Group[] = [];
+  let left = limit;
+  for (const [heading, rows] of groups) {
+    if (left <= 0) break;
+    out.push([heading, rows.slice(0, left)]);
+    left -= rows.length;
+  }
+  return out;
+}
+
 function useInsideDialog(ref: React.RefObject<HTMLElement | null>): boolean {
   const [inside, setInside] = React.useState(false);
   React.useEffect(() => {
@@ -89,7 +156,10 @@ export function SearchableSelect({
      `hidden` 顶掉,空 span 占住右格,下拉被挤到下一行的 112px 标签列里。 */
   const triggerRef = React.useRef<HTMLElement>(null);
   const modal = useInsideDialog(triggerRef);
-  const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
+  const items: Option[] = React.useMemo(
+    () => options.map((option) => (typeof option === "string" ? { value: option, label: option } : option)),
+    [options],
+  );
   const selected = items.find((item) => item.value === value);
   const hasDescriptions = items.some((item) => item.description);
   // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
@@ -98,18 +168,27 @@ export function SearchableSelect({
   // 代价是**调用方得把同一组的选项挨着写**:隔开写的话,同一个组名会渲染出两个小标题,
   // 而且不会报任何错。画板的「添加」菜单栽过这一下 —— 「选一张图片」排在最末,菜单里
   // 就出现了两个「素材库」。
-  const groups = React.useMemo(() => {
-    const out: Array<[string, Option[]]> = [];
-    for (const item of items) {
-      const heading = item.group ?? "";
-      const last = out[out.length - 1];
-      if (last && last[0] === heading) last[1].push(item);
-      else out.push([heading, [item]]);
+  const [search, setSearch] = React.useState("");
+  const query = search.trim();
+  const groups = React.useMemo(() => filterGroups(items, query), [items, query]);
+  const total = React.useMemo(() => groups.reduce((sum, [, rows]) => sum + rows.length, 0), [groups]);
+  // 打开时选中的那一项排在第一批之后:画到它为止,勾才看得见(只在没搜索时;一搜就从头画)。
+  const selectedIndex = query ? -1 : items.findIndex((item) => item.value === value);
+  const [limit, setLimit] = React.useState(RENDER_BATCH);
+  React.useEffect(() => setLimit(Math.max(RENDER_BATCH, selectedIndex + 1)), [query, open, selectedIndex]);
+  const shown = React.useMemo(() => firstRows(groups, limit), [groups, limit]);
+  const more = (event: React.UIEvent<HTMLDivElement>) => {
+    const list = event.currentTarget;
+    if (limit < total && list.scrollHeight - list.scrollTop - list.clientHeight < MORE_WITHIN_PX) {
+      setLimit((current) => Math.min(total, current + RENDER_BATCH));
     }
-    return out;
-  }, [items]);
+  };
+  const openChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch("");
+  };
   return (
-    <Popover modal={modal} open={open} onOpenChange={setOpen}>
+    <Popover modal={modal} open={open} onOpenChange={openChange}>
       <Hint label={hint} shortcut={shortcut}>
         <PopoverTrigger asChild ref={triggerRef as React.Ref<HTMLButtonElement>}>
           {trigger ?? (
@@ -143,22 +222,29 @@ export function SearchableSelect({
         )}
         align="start"
       >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder ?? t("searchableSelectPlaceholder")} className="h-9" />
+        {/* shouldFilter={false}:过滤和排序在上面 filterGroups 里做,cmdk 不再给每一项打分、挪 DOM(见 RENDER_BATCH)。 */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={searchPlaceholder ?? t("searchableSelectPlaceholder")}
+            className="h-9"
+          />
           {/* 列表限高 = min(300px, 可用高度 − 搜索框)。只写 300px 的话,矮窗口里浮层整块比可用
               空间高,被推出窗口外、连搜索框一起看不见(真机:节点的素材下拉)。 */}
-          <CommandList className="max-h-[min(300px,calc(var(--radix-popover-content-available-height,100vh)-2.75rem))]">
+          <CommandList
+            onScroll={more}
+            className="max-h-[min(300px,calc(var(--radix-popover-content-available-height,100vh)-2.75rem))]"
+          >
             <CommandEmpty>{emptyText ?? t("searchableSelectNoMatch")}</CommandEmpty>
-            {groups.map(([heading, groupItems]) => {
+            {shown.map(([heading, groupItems]) => {
               const rows = groupItems.map((item) => (
                 <CommandItem
                   key={item.value}
                   // **cmdk 拿 value 认「哪一行」**(高亮、键盘上下、选中都按它),所以它必须是这一项唯一的
                   // 值 —— 此前拿显示的文字当 value,几个都叫「未命名场景」的场景就被当成同一行:一起高亮,
-                  // 点哪个都可能选到另一个。能搜到的文字走 keywords:标签、描述(用户记得住「发抖音」却
-                  // 未必记得节点叫「发布」)和调用方给的关键词。
+                  // 点哪个都可能选到另一个。能搜到的文字见 keywordsOf(过滤在 filterGroups 里做)。
                   value={item.value}
-                  keywords={[item.label, item.description ?? "", ...(item.keywords ?? [])].filter(Boolean)}
                   onSelect={() => {
                     onValueChange(item.value);
                     setOpen(false);

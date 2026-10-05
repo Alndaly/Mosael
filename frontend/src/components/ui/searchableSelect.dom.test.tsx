@@ -2,10 +2,10 @@
 import * as React from "react";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { SearchableSelect } from "./searchable-select";
+import { RENDER_BATCH, SearchableSelect } from "./searchable-select";
 import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { SEARCHABLE_CONTENT_WIDTH, SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS, SELECT_CONTENT_WIDTH } from "./floating";
@@ -177,5 +177,102 @@ describe("可搜索下拉在版面里只占一格", () => {
     const row = container.querySelector<HTMLElement>("[data-row]")!;
     expect([...row.children].map((child) => child.tagName)).toEqual(["SPAN", "BUTTON"]);
     expect(row.children[1].getAttribute("role")).toBe("combobox");
+  });
+});
+
+/**
+ * 短清单(Radix Select)里的长名字要截断、悬停看全文。Radix 的 ItemText 把 className 拆出来就扔了,写在它上面的
+ * `min-w-0` 从来没生效:名字那一格按整串文字排、冲出菜单,Truncate 量不到截断,悬停也没有说明(维护者截图:
+ * ControlNet 模型的下拉)。jsdom 不排版,钉的是**能收窄的那一层真的在 DOM 上、包着 ItemText**。
+ */
+describe("短清单的长名字能收窄", () => {
+  it("ItemText 外面那层带着 min-w-0 / max-w-full(有缩略图、有说明、什么都没有的三种行都是)", () => {
+    const NAME = "Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors";
+    render(
+      <Select value="" defaultOpen>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a" truncate media={<span />} description="Z-Image">{`${NAME}-a`}</SelectItem>
+          <SelectItem value="b" truncate description="Z-Image">{`${NAME}-b`}</SelectItem>
+          <SelectItem value="c" truncate>{`${NAME}-c`}</SelectItem>
+        </SelectContent>
+      </Select>,
+    );
+    for (const suffix of ["a", "b", "c"]) {
+      const option = screen.getAllByRole("option").find((one) => one.textContent?.includes(`${NAME}-${suffix}`))!;
+      const itemText = within(option).getByText(`${NAME}-${suffix}`).closest("span[id]")!;
+      expect(itemText, "找不到 ItemText").toBeTruthy();
+      expect(classes(itemText.parentElement!), `${suffix}:ItemText 外面那层能收窄`).toEqual(
+        expect.arrayContaining(["min-w-0", "max-w-full"]),
+      );
+    }
+  });
+});
+
+/**
+ * ComfyUI 的 checkpoint / LoRA 动辄几百项:一打开就全挂上、cmdk 每敲一个字给全部项打分再挪一遍 DOM,
+ * 实测 300 项一打开 338ms、一个字 76–254ms(维护者:「数据过多的情况下加载会特别卡顿」)。
+ * 现在列表只画前一段、滚到底接着画,过滤在组件里做。
+ */
+describe("长清单只画看得见的那一段", () => {
+  beforeAll(() => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    Element.prototype.scrollIntoView ??= () => {};
+  });
+
+  const rendered = () => document.querySelectorAll("[cmdk-item]");
+
+  it("打开时只画第一批", () => {
+    render(<SearchableSelect value="" onValueChange={vi.fn()} options={options(500)} />);
+    openContent();
+    expect(rendered()).toHaveLength(RENDER_BATCH);
+  });
+
+  it("搜索在全部选项里找,不只找画出来的那一批", () => {
+    render(<SearchableSelect value="" onValueChange={vi.fn()} options={options(500)} />);
+    openContent();
+    const input = document.querySelector("[cmdk-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "v450." } });
+    expect([...rendered()].map((one) => one.textContent)).toContain("JANKUTrainedChenkinNoobai_v450.safetensors");
+  });
+
+  it("滚到离底部不远就接着画下一批", () => {
+    render(<SearchableSelect value="" onValueChange={vi.fn()} options={options(500)} />);
+    openContent();
+    const list = document.querySelector<HTMLElement>("[cmdk-list]")!;
+    Object.defineProperty(list, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(list, "clientHeight", { value: 300, configurable: true });
+    list.scrollTop = 1600;
+    fireEvent.scroll(list);
+    expect(rendered()).toHaveLength(RENDER_BATCH * 2);
+  });
+
+  it("选中的那项排在第一批之后,打开也看得见它(勾在它上面)", () => {
+    render(<SearchableSelect value="ckpt300" onValueChange={vi.fn()} options={options(500)} />);
+    openContent();
+    const chosen = [...rendered()].find((one) => one.getAttribute("data-value") === "ckpt300");
+    expect(chosen, "选中项没画出来").toBeTruthy();
+    expect(chosen!.querySelector("svg"), "选中项上该有勾").toBeTruthy();
+  });
+
+  it("搜索排序和 cmdk 自己排的一样:更像的排前面", () => {
+    render(
+      <SearchableSelect
+        value=""
+        onValueChange={vi.fn()}
+        options={[
+          { value: "x1", label: "influx-capacitor.safetensors" },
+          { value: "x2", label: "flux-dev.safetensors" },
+          { value: "x3", label: "my-flux-dev-lora.safetensors" },
+          { value: "x4", label: "sdxl-base.safetensors" },
+        ]}
+      />,
+    );
+    openContent();
+    fireEvent.change(document.querySelector("[cmdk-input]") as HTMLInputElement, { target: { value: "flux" } });
+    //: 词首命中的两个同分,保持原来的先后;词中间命中的排后面;不沾边的不列。
+    expect([...rendered()].map((one) => one.getAttribute("data-value"))).toEqual(["x2", "x3", "x1"]);
   });
 });
