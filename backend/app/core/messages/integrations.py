@@ -59,6 +59,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{what}没成功:{detail}",
         "en": "Couldn't convert the file for the provider ({what}): {detail}",
     },
+    "mediaErr_videoSidesOutOfRange": {
+        "zh": "这段视频是 {width}×{height},供应商要求每边在 {min}–{max} 像素之间,长宽比太极端,等比缩放也放不进去:先裁成常见的横屏或竖屏再交",
+        "en": "This video is {width}×{height}; the provider needs each side between {min} and {max} pixels, and the aspect ratio is too extreme to scale into range. Crop it to a common landscape or portrait shape first",
+    },
     "audioErr_ffmpegNoReason": {
         "zh": "ffmpeg 没有说明原因",
         "en": "ffmpeg gave no reason",

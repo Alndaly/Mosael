@@ -176,3 +176,32 @@ def test_人脸预检是同步接口_不带异步头() -> None:
     assert "x-dashscope-async" not in seen[0].headers, dict(seen[0].headers)
     assert seen[0].headers["x-dashscope-ossresourceresolve"] == "enable", "oss:// 的临时地址照样要解析"
     assert seen[0].headers["authorization"] == "Bearer k"
+
+
+def test_改口型的原视频不在_640_到_2048_之间_先缩放进范围再传(tmp_path, monkeypatch) -> None:
+    """真跑:说话照片交回的视频是 512×512,交给改口型被百炼拒「The height or width of video must be 640 ~ 2048」。"""
+    import subprocess
+
+    from app.core.config import settings
+
+    source = tmp_path / "talk.mp4"
+    subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=gray:s=512x512:d=1",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)], check=True, capture_output=True)
+    sizes: list[str] = []
+
+    def fake_post(url, data=None, files=None, timeout=None):
+        name, handle = files["file"]
+        kept = tmp_path / f"uploaded-{name}"
+        kept.write_bytes(handle.read())
+        probe = subprocess.run([settings.ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                "stream=width,height", "-of", "csv=p=0", str(kept)],
+                               capture_output=True, text=True, encoding="utf-8")
+        sizes.append(probe.stdout.strip())
+        return SimpleNamespace(raise_for_status=lambda: None)
+
+    monkeypatch.setattr(digital_human.httpx, "post", fake_post)
+    client = FakeClient({"/api/v1/uploads": POLICY})
+    payload = build_talking_payload(client, _request("videoretalk", [(SOURCE_VIDEO, source, None),
+                                                                     (DRIVING_AUDIO, None, "https://x/a.mp3")]))
+    assert sizes == ["640,640"], sizes
+    assert payload["input"]["video_url"].startswith("oss://")

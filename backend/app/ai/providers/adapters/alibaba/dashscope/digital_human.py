@@ -41,6 +41,8 @@ OSS_RESOLVE_HEADER = {"X-DashScope-OssResourceResolve": "enable"}
 S2V_MODEL_PREFIX = "wan2.2-s2v"
 S2V_DETECT_MODEL = "wan2.2-s2v-detect"
 RETALK_MODEL = "videoretalk"
+#: 改口型的原视频每边要在这个范围里(百炼回「The height or width of video must be 640 ~ 2048」)。
+RETALK_VIDEO_SIDES = (640, 2048)
 
 
 def is_talking_model(model: str) -> bool:
@@ -91,10 +93,28 @@ def _input_url(client: RetryingClient, request: GenerationRequest, role: str, *,
     if url:
         return url
     if local is not None:
+        if role == SOURCE_VIDEO and str(request.model).lower() == RETALK_MODEL:
+            return _upload_fitted_video(client, request.model, local)
         return upload_temporary(client, request.model, local)
     if required:
         raise GenerationAdapterError("providerErr_sourceMissing", vendor="DashScope", role=role)
     return ""
+
+
+def _upload_fitted_video(client: RetryingClient, model: str, path: Path) -> str:
+    """改口型的原视频先等比缩放进每边 640–2048 像素再传(说话照片交回的 512×512 直接交过去被拒,真跑撞上过)。
+    已经在范围里的原样传;缩放用的临时文件传完就删。"""
+    import tempfile
+
+    from app.media.vendor_formats import VendorFormatError, video_sides_within
+
+    low, high = RETALK_VIDEO_SIDES
+    with tempfile.TemporaryDirectory(prefix="mosael-retalk-") as scratch:
+        try:
+            fitted = video_sides_within(path, Path(scratch) / f"{path.stem}-fit.mp4", min_side=low, max_side=high)
+        except VendorFormatError as exc:
+            raise GenerationAdapterError(exc.key, **exc.params) from exc
+        return upload_temporary(client, model, fitted)
 
 
 def check_portrait(client: RetryingClient, image_url: str) -> None:

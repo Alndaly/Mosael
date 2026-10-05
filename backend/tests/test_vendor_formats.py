@@ -7,7 +7,7 @@ import subprocess
 import pytest
 
 from app.core.config import settings
-from app.media.vendor_formats import VendorFormatError, speech_mp3, still_png
+from app.media.vendor_formats import VendorFormatError, speech_mp3, still_png, video_sides_within
 
 
 def _make(arguments: list[str], target) -> None:
@@ -36,3 +36,33 @@ def test_转不出来说清楚(tmp_path) -> None:
     with pytest.raises(VendorFormatError) as caught:
         speech_mp3(broken, tmp_path / "out.mp3")
     assert caught.value.key == "mediaErr_vendorFormat"
+
+
+def _size(path) -> tuple[int, int]:
+    probe = subprocess.run([settings.ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=p=0", str(path)], capture_output=True, text=True, encoding="utf-8", check=True)
+    width, height = probe.stdout.strip().split(",")
+    return int(width), int(height)
+
+
+@pytest.mark.parametrize(("source_size", "expected"), [("512x512", (640, 640)), ("3000x1000", (2048, 682)), ("480x852", (640, 1136))])
+def test_视频每边缩放进范围_长宽比不变(tmp_path, source_size: str, expected: tuple[int, int]) -> None:
+    """百炼改口型只收每边 640–2048 像素的原视频;说话照片交回的是 512×512,直接交过去被拒。"""
+    source = tmp_path / "source.mp4"
+    _make(["-f", "lavfi", "-i", f"color=c=gray:s={source_size}:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"], source)
+    out = video_sides_within(source, tmp_path / "fit.mp4", min_side=640, max_side=2048)
+    assert out != source and _size(out) == expected
+
+
+def test_已经在范围里的原样交回(tmp_path) -> None:
+    source = tmp_path / "source.mp4"
+    _make(["-f", "lavfi", "-i", "color=c=gray:s=720x1280:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"], source)
+    assert video_sides_within(source, tmp_path / "fit.mp4", min_side=640, max_side=2048) == source
+
+
+def test_长宽比太极端_怎么缩都放不进范围_说清楚(tmp_path) -> None:
+    source = tmp_path / "source.mp4"
+    _make(["-f", "lavfi", "-i", "color=c=gray:s=4000x400:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"], source)
+    with pytest.raises(VendorFormatError) as caught:
+        video_sides_within(source, tmp_path / "fit.mp4", min_side=640, max_side=2048)
+    assert caught.value.key == "mediaErr_videoSidesOutOfRange"
