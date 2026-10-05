@@ -71,9 +71,9 @@ Mosael reads **what each workflow lets you tune and what it takes**:
 | With no sampler Mosael knows (API nodes such as MiniMax / Hailuo, Kling and Veo; packs with their own sampler such as WanVideo; MiniMax H3 wrapped in a subgraph): a multiline `prompt` on a node wired into an output | Prompt; a `negative_prompt` on the same node is the negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | Seed (random each time when left empty) |
 | Width and height of the node that creates the canvas (EmptyLatentImage, Wan / Hunyuan video latents) | Size: the workflow's own when not chosen; the list holds the workflow's own and a few common sizes, and you can also type any "width x height" (such as `768x1024`), each side rounded to a multiple of 8, at least 16 |
-| The canvas node's batch_size | “Images”: how many per run (up to 4, one when not chosen), all of them collected |
-| An image workflow with no canvas but a seed (inpainting, image-to-image and others that start from a loaded image) | “Images” is there too: the plugin **runs one result to the end before submitting the next**, with a new seed each time (counting up from the seed you gave), and each result's seed is kept in its generation parameters. Cancelling stops the rest from being submitted; if one fails, the others are still returned with a note such as "2 of 3 images were made; image 2 failed because …". Upscaling and others without a seed would make the same image every time, so they have no image count |
-| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: pick one node to get only its output while the other save nodes don't run. It defaults to all; when the workflow only has preview nodes and some of them are not the final result (the first pass of a two-pass workflow, the image before a face detailer or an upscale, a ControlNet control image, a mask), it defaults to **Final result**, so one image means one image. Pick All to get every one. A preview node that only shows the loaded image or a preprocessor's result (an OpenPose skeleton, Canny lines, a depth map) is not an output |
+| The canvas node's batch_size | How many images one run makes, **as the workflow is saved**: a saved 4 makes 4 per run |
+| An image workflow with a seed (with or without a canvas) | “**Runs**” (up to 4, one when not chosen): the plugin **runs once to the end before submitting the next run**, each run as the workflow is saved with a new seed (counting up from the seed you gave), and each output's seed is kept in its generation parameters; what comes back is runs × images per run, and the field says how many per run and in total. Cancelling stops the rest from being submitted; if one run fails, the others are still returned with a note such as "2 of 3 runs came out; run 2 failed because …". Upscaling and others without a seed would make the same image every run, so they have no such field |
+| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: pick one node to get only its output while the other save nodes don't run. It defaults to all; when the workflow only has preview nodes and some of them are not the final result (the first pass of a two-pass workflow, the image before a face detailer or an upscale, a ControlNet control image, a mask), it defaults to **Final result**, so only the last result node comes back. Pick All to get every one. A preview node that only shows the loaded image or a preprocessor's result (an OpenPose skeleton, Canny lines, a depth map) is not an output |
 | Checkpoint, LoRA, VAE, text encoder, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI, each with a thumbnail, base model and trigger words (see "The model library shows up when generating" below) |
 | Steps, CFG, sampler, scheduler, denoise, frame count … | One entry each in the parameters panel with a plain name (“Steps”, “Sampler”); common ones first, details under Advanced |
 | LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame (also when they pass through a resize, crop or similar step first); an image-to-video workflow requires its first frame |
@@ -118,8 +118,8 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
 - one field per loader node — “Image”, “Mask”, “Video”, “Audio” — listing only that kind of asset, with the node's
   title when you gave it one;
 - one field per tunable parameter, named and ranged as in the generation parameters, common ones first; seed, size and
-  image count under Advanced — the count is 1 when left empty (not the batch_size saved on the workflow's canvas), and size
-  takes any width and height, as in generation;
+  runs under Advanced — one run when left empty, each run making what the batch_size saved on the workflow's canvas
+  makes, and size takes any width and height, as in generation;
 - outputs per output node: connect “Image · SaveImage” downstream directly, or use “First output” / “All outputs” /
   “Text outputs” / “Summary” / “Task id”. Those five are for wiring workflows: run it on a board and only each
   output node's own product (image, video, audio, text) lands to the right — no duplicate image, no JSON or summary notes.
@@ -158,9 +158,9 @@ several inputs at once, or get every intermediate output back, use that workflow
 **On a board a workflow has one entry: Generate.** A workflow that delivers images, video or audio (preview nodes such as
 PreviewImage don't count — they write temporary files) is the same thing as the model of the same name: the board no longer lists
 its tool, and the "⋯" at the top of an item doesn't repeat it — add an image (video, audio) item and pick that model; the result
-lands in place. Workflows with several save nodes work the same way: placeholders for every save node are laid out before it runs
-(**Results per run** shows "N per node"), and **Results from** under Settings narrows it to one node. Calling ComfyUI through
-Generate without choosing a count makes one. A workflow that only returns text (tagging, prompt extraction) isn't a model and stays an
+lands in place. Workflows with several save nodes work the same way: placeholders for runs × images per run are laid out before it runs
+(**Results per run** shows that total, each choice saying how many runs), and **Results from** under Settings narrows it to one
+node. Calling ComfyUI through Generate without choosing runs it once, as the workflow is saved. A workflow that only returns text (tagging, prompt extraction) isn't a model and stays an
 item ability on boards. "Import outputs" fetches by task id, so it is not on boards. Workflows and the agent keep the tools (what they
 do beyond generation — every output node, displayed text, previews — stays there), and the tool's description ends with "If you only
 need the image, use the AI generate node with this model".
