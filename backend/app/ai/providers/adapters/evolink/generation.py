@@ -289,18 +289,35 @@ def reported_charge(payload: dict[str, Any]) -> ReportedUsage:
     """
     task = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     usage = task.get("usage") if isinstance(task, dict) else None
+    observed = _token_detail(usage)
     cost = usage.get("cost") if isinstance(usage, dict) else None
     if not isinstance(cost, dict):
-        return ReportedUsage()
+        return ReportedUsage(observed=observed)
     credits = _decimal(cost.get("credits"))
     if credits is not None:
         micros = int((credits * 1_000_000 / _CREDITS_PER_USD).to_integral_value(rounding=ROUND_HALF_UP))
-        return ReportedUsage(units={"credits": float(credits)}, cost_micros=micros, currency="USD")
+        return ReportedUsage(units={"credits": float(credits)}, cost_micros=micros, currency="USD", observed=observed)
     for key, currency in _REPORTED_CURRENCIES:
         amount = _decimal(cost.get(key))
         if amount is not None:
-            return ReportedUsage(cost_micros=int((amount * 1_000_000).to_integral_value()), currency=currency)
-    return ReportedUsage()
+            return ReportedUsage(cost_micros=int((amount * 1_000_000).to_integral_value()), currency=currency, observed=observed)
+    return ReportedUsage(observed=observed)
+
+
+def _token_detail(usage: Any) -> dict[str, Any]:
+    """GPT Image 出图回包里的 token 明细(文本输入 / 参考图输入 / 出图,缓存命中的并进各自那一项)—— 只拿来核对:
+    按参考价算出来的钱应当和回报的扣费对得上(见 generation.runner)。没有明细的(视频、别的模型)回空。"""
+    if not isinstance(usage, dict) or "image_output_tokens" not in usage:
+        return {}
+
+    def count(*keys: str) -> int:
+        return sum(int(usage.get(key) or 0) for key in keys if isinstance(usage.get(key), (int, float)))
+
+    return {
+        "input_tokens": count("text_input_tokens", "text_cached_input_tokens"),
+        "image_input_tokens": count("image_input_tokens", "image_cached_input_tokens"),
+        "output_tokens": count("image_output_tokens"),
+    }
 
 
 def _task_id(payload: dict[str, Any]) -> str:

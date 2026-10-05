@@ -21,6 +21,7 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterContext,
     GenerationAdapterError,
     metering_from_request,
+    ReportedUsage,
 )
 from app.ai.providers.adapters.shared.errors import adapter_http_error
 from app.ai.providers.adapters.shared.polling import poll_until_ready
@@ -112,6 +113,18 @@ class MiniMaxVideoAdapter(GenerationAdapter):
     media_kind = "video"
 
     supports_resume = True
+
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        """查询回包 `task.usage.output_seconds` 是出了几秒、`task.resolution` 是分辨率档 —— 只拿来核对。"""
+        task = raw_usage.get("task") if isinstance(raw_usage.get("task"), dict) else raw_usage
+        usage = task.get("usage") if isinstance(task, dict) else None
+        observed: dict[str, Any] = {}
+        seconds = usage.get("output_seconds") if isinstance(usage, dict) else None
+        if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) and seconds > 0:
+            observed["video_seconds"] = seconds
+        if isinstance(task, dict) and task.get("resolution"):
+            observed["resolution"] = str(task["resolution"])
+        return ReportedUsage(observed=observed)
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:

@@ -8,6 +8,7 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
+    ReportedUsage,
     GenerationAdapter,
     GenerationRequest,
     GenerationResult,
@@ -183,11 +184,30 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _seconds(value: Any) -> int | float | None:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
+
+
 class WanVideoAdapter(GenerationAdapter):
     vendor_id = "alibaba"
     media_kind = "video"
 
     supports_resume = True
+
+    def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
+        """回包 `usage` 里出了几秒(`output_video_duration`,没有就 `duration`)、什么分辨率档(`SR`)—— 只拿来核对。"""
+        usage = raw_usage.get("usage") if isinstance(raw_usage, dict) else None
+        if not isinstance(usage, dict):
+            return ReportedUsage()
+        observed: dict[str, Any] = {}
+        seconds = _seconds(usage.get("output_video_duration"))
+        if seconds is None:
+            seconds = _seconds(usage.get("duration"))
+        if seconds is not None:
+            observed["video_seconds"] = seconds
+        if usage.get("SR") not in (None, ""):
+            observed["resolution"] = str(usage["SR"])
+        return ReportedUsage(observed=observed)
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:

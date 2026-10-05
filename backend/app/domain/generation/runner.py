@@ -40,7 +40,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError, tr
-from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
+from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
 from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider
 from app.domain.jobs import (
@@ -54,7 +54,7 @@ from app.domain.jobs import (
 )
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
-from app.domain.billing.usage import billable
+from app.domain.billing.usage import billable, price_usage, usage_mismatches
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -465,6 +465,7 @@ def _record_generation_usage(
             request, result, measured_seconds,
         )
         raw = result.raw_usage if result is not None else {}
+    check = _cross_check(db, generation, job, context, units, reported)
     with billable(
         db,
         capability=generation.kind,
@@ -482,9 +483,54 @@ def _record_generation_usage(
         call.meter(units, raw=raw)
         if reported.cost_micros is not None:
             call.report_cost(reported.cost_micros, reported.currency)
+        if check:
+            call.annotate(usage_check=check)
         if status != "succeeded":
             # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
             call.mark_failed()
+
+
+#: 回报的扣费和按价目对回包明细算出来的钱,差多少算对不上:一成,或者不到一分钱的零头不算。
+_COST_TOLERANCE = 0.10
+_COST_TOLERANCE_MICROS = 100
+
+
+def _cross_check(
+    db, generation: GenerationJob, job: Job, context: GenerationAdapterContext, units: dict, reported: ReportedUsage,
+) -> dict | None:
+    """服务商回包里现成的用量字段和我们记的账互相印证(不改记账的依据)。
+
+    - 回包说的事实(出了几秒、什么分辨率档)和记下的计量比;
+    - 服务商回报了扣费、回包又带着明细(Evolink 出图的 token 数)时,按价目对明细算一遍,和回报的扣费比。
+    对不上记一条警告,连同核对的依据一起留在这条账的 raw_usage 里(`usage_check`),事后对账查得到。
+    """
+    if not reported.observed:
+        return None
+    check: dict = {"observed": dict(reported.observed)}
+    mismatched = usage_mismatches(units, reported.observed)
+    if reported.cost_micros is not None:
+        basis = {key: value for key, value in units.items() if key != "token_estimate"} | reported.observed
+        try:
+            priced = price_usage(
+                db, workspace_id=job.workspace_id, provider_profile_id=context.connection_id, provider=generation.provider,
+                capability=generation.kind, model=generation.model, units=basis, moment=now(),
+            )
+        except Exception:  # noqa: BLE001 — 核对是旁路,算不出来不该影响记账
+            logger.warning("核对 %s %s 的扣费时按价目算不出来", generation.provider, generation.model, exc_info=True)
+            priced = None
+        if priced is not None and priced.cost_micros is not None:
+            check["priced"] = {"micros": priced.cost_micros, "currency": priced.currency}
+            gap = abs(priced.cost_micros - reported.cost_micros)
+            if priced.currency.upper() == reported.currency.upper() and gap > max(
+                _COST_TOLERANCE_MICROS, reported.cost_micros * _COST_TOLERANCE
+            ):
+                mismatched["cost"] = {"billed": reported.cost_micros, "priced": priced.cost_micros}
+    if mismatched:
+        check["mismatched"] = mismatched
+        logger.warning(
+            "%s %s 的回包用量和记账对不上(生成 %s):%s", generation.provider, generation.model, generation.id, mismatched
+        )
+    return check
 
 
 def _with_request_facts(

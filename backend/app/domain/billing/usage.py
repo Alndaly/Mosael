@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
+import re
 from uuid import uuid4
 import time
 from typing import Any
@@ -86,6 +87,33 @@ def costs_by_currency(
         key: [amount for _, amount in sorted(items, key=lambda item: (-item[0], item[1].currency))]
         for key, items in counted.items()
     }
+
+
+#: 回包里的 token 数和我们估的 token 数不拿来比(估的本来就不准,回包的才是实数),只拿来按价目核对扣费。
+_TOKEN_KEYS = frozenset({"input_tokens", "output_tokens", "image_input_tokens", "total_tokens"})
+
+
+def usage_mismatches(billed: dict[str, Any], observed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """记下的计量和服务商回包说的事实(`ReportedUsage.observed`)哪几项对不上。两边都有的键才比:
+    数按 2% 或半个单位的容差比(5 秒和 5.0 秒是一回事);分辨率这类文字有数字的只比数字(`720P` 和 SR 720 是同一档)。
+    我们自己估的 token(`token_estimate`)不比。"""
+    estimated = bool(billed.get("token_estimate"))
+    mismatched: dict[str, dict[str, Any]] = {}
+    for key, reported in observed.items():
+        if key not in billed or (estimated and key in _TOKEN_KEYS):
+            continue
+        mine = billed[key]
+        if isinstance(mine, bool) or isinstance(reported, bool):
+            same = mine == reported
+        elif isinstance(mine, (int, float)) and isinstance(reported, (int, float)):
+            same = abs(float(mine) - float(reported)) <= max(0.5, abs(float(reported)) * 0.02)
+        else:
+            left, right = str(mine).strip().lower(), str(reported).strip().lower()
+            digits = re.sub(r"\D", "", left), re.sub(r"\D", "", right)
+            same = digits[0] == digits[1] if digits[0] and digits[1] else left == right
+        if not same:
+            mismatched[key] = {"billed": mine, "reported": reported}
+    return mismatched
 
 
 def run_costs(db: Session, job_id: str) -> dict[str, Any]:

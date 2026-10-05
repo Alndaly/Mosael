@@ -212,11 +212,16 @@ class ReportedUsage:
     (`with_reported`),有扣费就直接记扣费,不再拿价目去估。
 
     `cost_micros` + `currency` 是服务商回报的这一次实际扣了多少钱(币种照它报的,不换算);没报为 None。
+
+    `observed` 是回包里**拿来核对、不拿来计价**的事实:出了几秒、什么分辨率档、token 明细。键和计量同名
+    (`video_seconds` / `resolution` / `input_tokens` …),运行器拿它和记下的那份比,对不上记日志、在账上留底
+    (见 generation.runner)。
     """
 
     units: dict[str, Any] = field(default_factory=dict)
     cost_micros: int | None = None
     currency: str = ""
+    observed: dict[str, Any] = field(default_factory=dict)
 
 
 class GenerationAdapter(ABC):
