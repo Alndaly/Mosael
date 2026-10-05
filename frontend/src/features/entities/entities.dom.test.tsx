@@ -30,7 +30,7 @@ const api = vi.hoisted(() => ({
   listAssetEntities: vi.fn(),
   getEntityCatalog: vi.fn(),
   importAsset: vi.fn(),
-  listAssets: vi.fn(),
+  listAssetPage: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn(),
   fetchVoicePreview: vi.fn(),
   listScenes: vi.fn(),
@@ -146,11 +146,16 @@ function mount(ui: React.ReactElement) {
 }
 
 const WORKSPACE = { id: "ws", name: "W" } as never;
+//: 素材库一页页给,种类在服务端筛(参考图只要图片和视频)。
+const servedAssets = (rows: { id: string; kind: string; name: string }[]) => async (query: { kind?: string[] }) => {
+  const items = rows.filter((one) => !query.kind || query.kind.includes(one.kind));
+  return { items, next_cursor: null, total: items.length };
+};
 
 beforeEach(() => {
   for (const one of Object.values(api)) one.mockReset();
   api.getEntityCatalog.mockResolvedValue(CATALOG);
-  api.listAssets.mockResolvedValue([]);
+  api.listAssetPage.mockImplementation(servedAssets([]));
   api.fetchWorkflowFieldOptions.mockImplementation(async (source: string, _ws: string, parent?: string) => {
     if (source === "speech_engines") return [{ value: "clone", label: "本地克隆" }, { value: "edge", label: "Edge" }];
     if (source === "speech_voices") return parent === "edge" ? [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }] : [{ value: "v1", label: "我的声音" }];
@@ -386,11 +391,11 @@ describe("参考图墙", () => {
   });
 
   it("从素材库挑一张挂上;已经挂着的不给再挂", async () => {
-    api.listAssets.mockResolvedValue([
+    api.listAssetPage.mockImplementation(servedAssets([
       { id: "a-front", kind: "image", name: "正面.png" },
       { id: "a-new", kind: "image", name: "背面.png" },
       { id: "a-song", kind: "audio", name: "歌.mp3" },
-    ]);
+    ]));
     api.addEntityReference.mockResolvedValue(entity());
     const wall = await openDetail();
     fireEvent.click(within(wall).getByRole("button", { name: "entityFromLibrary" }));
@@ -444,10 +449,10 @@ describe("参考图墙", () => {
   });
 
   it("从素材库挂一批,挂到一半失败:前面挂上的照实显示 —— 失败也重取这个资产", async () => {
-    api.listAssets.mockResolvedValue([
+    api.listAssetPage.mockImplementation(servedAssets([
       { id: "a-new", kind: "image", name: "背面.png" },
       { id: "a-two", kind: "image", name: "侧脸.png" },
-    ]);
+    ]));
     api.addEntityReference.mockResolvedValueOnce(entity()).mockRejectedValueOnce(new Error("挂不上"));
     const wall = await openDetail();
     fireEvent.click(within(wall).getByRole("button", { name: "entityFromLibrary" }));

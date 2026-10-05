@@ -2820,6 +2820,7 @@
           "assets"
         ],
         "summary": "List Assets",
+        "description": "素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。\n\n`kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,\n其余参数不变。",
         "operationId": "list_assets_api_assets_get",
         "parameters": [
           {
@@ -2854,7 +2855,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -2864,7 +2868,7 @@
             }
           },
           {
-            "name": "name_contains",
+            "name": "source",
             "in": "query",
             "required": false,
             "schema": {
@@ -2876,7 +2880,197 @@
                   "type": "null"
                 }
               ],
-              "title": "Name Contains"
+              "title": "Source"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 300,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "tag_match",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "any"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Tag Match"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "created",
+                "updated",
+                "name",
+                "duration"
+              ],
+              "type": "string",
+              "default": "created",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 60,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/facets": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Asset Facets",
+        "description": "页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。",
+        "operationId": "asset_facets_api_assets_facets_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetFacetsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/assets": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Sequence Assets",
+        "description": "这条时间线上用到的素材,完整字段(剪辑台的时间线、监视器、检查器读它)。",
+        "operationId": "sequence_assets_api_sequences__sequence_id__assets_get",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
             }
           }
         ],
@@ -2890,7 +3084,7 @@
                   "items": {
                     "$ref": "#/components/schemas/AssetOut"
                   },
-                  "title": "Response List Assets Api Assets Get"
+                  "title": "Response Sequence Assets Api Sequences  Sequence Id  Assets Get"
                 }
               }
             }
@@ -24472,6 +24666,191 @@
         ],
         "title": "AsrModelOut"
       },
+      "AssetCardMediaOut": {
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "has_thumbnail": {
+            "type": "boolean",
+            "title": "Has Thumbnail",
+            "default": false
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "title": "AssetCardMediaOut",
+        "description": "卡片上画得出来的那几样:时长、尺寸、帧率、有没有缩略图;文档是格式、页数、大小。\n\n**只是 media_info 的一个子集**:代理在哪、转写到哪一步、出处网址这些,卡片用不上,详情\n(`GET /api/assets/{id}`)里照旧是完整的。"
+      },
+      "AssetCardOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "derived": {
+            "type": "boolean",
+            "title": "Derived",
+            "default": false
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated",
+            "default": false
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "media_info": {
+            "$ref": "#/components/schemas/AssetCardMediaOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "project_id",
+          "kind",
+          "source",
+          "name",
+          "original_filename",
+          "media_info"
+        ],
+        "title": "AssetCardOut",
+        "description": "素材库列表里的一张卡片:卡片和挑选清单要显示的、筛选和操作要用的,别的不带。"
+      },
       "AssetDerivationOut": {
         "properties": {
           "asset_id": {
@@ -24640,6 +25019,36 @@
         ],
         "title": "AssetExtractionOut",
         "description": "文档的一次解析(ADR 0031 §2)。正文按段读:outline 里每段的标题、页面图和在全文里的起止。"
+      },
+      "AssetFacetsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "kinds": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Kinds"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "kinds",
+          "tags"
+        ],
+        "title": "AssetFacetsOut",
+        "description": "页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上。"
       },
       "AssetFrameRequest": {
         "properties": {
@@ -24839,6 +25248,12 @@
             ],
             "title": "Updated At"
           },
+          "derived": {
+            "type": "boolean",
+            "title": "Derived",
+            "description": "它是不是从别的素材做出来的(有出处)。来源标签只要这一句(见前端 assetOrigin);卡片上也是这一格 ——\n卡片不带整份出处,一段成片的出处可以是它用到的两百多份素材。",
+            "readOnly": true
+          },
           "proxy_expected": {
             "type": "boolean",
             "title": "Proxy Expected",
@@ -24857,9 +25272,44 @@
           "original_filename",
           "file_key",
           "media_info",
+          "derived",
           "proxy_expected"
         ],
         "title": "AssetOut"
+      },
+      "AssetPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssetCardOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor",
+          "total"
+        ],
+        "title": "AssetPageOut",
+        "description": "素材库的一页。`next_cursor` 交回去取下一页;是 null 就到头了。`total` 是满足条件的一共几份。"
       },
       "AssetUpdate": {
         "properties": {

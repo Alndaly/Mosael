@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AssetDerivationOut(ApiModel):
@@ -35,6 +36,13 @@ class AssetOut(OrmModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def derived(self) -> bool:
+        """它是不是从别的素材做出来的(有出处)。来源标签只要这一句(见前端 assetOrigin);卡片上也是这一格 ——
+        卡片不带整份出处,一段成片的出处可以是它用到的两百多份素材。"""
+        return bool(self.derived_from)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def proxy_expected(self) -> bool:
         """这份素材会不会有代理。**前端不该用缺省值去猜后端的配置。**
 
@@ -49,6 +57,87 @@ class AssetOut(OrmModel):
         from app.domain.assets.proxies import proxies_possible
 
         return proxies_possible(self)
+
+
+#: 卡片上要读的那几项 media_info(见 AssetCardMediaOut)。
+CARD_MEDIA_FIELDS = ("duration", "width", "height", "fps", "has_thumbnail", "format", "pages", "size_bytes")
+
+
+class AssetCardMediaOut(ApiModel):
+    """卡片上画得出来的那几样:时长、尺寸、帧率、有没有缩略图;文档是格式、页数、大小。
+
+    **只是 media_info 的一个子集**:代理在哪、转写到哪一步、出处网址这些,卡片用不上,详情
+    (`GET /api/assets/{id}`)里照旧是完整的。
+    """
+
+    duration: float | None = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
+    has_thumbnail: bool = False
+    format: str | None = None
+    pages: int | None = None
+    size_bytes: int | None = None
+
+
+def _card_value(field: str, value: Any) -> Any:
+    """读不懂的一格当没有:一份素材里记坏了一个数(NaN、字符串),不该让整页列表 500。"""
+    if field == "has_thumbnail":
+        return value is True
+    if field == "format":
+        return value if isinstance(value, str) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    if field in ("width", "height", "pages", "size_bytes"):
+        return int(value)
+    return float(value)
+
+
+class AssetCardOut(OrmModel):
+    """素材库列表里的一张卡片:卡片和挑选清单要显示的、筛选和操作要用的,别的不带。"""
+
+    id: str
+    workspace_id: str
+    project_id: str | None
+    kind: str
+    source: str
+    name: str
+    original_filename: str
+    tags: list[str] = Field(default_factory=list)
+    #: 它是不是从别的素材做出来的(有出处)—— 来源标签只要这一句。**不带整份出处**:一段成片的出处是它用到的
+    #: 每一份素材,真实的库里有一段两百多份,一张卡片就是十几 KB。要看出处,详情里有、来源链另取。
+    derived: bool = Field(default=False, validation_alias="derived_from")
+    ai_generated: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    media_info: AssetCardMediaOut
+
+    @field_validator("derived", mode="before")
+    @classmethod
+    def _has_origin(cls, origins: Any) -> bool:
+        return bool(origins)
+
+    @field_validator("media_info", mode="before")
+    @classmethod
+    def _pick_card_fields(cls, info: Any) -> dict[str, Any]:
+        info = info if isinstance(info, dict) else {}
+        return {field: _card_value(field, info.get(field)) for field in CARD_MEDIA_FIELDS}
+
+
+class AssetPageOut(ApiModel):
+    """素材库的一页。`next_cursor` 交回去取下一页;是 null 就到头了。`total` 是满足条件的一共几份。"""
+
+    items: list[AssetCardOut]
+    next_cursor: str | None
+    total: int
+
+
+class AssetFacetsOut(ApiModel):
+    """页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上。"""
+
+    total: int
+    kinds: dict[str, int]
+    tags: dict[str, int]
 
 
 class AssetLineageNode(ApiModel):

@@ -1037,7 +1037,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
             key={item.id}
             item={{ ...item, kind: item.kind }}
             assetId={item.asset_id as string}
-            workspaceId={workspaceId}
             //: 剪一段、取一帧落的都是**新的一格**,原件不在跑;按钮转到请求落地为止由面板自己管(useSubmitting)。
             busy={false}
             //: 取一帧和剪一段都产出**新的一格** —— 摆在原件下面,原件不动。

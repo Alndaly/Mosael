@@ -31,7 +31,7 @@ def test_在第二个工作区里对话_不带工作区的工具作用到第二�
     client, first, other, assets, turn = _setup()
 
     listed = client.post("/api/agent/tools/list_assets", json={"arguments": {}}, headers=turn).json()
-    assert [one["id"] for one in listed["result"]] == [assets[other]], "列的是对话所在的工作区"
+    assert [one["id"] for one in listed["result"]["assets"]] == [assets[other]], "列的是对话所在的工作区"
 
     opened = client.post(
         "/api/agent/tools/delete_assets", json={"arguments": {"asset_ids": [assets[other]]}}, headers=turn
@@ -48,4 +48,4 @@ def test_不在对话里_照旧用第一个工作区() -> None:
 
     listed = client.post("/api/agent/tools/list_assets", json={"arguments": {}}).json()
 
-    assert [one["id"] for one in listed["result"]] == [assets[first]]
+    assert [one["id"] for one in listed["result"]["assets"]] == [assets[first]]

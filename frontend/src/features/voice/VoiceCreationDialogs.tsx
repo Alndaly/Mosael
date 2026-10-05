@@ -1,12 +1,11 @@
 import React from "react";
-import { assetKeys, transcriptKeys } from "@/api/queryKeys";
+import { transcriptKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Square, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   getAssetTranscript,
-  listAssets,
   uploadVoice,
   voiceFromSpeaker,
   type Project,
@@ -23,6 +22,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { useAssetSearch } from "@/lib/assetQueries";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 import { useReferenceAudioRecorder } from "./useReferenceAudioRecorder";
@@ -239,12 +239,12 @@ export function VoiceFromSpeakerDialog({
   const [name, setName] = React.useState("");
   const [consent, setConsent] = React.useState("");
   const formId = React.useId();
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspace.id, project.id),
-    queryFn: () => listAssets(workspace.id, project.id),
-    enabled: open,
-  });
-  const clipAssets = (assets.data ?? []).filter((asset) => asset.kind === "video" || asset.kind === "audio");
+  //: 有人声的那几种,这个项目里的(连同工作区级的);敲字在服务端搜。选中的那一份记下名字,再搜别的字时触发器上照样写着它。
+  const clips = useAssetSearch(
+    { workspace_id: workspace.id, project_id: project.id, kind: ["video", "audio"] },
+    { enabled: open },
+  );
+  const [assetName, setAssetName] = React.useState("");
   const transcript = useQuery({
     queryKey: transcriptKeys.of(assetId),
     queryFn: () => getAssetTranscript(assetId),
@@ -268,6 +268,7 @@ export function VoiceFromSpeakerDialog({
   React.useEffect(() => {
     if (!open) return;
     setAssetId("");
+    setAssetName("");
     setSpeaker("");
     setName("");
     setConsent("");
@@ -313,12 +314,16 @@ export function VoiceFromSpeakerDialog({
           <span>{t("voicePickAsset")}</span>
           <Combobox
             value={assetId}
-            options={clipAssets.map((asset) => ({ value: asset.id, label: asset.name }))}
+            options={clips.items.map((asset) => ({ value: asset.id, label: asset.name }))}
+            onSearch={clips.search}
+            searching={clips.isFetching}
+            renderValue={() => assetName || undefined}
             placeholder={t("voicePickAsset")}
             emptyText={t("cmdkEmpty")}
             className="w-full"
             onValueChange={(value) => {
               setAssetId(value);
+              setAssetName(clips.items.find((asset) => asset.id === value)?.name ?? "");
               setSpeaker("");
             }}
           />

@@ -20,7 +20,7 @@ type Upload = {
 const uploads: Upload[] = [];
 
 vi.mock("@/api/client", () => ({
-  listAssets: vi.fn(async () => []),
+  listAssetPage: vi.fn(async () => ({ items: [], next_cursor: null, total: 0 })),
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   importAsset: vi.fn(
     (params: { file: File; onProgress?: (fraction: number) => void; signal?: AbortSignal }) =>

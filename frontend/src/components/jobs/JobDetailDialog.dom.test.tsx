@@ -22,10 +22,9 @@ vi.mock("@/components/jobs/jobKinds", () => ({
   useJobKinds: () => ({ kindOf: () => ({ label: "工作流" }) }),
 }));
 vi.mock("@/api/client", () => ({
-  listAssets: async () => [
-    { id: "img-1", kind: "image", name: "三视图" },
-    { id: "aud-1", kind: "audio", name: "旁白" },
-  ],
+  //: 只按 id 取交出来的那几份(不再把整个素材库拉回来再找)。
+  getAsset: async (id: string) =>
+    ({ "img-1": { id: "img-1", kind: "image", name: "三视图" }, "aud-1": { id: "aud-1", kind: "audio", name: "旁白" } })[id],
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetFileUrl: (id: string) => `/file/${id}`,

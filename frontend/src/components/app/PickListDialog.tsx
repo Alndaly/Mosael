@@ -1,5 +1,5 @@
 import React from "react";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Truncate } from "@/components/ui/truncate";
+import { useReachEnd } from "@/lib/useReachEnd";
 import { cn } from "@/lib/utils";
 
 /** 一行里放什么:行首认脸用的一小块(缩略图或图标)、名字、一行说明、行尾一小段附注(版本、时长、日期)。 */
@@ -51,6 +52,8 @@ export function PickListDialog<T>({
   filters,
   actions,
   dropzone,
+  onReachEnd,
+  loadingMore = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,6 +81,13 @@ export function PickListDialog<T>({
   actions?: React.ReactNode;
   /** 整个弹窗收拖进来的文件(见 ModalShell 的 dropzone)。 */
   dropzone?: React.ComponentProps<typeof ModalShell>["dropzone"];
+  /**
+   * 清单是一页页从服务端取的(素材库):滚到最后一行附近时叫一声,调用方接着取下一页。
+   * 没有下一页了就别给。
+   */
+  onReachEnd?: () => void;
+  /** 下一页还在路上:清单底下转一个圈。 */
+  loadingMore?: boolean;
 }) {
   const t = useI18n();
   const [active, setActive] = React.useState(0);
@@ -87,6 +97,9 @@ export function PickListDialog<T>({
   React.useEffect(() => {
     list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [active]);
+  //: 最后一行快进视野就要下一页(见 useReachEnd)。
+  const wantsMore = Boolean(onReachEnd);
+  const end = useReachEnd<HTMLDivElement>(onReachEnd, items.length);
 
   const keys = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!items.length) return;
@@ -179,6 +192,11 @@ export function PickListDialog<T>({
               </button>
             );
           })}
+          {wantsMore || loadingMore ? (
+            <div ref={end} data-pick-more="" className="grid h-8 place-items-center text-muted-foreground">
+              {loadingMore ? <Loader2 size={14} className="animate-mosael-spin" aria-label={t("pageLoading")} /> : null}
+            </div>
+          ) : null}
           {notice ? <p className="m-0 px-1.5 pt-2 text-ui-xs text-muted-foreground">{notice}</p> : null}
         </div>
       )}

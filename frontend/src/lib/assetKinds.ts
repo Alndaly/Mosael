@@ -45,10 +45,11 @@ export function kindIsVisual(kind: string): boolean {
   return kind === "video" || kind === "image";
 }
 
-/** 这份素材有画面或声音(能上时间线、能当生成参考)。文档没有。 */
-export function isMediaAsset(asset: { kind: string }): boolean {
-  return kindHasSound(asset.kind) || kindIsVisual(asset.kind);
-}
+/**
+ * 有画面或声音的那几种(能上时间线、能当生成参考)。文档没有。
+ * 素材库分页之后按它在服务端筛(`kind=…`),不再把全部拿回来再在浏览器里挑。
+ */
+export const MEDIA_KINDS = ["video", "audio", "image"] as const;
 
 /** 种类在界面上叫什么。认不出的当视频说 —— 素材库里只有这四种。 */
 export function assetKindKey(kind: string): MessageKey {

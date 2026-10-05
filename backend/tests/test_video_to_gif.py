@@ -53,7 +53,7 @@ def test_素材接口只给视频排任务且原素材不变() -> None:
     assert job["payload"]["asset_id"] == video["id"]
     assert thread.called
 
-    unchanged = client.get(f"/api/assets?workspace_id={ws}").json()
+    unchanged = client.get(f"/api/assets?workspace_id={ws}").json()["items"]
     assert len(unchanged) == 1 and unchanged[0]["id"] == video["id"]
     assert unchanged[0]["original_filename"] == "source.mp4"
 

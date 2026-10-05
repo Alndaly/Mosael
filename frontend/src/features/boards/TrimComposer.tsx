@@ -4,7 +4,7 @@ import { Camera, Scissors, Volume2, VolumeX } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { listAssets, type Asset, type BoardItem } from "@/api/client";
+import { getAsset, type BoardItem } from "@/api/client";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Hint } from "@/components/ui/tooltip";
@@ -42,7 +42,6 @@ export function TrimComposer({
   item,
   assetId,
   initial,
-  workspaceId,
   busy,
   onTrim,
   onGrabFrame,
@@ -52,7 +51,6 @@ export function TrimComposer({
   assetId: string;
   /** 上一次截的那一段(截挂了回来重试时)。没给就从头到尾、带声音。 */
   initial?: { start: number; end: number; mute: boolean };
-  workspaceId: string;
   busy: boolean;
   /** 交回请求的 Promise:按钮转到它落地为止(见 useSubmitting),连点只发一次。 */
   onTrim: (input: { start: number; end: number; mute: boolean }) => Promise<unknown>;
@@ -61,14 +59,13 @@ export function TrimComposer({
 }) {
   const t = useI18n();
   const controls = TRIM_CONTROLS[item.kind];
-  //: 时长从素材库里查 —— 画布上的项只记着 asset_id,而"拖到哪儿是第几秒"全靠它。
+  //: 时长按 id 查这一份素材 —— 画布上的项只记着 asset_id,而"拖到哪儿是第几秒"全靠它。
   //: 查不到就不画那条轨(退回填秒数),而不是猜一个:猜错会把长素材截短。
-  const library = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId) });
+  const asset = useQuery({ queryKey: assetKeys.detail(assetId), queryFn: () => getAsset(assetId), enabled: Boolean(assetId) });
   const duration = React.useMemo(() => {
-    const asset = (library.data ?? []).find((one: Asset) => one.id === assetId);
-    const value = Number((asset?.media_info as { duration?: number } | undefined)?.duration);
+    const value = Number((asset.data?.media_info as { duration?: number } | undefined)?.duration);
     return Number.isFinite(value) && value > 0 ? value : 0;
-  }, [library.data, assetId]);
+  }, [asset.data]);
 
   const [start, setStart] = React.useState(String(initial?.start ?? 0));
   const [end, setEnd] = React.useState(initial ? String(initial.end) : "");

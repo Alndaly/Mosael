@@ -51,7 +51,7 @@ import {
   undoSequence,
   baseRevisionOf,
   onSequenceConflict,
-  type Asset,
+  type AssetCard,
   type Clip,
   type LinkOption,
   type Project,
@@ -59,6 +59,7 @@ import {
   type TrackStatePatch,
   type Workspace,
 } from "@/api/client";
+import { useSequenceAssets } from "@/lib/assetQueries";
 import { IconButton } from "@/components/ui/icon-button";
 import { formatCombo } from "@/lib/shortcuts";
 import { useI18n } from "@/app/preferences";
@@ -159,10 +160,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const agentSidebar = useResizableSidebar("editor-agent", { min: 320, max: 640, fallback: 400 });
 
 
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspace.id, project.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}&project_id=${project.id}`),
-  });
   const sequences = useQuery({
     queryKey: ["sequences", project.id],
     queryFn: () => api<Sequence[]>(`/api/projects/${project.id}/sequences`),
@@ -171,6 +168,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   //: 只在第一次渲染时读 —— 之后地址会被路由改写成只剩 ?p=。点名的不在这个项目里就回到默认:最近改过的那条。
   const [namedSequence] = React.useState(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("s"));
   const sequence = sequences.data?.find((one) => one.id === namedSequence) ?? sequences.data?.[0] ?? null;
+  //: 时间线、监视器、检查器读的素材:**这条时间线用到的那些**,完整字段(见 useSequenceAssets)。
+  //: 素材池是另一回事 —— 它一页页列素材库(MediaPool 自己取),配音片段这类中间产物不在那里,却照样在时间线上。
+  const sequenceAssetsQuery = useSequenceAssets(workspace.id, sequence);
+  const sequenceAssets = React.useMemo(() => sequenceAssetsQuery.data ?? [], [sequenceAssetsQuery.data]);
 
   // 换时间线 = 换内容:播放头与播放状态是全局 store 的,不重置就会带着上一条时间线的进度
   // 继续播新序列(播放头还可能停在新序列长度之外)。这里按序列 id 归零并停播,覆盖所有切换
@@ -898,7 +899,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     [findSelectedClip, sequence, moveClipMutation],
   );
 
-  const addAssetToTimeline = (asset: Asset) => {
+  const addAssetToTimeline = (asset: AssetCard) => {
     if (!sequence) return;
     const track = (sequence.tracks ?? []).find((item) => trackAcceptsAsset(item, asset));
     if (!track) return;
@@ -935,9 +936,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   // 素材拖入时间线走 dnd-kit(指针传感器,移动 6px 才起手,不吃普通点击/右键菜单)。
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const [dragOverlayAsset, setDragOverlayAsset] = React.useState<Asset | null>(null);
+  const [dragOverlayAsset, setDragOverlayAsset] = React.useState<AssetCard | null>(null);
   const onAssetDragStart = (event: DragStartEvent) => {
-    const asset = event.active.data.current?.asset as Asset | undefined;
+    const asset = event.active.data.current?.asset as AssetCard | undefined;
     if (!asset) return;
     setDragOverlayAsset(asset);
     useEditorStore.getState().setDraggingAsset({
@@ -1065,7 +1066,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <ReplaceMediaDialog
         sequence={sequence}
         clipId={replacingClipId}
-        assets={assets.data ?? []}
         pending={replaceMediaMutation.isPending}
         onCancel={() => setReplacingClipId(null)}
         onReplace={(body) => replaceMediaMutation.mutate(body)}
@@ -1131,7 +1131,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       />
       {panels.tab === "media" ? (
         <MediaPool
-          assets={assets.data ?? []}
+          workspaceId={workspace.id}
+          projectId={project.id}
           uploading={importFiles.isPending}
           onImportFiles={importMediaOrSubtitles}
           onRecord={() => openRecorder({ projectId: project.id })}
@@ -1193,7 +1194,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <Monitor
           sequence={sequence}
           subtitleStyleOverride={styleDraft}
-          assets={assets.data ?? []}
+          assets={sequenceAssets}
           onSetTransform={(clipId, transform) => setTransformMutation.mutateAsync({ clipId, transform })}
           onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
           onRefreshAssets={() => void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) })}
@@ -1205,7 +1206,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             <Inspector
               workspaceId={workspace.id}
               selectedClip={selectedClip}
-              assets={assets.data ?? []}
+              assets={sequenceAssets}
               isTitleText={isTitleText}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
@@ -1247,7 +1248,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <section className="editor-timeline col-span-full min-h-0 overflow-hidden border-t border-divider bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}
-          assets={assets.data ?? []}
+          assets={sequenceAssets}
           onInsertClip={(args) => insertClipMutation.mutate(args)}
           onMoveClip={(clipId, timelineStart, trackId, ripple, link) =>
             moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple, link })

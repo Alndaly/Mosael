@@ -12,7 +12,7 @@ import type { BoardItem, EntitySummary, GenerationOption } from "@/api/client";
  * (连进来的资产格由服务端按连线并进去,见后端 boards/actions.upstream_entities)。
  */
 
-const api = vi.hoisted(() => ({ getEntity: vi.fn(), listEntities: vi.fn(), listAssets: vi.fn(async () => []), listCapabilityModels: vi.fn() }));
+const api = vi.hoisted(() => ({ getEntity: vi.fn(), listEntities: vi.fn(), listAssetPage: vi.fn(async () => ({ items: [], next_cursor: null, total: 0 })), listCapabilityModels: vi.fn() }));
 vi.mock("@/api/client", async () => ({
   ...api,
   ApiError: (await import("@/api/transport")).ApiError,

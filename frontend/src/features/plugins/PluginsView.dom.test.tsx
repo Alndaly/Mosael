@@ -12,17 +12,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 //: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
 //: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
-const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets } = vi.hoisted(() => ({
+const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssetPage } = vi.hoisted(() => ({
   listPluginCredentials: vi.fn(),
   savePluginCredentials: vi.fn(),
   invokePluginTool: vi.fn(),
-  listAssets: vi.fn(),
+  listAssetPage: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listPluginCredentials,
   savePluginCredentials,
   invokePluginTool,
-  listAssets,
+  listAssetPage,
   fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
@@ -66,13 +66,15 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {} });
   listPluginCredentials.mockReset();
-  listAssets.mockReset();
-  listAssets.mockResolvedValue([
+  listAssetPage.mockReset();
+  //: 素材库一页就装得下:节点表单取的是完整清单(见 useAllAssetCards)。
+  const assets = [
     { id: "img-1", name: "海边.png", original_filename: "a.png", kind: "image" },
     { id: "img-2", name: "山.png", original_filename: "b.png", kind: "image" },
     { id: "vid-1", name: "成片.mp4", original_filename: "c.mp4", kind: "video" },
     { id: "doc-1", name: "协议.pdf", original_filename: "d.pdf", kind: "document" },
-  ]);
+  ];
+  listAssetPage.mockResolvedValue({ items: assets, next_cursor: null, total: assets.length });
   savePluginCredentials.mockReset();
   invokePluginTool.mockReset();
   listPluginCredentials.mockResolvedValue([

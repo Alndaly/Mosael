@@ -166,7 +166,7 @@ def test_存成笔记_插图这时才进素材库_分页隔开_来源记着原�
         "季度汇报.pptx", pptx_bytes([("营收", ["增长 20%"], ""), ("计划", ["上线会员"], "")], picture_on=1), "application/octet-stream")}).json()
     done = _wait(client, made["id"])
     assert done["status"] == "succeeded", done
-    before = {one["id"] for one in client.get("/api/assets", params={"workspace_id": ws}).json()}
+    before = {one["id"] for one in client.get("/api/assets", params={"workspace_id": ws}).json()["items"]}
     assert before == {made["id"]}, "解析出的插图不进素材库"
 
     saved = client.post(f"/api/assets/{made['id']}/note")
@@ -176,10 +176,11 @@ def test_存成笔记_插图这时才进素材库_分页隔开_来源记着原�
     assert "# 营收" in note["markdown"] and "\n\n---\n\n# 计划" in note["markdown"]
     assert "<!--" not in note["markdown"], "页码标记不进笔记"
     assert note["sources"][0]["kind"] == "asset" and note["sources"][0]["id"] == made["id"]
-    images = [one for one in client.get("/api/assets", params={"workspace_id": ws}).json() if one["id"] != made["id"]]
+    images = [one for one in client.get("/api/assets", params={"workspace_id": ws}).json()["items"] if one["id"] != made["id"]]
     assert len(images) == 1 and images[0]["kind"] == "image"
     assert f"mosael-asset:{images[0]['id']}" in note["markdown"]
-    assert images[0]["derived_from"] == [{"asset_id": made["id"], "op": "extract"}], "插图记着是从哪份文档里取出来的"
+    detail = client.get(f"/api/assets/{images[0]['id']}").json()
+    assert detail["derived_from"] == [{"asset_id": made["id"], "op": "extract"}], "插图记着是从哪份文档里取出来的"
 
 
 def test_还没解析好的不能存成笔记() -> None:

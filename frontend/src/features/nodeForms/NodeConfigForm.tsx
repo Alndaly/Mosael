@@ -1,8 +1,8 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { Link2, PenLine, Unlink } from "lucide-react";
 
-import { fetchWorkflowFieldOptions, listAssets, type Asset } from "@/api/client";
+import { fetchWorkflowFieldOptions, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
@@ -24,6 +24,7 @@ import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { hasReference } from "@/features/nodeForms/refDoc";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
 import { StartParamsField } from "@/features/nodeForms/StartParamsField";
+import { useAllAssetCards } from "@/lib/assetQueries";
 import { cn } from "@/lib/utils";
 
 /**
@@ -155,8 +156,8 @@ export interface NodeFieldOptions {
   dynamicOptions: (key: string, spec?: ConfigSpec) => Array<{ value: string; label: string }> | null;
   /** 现查的清单是空的时候,为什么。 */
   whyEmpty: (key: string) => EmptyOptions;
-  /** 工作区素材(有素材字段、或宿主说它要时才拉,见 hostNeeds)。 */
-  assets: Asset[];
+  /** 素材库里的素材(有素材字段、或宿主说它要时才拉,见 hostNeeds)。 */
+  assets: AssetCard[];
 }
 
 /**
@@ -227,11 +228,8 @@ export function useNodeFieldOptions({
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID;宿主自己画的素材
   // 挑选(hostNeeds.assets)用的也是这一份。
   const hasAssetField = Object.values(specs).some((spec) => fieldDataType(spec) === "asset");
-  const assets = useQuery({
-    queryKey: ["workflow-assets", workspaceId],
-    queryFn: () => listAssets(workspaceId),
-    enabled: hasAssetField || Boolean(hostNeeds.assets),
-  });
+  //: 下拉在浏览器里按字筛,要的是素材库的完整清单(见 useAllAssetCards):表单里真有素材格时才取。
+  const assets = useAllAssetCards({ workspace_id: workspaceId }, { enabled: hasAssetField || Boolean(hostNeeds.assets) });
 
   /** 一个字段的下拉选项;返回 null 表示它不是下拉。
 
@@ -252,7 +250,7 @@ export function useNodeFieldOptions({
       // 声明了素材种类的只列那几种:转 GIF 只收视频,转写只收音频和视频(一种是字符串,几种是列表)
       const declared = (spec as ConfigSpec | undefined)?.media;
       const media = declared === undefined ? [] : Array.isArray(declared) ? declared : [declared];
-      return (assets.data ?? [])
+      return assets.items
         .filter((asset) => media.length === 0 || media.includes(asset.kind))
         .map((asset) => ({
           value: asset.id,
@@ -267,12 +265,12 @@ export function useNodeFieldOptions({
     const parent = parentOf(spec);
     const parentName = parent.key ? String(specs[parent.key]?.label || parent.key) : "";
     if (parent.upstream) return { kind: "upstream", parent: parentName };
-    if (pendingOptions.has(key) || (fieldDataType(spec) === "asset" && assets.isLoading)) return { kind: "pending" };
+    if (pendingOptions.has(key) || (fieldDataType(spec) === "asset" && !assets.complete && !assets.isError)) return { kind: "pending" };
     if (parent.key && !parent.value) return { kind: "parent", parent: parentName };
     return { kind: "none" };
   };
 
-  return { dynamicOptions, whyEmpty, assets: assets.data ?? [] };
+  return { dynamicOptions, whyEmpty, assets: assets.items };
 }
 
 /** 字段「接上游」的那一半,由宿主给。工作流里上游是图里别的节点的输出,连法是数据边;

@@ -16,12 +16,18 @@ const assets = [
   { id: "doc", kind: "file", name: "说明.pdf", media_info: {} },
   { id: "deck", kind: "document", name: "方案.pptx", media_info: {} },
 ];
+//: 一个小小的「服务端」:种类在服务端筛(素材库分页之后,不再整个拿回来在弹窗里筛);按 id 取详情。
 vi.mock("@/api/client", () => ({
-  listAssets: vi.fn(async () => assets),
+  listAssetPage: vi.fn(async (query: { kind?: string[] }) => {
+    const items = assets.filter((one) => !query.kind || query.kind.includes(one.kind));
+    return { items, next_cursor: null, total: items.length };
+  }),
+  getAsset: vi.fn(async (id: string) => assets.find((one) => one.id === id)),
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 
+import { listAssetPage } from "@/api/client";
 import { AssetPickerDialog } from "./AssetPickerDialog";
 
 beforeAll(() => {
@@ -45,6 +51,7 @@ it("「素材」一行:图片、视频、音频都列(别的文件不列),按种
   const onPick = mount("media");
   await waitFor(() => expect(titles()).toHaveLength(3));
   expect(titles().join("|")).not.toContain("说明.pdf");
+  expect(vi.mocked(listAssetPage).mock.calls.at(-1)?.[0]).toMatchObject({ workspace_id: "ws", kind: ["image", "video", "audio"] });
   fireEvent.click(screen.getByRole("button", { name: "boardKindVideo" }));
   await waitFor(() => expect(titles()).toHaveLength(1));
   expect(screen.getByRole("button", { name: "boardKindVideo" }).getAttribute("aria-pressed")).toBe("true");

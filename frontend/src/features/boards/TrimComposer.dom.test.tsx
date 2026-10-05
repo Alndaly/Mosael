@@ -22,14 +22,14 @@ const clip = (kind: "video" | "audio") =>
   ({ id: kind, kind, x: 0, y: 0, asset_id: `${kind}-asset` }) as BoardItem & { kind: "video" | "audio" };
 
 it("音频没有「去掉声音」—— 它本身就是那段声音", () => {
-  render(<TrimComposer item={clip("audio")} assetId="audio-asset" workspaceId="w" busy={false} onTrim={vi.fn()} onGrabFrame={vi.fn()} />);
+  render(<TrimComposer item={clip("audio")} assetId="audio-asset" busy={false} onTrim={vi.fn()} onGrabFrame={vi.fn()} />);
   expect(screen.queryByRole("button", { name: "boardKeepSound" })).toBeNull();
   expect(screen.queryByRole("button", { name: /boardGrabFrame/ })).toBeNull();
 });
 
 it("视频有「去掉声音」,打开后发出去的是 mute", () => {
   const onTrim = vi.fn();
-  render(<TrimComposer item={clip("video")} assetId="video-asset" workspaceId="w" busy={false} onTrim={onTrim} />);
+  render(<TrimComposer item={clip("video")} assetId="video-asset" busy={false} onTrim={onTrim} />);
   fireEvent.click(screen.getByRole("button", { name: "boardKeepSound" }));
   fireEvent.change(screen.getByLabelText("boardTrimEndLabel"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: /boardTrimSubmit/ }));

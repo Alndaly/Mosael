@@ -69,7 +69,8 @@ export function SetAsReferenceDialog({
   asset,
   onClose,
 }: {
-  asset: Asset | null;
+  /** 只要认得出是哪一份:素材库的卡片和完整详情都行。 */
+  asset: Pick<Asset, "id" | "workspace_id" | "kind" | "name"> | null;
   onClose: () => void;
 }) {
   const t = useI18n();

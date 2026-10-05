@@ -18,7 +18,13 @@ export const tagsOf = (item: Tagged): string[] => item.tags ?? [];
 export function tagCounts(assets: readonly Tagged[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const asset of assets) for (const tag of tagsOf(asset)) if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-  return new Map([...counts].sort(([a], [b]) => a.localeCompare(b, "zh-CN")));
+  return sortedTagCounts(counts);
+}
+
+/** 服务端数好的标签计数(素材库分页之后,标签候选由 `/api/assets/facets` 给)排成和 `tagCounts` 一样的顺序。 */
+export function sortedTagCounts(counts: Iterable<[string, number]> | Record<string, number>): Map<string, number> {
+  const entries = Symbol.iterator in counts ? [...(counts as Iterable<[string, number]>)] : Object.entries(counts);
+  return new Map(entries.filter(([tag]) => tag).sort(([a], [b]) => a.localeCompare(b, "zh-CN")));
 }
 
 /** 这条素材过不过标签筛选。一个都没勾就是不筛。 */

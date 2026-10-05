@@ -204,7 +204,7 @@ def test_图片消息进素材库_并把素材id带进提示(monkeypatch) -> Non
     )
 
     assert sent == [("oc_i", "看到了")]
-    assets = client.get(f"/api/assets?workspace_id={ws['id']}").json()
+    assets = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"]
     assert [a["kind"] for a in assets] == ["image"]
     assert assets[0]["source"] == "feishu"
     # 提示里必须带上素材 id,否则模型知道"有张图"却拿不到它。

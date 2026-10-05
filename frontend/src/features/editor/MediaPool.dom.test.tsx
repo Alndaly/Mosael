@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
-import { renameAsset, separateAssetAudio, type Asset } from "@/api/client";
+import { renameAsset, separateAssetAudio, type AssetCard, type AssetQuery } from "@/api/client";
 import { MediaPool } from "./MediaPool";
 import { hoverHint } from "@/test/hint";
 
@@ -20,15 +20,12 @@ vi.mock("@/app/preferences", () => ({
     ({ mediaPoolCount: "{count} assets", mediaPoolCountFiltered: "{shown}/{total} assets", mediaRemoveTag: "remove {tag}" })[key] ?? key,
 }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
-vi.mock("@/api/client", async (original) => ({
-  ...(await original<typeof import("@/api/client")>()),
-  renameAsset: vi.fn(async () => Promise.reject(new Error("name taken"))),
-  separateAssetAudio: vi.fn(async () => ({ id: "job-1" })),
-  listDenoiseEngines: vi.fn(async () => []),
-}));
 
-const asset = (id: string, kind: Asset["kind"], tags: string[]) =>
-  ({ id, name: id, workspace_id: "ws", project_id: "p", original_filename: id, file_key: id, kind, source: "imported", tags, media_info: {}, proxy_expected: false }) as Asset;
+const asset = (id: string, kind: string, tags: string[]): AssetCard => ({
+  id, name: id, workspace_id: "ws", project_id: "p", original_filename: id, kind, source: "imported", tags,
+  derived: false, ai_generated: false,
+  media_info: { duration: null, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
+});
 
 const ASSETS = [
   asset("beach", "video", ["sea", "dusk", "b-roll"]),
@@ -37,13 +34,40 @@ const ASSETS = [
   asset("plain", "audio", []),
 ];
 
-function renderPool(assets: Asset[] = ASSETS) {
-  const client = new QueryClient();
-  return render(
+//: 一个小小的「服务端」:种类、标签、搜索词都在这边筛(素材池分页之后,筛选交给服务端)。
+function serve(query: AssetQuery) {
+  const tags = query.tag ?? [];
+  const items = ASSETS.filter(
+    (one) =>
+      (!query.kind || query.kind.includes(one.kind)) &&
+      (tags.length === 0 || (query.tag_match === "any" ? tags.some((tag) => one.tags?.includes(tag)) : tags.every((tag) => one.tags?.includes(tag)))) &&
+      (!query.q || one.name.includes(query.q)),
+  );
+  return { items, next_cursor: null, total: items.length };
+}
+
+vi.mock("@/api/client", async (original) => ({
+  ...(await original<typeof import("@/api/client")>()),
+  renameAsset: vi.fn(async () => Promise.reject(new Error("name taken"))),
+  separateAssetAudio: vi.fn(async () => ({ id: "job-1" })),
+  listDenoiseEngines: vi.fn(async () => []),
+  listAssetPage: vi.fn(async (query: AssetQuery) => serve(query)),
+  getAssetFacets: vi.fn(async () => ({
+    total: ASSETS.length,
+    kinds: { video: 2, image: 1, audio: 1 },
+    tags: { sea: 2, dusk: 1, "b-roll": 1, interview: 1 },
+  })),
+}));
+
+async function renderPool() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = render(
     <QueryClientProvider client={client}>
-      <MediaPool assets={assets} uploading={false} onImportFiles={vi.fn()} onRecord={vi.fn()} onAddToTimeline={vi.fn()} />
+      <MediaPool workspaceId="ws" projectId="p" uploading={false} onImportFiles={vi.fn()} onRecord={vi.fn()} onAddToTimeline={vi.fn()} />
     </QueryClientProvider>,
   );
+  await waitFor(() => expect(document.querySelector("[data-pool-item]")).not.toBeNull());
+  return view;
 }
 
 const rowNames = () => [...document.querySelectorAll("[data-pool-item] strong")].map((one) => one.textContent);
@@ -52,16 +76,16 @@ const tagOption = (dialog: HTMLElement, tag: string) => within(dialog).getByRole
 
 beforeEach(() => localStorage.clear());
 
-it("头上写「N 个素材」;筛了之后写剩几个 / 一共几个", () => {
-  renderPool();
-  expect(count()).toBe("4 assets");
+it("头上写「N 个素材」;筛了之后写剩几个 / 一共几个", async () => {
+  await renderPool();
+  await waitFor(() => expect(count()).toBe("4 assets"));
   fireEvent.click(screen.getByRole("button", { name: "kindVideo" }));
-  expect(count()).toBe("2/4 assets");
+  await waitFor(() => expect(count()).toBe("2/4 assets"));
   expect(rowNames()).toEqual(["beach", "talk"]);
 });
 
 it("每一行带着素材的标签:露前两个,其余收成 +N(悬停看收起来的那些);没标签的行不画", async () => {
-  renderPool();
+  await renderPool();
   const beach = document.querySelector("[data-pool-item='beach']")!;
   const chips = beach.querySelector("[data-asset-tags]")!;
   expect([...chips.children].map((one) => one.textContent)).toEqual(["sea", "dusk", "+1"]);
@@ -71,59 +95,59 @@ it("每一行带着素材的标签:露前两个,其余收成 +N(悬停看收起�
 });
 
 it("标签可以同时勾几个,「同时 / 任一」切换结果;下面一排能一个个去掉、一键清空", async () => {
-  renderPool();
-  fireEvent.click(screen.getByRole("button", { name: "filterByTag" }));
+  await renderPool();
+  fireEvent.click(await screen.findByRole("button", { name: "filterByTag" }));
   const dialog = await screen.findByRole("dialog");
   // 标签后面标着挂了几条素材。
   expect(tagOption(dialog, "sea")).toHaveTextContent("sea2");
 
   fireEvent.click(tagOption(dialog, "sea"));
-  expect(rowNames()).toEqual(["beach", "pier"]);
+  await waitFor(() => expect(rowNames()).toEqual(["beach", "pier"]));
   fireEvent.click(tagOption(dialog, "interview"));
   // 默认「同时带有」:没有哪条既是 sea 又是 interview。
-  expect(rowNames()).toEqual([]);
+  await waitFor(() => expect(rowNames()).toEqual([]));
   fireEvent.click(within(dialog).getByRole("radio", { name: "mediaTagMatchAny" }));
-  expect(rowNames()).toEqual(["beach", "talk", "pier"]);
+  await waitFor(() => expect(rowNames()).toEqual(["beach", "talk", "pier"]));
   expect(screen.getByRole("button", { name: "filterByTag" }).querySelector("[data-tag-filter-count]")).toHaveTextContent("2");
 
   const chips = screen.getByRole("group", { name: "mediaActiveTags" });
   expect(chips).toHaveTextContent("mediaTagMatchAny");
   fireEvent.click(within(chips).getByRole("button", { name: "remove sea" }));
-  expect(rowNames()).toEqual(["talk"]);
+  await waitFor(() => expect(rowNames()).toEqual(["talk"]));
 
   fireEvent.click(within(screen.getByRole("group", { name: "mediaActiveTags" })).getByRole("button", { name: "mediaClearTag" }));
-  expect(rowNames()).toEqual(["beach", "talk", "pier", "plain"]);
+  await waitFor(() => expect(rowNames()).toEqual(["beach", "talk", "pier", "plain"]));
   expect(screen.queryByRole("group", { name: "mediaActiveTags" })).not.toBeInTheDocument();
 });
 
 it("类型、标签和「同时 / 任一」都记住:面板卸掉再装上还是那样", async () => {
-  const first = renderPool();
+  const first = await renderPool();
   fireEvent.click(screen.getByRole("button", { name: "kindVideo" }));
-  fireEvent.click(screen.getByRole("button", { name: "filterByTag" }));
+  fireEvent.click(await screen.findByRole("button", { name: "filterByTag" }));
   const dialog = await screen.findByRole("dialog");
   fireEvent.click(tagOption(dialog, "sea"));
   fireEvent.click(tagOption(dialog, "interview"));
   fireEvent.click(within(dialog).getByRole("radio", { name: "mediaTagMatchAny" }));
   first.unmount();
 
-  renderPool();
+  await renderPool();
   expect(screen.getByRole("button", { name: "kindVideo" })).toHaveAttribute("aria-pressed", "true");
-  expect(rowNames()).toEqual(["beach", "talk"]);
+  await waitFor(() => expect(rowNames()).toEqual(["beach", "talk"]));
   expect(within(screen.getByRole("group", { name: "mediaActiveTags" })).getAllByRole("button").map((one) => one.getAttribute("aria-label"))).toEqual(["remove sea", "remove interview", "mediaClearTag"]);
 });
 
-it("记着的标签已经没有素材带着了,就当没勾 —— 面板不会空得莫名其妙", () => {
+it("记着的标签已经没有素材带着了,就当没勾 —— 面板不会空得莫名其妙", async () => {
   localStorage.setItem("mosael:selected-set:editor-pool-tags", JSON.stringify(["gone"]));
-  renderPool();
-  expect(rowNames()).toEqual(["beach", "talk", "pier", "plain"]);
-  expect(count()).toBe("4 assets");
+  await renderPool();
+  await waitFor(() => expect(rowNames()).toEqual(["beach", "talk", "pier", "plain"]));
+  await waitFor(() => expect(count()).toBe("4 assets"));
   expect(screen.queryByRole("group", { name: "mediaActiveTags" })).not.toBeInTheDocument();
 });
 
 // 重命名失败时对话框要收起(失败原因由全局兜底报):此前停在那儿、确认键又能点,连点就是连发请求。
 it("重命名失败:对话框收起,不留一个能反复点的确认键", async () => {
   const user = userEvent.setup();
-  renderPool();
+  await renderPool();
   fireEvent.contextMenu(document.querySelector("[data-pool-item='beach']")!, { button: 2, clientX: 10, clientY: 10 });
   await user.click(await screen.findByRole("menuitem", { name: "rename" }));
   const dialog = await screen.findByRole("dialog", { name: "renameAsset" });
@@ -142,7 +166,7 @@ const menuItems = () => screen.getAllByRole("menuitem").map((item) => item.textC
 
 it("有声音的素材:右键能分离人声与背景音(排任务)、能降噪(开对话框);图片没有这两项", async () => {
   const user = userEvent.setup();
-  renderPool();
+  await renderPool();
 
   openRowMenu("pier");
   await screen.findByRole("menuitem", { name: "rename" });

@@ -1,4 +1,4 @@
-import type { components } from "@/api/generated/schema";
+import type { components, operations } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
 import type { Transcript } from "@/api/domains/speech";
 import { API_BASE, ApiError, api, apiUpload, getAuthToken } from "@/api/transport";
@@ -118,10 +118,47 @@ export function fetchWaveform(assetId: string): Promise<WaveformData> {
   return api<WaveformData>(`/api/assets/${assetId}/waveform`);
 }
 
-export function listAssets(workspaceId: string, projectId?: string): Promise<Asset[]> {
+/**
+ * 素材库列表里的一张卡片:卡片和挑选清单要显示的那些字段,`media_info` 只是卡片读得到的几项(时长、
+ * 尺寸、帧率、有没有缩略图;文档的格式、页数、大小)。**要完整字段就取详情**(`getAsset`)。
+ */
+export type AssetCard = components["schemas"]["AssetCardOut"];
+export type AssetPage = components["schemas"]["AssetPageOut"];
+export type AssetFacets = components["schemas"]["AssetFacetsOut"];
+
+/**
+ * 看哪些素材:就是 `GET /api/assets` 的查询参数(游标除外,它由翻页的那一层管)。筛选和排序都在服务端做
+ * (见后端 domain/assets/listing)。`kind` / `tag` 可以给几个;给了 `project_id` 就是「这个项目里的 + 工作区级的」。
+ */
+export type AssetQuery = Omit<NonNullable<operations["list_assets_api_assets_get"]["parameters"]["query"]>, "cursor">;
+export type AssetSort = NonNullable<AssetQuery["sort"]>;
+
+function assetQueryParams(query: AssetQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) for (const one of value) params.append(key, String(one));
+    else if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  return params;
+}
+
+/** 素材库的一页;`cursor` 是上一页的 `next_cursor`,其余条件不变。 */
+export function listAssetPage(query: AssetQuery, cursor?: string | null): Promise<AssetPage> {
+  const params = assetQueryParams(query);
+  if (cursor) params.set("cursor", cursor);
+  return api<AssetPage>(`/api/assets?${params.toString()}`);
+}
+
+/** 页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上(不看搜索)。 */
+export function getAssetFacets(workspaceId: string, projectId?: string | null): Promise<AssetFacets> {
   const params = new URLSearchParams({ workspace_id: workspaceId });
   if (projectId) params.set("project_id", projectId);
-  return api<Asset[]>(`/api/assets?${params.toString()}`);
+  return api<AssetFacets>(`/api/assets/facets?${params.toString()}`);
+}
+
+/** 这条时间线上用到的素材,完整字段 —— 剪辑台的时间线、监视器、检查器读它。 */
+export function listSequenceAssets(sequenceId: string): Promise<Asset[]> {
+  return api<Asset[]>(`/api/sequences/${sequenceId}/assets`);
 }
 
 export function renameAsset(assetId: string, name: string): Promise<Asset> {

@@ -31,26 +31,32 @@ function sources(dir: string): string[] {
 describe("素材缓存的键", () => {
   it("失效用的键是取数用的键的前缀", () => {
     const all = assetKeys.all("ws");
-    for (const key of [assetKeys.list("ws"), assetKeys.list("ws", "project")]) {
+    for (const key of [
+      assetKeys.pages({ workspace_id: "ws" }),
+      assetKeys.pages({ workspace_id: "ws", project_id: "project", kind: ["video"], q: "海边" }),
+      assetKeys.facets("ws"),
+      assetKeys.facets("ws", "project"),
+      assetKeys.sequence("ws", "seq", "3:abc"),
+    ]) {
       expect(key.slice(0, all.length), `${JSON.stringify(key)} 不以 ${JSON.stringify(all)} 开头`).toEqual([...all]);
     }
-    // 反过来不成立,这正是问题所在:三段的键匹配不到两段的缓存。
-    expect(assetKeys.list("ws", "project").length).toBeGreaterThan(all.length);
+    // 反过来不成立,这正是问题所在:更长的键匹配不到别的取数形状。
+    expect(assetKeys.pages({ workspace_id: "ws", project_id: "project" }).length).toBeGreaterThan(all.length);
   });
 
   it("不同工作区之间互不影响", () => {
     expect(assetKeys.all("a")).not.toEqual(assetKeys.all("b"));
   });
 
-  it("失效一律用最短前缀 —— 没有人用 list() 去失效", () => {
+  it("失效一律用最短前缀 —— 没有人用取数的键去失效", () => {
     const offenders: string[] = [];
     for (const path of sources(SRC)) {
       const code = readFileSync(path, "utf8");
-      for (const [line] of code.matchAll(/(?:invalidate|remove|cancel)Queries\(\{[^}]*assetKeys\.list\([^}]*\}/g)) {
+      for (const [line] of code.matchAll(/(?:invalidate|remove|cancel)Queries\(\{[^}]*assetKeys\.(?:pages|facets|sequence)\([^}]*\}/g)) {
         offenders.push(`${path.slice(SRC.length + 1)}: ${line.slice(0, 80)}`);
       }
     }
-    expect(offenders, "失效要用 assetKeys.all():list() 更长,匹配不到按工作区取数的那些缓存").toEqual([]);
+    expect(offenders, "失效要用 assetKeys.all():取数的键更长,匹配不到别的取数形状").toEqual([]);
   });
 
 });

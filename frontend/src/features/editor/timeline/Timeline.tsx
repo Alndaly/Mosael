@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AudioLines, AudioWaveform, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Maximize2, Mic, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Split, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
-import { fetchWaveform, type Asset, type Clip, type LinkOption, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
+import { fetchWaveform, type Asset, type AssetCard, type Clip, type LinkOption, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -920,7 +920,7 @@ export function Timeline({
       dragPointerXRef.current = (event.activatorEvent as PointerEvent).clientX ?? null;
     },
     onDragMove(event) {
-      const asset = event.active.data.current?.asset as Asset | undefined;
+      const asset = event.active.data.current?.asset as AssetCard | undefined;
       if (!asset) return;
       const track = event.over?.data.current?.track as Track | undefined;
       if (!track || track.locked || !trackAcceptsAsset(track, asset)) {
@@ -934,7 +934,7 @@ export function Timeline({
     },
     onDragEnd(event) {
       setDropGhost(null);
-      const asset = event.active.data.current?.asset as Asset | undefined;
+      const asset = event.active.data.current?.asset as AssetCard | undefined;
       const track = event.over?.data.current?.track as Track | undefined;
       if (!asset || !track || !trackAcceptsAsset(track, asset) || track.locked) return;
       const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
@@ -1702,7 +1702,7 @@ function listenEscape(onEscape: () => void): () => void {
   );
 }
 
-export function trackAcceptsAsset(track: Track, asset: Asset): boolean {
+export function trackAcceptsAsset(track: Track, asset: Pick<Asset, "kind">): boolean {
   if (track.kind === "video") return asset.kind === "video" || asset.kind === "image";
   if (track.kind === "audio") return asset.kind === "audio";
   return false;

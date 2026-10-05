@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import mimetypes
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetLineageOut, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
 from app.domain import host_files
 from app.domain.assets import use_cases
+from app.domain.assets.listing import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, AssetFacets, AssetListingError, AssetScope
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
@@ -222,18 +224,47 @@ def import_local_asset(
     return use_cases.import_local(db, user, body.workspace_id, project_id=body.project_id, path=path)
 
 
-@router.get("/assets", response_model=list[AssetOut])
+@router.get("/assets", response_model=AssetPageOut)
 def list_assets(
     workspace_id: str,
     db: DbSession,
     user: CurrentUser,
     project_id: str | None = None,
-    kind: str | None = None,
-    name_contains: str | None = None,
-) -> list[Asset]:
-    return use_cases.list_assets(
-        db, user, workspace_id, project_id=project_id, kind=kind, name_contains=name_contains
+    kind: Annotated[list[str] | None, Query()] = None,
+    source: str | None = None,
+    q: Annotated[str, Query(max_length=300)] = "",
+    tag: Annotated[list[str] | None, Query()] = None,
+    tag_match: Literal["all", "any"] = "all",
+    sort: Literal["created", "updated", "name", "duration"] = "created",
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+) -> dict:
+    """素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。
+
+    `kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,
+    其余参数不变。
+    """
+    scope = AssetScope(
+        workspace_id=workspace_id, project_id=project_id, kinds=tuple(kind or ()), source=source or None,
+        query=q, tags=tuple(tag or ()), tag_match=tag_match,
     )
+    try:
+        found = use_cases.list_assets(db, user, scope, sort=sort, cursor=cursor, limit=limit)
+    except AssetListingError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return {"items": found.items, "next_cursor": found.next_cursor, "total": found.total}
+
+
+@router.get("/assets/facets", response_model=AssetFacetsOut)
+def asset_facets(workspace_id: str, db: DbSession, user: CurrentUser, project_id: str | None = None) -> AssetFacets:
+    """页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。"""
+    return use_cases.asset_facets(db, user, workspace_id, project_id=project_id)
+
+
+@router.get("/sequences/{sequence_id}/assets", response_model=list[AssetOut])
+def sequence_assets(sequence_id: str, db: DbSession, user: CurrentUser) -> list[Asset]:
+    """这条时间线上用到的素材,完整字段(剪辑台的时间线、监视器、检查器读它)。"""
+    return use_cases.assets_on_sequence(db, user, sequence_id)
 
 
 @router.get("/assets/transcript-by-source", response_model=TranscriptOut)

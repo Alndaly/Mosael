@@ -1,3 +1,5 @@
+import type { AssetQuery } from "@/api/domains/assets";
+
 /**
  * 缓存的键**在一处定义**,取数和失效各有各的写法。
  *
@@ -14,7 +16,7 @@
  *
  * 所以这里把两件事分开说:
  *
- *   `assetKeys.list(...)`  取数用 —— 想要多细就多细;
+ *   `assetKeys.pages(...)` / `facets` / `sequence` 取数用 —— 想要多细就多细,但都挂在 `["assets", 工作区]` 下;
  *   `assetKeys.all(ws)`    失效用 —— 永远是最短的那个前缀,匹配到这个工作区下的每一份素材缓存。
  *
  * 失效**一律用 `.all()`**:多刷一次的代价是一个本地请求,少刷一次的代价是用户看着旧数据
@@ -25,9 +27,19 @@
 export const assetKeys = {
   /** 失效用:这个工作区下的所有素材缓存(含按项目细分的那些)。 */
   all: (workspaceId: string) => ["assets", workspaceId] as const,
-  /** 取数用:整个工作区,或某个项目里的那些。 */
-  list: (workspaceId: string, projectId?: string | null) =>
-    (projectId ? (["assets", workspaceId, projectId] as const) : (["assets", workspaceId] as const)),
+  /**
+   * 取数用:素材库按条件一页页取(`useAssetPages`)。条件整个进键 —— 搜索词、种类、排序换了就是另一份列表,
+   * 不是同一份列表的另一个样子。
+   */
+  pages: ({ workspace_id, ...rest }: AssetQuery) => ["assets", workspace_id, "pages", rest] as const,
+  /** 取数用:页签上的数字和标签候选(整个范围,不看搜索)。 */
+  facets: (workspaceId: string, projectId?: string | null) => ["assets", workspaceId, "facets", projectId ?? null] as const,
+  /**
+   * 取数用:一条时间线用到的素材(完整字段)。`ids` 是时间线上那几份素材的指纹 —— 放进一段新素材、删掉
+   * 最后一段时它变,键跟着换、重取一次;只是挪动片段时不变,不重取。
+   */
+  sequence: (workspaceId: string, sequenceId: string, ids: string) =>
+    ["assets", workspaceId, "sequence", sequenceId, ids] as const,
   /** 失效用:所有工作区 —— 只在不知道自己动了哪个工作区时用(智能体的确认卡就是这种)。 */
   everywhere: () => ["assets"] as const,
   /**

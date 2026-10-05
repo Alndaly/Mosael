@@ -1,5 +1,4 @@
 import { LoadingState } from "@/components/layout/LoadingState";
-import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +7,6 @@ import { toast } from "sonner";
 
 import { deleteWarningKey } from "@/features/publish/publishDeleteWarning";
 import {
-  api,
   createPublishTask,
   deletePublishTask,
   generatePublishCopy,
@@ -16,7 +14,6 @@ import {
   listPublishPlatforms,
   listPublishTasks,
   publishWorkerOnline,
-  type Asset,
   type PublishAccount,
   type PublishTask,
   type Workspace,
@@ -26,6 +23,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
+import { useAssetSearch } from "@/lib/assetQueries";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
@@ -513,18 +511,16 @@ function CreatePublishDialog({
   // 全部来自 /api/publish/platforms 的声明(后端 PLATFORM_OPTIONS)。加一个平台属性不需要动这里。
   const [options, setOptions] = React.useState<Record<string, unknown>>({});
 
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspace.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
-    enabled: open,
-  });
+  //: 能发的是视频:按种类在服务端筛、敲字在服务端搜,不把整个素材库拉回来。选中的那一份记下名字 ——
+  //: 再搜别的字时它不一定还在清单里,触发器上照样写着它。
+  const videos = useAssetSearch({ workspace_id: workspace.id, kind: ["video"] }, { enabled: open });
+  const [assetName, setAssetName] = React.useState("");
   const accounts = useQuery({
     queryKey: ["publish-accounts", workspace.id],
     queryFn: () => listPublishAccounts(workspace.id),
     enabled: open,
   });
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, enabled: open, staleTime: Infinity });
-  const videos = (assets.data ?? []).filter((asset) => asset.kind === "video");
   // 停用的账号发不出去(后端报 publishErr_accountDisabled):不列进可选项,只说一句它们去哪儿启用。
   const allAccounts = accounts.data ?? [];
   const usableAccounts = allAccounts.filter((account) => account.enabled);
@@ -601,13 +597,19 @@ function CreatePublishDialog({
           <span>{t("publishAsset")}</span>
           <Combobox
             value={assetId ?? ""}
-            options={videos.map((asset) => ({ value: asset.id, label: asset.name }))}
+            options={videos.items.map((asset) => ({ value: asset.id, label: asset.name }))}
+            onSearch={videos.search}
+            searching={videos.isFetching}
+            renderValue={() => assetName || undefined}
             placeholder={t("publishPickAsset")}
             emptyText={t("cmdkEmpty")}
             className="w-full"
-            onValueChange={setAssetId}
+            onValueChange={(id) => {
+              setAssetId(id);
+              setAssetName(videos.items.find((asset) => asset.id === id)?.name ?? "");
+            }}
           />
-          {videos.length === 0 && assets.isSuccess && <small>{t("publishNoVideos")}</small>}
+          {videos.isSuccess && videos.total === 0 && !videos.query && <small>{t("publishNoVideos")}</small>}
         </label>
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAccount")}</span>

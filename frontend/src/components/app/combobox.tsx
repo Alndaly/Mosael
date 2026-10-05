@@ -53,6 +53,8 @@ export function Combobox({
   className,
   size,
   contentClassName,
+  onSearch,
+  searching = false,
   onValueChange,
 }: {
   value: string;
@@ -79,13 +81,25 @@ export function Combobox({
   /** 触发器档位,和 `<Input size>`、`<Button size>` 同一把尺。 */
   size?: FieldSize;
   contentClassName?: string;
+  /**
+   * 给了就是**在服务端搜**:敲的字交给调用方,它交回来的 `options` 就是搜到的那些,这里不再按字过滤。
+   * 清单大到不能一次全拿回来时用(素材库)。选中的那一项不一定还在搜到的清单里 —— 触发器上的名字用
+   * `renderValue` 给。
+   */
+  onSearch?: (query: string) => void;
+  /** 服务端还在搜:清单是空的时候说「在找」,而不是「没有匹配」。 */
+  searching?: boolean;
   onValueChange: (value: string) => void;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const modal = useInsideDialog(triggerRef);
-  const [query, setQuery] = React.useState("");
+  const [query, setQueryState] = React.useState("");
+  const setQuery = (next: string) => {
+    setQueryState(next);
+    onSearch?.(next);
+  };
   const selected = options.find((option) => option.value === value);
   const trimmedQuery = query.trim();
   const extras = trimmedQuery && extraOptions ? extraOptions(trimmedQuery) : [];
@@ -140,7 +154,7 @@ export function Combobox({
       {hint ? <Hint label={hint}>{trigger}</Hint> : trigger}
       {/* 宽度规则在 floating.ts(SEARCHABLE_CONTENT_WIDTH):此前死等于触发器宽,窄格子下面挂一条只剩几个字的列表。 */}
       <PopoverContent className={cn(SEARCHABLE_CONTENT_WIDTH, "p-0", contentClassName)} align="start">
-        <Command shouldFilter>
+        <Command shouldFilter={!onSearch}>
           <CommandInput value={query} onValueChange={setQuery} placeholder={searchPlaceholder ?? placeholder} />
           <CommandList>
             {extras.map((option) => (
@@ -154,7 +168,7 @@ export function Combobox({
                 <Truncate>{customValueLabel ? customValueLabel(trimmedQuery) : t("comboboxUseCustomValue").replace("{q}", trimmedQuery)}</Truncate>
               </CommandItem>
             ) : null}
-            <CommandEmpty>{emptyText ?? t("comboboxNoMatch")}</CommandEmpty>
+            <CommandEmpty>{searching ? t("pageLoading") : (emptyText ?? t("comboboxNoMatch"))}</CommandEmpty>
             {options.map((option) => (
               // cmdk 按 item 的 value 过滤:value 若只是 id(uuid),按名称搜索会一无所获。
               // label 打头让搜索命中名称,拼上 id 保证唯一。

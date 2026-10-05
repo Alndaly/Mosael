@@ -17,6 +17,8 @@ let shots = [{ id: "shot-1", name: "全景" }, { id: "shot-2", name: "跟拍" }]
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey: unknown[] }) =>
     queryKey[0] === "scene" ? { data: { name: "草原", revision: 2, content: { shots } } } : { data: [] },
+  //: 按 id 取引到的素材(useAssetDetails):一份都没取到。
+  useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.mock("./PromptEditor", () => ({

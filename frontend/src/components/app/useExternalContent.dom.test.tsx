@@ -29,7 +29,7 @@ const doc = (text: string) => ({ type: "doc", content: [{ type: "paragraph", con
 const EDITORS: Record<string, (text: string) => React.ReactElement> = {
   RefEditor: (text) => <RefEditor value={text} onChange={() => undefined} variables={[]} />,
   PromptEditor: (text) => (
-    <PromptEditor value={text} onChange={() => undefined} placeholder="" candidates={() => []} onSubmit={() => undefined} emptyHint={() => ""} />
+    <PromptEditor value={text} onChange={() => undefined} placeholder="" candidates={async () => []} onSubmit={() => undefined} emptyHint={() => ""} />
   ),
   ChatComposer: (text) => <ChatComposer workspaceId="w1" value={doc(text)} onChange={() => undefined} onSubmit={() => undefined} search={async () => []} />,
   NoteEditor: (text) => <NoteEditor markdown={text} onChange={() => undefined} onReference={() => undefined} workspaceId="w1" noteId="n1" />,

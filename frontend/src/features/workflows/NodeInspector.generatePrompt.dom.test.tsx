@@ -83,7 +83,7 @@ function renderInspector(
     askedPaths.push(url.pathname);
     let body: unknown = [];
     if (url.pathname.endsWith("/settings/providers")) body = profiles;
-    if (url.pathname.endsWith("/api/assets")) body = [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png" }];
+    if (url.pathname.endsWith("/api/assets")) body = { items: [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png" }], next_cursor: null, total: 1 };
     if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",

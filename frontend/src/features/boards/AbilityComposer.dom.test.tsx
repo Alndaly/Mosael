@@ -87,7 +87,12 @@ const host = (abilities: Record<string, BoardAbilitySetting> = {}): BoardItem =>
 function stubApi(connections: Array<{ value: string; label: string }>) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
-    const body = url.pathname.endsWith("/workflows/field-options") ? connections : [];
+    //: 素材库是一页一页给的(空的一页),别的清单给空数组。
+    const body = url.pathname.endsWith("/workflows/field-options")
+      ? connections
+      : url.pathname === "/api/assets"
+        ? { items: [], next_cursor: null, total: 0 }
+        : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
 }

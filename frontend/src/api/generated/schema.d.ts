@@ -1149,8 +1149,54 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Assets */
+        /**
+         * List Assets
+         * @description 素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。
+         *
+         *     `kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,
+         *     其余参数不变。
+         */
         get: operations["list_assets_api_assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Facets
+         * @description 页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。
+         */
+        get: operations["asset_facets_api_assets_facets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sequence Assets
+         * @description 这条时间线上用到的素材,完整字段(剪辑台的时间线、监视器、检查器读它)。
+         */
+        get: operations["sequence_assets_api_sequences__sequence_id__assets_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8339,6 +8385,71 @@ export interface components {
             message: string;
         };
         /**
+         * AssetCardMediaOut
+         * @description 卡片上画得出来的那几样:时长、尺寸、帧率、有没有缩略图;文档是格式、页数、大小。
+         *
+         *     **只是 media_info 的一个子集**:代理在哪、转写到哪一步、出处网址这些,卡片用不上,详情
+         *     (`GET /api/assets/{id}`)里照旧是完整的。
+         */
+        AssetCardMediaOut: {
+            /** Duration */
+            duration?: number | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Fps */
+            fps?: number | null;
+            /**
+             * Has Thumbnail
+             * @default false
+             */
+            has_thumbnail: boolean;
+            /** Format */
+            format?: string | null;
+            /** Pages */
+            pages?: number | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+        };
+        /**
+         * AssetCardOut
+         * @description 素材库列表里的一张卡片:卡片和挑选清单要显示的、筛选和操作要用的,别的不带。
+         */
+        AssetCardOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id: string | null;
+            /** Kind */
+            kind: string;
+            /** Source */
+            source: string;
+            /** Name */
+            name: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Derived
+             * @default false
+             */
+            derived: boolean;
+            /**
+             * Ai Generated
+             * @default false
+             */
+            ai_generated: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            media_info: components["schemas"]["AssetCardMediaOut"];
+        };
+        /**
          * AssetDerivationOut
          * @description 一项出处:从哪份素材、经过什么操作(op 的取值见 domain/assets/lineage.OPS)。
          */
@@ -8426,6 +8537,22 @@ export interface components {
             finished_at?: string | null;
         };
         /**
+         * AssetFacetsOut
+         * @description 页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上。
+         */
+        AssetFacetsOut: {
+            /** Total */
+            total: number;
+            /** Kinds */
+            kinds: {
+                [key: string]: number;
+            };
+            /** Tags */
+            tags: {
+                [key: string]: number;
+            };
+        };
+        /**
          * AssetFrameRequest
          * @description 从一段视频里取某一时刻的一帧,存成一份新素材。
          */
@@ -8504,6 +8631,12 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
             /**
+             * Derived
+             * @description 它是不是从别的素材做出来的(有出处)。来源标签只要这一句(见前端 assetOrigin);卡片上也是这一格 ——
+             *     卡片不带整份出处,一段成片的出处可以是它用到的两百多份素材。
+             */
+            readonly derived: boolean;
+            /**
              * Proxy Expected
              * @description 这份素材会不会有代理。**前端不该用缺省值去猜后端的配置。**
              *
@@ -8516,6 +8649,18 @@ export interface components {
              *     而且每份素材里存的都是同一句话。
              */
             readonly proxy_expected: boolean;
+        };
+        /**
+         * AssetPageOut
+         * @description 素材库的一页。`next_cursor` 交回去取下一页;是 null 就到头了。`total` 是满足条件的一共几份。
+         */
+        AssetPageOut: {
+            /** Items */
+            items: components["schemas"]["AssetCardOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Total */
+            total: number;
         };
         /** AssetUpdate */
         AssetUpdate: {
@@ -18255,11 +18400,80 @@ export interface operations {
             query: {
                 workspace_id: string;
                 project_id?: string | null;
-                kind?: string | null;
-                name_contains?: string | null;
+                kind?: string[] | null;
+                source?: string | null;
+                q?: string;
+                tag?: string[] | null;
+                tag_match?: "all" | "any";
+                sort?: "created" | "updated" | "name" | "duration";
+                cursor?: string | null;
+                limit?: number;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    asset_facets_api_assets_facets_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                project_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFacetsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sequence_assets_api_sequences__sequence_id__assets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

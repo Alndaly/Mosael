@@ -99,7 +99,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
   ),
 
   //: 截出来的那一格还没有产出(截挂了、还在截):照表单上记的那份、那段就地再截。不吃上游。
-  trim: ({ item, position, workspaceId, run }) => {
+  trim: ({ item, position, run }) => {
     const source = item.form?.trim;
     const kind = item.kind;
     if (!source || (kind !== "video" && kind !== "audio")) return null;
@@ -109,7 +109,6 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
         item={{ ...item, kind }}
         assetId={source.asset_id}
         initial={source}
-        workspaceId={workspaceId}
         busy={itemIsRunning(item)}
         onTrim={({ start, end, mute }) =>
           run({

@@ -110,7 +110,8 @@ describe("候选清单的配额", () => {
       Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix}-${i}` }));
     vi.resetModules();
     vi.doMock("@/api/client", () => ({
-      listAssets: async () => many(50, "a"),
+      //: 素材在服务端搜、按配额取:交回的条数就是要的那么多(limit)。
+      listAssetPage: async ({ limit }: { limit: number }) => ({ items: many(50, "a").slice(0, limit), next_cursor: "more", total: 50 }),
       listBoards: async () => many(50, "b"),
       listWorkflows: async () => many(50, "w"),
       assetThumbnailUrl: (id: string) => `/t/${id}`,

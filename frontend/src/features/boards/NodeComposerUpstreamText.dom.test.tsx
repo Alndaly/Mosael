@@ -9,7 +9,12 @@ import { NodeComposer } from "./NodeComposer";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
-vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }), useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: [] }),
+  //: 按 id 取引到的素材(useAssetDetails):一份都没取到。
+  useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 
 afterEach(cleanup);
 

@@ -30,9 +30,9 @@ import { assetOriginKey, showsContainsAi } from "./assetOrigin";
 const base = { workspace_id: "ws", project_id: null, original_filename: "", file_key: "", tags: [], media_info: {},
                proxy_expected: false, created_at: "2026-10-01T10:00:00" };
 const gif = { ...base, id: "gif", name: "片段 · GIF", kind: "image", source: "generated", ai_generated: true,
-              derived_from: [{ asset_id: "cut", op: "gif" }] };
+              derived_from: [{ asset_id: "cut", op: "gif" }], derived: true };
 const cut = { ...base, id: "cut", name: "AI 视频 · 0.2-1.2s", kind: "video", source: "generated", ai_generated: true,
-              derived_from: [{ asset_id: "root", op: "trim" }] };
+              derived_from: [{ asset_id: "root", op: "trim" }], derived: true };
 
 function show(asset: object) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -77,7 +77,7 @@ describe("素材详情的来源链", () => {
 
   it("导入的素材没有「来自」这一行,也不去取来源链", () => {
     getAssetLineage.mockClear();
-    show({ ...base, id: "plain", name: "实拍.mp4", kind: "image", source: "imported", ai_generated: false, derived_from: [] });
+    show({ ...base, id: "plain", name: "实拍.mp4", kind: "image", source: "imported", ai_generated: false, derived_from: [], derived: false });
     expect(screen.queryByText("assetLineageTitle")).toBeNull();
     expect(getAssetLineage).not.toHaveBeenCalled();
     expect(screen.getByText("mediaSourceImported")).toBeTruthy();
@@ -86,7 +86,7 @@ describe("素材详情的来源链", () => {
 
 describe("来源标签", () => {
   const origin = (source: string, aiGenerated: boolean, derived = false) => ({
-    source, ai_generated: aiGenerated, derived_from: derived ? [{ asset_id: "x", op: "trim" }] : [],
+    source, ai_generated: aiGenerated, derived,
   });
 
   it("生成任务的产出是「AI 生成」,不另挂含 AI", () => {

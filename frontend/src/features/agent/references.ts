@@ -1,7 +1,7 @@
 import { Box, FileText, Image, Workflow as WorkflowIcon, type LucideIcon } from "lucide-react";
 
 import type { MessageKey } from "@/app/messages";
-import { listAssets, listBoards, listWorkflows } from "@/api/client";
+import { listAssetPage, listBoards, listWorkflows } from "@/api/client";
 import { listNotes } from "@/api/domains/notes";
 
 /**
@@ -55,8 +55,10 @@ export async function searchReferences(workspaceId: string, query: string): Prom
   const needle = query.trim().toLowerCase();
   const matches = (name: string) => !needle || name.toLowerCase().includes(needle);
   // 四类并发问,慢的那一类不拖住其余的。任何一类挂掉只丢它自己(菜单是辅助,不该整块消失)。
+  const perKind = Math.max(2, Math.floor(REFERENCE_MENU_LIMIT / REFERENCE_KINDS.length));
   const [assets, notes, boards, workflows] = await Promise.all([
-    listAssets(workspaceId).catch(() => []),
+    //: 素材在服务端按名字 / 文件名 / 标签搜,只要这一类的配额那么几条 —— 不为了菜单里的几行拉回整个素材库。
+    listAssetPage({ workspace_id: workspaceId, q: query, limit: perKind }).then((page) => page.items, () => []),
     listNotes(workspaceId, query).catch(() => []),
     listBoards(workspaceId).catch(() => []),
     listWorkflows(workspaceId).catch(() => []),
@@ -65,13 +67,13 @@ export async function searchReferences(workspaceId: string, query: string): Prom
   const push = (kind: ReferenceKind, id: string, name: string) => {
     if (id && matches(name)) out.push({ kind, id, name: name || id.slice(0, 8) });
   };
-  for (const asset of assets) push("asset", asset.id, asset.name || asset.original_filename || "");
+  //: 服务端已经按搜索词筛过(它还搜文件名和标签,名字里不一定有这几个字),这里不再按名字筛一遍。
+  for (const asset of assets) out.push({ kind: "asset", id: asset.id, name: asset.name || asset.original_filename || asset.id.slice(0, 8) });
   for (const note of notes) push("note", note.id, note.title || "");
   for (const board of boards) push("board", board.id, board.name || "");
   for (const flow of workflows) push("workflow", flow.id, flow.name || "");
   // **按类成段**,不再轮转:菜单是分组显示的(每组一个标题),轮转会把同一类拆散到各处。
   // 每类各自封顶,免得素材把其余三类挤出屏幕 —— 素材通常最多,不封顶的话笔记和工作流
   // 永远露不了面,用户会以为只能引用素材。
-  const perKind = Math.max(2, Math.floor(REFERENCE_MENU_LIMIT / REFERENCE_KINDS.length));
   return REFERENCE_KINDS.flatMap((kind) => out.filter((one) => one.kind === kind).slice(0, perKind));
 }

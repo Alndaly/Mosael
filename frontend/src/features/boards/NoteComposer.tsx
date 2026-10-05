@@ -1,9 +1,9 @@
-import { assetKeys, providerKeys } from "@/api/queryKeys";
+import { providerKeys } from "@/api/queryKeys";
 import React from "react";
 import { Film, Music, Sparkles, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import { listAssets, listCapabilityModels, type Asset, type BoardItem } from "@/api/client";
+import { listCapabilityModels, type BoardItem } from "@/api/client";
 import {
   collect,
   PromptEditor,
@@ -15,6 +15,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useSubmitting } from "@/features/boards/useSubmitting";
+import { useAssetDetails, useMentionCandidates } from "@/lib/assetQueries";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -22,6 +23,9 @@ import { useI18n } from "@/app/preferences";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
+
+/** `@` 能引的素材:图片、视频、音频都能引。后端会按类别摊开(图片和视频给画面,音频给转写)。 */
+const MENTIONABLE_KINDS = ["image", "video", "audio"] as const;
 
 /**
  * 便签的「写文案」面板。
@@ -88,22 +92,8 @@ export function NoteComposer({
       : "",
   );
 
-  //: `@` 的候选:图片、视频、音频都能引。后端会按类别摊开(图片和视频给画面,音频给转写)——
-  //: 只列图片的话,用户明明连得上视频,却 @ 不到它。
-  const library = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId) });
-  const candidates = React.useCallback(
-    (query: string) => {
-      const needle = query.trim().toLowerCase();
-      return (library.data ?? [])
-        .filter((asset: Asset) => ["image", "video", "audio"].includes(asset.kind))
-        .filter(
-          (asset: Asset) =>
-            !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
-        )
-        .slice(0, 8);
-    },
-    [library.data],
-  );
+  //: `@` 的候选:只列图片的话,用户明明连得上视频,却 @ 不到它。
+  const candidates = useMentionCandidates(workspaceId, MENTIONABLE_KINDS);
 
   const models = useQuery({
     queryKey: providerKeys.capabilityModels("chat", "automation"),
@@ -115,11 +105,14 @@ export function NoteComposer({
 
   // 升级旧节点：旧版只保存纯文本和引用 id。素材库回来后按素材名恢复 chip，并在下一次
   // onFormChange 时把结构化文档补进节点；之后重开不再依赖猜测。
+  //: 引到的那几份(上游连过来的 + 正文里 @ 到的)按 id 取:恢复 chip 要名字,下面的缩略图要种类。
+  const referencedIds = React.useMemo(() => [...new Set([...(upstreamAssets ?? []), ...mentioned])], [upstreamAssets, mentioned]);
+  const details = useAssetDetails(referencedIds);
   React.useEffect(() => {
-    if (promptDocument || mentioned.length === 0 || !library.data?.length) return;
-    const restored = restorePromptDocument(prompt, mentioned, library.data);
+    if (promptDocument || mentioned.length === 0 || !details.settled || details.byId.size === 0) return;
+    const restored = restorePromptDocument(prompt, mentioned, [...details.byId.values()]);
     if (collect(restored as { content?: unknown[] }).length > 0) setPromptDocument(restored);
-  }, [promptDocument, prompt, mentioned, library.data]);
+  }, [promptDocument, prompt, mentioned, details]);
 
   const serializedForm = JSON.stringify({
     prompt,
@@ -138,12 +131,10 @@ export function NoteComposer({
 
   //: 这次会发给模型的那几份素材 —— 上游连过来的 + 正文里 @ 到的。**从素材库里查回实体**
   //: 才画得出缩略图(手上只有 id)。
-  const referenced = React.useMemo(() => {
-    const ids = [...new Set([...(upstreamAssets ?? []), ...mentioned])];
-    return ids
-      .map((id) => (library.data ?? []).find((asset: Asset) => asset.id === id))
-      .filter((asset): asset is Asset => Boolean(asset));
-  }, [upstreamAssets, mentioned, library.data]);
+  const referenced = React.useMemo(
+    () => referencedIds.flatMap((id) => details.byId.get(id) ?? []),
+    [referencedIds, details.byId],
+  );
 
   //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
   const { submitting, run } = useSubmitting();

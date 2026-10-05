@@ -29,7 +29,7 @@ function mount() {
       document={saved}
       onChange={vi.fn()}
       placeholder="写点什么"
-      candidates={() => []}
+      candidates={async () => []}
       onSubmit={vi.fn()}
       emptyHint={() => ""}
     />,

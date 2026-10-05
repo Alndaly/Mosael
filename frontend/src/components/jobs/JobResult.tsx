@@ -1,12 +1,11 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { FileText, Film, Music } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type Job } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, type Job } from "@/api/client";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { noteHref } from "@/lib/deepLink";
-import { assetKeys } from "@/api/queryKeys";
+import { useAssetDetails } from "@/lib/assetQueries";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 
@@ -52,13 +51,9 @@ export function JobResult({ job }: { job: Job }) {
   const { openImagePreview } = useImagePreview();
   const outputs = jobOutputs(job);
   const assetIds = outputs.flatMap((one) => (one.type === "asset" ? [one.asset_id] : []));
-  const library = useQuery({
-    queryKey: assetKeys.list(job.workspace_id),
-    queryFn: () => listAssets(job.workspace_id),
-    enabled: assetIds.length > 0,
-  });
+  //: 只取这次任务交出来的那几份(按 id 走详情缓存),不为了认出三张图把整个素材库拉回来。
+  const { byId } = useAssetDetails(assetIds);
   if (!outputs.length) return null;
-  const byId = new Map((library.data ?? []).map((asset: Asset) => [asset.id, asset]));
   const visual = assetIds.filter((id) => byId.get(id)?.kind !== "audio");
   const gallery: ImagePreviewItem[] = visual.map((id) => {
     const asset = byId.get(id);

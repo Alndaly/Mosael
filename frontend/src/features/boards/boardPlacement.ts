@@ -17,7 +17,7 @@ export interface PlacedAsset {
  * 两条路上格子的名字取法和「哪些种类放得上画板」是同一个判据。画板上没有那种格子(文本、字幕……)回 null:
  * 它只进素材库、不上画板。名字空着(没起名的导入)退回原始文件名。
  */
-export function placedAsset(asset: Asset): PlacedAsset | null {
+export function placedAsset(asset: Pick<Asset, "id" | "name" | "original_filename" | "kind">): PlacedAsset | null {
   if (!isMediaKind(asset.kind) && asset.kind !== "document") return null;
   return { id: asset.id, name: asset.name || asset.original_filename || "", kind: asset.kind };
 }

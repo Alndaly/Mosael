@@ -31,8 +31,11 @@ export type PromptDocument = JSONContent;
  * 两种东西各自长成自己的样子、落成自己的 chip —— 不另起一个「@ 资产」菜单。
  */
 export type MentionItem =
-  | { type: "asset"; id: string; asset: Asset }
+  | { type: "asset"; id: string; asset: MentionAsset }
   | { type: "entity"; id: string; entity: EntitySummary };
+
+/** `@` 菜单里一份素材要的那几样:素材库的卡片就够(名字、种类、缩略图按 id 取)。 */
+export type MentionAsset = Pick<Asset, "id" | "name" | "original_filename" | "kind">;
 
 /** 一段纯文本的提示词文档(没有素材 chip)。 */
 export function textDocument(value: string): PromptDocument {
@@ -250,8 +253,11 @@ export function PromptEditor({
   /** 正文变化。`assets` 是正文里 chip 引用到的素材 —— 提交时它们进 source_assets;`entityIds` 是 @ 到的资产。 */
   onChange: (next: string, assets: string[], document: PromptDocument, entityIds: string[]) => void;
   placeholder: string;
-  /** `@` 能挑的素材。由调用方按「这个模型收得下什么」筛过。 */
-  candidates: (query: string) => Asset[];
+  /**
+   * `@` 能挑的素材:由调用方按「这个模型收得下什么」在服务端搜(素材库分了页,不再整个拿回来在这里筛)。
+   * 插件每次 query 变了问一次,等它回来再画菜单。
+   */
+  candidates: (query: string) => Promise<MentionAsset[]>;
   /** ⌘/Ctrl+Enter。 */
   onSubmit: () => void;
   /** 一个候选都没有时说的那句话;返回空串就什么都不弹。 */
@@ -362,10 +368,12 @@ export function PromptEditor({
           //: 放开之后 `a@b` 这样的邮箱也会试着唤起,但它匹配不到任何东西,菜单自己就不显示 ——
           //: 「偶尔多算一次、什么都不弹」比「中文里一半时候用不了」轻得多。
           allowedPrefixes: null,
-          items: ({ query }): MentionItem[] => [
-            ...(entitiesRef.current?.(query) ?? []).map((entity) => ({ type: "entity" as const, id: entity.id, entity })),
-            ...candidatesRef.current(query).map((asset) => ({ type: "asset" as const, id: asset.id, asset })),
-          ],
+          items: async ({ query }): Promise<MentionItem[]> => {
+            const entities = (entitiesRef.current?.(query) ?? []).map((entity) => ({ type: "entity" as const, id: entity.id, entity }));
+            //: 搜素材失败(断网、后端在重启)只是少了素材那一段,资产照样列。
+            const assets = await candidatesRef.current(query).catch((): MentionAsset[] => []);
+            return [...entities, ...assets.map((asset) => ({ type: "asset" as const, id: asset.id, asset }))];
+          },
           command: ({ editor: instance, range, props }) => {
             const item = props as unknown as MentionItem;
             //: 把那段 `@词` 换成一个 chip,并在后面补一个空格 —— 不补的话光标紧贴着原子节点,

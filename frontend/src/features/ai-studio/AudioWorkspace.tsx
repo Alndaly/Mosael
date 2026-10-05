@@ -1,18 +1,15 @@
 import React from "react";
-import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Music, Settings2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  api,
   assetFileUrl,
   generatePodcast,
   listTtsEngines,
   listTtsVoices,
   synthesizeVoice,
   synthesizeWithEngine,
-  type Asset,
   type Job,
   type Workspace,
 } from "@/api/client";
@@ -26,6 +23,7 @@ import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import { CLONE_ENGINE, PODCAST_ENGINE } from "@/api/domains/speech";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
+import { useAssetPages } from "@/lib/assetQueries";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { gotoSettings } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
@@ -259,19 +257,17 @@ function SettingsHint({ body, action, section }: { body: string; action: string;
   );
 }
 
+/** 「最近生成」列几条。 */
+const RECENT_AUDIO = 12;
+
 /** 这一页做出来的最近几条,就地试听。完整的在素材库里。 */
 function RecentAudio({ workspace, source }: { workspace: Workspace; source: string }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  // 与素材库同一个缓存键:那边导入/删除,这里跟着变;这里生成完一刷,那边也有。
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspace.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
-  });
-  const recent = (assets.data ?? [])
-    .filter((asset) => asset.kind === "audio" && asset.source === source)
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .slice(0, 12);
+  // 挂在素材缓存下(assetKeys.all 失效得到):那边导入/删除,这里跟着变;这里生成完一刷,那边也有。
+  // 只要这一类最新的 12 条:按种类、来源在服务端筛,不把整个素材库拉回来再挑。
+  const assets = useAssetPages({ workspace_id: workspace.id, kind: ["audio"], source, sort: "created", limit: RECENT_AUDIO });
+  const recent = assets.items.slice(0, RECENT_AUDIO);
 
   return (
     <section className="grid gap-2" aria-label={t("audioRecentTitle")}>

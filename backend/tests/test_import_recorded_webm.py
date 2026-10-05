@@ -90,7 +90,7 @@ def test_startup_reconcile_repairs_legacy_recordings() -> None:
         assert reconcile_broken_media_info(db) == 1
         db.commit()  # 提交归入口(启动时是 main 的 unit_of_work),测试就是这里的入口
 
-    repaired = client.get(f"/api/assets?workspace_id={ws['id']}").json()[0]
+    repaired = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"][0]
     info = repaired["media_info"]
     assert info.get("duration") == pytest.approx(1.0, abs=0.35), info
     assert info.get("has_thumbnail") is True, info

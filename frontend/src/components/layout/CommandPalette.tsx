@@ -1,5 +1,4 @@
 import React from "react";
-import { assetKeys } from "@/api/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 import {
   Clapperboard,
@@ -12,7 +11,7 @@ import {
   Workflow,
 } from "lucide-react";
 
-import { api, listPublishTasks, listWorkflows, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
+import { listPublishTasks, listWorkflows, type ProjectWithStats, type Workspace } from "@/api/client";
 import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
@@ -27,6 +26,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { useAssetPages } from "@/lib/assetQueries";
 import { emitOpenEvent } from "@/lib/deepLink";
 import { listenKeys } from "@/lib/shortcuts";
 
@@ -39,6 +39,9 @@ type PaletteItem = {
   content: React.ReactNode;
 };
 type PaletteGroup = { id: string; heading: string; items: PaletteItem[]; separatorAfter?: boolean };
+
+/** 素材一组摆几条(和别的几组一样多)。 */
+const ASSET_MATCHES = 6;
 
 const ASSET_ICONS: Record<string, React.ReactNode> = {
   video: <FileVideo size={14} />,
@@ -99,14 +102,12 @@ export function CommandPalette({
     }
   }, [open]);
 
-  const assets = useQuery({
-    // Same key as the media library — same request. Two keys meant the palette warmed one
-    // cache entry and the page read the other, so a deep link landed on an empty list.
-    queryKey: assetKeys.list(workspace.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
-    enabled: open && query.length > 0,
-    staleTime: 30_000,
-  });
+  //: 素材按名字 / 文件名 / 标签在服务端搜,只要前 6 条 —— 不为了面板里这几行把整个素材库拉回来。
+  //: 跳过去之后素材页按 id 开详情,不靠这里预热它的列表。
+  const assets = useAssetPages(
+    { workspace_id: workspace.id, q: query, limit: ASSET_MATCHES },
+    { enabled: open && query.length > 0 },
+  );
 
   // 工作流与发布记录都有现成的深链通道(mosael:open-*),接进来就能跳。
   const workflows = useQuery({
@@ -134,15 +135,7 @@ export function CommandPalette({
       )
     : pages;
   const projectMatches = q ? projects.filter((project) => project.name.toLowerCase().includes(q)).slice(0, 6) : [];
-  const assetMatches = q
-    ? (assets.data ?? [])
-        .filter(
-          (asset) =>
-            asset.name.toLowerCase().includes(q) ||
-            (asset.tags ?? []).some((tag) => tag.toLowerCase().includes(q)),
-        )
-        .slice(0, 6)
-    : [];
+  const assetMatches = q ? assets.items.slice(0, ASSET_MATCHES) : [];
 
   // 名字之外也搜说明/账号/成片名 —— 记不住标题但记得"发到哪个号"的时候,那才是他手上的线索。
   const workflowMatches = q

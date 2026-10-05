@@ -8,10 +8,10 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import React from "react";
 import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { assetThumbnailUrl, convertVideoToGif, deleteAsset, renameAsset, setAssetTags, type AssetCard, type AssetQuery, type AssetSort, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
@@ -29,17 +29,19 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
-import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
+import { useAssetDetails, useAssetFacets, useAssetPages } from "@/lib/assetQueries";
 import { assetOriginKey, showsContainsAi } from "@/features/media/assetOrigin";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { TagFilter } from "@/components/app/TagFilter";
 import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";
-import { TAG_MATCHES, tagsOf, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
+import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags";
 import { TagChips } from "./TagChips";
 import { TagsDialog } from "@/components/app/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { cn } from "@/lib/utils";
 import { formatShortDate, formatTimecode } from "@/lib/time";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,21 +49,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 const KIND_FILTERS = ["all", "video", "audio", "image", "document"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
 
-const SORT_KEYS = ["created", "updated", "name", "duration"] as const;
+const SORT_KEYS = ["created", "updated", "name", "duration"] as const satisfies readonly AssetSort[];
 type SortKey = (typeof SORT_KEYS)[number];
 
-function compareAssets(a: Asset, b: Asset, key: SortKey): number {
-  switch (key) {
-    case "name":
-      return a.name.localeCompare(b.name, "zh-CN");
-    case "duration":
-      return (Number(b.media_info.duration) || 0) - (Number(a.media_info.duration) || 0);
-    case "updated":
-      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
-    default:
-      return (b.created_at ?? "").localeCompare(a.created_at ?? "");
-  }
-}
+/** 离底边还有这么远就去取下一页:人滚到底之前,下一页已经到了。 */
+const PREFETCH_PX = 1200;
 
 /**
  * 素材库 —— **工作区级**资源池。素材归属工作区(Asset.workspace_id 必填;project_id 可空,
@@ -72,17 +64,20 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
-  const [renaming, setRenaming] = React.useState<Asset | null>(null);
-  const [deleting, setDeleting] = React.useState<Asset | null>(null);
-  const [previewing, setPreviewing] = React.useState<Asset | null>(null);
+  const [renaming, setRenaming] = React.useState<AssetCard | null>(null);
+  const [deleting, setDeleting] = React.useState<AssetCard | null>(null);
+  //: 详情按 id 开(AssetPreviewModalById 自己取完整字段):列表只带卡片字段,深链点名的那一份也不一定在已经翻到的几页里。
+  const [previewingId, setPreviewingId] = React.useState<string | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
-  const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
+  const [editingTags, setEditingTags] = React.useState<AssetCard | null>(null);
   //: 右键「设为某个资产的参考图…」(ADR 0027):图片和视频能当参考图。
-  const [referencing, setReferencing] = React.useState<Asset | null>(null);
+  const [referencing, setReferencing] = React.useState<AssetCard | null>(null);
   // 筛选和排序是**这个人怎么用素材库**的一部分,不是这一刻的临时值 —— 切走再回来不该重置。
   // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
+  //: 发给服务端的是停手之后的那个词:输入框照常跟手,不为每一个字发一次请求。
+  const settledSearch = useDebouncedValue(search.trim());
   const [display, setDisplay] = usePersistentTab<"grid" | "list">("media-display", "grid", ["grid", "list"]);
   const [sortKey, setSortKey] = usePersistentTab<SortKey>("media-sort", "created", SORT_KEYS);
   const [comparing, setComparing] = React.useState(false);
@@ -94,27 +89,59 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [filtersStuck, setFiltersStuck] = React.useState(false);
   const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
 
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspace.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
-  });
-  //: `#/media?asset=<id>` 直接打开那一份的详情(画板上的文档格、智能体的引用胶囊跳过来):素材拉回来之后开一次,
-  //: 开过就把参数摘掉 —— 否则关掉详情再回到这一页又弹出来。
+  //: 页签上的数字、标签筛选的候选:整个工作区的,不跟着搜索和这一页走(见后端 domain/assets/listing)。
+  const facets = useAssetFacets(workspace.id);
+  const tagCount = React.useMemo(() => sortedTagCounts(facets.data?.tags ?? {}), [facets.data]);
+  const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
+
+  // 标签筛选同理,而且可以同时勾几个。合法值是**动态的**(标签会被删),存着一个已经不存在的标签时
+  // 当作没勾 —— 否则素材库会空得莫名其妙。
+  const [tagFilter, setTagFilter] = usePersistentSet("media-tags", facets.data === undefined ? undefined : allTags);
+  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", TAG_MATCHES);
+
+  //: 看哪些:种类、搜索、标签、排序都交给服务端,这里只拿一页一页的卡片。
+  const query: AssetQuery = {
+    workspace_id: workspace.id,
+    kind: kindFilter === "all" ? undefined : [kindFilter],
+    q: settledSearch || undefined,
+    tag: tagFilter.length > 0 ? tagFilter : undefined,
+    tag_match: tagMatch,
+    sort: sortKey,
+  };
+  const assets = useAssetPages(query);
+  const visible = assets.items;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = assets;
+  //: 离底边不到 PREFETCH_PX 就去取下一页。滚动时问一次;一页取回来之后再问一次 —— 屏幕很高、第一页填不满时,
+  //: 没有滚动可言,只能靠这一下接着取。量不到高度(还没排版)时不取,免得一打开就把好几页全拉回来。
+  const scrollerRef = React.useRef<HTMLDivElement>(null);
+  const loadMoreIfNearEnd = React.useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !scroller.clientHeight || !hasNextPage || isFetchingNextPage) return;
+    if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < PREFETCH_PX) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  React.useEffect(loadMoreIfNearEnd, [loadMoreIfNearEnd, visible.length]);
+
+  //: `#/media?asset=<id>` 直接打开那一份的详情(画板上的文档格、智能体的引用胶囊跳过来):开一次就把参数摘掉 ——
+  //: 否则关掉详情再回到这一页又弹出来。按 id 开,不等它出现在列表里。
   React.useEffect(() => {
     const wanted = new URLSearchParams(window.location.hash.split("?")[1] || "").get("asset");
-    const found = wanted ? assets.data?.find((one) => one.id === wanted) : undefined;
-    if (!found) return;
-    setPreviewing(found);
+    if (!wanted) return;
+    setPreviewingId(wanted);
     window.history.replaceState(null, "", window.location.hash.split("?")[0] || "#/media");
-  }, [assets.data]);
+  }, []);
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
   const { selectMode, enter: enterSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
-    useMultiSelect(assets.data ?? [], (asset) => asset.id);
+    useMultiSelect(visible, (asset) => asset.id);
+  //: 「全选」要的是满足条件的**全部**(没翻到的那几页先取回来),不是已经滚到的这些。
+  const toggleSelectAll = async () => {
+    if (!hasNextPage) return selectAll(visible);
+    selectAll(await assets.loadAll());
+  };
   /** 选中项里能参与对比的:图片和视频各是一套对比,**不混** —— 图片比的是同一处细节(联动缩放),
    *  视频比的是同一时刻(联动播放)。混选时两套都不成立,按钮禁用并说明。 */
   const selectedAssets = React.useMemo(
-    () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id)),
-    [assets.data, selectedIds],
+    () => visible.filter((asset) => selectedIds.has(asset.id)),
+    [visible, selectedIds],
   );
   const compareKind: "image" | "video" | null = React.useMemo(() => {
     const kinds = new Set(selectedAssets.map((asset) => asset.kind));
@@ -123,16 +150,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     return only === "image" || only === "video" ? only : null;
   }, [selectedAssets]);
   const comparable = compareKind ? selectedAssets : [];
+  //: 对比要完整字段(宽高、时长、代理):点「对比」时才按 id 取详情。
+  const comparedDetails = useAssetDetails(comparing ? comparable.map((asset) => asset.id) : []).byId;
+  const compared = comparable.flatMap((asset) => comparedDetails.get(asset.id) ?? []);
   const refresh = () => qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
 
-  // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
-  // 那一份还没加载出来时接不住 —— 返回 false,请求留在信箱里,列表到货后再投(见 lib/deepLink)。
+  // Cmd+K 面板选中素材后跳转到本页并直接打开详情(统一先进详情卡,图片也一样,要看大图再从卡里点开)。
   useOpenRequest("mosael:open-asset", (assetId) => {
-    const asset = (assets.data ?? []).find((item) => item.id === assetId);
-    if (!asset) return false;
-    // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
-    setPreviewing(asset);
-  }, [assets.data]);
+    setPreviewingId(assetId);
+  });
 
   // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。按钮多选和拖进来是同一条路。
   const importFiles = useImportMediaFiles({ workspaceId: workspace.id });
@@ -180,7 +206,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   // 批量打标:并集合并到每个选中素材上,已有标签保留。
   const batchAddTags = useMutation({
     mutationFn: async (tags: string[]) => {
-      const targets = (assets.data ?? []).filter((asset) => selectedIds.has(asset.id));
+      const targets = visible.filter((asset) => selectedIds.has(asset.id));
       await Promise.all(
         targets.map((asset) => {
           const merged = [...tagsOf(asset)];
@@ -203,7 +229,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         try {
           await deleteAsset(id);
         } catch (error) {
-          const asset = assets.data?.find((item) => item.id === id);
+          const asset = visible.find((item) => item.id === id);
           failures.push(`${asset?.name ?? id}: ${String((error as Error).message)}`);
         }
       }
@@ -217,37 +243,17 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     },
   });
 
-  const tagCount = React.useMemo(() => tagCounts(assets.data ?? []), [assets.data]);
-  const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
-
-  // 标签筛选同理,而且可以同时勾几个。合法值是**动态的**(标签会被删),存着一个已经不存在的标签时
-  // 当作没勾 —— 否则素材库会空得莫名其妙。
-  const [tagFilter, setTagFilter] = usePersistentSet(
-    "media-tags",
-    assets.data === undefined ? undefined : allTags,
-  );
-  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", TAG_MATCHES);
   // 「从起点进来」(统计页的素材总数):看的是**全部**素材 —— 记住的类型、标签筛选这回不作数,
   // 否则点「素材 128」进来只看到其中 12 条。排序、网格/列表是怎么看,不是看哪些,照旧。
   useSectionEntry("media", () => {
-    setPreviewing(null);
+    setPreviewingId(null);
     setKindFilter("all");
     setTagFilter([]);
   });
-
-  const visible = React.useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const matched = (assets.data ?? []).filter(
-      (asset) =>
-        (kindFilter === "all" || asset.kind === kindFilter) &&
-        matchesTags(asset, tagFilter, tagMatch) &&
-        (query === "" ||
-          asset.name.toLowerCase().includes(query) ||
-          tagsOf(asset).some((tag) => tag.toLowerCase().includes(query))),
-    );
-    return [...matched].sort((a, b) => compareAssets(a, b, sortKey));
-  }, [assets.data, kindFilter, tagFilter, tagMatch, search, sortKey]);
-
+  //: 一份都没有(不是「筛完没有」):整个工作区的计数说了算。
+  const libraryEmpty = facets.data?.total === 0;
+  const kindCount = (kind: KindFilter): number | undefined =>
+    facets.data === undefined ? undefined : kind === "all" ? facets.data.total : (facets.data.kinds[kind] ?? 0);
 
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
@@ -279,13 +285,14 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           </span>
         </div>
       )}
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
+      <div ref={scrollerRef} data-media-scroll className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
         onScroll={(event) => {
           const filters = filtersRef.current;
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
+          loadMoreIfNearEnd();
         }}
       >
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7 xl:py-8" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={facets.data?.total} className="py-7 xl:py-8" actions={<>
               <input
                 ref={importInputRef}
                 type="file"
@@ -317,7 +324,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
-      {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
+      {!libraryEmpty && (
         <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
           {/* **一行,按"这是哪一类动作"分三段。**
               类型标签是最粗的那一刀,锚在左边 —— 它的下划线指示器需要一条稳定的左基线;
@@ -328,7 +335,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               **窄了就换行,不横向滚。** 这一行里全是要读的标签和要打字的输入框,滚动条会把
               其中一半藏起来 —— 而它们没有主次之分,藏哪一半都是错的。 */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-row>
-            <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
+            <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: kindCount(kind) }))} />
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="relative min-w-40 flex-1">
                 <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
@@ -361,9 +368,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <span className="whitespace-nowrap text-xs text-muted-foreground">
                     {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
                   </span>
-                  <Button variant="outline" size="default" onClick={() => selectAll(visible)}>
+                  <Button variant="outline" size="default" loading={assets.isFetchingNextPage} onClick={() => void toggleSelectAll()}>
                     <ListChecks size={13} />{" "}
-                    {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                    {allSelected(visible) && !hasNextPage ? t("mediaDeselectAll") : t("mediaSelectAll")}
                   </Button>
                   {/* 图片:联动缩放平移;视频:联动播放。选的不是同一种、或不到两个时禁用并说明原因。 */}
                   <Hint disabledReason={comparable.length < 2 ? t("mediaCompareHint") : undefined}>
@@ -409,7 +416,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onQueued={() => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() })}
       />
 
-      {assets.isPending ? <MediaLibrarySkeleton list={display === "list"} /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : (assets.data ?? []).length === 0 ? (
+      {assets.isPending ? <MediaLibrarySkeleton list={display === "list"} /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : libraryEmpty ? (
         <EmptyState
           icon={<FolderOpen size={22} />}
           title={t("mediaEmptyTitle")}
@@ -426,7 +433,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   onClick={() => {
                     // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
                     if (selectMode) toggleSelected(asset.id);
-                    else setPreviewing(asset);
+                    else setPreviewingId(asset.id);
                   }}
                 >
                   <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
@@ -494,8 +501,14 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           ))}
         </div>
       )}
+      {assets.isFetchingNextPage && (
+        <div role="status" className="grid place-items-center py-4 text-muted-foreground">
+          <Loader2 size={16} className="animate-mosael-spin" />
+          <span className="sr-only">{t("pageLoading")}</span>
+        </div>
+      )}
 
-      <AssetPreviewModal asset={previewing} onClose={() => setPreviewing(null)} />
+      <AssetPreviewModalById id={previewingId} onClose={() => setPreviewingId(null)} />
       <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
       {denoiseDialog}
       <RenameDialog
@@ -543,22 +556,20 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
-      {comparing && comparable.length >= 2 && (compareKind === "video" ? (
-        <VideoCompareView assets={comparable} onClose={() => setComparing(false)} />
+      {comparing && comparable.length >= 2 && compared.length === comparable.length && (compareKind === "video" ? (
+        <VideoCompareView assets={compared} onClose={() => setComparing(false)} />
       ) : (
-        <AssetCompareView assets={comparable} onClose={() => setComparing(false)} />
+        <AssetCompareView assets={compared} onClose={() => setComparing(false)} />
       ))}
       </div>
     </div>
   );
 }
 
-function AssetTile({ asset, selected = false, list = false }: { asset: Asset; selected?: boolean; list?: boolean }) {
+function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard; selected?: boolean; list?: boolean }) {
   const t = useI18n();
   const [thumbFailed, setThumbFailed] = React.useState(false);
-  const duration = asset.media_info.duration as number | undefined;
-  const width = asset.media_info.width as number | undefined;
-  const fps = asset.media_info.fps as number | undefined;
+  const { duration, width, height, fps } = asset.media_info;
   //: 文档的封面是解析时渲的第一页(ADR 0031),还没有就画图标。
   const hasThumb = asset.kind !== "audio" && (asset.kind !== "document" || Boolean(asset.media_info.has_thumbnail)) && !thumbFailed;
   return (
@@ -606,8 +617,8 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
           </small>
         </div>
         <Truncate className="font-mono text-ui-xs tabular-nums text-muted-foreground">
-          {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${asset.media_info.height}` : "—"}
-          {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
+          {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${height}` : "—"}
+          {asset.kind === "video" && fps ? ` · ${Math.round(fps)}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
         </Truncate>
       </div>

@@ -97,7 +97,7 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
     proxyjobs._run_proxy(job.id, asset["id"])  # run the (faked) worker synchronously
 
     # Asset now reports ready + carries a proxy_key; the endpoint serves the file.
-    refreshed = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["id"] == asset["id"])
+    refreshed = client.get(f"/api/assets/{asset['id']}").json()
     assert refreshed["media_info"]["proxy_status"] == "ready"
     assert refreshed["media_info"]["proxy_key"].endswith("/proxy.mp4")
 

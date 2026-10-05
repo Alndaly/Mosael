@@ -124,4 +124,4 @@ def test_asset_tools_call_the_domain_directly_not_the_api(monkeypatch) -> None:
     done = call("tester", "update_asset_tags", {"asset_id": asset_id, "tags": ["x", "x", " y "]})
     assert done["result"]["tags"] == ["x", "y"], done
     listed = call(viewer, "list_assets", {"workspace_id": workspace_id})
-    assert [item["id"] for item in listed["result"]] == [asset_id]
+    assert [item["id"] for item in listed["result"]["assets"]] == [asset_id]

@@ -88,6 +88,7 @@ function renderInspector(parameters: Record<string, unknown>) {
     let body: unknown = [];
     if (url.pathname.endsWith("/settings/providers")) body = [PROFILE];
     if (url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "video") body = [SEEDANCE, VEO];
+    if (url.pathname.endsWith("/api/assets")) body = { items: [], next_cursor: null, total: 0 };
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   const node = {

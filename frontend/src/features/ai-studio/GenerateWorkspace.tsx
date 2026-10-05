@@ -1125,7 +1125,6 @@ export function GenerateWorkspace({
                 {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
                   <TruncationHint
                     model={selectedModel}
-                    workspaceId={workspace.id}
                     frames={generationConfig.frames}
                     durationSeconds={generationConfig.durationSeconds}
                     bounds={durationRange(selectedModel) ?? {}}

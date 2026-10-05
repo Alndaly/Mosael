@@ -4,14 +4,38 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
-import { separateAssetAudio, type Asset, type Workspace } from "@/api/client";
+import { getAssetFacets, listAssetPage, separateAssetAudio, type AssetCard, type AssetQuery, type Workspace } from "@/api/client";
 import { gotoSection } from "@/lib/deepLink";
 import { MediaLibraryView } from "./MediaLibraryView";
 
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   separateAssetAudio: vi.fn(async () => ({ id: "job-1" })),
+  listAssetPage: vi.fn(),
+  getAssetFacets: vi.fn(async () => ({ total: 0, kinds: {}, tags: {} })),
 }));
+
+const asset = (id: string, kind: string, tags: string[] = []): AssetCard => ({
+  id, name: id, workspace_id: "ws", project_id: null, original_filename: id, kind, source: "imported", tags,
+  derived: false, ai_generated: false,
+  media_info: { duration: null, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
+});
+
+/** 素材库里就是这几份:种类、标签在服务端筛(和真的一样,一页交回)。 */
+function serve(cards: AssetCard[]) {
+  vi.mocked(listAssetPage).mockImplementation(async (query: AssetQuery) => {
+    const items = cards.filter(
+      (one) => (!query.kind || query.kind.includes(one.kind)) && (query.tag ?? []).every((tag) => one.tags?.includes(tag)),
+    );
+    return { items, next_cursor: null, total: items.length };
+  });
+  const count = (values: string[]) => Object.fromEntries([...new Set(values)].map((one) => [one, values.filter((v) => v === one).length]));
+  vi.mocked(getAssetFacets).mockResolvedValue({
+    total: cards.length,
+    kinds: count(cards.map((one) => one.kind)),
+    tags: count(cards.flatMap((one) => one.tags ?? [])),
+  });
+}
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en" }) }));
 vi.mock("@/features/media/recordingContext", () => ({ useRecorder: () => ({ openRecorder: vi.fn() }) }));
 vi.mock("@/features/media/UrlImportDialog", () => ({ UrlImportDialog: () => null }));
@@ -20,11 +44,10 @@ vi.mock("@/features/media/AssetPreviewModal", () => ({ AssetPreviewModal: () => 
 it("keeps only the current asset action menu open and closes it for a context menu", async () => {
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["assets", "ws"], ["one", "two", "three"].map(id => ({
-    id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind: "image", source: "imported", tags: [], media_info: {}, proxy_expected: false, ai_generated: false,
-  }) as Asset));
+  serve(["one", "two", "three"].map((id) => asset(id, "image")));
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
+  await screen.findByRole("button", { name: "studioActions: one" });
   for (const id of ["one", "two", "three"]) {
     await user.click(screen.getByRole("button", { name: `studioActions: ${id}` }));
     await waitFor(() => expect(screen.getAllByRole("menuitem", { name: "rename" })).toHaveLength(1));
@@ -42,13 +65,11 @@ it("keeps only the current asset action menu open and closes it for a context me
 it("有声音的素材才能分离人声与背景音,点了就排任务", async () => {
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  const asset = (id: string, kind: Asset["kind"]) =>
-    ({ id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind, source: "imported", tags: [], media_info: {}, proxy_expected: false, ai_generated: false }) as Asset;
-  client.setQueryData(["assets", "ws"], [asset("clip", "video"), asset("still", "image")]);
+  serve([asset("clip", "video"), asset("still", "image")]);
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
 
-  await user.click(screen.getByRole("button", { name: "studioActions: still" }));
+  await user.click(await screen.findByRole("button", { name: "studioActions: still" }));
   await waitFor(() => expect(screen.getByRole("menuitem", { name: "rename" })).toBeInTheDocument());
   expect(screen.queryByRole("menuitem", { name: "separateAudio" })).not.toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "denoiseAction" })).not.toBeInTheDocument();
@@ -62,13 +83,11 @@ it("有声音的素材才能分离人声与背景音,点了就排任务", async 
 it("有声音的素材能降噪:点了打开降噪对话框", async () => {
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["assets", "ws"], [
-    { id: "clip", name: "clip", workspace_id: "ws", project_id: null, original_filename: "clip", file_key: "clip", kind: "audio", source: "imported", tags: [], media_info: {}, proxy_expected: false, ai_generated: false } as Asset,
-  ]);
+  serve([asset("clip", "audio")]);
   client.setQueryData(["denoise-engines"], []);
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
+  await user.click(await screen.findByRole("button", { name: "studioActions: clip" }));
   await user.click(await screen.findByRole("menuitem", { name: "denoiseAction" }));
   expect(await screen.findByRole("dialog", { name: "denoiseTitle" })).toBeInTheDocument();
 });
@@ -79,9 +98,7 @@ it("从起点进来时清掉记住的类型和标签筛选", async () => {
   localStorage.setItem("mosael:tab:media-kind", "video");
   localStorage.setItem("mosael:selected-set:media-tags", JSON.stringify(["b-roll"]));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  const asset = (id: string, kind: Asset["kind"], tags: string[]) =>
-    ({ id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind, source: "imported", tags, media_info: {}, proxy_expected: false, ai_generated: false }) as Asset;
-  client.setQueryData(["assets", "ws"], [asset("clip", "video", ["b-roll"]), asset("still", "image", [])]);
+  serve([asset("clip", "video", ["b-roll"]), asset("still", "image", [])]);
   gotoSection("media");
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   expect(await screen.findByRole("button", { name: "still" })).toBeInTheDocument();

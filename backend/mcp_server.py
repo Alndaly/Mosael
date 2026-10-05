@@ -272,34 +272,49 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(effect="reads")
-def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "") -> list[dict[str, Any]]:
-    """Read-only: list media assets in a workspace (id, name, kind, source, duration).
+def list_assets(
+    workspace_id: str = "",
+    kind: str = "",
+    name_contains: str = "",
+    limit: int = 50,
+    cursor: str = "",
+) -> dict[str, Any]:
+    """Read-only: list media assets in a workspace, newest first, one page at a time.
 
+    Returns {assets: [{id, name, kind, source, duration_seconds}], count, total, next_cursor}.
     Use when you need asset_id values for timeline clips, visual analysis, tagging,
     or choosing generated/imported media. Filter with kind ("video"/"image"/"audio"/
-    "document") and/or name_contains to batch-select. kind "document" is an uploaded
-    file — PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB; it has no
-    picture or sound, so it never goes on a timeline or into generation as a reference.
-    Do NOT use for knowledge-base notes or workflow nodes (read_note / list_workflows).
-    Leave workspace_id empty to use this conversation's workspace.
+    "document") and/or name_contains (matches name, original file name or a tag) to
+    batch-select. kind "document" is an uploaded file — PDF, Word, PowerPoint, Excel, CSV,
+    Markdown, text, web page, EPUB; it has no picture or sound, so it never goes on a
+    timeline or into generation as a reference. limit is 1–200 (default 50); when
+    next_cursor is not null there are more — call again with cursor=next_cursor and the
+    same filters. Do NOT use for knowledge-base notes or workflow nodes
+    (read_note / list_workflows). Leave workspace_id empty to use this conversation's workspace.
     """
     workspace_id = workspace_id or _default_workspace_id()
-    from app.api.schemas import AssetOut
     from app.domain.assets import use_cases
+    from app.domain.assets.listing import MAX_PAGE_SIZE, AssetScope
 
-    assets = _use_case(
-        use_cases.list_assets, workspace_id, kind=kind or None, name_contains=name_contains or None, out=AssetOut
-    )
-    return [
-        {
-            "id": asset["id"],
-            "name": asset["name"],
-            "kind": asset["kind"],
-            "source": asset["source"],
-            "duration_seconds": asset.get("media_info", {}).get("duration"),
-        }
-        for asset in assets
-    ]
+    scope = AssetScope(workspace_id=workspace_id, kinds=(kind,) if kind and kind != "all" else (), query=name_contains)
+
+    def one_page(db, user) -> dict[str, Any]:
+        # 在事务里摊平:出了会话,ORM 对象的属性就读不到了(见 _use_case)。
+        found = use_cases.list_assets(db, user, scope, cursor=cursor or None,
+                                      limit=max(1, min(int(limit), MAX_PAGE_SIZE)))
+        assets = [
+            {
+                "id": asset.id,
+                "name": asset.name,
+                "kind": asset.kind,
+                "source": asset.source,
+                "duration_seconds": (asset.media_info or {}).get("duration"),
+            }
+            for asset in found.items
+        ]
+        return {"assets": assets, "count": len(assets), "total": found.total, "next_cursor": found.next_cursor}
+
+    return _use_case(one_page)
 
 
 @tool(effect="reads")

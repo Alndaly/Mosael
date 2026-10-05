@@ -34,7 +34,7 @@ def _exported_file(client, workspace_id: str, tmp_path: Path) -> Path:
     已经拷进素材库,留着等于同一段成片在磁盘上存两份(实测某台机器攒了 445 MB);
     取消/失败时它是个半截,更不该留。
     """
-    assets = client.get(f"/api/assets?workspace_id={workspace_id}").json()
+    assets = client.get(f"/api/assets?workspace_id={workspace_id}").json()["items"]
     exported = next(item for item in assets if item["source"] == "exported")
     path = tmp_path / "exported.mp4"
     path.write_bytes(client.get(f"/api/assets/{exported['id']}/file").content)
@@ -83,7 +83,7 @@ def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
     assert not (settings.data_dir / "exports" / f"{job['id']}.mp4").exists()
     assert _exported_file(client, ws["id"], tmp_path).stat().st_size > 0
 
-    exported_asset = client.get(f"/api/assets?workspace_id={ws['id']}").json()
+    exported_asset = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"]
     exported = next(item for item in exported_asset if item["source"] == "exported")
     assert exported["kind"] == "video"
     assert abs(exported["media_info"]["duration"] - 2.5) < 0.2

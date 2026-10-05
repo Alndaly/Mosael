@@ -75,7 +75,7 @@ function renderForm(config: Record<string, unknown>) {
       body = [{ value: "x", label: "X 平台" }];
     } else if (url.pathname.endsWith("/assets")) {
       asked.push("assets");
-      body = [{ id: "a1", name: "开场.mp4", original_filename: "open.mp4" }];
+      body = { items: [{ id: "a1", name: "开场.mp4", original_filename: "open.mp4" }], next_cursor: null, total: 1 };
     }
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
@@ -324,11 +324,11 @@ describe("节点表单", () => {
 
   it("素材字段声明了收哪几种(转写:音频和视频),下拉只列那几种", async () => {
     const specs = { clip: { type: "text", label: "音视频", data_type: "asset", media: ["audio", "video"] } } as unknown as Record<string, ConfigSpec>;
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify([
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ items: [
       { id: "i1", name: "封面.png", kind: "image" },
       { id: "a1", name: "口播.wav", kind: "audio" },
       { id: "v1", name: "开场.mp4", kind: "video" },
-    ]), { status: 200, headers: { "content-type": "application/json" } })) as never;
+    ], next_cursor: null, total: 3 }), { status: 200, headers: { "content-type": "application/json" } })) as never;
     function MediaHost() {
       const fieldOptions = useNodeFieldOptions({ specs, config: {}, workspaceId: "w1", nodeType: "x.transcribe" });
       return (

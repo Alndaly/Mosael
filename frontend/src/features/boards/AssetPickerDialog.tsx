@@ -1,15 +1,14 @@
 import React from "react";
-import { assetKeys } from "@/api/queryKeys";
 import { FileUp, Image as ImageIcon, Music, Upload } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 
-import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
+import { assetThumbnailUrl, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
 import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { AssetUploadStatus, acceptFor, fileKind, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
+import { useAssetDetails, useAssetSearch } from "@/lib/assetQueries";
 import { useFileDrop } from "@/lib/useFileDrop";
 
 /**
@@ -28,8 +27,11 @@ import { useFileDrop } from "@/lib/useFileDrop";
  * (三种都列时三种都收),传完就当是挑中了它 —— 和点一行同一个 `onPick`。
  */
 /** 行尾那句说明:尺寸、时长 —— 挑素材时真正要看的东西。取不到就不写,不编。 */
-function describe(asset: Asset): string {
-  const info = (asset.media_info ?? {}) as { width?: number; height?: number; duration?: number };
+/** 清单里的一行:素材库的卡片,或「这张画板上的」那几份的详情 —— 两种都有这几样。 */
+type PickerRow = Pick<AssetCard, "id" | "name" | "original_filename" | "kind"> & { media_info: Record<string, unknown> };
+
+function describe(asset: PickerRow): string {
+  const info = asset.media_info as { width?: number | null; height?: number | null; duration?: number | null };
   const parts: string[] = [];
   if (info.width && info.height) parts.push(`${info.width}×${info.height}`);
   if (info.duration) parts.push(`${Math.round(info.duration)}s`);
@@ -60,7 +62,6 @@ export function AssetPickerDialog({
   onBoard?: readonly string[];
 }) {
   const t = useI18n();
-  const [keyword, setKeyword] = React.useState("");
   const [only, setOnly] = React.useState<PickedKind | "all">("all");
   const listed: readonly PickedKind[] = withDocuments ? [...MEDIA_KINDS, "document"] : MEDIA_KINDS;
   const boardSet = React.useMemo(() => new Set(onBoard ?? []), [onBoard]);
@@ -72,21 +73,19 @@ export function AssetPickerDialog({
   const mixed = kind === "media";
   const kinds: readonly PickedKind[] = !mixed ? [kind] : only === "all" ? listed : [only];
 
-  const assets = useQuery({
-    queryKey: assetKeys.list(workspaceId),
-    queryFn: () => listAssets(workspaceId),
-    enabled: open,
-  });
-
-  const images = React.useMemo(() => {
-    const all = (assets.data ?? []).filter((asset: Asset) =>
-      (kinds as readonly string[]).includes(asset.kind) && (!boardOnly || boardSet.has(asset.id)));
-    const needle = keyword.trim().toLowerCase();
-    if (!needle) return all;
-    return all.filter((asset: Asset) =>
-      `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
+  //: 整个素材库:种类和搜索词交给服务端,往下滚接着取(见 useAssetSearch)。
+  const library = useAssetSearch({ workspace_id: workspaceId, kind: [...kinds] }, { enabled: open && !boardOnly });
+  //: 「这张画板上的」:就是那几份,按 id 取 —— 一张画板上的素材通常就几十份,不必翻页;搜索在这几份里筛。
+  const boardAssets = useAssetDetails(open && boardOnly ? [...boardSet] : []);
+  const onBoardItems = React.useMemo(() => {
+    const needle = library.text.trim().toLowerCase();
+    return [...boardAssets.byId.values()].filter(
+      (asset) =>
+        (kinds as readonly string[]).includes(asset.kind) &&
+        (!needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle)),
     );
-  }, [assets.data, kinds, keyword, boardOnly, boardSet]);
+  }, [boardAssets.byId, kinds, library.text]);
+  const images: readonly PickerRow[] = boardOnly ? onBoardItems : library.items;
 
   //: 直接传一个:只收这一格要的那一种;收不了的就地说一句(拖进图片槽的一段视频)。
   const upload = useAssetUpload(workspaceId);
@@ -181,8 +180,8 @@ export function AssetPickerDialog({
         ) : null,
       }}
       searchLabel={t("boardsSearchImages")}
-      query={keyword}
-      onQueryChange={setKeyword}
+      query={library.text}
+      onQueryChange={library.search}
       items={images}
       itemKey={(asset) => asset.id}
       //: **一行一个,不是缩略图墙。** 光看图分不出「同一个人的三版」哪个是哪个 —— 名字、尺寸、时长才是
@@ -202,9 +201,11 @@ export function AssetPickerDialog({
         const placed = placedAsset(asset);
         if (placed) onPick(placed);
       }}
-      pending={assets.isLoading}
-      error={assets.isError ? assets.error.message : null}
-      onRetry={() => void assets.refetch()}
+      pending={boardOnly ? !boardAssets.settled : library.isLoading}
+      error={!boardOnly && library.isError ? library.error.message : null}
+      onRetry={() => void library.refetch()}
+      onReachEnd={!boardOnly && library.hasNextPage ? () => void (library.isFetchingNextPage || library.fetchNextPage()) : undefined}
+      loadingMore={!boardOnly && library.isFetchingNextPage}
       empty={{
         icon: <EmptyIcon size={24} strokeWidth={1.5} />,
         text: t(mixed ? "boardsNoMedia" : kind === "video" ? "boardsNoVideos" : kind === "audio" ? "boardsNoAudios" : "boardsNoImages"),

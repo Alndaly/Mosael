@@ -1,4 +1,3 @@
-import { assetKeys } from "@/api/queryKeys";
 import type { NoteReference } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import React from "react";
@@ -6,9 +5,8 @@ import React from "react";
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
 
-import { useQuery } from "@tanstack/react-query";
 
-import { listAssets, type Asset, type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
+import { type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
 import { resolvedShot, SceneReferencePicker, sceneReferenceUses, useReferencedScene } from "@/features/boards/SceneReferencePicker";
 import {
   collect,
@@ -18,6 +16,7 @@ import {
   type PromptDocument,
 } from "@/features/boards/PromptEditor";
 import { useSubmitting } from "@/features/boards/useSubmitting";
+import { useAssetDetails, useMentionCandidates } from "@/lib/assetQueries";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
@@ -663,31 +662,10 @@ export function NodeComposer({
    * 只列这个模型**收得下**的类别:它一个视频槽都没有的时候,把视频列出来等于让用户选一个
    * 挂不上去的东西。
    */
-  //: **面板一开就预取**,不等到敲下 @ 才拉。插件是在每次按键时问一次候选的:等到那一刻
-  //: 才发请求的话,第一次敲 @ 手上是空的 —— 菜单不出,用户得再多敲一个字它才冒出来。
-  const library = useQuery({
-    queryKey: assetKeys.list(workspaceId),
-    queryFn: () => listAssets(workspaceId),
-    enabled: slots.length > 0,
-  });
-  const assetKindById = React.useMemo(
-    () => new Map((library.data ?? []).map((asset: Asset) => [asset.id, asset.kind])),
-    [library.data],
-  );
+  //: 在服务端按这几种、敲的字搜(见 useMentionCandidates):提示词编辑器每次 query 变了问一次,等它回来再画菜单。
   const accepted = React.useMemo(() => new Set(slots.map((slot) => roleAccepts(slot.role))), [slots]);
-  const candidates = React.useCallback(
-    (query: string) => {
-      const needle = query.trim().toLowerCase();
-      return (library.data ?? [])
-        .filter((asset: Asset) => accepted.has(asset.kind as "image" | "video" | "audio"))
-        .filter(
-          (asset: Asset) =>
-            !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
-        )
-        .slice(0, 8);
-    },
-    [library.data, accepted],
-  );
+  const acceptedKinds = React.useMemo(() => [...accepted].sort(), [accepted]);
+  const candidates = useMentionCandidates(workspaceId, acceptedKinds);
 
   //: 正文里 chip 引用到的素材。它们和上面那排槽位是**两件事**:槽位挂的是首帧/参考这种
   //: 有角色的位置,而 chip 是「我在这句话里指的是这张图」。提交时两边都进 source_assets。
@@ -699,11 +677,21 @@ export function NodeComposer({
     (query: string) => matchEntities(mentionable.data, query).slice(0, 6),
     [mentionable.data],
   );
+  //: 槽位里挂着的和正文里 @ 到的那几份,按 id 取:槽位的预览要真实种类,恢复 chip 要名字,分到哪个槽要种类。
+  const referencedIds = React.useMemo(
+    () => [...sources.map((one) => one.assetId), ...mentioned],
+    [sources, mentioned],
+  );
+  const referenced = useAssetDetails(referencedIds);
+  const assetKindById = React.useMemo(
+    () => new Map([...referenced.byId.values()].map((asset) => [asset.id, asset.kind])),
+    [referenced.byId],
+  );
   React.useEffect(() => {
-    if (promptDocument || mentioned.length === 0 || !library.data?.length) return;
-    const restored = restorePromptDocument(prompt, mentioned, library.data);
+    if (promptDocument || mentioned.length === 0 || !referenced.settled || referenced.byId.size === 0) return;
+    const restored = restorePromptDocument(prompt, mentioned, [...referenced.byId.values()]);
     if (collect(restored as { content?: unknown[] }).length > 0) setPromptDocument(restored);
-  }, [promptDocument, prompt, mentioned, library.data]);
+  }, [promptDocument, prompt, mentioned, referenced]);
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
@@ -788,7 +776,7 @@ export function NodeComposer({
   //: 挂了驱动音频 = 数字人生成:要勾上授权才发得出去(后端生成漏斗同一条)。不存进格子的表单 —— 每次发都要本人勾。
   //: 按**发出去的**那一份判:正文里 `@` 到的一段音频也会落进驱动音频的槽(见 mergeSourceAssets)。
   const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
-  const outgoingSources = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, library.data ?? [], slots);
+  const outgoingSources = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, [...referenced.byId.values()], slots);
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
   const canSend =
     Boolean(current) && hasEnoughText(current, prompt) && sceneReady && (!needsDigitalHumanConsent || digitalHumanConsent);

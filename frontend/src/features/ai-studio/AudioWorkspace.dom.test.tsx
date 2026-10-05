@@ -43,6 +43,16 @@ const ASSETS = [
   { id: "a3", name: "导入的歌", kind: "audio", source: "imported", created_at: "2026-09-03T00:00:00Z", workspace_id: "w1", project_id: null, original_filename: "", file_key: "k", media_info: {} },
 ];
 
+//: 素材库在服务端按种类、来源筛,一页交回(「最近生成」只要这一种产物的最新几条)。
+function assetPage(url: string) {
+  const query = new URL(url).searchParams;
+  const kinds = query.getAll("kind");
+  const items = ASSETS.filter(
+    (one) => (kinds.length === 0 || kinds.includes(one.kind)) && (!query.get("source") || one.source === query.get("source")),
+  );
+  return { items, next_cursor: null, total: items.length };
+}
+
 function renderWorkspace({ engines = ENGINES, voices = [] as unknown[] } = {}) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -64,7 +74,7 @@ function renderWorkspace({ engines = ENGINES, voices = [] as unknown[] } = {}) {
               : url.includes("/api/voices")
                 ? voices
                 : url.includes("/api/assets")
-                  ? ASSETS
+                  ? assetPage(url)
                   : url.includes("/api/jobs/")
                     ? { id: "job-1", status: "running" }
                     : [];

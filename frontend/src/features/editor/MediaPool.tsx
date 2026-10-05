@@ -3,7 +3,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Search, Tag, Trash2 } from "lucide-react";
 
-import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
+import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
@@ -13,40 +13,44 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/components/app/TagsDialog";
 import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
 import { TagChips } from "@/features/media/TagChips";
-import { TAG_MATCHES, tagsOf, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
+import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
+import { useAssetFacets, useAssetPages } from "@/lib/assetQueries";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useReachEnd } from "@/lib/useReachEnd";
 import { useDraggable } from "@dnd-kit/core";
-import { assetKindKey, isMediaAsset, kindHasSound } from "@/lib/assetKinds";
+import { assetKindKey, kindHasSound, MEDIA_KINDS } from "@/lib/assetKinds";
 import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
 
 export function MediaPool({
-  assets: projectAssets,
+  workspaceId,
+  projectId,
   uploading,
   onImportFiles,
   onRecord,
   onAddToTimeline,
 }: {
-  assets: Asset[];
+  workspaceId: string;
+  /** 这个项目里的素材,连同工作区级的(素材库里导入的那些)。 */
+  projectId: string;
   uploading: boolean;
   onImportFiles: (files: File[]) => void;
   onRecord: () => void;
-  onAddToTimeline: (asset: Asset) => void;
+  onAddToTimeline: (asset: AssetCard) => void;
 }) {
-  //: 剪辑页的素材池只列能放上时间线的:文档(ADR 0031)没有画面和声音,在素材库里看、给智能体读。
-  const assets = React.useMemo(() => projectAssets.filter(isMediaAsset), [projectAssets]);
   const t = useI18n();
   const qc = useQueryClient();
-  const [renaming, setRenaming] = React.useState<Asset | null>(null);
-  const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
-  const [deleting, setDeleting] = React.useState<Asset | null>(null);
+  const [renaming, setRenaming] = React.useState<AssetCard | null>(null);
+  const [editingTags, setEditingTags] = React.useState<AssetCard | null>(null);
+  const [deleting, setDeleting] = React.useState<AssetCard | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   // 人声分离 / 降噪处理的是整份素材、产出进素材库 —— 和素材库那边是同一个实现。
   const audioActions = useAssetAudioActions();
@@ -54,28 +58,37 @@ export function MediaPool({
   // 当前工程的素材,那边是整个工作区的,两处各筛各的。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("editor-pool-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
-  const tagCount = React.useMemo(() => tagCounts(assets), [assets]);
+  const settledSearch = useDebouncedValue(search.trim());
+  //: 标签候选和总数:这个项目范围里的(见后端 domain/assets/listing.facets),不跟着搜索走。
+  const facets = useAssetFacets(workspaceId, projectId);
+  const tagCount = React.useMemo(() => sortedTagCounts(facets.data?.tags ?? {}), [facets.data]);
   const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
   // 存着一个已经没有素材带着的标签时当作没勾(usePersistentSet 自己验),面板不会空得莫名其妙。
-  const [tagFilter, setTagFilter] = usePersistentSet("editor-pool-tags", allTags);
+  const [tagFilter, setTagFilter] = usePersistentSet("editor-pool-tags", facets.data === undefined ? undefined : allTags);
   const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("editor-pool-tag-match", "all", TAG_MATCHES);
-  const visibleAssets = React.useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return assets.filter(
-      (asset) =>
-        matchesTags(asset, tagFilter, tagMatch) &&
-        (kindFilter === "all" || asset.kind === kindFilter) &&
-        (query === "" ||
-          asset.name.toLowerCase().includes(query) ||
-          tagsOf(asset).some((tag) => tag.toLowerCase().includes(query)) ||
-          asset.kind.toLowerCase().includes(query)),
-    );
-  }, [assets, kindFilter, search, tagFilter, tagMatch]);
+  //: 种类、搜索、标签交给服务端,一页页往下取。只列能放上时间线的(MEDIA_KINDS):文档(ADR 0031)
+  //: 没有画面和声音,在素材库里看、给智能体读。
+  const pool = useAssetPages({
+    workspace_id: workspaceId,
+    project_id: projectId,
+    kind: kindFilter === "all" ? [...MEDIA_KINDS] : [kindFilter],
+    q: settledSearch || undefined,
+    tag: tagFilter.length > 0 ? tagFilter : undefined,
+    tag_match: tagMatch,
+  });
+  const visibleAssets = pool.items;
+  const end = useReachEnd<HTMLDivElement>(
+    pool.hasNextPage ? () => void (pool.isFetchingNextPage || pool.fetchNextPage()) : undefined,
+    visibleAssets.length,
+  );
+  //: 能放上时间线的一共几份(不含文档)。
+  const mediaTotal = facets.data ? MEDIA_KINDS.reduce((sum, kind) => sum + (facets.data.kinds[kind] ?? 0), 0) : undefined;
   // 头上那个数要说清楚是什么:没筛就是「N 个素材」,筛了就是「剩几个 / 一共几个」。
   const filtering = kindFilter !== "all" || tagFilter.length > 0 || search.trim() !== "";
+  const shown = pool.total ?? visibleAssets.length;
   const countLabel = filtering
-    ? t("mediaPoolCountFiltered").replace("{shown}", String(visibleAssets.length)).replace("{total}", String(assets.length))
-    : t("mediaPoolCount").replace("{count}", String(assets.length));
+    ? t("mediaPoolCountFiltered").replace("{shown}", String(shown)).replace("{total}", String(mediaTotal ?? "—"))
+    : t("mediaPoolCount").replace("{count}", String(mediaTotal ?? shown));
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
     video: t("kindVideo"),
@@ -195,8 +208,9 @@ export function MediaPool({
             </ContextMenuContent>
           </ContextMenu>
         ))}
-        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
-        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
+        {pool.hasNextPage && <div ref={end} aria-hidden="true" className="h-px" />}
+        {mediaTotal === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
+        {Boolean(mediaTotal) && pool.isSuccess && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
       {audioActions.denoiseDialog}
@@ -231,14 +245,14 @@ export function MediaPool({
   );
 }
 
-function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
+function PoolItem({ asset, onAdd }: { asset: AssetCard; onAdd: () => void }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
   // dnd-kit(指针驱动):原生 HTML5 拖拽在 Electron + Radix 包裹下不可靠,这里全面换掉。
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `asset-${asset.id}`, data: { asset } });
   const [thumbFailed, setThumbFailed] = React.useState(false);
-  const duration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : null;
-  const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
+  const duration = asset.media_info.duration;
+  const hasThumb = asset.media_info.has_thumbnail && !thumbFailed;
   return (
     <div
       ref={setNodeRef}

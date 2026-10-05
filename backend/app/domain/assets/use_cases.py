@@ -14,14 +14,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Job, Transcript, User
+from app.db.models import Asset, Clip, Job, Transcript, User
+from app.domain.assets import listing
 from app.domain.assets.deletion import Deleted, delete_asset as _delete
+from app.domain.assets.listing import DEFAULT_PAGE_SIZE, AssetFacets, AssetPage, AssetScope
 from app.domain.assets.project_scope import asset_project
 from app.domain.assets.web_capture import RunOrigin
-from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_asset
+from app.domain.permissions import (
+    NotVisible,
+    ensure_workspace_access,
+    ensure_workspace_perm,
+    require_asset,
+    require_sequence_access,
+)
 
 #: 标签的长度上限;更长的截断。
 TAG_MAX_CHARS = 40
@@ -55,23 +63,32 @@ def lineage(db: Session, user: User, asset_id: str) -> dict[str, Any]:
 def list_assets(
     db: Session,
     user: User,
-    workspace_id: str,
+    scope: AssetScope,
     *,
-    project_id: str | None = None,
-    kind: str | None = None,
-    name_contains: str | None = None,
-) -> list[Asset]:
+    sort: str = "created",
+    cursor: str | None = None,
+    limit: int = DEFAULT_PAGE_SIZE,
+) -> AssetPage:
+    """素材库的一页(筛选、排序、游标见 domain/assets/listing)。"""
+    ensure_workspace_access(db, user, scope.workspace_id)
+    return listing.page(db, scope, sort=sort, cursor=cursor, limit=limit)
+
+
+def asset_facets(db: Session, user: User, workspace_id: str, *, project_id: str | None = None) -> AssetFacets:
+    """页签上的数字和标签筛选的候选(整个范围的,不跟着搜索和这一页走)。"""
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Asset).where(Asset.workspace_id == workspace_id)
-    if project_id:
-        # 工作区级素材(project_id IS NULL)属于整个工作区,任何项目都该能用它 —— 否则从
-        # 「素材」页导入的素材在剪辑页看不到(素材页按工作区列,剪辑页按项目过滤)。
-        stmt = stmt.where(or_(Asset.project_id == project_id, Asset.project_id.is_(None)))
-    if kind and kind != "all":
-        stmt = stmt.where(Asset.kind == kind)
-    if name_contains:
-        stmt = stmt.where(Asset.name.contains(name_contains))
-    return list(db.scalars(stmt.order_by(Asset.created_at.desc())))
+    return listing.facets(db, workspace_id, project_id=project_id)
+
+
+def assets_on_sequence(db: Session, user: User, sequence_id: str) -> list[Asset]:
+    """这条时间线上的片段用到的素材,每份一行、完整字段 —— 剪辑台画时间线、监视器、检查器要的就是这些。
+
+    素材库的列表只给卡片字段,而且只列素材库里的;剪辑台按时间线取,才不会因为列表分了页、或者某份素材
+    不在列表里,时间线上就有一段认不出来。
+    """
+    require_sequence_access(db, user, sequence_id)
+    used = select(Clip.asset_id).where(Clip.sequence_id == sequence_id, Clip.asset_id.is_not(None))
+    return list(db.scalars(select(Asset).where(Asset.id.in_(used)).order_by(Asset.created_at, Asset.id)))
 
 
 def transcript_by_source(db: Session, user: User, workspace_id: str, url: str) -> Transcript | None:

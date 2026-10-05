@@ -177,7 +177,7 @@ def test_运行工作流_全部产出进素材库(connected) -> None:
     assert len(output["asset_ids"]) == 2 and output["asset_id"] == output["asset_ids"][0]
     assert [one["filename"] if "filename" in one else one["asset_name"] for one in output["assets"]] == ["u1.png", "u2.png"]
     assert output["assets"][0]["node"] == "4" and output["assets"][0]["media"] == "image"
-    names = {one["id"]: one["name"] for one in client.get(f"/api/assets?workspace_id={workspace}").json()}
+    names = {one["id"]: one["name"] for one in client.get(f"/api/assets?workspace_id={workspace}").json()["items"]}
     assert {names[one] for one in output["asset_ids"]} == {"u1.png", "u2.png"}
     [(_, uploaded)] = comfy.state.uploads
     assert uploaded == PNG, "输入是素材库里那张图的副本"

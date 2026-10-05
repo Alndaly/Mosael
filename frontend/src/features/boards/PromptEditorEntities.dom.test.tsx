@@ -56,7 +56,7 @@ function mount(onChange = vi.fn(), linkedEntities: string[] = []) {
         value=""
         onChange={onChange}
         placeholder="写点什么"
-        candidates={(query) => [PHOTO].filter((one) => one.name.includes(query))}
+        candidates={async (query) => [PHOTO].filter((one) => one.name.includes(query))}
         entities={(query) => [ZHANG, WINTER, STREET].filter((one) => `${one.parent_name}${one.name}`.includes(query))}
         linkedEntities={linkedEntities}
         onSubmit={vi.fn()}

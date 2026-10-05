@@ -30,7 +30,7 @@ def test_project_asset_list_includes_workspace_level_assets() -> None:
     mk("mine", proj["id"])
     mk("theirs", other["id"])
 
-    names = {a["name"] for a in client.get(f"/api/assets?workspace_id={ws['id']}&project_id={proj['id']}").json()}
+    names = {a["name"] for a in client.get(f"/api/assets?workspace_id={ws['id']}&project_id={proj['id']}").json()["items"]}
     assert names == {"workspace-level", "mine"}, names  # 别的项目的素材仍然不串场
 
 
@@ -99,7 +99,7 @@ def test_asset_tags_update_dedupes_and_trims() -> None:
     renamed = client.patch(f"/api/assets/{asset['id']}", json={"name": "A2"}).json()
     assert renamed["tags"] == ["b-roll", "海边"]
 
-    listed = client.get(f"/api/assets?workspace_id={ws['id']}").json()
+    listed = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"]
     assert listed[0]["tags"] == ["b-roll", "海边"]
 
 

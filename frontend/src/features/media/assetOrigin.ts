@@ -1,7 +1,7 @@
 import type { Asset } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 
-type Origin = Pick<Asset, "source" | "derived_from" | "ai_generated">;
+type Origin = Pick<Asset, "source" | "derived" | "ai_generated">;
 
 /**
  * 素材卡片和详情上那个「来源」标签。
@@ -12,7 +12,7 @@ type Origin = Pick<Asset, "source" | "derived_from" | "ai_generated">;
  */
 export function assetOriginKey(asset: Origin): MessageKey {
   if (asset.source === "exported") return "mediaSourceExported";
-  if (asset.derived_from?.length || (asset.source === "generated" && !asset.ai_generated)) return "mediaSourceDerived";
+  if (asset.derived || (asset.source === "generated" && !asset.ai_generated)) return "mediaSourceDerived";
   if (asset.ai_generated) return "mediaSourceGenerated";
   return "mediaSourceImported";
 }

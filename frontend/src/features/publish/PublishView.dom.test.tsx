@@ -19,13 +19,18 @@ vi.mock("@/api/client", async importOriginal => ({
   listPublishPlatforms: vi.fn().mockResolvedValue([
     { platform: "short", label: "Short", description: "", config: {}, title_max: 5, short_title: false, options: [] },
   ]),
+  listAssetPage: vi.fn().mockResolvedValue({
+    items: [{ id: "film", name: "Final cut", kind: "video", media_info: {}, tags: [] }],
+    next_cursor: null,
+    total: 1,
+  }),
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key === "mediaSelectedCount" ? "Selected {n}" : key,
   usePreferences: () => ({ locale: "en-US" }),
 }));
 
-import { assetKeys } from "@/api/queryKeys";
+import { listAssetPage } from "@/api/client";
 import { gotoSection } from "@/lib/deepLink";
 import { PublishView } from "./PublishView";
 
@@ -59,7 +64,6 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView = () => {};
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(assetKeys.list("qa"), [{ id: "film", name: "Final cut", kind: "video", media_info: {}, tags: [] }]);
   render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
@@ -68,6 +72,9 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   const [assetPicker, accountPicker] = within(dialog).getAllByRole("combobox");
   await user.click(assetPicker);
   await user.click(await screen.findByRole("option", { name: "Final cut" }));
+  //: 只问视频,而且是在服务端筛的 —— 不把整个素材库拉回来再挑。
+  expect(vi.mocked(listAssetPage).mock.calls[0][0]).toMatchObject({ workspace_id: "qa", kind: ["video"] });
+  expect(assetPicker).toHaveTextContent("Final cut");
   await user.click(accountPicker);
   expect(screen.queryByRole("option", { name: "Paused account" })).toBeNull();
   await user.click(await screen.findByRole("option", { name: "Live account" }));

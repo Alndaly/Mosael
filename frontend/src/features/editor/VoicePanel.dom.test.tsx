@@ -107,7 +107,9 @@ function renderPanel({
                 ? voiceData
                 : url.includes("/api/jobs/")
                   ? { id: "job-1", status: "running" }
-                  : [];
+                  : url.includes("/api/assets?")
+                    ? { items: [], next_cursor: null, total: 0 }
+                    : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -322,7 +322,7 @@ def test_export_with_pip_overlay_and_music(tmp_path: Path) -> None:
         time.sleep(0.5)
     assert job["status"] == "succeeded", job.get("error")
 
-    exported = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["source"] == "exported")
+    exported = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"] if a["source"] == "exported")
     assert abs(exported["media_info"]["duration"] - 3.0) < 0.2
 
 

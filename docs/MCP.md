@@ -75,7 +75,7 @@
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `inspect_sequence` | 直接执行 | Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
-| `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
+| `list_assets` | 直接执行 | Read-only: list media assets in a workspace, newest first, one page at a time. |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
 | `list_entities` | 直接执行 | Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace. |

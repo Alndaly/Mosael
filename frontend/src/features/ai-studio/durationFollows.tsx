@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listAssets, type Asset, type GenerationOption } from "@/api/client";
+import { getAsset, type GenerationOption } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -36,14 +36,12 @@ export function DurationFollowsNote({ role }: { role: string }) {
 /** 所选时长比挂着的那份素材短、而这个模型会截掉多出来的部分时,说截掉几秒,给一个「按它的长度」。 */
 export function TruncationHint({
   model,
-  workspaceId,
   frames,
   durationSeconds,
   bounds,
   onUseSourceLength,
 }: {
   model: GenerationOption | null | undefined;
-  workspaceId: string;
   frames: Record<string, FrameSlot[]>;
   durationSeconds: string;
   bounds: { min?: number; max?: number };
@@ -52,12 +50,12 @@ export function TruncationHint({
   const t = useI18n();
   const role = capabilityRole(model, "truncates_role");
   const assetId = role ? (frames[role]?.[0]?.assetId ?? "") : "";
-  const library = useQuery({
-    queryKey: assetKeys.list(workspaceId),
-    queryFn: () => listAssets(workspaceId),
+  //: 只要槽里那一份的时长:按 id 取详情,不把整个素材库拉回来再找。
+  const asset = useQuery({
+    queryKey: assetKeys.detail(assetId),
+    queryFn: () => getAsset(assetId),
     enabled: Boolean(assetId),
-  });
-  const asset = (library.data ?? []).find((one: Asset) => one.id === assetId);
+  }).data;
   const sourceSeconds = Number((asset?.media_info as { duration?: number } | undefined)?.duration ?? 0);
   const chosen = Number(durationSeconds);
   if (!role || !assetId || !(sourceSeconds > 0) || !(chosen > 0) || sourceSeconds <= chosen) return null;

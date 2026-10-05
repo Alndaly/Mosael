@@ -1,15 +1,15 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Check, Film, ImageIcon, Search } from "lucide-react";
 
-import { assetKeys } from "@/api/queryKeys";
-import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
+import { assetThumbnailUrl, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAssetSearch } from "@/lib/assetQueries";
+import { useReachEnd } from "@/lib/useReachEnd";
 import { cn } from "@/lib/utils";
 
 type KindFilter = "all" | "image" | "video";
@@ -36,24 +36,23 @@ export function LibraryPickerDialog({
   onAdd: (assetIds: string[]) => void;
 }) {
   const t = useI18n();
-  const [keyword, setKeyword] = React.useState("");
   const [kind, setKind] = React.useState<KindFilter>("all");
   const [picked, setPicked] = React.useState<string[]>([]);
-  const assets = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId), enabled: open });
+  //: 种类和搜索词交给服务端,往下滚接着取(见 useAssetSearch)。能当参考图的只有图片和视频。
+  const assets = useAssetSearch({ workspace_id: workspaceId, kind: kind === "all" ? ["image", "video"] : [kind] }, { enabled: open });
+  const { search } = assets;
 
   React.useEffect(() => {
     if (!open) return;
-    setKeyword("");
+    search("");
     setKind("all");
     setPicked([]);
-  }, [open]);
+  }, [open, search]);
 
-  const needle = keyword.trim().toLowerCase();
-  const items = (assets.data ?? []).filter(
-    (asset) =>
-      (asset.kind === "image" || asset.kind === "video") &&
-      (kind === "all" || asset.kind === kind) &&
-      (!needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle)),
+  const items = assets.items;
+  const end = useReachEnd<HTMLLIElement>(
+    assets.hasNextPage ? () => void (assets.isFetchingNextPage || assets.fetchNextPage()) : undefined,
+    items.length,
   );
   const toggle = (id: string) => setPicked((current) => (current.includes(id) ? current.filter((one) => one !== id) : [...current, id]));
   const filterLabel: Record<KindFilter, string> = { all: t("entityLibraryAll"), image: t("entityLibraryImages"), video: t("entityLibraryVideos") };
@@ -74,8 +73,8 @@ export function LibraryPickerDialog({
               className="pl-8"
               aria-label={t("entityLibrarySearch")}
               placeholder={t("entityLibrarySearch")}
-              value={keyword}
-              onChange={(event) => setKeyword(event.currentTarget.value)}
+              value={assets.text}
+              onChange={(event) => search(event.currentTarget.value)}
             />
           </span>
           <div role="radiogroup" aria-label={t("entityLibraryKind")} className="flex gap-1">
@@ -127,7 +126,7 @@ export function LibraryPickerDialog({
       ) : items.length === 0 ? (
         <div className="grid justify-items-center gap-2 py-16 text-center text-ui-sm text-muted-foreground">
           <ImageIcon size={26} strokeWidth={1.3} />
-          {needle || kind !== "all" ? t("studioNoMatches") : t("entityLibraryEmpty")}
+          {assets.query || kind !== "all" ? t("studioNoMatches") : t("entityLibraryEmpty")}
         </div>
       ) : (
         <ul className={cn("m-0 list-none p-0", GRID)} role="listbox" aria-multiselectable="true" aria-label={t("entityLibraryTitle")}>
@@ -140,6 +139,8 @@ export function LibraryPickerDialog({
               onToggle={() => toggle(asset.id)}
             />
           ))}
+          {/* 末尾一条线:进了视野就接着取下一页。占满一整行,不挤进格子里。 */}
+          {assets.hasNextPage && <li ref={end} aria-hidden="true" className="col-span-full h-px" />}
         </ul>
       )}
     </ModalShell>
@@ -147,7 +148,7 @@ export function LibraryPickerDialog({
 }
 
 /** 一格素材。选中时右上角是挑的先后(1、2、3 —— 挂上去就是这个顺序)。 */
-function Tile({ asset, attached, order, onToggle }: { asset: Asset; attached: boolean; order: number; onToggle: () => void }) {
+function Tile({ asset, attached, order, onToggle }: { asset: AssetCard; attached: boolean; order: number; onToggle: () => void }) {
   const t = useI18n();
   const selected = order >= 0;
   const name = asset.name || asset.original_filename || "";
