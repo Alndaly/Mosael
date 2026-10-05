@@ -277,6 +277,64 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
     return [{"value": voice, "label": label} for voice, label in VOLCANO_BUILTIN_VOICES]
 
 
+def clone_engine_ready() -> bool | None:
+    """本机克隆引擎(配音库的音色走它)跑不跑得起来:True 跑得起来,False 已知跑不起来(没有运行环境、或权重没下),
+    None 还没测过。只读已经测过的结果，不在请求里起探测(起子进程 import torch 要十几秒)。"""
+    from app.ai.runtime import config as tts_config
+    from app.ai.runtime import tts_models
+
+    engine = tts_config.get().engine
+    ready, known = tts_models.runtime_status(engine)
+    if known and not ready:
+        return False
+    if ready and not tts_models.is_installed(engine):
+        return False
+    return True if ready else None
+
+
+def cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:
+    """这个工作区的配音库里有没有**能用的**克隆音色:`met` 有、而且克隆引擎跑得起来;`missing` 没有音色或引擎已知
+    跑不起来;`unknown` 有音色、引擎还没测过。`digital_human`:要交给数字人的，只算声明过是谁的那几把(ADR 0028 §5)。
+
+    模板的前置检查、建图时预填音色、配音节点说「用的是哪把嗓子」用的都是这一个判据。
+    """
+    from sqlalchemy import select
+
+    from app.db.models import Voice
+    from app.domain.voices.consent import UNDECLARED
+
+    if not workspace_id:
+        return "missing"
+    query = select(Voice.id).where(Voice.workspace_id == workspace_id)
+    if digital_human:
+        query = query.where(Voice.consent_kind != UNDECLARED)
+    if db.scalar(query.limit(1)) is None:
+        return "missing"
+    ready = clone_engine_ready()
+    return "missing" if ready is False else "met" if ready else "unknown"
+
+
+def voice_note(db: Session, *, engine: str, voice: str, workspace_id: str, user_id: str | None) -> str:
+    """「这次配音用的是哪把嗓子」—— 按**实际**念的引擎和音色说的一句话(配音节点的 `voice_note`,完成通知里用)。
+
+    用的不是克隆音色时,顺带说清楚配音库里有没有能用的克隆音色(判据和模板预填音色同一个,见
+    cloned_voice_status):此前带货口播的那句是建图时写死的,之后在节点里换上克隆音色,通知照样说 Edge。
+    """
+    from app.core.i18n import fragment, tr
+    from app.db.models import Voice
+
+    engine = (engine or "").strip() or CLONE_ENGINE
+    if engine == CLONE_ENGINE:
+        row = db.get(Voice, voice) if voice else None
+        return tr("wfVoice_cloned", name=row.name if row is not None else voice)
+    entry = next((one for one in describe_engines(db, user_id) if one["id"] == engine), None)
+    label = str(entry["label"]) if entry is not None else engine
+    named = {one["value"]: one["label"] for one in list_engine_voices(db, engine, user_id=user_id)}
+    spoken = str(named.get(voice, voice)).split("(")[0].strip() or voice
+    has_clone = cloned_voice_status(db, workspace_id) != "missing"
+    return tr("wfVoice_engineCloneReady" if has_clone else "wfVoice_engineNoClone", voice=spoken, engine=fragment(label))
+
+
 def voice_resource_for(db: Session, engine: str, voice: str, *, user_id: str | None) -> str:
     """这个音色的资源族(只有火山有)。**合成的那一方自己查**,不靠界面选音色时顺手填上 ——
     那样的话,每一个挑音色的地方都得记得多存一个字段,而忘了存的后果是音色不生效、也不报错。

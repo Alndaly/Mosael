@@ -109,7 +109,9 @@ class Studio:
         assert str(config.get("voice") or "").strip(), f"没带音色就去合成了:{config}"
         self.calls["synthesize_speech"].append(config)
         seconds = self.speech_seconds.get(config["text"], max(1.0, len(config["text"]) / 4))
-        return {"asset_id": self._asset(db, "audio", config["text"], {"duration": seconds})}
+        #: 真的节点按实际用的引擎和音色说一句(见 executors.subjobs.synthesize_speech);假的照样说,带上用了哪一把。
+        note = f"用的嗓子:{config.get('engine')} / {config['voice']}"
+        return {"asset_id": self._asset(db, "audio", config["text"], {"duration": seconds}), "voice_note": note}
 
     def segments(self, db, scope, config):
         self.calls["talking_segments"].append(config)
@@ -587,11 +589,13 @@ class Test带货口播真跑:
         assert {(one["engine"], one["voice"]) for one in studio.calls["synthesize_speech"]} == {
             ("builtin:edge", "zh-CN-XiaoxiaoNeural")}
         assert len(_clips(context["pitch_project"]["sequence_id"], "audio")) == len(BEATS), "每一拍照样有画外音"
+        #: 说明是**运行时**按实际念的那一把说的(配音节点的 voice_note),不是建图时写死的一句。
         said = context["output"]["output"]["voice"]
-        assert "Edge" in said and "晓晓" in said and "克隆音色" in said, said
+        assert said == "用的嗓子:builtin:edge / zh-CN-XiaoxiaoNeural", said
         with unit_of_work() as db:
             bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
-        assert any("Edge" in one and "克隆音色" in one for one in bodies), bodies
+        assert any(said in one for one in bodies), bodies
+        assert "建这张图时" not in json.dumps(graph, ensure_ascii=False), "图里不再写死一句建图时的说明"
 
     def test_不出镜版_有克隆音色时优先用它(self, monkeypatch) -> None:
         ws = _workspace()
@@ -601,8 +605,19 @@ class Test带货口播真跑:
         context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
 
         assert {(one["engine"], one["voice"]) for one in studio.calls["synthesize_speech"]} == {("builtin:clone", "voice-1")}
-        said = context["output"]["output"]["voice"]
-        assert "克隆音色" in said and "Edge" not in said, said
+        assert context["output"]["output"]["voice"] == "用的嗓子:builtin:clone / voice-1"
+
+    def test_建图之后在节点里换成克隆音色_说明跟着变(self, monkeypatch) -> None:
+        """此前那句「用的是免费的 Edge 音色」是建图时写死的:之后在「念这一拍的画外音」里换上克隆音色,通知照样说 Edge。"""
+        ws = _workspace()
+        Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id=""),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        loop = next(node for node in graph["nodes"] if node["id"] == "shoot_beats")
+        voice = next(node for node in loop["config"]["body"]["nodes"] if node["id"] == "beat_voice")
+        voice["config"].update({"engine": "builtin:clone", "voice": "voice-9"})
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        assert context["output"]["output"]["voice"] == "用的嗓子:builtin:clone / voice-9"
 
 
 # --------------------------------------------------------------------------------------

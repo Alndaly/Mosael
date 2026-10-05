@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "7975514b7a610e8fba951740f19c41e1141488aaac4196d245541c53e78b0614",
+  "graph_hash": "438b119c62af90dece07cd75953fc4314e6af1f2d9fa5868fe2f9f69bc0406d0",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -423,7 +423,7 @@
         },
         "config": {
           "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。\n{{fit_beats.note}}"
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n{{shoot_beats.results.0.beat_voice.voice_note}}\n{{fit_beats.note}}"
         }
       },
       {
@@ -441,7 +441,7 @@
             "beat_count": "{{shoot_beats.count}}",
             "caption_count": "{{beat_captions.count}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
-            "voice": "配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。"
+            "voice": "{{shoot_beats.results.0.beat_voice.voice_note}}"
           }
         }
       }

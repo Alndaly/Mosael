@@ -483,12 +483,6 @@ def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = Fal
     return voice.id if voice else ""
 
 
-def _probed(status: tuple[bool, bool]) -> CheckStatus:
-    """(跑得起来吗, 测过了吗) → 状态。没测过就是「还不知道」,不拿未知冒充结论。"""
-    ready, known = status
-    return "met" if ready else ("missing" if known else "unknown")
-
-
 def _engines_status(runtime_status, engines: list[str]) -> CheckStatus:
     """本地引擎(转写、人声分离)**有一个跑得起来就算齐**;探测还没回来的,说「还不知道」。
 
@@ -529,16 +523,11 @@ def _provider_status(db: Session, user_id: str, capability: Any, runtime_status)
 
 def _cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool) -> CheckStatus:
     """模板里配音节点写的是本机克隆引擎:要有一把克隆音色,**而且克隆引擎跑得起来**(此前只看有没有音色行)。
-    数字人用的那把还要声明过是谁的。引擎的判据和运行前检查同一个(executors.subjobs.clone_engine_problem)。"""
-    from app.ai.runtime import config as tts_config
-    from app.ai.runtime import tts_models
-    from app.domain.workflows.executors.subjobs import clone_engine_problem
+    数字人用的那把还要声明过是谁的。判据只有一份(voices.engine_catalog.cloned_voice_status),配音节点说「用的是
+    哪把嗓子」时用的也是它。"""
+    from app.domain.voices.engine_catalog import cloned_voice_status
 
-    if not _first_voice_id(db, workspace_id, digital_human=digital_human):
-        return "missing"
-    if clone_engine_problem() is not None:
-        return "missing"
-    return _probed(tts_models.runtime_status(tts_config.get().engine))
+    return cloned_voice_status(db, workspace_id, digital_human=digital_human)  # type: ignore[return-value]
 
 
 def _prefilled_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:

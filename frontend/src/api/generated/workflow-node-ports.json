@@ -1506,7 +1506,8 @@
       }
     },
     "outputs": [
-      "asset_id"
+      "asset_id",
+      "voice_note"
     ]
   },
   {

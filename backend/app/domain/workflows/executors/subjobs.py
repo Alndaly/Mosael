@@ -409,18 +409,29 @@ def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
 
 @register("synthesize_speech")
 def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """把文本念出来。音色是一格,引擎决定它指什么(见 `_speech_params`)。"""
-    from app.domain.voices.voices import start_synthesis
+    """把文本念出来。音色是一格,引擎决定它指什么(见 `_speech_params`)。
 
-    child = start_synthesis(
+    `voice_note` 是按实际念的那一把说的一句「用的是哪把嗓子」(见 engine_catalog.voice_note),完成通知照它说 ——
+    不在建图时替人写死。"""
+    from app.domain.voices import voices
+    from app.domain.voices.engine_catalog import voice_note
+
+    actor = current_actor(db)
+    child = voices.start_synthesis(
         db,
         text=str(config.get("text", "")),
         project_id=None,
-        created_by=current_actor(db),
+        created_by=actor,
         **_speech_params(db, scope, config),
     )
     final = wait_for_job(child.id, release=db)
-    return {"asset_id": str((final.result or {}).get("asset_id", ""))}
+    try:
+        note = voice_note(db, engine=str(config.get("engine") or ""), voice=str(config.get("voice") or ""),
+                          workspace_id=scope.workspace_id, user_id=actor)
+    except Exception:  # noqa: BLE001 — 说明是旁路:说不出来不该让已经念好、付过钱的这一段作废
+        logger.warning("说不出这次配音用的是哪把嗓子(engine=%s)", config.get("engine"), exc_info=True)
+        note = ""
+    return {"asset_id": str((final.result or {}).get("asset_id", "")), "voice_note": note}
 
 
 def clone_engine_problem() -> WorkflowDomainError | None:

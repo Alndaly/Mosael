@@ -1245,7 +1245,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
-        "outputs": ["asset_id"],
+        #: `voice_note`:按实际念的那一把说的一句「用的是哪把嗓子」(见 voices.engine_catalog.voice_note)。
+        "outputs": ["asset_id", "voice_note"],
+        "output_types": {"voice_note": "text"},
+        "output_labels": {"voice_note": "wfOut_voice_note"},
     },
     "notify": {
         "external": False,

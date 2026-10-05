@@ -881,22 +881,18 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
 PITCH_FALLBACK_EDGE_VOICE = "zh-CN-XiaoxiaoNeural"
 
 
-def _pitch_voice(voice_id: str) -> tuple[str, str, str]:
-    """不出镜那一版用哪把嗓子念:(引擎, 音色, 一句给人看的说明 —— 进完成通知和输出)。
+def _pitch_voice(voice_id: str) -> tuple[str, str]:
+    """不出镜那一版用哪把嗓子念:(引擎, 音色)。
 
     `voice_id` 是建图时预填的克隆音色(templates._prefilled_voice_id:配音库里有、克隆引擎也跑得起来才填)。有就用它;
-    没有就用免费的 Edge 音色。此前没有克隆音色这张模板就跑不了:念画外音那一格空着,运行前拦住。
+    没有就用免费的 Edge 音色。此前没有克隆音色这张模板就跑不了:念画外音那一格空着,运行前拦住。用的是哪一把、为什么,
+    由配音节点运行时按实际念的那一把说(`voice_note`),不在这里写死 —— 之后在节点里换了音色,说明跟着变。
     """
-    from app.ai.providers import EDGE_BUILTIN_VOICES
     from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE
 
     if voice_id:
-        return CLONE_ENGINE, voice_id, "配音用的是配音库里的克隆音色。"
-    name = dict(EDGE_BUILTIN_VOICES)[PITCH_FALLBACK_EDGE_VOICE].split("(")[0]
-    return EDGE_ENGINE, PITCH_FALLBACK_EDGE_VOICE, (
-        f"配音用的是免费的 Edge 音色「{name}」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。"
-        "有了克隆音色,在「念这一拍的画外音」里换上它。"
-    )
+        return CLONE_ENGINE, voice_id
+    return EDGE_ENGINE, PITCH_FALLBACK_EDGE_VOICE
 
 
 def product_pitch_short_graph(
@@ -956,13 +952,14 @@ def product_pitch_short_graph(
         "video_track_id": "{{pitch_project.video_track_id}}",
         "audio_track_id": "{{pitch_project.audio_track_id}}",
     }
-    voice_said = ""
     if presenter:
         shoot_inputs.update({"voice_engine": "{{presenter.voice_engine}}", "voice_id": "{{presenter.voice_id}}"})
         body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}")
     else:
-        engine, voice, voice_said = _pitch_voice(voice_id)
+        engine, voice = _pitch_voice(voice_id)
         body = _beat_body(db, image, engine=engine, voice=voice)
+    #: 用的是哪把嗓子:第一拍(开场钩子,总有口播)的配音节点运行时说的那一句。出镜版的嗓子是主播自己的,不另说。
+    voice_said = "" if presenter else "{{shoot_beats.results.0.beat_voice.voice_note}}"
 
     nodes: list[dict[str, Any]] = [
         {

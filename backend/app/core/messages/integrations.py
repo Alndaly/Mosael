@@ -899,6 +899,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_document_sections": {"zh": "各段", "en": "Sections"},
     "wfOut_loop_failed": {"zh": "失败的项", "en": "Failed items"},
     "wfOut_fit_note": {"zh": "收紧说明", "en": "Fit note"},
+    "wfOut_voice_note": {"zh": "用的哪把嗓子", "en": "Voice used"},
     "wfOut_document_total": {"zh": "一共几段", "en": "Section count"},
     "wfOut_document_unit": {"zh": "按什么分段", "en": "Split by"},
     "wfNode_document_to_markdown": {"zh": "文档转 Markdown", "en": "Document to Markdown"},
