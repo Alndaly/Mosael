@@ -22,10 +22,10 @@ Downloads contain no account secrets or private assets, and do not automatically
 
 | For | Templates |
 | --- | --- |
-| Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
+| Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default; the start node's **Seconds per shot** is set at build time to the duration nearest the default that the chosen video model can make, video length, timeline and storyboard all follow it, and a model that can't make that length is stopped before the run), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
 | Clean-up and montage | **Transcript-based video cleanup** (denoise first, then cut pauses, fillers and repetition by the transcript; for material up to about 30 minutes), **Montage from your own footage** (orders a tagged batch of your clips and adds narration and captions) |
 | Translated dubbing | **Translated dubbing with subtitles** (transcribe, translate and subtitle line by line on the original timecodes, dub each line into its slot, strip the original voice but keep the music), **Translated dubbing with lip-sync** (the same, then the speaker's lips follow the dub) |
-| Products and business | **Product photo into on-model shots**, **Product into a narrated short** (uses a cloned voice when you have one, otherwise the free Edge voice Xiaoxiao, with nothing to set up), **Fabric into applications and a spec sheet** |
+| Products and business | **Product photo into on-model shots** (the outputs list each group's on-model shot and video), **Product into a narrated short** (the script goes through **Fit narration to its length** first; uses a cloned voice when you have one, otherwise the free Edge voice, with nothing to set up, and the finish notice says which voice it used), **Fabric into applications and a spec sheet** |
 | Digital humans | **Script into a talking-head video**, **Product into a presenter-led short** (see [Digital humans](/docs/guides/digital-humans)) |
 | Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience** (see "Analytics templates" below) |
 
@@ -57,7 +57,7 @@ start parameters and values you filled in, and keeps the old one; dismiss it and
   | Group | Nodes |
   | --- | --- |
   | Flow | Start, Condition, Delay, Loop · for each, Loop · while, Call workflow, Output, Subgraph |
-  | AI | LLM, AI generate, Translate, Translate lines, Fill in angles, Generate expressions, Make it talk (character / image), Lip sync, Lip-sync a dubbed timeline, Voice a long script in segments |
+  | AI | LLM, AI generate, Translate, Translate lines, Fill in angles, Generate expressions, Make it talk (character / image), Lip sync, Lip-sync a dubbed timeline, Voice a long script in segments, Fit narration to its length |
   | Audio | Transcribe asset, Text to speech, Separate voice and background, Reduce noise, Dub subtitles |
   | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
   | 3D | Available 3D props, Build a 3D blockout scene, Build a 3D scene from text, Render blockout references |
@@ -193,6 +193,8 @@ When a run fails partway, **the outputs of the nodes that already finished stay 
 
 ![Run history: every node of one real run and its time (asset query, tagging, text template, save as note — all local)](/media/screens/en/workflow-runs.png)
 
+Each run in the history also says **what it cost** — "Cost $1.20 · 5 billed calls" — including the sub-jobs it started (LLM calls inside the workflow, generation, voice-over…); calls that couldn't be priced are noted as not included. The free Edge voice records 0, not unpriced.
+
 A few node details:
 
 - **HTTP request** escapes upstream text inserted into a JSON body as JSON and sets `Content-Type`; **Fail on non-2xx** is on by default (switchable under Advanced).
@@ -201,7 +203,17 @@ A few node details:
   [Admin → Deployment → Internal network access](/docs/guides/admin). The agent's page fetches and requests and import from link work the same way.
 - **Code**: the only thing it can hand over is `output` — when the code finishes without assigning it you're told on the spot (written as a
   function, call it at the end: `output = main(inputs)`) instead of a "successful" empty value; `print` for debugging doesn't affect the result.
-- **JSON extract** recognises text wrapped in a ```json fence (the usual shape of a model's text output) instead of quietly returning nothing.
+- **JSON extract** recognises text wrapped in a ```json fence (the usual shape of a model's text output) instead of quietly returning nothing. A `*` in
+  the path means "every item in this list": `results.*.asset_id` takes each item's asset_id, and items without it leave no gap.
+- **Fit narration to its length** takes a list of segments (the beats of a script, say), each with its narration and length; it estimates how long each
+  takes to read (about 4 Chinese characters or 2.5 English words a second), sends only the segments that run long back to the chat model to shorten
+  (for a configurable number of rounds, keeping a rewrite only if it is shorter), hands anything still too long to the voice-over alignment that follows to
+  speed up or trim, and names those segments in its output. If the rewrite step fails, the flow carries on with the original text and says so.
+- Voice-over nodes have a new **Voice used** output that says which engine and voice actually read the line (a cloned voice by name), ready to go into a
+  finish notice. When a line has to be sped up to fit its beat, the rate is rounded up, so a beat that fits at 1.19× is no longer reported as too long.
+- The texts a template shows people (finish notices, too-long warnings, the new project's name) follow **the language it was built in**, so a graph built
+  in English says them in English; what is only worked out at run time (which voice was used, which segments were shortened) follows **the language of
+  whoever started the run**, and runs nobody started, such as scheduled ones, use the default language.
 - **Call workflow**: inputs wired to upstream values (references) are not checked against the sub-workflow's required fields and options
   before the run — that happens at run time; when a sub-workflow chosen only at run time can't start, the error names which one.
 - **Check quotes** looks up every quoted passage (「」, “”, and in English straight quotes that look like quotations) in text such as a

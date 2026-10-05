@@ -82,7 +82,10 @@ named after it, and a collision is treated as the same plugin.
 - On failure, the **first line of `error` is the sentence meant for people** (what happened and what to do next); the exception,
   errno or the other side's response goes on the following lines. The interface shows the first line as the message and keeps the
   rest under **Details** or in a hover hint — for example "Can't reach this server. Make sure it is running and the URL is right", with
-  the address and `[Errno 61] Connection refused` on the next line.
+  the address and `[Errno 61] Connection refused` on the next line. Failure reasons are **stored** (the error on a connection card is
+  what you said at the last refresh, which may have happened in another interface language or in the background), so give both
+  languages when you can: `"error": {"zh": "…", "en": "…"}`; the host stores it as is and picks the reader's language when showing it.
+  A plain string is still shown as it is.
 
 ## Taking settings and credentials
 

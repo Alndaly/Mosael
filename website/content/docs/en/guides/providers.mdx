@@ -61,6 +61,11 @@ belong to ByteDance, but their consoles, credentials, endpoints and request prot
 interchangeable. Mosael groups them under one company namespace while retaining separate
 Adapters and stable connection types; directory ownership does not merge the two credential sets.
 
+When Volcengine Ark's **content moderation** refuses a request (something in the prompt, the first frame or reference image, a reference
+video or audio, or the generated result), the error says which part was blocked and that this is **the provider's moderation, not
+Mosael's**; when a photo of a real person in the first frame is refused as private information, it suggests a model that accepts real
+people, such as Seedance on Evolink. Task failures that aren't moderation now carry the provider's error code and reason too.
+
 ### Evolink: several generation engines under one connection
 
 Evolink is a unified image/video gateway. One Evolink API key can host Seedance, Kling, Veo,
@@ -256,6 +261,18 @@ tiers of one unit together with the base tier first.
 - **Failed calls**: when the provider returned nothing (the request was refused outright) the cost is 0, regardless of how many images
   or seconds were asked for; when the provider had already generated and charged and only our download failed, the reported usage
   or charge is recorded.
+
+**Free is recorded as 0 and marked free.** Voices that cost nothing, such as Edge, record 0 marked **free** — no longer "unpriced", and no
+prompt to add a price rule; spend totals leave them out, so a CNY deployment's account doesn't sprout a $0 line.
+
+**Provider responses are used as a check.** The output seconds and resolution in Wan and MiniMax responses, the token breakdown in Evolink
+image responses and the duration in Bailian's digital-human responses are compared with what was metered; when a provider reports a
+charge with a breakdown, the breakdown is priced and compared with the charge. A mismatch doesn't change the record — it logs a warning
+and keeps the evidence with that usage entry. Video metering records only the resolution the request states (declared defaults are
+already in the request) instead of guessing, and reference images count only first frames, last frames, reference images and masks.
+
+**A workflow's spending belongs to its run.** LLM calls, generation and voice-over inside a workflow are attached to that run (with the
+sub-jobs it starts), the run history shows what each run cost, and the admin page's spend by person no longer misses them.
 
 **Currencies are kept apart.** CNY and USD spend are never added together: statistics, the overview and the admin page show one amount per currency ("CN¥12.30 + $4.50"), the cost chart draws one currency at a time with a switch when there are several, and nothing is converted. If one call matches rules in different currencies, it's recorded as unpriced with that reason — put those rules in one currency.
 

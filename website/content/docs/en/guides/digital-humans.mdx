@@ -25,7 +25,7 @@ talking photo or lip-sync.
 | Provider | Model | What it does | Audio length | Needs object storage |
 | --- | --- | --- | --- | --- |
 | Alibaba Bailian | wan2.2-s2v | Talking photo (480P / 720P; checks for a clear frontal face first) | 1–20 s | No |
-| Alibaba Bailian | videoretalk | Lip-sync | 2–120 s | No |
+| Alibaba Bailian | videoretalk | Lip-sync (each side of the source video must be 640–2048 px: anything outside is scaled into range first, so a 512×512 talking photo can go straight on to lip-sync) | 2–120 s | No |
 | Volcengine Jimeng | OmniHuman 1.5 | Talking photo (720p / 1080p; an optional prompt steers motion and camera) | 1–59 s | Yes |
 | Kling | Kling Avatar | Talking photo (optional prompt) | 2–300 s | No |
 | Kling | Kling Lip-sync | Lip-sync (finds the face on screen longest first) | 2–60 s | For the source video |
@@ -101,3 +101,6 @@ publisher is responsible once it's off. The digital-human templates always expor
 Talking photos and lip-sync are metered by the **actual length** of the output (which is the voice-over's length). Bailian
 wan2.2-s2v (0.5 CNY/s at 480P) and videoretalk (0.08 CNY/s) can be pre-filled from their list prices in Admin → Cost
 rules; the other providers either show prices only after signing in or bill in credits, so enter your account's prices by hand.
+A lip-sync output follows the source video's size, so only a resolution the request actually states is recorded (it is no longer
+guessed as 720P), and the source video and driving audio are not counted as reference images; the duration in Bailian's response
+is checked against the recorded seconds.

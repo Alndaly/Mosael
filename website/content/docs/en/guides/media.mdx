@@ -99,15 +99,35 @@ reach it.
 Downloads run as a background job with progress in the task centre. One failure does not sink the
 batch: what downloaded stays in the library, and the failed count is reported.
 
-## Tags and filters
+## Tags, filters and sorting
 
 - Filter by type (video / audio / image / document) or by tag from the toolbar. Several tags can be ticked at once;
   with two or more you choose between **Has all of them** and **Has any of them**. The library, the editor's media
   panel and the asset library share the same tag filter.
+- Search looks at names, original file names and tags, ignoring case, as soon as you pause typing. Sort by Newest, Recently
+  updated, Name or Duration; **sorting by name puts Chinese names in pinyin order**.
+- **Thousands of assets still open quickly.** The list is fetched a page at a time, with filtering, search and sorting done on the
+  server, and the next page comes in as you near the bottom; the grid and the list draw only the rows in view, and thumbnails load
+  as they scroll in. The counts on the type tabs cover the whole scope (not the search). **Select all** fetches the remaining pages
+  before selecting.
 - Multi-select to tag or delete in bulk.
 - **Compare**: multi-select assets of one kind to lay them side by side and pick a version. Images sit next
   to each other; videos share one screen and one play button, start muted (click a speaker to hear only that
   one), and frame stepping and timeline scrubbing apply to all of them at once.
+
+### Dub lines: a process's parts stay out of the way
+
+A subtitle dub makes one short audio file per subtitle, and lip-sync cuts a video into chunks to fix the lips — these are parts of
+a process: timelines and dub tracks still use them, but you don't need them when looking for something in the library, and there
+are often hundreds of them with the same name. So they **are left out of the library by default**, and out of the asset pickers,
+the editor's media pool and the agent's asset lists too.
+
+Next to the type tabs on the media page, a **Dub lines N** chip (and **Lip-sync chunks N** when there are any) shows exactly
+those: a line at the top explains what they are, and **Back to the library** returns in one click. A dub line's card shows the
+sentence it speaks, and you can search by that sentence. It is only what you are looking at right now, not remembered; the
+count by the title is always the library's. When you upgrade, the parts that can be recognised (those remembering their dub
+sentence, synthesis started by a dubbing task, lip-sync chunks…) are marked automatically; anything that can't be told apart
+stays in the library.
 
 ## Where an asset came from: provenance
 
