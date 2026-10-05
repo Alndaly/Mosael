@@ -254,6 +254,38 @@ Accepted — 2026-10-05。1.10.0 的主功能,1.9.1 发版之后开工。维护�
 - 存放:手动标记和 Civitai 标记跟着模型文件走(和 §2 一样,优先写在 ComfyUI 那边能留住的地方;写不了的记在 Mosael 库里按
   (连接, 文件)存),推断和识别的结果只是缓存,随时可重算。
 
+#### 本地识别怎么带(2026-10-06,第三刀开工前补)
+
+第四种来源「本地看预览图本身」要一个识别模型。开工前查了几个小的、可商用的 NSFW 图片分类模型,许可都按仓库里的 LICENSE
+文件或 HuggingFace 模型卡核对过(2026-10-06):
+
+| 候选 | 许可 | 多大 | 跑起来要什么 | 看法 |
+| --- | --- | --- | --- | --- |
+| NudeNet v3 | **AGPL-3.0** | 几十 MB(ONNX) | onnxruntime | 不用:AGPL 会牵连随应用发的代码 |
+| opennsfw2 | 代码 MIT;权重是 Yahoo open_nsfw 的移植,BSD-2-Clause | 约 24 MB | TensorFlow / Keras(几百 MB) | 2016 年按照片训的,对画出来的、AI 出的图不熟;运行时太重 |
+| GantMan nsfw_model | MIT | 约 17 MB(MobileNetV2) | Keras / TF.js | 分了 drawings / hentai 两类,但运行时同样是 TensorFlow 一家 |
+| Falconsai/nsfw_image_detection | Apache-2.0 | 343 MB(ViT-base) | transformers + torch | 太大 |
+| AdamCodd/vit-base-nsfw-detector | Apache-2.0 | 88 MB(int8 ONNX)/ 344 MB | onnxruntime | 还是 ViT-base |
+| **Marqo/nsfw-image-detection-384** | **Apache-2.0** | **22.4 MB**(safetensors) | timm 的 ViT-tiny(570 万参数、12 层、192 宽、3 个头,输入 384) | 训练集有照片、画、Rule 34、AI 出的图,正合 ComfyUI 模型预览图;模型卡自报准确率 98.56%,比上面两个 ViT-base 都高 |
+
+**选 Marqo/nsfw-image-detection-384**,定下这几条:
+
+- **怎么带**:不进安装包。第一次用时下载那一个 22.4 MB 的权重文件,地址钉死在 HuggingFace 的一个版本上
+  (`0c26ec22111b83f106d72a55f611ec35962bcb65`),下完按固定的 SHA-256(`6bf2e0f6…eeefce`)校验,对不上就拒装 ——
+  和降噪引擎 DeepFilterNet 同一套(`ai/runtime/install_state` 记进度、`download_to_path` 下载、校验通过才挪到正式位置)。
+  落在 `<数据目录>/nsfw-classifier/`,卸载时一个目录删掉。入口在模型库「预览图」设置里一行「本地识别」:没下就写多大、
+  点了才下;下好之后才开始识别。
+- **在哪跑**:后端。**不另装推理运行时**:ViT-tiny 一次前向就是十二层 192 宽的注意力,用后端本来就带着的 numpy 写一份前向
+  (照 timm 的 VisionTransformer:pre-norm、精确 GELU、cls token、LayerNorm eps 1e-6),Pillow 做预处理(短边缩到 384、
+  居中裁 384,均值 / 方差 0.5)。不要 torch、onnxruntime,不起 venv。动手前对着 timm 核对过:同一张图两边的 logits 差在
+  1e-5 以内;测试用一份随机小权重的夹具锁住这份前向,数是 timm 算的。
+- **性能**:识别宿主已经缩好的缩略图(长边 512,见 ADR 0034 §1),不碰原图;一张 0.1–0.3 秒(M 系列 CPU)。结果按**预览图
+  内容的 SHA-256** 记在磁盘缓存里 —— 同一张图换了名字、换了连接都不再算;全进程同时只识别一张,在后台线程里跑,
+  列模型库不等它:列出来时缓存里有结果就带上,没有的排队去算,下次列出就有。视频预览识别它的首帧(卡片上那张)。
+- **隐私**:图、模型、结果都不出这台电脑;不联网,除了第一次下那个权重文件。
+- **只是提示**:识别结果是第四种来源,排在手动标记之下(手动标了就听手动的,两头都能改);阈值取模型自己的 0.5,悬停时
+  写「本机识别:NSFW 的可能 87%」。识别不出(图坏了、权重没下)就不说话,不当成「安全」。
+
 ## 这一版不做
 
 - 自己画画布、在 Mosael 里重排节点和连线。
