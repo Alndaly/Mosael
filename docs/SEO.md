@@ -19,7 +19,7 @@
 
 | 项 | 位置 | 测试 |
 | --- | --- | --- |
-| 每页的 title、description、keywords、canonical、hreflang(`en` / `zh-CN` / `x-default`)、Open Graph、Twitter 卡片 | `website/src/lib/seo.ts` 的 `pageMetadata`，每个 `page.tsx` 都调用 | `test/seo.test.mjs`：每个页面路由都调用它；根布局不写会被继承的 canonical 和 Open Graph |
+| 每页的 title、description、keywords、canonical、hreflang(`en` / `zh-CN` / `x-default`)、Open Graph、Twitter 卡片 | `website/src/lib/seo.ts` 的 `pageMetadata`，每个 `page.tsx` 都调用 | `website/test/seo.test.mjs`：每个页面路由都调用它；根布局不写会被继承的 canonical 和 Open Graph |
 | 文档页搜索标题与关键词 | frontmatter 的 `seo_title`、`keywords`；`title` 仍是 h1 和侧边栏标签 | 每种语言里 `<title>` 不重复，宽度不超出搜索结果的显示范围 |
 | sitemap | `website/src/app/sitemap.ts`：首页、社区两页、更新日志、全部文档，以及**插件和工作流详情页**，两种语言都有 hreflang | 列全且不含跳转地址 |
 | robots | `website/src/app/robots.ts`：全站放行，只挡 `/<语言>/search.json` | ✓ |
