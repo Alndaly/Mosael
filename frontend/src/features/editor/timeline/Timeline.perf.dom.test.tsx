@@ -6,8 +6,12 @@
  * 刻度 3020 根(1 小时 240px/s 是 28801 根)。原因是每段都渲染、每段带现捏的闭包和自己的一棵右键菜单、
  * 刻度从 0 画到尾。
  *
- * 断言分两类:**数量**(只画视口里的片段和刻度)是确定的,收得紧;**耗时**受机器和并行影响,阈值放得
- * 很宽 —— 只为抓住「又退回整树渲染」那种数量级的回退,不为卡毫秒。
+ * 断言分两类:**数量**(只画视口里的片段和刻度)是确定的,收得紧;**耗时**只和自己比 —— 同一次运行里
+ * 300 段和 3000 段各量一遍,3000 段不许慢出好几倍。虚拟化在时两者画的是同样的视口里那一百多段,耗时差不多;
+ * 退回整树协调时 3000 段要做十倍的活,慢一个数量级。
+ *
+ * 此前卡的是绝对毫秒(缩放 < 150ms):本机 ~13ms,CI 的机器慢 20 倍、量出来 157 / 159 / 185ms,同一个提交
+ * 时红时绿。比值不受机器快慢影响。
  */
 import { DndContext } from "@dnd-kit/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -72,36 +76,44 @@ const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floo
 const renderedClips = (root: HTMLElement) => root.querySelectorAll("[data-clip-id]").length;
 const rulerTicks = (root: HTMLElement) => root.querySelectorAll(".bg-\\[var\\(--ruler-tick\\)\\]").length;
 
+/** 挂一条 n 段的时间线,量拖动 / 点选 / 缩放每一步的中位耗时,连同画了几段。 */
+function measure(nClips: number) {
+  useEditorStore.setState({ pxPerSecond: 40, dragDraft: null, selectedClipIds: [], playhead: 0 });
+  const { container, unmount } = mount(build(nClips));
+  const drags: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    drags.push(
+      time(() =>
+        useEditorStore.getState().setDragDraft({
+          clipId: "c0_0", trackId: "t0", timeline_start: 0.1 * i, src_in: 0, src_out: 1.8, kind: "move",
+        }),
+      ),
+    );
+  }
+  act(() => useEditorStore.getState().setDragDraft(null));
+  const select = median([0, 1, 2, 3, 4, 5, 6].map((i) => time(() => useEditorStore.getState().selectClip(`c1_${i}`))));
+  const zoom = median([80, 40, 80, 40, 80, 40, 80].map((px) => time(() => useEditorStore.getState().setPxPerSecond(px))));
+  const rendered = renderedClips(container);
+  unmount();
+  return { rendered, drag: median(drags), select, zoom };
+}
+
 afterEach(() => useEditorStore.setState({ dragDraft: null, selectedClipIds: [], pxPerSecond: 40, playhead: 0 }));
 
 describe("时间线虚拟化", () => {
-  it("3000 段:只画视口里的片段,拖动 / 点选 / 缩放不再整树协调", () => {
-    useEditorStore.setState({ pxPerSecond: 40, dragDraft: null, selectedClipIds: [], playhead: 0 });
-    const { container, unmount } = mount(build(3000));
+  it("3000 段:只画视口里的片段,拖动 / 点选 / 缩放的耗时不随总段数涨", () => {
+    const small = measure(300);
+    const large = measure(3000);
     // 视口(jsdom 量不到,按兜底宽度)+ 两侧缓冲:四条轨各几十段,而不是 3000。
-    expect(renderedClips(container)).toBeLessThan(400);
+    expect(large.rendered).toBeLessThan(400);
 
-    const drags: number[] = [];
-    for (let i = 0; i < 20; i++) {
-      drags.push(
-        time(() =>
-          useEditorStore.getState().setDragDraft({
-            clipId: "c0_0", trackId: "t0", timeline_start: 0.1 * i, src_in: 0, src_out: 1.8, kind: "move",
-          }),
-        ),
+    // 修之前(单机,jsdom,3000 段):拖动 ~280、点选 ~260、缩放 ~310ms;修之后 300 段和 3000 段都是 3 / 3 / 13ms
+    // 上下。整树协调时 3000 段是 300 段的十来倍;留三倍,再加 5ms 吸收亚毫秒那几步的抖动。
+    for (const step of ["drag", "select", "zoom"] as const) {
+      expect(large[step], `${step}:300 段 ${small[step].toFixed(1)}ms,3000 段 ${large[step].toFixed(1)}ms`).toBeLessThan(
+        small[step] * 3 + 5,
       );
     }
-    const drag = median(drags);
-    act(() => useEditorStore.getState().setDragDraft(null));
-    const select = median([0, 1, 2, 3, 4].map((i) => time(() => useEditorStore.getState().selectClip(`c1_${i}`))));
-    const zoom = median([80, 40, 80, 40, 80].map((px) => time(() => useEditorStore.getState().setPxPerSecond(px))));
-    expect(renderedClips(container)).toBeLessThan(400);
-
-    // 修之前(单机,jsdom):拖动 ~280、点选 ~260、缩放 ~310ms;修之后 3 / 2 / 8ms。阈值只抓数量级回退。
-    expect(drag).toBeLessThan(80);
-    expect(select).toBeLessThan(80);
-    expect(zoom).toBeLessThan(150);
-    unmount();
   }, 60_000);
 
   it("拖动中正在拖的那段一直在 DOM 里,哪怕它被拖出了视口", () => {
