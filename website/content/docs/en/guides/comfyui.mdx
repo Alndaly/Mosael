@@ -188,6 +188,8 @@ tool call. Longer runs belong in generation.
   large cards add the folder and how many workflows use it; the list has one file per row with folder, base model, size and date.
   With **Blur previews** on, previews stay blurred until the pointer or keyboard focus rests on them — for when some previews
   aren't fit to open in front of others.
+  Cards and list rows use a downscaled preview (512 px on the long side); the detail page shows the original. With hundreds of
+  files only the rows in view are drawn, and the first open only fetches the previews you can see from ComfyUI.
 
 ![The model library (the demo's stand-in ComfyUI, with Big Buck Bunny frames as previews): folders and Models missing for workflows on the left; search, base model, sort, the three views, blur previews and Download model on top; small cards below, with a per-folder placeholder where there is no preview](/media/screens/en/model-library.png)
 
