@@ -33,6 +33,7 @@ const {
   IPC,
   parseAuthToken,
   parseBrowserLogin,
+  parseComfyNewWorkflow,
   parseComfyWorkflow,
   parseBrowserProfile,
   parseCaptureMode,
@@ -898,6 +899,15 @@ app.whenReady().then(async () => {
     try {
       const request = parseComfyWorkflow(payload);
       return { ok: true, outcome: await requirePublish().openComfyWorkflow(request) };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  // 工作流库「新建」(ADR 0038):同一个视图里执行 ComfyUI 前端自己的「新建」命令(写死的脚本,先探测有没有这条命令)。
+  ipcMain.handle(IPC.invoke.comfyuiNewWorkflow, async (_e, payload) => {
+    try {
+      const request = parseComfyNewWorkflow(payload);
+      return { ok: true, outcome: await requirePublish().newComfyWorkflow(request) };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }

@@ -168,6 +168,8 @@ const browserBridge = {
   clearProfile: (partition) => invoke(IPC.invoke.browserClearProfile, { partition }),
   // 工作流库「在编辑器里打开」(见 main.cjs comfyui:openWorkflow)。
   openComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiOpenWorkflow, opts),
+  // 工作流库「新建」(见 main.cjs comfyui:newWorkflow)。
+  newComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiNewWorkflow, opts),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 

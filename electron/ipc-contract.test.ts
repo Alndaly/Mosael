@@ -21,6 +21,7 @@ const contract = require("./ipc-contract.cjs") as {
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
   parseComfyWorkflow: (value: unknown) => { partition: string; url: string; name: string; path: string };
+  parseComfyNewWorkflow: (value: unknown) => { partition: string; url: string; name: string };
   parsePanelLayout: (value: unknown) => Record<string, number | string>;
   parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
@@ -124,6 +125,15 @@ describe("Electron IPC contract", () => {
     for (const path of ["../a.json", "/a.json", "a\\b.json", "a", ".hidden/a.json", "a/.b.json", "a\nb.json", "a//b.json"]) {
       expect(() => contract.parseComfyWorkflow({ ...comfy, path }), path).toThrow(/path/);
     }
+    expect(() => contract.parseComfyWorkflow({ ...comfy, path: 42 })).toThrow(/path/);
+
+    // 「新建」:同一个视图、同一道闸,不带路径;多一个字段(比如想塞一段脚本、点名一个分区)就拒。
+    expect(contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://127.0.0.1:8188", name: "本机" }))
+      .toEqual({ partition: "persist:pool-comfyui-c1", url: "http://127.0.0.1:8188", name: "本机" });
+    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://x", path: "a.json" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://x", script: "alert(1)" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyNewWorkflow({ connectionId: "a b", url: "http://x" })).toThrow(/connectionId/);
+    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "javascript:alert(1)" })).toThrow(/http/);
 
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });

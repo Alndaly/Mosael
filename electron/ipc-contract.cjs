@@ -51,6 +51,8 @@ const IPC = Object.freeze({
     browserClearProfile: "browser:clearProfile",
     // 工作流库「在编辑器里打开」:这个 ComfyUI 连接自己的内嵌视图里打开它的界面和指定的那张工作流。
     comfyuiOpenWorkflow: "comfyui:openWorkflow",
+    // 工作流库「新建」:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(ADR 0038 §8)。
+    comfyuiNewWorkflow: "comfyui:newWorkflow",
     // 浏览器会话顶栏的页面工具:只作用于前台那个内嵌视图(主进程自己认是哪个,渲染层不点名)。
     pageToolsCapture: "pageTools:capture",
     pageToolsRegionStart: "pageTools:regionStart",
@@ -214,24 +216,41 @@ function parseComfyWorkflow(value) {
   const channel = IPC.invoke.comfyuiOpenWorkflow;
   const payload = record(value, channel);
   onlyKeys(payload, ["connectionId", "url", "name", "path"], channel);
+  return { ...comfyConnection(payload, channel), path: comfyWorkflowPath(payload.path, channel) };
+}
+
+/** 工作流库「新建」(ADR 0038 §8):同一个视图、同一道闸,只是不带路径 —— 执行的是前端自己的「新建」命令。 */
+function parseComfyNewWorkflow(value) {
+  const channel = IPC.invoke.comfyuiNewWorkflow;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["connectionId", "url", "name"], channel);
+  return comfyConnection(payload, channel);
+}
+
+/** 一个 ComfyUI 连接的内嵌视图:分区按连接 id 拼(渲染层点不了别的分区)、地址只认 http(s)、名字只用来显示。 */
+function comfyConnection(payload, channel) {
   const connectionId = requiredString(payload, "connectionId", channel);
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(connectionId)) {
     throw new TypeError(`${channel}: connectionId must be a plain id`);
   }
   const { url } = parseUrlRequest(payload, channel);
-  const path = requiredString(payload, "path", channel);
-  const segments = path.split("/");
-  const badSegment = (one) =>
-    !one || one.startsWith(".") || one !== one.trim() || /[\x00-\x1f<>:"|?*\\]/.test(one);
-  if (!path.toLowerCase().endsWith(".json") || path.length > 500 || segments.some(badSegment)) {
-    throw new TypeError(`${channel}: path must be a workflow path under workflows/`);
-  }
   return {
     partition: `persist:pool-comfyui-${connectionId}`,
     url,
     name: typeof payload.name === "string" ? payload.name.trim() : "",
-    path,
   };
+}
+
+/** workflows/ 里的相对路径:.json 结尾、不带 ..、隐藏段和 Windows 不收的字符(和宿主同一套规矩)。 */
+function comfyWorkflowPath(value, channel) {
+  const path = typeof value === "string" ? value.trim() : "";
+  const segments = path.split("/");
+  const badSegment = (one) =>
+    !one || one.startsWith(".") || one !== one.trim() || /[\x00-\x1f<>:"|?*\\]/.test(one);
+  if (!path || !path.toLowerCase().endsWith(".json") || path.length > 500 || segments.some(badSegment)) {
+    throw new TypeError(`${channel}: path must be a workflow path under workflows/`);
+  }
+  return path;
 }
 
 /** 只认这几个键,多一个就拒(理由同 parsePanelLayout:渲染层热更新、主进程不重启时两边常常不是同一版)。 */
@@ -494,6 +513,7 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComfyNewWorkflow,
   parseComfyWorkflow,
   parseImageUrls,
   parseLocale,

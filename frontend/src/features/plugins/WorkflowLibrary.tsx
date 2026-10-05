@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   MoreHorizontal,
   PencilLine,
+  Plus,
   RefreshCcw,
   RotateCcw,
   Search,
@@ -83,6 +84,8 @@ import {
 } from "@/features/plugins/WorkflowNodeInstall";
 import { WorkflowPathField, useWorkflowPath } from "@/features/plugins/WorkflowPathField";
 import {
+  NEW_NOTE_PATH,
+  embeddedCreate,
   embeddedEditor,
   useWorkflowEditor,
   type EditorNote,
@@ -119,7 +122,8 @@ import { cn } from "@/lib/utils";
  * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。和模型库互相跳(见 ConnectionLibraries):用到的模型
  * 点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
  *
- * 工具条上的「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
+ * 工具条上的「新建」在 ComfyUI 自己的画布上开一张新的(内嵌视图里执行它的「新建」命令,见 workflowEditor;存盘是 ComfyUI
+ * 自己的,回来时刷新,新存的那张就出现在列表里);「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
  *
  * 列表每次打开现问插件(不存库)。
  */
@@ -256,6 +260,17 @@ export function WorkflowLibraryDialog({
       </Button>
     </Hint>
   );
+  //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
+  const editorTarget = library.data?.editor ?? null;
+  const newButton = editorTarget ? (
+    <Hint label={t(embeddedCreate(editorTarget) ? "workflowNewHint" : "workflowNewHintTab")}>
+      <Button disabled={editor.opening} onClick={() => void editor.create(editorTarget)}>
+        <Plus size={13} />
+        {t("workflowNew")}
+      </Button>
+    </Hint>
+  ) : null;
+  const newNote = editor.note?.path === NEW_NOTE_PATH ? <EditorNoteLine note={editor.note} onDismiss={editor.dismiss} /> : null;
   //: 往库上拖一个工作流文件:直接打开导入、认它(回收站那一页也一样 —— 拖进来的总是要导入的)
   const drop = useFileDrop((files) => setImporting({ file: files[0] }), importable);
 
@@ -318,6 +333,7 @@ export function WorkflowLibraryDialog({
         }))}
       />
       <LibraryDensitySwitch value={density} onChange={setDensity} />
+      {newButton}
       {importButton}
       {refresh}
     </>
@@ -358,7 +374,7 @@ export function WorkflowLibraryDialog({
           action={<Button variant="secondary" onClick={clearFilters}>{t("workflowLibraryClearFilters")}</Button>}
         />
       ) : (
-        <EmptyState size="section" icon={<Workflow />} title={t("workflowLibraryEmpty")} />
+        <EmptyState size="section" icon={<Workflow />} title={t("workflowLibraryEmpty")} action={newButton ?? undefined} />
       );
     }
     const listLabel = t("workflowLibraryTitle").replace("{name}", instance.name);
@@ -410,12 +426,15 @@ export function WorkflowLibraryDialog({
       }
       chips={
         library.data ? (
-          <LibraryFilterChips
-            label={t("modelLibraryActiveFilters")}
-            summary={t("workflowLibraryResultCount").replace("{n}", String(shown.length))}
-            chips={chips}
-            onClearAll={clearFilters}
-          />
+          <>
+            {newNote}
+            <LibraryFilterChips
+              label={t("modelLibraryActiveFilters")}
+              summary={t("workflowLibraryResultCount").replace("{n}", String(shown.length))}
+              chips={chips}
+              onClearAll={clearFilters}
+            />
+          </>
         ) : undefined
       }
       detailKey={detail ? detailKey : null}
@@ -724,14 +743,21 @@ function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows:
   );
 }
 
-/** 「在编辑器里打开」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、或者出了错。 */
+/** 「在编辑器里打开」/「新建」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、这版前端不能新建、或者出了错。 */
 function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () => void }) {
   const t = useI18n();
+  const created = note.path === NEW_NOTE_PATH;
+  const keys: Record<Exclude<EditorNote["kind"], "error">, Parameters<typeof t>[0]> = {
+    missing: "workflowEditorMissing",
+    tab: "workflowEditorTab",
+    notReady: created ? "workflowNewNotReady" : "workflowEditorNotReady",
+    unsupported: "workflowNewUnsupported",
+    newTab: "workflowNewTab",
+  };
   const text =
     note.kind === "error"
-      ? note.message || t("workflowEditorFailed")
-      : t(note.kind === "missing" ? "workflowEditorMissing" : note.kind === "tab" ? "workflowEditorTab" : "workflowEditorNotReady")
-          .replace("{name}", note.path);
+      ? note.message || t(created ? "workflowNewFailed" : "workflowEditorFailed")
+      : t(keys[note.kind]).replace("{name}", note.path);
   return (
     <div
       role={note.kind === "error" ? "alert" : "status"}

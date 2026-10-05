@@ -168,7 +168,8 @@ type ViewState = { visible: boolean; accountId: string | null; accountName: stri
 function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
   const listeners = new Set<(state: ViewState) => void>();
   const openComfyWorkflow = vi.fn().mockResolvedValue(result);
-  vi.stubGlobal("mosaelBrowser", { openComfyWorkflow });
+  const newComfyWorkflow = vi.fn().mockResolvedValue(result);
+  vi.stubGlobal("mosaelBrowser", { openComfyWorkflow, newComfyWorkflow });
   vi.stubGlobal("mosaelPublish", {
     onViewState: (callback: (state: ViewState) => void) => {
       listeners.add(callback);
@@ -176,7 +177,7 @@ function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
     },
   });
   const emit = (state: ViewState) => act(() => listeners.forEach((listener) => listener(state)));
-  return { openComfyWorkflow, emit };
+  return { openComfyWorkflow, newComfyWorkflow, emit };
 }
 
 describe("工作流库", () => {
@@ -423,6 +424,63 @@ describe("工作流库", () => {
   it("插件没给编辑器地址就没有这个按钮", async () => {
     await openDetail("portrait");
     expect(screen.queryByRole("button", { name: "workflowOpenInEditor" })).toBeNull();
+  });
+
+  it("新建(桌面版):工具条上和「导入」并排;在这个连接自己的内嵌视图里执行 ComfyUI 的「新建」,回到 Mosael 时刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "created" });
+    await openLibrary();
+    const create = screen.getByRole("button", { name: "workflowNew" });
+    const imports = screen.getByRole("button", { name: "workflowImport" });
+    expect(create.compareDocumentPosition(imports) & Node.DOCUMENT_POSITION_FOLLOWING, "新建排在导入前面").toBeTruthy();
+    fireEvent.click(create);
+    await waitFor(() => expect(bridge.newComfyWorkflow).toHaveBeenCalledWith({ connectionId: "i1", url: EDITOR.url, name: instance.name }));
+    expect(bridge.openComfyWorkflow).not.toHaveBeenCalled();
+    const partition = "persist:pool-comfyui-i1";
+    bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
+    expect(api.refreshPluginInstance).not.toHaveBeenCalled();
+    // 在 ComfyUI 里存了一张新的,回来:目录重拉、工作流库重新列 —— 新的那张出现在列表里
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR, workflows: [...(library().workflows ?? []), flow({ path: "新的.json", label: "新的" })] }));
+    bridge.emit({ visible: false, accountId: null, accountName: null });
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+    await waitFor(() => expect(names()).toContain("新的"));
+    expect(screen.queryByRole("status"), "新建成了不留话").toBeNull();
+  });
+
+  it("新建:这版 ComfyUI 前端没有「新建」命令就说清楚(画布照样开着,自己点),回来时照样刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "unsupported" });
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: "workflowNew" }));
+    expect((await screen.findByRole("status")).textContent).toContain("workflowNewUnsupported");
+    const partition = "persist:pool-comfyui-i1";
+    bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
+    bridge.emit({ visible: false, accountId: null, accountName: null });
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+    bridge.newComfyWorkflow.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
+    fireEvent.click(screen.getByRole("button", { name: "workflowNew" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("前台正被另一个页面占着");
+  });
+
+  it("新建(网页版):新标签页开这台 ComfyUI,说在那边点「新建」;回到这个标签页时刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const opened = vi.fn(() => null);
+    vi.stubGlobal("open", opened);
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: "workflowNew" }));
+    expect(opened).toHaveBeenCalledWith(EDITOR.url, "_blank", "noopener,noreferrer");
+    expect((await screen.findByRole("status")).textContent).toContain("workflowNewTab");
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+  });
+
+  it("插件没给编辑器地址就没有「新建」;一张都没有时空状态里也给「新建」", async () => {
+    await openLibrary();
+    expect(screen.queryByRole("button", { name: "workflowNew" })).toBeNull();
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR, workflows: [] }));
+    wrap(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w2" />);
+    await screen.findByText("workflowLibraryEmpty");
+    expect(screen.getAllByRole("button", { name: "workflowNew" }).length).toBeGreaterThanOrEqual(2);
   });
 
   it("用到的模型:在的点了跳到模型库那一项;缺的模型点了去模型库下载(带上工作流里写的地址)", async () => {

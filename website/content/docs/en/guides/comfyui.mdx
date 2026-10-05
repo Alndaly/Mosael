@@ -266,7 +266,7 @@ appends them (skipping any already there).
 - **The left column**: All, each subfolder (by count), and **Missing nodes or models** pinned at the bottom; once you have deleted
   workflows in Mosael, a **Trash** as well.
 - **The toolbar**: search (names, paths, missing node types, models used and input / output names all count), a kind filter
-  (image / video / audio / can't be converted), sorting (name / date modified / node count), the three views, and **Import**.
+  (image / video / audio / can't be converted), sorting (name / date modified / node count), the three views, and **New** and **Import**.
 - **Each card is a thumbnail of the workflow's node graph**, drawn from the node positions, links and groups in the workflow, nodes
   coloured by role (loading inputs, loading models, sampling, prompts, outputs…), bypassed ones faded; below it the name, kind,
   node count and how many node types and models are missing.
@@ -306,6 +306,12 @@ After any change the workflow library, the generation models and the tool list r
 workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved changes already open there are kept); the web
 version opens ComfyUI in a new tab and tells you which workflow to click under Workflows. Save in ComfyUI, come back to Mosael, and
 the workflow library refreshes itself, still on the same workflow. If ComfyUI sits behind a reverse proxy with login, sign in once in that built-in browser.
+
+**New**: **New** in the toolbar starts a new workflow on this ComfyUI's own canvas. The desktop app runs the same command as
+“Workflow → New” in ComfyUI's menu, in the same built-in browser (it opens in a new tab; the workflows already open stay as they are);
+the web version opens ComfyUI in a new tab, where you click “New”. Build it, save it with Ctrl+S in ComfyUI, come back to Mosael, and the
+workflow library refreshes itself with the new workflow in it. If this ComfyUI frontend has no such command, Mosael says so and leaves the
+canvas open, so you can click “New” in ComfyUI yourself.
 
 ### Apps: pick the items others fill in
 

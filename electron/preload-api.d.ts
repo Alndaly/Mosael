@@ -157,6 +157,15 @@ export interface MosaelBrowserBridge {
     name?: string;
     path: string;
   }): Promise<{ ok: boolean; outcome?: "opened" | "missing" | "elsewhere" | "notReady"; error?: string }>;
+  /**
+   * 工作流库「新建」:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(和它菜单里「工作流 → 新建」同一条)。
+   * `outcome`:开了一张新的 / 这版前端没有这条命令 / 视图不在这台 ComfyUI 上 / 前端一直没就绪。
+   */
+  newComfyWorkflow(opts: {
+    connectionId: string;
+    url: string;
+    name?: string;
+  }): Promise<{ ok: boolean; outcome?: "created" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
 }
 
 /** 页面工具作用的那一页。 */

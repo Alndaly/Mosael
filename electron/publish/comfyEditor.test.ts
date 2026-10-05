@@ -2,7 +2,14 @@ import vm from "node:vm";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { comfyOpenWorkflowScript, comfyReady, openWorkflowInPage } from "./comfyEditor";
+import {
+  NEW_WORKFLOW_COMMAND,
+  comfyNewWorkflowScript,
+  comfyOpenWorkflowScript,
+  comfyReady,
+  newWorkflowInPage,
+  openWorkflowInPage,
+} from "./comfyEditor";
 
 const ORIGIN = "http://192.168.3.15:8188";
 
@@ -129,5 +136,55 @@ describe("视图里的流程", () => {
 
     await expect(openWorkflowInPage(page, request)).resolves.toBe("notReady");
     expect(page.evaluate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("新建一张工作流", () => {
+  /** 一页假的前端:命令仓库(`extensionManager.command`)里登记着哪些命令。 */
+  function commandPage(origin: string, ids: string[] | null) {
+    const execute = vi.fn(async () => undefined);
+    const command = ids === null ? undefined : { commands: ids.map((id) => ({ id, label: id })), execute };
+    const app = { extensionManager: { workflow: {}, command }, loadGraphData: vi.fn() };
+    const context = vm.createContext({ window: { app }, location: { origin } });
+    return { execute, run: (script: string) => vm.runInContext(script, context) as Promise<unknown> };
+  }
+
+  it("执行前端自己的「新建」命令(和 ComfyUI 菜单里「工作流 → 新建」同一条)", async () => {
+    const page = commandPage(ORIGIN, ["Comfy.SaveWorkflow", NEW_WORKFLOW_COMMAND]);
+    await expect(page.run(comfyNewWorkflowScript(ORIGIN))).resolves.toBe("created");
+    expect(page.execute).toHaveBeenCalledExactlyOnceWith("Comfy.NewBlankWorkflow");
+  });
+
+  it("这版前端没有这条命令(或者没有命令仓库):什么都不做,说不支持", async () => {
+    const missing = commandPage(ORIGIN, ["Comfy.SaveWorkflow"]);
+    await expect(missing.run(comfyNewWorkflowScript(ORIGIN))).resolves.toBe("unsupported");
+    expect(missing.execute).not.toHaveBeenCalled();
+    const old = commandPage(ORIGIN, null);
+    await expect(old.run(comfyNewWorkflowScript(ORIGIN))).resolves.toBe("unsupported");
+  });
+
+  it("视图停在别的站点上就什么都不做", async () => {
+    const page = commandPage("https://example.com", [NEW_WORKFLOW_COMMAND]);
+    await expect(page.run(comfyNewWorkflowScript(ORIGIN))).resolves.toBe("elsewhere");
+    expect(page.execute).not.toHaveBeenCalled();
+  });
+
+  it("来源经 JSON 编码嵌进脚本:带引号的来源只是一个对不上的字符串", async () => {
+    const tricky = 'http://x"; window.hacked = 1; "';
+    const page = commandPage(ORIGIN, [NEW_WORKFLOW_COMMAND]);
+    await expect(page.run(comfyNewWorkflowScript(tricky))).resolves.toBe("elsewhere");
+  });
+
+  it("视图里的流程:等前端就绪才新建;一直没就绪就说没就绪", async () => {
+    const ready = {
+      evaluate: vi.fn(async (expression: string) => (expression === "location.origin" ? ORIGIN : "created")),
+      waitForFunction: vi.fn(async () => true),
+      goto: vi.fn(async () => ({ outcome: "loaded" as const })),
+    };
+    await expect(newWorkflowInPage(ready, { url: `${ORIGIN}/` })).resolves.toBe("created");
+    expect(ready.evaluate).toHaveBeenLastCalledWith(comfyNewWorkflowScript(ORIGIN), expect.any(Number));
+    const stuck = { ...ready, evaluate: vi.fn(async () => ORIGIN), waitForFunction: vi.fn(async () => false) };
+    await expect(newWorkflowInPage(stuck, { url: `${ORIGIN}/` })).resolves.toBe("notReady");
+    expect(stuck.evaluate).toHaveBeenCalledTimes(1);
   });
 });

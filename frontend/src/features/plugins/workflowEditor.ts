@@ -1,12 +1,14 @@
 /**
- * 工作流库「在编辑器里打开」(ADR 0035 §4)。
+ * 工作流库「在编辑器里打开」(ADR 0035 §4)和「新建」(ADR 0038 §8)。
  *
  * - 桌面版:主进程在这个连接自己的内嵌视图里打开它的 ComfyUI 界面,再打开那一张(`mosaelBrowser.openComfyWorkflow`,
  *   分区由主进程按连接 id 拼,脚本是写死的);没打开成(那台机器上没有这一张、页面没就绪)就留一句话,回来时看得到;
  * - 网页版(没有那座桥)或不认识的编辑器:新标签页打开它的地址。ComfyUI 的地址打不开某一张存着的工作流,所以说清楚
  *   在左边「工作流」里点开哪一张;
- * - **回来时刷新**:在 ComfyUI 里存了改动、换了模型,Mosael 这边跟着变 —— 桌面版是我们开的那个内嵌视图收起时,
- *   网页版是这个标签页重新拿到焦点时,各调一次 `onReturn`。
+ * - **新建**:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(和它菜单里「工作流 → 新建」同一条,先探测有没有);
+ *   这版前端没有就说清楚、让用户在 ComfyUI 里自己点。网页版开新标签页、说在 ComfyUI 里点「新建」。存盘是 ComfyUI 自己的;
+ * - **回来时刷新**:在 ComfyUI 里存了改动、换了模型、存了新的一张,Mosael 这边跟着变 —— 桌面版是我们开的那个内嵌视图
+ *   收起时,网页版是这个标签页重新拿到焦点时,各调一次 `onReturn`。
  */
 import React from "react";
 
@@ -15,10 +17,16 @@ import { errorText } from "@/api/errorMessage";
 
 export type WorkflowEditor = NonNullable<WorkflowLibrary["editor"]>;
 
-/** 打开之后要告诉用户的那句话(`path` 是哪一张的;详情页只显示自己那一张的)。 */
+/**
+ * 打开之后要告诉用户的那句话(`path` 是哪一张的;详情页只显示自己那一张的)。新建的那几句 `path` 是空的,摆在列表上面:
+ * 这版前端没有「新建」命令(`unsupported`)、页面没就绪(`notReady`)、开了新标签页(`newTab`)。
+ */
 export type EditorNote =
-  | { kind: "missing" | "notReady" | "tab"; path: string }
+  | { kind: "missing" | "notReady" | "tab" | "unsupported" | "newTab"; path: string }
   | { kind: "error"; path: string; message: string };
+
+/** 新建的那几句话(`path` 是空的):摆在工作流库列表上面,不在某一张的详情里。 */
+export const NEW_NOTE_PATH = "";
 
 /** 这个 ComfyUI 连接的内嵌视图分区 —— 和主进程契约拼的是同一个(electron/ipc-contract.cjs parseComfyWorkflow)。 */
 export const editorPartition = (instanceId: string) => `persist:pool-comfyui-${instanceId}`;
@@ -26,6 +34,10 @@ export const editorPartition = (instanceId: string) => `persist:pool-comfyui-${i
 /** 这个界面开得了内嵌视图里的 ComfyUI 吗(桌面版、主进程是带这座桥的那一版)。 */
 export const embeddedEditor = (editor: WorkflowEditor) =>
   editor.kind === "comfyui" && typeof window.mosaelBrowser?.openComfyWorkflow === "function";
+
+/** 这个界面能在内嵌视图里新建吗(主进程是带「新建」那座桥的那一版)。旧主进程没有它时退回新标签页。 */
+export const embeddedCreate = (editor: WorkflowEditor) =>
+  editor.kind === "comfyui" && typeof window.mosaelBrowser?.newComfyWorkflow === "function";
 
 export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void) {
   const [note, setNote] = React.useState<EditorNote | null>(null);
@@ -94,5 +106,34 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     }
   };
 
-  return { open, opening, note, dismiss: () => setNote(null) };
+  /** 新建一张:内嵌视图里执行 ComfyUI 自己的「新建」命令;网页版(或旧主进程)开新标签页,说在 ComfyUI 里点「新建」。 */
+  const create = async (editor: WorkflowEditor) => {
+    setNote(null);
+    if (!embeddedCreate(editor)) {
+      window.open(editor.url, "_blank", "noopener,noreferrer");
+      away.current = "tab";
+      setNote({ kind: "newTab", path: NEW_NOTE_PATH });
+      return;
+    }
+    away.current = "view";
+    shown.current = false;
+    setOpening(true);
+    try {
+      const result = await window.mosaelBrowser!.newComfyWorkflow({ connectionId: instance.id, url: editor.url, name: instance.name });
+      if (!result.ok) {
+        away.current = null;
+        setNote({ kind: "error", path: NEW_NOTE_PATH, message: result.error ?? "" });
+      } else if (result.outcome && result.outcome !== "created") {
+        // 视图已经亮着(ComfyUI 照常能用,用户可以自己点「新建」):回来时照样刷新,话留着
+        setNote({ kind: result.outcome === "unsupported" ? "unsupported" : "notReady", path: NEW_NOTE_PATH });
+      }
+    } catch (error) {
+      away.current = null;
+      setNote({ kind: "error", path: NEW_NOTE_PATH, message: errorText(error) });
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return { open, create, opening, note, dismiss: () => setNote(null) };
 }

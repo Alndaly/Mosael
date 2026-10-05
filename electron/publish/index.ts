@@ -6,6 +6,7 @@ export {
   openLogin,
   openPoolLogin,
   openComfyWorkflow,
+  newComfyWorkflow,
   openPage,
   signOutAccount,
   clearPoolProfile,

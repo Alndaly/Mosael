@@ -27,7 +27,7 @@ import type { DownloadNotice } from "./downloads";
 import { FloatLayer, type FloatHint } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
-import { openWorkflowInPage, type ComfyOpenOutcome } from "./comfyEditor";
+import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
@@ -650,6 +650,17 @@ export async function openComfyWorkflow(opts: {
   const driver = views?.existingDriver(opts.partition);
   if (!driver) return "notReady";
   return openWorkflowInPage(driver, opts);
+}
+
+/**
+ * 工作流库「新建」(ADR 0038 §8):亮出这个 ComfyUI 连接自己的内嵌视图(还开着就接着用),执行前端自己的「新建」命令
+ * (见 comfyEditor.comfyNewWorkflowScript)。存盘照旧是 ComfyUI 自己的,视图收起时工作流库重拉。
+ */
+export async function newComfyWorkflow(opts: { partition: string; url: string; name: string }): Promise<ComfyNewOutcome> {
+  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
+  const driver = views?.existingDriver(opts.partition);
+  if (!driver) return "notReady";
+  return newWorkflowInPage(driver, opts);
 }
 
 /** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */
