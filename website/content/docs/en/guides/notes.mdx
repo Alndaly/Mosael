@@ -1,8 +1,8 @@
 ---
 title: Notes
-description: Collect scripts and research, edit text with revision history, and reference notes from boards, workflows and the agent.
+description: Collect scripts and research, rework text with the selection toolbar and the AI assistant, trace and compare revisions, and reference notes from boards, workflows and the agent.
 order: 8
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -19,6 +19,7 @@ These places can turn content into a note, and everything written this way carri
 | Editor → Transcript | The whole transcript; with a selection, only the selected lines |
 | Editor → Subtitles | The whole subtitle track; translations are written alongside the original |
 | **Save as note** on a document asset | The parsed full text; the document's images enter the library at this point, sourced back to the original document |
+| **Save as note** in a browser session's top bar | The page's main text (the page as you see it signed in) or the text selected on it, sourced to the page address and title; see [Browser pool](/docs/guides/browser-pool) |
 
 The dialog can **create a note** or **append to an existing one**. Transcripts and subtitles add a
 choice of **body shape**:
@@ -35,21 +36,39 @@ into their current draft and they keep typing, with no conflict prompt.
 
 ## Writing
 
-The body is a what-you-see editor with one toolbar row: paragraph style (body text, headings one
-through six), bold, italic, strikethrough, three list kinds (bulleted, numbered, task), an insert
-menu (quote, code block, divider, image), web links, tables, and undo/redo.
+The body is a what-you-see editor. The left side of the top bar is all formatting, from left to right: the sidebar toggle (hide the
+note list and focus on writing) | paragraph style (body text, headings one through six) | bold, italic, strikethrough, highlight |
+bulleted, numbered and task lists | Insert ▾ (quote, code block, divider, reference a note, image), web link, table | undo, redo.
+The right side is about the document: save status · **Markdown** · **AI assistant** · favorite · more. When the window gets
+narrow nothing wraps: the insert, undo/redo, list and bold groups fold, in that order, into **More formatting** (the vertical ⋮) at
+the far right, while the paragraph style always stays.
+
+![The Notes page: formatting on the left of the top bar, save status, Markdown, AI assistant, favorite and more on the right](/media/screens/en/notes.png)
+
+Every button has a hover hint with its shortcut: bold <kbd>⌘B</kbd>, italic <kbd>⌘I</kbd>, strikethrough <kbd>⇧⌘S</kbd>,
+highlight <kbd>⇧⌘H</kbd>, the three lists <kbd>⇧⌘8</kbd> / <kbd>⇧⌘7</kbd> / <kbd>⇧⌘9</kbd>, paragraph style
+<kbd>⌥⌘0</kbd>–<kbd>⌥⌘6</kbd>, undo <kbd>⌘Z</kbd>, redo <kbd>⇧⌘Z</kbd> (Ctrl instead of ⌘ on Windows). A button you can't use
+says why, such as "Nothing to undo".
+
+![Hovering Bold: the hint carries the shortcut keys](/media/screens/en/notes-hint.png)
+
+![The Insert menu: a lighter line of description under each name, such as "Insert image · Or paste / drop it in"](/media/screens/en/notes-insert-menu.png)
 
 A few things worth calling out:
 
-- **Images** can be pasted, dragged in, or inserted from the toolbar; select one to edit its link
-  and alt text in place.
+- **Images** can be pasted, dragged in, or picked from Insert; select one to edit its link and alt text in place.
 - **Code blocks** take a language, get syntax highlighting in both light and dark themes, and have
   a copy button. They stay valid Markdown and participate in undo.
+- **Highlight** is stored as `==text==` (the same notation as Obsidian and Typora), and can wrap bold and other formatting; typing
+  `==text==` or pasting it also turns into a highlight. Exported Markdown keeps the `==`, and a literal `==` already in the text
+  does not suddenly become a highlight.
 - **Type `@`** to reference another note. The reference **pins the revision it was made against**,
   but opens the latest content by default; use **View referenced version** to see the pinned one.
-- The **Markdown** button at the top right shows the source; press it again to go back to editing.
+- **Markdown** is a toggle you can press: pressed shows the source (the formatting buttons fold away), pressed again goes back to editing.
 
-The status at the top right, next to the Markdown button, says where you stand: `Saved` / `Saving…` / `Draft pending`. **Closing
+![Markdown pressed: the note's source](/media/screens/en/notes-markdown.png)
+
+The save status on the right of the top bar says where you stand: `Saved` / `Saving…` / `Unsaved draft`. **Closing
 the page loses nothing** — an unsaved draft stays on this device and comes back the next time you
 open the note.
 
@@ -63,6 +82,53 @@ When two people change the same part of the same note, you see *This note has a 
    server's copy.
 
 So the worst case leaves you with an extra .md file, not with lost words.
+
+## Select a passage: the selection toolbar
+
+Select some text in the body and a toolbar floats above the selection (below it when the selection is near the top of the window):
+
+- **Formatting**: bold, italic, strikethrough, inline code (<kbd>⌘E</kbd>), highlight, add a link (type the address in place) /
+  remove a link; formatting already applied shows as pressed.
+- **AI actions** (a menu): Polish, Rewrite, Expand, Shorten, Translate (into English when the selection contains Chinese, otherwise
+  into Chinese), Summarize, Explain, Continue, each with a hover description. They run straight in the AI assistant (next section).
+- **Ask AI**: opens the AI assistant with this passage and puts the cursor in the input, for a question of your own.
+- **Copy** (plain text), **turn into a bulleted list / to-dos**.
+- **Quote in chat**: attaches the passage to the AI assistant's input without sending it or taking the cursor.
+- **Read aloud**: reads it in the voice you chose under **Settings → Spoken replies**, or the free Edge voice if you never chose one; the
+  notice offers **Stop reading** or **Save as audio** (only that step makes an audio asset in the library). A paid voice is billed per
+  character, exactly as when the assistant speaks a line in chat.
+- **Save to notes**: opens the save dialog to make a new note or append to another one.
+- **Add to board**: pick a board (the one you used last comes first, you can search, and a name that matches nothing creates a new
+  board). The passage lands as a sticky note in an empty spot, covering nothing; under it, "From note “…”" leads back to this note
+  and finds the passage. **Open board** in the notice takes you to that sticky.
+
+![A passage selected in the body, with the selection toolbar above it](/media/screens/en/notes-selection.png)
+
+![The selection toolbar's AI actions: Polish, Rewrite, Expand, Shorten, Translate, Summarize, Explain, Continue](/media/screens/en/notes-ai-actions.png)
+
+It works from the keyboard too: <kbd>Tab</kbd> enters the toolbar, arrow keys and <kbd>Home</kbd> / <kbd>End</kbd> move,
+<kbd>Esc</kbd> closes it and returns to the text. In a very narrow window the toolbar keeps only **Ask AI** and **More**.
+
+## AI assistant
+
+**AI assistant** on the right of the top bar opens the same assistant panel as the editor and boards, and it knows which note you are
+looking at: every message carries this note's title and text (only the opening of a long one; it reads the rest in sections when it
+needs to), plus the passage you selected — shown as a small chip on the input, which you can remove. Docked, the panel takes a column
+whose left edge you can drag; when the window has no room it overlays the right side of the text instead. Whether it is open, docked
+or floating, and its width are remembered on this device. Switching notes keeps the conversation.
+
+![The AI assistant docked beside the note, with the selected passage attached to the input](/media/screens/en/notes-agent.png)
+
+- **Summaries, explanations, outlines** are answered in the chat; the note is not touched.
+- **Changing the text** (Polish, Rewrite, Expand, Shorten, Translate, Continue on the selection toolbar, or your own request such as
+  "make this more conversational") is done passage by passage, behind a confirmation card that shows each change as original → new,
+  removed text struck through and added text highlighted. Nothing changes until you approve, the change can be undone, and the old
+  version stays in the revision history. If you edited that passage before it got there, the step fails instead of writing in the
+  wrong place.
+- A message sent with a selection shows an excerpt line in its bubble (the note title and the start of the passage), so you can tell
+  later which passage "this" was; click it to go back to the note with the passage selected.
+
+While the panel is open, text the agent appends directly (the kind that needs no confirmation card) shows up in the note within seconds.
 
 ## Keeping it tidy
 
@@ -105,6 +171,17 @@ reading width.
   revision**; every existing revision stays. **Copy this version's content** copies its Markdown text.
   Arrow keys move between versions in the list.
 
+![Version history: versions grouped by day, each saying how it came about and how much changed, the current one at the top](/media/screens/en/notes-history.png)
+
+![Compare with previous: removed text struck through, added text highlighted](/media/screens/en/notes-history-compare.png)
+
+<Recording src="/media/videos/en/note-history.mp4" poster="/media/screens/en/notes-history.png" caption="Live interaction: open the version history, move between versions, compare with the previous one" />
+
+When you upgrade from an older version, the fragmentary revisions the old library saved on every autosave are merged by the rules
+above and renumbered without gaps; document items on boards, sources and links that pointed at old revision numbers are repointed,
+so nothing breaks. How each old revision came about is filled in wherever tasks, conversations and run records can tell; the rest
+are recorded as edits.
+
 ## Sources and properties
 
 **More → Sources and properties** lists where this note came from, plus its **topics** and **tags**
@@ -123,6 +200,9 @@ referenced note as its next revision (the old one stays).
 
 When the original is trashed or deleted, the node says **Note unavailable** instead of quietly
 passing an empty string downstream.
+
+The other way round, **Add to board** on the selection toolbar puts a passage on a board as a sticky note that remembers which
+revision of which note it came from (see above).
 
 ### Workflows
 
@@ -152,6 +232,4 @@ asked to trust that it remembered correctly.
 - [Editing and color](/docs/guides/editing) — where transcripts and subtitles become notes
 - [AI Studio](/docs/guides/ai-studio) — saving excerpts from a conversation
 
-![Workspace note editing](/media/screens/en/notes.png)
-
-<Recording src="/media/videos/en/notes.mp4" poster="/media/screens/en/notes.png" caption="Live interaction: editing and the Markdown source" />
+<Recording src="/media/videos/en/notes.mp4" poster="/media/screens/en/notes.png" caption="Live interaction: select a passage, open the selection toolbar and its AI actions, then switch to the Markdown source" />
