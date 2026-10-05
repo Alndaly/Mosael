@@ -49,6 +49,8 @@ class SpeechAdapter(Protocol):
     #: May several synthesize() calls run at once? True for remote HTTP engines, false for a
     #: local model that holds one instance in memory.
     supports_parallel_synthesis: bool
+    #: 用它念不花钱(Edge 的免费在线语音)。记账据此记 0、可信度「免费」,而不是一条找不到价格规则的「未定价」。
+    free_of_charge: bool
 
     def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None: ...
 

@@ -31,6 +31,7 @@ class BailianSpeechAdapter:
     engine_id = "alibaba"
     label_key = "ttsProvider_bailian"
     supports_parallel_synthesis = True
+    free_of_charge = False
     #: 这一支只认 qwen-tts 家族。CosyVoice 是同一把 Key 下的**另一套 API**,单独一个引擎
     #: (见 CosyVoiceSpeechAdapter)—— 端点、请求体、音色、支不支持语速全都不一样,合成一条会让面板
     #: 上的音色和语速跟着"当前恰好配了哪个模型"无声地变。

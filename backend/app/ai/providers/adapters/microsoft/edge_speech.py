@@ -24,6 +24,7 @@ class EdgeSpeechAdapter:
     engine_id = "edge"
     label_key = "ttsProvider_edge"
     supports_parallel_synthesis = True
+    free_of_charge = True
 
     def __init__(self, voice: str = "") -> None:
         self._default_voice = voice

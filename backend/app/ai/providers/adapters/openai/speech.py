@@ -20,6 +20,7 @@ class OpenAISpeechAdapter:
     engine_id = "openai"
     label_key = "ttsProvider_openai"
     supports_parallel_synthesis = True
+    free_of_charge = False
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
 
     def __init__(self, api_key: str, model: str = "gpt-4o-mini-tts", base_url: str = "") -> None:

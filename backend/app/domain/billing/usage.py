@@ -73,7 +73,10 @@ def costs_by_currency(
     ).select_from(ProviderUsageEvent)
     for target, onclause in join:
         stmt = stmt.join(target, onclause)
-    stmt = stmt.where(ProviderUsageEvent.cost_micros.is_not(None), *where).group_by(*keys, ProviderUsageEvent.currency)
+    #: 免费的那几条(`free`)不是钱:混进来的话一个人民币部署的账上会冒出一笔 $0,还按次数把美元排成主要币种。
+    stmt = stmt.where(
+        ProviderUsageEvent.cost_micros.is_not(None), ProviderUsageEvent.cost_confidence != "free", *where
+    ).group_by(*keys, ProviderUsageEvent.currency)
     counted: dict[tuple[Any, ...], list[tuple[int, CostAmount]]] = {}
     for row in db.execute(stmt).all():
         key = tuple(row[: len(keys)])
@@ -937,6 +940,11 @@ class BillableCall:
         self.cost_micros = int(micros)
         self.currency = (currency or "USD").upper()
         self.cost_confidence = "reported"
+
+    def mark_free(self) -> None:
+        """这一次不花钱(免费的引擎):记 0,可信度 `free` —— 不拿价目去估,也不落成「没能定价」。"""
+        self.cost_micros = 0
+        self.cost_confidence = "free"
 
     def __post_init__(self) -> None:
         if self.units is None:

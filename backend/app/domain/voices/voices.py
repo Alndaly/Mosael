@@ -777,6 +777,8 @@ def speak_to_file(
         job_id=job_id,
     ) as call:
         call.meter(characters=len(text), requests=1)
+        if adapter.free_of_charge:
+            call.mark_free()
         adapter.synthesize(SpeechSynthesisRequest(text=text, voice=engine_voice, speed=speed), out)
     return out
 

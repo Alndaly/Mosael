@@ -31,6 +31,7 @@ class VolcanoSpeechAdapter:
     engine_id = "volcano"
     label_key = "ttsProvider_volcano"
     supports_parallel_synthesis = True
+    free_of_charge = False
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
