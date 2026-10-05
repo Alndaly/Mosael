@@ -1,5 +1,15 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.1": {
+    zh: [
+      "**克隆音色能交给百炼 CosyVoice 念。** 配音库里的嗓子复刻到你自己的百炼账号,选 CosyVoice 时音色下拉多一组「我的克隆音色」,配音、字幕逐句配音、AI 工作台、画板、工作流和语音对话都能挑,不装本机引擎也能用自己的嗓子配音。第一次用会问你一次要不要上传参考音频,没声明是谁的嗓子不复刻;配音库写明每把嗓子在哪儿能念,删掉嗓子时百炼上的副本一起删。",
+      "**CosyVoice 配音对得上价目了。** 语音合成的账记在连接的厂商名下,对百炼那条连接点一次「预填价格」就能按挂牌价记 CosyVoice;老账升级时一并改过来,早先还算「未定价」的 Edge 配音记 0、标「免费」。百炼语音合成失败时,报错带上百炼回包里的原话。",
+    ],
+    en: [
+      "**Cloned voices can speak through Bailian CosyVoice.** A voice from your library is cloned into your own Bailian account; with CosyVoice the voice dropdown gains a My cloned voices group for dubbing, subtitle dubbing, AI Studio, boards, workflows and spoken replies — your own voice without installing a local engine. You're asked once before its reference clip is uploaded, voices nobody has declared ownership of are never cloned, the voice library shows where each voice can speak, and deleting a voice deletes its copies on Bailian too.",
+      "**CosyVoice voice-overs match their prices.** Speech is recorded under the connection's vendor, so running Prefill prices once on the Bailian connection records CosyVoice at its list price; past records are fixed on upgrade, and older Edge voice-overs still marked unpriced become 0, marked free. When Bailian speech synthesis fails, the error carries Bailian's own words.",
+    ],
+  },
   "v1.9.0": {
     zh: [
       "**笔记有了 AI 助手和选区工具条。** 选中一段就能润色、改写、扩写、翻译、续写,改正文先给出「原文 → 新文」的确认卡,批了才改;还能朗读、高亮、引用到对话、加到画板。顶栏重新排过,版本记录换成按天分组的大弹窗,能和当前版本或上一版逐字对比,连续的编辑合成一版。",
