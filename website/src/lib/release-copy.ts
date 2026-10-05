@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.0": {
+    zh: [
+      "**笔记有了 AI 助手和选区工具条。** 选中一段就能润色、改写、扩写、翻译、续写,改正文先给出「原文 → 新文」的确认卡,批了才改;还能朗读、高亮、引用到对话、加到画板。顶栏重新排过,版本记录换成按天分组的大弹窗,能和当前版本或上一版逐字对比,连续的编辑合成一版。",
+      "**浏览器会话成了收集素材的地方。** 顶栏一排图标:截屏、下载视频、采集图片、存成笔记、用当前页开工,网页里点的下载也直接进素材库;左侧像 Arc 一样的页面列表,新窗口打开的链接进列表不再弹小窗。工作流多了「浏览器·截图」「浏览器·切换页面」节点,遇到错误页默认算失败,能操作同源框架里的元素。",
+      "**ComfyUI 插件多了模型库和工作流库。** 看这台服务器上的模型(预览、底模、触发词、谁在用)和工作流(节点图、能填什么、缺什么),从 HuggingFace、Civitai、ModelScope 下载缺的模型,导入别处的工作流并经 ComfyUI-Manager 装上缺的节点;生成表单里选 LoRA 带缩略图和触发词,没有画布的工作流也能一次出几张。",
+      "**花了多少钱记得更准。** 价目按分辨率分档,GPT Image 按服务商回报的 token 计价,Evolink 按回包里的实扣记,失败的调用没扣钱就不记,老账按现在的规则补算;Evolink 的 GPT Image 2 / 2.5 默认最便宜的画质。全应用的菜单和悬停说明统一了,报错第一行改成人话,原文收进「详情」。",
+    ],
+    en: [
+      "**Notes get the AI assistant and a selection toolbar.** Select a passage to polish, rewrite, expand, translate or continue it; changes to the text arrive as an original → new confirmation card and apply only once approved. You can also read aloud, highlight, quote it in chat or add it to a board. The toolbar is reorganised, and version history is a large dialog grouped by day that compares with the current or previous version word by word, with consecutive edits folded into one version.",
+      "**The browser session becomes a place to collect material.** A row of icons in the top bar takes screenshots, downloads videos, collects images, saves the page as a note or starts work from it, and downloads you click on a page go straight to the library; an Arc-style page list on the left keeps links that open new windows instead of popping up small ones. Workflows gain Browser · screenshot and Browser · switch page nodes, treat error pages as failures by default and can reach elements inside same-origin frames.",
+      "**The ComfyUI plugin adds a model library and a workflow library.** Browse the server's models (previews, base model, trigger words, who uses them) and workflows (node graph, inputs, what is missing), download missing models from HuggingFace, Civitai or ModelScope, and import workflows from elsewhere, installing missing nodes through ComfyUI-Manager; generation forms show thumbnails and trigger words when picking a LoRA, and workflows without a canvas can make several results at once.",
+      "**Spending is recorded more accurately.** Prices can be tiered by resolution, GPT Image is billed on the tokens the provider reports, Evolink on the charge in its response, failed calls that were never charged cost nothing, and past usage is recalculated with today's rules; Evolink's GPT Image 2 / 2.5 default to the cheapest quality. Menus and hover hints are consistent across the app, and errors lead with a plain sentence, with the raw message under Details.",
+    ],
+  },
   "v1.8.3": {
     zh: [
       "**剪辑模块从里到外修了一遍。** 放下即覆盖、视频和它的声音链接在一起、波纹删除和变速带着后面的内容走;多人或智能体同时改一条时间线不再互相覆盖,⌘Z 默认只撤你自己的;J / K / L、入出点、全轨切、波纹修剪等快捷键补齐,长时间线也流畅了。",
