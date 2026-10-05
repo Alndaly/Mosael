@@ -70,6 +70,10 @@ class Studio:
             "export_sequence": self.export,
         }.items():
             monkeypatch.setitem(registry._REGISTRY, node_type, handler)
+        #: 「口播按时长收紧」改写时直接调对话节点的执行体(不经登记表),一起换成假的。
+        from app.domain.workflows.executors import ai as ai_nodes
+
+        monkeypatch.setattr(ai_nodes, "llm", self.llm)
 
     def _asset(self, db, kind: str, name: str, media_info: dict[str, Any]) -> str:
         asset = Asset(workspace_id=self.workspace_id, kind=kind, name=name, source="generated",
@@ -80,7 +84,8 @@ class Studio:
 
     def llm(self, db, scope, config):
         name = config["json_schema_name"]
-        plan = self.plans[name]
+        #: 口播收紧那一步(fit_narration)没给假回答时,当模型一段都没改短。
+        plan = self.plans.get(name, {"rewrites": []}) if name == "narration_rewrites" else self.plans[name]
         #: 假回答也得是这一步要的形状 —— 否则测的是一张模板里根本不会出现的数据。
         jsonschema.validate(plan, config["json_schema"])
         self.calls["llm"].append({"name": name, "prompt": config["prompt"]})
@@ -383,6 +388,47 @@ class Test带货口播真跑:
             filed = db.query(Asset).filter(Asset.project_id == context["pitch_project"]["project_id"],
                                            Asset.kind == "image").count()
         assert filed == 3
+
+    @pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+    def test_脚本写出来先量一遍口播_超了的那一拍让模型改短_改短的那一版拿去念(self, monkeypatch, presenter: bool) -> None:
+        """10 秒的口播给 2 秒那一拍写了 12 个字(真跑)。脚本之后由「口播按时长收紧」量一遍,只把超了的那几拍交回给模型。"""
+        from app.db.models import Notification
+
+        ws = _workspace()
+        short = "细密针织不起球"
+        script = {"beats": BEATS} | ({"hook_line": "h", "call_to_action": "c"} if presenter else {})
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": script,
+                                          "narration_rewrites": {"rewrites": [{"index": 2, "narration": short}]}})
+        graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1", presenter=presenter)
+        fit = next(node for node in graph["nodes"] if node["id"] == "fit_beats")
+        assert fit["type"] == "fit_narration" and fit["config"]["items"] == "{{pitch_script.json.beats}}"
+        assert fit["config"]["profile_id"] == CHAT.profile_id
+        assert any(edge.get("kind") == "data" and (edge["source"], edge["source_output"], edge["target"], edge["target_input"])
+                   == ("fit_beats", "items", "shoot_beats", "items") for edge in graph["edges"]), "逐拍拿的是收紧过的那一份"
+        _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        if presenter:
+            _pick(graph, "presenter", entity_id="presenter-1")
+        _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+
+        assert [one["name"] for one in studio.calls["llm"]] == ["product_pitch_script", "narration_rewrites"]
+        said = [one["text"] for one in studio.calls["synthesize_speech"]]
+        assert short in said and LONG_NARRATION not in said, said
+        with unit_of_work() as db:
+            bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any("第 2 段" in body and "改短" in body for body in bodies), bodies
+
+    def test_改不短的那一拍照旧加速塞进去_通知里说清楚(self, monkeypatch) -> None:
+        from app.db.models import Notification
+
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        assert [one["name"] for one in studio.calls["llm"]].count("narration_rewrites") == 2, "最多两轮"
+        with unit_of_work() as db:
+            bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any("第 2 段" in body and "加速" in body for body in bodies), bodies
 
     def test_最后一拍念不完_裁到这一拍的末尾_成片尾不留黑(self, monkeypatch) -> None:
         ws = _workspace()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from jsonschema import SchemaError, ValidationError, validate as validate_json_schema
@@ -465,6 +466,152 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 由 test_executor_outputs_are_declared 强制两边对齐。
     result["response_format_used"] = used_tier
     return result
+
+
+#: 念一段口播要多久:中文按每秒约 4 个字、英文按每秒约 2.5 个词 —— 和模板提示词里写给模型的是同一组数。
+CJK_CHARS_PER_SECOND = 4
+LATIN_WORDS_PER_SECOND = 2.5
+_CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+_WORD = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z]+)?")
+#: 超了的那几段最多让模型改几轮。一轮多半就改对了;两轮还改不短的,交给时间线那一步加速 / 裁剪。
+FIT_NARRATION_ROUNDS = 2
+FIT_NARRATION_MAX_ROUNDS = 3
+
+
+def speech_seconds(text: str) -> float:
+    """这段口播念出来大约要几秒(标点不算)。"""
+    cjk = len(_CJK.findall(text))
+    words = len(_WORD.findall(_CJK.sub(" ", text)))
+    return cjk / CJK_CHARS_PER_SECOND + words / LATIN_WORDS_PER_SECOND
+
+
+def _seconds_of(item: Any, field: str) -> float | None:
+    value = item.get(field) if isinstance(item, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return float(value)
+
+
+def _too_long(items: list[Any], text_field: str, seconds_field: str) -> list[int]:
+    """念不完的那几段(从 0 数)。没给时长、没有口播的不算。"""
+    return [
+        index for index, item in enumerate(items)
+        if (seconds := _seconds_of(item, seconds_field)) is not None
+        and speech_seconds(str(item.get(text_field) or "")) > seconds + 1e-9
+    ]
+
+
+_REWRITE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "rewrites": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"index": {"type": "integer"}, "narration": {"type": "string"}},
+                "required": ["index", "narration"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["rewrites"],
+    "additionalProperties": False,
+}
+
+_REWRITE_SYSTEM = """你是短视频口播编辑。下面几段口播念出来比它那一段的时长长。把每一段改短到念得完:意思和卖点不变、
+不加新信息、不换语言(原文是中文就写中文)。中文按每秒约 4 个字、英文按每秒约 2.5 个词估,宁短勿长。
+只输出符合 JSON Schema 的对象,index 照抄。"""
+
+
+def _rewrite_prompt(items: list[Any], over: list[int], text_field: str, seconds_field: str) -> str:
+    lines = []
+    for index in over:
+        seconds = _seconds_of(items[index], seconds_field) or 0
+        lines.append(
+            f"第 {index + 1} 段({seconds:g} 秒,中文不超过 {int(seconds * CJK_CHARS_PER_SECOND)} 个字,"
+            f"英文不超过 {int(seconds * LATIN_WORDS_PER_SECOND)} 个词):{items[index].get(text_field) or ''}"
+        )
+    return "把这几段口播改短到念得完(index 写段号):\n" + "\n".join(lines)
+
+
+@register("fit_narration")
+def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """口播按时长收紧:量一遍每一段念出来要多久,超了的那几段交回给模型改短(只改那几段,最多 `max_rewrites` 轮);
+    改短了的换上(没改短的不换)。还超的照旧交给时间线那一步加速 / 裁剪,`over` / `note` 说清楚是哪几段。
+
+    提示词里写了「宁短勿长」,模型照样超:10 秒的带货口播给 2 秒那一拍写了 12 个字(真跑)。这条约束得由代码量。
+    """
+    from app.core.i18n import tr
+    from app.domain.workflows.executors.common import whole_number
+
+    raw = config.get("items")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw) if raw.strip() else []
+        except ValueError as exc:
+            raise WorkflowDomainError("wfErr_fitNarrationItems") from exc
+    if not isinstance(raw, list):
+        raise WorkflowDomainError("wfErr_fitNarrationItems")
+    text_field = str(config.get("text_field") or "narration").strip() or "narration"
+    seconds_field = str(config.get("seconds_field") or "seconds").strip() or "seconds"
+    rounds = whole_number(config, "max_rewrites", node_type="fit_narration", default=FIT_NARRATION_ROUNDS)
+    rounds = max(0, min(rounds, FIT_NARRATION_MAX_ROUNDS))
+    items = [dict(item) if isinstance(item, dict) else item for item in raw]
+    rewritten: set[int] = set()
+    failure = ""
+    for _ in range(rounds):
+        over = _too_long(items, text_field, seconds_field)
+        if not over:
+            break
+        try:
+            #: 改写就是一次对话节点:同一条连接解析、同一套结构化输出降级与 JSON 修复、同一份记账。
+            answer = llm(db, scope, {
+                "profile_id": config.get("profile_id") or "",
+                "model": config.get("model") or "",
+                "preset": "precise",
+                "system": _REWRITE_SYSTEM,
+                "prompt": _rewrite_prompt(items, over, text_field, seconds_field),
+                "response_format": "json_schema",
+                "json_schema_name": "narration_rewrites",
+                "json_schema": _REWRITE_SCHEMA,
+                "json_schema_strict": "true",
+                "temperature": 0.3,
+                "max_tokens": 2000,
+            })
+        except WorkflowDomainError as exc:
+            # 改写那一步失败不该让整条流程作废(脚本、画面都还能用):停在这里,照原文交下去,说一声。
+            failure = str(exc)
+            break
+        for rewrite in ((answer or {}).get("json") or {}).get("rewrites") or []:
+            index = rewrite.get("index") if isinstance(rewrite, dict) else None
+            text = str(rewrite.get("narration") or "").strip() if isinstance(rewrite, dict) else ""
+            if not isinstance(index, int) or isinstance(index, bool) or index - 1 not in over or not text:
+                continue
+            current = str(items[index - 1].get(text_field) or "")
+            if speech_seconds(text) < speech_seconds(current):
+                items[index - 1][text_field] = text
+                rewritten.add(index - 1)
+    still = _too_long(items, text_field, seconds_field)
+    fitted = sorted(index + 1 for index in rewritten if index not in still)
+    notes = []
+    if fitted:
+        notes.append(tr("wfFit_rewritten", which=fitted))
+    if still:
+        notes.append(tr("wfFit_stillOver", which=[index + 1 for index in still]))
+    if failure:
+        notes.append(tr("wfFit_rewriteFailed", reason=failure))
+    return {
+        "items": items,
+        "rewritten": len(rewritten),
+        "over": [index + 1 for index in still],
+        "note": "\n".join(notes),
+    }
+
+
+@register_preflight("fit_narration")
+def fit_narration_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """改写要用对话模型:和对话节点同一道运行前检查(连接、模型都留空时,跑的这个人得有默认对话模型)。"""
+    llm_preflight(db, config, actor, place)
 
 
 @register_preflight("llm")

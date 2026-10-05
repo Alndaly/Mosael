@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "3f3ab175f9aba1a96f368a1b5b0f65b9dc3a0b5ee28ec2058fadc5c51b5108be",
+  "graph_hash": "7975514b7a610e8fba951740f19c41e1141488aaac4196d245541c53e78b0614",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -115,6 +115,22 @@
         }
       },
       {
+        "id": "fit_beats",
+        "type": "fit_narration",
+        "name": "量一遍每拍的口播念不念得完",
+        "position": {
+          "x": 970,
+          "y": 120
+        },
+        "config": {
+          "items": "{{pitch_script.json.beats}}",
+          "text_field": "narration",
+          "seconds_field": "seconds",
+          "profile_id": "",
+          "model": ""
+        }
+      },
+      {
         "id": "pitch_project",
         "type": "project_sequence_create",
         "name": "建立竖屏成片时间线",
@@ -138,7 +154,7 @@
           "y": 260
         },
         "config": {
-          "items": "{{pitch_script.json.beats}}",
+          "items": "",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
             "product_name": "{{start.product_name}}",
@@ -357,7 +373,10 @@
           },
           "concurrency": 1,
           "output": ""
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "beat_captions",
@@ -404,7 +423,7 @@
         },
         "config": {
           "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。"
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。\n{{fit_beats.note}}"
         }
       },
       {
@@ -444,8 +463,13 @@
         "target": "pitch_project"
       },
       {
-        "id": "script_shoot",
+        "id": "script_fit",
         "source": "pitch_script",
+        "target": "fit_beats"
+      },
+      {
+        "id": "fit_shoot",
+        "source": "fit_beats",
         "target": "shoot_beats"
       },
       {
@@ -477,6 +501,14 @@
         "id": "notice_output",
         "source": "done_notice",
         "target": "output"
+      },
+      {
+        "id": "d-fit_beats-items-shoot_beats-items",
+        "source": "fit_beats",
+        "target": "shoot_beats",
+        "kind": "data",
+        "source_output": "items",
+        "target_input": "items"
       },
       {
         "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",

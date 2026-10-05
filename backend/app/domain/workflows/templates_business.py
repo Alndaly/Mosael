@@ -1018,6 +1018,21 @@ def product_pitch_short_graph(
             },
         },
         {
+            #: 脚本写出来先量一遍:每一拍的口播念不念得完。提示词里写了「宁短勿长」,模型照样超(10 秒的口播给 2 秒那一拍
+            #: 写了 12 个字,真跑);超了的那几拍交回给模型改短,还长的照旧由「画外音对齐这一拍开头」加速 / 裁剪,完成通知里说明。
+            "id": "fit_beats",
+            "type": "fit_narration",
+            "name": {"zh": "量一遍每拍的口播念不念得完", "en": "Check each beat's narration fits"},
+            "position": {"x": 970, "y": 120},
+            "config": {
+                "items": "{{pitch_script.json.beats}}",
+                "text_field": "narration",
+                "seconds_field": "seconds",
+                "profile_id": getattr(chat, "profile_id", ""),
+                "model": getattr(chat, "model", ""),
+            },
+        },
+        {
             "id": "pitch_project",
             "type": "project_sequence_create",
             "name": {"zh": "建立竖屏成片时间线", "en": "Create the vertical timeline"},
@@ -1039,7 +1054,7 @@ def product_pitch_short_graph(
             ),
             "position": {"x": 970, "y": 260},
             "config": {
-                "items": "{{pitch_script.json.beats}}",
+                "items": "{{fit_beats.items}}",
                 "inputs": shoot_inputs,
                 "body": body,
                 # 画面要按拍的顺序首尾相接,所以**不能并发** —— 并发的落位顺序是谁先回来谁在前。
@@ -1076,7 +1091,8 @@ def product_pitch_short_graph(
             "config": {
                 "title": "带货短片已导出",
                 "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
-                + (f"\n{voice_said}" if voice_said else ""),
+                + (f"\n{voice_said}" if voice_said else "")
+                + "\n{{fit_beats.note}}",
             },
         },
         {
@@ -1103,7 +1119,8 @@ def product_pitch_short_graph(
             {"id": "start_script", "source": "start", "target": "pitch_script"},
             #: 时间线在脚本写出来之后才建:此前和那次对话并行,对话失败时留下一个空项目。
             {"id": "script_project", "source": "pitch_script", "target": "pitch_project"},
-            {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
+            {"id": "script_fit", "source": "pitch_script", "target": "fit_beats"},
+            {"id": "fit_shoot", "source": "fit_beats", "target": "shoot_beats"},
             {"id": "project_shoot", "source": "pitch_project", "target": "shoot_beats"},
             {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
             {"id": "shoot_captions", "source": "shoot_beats", "target": "beat_captions"},
@@ -1666,7 +1683,8 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         {"id": "hook_then_beats", "source": "hook_place", "target": "shoot_beats"},
         #: 逐拍只挂在脚本(和开场)之后:商品图、主播是它引用的值(引用即依赖,照样等它们),但不能让它们
         #: 把逐拍激活 —— 主播缺音色停下时,脚本没写,逐拍也不该跑。
-        {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
+        {"id": "script_fit", "source": "pitch_script", "target": "fit_beats"},
+        {"id": "fit_shoot", "source": "fit_beats", "target": "shoot_beats"},
         {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_spoken"},
         {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
         {"id": "cta_place_gate", "source": "cta_spoken", "target": "cta_place", "source_handle": "true"},

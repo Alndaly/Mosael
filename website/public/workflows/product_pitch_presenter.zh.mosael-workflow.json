@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "8ff1553ed627fbb77cc23947df988d2878f7464e6a45ea7dd2d9c0ebe66c39a8",
+  "graph_hash": "e8d0999e9a9c4bde10da5134c22e34faee90c83e19e7b8631722608ef9629203",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -121,6 +121,22 @@
           "json_schema_strict": "true",
           "temperature": 0.6,
           "max_tokens": 6000
+        }
+      },
+      {
+        "id": "fit_beats",
+        "type": "fit_narration",
+        "name": "量一遍每拍的口播念不念得完",
+        "position": {
+          "x": 970,
+          "y": 120
+        },
+        "config": {
+          "items": "{{pitch_script.json.beats}}",
+          "text_field": "narration",
+          "seconds_field": "seconds",
+          "profile_id": "",
+          "model": ""
         }
       },
       {
@@ -332,7 +348,7 @@
           "y": 260
         },
         "config": {
-          "items": "{{pitch_script.json.beats}}",
+          "items": "",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
             "product_name": "{{start.product_name}}",
@@ -553,7 +569,10 @@
           },
           "concurrency": 1,
           "output": ""
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "beat_captions",
@@ -600,7 +619,7 @@
         },
         "config": {
           "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n{{fit_beats.note}}"
         }
       },
       {
@@ -698,8 +717,13 @@
         "target": "shoot_beats"
       },
       {
-        "id": "script_shoot",
+        "id": "script_fit",
         "source": "pitch_script",
+        "target": "fit_beats"
+      },
+      {
+        "id": "fit_shoot",
+        "source": "fit_beats",
         "target": "shoot_beats"
       },
       {
@@ -825,6 +849,14 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
+      },
+      {
+        "id": "d-fit_beats-items-shoot_beats-items",
+        "source": "fit_beats",
+        "target": "shoot_beats",
+        "kind": "data",
+        "source_output": "items",
+        "target_input": "items"
       },
       {
         "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",

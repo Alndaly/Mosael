@@ -154,6 +154,10 @@ _FIELD_LABELS = {
     "start_field": "wfField_start_field",
     "end_field": "wfField_end_field",
     "text_field": "wfField_text_field",
+    "seconds_field": "wfField_seconds_field",
+    "max_rewrites": "wfField_max_rewrites",
+    "rewritten": "wfField_rewritten",
+    "over": "wfField_over",
     "allow_empty": "wfField_allow_empty",
     "at": "wfField_at",
     "max_duration": "wfField_max_duration",
@@ -660,6 +664,24 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         #: 引用它的地方(具名输出、入参……)据此列出 `{{节点.json.字段}}` 让人挑,而不是只能挑整个 `json`、
         #: 再手敲子路径。界面只读这份声明,不按节点类型认(见前端 workflows/workflowRefCatalog)。
         "output_schema_from": {"json": "json_schema"},
+    },
+    #: 口播按时长收紧(见 executors/ai.fit_narration):脚本之后量一遍每段念出来要多久,超了的交回给模型改短。
+    "fit_narration": {
+        "external": False,
+        "category": "wfCat_ai",
+        "label": "wfNode_fit_narration",
+        "description": "wfNode_fit_narration_desc",
+        "config": {
+            "items": {"type": "template", "required": True, "label": "wfField_fit_items", "description": "wfNode_fit_narration_items"},
+            "text_field": {"advanced": True, "type": "template", "default": "narration", "description": "wfNode_fit_narration_text_field"},
+            "seconds_field": {"advanced": True, "type": "template", "default": "seconds", "description": "wfNode_fit_narration_seconds_field"},
+            "profile_id": {"type": "string", "description": "wfNode_llm_profile_id", "options_from": "chat_connections"},
+            "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
+            "max_rewrites": {"advanced": True, "type": "number", "default": 2, "description": "wfNode_fit_narration_max_rewrites"},
+        },
+        "outputs": ["items", "rewritten", "over", "note"],
+        "output_types": {"items": "json", "rewritten": "number", "over": "json", "note": "text"},
+        "output_labels": {"note": "wfOut_fit_note"},
     },
     "plugin_tool": {
         "external": True,

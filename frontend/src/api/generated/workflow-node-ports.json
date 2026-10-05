@@ -755,6 +755,35 @@
     ]
   },
   {
+    "type": "fit_narration",
+    "config": {
+      "items": {
+        "type": "template"
+      },
+      "text_field": {
+        "type": "template"
+      },
+      "seconds_field": {
+        "type": "template"
+      },
+      "profile_id": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "max_rewrites": {
+        "type": "number"
+      }
+    },
+    "outputs": [
+      "items",
+      "rewritten",
+      "over",
+      "note"
+    ]
+  },
+  {
     "type": "generate_subtitles",
     "config": {
       "sequence_id": {

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "88e305cd3593159a39089565fef83baa4853bb7b70bb15d15d14646bcf0a837a",
+  "graph_hash": "9cda86bfeb30e1f0bb710ca35b1a854e0c8dac92369db9ce249dbf851273f91e",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -115,6 +115,22 @@
         }
       },
       {
+        "id": "fit_beats",
+        "type": "fit_narration",
+        "name": "Check each beat's narration fits",
+        "position": {
+          "x": 970,
+          "y": 120
+        },
+        "config": {
+          "items": "{{pitch_script.json.beats}}",
+          "text_field": "narration",
+          "seconds_field": "seconds",
+          "profile_id": "",
+          "model": ""
+        }
+      },
+      {
         "id": "pitch_project",
         "type": "project_sequence_create",
         "name": "Create the vertical timeline",
@@ -138,7 +154,7 @@
           "y": 260
         },
         "config": {
-          "items": "{{pitch_script.json.beats}}",
+          "items": "",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
             "product_name": "{{start.product_name}}",
@@ -357,7 +373,10 @@
           },
           "concurrency": 1,
           "output": ""
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "beat_captions",
@@ -404,7 +423,7 @@
         },
         "config": {
           "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。"
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n配音用的是免费的 Edge 音色「晓晓」:建这张图时配音库里没有能用的克隆音色(没有音色,或者克隆引擎跑不起来)。有了克隆音色,在「念这一拍的画外音」里换上它。\n{{fit_beats.note}}"
         }
       },
       {
@@ -444,8 +463,13 @@
         "target": "pitch_project"
       },
       {
-        "id": "script_shoot",
+        "id": "script_fit",
         "source": "pitch_script",
+        "target": "fit_beats"
+      },
+      {
+        "id": "fit_shoot",
+        "source": "fit_beats",
         "target": "shoot_beats"
       },
       {
@@ -477,6 +501,14 @@
         "id": "notice_output",
         "source": "done_notice",
         "target": "output"
+      },
+      {
+        "id": "d-fit_beats-items-shoot_beats-items",
+        "source": "fit_beats",
+        "target": "shoot_beats",
+        "kind": "data",
+        "source_output": "items",
+        "target_input": "items"
       },
       {
         "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",

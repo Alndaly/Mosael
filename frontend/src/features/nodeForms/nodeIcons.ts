@@ -95,6 +95,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   list_chunk: ListChecks,
   text_transform: CaseSensitive,
   delay: Timer,
+  //: 口播按时长收紧:掐着表改稿。
+  fit_narration: Timer,
   synthesize_speech: AudioLines,
   //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
   //: 拆成两份(人声 / 背景):画板上它和「剪一段」并排在音频格的操作条上,不能都是剪刀。

@@ -353,7 +353,7 @@
     },
     "author": "Mosael",
     "version": 5,
-    "nodes": 9,
+    "nodes": 10,
     "download": {
       "zh": "/workflows/product_pitch_short.zh.mosael-workflow.json",
       "en": "/workflows/product_pitch_short.en.mosael-workflow.json"
@@ -549,7 +549,7 @@
     },
     "author": "Mosael",
     "version": 5,
-    "nodes": 21,
+    "nodes": 22,
     "download": {
       "zh": "/workflows/product_pitch_presenter.zh.mosael-workflow.json",
       "en": "/workflows/product_pitch_presenter.en.mosael-workflow.json"

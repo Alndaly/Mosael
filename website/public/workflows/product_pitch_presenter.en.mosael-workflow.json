@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "32a53e7bd2dc6776fa914bbc8226d1b95f68243d19c265c306fe60e6af521604",
+  "graph_hash": "af527acd58fb62e1dd28b34dbec40e02d1c391bd82fea21054c898ba5b96e52c",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -121,6 +121,22 @@
           "json_schema_strict": "true",
           "temperature": 0.6,
           "max_tokens": 6000
+        }
+      },
+      {
+        "id": "fit_beats",
+        "type": "fit_narration",
+        "name": "Check each beat's narration fits",
+        "position": {
+          "x": 970,
+          "y": 120
+        },
+        "config": {
+          "items": "{{pitch_script.json.beats}}",
+          "text_field": "narration",
+          "seconds_field": "seconds",
+          "profile_id": "",
+          "model": ""
         }
       },
       {
@@ -332,7 +348,7 @@
           "y": 260
         },
         "config": {
-          "items": "{{pitch_script.json.beats}}",
+          "items": "",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
             "product_name": "{{start.product_name}}",
@@ -553,7 +569,10 @@
           },
           "concurrency": 1,
           "output": ""
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "beat_captions",
@@ -600,7 +619,7 @@
         },
         "config": {
           "title": "带货短片已导出",
-          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。\n{{fit_beats.note}}"
         }
       },
       {
@@ -698,8 +717,13 @@
         "target": "shoot_beats"
       },
       {
-        "id": "script_shoot",
+        "id": "script_fit",
         "source": "pitch_script",
+        "target": "fit_beats"
+      },
+      {
+        "id": "fit_shoot",
+        "source": "fit_beats",
         "target": "shoot_beats"
       },
       {
@@ -825,6 +849,14 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
+      },
+      {
+        "id": "d-fit_beats-items-shoot_beats-items",
+        "source": "fit_beats",
+        "target": "shoot_beats",
+        "kind": "data",
+        "source_output": "items",
+        "target_input": "items"
       },
       {
         "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",
