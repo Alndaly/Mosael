@@ -55,6 +55,36 @@ export type LibraryNav = {
 
 const navName = (item: LibraryNavItem) => `${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`;
 
+/**
+ * 工具条按钮上的字在多窄时收起(见 LibraryToolbarLabel)。看的是**工具条自己**有多宽(容器查询),不是窗口:左边那一列
+ * 目录占掉的宽度窗口看不出来,窄窗口下它还会收成工具条里的一个下拉。
+ *
+ * 两道线按英文界面(字最长)量:弹窗开到最宽(1180)时工具条 914,中英文、什么都不收都放得下;窄一些先收 `first`,
+ * 再窄收 `last`,到应用的最小窗口(980)还是一行。再窄就换行 —— 工具条本来就会折行,不会叠在一起。
+ */
+const TOOLBAR_COLLAPSE = {
+  first: { label: "@max-[890px]/library-toolbar:hidden", icon: "hidden @max-[890px]/library-toolbar:inline-flex" },
+  last: { label: "@max-[800px]/library-toolbar:hidden", icon: "hidden @max-[800px]/library-toolbar:inline-flex" },
+} as const;
+
+/**
+ * 工具条按钮上的那几个字:工具条一行放不下时**按优先级收起**,按钮只剩图标。名字不丢 —— 按钮是 IconButton,
+ * 读屏念 aria-label、悬停说明第一行也是它。`first` 先收(次要的:筛选),`last` 最后收(主操作:下载、导入)。
+ *
+ * 按钮本来就带图标的(「⬇ 下载模型」),图标写在外面,这里只收字;本来只有字的(「底模 ▾」),`icon` 是收起后
+ * 顶上的那个 —— 字在的时候它是多余的。
+ */
+export function LibraryToolbarLabel({ collapse, icon, children }: { collapse: keyof typeof TOOLBAR_COLLAPSE; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <>
+      {icon && <span data-toolbar-icon={collapse} className={TOOLBAR_COLLAPSE[collapse].icon}>{icon}</span>}
+      <span data-toolbar-label={collapse} className={cn("min-w-0", TOOLBAR_COLLAPSE[collapse].label)}>
+        {children}
+      </span>
+    </>
+  );
+}
+
 export function LibraryDialog({
   open,
   onOpenChange,
@@ -159,7 +189,8 @@ export function LibraryDialog({
             aria-labelledby={showColumn && nav ? tabId(nav.value) : undefined}
             className="flex min-h-0 min-w-0 flex-col"
           >
-            <div data-library-toolbar="" className="flex shrink-0 flex-wrap items-center gap-2 px-6 pb-3 pt-1">
+            {/* 工具条是一个容器:按钮上的字收不收看它自己有多宽(见 LibraryToolbarLabel)。 */}
+            <div data-library-toolbar="" className="@container/library-toolbar flex shrink-0 flex-wrap items-center gap-2 px-6 pb-3 pt-1">
               {navPicker}
               {toolbar}
             </div>

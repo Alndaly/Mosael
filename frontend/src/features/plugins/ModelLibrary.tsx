@@ -11,6 +11,7 @@ import {
   FolderTree,
   LayoutGrid,
   Library,
+  ListFilter,
   RefreshCcw,
   Search,
   SearchX,
@@ -46,6 +47,7 @@ import {
   LibraryDialog,
   LibraryFilterChips,
   LibrarySection,
+  LibraryToolbarLabel,
   type LibraryChip,
   type LibraryDensity,
   type LibraryNavItem,
@@ -249,10 +251,7 @@ export function ModelLibraryDialog({
       >
         <RefreshCcw size={13} />
       </IconButton>
-      <Button onClick={() => setSeed({})} disabled={!library.data}>
-        <Download size={13} />
-        {t("modelLibraryDownload")}
-      </Button>
+      <DownloadButton onClick={() => setSeed({})} />
     </>
   );
 
@@ -260,16 +259,11 @@ export function ModelLibraryDialog({
   //: 筛选和排序不摆,下载点不了并说为什么。在读时的进度、读不出来时的「重试」在内容区里。
   const toolbar = !library.data ? (
     <>
-      <label className="relative min-w-[180px] flex-1 basis-[220px]">
+      <label className="relative min-w-[180px] flex-1 basis-[180px]">
         <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-9" disabled placeholder={t("modelLibrarySearchPending")} aria-label={t("modelLibrarySearchPending")} />
       </label>
-      <Hint disabledReason={library.isError ? t("modelLibraryUnreadable") : t("modelLibraryStillReading")}>
-        <Button disabled>
-          <Download size={13} />
-          {t("modelLibraryDownload")}
-        </Button>
-      </Hint>
+      <DownloadButton disabledReason={library.isError ? t("modelLibraryUnreadable") : t("modelLibraryStillReading")} />
     </>
   ) : current === MISSING_VIEW || current === DOWNLOADS_VIEW ? (
       <>
@@ -285,7 +279,8 @@ export function ModelLibraryDialog({
       </>
     ) : (
       <>
-        <label className="relative min-w-[180px] flex-1 basis-[220px]">
+        {/* 放不放得下一行按搜索框最窄的时候算(basis = min),放得下它再往宽里长。 */}
+        <label className="relative min-w-[180px] flex-1 basis-[180px]">
           <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-9"
@@ -458,6 +453,24 @@ export function ModelLibraryDialog({
   );
 }
 
+/** 工具条上的主操作。工具条窄了最后才收字(见 LibraryToolbarLabel);还没读出来时点不了,并说为什么。 */
+function DownloadButton({ onClick, disabledReason }: { onClick?: () => void; disabledReason?: string }) {
+  const t = useI18n();
+  return (
+    <IconButton
+      variant="default"
+      size="default"
+      label={t("modelLibraryDownload")}
+      disabled={Boolean(disabledReason)}
+      disabledReason={disabledReason}
+      onClick={onClick}
+    >
+      <Download size={13} />
+      <LibraryToolbarLabel collapse="last">{t("modelLibraryDownload")}</LibraryToolbarLabel>
+    </IconButton>
+  );
+}
+
 /**
  * 按底模筛:勾几种都行(其中任一),勾的时候菜单不关。只列**当前目录里有的**底模,每种标着几个文件 ——
  * 勾之前就知道会剩多少。只有一种(或一种都认不出)时没什么可筛的,按钮点不了并说为什么。
@@ -475,36 +488,45 @@ function FamilyFilter({
 }) {
   const t = useI18n();
   const chosen = new Set(value);
-  const label =
-    value.length === 0
-      ? t("modelLibraryFamilyButton")
-      : value.length === 1
-        ? `${t("modelLibraryFamilyButton")} · ${nameOf(value[0])}`
-        : `${t("modelLibraryFamilyButton")} · ${value.length}`;
+  //: 勾了几种就写几,不写名字:勾的是哪几种,工具条下面那行筛选里一个个写着;按钮上再写一遍名字,勾一个长名字
+  //: (「Wan Video 14B t2v」)就把工具条挤成两行。
+  const label = value.length === 0 ? t("modelLibraryFamilyButton") : `${t("modelLibraryFamilyButton")} · ${value.length}`;
+  //: 工具条窄了先收这几个字(见 LibraryToolbarLabel),换成筛选图标;勾了哪几种,按钮换成强调色,下面那行筛选里一个个写着。
+  const text = (
+    <LibraryToolbarLabel collapse="first" icon={<ListFilter size={13} />}>
+      <span className="flex min-w-0 items-center gap-2">
+        <Truncate>{label}</Truncate>
+        <ChevronDown />
+      </span>
+    </LibraryToolbarLabel>
+  );
   if (families.length < 2) {
     return (
-      <Hint label={t("modelLibraryFamilyHint")} disabledReason={t("modelLibraryFamilySingle")}>
-        <Button variant="outline" disabled aria-label={t("modelLibraryFamilyLabel")}>
-          {t("modelLibraryFamilyButton")}
-          <ChevronDown />
-        </Button>
-      </Hint>
+      <IconButton
+        variant="outline"
+        size="default"
+        disabled
+        label={t("modelLibraryFamilyLabel")}
+        hint={t("modelLibraryFamilyHint")}
+        disabledReason={t("modelLibraryFamilySingle")}
+      >
+        {text}
+      </IconButton>
     );
   }
   return (
     <Popover>
-      <Hint label={t("modelLibraryFamilyHint")}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            aria-label={`${t("modelLibraryFamilyLabel")}${value.length ? ` · ${label}` : ""}`}
-            className={cn("max-w-[220px]", value.length > 0 && "border-primary/40 bg-accent text-primary")}
-          >
-            <Truncate>{label}</Truncate>
-            <ChevronDown />
-          </Button>
-        </PopoverTrigger>
-      </Hint>
+      <PopoverTrigger asChild>
+        <IconButton
+          variant="outline"
+          size="default"
+          label={`${t("modelLibraryFamilyLabel")}${value.length ? ` · ${label}` : ""}`}
+          hint={t("modelLibraryFamilyHint")}
+          className={cn("max-w-[220px]", value.length > 0 && "border-primary/40 bg-accent text-primary")}
+        >
+          {text}
+        </IconButton>
+      </PopoverTrigger>
       <MenuContent label={t("modelLibraryFamilyLabel")} align="end">
         {families.map(([family, count]) => (
           <MenuItem

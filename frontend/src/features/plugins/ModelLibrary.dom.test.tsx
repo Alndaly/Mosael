@@ -43,6 +43,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import type { Job, ModelLibrary, PluginInstance } from "@/api/client";
+import { readHint } from "@/test/hint";
 import { ConnectionLibraries } from "./ConnectionLibraries";
 import { ModelLibraryDialog, freeName } from "./ModelLibrary";
 
@@ -261,6 +262,35 @@ describe("模型库", () => {
     expect(within(anima).getAllByRole("cell")[2].textContent).toBe("loras/sub");
     fireEvent.click(within(sdxl).getByRole("button", { name: "sd_xl_base.safetensors" }));
     expect(await screen.findByRole("button", { name: "modelLibraryBack" })).toBeTruthy();
+  });
+
+  it("工具条一行放不下时按优先级收成图标:先收「底模」的字,最后收「下载模型」;名字照样在按钮上(读屏、悬停说明)", async () => {
+    await openLibrary();
+    const bar = document.querySelector<HTMLElement>("[data-library-toolbar]")!;
+    //: 收不收看工具条自己有多宽(容器查询),不看窗口 —— 左边那一列占掉多少,窗口宽度看不出来。
+    expect(bar.className).toContain("@container/library-toolbar");
+    const family = within(bar).getByRole("button", { name: /modelLibraryFamilyLabel/ });
+    const download = within(bar).getByRole("button", { name: "modelLibraryDownload" });
+    expect(family.querySelector("[data-toolbar-label]")?.getAttribute("data-toolbar-label")).toBe("first");
+    expect(download.querySelector("[data-toolbar-label]")?.getAttribute("data-toolbar-label")).toBe("last");
+    //: 收起之后剩下的是图标:「⬇ 下载模型」本来就带着;「底模 ▾」收起时换上筛选图标。名字在 aria-label 上,悬停说明里也是它。
+    expect(family.querySelector("[data-toolbar-icon]")?.getAttribute("data-toolbar-icon")).toBe("first");
+    expect(download.querySelector(":scope > svg")).toBeTruthy();
+    expect(await readHint(download)).toBe("modelLibraryDownload");
+    //: 勾了底模,按钮上写的是几种,不是名字(名字在下面那行筛选里):勾一个长名字不会把工具条挤成两行。
+    pickFamilies("Illustrious 2");
+    expect(within(bar).getByRole("button", { name: /modelLibraryFamilyLabel/ }).textContent).toBe("modelLibraryFamilyButton · 1");
+    expect(screen.getByRole("group", { name: "modelLibraryActiveFilters" }).textContent).toContain("Illustrious");
+  });
+
+  it("还在读时点不了的「下载模型」也一样能收成图标,并说为什么点不了", async () => {
+    api.getModelLibrary.mockReturnValue(new Promise(() => {}));
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" models />);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    const download = await screen.findByRole("button", { name: "modelLibraryDownload" });
+    expect((download as HTMLButtonElement).disabled).toBe(true);
+    expect(download.querySelector("[data-toolbar-label]")?.getAttribute("data-toolbar-label")).toBe("last");
+    expect(await readHint(download)).toBe("modelLibraryDownloadmodelLibraryStillReading");
   });
 
   it("模糊预览图:默认关;打开后卡片和列表里的预览图都先模糊(悬停 / 聚焦时看清),占位不模糊;记在本机", async () => {
