@@ -222,6 +222,8 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     HANDLES_HTTP_ERRORS = {
         # HTTP 失败 → 带文案 key 的错误(按状态码归类、带脱敏的回包原文)。
         "app.ai.providers.adapters.shared.errors",
+        # 火山方舟的失败(内容审核码)→ 人话:读调用方抛出的 httpx 异常里的回包。
+        "app.ai.providers.adapters.bytedance.ark.errors",
     }
     sends = re.compile(r"httpx\.(Client|AsyncClient|get|post|put|patch|delete|request|stream)\b")
 

@@ -19,7 +19,7 @@ from app.ai.providers.contracts.generation import (
     source_values,
     metering_from_request,
 )
-from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.bytedance.ark.errors import ark_http_error
 from app.ai.media_transfer import download_to_path
 
 """
@@ -111,4 +111,4 @@ class SeedreamAdapter(GenerationAdapter):
                 download_to_path(url, target, timeout=120)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=payload)
         except httpx.HTTPError as exc:
-            raise adapter_http_error("ARK", exc, context.api_key) from exc
+            raise ark_http_error(exc, context.api_key, kind="image") from exc

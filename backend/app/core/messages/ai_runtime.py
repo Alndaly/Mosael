@@ -40,9 +40,34 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} is rate limiting requests; try again in a moment: {detail}",
     },
     "providerErr_upstreamContentBlocked": {
-        "zh": "{vendor} 的内容审核拦下了这次请求,换个说法再试:{detail}",
-        "en": "{vendor} content moderation blocked this request; rephrase and try again: {detail}",
+        "zh": "{vendor} 的内容审核拦下了这次请求(这是服务商的审核,不是 Mosael 拦的),换个说法再试:{detail}",
+        "en": "{vendor} content moderation blocked this request (the provider's moderation, not Mosael's); rephrase and try again: {detail}",
     },
+    #: 火山方舟的内容审核(见 adapters/bytedance/ark/errors)。说清是**服务商**的审核,不是 Mosael 拦的。
+    "providerErr_arkPrivacyBlocked": {
+        "zh": "火山方舟的内容审核认为{part}里可能有真人(隐私信息),拒绝了这次请求。这是服务商的审核,不是 Mosael 拦的:"
+              "换一张不是写实真人的图,或者换一个不拦真人的模型(比如{alternative})再试。服务商原话:{detail}",
+        "en": "Volcengine Ark's content moderation thinks {part} may show a real person (private information) and refused "
+              "the request. This is the provider's moderation, not Mosael's: use an image that isn't a photorealistic real "
+              "person, or switch to a model that doesn't block real people (such as {alternative}) and try again. "
+              "Provider said: {detail}",
+    },
+    "providerErr_arkContentBlocked": {
+        "zh": "火山方舟的内容审核认为{part}可能含敏感内容,拒绝了这次请求。这是服务商的审核,不是 Mosael 拦的:"
+              "改一下{part}再试。服务商原话:{detail}",
+        "en": "Volcengine Ark's content moderation thinks {part} may contain sensitive content and refused the request. "
+              "This is the provider's moderation, not Mosael's: change {part} and try again. Provider said: {detail}",
+    },
+    "arkPart_inputText": {"zh": "提示词", "en": "the prompt"},
+    "arkPart_inputImage": {"zh": "输入的图片(首帧 / 参考图)", "en": "an input image (first frame or reference)"},
+    "arkPart_inputVideo": {"zh": "输入的视频", "en": "an input video"},
+    "arkPart_inputAudio": {"zh": "输入的音频", "en": "an input audio clip"},
+    "arkPart_outputText": {"zh": "生成的文字", "en": "the generated text"},
+    "arkPart_outputImage": {"zh": "生成的图片", "en": "the generated image"},
+    "arkPart_outputVideo": {"zh": "生成的视频", "en": "the generated video"},
+    "arkPart_outputAudio": {"zh": "生成的音频", "en": "the generated audio"},
+    "arkAlternative_video": {"zh": "Evolink 上的 Seedance", "en": "Seedance on Evolink"},
+    "arkAlternative_image": {"zh": "Evolink 上的图像模型", "en": "an image model on Evolink"},
     "providerErr_upstreamInvalidParams": {
         "zh": "{vendor} 说参数不对:{detail}",
         "en": "{vendor} rejected the parameters: {detail}",

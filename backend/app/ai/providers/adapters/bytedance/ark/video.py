@@ -23,7 +23,7 @@ from app.ai.providers.contracts.generation import (
     source_values,
     metering_from_request,
 )
-from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.bytedance.ark.errors import ark_http_error, ark_task_failed
 from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.ai.media_transfer import download_to_path
 
@@ -128,7 +128,7 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
             raise GenerationAdapterError("providerErr_noResultUrl", vendor="ARK")
         return str(url)
     if status in ("failed", "cancelled", "canceled", "expired"):
-        raise GenerationAdapterError("providerErr_generationFailed", vendor="ARK", detail=status)
+        raise ark_task_failed(task_payload, status, kind="video")
     return None
 
 
@@ -171,14 +171,14 @@ class SeedanceAdapter(GenerationAdapter):
                     raise GenerationAdapterError("providerErr_noTaskId", vendor="ARK")
                 return self._collect(client, f"{TASKS_PATH}/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise adapter_http_error("ARK", exc, context.api_key) from exc
+            raise ark_http_error(exc, context.api_key, kind="video") from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(request, context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise adapter_http_error("ARK", exc, context.api_key) from exc
+            raise ark_http_error(exc, context.api_key, kind="video") from exc
 
     def _client(self, request: GenerationRequest, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
