@@ -2,7 +2,7 @@
 title: Remote deployment
 description: Connect a shared backend, configure access and workers, and understand where data is stored.
 order: 14
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -10,7 +10,7 @@ By default the whole of Mosael runs on your own machine. But the backend can mov
 the desktop app pointed at it — several people sharing one media library, one set of workflows, one
 publishing queue.
 
-> Think this through first: your data now lives on that server. Access still requires authentication and workspace membership; members, sign-up, local engines and the outbound proxy are managed by the deployment admin in the [admin console](/docs/guides/admin).
+> Think this through first: your data now lives on that server. Access still requires authentication and workspace membership; members, sign-up, local engines, the outbound proxy and internal network access are managed by the deployment admin in the [admin console](/docs/guides/admin) — workflows and the agent on the server reach only the public internet by default, so services on the same private network (a NAS, a local model) must be allowed under Internal network access.
 
 ## Point the desktop app at a remote backend
 
