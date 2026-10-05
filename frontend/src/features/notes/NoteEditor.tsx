@@ -104,7 +104,11 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
         event.preventDefault(); upload.current(files, view.posAtCoords({left: event.clientX, top: event.clientY})?.pos); return true;
       },
     },
-    onUpdate: ({ editor: e }) => change.current(e.getMarkdown()),
+    //: **只有改了文档的那个事务才算改动。** 编辑器会自己补结构:文末是表格时补一个空段落好让光标落得下去
+    //: (TrailingNode),它挂在随便哪个事务后面(代码高亮挂装饰的那一下、聚焦就够)。那一下文档变了、update 照发,
+    //: 可它不是谁写的字 —— 当成改动的话,只是打开一篇就按编辑器的排版(表格补齐空格、空行数)重写、自动保存,
+    //: 多出一版看不出改动的「手动编辑」。补上的结构和排版跟着下一次真改动一起存。
+    onUpdate: ({ editor: e, transaction }) => { if (transaction.docChanged) change.current(e.getMarkdown()); },
   });
   React.useEffect(() => {
     const element = sentinel.current;
