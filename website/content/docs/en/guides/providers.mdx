@@ -283,6 +283,13 @@ tiers of one unit together with the base tier first.
 **Free is recorded as 0 and marked free.** Voices that cost nothing, such as Edge, record 0 marked **free** — no longer "unpriced", and no
 prompt to add a price rule; spend totals leave them out, so a CNY deployment's account doesn't sprout a $0 line.
 
+**Speech is recorded under the connection's vendor.** Price rules (from Prefill prices or written by hand) are set per vendor, so both
+qwen-tts and CosyVoice on a Bailian connection are recorded under Alibaba Bailian and match Bailian's speech prices in the price list
+(CosyVoice models are priced per 10,000 characters). CosyVoice used to be recorded under its engine name, which never matched a price
+rule, so everything it spoke was "unpriced"; past records are moved over when you upgrade. The upgrade **doesn't create price rules for
+you**: to record CosyVoice at its list price, run **Prefill prices** once for the Bailian connection under Cost rules. Cloning a voice
+records a free usage entry (`tts / enroll_voice`), so you can see when, which voice and which connection it went to.
+
 **Provider responses are used as a check.** The output seconds and resolution in Wan and MiniMax responses, the token breakdown in Evolink
 image responses and the duration in Bailian's digital-human responses are compared with what was metered; when a provider reports a
 charge with a breakdown, the breakdown is priced and compared with the charge. A mismatch doesn't change the record — it logs a warning
@@ -302,7 +309,7 @@ sub-jobs it starts), the run history shows what each run cost, and the admin pag
 
 Two rules stay the same: it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement), and a price of 0 produces no rule — that means "unpriced / included in the subscription", not "free". The result says how many rules came from the catalog and from the price list, and which models still need a price by hand.
 
-**Two things happen on their own when you upgrade:**
+**A few things happen on their own when you upgrade:**
 
 - Models newly added to the price list in this version (the resolution tiers, GPT Image's text and reference-image input prices,
   147ai's gpt-image-2-client, Evolink's Seedance and GPT Image, Hailuo H3 at 2K…) are filled into existing libraries by the same rules
@@ -312,6 +319,9 @@ Two rules stay the same: it only fills what's **missing** and never touches what
   list or the provider's report get a cost; failures refused on the spot that were charged by the request become free; GPT Image calls
   recorded at a few dozen micros from estimated prompt tokens are repriced on the reported tokens. Any other cost already recorded, anything not
   computable and anything ambiguous are left alone, and chat usage is not backfilled.
+- **Past speech records follow today's booking**: CosyVoice records move under Bailian (see "Speech is recorded under the
+  connection's vendor" above), and older Edge voice-overs still sitting as "unpriced" become 0, marked free, and stop counting
+  toward "N unpriced". Only records with no cost change; anything already costed is left alone.
 
 ## Bindings: missing config surfaces where it's needed
 
