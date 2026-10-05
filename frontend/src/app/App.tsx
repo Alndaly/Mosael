@@ -135,8 +135,8 @@ export function App() {
  *  EMBED_HEADER_HEIGHT),两者不等就会露出一条缝、缝里是 App 自己的顶栏。
  *  由 contracts/shared-constants.json 钉住。 */
 export const PUBLISH_BAR_HEIGHT = 56;
-/** 这条栏就是说明浮层唯一画得出来的地方(见 HintRegion)。 */
-const PUBLISH_BAR_REGION = { area: { top: 0, height: PUBLISH_BAR_HEIGHT }, side: "left" as const };
+/** 顶栏里的说明往下出,画在网页上面(见 HintRegion)。 */
+const PUBLISH_BAR_REGION = { side: "bottom" as const };
 
 /** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 页面工具 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
@@ -179,7 +179,7 @@ function PublishViewBar() {
         WINDOW_CHROME_INSET,
       )}
     >
-      {/* 栏下面是原生网页视图,盖在一切 DOM 上:栏里的悬停说明只能画在这条横带里(见 HintRegion)。 */}
+      {/* 栏下面是原生网页视图,盖在一切 DOM 上:栏里的悬停说明交给浮层视图画在网页上面(见 HintRegion)。 */}
       <HintRegion.Provider value={PUBLISH_BAR_REGION}>
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <IconButton

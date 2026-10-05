@@ -1,0 +1,21 @@
+/* 浮层视图是透明的:只看得见说明本身。 */
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+#float {
+  position: fixed;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+}
+
+/* 说明在主窗口里是 Radix 浮层摆的位置;这里它就从左上角开始,宽度由外面那层定(主窗口里量出来的宽度)。
+   它自己的 max-width 按视口算(100vw),而这里的视口只有说明那么大 —— 不放开就比主窗口里窄,折行变了。 */
+#float > * {
+  position: relative;
+  max-width: none !important;
+}

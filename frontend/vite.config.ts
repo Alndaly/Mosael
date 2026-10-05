@@ -75,6 +75,16 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      // 第二张页:内嵌浏览器的浮层视图(electron/publish/floatLayer.ts)加载它,把外壳里的悬停说明画在网页上面。
+      // 和主窗口同一套样式,画出来一模一样。
+      input: {
+        index: path.resolve(here, "index.html"),
+        "float-layer": path.resolve(here, "float-layer.html"),
+      },
+    },
+  },
   test: {
     // 默认留在 node(纯逻辑测试快得多)。要 DOM 的文件在**文件头**写
     //     /** @vitest-environment jsdom */

@@ -19,6 +19,8 @@ type Page = NonNullable<PublishViewState["pages"]>[number];
 export const PAGE_LIST_WIDTH = 220;
 export const PAGE_LIST_COLLAPSED_WIDTH = 48;
 const NOTICE_MS = 6_000;
+/** 列表里的说明(被截断的标题、按钮的名字)往右出,画在网页上面(见 HintRegion)。 */
+const PAGE_LIST_REGION = { side: "right" as const };
 
 /**
  * 浏览器会话左侧的**页面列表**(像 Arc 左边那一列):这个会话开着的每一页 —— 网站图标、标题,悬停看网址;
@@ -61,8 +63,6 @@ function PageList({
   //: 画面盖着的时候,它的右沿钉在网页原来的右沿,左沿跟着网页该在的位置滑。
   const backdropRight = snapshot ? snapshot.bounds.x + snapshot.bounds.width : 0;
   const edge = useEdgeColor(snapshot?.frame ?? null);
-  //: 列表右边就是原生网页视图(临时展开时是那张画面):说明夹在这一列里往下出,伸出去会被网页盖住。
-  const hintRegion = React.useMemo(() => ({ area: { top, left: 0, width }, side: "bottom" as const }), [top, width]);
 
   React.useEffect(() => {
     void bridge.setPagesInset(inset);
@@ -125,7 +125,7 @@ function PageList({
           motion.dismiss();
         }}
       >
-        <HintRegion.Provider value={hintRegion}>
+        <HintRegion.Provider value={PAGE_LIST_REGION}>
           <div className={cn("flex items-center gap-1 p-1.5", compact && "flex-col")}>
             {/* 收起时只剩一个加号;要看名字,鼠标停上去列表就展开了。展开时字就写在按钮上。 */}
             <button

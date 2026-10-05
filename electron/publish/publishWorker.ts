@@ -24,6 +24,7 @@ import {
   type PanelLayoutChange,
 } from "./accountViews";
 import type { DownloadNotice } from "./downloads";
+import { FloatLayer, type FloatHint } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { openWorkflowInPage, type ComfyOpenOutcome } from "./comfyEditor";
@@ -35,6 +36,7 @@ import type { LiveViewFrame, PublishTask, ViewState } from "./types";
 import * as backend from "./publishBackend";
 
 let views: AccountViewManager | null = null;
+let floatLayer: FloatLayer | null = null;
 // 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
 const running = new Set<string>();
 const taskControllers = new Map<string, AbortController>();
@@ -548,8 +550,15 @@ export function startPublishWorker(opts: {
   running.clear();
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
+  // 浮层视图(外壳里的悬停说明画在网页上面):内嵌浏览器一亮出来就先建好,收回去时收起说明。
+  floatLayer = new FloatLayer(opts.window);
+  const onViewChanged = (state: ViewState) => {
+    if (state.visible) floatLayer?.warm();
+    else floatLayer?.hide();
+    opts.onViewChanged?.(state);
+  };
   // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
-  views = createSharedViews(opts.onViewChanged, opts.onPanels, opts.onDownload);
+  views = createSharedViews(onViewChanged, opts.onPanels, opts.onDownload);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
@@ -571,6 +580,8 @@ export function stopPublishWorker(): void {
   // 在磁盘分区里(persist:mosael-<id>),销毁视图不丢登录态。
   destroySharedViews();
   views = null;
+  floatLayer?.destroy();
+  floatLayer = null;
   onFrame = null;
   mirroring = null;
   running.clear();
@@ -845,6 +856,13 @@ export function setPagesInset(left: number): void {
 /** 页面列表展开、收起、临时展开:先拍下前台网页的画面(渲染层铺回原处),再把原生视图挪开 / 放回原处。 */
 export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
   return views?.snapshotForeground() ?? Promise.resolve(null);
+}
+/** 外壳里的悬停说明画到网页上面 / 收起(见 floatLayer)。 */
+export function showFloat(hint: FloatHint): Promise<void> {
+  return floatLayer?.show(hint) ?? Promise.resolve();
+}
+export function hideFloat(id?: string): void {
+  floatLayer?.hide(id);
 }
 export function coverViewPage(covered: boolean): void {
   views?.setForegroundHidden("cover", covered);

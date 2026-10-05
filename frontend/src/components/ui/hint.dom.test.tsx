@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readHint } from "@/test/hint";
 
-import { Hint, HintRegion, TooltipProvider, regionPlacement } from "./tooltip";
+import { Hint, HintRegion, TooltipProvider } from "./tooltip";
 import { Truncate } from "./truncate";
 
 function mount() {
@@ -132,56 +132,23 @@ describe("点不了的按钮说出为什么", () => {
   });
 });
 
-describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () => {
-  // 顶栏下面是原生网页视图,盖在一切 DOM 上:说明往下出就被盖住,往上出又出了窗口。
+describe("内嵌浏览器外壳(顶栏、页面列表、侧栏)里的说明", () => {
+  // 外壳旁边就是原生网页视图,盖在一切 DOM 上。说明交给一块透明的原生浮层视图画(见 electron/publish/floatLayer),
+  // DOM 里那份只用来量位置、给读屏。没有浮层视图(网页版)时照旧画在 DOM 里,压在外壳上面。
   const content = () => document.querySelector("[data-tooltip]") as HTMLElement | null;
+  const showFloat = vi.fn();
+  const hideFloat = vi.fn();
 
-  it("带里的说明默认往左右出(竖直方向夹在带里),不往下掉进网页那一块", () => {
+  function chrome(side: "bottom" | "right" | "left" | "top" = "bottom") {
     render(
       <TooltipProvider delayDuration={0}>
-        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
+        <Hint label="外面">
+          <button type="button" aria-label="外面">O</button>
+        </Hint>
+        <HintRegion.Provider value={{ side }}>
           <Hint label="截屏" hint="可见区域、整页长图或框选一块">
             <button type="button" aria-label="截屏">S</button>
           </Hint>
-        </HintRegion.Provider>
-      </TooltipProvider>,
-    );
-    fireEvent.keyDown(document, { key: "Tab" });
-    act(() => screen.getByRole("button", { name: "截屏" }).focus());
-    expect(screen.getByRole("tooltip").textContent).toBe("截屏可见区域、整页长图或框选一块");
-    expect(content()?.getAttribute("data-side")).toBe("left");
-    // 顶栏 z 200,比浮层那一层高:标上记号,styles.css 把它抬到顶栏上面。
-    expect(content()?.hasAttribute("data-over-chrome")).toBe(true);
-  });
-
-  it("侧栏里(不限位置)照常往上出,但也压在侧栏上面;应用里的说明不带这个记号", () => {
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Hint label="外面">
-          <button type="button" aria-label="外面">O</button>
-        </Hint>
-        <HintRegion.Provider value={{ area: null }}>
-          <Hint label="侧栏">
-            <button type="button" aria-label="侧栏">D</button>
-          </Hint>
-        </HintRegion.Provider>
-      </TooltipProvider>,
-    );
-    fireEvent.keyDown(document, { key: "Tab" });
-    act(() => screen.getByRole("button", { name: "外面" }).focus());
-    expect(content()?.hasAttribute("data-over-chrome")).toBe(false);
-    act(() => screen.getByRole("button", { name: "侧栏" }).focus());
-    expect(content()?.getAttribute("data-side")).toBe("top");
-    expect(content()?.hasAttribute("data-over-chrome")).toBe(true);
-  });
-
-  it("带外照旧往上出;带里显式给了方向就听它的", () => {
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Hint label="外面">
-          <button type="button" aria-label="外面">O</button>
-        </Hint>
-        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
           <Hint label="右边" side="right">
             <button type="button" aria-label="右边">R</button>
           </Hint>
@@ -189,41 +156,74 @@ describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () =>
       </TooltipProvider>,
     );
     fireEvent.keyDown(document, { key: "Tab" });
+  }
+
+  beforeEach(() => {
+    showFloat.mockClear();
+    hideFloat.mockClear();
+    Object.defineProperty(window, "mosaelPublish", { configurable: true, value: { showFloat, hideFloat } });
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "mosaelPublish", { configurable: true, value: undefined });
+  });
+
+  it("交给浮层视图画在网页上面:内容、位置、主题都交过去;DOM 里那份看不见但读屏照样念;收起时浮层也收起", async () => {
+    chrome();
+    act(() => screen.getByRole("button", { name: "截屏" }).focus());
+    await waitFor(() => expect(showFloat).toHaveBeenCalled());
+    const payload = showFloat.mock.calls.at(-1)![0];
+    expect(payload.html).toContain("截屏");
+    expect(payload.html).toContain("可见区域、整页长图或框选一块");
+    expect(Object.keys(payload.rect).sort()).toEqual(["height", "width", "x", "y"]);
+    expect(payload.id).toEqual(expect.any(String));
+    expect(payload.root).toEqual(expect.objectContaining({ className: expect.any(String), attributes: expect.any(Object) }));
+    expect(content()!.parentElement!.style.opacity).toBe("0");
+    expect(screen.getByRole("tooltip").textContent).toBe("截屏可见区域、整页长图或框选一块");
+    act(() => screen.getByRole("button", { name: "外面" }).focus());
+    await waitFor(() => expect(hideFloat).toHaveBeenCalledWith(payload.id));
+  });
+
+  it("顶栏里默认往下出(盖在网页上);显式给了方向就听它的", async () => {
+    chrome("bottom");
+    act(() => screen.getByRole("button", { name: "截屏" }).focus());
+    await waitFor(() => expect(content()?.getAttribute("data-side")).toBe("bottom"));
+    act(() => screen.getByRole("button", { name: "右边" }).focus());
+    await waitFor(() => expect(content()?.getAttribute("data-side")).toBe("right"));
+  });
+
+  it("区域外的说明照旧画在 DOM 里,不交给浮层", async () => {
+    chrome();
     act(() => screen.getByRole("button", { name: "外面" }).focus());
     expect(content()?.getAttribute("data-side")).toBe("top");
-    act(() => screen.getByRole("button", { name: "右边" }).focus());
-    expect(content()?.getAttribute("data-side")).toBe("right");
+    expect(content()?.hasAttribute("data-over-chrome")).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(showFloat).not.toHaveBeenCalled();
   });
 
-  it("竖着的一列(页面列表):说明默认往下出,左右夹在这一列里;横带的上下夹在带里", () => {
-    Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
-    Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
-    expect(regionPlacement({ area: { top: 56, left: 0, width: 220 }, side: "bottom" }, undefined)).toEqual({
-      side: "bottom",
-      collisionPadding: { top: 56, bottom: 8, left: 8, right: 1440 - 220 + 8 },
-      "data-over-chrome": "",
-    });
-    expect(regionPlacement({ area: { top: 0, height: 56 }, side: "left" }, "right")).toEqual({
-      side: "right",
-      collisionPadding: { top: 0, bottom: 900 - 56, left: 8, right: 8 },
-      "data-over-chrome": "",
-    });
+  it("没有浮层视图(网页版):照旧画在 DOM 里,压在外壳上面", async () => {
+    Object.defineProperty(window, "mosaelPublish", { configurable: true, value: undefined });
+    chrome();
+    act(() => screen.getByRole("button", { name: "截屏" }).focus());
+    expect(content()?.hasAttribute("data-over-chrome")).toBe(true);
+    expect(content()!.parentElement!.style.opacity).not.toBe("0");
   });
 
-  it("带里被截断的字(顶栏的状态那一句)看全文也往左右出", async () => {
+  it("区域里被截断的字看全文也交给浮层", async () => {
     render(
       <TooltipProvider delayDuration={0}>
-        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
-          <Truncate>一段很长很长的报错</Truncate>
+        <HintRegion.Provider value={{ side: "right" }}>
+          <Truncate>一段很长很长的页面标题</Truncate>
         </HintRegion.Provider>
       </TooltipProvider>,
     );
-    const text = screen.getByText("一段很长很长的报错");
+    const text = screen.getByText("一段很长很长的页面标题");
     Object.defineProperty(text, "scrollWidth", { value: 500, configurable: true });
     Object.defineProperty(text, "clientWidth", { value: 100, configurable: true });
     fireEvent.pointerEnter(text);
     fireEvent.pointerMove(text);
     await screen.findByRole("tooltip", {}, { timeout: 2000 });
-    expect(content()?.getAttribute("data-side")).toBe("left");
+    expect(content()?.getAttribute("data-side")).toBe("right");
+    await waitFor(() => expect(showFloat).toHaveBeenCalled());
+    expect(showFloat.mock.calls.at(-1)![0].html).toContain("一段很长很长的页面标题");
   });
 });

@@ -21,6 +21,8 @@ export {
   setPagesInset,
   snapshotViewPage,
   coverViewPage,
+  showFloat,
+  hideFloat,
   republishViewState,
   embeddedViewVisible,
   hidePublishView,

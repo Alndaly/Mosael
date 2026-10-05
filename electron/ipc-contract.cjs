@@ -65,6 +65,9 @@ const IPC = Object.freeze({
     systemStatus: "system:status",
     systemNotify: "system:notify",
     locale: "mosael:locale",
+    // 内嵌浏览器外壳里的悬停说明交给浮层视图画在网页上面 / 收起(见 publish/floatLayer.ts)。
+    floatShow: "float:show",
+    floatHide: "float:hide",
   }),
   event: Object.freeze({
     fullscreen: "mosael:fullscreen",
@@ -356,6 +359,52 @@ function parsePagesInset(value) {
   return { left };
 }
 
+const FLOAT_ROOT_ATTRIBUTE = /^(?:data-[a-z0-9-]+|lang|dir)$/;
+
+function finiteIn(value, min, max) {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+}
+
+/**
+ * 一条交给浮层视图画的说明:渲染层自己渲染出来的 HTML(有长度上限)、它在窗口里的矩形、根元素上和外观有关的
+ * 那几样(class、style、data-*、lang、dir —— 别的属性一律不收)。
+ */
+function parseFloatShow(value) {
+  const channel = IPC.send.floatShow;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id", "html", "rect", "root"], channel);
+  const id = requiredString(payload, "id", channel);
+  if (id.length > 64) throw new TypeError(`${channel}: id is too long`);
+  if (typeof payload.html !== "string" || payload.html.length > 65_536) throw new TypeError(`${channel}: html must be a string under 64 KiB`);
+  const rect = record(payload.rect, channel);
+  const { x, y, width, height } = rect;
+  if (!finiteIn(x, -10_000, 10_000) || !finiteIn(y, -10_000, 10_000) || !finiteIn(width, 0, 4_000) || !finiteIn(height, 0, 4_000)) {
+    throw new TypeError(`${channel}: rect must be a bounded rectangle`);
+  }
+  const root = record(payload.root, channel);
+  onlyKeys(root, ["className", "style", "attributes"], channel);
+  if (typeof root.className !== "string" || root.className.length > 4_096) throw new TypeError(`${channel}: root className is invalid`);
+  if (typeof root.style !== "string" || root.style.length > 16_384) throw new TypeError(`${channel}: root style is invalid`);
+  const attributes = record(root.attributes, channel);
+  const entries = Object.entries(attributes);
+  if (entries.length > 32) throw new TypeError(`${channel}: too many root attributes`);
+  for (const [name, text] of entries) {
+    if (!FLOAT_ROOT_ATTRIBUTE.test(name) || typeof text !== "string" || text.length > 1_024) {
+      throw new TypeError(`${channel}: root attribute ${name} is not allowed`);
+    }
+  }
+  return { id, html: payload.html, rect: { x, y, width, height }, root: { className: root.className, style: root.style, attributes: { ...attributes } } };
+}
+
+/** 收起哪一条(不给 id 就是不管哪条都收)。 */
+function parseFloatHide(value) {
+  const channel = IPC.send.floatHide;
+  const payload = record(value ?? {}, channel);
+  onlyKeys(payload, ["id"], channel);
+  if (payload.id === undefined) return { id: null };
+  return { id: requiredString(payload, "id", channel) };
+}
+
 /** 把前台网页挪开 / 放回(页面列表在它的画面上变形)。 */
 function parseCoverPage(value) {
   const channel = IPC.invoke.publishCoverPage;
@@ -451,6 +500,8 @@ module.exports = {
   parsePageOrder,
   parsePagesInset,
   parseCoverPage,
+  parseFloatShow,
+  parseFloatHide,
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,

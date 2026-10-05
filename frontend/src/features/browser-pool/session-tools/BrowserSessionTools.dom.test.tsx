@@ -419,7 +419,8 @@ describe("工具区只留图标", () => {
     expect((toolButton("note") as HTMLButtonElement).disabled).toBe(true);
     expect((toolButton("shot") as HTMLButtonElement).disabled).toBe(false);
     expect((toolButton("start") as HTMLButtonElement).disabled).toBe(false);
-    expect(await readHint(toolButton("video"))).toContain("browserToolsStillLoading");
+    // 说明画在网页上面(浮层视图),不再挤在顶栏那一条里:名字、它是干什么的、为什么点不了,三样都在。
+    expect(await readHint(toolButton("video"))).toBe("browserToolsVideobrowserToolsVideoHintbrowserToolsStillLoading");
   });
 
   it("上一个操作还没做完:工具都等一等,说明里写为什么", async () => {

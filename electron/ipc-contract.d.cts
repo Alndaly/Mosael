@@ -52,6 +52,8 @@ export const IPC: {
     systemStatus: "system:status";
     systemNotify: "system:notify";
     locale: "mosael:locale";
+    floatShow: "float:show";
+    floatHide: "float:hide";
   }>;
   readonly event: Readonly<{
     fullscreen: "mosael:fullscreen";
@@ -100,6 +102,13 @@ export function parsePageOrder(value: unknown): { ids: string[] };
 export function parseNewPage(value: unknown): { url: string };
 export function parsePagesInset(value: unknown): { left: number };
 export function parseCoverPage(value: unknown): { covered: boolean };
+export function parseFloatShow(value: unknown): {
+  id: string;
+  html: string;
+  rect: { x: number; y: number; width: number; height: number };
+  root: { className: string; style: string; attributes: Record<string, string> };
+};
+export function parseFloatHide(value: unknown): { id: string | null };
 export function parseSaveDownload(value: unknown): {
   id: string;
   server: string;

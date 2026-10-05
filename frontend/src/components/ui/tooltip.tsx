@@ -7,6 +7,7 @@ import { listenKeys } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
 import { FLOATING_COLLISION_PADDING } from "./floating"
+import { useFloatMirror } from "./floatLayer"
 import { Kbd, KbdGroup } from "./kbd"
 
 /**
@@ -42,21 +43,38 @@ const TOOLTIP_SURFACE =
 const TOOLTIP_MOTION =
   "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-tooltip-content-transform-origin) motion-reduce:animate-none"
 
+/**
+ * 说明浮层。在内嵌浏览器外壳(`HintRegion`)里时交给浮层视图画到原生网页视图上面(见 useFloatMirror),
+ * DOM 里这份只留着量位置、给读屏。
+ */
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
-      ref={ref}
-      data-tooltip=""
-      sideOffset={sideOffset}
-      collisionPadding={FLOATING_COLLISION_PADDING}
-      className={cn(TOOLTIP_SURFACE, TOOLTIP_MOTION, className)}
-      {...props}
-    />
-  </TooltipPrimitive.Portal>
-))
+>(({ className, sideOffset = 4, ...props }, ref) => {
+  //: 浮层内容只在打开时才挂上(Radix 的 Presence),所以用 state 记住它 —— 挂上那一刻才开始交给浮层视图。
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null)
+  useFloatMirror(node, React.useContext(HintRegion) !== null)
+  const setRef = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setNode(element)
+      if (typeof ref === "function") ref(element)
+      else if (ref) ref.current = element
+    },
+    [ref],
+  )
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        ref={setRef}
+        data-tooltip=""
+        sideOffset={sideOffset}
+        collisionPadding={FLOATING_COLLISION_PADDING}
+        className={cn(TOOLTIP_SURFACE, TOOLTIP_MOTION, className)}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
+  )
+})
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
 /**
@@ -111,41 +129,20 @@ type OverflowText = () => React.ReactNode | null
 const HintScope = React.createContext<((get: OverflowText) => () => void) | null>(null)
 
 /**
- * 说明浮层所在的「区域」,给**内嵌浏览器**那几块用:顶栏、侧栏、左边的页面列表。它们压在原生网页视图周围,
- * z 比所有浮层(styles.css 统一定成 120)都高 —— 不说一声,说明就画在它们底下。原生网页视图又盖在一切 DOM
- * 上,说明伸进它那一块就被盖住。
+ * 说明浮层所在的「区域」:**内嵌浏览器的外壳**(顶栏、页面列表、侧栏)。外壳旁边就是原生网页视图,盖在一切 DOM
+ * 上,DOM 里的说明伸进网页那一块就看不见 —— 所以区域里的说明交给浮层视图画在网页上面(见 useFloatMirror),
+ * 想往哪边出就往哪边出。`side` 是这块里的说明默认往哪边出(顶栏往下、页面列表往右),控件自己给了方向就听控件的。
  *
- * - `area`:说明只能画在这一块里(窗口坐标,CSS 像素;不写宽 / 高就是铺到窗口那一边)。顶栏是一条 56px 的
- *   横带 —— 往下出被网页盖住,往上出又出了窗口,所以带里的说明往左右出(`side: "left"`),竖直方向夹在带里,
- *   两行(名字 + 一句说明)放得下。页面列表是竖着的一列 —— 往下出,左右夹在这一列里。
- * - `area: null`:不限位置,只是要压在这块上面(侧栏:它旁边的网页让开了,浮层照常摆)。
- * - `side`:这块里的说明默认往哪边出;控件自己给了方向就听控件的。
- *
- * 都给浮层标上 `data-over-chrome`,styles.css 据此把它那层抬到顶栏、侧栏、列表之上。
+ * 没有浮层视图(网页版,没有原生视图)时照旧画在 DOM 里;外壳的 z 比所有浮层(styles.css 统一定成 120)都高,
+ * 所以标上 `data-over-chrome`,styles.css 据此把它那层抬到外壳之上。
  */
-type HintArea = { top: number; left?: number; width?: number; height?: number }
-type HintRegionValue = { area: HintArea | null; side?: Side }
+type HintRegionValue = { side?: Side }
 const HintRegion = React.createContext<HintRegionValue | null>(null)
 
-/** 区域里的说明怎么摆:默认方向听区域的;避让的四条边按区域的边算(放不下 Radix 会翻到对面)。 */
+/** 区域里的说明怎么摆:默认方向听区域的(放不下 Radix 会翻到对面)。 */
 function regionPlacement(region: HintRegionValue | null, side: Side | undefined) {
   if (!region) return { side: side ?? "top" }
-  const placed = { side: side ?? region.side ?? "top" }
-  const area = region.area
-  if (!area) return { ...placed, "data-over-chrome": "" }
-  const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth
-  const viewportHeight = typeof window === "undefined" ? 0 : window.innerHeight
-  const left = area.left ?? 0
-  return {
-    ...placed,
-    collisionPadding: {
-      top: area.top,
-      bottom: area.height === undefined ? 8 : Math.max(0, viewportHeight - area.top - area.height),
-      left: left + 8,
-      right: area.width === undefined ? 8 : Math.max(0, viewportWidth - left - area.width) + 8,
-    },
-    "data-over-chrome": "",
-  }
+  return { side: side ?? region.side ?? "top", "data-over-chrome": "" }
 }
 
 /** 浮层内容用它把 Hint 的范围清掉(见 HintScope)。 */

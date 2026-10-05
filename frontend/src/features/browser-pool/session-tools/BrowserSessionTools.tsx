@@ -135,8 +135,7 @@ function SessionTools({
         data-page-tool={key}
         aria-pressed={active}
         label={t(label)}
-        // 点不了时说明里只留名字和原因:顶栏只有一条 56px 的横带画得下说明(见 HintRegion),三行放不下。
-        hint={reason ? undefined : t(TOOL_HINTS[key])}
+        hint={t(TOOL_HINTS[key])}
         disabled={reason !== null}
         disabledReason={reason ? t(reason) : undefined}
         onClick={onClick}

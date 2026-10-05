@@ -43,6 +43,8 @@ const {
   parsePageOrder,
   parsePagesInset,
   parseCoverPage,
+  parseFloatShow,
+  parseFloatHide,
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
@@ -865,6 +867,15 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.publishCoverPage, (_e, payload) =>
     requirePublish().coverViewPage(parseCoverPage(payload).covered),
   );
+  // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起。只收主窗口自己发来的。
+  ipcMain.on(IPC.send.floatShow, (event, payload) => {
+    if (!publish || BrowserWindow.fromWebContents(event.sender)?.webContents !== event.sender) return;
+    void publish.showFloat(parseFloatShow(payload));
+  });
+  ipcMain.on(IPC.send.floatHide, (event, payload) => {
+    if (!publish || BrowserWindow.fromWebContents(event.sender)?.webContents !== event.sender) return;
+    publish.hideFloat(parseFloatHide(payload).id ?? undefined);
+  });
   ipcMain.handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
     const { id, muted } = parsePanelMuted(payload);
     return requirePublish().setPanelMuted(id, muted);

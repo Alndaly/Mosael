@@ -37,6 +37,13 @@ const contract = require("./ipc-contract.cjs") as {
   parseNewPage: (value: unknown) => { url: string };
   parsePagesInset: (value: unknown) => { left: number };
   parseCoverPage: (value: unknown) => { covered: boolean };
+  parseFloatShow: (value: unknown) => {
+    id: string;
+    html: string;
+    rect: { x: number; y: number; width: number; height: number };
+    root: { className: string; style: string; attributes: Record<string, string> };
+  };
+  parseFloatHide: (value: unknown) => { id: string | null };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -199,6 +206,23 @@ describe("Electron IPC contract", () => {
     expect(contract.parseCoverPage({ covered: true })).toEqual({ covered: true });
     expect(() => contract.parseCoverPage({ covered: "yes" })).toThrow(/covered/);
     expect(() => contract.parseCoverPage({ covered: false, left: 1 })).toThrow(/unexpected field left/);
+  });
+
+  it("decodes a hint for the float layer: bounded markup and rectangle, only theme-ish attributes of the root", () => {
+    const hint = {
+      id: "hint-1",
+      html: '<div data-tooltip="">截屏</div>',
+      rect: { x: 900, y: 60, width: 140, height: 40 },
+      root: { className: "dark", style: "--font-sans: Inter", attributes: { "data-theme": "dark", lang: "zh-CN" } },
+    };
+    expect(contract.parseFloatShow(hint)).toEqual(hint);
+    expect(() => contract.parseFloatShow({ ...hint, html: "x".repeat(70_000) })).toThrow(/html/);
+    expect(() => contract.parseFloatShow({ ...hint, rect: { ...hint.rect, width: Number.NaN } })).toThrow(/rect/);
+    expect(() => contract.parseFloatShow({ ...hint, rect: { ...hint.rect, height: 50_000 } })).toThrow(/rect/);
+    expect(() => contract.parseFloatShow({ ...hint, root: { ...hint.root, attributes: { onclick: "x" } } })).toThrow(/attribute/);
+    expect(() => contract.parseFloatShow({ ...hint, extra: 1 })).toThrow(/unexpected field extra/);
+    expect(contract.parseFloatHide({ id: "hint-1" })).toEqual({ id: "hint-1" });
+    expect(contract.parseFloatHide({})).toEqual({ id: null });
   });
 
   it("decodes saving a finished download: an http(s) server, a token, a workspace, nothing else", () => {
