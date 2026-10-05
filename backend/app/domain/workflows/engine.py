@@ -37,6 +37,7 @@ from app.domain.jobs import (
     set_parent_job,
     stop_listening_for_progress,
 )
+from app.domain.billing.usage import run_costs
 from app.domain.notifications import notify
 from app.domain.workflows import (
     BRANCHING_NODE_TYPES,
@@ -796,6 +797,8 @@ def run_workflow(
             "workflow_revision": revision.revision,
             "workflow_graph_hash": revision.graph_hash,
             "context": {nid: snapshot(out)[0] for nid, out in context.items()},
+            #: 失败了,已经花掉的钱照样汇总(见 billing.usage.run_costs)。
+            "costs": run_costs(db, job.id),
         }
         raise run.error
 
@@ -820,6 +823,8 @@ def run_workflow(
         "workflow_graph_hash": revision.graph_hash,
         "context": {nid: snapshot(out)[0] for nid, out in context.items()},
         **({"output": output_values} if declares_output else {}),
+        #: 这次运行花了多少钱:大模型的调用挂在运行上,生成、配音挂在子任务上,一起算(见 billing.usage.run_costs)。
+        "costs": run_costs(db, job.id),
     }
     emit_job_event(
         db,

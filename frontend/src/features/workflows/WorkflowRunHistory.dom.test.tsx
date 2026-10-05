@@ -86,3 +86,35 @@ it("选中项由编辑器给;点另一行交给编辑器,面板自己不换", as
   expect(onViewRun).toHaveBeenCalledWith("new");
   expect(older.getAttribute("aria-current"), "面板不自己换,等编辑器给").toBe("true");
 });
+
+//: 一次运行花了多少钱(后端 run_costs 记在 result.costs):大模型的调用挂在运行上、生成挂在子任务上,一起算。
+it("选中的那一次说清楚花了多少钱、几次计费调用、几次没能定价", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    {
+      id: "j1", kind: "workflow", status: "succeeded", message: "完成", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {},
+      result: { costs: { amounts: [{ currency: "CNY", micros: 1_300_000 }], calls: 3, unpriced: 1 } },
+    },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+
+  const line = await screen.findByTestId("run-costs");
+  expect(line.textContent).toContain("wfHistoryCost");
+  expect(line.textContent).toContain("wfHistoryCostUnpriced");
+});
+
+it("一次计费调用都没有的运行不显示花费那一行", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    {
+      id: "j1", kind: "workflow", status: "succeeded", message: "完成", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {},
+      result: { costs: { amounts: [], calls: 0, unpriced: 0 } },
+    },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+
+  await screen.findByText("完成");
+  expect(screen.queryByTestId("run-costs")).toBeNull();
+});

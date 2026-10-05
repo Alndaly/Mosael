@@ -14,8 +14,8 @@ from sqlalchemy import event as orm_event, func, inspect, or_, select
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.usage_scope import current_workspace
-from app.db.models import ProviderPricingRule, ProviderUsageEvent, now
-from app.domain.jobs import emit_job_event
+from app.db.models import Job, ProviderPricingRule, ProviderUsageEvent, now
+from app.domain.jobs import current_parent_job_id, emit_job_event
 from app.domain.billing.price_schedule import normalize_schedule, price_at
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,29 @@ def costs_by_currency(
     return {
         key: [amount for _, amount in sorted(items, key=lambda item: (-item[0], item[1].currency))]
         for key, items in counted.items()
+    }
+
+
+def run_costs(db: Session, job_id: str) -> dict[str, Any]:
+    """一次运行(任务连同它派生的全部子任务)花了多少钱:`amounts` 每个币种一笔、`calls` 几次计费调用、
+    `unpriced` 其中几次没能定价。
+
+    运行自己的账(工作流里大模型那几次调用)挂在运行的任务上,生成、配音这些子任务的账挂在各自的子任务上 ——
+    所以顺着 `parent_job_id` 把整棵树收齐再加。
+    """
+    ids: set[str] = {job_id}
+    frontier = {job_id}
+    while frontier:
+        frontier = set(db.scalars(select(Job.id).where(Job.parent_job_id.in_(frontier)))) - ids
+        ids |= frontier
+    in_run = ProviderUsageEvent.job_id.in_(ids)
+    calls, unpriced = db.execute(
+        select(func.count(), func.sum(func.iif(ProviderUsageEvent.cost_micros.is_(None), 1, 0))).where(in_run)
+    ).one()
+    return {
+        "amounts": [{"currency": amount.currency, "micros": amount.micros} for amount in costs_by_currency(db, in_run).get((), [])],
+        "calls": int(calls or 0),
+        "unpriced": int(unpriced or 0),
     }
 
 
@@ -998,7 +1021,8 @@ def billable(
 ) -> Iterator[BillableCall]:
     """包住一次供应商调用,结束时记一条账。
 
-    - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。
+    - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。`job_id` 同理:
+      没给就挂在当前正在执行的任务上(见 jobs.current_parent_job_id)。
       两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
     - **先进调用方的事务,但不随它回滚**:落库用调用方的 Session —— `job_id` /
       `agent_message_id` 是外键,指向调用方**刚 flush 还没 commit** 的行,独立事务看不见。
@@ -1031,7 +1055,10 @@ def billable(
         provider_profile_id=provider_profile_id,
         source_type=source_type,
         source_id=source_id,
-        job_id=job_id,
+        #: 没说挂在哪个任务上的,挂在**这次调用发生在其中的那个任务**上(工作流节点、任务的执行体都立了它,
+        #: 见 jobs.set_parent_job)—— 和归属取环境上下文同一个做法。此前工作流里大模型的调用都没挂上,按运行汇总的
+        #: 费用、管理页按人分的花费(顺着任务找是谁花的)都漏掉它们。
+        job_id=job_id if job_id is not None else current_parent_job_id(),
         agent_message_id=agent_message_id,
     )
     try:

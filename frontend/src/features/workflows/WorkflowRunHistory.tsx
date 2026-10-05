@@ -4,10 +4,11 @@ import { Ban, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, Hist
 
 import { attestRequestOf, listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
 import { assetOutputs, outputRows, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
+import { formatCosts, type CostAmount } from "@/lib/money";
 import { parseServerTime } from "@/lib/time";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { runStatusText } from "@/components/jobs/runStatus";
@@ -47,6 +48,31 @@ function runAttest(job: Job) {
   const failure = (job.result as Record<string, unknown> | undefined)?.failure as Record<string, unknown> | undefined;
   const details = failure?.details as Record<string, unknown> | undefined;
   return job.status === "failed" ? attestRequestOf(details?.attest) : null;
+}
+
+/** 这次运行花了多少钱(后端 billing.usage.run_costs 记在 result.costs):大模型的调用挂在运行上、生成和配音挂在子任务上,
+ *  一起算。一次计费调用都没有的(没花钱的流程)不说。 */
+function runCosts(job: Job): { amounts: CostAmount[]; calls: number; unpriced: number } | null {
+  const costs = (job.result as Record<string, unknown> | undefined)?.costs as
+    | { amounts?: CostAmount[]; calls?: number; unpriced?: number }
+    | undefined;
+  if (!costs || !costs.calls) return null;
+  return { amounts: costs.amounts ?? [], calls: costs.calls, unpriced: costs.unpriced ?? 0 };
+}
+
+function RunCosts({ job }: { job: Job }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const costs = runCosts(job);
+  if (!costs) return null;
+  return (
+    <p data-testid="run-costs" className="m-0 mb-2 px-1.5 text-ui-2xs text-muted-foreground">
+      {t("wfHistoryCost")
+        .replace("{cost}", formatCosts(costs.amounts, locale) || t("wfHistoryCostNone"))
+        .replace("{calls}", String(costs.calls))}
+      {costs.unpriced > 0 && ` ${t("wfHistoryCostUnpriced").replace("{count}", String(costs.unpriced))}`}
+    </p>
+  );
 }
 
 function RunIcon({ status }: { status: string }) {
@@ -266,6 +292,7 @@ export function WorkflowRunHistory({
                   <AttestRevisionButton attest={runAttest(selected)!} />
                 </div>
               )}
+              <RunCosts job={selected} />
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => {
                   const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error) || Boolean(s.details);
