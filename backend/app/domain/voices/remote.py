@@ -475,8 +475,9 @@ def _settle(row_id: str, status: str, *, error: str = "") -> None:
 def vanished(voice_id: str, account: Account, copy: Copy) -> bool:
     """合成失败之后问一句:这份副本还在不在远端。按前缀列一遍,不在列表里就是没了。
 
-    不靠认合成报错的原话:那句话各模型、各版本说法不一,而「列表里有没有它」是确定的。问不到(网络)就当它还在 ——
-    这次的失败照原样报,不去重建一个可能还好好的副本。
+    不靠认合成报错的原话:真机(2026-10-05)上被删的音色再拿去念,百炼回的是
+    `InvalidParameter: [cosyvoice]Engine return error code: 418` —— 和把 v2 的音色发给 v3 是同一句,分不出是哪一种;
+    而「列表里有没有它」是确定的。问不到(网络)就当它还在 —— 这次的失败照原样报,不去重建一个可能还好好的副本。
     """
     try:
         listed = account.adapter().list(prefix=prefix_for(voice_id))

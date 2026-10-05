@@ -2,7 +2,7 @@
 title: Editing & color
 description: Cut video on a multi-track timeline, edit from transcripts, work with captions, voiceover and color, then export.
 order: 2
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.9.0
 ---
 
@@ -210,6 +210,19 @@ Reading arbitrary text aloud and making a podcast produce standalone audio asset
 What local cloning can read **depends on which weights are installed**, not on the engine. The base weights are Chinese + English; Japanese, French, German, Spanish, Italian, Russian, Hindi, Arabic and Finnish each have a community finetune, and whichever is missing gets a download button right on the Voice tab (~1.4 GB each).
 
 Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itself — install the weights and they just work. French, German, Spanish, Italian and Finnish share the Latin alphabet with English: **no character can prove "this is French rather than English"**, so those are picked explicitly in the **Weights** dropdown.
+
+### Your own voice through Bailian, without a local engine
+
+A voice from the library can also be spoken by **Alibaba Cloud Bailian's CosyVoice**: pick the engine **Alibaba Bailian (CosyVoice)** and the voice dropdown gains a **My cloned voices** group under the stock voices. What speaks is a copy of that voice cloned into **your own Bailian account** — no local engine to install, no gigabytes of weights; in exchange it is billed at CosyVoice's per-character price (the cloning step itself is free). Local cloning keeps working: the same voice is spoken from its reference clip locally, or from its copy on CosyVoice.
+
+- **You agree once, the first time.** The reference clip (the 5–15 seconds you created the voice from) is uploaded to your Bailian account; the dialog says which connection and which model it goes to, and nothing is uploaded until you agree. Cloning runs in the background (about ten seconds) and the dub waits for it. After that, a new model or a copy Bailian deleted (copies unused for a year are removed automatically) is rebuilt as needed without asking again. You can also clone ahead of time with **Clone on Bailian** on the voice under **Settings → Dubbing & voices**.
+- **A voice nobody has declared ownership of is never cloned** (the same line as [digital humans](/docs/guides/digital-humans)) and is not listed — add the declaration in the voice library first.
+- Each cloned voice in the library shows where it can speak: **This computer**, **Bailian · cosyvoice-v3-flash**; cloning, failed (hover for the reason) and deleted-by-Bailian are shown there too.
+- **Deleting the voice in Mosael deletes its copies on Bailian.** Any that can't be removed (an expired key, no network) are listed so you can check Voice Cloning in the Bailian console.
+- Copies follow the key: on a shared connection everyone uses their own key, and a cloned voice lives only in that person's account. Each clone is recorded in usage (free), so you can see when, which voice and which connection.
+- A voice is tied to the model it was built on: when the CosyVoice model on the connection changes, a new copy is cloned on the new model the next time it's used, and the old one is left alone.
+
+AI Studio's **Audio**, speaking on a board, the workflow dubbing node and the **Spoken replies** voice can all pick library voices once CosyVoice is the engine.
 
 ## Export
 

@@ -30,6 +30,7 @@ Accepted — 2026-10-05
 | 合成 | 现有 `CosyVoiceSpeechAdapter` **一行不改**,`voice` 换成复刻出的 `voice_id` 就念出来了(2.08 秒) |
 | 跨模型 | 在 `cosyvoice-v3-flash` 上建的音色发给 `cosyvoice-v2`:400。**音色绑死在建它的那个模型上** |
 | 列表 / 删除 | `list_voice` 可按前缀过滤;`delete_voice` 之后列表为空 |
+| 被删的音色再念 | 实现之后又验了一次:删掉的音色拿去合成,百炼回 `InvalidParameter: [cosyvoice]Engine return error code: 418` —— 和把 v2 的音色发给 v3 是**同一句**,认不出是哪一种。所以「副本没了」不靠认这句话,而是合成失败后按前缀 `list_voice`,不在列表里才算没了 |
 
 文档里另有几条约束:建音色免费,合成按 CosyVoice 的字符价计;一个账号最多 1000 个复刻音色;**一年内没被合成用过的
 音色会被自动删除**;音频推荐 10–20 秒、最长 60 秒、≤10 MB、≥16 kHz、至少 5 秒连续清晰的朗读;北京地域
