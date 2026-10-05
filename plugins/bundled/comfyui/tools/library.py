@@ -33,10 +33,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib import parse
 
+import civitai as civitai_mod
 import install
 import models
+import nsfw
+import previews
+import provenance
 import weights
-from families import family_applies, family_of
+from families import family_applies, family_of, refined_by_civitai
 from comfy_http import Comfy
 from sources import canonical_url
 from lines import ComfyError, say
@@ -92,34 +96,69 @@ def _title_of(meta: dict[str, Any]) -> str:
     return ""
 
 
-def summarize(folder: str, name: str, inputs: dict[str, Any]) -> dict[str, Any]:
-    """一个文件读到的原料(见 _inputs;没读过的是空的,只按文件名认)→ 列表里那几格。每次列出都现推。"""
+def summarize(folder: str, name: str, inputs: dict[str, Any], origin: dict[str, Any] | None = None) -> dict[str, Any]:
+    """一个文件读到的原料(见 _inputs;没读过的是空的,只按文件名认)和它的来源记录(见 provenance;没有是 None)→
+    列表里那几格。每次列出都现推。"""
     meta = inputs.get("meta") or {}
     found = inputs.get("weights") or weights.family_of_gguf(inputs.get("gguf") or "")
     family, family_source = family_of(folder, name, meta, found)
     triggers, triggers_source = triggers_of(meta, list(inputs.get("tags") or []))
+    title = _title_of(meta)
+    civitai = (origin or {}).get("civitai") if isinstance((origin or {}).get("civitai"), dict) else None
+    if civitai:
+        family, family_source = refined_by_civitai(family, family_source, str(civitai.get("base_model") or ""))
     return {"family": family, "family_source": family_source, "triggers": triggers[:LIST_TRIGGERS],
-            "triggers_source": triggers_source, "title": _title_of(meta)}
+            "triggers_source": triggers_source, "title": title,
+            "nsfw_signals": nsfw.signals(name, title, dict(inputs.get("nsfw_tags") or {}), civitai),
+            "source": source_of(origin, meta), "remote_previews": civitai_mod.remote_previews(civitai)}
+
+
+def source_of(origin: dict[str, Any] | None, meta: dict[str, Any]) -> dict[str, str] | None:
+    """这个文件的出处(原站上那一页):经 Mosael 下载时记下的、在 Civitai 上对上的(见 provenance);都没有时看文件自带的
+    元数据,只认明说「来源 / 地址」的那几个键、指着一个模型页的。都没有就是 None —— 不按文件名猜一个链接。"""
+    if origin and origin.get("page"):
+        return {"page": str(origin["page"]), "site": str(origin.get("site") or ""), "how": str(origin.get("how") or "")}
+    for key in _SOURCE_KEYS:
+        value = str(meta.get(key) or "").strip()
+        if any(pattern.match(value) for pattern in _MODEL_PAGES):
+            site = "civitai" if "civitai" in value else "huggingface" if "huggingface" in value else "modelscope"
+            return {"page": value.split()[0][:500], "site": site, "how": "metadata"}
+    return None
 
 
 # --- 持久目录里的记录:读到的原料 ------------------------------------------------
 
+#: 元数据里能说明「这个文件就是原站上那一页」的键。描述、训练备注里的地址常指向作者主页、文章、底模仓库 —— 不算。
+_SOURCE_KEYS = ("modelspec.source", "modelspec.url", "url", "source", "homepage", "Civitai url")
+#: 原站上**一个模型的那一页**长什么样:Civitai 的模型页、HuggingFace 的仓库(不是数据集、空间)、ModelScope 的模型页。
+_MODEL_PAGES = (
+    re.compile(r"^https://(?:www\.)?civitai\.com/models/\d+"),
+    re.compile(r"^https://huggingface\.co/(?!datasets/|spaces/|docs/|blog/)[\w.-]+/[\w.-]+"),
+    re.compile(r"^https://(?:www\.)?modelscope\.(?:cn|ai)/models/[\w.-]+/[\w.-]+"),
+)
+
+
 #: 缓存的版本:格式,加上权重那张表的指纹 —— 表一改,记着的「权重认成了什么」就作废,整份重读。对不上就扔掉(缓存,不是
 #: 用户的数据)。
-CACHE_VERSION = f"inputs-1:{weights.DIGEST}"
+CACHE_VERSION = f"inputs-3:{weights.DIGEST}"
 #: 元数据里留下的几项:认底模(families._declared / _narrowed)、触发词、标题要用的。别的在详情里现读。
 _KEPT_META = ("ss_base_model_version", "modelspec.architecture", "ss_sd_model_name", "modelspec.title", "ss_v2",
-              "ss_network_module", "ss_network_dim", "modelspec.trigger_phrase", "ss_trigger_words", "ss_output_name")
+              "ss_network_module", "ss_network_dim", "modelspec.trigger_phrase", "ss_trigger_words", "ss_output_name",
+              *_SOURCE_KEYS)
 
 
 def _inputs(meta: dict[str, Any], header: Any) -> dict[str, Any]:
-    """一个文件要记下的原料:`meta`(留下的那几项元数据)、`tags`(训练标签里最多的几个)、`weights`(权重结构认成的家族,
-    认不出是空串;**没有这一项**是还没读到文件头,下次有能用的读头地址时再读)、`gguf`(GGUF 的架构名)。"""
+    """一个文件要记下的原料:`meta`(留下的那几项元数据)、`tags`(训练标签里最多的几个)、`nsfw_tags`(训练标签里的成人
+    标签各占多少,见 nsfw.tag_shares)、`weights`(权重结构认成的家族,认不出是空串;**没有这一项**是还没读到文件头,下次
+    有能用的读头地址时再读)、`gguf`(GGUF 的架构名)。"""
     entry: dict[str, Any] = {"meta": {key: meta[key][:500] for key in _KEPT_META
                                       if isinstance(meta.get(key), str) and meta[key].strip()}}
     tags = _top_tags(meta)
     if tags:
         entry["tags"] = tags
+    explicit = nsfw.tag_shares(_tag_counts(meta))
+    if explicit:
+        entry["nsfw_tags"] = explicit
     if header is not None:
         entry["weights"] = weights.family_of_weights(header.tensors)
         if header.architecture:
@@ -307,6 +346,7 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         for value in used:
             used_by.setdefault(value, []).append({"id": ident, "label": label})
 
+    origins = provenance.load(comfy)
     out_models: list[dict[str, Any]] = []
     for folder, items in shown.items():
         for item in items:
@@ -315,7 +355,8 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
             inputs = fresh.get(key) or cache.get(key)
             if inputs is not None:
                 fresh[key] = inputs
-            summary = summarize(folder, name, inputs or {})  # 没有文件头的(.ckpt、.pt……)只按文件名认
+            origin = provenance.find(origins, folder, name, item.get("size"))
+            summary = summarize(folder, name, inputs or {}, origin)  # 没有文件头的(.ckpt、.pt……)只按文件名认
             entry: dict[str, Any] = {"folder": folder, "name": name}
             for field in ("size", "modified"):
                 if isinstance(item.get(field), (int, float)):
@@ -343,12 +384,21 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
             if all(one["id"] != ident for one in found["workflows"]):
                 found["workflows"].append({"id": ident, "label": label})
 
+    ways = previews.tools(comfy)
     out: dict[str, Any] = {
         "folders": [{"name": folder, "count": len(items)} for folder, items in shown.items()],
         "models": out_models,
         "missing": list(missing.values()),
         "download": install.describe(comfy, info, listing, locale),
+        # 找预览图、写回预览图走哪条路(见 previews):按哈希找要 ComfyUI-Custom-Scripts,没有它只能按文件名找
+        "preview_tools": {"lookup": "sha256" if ways["hash"] else "filename", "save": ways["save"],
+                          "save_note": "" if ways["save"] else previews.missing_tool(locale)},
     }
+    if info is not None and ways["save"]:
+        # 模型旁边的预览视频、文件名带 [ ] 的那几张图:按名字直接读(和 /pysssss/save 同一个模块的 /pysssss/view)
+        out["sidecar_base"] = f"{comfy.base}/pysssss/view/"
+        for entry in out_models:
+            entry["sidecars"] = previews.sidecars(entry["folder"], entry["name"])
     if info is not None:
         out["preview_base"] = f"{comfy.base}/experiment/models/preview/"
         if comfy.headers:
@@ -361,7 +411,7 @@ def _within_budget(out: dict[str, Any], locale: str) -> dict[str, Any]:
     def size() -> int:
         return len(json.dumps(out, ensure_ascii=False).encode("utf-8"))
 
-    for trim in ("triggers", "used_by", "title"):
+    for trim in ("triggers", "used_by", "title", "sidecars"):
         if size() <= OUTPUT_BUDGET:
             return out
         for entry in out["models"]:

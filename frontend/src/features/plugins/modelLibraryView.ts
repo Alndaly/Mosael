@@ -48,6 +48,7 @@ export function familySource(model: FamilyFields): { hint: MessageKey; certain: 
   if (!model.family) return model.family_source === "not_applicable" ? { hint: "modelFamilyNotApplicableHint", certain: false } : null;
   if (model.family_source === "filename") return { hint: "modelFamilySourceFilename", certain: false };
   if (model.family_source === "weights") return { hint: "modelFamilySourceWeights", certain: true };
+  if (model.family_source === "civitai") return { hint: "modelFamilySourceCivitai", certain: true };
   return { hint: "modelFamilySourceMetadata", certain: true };
 }
 

@@ -186,6 +186,20 @@ def _narrowed(family: str, source: str, meta: dict[str, Any], stem: str) -> tupl
     return family, source
 
 
+def refined_by_civitai(family: str, source: str, base_model: str) -> tuple[str, str]:
+    """Civitai 上登记的底模(按哈希对上的版本、经 Mosael 从 Civitai 下的)细分一下:元数据、权重只看得出 SDXL / Wan / Flux
+    这一层时,换成 Civitai 说的那一支(Illustrious、Wan 2.2……),凭的写 `civitai`。认不出底模、只凭文件名猜的,用
+    Civitai 的(它说的是这个文件本身);元数据、权重已经认出一支的,不改。"""
+    found = family_from_base(base_model)
+    if not found or source == NOT_APPLICABLE:
+        return family, source
+    if family in BRANCHES and found in BRANCHES[family] and found != family:
+        return found, "civitai"
+    if not family or source == "filename":
+        return found, "civitai"
+    return family, source
+
+
 def family_of(folder: str, name: str, meta: dict[str, Any], weights: str = "") -> tuple[str, str]:
     """推断的底模家族和凭的是什么(`metadata` / `weights` / `filename`);认不出是 ("", ""),这个目录不讲底模是
     ("", "not_applicable")。`weights` 是 weights.py 从文件头的张量认出的家族(没读到就是空串)。规矩写在插件 README 里:

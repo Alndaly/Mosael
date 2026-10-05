@@ -20,6 +20,7 @@ import {
   Film,
   GitBranch,
   HardDriveDownload,
+  ImageDown,
   Link as LinkIcon,
   type LucideIcon,
   Mic,
@@ -62,6 +63,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   proxy: Clapperboard,
   model_download: HardDriveDownload,
   node_install: PackagePlus,
+  model_previews: ImageDown,
 };
 
 /** 后端说"改动了哪种资源",这里说"那是哪些缓存"。 */

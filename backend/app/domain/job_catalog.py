@@ -74,6 +74,9 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("model_download", "always", ()),
         # 工作流库里「装上」缺的节点包(ADR 0035):经 ComfyUI-Manager 装到那台机器上,要一阵;装完提醒他要重启。
         JobKind("node_install", "always", ()),
+        # 模型库里「在 Civitai 上找」「为缺预览图的模型补图」(ADR 0038 §9):那台机器要把模型文件整个读一遍算哈希,一个大的
+        # 要几分钟;找完告诉他。改动的是那台服务器上的预览图和插件记的来源 —— 模型库自己重新列。
+        JobKind("model_previews", "always", ()),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
     )

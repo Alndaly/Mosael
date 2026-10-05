@@ -19528,7 +19528,7 @@
           "plugins"
         ],
         "summary": "Get Model Library",
-        "description": "现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。",
+        "description": "现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。`pick`:那台服务器上没有\n预览图、用别处(Civitai)的示例图时挑哪一张 —— `safest` 分级最低的,`cover` 作者排在最前的(界面按「NSFW 预览」\n那组设置要);预览图从哪来、NSFW 的判断都照它。",
         "operationId": "get_model_library_api_plugins_instances__instance_id__model_library_get",
         "parameters": [
           {
@@ -19538,6 +19538,16 @@
             "schema": {
               "type": "string",
               "title": "Instance Id"
+            }
+          },
+          {
+            "name": "pick",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "safest",
+              "title": "Pick"
             }
           }
         ],
@@ -19600,6 +19610,16 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "pick",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "safest",
+              "title": "Pick"
+            }
           }
         ],
         "responses": {
@@ -19658,6 +19678,16 @@
             "schema": {
               "type": "string",
               "title": "Name"
+            }
+          },
+          {
+            "name": "pick",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "safest",
+              "title": "Pick"
             }
           }
         ],
@@ -19885,6 +19915,165 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/lookups": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Start Model Lookup",
+        "description": "在 Civitai 上找这几个文件(不给 `files` 是这台服务器上没有预览图的全部),`save` 时找到的顺手存成预览图:一个后台\n任务(按哈希找要那台机器把整个文件读一遍)。",
+        "operationId": "start_model_lookup_api_plugins_instances__instance_id__model_library_lookups_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/save-preview": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Save Model Preview",
+        "description": "把 Mosael 里显示的那张别处的示例图存成这个文件在那台服务器上的预览图(写在模型旁边)。那台服务器上已经有预览图的\n不写;按文件名对上的要 `confirmed`。",
+        "operationId": "save_model_preview_api_plugins_instances__instance_id__model_library_save_preview_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSavePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSavePreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/model-library/nsfw": {
+      "put": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Mark Model Nsfw",
+        "description": "手动标一个模型文件的预览图是不是 NSFW(ADR 0038 §9),`nsfw: null` 去掉标记。回合成之后的判断(手动的压过\n自动的)。只记在 Mosael 这边,不改那台服务器。",
+        "operationId": "mark_model_nsfw_api_plugins_instances__instance_id__model_library_nsfw_put",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelNsfwMarkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelNsfwOut"
                 }
               }
             }
@@ -33287,12 +33476,35 @@
             "title": "Has Preview",
             "default": false
           },
+          "preview_origin": {
+            "type": "string",
+            "title": "Preview Origin",
+            "default": ""
+          },
+          "preview_kind": {
+            "type": "string",
+            "title": "Preview Kind",
+            "default": "image"
+          },
           "used_by": {
             "items": {
               "$ref": "#/components/schemas/ModelLibraryRefOut"
             },
             "type": "array",
             "title": "Used By"
+          },
+          "nsfw": {
+            "$ref": "#/components/schemas/ModelNsfwOut"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSourceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -33353,6 +33565,9 @@
             },
             "type": "array",
             "title": "Downloads"
+          },
+          "preview_tools": {
+            "$ref": "#/components/schemas/ModelPreviewToolsOut"
           }
         },
         "type": "object",
@@ -33376,6 +33591,73 @@
         ],
         "title": "ModelLibraryRefOut",
         "description": "一张工作流:id 和给人看的名字。"
+      },
+      "ModelLookupFile": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelLookupFile"
+      },
+      "ModelLookupRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "files": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModelLookupFile"
+                },
+                "type": "array",
+                "maxItems": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files"
+          },
+          "save": {
+            "type": "boolean",
+            "title": "Save",
+            "default": false
+          },
+          "pick": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Pick",
+            "default": "safest"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "ModelLookupRequest",
+        "description": "在 Civitai 上找(`files`;不给是「这台服务器上没有预览图的全部」),`save` 时找到的顺手存成预览图。"
       },
       "ModelNodeFolderIn": {
         "properties": {
@@ -33428,6 +33710,146 @@
         ],
         "title": "ModelNodeFoldersRequest",
         "description": "工作台的「模型库」面板(ADR 0038 §6):这几格各选的是哪个模型目录的文件。"
+      },
+      "ModelNsfwMarkRequest": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "nsfw": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfw"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelNsfwMarkRequest"
+      },
+      "ModelNsfwOut": {
+        "properties": {
+          "flagged": {
+            "type": "boolean",
+            "title": "Flagged",
+            "default": false
+          },
+          "manual": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ModelNsfwReasonOut"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "title": "ModelNsfwOut",
+        "description": "这个模型的预览图算不算 NSFW、凭什么。`flagged` 为真时界面按「NSFW 预览」那组设置处理。`manual` 是手动标的\n(压过自动的,没标是 None);`reasons` 是每一条自动依据。"
+      },
+      "ModelNsfwReasonOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "nsfw": {
+            "type": "boolean",
+            "title": "Nsfw"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "nsfw"
+        ],
+        "title": "ModelNsfwReasonOut",
+        "description": "一条自动的 NSFW 依据(ADR 0038 §9)。`source`:`civitai`(Civitai 上这个模型 / 这张示例图的标记)、`local`(本机识别\n预览图)、`metadata`(训练标签、文件名和标题)。`nsfw` 是这一条说的是不是;元数据只在说「是」时才有。"
+      },
+      "ModelPreviewToolsOut": {
+        "properties": {
+          "lookup": {
+            "type": "string",
+            "title": "Lookup",
+            "default": ""
+          },
+          "save": {
+            "type": "boolean",
+            "title": "Save",
+            "default": false
+          },
+          "save_note": {
+            "type": "string",
+            "title": "Save Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ModelPreviewToolsOut",
+        "description": "这台服务器上找预览图、写回预览图的路。`lookup`:`sha256` 能按哈希找、`filename` 只能按文件名和大小找、空串是\n找不了;`save`:能不能把预览图写回那台服务器,不能时 `save_note` 说缺什么。"
       },
       "ModelResolveOut": {
         "properties": {
@@ -33520,6 +33942,62 @@
           "url"
         ],
         "title": "ModelResolveRequest"
+      },
+      "ModelSavePreviewOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "saved": {
+            "type": "string",
+            "title": "Saved",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelSavePreviewOut"
+      },
+      "ModelSavePreviewRequest": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "pick": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Pick",
+            "default": "safest"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelSavePreviewRequest"
       },
       "ModelSearchCandidateOut": {
         "properties": {
@@ -33648,6 +34126,30 @@
         ],
         "title": "ModelSearchRequest",
         "description": "按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。"
+      },
+      "ModelSourceOut": {
+        "properties": {
+          "page": {
+            "type": "string",
+            "title": "Page"
+          },
+          "site": {
+            "type": "string",
+            "title": "Site",
+            "default": ""
+          },
+          "how": {
+            "type": "string",
+            "title": "How",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "page"
+        ],
+        "title": "ModelSourceOut",
+        "description": "一个模型文件的出处:原站上的那一页。`how`:`download`(经 Mosael 下载时记下的)、`sha256`(按文件哈希在 Civitai 上\n对上的)、`filename`(按 Civitai 记的原始文件名和大小对上的,存回之前要确认)、`metadata`(文件自带的)。"
       },
       "ModelTagOut": {
         "properties": {

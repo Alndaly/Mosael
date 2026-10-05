@@ -4,6 +4,7 @@
 `/object_info`、`/api/userdata`(列工作流 / 取工作流)、`/upload/image`(multipart)、`/prompt`、
 `/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件;模型库用到的
 `/experiment/models*`、`/view_metadata/*`、ComfyUI-Custom-Scripts 的 `/pysssss/view/*`(按 Range 读文件头)、
+`/pysssss/metadata/*`(按哈希找:算整个文件的 SHA256)、`/pysssss/save/*`(把 temp 里的一份拷成模型的预览图)、`/extensions`、
 `/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`;工作流库用到的
 userdata 写 / 移动 / 删除(照 ComfyUI 源码 app/user_manager.py 的语义:`overwrite=false` 撞名回 409、写和移动时建目标的
 父目录、移动的源可以是一个目录、删除是硬删)、连目录一起列的 `/api/v2/userdata`(空目录也在),和 Manager 的
@@ -623,6 +624,17 @@ class State:
     #: `missing` = 没装(404);`ignore_range` = 不认 Range、回 200 把整个文件发过来。文件的字节在 `model_bytes`(键是
     #: 「目录/名字」);`range_bytes_sent` 记下 ignore_range 时实际发出去了多少(对面读完头就该挂断)。
     pysssss: str = "range"
+    #: 装了 pysssss 时 `/extensions` 里列的它的前端脚本(betterCombos.js 和 /pysssss/save、/pysssss/view 是同一个模块,
+    #: modelInfo.js 和 /pysssss/metadata 是同一个);删掉哪个就是那条路没有
+    pysssss_scripts: tuple[str, ...] = ("betterCombos.js", "modelInfo.js")
+    #: 按哈希找时那台机器算出的 SHA256(键是「目录/名字」);没写的按 model_bytes(再没有按键本身)算
+    model_hashes: dict[str, str] = field(default_factory=dict)
+    #: 算过哈希的文件(「目录/名字」)—— 测「一次一个、不重复算」
+    hashed: list[str] = field(default_factory=list)
+    #: 经 /pysssss/save 写到模型旁边的预览图:「目录/名字」→ (扩展名, 字节)
+    saved_previews: dict[str, tuple[str, bytes]] = field(default_factory=dict)
+    #: 每次 /upload/image 带的表单字段(type、subfolder、overwrite)
+    upload_fields: list[dict[str, str]] = field(default_factory=list)
     model_bytes: dict[str, bytes] = field(default_factory=dict)
     range_bytes_sent: int = 0
     #: 每次读文件的 (目录/名字, Range 头)
@@ -894,6 +906,19 @@ class _Handler(BaseHTTPRequestHandler):
                             for index, name in enumerate(state.model_folders[folder])])
         elif path.startswith("/pysssss/view/") and state.pysssss != "missing":
             self._model_bytes(unquote(path[len("/pysssss/view/"):]))
+        elif path == "/extensions":
+            scripts = state.pysssss_scripts if state.pysssss != "missing" else ()
+            self._json(["/extensions/core/linkRenderMode.js",
+                        *(f"/extensions/comfyui-custom-scripts/js/{name}" for name in scripts)])
+        elif path.startswith("/pysssss/metadata/") and state.pysssss != "missing" and "modelInfo.js" in state.pysssss_scripts:
+            key = unquote(path[len("/pysssss/metadata/"):])
+            folder, _, name = key.partition("/")
+            if name not in state.model_folders.get(folder, []):
+                self._json({"error": "not found"}, 404)
+                return
+            state.hashed.append(key)
+            digest = state.model_hashes.get(key) or hashlib.sha256(state.model_bytes.get(key, key.encode())).hexdigest()
+            self._json({**(state.model_metadata.get(key) or {}), "pysssss.sha256": digest})
         elif path.startswith("/view_metadata/"):
             folder = unquote(path[len("/view_metadata/"):])
             name = query.get("filename", [""])[0]
@@ -1019,9 +1044,30 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == "/upload/image":
             name, content = _multipart_file(self.headers.get("Content-Type", ""), raw)
+            fields = _multipart_fields(self.headers.get("Content-Type", ""), raw)
             state.uploads.append((name, content))
+            state.upload_fields.append(fields)
             state.calls.append(("POST", path, name))
-            self._json({"name": name, "subfolder": "mosael", "type": "input"})
+            self._json({"name": name, "subfolder": fields.get("subfolder", ""), "type": fields.get("type", "input")})
+            return
+        if path.startswith("/pysssss/save/") and state.pysssss != "missing" and "betterCombos.js" in state.pysssss_scripts:
+            # 照 ComfyUI-Custom-Scripts 的 save_preview:temp(或 type 说的目录)里那一份拷到模型旁边,名字换上它的扩展名,
+            # 同名的覆盖
+            key = unquote(path[len("/pysssss/save/"):])
+            body = json.loads(raw or b"{}")
+            state.calls.append(("POST", path, body))
+            folder, _, name = key.partition("/")
+            uploaded = next((content for stored, content in reversed(state.uploads) if stored == body.get("filename")), None)
+            if name not in state.model_folders.get(folder, []) or uploaded is None:
+                self._json({"error": "bad request"}, 400)
+                return
+            suffix = "." + str(body.get("filename")).rsplit(".", 1)[-1]
+            state.saved_previews[key] = (suffix, uploaded)
+            # 拷到模型旁边的是一个真文件:/pysssss/view 按名字读得到它;ComfyUI 自己的预览接口只认图
+            state.model_bytes[f"{key.rsplit('.', 1)[0]}{suffix}"] = uploaded
+            if suffix in (".png", ".jpg", ".jpeg", ".webp"):
+                state.model_previews.add(key)
+            self._json({"image": f"{folder}/{name.rsplit('.', 1)[0].replace(chr(92), '/').rsplit('/', 1)[-1]}{suffix}"})
             return
         body = json.loads(raw or b"{}")
         state.calls.append(("POST", path, body))
@@ -1201,6 +1247,17 @@ def _frame(stream: Any, message: dict[str, Any]) -> None:
     else:
         header = bytes([0x81, 126]) + struct.pack("!H", len(payload))
     stream.write(header + payload)
+
+
+def _multipart_fields(content_type: str, body: bytes) -> dict[str, str]:
+    """multipart 里除文件以外的字段(`type`、`subfolder`、`overwrite`)。"""
+    boundary = content_type.split("boundary=", 1)[1].encode()
+    fields: dict[str, str] = {}
+    for part in body.split(b"--" + boundary):
+        found = re.search(rb'name="([^"]+)"\r\n\r\n', part)
+        if found and b"filename=" not in part:
+            fields[found.group(1).decode()] = part.split(b"\r\n\r\n", 1)[1].rstrip(b"\r\n").decode()
+    return fields
 
 
 def _multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:

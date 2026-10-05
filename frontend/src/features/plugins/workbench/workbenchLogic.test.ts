@@ -35,7 +35,7 @@ const lora: WorkbenchNode = {
 };
 
 const model = (folder: string, name: string, extra: Partial<ModelFile> = {}): ModelFile =>
-  ({ folder, name, family: "", family_source: "", triggers: [], triggers_source: "", title: "", has_preview: false, ...extra });
+  ({ folder, name, family: "", family_source: "", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", ...extra });
 
 describe("工作台面板背后的纯函数", () => {
   it("选中节点上的下拉格子交给插件问目录;插件说了目录的那几格才是选模型文件的", () => {

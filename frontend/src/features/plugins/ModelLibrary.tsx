@@ -6,16 +6,23 @@ import {
   CircleAlert,
   Copy,
   Download,
+  ExternalLink,
   Eye,
-  EyeOff,
   FolderTree,
+  ImageDown,
+  ImageUp,
   LayoutGrid,
   Library,
   ListFilter,
+  MoreHorizontal,
   RefreshCcw,
+  RotateCcw,
   Search,
+  SearchCheck,
   SearchX,
   Settings2,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
   TriangleAlert,
   Unplug,
@@ -27,13 +34,19 @@ import {
   cancelJob,
   getJob,
   getModelDetail,
-  getModelLibrary,
+  markModelNsfw,
+  modelPreviewUrl,
+  modelThumbnailUrl,
   resolveModelLink,
+  saveModelPreview,
   startModelDownload,
+  startModelLookup,
   type Job,
   type MissingModel,
   type ModelFile,
   type ModelLibrary,
+  type ModelNsfw,
+  type ModelPreviewTools,
   type ModelResolved,
   type PluginInstance,
 } from "@/api/client";
@@ -53,19 +66,30 @@ import {
   type LibraryNavItem,
   type LibraryReturn,
 } from "@/components/app/LibraryBrowser";
-import { ModalShell } from "@/components/app/modals";
+import { useImagePreview } from "@/components/app/image-preview";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
+import { ModelActionsContext, type ModelActions } from "@/features/plugins/modelActions";
+import { ModelContextMenu, isMenuKey } from "@/features/plugins/ModelMenu";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import {
   ALL_FOLDERS,
@@ -83,7 +107,24 @@ import {
   type GenerationTarget,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
-import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
+import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
+import {
+  ModelThumb,
+  NsfwMark,
+  PreviewOriginMark,
+  folderIcon,
+  modelBaseName,
+  modelSubFolder,
+  normModelName,
+  nsfwSummary,
+} from "@/components/generation/ModelThumb";
+import {
+  previewPick,
+  previewTreatment,
+  useModelPreviewSettings,
+  type ModelPreviewSettings,
+} from "@/components/generation/modelPreviewSettings";
+import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { formatBytes } from "@/lib/bytes";
 import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 import { handOffToGeneration } from "@/lib/generationHandoff";
@@ -132,7 +173,6 @@ const plainName = (name: string) => {
 };
 
 const ACTIVE = new Set(["queued", "running"]);
-const BLUR_SETTINGS = ["on", "off"] as const;
 
 type DownloadSeed = { url?: string; folder?: string; name?: string };
 
@@ -157,19 +197,26 @@ export function ModelLibraryDialog({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const queryKey = React.useMemo(() => ["model-library", instance.id], [instance.id]);
-  const library = useQuery({ queryKey, queryFn: () => getModelLibrary(instance.id), enabled: open, staleTime: 30_000 });
+  const library = useModelLibrary(instance.id, { enabled: open, staleTime: 30_000 });
+  const queryKey = library.queryKey;
+  //: 下完一个、找完一批、存回一张之后作废的是这个连接的模型库(不管挑法是哪一种)
+  const libraryPrefix = React.useMemo(() => ["model-library", instance.id], [instance.id]);
   const [view, setView] = React.useState(ALL_FOLDERS);
   const [families, setFamilies] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<LibrarySort>("name");
   //: 显示方式记在本机(每台电脑屏幕不一样大);默认小卡片 —— 一屏多看几张。
   const [density, setDensity] = usePersistentTab<LibraryDensity>("model-library.density", "small", LIBRARY_DENSITIES);
-  //: 「模糊预览图」也记在本机:这台机器的预览图里可能有不适合当众打开的,开没开是看场合的事,不跟着账号走。
-  //: 默认关 —— 设置里没有现成的「敏感内容」开关可以跟,而默认糊着会让第一次打开的人以为图坏了。
-  const [blurSetting, setBlurSetting] = usePersistentTab<"on" | "off">("model-library.blur", "off", BLUR_SETTINGS);
-  const blurred = blurSetting === "on";
+  //: 预览图分档、NSFW 单独管(ADR 0038 §9):记在本机,模型库、生成表单的下拉、工作台面板读同一份
+  const [previewSettings] = useModelPreviewSettings();
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
+  //: 打开详情时要直接跳到哪一节(菜单里的「在用的工作流」)
+  const [detailSection, setDetailSection] = React.useState<"used" | null>(null);
+  //: 稳定的一个:网格里几百张记忆化的卡拿着它,它一变卡就全重画
+  const openDetail = React.useCallback((key: string) => {
+    setDetailSection(null);
+    setDetailKey(key);
+  }, []);
   const [seed, setSeed] = React.useState<DownloadSeed | null>(null);
   //: 这次打开之后发起的下载(列表里的那份是打开时的快照)。
   const [started, setStarted] = React.useState<Job[]>([]);
@@ -195,9 +242,45 @@ export function ModelLibraryDialog({
     [scope, activeFamilies, query, sort],
   );
   const detail = detailKey ? models.find((model) => keyOf(model) === detailKey) ?? null : null;
+  //: 「在 Civitai 上找」「补图」:后台任务,这次打开之后发起的;做完了重新列一遍
+  const lookups = useLookupJobs(() => void qc.invalidateQueries({ queryKey: libraryPrefix }));
+  //: 「存为预览图」「为缺预览图的模型补图」先确认:写的是那台服务器
+  const [saving, setSaving] = React.useState<ModelFile | null>(null);
+  const [filling, setFilling] = React.useState(false);
+  const tools = library.data?.preview_tools;
+  const actions = useModelActions({
+    instanceId: instance.id,
+    workspaceId,
+    queryKey,
+    shown,
+    settings: previewSettings,
+    tools,
+    lookingUp: lookups.running,
+    onLookup: lookups.add,
+    onSave: setSaving,
+    onOpen: (model, section) => {
+      setDetailSection(section);
+      setDetailKey(keyOf(model));
+    },
+  });
+  const save = useMutation({
+    mutationFn: ({ model, confirmed }: { model: ModelFile; confirmed: boolean }) =>
+      saveModelPreview(instance.id, { folder: model.folder, name: model.name, pick: previewPick(previewSettings), confirmed }),
+    onSuccess: () => {
+      setSaving(null);
+      void qc.invalidateQueries({ queryKey: libraryPrefix });
+    },
+  });
+  const fill = useMutation({
+    mutationFn: () => startModelLookup(instance.id, { workspace_id: workspaceId, save: true, pick: previewSettings.nsfw === "show" ? "cover" : "safest" }),
+    onSuccess: (job) => {
+      setFilling(false);
+      lookups.add(job);
+    },
+  });
 
   const downloads = useDownloads(library.data, started, () => {
-    void qc.invalidateQueries({ queryKey });
+    void qc.invalidateQueries({ queryKey: libraryPrefix });
     // 生成表单的下拉、工作流节点:下好的文件要马上选得到(宿主那边已经刷新了这个连接的目录)
     invalidatePluginDependents(qc);
   });
@@ -253,7 +336,7 @@ export function ModelLibraryDialog({
     ? t("modelLibrarySearchIn").replace("{folder}", scopeName).replace("{n}", String(scope.length))
     : t("modelLibrarySearch").replace("{n}", String(scope.length));
 
-  const actions = (
+  const toolbarActions = (
     <>
       <IconButton
         variant="outline"
@@ -265,6 +348,7 @@ export function ModelLibraryDialog({
       >
         <RefreshCcw size={13} />
       </IconButton>
+      <FillPreviewsButton tools={tools} running={lookups.batchRunning} onClick={() => setFilling(true)} />
       <DownloadButton onClick={() => setSeed({})} />
     </>
   );
@@ -289,7 +373,7 @@ export function ModelLibraryDialog({
             {current === MISSING_VIEW ? t("modelMissingDesc") : t("modelLibraryDownloadsDesc")}
           </p>
         </div>
-        {actions}
+        {toolbarActions}
       </>
     ) : (
       <>
@@ -321,18 +405,8 @@ export function ModelLibraryDialog({
           }))}
         />
         <LibraryDensitySwitch value={density} onChange={setDensity} />
-        <IconButton
-          variant="outline"
-          size="default"
-          aria-pressed={blurred}
-          className={cn("px-3 text-muted-foreground", blurred && "border-primary/40 bg-accent text-primary hover:bg-accent hover:text-primary")}
-          label={t("modelLibraryBlur")}
-          hint={t("modelLibraryBlurHint")}
-          onClick={() => setBlurSetting(blurred ? "off" : "on")}
-        >
-          {blurred ? <EyeOff size={13} /> : <Eye size={13} />}
-        </IconButton>
-        {actions}
+        <ModelPreviewSettingsButton />
+        {toolbarActions}
       </>
     );
 
@@ -384,7 +458,7 @@ export function ModelLibraryDialog({
           label={listLabel}
           instanceId={instance.id}
           models={shown}
-          blurred={blurred}
+          settings={previewSettings}
           onOpen={openItem}
           returnTo={returnTo}
         />
@@ -396,7 +470,7 @@ export function ModelLibraryDialog({
         instanceId={instance.id}
         models={shown}
         large={density === "large"}
-        blurred={blurred}
+        settings={previewSettings}
         onOpen={openItem}
         returnTo={returnTo}
       />
@@ -404,6 +478,7 @@ export function ModelLibraryDialog({
   };
 
   return (
+    <ModelActionsContext.Provider value={actions}>
     <LibraryDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -425,7 +500,7 @@ export function ModelLibraryDialog({
         ) : undefined
       }
       detailKey={detail ? detailKey : null}
-      onOpenItem={setDetailKey}
+      onOpenItem={openDetail}
       onBack={() => setDetailKey(null)}
       detail={
         detail && (
@@ -434,32 +509,227 @@ export function ModelLibraryDialog({
             key={keyOf(detail)}
             instanceId={instance.id}
             model={detail}
-            blurred={blurred}
+            settings={previewSettings}
+            section={detailSection}
             onShowWorkflow={onShowWorkflow}
             onBack={() => setDetailKey(null)}
           />
         )
       }
       dialogs={
-        seed && library.data ? (
-          <ModelDownloadDialog
-            instance={instance}
-            workspaceId={workspaceId}
-            library={library.data}
-            seed={seed}
-            onClose={() => setSeed(null)}
-            onStarted={(job) => {
-              setStarted((list) => [job, ...list]);
-              // 发起的下载在「下载记录」里看进度
-              setView(DOWNLOADS_VIEW);
+        <>
+          {seed && library.data && (
+            <ModelDownloadDialog
+              instance={instance}
+              workspaceId={workspaceId}
+              library={library.data}
+              seed={seed}
+              onClose={() => setSeed(null)}
+              onStarted={(job) => {
+                setStarted((list) => [job, ...list]);
+                // 发起的下载在「下载记录」里看进度
+                setView(DOWNLOADS_VIEW);
+              }}
+            />
+          )}
+          <ConfirmDialog
+            open={saving !== null}
+            title={t("modelSavePreviewTitle").replace("{name}", saving ? baseName(saving.name) : "")}
+            body={[
+              t("modelSavePreviewBody").replace("{server}", instance.name).replace("{place}", saving ? placeOf(saving) : ""),
+              saving?.source?.how === "filename" ? t("modelSavePreviewFilenameMatch") : "",
+              save.isError ? errorText(save.error) : "",
+            ].filter(Boolean).join("\n\n")}
+            confirmLabel={t("modelSavePreview")}
+            pending={save.isPending}
+            onCancel={() => {
+              save.reset();
+              setSaving(null);
             }}
+            onConfirm={() => saving && save.mutate({ model: saving, confirmed: saving.source?.how === "filename" })}
           />
-        ) : undefined
+          <ConfirmDialog
+            open={filling}
+            title={t("modelFillPreviewsTitle")}
+            body={[t("modelFillPreviewsBody").replace("{server}", instance.name), fill.isError ? errorText(fill.error) : ""]
+              .filter(Boolean).join("\n\n")}
+            confirmLabel={t("modelFillPreviewsStart")}
+            pending={fill.isPending}
+            onCancel={() => {
+              fill.reset();
+              setFilling(false);
+            }}
+            onConfirm={() => fill.mutate()}
+          />
+        </>
       }
     >
       {content}
     </LibraryDialog>
+    </ModelActionsContext.Provider>
   );
+}
+
+/**
+ * 卡片、列表行、详情页的菜单要的那几样本事(见 ModelMenu)。生成选项、标记的改动、灯箱都在这里接上。
+ * 标 NSFW 之后**不**让插件再列一遍:宿主回的是新的判断,直接改进模型库的那份缓存 —— 生成表单的下拉、工作台面板
+ * 读的是同一份,跟着变。
+ */
+function useModelActions({
+  instanceId,
+  workspaceId,
+  queryKey,
+  shown,
+  settings,
+  tools,
+  lookingUp,
+  onLookup,
+  onSave,
+  onOpen,
+}: {
+  instanceId: string;
+  workspaceId: string;
+  queryKey: readonly unknown[];
+  shown: ModelFile[];
+  settings: ModelPreviewSettings;
+  tools: ModelPreviewTools | undefined;
+  /** 正在找的文件(`目录/名字`) */
+  lookingUp: Set<string>;
+  onLookup: (job: Job) => void;
+  onSave: (model: ModelFile) => void;
+  onOpen: (model: ModelFile, section: "used" | null) => void;
+}): ModelActions {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const generation = useGenerationOptions(GENERATION_KINDS);
+  const { openImagePreview } = useImagePreview();
+  const mark = useMutation({
+    mutationFn: ({ model, nsfw }: { model: ModelFile; nsfw: boolean | null }) =>
+      markModelNsfw(instanceId, { folder: model.folder, name: model.name, nsfw }),
+    onSuccess: (verdict, { model }) => {
+      qc.setQueryData<ModelLibrary>(queryKey, (old) =>
+        old ? { ...old, models: (old.models ?? []).map((one) => (keyOf(one) === keyOf(model) ? { ...one, nsfw: verdict } : one)) } : old,
+      );
+    },
+  });
+  //: 菜单在打开那一刻才读这些(见 ModelMenu):放在一个 ref 里,本事本身不跟着变 —— 它在上下文里,一变,画着的几百张卡
+  //: 都要重画(搜索框里打一个字,筛出来的那份清单就是新的)。
+  const onLookupRef = React.useRef(onLookup);
+  onLookupRef.current = onLookup;
+  const lookup = useMutation({
+    mutationFn: ({ model, pick }: { model: ModelFile; pick: "safest" | "cover" }) => startModelLookup(instanceId, {
+      workspace_id: workspaceId, files: [{ folder: model.folder, name: model.name }], refresh: true, pick,
+    }),
+    onSuccess: (job) => onLookupRef.current(job),
+  });
+  const latest = React.useRef({ onOpen, shown, settings, generation, openImagePreview, mark: mark.mutate, t, tools, lookingUp,
+                                onLookup, onSave, lookup: lookup.mutate });
+  latest.current = { onOpen, shown, settings, generation, openImagePreview, mark: mark.mutate, t, tools, lookingUp, onLookup,
+                     onSave, lookup: lookup.mutate };
+  return React.useMemo<ModelActions>(() => {
+    //: 能跟着翻的:看得清的(模糊着、不显示的不进来 —— 点开一张是明确要看这一张,翻到别的就等于没经同意替人把它们都看清了)
+    const visible = (model: ModelFile) =>
+      model.has_preview && previewTreatment(latest.current.settings, Boolean(model.nsfw?.flagged)) === "clear";
+    return {
+      open: (model) => latest.current.onOpen(model, null),
+      openUsed: (model) => latest.current.onOpen(model, "used"),
+      targets: (model) => generationTargets(latest.current.generation.options, instanceId, model),
+      targetsLoading: () => latest.current.generation.pending,
+      generate: (model, target) =>
+        handOffToGeneration({
+          providerProfileId: target.option.provider_profile_id,
+          kind: target.option.kind,
+          model: target.option.model,
+          declared: { [target.key]: target.value },
+          promptWords: model.triggers_source === "metadata" ? model.triggers ?? [] : [],
+        }),
+      largeUnavailable: (model) => (!model.has_preview ? latest.current.t("modelNoPreview") : null),
+      showLarge: (model) => {
+        const pick = previewPick(latest.current.settings);
+        const item = (one: ModelFile) => ({
+          src: modelPreviewUrl(instanceId, one.folder, one.name, pick),
+          title: baseName(one.name),
+          ...(one.preview_kind === "video" ? { video: true } : {}),
+        });
+        //: 能左右翻的是当前筛出来的、看得清的那一批;点的是模糊着、不显示的那一张时只开它
+        const gallery = visible(model)
+          ? latest.current.shown.filter((one) => keyOf(one) === keyOf(model) || visible(one)).map(item)
+          : [item(model)];
+        latest.current.openImagePreview({ ...item(model), gallery });
+      },
+      markNsfw: (model, nsfw) => latest.current.mark({ model, nsfw }),
+      openSource: (model) => {
+        if (model.source?.page) window.open(model.source.page, "_blank", "noopener,noreferrer");
+      },
+      lookUp: (model) => latest.current.lookup({ model, pick: previewPick(latest.current.settings) }),
+      lookupUnavailable: (model) => {
+        const { tools: ways, lookingUp: running, t: say } = latest.current;
+        if (running.has(keyOf(model))) return say("modelLookupRunning");
+        if (ways && !ways.lookup) return say("modelLookupUnavailable");
+        return null;
+      },
+      savePreview: (model) => latest.current.onSave(model),
+      saveUnavailable: () => {
+        const { tools: ways, t: say } = latest.current;
+        if (ways && !ways.save) return ways.save_note || say("modelSavePreviewUnavailable");
+        return null;
+      },
+    };
+  }, [instanceId]);
+}
+
+/**
+ * 「为缺预览图的模型补图」:那台服务器上没有预览图的,逐个在 Civitai 上找,按哈希对上的把示例图写回去(先确认)。写不回
+ * (没有那条路)、找不了时点不了并说为什么;正在补时转圈。
+ */
+function FillPreviewsButton({ tools, running, onClick }: { tools: ModelPreviewTools | undefined; running: boolean; onClick: () => void }) {
+  const t = useI18n();
+  const why = !tools ? t("modelLibraryStillReading") : !tools.save ? tools.save_note || t("modelSavePreviewUnavailable")
+    : !tools.lookup ? t("modelLookupUnavailable") : null;
+  return (
+    <IconButton
+      variant="outline"
+      size="default"
+      className="px-3 text-muted-foreground"
+      label={t("modelFillPreviews")}
+      hint={t("modelFillPreviewsHint")}
+      disabled={Boolean(why)}
+      disabledReason={why}
+      loading={running}
+      onClick={onClick}
+    >
+      <ImageDown size={13} />
+    </IconButton>
+  );
+}
+
+/**
+ * 这次打开之后发起的「在 Civitai 上找」「补图」任务:在跑的隔一会儿读一次任务本身,有一个做完了就让模型库重新列一遍。
+ * 交出哪些文件正在找(详情里那颗「在 Civitai 上找」转圈)、有没有一批补图在跑。
+ */
+function useLookupJobs(onDone: () => void): { add: (job: Job) => void; running: Set<string>; batchRunning: boolean } {
+  const [jobs, setJobs] = React.useState<Job[]>([]);
+  const watching = jobs.filter((job) => ACTIVE.has(job.status)).map((job) => job.id);
+  const live = useQuery({
+    queryKey: ["model-lookups", watching],
+    queryFn: () => Promise.all(watching.map((id) => getJob(id))),
+    enabled: watching.length > 0,
+    refetchInterval: 1500,
+  });
+  const callback = React.useRef(onDone);
+  callback.current = onDone;
+  React.useEffect(() => {
+    const fresh = live.data ?? [];
+    if (!fresh.length) return;
+    setJobs((list) => list.map((job) => fresh.find((one) => one.id === job.id) ?? job));
+    if (fresh.some((job) => !ACTIVE.has(job.status))) callback.current();
+  }, [live.data]);
+  const add = React.useCallback((job: Job) => setJobs((list) => [job, ...list]), []);
+  const active = jobs.filter((job) => ACTIVE.has(job.status));
+  const running = new Set(active.flatMap((job) =>
+    ((job.payload as { files?: { folder: string; name: string }[] }).files ?? []).map((one) => keyOf(one))));
+  const batchRunning = active.some((job) => (job.payload as { save?: boolean }).save === true);
+  return { add, running, batchRunning };
 }
 
 /** 工具条上的主操作。工具条窄了最后才收字(见 LibraryToolbarLabel);还没读出来时点不了,并说为什么。 */
@@ -653,7 +923,9 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
       </div>
       <ul className="m-0 grid list-none gap-2 p-0">
         {missing.map((one) => (
-          <li key={keyOf(one)} className="flex min-w-0 items-center gap-3">
+          <ContextMenu key={keyOf(one)}>
+            <ContextMenuTrigger asChild>
+          <li data-missing-item={keyOf(one)} className="flex min-w-0 items-center gap-3">
             <span className="grid min-w-0 flex-1 gap-0.5">
               <span className="flex min-w-0 items-baseline gap-2">
                 <Truncate className="text-ui-sm text-foreground" hint={one.url}>{one.name}</Truncate>
@@ -668,6 +940,21 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
               {t("modelMissingDownload")}
             </Button>
           </li>
+            </ContextMenuTrigger>
+            {/* 缺的那个文件:下载框带着地址、目录、文件名;也能只复制名字和地址,自己去那台机器上放 */}
+            <ContextMenuContent aria-label={t("modelMenuLabel").replace("{name}", one.name)}>
+              <ContextMenuItem onSelect={() => onDownload(one)}>
+                <MenuItemBody icon={<Download />} label={t("modelMissingMenuDownload")} description={one.folder} />
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(one.name)}>
+                <MenuItemBody icon={<Copy />} label={t("modelCopyName")} />
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(one.url)}>
+                <MenuItemBody icon={<Copy />} label={t("modelMissingCopyLink")} description={one.url} />
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
       </ul>
     </section>
@@ -776,7 +1063,7 @@ function ModelGrid({
   instanceId,
   models,
   large,
-  blurred,
+  settings,
   onOpen,
   returnTo,
 }: {
@@ -784,7 +1071,7 @@ function ModelGrid({
   instanceId: string;
   models: ModelFile[];
   large: boolean;
-  blurred: boolean;
+  settings: ModelPreviewSettings;
   onOpen: (key: string) => void;
   returnTo: React.RefObject<LibraryReturn | null>;
 }) {
@@ -837,7 +1124,7 @@ function ModelGrid({
                 aria-posinset={index * columns + column + 1}
                 className="grid min-w-0"
               >
-                <ModelCard instanceId={instanceId} model={model} large={large} blurred={blurred} onOpen={onOpen} />
+                <ModelCard instanceId={instanceId} model={model} large={large} settings={settings} onOpen={onOpen} />
               </div>
             ))}
           </div>
@@ -858,29 +1145,49 @@ const ModelCard = React.memo(function ModelCard({
   instanceId,
   model,
   large,
-  blurred,
+  settings,
   onOpen,
 }: {
   instanceId: string;
   model: ModelFile;
   large: boolean;
-  blurred: boolean;
+  settings: ModelPreviewSettings;
   onOpen: (key: string) => void;
 }) {
   const t = useI18n();
   const used = model.used_by?.length ?? 0;
+  //: 预览是视频的:鼠标移上来、焦点进来时静音循环播(清晰时;模糊、不显示的不播)
+  const [playing, setPlaying] = React.useState(false);
+  const video = model.preview_kind === "video";
   return (
+    <ModelContextMenu model={model}>
+      {(openMenu) => (
     <article
       data-library-item={keyOf(model)}
+      onPointerEnter={video ? () => setPlaying(true) : undefined}
+      onPointerLeave={video ? () => setPlaying(false) : undefined}
+      onFocus={video ? () => setPlaying(true) : undefined}
+      onBlur={video ? (event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPlaying(false); } : undefined}
       className={cn(
         "group/thumb relative grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-panel transition-colors",
         "hover:border-border-strong hover:bg-panel-subtle",
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
-      <div className="overflow-hidden bg-secondary">
-        <ModelThumb instanceId={instanceId} model={model} blurred={blurred} className="aspect-[3/4] w-full object-[50%_20%]" />
+      <div className="relative overflow-hidden bg-secondary">
+        <ModelThumb
+          instanceId={instanceId}
+          model={model}
+          treatment={previewTreatment(settings, Boolean(model.nsfw?.flagged))}
+          play={playing}
+          className="aspect-[3/4] w-full object-[50%_20%]"
+        />
       </div>
+      <span className="absolute left-1.5 top-1.5 flex gap-1">
+        <NsfwMark nsfw={model.nsfw} />
+        <PreviewOriginMark origin={model.preview_origin} />
+      </span>
+      <CardMenuButton model={model} onOpenMenu={openMenu} />
       <div className={cn("grid min-w-0 content-start", large ? "gap-1.5 p-2.5" : "gap-1 p-2")}>
         <h3 className={cn("m-0 min-w-0 font-semibold leading-snug text-foreground", large ? "text-ui-sm" : "text-ui-xs")}>
           <button
@@ -888,6 +1195,11 @@ const ModelCard = React.memo(function ModelCard({
             data-library-open
             className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
             onClick={() => onOpen(keyOf(model))}
+            onKeyDown={(event) => {
+              if (!isMenuKey(event)) return;
+              event.preventDefault();
+              openMenu(event.currentTarget);
+            }}
           >
             <Truncate hint={large ? undefined : placeOf(model)}>{baseName(model.name)}</Truncate>
           </button>
@@ -915,8 +1227,39 @@ const ModelCard = React.memo(function ModelCard({
         )}
       </div>
     </article>
+      )}
+    </ModelContextMenu>
   );
 });
+
+/**
+ * 卡片右上角的 ⋯:悬停、或焦点在卡片里时出来(触屏上一直在),打开的就是右键那一个菜单(见 ModelMenu)。
+ * 叠在名字那颗按钮盖满整张卡的 `after:` 上面。
+ */
+function CardMenuButton({ model, onOpenMenu, className }: { model: ModelFile; onOpenMenu: (anchor: HTMLElement) => void; className?: string }) {
+  const t = useI18n();
+  return (
+    <IconButton
+      variant="secondary"
+      size="icon-xs"
+      aria-haspopup="menu"
+      data-model-menu-button=""
+      label={t("modelMenuLabel").replace("{name}", baseName(model.name))}
+      className={cn(
+        "absolute right-1.5 top-1.5 z-10 opacity-0 shadow-[var(--shadow-floating)] transition-opacity duration-100",
+        "group-hover/thumb:opacity-100 group-focus-within/thumb:opacity-100 focus-visible:opacity-100",
+        "[@media(hover:none)]:opacity-100",
+        className,
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpenMenu(event.currentTarget);
+      }}
+    >
+      <MoreHorizontal />
+    </IconButton>
+  );
+}
 
 /**
  * 列表:一行一个文件,扫一大批文件时比卡片快。名字是行里那颗按钮(键盘从它进详情);整行也点得开(鼠标方便)。
@@ -927,14 +1270,14 @@ function ModelTable({
   label,
   instanceId,
   models,
-  blurred,
+  settings,
   onOpen,
   returnTo,
 }: {
   label: string;
   instanceId: string;
   models: ModelFile[];
-  blurred: boolean;
+  settings: ModelPreviewSettings;
   onOpen: (key: string) => void;
   returnTo: React.RefObject<LibraryReturn | null>;
 }) {
@@ -984,7 +1327,7 @@ function ModelTable({
             rowRef={virtual.measure(keyOf(model))}
             instanceId={instanceId}
             model={model}
-            blurred={blurred}
+            settings={settings}
             onOpen={onOpen}
           />
         ))}
@@ -1009,19 +1352,21 @@ const ModelRow = React.memo(function ModelRow({
   rowRef,
   instanceId,
   model,
-  blurred,
+  settings,
   onOpen,
 }: {
   rowRef: (element: HTMLElement | null) => void;
   instanceId: string;
   model: ModelFile;
-  blurred: boolean;
+  settings: ModelPreviewSettings;
   onOpen: (key: string) => void;
 }) {
   const { locale } = usePreferences();
   const used = model.used_by?.length ?? 0;
   const cell = TABLE_CELL;
   return (
+    <ModelContextMenu model={model}>
+      {(openMenu) => (
     <tr
       ref={rowRef}
       data-library-item={keyOf(model)}
@@ -1030,21 +1375,37 @@ const ModelRow = React.memo(function ModelRow({
     >
       <td className={cell}>
         <span className="block size-9 overflow-hidden rounded-md bg-secondary">
-          <ModelThumb instanceId={instanceId} model={model} compact blurred={blurred} className="size-9 object-[50%_20%]" />
+          <ModelThumb
+            instanceId={instanceId}
+            model={model}
+            compact
+            treatment={previewTreatment(settings, Boolean(model.nsfw?.flagged))}
+            className="size-9 object-[50%_20%]"
+          />
         </span>
       </td>
       <td className={cell}>
-        <button
-          type="button"
-          data-library-open
-          className="block max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen(keyOf(model));
-          }}
-        >
-          <Truncate>{baseName(model.name)}</Truncate>
-        </button>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <button
+            type="button"
+            data-library-open
+            className="block min-w-0 max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(keyOf(model));
+            }}
+            onKeyDown={(event) => {
+              if (!isMenuKey(event)) return;
+              event.preventDefault();
+              openMenu(event.currentTarget);
+            }}
+          >
+            <Truncate>{baseName(model.name)}</Truncate>
+          </button>
+          <NsfwMark nsfw={model.nsfw} className="shrink-0" />
+          <PreviewOriginMark origin={model.preview_origin} className="shrink-0 shadow-none" />
+          <CardMenuButton model={model} onOpenMenu={openMenu} className="static ml-auto shrink-0 shadow-none" />
+        </span>
       </td>
       <td className={cn(cell, "text-ui-xs text-muted-foreground")}>
         <Truncate>{placeOf(model)}</Truncate>
@@ -1064,6 +1425,8 @@ const ModelRow = React.memo(function ModelRow({
         {used > 0 ? used : ""}
       </td>
     </tr>
+      )}
+    </ModelContextMenu>
   );
 });
 
@@ -1103,6 +1466,96 @@ function OverviewRow({ label, note, children }: { label: string; note?: string; 
         {note && <span className="text-ui-xs leading-relaxed text-muted-foreground">{note}</span>}
       </dd>
     </div>
+  );
+}
+
+/** 「存为预览图」:把 Mosael 里显示的那张别处的示例图写回那台服务器(先确认);写不回时点不了并说缺什么。 */
+function SavePreviewButton({ model, actions, className }: { model: ModelFile; actions: ModelActions; className?: string }) {
+  const t = useI18n();
+  const why = actions.saveUnavailable(model);
+  return (
+    <Hint label={t("modelSavePreviewHint")} disabledReason={why}>
+      <Button variant="secondary" size="sm" className={cn("shadow-[var(--shadow-floating)]", className)} disabled={Boolean(why)}
+              onClick={() => actions.savePreview(model)}>
+        <ImageUp size={13} />
+        {t("modelSavePreview")}
+      </Button>
+    </Hint>
+  );
+}
+
+const HOW_NOTES = {
+  download: "modelSourceHowDownload",
+  sha256: "modelSourceHowSha256",
+  filename: "modelSourceHowFilename",
+  metadata: "modelSourceHowMetadata",
+} as const;
+
+/**
+ * 概要里的「原链接」一行:原站上那一页(Civitai 的版本页、HuggingFace / ModelScope 的文件页),下面一行说是怎么知道的;
+ * 没有就说没有、怎么补(经 Mosael 下载的会记下,别的「在 Civitai 上找」)—— 不按文件名猜一个链接。
+ */
+function SourceRow({ model }: { model: ModelFile }) {
+  const t = useI18n();
+  const actions = React.useContext(ModelActionsContext);
+  const source = model.source;
+  const how = source ? HOW_NOTES[source.how as keyof typeof HOW_NOTES] : undefined;
+  const busy = actions?.lookupUnavailable(model);
+  const find = actions && (
+    <Hint label={t("modelLookupHint")} disabledReason={busy}>
+      <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => actions.lookUp(model)}>
+        <SearchCheck size={13} />
+        {t(model.has_preview ? "modelLookup" : "modelLookupPreview")}
+      </Button>
+    </Hint>
+  );
+  return (
+    <OverviewRow label={t("modelSourceRow")} note={source ? (how ? t(how) : undefined) : t("modelSourceNone")}>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {source ? (
+          <a href={source.page} target="_blank" rel="noreferrer noopener" data-model-source=""
+             className="inline-flex min-w-0 max-w-full items-center gap-1 text-primary no-underline hover:underline">
+            <ExternalLink size={13} aria-hidden className="shrink-0" />
+            <Truncate>{source.page.replace(/^https?:\/\//, "")}</Truncate>
+          </a>
+        ) : (
+          <span className="text-muted-foreground">{t("modelSourceUnknown")}</span>
+        )}
+        {find}
+      </span>
+    </OverviewRow>
+  );
+}
+
+/**
+ * 概要里的 NSFW 一行:结论(手动标的说是手动标的)、每一条依据;按钮改手动标记 —— 判错了能改,标过的能改回自动判断。
+ * 改了马上生效(宿主回新的判断,模型库那份缓存跟着改)。
+ */
+function NsfwRow({ model }: { model: ModelFile }) {
+  const t = useI18n();
+  const actions = React.useContext(ModelActionsContext);
+  const nsfw: ModelNsfw = model.nsfw ?? { flagged: false, manual: null, reasons: [] };
+  const summary = nsfwSummary(nsfw, t);
+  return (
+    <OverviewRow label={t("modelNsfwRow")} note={summary.reasons.join(" · ") || undefined}>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <CatalogBadge tone={nsfw.flagged ? "warning" : "muted"}>{summary.label}</CatalogBadge>
+        {actions && (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => actions.markNsfw(model, !nsfw.flagged)}>
+              {nsfw.flagged ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
+              {t(nsfw.flagged ? "modelNsfwUnmark" : "modelNsfwMark")}
+            </Button>
+            {nsfw.manual != null && (
+              <Button variant="ghost" size="sm" onClick={() => actions.markNsfw(model, null)}>
+                <RotateCcw size={13} />
+                {t("modelNsfwClearMark")}
+              </Button>
+            )}
+          </>
+        )}
+      </span>
+    </OverviewRow>
   );
 }
 
@@ -1314,19 +1767,22 @@ function UseToGenerate({
 const DETAIL_PREVIEW_FRAME = "max-h-[640px] w-full [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
 
 /**
- * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(遵循「模糊预览图」,
- * 悬停或点「看清」才清楚);右栏概要(底模和判据、触发词点一下复制、文件、改动时间)、在用的工作流、训练标签、元数据。
+ * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(照预览图那两组设置:
+ * 模糊的悬停或点「看清」才清楚,不显示的点「显示这一张」才去取);右栏概要(底模和判据、NSFW 和凭什么、触发词点一下复制、
+ * 文件、改动时间)、在用的工作流、训练标签、元数据。`section` 是打开时直接跳到的那一节(菜单里的「在用的工作流」)。
  */
 function ModelDetail({
   instanceId,
   model,
-  blurred,
+  settings,
+  section,
   onShowWorkflow,
   onBack,
 }: {
   instanceId: string;
   model: ModelFile;
-  blurred: boolean;
+  settings: ModelPreviewSettings;
+  section: "used" | null;
   onShowWorkflow?: (path: string) => void;
   onBack: () => void;
 }) {
@@ -1336,6 +1792,7 @@ function ModelDetail({
     queryKey: ["model-library-detail", instanceId, model.folder, model.name],
     queryFn: () => getModelDetail(instanceId, model.folder, model.name),
   });
+  const actions = React.useContext(ModelActionsContext);
   const [revealed, setRevealed] = React.useState(false);
   //: 说有预览图、这张却没取到:和没有预览图一样,画那个 3:4 的框。这不是少见的情况 —— 新版 ComfyUI 给每个文件都报
   //: 预览地址,有没有图要取了才知道(没有就 404),没配预览图的文件走的都是这条。不能留给 ModelThumb 自己的占位:
@@ -1363,23 +1820,75 @@ function ModelDetail({
   const source = familySource(model);
   const familyNote = source ? t(source.hint) : undefined;
   const jumpToUsed = () => {
-    const section = usedRef.current;
-    if (!section) return;
-    section.scrollIntoView({ block: "start", behavior: "smooth" });
-    section.querySelector<HTMLElement>("h4")?.focus({ preventScroll: true });
+    const found = usedRef.current;
+    if (!found) return;
+    found.scrollIntoView({ block: "start", behavior: "smooth" });
+    found.querySelector<HTMLElement>("h4")?.focus({ preventScroll: true });
   };
+  //: 从菜单的「在用的工作流」打开:挂上之后跳过去(一次)
+  React.useEffect(() => {
+    if (section === "used") jumpToUsed();
+    // 只在打开这一页时跳一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const treatment = revealed ? "clear" : previewTreatment(settings, Boolean(model.nsfw?.flagged));
 
-  const media = model.has_preview && !previewFailed ? (
-    <div className="group/thumb relative overflow-hidden rounded-xl bg-secondary">
-      <ModelThumb
-        instanceId={instanceId}
-        model={model}
-        full
-        blurred={blurred && !revealed}
-        onFailed={() => setPreviewFailed(true)}
-        className={cn(DETAIL_PREVIEW_FRAME, "object-contain")}
-      />
-      {blurred && !revealed && (
+  const media = model.has_preview && !previewFailed && treatment === "hidden" ? (
+    <div
+      data-detail-placeholder={model.folder}
+      data-hidden-preview=""
+      className={cn(
+        DETAIL_PREVIEW_FRAME,
+        "grid aspect-[3/4] place-items-center content-center gap-3 rounded-xl border border-border bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-primary",
+      )}
+    >
+      <Icon className="size-10 opacity-70" />
+      <span className="px-4 text-center text-ui-xs text-muted-foreground">
+        {t(model.nsfw?.flagged ? "modelPreviewHiddenNsfw" : "modelPreviewHiddenLevel")}
+      </span>
+      <Button variant="secondary" size="sm" onClick={() => setRevealed(true)}>
+        <Eye size={13} />
+        {t("modelShowHiddenPreview")}
+      </Button>
+    </div>
+  ) : model.has_preview && !previewFailed ? (
+    <div className="group/thumb group/preview relative overflow-hidden rounded-xl bg-secondary">
+      {actions && (
+        //: 「看大图」:全站共用的灯箱,能左右翻当前筛出来的那一批;视频的那一枚抬到播放控件上面,不压着它
+        <ViewFullSizeButton name={baseName(model.name)} onOpen={() => actions.showLarge(model)}
+                            className={model.preview_kind === "video" && treatment === "clear" ? "bottom-14 right-3" : "bottom-3 right-3"} />
+      )}
+      {model.preview_kind === "video" && treatment === "clear" ? (
+        // 预览是一段视频:能播(静音、循环,控件在);模糊着时上面那一枚是它的第一帧,不自己播
+        <video
+          data-detail-video=""
+          src={modelPreviewUrl(instanceId, model.folder, model.name, previewPick(settings))}
+          poster={modelThumbnailUrl(instanceId, model.folder, model.name, previewPick(settings))}
+          controls
+          muted
+          loop
+          playsInline
+          aria-label={t("modelPreviewVideo").replace("{name}", baseName(model.name))}
+          className={cn(DETAIL_PREVIEW_FRAME, "block object-contain")}
+          onError={() => setPreviewFailed(true)}
+        />
+      ) : (
+        <ModelThumb
+          instanceId={instanceId}
+          model={model}
+          full
+          treatment={treatment}
+          onFailed={() => setPreviewFailed(true)}
+          className={cn(DETAIL_PREVIEW_FRAME, "object-contain")}
+        />
+      )}
+      <span className="absolute left-3 top-3 flex gap-1">
+        <PreviewOriginMark origin={model.preview_origin} />
+      </span>
+      {actions && model.preview_origin && model.preview_origin !== "server" && (
+        <SavePreviewButton model={model} actions={actions} className="absolute right-3 top-3" />
+      )}
+      {(treatment === "light" || treatment === "heavy") && (
         <Button
           variant="secondary"
           size="sm"
@@ -1445,6 +1954,8 @@ function ModelDetail({
               </span>
             )}
           </OverviewRow>
+          <SourceRow model={model} />
+          <NsfwRow model={model} />
           {triggers.length > 0 && (
             <OverviewRow label={t("modelTriggers")} note={model.triggers_source === "tags" ? t("modelTriggersFromTags") : undefined}>
               <span className="flex min-w-0 flex-wrap gap-1.5">

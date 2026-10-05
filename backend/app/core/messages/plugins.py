@@ -204,6 +204,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{name} 的回答形状不对",
         "en": "{name} gave a malformed answer",
     },
+    "modelLibErr_cantSavePreview": {
+        "zh": "这台 ComfyUI 存不了预览图:{note}",
+        "en": "This ComfyUI can't save previews: {note}",
+    },
+    "modelLibErr_nothingToLookUp": {
+        "zh": "没有要找的文件:这台服务器上的模型都有预览图了",
+        "en": "Nothing to look up: every model on this server already has a preview",
+    },
+    "modelLibErr_noElsewherePreview": {
+        "zh": "这个文件还没有从 Civitai 取来的预览图:先「在 Civitai 上找」",
+        "en": "This file has no preview from Civitai yet: use “Find on Civitai” first",
+    },
+    "modelLibErr_confirmFilenameMatch": {
+        "zh": "这个文件是按文件名和大小在 Civitai 上对上的,存回之前要确认是同一个文件",
+        "en": "This file was matched on Civitai by name and size; confirm it's the same file before saving",
+    },
+    "modelLibErr_alreadyHasPreview": {
+        "zh": "那台服务器上已经有这个文件的预览图了,不覆盖",
+        "en": "That server already has a preview for this file; it won't be overwritten",
+    },
+    "modelLibErr_elsewhereUnreachable": {
+        "zh": "这张示例图这会儿取不到(Civitai 没回应),过一会儿再试",
+        "en": "Couldn't fetch this example image right now (Civitai didn't answer); try again in a moment",
+    },
     "modelLibErr_instanceGone": {
         "zh": "这个插件连接已经删掉了,下载没开始",
         "en": "This plugin connection was deleted; the download did not start",

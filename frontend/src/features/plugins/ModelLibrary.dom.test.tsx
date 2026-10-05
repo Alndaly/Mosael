@@ -9,7 +9,8 @@
  * - 三档显示方式(大卡片 / 小卡片 / 列表),记在本机;
  * - 还在读、读不出来、空着:状态在工具条下面的整块里上下左右居中;读不出来给「重试」和「去检查连接设置」,
  *   工具条上的搜索、筛选、下载不装作「0 个文件」;
- * - 「模糊预览图」开关(这台机器的预览图里可能有不适合当众打开的):默认关,打开后先模糊、悬停或点开看清,记在本机;
+ * - 预览图分档(清晰 / 轻度模糊 / 重度模糊 / 不显示)、NSFW 单独管:记在本机,模糊的悬停或点开看清
+ *   (细则、NSFW、右键菜单在 ModelLibrary.info.dom.test.tsx);
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
  * - 点开是详情:顶上一条固定头(返回、名字、目录·大小·底模、常用操作),下面左边预览、右边概要 / 在用的工作流 /
  *   元数据,两栏各自滚(窄窗口上下排、一起滚);元数据能搜,长值折叠、能展开、能复制,大段 JSON 格式化显示;
@@ -38,6 +39,9 @@ vi.mock("@/api/client", () => api);
 vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
 const handoff = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
+//: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
+const imagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: imagePreview, isImagePreviewOpen: false }) }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh" }),
@@ -60,18 +64,18 @@ function library(overrides: Partial<ModelLibrary> = {}): ModelLibrary {
     models: [
       { folder: "checkpoints", name: "sd_xl_base.safetensors", size: 6938041004, modified: 1700000000, family: "SDXL",
         family_source: "metadata", triggers: [], triggers_source: "", title: "", has_preview: false,
-        used_by: [{ id: "portrait.json", label: "portrait" }] },
+        preview_origin: "", preview_kind: "image", used_by: [{ id: "portrait.json", label: "portrait" }] },
       { folder: "checkpoints", name: "AWPainting_IL.safetensors", size: 6938041004, modified: 1700000001,
-        family: "Illustrious", family_source: "filename", triggers: [], triggers_source: "", title: "", has_preview: false,
+        family: "Illustrious", family_source: "filename", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image",
         used_by: [] },
       { folder: "loras", name: "detail.safetensors", size: 228456516, modified: 1700000002, family: "Illustrious",
         family_source: "metadata", triggers: ["1girl", "solo"], triggers_source: "tags", title: "detail_tweaker",
-        has_preview: true, used_by: [{ id: "declaring.json", label: "declaring" }] },
+        has_preview: true, preview_origin: "", preview_kind: "image", used_by: [{ id: "declaring.json", label: "declaring" }] },
       { folder: "loras", name: "sub\\anima_style.safetensors", size: 1000, modified: 1700000003, family: "anima",
-        family_source: "metadata", triggers: ["anima style"], triggers_source: "metadata", title: "", has_preview: false,
+        family_source: "metadata", triggers: ["anima style"], triggers_source: "metadata", title: "", has_preview: false, preview_origin: "", preview_kind: "image",
         used_by: [] },
       { folder: "loras", name: "pony_style.safetensors", size: 50000000, modified: 1700000010, family: "Pony",
-        family_source: "filename", triggers: [], triggers_source: "", title: "", has_preview: false, used_by: [] },
+        family_source: "filename", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
     ],
     missing: [{ folder: "vae", name: "ae.safetensors", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors",
                 workflows: [{ id: "declaring.json", label: "declaring" }] }],
@@ -214,7 +218,7 @@ beforeEach(() => {
 describe("模型库", () => {
   it("左边一列目录:按文件数排、空目录不列;最上面是「全部」,工作流缺的模型钉在底部;上下方向键切换", async () => {
     await openLibrary();
-    expect(api.getModelLibrary).toHaveBeenCalledWith("i1");
+    expect(api.getModelLibrary).toHaveBeenCalledWith("i1", "safest");
     const column = screen.getByRole("tablist", { name: "modelLibraryFolders" });
     expect(column.getAttribute("aria-orientation")).toBe("vertical");
     expect(within(column).getAllByRole("tab").map((tab) => tab.getAttribute("aria-label"))).toEqual([
@@ -312,26 +316,25 @@ describe("模型库", () => {
     expect(await readHint(download)).toBe("modelLibraryDownloadmodelLibraryStillReading");
   });
 
-  it("模糊预览图:默认关;打开后卡片和列表里的预览图都先模糊(悬停 / 聚焦时看清),占位不模糊;记在本机", async () => {
+  it("预览图模糊:默认清晰;选了重度模糊,卡片和列表里的预览图都先糊着(悬停 / 聚焦时看清),占位不模糊;记在本机", async () => {
     await openLibrary();
-    const toggle = screen.getByRole("button", { name: "modelLibraryBlur" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
     const detail = () => cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
-    expect(within(detail()).getByRole("img").hasAttribute("data-blurred")).toBe(false);
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(within(detail()).getByRole("img").getAttribute("data-treatment")).toBe("clear");
+    fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "modelPreviewLevel" })).getByRole("radio", { name: "modelPreviewLevelHeavy" }));
     const img = within(detail()).getByRole("img");
-    expect(img.hasAttribute("data-blurred")).toBe(true);
+    expect(img.getAttribute("data-treatment")).toBe("heavy");
+    expect(img.className).toContain("blur-xl");
     // 悬停 / 键盘聚焦到这张卡时看清:靠卡片上的 group/thumb
     expect(detail().querySelector("[data-library-item]")!.className).toContain("group/thumb");
-    expect(document.querySelectorAll("[data-placeholder][data-blurred]")).toHaveLength(0);
+    expect(img.className).toContain("group-hover/thumb:blur-none");
+    expect(document.querySelectorAll("[data-placeholder][data-treatment]")).toHaveLength(0);
     cleanup();
 
     window.localStorage.setItem("mosael:tab:model-library.density", "list");
     const table = await openLibraryAs("table");
-    expect(screen.getByRole("button", { name: "modelLibraryBlur" }).getAttribute("aria-pressed")).toBe("true");
     const row = table.getAllByRole("row").find((one) => one.textContent?.includes("detail.safetensors"))!;
-    expect(row.querySelector("img")!.hasAttribute("data-blurred")).toBe(true);
+    expect(row.querySelector("img")!.getAttribute("data-treatment")).toBe("heavy");
   });
 
   it("还在读:加载中在工具条下面的整块里居中(没有左栏);搜索、筛选、下载不装作「0 个文件」", async () => {
@@ -502,20 +505,22 @@ describe("模型库", () => {
     expect(both.textContent).toContain("modelOverview");
   });
 
-  it("详情预览:有图时照旧按图自己的比例收进框里(并排 640、上下排半屏);开了「模糊预览图」先糊着,能点「看清」", async () => {
-    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+  it("详情预览:有图时照旧按图自己的比例收进框里(并排 640、上下排半屏);预览图模糊时先糊着,能点「看清」", async () => {
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "heavy", nsfw: "blur" }));
     await openDetail();
     const img = within(detailMedia()).getByRole("img");
     for (const name of ["object-contain", "w-full", "max-h-[640px]", "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]"]) {
       expect(img.classList.contains(name), name).toBe(true);
     }
     expect(img.classList.contains("aspect-[3/4]")).toBe(false);
-    expect(img.hasAttribute("data-blurred")).toBe(true);
-    expect(within(detailMedia()).getByRole("button", { name: "modelRevealPreview" })).toBeTruthy();
+    expect(img.getAttribute("data-treatment")).toBe("heavy");
+    fireEvent.click(within(detailMedia()).getByRole("button", { name: "modelRevealPreview" }));
+    expect(within(detailMedia()).getByRole("img").getAttribute("data-treatment")).toBe("clear");
+    expect(within(detailMedia()).queryByRole("button", { name: "modelRevealPreview" })).toBeNull();
   });
 
   it("详情预览:没有预览图是一个 3:4 的框,图标和「没有预览图」在框里居中;没有「看清」", async () => {
-    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "heavy", nsfw: "blur" }));
     await openDetail("pony_style.safetensors");
     const media = detailMedia();
     expect(within(media).queryByRole("img")).toBeNull();
@@ -524,7 +529,7 @@ describe("模型库", () => {
   });
 
   it("详情预览:说有预览图、这张却取不到 —— 换成同一个 3:4 的框,不缩成顶上一条;「看清」跟着收起", async () => {
-    window.localStorage.setItem("mosael:tab:model-library.blur", "on");
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "heavy", nsfw: "blur" }));
     await openDetail();
     const media = detailMedia();
     fireEvent.error(within(media).getByRole("img"));
@@ -585,9 +590,9 @@ describe("模型库", () => {
       models: [
         ...(base.models ?? []),
         { folder: "checkpoints", name: "dessert.safetensors", size: 6938041004, modified: 1700000020, family: "SDXL",
-          family_source: "weights", triggers: [], triggers_source: "", title: "", has_preview: false, used_by: [] },
+          family_source: "weights", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
         { folder: "text_encoders", name: "t5xxl.safetensors", size: 9000000000, modified: 1700000021, family: "",
-          family_source: "not_applicable", triggers: [], triggers_source: "", title: "", has_preview: false, used_by: [] },
+          family_source: "not_applicable", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
       ],
     }));
     await openLibrary();

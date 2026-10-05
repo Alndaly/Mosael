@@ -28,6 +28,9 @@ vi.mock("@/api/client", () => ({
   createPluginInstance: vi.fn(),
   getModelLibrary: vi.fn().mockResolvedValue({ folders: [], models: [], missing: [], download: { route: "none", note: "" }, downloads: [] }),
 }));
+//: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
+const imagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: imagePreview, isImagePreviewOpen: false }) }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh" }),

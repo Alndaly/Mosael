@@ -1,9 +1,8 @@
 import React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Download, Link2, Search } from "lucide-react";
 
 import {
-  getModelLibrary,
   resolveModelLink,
   searchModelSources,
   startModelDownload,
@@ -15,6 +14,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { modelBaseName } from "@/components/generation/ModelThumb";
+import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
@@ -72,11 +72,7 @@ export function ModelDownload({
     if (done.status === "succeeded") onDone();
   });
   //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型库面板同一份缓存
-  const library = useQuery({
-    queryKey: ["model-library", target.instanceId],
-    queryFn: () => getModelLibrary(target.instanceId),
-    staleTime: 30_000,
-  });
+  const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const route = library.data?.download?.route ?? "";
   const search = useMutation({ mutationFn: () => searchModelSources(target.instanceId, filename, folder) });
   const resolve = useMutation({

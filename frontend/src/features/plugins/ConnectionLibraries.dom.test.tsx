@@ -13,6 +13,9 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+//: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
+const imagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: imagePreview, isImagePreviewOpen: false }) }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 type Stub = {

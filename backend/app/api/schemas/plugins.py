@@ -381,6 +381,87 @@ class ModelLibraryFolderOut(ApiModel):
     count: int = 0
 
 
+class ModelNsfwReasonOut(ApiModel):
+    """一条自动的 NSFW 依据(ADR 0038 §9)。`source`:`civitai`(Civitai 上这个模型 / 这张示例图的标记)、`local`(本机识别
+    预览图)、`metadata`(训练标签、文件名和标题)。`nsfw` 是这一条说的是不是;元数据只在说「是」时才有。"""
+
+    source: str
+    nsfw: bool
+    #: `metadata`:训练标签里占到一成以上的成人标签、文件名和标题里的词
+    tags: list[str] = Field(default_factory=list)
+    words: list[str] = Field(default_factory=list)
+    #: `civitai`:当预览图的那张示例图在 Civitai 上的分级(1 PG、2 PG-13、4 R、8 X、16 XXX);说的是模型的标记时没有
+    level: int | None = None
+    #: `local`:识别模型说「是 NSFW」的可能(0–1)
+    score: float | None = None
+
+
+class ModelNsfwOut(ApiModel):
+    """这个模型的预览图算不算 NSFW、凭什么。`flagged` 为真时界面按「NSFW 预览」那组设置处理。`manual` 是手动标的
+    (压过自动的,没标是 None);`reasons` 是每一条自动依据。"""
+
+    flagged: bool = False
+    manual: bool | None = None
+    reasons: list[ModelNsfwReasonOut] = Field(default_factory=list)
+
+
+class ModelNsfwMarkRequest(ApiModel):
+    folder: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=1000)
+    #: true / false:手动标成是 / 不是;null:去掉手动标记,回到自动判断
+    nsfw: bool | None = None
+
+
+class ModelSourceOut(ApiModel):
+    """一个模型文件的出处:原站上的那一页。`how`:`download`(经 Mosael 下载时记下的)、`sha256`(按文件哈希在 Civitai 上
+    对上的)、`filename`(按 Civitai 记的原始文件名和大小对上的,存回之前要确认)、`metadata`(文件自带的)。"""
+
+    page: str
+    site: str = ""
+    how: str = ""
+
+
+class ModelPreviewToolsOut(ApiModel):
+    """这台服务器上找预览图、写回预览图的路。`lookup`:`sha256` 能按哈希找、`filename` 只能按文件名和大小找、空串是
+    找不了;`save`:能不能把预览图写回那台服务器,不能时 `save_note` 说缺什么。"""
+
+    lookup: str = ""
+    save: bool = False
+    save_note: str = ""
+
+
+class ModelLookupFile(ApiModel):
+    folder: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=1000)
+
+
+class ModelLookupRequest(ApiModel):
+    """在 Civitai 上找(`files`;不给是「这台服务器上没有预览图的全部」),`save` 时找到的顺手存成预览图。"""
+
+    workspace_id: str
+    files: list[ModelLookupFile] | None = Field(default=None, max_length=5000)
+    save: bool = False
+    #: 别处的示例图挑哪一张:`safest`(分级最低的)/ `cover`(作者排在最前的)
+    pick: str = Field(default="safest", max_length=20)
+    #: 查过的也重查(用户点了「在 Civitai 上找」)
+    refresh: bool = False
+
+
+class ModelSavePreviewRequest(ApiModel):
+    folder: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=1000)
+    pick: str = Field(default="safest", max_length=20)
+    #: 按文件名对上的:用户确认过是同一个文件
+    confirmed: bool = False
+
+
+class ModelSavePreviewOut(ApiModel):
+    folder: str
+    name: str
+    #: 写到那台服务器上的那个文件(目录/文件名)
+    saved: str = ""
+
+
 class ModelFileOut(ApiModel):
     """那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。"""
 
@@ -399,7 +480,13 @@ class ModelFileOut(ApiModel):
     triggers_source: str = ""
     title: str = ""
     has_preview: bool = False
+    #: 显示的预览图是哪儿的:`server`(那台服务器上的)、`civitai`(别处的示例图,那台服务器上没有)、空串(还没取过)
+    preview_origin: str = ""
+    #: 显示的那一份是图(`image`)还是视频(`video`:卡片上是第一帧,悬停时静音循环播)
+    preview_kind: str = "image"
     used_by: list[ModelLibraryRefOut] = Field(default_factory=list)
+    nsfw: ModelNsfwOut = Field(default_factory=ModelNsfwOut)
+    source: ModelSourceOut | None = None
 
 
 class MissingModelOut(ApiModel):
@@ -425,6 +512,7 @@ class ModelLibraryOut(ApiModel):
     download: ModelDownloadRouteOut = Field(default_factory=ModelDownloadRouteOut)
     #: 这个连接最近的下载任务(在跑的总在里面)。
     downloads: list[JobOut] = Field(default_factory=list)
+    preview_tools: ModelPreviewToolsOut = Field(default_factory=ModelPreviewToolsOut)
 
 
 class ModelTagOut(ApiModel):

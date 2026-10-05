@@ -75,3 +75,20 @@ it("没有预览图:一开始就是占位,不去要图", () => {
   expect(container.querySelector("img")).toBeNull();
   expect(container.querySelector("[data-placeholder='loras']")?.textContent).toBe("loras");
 });
+
+it("四档:清晰不糊;轻度、重度两种糊法,悬停 / 聚焦到外层时看清;不显示的不去取图,画目录图标加一枚眼睛", () => {
+  const { container, rerender } = render(<ModelThumb instanceId="i1" model={lora} />);
+  expect(container.querySelector("img")!.getAttribute("data-treatment")).toBe("clear");
+  expect(container.querySelector("img")!.className).not.toContain("blur");
+  rerender(<ModelThumb instanceId="i1" model={lora} treatment="light" />);
+  expect(container.querySelector("img")!.className).toContain("blur-sm");
+  expect(container.querySelector("img")!.className).toContain("group-hover/thumb:blur-none");
+  rerender(<ModelThumb instanceId="i1" model={lora} treatment="heavy" />);
+  expect(container.querySelector("img")!.className).toContain("blur-xl");
+  rerender(<ModelThumb instanceId="i1" model={lora} treatment="hidden" compact />);
+  expect(container.querySelector("img")).toBeNull();
+  expect(container.querySelector("[data-placeholder='loras'][data-hidden-preview]")).toBeTruthy();
+  //: 本来就没有预览图的:照旧是目录图标,不说「已隐藏」
+  rerender(<ModelThumb instanceId="i1" model={{ ...lora, has_preview: false }} treatment="hidden" />);
+  expect(container.querySelector("[data-hidden-preview]")).toBeNull();
+});

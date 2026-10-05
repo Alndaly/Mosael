@@ -200,3 +200,21 @@ class PluginPublicLink(Base):
     instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class ModelFileMark(Base):
+    """有人把一个模型文件的预览图**手动**标成 NSFW / 不是 NSFW(ADR 0038 §9 的第一种来源,压过别的几种)。
+
+    按(连接, 目录, 文件)记:模型文件在那台服务器上,Mosael 只能经插件读它;手动标记写不进 ComfyUI 那边能留住的地方,
+    就记在这里。连接删掉时跟着删(外键级联)。没有这一行 = 没标过,由别的来源判断。
+    """
+
+    __tablename__ = "model_file_marks"
+
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
+    folder: Mapped[str] = mapped_column(String(200), primary_key=True)
+    #: 目录内的相对路径,正斜杠(Windows 上 ComfyUI 报的反斜杠在记下前换掉)。
+    name: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    nsfw: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    marked_by: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

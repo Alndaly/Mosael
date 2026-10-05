@@ -17,6 +17,8 @@
     {"op": "search_sources", "filename", "folder"} → 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址,每个候选的链接 resolve 都认(见 model_search)
     {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
     {"op": "node_folders", "nodes"}         → 工作台:选中节点上选模型文件的那几格各是哪个模型目录(见 workbench)
+    {"op": "lookup", "folder", "name", "refresh"?} → 在 Civitai 上找这个文件(按哈希,或文件名和大小;见 lookup)
+    {"op": "save_preview", "folder", "name", "path"} → 把宿主交来的那张图写成这个文件的预览图(见 previews)
 
 **工作流库**(ADR 0035,同一个工具认领 `workflow_library`,见 workflow_library):
 
@@ -52,8 +54,10 @@ from typing import Any, Callable
 
 import install
 import library
+import lookup
 import model_search
 import models
+import previews
 import run
 import server
 import sources
@@ -94,6 +98,10 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return install.download(payload, comfy, locale, emit)
     if op == "node_folders":
         return workbench.node_folders(payload, comfy, locale)
+    if op == "lookup":
+        return lookup.lookup(payload, comfy, locale)
+    if op == "save_preview":
+        return previews.save(payload, comfy, locale)
     if op == "install_nodes":
         return workflow_import.install_nodes(payload, comfy, locale, emit)
     if op in _WORKFLOW_LIBRARY:

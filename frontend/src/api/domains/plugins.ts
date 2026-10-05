@@ -30,6 +30,18 @@ export type ModelDetail = components["schemas"]["ModelDetailOut"];
 export type ModelResolved = components["schemas"]["ModelResolveOut"];
 /** 按文件名找下载地址的结果:候选(同名的在前)和搜不了的站。 */
 export type ModelSearch = components["schemas"]["ModelSearchOut"];
+/** 一个模型的预览图算不算 NSFW、凭什么(ADR 0038 §9):手动标记压过自动的几条依据。 */
+export type ModelNsfw = components["schemas"]["ModelNsfwOut"];
+export type ModelNsfwReason = components["schemas"]["ModelNsfwReasonOut"];
+/** 一个模型文件的出处(原站上那一页)和怎么知道的。 */
+export type ModelSource = components["schemas"]["ModelSourceOut"];
+/** 这台服务器上找预览图、写回预览图的路。 */
+export type ModelPreviewTools = components["schemas"]["ModelPreviewToolsOut"];
+/**
+ * 那台服务器上没有预览图、用别处(Civitai)的示例图时挑哪一张:`safest` 分级最低的(缺省),`cover` 作者排在最前的。
+ * 界面按「NSFW 预览」那组设置要(照常 → cover,别的 → safest);预览图从哪来、NSFW 的判断都照它。
+ */
+export type ModelPreviewPick = "safest" | "cover";
 /** 工作流库(ADR 0035):认领 workflow_library 的连接上存着的工作流、回收目录里的。 */
 export type WorkflowLibrary = components["schemas"]["WorkflowLibraryOut"];
 export type WorkflowFile = components["schemas"]["WorkflowFileOut"];
@@ -113,8 +125,8 @@ export const installPlugin = (url: string, overwrite: boolean, advertisedVersion
 // --- 模型库(ADR 0034) ---------------------------------------------------------
 
 /** 现问插件:这个连接上的全部模型文件(第一次要读文件头,几百个文件要几秒)。 */
-export const getModelLibrary = (instanceId: string) =>
-  api<ModelLibrary>(`/api/plugins/instances/${instanceId}/model-library`);
+export const getModelLibrary = (instanceId: string, pick: ModelPreviewPick = "safest") =>
+  api<ModelLibrary>(`/api/plugins/instances/${instanceId}/model-library?${new URLSearchParams({ pick })}`);
 
 export const getModelDetail = (instanceId: string, folder: string, name: string) =>
   api<ModelDetail>(`/api/plugins/instances/${instanceId}/model-library/detail?${new URLSearchParams({ folder, name })}`);
@@ -139,6 +151,29 @@ export const startModelDownload = (
   instanceId: string,
   body: { workspace_id: string; url: string; folder: string; filename: string },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
+
+/**
+ * 在 Civitai 上找这几个文件(不给 `files` 是这台服务器上没有预览图的全部),`save` 时找到的顺手存成预览图:一个后台任务
+ * (按哈希找要那台机器把整个文件读一遍)。
+ */
+export const startModelLookup = (
+  instanceId: string,
+  body: { workspace_id: string; files?: { folder: string; name: string }[] | null; save?: boolean; pick?: ModelPreviewPick;
+          refresh?: boolean },
+) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/lookups`, { method: "POST", body: JSON.stringify(body) });
+
+/** 把 Mosael 里显示的那张 Civitai 示例图存成这个文件在那台服务器上的预览图。按文件名对上的要 `confirmed`。 */
+export const saveModelPreview = (
+  instanceId: string,
+  body: { folder: string; name: string; pick: ModelPreviewPick; confirmed?: boolean },
+) => api<{ folder: string; name: string; saved: string }>(`/api/plugins/instances/${instanceId}/model-library/save-preview`, {
+  method: "POST",
+  body: JSON.stringify(body),
+});
+
+/** 手动标一个模型文件的预览图是不是 NSFW(`nsfw: null` 去掉标记,回到自动判断)。只记在 Mosael 这边。 */
+export const markModelNsfw = (instanceId: string, body: { folder: string; name: string; nsfw: boolean | null }) =>
+  api<ModelNsfw>(`/api/plugins/instances/${instanceId}/model-library/nsfw`, { method: "PUT", body: JSON.stringify(body) });
 
 /** 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件(不是的为空串)。 */
 export const getNodeFolders = (instanceId: string, nodes: { class_type: string; input: string }[]) =>
@@ -244,17 +279,18 @@ export const startNodeInstall = (instanceId: string, body: { workspace_id: strin
 export const rebootWorkflowServer = (instanceId: string) =>
   api<{ back: boolean }>(`/api/plugins/instances/${instanceId}/workflow-library/reboot`, { method: "POST" });
 
-function modelImageUrl(variant: "preview" | "thumbnail", instanceId: string, folder: string, name: string): string {
-  const params = new URLSearchParams({ folder, name });
+function modelImageUrl(variant: "preview" | "thumbnail", instanceId: string, folder: string, name: string,
+                       pick: ModelPreviewPick): string {
+  const params = new URLSearchParams({ folder, name, pick });
   const token = getAuthToken();
   if (token) params.set("token", token);
   return `${API_BASE}/api/plugins/instances/${instanceId}/model-library/${variant}?${params}`;
 }
 
 /** 预览图原图(详情页的大图)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
-export const modelPreviewUrl = (instanceId: string, folder: string, name: string) =>
-  modelImageUrl("preview", instanceId, folder, name);
+export const modelPreviewUrl = (instanceId: string, folder: string, name: string, pick: ModelPreviewPick = "safest") =>
+  modelImageUrl("preview", instanceId, folder, name, pick);
 
 /** 预览图的缩略图(长边不超过 512):卡片、列表行、选模型的下拉用它 —— 一屏几十张不解原图。 */
-export const modelThumbnailUrl = (instanceId: string, folder: string, name: string) =>
-  modelImageUrl("thumbnail", instanceId, folder, name);
+export const modelThumbnailUrl = (instanceId: string, folder: string, name: string, pick: ModelPreviewPick = "safest") =>
+  modelImageUrl("thumbnail", instanceId, folder, name, pick);

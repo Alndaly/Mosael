@@ -54,7 +54,8 @@ CIVITAI_FOLDERS = {
     "hypernetwork": "hypernetworks",
     "motionmodule": "animatediff_models",
 }
-USER_AGENT = "Mosael-ComfyUI-plugin"
+#: 浏览器式的写法:Civitai 对 Python 自己的 User-Agent(`Python-urllib/3.x`)回 403;这样写各站都认,也说得出是谁。
+USER_AGENT = "Mozilla/5.0 (compatible; Mosael-ComfyUI-plugin)"
 #: 一问一答最多读多少(Civitai 的版本接口几 KB)。
 MAX_SMALL = 4 * 1024 * 1024
 #: 跟跳转最多几跳。
@@ -260,11 +261,38 @@ def _civitai_json(path: str, locale: str) -> dict[str, Any]:
     return found if isinstance(found, dict) else {}
 
 
+#: 链接上能挑版本里哪一个文件的参数:`fileId` 是 Civitai 给每个文件的编号(点名要这一个);另外四个和 Civitai 自己的
+#: 下载链接一样(`type` 对文件的种类,`format` / `size` / `fp` 对文件的 metadata),没有对得上的就用主文件。
+_CIVITAI_FILE_KEYS = ("type", "format", "size", "fp")
+
+
+def _civitai_file(files: list[dict[str, Any]], query: dict[str, list[str]], locale: str) -> dict[str, Any] | None:
+    """版本里挑哪一个文件:链接点名的(`fileId`,对不上就说对不上,不悄悄换一个),再按种类、格式、精度挑,
+    都没说就挑主文件(`primary`),再不然第一个模型文件、第一个文件。"""
+    file_id = (query.get("fileId") or [""])[0].strip()
+    if file_id:
+        named = next((one for one in files if str(one.get("id") or "") == file_id), None)
+        if named is None:
+            raise ComfyError(say(locale, f"这个 Civitai 版本里没有编号是 {file_id} 的文件",
+                                 f"This Civitai version has no file with id {file_id}"))
+        return named
+    wanted = {key: (query.get(key) or [""])[0].strip().lower() for key in _CIVITAI_FILE_KEYS}
+
+    def fits(one: dict[str, Any]) -> bool:
+        meta = one.get("metadata") if isinstance(one.get("metadata"), dict) else {}
+        facts = {"type": one.get("type"), **{key: meta.get(key) for key in ("format", "size", "fp")}}
+        return all(not want or str(facts[key] or "").strip().lower() == want for key, want in wanted.items())
+
+    return (next((one for one in files if fits(one)), None) if any(wanted.values()) else None) \
+        or next((one for one in files if one.get("primary")), None) \
+        or next((one for one in files if one.get("type") == "Model"), None) \
+        or (files[0] if files else None)
+
+
 def _civitai(url: str, locale: str, folders: set[str]) -> Link:
     parts = parse.urlsplit(url)
     query = parse.parse_qs(parts.query)
     version_id = ""
-    wanted_type = (query.get("type") or [""])[0]
     if found := re.match(r"^/api/download/models/(\d+)", parts.path):
         version_id = found.group(1)
     elif found := re.match(r"^/api/v1/model-versions/(\d+)", parts.path):
@@ -282,10 +310,7 @@ def _civitai(url: str, locale: str, folders: set[str]) -> Link:
                              "Can't tell which Civitai model this is. Paste the model page (with modelVersionId to pick a version) or its download link"))
     version = _civitai_json(f"/api/v1/model-versions/{version_id}", locale)
     files = [one for one in version.get("files") or [] if isinstance(one, dict) and one.get("downloadUrl")]
-    chosen = next((one for one in files if wanted_type and one.get("type") == wanted_type), None) \
-        or next((one for one in files if one.get("primary")), None) \
-        or next((one for one in files if one.get("type") == "Model"), None) \
-        or (files[0] if files else None)
+    chosen = _civitai_file(files, query, locale)
     if chosen is None:
         raise ComfyError(say(locale, "这个 Civitai 版本没有可下载的文件", "This Civitai version has no downloadable file"))
     model = version.get("model") if isinstance(version.get("model"), dict) else {}
@@ -514,6 +539,41 @@ def direct_url(url: str, locale: str, folders: set[str]) -> str:
             return _ms_resolve_url(target.site, target.repo, target.revision or "master", target.path)
         return link_for(url, locale, folders).url
     return url
+
+
+def provenance_of(url: str, locale: str) -> dict[str, Any]:
+    """下载的这个链接是哪个站上的哪一页(经 Mosael 下载时记下,见 provenance):HuggingFace 的文件页、Civitai 的版本页
+    (连着那个版本的信息)、ModelScope 的文件页。别的直链只记站点,不记页 —— 下载地址不是介绍页。
+
+    尽力而为:问 Civitai 失败(断网、限流)不该挡住下载,那时只记站点。"""
+    import civitai
+
+    url = canonical_url(url)
+    host = _host(url)
+    if host in HF_HOSTS:
+        found = _HF_FILE.match(parse.urlsplit(url).path)
+        if found:
+            return {"site": "huggingface", "page": f"https://huggingface.co/{found.group('repo')}/blob/{found.group('rev')}/"
+                                                   f"{found.group('path')}"}
+        return {"site": "huggingface"}
+    if host in CIVITAI_HOSTS:
+        version_id = civitai.version_id_of(url)
+        try:
+            info = civitai.version(version_id, locale) if version_id else None
+        except (ComfyError, OSError):
+            info = None
+        return {"site": "civitai", "page": info["page"], "civitai": info} if info else {"site": "civitai"}
+    if host in MODELSCOPE_HOSTS:
+        try:
+            target = _ms_link(url, locale)
+        except ComfyError:
+            return {"site": "modelscope"}
+        base = f"https://{target.site}/models/{parse.quote(target.repo)}"
+        if target.path:
+            return {"site": "modelscope", "page": f"{base}/file/view/{parse.quote(target.revision or 'master', safe='')}/"
+                                                  f"{parse.quote(target.path)}"}
+        return {"site": "modelscope", "page": base}
+    return {"site": "direct"}
 
 
 def resolve(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:

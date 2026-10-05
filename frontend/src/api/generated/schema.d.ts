@@ -6403,7 +6403,9 @@ export interface paths {
         };
         /**
          * Get Model Library
-         * @description 现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。
+         * @description 现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。`pick`:那台服务器上没有
+         *     预览图、用别处(Civitai)的示例图时挑哪一张 —— `safest` 分级最低的,`cover` 作者排在最前的(界面按「NSFW 预览」
+         *     那组设置要);预览图从哪来、NSFW 的判断都照它。
          */
         get: operations["get_model_library_api_plugins_instances__instance_id__model_library_get"];
         put?: never;
@@ -6529,6 +6531,69 @@ export interface paths {
          * @description 把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。
          */
         post: operations["start_model_download_api_plugins_instances__instance_id__model_library_downloads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/lookups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Model Lookup
+         * @description 在 Civitai 上找这几个文件(不给 `files` 是这台服务器上没有预览图的全部),`save` 时找到的顺手存成预览图:一个后台
+         *     任务(按哈希找要那台机器把整个文件读一遍)。
+         */
+        post: operations["start_model_lookup_api_plugins_instances__instance_id__model_library_lookups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/save-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Model Preview
+         * @description 把 Mosael 里显示的那张别处的示例图存成这个文件在那台服务器上的预览图(写在模型旁边)。那台服务器上已经有预览图的
+         *     不写;按文件名对上的要 `confirmed`。
+         */
+        post: operations["save_model_preview_api_plugins_instances__instance_id__model_library_save_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/model-library/nsfw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark Model Nsfw
+         * @description 手动标一个模型文件的预览图是不是 NSFW(ADR 0038 §9),`nsfw: null` 去掉标记。回合成之后的判断(手动的压过
+         *     自动的)。只记在 Mosael 这边,不改那台服务器。
+         */
+        put: operations["mark_model_nsfw_api_plugins_instances__instance_id__model_library_nsfw_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11987,8 +12052,20 @@ export interface components {
              * @default false
              */
             has_preview: boolean;
+            /**
+             * Preview Origin
+             * @default
+             */
+            preview_origin: string;
+            /**
+             * Preview Kind
+             * @default image
+             */
+            preview_kind: string;
             /** Used By */
             used_by?: components["schemas"]["ModelLibraryRefOut"][];
+            nsfw?: components["schemas"]["ModelNsfwOut"];
+            source?: components["schemas"]["ModelSourceOut"] | null;
         };
         /** ModelLibraryFolderOut */
         ModelLibraryFolderOut: {
@@ -12011,6 +12088,7 @@ export interface components {
             download?: components["schemas"]["ModelDownloadRouteOut"];
             /** Downloads */
             downloads?: components["schemas"]["JobOut"][];
+            preview_tools?: components["schemas"]["ModelPreviewToolsOut"];
         };
         /**
          * ModelLibraryRefOut
@@ -12021,6 +12099,38 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+        };
+        /** ModelLookupFile */
+        ModelLookupFile: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ModelLookupRequest
+         * @description 在 Civitai 上找(`files`;不给是「这台服务器上没有预览图的全部」),`save` 时找到的顺手存成预览图。
+         */
+        ModelLookupRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Files */
+            files?: components["schemas"]["ModelLookupFile"][] | null;
+            /**
+             * Save
+             * @default false
+             */
+            save: boolean;
+            /**
+             * Pick
+             * @default safest
+             */
+            pick: string;
+            /**
+             * Refresh
+             * @default false
+             */
+            refresh: boolean;
         };
         /**
          * ModelNodeFolderIn
@@ -12044,6 +12154,72 @@ export interface components {
         ModelNodeFoldersRequest: {
             /** Nodes */
             nodes: components["schemas"]["ModelNodeFolderIn"][];
+        };
+        /** ModelNsfwMarkRequest */
+        ModelNsfwMarkRequest: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /** Nsfw */
+            nsfw?: boolean | null;
+        };
+        /**
+         * ModelNsfwOut
+         * @description 这个模型的预览图算不算 NSFW、凭什么。`flagged` 为真时界面按「NSFW 预览」那组设置处理。`manual` 是手动标的
+         *     (压过自动的,没标是 None);`reasons` 是每一条自动依据。
+         */
+        ModelNsfwOut: {
+            /**
+             * Flagged
+             * @default false
+             */
+            flagged: boolean;
+            /** Manual */
+            manual?: boolean | null;
+            /** Reasons */
+            reasons?: components["schemas"]["ModelNsfwReasonOut"][];
+        };
+        /**
+         * ModelNsfwReasonOut
+         * @description 一条自动的 NSFW 依据(ADR 0038 §9)。`source`:`civitai`(Civitai 上这个模型 / 这张示例图的标记)、`local`(本机识别
+         *     预览图)、`metadata`(训练标签、文件名和标题)。`nsfw` 是这一条说的是不是;元数据只在说「是」时才有。
+         */
+        ModelNsfwReasonOut: {
+            /** Source */
+            source: string;
+            /** Nsfw */
+            nsfw: boolean;
+            /** Tags */
+            tags?: string[];
+            /** Words */
+            words?: string[];
+            /** Level */
+            level?: number | null;
+            /** Score */
+            score?: number | null;
+        };
+        /**
+         * ModelPreviewToolsOut
+         * @description 这台服务器上找预览图、写回预览图的路。`lookup`:`sha256` 能按哈希找、`filename` 只能按文件名和大小找、空串是
+         *     找不了;`save`:能不能把预览图写回那台服务器,不能时 `save_note` 说缺什么。
+         */
+        ModelPreviewToolsOut: {
+            /**
+             * Lookup
+             * @default
+             */
+            lookup: string;
+            /**
+             * Save
+             * @default false
+             */
+            save: boolean;
+            /**
+             * Save Note
+             * @default
+             */
+            save_note: string;
         };
         /**
          * ModelResolveOut
@@ -12106,6 +12282,35 @@ export interface components {
         ModelResolveRequest: {
             /** Url */
             url: string;
+        };
+        /** ModelSavePreviewOut */
+        ModelSavePreviewOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Saved
+             * @default
+             */
+            saved: string;
+        };
+        /** ModelSavePreviewRequest */
+        ModelSavePreviewRequest: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Pick
+             * @default safest
+             */
+            pick: string;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
         };
         /**
          * ModelSearchCandidateOut
@@ -12184,6 +12389,25 @@ export interface components {
              * @default
              */
             folder: string;
+        };
+        /**
+         * ModelSourceOut
+         * @description 一个模型文件的出处:原站上的那一页。`how`:`download`(经 Mosael 下载时记下的)、`sha256`(按文件哈希在 Civitai 上
+         *     对上的)、`filename`(按 Civitai 记的原始文件名和大小对上的,存回之前要确认)、`metadata`(文件自带的)。
+         */
+        ModelSourceOut: {
+            /** Page */
+            page: string;
+            /**
+             * Site
+             * @default
+             */
+            site: string;
+            /**
+             * How
+             * @default
+             */
+            how: string;
         };
         /** ModelTagOut */
         ModelTagOut: {
@@ -30572,7 +30796,9 @@ export interface operations {
     };
     get_model_library_api_plugins_instances__instance_id__model_library_get: {
         parameters: {
-            query?: never;
+            query?: {
+                pick?: string;
+            };
             header?: never;
             path: {
                 instance_id: string;
@@ -30606,6 +30832,7 @@ export interface operations {
             query: {
                 folder: string;
                 name: string;
+                pick?: string;
             };
             header?: never;
             path: {
@@ -30640,6 +30867,7 @@ export interface operations {
             query: {
                 folder: string;
                 name: string;
+                pick?: string;
             };
             header?: never;
             path: {
@@ -30795,6 +31023,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_model_lookup_api_plugins_instances__instance_id__model_library_lookups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelLookupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_model_preview_api_plugins_instances__instance_id__model_library_save_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSavePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSavePreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_model_nsfw_api_plugins_instances__instance_id__model_library_nsfw_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelNsfwMarkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelNsfwOut"];
                 };
             };
             /** @description Validation Error */

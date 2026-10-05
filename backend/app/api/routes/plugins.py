@@ -21,6 +21,11 @@ from app.api.schemas import (
     ModelDetailOut,
     ModelDownloadRequest,
     ModelLibraryOut,
+    ModelLookupRequest,
+    ModelNsfwMarkRequest,
+    ModelSavePreviewOut,
+    ModelSavePreviewRequest,
+    ModelNsfwOut,
     ModelNodeFoldersOut,
     ModelNodeFoldersRequest,
     ModelResolveOut,
@@ -501,24 +506,27 @@ _MODEL_LIBRARY_ERRORS = (model_library.ModelLibraryError, PluginDomainError, Plu
 
 
 @router.get("/plugins/instances/{instance_id}/model-library", response_model=ModelLibraryOut)
-def get_model_library(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
-    """现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。"""
+def get_model_library(instance_id: str, db: DbSession, user: CurrentUser, pick: str = "safest") -> dict:
+    """现问插件:这个连接上的全部模型文件、工作流缺的模型、下载走哪条路,外加最近的下载任务。`pick`:那台服务器上没有
+    预览图、用别处(Civitai)的示例图时挑哪一张 —— `safest` 分级最低的,`cover` 作者排在最前的(界面按「NSFW 预览」
+    那组设置要);预览图从哪来、NSFW 的判断都照它。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return model_library.library(db, instance)
+        return model_library.library(db, instance, pick)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
 
 
 def _model_image(
-    db: Session, user: User, request: Request, instance_id: str, folder: str, name: str, *, thumbnail: bool
+    db: Session, user: User, request: Request, instance_id: str, folder: str, name: str, *, thumbnail: bool,
+    pick: str = "safest",
 ) -> Response:
     """预览图和缩略图两个端点的身子。读库(认连接、找这张图在哪)在前头一次读完,**随后交还数据库连接**:缓存里没有时
     要排队等那台服务器(见 model_library.PreviewSource),不攥着连接等。排到去取时浏览器已经掐了这个请求(卡片滚出去、
     弹窗关了)就不取 —— 端点是同步的、在线程池里跑,回事件循环问一句。"""
     instance = my_instance(db, instance_id, user)
     try:
-        source = model_library.preview_source(db, instance, folder, name)
+        source = model_library.preview_source(db, instance, folder, name, pick)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
     db.close()
@@ -535,20 +543,20 @@ def _model_image(
 
 @router.get("/plugins/instances/{instance_id}/model-library/preview")
 def get_model_preview(
-    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser
+    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser, pick: str = "safest"
 ) -> Response:
     """一个模型文件的预览图原图(详情页的大图)。宿主按插件给的地址取回、记在磁盘上;没有就 404(界面换成按目录分的
     占位)。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。"""
-    return _model_image(db, user, request, instance_id, folder, name, thumbnail=False)
+    return _model_image(db, user, request, instance_id, folder, name, thumbnail=False, pick=pick)
 
 
 @router.get("/plugins/instances/{instance_id}/model-library/thumbnail")
 def get_model_thumbnail(
-    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser
+    instance_id: str, folder: str, name: str, request: Request, db: DbSession, user: CurrentUser, pick: str = "safest"
 ) -> Response:
     """预览图的缩略图(长边不超过 512 的 WebP):模型库的卡片和列表、生成表单里选模型的下拉用它,一屏几十张不解原图。
     第一次要时由原图缩一次、记在原图旁边;没有预览图就 404。凭据同上走 `?token=`。"""
-    return _model_image(db, user, request, instance_id, folder, name, thumbnail=True)
+    return _model_image(db, user, request, instance_id, folder, name, thumbnail=True, pick=pick)
 
 
 @router.get("/plugins/instances/{instance_id}/model-library/detail", response_model=ModelDetailOut)
@@ -590,6 +598,43 @@ def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, u
         return model_library.start_download(
             db, user, instance, workspace_id=body.workspace_id, url=body.url, folder=body.folder, filename=body.filename
         )
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/model-library/lookups", response_model=JobOut)
+def start_model_lookup(instance_id: str, body: ModelLookupRequest, db: Tx, user: CurrentUser) -> Job:
+    """在 Civitai 上找这几个文件(不给 `files` 是这台服务器上没有预览图的全部),`save` 时找到的顺手存成预览图:一个后台
+    任务(按哈希找要那台机器把整个文件读一遍)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.start_lookup(
+            db, user, instance, workspace_id=body.workspace_id,
+            files=[one.model_dump() for one in body.files] if body.files is not None else None,
+            save=body.save, pick=body.pick, refresh=body.refresh,
+        )
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/model-library/save-preview", response_model=ModelSavePreviewOut)
+def save_model_preview(instance_id: str, body: ModelSavePreviewRequest, db: DbSession, user: CurrentUser) -> dict:
+    """把 Mosael 里显示的那张别处的示例图存成这个文件在那台服务器上的预览图(写在模型旁边)。那台服务器上已经有预览图的
+    不写;按文件名对上的要 `confirmed`。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.save_preview(db, instance, body.folder, body.name, pick=body.pick, confirmed=body.confirmed)
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.put("/plugins/instances/{instance_id}/model-library/nsfw", response_model=ModelNsfwOut)
+def mark_model_nsfw(instance_id: str, body: ModelNsfwMarkRequest, db: Tx, user: CurrentUser) -> dict:
+    """手动标一个模型文件的预览图是不是 NSFW(ADR 0038 §9),`nsfw: null` 去掉标记。回合成之后的判断(手动的压过
+    自动的)。只记在 Mosael 这边,不改那台服务器。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.mark_nsfw(db, user, instance, body.folder, body.name, body.nsfw)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
 

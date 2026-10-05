@@ -122,6 +122,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
     "PluginCapabilityDefault": ("app/domain/plugins/",),
+    #: 模型文件的手动 NSFW 标记(ADR 0038 §9):只由模型库的领域模块写。
+    "ModelFileMark": ("app/domain/model_library.py",),
     #: 素材外链的缓存由生成链路写(传完记下、过期重传),见 generation/public_links。
     "PluginPublicLink": ("app/domain/generation/public_links.py",),
     #: 引用表是派生数据:只由 db/references 按各来源的 JSON 写(flush 时跟着写、启动时按版本重建)。

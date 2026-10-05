@@ -70,11 +70,11 @@ class Comfy:
             ) from exc
 
     def request_json(self, method: str, path: str, *, params: dict[str, Any] | None = None,
-                     body: Any = None) -> Any:
+                     body: Any = None, timeout: float = TIMEOUT_SECONDS) -> Any:
         data = json.dumps(body).encode("utf-8") if body is not None else None
         headers = {"Content-Type": "application/json"} if body is not None else {}
         try:
-            with self._open(method, path, params=params, body=data, headers=headers) as response:
+            with self._open(method, path, params=params, body=data, headers=headers, timeout=timeout) as response:
                 raw = response.read()
         except error.HTTPError as exc:
             raise self._http_error(exc) from exc
@@ -86,8 +86,9 @@ class Comfy:
             raise ComfyError(say(self.locale, f"ComfyUI 回了一段不是 JSON 的东西({path})",
                                  f"ComfyUI answered {path} with something that is not JSON")) from exc
 
-    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        return self.request_json("GET", path, params=params)
+    def get(self, path: str, params: dict[str, Any] | None = None, *, timeout: float = TIMEOUT_SECONDS) -> Any:
+        """`timeout`:少数要等那台机器算一阵的(按哈希找模型要它把整个文件读一遍)才放宽。"""
+        return self.request_json("GET", path, params=params, timeout=timeout)
 
     def get_text(self, path: str) -> str | None:
         """回一段纯文字的接口(ComfyUI-Manager 的 `/v2/manager/version` 回 `V4.2.1`)。没有这个接口(404)→ None。"""
@@ -288,9 +289,15 @@ class Comfy:
         """把一份输入素材传进 ComfyUI 的 input 目录,返回读素材的节点该填的那个名字。
 
         图、视频、音频走的都是这一个接口(ComfyUI 自己的前端上传视频也用它)。"""
+        stored = self.upload_file(source, name, kind="input", subfolder="mosael")
+        return f"{stored['subfolder']}/{stored['name']}" if stored["subfolder"] else stored["name"]
+
+    def upload_file(self, source: Path, name: str, *, kind: str, subfolder: str) -> dict[str, str]:
+        """经 `/upload/image` 把一个文件传进 ComfyUI 的某个目录(`kind`:input / temp),回它存下的 `name`、`subfolder`。
+        同名的覆盖(名字是我们起的,带随机串)。"""
         boundary = f"----mosael{uuid.uuid4().hex}"
         parts: list[bytes] = []
-        for key, value in (("overwrite", "true"), ("type", "input"), ("subfolder", "mosael")):
+        for key, value in (("overwrite", "true"), ("type", kind), ("subfolder", subfolder)):
             parts.append(
                 f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode("utf-8")
             )
@@ -307,9 +314,7 @@ class Comfy:
                 answer = json.loads(response.read().decode("utf-8") or "{}")
         except error.HTTPError as exc:
             raise self._http_error(exc) from exc
-        stored = str(answer.get("name") or name)
-        subfolder = str(answer.get("subfolder") or "")
-        return f"{subfolder}/{stored}" if subfolder else stored
+        return {"name": str(answer.get("name") or name), "subfolder": str(answer.get("subfolder") or "")}
 
     def download(self, item: dict[str, Any], target: Path) -> Path:
         """取回一份产出(`/view`),流式写到 `target`。"""

@@ -21,6 +21,7 @@ const file = (name: string, family: string, family_source: string): ModelFile =>
   triggers_source: "",
   title: "",
   has_preview: false,
+  preview_origin: "", preview_kind: "image",
   used_by: [],
 });
 
@@ -66,5 +67,7 @@ describe("模型库的底模", () => {
     expect(familySource(models[2])).toEqual({ hint: "modelFamilySourceFilename", certain: false });
     expect(familySource(models[3])).toEqual({ hint: "modelFamilyNotApplicableHint", certain: false });
     expect(familySource(models[5])).toBeNull();
+    //: 权重只看得出 SDXL,Civitai 上按哈希对上的版本登记的是 Illustrious:凭的是 Civitai(实)
+    expect(familySource(file("x.safetensors", "Illustrious", "civitai"))).toEqual({ hint: "modelFamilySourceCivitai", certain: true });
   });
 });

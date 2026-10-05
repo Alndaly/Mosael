@@ -239,6 +239,30 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "refreshCombos" }));
   });
 
+  it("模型库:缩略图照预览图那两组设置画(和模型库同一份,这里也能改),判成 NSFW 的带角标", async () => {
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "clear", nsfw: "hidden" }));
+    api.getModelLibrary.mockResolvedValue({
+      folders: [], missing: [], downloads: [],
+      models: [
+        { folder: "checkpoints", name: "sdxl.safetensors", family: "SDXL", title: "SDXL Base", triggers: [], has_preview: true,
+          nsfw: { flagged: false, manual: null, reasons: [] } },
+        { folder: "checkpoints", name: "spicy.safetensors", family: "SDXL", title: "Spicy", triggers: [], has_preview: true,
+          nsfw: { flagged: true, manual: null, reasons: [{ source: "metadata", nsfw: true, tags: ["nude"], words: [] }] } },
+      ],
+    });
+    await mount();
+    const list = await screen.findByRole("list", { name: "workbenchModelsList" });
+    const item = (name: string) => within(list).getAllByRole("listitem").find((one) => one.textContent?.includes(name))!;
+    expect(item("SDXL Base").querySelector("img")!.getAttribute("data-treatment")).toBe("clear");
+    expect(item("Spicy").querySelector("img")).toBeNull();
+    expect(item("Spicy").querySelector("[data-hidden-preview]")).toBeTruthy();
+    expect(item("Spicy").querySelector("[data-nsfw-mark]")).toBeTruthy();
+    fireEvent.click(within(column()).getByRole("button", { name: "modelPreviewSettings" }));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "modelPreviewLevel" })).getByRole("radio", { name: "modelPreviewLevelHeavy" }));
+    expect(item("SDXL Base").querySelector("img")!.getAttribute("data-treatment")).toBe("heavy");
+    expect(JSON.parse(window.localStorage.getItem("mosael:model-previews")!)).toEqual({ level: "heavy", nsfw: "hidden" });
+  });
+
   it("模型库:没选中节点时说怎么用;选的不是加载节点说一句;那一格的文件这台机器上没有就地下载(先确认)", async () => {
     const bridge = await mount(state({ selection: { count: 0, node: null } }));
     expect(within(column()).getByText("workbenchModelsPick")).toBeTruthy();

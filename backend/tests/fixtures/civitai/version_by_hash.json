@@ -1,0 +1,84 @@
+{
+  "id": 889818,
+  "modelId": 795765,
+  "name": "v0.1",
+  "nsfwLevel": 1,
+  "createdAt": "2024-09-25T10:05:14.182Z",
+  "status": "Published",
+  "trainedWords": [],
+  "baseModel": "Illustrious",
+  "baseModelType": "Standard",
+  "air": "urn:air:sdxl:checkpoint:civitai:795765@889818",
+  "stats": {
+    "downloadCount": 189405,
+    "thumbsUpCount": 19459
+  },
+  "model": {
+    "name": "Example Checkpoint",
+    "type": "Checkpoint",
+    "nsfw": false,
+    "poi": false
+  },
+  "files": [
+    {
+      "id": 798303,
+      "sizeKB": 6775430.4296875,
+      "name": "example_checkpoint_v01.safetensors",
+      "type": "Model",
+      "metadata": {
+        "format": "SafeTensor",
+        "size": "pruned",
+        "fp": "fp16"
+      },
+      "hashes": {
+        "AutoV1": "AD446F67",
+        "AutoV2": "3E15BA0038",
+        "SHA256": "3E15BA00387DB678AB4A099F75771C4F5AC67FDA9E7100A01D263EAF30145AA9",
+        "CRC32": "5EF2797E",
+        "BLAKE3": "EF3A6DD9C8A71E07D77CE8E84780524357E629EE8750EB3018AED648D4C803F1",
+        "AutoV3": "B5A178534B80",
+        "SHA256_12": "3E15BA00387D"
+      },
+      "primary": true,
+      "downloadUrl": "https://civitai.com/api/download/models/889818?fileId=798303"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/ba3f42b7-a4e8-43a7-8b25-8b50708a85cb/original=true/31462610.jpeg",
+      "nsfwLevel": 1,
+      "width": 832,
+      "height": 1216,
+      "hash": "UBJF?H?l2#v?3u5rBzKs0Q+a}IGH1VwPI,+^",
+      "type": "image",
+      "minor": false,
+      "poi": false,
+      "hasMeta": true,
+      "availability": "Public"
+    },
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/308f206d-19f8-4a94-8fd3-69804539821f/original=true/31255930.jpeg",
+      "nsfwLevel": 1,
+      "width": 832,
+      "height": 1216,
+      "hash": "UTJk1u{3R8$-w6MwIUtQD-RO%Lxuiy-TrWSh",
+      "type": "image",
+      "minor": false,
+      "poi": false,
+      "hasMeta": true,
+      "availability": "Public"
+    },
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/dfe2fb34-d311-4b5a-9787-146aace86003/original=true/31256053.jpeg",
+      "nsfwLevel": 1,
+      "width": 1216,
+      "height": 832,
+      "hash": "U47-Qe~q01019YxuxuR6004n^+^*w~IUEL?u",
+      "type": "image",
+      "minor": false,
+      "poi": false,
+      "hasMeta": true,
+      "availability": "Public"
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { getModelLibrary, type ModelFile } from "@/api/client";
+import type { ModelFile } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { DEFAULT_CHOICE, declaredChoices } from "@/components/generation/parameterPanel";
 import { ModelThumb, normModelName } from "@/components/generation/ModelThumb";
+import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
+import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { Button } from "@/components/ui/button";
 import type { FieldSize } from "@/components/ui/control-size";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -49,13 +50,7 @@ export function ModelFilePicker({
 }) {
   const t = useI18n();
   const folder = parameter.modelFolder ?? "";
-  const library = useQuery({
-    queryKey: ["model-library", instanceId],
-    queryFn: () => getModelLibrary(instanceId),
-    enabled: Boolean(instanceId && folder),
-    staleTime: LIBRARY_STALE_MS,
-    retry: false,
-  });
+  const library = useModelLibrary(instanceId, { enabled: Boolean(instanceId && folder), staleTime: LIBRARY_STALE_MS, retry: false });
   const files = React.useMemo(() => {
     const byName = new Map<string, ModelFile>();
     for (const file of library.data?.models ?? []) {
@@ -65,17 +60,22 @@ export function ModelFilePicker({
   }, [library.data, folder]);
   const choices = declaredChoices(parameter, t);
   const known = library.isSuccess;
+  //: 预览图分档、NSFW 单独管:和模型库是同一份设置(记在本机)
+  const [previewSettings] = useModelPreviewSettings();
+  const treatmentOf = (file: ModelFile | undefined) => previewTreatment(previewSettings, Boolean(file?.nsfw?.flagged));
   const options = choices.options.map((option) => {
     const file = files.get(normModelName(option.value));
     const triggers = file?.triggers ?? [];
-    const facts = [option.description, file?.family, triggers.slice(0, LISTED_TRIGGERS).join(", ")].filter(Boolean).join(" · ");
+    const facts = [option.description, file?.nsfw?.flagged ? t("modelNsfwBadge") : "", file?.family,
+                   triggers.slice(0, LISTED_TRIGGERS).join(", ")].filter(Boolean).join(" · ");
     return {
       ...option,
       description: facts || undefined,
       keywords: [file?.family ?? "", ...triggers].filter(Boolean),
       media:
         known && option.value !== DEFAULT_CHOICE ? (
-          <ModelThumb compact instanceId={instanceId} model={file ?? { folder, name: option.value, has_preview: false }} />
+          <ModelThumb compact instanceId={instanceId} model={file ?? { folder, name: option.value, has_preview: false }}
+                      treatment={treatmentOf(file)} />
         ) : undefined,
     };
   });
@@ -94,7 +94,8 @@ export function ModelFilePicker({
         icon={
           known ? (
             <span aria-hidden className="grid size-5 shrink-0 overflow-hidden rounded [&>*]:size-full">
-              <ModelThumb compact instanceId={instanceId} model={current ?? { folder, name: shown, has_preview: false }} />
+              <ModelThumb compact instanceId={instanceId} model={current ?? { folder, name: shown, has_preview: false }}
+                          treatment={treatmentOf(current)} />
             </span>
           ) : undefined
         }

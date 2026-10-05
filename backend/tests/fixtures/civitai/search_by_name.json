@@ -1,0 +1,124 @@
+{
+  "items": [
+    {
+      "id": 1862320,
+      "name": "Example LoRA 1862320",
+      "type": "LORA",
+      "nsfw": false,
+      "nsfwLevel": 7,
+      "modelVersions": [
+        {
+          "id": 2107735,
+          "name": "Wan 2.2 T2V LORA - Low",
+          "baseModel": "Wan Video 2.2 T2V-A14B",
+          "nsfwLevel": 7,
+          "files": [
+            {
+              "id": 2002497,
+              "sizeKB": 299655.71875,
+              "name": "example_style_low.safetensors",
+              "type": "Model",
+              "hashes": {
+                "SHA256": "72663446FD0AF94B2769435243EE1867842198E0AEEB0D526B638351B05874C6"
+              },
+              "primary": true,
+              "downloadUrl": "https://civitai.com/api/download/models/2107735"
+            }
+          ],
+          "images": [
+            {
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9a7dee95-a36b-4fc9-b4ea-401167887a11/original=true/93890742.mp4",
+              "nsfwLevel": 1,
+              "width": 1920,
+              "height": 1440,
+              "type": "video"
+            },
+            {
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/b101d96f-9128-46a8-9f70-071291b2b9b0/original=true/93903557.mp4",
+              "nsfwLevel": 1,
+              "width": 1920,
+              "height": 1440,
+              "type": "video"
+            }
+          ]
+        },
+        {
+          "id": 2107733,
+          "name": "Wan 2.2 T2V LORA - High",
+          "baseModel": "Wan Video 2.2 T2V-A14B",
+          "nsfwLevel": 1,
+          "files": [
+            {
+              "id": 2002557,
+              "sizeKB": 299655.7109375,
+              "name": "example_style_high.safetensors",
+              "type": "Model",
+              "hashes": {
+                "SHA256": "91EE7576EAFC956280CA79F5D79CE1888E415CF489366314834EA711DB02A932"
+              },
+              "primary": true,
+              "downloadUrl": "https://civitai.com/api/download/models/2107733"
+            }
+          ],
+          "images": [
+            {
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/32fdb341-bb86-4e6b-a7d3-311c66ae905d/original=true/93898348.mp4",
+              "nsfwLevel": 1,
+              "width": 1920,
+              "height": 1440,
+              "type": "video"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1865359,
+      "name": "Example LoRA 1865359",
+      "type": "LORA",
+      "nsfw": false,
+      "nsfwLevel": 5,
+      "modelVersions": [
+        {
+          "id": 2111234,
+          "name": "v1.0",
+          "baseModel": "Wan Video 2.2 T2V-A14B",
+          "nsfwLevel": 5,
+          "files": [
+            {
+              "id": 2005870,
+              "sizeKB": 149854.140625,
+              "name": "diffusers_lora.safetensors",
+              "type": "Model",
+              "hashes": {
+                "SHA256": "19A602A6641354E546CC25CCC9EE7C604C506DB275279E745DD31615B57EF74C"
+              },
+              "primary": true,
+              "downloadUrl": "https://civitai.com/api/download/models/2111234"
+            }
+          ],
+          "images": [
+            {
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/a608bd5e-8d95-4776-8ab3-fbbe306ed6b3/original=true/94102391.jpeg",
+              "nsfwLevel": 1,
+              "width": 1024,
+              "height": 1024,
+              "type": "image"
+            },
+            {
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/62d55b20-5101-4bc7-9d0a-54749422b153/original=true/94102389.jpeg",
+              "nsfwLevel": 1,
+              "width": 1024,
+              "height": 1024,
+              "type": "image"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "nextCursor": "3",
+    "nextPage": "https://civitai.com/api/v1/models?query=wan%202.2%20lora&types=LORA&limit=3&nsfw=false&cursor=3"
+  }
+}

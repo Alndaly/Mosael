@@ -4,8 +4,10 @@
 插件做不了、也不该做的那几样:
 
 - **规整**:插件报的每一条都过一遍(没有目录或名字的丢掉、长文本截断、只认 http(s) 的声明地址),界面拿到的形状只有一种;
-- **预览图**:插件给的是那台服务器上的地址(连同取它要带的头)。宿主按这个连接的出站决定去取、记进磁盘缓存,再交给界面 ——
-  和插件交回 `url` 的产出同一个规矩;那一头的地址和凭据不进给界面的回答;
+- **预览图**:插件给的是那台服务器上的地址(连同取它要带的头),在 Civitai 上对上了版本的还有几张示例图的地址。宿主按
+  这个连接的出站决定去取、记进磁盘缓存,再交给界面(见 model_previews)—— 和插件交回 `url` 的产出同一个规矩;那一头的
+  地址和凭据不进给界面的回答;
+- **NSFW**:插件交的依据、库里记着的手动标记合成一个判断(ADR 0038 §9);
 - **下载**:一个后台任务(`model_download`),进度、取消走流式协议;下完让这个连接的目录重新拉一遍,生成表单里选模型的
   下拉马上有它。
 
@@ -15,29 +17,20 @@
 
 from __future__ import annotations
 
-import hashlib
-import io
 import logging
 import re
-import shutil
 import threading
-import time
-import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-import httpx
-from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
-from app.db.models import Job, PluginInstance, User
-from app.domain import capabilities
+from app.db.models import Job, ModelFileMark, PluginInstance, User
+from app.domain import capabilities, model_previews
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import egress as plugin_egress
@@ -48,7 +41,6 @@ from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import MODEL_LIBRARY
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
-from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, write_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +50,6 @@ KIND = "model_download"
 LIBRARY_TIMEOUT_SECONDS = 600
 #: 读一个文件的元数据、解析一个链接:一两个请求的事。
 QUICK_TIMEOUT_SECONDS = 120
-#: 一张预览图最大多少。ComfyUI 给的是转好的 webp,几十 KB;再大就不是预览图了。
-PREVIEW_MAX_BYTES = 8 * 1024 * 1024
-#: 那台服务器上没有预览图的,记多久不再去问(作者随时可能补一张同名图进去)。
-NO_PREVIEW_SECONDS = 600
-#: 卡片、列表行、生成表单下拉里那一枚用的缩略图:长边不超过这么多像素。卡片最宽两百来点,高清屏上翻倍也够清楚;
-#: 解码一张是原图(常见 1200×1800、1800×2300)的十几分之一 —— 网格一屏几十张全解原图,滚动和悬停都卡。
-THUMBNAIL_EDGE = 512
-#: 同一个连接同时去那台服务器取几张预览图。ComfyUI 是在它唯一的事件循环里把预览图现转成 WebP 的,一次只转一张:
-#: 多发的请求只是在它那边排队,还把它别的回答(队列、进度)压在后面。
-REMOTE_FETCHES = 2
 #: 模型库里列出最近几条下载(在跑的总在里面)。
 RECENT_DOWNLOADS = 10
 
@@ -85,28 +67,27 @@ class ModelLibraryError(LocalizedError, ValueError):
 
 @dataclass
 class _Snapshot:
-    """最近一次列出来的:每个文件的预览图在那台服务器上的哪儿、取它要带的头。只在内存里。"""
+    """最近一次列出来的:每个文件的预览图在那台服务器上的哪儿、取它要带的头,别处(Civitai)的几张示例图,插件交的 NSFW
+    依据(手动标记改了之后重算判断用,不用再让插件列一遍),来源和对上 Civitai 的方式。只在内存里。"""
 
     previews: dict[tuple[str, str], str] = field(default_factory=dict)
+    #: 那台服务器上模型旁边的几处(预览视频、带 [ ] 的文件名的图),预览接口没有时按名字直接读
+    sidecars: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
+    signals: dict[tuple[str, str], list[dict[str, Any]]] = field(default_factory=dict)
+    elsewhere: dict[tuple[str, str], list[model_previews.Elsewhere]] = field(default_factory=dict)
+    how: dict[tuple[str, str], str] = field(default_factory=dict)
+    tools: dict[str, Any] = field(default_factory=dict)
+
+    def files(self) -> list[tuple[str, str]]:
+        """列出来的全部文件(目录, 名字)。"""
+        return list(self.elsewhere)
 
 
 _lock = threading.Lock()
 _snapshots: dict[str, _Snapshot] = {}
 #: 一个连接一把:记着的地址没了时,同时到的几十个预览请求只让插件列一遍,别的等它列完。
 _listing_locks: dict[str, threading.Lock] = {}
-#: (连接, 预览地址) → 到这个时刻之前不再去问(那边说没有)。
-_absent: dict[tuple[str, str], float] = {}
-#: (连接, 预览地址) 一把:同一张图同时被要好几次时只去取一次(缩略图也只缩一次),别的等它落盘再读。
-_fetch_locks: dict[tuple[str, str], threading.Lock] = {}
-#: 一个连接一个:同时去那台服务器取的预览图不超过 REMOTE_FETCHES 张。
-_remote_slots: dict[str, threading.BoundedSemaphore] = {}
-#: 排队等取图名额时,隔多久问一次要图的人还在不在。
-_WANTED_POLL_SECONDS = 0.25
-
-
-class _PreviewNotNow(Exception):
-    """这次没取到(那台机器回 5xx、连接断了、超时)—— 不是「没有预览图」,下次照常去取。"""
 
 
 def forget(instance_id: str | None = None) -> None:
@@ -114,22 +95,15 @@ def forget(instance_id: str | None = None) -> None:
     with _lock:
         if instance_id is None:
             _snapshots.clear()
-            _absent.clear()
-            _fetch_locks.clear()
-            _remote_slots.clear()
-            return
-        _snapshots.pop(instance_id, None)
-        _remote_slots.pop(instance_id, None)
-        for key in [key for key in _absent if key[0] == instance_id]:
-            _absent.pop(key, None)
-        for key in [key for key in _fetch_locks if key[0] == instance_id]:
-            _fetch_locks.pop(key, None)
+        else:
+            _snapshots.pop(instance_id, None)
+    model_previews.forget(instance_id)
 
 
 def drop_cache(instance_id: str) -> None:
     """连接删掉了:记着的地址和磁盘上的预览图一起清掉。"""
     forget(instance_id)
-    shutil.rmtree(_preview_dir(instance_id), ignore_errors=True)
+    model_previews.drop_cache(instance_id)
 
 
 def _require(db: Session, instance: PluginInstance) -> None:
@@ -162,6 +136,12 @@ def _refs(value: Any) -> list[dict[str, str]]:
     return out[:_MAX_LIST]
 
 
+def _sidecars(value: Any, base: str) -> list[str]:
+    """插件列的「模型旁边的文件」(相对 `sidecar_base` 的一段,或整个地址)→ 取它们的地址。只认 http(s)。"""
+    out = [_http(urljoin(base, one) if base else one) for one in value if isinstance(one, str)] if isinstance(value, list) else []
+    return [one for one in out if one][:12]
+
+
 def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
     """插件报的一条模型文件 → 给界面的那一份,外加它的预览图地址(不交给界面)。"""
     if not isinstance(raw, dict):
@@ -174,6 +154,9 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
     # 预览地址可以是相对 `preview_base` 的一段(几千个文件时省下回答的体积,插件的一次回答有上限)。
     preview = _http(urljoin(base, raw["preview"]) if base and isinstance(raw.get("preview"), str) else raw.get("preview"))
     return {
+        "nsfw_signals": _signals(raw.get("nsfw_signals")),
+        "elsewhere": model_previews.elsewhere(raw.get("remote_previews")),
+        "source": _source(raw.get("source")),
         "folder": folder,
         "name": name,
         "size": int(size) if size is not None else None,
@@ -188,22 +171,67 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
     }, preview
 
 
-def library(db: Session, instance: PluginInstance) -> dict[str, Any]:
-    """现问插件:这个连接上的全部模型文件,规整好交给界面;顺手记下每个文件的预览图在哪。"""
+def _source(value: Any) -> dict[str, str] | None:
+    """这个文件的出处:`page`(原站上那一页,只认 http(s))、`site`、`how`(怎么知道的:`download` 经 Mosael 下载时记下的、
+    `sha256` 按文件哈希对上的、`filename` 按文件名和大小对上的、`metadata` 文件自带的)。没有页就是 None —— 不猜。"""
+    if not isinstance(value, dict) or not _http(value.get("page")):
+        return None
+    return {"page": _http(value.get("page")), "site": _text(value.get("site"), 40), "how": _text(value.get("how"), 40)}
+
+
+def _preview_tools(value: Any) -> dict[str, Any]:
+    """这台服务器上找预览图、写回预览图的路:`lookup`(`sha256` 能按哈希找 / `filename` 只能按文件名和大小找),`save`
+    (能不能写回),`save_note`(写不回时说缺什么)。"""
+    raw = value if isinstance(value, dict) else {}
+    lookup = _text(raw.get("lookup"), 20)
+    return {"lookup": lookup if lookup in ("sha256", "filename") else "", "save": bool(raw.get("save")),
+            "save_note": _text(raw.get("save_note"), 1000)}
+
+
+def _preview_fields(instance_id: str, model: dict[str, Any], server: str, choices: list[model_previews.Elsewhere],
+                    pick: str) -> tuple[dict[str, Any], model_previews.Elsewhere | None]:
+    """给界面的预览图那几格:有没有(`has_preview`)、显示的是哪儿的(`preview_origin`:`server` 那台服务器上的、
+    `civitai` 这类别处的示例图,还没取过、说不准是空串)。那台服务器上取过、说没有,才换成别处的那张。"""
+    chosen = model_previews.pick(choices, pick)
+    status = model_previews.server_status(instance_id, model["folder"], model["name"])
+    origin = "server" if status == "found" else (chosen.site or "elsewhere") if chosen and (status == "absent" or not server) else ""
+    shown = chosen if origin and origin != "server" else None
+    kind = model_previews.server_kind(instance_id, model["folder"], model["name"]) if origin == "server" else \
+        shown.kind if shown else ""
+    return {"has_preview": bool(server or chosen), "preview_origin": origin, "preview_kind": kind or "image"}, shown
+
+
+def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict[str, Any]:
+    """现问插件:这个连接上的全部模型文件,规整好交给界面;顺手记下每个文件的预览图在哪。`pick`:别处的示例图挑哪一张
+    (界面按「NSFW 预览」那组设置要,见 model_previews.pick),预览图从哪来和 NSFW 的判断都照它。"""
     _require(db, instance)
     # 不留调用记录:打开模型库、下完一个文件都会列一遍,每次一行会把插件页真正的调用淹掉(和目录指纹同一个理由)。
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "library"},
                                timeout=LIBRARY_TIMEOUT_SECONDS, record=False)
     models: list[dict[str, Any]] = []
-    snapshot = _Snapshot(headers={str(k): str(v) for k, v in (output.get("preview_headers") or {}).items()})
+    snapshot = _Snapshot(headers={str(k): str(v) for k, v in (output.get("preview_headers") or {}).items()},
+                         tools=_preview_tools(output.get("preview_tools")))
+    marks = _marks(db, instance.id)
     for raw in (output.get("models") or [])[:_MAX_MODELS]:
         found = _model(raw, _http(output.get("preview_base")))
         if found is None:
             continue
         model, preview = found
+        key = (model["folder"], model["name"])
+        sidecars = _sidecars(raw.get("sidecars"), _http(output.get("sidecar_base")))
+        choices = model.pop("elsewhere")
+        fields, shown = _preview_fields(instance.id, model, preview or (sidecars[0] if sidecars else ""), choices, pick)
+        model.update(fields)
+        signals = with_elsewhere_signal(model.pop("nsfw_signals"), shown)
+        model["nsfw"] = nsfw_verdict(marks.get((model["folder"], _norm(model["name"]))), signals)
         models.append(model)
+        snapshot.signals[(model["folder"], _norm(model["name"]))] = signals
+        snapshot.elsewhere[key] = choices
+        snapshot.how[key] = (model["source"] or {}).get("how", "")
         if preview:
-            snapshot.previews[(model["folder"], model["name"])] = preview
+            snapshot.previews[key] = preview
+        if sidecars:
+            snapshot.sidecars[key] = sidecars
     with _lock:
         _snapshots[instance.id] = snapshot
     folders = [
@@ -222,152 +250,119 @@ def library(db: Session, instance: PluginInstance) -> dict[str, Any]:
         "missing": [one for one in missing if one["folder"] and one["name"] and one["url"]][:_MAX_LIST * 4],
         "download": {"route": _text(route.get("route"), 40) or "none", "note": _text(route.get("note"), 2000)},
         "downloads": downloads(db, instance),
+        "preview_tools": snapshot.tools,
     }
 
 
-def _preview_dir(instance_id: str) -> Path:
-    return settings.data_dir / "model-previews" / instance_id
+# --- NSFW:几种依据合成一个判断(ADR 0038 §9) ---------------------------------
+#
+# 依据有四种:**手动标记**(这里记在库里,两头都能标)、**元数据推断**和 **Civitai 的标记**(插件交的,见插件的
+# nsfw.py)、**本机识别预览图**。手动标了就听手动的;没标时任何一种自动的说「是」就算是 —— 这个判断是拿来
+# 「当众打开时先藏起来」的,宁可多藏一张(点开、悬停、改标记都能看),不放过一张。界面上悬停看得到每一条依据。
+
+#: 依据从哪来,界面按这个顺序列。
+NSFW_SOURCES = ("civitai", "local", "metadata")
+_MAX_NSFW_WORDS = 8
 
 
-@dataclass(frozen=True)
-class _Cached:
-    """一张预览图在磁盘上的那几个文件。按地址记:换了服务器、换了文件(ComfyUI 的地址里带着目录序号和名字)就是另一张。
-
-    原图(`<key>`)和它的类型(`<key>.type`)是取回来的原样,详情页的大图用它;缩略图(`<key>.thumbnail.webp`)
-    由原图缩出来,卡片、列表行、下拉用它。"""
-
-    original: Path
-    kind: Path
-    thumbnail: Path
-
-    @classmethod
-    def of(cls, instance_id: str, url: str) -> _Cached:
-        target = _preview_dir(instance_id) / hashlib.sha1(url.encode("utf-8")).hexdigest()
-        return cls(target, target.with_name(f"{target.name}.type"), target.with_name(f"{target.name}.thumbnail.webp"))
-
-    def read_original(self) -> tuple[bytes, str] | None:
-        if self.original.is_file() and self.kind.is_file():
-            return self.original.read_bytes(), self.kind.read_text(encoding="utf-8")
-        return None
-
-    def read_thumbnail(self) -> tuple[bytes, str] | None:
-        return (self.thumbnail.read_bytes(), THUMBNAIL_MEDIA_TYPE) if self.thumbnail.is_file() else None
+def _norm(name: str) -> str:
+    """Windows 上 ComfyUI 报的相对路径是反斜杠:记标记、找标记前统一成正斜杠。"""
+    return name.replace("\\", "/").strip()
 
 
-def _write(path: Path, content: bytes) -> None:
-    """临时文件再换上去:读的人不会读到半截。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
-    partial.write_bytes(content)
-    partial.replace(path)
+def _words(value: Any) -> list[str]:
+    return [_text(one, 80) for one in value if _text(one, 80)][:_MAX_NSFW_WORDS] if isinstance(value, list) else []
 
 
-def _always() -> bool:
-    return True
+def _signals(value: Any) -> list[dict[str, Any]]:
+    """插件交的 NSFW 依据规整成一种形状:`{source, nsfw, tags?, words?, level?}`。来源只认插件说得出的那两种。"""
+    out: list[dict[str, Any]] = []
+    for raw in value if isinstance(value, list) else []:
+        if not isinstance(raw, dict) or raw.get("source") not in ("metadata", "civitai") or \
+                not isinstance(raw.get("nsfw"), bool):
+            continue
+        entry: dict[str, Any] = {"source": raw["source"], "nsfw": raw["nsfw"]}
+        for key in ("tags", "words"):
+            if _words(raw.get(key)):
+                entry[key] = _words(raw.get(key))
+        level = _number(raw.get("level"))
+        if level is not None:
+            entry["level"] = int(level)
+        if all(one["source"] != entry["source"] for one in out):
+            out.append(entry)
+    return out
 
 
-def preview_source(db: Session, instance: PluginInstance, folder: str, name: str) -> PreviewSource | None:
-    """这个文件的预览图从哪儿取、记在哪儿;插件没给预览地址就是 None。**读库的只有这一步**:拿到它之后取图、缩图都不碰
-    数据库 —— 调用方(路由)接着就把连接交还,再去等(见 PreviewSource)。"""
+def with_elsewhere_signal(signals: list[dict[str, Any]],
+                          shown: model_previews.Elsewhere | None) -> list[dict[str, Any]]:
+    """显示的是别处的那张示例图时,它自己的分级就是关于**这张图**最直接的依据:换下插件交的那一条同来源的(说的是模型),
+    换成这张图的(`level`)。"""
+    if shown is None:
+        return signals
+    own = {"source": shown.site, "nsfw": shown.nsfw, "level": shown.level}
+    return [one for one in signals if one["source"] != shown.site] + [own] if shown.site in NSFW_SOURCES else signals
+
+
+def nsfw_verdict(manual: bool | None, signals: list[dict[str, Any]]) -> dict[str, Any]:
+    """合成的判断:`flagged`(按 NSFW 那组设置处理)、`manual`(手动标的,没标是 None)、`reasons`(每一种自动依据,
+    按 NSFW_SOURCES 排)。手动标了就听手动的;没标时任一种自动依据说是就算是。"""
+    reasons = sorted(signals, key=lambda one: NSFW_SOURCES.index(one["source"]) if one["source"] in NSFW_SOURCES else 99)
+    flagged = manual if manual is not None else any(one["nsfw"] for one in reasons)
+    return {"flagged": flagged, "manual": manual, "reasons": reasons}
+
+
+def _marks(db: Session, instance_id: str) -> dict[tuple[str, str], bool]:
+    """这个连接上手动标过的文件:(目录, 名字) → 是不是 NSFW。"""
+    rows = db.scalars(select(ModelFileMark).where(ModelFileMark.instance_id == instance_id))
+    return {(row.folder, row.name): row.nsfw for row in rows}
+
+
+def mark_nsfw(db: Session, user: User, instance: PluginInstance, folder: str, name: str,
+              nsfw: bool | None) -> dict[str, Any]:
+    """手动标一个文件的预览图是不是 NSFW(`None` 是去掉标记,回到自动判断)。回新的判断。
+
+    自动的那几条依据用最近一次列出来时插件交的(在内存里);重启后还没列过时先替它列一遍。"""
+    _require(db, instance)
+    folder, name = _text(folder, 200), _norm(_text(name, 1000))
+    if not folder or not name:
+        raise ModelLibraryError("modelLibErr_badFilename", name=name)
+    row = db.get(ModelFileMark, (instance.id, folder, name))
+    if nsfw is None:
+        if row is not None:
+            db.delete(row)
+    elif row is None:
+        db.add(ModelFileMark(instance_id=instance.id, folder=folder, name=name, nsfw=nsfw, marked_by=user.id))
+    else:
+        row.nsfw, row.marked_by = nsfw, user.id
+    db.flush()
+    snapshot = _snapshot_for(db, instance)
+    signals = snapshot.signals.get((folder, name), []) if snapshot else []
+    return nsfw_verdict(nsfw, signals)
+
+
+def preview_source(db: Session, instance: PluginInstance, folder: str, name: str,
+                   pick: str = "safest") -> model_previews.PreviewSource | None:
+    """这个文件的预览图从哪儿取:那台服务器上的(插件给的地址),再是别处的那张示例图(按 `pick` 挑,见
+    model_previews.pick);两样都没有就是 None。**读库的只有这一步**:拿到它之后取图、缩图都不碰数据库 —— 调用方(路由)
+    接着就把连接交还,再去等(见 PreviewSource)。"""
     _require(db, instance)
     snapshot = _snapshot_for(db, instance)
-    url = snapshot.previews.get((folder, name)) if snapshot else None
-    if not snapshot or not url:
+    if snapshot is None:
+        return None
+    key = (folder, name)
+    candidates: list[model_previews.Media] = []
+    if snapshot.previews.get(key):
+        candidates.append(model_previews.Media(snapshot.previews[key], dict(snapshot.headers), server=True))
+    # 预览接口没有的:模型旁边的预览视频、文件名带 [ ] 的那张图(ComfyUI 按通配符找不到),按名字直接读
+    candidates += [model_previews.Media(url, dict(snapshot.headers), server=True) for url in snapshot.sidecars.get(key, [])]
+    chosen = model_previews.pick(snapshot.elsewhere.get(key, []), pick)
+    if chosen is not None:
+        # 别处的不带那台服务器的头(访问凭据只给它自己)
+        candidates.append(model_previews.Media(chosen.url, {}, server=False))
+    if not candidates:
         return None
     route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
-    return PreviewSource(instance.id, url, dict(snapshot.headers), route, _Cached.of(instance.id, url))
-
-
-@dataclass(frozen=True)
-class PreviewSource:
-    """一张预览图:那台服务器上的地址、取它要带的头、走哪条出站,磁盘上记在哪。
-
-    缓存里没有时要排队(这张图的锁、这个连接的取图名额)、等那台服务器 —— 第一次打开模型库时一屏的请求同时到,滚一下
-    又是一屏(滚出去的那些浏览器掐了,线程还在排队)。此前每个都攥着一条数据库连接排着,连接池(5 + 10)很快就空了,
-    详情、任务列表这些请求要等满 30 秒才报错;现在等的这一段手里没有会话。"""
-
-    instance_id: str
-    url: str
-    headers: dict[str, str]
-    route: plugin_egress.Egress
-    cached: _Cached
-
-    def original(self, wanted: Callable[[], bool] = _always) -> tuple[bytes, str] | None:
-        """原图(字节、类型),详情页的大图;没有就是 None。取回来的记在磁盘上,同一个地址第二次不再去取。
-        `wanted`:要它的人还在不在(见 `_fetch`)。"""
-        hit = self.cached.read_original()
-        if hit is not None:
-            return hit
-        with self._gate():
-            return self._fetch(wanted)
-
-    def thumbnail(self, wanted: Callable[[], bool] = _always) -> tuple[bytes, str] | None:
-        """缩略图(长边不超过 THUMBNAIL_EDGE 的 WebP,透明照留),卡片、列表和选模型的下拉用;没有预览图就是 None。
-
-        第一次要的时候取原图(已经取过就用磁盘上那份)、缩一次,记在原图旁边;之后都从磁盘给。缩不出来(Pillow 不认识
-        这种图)就给原图 —— 浏览器认得的话卡片照样有图,只是大一些。`wanted` 同上。"""
-        hit = self.cached.read_thumbnail()
-        if hit is not None:
-            return hit
-        with self._gate():
-            # 等锁的这段时间里,先到的那个可能已经缩好了。
-            hit = self.cached.read_thumbnail()
-            if hit is not None:
-                return hit
-            original = self._fetch(wanted)
-            if original is None:
-                return None
-            try:
-                with Image.open(io.BytesIO(original[0])) as image:
-                    buffer = io.BytesIO()
-                    write_thumbnail(image, buffer, width=THUMBNAIL_EDGE, height=THUMBNAIL_EDGE)
-            except (OSError, ValueError, Image.DecompressionBombError) as exc:
-                logger.info("模型预览图缩不出缩略图(连接 %s),给原图:%s", self.instance_id, exc)
-                return original
-            _write(self.cached.thumbnail, buffer.getvalue())
-            return buffer.getvalue(), THUMBNAIL_MEDIA_TYPE
-
-    def _gate(self) -> threading.Lock:
-        """这张图一把锁:同时被要好几次时只去取一次、只缩一次,别的等它落盘再读。"""
-        with _lock:
-            return _fetch_locks.setdefault((self.instance_id, self.url), threading.Lock())
-
-    def _fetch(self, wanted: Callable[[], bool]) -> tuple[bytes, str] | None:
-        """磁盘上的原图;没有就去那台服务器取一次、落盘。拿着这张图的锁调。
-
-        去取要排队(一个连接同时取 REMOTE_FETCHES 张)。排着的时候、排到的时候都问 `wanted()`:人已经滚走了(浏览器掐了
-        这个请求)就不取,也不记成「没有」—— 一路滚过去几百张卡,每张都发过一个请求;挨个去取的话,眼前这几张要排在它们
-        后面等上几十秒。"""
-        # 等锁的这段时间里,先到的那个可能已经取回落盘,或者问出了「没有」。
-        hit = self.cached.read_original()
-        if hit is not None:
-            return hit
-        key = (self.instance_id, self.url)
-        with _lock:
-            until = _absent.get(key, 0.0)
-            slots = _remote_slots.setdefault(self.instance_id, threading.BoundedSemaphore(REMOTE_FETCHES))
-        if until > time.monotonic():
-            return None
-        while not slots.acquire(timeout=_WANTED_POLL_SECONDS):
-            if not wanted():
-                return None
-        try:
-            if not wanted():
-                return None
-            fetched = _fetch_preview(self.instance_id, self.route, self.url, self.headers)
-        except _PreviewNotNow:
-            return None
-        finally:
-            slots.release()
-        if fetched is None:
-            with _lock:
-                _absent[key] = time.monotonic() + NO_PREVIEW_SECONDS
-            return None
-        data, kind = fetched
-        # 类型先落,读的人见到图就有类型。
-        _write(self.cached.kind, kind.encode("utf-8"))
-        _write(self.cached.original, data)
-        return data, kind
+    return model_previews.PreviewSource(instance.id, folder, name, tuple(candidates), route)
 
 
 def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
@@ -385,36 +380,6 @@ def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
             with _lock:
                 snapshot = _snapshots.get(instance.id)
     return snapshot
-
-
-def _fetch_preview(
-    instance_id: str, route: plugin_egress.Egress, url: str, headers: dict[str, str]
-) -> tuple[bytes, str] | None:
-    """按这个连接的出站决定(`route`)去取(和插件交回 `url` 的产出同一条路)。
-
-    那边明确说没有(404 这类)、不是图、太大 → None,记成没有;那边一时出错(5xx、连接断了、超时)→ 抛
-    _PreviewNotNow,这次不给、也不记成没有,下次照常去取。"""
-    try:
-        with httpx.Client(timeout=30, headers=headers, follow_redirects=True, **route.httpx_options(url)) as client:
-            with client.stream("GET", url) as response:
-                if response.status_code >= 500 or response.status_code == 429:
-                    raise _PreviewNotNow(f"HTTP {response.status_code}")
-                if response.status_code != 200:
-                    return None
-                kind = response.headers.get("content-type", "").split(";")[0].strip().lower()
-                if not kind.startswith("image/"):
-                    return None
-                chunks: list[bytes] = []
-                total = 0
-                for chunk in response.iter_bytes():
-                    total += len(chunk)
-                    if total > PREVIEW_MAX_BYTES:
-                        return None
-                    chunks.append(chunk)
-                return b"".join(chunks), kind
-    except httpx.HTTPError as exc:
-        logger.info("模型预览图这次没取到(连接 %s):%s", instance_id, exc)
-        raise _PreviewNotNow(str(exc)) from exc
 
 
 def detail(db: Session, instance: PluginInstance, folder: str, name: str) -> dict[str, Any]:
@@ -628,11 +593,221 @@ def _download(job_id: str) -> None:
         instance = db.get(PluginInstance, instance_id)
         if instance is not None:
             host_capabilities.notify(db, instance, refresh=True)
+    # 新下的文件那台服务器上多半没有预览图(只下了模型):先问一次,模型库一打开就知道该显示 Civitai 的示例图、标上「来自」
+    try:
+        _probe_server(instance_id, result["folder"], result["name"])
+    except (ModelLibraryError, PluginDomainError, PluginRuntimeError):
+        logger.info("新下的模型的预览图这次没问到(连接 %s)", instance_id)
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is not None and finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_modelDownloadDone", name=result["name"], folder=result["folder"])
             emit_job_event(db, job.id, "job.succeeded", dict(result))
+
+
+# --- 模型信息:在 Civitai 上找、存回预览图(ADR 0038 §9) ---------------------------
+#
+# 「在 Civitai 上找」和「为缺预览图的模型补图」是一个后台任务(`model_previews`):按哈希找要那台服务器把整个文件读一遍,
+# 一个大模型要几分钟,一批要更久 —— 任务中心里看得到进度、能取消。「存为预览图」一张图一两秒,当场做。
+# 写回那台服务器的只有这两处,每次都是用户点的(确认框写明写到哪台服务器、哪个文件旁边)。
+
+#: 找、补预览图任务的种类(见 job_catalog)。
+INFO_KIND = "model_previews"
+#: 按哈希找一个文件最多等多久:那台机器把整个文件读进来再算,几十 GB 的视频模型在机械盘上要好几分钟。
+LOOKUP_TIMEOUT_SECONDS = 1200
+#: 写回一张预览图:传一张图、拷一份。
+SAVE_TIMEOUT_SECONDS = 120
+#: 一次最多找几个文件。
+MAX_LOOKUP_FILES = 5000
+
+
+def _picked(value: str) -> str:
+    return value if value in model_previews.PICKS else "safest"
+
+
+def start_lookup(
+    db: Session, user: User, instance: PluginInstance, *, workspace_id: str, files: list[dict[str, str]] | None,
+    save: bool, pick: str = "safest", refresh: bool = False,
+) -> Job:
+    """在 Civitai 上找这几个文件(`files`;给 None 是「这台服务器上没有预览图的全部」),`save` 时找到的顺手存成预览图。
+    一个后台任务。"""
+    _require(db, instance)
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    blocked = inst.blocked_reason(db, instance)
+    if blocked:
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    snapshot = _snapshot_for(db, instance)
+    if snapshot is None:
+        raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
+    if save and not snapshot.tools.get("save"):
+        raise ModelLibraryError("modelLibErr_cantSavePreview", note=snapshot.tools.get("save_note") or "")
+    if files is None:
+        # 「缺预览图的」:那台服务器上取过、说没有的,和还没取过的(任务里先问一次)
+        wanted = [{"folder": folder, "name": name} for folder, name in snapshot.files()
+                  if model_previews.server_status(instance.id, folder, name) != "found"]
+    else:
+        known = set(snapshot.files())
+        wanted = [{"folder": _text(one.get("folder"), 200), "name": _text(one.get("name"), 1000)} for one in files]
+        wanted = [one for one in wanted if (one["folder"], one["name"]) in known]
+    if not wanted:
+        raise ModelLibraryError("modelLibErr_nothingToLookUp")
+    wanted = wanted[:MAX_LOOKUP_FILES]
+    subject = wanted[0]["name"] if len(wanted) == 1 else str(len(wanted))
+    job = create_job(
+        db,
+        workspace_id=workspace_id,
+        kind="model_previews",  # 和 INFO_KIND 同一个;任务目录的测试按字面量扫
+        created_by=user.id,
+        payload={"instance_id": instance.id, "files": wanted, "save": save, "pick": _picked(pick), "refresh": refresh,
+                 "subject": subject},
+        message="jobMsg_modelPreviewsQueued",
+        message_params={"n": str(len(wanted))},
+    )
+    job_id = job.id
+    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _lookups(job_id), what="模型信息"))
+    return job
+
+
+def _probe_server(instance_id: str, folder: str, name: str) -> str:
+    """那台服务器上有没有这个文件的预览图;没取过就取一次(顺手落进缓存)。回 `found` / `absent` / ``(这次没取到)。"""
+    status = model_previews.server_status(instance_id, folder, name)
+    if status:
+        return status
+    with unit_of_work() as db:
+        instance = db.get(PluginInstance, instance_id)
+        snapshot = _snapshot_for(db, instance) if instance is not None else None
+        servers = ([snapshot.previews[(folder, name)]] if snapshot and snapshot.previews.get((folder, name)) else []) + \
+            (snapshot.sidecars.get((folder, name), []) if snapshot else [])
+        if instance is None or snapshot is None or not servers:
+            return "absent" if instance is not None else ""
+        route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
+        source = model_previews.PreviewSource(
+            instance_id, folder, name, tuple(model_previews.Media(url, dict(snapshot.headers), server=True) for url in servers),
+            route)
+    source.original()
+    return model_previews.server_status(instance_id, folder, name)
+
+
+def _lookups(job_id: str) -> None:
+    """找、补预览图任务的身子。一个文件一步:先看那台服务器上有没有预览图(补图时有了就跳过),再让插件在 Civitai 上找,
+    补图时按哈希对上的(和经 Mosael 从 Civitai 下的)顺手存回;按文件名对上的不替人存,列在结果里请他一个个确认。"""
+    with unit_of_work() as db:
+        job = db.get(Job, job_id)
+        if job is None:
+            return
+        payload = dict(job.payload or {})
+        if db.get(PluginInstance, str(payload.get("instance_id") or "")) is None:
+            if finish_job(db, job, status="failed", error="", error_key="modelLibErr_instanceGone", error_params={}):
+                say(job, "jobMsg_modelPreviewsFailed")
+            return
+        if not finish_job(db, job, status="running", progress=0.01):
+            return
+        emit_job_event(db, job.id, "job.running", {})
+    instance_id = str(payload["instance_id"])
+    files = [one for one in payload.get("files") or [] if isinstance(one, dict)]
+    save, pick, refresh = bool(payload.get("save")), _picked(str(payload.get("pick") or "")), bool(payload.get("refresh"))
+    result: dict[str, Any] = {"looked": 0, "matched": 0, "saved": 0, "had_preview": 0, "confirm": [], "failed": []}
+    for index, one in enumerate(files):
+        if _cancelled(job_id):
+            return
+        folder, name = str(one.get("folder") or ""), str(one.get("name") or "")
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None or not finish_job(db, job, status="running"):
+                return
+            job.progress = max(0.01, min(0.99, index / max(len(files), 1)))
+            say(job, "jobMsg_modelPreviewsLooking", name=name.replace("\\", "/").rsplit("/", 1)[-1],
+                at=str(index + 1), n=str(len(files)))
+        try:
+            # 先问一次那台服务器上有没有预览图(顺手落进缓存):补图时有了就跳过;只找不存时,列表据此马上知道该不该显示
+            # 找来的那张、标上「来自 Civitai」
+            if _probe_server(instance_id, folder, name) == "found" and save:
+                result["had_preview"] += 1
+                continue
+            with unit_of_work() as db:
+                output = tools.invoke_host(db, instance_id, MODEL_LIBRARY,
+                                           {"op": "lookup", "folder": folder, "name": name, "refresh": refresh},
+                                           timeout=LOOKUP_TIMEOUT_SECONDS, record=False)
+            result["looked"] += 1
+            match = _text(output.get("match"), 20)
+            if match in ("sha256", "filename", "download"):
+                result["matched"] += 1
+            if not save or match not in ("sha256", "filename", "download"):
+                continue
+            if match == "filename":
+                result["confirm"].append({"folder": folder, "name": name})
+                continue
+            with unit_of_work() as db:
+                instance = db.get(PluginInstance, instance_id)
+                if instance is None:
+                    return
+                _remember_lookup(db, instance, folder, name, output)
+                _save_preview(db, instance, folder, name, pick)
+            result["saved"] += 1
+        except (ModelLibraryError, PluginDomainError, PluginRuntimeError) as exc:
+            result["failed"].append({"folder": folder, "name": name, "error": str(exc)[:500]})
+    # 记着的列表作废:下一次打开模型库重新列,来源、示例图、预览图从哪来都是新的
+    forget(instance_id)
+    with unit_of_work() as db:
+        job = db.get(Job, job_id)
+        if job is not None and finish_job(db, job, status="succeeded", progress=1.0, result=result):
+            say(job, "jobMsg_modelPreviewsDone", looked=str(result["looked"]), matched=str(result["matched"]),
+                saved=str(result["saved"]))
+            emit_job_event(db, job.id, "job.succeeded", {"saved": result["saved"]})
+
+
+def _remember_lookup(db: Session, instance: PluginInstance, folder: str, name: str, output: dict[str, Any]) -> None:
+    """插件刚在 Civitai 上找到的(示例图、怎么对上的)记进宿主记着的那份列表:接着要存回,不必为一个文件让插件再列一遍。"""
+    snapshot = _snapshot_for(db, instance)
+    if snapshot is None:
+        return
+    with _lock:
+        snapshot.elsewhere[(folder, name)] = model_previews.elsewhere(output.get("remote_previews"))
+        snapshot.how[(folder, name)] = _text(output.get("match"), 20)
+
+
+def save_preview(db: Session, instance: PluginInstance, folder: str, name: str, *, pick: str = "safest",
+                 confirmed: bool = False) -> dict[str, Any]:
+    """把 Mosael 里显示的那张别处的示例图存成这个文件在那台服务器上的预览图(写到模型旁边)。按文件名对上的要用户确认过
+    (`confirmed`)。那台服务器上已经有预览图的不写(写回那条路会覆盖同名的)。"""
+    _require(db, instance)
+    snapshot = _snapshot_for(db, instance)
+    key = (folder, name)
+    if snapshot is None or key not in snapshot.elsewhere:
+        raise ModelLibraryError("modelLibErr_noElsewherePreview")
+    if snapshot.how.get(key) == "filename" and not confirmed:
+        raise ModelLibraryError("modelLibErr_confirmFilenameMatch")
+    return _save_preview(db, instance, folder, name, _picked(pick))
+
+
+def _save_preview(db: Session, instance: PluginInstance, folder: str, name: str, pick: str) -> dict[str, Any]:
+    snapshot = _snapshot_for(db, instance)
+    if snapshot is None:
+        raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
+    if not snapshot.tools.get("save"):
+        raise ModelLibraryError("modelLibErr_cantSavePreview", note=snapshot.tools.get("save_note") or "")
+    chosen = model_previews.pick(snapshot.elsewhere.get((folder, name), []), pick)
+    if chosen is None:
+        raise ModelLibraryError("modelLibErr_noElsewherePreview")
+    if model_previews.server_status(instance.id, folder, name) == "found":
+        raise ModelLibraryError("modelLibErr_alreadyHasPreview")
+    route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
+    fetched = model_previews.PreviewSource(instance.id, folder, name, (model_previews.Media(chosen.url, {}, server=False),),
+                                           route).original()
+    if fetched is None:
+        raise ModelLibraryError("modelLibErr_elsewhereUnreachable")
+    data, suffix = model_previews.save_ready(fetched)
+
+    def prepare(scratch):
+        target = scratch / f"preview{suffix}"
+        target.write_bytes(data)
+        return {"op": "save_preview", "folder": folder, "name": name, "path": str(target)}
+
+    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "save_preview", "folder": folder, "name": name},
+                               prepare=prepare, timeout=SAVE_TIMEOUT_SECONDS)
+    # 那台服务器上现在有了:它自己的那张取代别处的这张(列表马上标成「那台服务器上的」,取图时去问它)
+    model_previews.note_server(instance.id, folder, name, "found", "video" if suffix == ".mp4" else "image")
+    return {"folder": folder, "name": name, "saved": _text(output.get("saved"), 1000)}
 
 
 def downloads(db: Session, instance: PluginInstance) -> list[Job]:
@@ -669,15 +844,18 @@ __all__ = [
     "CAPABILITY",
     "KIND",
     "ModelLibraryError",
-    "PreviewSource",
     "detail",
     "downloads",
     "drop_cache",
     "forget",
     "library",
+    "mark_nsfw",
+    "nsfw_verdict",
     "preview_source",
     "register_uses",
     "resolve",
+    "save_preview",
     "search_sources",
     "start_download",
+    "start_lookup",
 ]

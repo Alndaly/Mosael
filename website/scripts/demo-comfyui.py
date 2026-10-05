@@ -10,6 +10,10 @@ the endpoints the plugin uses — loaded with:
 - model files with invented, generic names (checkpoints, LoRAs, VAE, text encoder, upscalers). They are entries in a
   listing, not files: each has a size and safetensors header metadata (base model, trigger words, training tags).
   Their previews are Big Buck Bunny frames (CC BY 3.0) that the seed script cuts from the trailer excerpts;
+- two model files without a preview whose file hash (what ComfyUI-Custom-Scripts' hash route answers) is a real public
+  Civitai version: an Illustrious base checkpoint (its examples are images) and a Wan 2.2 cartoon-style LoRA (its examples
+  are only videos). Mosael's model library looks them up on Civitai for real, shows the example from Civitai and can save
+  it back here (this server keeps what was saved: `/upload/image`, `/pysssss/save`, `/pysssss/view`);
 - five workflows (text to image with a checkpoint and LoRAs, image to video, a 4× upscale), saved the way ComfyUI saves
   them, some in folders (`landscapes/`, `video/`, `upscale/`) next to two empty folders (`archive/`, `video/drafts/`),
   so the workflow library's folder tree has depth, counts and empty entries. The image-to-video one uses a node type
@@ -65,7 +69,17 @@ MODELS: list[tuple[str, str, int, str, dict[str, Any]]] = [
     ("text_encoders", "demo-video-text-encoder.safetensors", 6_735_906_816, "", {}),
     ("upscale_models", "demo-upscale-4x.pth", 66_961_958, "", {}),
     ("upscale_models", "demo-upscale-2x.pth", 67_040_989, "", {}),
+    ("checkpoints", "demo-illustrious-base.safetensors", 6_938_040_682, "",
+     {"modelspec.architecture": "stable-diffusion-xl-v1-base"}),
+    ("loras", "demo-wan-cartoon-lora.safetensors", 306_847_456, "", {"ss_base_model_version": "wan"}),
 ]
+
+#: The SHA256 the hash route answers for the two files above: public Civitai versions (Illustrious-XL v0.1, version
+#: 889818; a Wan 2.2 cartoon-style LoRA, version 2107735). Looked up on Civitai for real when the library asks.
+CIVITAI_HASHES = {
+    "checkpoints/demo-illustrious-base.safetensors": "3e15ba00387db678ab4a099f75771c4f5ac67fda9e7100a01d263eaf30145aa9",
+    "loras/demo-wan-cartoon-lora.safetensors": "72663446fd0af94b2769435243ee1867842198e0aeeb0d526b638351b05874c6",
+}
 
 #: The node pack the fake ComfyUI-Manager knows for the one missing node type (fictional).
 NODE_PACK = ("comfyui-frame-tools", "Frame Tools", ["FrameInterpolate", "FrameBlend"])
@@ -310,10 +324,12 @@ def build(media: Path):
                 return
             if path.startswith(prefix):
                 folder, _index, name = unquote(path[len(prefix):]).split("/", 2)
-                body = previews.get(f"{folder}/{name}")
+                saved = state.saved_previews.get(f"{folder}/{name}")
+                # a preview saved back from Mosael (an image; ComfyUI's own preview route doesn't list videos)
+                body = saved[1] if saved and saved[0] in (".png", ".jpg", ".jpeg", ".webp") else previews.get(f"{folder}/{name}")
                 if body is not None:
                     self.send_response(200)
-                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Type", "image/png" if saved and saved[0] == ".png" else "image/jpeg")
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
@@ -341,6 +357,7 @@ def build(media: Path):
             state.model_sizes = {f"{folder}/{name}": size for folder, name, size, _frame, _meta in MODELS}
             state.model_metadata = {f"{folder}/{name}": meta for folder, name, _size, _frame, meta in MODELS if meta}
             state.model_previews = set(previews)
+            state.model_hashes = dict(CIVITAI_HASHES)
             state.manager = "V4.2.1"
             pack, title, nodes = NODE_PACK
             state.manager_mappings = {pack: [nodes, {"title_aux": title}]}

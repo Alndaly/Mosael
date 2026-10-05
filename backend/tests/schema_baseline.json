@@ -381,6 +381,14 @@
     "updated_at",
     "workspace_id"
   ],
+  "model_file_marks": [
+    "instance_id",
+    "folder",
+    "name",
+    "nsfw",
+    "marked_by",
+    "updated_at"
+  ],
   "network_config": [
     "id",
     "no_proxy",

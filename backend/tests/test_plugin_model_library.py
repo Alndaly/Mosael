@@ -57,11 +57,24 @@ elif op == "library":
         "models": [
             {"folder": "checkpoints", "name": "sdxl_base.safetensors", "size": 6938041004, "modified": 1700000000.5,
              "family": "SDXL", "family_source": "metadata", "used_by": [{"id": "wf.json", "label": "人像"}],
-             "preview": f"http://127.0.0.1:{port}/preview/a"},
+             "preview": f"http://127.0.0.1:{port}/preview/a",
+             "nsfw_signals": [{"source": "metadata", "nsfw": True, "tags": ["nude"], "words": []},
+                              {"source": "local", "nsfw": True}, {"source": "civitai"}, "junk"]},
             {"folder": "loras", "name": "sub\\style.safetensors", "size": 228456516, "modified": 1700000001,
              "family": "Illustrious", "family_source": "filename", "triggers": ["1girl", "style"],
-             "triggers_source": "tags", "title": "Style", "preview": "preview/missing"},
-            {"folder": "loras", "name": "plain.safetensors", "size": None},
+             "triggers_source": "tags", "title": "Style", "preview": "preview/missing",
+             "nsfw_signals": [{"source": "civitai", "nsfw": False}],
+             "source": {"page": "https://civitai.com/models/1?modelVersionId=2", "site": "civitai",
+                        "how": (data / "how").read_text() if (data / "how").exists() else "sha256"},
+             # 作者排在最前的那张分级高,后面那张最低
+             "remote_previews": [] if (data / "no-remote").exists() else [
+                 {"url": f"http://127.0.0.1:{port}/elsewhere/clip.mp4", "kind": "video", "site": "civitai", "level": 1, "nsfw": False}
+             ] if (data / "remote-video").exists() else [
+                 {"url": f"http://127.0.0.1:{port}/elsewhere/spicy", "kind": "image", "site": "civitai", "level": 8, "nsfw": True},
+                 {"url": f"http://127.0.0.1:{port}/elsewhere/safe", "kind": "image", "site": "civitai", "level": 1, "nsfw": False},
+                 {"url": "file:///etc/passwd", "kind": "image", "site": "civitai", "level": 1}]},
+            {"folder": "loras", "name": "plain.safetensors", "size": None,
+             **({"sidecars": ["plain.mp4"]} if (data / "video-sidecar").exists() else {})},
             {"folder": "", "name": "no-folder.safetensors"},
             {"name": "no-folder-either"},
             "not a dict",
@@ -73,7 +86,20 @@ elif op == "library":
         "download": {"route": "manager", "note": "经 ComfyUI-Manager 下载"},
         "preview_headers": {"Authorization": "Bearer secret-for-previews"},
         "preview_base": f"http://127.0.0.1:{port}/",
+        "sidecar_base": f"http://127.0.0.1:{port}/sidecar/",
+        "preview_tools": {"lookup": "sha256", "save": not (data / "no-save").exists(),
+                          "save_note": "缺 ComfyUI-Custom-Scripts" if (data / "no-save").exists() else ""},
     }})
+elif op == "lookup":
+    found = payload["name"] != "plain.safetensors"
+    match = (data / "lookup-match").read_text() if (data / "lookup-match").exists() else "sha256"
+    emit({"ok": True, "output": {"match": match if found else "none", "page": "", "note": "",
+                                 "remote_previews": [{"url": f"http://127.0.0.1:{port}/elsewhere/safe", "kind": "image",
+                                                      "site": "civitai", "level": 1, "nsfw": False}] if found else []}})
+elif op == "save_preview":
+    (data / "saved.bin").write_bytes(Path(payload["path"]).read_bytes())
+    (data / "saved-name").write_text(Path(payload["path"]).name)
+    emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["name"], "saved": "loras/style.png"}})
 elif op == "node_folders":
     emit({"ok": True, "output": {"folders": ["checkpoints" if one["input"] == "ckpt_name" else
                                              "../etc" if one["input"] == "evil" else "" for one in payload["nodes"]]}})
@@ -145,6 +171,53 @@ def _manifest(path: Path) -> dict[str, Any]:
     }
 
 
+def _colored_png(color: tuple[int, int, int], size: tuple[int, int] = (1024, 1536)) -> bytes:
+    """一张别处的示例图:纯色的大图(1024×1536,比要写回那台服务器的 512 宽大)。"""
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+_VIDEO: list[bytes] = []
+
+
+def _sample_video() -> bytes:
+    """一段真的示例视频:1280×720、两秒、带声音(Civitai 没转好时给的原片就是这样)。生成一次,之后复用。"""
+    if not _VIDEO:
+        import subprocess
+        import tempfile
+
+        from app.core.config import settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "sample.mp4"
+            subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=10",
+                            "-f", "lavfi", "-i", "sine=frequency=440", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", "-shortest", str(target)], check=True, capture_output=True)
+            _VIDEO.append(target.read_bytes())
+    return _VIDEO[0]
+
+
+def _video_facts(content: bytes) -> dict[str, Any]:
+    """一段视频的宽、高、有没有声音。"""
+    import subprocess
+    import tempfile
+
+    from app.core.config import settings
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "v.mp4"
+        path.write_bytes(content)
+        streams = json.loads(subprocess.run([settings.ffprobe, "-v", "error", "-show_entries", "stream=codec_type,width,height",
+                                             "-of", "json", str(path)], check=True, capture_output=True, text=True).stdout)["streams"]
+    video = next(one for one in streams if one["codec_type"] == "video")
+    return {"width": video["width"], "height": video["height"], "audio": any(one["codec_type"] == "audio" for one in streams)}
+
+
 class _Previews:
     """本机一个真的 HTTP 服务,替插件那一头的「预览图地址」:`/preview/a` 有图,别的 404;记下每次请求和带的头。"""
 
@@ -171,6 +244,22 @@ class _Previews:
                     self.send_header("Content-Length", str(len(outer.body)))
                     self.end_headers()
                     self.wfile.write(outer.body)
+                    return
+                if self.path in ("/sidecar/plain.mp4", "/elsewhere/clip.mp4"):
+                    body = _sample_video()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                if self.path in ("/elsewhere/safe", "/elsewhere/spicy"):
+                    body = _colored_png((20, 160, 80) if self.path.endswith("safe") else (200, 30, 30))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
                     return
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
@@ -223,6 +312,13 @@ def _ops() -> list[dict[str, Any]]:
     return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
 
 
+def _no_elsewhere() -> None:
+    """这一回插件不交别处(Civitai)的示例图:测「那台服务器上没有预览图」本身。"""
+    data = runtime.data_dir_for(PACKAGE_ID)
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "no-remote").write_text("1")
+
+
 def _workspace(client) -> str:
     return client.post("/api/workspaces", json={"name": "模型"}).json()["id"]
 
@@ -268,6 +364,7 @@ def test_列出插件报的模型_宿主规整字段_预览图换成宿主的地
 
 def test_预览图_宿主按插件给的地址取回_记进磁盘缓存_没有的回404(library) -> None:
     client, instance_id, previews = library
+    _no_elsewhere()
     assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
     url = f"/api/plugins/instances/{instance_id}/model-library/preview"
     hit = client.get(url, params={"folder": "checkpoints", "name": "sdxl_base.safetensors"})
@@ -376,6 +473,7 @@ def test_缩略图_宿主缩小一次记在原图旁边_详情拿到的还是原
     from app.core.config import settings
 
     client, instance_id, previews = library
+    _no_elsewhere()
     previews.body, previews.kind = _portrait_png(), "image/png"
     assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
     params = {"folder": "checkpoints", "name": "sdxl_base.safetensors"}
@@ -388,7 +486,8 @@ def test_缩略图_宿主缩小一次记在原图旁边_详情拿到的还是原
         assert image.size == (341, 512), "长边缩到 512,等比"
         assert image.mode == "RGBA" and image.getpixel((10, 10))[3] == 0, "透明的地方还是透明"
         assert image.getpixel((300, 400))[3] == 255
-    cached = list((settings.data_dir / "model-previews" / instance_id).iterdir())
+    cached = [path for path in (settings.data_dir / "model-previews" / instance_id).iterdir()
+              if path.name != "server-previews.json"]
     assert sorted(path.name.split(".", 1)[-1] for path in cached if "." in path.name) == ["thumbnail.webp", "type"]
     assert len(cached) == 3, "原图、类型、缩略图三个文件记在一起"
 
@@ -432,13 +531,14 @@ def test_排队等那台服务器的请求_不攥着数据库连接(library) -> 
     import httpx
 
     from app.core.db import engine
-    from app.domain import model_library
     from app.main import app
 
     previews.body, previews.kind = _portrait_png(), "image/png"
     assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
-    slots = model_library._remote_slots.setdefault(instance_id, threading.BoundedSemaphore(model_library.REMOTE_FETCHES))
-    for _ in range(model_library.REMOTE_FETCHES):
+    from app.domain import model_previews
+
+    slots = model_previews._slots.setdefault(f"server:{instance_id}", threading.BoundedSemaphore(model_previews.SERVER_FETCHES))
+    for _ in range(model_previews.SERVER_FETCHES):
         slots.acquire()  # 那台服务器正忙:名额都占着
 
     async def scenario() -> tuple[int, list[httpx.Response]]:
@@ -452,7 +552,7 @@ def test_排队等那台服务器的请求_不攥着数据库连接(library) -> 
                 await asyncio.sleep(0.8)
                 queued = engine.pool.checkedout() - held
             finally:
-                for _ in range(model_library.REMOTE_FETCHES):
+                for _ in range(model_previews.SERVER_FETCHES):
                     slots.release()
             return queued, await pending
 
@@ -613,3 +713,273 @@ def test_工作台_选中节点那一格是哪个模型目录_插件给的不像
     too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders",
                            json={"nodes": [{"class_type": "X", "input": "y"}] * 65})
     assert too_many.status_code == 422
+
+
+# --- NSFW:几种依据合成一个判断(ADR 0038 §9) -----------------------------------
+
+def test_NSFW判断_手动标记压过自动的_没标时任一种说是就算是() -> None:
+    from app.domain.model_library import nsfw_verdict
+
+    metadata = {"source": "metadata", "nsfw": True, "tags": ["nude"]}
+    civitai_no = {"source": "civitai", "nsfw": False}
+    civitai_yes = {"source": "civitai", "nsfw": True, "level": 8}
+    assert nsfw_verdict(None, []) == {"flagged": False, "manual": None, "reasons": []}, "没有依据就不算"
+    assert nsfw_verdict(None, [civitai_no])["flagged"] is False
+    assert nsfw_verdict(None, [civitai_no, metadata])["flagged"] is True, "任一种说是就算是:宁可多藏一张"
+    assert [one["source"] for one in nsfw_verdict(None, [metadata, civitai_yes])["reasons"]] == ["civitai", "metadata"], \
+        "依据按 Civitai、本机识别、元数据的顺序列"
+    overruled = nsfw_verdict(False, [metadata, civitai_yes])
+    assert overruled["flagged"] is False and overruled["manual"] is False, "手动标了「不是」:自动判错了能改"
+    assert len(overruled["reasons"]) == 2, "自动的依据照样交,悬停看得到"
+    assert nsfw_verdict(True, [civitai_no])["flagged"] is True, "手动也能标成「是」"
+
+
+def test_列出时带上NSFW判断_插件交的依据规整过(library) -> None:
+    client, instance_id, _ = library
+    models = client.get(f"/api/plugins/instances/{instance_id}/model-library").json()["models"]
+    first, second, third = models
+    assert first["nsfw"] == {"flagged": True, "manual": None, "reasons": [
+        {"source": "metadata", "nsfw": True, "tags": ["nude"], "words": [], "level": None, "score": None}]}, \
+        "插件说不出本机识别那一条(那是宿主的);缺 nsfw 的、不是对象的丢掉"
+    assert second["nsfw"]["flagged"] is False and second["nsfw"]["reasons"][0]["source"] == "civitai"
+    assert third["nsfw"] == {"flagged": False, "manual": None, "reasons": []}
+
+
+def test_手动标NSFW_压过自动的_去掉标记回到自动_按正斜杠记(library) -> None:
+    client, instance_id, _ = library
+    url = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(url)
+    # 自动说是 → 手动标成不是
+    answer = client.put(f"{url}/nsfw", json={"folder": "checkpoints", "name": "sdxl_base.safetensors", "nsfw": False})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["flagged"] is False and answer.json()["manual"] is False
+    assert [one["source"] for one in answer.json()["reasons"]] == ["metadata"], "自动的依据照样带着"
+    # Windows 的反斜杠和正斜杠是同一个文件
+    marked = client.put(f"{url}/nsfw", json={"folder": "loras", "name": "sub/style.safetensors", "nsfw": True}).json()
+    assert marked == {"flagged": True, "manual": True,
+                      "reasons": [{"source": "civitai", "nsfw": False, "tags": [], "words": [], "level": None, "score": None}]}
+    listed = {one["name"]: one["nsfw"] for one in client.get(url).json()["models"]}
+    assert listed["sdxl_base.safetensors"]["manual"] is False and listed["sdxl_base.safetensors"]["flagged"] is False
+    assert listed["sub\\style.safetensors"]["manual"] is True, "插件报的是反斜杠,标记按正斜杠记,对得上"
+    cleared = client.put(f"{url}/nsfw", json={"folder": "checkpoints", "name": "sdxl_base.safetensors", "nsfw": None}).json()
+    assert cleared["manual"] is None and cleared["flagged"] is True, "去掉标记:回到自动判断"
+    assert {op.get("op") for op in _ops()} <= {"library", "models", "tools", "fingerprint"}, \
+        "标记只记在 Mosael 这边,不让插件改那台服务器"
+
+
+def test_手动标记按连接分_连接删了跟着删(library) -> None:
+    client, instance_id, previews = library
+    from sqlalchemy import select
+
+    from app.db.models import ModelFileMark
+
+    url = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(url)
+    assert client.put(f"{url}/nsfw", json={"folder": "loras", "name": "plain.safetensors", "nsfw": True}).status_code == 200
+    other = client.post(f"/api/plugins/{PACKAGE_ID}/instances", json={"config": {"SERVER": str(previews.port)}}).json()["id"]
+    assert client.patch(f"/api/plugins/instances/{other}/permissions",
+                        json={"grants": {"network:test": True}}).status_code == 200
+    assert client.patch(f"/api/plugins/instances/{other}", json={"enabled": True}).status_code == 200
+    elsewhere = {one["name"]: one["nsfw"]
+                 for one in client.get(f"/api/plugins/instances/{other}/model-library").json()["models"]}
+    assert elsewhere["plain.safetensors"]["manual"] is None, "另一个连接(可能指着另一台服务器)不沾这个标记"
+    assert client.delete(f"/api/plugins/instances/{instance_id}").status_code == 204
+    with SessionLocal() as db:
+        assert not db.scalars(select(ModelFileMark).where(ModelFileMark.instance_id == instance_id)).all()
+
+
+# --- 别处的示例图(Civitai):那台服务器上没有预览图时用它,存回去(ADR 0038 §9) ------------
+
+def _origin(client, instance_id: str, name: str, pick: str = "safest") -> dict:
+    body = client.get(f"/api/plugins/instances/{instance_id}/model-library", params={"pick": pick}).json()
+    return next(one for one in body["models"] if one["name"] == name)
+
+
+def _pixel(content: bytes) -> tuple[int, ...]:
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(content)) as image:
+        return image.convert("RGB").getpixel((5, 5))
+
+
+def test_那台服务器上没有预览图_用别处的示例图_缺省挑分级最低的_不带那台服务器的头(library) -> None:
+    client, instance_id, previews = library
+    first = _origin(client, instance_id, "sub\\style.safetensors")
+    assert first["has_preview"] is True
+    assert first["preview_origin"] == "", "那台服务器上有没有还没问过:说不准"
+    assert first["source"] == {"page": "https://civitai.com/models/1?modelVersionId=2", "site": "civitai", "how": "sha256"}
+    thumb = client.get(f"/api/plugins/instances/{instance_id}/model-library/thumbnail",
+                       params={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert thumb.status_code == 200 and thumb.headers["content-type"] == "image/webp"
+    assert _pixel(thumb.content)[1] > 100, "缺省挑分级最低的那张(绿的)"
+    asked = [one for one in previews.requests if one["path"].startswith("/elsewhere/")]
+    assert asked == [{"path": "/elsewhere/safe", "auth": None}], "别处的不带那台服务器的访问凭据"
+    assert [one["path"] for one in previews.requests if one["path"] == "/preview/missing"], "先问过那台服务器"
+
+    after = _origin(client, instance_id, "sub\\style.safetensors")
+    assert after["preview_origin"] == "civitai", "那台服务器说没有:显示的是 Civitai 的那张"
+    assert [(one["source"], one["nsfw"], one["level"]) for one in after["nsfw"]["reasons"]] == [("civitai", False, 1)], \
+        "显示的是这张示例图:它自己的分级就是依据"
+
+
+def test_NSFW照常时挑作者排在最前的那张_判断跟着那张图(library) -> None:
+    client, instance_id, _ = library
+    params = {"folder": "loras", "name": "sub\\style.safetensors", "pick": "cover"}
+    thumb = client.get(f"/api/plugins/instances/{instance_id}/model-library/thumbnail", params=params)
+    assert thumb.status_code == 200 and _pixel(thumb.content)[0] > 150, "作者排在最前的那张(红的)"
+    cover = _origin(client, instance_id, "sub\\style.safetensors", pick="cover")
+    assert cover["preview_origin"] == "civitai"
+    assert cover["nsfw"]["flagged"] is True and cover["nsfw"]["reasons"][0]["level"] == 8
+    assert _origin(client, instance_id, "sub\\style.safetensors")["nsfw"]["flagged"] is False
+
+
+def test_存为预览图_取别处那张_缩到512宽的PNG_交插件写回_之后重新去问那台服务器(library) -> None:
+    import io
+
+    from PIL import Image
+
+    from app.domain import model_previews
+
+    client, instance_id, _ = library
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(f"{base}/thumbnail", params={"folder": "loras", "name": "sub\\style.safetensors"})
+    saved = client.post(f"{base}/save-preview", json={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json() == {"folder": "loras", "name": "sub\\style.safetensors", "saved": "loras/style.png"}
+    data = runtime.data_dir_for(PACKAGE_ID)
+    assert (data / "saved-name").read_text() == "preview.png"
+    with Image.open(io.BytesIO((data / "saved.bin").read_bytes())) as image:
+        assert image.format == "PNG" and image.size == (512, 768), "缩到 512 宽,等比"
+        assert image.convert("RGB").getpixel((5, 5))[1] > 100
+    assert model_previews.server_status(instance_id, "loras", "sub\\style.safetensors") == "found", "写回了:那台服务器上的取代别处的"
+    assert model_previews.server_kind(instance_id, "loras", "sub\\style.safetensors") == "image"
+    save_ops = [one for one in _ops() if one["op"] == "save_preview"]
+    assert len(save_ops) == 1 and save_ops[0]["folder"] == "loras"
+    again = client.post(f"{base}/save-preview", json={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert again.status_code == 422, "那台服务器上已经有了:写回那条路会覆盖同名的,不写"
+    assert len([one for one in _ops() if one["op"] == "save_preview"]) == 1
+
+
+def test_存为预览图_按文件名对上的要确认_那台服务器上已经有的不写_写不回的说缺什么(library) -> None:
+    client, instance_id, _ = library
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    data = runtime.data_dir_for(PACKAGE_ID)
+    (data / "how").write_text("filename")
+    client.get(base)
+    unconfirmed = client.post(f"{base}/save-preview", json={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert unconfirmed.status_code == 422 and "确认" in unconfirmed.json()["detail"]
+    confirmed = client.post(f"{base}/save-preview", json={"folder": "loras", "name": "sub\\style.safetensors",
+                                                          "confirmed": True})
+    assert confirmed.status_code == 200, confirmed.text
+    # 那台服务器上有预览图的(sdxl_base 有):没有别处的示例图可存
+    assert client.post(f"{base}/save-preview", json={"folder": "checkpoints", "name": "sdxl_base.safetensors"}).status_code == 422
+    (data / "no-save").write_text("1")
+    (data / "how").unlink()
+    client.get(base)
+    refused = client.post(f"{base}/save-preview", json={"folder": "loras", "name": "sub\\style.safetensors"})
+    assert refused.status_code == 422 and "ComfyUI-Custom-Scripts" in refused.json()["detail"]
+    assert client.get(base).json()["preview_tools"] == {"lookup": "sha256", "save": False, "save_note": "缺 ComfyUI-Custom-Scripts"}
+
+
+def test_在Civitai上找是一个后台任务_补图时那台服务器上有预览图的跳过_找到的存回(library) -> None:
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(base)
+    started = client.post(f"{base}/lookups", json={"workspace_id": workspace, "save": True})
+    assert started.status_code == 200, started.text
+    assert started.json()["kind"] == "model_previews"
+    assert wait_status(client, started.json()["id"]) == "succeeded"
+    result = client.get(f"/api/jobs/{started.json()['id']}").json()["result"]
+    assert result["had_preview"] == 1, "sdxl_base 那台服务器上有预览图:不找、不写"
+    assert (result["looked"], result["matched"], result["saved"]) == (2, 1, 1), "plain 在 Civitai 上没有;style 找到、存回"
+    looked = sorted(one["name"] for one in _ops() if one["op"] == "lookup")
+    assert looked == ["plain.safetensors", "sub\\style.safetensors"]
+    assert all(one["refresh"] is False for one in _ops() if one["op"] == "lookup"), "补图不重查查过的"
+
+    single = client.post(f"{base}/lookups", json={"workspace_id": workspace, "files": [{"folder": "loras", "name": "plain.safetensors"}],
+                                                  "refresh": True})
+    assert wait_status(client, single.json()["id"]) == "succeeded"
+    assert client.get(f"/api/jobs/{single.json()['id']}").json()["result"]["saved"] == 0, "只找不存"
+    assert [one["refresh"] for one in _ops() if one["op"] == "lookup"][-1] is True
+    unknown = client.post(f"{base}/lookups", json={"workspace_id": workspace, "files": [{"folder": "loras", "name": "nobody"}]})
+    assert unknown.status_code == 422, "列表里没有的文件不找"
+
+
+def test_补图时按文件名对上的不替你存_列出来等你确认(library) -> None:
+    client, instance_id, _ = library
+    _flag("lookup-match")
+    (runtime.data_dir_for(PACKAGE_ID) / "lookup-match").write_text("filename")
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(base)
+    started = client.post(f"{base}/lookups", json={"workspace_id": _workspace(client), "save": True})
+    assert wait_status(client, started.json()["id"]) == "succeeded"
+    result = client.get(f"/api/jobs/{started.json()['id']}").json()["result"]
+    assert (result["matched"], result["saved"]) == (1, 0)
+    assert result["confirm"] == [{"folder": "loras", "name": "sub\\style.safetensors"}]
+    assert not [one for one in _ops() if one["op"] == "save_preview"], "按文件名猜的可能是同名的别的模型:不写到那台服务器上"
+
+
+def test_挑哪张示例图_有图就在图里挑_要最稳妥的挑分级最低的_照常就要作者排在前的() -> None:
+    from app.domain.model_previews import Elsewhere, pick
+
+    clip = Elsewhere("https://x/clip.mp4", "video", "civitai", 1, False)
+    spicy = Elsewhere("https://x/spicy.jpg", "image", "civitai", 8, True)
+    mild = Elsewhere("https://x/mild.jpg", "image", "civitai", 2, False)
+    unknown = Elsewhere("https://x/unknown.jpg", "image", "civitai", 0, False)
+    assert pick([clip, spicy, mild], "safest") == mild, "有图就不用视频,哪怕视频分级更低"
+    assert pick([clip, spicy, mild], "cover") == spicy
+    assert pick([unknown, mild], "safest") == mild, "说不出分级的不当成最稳妥"
+    assert pick([clip], "safest") == clip, "示例只有视频才用视频"
+    assert pick([], "safest") is None
+
+
+# --- 预览视频 --------------------------------------------------------------------------
+
+def _flag(name: str) -> None:
+    data = runtime.data_dir_for(PACKAGE_ID)
+    data.mkdir(parents=True, exist_ok=True)
+    (data / name).write_text("1")
+
+
+def test_模型旁边的预览视频_转成512宽静音的一段_卡片是第一帧_详情播视频(library) -> None:
+    client, instance_id, previews = library
+    _flag("video-sidecar")
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    assert _origin(client, instance_id, "plain.safetensors")["has_preview"] is True
+    params = {"folder": "loras", "name": "plain.safetensors"}
+    thumb = client.get(f"{base}/thumbnail", params=params)
+    assert thumb.status_code == 200 and thumb.headers["content-type"] == "image/webp", "卡片上是第一帧"
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(thumb.content)) as frame:
+        assert frame.size == (512, 288)
+    video = client.get(f"{base}/preview", params=params)
+    assert video.status_code == 200 and video.headers["content-type"] == "video/mp4"
+    assert _video_facts(video.content) == {"width": 512, "height": 288, "audio": False}, "缓存的是 512 宽、静音的那一段"
+    assert [one["path"] for one in previews.requests if one["path"].startswith("/sidecar/")] == ["/sidecar/plain.mp4"], \
+        "取过一次就从缓存给"
+    listed = _origin(client, instance_id, "plain.safetensors")
+    assert (listed["preview_origin"], listed["preview_kind"]) == ("server", "video")
+
+
+def test_示例只有视频的_用视频当预览_存回的是视频本身(library) -> None:
+    client, instance_id, _ = library
+    _flag("remote-video")
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    name = "sub\\style.safetensors"
+    assert client.get(f"{base}/thumbnail", params={"folder": "loras", "name": name}).headers["content-type"] == "image/webp"
+    listed = _origin(client, instance_id, name)
+    assert (listed["preview_origin"], listed["preview_kind"]) == ("civitai", "video")
+    saved = client.post(f"{base}/save-preview", json={"folder": "loras", "name": name})
+    assert saved.status_code == 200, saved.text
+    data = runtime.data_dir_for(PACKAGE_ID)
+    assert (data / "saved-name").read_text() == "preview.mp4", "维护者:不要用帧,直接用视频当预览"
+    assert _video_facts((data / "saved.bin").read_bytes())["width"] == 512
+    from app.domain import model_previews
+
+    assert model_previews.server_kind(instance_id, "loras", name) == "video", "存回的是视频:列表马上标成那台服务器上的视频"

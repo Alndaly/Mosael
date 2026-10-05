@@ -10,7 +10,9 @@
    半截文件;开始前查剩余空间;
 4. 都走不通:如实说明,并给出能做的那一步。
 
-    {"op": "download", "url", "folder", "filename"} → 流式:进度行;结果 {folder, name, size, route}
+    {"op": "download", "url", "folder", "filename"} → 流式:进度行;结果 {folder, name, size, route, page}
+
+下成了就记下这个文件的来源(见 provenance):模型库的「原链接」、Civitai 的 NSFW 标记和示例图都从这里来。
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Callable
 from urllib import parse
 
+import provenance
 import sources
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -424,6 +427,15 @@ def download(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     if norm(filename) in names_in(comfy, folder):
         raise ComfyError(_same_name(locale, folder, filename))
     direct = sources.direct_url(url, locale, set(info))
+    # 来源页在开始下之前就问好(Civitai 的要问一次版本信息):下完才问的话,那几秒里用户以为卡住了
+    origin = sources.provenance_of(url, locale)
+    done = _download_by_route(comfy, info, direct, folder, filename, locale, emit)
+    provenance.record(comfy, folder, str(done.get("name") or filename), done.get("size"), {"how": "download", **origin})
+    return {**done, "page": origin.get("page", "")}
+
+
+def _download_by_route(comfy: Comfy, info: dict[str, list[str]], direct: str, folder: str, filename: str, locale: str,
+                       emit: Emit) -> dict[str, Any]:
     version = manager_version(comfy)
     local = _local_dir(info, folder) if same_machine(comfy, info) else None
     refused = bool(_refusal(comfy))

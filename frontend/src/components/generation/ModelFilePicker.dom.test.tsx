@@ -48,6 +48,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  window.localStorage.clear();
   api.getModelLibrary.mockReset();
   api.getModelLibrary.mockResolvedValue({
     folders: [{ name: "loras", count: 11 }],
@@ -74,7 +75,7 @@ function openList(): HTMLElement {
 describe("选模型文件的那一格", () => {
   it("下拉里每一项有缩略图或按目录分的占位,写着底模和触发词;读的是那个连接的模型库", async () => {
     wrap(<ModelFilePicker instanceId="i1" parameter={parameter} value="" onChange={vi.fn()} />);
-    await waitFor(() => expect(api.getModelLibrary).toHaveBeenCalledWith("i1"));
+    await waitFor(() => expect(api.getModelLibrary).toHaveBeenCalledWith("i1", "safest"));
     await waitFor(() => expect(screen.getByRole("combobox").querySelector("[data-placeholder]")).toBeTruthy());
     const list = openList();
     const rows = within(list).getAllByRole("option");
@@ -116,6 +117,30 @@ describe("选模型文件的那一格", () => {
     const list = openList();
     expect(within(list).getAllByRole("option").length).toBe(11);
     expect(screen.queryByRole("button", { name: "modelTriggersAddToPrompt" })).toBeNull();
+  });
+});
+
+describe("预览图分档、NSFW 单独管(和模型库同一份设置)", () => {
+  it("下拉里的缩略图照两组设置画:判成 NSFW 的按 NSFW 那一档(更严的),说明里写着 NSFW;不显示的不去取图", async () => {
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "light", nsfw: "hidden" }));
+    api.getModelLibrary.mockResolvedValue({
+      folders: [{ name: "loras", count: 2 }], missing: [], download: { route: "none", note: "" }, downloads: [],
+      models: [
+        { folder: "loras", name: "style_1.safetensors", family: "", family_source: "", triggers: [], triggers_source: "",
+          has_preview: true, used_by: [], title: "", nsfw: { flagged: false, manual: null, reasons: [] } },
+        { folder: "loras", name: "style_2.safetensors", family: "", family_source: "", triggers: [], triggers_source: "",
+          has_preview: true, used_by: [], title: "", nsfw: { flagged: true, manual: true, reasons: [] } },
+      ],
+    });
+    wrap(<ModelFilePicker instanceId="i1" parameter={parameter} value="style_2.safetensors" onChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox").querySelector("[data-hidden-preview]")).toBeTruthy());
+    expect(screen.getByRole("combobox").querySelector("img")).toBeNull();
+    const rows = within(openList()).getAllByRole("option");
+    const row = (name: string) => rows.find((one) => one.textContent?.includes(name))!;
+    expect(row("style_1.safetensors").querySelector("img")!.getAttribute("data-treatment")).toBe("light");
+    expect(row("style_2.safetensors").querySelector("img")).toBeNull();
+    expect(row("style_2.safetensors").querySelector("[data-hidden-preview]")).toBeTruthy();
+    expect(row("style_2.safetensors").textContent).toContain("modelNsfwBadge");
   });
 });
 

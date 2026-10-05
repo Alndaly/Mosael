@@ -2,12 +2,15 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, MousePointerClick, RefreshCcw, Search } from "lucide-react";
 
-import { getModelLibrary, getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
+import { getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { useImagePreview } from "@/components/app/image-preview";
-import { ModelThumb, modelBaseName } from "@/components/generation/ModelThumb";
+import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
+import { ModelThumb, NsfwMark, PreviewOriginMark, modelBaseName } from "@/components/generation/ModelThumb";
+import { previewPick, previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
+import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -25,7 +28,6 @@ import {
 } from "@/features/plugins/workbench/workbenchLogic";
 import { PANEL_ROOT, PanelEmpty, PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
-import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 /** 一次最多摆多少个(一个目录里见过几百个 LoRA):多了先搜。 */
@@ -53,11 +55,7 @@ export function ModelsPanel({
     enabled: inputs.length > 0,
     staleTime: Infinity,
   });
-  const library = useQuery({
-    queryKey: ["model-library", target.instanceId],
-    queryFn: () => getModelLibrary(target.instanceId),
-    staleTime: 30_000,
-  });
+  const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const slots = modelSlots(node, folders.data?.folders ?? []);
 
   if (capabilities && (!capabilities.selection || !capabilities.setWidget)) {
@@ -116,9 +114,9 @@ function SlotPicker({
   const [note, setNote] = React.useState<Note | null>(null);
   //: 说有预览图、取的时候却没取到的那几个:缩略图换成了占位,也就没有大图可看
   const [failed, setFailed] = React.useState<ReadonlySet<string>>(() => new Set());
-  //: 模型库的「模糊预览图」记在本机,这里照着它(读同一个开关,不另起一个)
-  const [blur] = usePersistentTab<"on" | "off">("model-library.blur", "off", ["on", "off"]);
-  const blurred = blur === "on";
+  //: 预览图分档、NSFW 单独管:和模型库是同一份设置(记在本机),这里也能改
+  const [previewSettings] = useModelPreviewSettings();
+  const treatmentOf = (model: ModelFile) => previewTreatment(previewSettings, Boolean(model.nsfw?.flagged));
   const families = folderFamilies(models, slot.folder);
   const listed = folderModels(models, slot.folder, { query, family });
   const present = presentIn(models, slot.folder, slot.value);
@@ -141,11 +139,17 @@ function SlotPicker({
   });
 
   const previewable = (model: ModelFile) => model.has_preview && !failed.has(model.name);
-  //: 看大图:这一页列着的、有预览图的成组翻(按列表的顺序)。开着「模糊预览图」时只开点的那一张 —— 点它是明确要看这一张,
+  //: 看大图:这一页列着的、看得清的成组翻(按列表的顺序)。点的是模糊着、不显示的那一张时只开它 —— 点它是明确要看这一张,
   //: 翻到别的就等于没经同意替人把它们都看清了
   const preview = (model: ModelFile) => {
-    const item = (one: ModelFile) => ({ src: modelPreviewUrl(target.instanceId, one.folder, one.name), title: one.title || modelBaseName(one.name) });
-    const gallery = blurred ? [item(model)] : listed.slice(0, LISTED).filter(previewable).map(item);
+    const pick = previewPick(previewSettings);
+    const item = (one: ModelFile) => ({
+      src: modelPreviewUrl(target.instanceId, one.folder, one.name, pick),
+      title: one.title || modelBaseName(one.name),
+      ...(one.preview_kind === "video" ? { video: true } : {}),
+    });
+    const clear = (one: ModelFile) => previewable(one) && treatmentOf(one) === "clear";
+    const gallery = clear(model) ? listed.slice(0, LISTED).filter(clear).map(item) : [item(model)];
     openImagePreview({ ...item(model), gallery });
   };
 
@@ -184,11 +188,14 @@ function SlotPicker({
                          if (canRefresh) refresh.mutate();
                        }} />
       )}
-      <label className="relative">
-        <Search size={13} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input size="xs" className="pl-8" value={query} placeholder={t("workbenchModelsSearch").replace("{folder}", slot.folder)}
-               aria-label={t("workbenchModelsSearch").replace("{folder}", slot.folder)} onChange={(event) => setQuery(event.target.value)} />
-      </label>
+      <div className="flex items-center gap-1.5">
+        <label className="relative min-w-0 flex-1">
+          <Search size={13} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input size="xs" className="pl-8" value={query} placeholder={t("workbenchModelsSearch").replace("{folder}", slot.folder)}
+                 aria-label={t("workbenchModelsSearch").replace("{folder}", slot.folder)} onChange={(event) => setQuery(event.target.value)} />
+        </label>
+        <ModelPreviewSettingsButton compact />
+      </div>
       {families.length > 1 && (
         <div role="group" aria-label={t("workbenchModelsFamily")} className="flex flex-wrap gap-1">
           {["", ...families].map((one) => (
@@ -220,7 +227,7 @@ function SlotPicker({
             const filling = pick.isPending && pick.variables?.name === model.name;
             const name = model.title || modelBaseName(model.name);
             const thumb = (
-              <ModelThumb compact instanceId={target.instanceId} model={model} blurred={blurred}
+              <ModelThumb compact instanceId={target.instanceId} model={model} treatment={treatmentOf(model)}
                           onFailed={() => setFailed((current) => new Set([...current, model.name]))} />
             );
             return (
@@ -267,6 +274,13 @@ function SlotPicker({
                       : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
                   </span>
                 </button>
+                {/* 判成 NSFW、预览图来自 Civitai 的角标:在填的那颗按钮外面(它们自己能聚焦、悬停说凭什么) */}
+                {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server")) && (
+                  <span className="flex shrink-0 flex-col items-end gap-0.5">
+                    <NsfwMark nsfw={model.nsfw} className="h-4" />
+                    <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
+                  </span>
+                )}
               </li>
             );
           })}

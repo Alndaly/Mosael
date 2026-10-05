@@ -34,7 +34,8 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
 TOOLS = PLUGIN / "tools"
 _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
-            "tooling", "library", "sources", "install", "families", "weights", "model_files")
+            "tooling", "library", "sources", "install", "families", "weights", "model_files", "civitai", "nsfw",
+            "provenance", "lookup", "previews")
 
 TAGS = json.dumps({"10_style": {"1girl": 40, "solo": 35, "smile": 12, "outdoors": 3}, "5_extra": {"1girl": 5, "hat": 9}})
 
@@ -354,7 +355,7 @@ def test_本机那条路_直接写进模型目录_不留半截文件(comfy, data
     site = files({"/tiny.safetensors": body})
     out, progress = _download(comfy, {"url": f"{site.url}/tiny.safetensors", "folder": "vae",
                                       "filename": "mosael-test-tiny.safetensors"}, data_dir, tmp_path)
-    assert out == {"folder": "vae", "name": "mosael-test-tiny.safetensors", "size": 200_000, "route": "local"}
+    assert out == {"folder": "vae", "name": "mosael-test-tiny.safetensors", "size": 200_000, "route": "local", "page": ""}
     assert (root / "vae" / "mosael-test-tiny.safetensors").read_bytes() == body
     assert not list((root / "vae").glob("*.mosael-part"))
     assert progress.events and progress.events[-1][0] == pytest.approx(1.0)
@@ -580,6 +581,37 @@ def test_解析Civitai页面_版本接口给文件_类型定目录_底模定家�
     assert "Authorization" not in web.calls[0][2], "公开的模型信息不用令牌就看得到:令牌能不带就不带"
     assert out["uses_token"] is True, "下载时会带上 Civitai 令牌(界面据此提醒经 Manager 下载时它会留在那台机器上)"
 
+
+def test_解析Civitai_链接能点名版本里的哪个文件_按编号或格式精度(modules, comfy, monkeypatch) -> None:
+    """一个版本常有几个文件(fp16 / fp8、SafeTensor / PickleTensor):链接带 `fileId` 就是那一个,带 Civitai 下载链接上的
+    `format` / `size` / `fp` 就按它们挑;都没带是主文件。点名的编号不在这个版本里,说出来,不悄悄换成主文件。"""
+    _, sources = modules
+    version = {
+        "id": 333, "name": "v1", "modelId": 30, "baseModel": "Flux.1 D", "model": {"name": "F", "type": "Checkpoint"},
+        "files": [
+            {"id": 9001, "name": "f_fp16.safetensors", "type": "Model", "primary": True, "sizeKB": 2.0,
+             "metadata": {"format": "SafeTensor", "size": "full", "fp": "fp16"},
+             "downloadUrl": "https://civitai.com/api/download/models/333"},
+            {"id": 9002, "name": "f_fp8.safetensors", "type": "Model", "sizeKB": 1.0,
+             "metadata": {"format": "SafeTensor", "size": "pruned", "fp": "fp8"},
+             "downloadUrl": "https://civitai.com/api/download/models/333?type=Model&format=SafeTensor&size=pruned&fp=fp8"},
+        ],
+    }
+    monkeypatch.setattr(sources, "fetch", _Web({("GET", "https://civitai.com/api/v1/model-versions/333"):
+                                                (200, {}, json.dumps(version).encode())}))
+    from comfy_http import Comfy
+
+    def resolved(url: str) -> str:
+        return sources.resolve({"url": url}, Comfy(comfy.url), "zh")["filename"]
+
+    page = "https://civitai.com/models/30?modelVersionId=333"
+    assert resolved(page) == "f_fp16.safetensors", "没点名:主文件"
+    assert resolved(f"{page}&fileId=9002") == "f_fp8.safetensors"
+    assert resolved("https://civitai.com/api/download/models/333?type=Model&format=SafeTensor&fp=fp8") == "f_fp8.safetensors"
+    assert resolved(f"{page}&fp=bf16") == "f_fp16.safetensors", "格式精度对不上的:和 Civitai 一样给主文件"
+    with pytest.raises(Exception, match="9003"):
+        resolved(f"{page}&fileId=9003")
+    assert sources.direct_url(f"{page}&fileId=9002", "zh", set()).endswith("fp=fp8"), "下载用的是那个文件自己的直链"
 
 
 @pytest.mark.parametrize("host", ["civitai.red", "www.civitai.red", "civitai.green"])

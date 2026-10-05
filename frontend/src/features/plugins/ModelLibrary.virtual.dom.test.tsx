@@ -23,6 +23,9 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
+//: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
+const imagePreview = vi.hoisted(() => vi.fn());
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: imagePreview, isImagePreviewOpen: false }) }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 //: 数缩略图画了几次:卡片记忆化之后,弹窗为别的事重渲时它们不该跟着重画。
 const thumbRenders = vi.hoisted(() => ({ count: 0 }));
@@ -47,7 +50,7 @@ const name = (index: number) => `lora-${String(index).padStart(3, "0")}.safetens
 function library(): ModelLibrary {
   const models: ModelFile[] = Array.from({ length: COUNT }, (_, index) => ({
     folder: "loras", name: name(index), size: 1000 + index, modified: 1700000000 + index, family: "", family_source: "",
-    triggers: [], triggers_source: "", title: "", has_preview: true, used_by: [],
+    triggers: [], triggers_source: "", title: "", has_preview: true, preview_origin: "", preview_kind: "image", used_by: [],
   }));
   return { folders: [{ name: "loras", count: COUNT }], models, missing: [], download: { route: "none", note: "" }, downloads: [] };
 }
@@ -161,7 +164,7 @@ it("从详情回来:滚回原处,刚才点开的那一张(几百个之后)画出
   expect(document.activeElement).toBe(back!.querySelector("[data-library-open]"));
 });
 
-it("弹窗为别的事重渲(比如搜索框里打字)时,已经画着的卡不跟着重画;开关「模糊预览图」才重画", async () => {
+it("弹窗为别的事重渲(比如搜索框里打字)时,已经画着的卡不跟着重画;改了预览图那一档才重画", async () => {
   open();
   const list = await screen.findByRole("list", { name: "modelLibraryTitle" });
   const mounted = within(list).getAllByRole("listitem").length;
@@ -170,6 +173,7 @@ it("弹窗为别的事重渲(比如搜索框里打字)时,已经画着的卡不�
   fireEvent.change(screen.getByRole("textbox", { name: "modelLibrarySearch" }), { target: { value: "lora" } });
   expect(within(list).getAllByRole("listitem")).toHaveLength(mounted);
   expect(thumbRenders.count).toBe(before);
-  fireEvent.click(screen.getByRole("button", { name: "modelLibraryBlur" }));
+  fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
+  fireEvent.click(within(screen.getByRole("radiogroup", { name: "modelPreviewLevel" })).getByRole("radio", { name: "modelPreviewLevelLight" }));
   expect(thumbRenders.count).toBe(before + mounted);
 });
