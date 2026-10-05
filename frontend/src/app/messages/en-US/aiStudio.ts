@@ -70,7 +70,6 @@ export const aiStudio = {
   genSectionSources: "Inputs",
   genSectionAdvanced: "Tuning",
   genSize: "Size",
-  genNumImages: "Images",
   genRuns: "Runs",
   genRunsHint: "How many times to run it. Each run makes {perRun} as the workflow is saved ({detail}); {total} in total this time",
   genRunsHintPlain: "How many times to run it. Each run makes {perRun} as the workflow is saved; {total} in total this time",

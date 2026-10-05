@@ -84,11 +84,11 @@ it("ComfyUI 的工作流:这一格叫「跑几遍」,下面说一遍几张、这
   });
   expect(await screen.findByText("跑几遍")).toBeInTheDocument();
   expect(screen.getByText("跑几遍。每遍按工作流原样出 4 张(批量 4),这次一共 4 张")).toBeInTheDocument();
-  expect(screen.queryByText("genNumImages")).not.toBeInTheDocument();
+  expect(screen.queryByText("wfGenNumImages")).not.toBeInTheDocument();
 });
 
 it("别的模型照旧叫「张数」,不带这句说明", async () => {
   renderStudio({ modes: ["text-to-image"], parameter_keys: ["num_images"], max_num_images: 4 });
-  expect(await screen.findByText("genNumImages")).toBeInTheDocument();
+  expect(await screen.findByText("wfGenNumImages")).toBeInTheDocument();
   expect(screen.queryByText("跑几遍")).not.toBeInTheDocument();
 });

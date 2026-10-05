@@ -70,7 +70,6 @@ export const aiStudio = {
   genSectionSources: "输入素材",
   genSectionAdvanced: "调参",
   genSize: "尺寸",
-  genNumImages: "张数",
   genRuns: "跑几遍",
   genRunsHint: "跑几遍。每遍按工作流原样出 {perRun} 张({detail}),这次一共 {total} 张",
   genRunsHintPlain: "跑几遍。每遍按工作流原样出 {perRun} 张,这次一共 {total} 张",

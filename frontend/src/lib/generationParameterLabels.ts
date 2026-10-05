@@ -1,6 +1,6 @@
 import type { GenerationOption } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
-import { declaredParameters, type GenerationKind } from "@/lib/generationCapabilities";
+import { countsRuns, declaredParameters, type GenerationKind } from "@/lib/generationCapabilities";
 
 /** 生成种类 → 界面上的名字。选择器分组、工作流节点、配置提示都读这一份。 */
 export const GENERATION_KIND_LABELS: Record<GenerationKind, MessageKey> = {
@@ -61,6 +61,9 @@ export function generationParameterLabel(
   model: GenerationOption | null,
   t: (key: MessageKey) => string,
 ): string {
+  // ComfyUI 工作流的「张数」是跑几遍(countsRuns,每遍按工作流原样出它那一批):照实叫「跑几遍」—— AI 工作台、画板、
+  // 工作流节点的表单和画布上的接入点都读这里,同一格不会一处叫「张数」一处叫「跑几遍」。
+  if (key === "num_images" && countsRuns(model)) return t("genRuns");
   const known = HOST_PARAMETER_LABELS[key] ?? GENERATION_BOOLEAN_LABELS[key] ?? GENERATION_PARAMETER_LABELS[key];
   if (known) return t(known);
   return declaredParameters(model).find((parameter) => parameter.key === key)?.label ?? "";

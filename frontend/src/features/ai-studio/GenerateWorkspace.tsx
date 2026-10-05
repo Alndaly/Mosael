@@ -96,7 +96,7 @@ import {
   withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
 import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
@@ -1031,7 +1031,7 @@ export function GenerateWorkspace({
                 {isImageModel && supportsParameter(selectedModel, "num_images") && (
                   // ComfyUI 的工作流「张数」是跑几遍:标签换成「跑几遍」,下面说清一遍出几张、一共几张(见 runsHint)。
                   <ParameterField
-                    label={countsRuns(selectedModel) ? t("genRuns") : t("genNumImages")}
+                    label={generationParameterLabel("num_images", selectedModel, t)}
                     hint={countsRuns(selectedModel)
                       ? runsHint(t, selectedModel, generationParameters(selectedModel, generationConfig),
                         Math.max(1, Math.min(maxImages(selectedModel), Number(generationConfig.numImages) || 1)))

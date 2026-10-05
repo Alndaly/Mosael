@@ -57,7 +57,7 @@ import {
   videoResolutionOptions,
   withTriggerWords,
 } from "@/lib/generationCapabilities";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -1285,7 +1285,7 @@ export function NodeComposer({
       trailing={
         options.length > 0 && batches ? (
           // ComfyUI 的工作流「张数」是跑几遍(countsRuns):悬停说清一遍出几张、这次一共几张,每一档的副标题写跑几遍。
-          <Hint label={runs ? t("genRuns") : undefined} hint={runs ? runsHint(t, current, formParameters, count) : undefined}>
+          <Hint label={runs ? generationParameterLabel("num_images", current, t) : undefined} hint={runs ? runsHint(t, current, formParameters, count) : undefined}>
           <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
             {/* 数是**这一次会落出几格**(跑一遍交回几份 × 张数),不是发出去的张数:一张工作流两个结果节点时选「4×」
                 是跑 2 遍、一共 4 格 —— 和其他模型上「N×」的意思一样(落出 N 格),副标题说清跑几遍 / 每个节点几张。 */}
