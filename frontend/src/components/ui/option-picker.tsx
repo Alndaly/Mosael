@@ -131,12 +131,15 @@ export function OptionPicker({
   }
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      {/* 选项是服务端给的动态值:列表里单行截断、悬停看全文(SelectItem 的 truncate);选中后
-          克隆进触发器的也是那一份,触发器里被截断的值同样悬停看得到全名。 */}
+      {/* 选项是服务端给的动态值:列表里单行截断、悬停看全文(SelectItem 的 truncate)。
+          **触发器里的值自己画,不用 Radix 从清单里克隆过来的那一份**:克隆是从清单(浮层内容)里 portal 进来的,
+          它的 React 上下文在清单那边 —— 浮层内容清掉了说明的范围(HintScopeReset),再加上值那一层
+          pointer-events: none,被截断的名字悬停时哪条说明都不出。自己画的这一份在触发器的 Hint 里,
+          被截断了全名就并进那条说明(外面还套着一条 Hint 时并进外面那条,见 tooltip.tsx 的 Hint)。 */}
       <Hint label={hint}>
         <SelectTrigger aria-label={ariaLabel} size={size} className={className} {...rest}>
           {icon}
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder}>{selected ? <Truncate>{selected.label}</Truncate> : undefined}</SelectValue>
         </SelectTrigger>
       </Hint>
       <SelectContent align={align} className={contentClassName}>

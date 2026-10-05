@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import * as React from "react";
+import { createPortal } from "react-dom";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -225,5 +227,143 @@ describe("内嵌浏览器外壳(顶栏、页面列表、侧栏)里的说明", ()
     expect(content()?.getAttribute("data-side")).toBe("right");
     await waitFor(() => expect(showFloat).toHaveBeenCalled());
     expect(showFloat.mock.calls.at(-1)![0].html).toContain("一段很长很长的页面标题");
+  });
+});
+
+/**
+ * 「这一下该不该出说明」只在说明的触发器里判(tooltip.tsx 的 TooltipTrigger)。Radix 一试图打开就先广播一声把别的说明
+ * 全关掉,在 onOpenChange 里再拒绝已经晚了 —— 下面每一条都是「Radix 先动了手」留下的闪烁。
+ */
+describe("说明只在真有人要看的时候出:不闪", () => {
+  /** 说明浮层挂上、卸下的次序。一闪而过就是挂上又卸下。 */
+  function watchTooltips() {
+    const events: string[] = [];
+    const has = (node: Node) =>
+      node instanceof HTMLElement && (node.matches("[data-tooltip]") || node.querySelector("[data-tooltip]") !== null);
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) if (has(node)) events.push("mount");
+        for (const node of record.removedNodes) if (has(node)) events.push("unmount");
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return events;
+  }
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+  const hover = (element: HTMLElement) => {
+    fireEvent.pointerEnter(element);
+    fireEvent.pointerMove(element);
+  };
+
+  it("一个控件套两层说明、里层没话说(画板的「4×」):指针从外层挪进里层的按钮,一直是外层那一条,挂在外层上,不先开再被关掉", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="跑几遍" hint="每遍按工作流原样出 4 张">
+          <span data-testid="outer">
+            <Hint label={undefined}>
+              <button type="button" aria-label="一次落出几格">4×</button>
+            </Hint>
+          </span>
+        </Hint>
+      </TooltipProvider>,
+    );
+    const outer = screen.getByTestId("outer");
+    const inner = screen.getByRole("button", { name: "一次落出几格" });
+    const events = watchTooltips();
+    //: 指针先落在外层够得着、里层够不着的那条边上(从右边的发送键移过来就是这样),说明出来
+    hover(outer);
+    await screen.findByRole("tooltip");
+    //: 再挪进里层的按钮:此前里层那条没话说的 Hint 也去敲 Radix 的门,Radix 广播一声把外层这条关了
+    hover(inner);
+    await settle();
+    const tooltips = screen.getAllByRole("tooltip");
+    expect(tooltips.map((one) => one.textContent)).toEqual(["跑几遍每遍按工作流原样出 4 张"]);
+    expect(document.querySelector("[data-tooltip]")?.getAttribute("data-state")).not.toBe("closed");
+    expect(outer.getAttribute("aria-describedby"), "说明挂在外层的触发器上").toBe(tooltips[0].id);
+    expect(inner.hasAttribute("aria-describedby")).toBe(false);
+    expect(events, "只挂上一次,没有卸下再挂").toEqual(["mount"]);
+  });
+
+  it("两层都有话说:指针在里层时只出里层那一条 —— 外层不跟着开出来把它顶掉", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="外层">
+          <span>
+            <Hint label="里层">
+              <button type="button">B</button>
+            </Hint>
+          </span>
+        </Hint>
+      </TooltipProvider>,
+    );
+    const events = watchTooltips();
+    hover(screen.getByRole("button"));
+    await screen.findByRole("tooltip");
+    await settle();
+    expect(screen.getAllByRole("tooltip").map((one) => one.textContent)).toEqual(["里层"]);
+    expect(events).toEqual(["mount"]);
+  });
+
+  it("Hint 包着一个自带弹出清单的控件:在清单里移动指针、用方向键挑选项,外层的说明都不出 —— 此前它挂在触发器上盖着清单,每挪一次焦点开关一次", async () => {
+    //: 清单经 portal 渲染到 body 底下,但在 React 的树里它还是 Hint 的子孙 —— 事件顺着 React 的树冒到 Hint 的触发器上
+    //: 和 Hint 包着的 <span><Pick/></span> 一样:触发器是一个真正的元素,弹出的清单是它的子组件
+    const Picker = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(function Picker(props, ref) {
+      return (
+        <span ref={ref} {...props}>
+          <button type="button">4×</button>
+          {createPortal(
+            <div role="listbox">
+              <button type="button" role="option" aria-selected="false">8×</button>
+              <button type="button" role="option" aria-selected="false">12×</button>
+            </div>,
+            document.body,
+          )}
+        </span>
+      );
+    });
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="跑几遍">
+          <Picker />
+        </Hint>
+      </TooltipProvider>,
+    );
+    const [eight, twelve] = screen.getAllByRole("option");
+    hover(eight);
+    await settle();
+    expect(screen.queryByRole("tooltip"), "指针在清单里").toBeNull();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    act(() => twelve.focus());
+    await settle();
+    expect(screen.queryByRole("tooltip"), "方向键挑到下一项").toBeNull();
+  });
+
+  it("在菜单里用方向键挑完,按 Esc / Enter 关掉:焦点还回按钮的那一下不出说明", () => {
+    const [write, translate] = mount();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    act(() => write.focus());
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    fireEvent.keyDown(document, { key: "Enter" });
+    act(() => translate.focus());
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("工具条里用方向键在按钮之间挪(和 Tab 一样是键盘切过来的):出说明", () => {
+    const [, translate] = mount();
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+    act(() => translate.focus());
+    expect(screen.getByRole("tooltip").textContent).toBe("翻译");
+  });
+
+  it("指针停在上面:只出一次,在上面来回移动不会关了再开", async () => {
+    const [write] = mount();
+    const events = watchTooltips();
+    hover(write);
+    await screen.findByRole("tooltip");
+    for (let step = 0; step < 5; step += 1) fireEvent.pointerMove(write);
+    await settle();
+    expect(events).toEqual(["mount"]);
   });
 });

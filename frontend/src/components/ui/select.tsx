@@ -149,8 +149,9 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
  * 不属于"当前选了什么"。
  *
  * 名字默认是静态文案:放不下就折行。**动态的长值**(模型名、文件名、音色名、服务端给的选项)
- * 传 `truncate`:单行截断、悬停看全文 —— 选中后克隆进触发器的也是这一份,触发器里被截断的值
- * 同样悬停看得到全文。
+ * 传 `truncate`:单行截断、悬停看全文。选中后克隆进触发器的那一份也截断,但**悬停看不到全文**:
+ * 它的 React 上下文在清单这边(说明的范围被浮层内容清掉了),值那一层又是 pointer-events: none。
+ * 触发器里要看全名的,像 OptionPicker 那样往 SelectValue 里自己画值。
  */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,

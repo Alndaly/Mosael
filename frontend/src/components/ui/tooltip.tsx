@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 
 import { listenKeys } from "@/lib/shortcuts"
@@ -34,8 +35,6 @@ function EnsureProvider({ children }: { children: React.ReactNode }) {
 }
 
 const Tooltip = TooltipPrimitive.Root
-
-const TooltipTrigger = TooltipPrimitive.Trigger
 
 /** 说明浮层的外观。长网址、长文件名在浮层里折行(任意处可断),不把浮层撑出窗口。 */
 const TOOLTIP_SURFACE =
@@ -78,17 +77,21 @@ const TooltipContent = React.forwardRef<
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
 /**
- * 最近一次输入是不是键盘。**焦点被程序还回来**(关掉菜单、面板时 Radix 把焦点还给触发它的那枚按钮)
- * 也是一次 focus —— 让它出说明的话,那条说明就挂在那枚按钮上,直到失焦;鼠标移到别的按钮上,
- * 旧的那条还在。所以因聚焦而出说明只认键盘切过来的(Tab、方向键),鼠标一动就不算。
+ * 焦点是不是**键盘在控件之间挪过来的**(Tab、方向键、Home / End)。说明因聚焦而出只认这一种。
+ *
+ * 焦点还会被程序挪:关掉菜单、面板、对话框时 Radix 把焦点还给打开它的那枚按钮。让这一下出说明的话,
+ * 关掉一个菜单,那枚按钮上就冒出一条说明,鼠标移到别处也不走。所以按下挪焦点的键记一笔,**按别的键就清掉**
+ * —— Esc、Enter、空格正是关菜单、选中、确认的那几下:在菜单里用方向键挑完再按 Esc / Enter,焦点还回去的
+ * 那一下不算键盘切过来的(此前只有指针能清,方向键挑过菜单的人一关菜单就看到说明冒出来)。指针一动也清。
  */
-let keyboardInput = false
+const NAVIGATION_KEYS = new Set(["Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"])
+let keyboardNavigation = false
 if (typeof document !== "undefined") {
   listenKeys(document, (event) => {
-    if (event.key === "Tab" || event.key.startsWith("Arrow")) keyboardInput = true
+    keyboardNavigation = NAVIGATION_KEYS.has(event.key)
   }, true)
   const pointer = () => {
-    keyboardInput = false
+    keyboardNavigation = false
   }
   document.addEventListener("pointerdown", pointer, true)
   document.addEventListener("pointermove", pointer, true)
@@ -122,12 +125,16 @@ export type HintShortcut = string | readonly string[]
  * 而不是在同一处再挂一个说明。两条说明叠在同一块上,同一时刻只留一条的规则会让其中一条永远出不来
  * (要么看不到全文和原文,要么看不到补充说明)。
  *
- * Truncate 在这个范围里就不自己出说明,只登记「我现在被截断了吗、全文是什么、补充哪一句」。浮层内容
- * (Popover / Select / ContextMenu / Dialog 的 Content)会把范围清掉:React 的 context 会穿过
+ * Truncate 在这个范围里就不自己出说明,只登记「我现在被截断了吗、全文是什么、补充哪一句」。范围由说明的触发器
+ * (TooltipTrigger)给:Hint 收下这些登记;直接用 Tooltip 的富内容卡片(引用卡片)不收 —— 那张卡片就是这块的说明,
+ * 里面被截断的名字不另出一条。自己没话说的 Hint 套在另一条说明里时把范围原样往里传(见 Hint)。
+ *
+ * 浮层内容(Popover / Select / ContextMenu / Dialog 的 Content)会把范围清掉:React 的 context 会穿过
  * portal,不清的话,一个套在 Hint 里的组件弹出来的菜单项也会把全文交给外面那条够不着它的说明。
  */
 type ScopedText = () => { full: React.ReactNode | null; hint: string | null }
-const HintScope = React.createContext<((get: ScopedText) => () => void) | null>(null)
+type ScopeRegister = (get: ScopedText) => () => void
+const HintScope = React.createContext<ScopeRegister | null>(null)
 
 /** 并进 Hint 说明里的一段:被截断的全文(正文色),或 Truncate 补充的那一句(跟在全文后面时淡一档)。 */
 type ScopedLine = { text: React.ReactNode; kind: "full" | "hint"; muted: boolean }
@@ -165,6 +172,74 @@ function HintScopeReset({ children }: { children?: React.ReactNode }) {
   return <HintScope.Provider value={null}>{children}</HintScope.Provider>
 }
 
+/** 不收登记的范围:直接用 Tooltip 的富内容卡片里被截断的字,不另出一条(见 HintScope)。 */
+const IGNORE_SCOPED: ScopeRegister = () => () => {}
+
+/** 每一下指针移动 / 聚焦只开一条说明:里层的触发器收下了,外层就不再拿它去开自己那条(见 TooltipTrigger)。 */
+const claimed = new WeakSet<Event>()
+
+/**
+ * 夹在 Radix 的触发器和真正那个元素之间的一道闸:「指针进来了」「聚焦了」只在这条说明**该出**的时候才交给 Radix。
+ *
+ * 不能等 Radix 问过之后再在 onOpenChange 里拒绝:Radix 一试图打开,先广播 `tooltip.open` 把别的说明全关掉、
+ * 再让下一条免等待,然后才问我们 —— 拒绝了也晚了,开着的那条已经被关掉。也不能在事件上 preventDefault
+ * 让 Radix 跳过:同一个事件还要冒泡给外层的触发器和别的组件(工具条的方向键焦点就听 onFocus)。
+ * 闸只拦它自己身后那一个 Radix 触发器,事件照常往上走。
+ */
+const OpenGate = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement> & { canOpen?: () => boolean }>(
+  function OpenGate({ canOpen, onPointerMove, onFocus, ...props }, ref) {
+    const admit = (event: React.SyntheticEvent<HTMLElement>, wanted: boolean) => {
+      if (!wanted || claimed.has(event.nativeEvent)) return false
+      //: 事件目标不在这块元素里:它是从 portal 里(这个控件自己弹出来的下拉、菜单)顺着 React 的树冒上来的
+      if (!event.currentTarget.contains(event.target as Node)) return false
+      if (canOpen && !canOpen()) return false
+      claimed.add(event.nativeEvent)
+      return true
+    }
+    return (
+      <Slot
+        ref={ref}
+        {...props}
+        onPointerMove={(event: React.PointerEvent<HTMLElement>) => {
+          if (admit(event, event.pointerType !== "touch")) onPointerMove?.(event)
+        }}
+        onFocus={(event: React.FocusEvent<HTMLElement>) => {
+          if (admit(event, keyboardNavigation)) onFocus?.(event)
+        }}
+      />
+    )
+  },
+)
+
+/**
+ * 说明的触发器 —— Hint、Truncate 和直接用 Tooltip 的富内容卡片都经过它。**「这一下该不该出说明」只在这里判**:
+ *
+ * 1. **指针真的在这块元素上。** React 的事件顺着组件树冒泡,穿过 portal:一个套在 Hint 里的下拉(Hint 包着
+ *    整个选择器,弹出来的清单是它的子组件),在清单里移动指针、用方向键挑选项,这些事件都会冒到 Hint 的触发器上
+ *    —— 说明就在下拉开着的时候挂到触发器上,盖在清单上,每挪一次焦点开一次关一次(画板「4×」那一格的闪烁)。
+ *    所以只认目标在这块元素的 DOM 里面的事件。
+ * 2. **聚焦只认键盘切过来的**(见 keyboardNavigation):焦点被还回来、被程序放过来都不出。
+ * 3. **有话可说才去开**(`canOpen`):没名字、没被截断的字时一声不响。
+ * 4. **一处只出一条,里层的说了算。** 两个触发器叠在一起(外层一条 Hint 包着一个自带说明的控件),一下指针移动
+ *    只开最里面那条有话可说的;外层只在指针落在里层够不着的地方时出。和原生 `title` 一样:离指针最近的那条。
+ *    自己没话说的那层不认领,也不另开一条(见 Hint)。
+ *
+ * `scope`:这块里被截断的字(Truncate)交给谁(见 HintScope)。缺省不收 —— 直接用 Tooltip 的卡片就是这块的说明。
+ */
+const TooltipTrigger = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & { canOpen?: () => boolean; scope?: ScopeRegister }
+>(function TooltipTrigger({ asChild, canOpen, scope = IGNORE_SCOPED, children, ...props }, ref) {
+  return (
+    // Provider 套在 Trigger 外面:asChild 的 Slot 只能把属性交给一个真正的元素。
+    <HintScope.Provider value={scope}>
+      <TooltipPrimitive.Trigger asChild ref={ref} {...props}>
+        <OpenGate canOpen={canOpen}>{asChild ? children : <button type="button">{children}</button>}</OpenGate>
+      </TooltipPrimitive.Trigger>
+    </HintScope.Provider>
+  )
+})
+
 function Shortcut({ keys }: { keys: HintShortcut }) {
   return typeof keys === "string" ? <Kbd>{keys}</Kbd> : <KbdGroup keys={keys} />
 }
@@ -178,10 +253,12 @@ function Shortcut({ keys }: { keys: HintShortcut }) {
  * 按钮自己的 `aria-label`,这里只管看得见的那一份。只有图标的按钮别直接套这个,用 `IconButton`:
  * 名字只写一次,两份都给。
  *
- * **只在指针真的停在上面、或键盘切过来时出**(见 keyboardInput),同一时刻只有一条(closeOpenHint)。
+ * **只在指针真的停在上面、或键盘切过来时出**,同一时刻只有一条(closeOpenHint)。什么时候算,见 TooltipTrigger。
  *
  * 没有可说的(`label`、`disabledReason` 都是空)就不出说明,但结构照旧 —— 「有时有说明」的控件
- * (`label={problem ?? undefined}`)不会因为说明来去而被换掉一层、丢了焦点。
+ * (`label={problem ?? undefined}`)不会因为说明来去而被换掉一层、丢了焦点。这时它若套在另一条说明的触发区里
+ * (外层一条 Hint 包着整个选择器,选择器自己的触发器也套着 Hint),就**让外面那条替整块说**:不认领指针和焦点,
+ * 里面被截断的字(触发器里的值)也交给外面那条,并进同一条说明。
  *
  * `disabledReason`:**点不了的按钮自己收不到悬停**(disabled 的原生按钮不派发指针事件,Button
  * 还挂着 `disabled:pointer-events-none`)。给了原因就在外面套一层能接住指针和键盘焦点的壳
@@ -208,7 +285,7 @@ function Hint({
 }) {
   const [open, setOpen] = useExclusiveOpen()
   const placement = regionPlacement(React.useContext(HintRegion), side)
-  const hovered = React.useRef(false)
+  const outer = React.useContext(HintScope)
   const scoped = React.useRef(new Set<ScopedText>())
   const register = React.useCallback((get: ScopedText) => {
     scoped.current.add(get)
@@ -217,6 +294,8 @@ function Hint({
     }
   }, [])
   const [lines, setLines] = React.useState<ScopedLine[]>([])
+  const speaks = Boolean(label || disabledReason)
+  const measure = () => scopedLines(scoped.current, [label, hint])
   const trigger = disabledReason ? (
     <span
       data-hint-disabled=""
@@ -237,28 +316,21 @@ function Hint({
             setOpen(false)
             return
           }
-          if (!hovered.current && !keyboardInput) return
-          const measured = scopedLines(scoped.current, [label, hint])
-          if (!label && !disabledReason && measured.length === 0) return
+          const measured = measure()
+          if (!speaks && measured.length === 0) return
           setLines(measured)
           setOpen(true)
         }}
       >
-        {/* Provider 套在 Trigger 外面:asChild 的 Slot 只能把属性交给一个真正的元素。 */}
-        <HintScope.Provider value={register}>
-          <TooltipTrigger
-            asChild
-            onPointerEnter={() => {
-              hovered.current = true
-            }}
-            onPointerLeave={() => {
-              hovered.current = false
-              setOpen(false)
-            }}
-          >
-            {trigger}
-          </TooltipTrigger>
-        </HintScope.Provider>
+        <TooltipTrigger
+          asChild
+          //: 自己没话说又在别的说明里:范围原样往里传,里面被截断的字交给外面那条(见上面的注释)
+          scope={!speaks && outer ? outer : register}
+          canOpen={() => speaks || measure().length > 0}
+          onPointerLeave={() => setOpen(false)}
+        >
+          {trigger}
+        </TooltipTrigger>
         <TooltipContent {...placement} align={align} data-hint="">
           {lines.map((line, index) => (
             <span key={index} data-truncate-line={line.kind} className={cn("block whitespace-pre-wrap", line.muted && "text-muted-foreground")}>

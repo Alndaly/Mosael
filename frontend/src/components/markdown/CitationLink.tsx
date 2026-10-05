@@ -15,7 +15,7 @@ export function CitationLink({ href, children }: React.ComponentProps<"a"> & {no
   }
   const Icon = source.kind === "note" ? BookOpen : Globe;
   // 悬停卡片(标题 + 摘录 + 网址)是富内容,不走 Hint。胶囊里截断的名字在卡片里都看得全(网页的域名在网址里、
-  // 笔记的名字就是标题);两条说明同一时刻只出一条,卡片在外层,出得晚、留下的是它。
+  // 笔记的名字就是标题),所以它不另出一条:触发器里被截断的字交给卡片,卡片不收(见 tooltip.tsx 的 HintScope)。
   // 摘录不再截成四行:它在 citations.ts 里已经截到 280 字;卡片里再套一层「截断了悬停看全文」的说明,
   // 一悬上去外面这张卡就被顶掉了。
   return <Tooltip><TooltipTrigger asChild><a href={source.href} target={source.kind === "web" ? "_blank" : undefined} rel="noopener noreferrer" aria-label={source.title}

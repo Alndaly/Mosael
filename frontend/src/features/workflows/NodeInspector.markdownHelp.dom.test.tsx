@@ -64,9 +64,10 @@ it("字段帮助和节点说明里的记号渲染成格式", async () => {
   expect(screen.getByText("素材id").tagName).toBe("CODE");
   expect(container.textContent).not.toMatch(/\*\*|`/);
 
-  // 节点说明在图标的提示气泡里:聚焦触发器把它打开。
+  // 节点说明在图标的提示气泡里:指针移上去把它打开(图标拿不到焦点;说明因聚焦而出只认键盘切过来的)。
   const trigger = container.querySelector("[data-state][class*='cursor-help']") as HTMLElement;
-  fireEvent.focus(trigger);
+  fireEvent.pointerEnter(trigger);
+  fireEvent.pointerMove(trigger);
   const strong = await screen.findAllByText("新素材");
   expect(strong.some((node) => node.tagName === "STRONG")).toBe(true);
   expect(document.body.textContent).not.toContain("**");

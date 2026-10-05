@@ -61,7 +61,8 @@ const Truncate = React.forwardRef<
     if (!node) return false
     return lines === 1 ? node.scrollWidth > node.clientWidth + 1 : node.scrollHeight > node.clientHeight + 1
   }
-  //: 在一条 Hint 的触发区里:不自己出说明,把「被截断时的全文」和补充的那句交给那条(见 tooltip.tsx 的 HintScope)。
+  //: 在一条说明的触发区里:不自己出说明,把「被截断时的全文」和补充的那句交给那条(见 tooltip.tsx 的 HintScope)。
+  //: 那条是 Hint 就并进它的说明;是直接用 Tooltip 的富内容卡片就不另出 —— 卡片就是这块的说明。
   const scope = React.useContext(HintScope)
   const full = text ?? children
   const scoped = () => ({ full: overflowing() ? full : null, hint: hint ?? null })
@@ -100,7 +101,10 @@ const Truncate = React.forwardRef<
           setOpen(cut || Boolean(hint))
         }}
       >
-        <TooltipTrigger asChild>{element}</TooltipTrigger>
+        {/* 没被截断、也没有补充的一句:指针移上来不去敲 Radix 的门(见 tooltip.tsx 的 TooltipTrigger) */}
+        <TooltipTrigger asChild canOpen={() => overflowing() || Boolean(hint)}>
+          {element}
+        </TooltipTrigger>
         <TooltipContent {...regionPlacement(region, side)} data-truncate-full="" className="max-w-[min(28rem,calc(100vw-1rem))] whitespace-pre-wrap">
           {clipped ? <span className="block">{full}</span> : null}
           {hint ? <span className={cn("block", clipped && "text-muted-foreground")}>{hint}</span> : null}

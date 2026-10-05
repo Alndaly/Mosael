@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 import * as React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
 import { insideDialog } from "./insideDialog";
+import { Hint, TooltipProvider } from "./tooltip";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -88,6 +89,81 @@ describe("选项的副标题", () => {
   it("没得选的时候是禁用的,而不是点开一片空", () => {
     render(<OptionPicker value="x" onChange={vi.fn()} options={[{ value: "x", label: "还没有可用模型" }]} disabled />);
     expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+});
+
+describe("触发器上的悬停说明", () => {
+  const LONG = "watercolor-character.json · 演示 ComfyUI";
+  const items = [
+    { value: "a", label: LONG },
+    { value: "b", label: "短" },
+  ];
+  /** 让触发器里那段值「放不下」(jsdom 没有版面)。 */
+  function clipValue() {
+    const value = screen.getByRole("combobox").querySelector<HTMLElement>(".truncate");
+    expect(value, "触发器里的值该是一段会截断的字").toBeTruthy();
+    Object.defineProperty(value!, "scrollWidth", { value: 400, configurable: true });
+    Object.defineProperty(value!, "clientWidth", { value: 120, configurable: true });
+  }
+  function hover(element: HTMLElement) {
+    fireEvent.pointerEnter(element);
+    fireEvent.pointerMove(element);
+  }
+
+  it("短清单的触发器里被截断的值,悬停看得到全名 —— 此前值是 Radix 从清单里克隆过来的,悬停什么都不出", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <OptionPicker value="a" onChange={vi.fn()} options={items} />
+      </TooltipProvider>,
+    );
+    clipValue();
+    hover(screen.getByRole("combobox"));
+    expect((await screen.findByRole("tooltip")).textContent).toBe(LONG);
+  });
+
+  it("外面还套着一条说「这一格是什么」的 Hint(画板的参数芯片、「4×」):全名并进外面那一条,只有一条说明", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="目标语言">
+          <span>
+            <OptionPicker value="a" onChange={vi.fn()} options={items} />
+          </span>
+        </Hint>
+      </TooltipProvider>,
+    );
+    clipValue();
+    hover(screen.getByRole("combobox"));
+    await screen.findByRole("tooltip");
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getAllByRole("tooltip").map((one) => one.textContent)).toEqual([`${LONG}目标语言`]);
+  });
+
+  it("键盘打开下拉、方向键挑、Enter 选中:外面那条说明不在下拉开着时冒出来,焦点还回触发器时也不出", async () => {
+    const onChange = vi.fn();
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="跑几遍">
+          <span>
+            <OptionPicker value="1" onChange={onChange} options={["1", "2", "3"].map((value) => ({ value, label: `${value}×` }))} />
+          </span>
+        </Hint>
+      </TooltipProvider>,
+    );
+    const trigger = screen.getByRole("combobox");
+    fireEvent.keyDown(document, { key: "Tab" });
+    act(() => trigger.focus());
+    expect(screen.getByRole("tooltip").textContent, "键盘切过来时照样出").toBe("跑几遍");
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const options = await screen.findAllByRole("option");
+    expect(screen.queryByRole("tooltip"), "下拉一开说明就收起").toBeNull();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    act(() => options[1].focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.queryByRole("tooltip"), "方向键挑选项时").toBeNull();
+    fireEvent.keyDown(options[1], { key: "Enter" });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(onChange).toHaveBeenCalledWith("2");
+    expect(screen.queryByRole("tooltip"), "选中后焦点还回触发器").toBeNull();
   });
 });
 
