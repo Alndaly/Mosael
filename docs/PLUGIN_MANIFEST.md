@@ -1106,7 +1106,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 #### `model_library` —— 这台服务器上有哪些模型文件,缺的下到它上面
 
 决策见 [ADR 0034](adr/0034-model-library.md),范例是 `plugins/bundled/comfyui/tools/library.py`。目录类:认领它的工具
-不进工具表,插件页上那个连接多一行「模型库」。宿主按 `op` 问:
+不进工具表,插件页上那个连接的标题行多一颗「打开模型库」。宿主按 `op` 问:
 
 - `{"op": "library"}` → 一问一答(不留调用记录,打开模型库、下完一个文件都会问一次 —— 逐个读的元数据请自己记在持久目录里):
 
@@ -1141,7 +1141,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 #### `workflow_library` —— 这台服务器上存着哪些工作流,替宿主改它们
 
 决策见 [ADR 0035](adr/0035-workflow-library.md),范例是 `plugins/bundled/comfyui/tools/workflow_library.py`。目录类:认领它的
-工具不进工具表,插件页上那个连接多一个「工作流库」。宿主按 `op` 问(都是一问一答):
+工具不进工具表,插件页上那个连接的标题行多一颗「打开工作流库」。宿主按 `op` 问(下面几个都是一问一答,装节点包是流式):
 
 - `{"op": "workflows"}` → 不留调用记录(打开工作流库、改完一张都会问一次):
 
@@ -1168,15 +1168,34 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
     }],
     "others": [{"path": "pack.zip", "reason": "给人看的一句:它为什么不是工作流"}],
     "trash": [{"path": ".mosael-trash/workflows/20261005-101500/sub/人像.json", "deleted_at": 1791000000.0}],
-    "manager": {"version": "V4.2.1"}                              // 没有节点管理器给空串
+    "manager": {"version": "V4.2.1"},                             // 没有节点管理器给空串
+    "editor": {"kind": "comfyui", "url": "http://192.168.1.20:8188"} // 可选:这些工作流在哪儿编辑(见下)
   }
   ```
   `role` 是着色用的:`input` / `model` / `sampler` / `text` / `output` / `note` / `missing` / `other`。
+  `editor` 有了,详情上才有「在编辑器里打开」:桌面版在这个连接自己的内嵌浏览器里开这个地址,网页版开一个新标签页。宿主只认简单的
+  种类名(小写字母开头,`[a-z0-9-]`)和不带「用户名:密码@」的 http(s) 地址,不对就当没有编辑器。打开具体哪一张是宿主按种类做的
+  (ComfyUI:页面就绪后经它前端自己的工作流列表打开那一张),插件只报地址。
 - `{"op": "workflow", "path": "…"}` → `{"content": {…}}`(原文);
 - `{"op": "copy_workflow", "path", "new_path"}`、`{"op": "rename_workflow", "path", "new_path"}`、
   `{"op": "restore_workflow", "path"(回收目录里的), "new_path"}` → `{"path": "改完之后的路径"}`;**不许覆盖**:`new_path` 已经有了
   就回 `{"conflict": true, "suggestion": "人像 (1).json"}`(宿主翻成 409、界面要求换名)。复制要给副本换一个新的图 id;
 - `{"op": "trash_workflow", "path"}` → `{"path": "回收目录里的路径"}`:**不硬删**,挪进 `.mosael-trash/workflows/<YYYYMMDD-HHMMSS>/<原路径>`。
+
+**导入并补齐**(ADR 0035 §5):
+
+- `{"op": "inspect_import", "text": "…"}`(贴进来的 JSON 原文)、`{"op": "inspect_import", "data": "<base64>", "filename": "x.png"}`
+  (一个文件:JSON、ComfyUI 存的 PNG / WebP、压缩包)或 `{"op": "inspect_import", "url": "https://…"}`,三样只给一样;不留调用记录。
+  回答:`{"workflow": {…界面格式…}, "format": "ui" | "api", "source": "json" | "png" | "webp" | "zip" | "url",
+  "suggested_path": "导入的工作流.json", "notes": ["给人看的话"]}`,外加和 `workflows` 里每一张同一套的描述(`kind`、`graph`、
+  `inputs`、`parameters`、`outputs`、`models`、`missing_nodes`、`missing_models`……)。API 格式的请换成界面格式交回
+  (宿主只存界面格式);认不出就失败,原因写给人看。宿主挡掉超过 30 MB 的和不是 http(s) 的链接;链接只该去插件声明过网络权限的站。
+- `{"op": "save_workflow", "path", "content": "<界面格式的 JSON 字符串>"}` → `{"path"}`;**不许覆盖**,撞名同上回 `conflict` + `suggestion`。
+- `{"op": "install_nodes", "packs": ["节点包 id"]}` → **流式**(进度行、取消照常),结果 `{"installed": [...], "restart": true}`。
+  宿主把它跑成一个后台任务(任务中心看得到),包名先过一遍(1~10 个、不超长、没有控制字符)、要工作区的编辑权限;节点管理器的安全策略
+  不让装时,失败原因写成人话和下一步。
+- `{"op": "reboot"}` → `{"back": true}`:经节点管理器重启那台服务器,等它回来(宿主最多等 5 分钟);回来以后宿主让这个连接的目录重拉,
+  新装的节点包这时才加载。
 
 宿主先查过路径(`workflows/` 里的相对路径、`.json`、没有 `..` 和反斜杠;回收目录里的只认上面那种形状),你写之前仍要再查一遍;
 每次改成了,宿主让这个连接重新拉一遍模型和工具目录。
@@ -1236,7 +1255,9 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 ```
 
 - `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`examples`(推荐值,不是限制)、`default`、`minimum`、`maximum`、
-  `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`、`x-enum-labels`、`x-outputs-per-run`(后两个见下)。认不出的类型整项丢掉。`title` / `description`
+  `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`、`x-enum-labels`、`x-outputs-per-run`(后两个见下)、`x-model-folder`
+  (这一格选的是哪个模型目录的文件,如 `checkpoints`、`loras`;连接认领了 `model_library` 时,生成表单从模型库取缩略图、底模和触发词,
+  选中带触发词的 LoRA 能一键加进提示词)。认不出的类型整项丢掉。`title` / `description`
   可以按语言分(`{"zh": "步数", "en": "Steps"}`):宿主**原样存着、给人看时再挑** —— 目录是在后台刷新的,刷新那一刻
   的语言不是看的人的语言。`title` 写人话(「采样器」),原始的内部名(`KSampler · sampler_name`)放 `description`,
   界面上悬停看得到。**顺序就是界面上的顺序**:常用的在前,留空也能跑的标 `x-advanced`。
@@ -1247,7 +1268,9 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`,以及音频模型的 `lyrics`(歌词编辑器)与
   `instrumental`(纯音乐开关)。**其余的键**进描述符的 `parameter_schema`,
   AI 工作台、画板、工作流节点用同一个通用控件渲染;提交时宿主按它校验类型、范围和可选值。
-  用户没动过的参数**不发**,插件给的 `default` 只当占位提示(ADR 0015)。
+  宿主控件那几个键(`size`、`resolution`、`aspect_ratio`、`duration_seconds`、`generate_audio`、`instrumental`)上写了 `default` 的,
+  调用方(工作流、画板、智能体、定时任务)没给时宿主照它发 —— 和内置目录声明的默认值同一条规矩,免得落到服务商自己的默认上;
+  其余的键用户没动过就**不发**,`default` 只当占位提示(ADR 0015)。
 - `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` /
   `source_video` / `driving_audio` / `mask` …,见 `ai/providers/contracts/generation.SOURCE_ROLES`),`max` 是这个角色
   最多几份,`required: true` 是必须给(放大、抠图这类没有提示词的工作流,图就是必须的)。认不出的角色不接。
