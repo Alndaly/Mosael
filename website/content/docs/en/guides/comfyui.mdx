@@ -184,18 +184,18 @@ tool call. Longer runs belong in generation.
   start of the toolbar.
 - **A toolbar on top**: search (with the number of files in scope), a **Base model** filter (tick several; it lists only the ones
   in the current folder, with counts), sorting (by name / size / date modified), three views (large cards / small cards / list),
-  a **Blur previews** switch, and **Download model**. Active filters sit in a row, each removable, with **Clear all**. The view and
-  the blur switch are remembered on this computer. In a narrower window the toolbar stays on one line by folding buttons down to icons
+  **How previews show** (the eye icon, see below), **Fill in missing previews**, and **Download model**. Active filters sit in a row,
+  each removable, with **Clear all**. The view and How previews show are remembered on this computer. In a narrower window the toolbar stays on one line by folding buttons down to icons
   in order of priority (Base model first, Download model last), with their names in the hover hints.
 - **Cards** show the preview image where there is one (an image with the same name as the model file, or the cover inside a
   safetensors file), always 3:4; files without one get a placeholder per folder. Small cards fit a dozen or more on a screen;
   large cards add the folder and how many workflows use it; the list has one file per row with folder, base model, size and date.
-  With **Blur previews** on, previews stay blurred until the pointer or keyboard focus rests on them — for when some previews
-  aren't fit to open in front of others.
+  Files judged NSFW carry an "NSFW" mark, and previews that come from Civitai say "From Civitai"; how previews show (clear,
+  blurred, hidden) follows How previews show.
   Cards and list rows use a downscaled preview (512 px on the long side); the detail page shows the original. With hundreds of
   files only the rows in view are drawn, and the first open only fetches the previews you can see from ComfyUI.
 
-![The model library (the demo's stand-in ComfyUI, with Big Buck Bunny frames as previews): folders and Models missing for workflows on the left; search, base model, sort, the three views, blur previews and Download model on top; small cards below, with a per-folder placeholder where there is no preview](/media/screens/en/model-library.png)
+![The model library (the demo's stand-in ComfyUI, with Big Buck Bunny frames as previews): folders and Models missing for workflows on the left; search, base model, sort, the three views, preview settings and Download model on top; small cards below, with a per-folder placeholder where there is no preview](/media/screens/en/model-library.png)
 
 **Open a model**: a fixed header shows its name and folder · size · base model, with **Copy file name**, **Used by N workflow(s)**
 and **Generate with it** on the right; below, the preview on the left and the overview, workflows and metadata on the right, each
@@ -216,6 +216,57 @@ column scrolling on its own.
   says why. Only trigger words the author wrote are added to the prompt.
 
 ![A LoRA's details: Generate with it, Copy file name and Used by 1 workflow at the top; the preview on the left; base model and how it was recognized (the file's metadata), trigger words, workflows, training tags and metadata on the right](/media/screens/en/model-detail.png)
+
+### Previews, NSFW and source
+
+**How previews show** (the eye icon on the toolbar; the model library, the workbench's Models panel and the model pickers when
+generating all follow it, and it's remembered on this computer):
+
+- **Previews**: Clear / Light blur / Heavy blur / Hidden (just the type icon);
+- **NSFW previews**: As usual / Blur / Hide. The two apply separately and the stricter one wins — for example "previews clear, NSFW
+  hidden". Blurred ones clear up while the pointer or keyboard focus rests on them; hidden ones aren't fetched at all, and the details
+  page can **Show this one**. The old **Blur previews** switch is converted on upgrade (on becomes Heavy blur).
+
+**What counts as NSFW**: cards and list rows carry an "NSFW" mark whose hint says why. Four kinds of evidence; any one saying yes
+counts:
+
+- **Manual mark**: **Mark as NSFW / Mark as not NSFW** in the context menu or the details, which beats everything below; **Back to
+  automatic** undoes it. Kept on the Mosael side only;
+- **Civitai**: the file was matched to a Civitai version (see below) and Civitai marks it adult, or the example shown is rated R or
+  above;
+- **Metadata**: adult tags make up a tenth of the training tags, or the file name or title has such words — offline, and it misses
+  some;
+- **Local detection**: looks at the preview itself on this computer. In **How previews show**, **Download (22 MB)** installs a small
+  model (deployment admins only; pictures and results never leave this computer). From then on cards are checked as they appear, and
+  the library refreshes itself when a batch is done; the hint reads "Local detection: 87% likely NSFW". It's a hint, not a guarantee.
+
+**Find on Civitai**: **Find on Civitai** in the context menu or the details. With ComfyUI-Custom-Scripts on that ComfyUI, it has the
+file's SHA256 computed (big files take a while; the result is kept next to the model) and asks Civitai by hash, so a match is exactly
+this version; without it, it searches by "original file name + size as recorded on Civitai", accepts exactly one match, and says it
+matched by name. Finding runs as a background job you can watch and cancel in the job center. After a match:
+
+- the details show the **source** (the Civitai version page) and how it's known; models downloaded through Mosael recorded their page
+  at download time (HuggingFace and ModelScope file pages too). Without one it says so — no link is guessed from a file name;
+- a base model only known as SDXL / Wan / Flux is refined to the one Civitai lists (Illustrious, Wan 2.2…), noted as "listed on
+  Civitai";
+- a model with **no preview on the server** shows Civitai's example, marked "**From Civitai**" in the corner — only inside Mosael,
+  nothing changes on that ComfyUI. Which example follows the NSFW setting: the author's first one with As usual, otherwise the
+  lowest-rated one;
+- **Save as preview** writes it next to the model on that ComfyUI (512 wide, after a confirmation naming the server and folder, with
+  an extra warning for name matches). **Fill in missing previews** on the toolbar goes through them one by one, saves hash matches
+  right away, and lists name matches for you instead of saving them. Both write through ComfyUI-Custom-Scripts' routes; without it
+  the buttons are greyed out and say what's missing. A preview already on the server is never overwritten.
+
+**Preview videos**: when a `.mp4` / `.webm` with the model's name sits next to it, or Civitai's examples for it are only videos
+(common for video models like Wan), the card shows the first frame and plays a muted loop on hover; the details can play it.
+Blurred or hidden previews don't play. Saving back stores the video itself (`model-name.mp4`) — ComfyUI's own model list only shows
+images, so it won't show these there. For model names with `[ ]`, which ComfyUI can't find previews for, Mosael reads the files next
+to them by name.
+
+**Context menu**: right-click a card or a list row, use the "⋯" in its corner on hover, or focus it and press Shift+F10 / the menu
+key — it's the same menu: Open details, Generate with it, Copy file name / full path, Used by workflows, Open source link, Find on
+Civitai, Save as preview, View large (the filtered list's clear previews in one gallery; a blurred one opens alone), Mark as NSFW
+/ not NSFW. Items that can't be used say why. Mosael never deletes, renames or moves model files.
 
 ### Downloading models
 
@@ -258,7 +309,7 @@ connection and lands on the server URL field).
 
 In AI Studio, boards and the workflow generate node, the field that picks a checkpoint or LoRA (or a VAE, text encoder and the
 like) is a list with thumbnails: each item shows its base model and first trigger words, which can also be searched; files without
-a preview get a placeholder per folder. After picking a LoRA with trigger words, the line below lists them and **Add to prompt**
+a preview get a placeholder per folder, and thumbnails follow How previews show. After picking a LoRA with trigger words, the line below lists them and **Add to prompt**
 appends them (skipping any already there).
 
 ![A ComfyUI workflow picked in AI Studio, with the LoRA field open: each item has a thumbnail, base model and trigger words; below, the chosen one's trigger words and Add to prompt](/media/screens/en/ai-generate-models.png)
@@ -451,8 +502,9 @@ beside it:
   arrow keys on that edge; double-click resets it); the width is remembered on this computer and the canvas makes room.
 - **Models**: select a model-loading node on the canvas (checkpoint, LoRA, VAE, ControlNet, upscaler…) and only the models in its
   folder are listed, with previews, base model families and trigger words, searchable and filterable by family; click a row to fill it
-  into that input (it checks the input's dropdown first), click a thumbnail to view it larger (the page's previews in one gallery; with
-  “Blur previews” on, only the one you clicked). If the file the input points at isn't on this ComfyUI, **Find a download** or paste a
+  into that input (it checks the input's dropdown first), click a thumbnail to view it larger (the page's clear previews in one gallery; a
+  blurred or hidden one opens alone). Thumbnails follow How previews show, with the NSFW and From Civitai marks, and the panel has
+  its own How previews show button. If the file the input points at isn't on this ComfyUI, **Find a download** or paste a
   link right there, check it and confirm to download it into that folder; once it's downloaded the canvas dropdowns refresh and the new
   file is in them.
 - **Missing**: the nodes and models the graph **on the canvas right now** (unsaved changes included) is missing, in one list that

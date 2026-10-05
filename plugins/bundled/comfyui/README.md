@@ -274,6 +274,42 @@ its own site (ModelScope's to modelscope.cn / modelscope.ai; never to the storag
 into results or errors; a Civitai download through the Manager can only carry it in the URL, so it stays in that
 machine's Manager task history.
 
+### Model info: NSFW, source, finding on Civitai, preview videos (1.13.0)
+
+Decision in the Mosael repository's ADR 0038 §9. The plugin hands over the raw facts; the host combines the verdict,
+fetches and caches the media, and confirms before writing anything back.
+
+- **NSFW signals** (`nsfw_signals`, `tools/nsfw.py`): **metadata** — adult tags make up at least a tenth of the training
+  images in `ss_tag_frequency` (one or two stray images don't count), plus words in the file name and title (camelCase split);
+  **Civitai** — the version matched by hash, or downloaded from Civitai through Mosael, has its model marked `nsfw`. The host
+  adds the manual mark and local detection (both on the Mosael side): any signal saying yes counts, and a manual mark beats
+  them all.
+- **Source** (`source`, `tools/provenance.py`): the page recorded when Mosael downloaded the file (a HuggingFace / ModelScope
+  file page, a Civitai version page), otherwise what the file's metadata says, or the Civitai version matched by hash. Kept in
+  the persistent directory by server + folder + name + size; a changed file (different size) no longer counts. No link is ever
+  guessed from a file name.
+- **Find on Civitai** (`{"op": "lookup"}`, `tools/lookup.py`): with ComfyUI-Custom-Scripts installed, that machine computes the
+  SHA256 (`GET /pysssss/metadata/<folder>%2F<name>`; the first time it reads the whole file and keeps the result in a `.sha256`
+  next to the model) and Civitai is asked `/api/v1/model-versions/by-hash/{SHA256}` — a match is exact to the version. Without
+  it, Civitai is searched by file name and only **exactly one** version whose original file name matches exactly and whose size
+  is within 1 KB counts (marked `filename`; the user confirms before anything is saved back); several look-alikes count as none.
+  A miss is recorded too, so a batch doesn't make that machine hash the file again for a while. A match brings the source page,
+  the model's NSFW flag, the base model Civitai lists (refining a family only known as SDXL / Wan / Flux into Illustrious,
+  Wan 2.2…, source `civitai`) and a few examples (`remote_previews`: 512-wide images; for versions whose examples are only
+  videos, the `transcode=true,width=512` video). Civitai's public API needs no key; requests carry a browser-like User-Agent
+  (the default one gets a 403).
+- **Save as preview** (`{"op": "save_preview", "folder", "name", "path"}`, `tools/previews.py`): the host puts the picture
+  (shrunk to a 512-wide PNG, or the 512-wide mp4) at `path`; the plugin uploads it to temp through `/upload/image`, then
+  `POST /pysssss/save/<folder>%2F<name>` with `{"filename", "type": "temp"}` — pysssss copies it next to the model, named after
+  the model with the uploaded file's extension (`x.png` / `x.mp4`). That route overwrites a file of the same name, so the host
+  only calls it when the server has **no** preview yet. Without ComfyUI-Custom-Scripts, `preview_tools.save` is false and
+  `save_note` says what's missing; the buttons are greyed out. Detection: `GET /extensions` lists its `betterCombos.js`
+  (save, read by name) and `modelInfo.js` (hashing).
+- **Preview files next to the model** (`sidecars`): `.mp4` / `.webm` preview videos named like the model, and for names with
+  `[ ]` the image kinds ComfyUI's preview route can't find (it globs, and brackets break the pattern) — listed relative to
+  `sidecar_base` (`/pysssss/view/`); the host reads them by exact name after the preview route says there's none. Not listed
+  without pysssss.
+
 ## Workflow library (1.11.0)
 
 The connection's "Workflow library" on the Plugins page: every workflow saved on this ComfyUI (ADR 0035), in the same
@@ -470,6 +506,8 @@ queued or saved). If a frontend lacks something the bridge uses, that panel says
   and which models they miss);
 - `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading via the
   Manager → same machine → explain order;
+- `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py`: model info: Civitai's API and answer shapes,
+  finding by hash or file name, NSFW signals, source, preview files next to the model and saving a preview back;
 - `comfy_http.py` / `ws.py`: talking to ComfyUI.
 
 For the protocol, see `docs/PLUGIN_MANIFEST.md` in the Mosael repository: the sections on doing generation for the host,

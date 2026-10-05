@@ -211,6 +211,33 @@ ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope �
 发给 modelscope.cn / modelscope.ai;跳转到别处的存储时不带),不进结果和报错;经 Manager 下 Civitai 时只能拼进下载地址,
 会留在那台机器的 Manager 任务记录里。
 
+### 模型信息:NSFW、出处、在 Civitai 上找、预览视频(1.13.0)
+
+决策见 Mosael 仓库 ADR 0038 §9。插件这一头交原料,宿主合成判断、取图、缓存、写回前确认。
+
+- **NSFW 依据**(`nsfw_signals`,`tools/nsfw.py`):**元数据推断** —— 训练标签(`ss_tag_frequency`)里成人标签占到训练图的
+  一成才算(偶然一两张不算),文件名、标题里的词(驼峰拆开)也算;**Civitai** —— 按哈希对上、或经 Mosael 从 Civitai 下的
+  版本,模型标着 `nsfw`。宿主再加上手动标记和本机识别(都在 Mosael 那边),任一种说是就算是,手动的压过全部。
+- **出处**(`source`,`tools/provenance.py`):经 Mosael 下载时记下的来源页(HuggingFace / ModelScope 的文件页、Civitai 的
+  版本页),否则文件元数据里写着的、在 Civitai 上按哈希对上的。按「服务器 + 目录 + 名字 + 大小」记在持久目录里;文件换了
+  (大小变了)就不算数。不按文件名猜一个链接。
+- **在 Civitai 上找**(`{"op": "lookup"}`,`tools/lookup.py`):装了 ComfyUI-Custom-Scripts 时让那台机器算 SHA256
+  (`GET /pysssss/metadata/<目录>%2F<名字>`,第一次要把整个文件读一遍,它把结果记在模型旁边的 `.sha256` 里),问 Civitai
+  `/api/v1/model-versions/by-hash/{SHA256}` —— 对上的精确到版本;没装时在 Civitai 上按文件名搜,只认「Civitai 记的原始
+  文件名一字不差、大小差不过 1 KB」**恰好一个**版本(标 `filename`,存回之前要用户确认),几个都像不认。查不到也记一笔,
+  一阵子内不再让那台机器算一遍。对上的交来源页、模型的 NSFW 标记、Civitai 登记的底模(把只认到 SDXL / Wan / Flux 这一层的
+  家族细分成 Illustrious、Wan 2.2……,凭的写 `civitai`)和几张示例(`remote_previews`:512 宽的图;示例只有视频的交
+  `transcode=true,width=512` 的转码视频)。Civitai 的公开接口不要 API Key,请求带浏览器式的 User-Agent(默认的会被 403)。
+- **存为预览图**(`{"op": "save_preview", "folder", "name", "path"}`,`tools/previews.py`):宿主把要存的那张(缩成
+  512 宽的 PNG,或那段 512 宽的 mp4)放在 `path`,插件经 `/upload/image` 传进 temp,再 `POST /pysssss/save/<目录>%2F<名字>`
+  `{"filename", "type": "temp"}` —— pysssss 把它拷到模型旁边,名字是模型的名字换上传那一份的扩展名(`x.png` / `x.mp4`)。
+  这条路会覆盖同名的文件,所以宿主只在那台服务器上**没有**预览图时才调;那台 ComfyUI 没装 ComfyUI-Custom-Scripts 时
+  `preview_tools.save` 是 false、`save_note` 说缺什么,界面置灰。看装没装:`GET /extensions` 里有没有它的
+  `betterCombos.js`(写回、按名字读)和 `modelInfo.js`(算哈希)。
+- **旁边的预览文件**(`sidecars`):和模型同名的 `.mp4` / `.webm` 预览视频,以及文件名带 `[ ]` 时的那几种图(ComfyUI 的
+  预览接口按通配符找,带方括号的名字找不到)—— 列成相对 `sidecar_base`(`/pysssss/view/`)的一段,宿主在预览接口说没有
+  之后按名字直接读。没装 pysssss 时不列。
+
 ## 工作流库(1.11.0)
 
 插件页上这个连接的「工作流库」:这台 ComfyUI 上存着的全部工作流(ADR 0035),和模型库同一套界面 —— 左边按子目录,
@@ -354,6 +381,8 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
 - `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
+- `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py` —— 模型信息:Civitai 的接口和回答的形状、按哈希或
+  文件名找、NSFW 依据、出处、旁边的预览文件和写回预览图;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 
 协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」「流式工具」「一次交出几份」。

@@ -1183,10 +1183,22 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
                                                                   // family_source 是 not_applicable,界面写「不适用」
       "triggers": ["1girl"], "triggers_source": "tags",           // metadata = 作者写的;tags = 训练标签里最多的几个
       "title": "…", "used_by": [{"id": "flows/a.json", "label": "人像"}],
-      "preview": "loras/0/sub%5Cstyle.safetensors"               // 宿主去取、缓存,不交给界面;没有就别给。可以是相对 preview_base 的一段
+      "preview": "loras/0/sub%5Cstyle.safetensors",              // 宿主去取、缓存,不交给界面;没有就别给。可以是相对 preview_base 的一段
+      "sidecars": ["loras/sub/style.mp4"],                        // 可选:模型旁边按名字直接读的预览文件(相对 sidecar_base),
+                                                                  // 预览接口说没有之后按先后试;视频宿主转成 512 宽静音的一段
+      "remote_previews": [{"url": "https://…", "kind": "image",  // 可选:别处的示例(image / video),那台服务器上没有预览图时
+                           "site": "civitai", "level": 1,        // 宿主挑一张显示(分级最低的,或排在前的)、标「来自 …」
+                           "nsfw": false}],
+      "nsfw_signals": [{"source": "metadata", "nsfw": true,       // 可选:NSFW 依据,来源只认 metadata / civitai;
+                        "tags": ["…"], "words": ["…"]}],          // 宿主再合上手动标记和本机识别(ADR 0038 §9)
+      "source": {"page": "https://civitai.com/models/…", "site": "civitai",
+                 "how": "sha256"}                                 // 可选:原站上那一页和怎么知道的(download / sha256 / filename / metadata)
     }],
     "preview_base": "http://…/experiment/models/preview/",      // 相对预览地址的前缀(可选;几千个文件时省体积,一次回答最多 1 MB)
     "preview_headers": {"Authorization": "…"},                  // 取预览图要带的头(可选)
+    "sidecar_base": "http://…/pysssss/view/",                    // 相对 sidecars 的前缀(可选)
+    "preview_tools": {"lookup": "sha256", "save": true,          // 可选:找出处的路(sha256 / filename / 空)、能不能写回预览图、
+                      "save_note": ""},                           // 写不回时说缺什么
     "missing": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…",
                  "workflows": [{"id": "…", "label": "…"}]}],    // 工作流声明了地址、这台服务器上又没有的
     "download": {"route": "manager", "note": "给人看的一句:下载走哪条路、走不通时该做什么"}
@@ -1199,6 +1211,13 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 - `{"op": "download", "url": "…", "folder": "loras", "filename": "…"}` → **流式**(宿主一定按流式协议调它,不论工具上写没写
   `stream`):进度行、取消文件照常;结果 `{"folder", "name", "size", "route"}`。**不许覆盖已有文件**:同名的就失败、说清楚。
   宿主已经挡掉了带路径分隔符的文件名和不是 http(s) 的链接,你写盘前仍要再查一遍。
+
+- `{"op": "lookup", "folder", "name", "refresh"}` → 在别处(ComfyUI 插件是 Civitai)找这个文件:`{"match": "sha256" |
+  "filename" | "download" | "none", "page", "note", "remote_previews": […]}`。`filename` 是按文件名猜着对上的:宿主存回预览图
+  之前要用户确认。宿主在后台任务里逐个调(按哈希找可能要那台机器把整个文件读一遍),`refresh` 是用户点了「再找一次」;
+- `{"op": "save_preview", "folder", "name", "path"}` → 把宿主放在 `path` 的那张图(512 宽的 PNG)或那段视频(512 宽的 mp4)
+  写成这个文件在那台服务器上的预览图,回 `{"saved": "目录/文件名"}`。宿主只在那台服务器上**没有**预览图、用户确认之后才调;
+  `preview_tools.save` 是 false 时不调。
 
 下载是宿主的一个后台任务(任务中心里看得到、能取消);成功后宿主让这个连接重新拉一遍模型和工具目录,生成表单里马上选得到。
 
