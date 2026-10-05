@@ -163,7 +163,12 @@ const SelectItem = React.forwardRef<
 >(({ className, children, description, truncate, media, ...props }, ref) => {
   const text = (
     <>
-      <SelectPrimitive.ItemText className="min-w-0 max-w-full break-words">{truncate ? <Truncate>{children}</Truncate> : children}</SelectPrimitive.ItemText>
+      {/* **类名写在外面这一层,不写在 ItemText 上**:Radix 的 ItemText 把 className、style 拆出来就扔了(源码里
+          `const { className, style, ...itemTextProps } = props` 之后再没用过)。写在它上面的 `min-w-0` 从来没生效,
+          名字那一格按整串文字的宽度排 —— 长文件名冲出菜单、不出省略号,Truncate 量不到截断,悬停也没有全文。 */}
+      <span className="min-w-0 max-w-full break-words">
+        <SelectPrimitive.ItemText>{truncate ? <Truncate>{children}</Truncate> : children}</SelectPrimitive.ItemText>
+      </span>
       {description && <span className="min-w-0 break-words text-ui-xs leading-4 text-muted-foreground">{description}</span>}
     </>
   )
