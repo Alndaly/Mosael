@@ -2,104 +2,209 @@
   <img src="brand/mosael-wordmark.png" alt="Mosael" width="440" />
 </p>
 
+<h1 align="center">Mosael — local-first AI video studio for Mac &amp; Windows</h1>
+
 <p align="center">
-  <strong>Where ideas find their timeline.</strong><br />
-  An AI video studio that lives on your computer, from the first clip to the final publish.
+  <strong>Generate, edit and dub AI video on your own computer.</strong><br />
+  Bring your own API keys for Seedance, Kling, Veo, Wan and more — or your own ComfyUI — then cut on a timeline,
+  clone a voice, translate and lip-sync, make a photo talk, and turn a product photo into a narrated short.
 </p>
 
 <p align="center">
+  <a href="https://github.com/Alndaly/Mosael/releases/latest"><strong>Download for macOS / Windows</strong></a> ·
   <a href="https://mosael.com/en">Website</a> ·
-  <a href="https://github.com/Alndaly/Mosael/releases">Download</a> ·
   <a href="https://mosael.com/en/docs/start/intro">Guide</a> ·
+  <a href="https://mosael.com/en/workflows">Workflow templates</a> ·
   <a href="https://mosael.com/en/docs/about/contact#wechat">WeChat community</a> ·
   <a href="https://x.com/KindaHuaX">Maker on X</a>
 </p>
 
 **English** | [简体中文](README.zh-CN.md)
 
-Mosael brings documents, infinite boards, 3D scenes, AI generation, editing and publishing into one desktop workspace. Gather references, rehearse a camera move, generate media and shape it into a finished piece.
-
-> Projects and media stay on your computer by default. Cloud models, URL downloads, online tools and publishing use the network; connecting a remote backend stores shared data on that server.
+Mosael is a desktop app that takes a video from idea to upload: **AI generation, a multi-track editor, voice cloning
+and dubbing, digital humans, workflow automation and publishing in one place**. It connects to the model providers you
+already pay for — Mosael doesn't resell credits — and keeps your projects and media on your computer by default.
 
 ![Mosael: the story board, the editing timeline and a 3D scene with its camera path, layered as overlapping windows](docs/media/readme-showcase.en.png)
 
-<p align="center"><sub>Unaltered captures, composed like the homepage · Caveat / Newsreader / Space Grotesk · <a href="website/public/media/homepage/en">Original screenshots</a> · <a href="docs/media/mosael-promo.mp4">Watch the tour</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
+<p align="center"><sub>Unaltered captures, composed like the homepage · <a href="website/public/media/homepage/en">Original screenshots</a> · <a href="docs/media/mosael-promo.mp4">Watch the tour</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
 
-## Download and run
+## Download
 
-Current stable release: **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)**.
+| Platform | Installer | Notes |
+| --- | --- | --- |
+| macOS | `Mosael-<version>-arm64.dmg` | Apple silicon (M-series); signed and notarized |
+| Windows | `Mosael.Setup.<version>.exe` | Windows 10 / 11, x64 |
 
-Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
+Get the latest stable build from **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)** (users in
+mainland China can use the [Baidu Netdisk mirror](https://mosael.com/zh/docs/start/download)). Free for personal,
+non-commercial use — see [License](#license).
 
-- macOS: `.dmg` for Apple silicon
-- Windows: installer for Windows 10/11 x64
+Launch the installed app directly. It starts the bundled backend (default `127.0.0.1:8800`), loads the frontend and
+starts the publishing executor; nothing needs to be launched by hand. If a healthy Mosael backend is already listening
+on port 8800, the desktop app reuses it. Local features work without setup; before using AI chat, image or video
+generation, voice-over or transcription, add a connection under **Settings → AI Chat / AI Image / AI Video / AI Audio**,
+or connect your ComfyUI under **Plugins**.
 
-Launch the installed app directly. It starts the bundled backend (default `127.0.0.1:8800`), loads
-the frontend, and starts the publishing executor; no services need to be launched manually. If a
-healthy Mosael backend is already listening on port 8800, the desktop app reuses it.
+## What you can make
 
-Local features can be explored without additional setup. Before using AI chat, image or video
-generation, voiceover, or transcription, add a connection and model under the appropriate **Settings → AI Chat / AI Image / AI Video / AI Audio** section.
+Official [workflow templates](https://mosael.com/en/workflows) are complete pipelines: import one, point it at your own
+models and footage, and run it. A few of them:
 
-## A connected creative workspace
+| Template | What it does |
+| --- | --- |
+| [Product photo → narrated promo short](https://mosael.com/en/workflows/product-pitch-short) | Beat-by-beat script from hook to call to action, a product shot per beat, voice-over and on-screen captions, exported vertical — using only the selling points you give it |
+| [Product → presenter-led short](https://mosael.com/en/workflows/product-pitch-presenter) | A character from your asset library speaks the hook and the call to action; the beats in between show the product |
+| [Flat-lay photo → on-model shots and clips](https://mosael.com/en/workflows/product-on-model) | Up to 12 scenes, a vertical on-model image for each, animated when a video model is available |
+| [Topic → finished video](https://mosael.com/en/workflows/full-video-generation) | Script, characters, storyboard and a 3D blockout per shot, then first frames, video, narration and subtitles assembled in order |
+| [Video translation with lip-sync](https://mosael.com/en/workflows/translated-dub-lipsync) | Transcribe, translate and subtitle every line, dub it in a cloned voice, then re-sync the speaker's lips |
+| [Long video → vertical clips](https://mosael.com/en/workflows/highlight-shorts) | Up to 12 stand-alone passages from a talk, interview or stream, each on its own vertical timeline with captions |
+| [Script → talking-head video](https://mosael.com/en/workflows/talking-script-video) | One portrait and a script become a talking video with subtitles timed to the voice |
+| [Why a video went viral](https://mosael.com/en/workflows/viral-video-breakdown) | Data, top comments and the transcript of a Douyin, Xiaohongshu or Bilibili video become a breakdown and a script outline |
 
-### Collect research and plan the story
+Others cover transcript-based cleanup of talking-head footage, translated dubbing with subtitles only, montages from
+your own footage, fabric lookbooks, and account and comment analysis.
 
-Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL; PDFs, Word files, slides and spreadsheets are parsed into readable text on your machine, and scans can be re-parsed with the MinerU plugin. Every asset remembers what it was made from and how. Use tags, search and previews to find material again; open a profile in the browser pool and a page's screenshots, videos, images and text go to the library or a note in one click. Save scripts, transcripts and agent answers as notes, where selecting a passage lets the AI assistant polish, rewrite or translate it, with each change shown as original → new for your approval; version history is grouped by day and compares word by word, and sources stay traceable. Keep recurring characters, locations and props in the asset library — `@` one while generating and its description and reference images come along.
+![The workflow template gallery: topic to video, transcript cleanup, translated dubbing, lip-sync, long video to vertical clips, product on-model shots and more](website/public/media/screens/en/workflow-templates.png)
 
-Lay documents, media, assets and 3D scenes side by side on an infinite board. Connections pass text and reference media to generation; items do their own work — transcribe, translate, denoise, split a grid — and a timeline item gives you a rough cut right on the board. Comments, member mentions and position markers keep review anchored.
+## Features
 
-![Documents and references on a creative board](website/public/media/screens/en/boards.png)
+### AI video, image and music generation with your own API keys
 
-[Media library](https://mosael.com/en/docs/guides/media) · [Documents](https://mosael.com/en/docs/guides/documents) · [Notes](https://mosael.com/en/docs/guides/notes) · [Asset library](https://mosael.com/en/docs/guides/assets) · [Creative boards](https://mosael.com/en/docs/guides/boards)
+AI Studio generates images, video, music and sound effects from text, a first and last frame or reference images. Pick
+any model from the providers you connect and the controls follow that model; results land in the media library and
+remember what they were made from. Spending is recorded from the usage and charges providers report.
+[AI Studio](https://mosael.com/en/docs/guides/ai-studio) · [Model connections](https://mosael.com/en/docs/guides/providers)
 
-### Build the scene before generating the shot
+### ComfyUI client: workflows become models and tools
 
-Arrange objects and lighting, then keyframe cameras and objects on one timeline. Switch between the camera composition and a global view of its movement, or keep both visible. The resulting frame, first/last frames or camera preview video can guide the image or video model you choose.
+Connect a ComfyUI server on this computer or your LAN. Every saved workflow becomes a model you can pick in AI Studio
+and on boards, and a tool the agent and workflows can run. The **model library** lists the server's checkpoints, LoRAs
+and other files with preview images, base model and trigger words, and downloads what's missing; the **workflow
+library** imports workflows and completes missing models and custom nodes. In the next release, an **app form** shows
+only the few fields others need to fill in. Mosael doesn't replace ComfyUI's own interface — it puts your workflows next
+to cloud models, the editor and automation. [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui)
 
-Import GLB/glTF models, export a frame or camera preview, and exchange scenes with Blender through its MCP connection. Mosael provides scene layout and shot previsualization; advanced modeling, simulation and Blender-native effects remain in Blender.
+![ComfyUI model library with previews, base model and file size](website/public/media/screens/en/model-library.png)
 
-![3D scene, camera path and animation timeline](website/public/media/screens/en/scenes.png)
+### AI video editor: timeline, transcript editing and subtitles
 
-[3D scenes & animation](https://mosael.com/en/docs/guides/scenes)
+Edit on multiple timelines and tracks with overwrite and insert modes, linked picture and sound, ripple edits and the
+usual J / K / L, I / O and Q / W shortcuts. Cut by deleting words in the transcript, import and export .srt / .vtt
+captions, stack bilingual subtitles, grade with curves, presets and LUTs, and normalize loudness on export. People and
+agents can edit the same timeline at once, and ⌘Z undoes only your own step. [Editing & color](https://mosael.com/en/docs/guides/editing)
 
-### Edit picture, words and sound together
+### Voice cloning, AI dubbing and video translation
 
-Work with multiple timelines and tracks: drops overwrite what they land on, video stays linked to its detached audio, ripple edits and speed changes push what follows, and the usual J / K / L, I / O and Q / W shortcuts are there. People and agents can edit the same timeline at once without overwriting each other, and ⌘Z undoes only your own step. Edit from a transcript, import and export .srt / .vtt captions, stack bilingual subtitles, and place voiceover on its own track; a cloned voice from your voice library speaks locally, or from a copy cloned into your own Alibaba Cloud Bailian account for CosyVoice, with no local engine to install; right-click a clip to denoise it or keep only the voice. Curves, style presets and LUTs handle color; export can normalize loudness, and anything containing AI-generated content is labelled.
+Dub a subtitle track line by line with a voice cloned **locally** (F5-TTS or Fish Speech), with a copy of that voice in
+your own Alibaba Cloud Bailian account for **CosyVoice**, with free Edge voices, or with OpenAI and Volcengine voices.
+Split a clip into voice and background, denoise it, or keep only the voice. The translated-dubbing templates transcribe,
+translate, subtitle and dub a whole video, and can re-sync the speaker's lips. [Voice-over](https://mosael.com/en/docs/guides/editing#voiceover)
 
-![Captions and voiceover in the editor](website/public/media/screens/en/subtitle-dub.png)
+![Dubbing a subtitle track with a locally cloned voice in the editor](website/public/media/screens/en/subtitle-dub.png)
 
-[Editing & color](https://mosael.com/en/docs/guides/editing) · [Voice interaction](https://mosael.com/en/docs/guides/voice)
+### AI digital humans: talking photos and lip-sync
 
-### Work with AI on your terms
+Turn a portrait or a character asset plus a voice-over into a talking video with OmniHuman (Jimeng), Kling Avatar,
+HeyGen Avatar IV, Hedra Character-3 or Wan, or re-sync the lips of existing footage with Bailian videoretalk, Kling or
+HeyGen. A real person needs a consent declaration before their face or voice is used.
+[Digital humans](https://mosael.com/en/docs/guides/digital-humans)
 
-Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video, music & sound and voice capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Spending is recorded from the usage and charges providers report, with prices that can be tiered by resolution. Digital-human models make a face speak a voiceover or re-sync the lips of existing footage, with consent checked at every entry point. Generated results return to the media library.
+### Workflow automation
 
-Agents can read project context and use tools across media, notes, boards, scenes, editing and workflows. Actions that need approval show a confirmation card. Sessions, tool results, citations and execution traces stay available for review; workspace assistants can dock beside the work or float above it.
+Connect models, media and tools on a visual node canvas. Required inputs are checked before anything runs, and
+references that could never resolve are caught up front. Run a flow by hand, on a schedule or from a webhook, or let the
+agent call it. [Workflows](https://mosael.com/en/docs/guides/workflows) · [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler)
 
-![AI Studio conversation workspace](website/public/media/screens/en/ai-chat.png)
+### AI infinite canvas
 
-[Model connections](https://mosael.com/en/docs/guides/providers) · [AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio) · [Digital humans](https://mosael.com/en/docs/guides/digital-humans)
+Lay documents, media, character assets, 3D scenes and generations side by side on an infinite board. Connections pass
+text and reference media to generation; cells transcribe, translate, denoise or split a grid on their own; a timeline
+cell gives you a rough cut on the board. Comments, mentions and markers keep review anchored.
+[Creative boards](https://mosael.com/en/docs/guides/boards)
 
-### Reuse a process and publish the result
+![Documents, references and generation cells on an infinite canvas](website/public/media/screens/en/boards.png)
 
-Connect models, media and tools in a visual workflow. Check required inputs, run the flow, inspect node results, and catch references that can never resolve before anything runs. Official templates cover topic-to-video, translated dubbing, product shorts, talking-head scripts and account / viral-video / comment analysis. Run a flow manually, on a schedule or through a webhook; local schedules need the backend to remain running.
+### 3D previs and Blender
 
-Browser Pool manages persistent sign-ins and proxies for uploads, URL imports and browser automation; opening a profile gives you a browser with a page list, and downloads on a page go straight to the media library. Agents ask before borrowing a profile. Publishing forms follow each destination's capabilities; review the video, account and post before submitting, then track the result. Browser uploads require a connected desktop executor.
+Arrange objects and lighting, keyframe cameras and objects on one timeline, and watch the shot and the camera path side
+by side. Use the frame, first/last frames or the camera preview video as a reference for the image or video model you
+choose. Import GLB/glTF and exchange scenes with Blender through its MCP connection; advanced modeling and simulation
+stay in Blender. [3D scenes & animation](https://mosael.com/en/docs/guides/scenes)
 
-![Visual workflow and connected nodes](website/public/media/screens/en/workflows.png)
+### Agent, media library, notes and documents
 
-[Workflows](https://mosael.com/en/docs/guides/workflows) · [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool) · [Publishing](https://mosael.com/en/docs/guides/publishing)
+The agent reads project context and uses tools across media, notes, boards, scenes, editing and workflows; actions that
+need approval show a confirmation card. Import footage, record your screen or camera, or download a supported video
+URL; PDFs, Word files, slides and spreadsheets are parsed into text on your machine. Notes keep scripts and research,
+and a selected passage can be polished, rewritten or translated with each change shown for approval. Recurring
+characters, locations and props live in the asset library — `@` one while generating and its references come along.
+[AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio) · [Media library](https://mosael.com/en/docs/guides/media) · [Notes](https://mosael.com/en/docs/guides/notes) · [Asset library](https://mosael.com/en/docs/guides/assets)
 
-### Extend your workspace
+### Publish to Douyin, TikTok, Bilibili, Xiaohongshu and YouTube
 
-The **Chrome video companion** opens in the browser's Side Panel to read transcripts, seek to words, translate and import media or clean video frames. Supported URLs depend on the installed yt-dlp build; page controls require a usable video player. It uses its own Mosael session and does not read Chrome cookies.
+Browser Pool keeps persistent sign-ins and proxies for several accounts. Publishing forms follow each destination's
+options; review the video, account and post before submitting, then track the result.
+[Publishing](https://mosael.com/en/docs/guides/publishing) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool)
 
-**Plugins** connect local scripts or MCP services to agents and workflows, and can also take over generation, transcription, translation, voiceover, denoising or document parsing for Mosael. ComfyUI (with a model library and a workflow library to browse, download and import that server's models and workflows and install missing nodes), object storage and MinerU document parsing ship with the app; Manim, Remotion, TikHub, Baidu Netdisk, Blender and more are in the plugin market. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
+### Plugins and the Chrome companion
 
-On a shared deployment, the deployment admin uses the **Admin** console to manage members and sign-up, install local engines, and set download mirrors, the outbound proxy, internal network access and cost rules.
+ComfyUI, object storage and MinerU document parsing ship with the app; Blender, Manim, Remotion, TikHub, Baidu Netdisk
+and more are in the [plugin market](https://mosael.com/en/plugins). Plugins connect local scripts or MCP servers to the
+agent and workflows. The Chrome video companion reads transcripts in the side panel, translates and imports media.
+[Using plugins](https://mosael.com/en/docs/guides/plugins) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins) · [Chrome companion](browser-extension/README.md)
 
-[Chrome companion](browser-extension/README.md) · [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins) · [Admin console](https://mosael.com/en/docs/guides/admin)
+### AI-generated content labels
+
+When an export contains AI-generated or AI-altered content, Mosael writes the standard implicit AIGC label into the
+file and, by default, a visible "AI-generated" mark — in line with China's rules on labelling synthetic content.
+Turning the visible mark off is your call and is stated in the export dialog.
+
+## Supported models and providers
+
+Bring your own API key, or sign in with a supported subscription. Availability depends on your account and region; the
+full list with model names is in [Model connections](https://mosael.com/en/docs/guides/providers).
+
+| Capability | Providers |
+| --- | --- |
+| Video | Volcengine Ark (Seedance), Kuaishou Kling, Google (Veo), Alibaba Bailian (Wan), MiniMax (Hailuo), Evolink (Seedance, Kling, Veo, Hailuo, Wan, Sora…) |
+| Image | OpenAI (GPT Image), Volcengine Ark (Seedream), Alibaba Bailian (Qwen Image), Evolink (GPT Image, Gemini, Seedream…), OpenAI-compatible endpoints |
+| Talking photo & lip-sync | Volcengine Jimeng (OmniHuman), Kling, HeyGen, Hedra, Alibaba Bailian (Wan s2v, videoretalk) |
+| Music & sound | Google (Lyria), Evolink (Suno), Kling audio, Alibaba Model Studio (Fun-Music), Volcengine AI music |
+| Speech & voice | Local voice cloning (F5-TTS, Fish Speech), Alibaba Bailian (CosyVoice), Edge voices, OpenAI, Volcengine TTS and podcast |
+| Transcription | FunASR, WhisperX (local) |
+| Chat & agent | DeepSeek, Kimi, Alibaba Bailian (Qwen), MiniMax, OpenAI, OpenRouter, Ollama and other OpenAI-compatible endpoints; Claude Pro/Max, ChatGPT Plus/Pro, Kimi Code, GitHub Copilot and xAI sign-in |
+| Your own GPU | Any ComfyUI server on this computer or your LAN |
+
+## How Mosael fits next to the tools you know
+
+| If you use… | Where Mosael fits |
+| --- | --- |
+| CapCut / Jianying | Mosael has a multi-track editor, transcript editing, subtitles and voice-over, keeps projects on your computer and uses your own AI accounts. If you depend on CapCut's templates, stickers and music library, keep CapCut for that. |
+| ComfyUI's own interface | Mosael connects to your ComfyUI rather than replacing it: saved workflows become models and tools next to cloud models, the editor and automation, and ComfyUI's interface keeps working. |
+| Cloud ComfyUI platforms such as RunningHub | Mosael runs workflows on your own ComfyUI and GPU; there is no hosted compute or credit system. |
+| Separate generation, voice and subtitle sites | One project holds the generations, the timeline, the voices and the subtitles, and workflows chain the steps. |
+
+## FAQ
+
+**Is Mosael free?** Downloading it and using it for personal, non-commercial work is free. AI models are billed by the
+providers you connect, at their own prices. Commercial use requires written permission from the author; the
+[LICENSE](LICENSE) is authoritative.
+
+**Is Mosael open source?** The source code is public here, so you can read it, learn from it and build it locally, but
+it is released under a proprietary license, not an open-source one: commercial use and redistribution are not allowed
+without permission.
+
+**Do I need a GPU?** Not for Mosael itself. Cloud models run on the provider's servers and ComfyUI runs on whichever
+machine you connect. Local transcription, voice cloning and voice separation run on your computer after their models
+are downloaded; keep 10 GB or more of disk space free for them.
+
+**Does Mosael upload my videos?** Projects and media stay on your computer by default. A cloud model call sends that
+run's inputs to the provider you chose (some providers only accept public links, so files go to object storage you
+configure first); URL downloads, online tools and publishing also use the network. With a team server, shared data
+lives on that server.
+
+**Which systems are supported?** macOS on Apple silicon and Windows 10/11 x64. There is no Linux installer.
 
 ## Documentation
 
@@ -279,9 +384,10 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 
 ## License
 
-The source is visible but **all rights are reserved**. It may be used only for evaluation, learning,
-and personal non-commercial purposes; commercial use and redistribution require written permission.
-See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
-or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
+Mosael is **source-available, not open source**. The code is public, but all rights are reserved: you may view it and
+build and run it locally for evaluation, learning and personal non-commercial use; commercial use and redistribution
+require written permission. See [LICENSE](LICENSE). For commercial licensing, reach the maker through the
+[community and contact page](https://mosael.com/en/docs/about/contact) or [KindaHuaX on X](https://x.com/KindaHuaX).
 
-User guides cover the current 1.9.1 interface. Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in [the media guide](docs/media/README.md).
+Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in
+[the media guide](docs/media/README.md).
