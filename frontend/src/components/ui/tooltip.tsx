@@ -118,15 +118,30 @@ export type HintShortcut = string | readonly string[]
 
 /**
  * Hint 的触发区里有会被截断的字(Truncate)时,**说明只出一条**:那段字被截断了,就把全文并进
- * 这条说明里,而不是在同一处再挂一个说明 —— 两条说明叠在同一块上,同一时刻只留一条的规则会让
- * 其中一条永远出不来(要么看不到全文,要么看不到补充说明)。
+ * 这条说明里;它带着补充的一句(Truncate 的 `hint`:完整地址、报错原文)时,那一句也并进来 ——
+ * 而不是在同一处再挂一个说明。两条说明叠在同一块上,同一时刻只留一条的规则会让其中一条永远出不来
+ * (要么看不到全文和原文,要么看不到补充说明)。
  *
- * Truncate 在这个范围里就不自己出说明,只登记「我现在被截断了吗、全文是什么」。浮层内容
+ * Truncate 在这个范围里就不自己出说明,只登记「我现在被截断了吗、全文是什么、补充哪一句」。浮层内容
  * (Popover / Select / ContextMenu / Dialog 的 Content)会把范围清掉:React 的 context 会穿过
  * portal,不清的话,一个套在 Hint 里的组件弹出来的菜单项也会把全文交给外面那条够不着它的说明。
  */
-type OverflowText = () => React.ReactNode | null
-const HintScope = React.createContext<((get: OverflowText) => () => void) | null>(null)
+type ScopedText = () => { full: React.ReactNode | null; hint: string | null }
+const HintScope = React.createContext<((get: ScopedText) => () => void) | null>(null)
+
+/** 并进 Hint 说明里的一段:被截断的全文(正文色),或 Truncate 补充的那一句(跟在全文后面时淡一档)。 */
+type ScopedLine = { text: React.ReactNode; kind: "full" | "hint"; muted: boolean }
+
+/** 打开的那一刻量一次:哪几段字真被截断了、各自补充哪一句。和 Hint 自己那两句重复的不再说一遍。 */
+function scopedLines(texts: Iterable<ScopedText>, own: (string | null | undefined)[]): ScopedLine[] {
+  const fresh = (one: React.ReactNode | null) => one !== null && one !== undefined && one !== "" && !own.includes(one as string)
+  return [...texts].flatMap((get) => {
+    const { full, hint } = get()
+    const lines: ScopedLine[] = fresh(full) ? [{ text: full, kind: "full", muted: false }] : []
+    if (fresh(hint)) lines.push({ text: hint, kind: "hint", muted: lines.length > 0 })
+    return lines
+  })
+}
 
 /**
  * 说明浮层所在的「区域」:**内嵌浏览器的外壳**(顶栏、页面列表、侧栏)。外壳旁边就是原生网页视图,盖在一切 DOM
@@ -194,16 +209,14 @@ function Hint({
   const [open, setOpen] = useExclusiveOpen()
   const placement = regionPlacement(React.useContext(HintRegion), side)
   const hovered = React.useRef(false)
-  const overflows = React.useRef(new Set<OverflowText>())
-  const register = React.useCallback((get: OverflowText) => {
-    overflows.current.add(get)
+  const scoped = React.useRef(new Set<ScopedText>())
+  const register = React.useCallback((get: ScopedText) => {
+    scoped.current.add(get)
     return () => {
-      overflows.current.delete(get)
+      scoped.current.delete(get)
     }
   }, [])
-  //: 打开的那一刻量一次:哪几段字真被截断了(和名字重复的不再说一遍)。
-  const [full, setFull] = React.useState<React.ReactNode[]>([])
-  const measure = () => [...overflows.current].map((get) => get()).filter((one) => one !== null && one !== undefined && one !== "" && one !== label)
+  const [lines, setLines] = React.useState<ScopedLine[]>([])
   const trigger = disabledReason ? (
     <span
       data-hint-disabled=""
@@ -225,9 +238,9 @@ function Hint({
             return
           }
           if (!hovered.current && !keyboardInput) return
-          const clipped = measure()
-          if (!label && !disabledReason && clipped.length === 0) return
-          setFull(clipped)
+          const measured = scopedLines(scoped.current, [label, hint])
+          if (!label && !disabledReason && measured.length === 0) return
+          setLines(measured)
           setOpen(true)
         }}
       >
@@ -247,13 +260,13 @@ function Hint({
           </TooltipTrigger>
         </HintScope.Provider>
         <TooltipContent {...placement} align={align} data-hint="">
-          {full.map((one, index) => (
-            <span key={index} data-truncate-full="" className="block whitespace-pre-wrap">
-              {one}
+          {lines.map((line, index) => (
+            <span key={index} data-truncate-line={line.kind} className={cn("block whitespace-pre-wrap", line.muted && "text-muted-foreground")}>
+              {line.text}
             </span>
           ))}
           {label ? (
-            <span className={cn("flex items-center justify-between gap-3", full.length > 0 && "text-muted-foreground")}>
+            <span className={cn("flex items-center justify-between gap-3", lines.length > 0 && "text-muted-foreground")}>
               <span>{label}</span>
               {shortcut && shortcut.length > 0 ? <Shortcut keys={shortcut} /> : null}
             </span>

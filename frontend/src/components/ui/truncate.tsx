@@ -32,6 +32,7 @@ const Truncate = React.forwardRef<
     /**
      * 名字之外要补一句的(完整地址、模型 id、「双击改名」):说明里全文下面一行淡色。给了它,
      * 没被截断时也出说明(只有这一句)。别在外面再套 Hint 说这一句 —— 那就是同一处挂两条说明。
+     * 已经在一条 Hint 的触发区里时,这一句并进那条 Hint 的说明(见 tooltip.tsx 的 HintScope)。
      */
     hint?: string | null
     /** 截成几行。默认一行(省略号);多行用于卡片描述这类本来就该折几行的字。 */
@@ -60,11 +61,12 @@ const Truncate = React.forwardRef<
     if (!node) return false
     return lines === 1 ? node.scrollWidth > node.clientWidth + 1 : node.scrollHeight > node.clientHeight + 1
   }
-  //: 在一条 Hint 的触发区里:不自己出说明,把「被截断时的全文」交给那条(见 tooltip.tsx 的 HintScope)。
+  //: 在一条 Hint 的触发区里:不自己出说明,把「被截断时的全文」和补充的那句交给那条(见 tooltip.tsx 的 HintScope)。
   const scope = React.useContext(HintScope)
   const full = text ?? children
-  const latest = React.useRef<() => React.ReactNode | null>(() => null)
-  latest.current = () => (overflowing() ? full : null)
+  const scoped = () => ({ full: overflowing() ? full : null, hint: hint ?? null })
+  const latest = React.useRef(scoped)
+  latest.current = scoped
   React.useEffect(() => scope?.(() => latest.current()), [scope])
   const element = (
     <Tag

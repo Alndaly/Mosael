@@ -149,4 +149,53 @@ describe("截断的字在一条 Hint 的触发区里", () => {
     //: 这个 span 就是 Hint 的触发器(data-state 来自 Hint),里面不再有第二个。
     expect(document.querySelectorAll("[data-state]")).toHaveLength(1);
   });
+
+  //: 插件页连接的标题行:整行是一个「展开」按钮(Hint),出错原因那一行只显示人话、原文(errno、地址)给在 Truncate 的 hint 里。
+  //: 此前 hint 在 Hint 的范围里被丢掉,悬停只出「展开…」,原文哪儿都看不到。
+  const SUMMARY = "连不上这台 ComfyUI,确认它在运行、地址填对";
+  const DETAIL = "http://127.0.0.1:8188:[Errno 61] Connection refused";
+
+  it("Truncate 的 hint 也并进那条 Hint:没被截断时,说明里是补充的那句和 Hint 自己那句", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="展开「ComfyUI」">
+          <button type="button"><Truncate hint={DETAIL}>{SUMMARY}</Truncate></button>
+        </Hint>
+      </TooltipProvider>,
+    );
+    overflow(screen.getByText(SUMMARY), 60, 120);
+    hover(screen.getByRole("button"));
+    const tooltips = await screen.findAllByRole("tooltip");
+    expect(tooltips.map((one) => one.textContent)).toEqual([`${DETAIL}展开「ComfyUI」`]);
+  });
+
+  it("被截断时全文、补充、Hint 自己那句依次在同一条里 —— 还是只有一条说明", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label="展开「ComfyUI」">
+          <button type="button"><Truncate hint={DETAIL}>{SUMMARY}</Truncate></button>
+        </Hint>
+      </TooltipProvider>,
+    );
+    const text = screen.getByText(SUMMARY);
+    overflow(text, 400, 120);
+    hover(screen.getByRole("button"));
+    const tooltips = await screen.findAllByRole("tooltip");
+    expect(tooltips.map((one) => one.textContent)).toEqual([`${SUMMARY}${DETAIL}展开「ComfyUI」`]);
+    //: 里面的 Truncate 还是不挂自己的触发器。
+    expect(text.hasAttribute("data-state")).toBe(false);
+  });
+
+  it("Hint 没有自己的话时,只凭 Truncate 的 hint 也出说明(和单独的 Truncate 一样)", async () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label={undefined}>
+          <button type="button"><Truncate hint={DETAIL}>{SUMMARY}</Truncate></button>
+        </Hint>
+      </TooltipProvider>,
+    );
+    overflow(screen.getByText(SUMMARY), 60, 120);
+    hover(screen.getByRole("button"));
+    expect((await screen.findByRole("tooltip")).textContent).toBe(DETAIL);
+  });
 });

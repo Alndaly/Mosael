@@ -734,7 +734,7 @@ export function ConnectionCard({
                 {summaryText && <span>{summaryText}</span>}
               </span>
               {issue.detail && (
-                /* 只说第一行那句人话;原文(errno、地址)悬停看 */
+                /* 只说第一行那句人话;原文(errno、地址)悬停看 —— 并进标题行那条「展开」的说明里(见 tooltip.tsx 的 HintScope) */
                 <Truncate lines={2} className="text-ui-xs leading-relaxed text-warning" hint={splitErrorText(issue.detail).detail || undefined}>
                   {splitErrorText(issue.detail).summary}
                 </Truncate>
