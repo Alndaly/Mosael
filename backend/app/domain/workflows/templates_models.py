@@ -243,8 +243,9 @@ def _video_plan(db: Session | None, choice: ModelChoice, *, references: int | No
     keys = set(capabilities.get("parameter_keys") or ())
     durations = [int(value) for value in capabilities.get("duration_seconds") or ()]
     if durations:
+        #: 只给几档固定时长的,取**最接近默认**的那一档(平手取短的,便宜);此前默认那档不在里面就取第一档。
         preferred = int(capabilities.get("default_duration_seconds") or 5)
-        clip_seconds = preferred if preferred in durations else durations[0]
+        clip_seconds = min(durations, key=lambda one: (abs(one - preferred), one))
     else:
         low = int(capabilities.get("min_duration_seconds") or 1)
         high = int(capabilities.get("max_duration_seconds") or max(5, low))

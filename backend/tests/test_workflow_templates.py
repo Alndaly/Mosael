@@ -85,7 +85,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 12,
+        "template_version": 13,
         "source": "official",
     }
 

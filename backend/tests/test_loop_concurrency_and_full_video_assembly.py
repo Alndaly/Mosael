@@ -242,7 +242,7 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
     fixtures = {
         "storyboard": {"json": {"shots": shots}},
         "video_project": project,
-        "start": {"voice_id": voice_id, "aspect_ratio": "16:9", "resolution": "720p"},
+        "start": {"voice_id": voice_id, "aspect_ratio": "16:9", "resolution": "720p", "shot_seconds": _assemble_seconds()},
         "frame_plan": {"value": {"frame_size": "", "video_size": "", "width": 1920, "height": 1080}},
         "build_set": {"scene_id": "scene-1"},
         "character_sheets": {"results": []},
@@ -270,8 +270,8 @@ def _assemble_seconds() -> float:
     graph = full_video_generation_graph(
         chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(profile_id="v", provider="f", model="vm")
     )
-    assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
-    return float(assemble["config"]["body"]["nodes"][0]["config"]["end"])
+    start = next(node for node in graph["nodes"] if node["id"] == "start")
+    return float(start["config"]["params"]["shot_seconds"])
 
 
 class Test整片生成的中段:

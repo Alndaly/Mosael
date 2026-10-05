@@ -133,8 +133,8 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Topic to finished video"
         },
         "summary": {
-            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限。",
-            "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count."
+            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
+            "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default)."
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -363,7 +363,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
     """
     blank = ModelChoice()
     return {
-        #: 视频模型留空 = 按"还没挑模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
+        #: 视频模型留空 = 按"还没挑模型"出片计划:每镜秒数默认 5、只走首帧那条路。**首帧是每一个能用的视频模型都收的
         #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道。出图 / 视频的画幅、尺寸、分辨率
         #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。

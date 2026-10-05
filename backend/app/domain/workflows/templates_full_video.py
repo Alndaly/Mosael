@@ -44,7 +44,7 @@ _PROP_RULE = """- **能用真道具就别用方块拼。** 下面那份「可用
 """
 
 
-def _camera_rules(clip: int, *, source: str) -> str:
+def _camera_rules(clip: int | str, *, source: str) -> str:
     return f"""每镜一台相机：kind="camera",id="cam-<n>";position 是起始机位,target 是起始看向点(一般是主体的胸口
 或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,
 35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,
@@ -60,7 +60,7 @@ camera_id:"cam-<n>"}}。lighting 按{source}的光线方案给方位角(0=相机
 """
 
 
-def blockout_rules(clip: int, *, source: str) -> str:
+def blockout_rules(clip: int | str, *, source: str) -> str:
     """搭 3D 白模布景的规矩:坐标、每镜一个布景台、人偶、道具、每镜一台相机和它的运镜、镜头与打光。
 
     整片模板的「设计 3D 白模布景与机位」和画板上的「按文字搭 3D 场景」(executors/scenes.scene_from_text)读的是
@@ -92,7 +92,7 @@ position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物�
 {_camera_rules(clip, source=source)}"""
 
 
-def single_set_rules(clip: int, *, source: str) -> str:
+def single_set_rules(clip: int | str, *, source: str) -> str:
     """搭**一个**布景的规矩:画板上的「按文字搭 3D 场景」(executors/scenes.scene_from_text)用。
 
     和整片模板的 `blockout_rules` 不同:那边是分镜,每镜可能换一个地方,所以每镜一个布景台;这里是**一个地方里的
@@ -148,9 +148,14 @@ def full_video_generation_graph(
     """
     video_plan = _video_plan(db, video)
     image_plan = _image_plan(db, image)
-    clip = video_plan.clip_seconds
+    #: **每镜几秒只有一处说了算**:开始节点的「每镜秒数」(建图时按所选视频模型取它能出的、最接近默认的那一档)。
+    #: 视频那一步的时长、上时间线截到哪、分镜和布景的提示词都在运行时引用它。此前建图那一刻算成一个数写死进这几处:
+    #: 把视频那一步改成 4 秒,时间线、分镜照样按 5 秒;所选模型出不了的时长由运行前检查在花钱之前拦下(和画幅同一道)。
+    clip = "{{start.shot_seconds}}"
     aspect = video_plan.aspect_ratio if video_plan.aspect_ratio in ("16:9", "9:16", "1:1") else "16:9"
     video_parameters = dict(video_plan.parameters or {})
+    if "duration_seconds" in video_parameters:
+        video_parameters["duration_seconds"] = "{{input.shot_seconds}}"
     ratios = [str(one) for one in (_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
     if "aspect_ratio" in video_parameters and ratios and aspect not in ratios:
         #: 这个模型不收白模那三种画幅里的任何一种(比如只收 adaptive,画幅跟着首帧走):视频那一步交它认的那一档,
@@ -306,7 +311,7 @@ JSON Schema 的对象。"""
             {
                 "id": "generate_clip",
                 "type": "ai_generate",
-                "name": {"zh": f"生成 {clip} 秒镜头", "en": f"Generate the {clip}s shot"},
+                "name": {"zh": "生成这一镜", "en": "Generate this shot"},
                 "position": {"x": 1320, "y": 260},
                 "config": {
                     "provider": video.provider,
@@ -407,7 +412,8 @@ JSON Schema 的对象。"""
                     "asset_id": "{{loop.item.generate_clip.asset_id}}",
                     "track_id": "{{input.video_track_id}}",
                     "start": 0,
-                    "end": clip,
+                    #: 截到每镜秒数(模型交回的比它短时夹到片子末尾)。
+                    "end": "{{input.shot_seconds}}",
                 },
             },
             {
@@ -567,6 +573,9 @@ JSON Schema 的对象。"""
                     #: 整条最贵的流程对着它跑完。
                     "topic": "",
                     "target_duration_seconds": 30,
+                    #: 每一镜几秒(见上面 `clip` 那段):建图时按所选视频模型取它能出的、最接近默认的那一档。换了视频模型,
+                    #: 它出不了这个时长的话,运行前就拦下。
+                    "shot_seconds": video_plan.clip_seconds,
                     #: 这一次最多做几镜。**它是成本的闸门**:每一镜都是一次付费的视频生成,
                     #: 而镜头数此前完全由模型按时长算,跑之前看不到要花多少。
                     "max_shots": 8,
@@ -824,6 +833,7 @@ JSON Schema 的对象。"""
                     "video_size": "{{frame_plan.value.video_size}}",
                     "aspect_ratio": "{{start.aspect_ratio}}",
                     "resolution": "{{start.resolution}}",
+                    "shot_seconds": "{{start.shot_seconds}}",
                 },
                 "body": generate_body,
                 # 不写 output:每一项交出那一镜的全部产物(画面、口播)连同分镜本身,
@@ -846,6 +856,7 @@ JSON Schema 的对象。"""
                     "sequence_id": "{{video_project.sequence_id}}",
                     "video_track_id": "{{video_project.video_track_id}}",
                     "audio_track_id": "{{video_project.audio_track_id}}",
+                    "shot_seconds": "{{start.shot_seconds}}",
                 },
                 "body": assemble_body,
                 "output": "",
@@ -951,7 +962,8 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 12, "source": "official"},
+        #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 13, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

@@ -256,14 +256,15 @@ def test_还没挑模型的副本_出图出视频的画幅尺寸照样接在开�
 
     blank = ModelChoice()
     full = full_video_generation_graph(chat=blank, image=blank, video=blank)
+    #: 时长也接在开始参数上(「每镜秒数」),和画幅、分辨率同一个做法。
     assert body(full, "generate_shots", "generate_clip") == {
-        "duration_seconds": 5, "aspect_ratio": "{{input.aspect_ratio}}", "resolution": "{{input.resolution}}"}
+        "duration_seconds": "{{input.shot_seconds}}", "aspect_ratio": "{{input.aspect_ratio}}", "resolution": "{{input.resolution}}"}
     assert body(full, "generate_shots", "paint_first_frame") == {"size": "{{input.frame_size}}"}
     on_model = product_on_model_graph(chat=blank, image=blank, video=blank, motion=True)
     assert body(on_model, "shoot_scenes", "on_model_clip")["aspect_ratio"] == "{{input.aspect_ratio}}"
     #: 认得出名字、查不到能力表的模型(用户自建的)不猜它收画幅。
     custom = full_video_generation_graph(chat=blank, image=blank, video=ModelChoice(provider="x", model="my-model"))
-    assert body(custom, "generate_shots", "generate_clip") == {"duration_seconds": 5}
+    assert body(custom, "generate_shots", "generate_clip") == {"duration_seconds": "{{input.shot_seconds}}"}
 
 
 @pytest.mark.parametrize("image", _image_params(REFERENCE_IMAGES_NEEDED))

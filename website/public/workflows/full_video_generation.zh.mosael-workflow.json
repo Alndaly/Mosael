@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "从主题到完整视频",
-  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限。",
-  "graph_hash": "fb3c6d1ca9f17de48e231104e412dbb5b919c2e98a26b769ebe19f1804eedfc3",
+  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
+  "graph_hash": "e24589409cfc519c3fe64586fe6a9450e7e56ecd371a487d568a631c359e667d",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 12,
+      "template_version": 13,
       "source": "official"
     },
     "nodes": [
@@ -24,6 +24,7 @@
           "params": {
             "topic": "",
             "target_duration_seconds": 30,
+            "shot_seconds": 5,
             "max_shots": 8,
             "audience": "对该主题感兴趣的大众观众",
             "tone": "专业、清晰、克制且有电影感",
@@ -683,8 +684,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 5 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 5 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
-          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒。镜头数 = 目标时长 ÷ 5 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 5 秒。时间码从 0 开始连续编号。",
+          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
+          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 {{start.shot_seconds}} 秒。镜头数 = 目标时长 ÷ {{start.shot_seconds}} 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {{start.shot_seconds}} 秒。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
           "json_schema": {
@@ -692,7 +693,7 @@
             "properties": {
               "total_duration_seconds": {
                 "type": "number",
-                "minimum": 5
+                "exclusiveMinimum": 0
               },
               "timeline_summary": {
                 "type": "string"
@@ -722,8 +723,7 @@
                     },
                     "duration_seconds": {
                       "type": "number",
-                      "minimum": 5,
-                      "maximum": 5
+                      "exclusiveMinimum": 0
                     },
                     "story_beat": {
                       "type": "string",
@@ -731,7 +731,7 @@
                     },
                     "narration": {
                       "type": "string",
-                      "description": "该时间段的口播或对白，念出来不超过 5 秒；无则写空字符串"
+                      "description": "该时间段的口播或对白，念出来不超过 {{start.shot_seconds}} 秒；无则写空字符串"
                     },
                     "location_id": {
                       "type": "string",
@@ -796,7 +796,7 @@
                     },
                     "subject_action": {
                       "type": "string",
-                      "description": "主体在 5 秒内可完成的动作节拍"
+                      "description": "主体在 {{start.shot_seconds}} 秒内可完成的动作节拍"
                     },
                     "lighting": {
                       "type": "string"
@@ -828,7 +828,7 @@
                     },
                     "generation_prompt": {
                       "type": "string",
-                      "description": "英文,交给视频模型:主体动作节拍(须能在 5 秒内完成)、表演、环境变化、光影;不要写机位参数(会从白模自动补上),不要要求字幕、UI、Logo 或水印"
+                      "description": "英文,交给视频模型:主体动作节拍(须能在 {{start.shot_seconds}} 秒内完成)、表演、环境变化、光影;不要写机位参数(会从白模自动补上),不要要求字幕、UI、Logo 或水印"
                     },
                     "negative_prompt": {
                       "type": "string"
@@ -901,7 +901,7 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。\n输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。\n\n**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的\n那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,\n台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。\n**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串\n看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。\n\n**每个布景台先出一个组。** kind=\"group\",id=\"bay-<n>\",name=\"镜头 <n> · <这一镜的场景名>\",\nposition 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)\n都把 parent_id 写成 \"bay-<n>\"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条\"都写世界\n坐标\"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。\n\n每个布景台：\n- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*D,0,0]，\n  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。\n- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。\n- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;\n  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。\n  id 写成 \"<角色id>-<n>\"。\n- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:\n  kind=\"model\",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了\n  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去\"设定\"它的尺寸\n  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。\n- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;\n  非 model 的物体 model_id 写空字符串。\n\n每镜一台相机：kind=\"camera\",id=\"cam-<n>\";position 是起始机位,target 是起始看向点(一般是主体的胸口\n或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,\n35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,\n仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,\n中景 1.5~2.5 米,全景 3~5 米)。\n运镜写在相机的 track 上：static 不写 track;其余至少两档 {time:0,...} 和 {time:5,...}\n(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,\n跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。\n\nshots:每镜一条 {id:\"shot-<n>\", name:\"镜头 <n>\", duration:5, aspect:画幅, easing:\"smooth\",\ncamera_id:\"cam-<n>\"}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、\n高度角、强度(2~5)、色温和软硬;preset 写 \"custom\"。background 写 \"#20242c\",ambient 写 1.5。\n只输出符合 JSON Schema 的对象。",
+          "system": "你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。\n输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。\n\n**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的\n那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,\n台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。\n**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串\n看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。\n\n**每个布景台先出一个组。** kind=\"group\",id=\"bay-<n>\",name=\"镜头 <n> · <这一镜的场景名>\",\nposition 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)\n都把 parent_id 写成 \"bay-<n>\"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条\"都写世界\n坐标\"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。\n\n每个布景台：\n- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*D,0,0]，\n  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。\n- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。\n- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;\n  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。\n  id 写成 \"<角色id>-<n>\"。\n- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:\n  kind=\"model\",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了\n  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去\"设定\"它的尺寸\n  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。\n- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;\n  非 model 的物体 model_id 写空字符串。\n\n每镜一台相机：kind=\"camera\",id=\"cam-<n>\";position 是起始机位,target 是起始看向点(一般是主体的胸口\n或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,\n35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,\n仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,\n中景 1.5~2.5 米,全景 3~5 米)。\n运镜写在相机的 track 上：static 不写 track;其余至少两档 {time:0,...} 和 {time:{{start.shot_seconds}},...}\n(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,\n跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。\n\nshots:每镜一条 {id:\"shot-<n>\", name:\"镜头 <n>\", duration:{{start.shot_seconds}}, aspect:画幅, easing:\"smooth\",\ncamera_id:\"cam-<n>\"}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、\n高度角、强度(2~5)、色温和软硬;preset 写 \"custom\"。background 写 \"#20242c\",ambient 写 1.5。\n只输出符合 JSON Schema 的对象。",
           "prompt": "视觉圣经(角色身高与白模颜色、场景尺寸)：\n{{visual_bible.text}}\n\n分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：\n{{storyboard.text}}\n\n可用的 3D 道具(kind=\"model\" 时 model_id 只能从这里选;尺寸是实测值)：\n{{props.catalog}}\n\n画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。",
           "response_format": "json_schema",
           "json_schema_name": "blockout_scene",
@@ -1235,7 +1235,8 @@
             "frame_size": "{{frame_plan.value.frame_size}}",
             "video_size": "{{frame_plan.value.video_size}}",
             "aspect_ratio": "{{start.aspect_ratio}}",
-            "resolution": "{{start.resolution}}"
+            "resolution": "{{start.resolution}}",
+            "shot_seconds": "{{start.shot_seconds}}"
           },
           "body": {
             "nodes": [
@@ -1347,7 +1348,7 @@
               {
                 "id": "generate_clip",
                 "type": "ai_generate",
-                "name": "生成 5 秒镜头",
+                "name": "生成这一镜",
                 "position": {
                   "x": 1320,
                   "y": 260
@@ -1360,7 +1361,7 @@
                   "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
-                    "duration_seconds": 5,
+                    "duration_seconds": "{{input.shot_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
                     "resolution": "{{input.resolution}}"
                   },
@@ -1505,7 +1506,8 @@
           "inputs": {
             "sequence_id": "{{video_project.sequence_id}}",
             "video_track_id": "{{video_project.video_track_id}}",
-            "audio_track_id": "{{video_project.audio_track_id}}"
+            "audio_track_id": "{{video_project.audio_track_id}}",
+            "shot_seconds": "{{start.shot_seconds}}"
           },
           "body": {
             "nodes": [
@@ -1522,7 +1524,7 @@
                   "asset_id": "{{loop.item.generate_clip.asset_id}}",
                   "track_id": "{{input.video_track_id}}",
                   "start": 0,
-                  "end": 5
+                  "end": "{{input.shot_seconds}}"
                 }
               },
               {

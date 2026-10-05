@@ -115,7 +115,8 @@ CAMERA_MOVES = ["static", "dolly in", "dolly out", "pan", "tilt", "tracking", "o
 def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -> dict[str, Any]:
     """`prompt_limits`:模型写的那几段提示词各自最多多少字(按所选图像 / 视频模型的提示词上限、减去模板固定拼上的
     那几句算出来,见 full_video_generation_graph);模型没声明上限的那段不限。"""
-    clip = plan.clip_seconds
+    #: 每镜几秒在运行时插进来(开始参数「每镜秒数」),不写死建图那一刻的数。
+    clip = "{{start.shot_seconds}}"
     limits = prompt_limits or {}
 
     def capped(field: dict[str, Any], key: str) -> dict[str, Any]:
@@ -128,7 +129,9 @@ def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -
         "shot_number": {"type": "integer", "minimum": 1},
         "start_seconds": {"type": "number", "minimum": 0},
         "end_seconds": {"type": "number", "exclusiveMinimum": 0},
-        "duration_seconds": {"type": "number", "minimum": clip, "maximum": clip},
+        #: 每镜多长由开始参数「每镜秒数」说了算,提示词里写着(运行时插进去);Schema 不写死建图那一刻的数 —— 此前
+        #: 改了视频那一步的时长,分镜照样被逼着按旧的秒数写。
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
         "story_beat": {"type": "string", "description": "该镜头推进叙事的唯一任务"},
         "narration": {
             "type": "string",
@@ -185,7 +188,7 @@ MAX_SHOTS_CEILING = 24
 
 def _storyboard_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -> dict[str, Any]:
     fields = {
-        "total_duration_seconds": {"type": "number", "minimum": plan.clip_seconds},
+        "total_duration_seconds": {"type": "number", "exclusiveMinimum": 0},
         "timeline_summary": {"type": "string"},
         "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
         "shots": {"type": "array", "minItems": 1, "maxItems": MAX_SHOTS_CEILING, "items": _shot_schema(plan, prompt_limits)},
