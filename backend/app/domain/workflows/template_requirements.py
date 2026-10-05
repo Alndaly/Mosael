@@ -24,7 +24,12 @@ CHAT_MODEL = "chat_model"
 REFERENCE_IMAGE_MODEL = "reference_image_model"
 #: 能同时带一组参考图出图的图像模型(整片生成的关键帧:白模帧 + 三视图 + 设定图,见 templates_models)。
 MULTI_REFERENCE_IMAGE_MODEL = "multi_reference_image_model"
+#: 能从首帧或**一张**参考图出片的视频模型(上身图动起来、带货口播每一拍动起来:每次只交那一张图)。
 REFERENCE_VIDEO_MODEL = "reference_video_model"
+#: 能从首帧或**一整组**参考图出片的视频模型(整片生成一镜交白模帧 + 三视图 + 设定图,见 templates_models)。
+#: 和上面分开,是因为卡片说「齐了」和建图时挑不挑得中视频模型必须是同一个门槛 —— 此前只有这一个键、门槛是整组,
+#: 只配了万相 wan2.7-r2v(只收 5 张)的人,带货口播的卡片说缺,建出来的图却带着动起来那一步。
+MULTI_REFERENCE_VIDEO_MODEL = "multi_reference_video_model"
 #: 一把克隆音色,而且本机克隆引擎跑得起来(模板里配音节点的引擎写的是 builtin:clone)。
 CLONED_VOICE = "cloned_voice"
 #: 同上,而且这把嗓子声明过是谁的(数字人用,ADR 0028 §5:未声明的克隆音色不能拿去让一张脸说话)。
@@ -46,6 +51,7 @@ CHECKS: tuple[str, ...] = (
     REFERENCE_IMAGE_MODEL,
     MULTI_REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
+    MULTI_REFERENCE_VIDEO_MODEL,
     CLONED_VOICE,
     DIGITAL_HUMAN_VOICE,
     TRANSCRIPTION_ENGINE,

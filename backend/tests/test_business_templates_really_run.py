@@ -1286,6 +1286,23 @@ class Test带货口播动起来_建图与运行前:
         assert (clip["config"]["provider_profile_id"], clip["config"]["model"]) == (profile_id, "doubao-seedance-2-0-260128")
         assert next(one for one in graph["nodes"] if one["id"] == "start")["config"]["params"]["beat_seconds"] == 5
 
+    def test_只配了收一张参考图的视频模型_卡片说齐了_建出来的图也动起来_整片那一条仍说缺(self) -> None:
+        """万相 wan2.7-r2v 只收 5 张参考:带货口播每拍只交一张画面,它挑得中;整片一镜要一整组,它挑不中。
+        卡片说「齐了」和建图时挑不挑得中必须是同一个门槛 —— 此前卡片按整组判,说缺,建出来的图却带着动起来那一步。"""
+        from app.core.db import SessionLocal
+        from app.domain.workflows.templates import requirement_status
+        from tests.util import add_provider, user_id
+
+        client, ws = _template_client()
+        with SessionLocal() as db:
+            add_provider(db, name="Bailian", vendor="alibaba", api_key="k", model="wan2.7-r2v", capability_ids=["video"])
+            db.commit()
+            assert requirement_status(db, user_id=user_id(), workspace_id=ws, check="reference_video_model") == "met"
+            assert requirement_status(db, user_id=user_id(), workspace_id=ws,
+                                      check="multi_reference_video_model") == "missing"
+        graph = _template_workflow(client, ws, "product_pitch_short")["graph"]
+        assert "beat_clip" in _loop_body_ids(graph, "shoot_beats")
+
     def test_选的视频模型出不了每拍秒数_运行前就拦_一个节点都不排(self) -> None:
         """Veo 只出 4 / 6 / 8 秒。每拍秒数是开始参数,跑之前就知道:改成 5 秒要在写脚本、出图之前就拦下。"""
         from sqlalchemy import select
