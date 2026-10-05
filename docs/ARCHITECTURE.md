@@ -60,6 +60,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
+| `assets/listing.py`(配 `assets/intermediates.py`) | 素材列表:按游标一页页给(排序键 + id 做游标,翻到一半有人导入也不重复不漏),种类 / 来源 / 搜索 / 标签 / 排序都在服务端做,只带卡片字段(`AssetCardOut`);页签数字另取 facets,剪辑台按时间线取完整字段。**中间产物**(`assets.intermediate`:逐句配音的一句、对口型的一块)由做零件的那道工序在登记时说,列表、挑素材的弹窗、剪辑台素材池、智能体 `list_assets` 默认不列([ADR-0036](adr/0036-intermediate-assets-stay-out-of-the-library.md)) |
 | `assets/web_capture.py` / `assets/web_download.py` | 浏览器会话交来的东西入库:顶栏截屏、采集图片、下载视频(`POST /api/assets/capture`,看文件头只收图片)和网页里点的下载(`/api/assets/web-download`,只收素材库认得的类型);出处记在 `media_info`(来源页、标题、截取时间、哪种截法),不冒充 `source_url`。自动化里触发的下载和「浏览器·截图」经执行器的产物入口(`/api/browser/worker/actions/{id}/artifact`,带那条动作的租约令牌)入库,出处另记运行和节点 |
 | `model_library.py` / `workflow_library.py` | 两项**目录类能力**的宿主一侧([ADR-0034](adr/0034-model-library.md)、[ADR-0035](adr/0035-workflow-library.md)):按 `op` 问认领它的插件工具,规整回答(路径、图摘要、预览地址都先过一遍)、补上「Mosael 里谁在用它」(引用表的 `generation_model`);下载模型、装节点包是能取消的后台任务,写操作一律不覆盖、撞名 409 带建议名,改成了让这个连接的目录重拉 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
@@ -69,6 +70,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.mosael/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `ai/runtime/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
+| `billing/` | 用量台账:按服务商回报的用量 / 扣费记账,失败没回报的记 0,免费的(Edge 配音)记 0 且标 `free`、不进花费汇总;回包里的用量另作核对(`ReportedUsage.observed`),对不上只记日志和依据不改账。没给 `job_id` 的调用挂在当前正在执行的任务上,`run_costs` 顺着 `parent_job_id` 把一次工作流运行的整棵任务树按币种加起来,记进运行结果 |
 | `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
 

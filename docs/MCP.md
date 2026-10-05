@@ -146,6 +146,13 @@
 两种情况下取值都未经验证，智能体照样可以只提交提示词。素材参数既可给 `asset_id`，也可按角色给 URL；两种传输形式进入相同的
 必填、份数、互斥与搭伴校验。
 
+`list_assets` **一页一页给**:回 `{assets, count, total, next_cursor}`,默认 50 条(1–200);`next_cursor` 不是 null 就带着
+`cursor=next_cursor` 和同样的筛选接着取。中间产物(字幕配音逐句合成的一句、对口型的一块,见 ADR 0036)默认不列,
+`intermediate="dub_line"` / `"lipsync_chunk"` 只列那一种。此前它一次把整个工作区的素材塞进对话。
+HTTP 这一侧同一次改的形状:`GET /api/assets` 不再回整个工作区的数组,而是一页 `{items, next_cursor, total}`(默认 60、最多 200,
+种类 / 来源 / 搜索 / 标签 / 排序都在服务端做,只带卡片字段;详情另取 `GET /api/assets/{id}`);页签上的数字和标签候选在
+`GET /api/assets/facets`;剪辑台要的完整字段按时间线取 `GET /api/sequences/{id}/assets`。游标不是这份列表、这种排序给的回 422。
+
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型
 没有对应工具、又没写明为什么不需要,测试就红。
 
