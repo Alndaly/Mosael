@@ -44,12 +44,16 @@ def test_相对链接指得到真实文件(readme: Path) -> None:
 @pytest.mark.parametrize("readme", READMES, ids=lambda p: p.parent.name)
 def test_没有_MDX_翻译不掉的写法(readme: Path) -> None:
     """裸的 `<Something>` 会被 MDX 当成 JSX 组件。autolink(`<https://…>`)官网翻译得掉,
-    别的形状翻译不掉 —— 那种要在这里拦住,而不是等构建失败。"""
+    别的形状翻译不掉 —— 那种要在这里拦住,而不是等构建失败。
+
+    **任何字母开头的都算**,中文、带空格的也是:「最终结果(<节点标题>)」「(<node title>)」这种写给人看的占位,
+    MDX 一样当成标签(一个叫「节点标题」的组件、一个带 title 属性的 node),官网构建当场失败。此前只认 ASCII 字母开头、
+    不带空格的那一种,这两处漏了过去。"""
     text = readme.read_text(encoding="utf-8")
     # 去掉代码块:里面写什么都行,MDX 不解析。
     outside_code = re.sub(r"```[\s\S]*?```|`[^`]*`", "", text)
     suspicious = [
-        one for one in re.findall(r"<([A-Za-z][^\s>]*)>", outside_code) if not one.startswith(("http://", "https://"))
+        one for one in re.findall(r"<([^\W\d_][^<>\n]*)>", outside_code) if not one.startswith(("http://", "https://"))
     ]
     assert suspicious == [], f"{readme.parent.name}/README.md 里这些尖括号 MDX 会当成组件:{suspicious}"
 
