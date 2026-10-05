@@ -1,7 +1,7 @@
 # Mosael 前端、Electron 桌面壳与官网深度分析
 
 > 分析员:frontend-analyst · 维度:前端(`frontend/`)、桌面壳(`electron/`)、官网(`website/`)
-> 证据基线:仓库 `/Users/kinda/Developer/Mosael`,版本 1.4.0(根 `package.json`)
+> 证据基线:Mosael 仓库根目录,版本 1.4.0(根 `package.json`)
 
 ## 0. 总览:三段自举与三个运行时
 

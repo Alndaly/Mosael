@@ -588,48 +588,48 @@ mine = task.claimed_by == worker if worker else True
 ## 附:本次用到的关键文件
 
 **任务总线**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/jobs.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/schemas/jobs.py`
-- `/Users/kinda/Developer/Mosael/backend/app/core/i18n.py`
-- `/Users/kinda/Developer/Mosael/backend/app/core/db.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/assets/proxies.py`
-- `/Users/kinda/Developer/Mosael/backend/tests/test_worker_admission.py`
-- `/Users/kinda/Developer/Mosael/backend/tests/test_backend_i18n.py`
+- `backend/app/domain/jobs.py`
+- `backend/app/api/schemas/jobs.py`
+- `backend/app/core/i18n.py`
+- `backend/app/core/db.py`
+- `backend/app/domain/assets/proxies.py`
+- `backend/tests/test_worker_admission.py`
+- `backend/tests/test_backend_i18n.py`
 
 **工作流**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/engine.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/__init__.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/ai_edit.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/graph_ops.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/normalization.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/executors/subworkflow.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/executors/loops.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/workflows/executors/common.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/workflows.py`
-- `/Users/kinda/Developer/Mosael/backend/tests/test_executor_outputs_are_declared.py`
+- `backend/app/domain/workflows/engine.py`
+- `backend/app/domain/workflows/__init__.py`
+- `backend/app/domain/workflows/ai_edit.py`
+- `backend/app/domain/workflows/graph_ops.py`
+- `backend/app/domain/workflows/normalization.py`
+- `backend/app/domain/workflows/executors/subworkflow.py`
+- `backend/app/domain/workflows/executors/loops.py`
+- `backend/app/domain/workflows/executors/common.py`
+- `backend/app/api/routes/workflows.py`
+- `backend/tests/test_executor_outputs_are_declared.py`
 
 **场景 / 画板 / 笔记**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/scenes/operations.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/scenes.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/schemas/scenes.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/boards/canvas.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/notes.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/blender/bridge.py`
+- `backend/app/domain/scenes/operations.py`
+- `backend/app/api/routes/scenes.py`
+- `backend/app/api/schemas/scenes.py`
+- `backend/app/domain/boards/canvas.py`
+- `backend/app/domain/notes/`
+- `backend/app/domain/blender/bridge.py`
 
 **智能体**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/confirmations.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/confirmable/graphs.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/confirmable/media.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/questions.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/tool_manifest.py`
-- `/Users/kinda/Developer/Mosael/backend/app/db/model_slices/agent.py`
-- `/Users/kinda/Developer/Mosael/backend/mcp_server.py`
+- `backend/app/domain/agent/confirmations.py`
+- `backend/app/domain/agent/confirmable/graphs.py`
+- `backend/app/domain/agent/confirmable/media.py`
+- `backend/app/domain/agent/questions.py`
+- `backend/app/domain/agent/tool_manifest.py`
+- `backend/app/db/model_slices/agent.py`
+- `backend/mcp_server.py`
 
 **时间线 / 发布 / 归属**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/sequences/operations.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/publish/worker.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/publish_worker.py`
-- `/Users/kinda/Developer/Mosael/electron/publish/publishBackend.ts`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/ownership.py`
-- `/Users/kinda/Developer/Mosael/backend/app/db/migrations.py`
-- `/Users/kinda/Developer/Mosael/frontend/src/features/workflows/runSteps.ts`
+- `backend/app/domain/sequences/operations.py`
+- `backend/app/domain/publish/worker.py`
+- `backend/app/api/routes/publish_worker.py`
+- `electron/publish/publishBackend.ts`
+- `backend/app/domain/ownership.py`
+- `backend/app/db/migrations.py`
+- `frontend/src/features/workflows/runSteps.ts`

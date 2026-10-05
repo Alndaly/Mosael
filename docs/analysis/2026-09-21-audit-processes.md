@@ -642,59 +642,59 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 ## 附:关键文件路径
 
 **后端 ↔ sidecar**
-- `/Users/kinda/Developer/Mosael/backend/app/ai/sidecar/pi_client.py`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/protocol.ts`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/index.ts`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/pi.ts`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/tools.ts`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/credentials.ts`
-- `/Users/kinda/Developer/Mosael/agent-sidecar/src/subagent.ts`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/host.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/agent/login.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/providers/auth.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/agent_credentials.py`
-- `/Users/kinda/Developer/Mosael/backend/app/core/child_process.py`
+- `backend/app/ai/sidecar/pi_client.py`
+- `agent-sidecar/src/protocol.ts`
+- `agent-sidecar/src/index.ts`
+- `agent-sidecar/src/pi.ts`
+- `agent-sidecar/src/tools.ts`
+- `agent-sidecar/src/credentials.ts`
+- `agent-sidecar/src/subagent.ts`
+- `backend/app/domain/agent/host.py`
+- `backend/app/domain/agent/login.py`
+- `backend/app/domain/providers/auth.py`
+- `backend/app/api/routes/agent_credentials.py`
+- `backend/app/core/child_process.py`
 
 **worker 通道**
-- `/Users/kinda/Developer/Mosael/docs/adr/0002-claim-report-worker-protocol.md`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/job_worker.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/publish_worker.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/routes/browser_worker.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/publish/worker.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/browser/__init__.py`
-- `/Users/kinda/Developer/Mosael/electron/publish/publishBackend.ts`
-- `/Users/kinda/Developer/Mosael/electron/publish/browserBackend.ts`
-- `/Users/kinda/Developer/Mosael/electron/publish/browserWorker.ts`
+- `docs/adr/0002-claim-report-worker-protocol.md`
+- `backend/app/api/routes/job_worker.py`
+- `backend/app/api/routes/publish_worker.py`
+- `backend/app/api/routes/browser_worker.py`
+- `backend/app/domain/publish/worker.py`
+- `backend/app/domain/browser/__init__.py`
+- `electron/publish/publishBackend.ts`
+- `electron/publish/browserBackend.ts`
+- `electron/publish/browserWorker.ts`
 
 **Electron 壳**
-- `/Users/kinda/Developer/Mosael/electron/main.cjs`
-- `/Users/kinda/Developer/Mosael/electron/publish/accountViews.ts`
-- `/Users/kinda/Developer/Mosael/electron/preload-build.test.ts`
-- `/Users/kinda/Developer/Mosael/test/bundle.smoke.mjs`
-- `/Users/kinda/Developer/Mosael/frontend/package.json`(`electron:dev`)
+- `electron/main.cjs`
+- `electron/publish/accountViews.ts`
+- `electron/preload-build.test.ts`
+- `test/bundle.smoke.mjs`
+- `frontend/package.json`(`electron:dev`)
 
 **插件与 Blender**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/plugins/runtime.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/plugins/mcp_bridge.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/plugins/tools.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/blender/bridge.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/blender/scripts.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/blender/worker.py`
-- `/Users/kinda/Developer/Mosael/plugins/examples/blender/mosael.plugin.json`
+- `backend/app/domain/plugins/runtime.py`
+- `backend/app/domain/plugins/mcp_bridge.py`
+- `backend/app/domain/plugins/tools.py`
+- `backend/app/domain/blender/bridge.py`
+- `backend/app/domain/blender/scripts.py`
+- `backend/app/domain/blender/worker.py`
+- `plugins/examples/blender/mosael.plugin.json`
 
 **扩展与对外面**
-- `/Users/kinda/Developer/Mosael/browser-extension/src/mosael/client.ts`
-- `/Users/kinda/Developer/Mosael/browser-extension/src/shared/protocol.ts`
-- `/Users/kinda/Developer/Mosael/browser-extension/src/content.ts`
-- `/Users/kinda/Developer/Mosael/browser-extension/scripts/build.mjs`
-- `/Users/kinda/Developer/Mosael/backend/mcp_server.py`
-- `/Users/kinda/Developer/Mosael/backend/app/api/deps/auth.py`
+- `browser-extension/src/mosael/client.ts`
+- `browser-extension/src/shared/protocol.ts`
+- `browser-extension/src/content.ts`
+- `browser-extension/scripts/build.mjs`
+- `backend/mcp_server.py`
+- `backend/app/api/deps/auth.py`
 
 **契约与官网**
-- `/Users/kinda/Developer/Mosael/contracts/shared-constants.json`
-- `/Users/kinda/Developer/Mosael/backend/tests/test_shared_constants_parity.py`
-- `/Users/kinda/Developer/Mosael/website/src/lib/releases.ts`
-- `/Users/kinda/Developer/Mosael/website/content/releases.json`
-- `/Users/kinda/Developer/Mosael/website/test/documentation-media.test.mjs`
-- `/Users/kinda/Developer/Mosael/website/content/docs/zh/start/download.mdx`
-- `/Users/kinda/Developer/Mosael/docs/RELEASING.md`
+- `contracts/shared-constants.json`
+- `backend/tests/test_shared_constants_parity.py`
+- `website/src/lib/releases.ts`
+- `website/content/releases.json`
+- `website/test/documentation-media.test.mjs`
+- `website/content/docs/zh/start/download.mdx`
+- `docs/RELEASING.md`
