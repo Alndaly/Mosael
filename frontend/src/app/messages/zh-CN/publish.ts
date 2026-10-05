@@ -265,6 +265,7 @@ export const publish = {
   boardReplaceAsset: "换一份",
   boardOutputCount: "一次落出几格",
   boardOutputsPerNode: "每个节点 {count} 张",
+  boardOutputsRuns: "跑 {count} 遍",
   boardGenerationSettings: "参数",
   boardGenerationUnknownParams: "参数未识别 · 去设置里指一下",
   boardGenerationMode: "生成方式",

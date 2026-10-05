@@ -84,9 +84,13 @@ def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults
     for key in ("steps", "duration_seconds"):
         if _number(parameters.get(key)):
             values[key] = parameters[key]
-    if _number(parameters.get("num_images")):
-        values["batch"] = int(parameters["num_images"])
     return values
+
+
+def runs_from(parameters: dict[str, Any]) -> int:
+    """「张数」= 跑几遍(见 graph.counts_runs):没给是一遍,最多 graph.MAX_RUNS 遍。"""
+    runs = parameters.get("num_images")
+    return min(max(int(runs), 1), graph.MAX_RUNS) if _number(runs) else 1
 
 
 def overrides_from(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -500,7 +504,7 @@ def download(comfy: Comfy, files: list[dict[str, Any]], stem: str) -> list[dict[
 
 
 class Repeated(NamedTuple):
-    """循环提交 N 次的结果:跑出来的那几次 (任务号, 历史条目, 种子),和没出来的那几次 (第几张, 原因)。"""
+    """跑 N 遍的结果:跑出来的那几遍 (任务号, 历史条目, 种子),和没出来的那几遍 (第几遍, 原因)。"""
 
     runs: list[tuple[str, dict[str, Any], int]]
     failures: list[tuple[int, str]]
@@ -509,9 +513,10 @@ class Repeated(NamedTuple):
 
 def run_repeated(comfy: Comfy, build: Callable[[int], dict[str, Any]], count: int, given_seed: int | None, emit: Emit,
                  locale: str, titles: dict[str, str] | None, resume: dict[str, Any] | None = None) -> Repeated:
-    """没有画布的图出 N 张:循环提交 N 次,每次换一个种子 —— 给了种子就从它开始依次 +1,没给就每次随机。
+    """跑 N 遍(「张数」,见 graph.counts_runs):循环提交 N 次,每次换一个种子 —— 给了种子就从它开始依次 +1,没给就
+    每次随机。每遍按工作流原样,一遍出几张是它自己的批量。
 
-    `build(种子)` 交回这一次要提交的图。一次一次来(跑完一张再提交下一张,不往 ComfyUI 的队列里灌);取消了剩下的
+    `build(种子)` 交回这一次要提交的图。一次一次来(跑完一遍再提交下一遍,不往 ComfyUI 的队列里灌);取消了剩下的
     不再提交,在跑的那一次由 run_prompt 停下。某一次失败不拖垮别的:记下原因接着跑,出来的照样交回。
     回执里记着这是第几次、前面几次的任务号和种子(`repeat`):后端重启后带着它回来,接着等在跑的那一次,剩下的照常提交。
     """
@@ -525,7 +530,7 @@ def run_repeated(comfy: Comfy, build: Callable[[int], dict[str, Any]], count: in
         def relay(event: dict[str, Any]) -> None:
             if event.get("event") == "progress":
                 share = (index + float(event.get("progress") or 0)) / count
-                head = say(locale, f"第 {index + 1}/{count} 张", f"Image {index + 1}/{count}")
+                head = say(locale, f"第 {index + 1}/{count} 遍", f"Run {index + 1}/{count}")
                 event = {**event, "progress": round(min(0.95, share), 4), "message": f"{head} · {event.get('message', '')}"}
             emit(event)
         return relay
@@ -570,13 +575,13 @@ def run_repeated(comfy: Comfy, build: Callable[[int], dict[str, Any]], count: in
 
 
 def repeat_note(result: Repeated, locale: str) -> str:
-    """循环里有几次没出来时给人看的那一句:N 张里出了几张、哪几张没出来、为什么。都出来了是空串。"""
+    """有几遍没出来时给人看的那一句:跑了几遍、出来了几遍、哪几遍没出来、为什么。都出来了是空串。"""
     if not result.failures:
         return ""
     which = "、".join(str(index) for index, _ in result.failures)
     reasons = ";".join(dict.fromkeys(reason for _, reason in result.failures))
-    return say(locale, f"{result.count} 张里出了 {len(result.runs)} 张;第 {which} 张没出来:{reasons}",
-               f"{len(result.runs)} of {result.count} images came out; image {which.replace('、', ', ')} failed: {reasons}")
+    return say(locale, f"跑了 {result.count} 遍,出来 {len(result.runs)} 遍;第 {which} 遍没出来:{reasons}",
+               f"{len(result.runs)} of {result.count} runs came out; run {which.replace('、', ', ')} failed: {reasons}")
 
 
 def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
@@ -598,13 +603,13 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         parameters = request.get("parameters") or {}
         # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)
         values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults)
-        # 没给张数就一次一张(目录里张数的缺省就是 1,见 graph.describe):不照画布上存着的 batch_size ——
-        # 宿主照目录说的份数摆占位,做的得是同一件事。
-        values.setdefault("batch", 1)
+        # 「张数」是跑几遍(见 graph.counts_runs),缺省一遍;每遍按工作流原样,画布上存着的 batch_size 照旧 ——
+        # 宿主照目录说的「跑几遍 × 一遍几张」摆占位,做的是同一件事。
+        runs = runs_from(parameters)
         wanted = graph.chosen_outputs(api, kind, choice, object_info, titles, locale)
-        if isinstance(resume, dict) and resume.get("repeat") or (values["batch"] > 1 and graph.repeats_for_count(api)):
-            # 没有画布的图出 N 张:循环提交 N 次(重启时带着循环的回执回来,接着跑)
-            return _generate_repeated(request, comfy, locale, emit, kind, wanted,
+        if isinstance(resume, dict) and resume.get("repeat") or (runs > 1 and graph.counts_runs(api)):
+            # 跑 N 遍:循环提交 N 次(重启时带着循环的回执回来,接着跑)
+            return _generate_repeated(request, comfy, locale, emit, kind, wanted, runs,
                                       (object_info, api, titles, values, parameters))
         prompt = graph.fill(api, values, overrides_from(parameters), object_info)
         if wanted is not None:
@@ -624,21 +629,20 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
 
 
 def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str,
-                       wanted: set[str] | None,
+                       wanted: set[str] | None, runs: int,
                        loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any]],
                        ) -> dict[str, Any]:
-    """没有画布的图出 N 张:循环提交 N 次(run_repeated),每份产出带着它用的种子;有几次没出来时说明一句。
+    """跑 N 遍:循环提交 N 次(run_repeated),每份产出带着它那一遍用的种子;有几遍没出来时说明一句。
 
     `loaded` 是 generate 已经取好的 (object_info, 图, 节点名字, 主控件的值, 参数表),不再拉第二遍。"""
     object_info, api, titles, values, parameters = loaded
-    count = min(int(values.get("batch") or 1), graph.MAX_BATCH)
     given = int(parameters["seed"]) if _number(parameters.get("seed")) else None
     overrides = overrides_from(parameters)
     uploaded: dict[str, list[str]] | None = None
 
     def build(seed: int) -> dict[str, Any]:
         nonlocal uploaded
-        prompt = graph.fill(api, {**values, "seed": seed, "batch": 1}, overrides, object_info)
+        prompt = graph.fill(api, {**values, "seed": seed}, overrides, object_info)
         if wanted is not None:
             prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
         if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
@@ -646,9 +650,9 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
             uploaded = upload(comfy, request.get("inputs") or [])
         return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded) if uploaded else prompt
 
-    result = run_repeated(comfy, build, count, given, emit, locale, titles, request.get("resume"))
+    result = run_repeated(comfy, build, runs, given, emit, locale, titles, request.get("resume"))
     if not result.runs:
-        raise ComfyError(result.failures[0][1] if result.failures else say(locale, "一张都没出来", "No image came out"))
+        raise ComfyError(result.failures[0][1] if result.failures else say(locale, "一遍都没出来", "No run came out"))
     files: list[dict[str, Any]] = []
     seeds: list[int] = []
     for _, entry, seed in result.runs:

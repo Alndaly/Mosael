@@ -9,6 +9,7 @@
  * 同一份规则解释两遍,迟早会在某一处漏掉新参数。
  */
 import type { GenerationOption } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 
 /**
  * 生成的种类:图像、视频、音频(音乐 / BGM / 音效 / 给视频配声,见 ADR 0022)。和后端
@@ -424,9 +425,9 @@ function positiveInteger(value: unknown): number | undefined {
 }
 
 /**
- * 张数为 1 时**一次交回几份**:模型说的 `outputs_per_run`(ComfyUI 的一张工作流有几个保存节点),某个参数的取值
- * 改变它时(「结果取自」只要其中一个节点的)按那个参数的 `x-outputs-per-run`。和后端
- * generation.catalog.outputs_per_run 同一个算法 —— 画板按它一次摆好那么多格占位,「N×」上显示的就是那个总数。
+ * 张数为 1 时**一次交回几份**:模型说的 `outputs_per_run`(ComfyUI 的一张工作流跑一遍交回几张:几个结果节点各收到
+ * 它那批),某个参数的取值改变它时(「结果取自」只要其中一个节点的)按那个参数的 `x-outputs-per-run`。和后端
+ * generation.catalog.outputs_per_run 同一个算法 —— 画板按它 × 张数一次摆好那么多格占位,「N×」上显示的就是那个总数。
  */
 export function outputsPerRun(model: GenerationOption | null, parameters: Record<string, unknown>): number {
   let perRun = positiveInteger(model?.capabilities?.outputs_per_run) ?? 1;
@@ -439,6 +440,35 @@ export function outputsPerRun(model: GenerationOption | null, parameters: Record
     }
   }
   return perRun;
+}
+
+/**
+ * 这个模型的「张数」数的是**跑几遍**(ComfyUI 的工作流,描述符的 `num_images_unit: "runs"`):每遍按工作流原样出它
+ * 那一批(画布上存着的批量照旧),一共是跑几遍 × 一遍几张。别的模型的张数就是张数。
+ */
+export function countsRuns(model: GenerationOption | null): boolean {
+  return model?.capabilities?.num_images_unit === "runs";
+}
+
+/**
+ * 跑几遍那一格下面的说明:每遍出几张(批量 × 几个结果节点)、这次一共几张。一遍每个结果节点出几张判不出来
+ * (`batch_per_run` 没给)时不报数,只说「一遍出几张由工作流定」—— 宁可不说,不说错。
+ */
+export function runsHint(
+  t: (key: MessageKey) => string,
+  model: GenerationOption | null,
+  parameters: Record<string, unknown>,
+  runs: number,
+): string {
+  const perRun = outputsPerRun(model, parameters);
+  const batch = positiveInteger(model?.capabilities?.batch_per_run);
+  if (!batch || perRun % batch !== 0) return t("genRunsHintUnknown").replace("{runs}", String(runs));
+  const nodes = perRun / batch;
+  const detail = batch > 1 && nodes > 1 ? "genRunsDetailBatchNodes" : batch > 1 ? "genRunsDetailBatch" : nodes > 1 ? "genRunsDetailNodes" : null;
+  const head = (detail ? t("genRunsHint").replace("{detail}", t(detail)) : t("genRunsHintPlain"))
+    .replace("{batch}", String(batch))
+    .replace("{nodes}", String(nodes));
+  return head.replace("{perRun}", String(perRun)).replace("{total}", String(perRun * runs));
 }
 
 /**

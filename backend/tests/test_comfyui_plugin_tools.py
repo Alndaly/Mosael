@@ -10,7 +10,7 @@
 - `server_status` / `list_models`:显卡、队列、模型文件(老版本没有 `/models` 时看加载节点的下拉);
 - `interrupt` / `clear_queue` / `free_memory`:只动该动的那一个。
 
-以及生成那一路的两处新东西:一次几张(`num_images` → batch_size,几张全交回),模型清单的指纹。
+以及生成那一路的两处新东西:跑几遍(`num_images`,每遍按工作流原样、换一个种子,几遍的产出全交回),模型清单的指纹。
 """
 
 from __future__ import annotations
@@ -302,8 +302,8 @@ def test_清空队列_释放显存(comfy) -> None:
 # --- 生成那一路的新东西 -----------------------------------------------------------------
 
 
-def test_一次几张_全部交回(comfy, tmp_path: Path) -> None:
-    comfy.state.outputs = {"9": {"images": [{"filename": f"b{i}.png", "type": "output"} for i in range(3)]}}
+def test_跑几遍_每遍按原样_全部交回(comfy, tmp_path: Path) -> None:
+    comfy.state.outputs = {"9": {"images": [{"filename": "b.png", "type": "output"}]}}
     scratch = tmp_path / "gen"
     scratch.mkdir()
     result = runtime.stream_tool(
@@ -312,7 +312,8 @@ def test_一次几张_全部交回(comfy, tmp_path: Path) -> None:
          "parameters": {"num_images": 3}, "inputs": [], "resume": None},
         {"SERVER_URL": comfy.url}, hooks=_Hooks().build(), scratch_dir=scratch, timeout=60,
     )
-    assert comfy.posted("/prompt")[0]["prompt"]["5"]["inputs"]["batch_size"] == 3
+    runs = [one["prompt"] for one in comfy.posted("/prompt")]
+    assert [one["5"]["inputs"]["batch_size"] for one in runs] == [1, 1, 1], "跑 3 遍,batch_size 按工作流原样"
     assert len(result.output["outputs"]) == 3 and result.output["usage"] == {"images": 3}
 
 

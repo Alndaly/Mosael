@@ -180,6 +180,13 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
             clean["x-advanced"] = True
         if spec.get("x-multiline") is True and kind == "string":
             clean["x-multiline"] = True
+        # 「张数」数的是**跑几遍**(ComfyUI:每遍按工作流原样出它那批,见 docs/PLUGIN_MANIFEST「替宿主做生成」),
+        # 和一遍里每个结果节点出几张(`x-batch`,判得出来才有)。
+        if spec.get("x-count-unit") == "runs" and kind == "integer":
+            clean["x-count-unit"] = "runs"
+            batch = spec.get("x-batch")
+            if isinstance(batch, int) and not isinstance(batch, bool) and batch >= 1:
+                clean["x-batch"] = min(batch, _MAX_OUTPUTS_PER_RUN)
         # 选模型文件的那一格写明是哪个模型目录的(生成表单据此从这个连接的模型库取缩略图、底模、触发词)
         folder = spec.get("x-model-folder")
         if isinstance(folder, str) and _MODEL_FOLDER.match(folder) and "enum" in clean:

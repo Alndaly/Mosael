@@ -81,9 +81,11 @@ import {
   durationChoices,
   sizeOptions,
   customSizeRule,
+  countsRuns,
   maxImages,
   parameterChoiceEntries,
   pickGenerationOption,
+  runsHint,
   supportsParameter,
   sourceLimit,
   exclusiveSourceGroups,
@@ -1027,7 +1029,14 @@ export function GenerateWorkspace({
                   </ParameterField>
                 )}
                 {isImageModel && supportsParameter(selectedModel, "num_images") && (
-                  <ParameterField label={t("genNumImages")}>
+                  // ComfyUI 的工作流「张数」是跑几遍:标签换成「跑几遍」,下面说清一遍出几张、一共几张(见 runsHint)。
+                  <ParameterField
+                    label={countsRuns(selectedModel) ? t("genRuns") : t("genNumImages")}
+                    hint={countsRuns(selectedModel)
+                      ? runsHint(t, selectedModel, generationParameters(selectedModel, generationConfig),
+                        Math.max(1, Math.min(maxImages(selectedModel), Number(generationConfig.numImages) || 1)))
+                      : undefined}
+                  >
                     <Input
                       className={PARAMETER_CONTROL_CLASS}
                       type="number"

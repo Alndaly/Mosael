@@ -163,3 +163,37 @@ it("缺省是「最终结果」:「结果取自」写明是哪个节点,「N×�
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(screen.getByRole("combobox", { name: "boardOutputCount" })).toHaveTextContent("3×");
 });
+
+/**
+ * ComfyUI 的工作流「张数」是跑几遍(`num_images_unit: "runs"`):画布存着一次 4 张的工作流(真的「古风女孩1」),「N×」是
+ * 跑几遍 × 一遍 4 张,每一档的副标题写跑几遍;发出去的是跑几遍。
+ */
+function runsModel(): GenerationOption {
+  const model = twoPassPreviews();
+  const schema = (model.capabilities as Record<string, unknown>).parameter_schema as Record<string, Record<string, unknown>>;
+  return {
+    ...model,
+    capabilities: {
+      ...model.capabilities,
+      num_images_unit: "runs",
+      batch_per_run: 4,
+      outputs_per_run: 4,
+      parameter_schema: {
+        output_node: { ...schema.output_node, "x-outputs-per-run": { final: 4, all: 12, "8": 4, "17": 4, "18": 4 } },
+      },
+    },
+  } as GenerationOption;
+}
+
+it("张数是跑几遍:「N×」= 跑几遍 × 一遍几张,副标题写跑几遍,发出去的是跑几遍", async () => {
+  const { onSubmit } = renderComposer(runsModel());
+  const count = screen.getByRole("combobox", { name: "boardOutputCount" });
+  expect(count).toHaveTextContent("4×");
+  fireEvent.click(count);
+  const options = within(await screen.findByRole("listbox")).getAllByRole("option");
+  expect(options.map((one) => one.textContent)).toEqual(["4×", "8×", "12×", "16×"].map((label) => `${label}boardOutputsRuns`));
+  fireEvent.click(options[1]);
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "boardOutputCount" })).toHaveTextContent("8×"));
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ num_images: 2 }) }));
+});

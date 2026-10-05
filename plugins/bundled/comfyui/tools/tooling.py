@@ -11,7 +11,7 @@
   内置文生图是 `wf_builtin_txt2img`;
 - 入参从图里读:提示词 / 反向提示词、每个读素材的节点一格(`image_10`、`mask_11`、`video_1`…,
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
-  和生成参数同一套,见 labels);种子、尺寸、一次几张收进「高级」;
+  和生成参数同一套,见 labels);种子、尺寸、跑几遍(`num_images`)收进「高级」;
 - 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary` /
   `prompt_id` —— 这五个是给工作流连线用的(第一份、全部、全部文字、摘要、任务号),声明成 `wiring_outputs`:
   画板上只落每个输出节点自己的产出(`board_outputs`),不再多出一张重复的图和几张 JSON / 摘要 / 任务号便签;
@@ -260,13 +260,15 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             shape.rename[name] = name
             if sized is not None:
                 alias(sized, name, name)
-    batched = graph.batch_input(api)
-    #: 有画布的写 batch_size;没有画布、有种子的循环提交(graph.repeats_for_count),和生成那一路同一件事
-    if (batched is not None and kind == "image") or graph.repeats_for_count(api):
-        # 缺省 1,和生成那一路同一个答案:不照画布上存着的 batch_size(古风女孩存的是 4,不填就一次出 4 张)
+    #: 「张数」是跑几遍(graph.counts_runs),和生成那一路同一件事:每遍按工作流原样(画布上存着的 batch_size 照旧),
+    #: 换一个种子,缺省一遍。键名照旧是 num_images —— 存着的工作流节点、智能体记着的入参不用改。
+    if graph.counts_runs(api):
         shape.properties["num_images"] = {
-            "type": "integer", "minimum": 1, "maximum": graph.MAX_BATCH, "x-advanced": True, "default": 1,
-            "title": _pair("张数", "Images"),
+            "type": "integer", "minimum": 1, "maximum": graph.MAX_RUNS, "x-advanced": True, "default": 1,
+            "title": _pair("跑几遍", "Runs"),
+            "description": _pair("每遍按工作流原样出图(画布上存的批量照旧),换一个种子;交回每一遍的全部产出",
+                                 "Each run makes what the workflow is saved to make (its saved batch size stays) with a "
+                                 "new seed; every run's outputs come back"),
         }
         shape.bindings["num_images"] = ("value", "num_images", "integer")
     shape.properties["include_previews"] = {
@@ -516,13 +518,12 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
 
     # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
-    values.setdefault("batch", 1)  # 没填张数就一次一张(入参的缺省),不照画布上存着的
     uploads: dict[str, list[str]] | None = None
 
     def build(seed: int | None) -> dict[str, Any]:
-        """这一次要提交的图:填好入参(循环提交时换上这一次的种子、一次一张),接上传好的素材。素材只传一次。"""
+        """这一次要提交的图:填好入参(跑几遍时换上这一遍的种子),接上传好的素材。素材只传一次。"""
         nonlocal uploads
-        filled = {**values, "seed": seed, "batch": 1} if seed is not None else values
+        filled = {**values, "seed": seed} if seed is not None else values
         prompt = graph.fill(api, filled, overrides, object_info)
         if uploads is None:
             run.preflight(prompt, object_info, locale)
@@ -539,9 +540,9 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
 
     from workflows import deliver  # 避免循环 import:workflows 也用这里的 output_key
 
-    count = min(int(values["batch"]), graph.MAX_BATCH)
-    if count > 1 and graph.repeats_for_count(api):
-        # 没有画布的图出 N 张:循环提交 N 次,每次换一个种子(和生成那一路同一个 run.run_repeated)
+    count = run.runs_from(parameters)
+    if count > 1 and graph.counts_runs(api):
+        # 跑 N 遍:循环提交 N 次,每次换一个种子(和生成那一路同一个 run.run_repeated)
         given = int(parameters["seed"]) if run._number(parameters.get("seed")) else None  # noqa: SLF001
         repeated = run.run_repeated(comfy, build, count, given, emit, locale, titles)
         if not repeated.runs:

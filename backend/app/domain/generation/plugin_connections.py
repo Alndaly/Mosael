@@ -119,6 +119,11 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
             # 张数的上限:插件在这个参数上说了就用它说的,没说就用「一次最多交回几份」。
             maximum = spec.get("maximum")
             caps["max_num_images"] = int(maximum) if isinstance(maximum, (int, float)) else model.max_outputs
+            # 张数数的是跑几遍(ComfyUI 的工作流):表单把这一格叫「跑几遍」,说明里写一遍出几张、一共几张
+            if spec.get("x-count-unit") == "runs":
+                caps["num_images_unit"] = "runs"
+                if isinstance(spec.get("x-batch"), int):
+                    caps["batch_per_run"] = spec["x-batch"]
         elif key == "generate_audio":
             caps["supports_generate_audio"] = True
             if isinstance(default, bool):

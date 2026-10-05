@@ -40,6 +40,21 @@ TWO_SAVES: dict[str, Any] = {
 }
 
 
+def test_张数数的是跑几遍_说明要的批量也进描述符() -> None:
+    """ComfyUI 的工作流「张数」是跑几遍(`x-count-unit: runs`),一遍每个结果节点出几张写在 `x-batch`:宿主把它们记成
+    `num_images_unit` / `batch_per_run`,表单据此把这一格叫「跑几遍」、写清一遍出几张。别的值、不是正整数的批量不收。"""
+    from app.domain.generation.plugin_connections import descriptor
+    from app.domain.plugins.generation import _model
+
+    runs = {"type": "integer", "minimum": 1, "maximum": 4, "default": 1, "x-count-unit": "runs", "x-batch": 4}
+    caps = descriptor(_model({**TWO_SAVES, "parameters": {"num_images": runs}}, _text))
+    assert caps["num_images_unit"] == "runs" and caps["batch_per_run"] == 4 and caps["max_num_images"] == 4
+    unknown = descriptor(_model({**TWO_SAVES, "parameters": {"num_images": {**runs, "x-batch": 0}}}, _text))
+    assert unknown["num_images_unit"] == "runs" and "batch_per_run" not in unknown, "判不出批量:不报"
+    plain = descriptor(_model({**TWO_SAVES, "parameters": {"num_images": {**runs, "x-count-unit": "frames"}}}, _text))
+    assert "num_images_unit" not in plain and "batch_per_run" not in plain, "张数就是张数的模型不写"
+
+
 def test_一次交回几份和选项名字进描述符() -> None:
     from app.domain.generation.plugin_connections import descriptor
     from app.domain.plugins.generation import _model

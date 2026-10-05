@@ -182,6 +182,7 @@ def connected():
     with FakeComfyUI() as comfy:
         comfy.state.workflows["two.json"] = TWO_SAVES_API
         comfy.state.workflows["two_videos.json"] = TWO_VIDEOS_API
+        comfy.state.workflows["four.json"] = FOUR_PER_RUN_API
         hand_depth, node_info = fixture_workflow(TWO_PASS_HAND_DEPTH)
         comfy.state.object_info.update(node_info)
         comfy.state.workflows["古风女孩1.json"] = hand_depth
@@ -209,6 +210,21 @@ def _generate(client, ws: str, profile_id: str, *, kind: str = "image", model: s
     return board_id, started.json()["canvas"]["items"]
 
 
+#: 一个保存节点、画布上存着一次 4 张的出图工作流:跑一遍交回 4 张。
+FOUR_PER_RUN_API: dict[str, Any] = {
+    **{key: value for key, value in TWO_SAVES_API.items() if key not in ("10", "11", "12")},
+    "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 4}},
+}
+
+
+def _batch(prefix: str, count: int, kind: str = "output") -> dict[str, Any]:
+    return {"images": [{"filename": f"{prefix}_{n}.png", "subfolder": "", "type": kind} for n in range(1, count + 1)]}
+
+
+def _cells(count: int) -> list[str]:
+    return ["cell", *(f"cell-{n}" for n in range(2, count + 1))]
+
+
 def _settled(client, board_id: str, ws: str) -> list[dict[str, Any]]:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -219,56 +235,55 @@ def _settled(client, board_id: str, ws: str) -> list[dict[str, Any]]:
     raise AssertionError("一直没落回来")
 
 
-def test_两个保存节点的工作流_点一次就摆两格_落回两张(connected) -> None:
+def test_两个保存节点的工作流_点一次就摆四格_落回四张(connected) -> None:
+    """两个保存节点、画布上存着一次 2 张:跑一遍交回 2 × 2 = 4 张,点一次就摆四格。"""
     client, comfy, ws, profile_id = connected
-    comfy.state.outputs = {"9": {"images": [{"filename": "base_00001_.png", "subfolder": "", "type": "output"}]},
-                           "12": {"images": [{"filename": "hd_00001_.png", "subfolder": "", "type": "output"}]}}
+    comfy.state.outputs = {"9": _batch("base", 2), "12": _batch("hd", 2)}
     board_id, placed = _generate(client, ws, profile_id)
-    assert [one["id"] for one in placed] == ["cell", "cell-2"]
+    assert [one["id"] for one in placed] == _cells(4)
     assert len({one["run"]["job_id"] for one in placed}) == 1
     items = _settled(client, board_id, ws)
-    assert [one["id"] for one in items] == ["cell", "cell-2"]
+    assert [one["id"] for one in items] == _cells(4)
     assert all(one["run"]["status"] == "succeeded" and one.get("asset_id") for one in items)
 
 
-def test_结果取自选一个节点_就只摆一格(connected) -> None:
+def test_结果取自选一个节点_就只摆它那一批(connected) -> None:
     client, comfy, ws, profile_id = connected
-    comfy.state.outputs = {"9": {"images": [{"filename": "base_00001_.png", "subfolder": "", "type": "output"}]},
-                           "12": {"images": [{"filename": "hd_00001_.png", "subfolder": "", "type": "output"}]}}
+    comfy.state.outputs = {"9": _batch("base", 2), "12": _batch("hd", 2)}
     board_id, placed = _generate(client, ws, profile_id, parameters={"output_node": "12"})
-    assert [one["id"] for one in placed] == ["cell"]
-    [cell] = _settled(client, board_id, ws)
-    assert cell["run"]["status"] == "succeeded" and cell["asset_id"]
+    assert [one["id"] for one in placed] == _cells(2)
+    items = _settled(client, board_id, ws)
+    assert all(one["run"]["status"] == "succeeded" and one["asset_id"] for one in items)
 
 
-def test_两遍出图只接了预览_点一次只摆一格_选全部摆三格(connected) -> None:
-    """维护者的「古风女孩1」:第一遍、手部深度图、第二遍各接一个预览。缺省「结果取自」是最终结果 —— 一格占位、落回第二遍
-    那一张,中间一步的两个预览不跑;选「全部」照旧三格三张。"""
+def test_两遍出图只接了预览_点一次只摆最终那一批_选全部摆三批(connected) -> None:
+    """维护者的「古风女孩1」:第一遍、手部深度图、第二遍各接一个预览,画布存着一次 4 张。缺省「结果取自」是最终结果 ——
+    摆 4 格、落回第二遍那一批,中间一步的两个预览不跑;选「全部」三个节点各 4 张,摆 12 格。"""
     client, comfy, ws, profile_id = connected
-    comfy.state.outputs = {node: {"images": [{"filename": f"temp_{node}.png", "subfolder": "", "type": "temp"}]}
-                           for node in ("8", "17", "18")}
+    comfy.state.outputs = {node: _batch(f"temp_{node}", 4, "temp") for node in ("8", "17", "18")}
     board_id, placed = _generate(client, ws, profile_id, model="古风女孩1.json")
-    assert [one["id"] for one in placed] == ["cell"]
-    [cell] = _settled(client, board_id, ws)
-    assert cell["run"]["status"] == "succeeded" and cell["asset_id"]
+    assert [one["id"] for one in placed] == _cells(4)
+    items = _settled(client, board_id, ws)
+    assert len(items) == 4 and all(one["run"]["status"] == "succeeded" and one["asset_id"] for one in items)
     assert not {"8", "18"} & set(comfy.posted("/prompt")[-1]["prompt"])
 
     board_id, placed = _generate(client, ws, profile_id, model="古风女孩1.json", parameters={"output_node": "all"})
-    assert [one["id"] for one in placed] == ["cell", "cell-2", "cell-3"]
+    assert [one["id"] for one in placed] == _cells(12)
     items = _settled(client, board_id, ws)
-    assert len(items) == 3 and all(one["run"]["status"] == "succeeded" and one.get("asset_id") for one in items)
+    assert len(items) == 12 and all(one["run"]["status"] == "succeeded" and one.get("asset_id") for one in items)
 
 
-def test_两个节点乘两张_摆四格(connected) -> None:
+def test_画布存着一次4张_张数2_摆八格_落回八张(connected) -> None:
+    """张数是跑几遍:一遍 4 张的工作流选 2,提交两次(batch_size 都照旧 4),摆 8 格、落回 8 张。"""
     client, comfy, ws, profile_id = connected
-    comfy.state.outputs = {
-        "9": {"images": [{"filename": f"base_{n}.png", "subfolder": "", "type": "output"} for n in (1, 2)]},
-        "12": {"images": [{"filename": f"hd_{n}.png", "subfolder": "", "type": "output"} for n in (1, 2)]},
-    }
-    board_id, placed = _generate(client, ws, profile_id, parameters={"num_images": 2})
-    assert [one["id"] for one in placed] == ["cell", "cell-2", "cell-3", "cell-4"]
+    comfy.state.outputs = {"9": _batch("base", 4)}
+    board_id, placed = _generate(client, ws, profile_id, model="four.json", parameters={"num_images": 2})
+    assert [one["id"] for one in placed] == _cells(8)
     items = _settled(client, board_id, ws)
-    assert len(items) == 4 and len({one["asset_id"] for one in items}) == 4
+    assert len(items) == 8 and all(one["run"]["status"] == "succeeded" and one.get("asset_id") for one in items), (
+        "跑几遍的生成把每份的种子记在 output_parameters:占了 outputs 的话这里一张都落不回来")
+    runs = [one["prompt"] for one in comfy.posted("/prompt")]
+    assert [one["5"]["inputs"]["batch_size"] for one in runs] == [4, 4]
 
 
 def test_两个视频保存节点_摆两格视频(connected) -> None:

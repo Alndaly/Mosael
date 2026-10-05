@@ -275,21 +275,32 @@ def size_node(api: dict[str, Any]) -> str | None:
     return None
 
 
-def repeats_for_count(api: dict[str, Any]) -> bool:
-    """这张图的「张数」靠**循环提交**:出图的、没有自己的画布(局部重绘、图生图这类从读进来的图出发的),
-    又有种子可换(每次换一个种子才出得来不一样的图)。有画布的写 batch_size,一次出 N 张;没有种子的(放大)
-    跑 N 遍也是同一张,不给张数。"""
-    return (kind_of(api) == "image" and batch_input(api) is None
-            and bool(seed_inputs(api) or "seed" in _placeholders_in(api)))
+def counts_runs(api: dict[str, Any]) -> bool:
+    """这张图的「张数」是**跑几遍**:出图的、有种子可换(每遍换一个种子才出得来不一样的图)。
+
+    每遍按工作流原样跑 —— 画布上存着的 batch_size 照旧,一遍出几张是工作流自己定的(见 images_per_run);张数不写进
+    batch_size。没有种子的(放大、抠图)跑几遍都是同一张,不给张数;视频图不给。
+    """
+    return kind_of(api) == "image" and bool(seed_inputs(api) or "seed" in _placeholders_in(api))
 
 
-def batch_input(api: dict[str, Any]) -> str | None:
-    """一次出几张写在哪:画布节点上的字面量 `batch_size`。没有就是 None(这张图一次只出它自己那么多)。"""
-    sized = size_node(api)
-    if sized is None:
-        return None
-    value = (api[sized].get("inputs") or {}).get("batch_size")
-    return sized if isinstance(value, int) and not isinstance(value, bool) else None
+def _batch_of(api: dict[str, Any], node_id: str) -> int | None:
+    """一遍下来这个输出节点收到几张:它上游存着的那个字面量 `batch_size`(画布、潜空间)。上游没有、或者存着几个
+    不一样的(判不了是哪个),是 None —— 一遍出几张由工作流自己定,只能按 1 张摆占位。"""
+    found = {value for one in _upstream_closure(api, {node_id})
+             if isinstance(value := (api[one].get("inputs") or {}).get("batch_size"), int) and not isinstance(value, bool)}
+    return found.pop() if len(found) == 1 else None
+
+
+def images_per_run(api: dict[str, Any], nodes: list[dict[str, str]]) -> int:
+    """跑一遍这几个输出节点一共交回几张:每个节点收到的批量(判不了按 1)加起来。"""
+    return sum(_batch_of(api, node["node"]) or 1 for node in nodes)
+
+
+def shared_batch(api: dict[str, Any], nodes: list[dict[str, str]]) -> int | None:
+    """这几个输出节点一遍各收到几张 —— 都一样、而且判得出来时是那个数,否则 None(给人看的说明就不写批量)。"""
+    found = {_batch_of(api, node["node"]) for node in nodes}
+    return found.pop() if len(found) == 1 else None
 
 
 def _node_order(node_id: str) -> tuple[int, str]:
@@ -715,8 +726,8 @@ _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 #: 尺寸下拉里**推荐**的几档(不是限制:任意宽高都收,每边取整到 SIZE_STEP 的倍数、至少 SIZE_MINIMUM)。
 #: **这张图自己的尺寸**总在里面,且是默认值。
 COMMON_SIZES = ("512x512", "768x768", "1024x1024", "832x1216", "1216x832", "1280x720", "720x1280", "1920x1080")
-#: 一次最多出几张(宿主一次生成的上限,见 ai/providers/contracts/generation.MAX_NUM_IMAGES)。
-MAX_BATCH = 4
+#: 「张数」(跑几遍)最多几遍:宿主一次生成的张数上限(见 ai/providers/contracts/generation.MAX_NUM_IMAGES)。
+MAX_RUNS = 4
 #: 宽高每边至少多少、取整到几的倍数。ComfyUI 的潜空间按 8 像素一格;生成的「尺寸」和工具的宽高是同一个规矩。
 SIZE_MINIMUM = 16
 SIZE_STEP = 8
@@ -789,7 +800,7 @@ def tunable(
 ) -> dict[str, dict[str, Any]]:
     """这张图里**给人调的**那些字面量输入:`<节点 id>.<输入名>` → JSON Schema 片段,按常用程度排好。
 
-    宿主自己有控件的(提示词、种子、尺寸、一次几张)、读素材的槽位、不该在 Mosael 里调的(文件名前缀)
+    宿主自己有控件的(提示词、种子、尺寸)、画布上的批量(按工作流原样,见 counts_runs)、读素材的槽位、不该在 Mosael 里调的(文件名前缀)
     都不在这里。名字是人话(见 labels),原始的「节点 · 输入名」在 description 里。
     """
     titles = titles or {}
@@ -815,7 +826,7 @@ def tunable(
             if (node_id, name) in seeds:
                 continue
             if node_id == sized and name in ("width", "height", "batch_size"):
-                continue  # 尺寸与一次几张:宿主的控件
+                continue  # 尺寸是宿主的控件;一遍出几张按工作流原样(见 counts_runs),不在这里改
             if (node_id, name) in slot_fields or class_type in _LOADERS and name in ("image", "upload", "channel"):
                 continue  # 读素材的槽位
             spec = _schema(defs.get(name), value)
@@ -862,7 +873,8 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
     选项名里写明是哪个;别的那几个标着「中间一步」「控制图」「蒙版」。没有这种节点(几个保存节点,或几个互不相干的
     预览)时缺省「全部」。
 
-    每个选项一次交回几份写在 `x-outputs-per-run` 上(张数为 1 时):宿主据此按选中的那一项摆占位。
+    每个选项跑一遍交回几张写在 `x-outputs-per-run` 上(每个节点收到的批量,见 images_per_run):宿主据此按选中的那一项、
+    乘上跑几遍摆占位。
     """
     saved = any(persists(api.get(node["node"]) or {}) for node in nodes)
     count = len(nodes)
@@ -912,8 +924,9 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
         "enum": enum,
         "default": FINAL_OUTPUTS if staged else ALL_OUTPUTS,
         "x-enum-labels": labels,
-        "x-outputs-per-run": {**({FINAL_OUTPUTS: len(finals)} if staged else {}), ALL_OUTPUTS: count,
-                              **{node["node"]: 1 for node in nodes}},
+        "x-outputs-per-run": {**({FINAL_OUTPUTS: images_per_run(api, finals)} if staged else {}),
+                              ALL_OUTPUTS: images_per_run(api, nodes),
+                              **{node["node"]: images_per_run(api, [node]) for node in nodes}},
     }
 
 
@@ -961,16 +974,15 @@ def describe(
 ) -> dict[str, Any]:
     """一张 API 图 → 插件目录里的一个模型(见 docs/PLUGIN_MANIFEST 的「替宿主做生成」)。
 
-    - 提示词 / 反向提示词、种子、尺寸、一次几张对到宿主自己的控件上(`negative_prompt` / `seed` / `size` /
-      `num_images`);
+    - 提示词 / 反向提示词、种子、尺寸、跑几遍对到宿主自己的控件上(`negative_prompt` / `seed` / `size` /
+      `num_images`,它在这里是跑几遍 —— `x-count-unit: runs`,见 counts_runs);
     - 其余可调的字面量输入按 `<节点 id>.<输入名>` 列成参数(见 `tunable`);
     - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频);
     - 粘贴的模板里的 `{{占位符}}` 一样认;
     - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);
-    - 一次运行交回几份(`outputs_per_run`,张数为 1、「结果取自」按缺省时)照实说:这一种里交回的节点各一份(见
-      generation_nodes),中间一步、控制图、蒙版这类预览不算(见 final_outputs);不止一个时给一项「结果取自」(见
-      `_output_choice`)。
-      宿主据此一次摆好那么多格占位。
+    - 跑一遍交回几张(`outputs_per_run`,「结果取自」按缺省时)照实说:这一种里交回的节点(见 generation_nodes)各按
+      它收到的批量算(见 images_per_run),中间一步、控制图、蒙版这类预览不算(见 final_outputs);不止一个时给一项
+      「结果取自」(见 `_output_choice`)。宿主据此按跑几遍 × 一遍几张一次摆好那么多格占位。
     """
     titles = titles or {}
     kind = kind_of(api)
@@ -998,18 +1010,21 @@ def describe(
         if own:
             size["default"] = own
         parameters["size"] = size
-    batched = batch_input(api)
-    #: 一次运行交回几份(张数为 1 时):缺省(最终结果,见 final_outputs)交回的那几个节点各一份;「全部」时是这一种
-    #: 交回的每个节点(见 generation_nodes)各一份 —— 那是一次最多交回几份。
+    #: 跑一遍交回几张:缺省(最终结果,见 final_outputs)交回的那几个节点,各按它收到的批量(见 images_per_run);
+    #: 「全部」时是这一种交回的每个节点 —— 再乘上最多跑几遍,是一次最多交回几张。
     delivering = generation_nodes(api, kind, object_info, titles)
-    per_run = max(1, len(final_outputs(api, delivering, object_info)))
-    max_outputs = max(1, len(delivering))
-    if kind == "image" and (batched is not None or repeats_for_count(api)):
-        # 有画布的写 batch_size;没有画布、有种子的循环提交 N 次,每次换一个种子(见 run.generate)
-        max_outputs *= MAX_BATCH
-        # 缺省是 1:生成那一路没给张数就一次出一张(见 run.generate),不照画布上存着的 batch_size ——
-        # 宿主的「N×」缺省就是 1,说的和做的得是同一件事。
-        parameters["num_images"] = {"type": "integer", "minimum": 1, "maximum": MAX_BATCH, "default": 1}
+    finals = final_outputs(api, delivering, object_info)
+    per_run = max(1, images_per_run(api, finals))
+    max_outputs = max(1, images_per_run(api, delivering))
+    if counts_runs(api):
+        # 「张数」是跑几遍(见 run.generate):每遍按工作流原样,换一个种子;缺省跑一遍。宿主的「N×」是跑几遍 × 一遍几张。
+        max_outputs *= MAX_RUNS
+        runs: dict[str, Any] = {"type": "integer", "minimum": 1, "maximum": MAX_RUNS, "default": 1,
+                                "x-count-unit": "runs"}
+        batch = shared_batch(api, delivering)
+        if batch is not None:
+            runs["x-batch"] = batch  # 给人看的说明里写「批量 N」:一遍每个结果节点出几张
+        parameters["num_images"] = runs
     if "steps" in placeholders:
         parameters["steps"] = {"type": "integer", "minimum": 1, "maximum": 200, "default": 20,
                                "title": {"zh": "步数", "en": "Steps"}}
@@ -1114,8 +1129,8 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
          object_info: dict[str, Any] | None = None) -> dict[str, Any]:
     """把一次请求写进 API 图(返回新图,不改入参)。
 
-    `values`:提示词 / 反向 / 种子 / 宽高 / 一次几张(`batch`)—— 宿主的主控件。**只写给了的**:用户没选尺寸,
-    这张图就用它自己的尺寸,而不是被一个默认的 1024 盖掉。
+    `values`:提示词 / 反向 / 种子 / 宽高 —— 宿主的主控件。**只写给了的**:用户没选尺寸,这张图就用它自己的尺寸,
+    而不是被一个默认的 1024 盖掉。画布上存着的 batch_size 不动:「张数」是跑几遍(见 counts_runs)。
     `overrides`:`<节点 id>.<输入名>` → 值,用户在参数表里动过的那些。只改字面量输入;节点或输入
     已经不在了就跳过(工作流可能在 ComfyUI 里改过了,不该为此报错)。
     `object_info`:认提示词写在哪几格(见 text_slots)—— 和描述这张图时给的是同一份,目录说「收提示词」的图,
@@ -1137,9 +1152,6 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
     if sized is not None and values.get("width") and values.get("height"):
         graph[sized]["inputs"]["width"] = values["width"]
         graph[sized]["inputs"]["height"] = values["height"]
-    batched = batch_input(graph)
-    if batched is not None and isinstance(values.get("batch"), int) and values["batch"] >= 1:
-        graph[batched]["inputs"]["batch_size"] = min(int(values["batch"]), MAX_BATCH)
     for key, value in (overrides or {}).items():
         node_id, dot, name = str(key).partition(".")
         if not dot:

@@ -44,7 +44,9 @@ import {
   exclusiveSourceGroups,
   hasEnoughText,
   maxImages,
+  countsRuns,
   outputsPerRun,
+  runsHint,
   parameterChoiceEntries,
   pickGenerationOption,
   promptMode,
@@ -765,6 +767,7 @@ export function NodeComposer({
   //: 张数为 1 时一次交回几份(ComfyUI 一张工作流几个保存节点;「结果取自」选了一个就是 1)。「N×」上显示的是
   //: 这一次会落出几格(= 这个数 × 张数),和画板一次摆好的占位一样多。
   const perRun = outputsPerRun(current, formParameters);
+  const runs = countsRuns(current);
 
   const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
     () => ({
@@ -1281,9 +1284,11 @@ export function NodeComposer({
       }
       trailing={
         options.length > 0 && batches ? (
+          // ComfyUI 的工作流「张数」是跑几遍(countsRuns):悬停说清一遍出几张、这次一共几张,每一档的副标题写跑几遍。
+          <Hint label={runs ? t("genRuns") : undefined} hint={runs ? runsHint(t, current, formParameters, count) : undefined}>
           <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
-            {/* 数是**这一次会落出几格**(一次交回几份 × 张数),不是发出去的张数:一张工作流两个保存节点时选「4×」
-                是每个节点 2 张、一共 4 格 —— 和其他模型上「N×」的意思一样(落出 N 格),副标题说清每个节点几张。 */}
+            {/* 数是**这一次会落出几格**(跑一遍交回几份 × 张数),不是发出去的张数:一张工作流两个结果节点时选「4×」
+                是跑 2 遍、一共 4 格 —— 和其他模型上「N×」的意思一样(落出 N 格),副标题说清跑几遍 / 每个节点几张。 */}
             <Pick
               ariaLabel={t("boardOutputCount")}
               value={String(count)}
@@ -1291,10 +1296,13 @@ export function NodeComposer({
               options={Array.from({ length: maxImages(current) }, (_, index) => ({
                 value: String(index + 1),
                 label: `${(index + 1) * perRun}×`,
-                ...(perRun > 1 ? { description: t("boardOutputsPerNode").replace("{count}", String(index + 1)) } : {}),
+                ...(runs
+                  ? { description: t("boardOutputsRuns").replace("{count}", String(index + 1)) }
+                  : perRun > 1 ? { description: t("boardOutputsPerNode").replace("{count}", String(index + 1)) } : {}),
               }))}
             />
           </span>
+          </Hint>
         ) : null
       }
       send={

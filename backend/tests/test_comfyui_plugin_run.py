@@ -287,12 +287,13 @@ def _submitted_seeds(comfy) -> list[int]:
     return [one["prompt"]["13"]["inputs"]["seed"] for one in comfy.posted("/prompt")]
 
 
-def test_没有画布的图出N张_循环提交N次_每次换一个种子(comfy, tmp_path: Path) -> None:
-    """用户拍板:局部重绘这类没有自己画布的图,张数照常生效 —— 插件循环提交 N 次。给了种子就从它开始依次 +1,
-    没给就每次随机;每张用的种子跟着产出交回(宿主记进生成记录),图只传一次。"""
+def test_没有画布的图跑3遍_循环提交3次_每次换一个种子(comfy, tmp_path: Path) -> None:
+    """「张数」是跑几遍:局部重绘这类没有自己画布的图也一样 —— 插件循环提交 N 次。给了种子就从它开始依次 +1,
+    没给就每次随机;每份产出带着它那一遍的种子(宿主记进生成记录),图只传一次。"""
     _inpaint(comfy)
     model = next(one for one in _models(comfy.url) if one["id"] == "inpainting.json")
-    assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1}
+    assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1,
+                                                 "x-count-unit": "runs"}
     assert model["max_outputs"] == 4
     image = {"role": "reference_image", "path": str(_png(tmp_path))}
 
@@ -304,7 +305,7 @@ def test_没有画布的图出N张_循环提交N次_每次换一个种子(comfy,
     assert output["usage"] == {"images": 3} and output["raw"]["prompt_ids"] == ["p1", "p2", "p3"]
     assert "note" not in output
     assert [task["prompt_id"] for task in hooks.tasks] == ["p1", "p2", "p3"]
-    assert any("第 2/3 张" in message for _, message in hooks.progress)
+    assert any("第 2/3 遍" in message for _, message in hooks.progress)
 
     _generate(comfy.url, tmp_path, {"model": "inpainting.json", "inputs": [image], "parameters": {"num_images": 2}})
     unseeded = _submitted_seeds(comfy)[3:]
@@ -317,8 +318,9 @@ def test_循环里一次失败_出来的照样交回_说明成功了几张和原
     comfy.state.error_message = "CUDA out of memory"
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 3, "seed": 7},
                                                    "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]})
-    assert [one["parameters"]["seed"] for one in output["outputs"]] == [7, 9], "第 2 张失败,第 1、3 张照样交回"
-    assert "3 张里出了 2 张" in output["note"] and "第 2 张" in output["note"] and "CUDA out of memory" in output["note"]
+    assert [one["parameters"]["seed"] for one in output["outputs"]] == [7, 9], "第 2 遍失败,第 1、3 遍照样交回"
+    assert "跑了 3 遍,出来 2 遍" in output["note"] and "第 2 遍" in output["note"]
+    assert "CUDA out of memory" in output["note"]
 
 
 def test_循环里一张都没出来_照旧报失败(comfy, tmp_path: Path) -> None:
@@ -354,53 +356,74 @@ def test_循环到一半后端重启_接着等那一次再把剩下的跑完(com
     assert [one["parameters"]["seed"] for one in output["outputs"]] == [50, 51, 52]
 
 
-def test_两个保存节点_一次交回两份_结果取自选一个就只交回它的(comfy, tmp_path: Path) -> None:
-    """目录说一次交回几份(`outputs_per_run`),做的就是那几份:没选张数时画布一次出一张(工作流里存着 2 张也是),
-    两个保存节点各一张;「结果取自」选了「高清」,只交回它那一张,原图那个保存节点不跑。"""
+def _batch(prefix: str, count: int, kind: str = "output") -> dict:
+    return {"images": [{"filename": f"{prefix}_{n:05d}_.png", "subfolder": "", "type": kind} for n in range(1, count + 1)]}
+
+
+def test_两个保存节点_跑一遍各交回一批_结果取自选一个就只交回它的(comfy, tmp_path: Path) -> None:
+    """目录说跑一遍交回几张(`outputs_per_run`),做的就是那几张:画布上存着一次 2 张,两个保存节点各 2 张,一遍 4 张;
+    「结果取自」选了「高清」、跑 2 遍:只交回它那一批 × 2 遍,原图那个保存节点不跑,batch_size 不动。"""
     comfy.state.workflows["two.json"] = TWO_SAVES_API
-    comfy.state.outputs = {"9": {"images": [{"filename": "base_00001_.png", "subfolder": "", "type": "output"}]},
-                           "12": {"images": [{"filename": "hd_00001_.png", "subfolder": "", "type": "output"}]}}
+    comfy.state.outputs = {"9": _batch("base", 2), "12": _batch("hd", 2)}
     model = next(one for one in _models(comfy.url) if one["id"] == "two.json")
-    assert model["outputs_per_run"] == 2 and model["parameters"]["output_node"]["enum"] == ["all", "9", "12"]
+    assert model["outputs_per_run"] == 4 and model["parameters"]["output_node"]["enum"] == ["all", "9", "12"]
+    assert model["parameters"]["output_node"]["x-outputs-per-run"] == {"all": 4, "9": 2, "12": 2}
 
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "two.json"})
-    submitted = comfy.posted("/prompt")[0]["prompt"]
-    assert submitted["5"]["inputs"]["batch_size"] == 1, "没选张数:一次一张,和目录里张数的缺省一致"
+    [submitted] = [one["prompt"] for one in comfy.posted("/prompt")]
+    assert submitted["5"]["inputs"]["batch_size"] == 2, "按工作流原样:存着一次 2 张就是 2 张"
     assert {"9", "12"} <= set(submitted)
-    assert len(output["outputs"]) == 2 and output["usage"] == {"images": 2}
+    assert len(output["outputs"]) == 4 and output["usage"] == {"images": 4}
 
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "two.json",
                                                    "parameters": {"output_node": "12", "num_images": 2}})
-    submitted = comfy.posted("/prompt")[1]["prompt"]
-    assert "9" not in submitted and submitted["5"]["inputs"]["batch_size"] == 2
-    assert output["usage"] == {"images": 1}
-    viewed = [query["filename"] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
-    assert viewed[-1:] == [["hd_00001_.png"]], viewed
+    runs = [one["prompt"] for one in comfy.posted("/prompt")[1:]]
+    assert len(runs) == 2, "张数 2 = 跑 2 遍"
+    assert all("9" not in one and one["5"]["inputs"]["batch_size"] == 2 for one in runs)
+    assert output["usage"] == {"images": 4}, "高清那一批 2 张 × 2 遍"
+
+
+def test_画布存着一次4张_张数2_跑两遍_一共8张(comfy, tmp_path: Path) -> None:
+    """维护者拍板:工作流这里的张数 = 跑几遍。画布上存着 batch_size 4 的工作流,选 2:提交两次,每次 batch_size 照旧 4,
+    种子从给的那个起依次 +1,一共交回 8 张,每张带着它那一遍的种子。"""
+    four = {key: value for key, value in TWO_SAVES_API.items() if key not in ("10", "11", "12")}
+    four["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 4}}
+    comfy.state.workflows["four.json"] = four
+    comfy.state.outputs = {"9": _batch("base", 4)}
+    model = next(one for one in _models(comfy.url) if one["id"] == "four.json")
+    assert model["outputs_per_run"] == 4 and model["parameters"]["num_images"]["x-batch"] == 4
+
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "four.json", "parameters": {"num_images": 2, "seed": 10}})
+    runs = [one["prompt"] for one in comfy.posted("/prompt")]
+    assert [one["5"]["inputs"]["batch_size"] for one in runs] == [4, 4], "batch_size 不被张数改写"
+    assert [one["3"]["inputs"]["seed"] for one in runs] == [10, 11]
+    assert len(output["outputs"]) == 8 and output["usage"] == {"images": 8}
+    assert [one["parameters"]["seed"] for one in output["outputs"]] == [10] * 4 + [11] * 4
 
 
 def test_两遍出图只接了预览_缺省只交回最终结果_全部照旧三张(comfy, tmp_path: Path) -> None:
-    """维护者的「古风女孩1」(脱敏夹具):第一遍、从它算出来的手部深度图、第二遍各接一个预览。目录说一次一张,
-    没选「结果取自」(宿主只发动过的参数)时提交的图里摘掉中间一步的两个预览、只交回第二遍那张;选「全部」照旧三张。"""
+    """维护者的「古风女孩1」(脱敏夹具):第一遍、从它算出来的手部深度图、第二遍各接一个预览,画布存着一次 4 张。
+    没选「结果取自」(宿主只发动过的参数)时提交的图里摘掉中间一步的两个预览、只交回第二遍那一批 4 张;选「全部」
+    三个节点各 4 张。"""
     ui, info = fixture_workflow(TWO_PASS_HAND_DEPTH)
     comfy.state.object_info.update(info)
     comfy.state.workflows["古风女孩1.json"] = ui
-    comfy.state.outputs = {node: {"images": [{"filename": f"ComfyUI_temp_{node}_00001_.png", "subfolder": "",
-                                              "type": "temp"}]} for node in ("8", "17", "18")}
+    comfy.state.outputs = {node: _batch(f"ComfyUI_temp_{node}", 4, "temp") for node in ("8", "17", "18")}
     model = next(one for one in _models(comfy.url) if one["id"] == "古风女孩1.json")
-    assert model["outputs_per_run"] == 1 and model["parameters"]["output_node"]["default"] == "final"
+    assert model["outputs_per_run"] == 4 and model["parameters"]["output_node"]["default"] == "final"
 
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "古风女孩1.json"})
     submitted = comfy.posted("/prompt")[0]["prompt"]
     assert "17" in submitted and not {"8", "18"} & set(submitted), "中间一步的预览不跑"
     assert {"6", "10", "11", "14", "16"} <= set(submitted)
-    assert submitted["7"]["inputs"]["batch_size"] == 1
-    assert len(output["outputs"]) == 1 and output["usage"] == {"images": 1}
-    viewed = [query["filename"] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
-    assert viewed == [["ComfyUI_temp_17_00001_.png"]]
+    assert submitted["7"]["inputs"]["batch_size"] == 4, "工作流存着一次 4 张:按原样"
+    assert len(output["outputs"]) == 4 and output["usage"] == {"images": 4}
+    viewed = [query["filename"][0] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
+    assert all(name.startswith("ComfyUI_temp_17_") for name in viewed) and len(viewed) == 4
 
     output, _, _ = _generate(comfy.url, tmp_path, {"model": "古风女孩1.json", "parameters": {"output_node": "all"}})
     assert {"8", "17", "18"} <= set(comfy.posted("/prompt")[1]["prompt"])
-    assert len(output["outputs"]) == 3 and output["usage"] == {"images": 3}
+    assert len(output["outputs"]) == 12 and output["usage"] == {"images": 12}
 
 
 def test_取消只停这一个任务(comfy, tmp_path: Path) -> None:

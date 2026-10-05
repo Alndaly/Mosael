@@ -449,15 +449,29 @@ def test_LoRA和checkpoint是下拉_选项来自object_info(graph) -> None:
     assert parameters["10.strength_clip"]["x-advanced"] is True
 
 
-def test_一次几张对到宿主的num_images(graph, convert) -> None:
+# --- 「张数」是跑几遍:每遍按工作流原样,画布上存着的 batch_size 照旧(1.12.3) -------------------------------
+#
+# 维护者拍板:工作流这里的张数 = 跑几遍。此前张数写进画布的 batch_size(缺省 1),存着 4 张的工作流在 Mosael 里只出 1 张;
+# 现在每遍按工作流原样出它那一批,一共「跑几遍 × 一遍几张」。键名照旧是 num_images,标着 `x-count-unit: runs`。
+
+
+def test_张数是跑几遍_一遍几张按画布上存着的批量(graph, convert) -> None:
     model = _portrait(graph, convert)
-    assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1}
-    assert model["max_outputs"] == 4
-    #: 画布上存着一次两张也是:没选张数时生成一次出一张(宿主那个「N×」缺省就是 1),说的和做的是同一件事。
-    assert graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO)["parameters"]["num_images"]["default"] == 1
+    assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1,
+                                                 "x-count-unit": "runs", "x-batch": 1}
+    assert model["outputs_per_run"] == 1 and model["max_outputs"] == 4
+    two = graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO)
+    assert two["parameters"]["num_images"]["x-batch"] == 2, "画布上存着一次两张:一遍每个保存节点 2 张"
+    assert two["outputs_per_run"] == 4 and two["max_outputs"] == 16, "两个保存节点 × 批量 2,最多跑 4 遍"
     api = convert.to_api(PORTRAIT_UI, OBJECT_INFO)
-    assert graph.fill(api, {"batch": 3}, {})["5"]["inputs"]["batch_size"] == 3
-    assert graph.fill(api, {"batch": 99}, {})["5"]["inputs"]["batch_size"] == 4, "不超过宿主一次的上限"
+    assert graph.fill(api, {"seed": 3}, {})["5"]["inputs"]["batch_size"] == api["5"]["inputs"]["batch_size"], (
+        "张数不写进 batch_size")
+
+
+def test_没有种子的图没有跑几遍_视频图也没有(graph) -> None:
+    upscale = graph.describe("upscale.json", "upscale", UPSCALE_API, OBJECT_INFO)
+    assert "num_images" not in upscale["parameters"], "放大跑几遍都是同一张"
+    assert not graph.counts_runs(UPSCALE_API) and not graph.counts_runs(WAN_API)
 
 
 def test_LoadImage_变成参考图槽位(graph, convert) -> None:
@@ -513,7 +527,8 @@ def test_没接到能跑的输出上的节点不算_局部重绘图没有假的�
     assert set(api) == {"4", "7", "13", "14", "15", "16", "21", "23", "24"}
     model = graph.describe("inpainting.json", "inpainting", api, info, {})
     assert "size" not in model["parameters"]
-    assert model["parameters"]["num_images"]["default"] == 1, "没有画布:张数靠循环提交(graph.repeats_for_count)"
+    assert model["parameters"]["num_images"]["x-count-unit"] == "runs", "没有画布、有种子:照样跑几遍"
+    assert "x-batch" not in model["parameters"]["num_images"], "上游没有存着的批量:一遍几张判不出来,不报"
     assert model["outputs_per_run"] == 1 and "output_node" not in model["parameters"]
     assert "6.text" not in model["parameters"], "没接上的那句提示词不是一个可调的参数"
     assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}, {"role": "mask", "max": 1}], (
@@ -549,7 +564,8 @@ def test_只预览预处理结果的预览节点不是产出(graph) -> None:
     kept = graph.live(api, info)
     assert not {"39", "41", "42"} & set(kept), "骨架那一路不跑"
     model = graph.describe("beautiful girl.json", "beautiful girl", kept, info)
-    assert model["outputs_per_run"] == 1 and model["inputs"] == [] and model["modes"] == ["text-to-image"]
+    assert model["outputs_per_run"] == 4, "画布上存着一次 4 张:跑一遍交回 4 张"
+    assert model["inputs"] == [] and model["modes"] == ["text-to-image"]
     assert [one["node"] for one in graph.output_nodes(UPSCALE_API, OBJECT_INFO)] == ["4", "5"], (
         "没有解码的图(放大):预览照旧是产出")
 
@@ -968,11 +984,11 @@ def test_认得的采样器那一路照旧_没接上的文字节点不算(graph)
     assert graph.text_slots(api, VIDEO_INFO) == {("1", "prompt_text"): "prompt"}
 
 
-# --- 一次运行交回几份:这一种里存下来的(都没存就是预览)节点数 × 张数 ---------------------------------
+# --- 跑一遍交回几张:这一种里交回的(都没存就是预览)节点,各按它收到的批量 ---------------------------------
 #
 # 用户在画板上选「1×」,落出来两三格:一次运行交回的是这一种**全部**存下来的文件,而工作流里常常不止一个保存节点
-# (原图 + 放大、几个预览)。插件在目录里照实说一次交回几份(`outputs_per_run`,张数为 1 时),多个保存节点时
-# 给一项「结果取自」(`output_node`):选其中一个,一次就只交回它那一份。
+# (原图 + 放大、几个预览)。插件在目录里照实说跑一遍交回几张(`outputs_per_run`:每个节点收到的批量加起来),多个
+# 保存节点时给一项「结果取自」(`output_node`):选其中一个,一遍就只交回它那一批。宿主再乘上跑几遍。
 
 
 def test_一次交回几份_按这一种的保存节点数(graph, convert) -> None:
@@ -981,7 +997,7 @@ def test_一次交回几份_按这一种的保存节点数(graph, convert) -> No
     assert upscale["outputs_per_run"] == 1, "保存 + 看一眼原图的预览:预览不交回"
     assert "output_node" not in upscale["parameters"], "只有一个保存节点:没得选"
     two = graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO, {"9": "原图", "12": "高清"})
-    assert two["outputs_per_run"] == 2 and two["max_outputs"] == 8, "两个节点 × 最多 4 张"
+    assert two["outputs_per_run"] == 4 and two["max_outputs"] == 16, "两个节点 × 批量 2,最多跑 4 遍"
     previews = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)
     assert previews["outputs_per_run"] == 3, "一个保存节点都没有:交回的是那三个预览"
     videos = graph.describe("two_videos.json", "v", TWO_VIDEOS_API, OBJECT_INFO, {"30": "原速", "31": "补帧"})
@@ -996,7 +1012,7 @@ def test_多个保存节点时_结果取自列出每一个(graph) -> None:
     assert choice["enum"] == ["all", "9", "12"] and choice["default"] == "all"
     assert choice["x-enum-labels"] == {"all": {"zh": "全部(2 个保存节点)", "en": "All (2 save nodes)"},
                                        "9": "原图", "12": "高清"}
-    assert choice["x-outputs-per-run"] == {"all": 2, "9": 1, "12": 1}
+    assert choice["x-outputs-per-run"] == {"all": 4, "9": 2, "12": 2}, "每一项跑一遍交回几张:各自的批量"
     assert "x-advanced" not in choice, "在「参数」里一眼看得到"
     #: 节点没改标题(都叫 PreviewImage):带上节点号才分得清。
     labels = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)["parameters"]["output_node"]["x-enum-labels"]
@@ -1045,8 +1061,9 @@ def test_古风女孩1_缺省只交回最终结果(graph, convert) -> None:
     api, info, titles = _hand_depth(graph, convert)
     assert [node["node"] for node in graph.generation_nodes(api, "image", info, titles)] == ["8", "17", "18"]
     model = graph.describe("古风女孩1.json", "古风女孩1", api, info, titles)
-    assert model["outputs_per_run"] == 1, "张数 1 就是一张"
-    assert model["max_outputs"] == 12, "选「全部」时三个节点 × 最多 4 张"
+    assert model["outputs_per_run"] == 4, "跑一遍交回最终结果那一批:画布上存着一次 4 张"
+    assert model["max_outputs"] == 48, "选「全部」时三个节点各 4 张 × 最多跑 4 遍"
+    assert model["parameters"]["num_images"]["x-batch"] == 4
     choice = model["parameters"]["output_node"]
     assert choice["default"] == "final" and choice["enum"] == ["final", "all", "8", "17", "18"]
     assert choice["x-enum-labels"] == {
@@ -1056,7 +1073,7 @@ def test_古风女孩1_缺省只交回最终结果(graph, convert) -> None:
         "17": "PreviewImage #17",
         "18": {"zh": "PreviewImage #18(控制图)", "en": "PreviewImage #18 (control image)"},
     }
-    assert choice["x-outputs-per-run"] == {"final": 1, "all": 3, "8": 1, "17": 1, "18": 1}
+    assert choice["x-outputs-per-run"] == {"final": 4, "all": 12, "8": 4, "17": 4, "18": 4}
     assert "不是最终结果" in choice["description"]["zh"]
     assert graph.auxiliary_view(api, "18", info) == "control", "MeshGraphormer 是 ControlNet 预处理器:那张黑图是控制图"
 

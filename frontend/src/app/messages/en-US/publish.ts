@@ -263,6 +263,7 @@ export const publish = {
   boardReplaceAsset: "Swap",
   boardOutputCount: "Results per run",
   boardOutputsPerNode: "{count} per node",
+  boardOutputsRuns: "Runs: {count}",
   boardGenerationSettings: "Settings",
   boardGenerationUnknownParams: "Parameters not recognised · set it in Settings",
   boardGenerationMode: "Generation mode",

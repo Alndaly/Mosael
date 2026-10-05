@@ -39,8 +39,10 @@ import {
   type DeclaredParameter,
   sizeOptions,
   customSizeRule,
+  countsRuns,
   maxImages,
   parameterChoiceEntries,
+  runsHint,
   parseGenerationParameterInput,
   pickGenerationOption,
   promptMode,
@@ -96,6 +98,8 @@ interface GenField {
   /** 可选值只是推荐、手填的也收(ComfyUI 工作流的尺寸):每边下限。 */
   custom?: { minimum: number };
   range?: { min: number; max: number };
+  /** 控件下面那句说明(跑几遍那一格:一遍出几张、一共几张)。 */
+  hint?: string;
   toggle?: boolean;
   /** 模型自己声明的参数(`parameter_schema`)。控件和取值都按它的声明来,见 DeclaredGenControl。 */
   declared?: DeclaredParameter;
@@ -244,7 +248,12 @@ export function useGenerateNodeSection({
       // 生成面板有、节点没有,同一个模型两处能力不一样。
       const images = maxImages(genModel);
       if (supportsParameter(genModel, "num_images") && images > 1) {
-        out.push({ key: "num_images", label: t("wfGenNumImages"), options: [], range: { min: 1, max: images } });
+        // ComfyUI 的工作流「张数」是跑几遍(countsRuns):标签照实叫,下面说清一遍出几张。
+        const runs = Number(genParams.num_images) || 1;
+        out.push(countsRuns(genModel)
+          ? { key: "num_images", label: t("genRuns"), options: [], range: { min: 1, max: images },
+              hint: runsHint(t, genModel, genParams, runs) }
+          : { key: "num_images", label: t("wfGenNumImages"), options: [], range: { min: 1, max: images } });
       }
     } else if (genModel.kind === "audio") {
       // 音频:时长是个可选的区间(多数音乐模型按歌词长短自己定曲长),歌词是一段长文字。
@@ -451,7 +460,7 @@ export function generateNodeSection({
       {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
       {genModel && genParamKeys.length > 0 && (
         <>
-          {genParamKeys.map(({ key, label, options, range, toggle, declared, custom }) => (
+          {genParamKeys.map(({ key, label, options, range, hint, toggle, declared, custom }) => (
             <div className={FIELD_BOX} key={key}>
               <span>{label}</span>
               {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
@@ -526,6 +535,7 @@ export function generateNodeSection({
                   placeholder={t("wfPickOption")}
                 />
               )}
+              {hint ? <span className="text-ui-2xs leading-[1.45] text-muted-foreground">{hint}</span> : null}
             </div>
           ))}
           {supportsParameter(genModel, "seed") && (

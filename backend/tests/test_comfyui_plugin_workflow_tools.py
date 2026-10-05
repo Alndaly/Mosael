@@ -163,15 +163,16 @@ def test_跑一张工作流的工具_字符串转回类型_素材接上_具名�
     assert result["text_40"] == "一只猫"
 
 
-def test_工具的张数默认也是1_不照工作流里存着的batch_size(comfy, tmp_path: Path) -> None:
-    """用户拍板:张数默认统一成 1。此前工具节点的「张数」缺省是画布上存着的 batch_size(古风女孩存的是 4,工作流节点
-    不填就一次出 4 张),而生成那一路缺省是 1 —— 同一张图两个入口两个答案。显式填了的照填的出。"""
+def test_工具的张数是跑几遍_缺省一遍_画布上存着的batch_size照旧(comfy, tmp_path: Path) -> None:
+    """维护者拍板:工作流这里的张数 = 跑几遍,和生成那一路同一个意思。画布上存着一次 4 张(古风女孩那样)的,
+    每遍都按原样出 4 张;没填(或空着)跑一遍,填了 3 就提交 3 次。"""
     stored = json.loads(json.dumps(PORTRAIT_UI))
     canvas = next(one for one in stored["nodes"] if one["type"] == "EmptyLatentImage")
     canvas["widgets_values"] = [832, 1216, 4]
     comfy.state.workflows["portrait.json"] = stored
     tool = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL]
-    assert tool["input_schema"]["properties"]["num_images"]["default"] == 1
+    runs = tool["input_schema"]["properties"]["num_images"]
+    assert runs["default"] == 1 and runs["title"] == {"zh": "跑几遍", "en": "Runs"}
     hooks = runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False)
     for payload in ({}, {"num_images": ""}, {"num_images": "3"}):
         scratch = tmp_path / f"out-{len(comfy.posted('/prompt'))}"
@@ -179,7 +180,7 @@ def test_工具的张数默认也是1_不照工作流里存着的batch_size(comf
         runtime.stream_tool(PLUGIN, ENTRY, PORTRAIT_TOOL, payload, {"SERVER_URL": comfy.url}, hooks=hooks,
                             scratch_dir=scratch, timeout=60)
     sizes = [one["prompt"]["5"]["inputs"]["batch_size"] for one in comfy.posted("/prompt")]
-    assert sizes == [1, 1, 3], "没填(或空着)就是 1,填了 3 就是 3"
+    assert sizes == [4, 4, 4, 4, 4], "没填、空着各跑一遍,填了 3 跑 3 遍;每遍都是存着的 4 张"
 
 
 def test_没有画布的图的工具也能出N张_循环提交_每张的种子交回(comfy, tmp_path: Path) -> None:
