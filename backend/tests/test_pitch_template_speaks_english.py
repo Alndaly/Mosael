@@ -35,8 +35,13 @@ def _without_refs(text: str) -> str:
     return re.sub(r"\{\{[^}]*\}\}", "", text)
 
 
+SEEDANCE = ModelChoice(profile_id="video", provider="bytedance", model="doubao-seedance-2-0-260128")
+
+
 @pytest.mark.parametrize("graph", [
     pytest.param(lambda: product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="", locale="en"), id="建图"),
+    pytest.param(lambda: product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE, voice_id="", locale="en"),
+                 id="建图·每一拍动起来"),
     pytest.param(lambda: blank_template_graphs("en")[PRODUCT_PITCH_SHORT], id="官网英文副本"),
 ])
 def test_英文的那一份_通知和项目名都是英文(graph) -> None:
@@ -46,6 +51,9 @@ def test_英文的那一份_通知和项目名都是英文(graph) -> None:
             text = _without_refs(nodes[node_id]["config"][key])
             assert text.strip() and not _CJK.search(text), (node_id, key, text)
     assert not _CJK.search(_without_refs(nodes["pitch_project"]["config"]["name"]))
+    if "file_clip" in nodes:
+        #: 视频归档进项目时的名字也跟着这一份的语言。
+        assert not _CJK.search(_without_refs(nodes["file_clip"]["config"]["name"])), nodes["file_clip"]["config"]["name"]
 
 
 def test_中文的那一份照旧是中文() -> None:

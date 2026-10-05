@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
-  "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "438b119c62af90dece07cd75953fc4314e6af1f2d9fa5868fe2f9f69bc0406d0",
+  "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
+  "graph_hash": "bac7195b0b37b7d975d9100de8488c2c7d0f0317d44cc17d92703ecd136a3e99",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
-      "template_version": 5,
+      "template_version": 6,
       "source": "official"
     },
     "nodes": [
@@ -26,6 +26,7 @@
             "selling_points": "",
             "audience": "刷竖屏短视频的年轻观众",
             "target_duration_seconds": 30,
+            "beat_seconds": 5,
             "width": 1080,
             "height": 1920,
             "fps": 30
@@ -60,8 +61,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——\n  成片本来就在手机上看。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
-          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和就是成片时长，要接近目标时长。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍正好 {{start.beat_seconds}} 秒（视频模型一段就出这么长），每一拍的 narration 念出来不能超过它：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的第一帧画面（这一拍的视频从它开始动），**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——\n  成片本来就在手机上看。\n- motion_prompt 用英文写这 {{start.beat_seconds}} 秒里画面怎么动：镜头缓慢推近、平移或环绕，光线在商品表面\n  流动，场景里轻微的动作；动作要小、在这几秒内完成，商品始终完整、清楚、不变形、不换样子。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面、再出一段视频，是两次付费生成。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
+          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。每拍 {{start.beat_seconds}} 秒，拍数 × 每拍秒数就是成片时长：拍数取目标时长 ÷ 每拍秒数（四舍五入，至少 2 拍）。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",
           "json_schema": {
@@ -74,17 +75,15 @@
                   "properties": {
                     "narration": {
                       "type": "string",
-                      "description": "这一拍要念的口播原文,中文;念出来不超过本拍时长"
-                    },
-                    "seconds": {
-                      "type": "number",
-                      "minimum": 2,
-                      "maximum": 8,
-                      "description": "这一拍多长"
+                      "description": "这一拍要念的口播原文,中文;念出来不超过一拍的时长"
                     },
                     "visual_prompt": {
                       "type": "string",
-                      "description": "这一拍的画面,英文;商品必须在画面里"
+                      "description": "这一拍的第一帧画面,英文;商品必须在画面里"
+                    },
+                    "motion_prompt": {
+                      "type": "string",
+                      "description": "这一拍的画面怎么动,英文:镜头的缓慢运动、光线在商品上的变化、轻微的动作"
                     },
                     "caption": {
                       "type": "string",
@@ -93,8 +92,8 @@
                   },
                   "required": [
                     "narration",
-                    "seconds",
                     "visual_prompt",
+                    "motion_prompt",
                     "caption"
                   ],
                   "additionalProperties": false
@@ -125,7 +124,7 @@
         "config": {
           "items": "{{pitch_script.json.beats}}",
           "text_field": "narration",
-          "seconds_field": "seconds",
+          "seconds": "{{start.beat_seconds}}",
           "profile_id": "",
           "model": ""
         }
@@ -148,7 +147,7 @@
       {
         "id": "shoot_beats",
         "type": "loop_foreach",
-        "name": "逐拍出画面、配音并上时间线",
+        "name": "逐拍出画面、动起来、配音并上时间线",
         "position": {
           "x": 970,
           "y": 260
@@ -161,7 +160,10 @@
             "project_id": "{{pitch_project.project_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
-            "audio_track_id": "{{pitch_project.audio_track_id}}"
+            "audio_track_id": "{{pitch_project.audio_track_id}}",
+            "beat_seconds": "{{start.beat_seconds}}",
+            "aspect_ratio": "9:16",
+            "resolution": "720p"
           },
           "body": {
             "nodes": [
@@ -204,11 +206,66 @@
                 ]
               },
               {
+                "id": "beat_clip",
+                "type": "ai_generate",
+                "name": "把这一拍动起来",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "video",
+                  "prompt": "{{loop.item.motion_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the product stays whole, undistorted and readable throughout. No text, no logo overlay, no watermark.",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
+                  "parameters": {
+                    "duration_seconds": "{{input.beat_seconds}}",
+                    "aspect_ratio": "{{input.aspect_ratio}}",
+                    "resolution": "{{input.resolution}}"
+                  },
+                  "source_assets": [
+                    "{{beat_frame.asset_id}}:first_frame"
+                  ]
+                }
+              },
+              {
+                "id": "file_clip",
+                "type": "asset_update",
+                "name": "归档这一拍的视频",
+                "position": {
+                  "x": 720,
+                  "y": 0
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.caption}} · 视频",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
+              },
+              {
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": "这一拍的视频不出声",
+                "position": {
+                  "x": 1040,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{beat_on_timeline.clip_id}}\", \"muted\": true}]"
+                }
+              },
+              {
                 "id": "beat_on_timeline",
                 "type": "timeline_append",
                 "name": "按这一拍的时长铺上去",
                 "position": {
-                  "x": 400,
+                  "x": 720,
                   "y": 140
                 },
                 "config": {
@@ -216,7 +273,7 @@
                   "asset_id": "",
                   "track_id": "{{input.video_track_id}}",
                   "start": 0,
-                  "end": "{{loop.item.seconds}}"
+                  "end": "{{input.beat_seconds}}"
                 },
                 "inputs": [
                   "asset_id"
@@ -254,7 +311,7 @@
                 "type": "timeline_append",
                 "name": "画外音对齐这一拍开头",
                 "position": {
-                  "x": 720,
+                  "x": 1040,
                   "y": 320
                 },
                 "config": {
@@ -276,7 +333,7 @@
                 "type": "condition",
                 "name": "画外音裁掉了尾巴吗",
                 "position": {
-                  "x": 1040,
+                  "x": 1360,
                   "y": 320
                 },
                 "config": {
@@ -293,16 +350,26 @@
                 "type": "notify",
                 "name": "说一声画外音被裁了",
                 "position": {
-                  "x": 1360,
+                  "x": 1680,
                   "y": 320
                 },
                 "config": {
                   "title": "带货短片:有一拍的画外音念不完",
-                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把开始节点的 beat_seconds(每拍几秒)改长(视频模型要出得了那个时长)再运行一次。"
                 }
               }
             ],
             "edges": [
+              {
+                "id": "file_then_clip",
+                "source": "file_frame",
+                "target": "beat_clip"
+              },
+              {
+                "id": "place_mute",
+                "source": "beat_on_timeline",
+                "target": "mute_clip"
+              },
               {
                 "id": "narration_voice",
                 "source": "has_narration",
@@ -330,8 +397,16 @@
                 "target_input": "asset_ids"
               },
               {
-                "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
-                "source": "beat_frame",
+                "id": "d-beat_clip-asset_id-file_clip-asset_ids",
+                "source": "beat_clip",
+                "target": "file_clip",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              },
+              {
+                "id": "d-beat_clip-asset_id-beat_on_timeline-asset_id",
+                "source": "beat_clip",
                 "target": "beat_on_timeline",
                 "kind": "data",
                 "source_output": "asset_id",

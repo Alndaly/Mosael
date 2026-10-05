@@ -327,6 +327,9 @@ def built_in_template_graph(
         return localised_names(locale, product_pitch_short_graph(
             chat=chat,
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
+            # 「每一拍动起来」是**可选**的一步,和上身图「把这一组动起来」同一个挑法:有能从这一拍的画面出片的视频模型
+            # 就每拍出一段视频,没有就和此前一样每拍一张静图。只交这一拍的画面一张,门槛是 1 张。
+            video=_shot_video_model(db, user_id, references=SINGLE_REFERENCE),
             voice_id=_prefilled_voice_id(db, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
@@ -377,8 +380,12 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 删掉「把这一组动起来」和「归档这一组的视频」两个节点即可(卡片的 download_note 说给下载的人听)——
         #: 循环交出的是上身图,不依赖它们。反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
         PRODUCT_ON_MODEL: product_on_model_graph(chat=blank, image=blank, video=blank, motion=True),
-        PRODUCT_PITCH_SHORT: product_pitch_short_graph(chat=blank, image=blank, voice_id="", locale=locale),
-        PRODUCT_PITCH_PRESENTER: product_pitch_short_graph(chat=blank, image=blank, voice_id="", presenter=True, locale=locale),
+        #: 带货口播同上身图:按**每一拍动起来**导出(`motion=True`),视频模型那一格留空,由导入的人挑;没有视频模型的话,
+        #: 照卡片的 download_note 在画布上去掉那一步 —— 反过来导成静图版,有视频模型的人看不到这一步。
+        PRODUCT_PITCH_SHORT: product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
+                                                       locale=locale),
+        PRODUCT_PITCH_PRESENTER: product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
+                                                           presenter=True, locale=locale),
         FABRIC_LOOKBOOK: fabric_lookbook_graph(chat=blank, image=blank),
         FOOTAGE_MONTAGE: footage_montage_graph(chat=blank, voice_id=""),
         TALKING_SCRIPT_VIDEO: talking_script_video_graph(voice_id=""),

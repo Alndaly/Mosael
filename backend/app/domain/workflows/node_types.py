@@ -680,6 +680,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "items": {"type": "template", "required": True, "label": "wfField_fit_items", "description": "wfNode_fit_narration_items"},
             "text_field": {"advanced": True, "type": "template", "default": "narration", "description": "wfNode_fit_narration_text_field"},
             "seconds_field": {"advanced": True, "type": "template", "default": "seconds", "description": "wfNode_fit_narration_seconds_field"},
+            #: 每一段一样长时直接给秒数(带货口播「每一拍动起来」:每拍就是视频模型一段的长度,脚本里不另写各拍的时长)。
+            #: 填了就按它量每一段,不读 seconds_field。
+            "seconds": {"advanced": True, "type": "number", "description": "wfNode_fit_narration_seconds"},
             "profile_id": {"type": "string", "description": "wfNode_llm_profile_id", "options_from": "chat_connections"},
             "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
             "max_rewrites": {"advanced": True, "type": "number", "default": 2, "description": "wfNode_fit_narration_max_rewrites"},

@@ -1798,6 +1798,13 @@
           "en": "Length field"
         }
       },
+      "seconds": {
+        "type": "number",
+        "label": {
+          "zh": "秒数",
+          "en": "Seconds"
+        }
+      },
       "profile_id": {
         "type": "string",
         "label": {

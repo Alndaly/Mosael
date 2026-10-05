@@ -51,10 +51,10 @@ class _Writer:
         return {"text": "", "json": answer, "response_format_used": "json_schema"}
 
 
-def _fit(monkeypatch, writer: _Writer, beats: list[dict[str, Any]] = BEATS) -> dict[str, Any]:
+def _fit(monkeypatch, writer: _Writer, beats: list[dict[str, Any]] = BEATS, **config: Any) -> dict[str, Any]:
     monkeypatch.setattr(ai_nodes, "llm", writer)
     node = {"id": "fit", "type": "fit_narration", "config": {
-        "items": beats, "text_field": "narration", "seconds_field": "seconds", "profile_id": "chat", "model": "m",
+        "items": beats, "text_field": "narration", "seconds_field": "seconds", "profile_id": "chat", "model": "m", **config,
     }}
     context, _ = execute_graph({"nodes": [node], "edges": []}, wf_id=_workflow(), entry_is_root=True)
     return context["fit"]
@@ -91,3 +91,17 @@ def test_改了两轮还超_留着最短的那一版_说清楚会加速或裁掉
     assert out["items"][1]["narration"] == "亚麻加棉,透气看得见", "比原文短,就留它"
     assert out["over"] == [2]
     assert "第 2 段" in out["note"] and "加速" in out["note"] and "裁" in out["note"], out["note"]
+
+
+def test_每一段一样长时直接给秒数_按它量_不读每段里的字段(monkeypatch) -> None:
+    """带货口播「每一拍动起来」:每拍就是视频模型一段的长度(开始参数),脚本里没有各拍的 seconds。"""
+    beats = [{"narration": "夏天久坐也不闷", "caption": "久坐不闷"}, {"narration": "五五亚麻加棉,透气看得见", "caption": "透气"}]
+    writer = _Writer([{2: "亚麻加棉,透气"}])
+    out = _fit(monkeypatch, writer, beats, seconds="2", seconds_field="")
+    assert len(writer.prompts) == 1 and "第 2 段(2 秒" in writer.prompts[0], writer.prompts
+    assert "夏天久坐也不闷" not in writer.prompts[0], "7 个字念 1.75 秒,放得进 2 秒"
+    assert [beat["narration"] for beat in out["items"]] == ["夏天久坐也不闷", "亚麻加棉,透气"]
+    #: 给了秒数就不看每段里写的:这里每段写着 9 秒(按它量就什么都不改),照样按 2 秒量、改短第 2 段。
+    again = _Writer([{2: "亚麻加棉,透气"}])
+    assert _fit(monkeypatch, again, [{**beat, "seconds": 9} for beat in beats], seconds=2)["rewritten"] == 1
+    assert "第 2 段(2 秒" in again.prompts[0]

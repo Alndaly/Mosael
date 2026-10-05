@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -748,19 +749,33 @@ def product_on_model_graph(
 # --------------------------------------------------------------------------------------
 
 
-def _pitch_schema(*, presenter: bool) -> dict[str, Any]:
+def _pitch_schema(*, presenter: bool, motion: bool) -> dict[str, Any]:
     """分拍脚本。不出镜的那条**钩子和号召就是首尾两拍**(各有一张画面、一段画外音);出镜的那条由主播另外说,
-    所以多两段 `hook_line` / `call_to_action`。不出镜时不要这两段 —— 要了就是让模型白写两句没人念的话。"""
-    beat = _object(
-        {
-            "narration": _str("这一拍要念的口播原文,中文;念出来不超过本拍时长"),
-            "seconds": {"type": "number", "minimum": 2, "maximum": 8, "description": "这一拍多长"},
-            "visual_prompt": _str("这一拍的画面,英文;商品必须在画面里"),
-            "caption": _str("屏幕上的短句,不超过 14 字"),
-        },
-        ["narration", "seconds", "visual_prompt", "caption"],
-    )
-    #: 每一拍是一次付费出图,上限就是钱的上限(见 MAX_VARIANTS)。
+    所以多两段 `hook_line` / `call_to_action`。不出镜时不要这两段 —— 要了就是让模型白写两句没人念的话。
+
+    `motion`(每一拍动起来):每一拍一样长,就是开始参数 `beat_seconds` —— 视频模型一段出多长,一拍就多长。所以脚本里
+    **没有** `seconds`(由开始参数一处说了算,脚本不另抄一份),多一段 `motion_prompt`:这几秒里画面怎么动。"""
+    if motion:
+        beat = _object(
+            {
+                "narration": _str("这一拍要念的口播原文,中文;念出来不超过一拍的时长"),
+                "visual_prompt": _str("这一拍的第一帧画面,英文;商品必须在画面里"),
+                "motion_prompt": _str("这一拍的画面怎么动,英文:镜头的缓慢运动、光线在商品上的变化、轻微的动作"),
+                "caption": _str("屏幕上的短句,不超过 14 字"),
+            },
+            ["narration", "visual_prompt", "motion_prompt", "caption"],
+        )
+    else:
+        beat = _object(
+            {
+                "narration": _str("这一拍要念的口播原文,中文;念出来不超过本拍时长"),
+                "seconds": {"type": "number", "minimum": 2, "maximum": 8, "description": "这一拍多长"},
+                "visual_prompt": _str("这一拍的画面,英文;商品必须在画面里"),
+                "caption": _str("屏幕上的短句,不超过 14 字"),
+            },
+            ["narration", "seconds", "visual_prompt", "caption"],
+        )
+    #: 每一拍是一次付费出图(动起来时再加一次付费视频生成),上限就是钱的上限(见 MAX_VARIANTS)。
     beats: dict[str, Any] = {"type": "array", "items": beat, "minItems": 2, "maxItems": MAX_VARIANTS}
     if not presenter:
         beats["description"] = "按时间顺序的各拍:第一拍的 narration 就是前三秒的钩子,最后一拍的 narration 是行动号召"
@@ -775,132 +790,218 @@ def _pitch_schema(*, presenter: bool) -> dict[str, Any]:
     )
 
 
-def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str, text: Any) -> dict[str, Any]:
-    """逐拍的循环体:出这一拍的画面 → 按脚本给的时长铺上视频轨;同时合成这一拍的画外音 → 放在这一拍的开头。
+@dataclass(frozen=True)
+class _BeatMotion:
+    """「每一拍动起来」那一步交给视频模型的东西:哪个模型、哪组参数(时长接开始参数 `beat_seconds`)、
+    这一拍的画面当什么交给它(首帧,只会照参考出片的模型当参考图,见 _still_role)。"""
+
+    video: Any
+    parameters: dict[str, Any]
+    still_role: str
+
+
+def _beat_body(
+    db: Session | None, image: Any, *, engine: str, voice: str, text: Any, motion: _BeatMotion | None = None,
+) -> dict[str, Any]:
+    """逐拍的循环体:出这一拍的画面 → 按这一拍的时长铺上视频轨;同时合成这一拍的画外音 → 放在这一拍的开头。
 
     - 画面是一张图,**用 `end` 定长**(从 0 截到这一拍的 seconds)。此前写的是 `max_duration`,那只会加速、不会
       拉长,而图片进时间线的默认定格是 5 秒 —— 于是每一拍都是 5 秒,和脚本、和画外音都对不上。
     - 画外音落在这一拍**实际**的起点(`beat_on_timeline.timeline_start`,运行时回报),`max_duration` 是这一拍
       实际占的秒数:念得比这一拍长就加速塞进去(最多 1.5 倍),还放不下就裁掉尾巴并发一条通知 —— 不压到下一拍的
       话上,最后一拍也不在成片尾留黑。
+
+    `motion`(每一拍动起来):这一拍的画面先归档,再当首帧交给视频模型出一段 `beat_seconds` 长的视频,**铺上时间线的是
+    这段视频**,`end` 同样是 `beat_seconds` —— 模型交回的比要的长一点就截到这一拍的长度,短一点就按它实际的长度铺,
+    画外音和字幕跟着实际的起止走(同上)。视频自带的声音在时间线上静音:这一拍的声音是画外音,有的模型(Veo)
+    一定出声、出的是什么也说不准,不能压在口播底下。视频同样是付过钱的素材,归进项目。
     """
-    return {
-        "nodes": [
-            {
-                "id": "beat_frame",
-                "type": "ai_generate",
-                "name": {"zh": "出这一拍的画面", "en": "Paint this beat"},
-                "position": {"x": 80, "y": 140},
-                "config": {
-                    "provider": getattr(image, "provider", ""),
-                    "provider_profile_id": getattr(image, "profile_id", ""),
-                    "model": getattr(image, "model", ""),
-                    "kind": "image",
-                    "prompt": (
-                        "{{loop.item.visual_prompt}} "
-                        f"{_KEEP_PRODUCT} "
-                        f"{_VERTICAL_FRAME} Photorealistic, "
-                        "no text, no logo overlay, no watermark."
-                    ),
-                    "negative_prompt": _NEGATIVE_PRODUCT,
-                    "parameters": _vertical_image_parameters(db, image),
-                    "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
-                },
+    shown = "beat_clip" if motion else "beat_frame"
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "beat_frame",
+            "type": "ai_generate",
+            "name": {"zh": "出这一拍的画面", "en": "Paint this beat"},
+            "position": {"x": 80, "y": 140},
+            "config": {
+                "provider": getattr(image, "provider", ""),
+                "provider_profile_id": getattr(image, "profile_id", ""),
+                "model": getattr(image, "model", ""),
+                "kind": "image",
+                "prompt": (
+                    "{{loop.item.visual_prompt}} "
+                    f"{_KEEP_PRODUCT} "
+                    f"{_VERTICAL_FRAME} Photorealistic, "
+                    "no text, no logo overlay, no watermark."
+                ),
+                "negative_prompt": _NEGATIVE_PRODUCT,
+                "parameters": _vertical_image_parameters(db, image),
+                "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
             },
-            {
-                #: 每一拍的画面都是付过钱的素材:归进这条短片的项目(此前只铺上时间线,素材库里散着、不在项目里)。
-                "id": "file_frame",
-                "type": "asset_update",
-                "name": {"zh": "归档这一拍的画面", "en": "File this beat's frame"},
-                "position": {"x": 400, "y": 0},
-                "config": {
-                    "asset_ids": "{{beat_frame.asset_id}}",
-                    "name": "{{input.product_name}} · {{loop.item.caption}}",
-                    "project_id": "{{input.project_id}}",
-                },
+        },
+        {
+            #: 每一拍的画面都是付过钱的素材:归进这条短片的项目(此前只铺上时间线,素材库里散着、不在项目里)。
+            "id": "file_frame",
+            "type": "asset_update",
+            "name": {"zh": "归档这一拍的画面", "en": "File this beat's frame"},
+            "position": {"x": 400, "y": 0},
+            "config": {
+                "asset_ids": "{{beat_frame.asset_id}}",
+                "name": "{{input.product_name}} · {{loop.item.caption}}",
+                "project_id": "{{input.project_id}}",
             },
-            {
-                "id": "beat_on_timeline",
-                "type": "timeline_append",
-                "name": {"zh": "按这一拍的时长铺上去", "en": "Lay it down for this beat's length"},
-                "position": {"x": 400, "y": 140},
-                "config": {
-                    "sequence_id": "{{input.sequence_id}}",
-                    "asset_id": "{{beat_frame.asset_id}}",
-                    "track_id": "{{input.video_track_id}}",
-                    "start": 0,
-                    "end": "{{loop.item.seconds}}",
-                },
+        },
+        {
+            "id": "beat_on_timeline",
+            "type": "timeline_append",
+            "name": {"zh": "按这一拍的时长铺上去", "en": "Lay it down for this beat's length"},
+            "position": {"x": 720 if motion else 400, "y": 140},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": f"{{{{{shown}.asset_id}}}}",
+                "track_id": "{{input.video_track_id}}",
+                "start": 0,
+                "end": "{{input.beat_seconds}}" if motion else "{{loop.item.seconds}}",
             },
-            {
-                "id": "has_narration",
-                "type": "condition",
-                "name": {"zh": "这一拍有画外音吗", "en": "Does this beat have narration?"},
-                "position": {"x": 80, "y": 320},
-                "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+        },
+        {
+            "id": "has_narration",
+            "type": "condition",
+            "name": {"zh": "这一拍有画外音吗", "en": "Does this beat have narration?"},
+            "position": {"x": 80, "y": 320},
+            "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+        },
+        {
+            "id": "beat_voice",
+            "type": "synthesize_speech",
+            "name": {"zh": "念这一拍的画外音", "en": "Voice this beat"},
+            "position": {"x": 400, "y": 320},
+            "config": {"text": "{{loop.item.narration}}", "engine": engine, "voice": voice},
+        },
+        {
+            "id": "beat_voice_place",
+            "type": "timeline_append",
+            "name": {"zh": "画外音对齐这一拍开头", "en": "Line the voice up with the beat"},
+            "position": {"x": 1040 if motion else 720, "y": 320},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": "{{beat_voice.asset_id}}",
+                "track_id": "{{input.audio_track_id}}",
+                "at": "{{beat_on_timeline.timeline_start}}",
+                #: 最长就是这一拍画面实际占的秒数;加速到 1.5 倍仍放不下就裁掉尾巴 —— 不压到下一拍,
+                #: 最后一拍也不在成片尾留一截黑屏。
+                "max_duration": "{{beat_on_timeline.duration}}",
+                "trim_overflow": "yes",
             },
-            {
-                "id": "beat_voice",
-                "type": "synthesize_speech",
-                "name": {"zh": "念这一拍的画外音", "en": "Voice this beat"},
-                "position": {"x": 400, "y": 320},
-                "config": {"text": "{{loop.item.narration}}", "engine": engine, "voice": voice},
+        },
+        {
+            "id": "voice_overflow",
+            "type": "condition",
+            "name": {"zh": "画外音裁掉了尾巴吗", "en": "Was the voice-over cut short?"},
+            "position": {"x": 1360 if motion else 1040, "y": 320},
+            "config": {"left": "{{beat_voice_place.trimmed}}", "op": "gt", "right": "0"},
+        },
+        {
+            "id": "overflow_notice",
+            "type": "notify",
+            "name": {"zh": "说一声画外音被裁了", "en": "Say the voice-over was cut"},
+            "position": {"x": 1680 if motion else 1360, "y": 320},
+            "config": {
+                "title": text("带货短片:有一拍的画外音念不完", "Product short: a beat's voice-over didn't fit"),
+                "body": text(
+                    "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,"
+                    "超出的部分已裁掉。想保住整句,把这一拍的口播改短"
+                    + ("或把开始节点的 beat_seconds(每拍几秒)改长(视频模型要出得了那个时长)" if motion else "或把这一拍的时长加长")
+                    + "再运行一次。",
+                    "The voice-over for the “{{loop.item.caption}}” beat is still {{beat_voice_place.trimmed}} s longer "
+                    "than its picture at 1.5× speed, so the rest was cut. To keep the whole line, shorten that beat's "
+                    "narration or "
+                    + ("raise the start node's beat_seconds (to a length the video model can make)" if motion
+                       else "lengthen the beat")
+                    + " and run again.",
+                ),
             },
-            {
-                "id": "beat_voice_place",
-                "type": "timeline_append",
-                "name": {"zh": "画外音对齐这一拍开头", "en": "Line the voice up with the beat"},
-                "position": {"x": 720, "y": 320},
-                "config": {
-                    "sequence_id": "{{input.sequence_id}}",
-                    "asset_id": "{{beat_voice.asset_id}}",
-                    "track_id": "{{input.audio_track_id}}",
-                    "at": "{{beat_on_timeline.timeline_start}}",
-                    #: 最长就是这一拍画面实际占的秒数;加速到 1.5 倍仍放不下就裁掉尾巴 —— 不压到下一拍,
-                    #: 最后一拍也不在成片尾留一截黑屏。
-                    "max_duration": "{{beat_on_timeline.duration}}",
-                    "trim_overflow": "yes",
-                },
+        },
+    ]
+    edges: list[dict[str, Any]] = [
+        {"id": "frame_file", "source": "beat_frame", "target": "file_frame"},
+        {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
+        {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
+        #: 脚本里某一拍的 narration 是空串(只给画面的一拍)时,画外音那两步整段跳过 —— 此前照样去合成,
+        #: 「合成文本不能为空」让整条失败,前面几拍的出图钱白花。
+        {"id": "narration_voice", "source": "has_narration", "target": "beat_voice", "source_handle": "true"},
+        #: **这一条不能省**(和混剪的 narration_place 同一个道理):「放画外音」的两条入边都是数据边,只剩数据边时
+        #: 任一上游跑过就算激活 —— 「铺这一拍」总是跑过的,于是没有画外音时它拿着空素材照跑。带 handle 的边有路由语义。
+        {"id": "narration_voice_place", "source": "has_narration", "target": "beat_voice_place", "source_handle": "true"},
+        {"id": "voice_overflow_check", "source": "beat_voice_place", "target": "voice_overflow"},
+        {"id": "overflow_notify", "source": "voice_overflow", "target": "overflow_notice", "source_handle": "true"},
+    ]
+    if motion is None:
+        edges.insert(0, {"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"})
+        return {"nodes": nodes, "edges": edges}
+
+    video = motion.video
+    #: 排在「归档这一拍的画面」之后、「铺上去」之前:画布上和图里读起来都是 画面 → 视频 → 时间线。
+    nodes[2:2] = [
+        {
+            "id": "beat_clip",
+            "type": "ai_generate",
+            "name": {"zh": "把这一拍动起来", "en": "Put this beat in motion"},
+            "position": {"x": 400, "y": 140},
+            "config": {
+                "provider": getattr(video, "provider", ""),
+                "provider_profile_id": getattr(video, "profile_id", ""),
+                "model": getattr(video, "model", ""),
+                "kind": "video",
+                "prompt": (
+                    "{{loop.item.motion_prompt}} "
+                    f"{_KEEP_PRODUCT} "
+                    "Subtle, natural motion only; the product stays whole, undistorted and readable throughout. "
+                    "No text, no logo overlay, no watermark."
+                ),
+                "negative_prompt": _NEGATIVE_PRODUCT,
+                #: 时长接开始参数 `beat_seconds`(经循环的 inputs),画幅、分辨率按这个视频模型的能力表挑(见 _vertical_clip)。
+                #: 时长是开始参数,所以选的模型出不了这个时长时,运行前检查在任何付费调用之前就拦下。
+                "parameters": motion.parameters,
+                #: 只给这一拍的画面(一般当首帧)—— 视频和画面因此必然是同一件商品、同一个构图。不另挂商品图:
+                #: 首帧加参考图,内置视频模型没有一个接得住(见 product_on_model_graph)。
+                "source_assets": [f"{{{{beat_frame.asset_id}}}}:{motion.still_role}"],
             },
-            {
-                "id": "voice_overflow",
-                "type": "condition",
-                "name": {"zh": "画外音裁掉了尾巴吗", "en": "Was the voice-over cut short?"},
-                "position": {"x": 1040, "y": 320},
-                "config": {"left": "{{beat_voice_place.trimmed}}", "op": "gt", "right": "0"},
+        },
+        {
+            #: 视频也是付过钱的素材,和画面一样归进项目。
+            "id": "file_clip",
+            "type": "asset_update",
+            "name": {"zh": "归档这一拍的视频", "en": "File this beat's clip"},
+            "position": {"x": 720, "y": 0},
+            "config": {
+                "asset_ids": "{{beat_clip.asset_id}}",
+                "name": text("{{input.product_name}} · {{loop.item.caption}} · 视频",
+                             "{{input.product_name}} · {{loop.item.caption}} · clip"),
+                "project_id": "{{input.project_id}}",
             },
-            {
-                "id": "overflow_notice",
-                "type": "notify",
-                "name": {"zh": "说一声画外音被裁了", "en": "Say the voice-over was cut"},
-                "position": {"x": 1360, "y": 320},
-                "config": {
-                    "title": text("带货短片:有一拍的画外音念不完", "Product short: a beat's voice-over didn't fit"),
-                    "body": text(
-                        "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,"
-                        "超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。",
-                        "The voice-over for the “{{loop.item.caption}}” beat is still {{beat_voice_place.trimmed}} s longer "
-                        "than its picture at 1.5× speed, so the rest was cut. To keep the whole line, shorten that beat's "
-                        "narration or lengthen the beat and run again.",
-                    ),
-                },
+        },
+        {
+            "id": "mute_clip",
+            "type": "edit_timeline",
+            "name": {"zh": "这一拍的视频不出声", "en": "Mute this beat's clip"},
+            "position": {"x": 1040, "y": 140},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                #: 基底视频轨的原声默认混进成片(见混剪的 duck_source);这一拍的声音是画外音。
+                "operations": '[{"kind": "set_clip_gain", "clip_id": "{{beat_on_timeline.clip_id}}", "muted": true}]',
             },
-        ],
-        "edges": [
-            {"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"},
-            {"id": "frame_file", "source": "beat_frame", "target": "file_frame"},
-            {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
-            {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
-            #: 脚本里某一拍的 narration 是空串(只给画面的一拍)时,画外音那两步整段跳过 —— 此前照样去合成,
-            #: 「合成文本不能为空」让整条失败,前面几拍的出图钱白花。
-            {"id": "narration_voice", "source": "has_narration", "target": "beat_voice", "source_handle": "true"},
-            #: **这一条不能省**(和混剪的 narration_place 同一个道理):「放画外音」的两条入边都是数据边,只剩数据边时
-            #: 任一上游跑过就算激活 —— 「铺这一拍」总是跑过的,于是没有画外音时它拿着空素材照跑。带 handle 的边有路由语义。
-            {"id": "narration_voice_place", "source": "has_narration", "target": "beat_voice_place", "source_handle": "true"},
-            {"id": "voice_overflow_check", "source": "beat_voice_place", "target": "voice_overflow"},
-            {"id": "overflow_notify", "source": "voice_overflow", "target": "overflow_notice", "source_handle": "true"},
-        ],
-    }
+        },
+    ]
+    edges = [
+        #: 画面先归档,再去出视频:视频那一步失败时,已经付过钱的画面照样在项目里。
+        {"id": "file_then_clip", "source": "file_frame", "target": "beat_clip"},
+        {"id": "clip_file", "source": "beat_clip", "target": "file_clip"},
+        {"id": "clip_place", "source": "beat_clip", "target": "beat_on_timeline"},
+        {"id": "place_mute", "source": "beat_on_timeline", "target": "mute_clip"},
+        *edges,
+    ]
+    return {"nodes": nodes, "edges": edges}
 
 
 #: 带货口播没有能用的克隆音色时念画外音的那把嗓子:微软 Edge 的免费音色,不用配置、不用钥匙。
@@ -922,8 +1023,8 @@ def _pitch_voice(voice_id: str) -> tuple[str, str]:
 
 
 def product_pitch_short_graph(
-    *, chat: Any, image: Any, voice_id: str = "", presenter: bool = False, db: Session | None = None,
-    locale: str | None = None,
+    *, chat: Any, image: Any, video: Any = None, motion: bool | None = None, voice_id: str = "",
+    presenter: bool = False, db: Session | None = None, locale: str | None = None,
 ) -> dict[str, Any]:
     """商品图 + 几条卖点 → 分拍口播脚本 → 每拍出一张画面、配一段画外音 → 组装 → 字幕 → 导出。
 
@@ -941,7 +1042,20 @@ def product_pitch_short_graph(
     (`entity_speak`:脸、嗓子、授权声明都是那个人物资产的,没声明的真人当场拒),中间每一拍仍是商品画面,这一拍的口播
     用同一个人物的嗓子念。**先取主播、再写脚本**:主播没挑(运行前拦)或挑的那个已经不在,都在任何一次付费调用之前说清。
 
-    `db` 让出图尺寸读到用户对这个模型的参数声明;没有库的上下文退回内置目录。
+    `video` / `motion`:「每一拍动起来」(和「模特上身图」的「把这一组动起来」同一个做法)。缺省跟着有没有视频模型走:
+    有,每一拍的画面就当首帧交给它出一段视频,铺上时间线的是视频(见 _beat_body);没有,和此前一样每拍一张静图。
+    官网那份导出时写 True 而模型留空,由导入的人挑。出镜版的开场和收尾本来就是主播出镜的视频,只有中间各拍动。
+
+    **时长怎么对齐**:视频模型只出得了几档时长(Veo 4 / 6 / 8 秒,可灵 5 / 10 秒),而口播按拍对齐。所以动起来时
+    每一拍一样长,就是开始参数 `beat_seconds`(每拍几秒;建图时取这个模型能出的、最接近它默认的那一档,同整片的「每镜秒数」):
+    视频那一步的时长、铺上时间线截到哪、量口播念不念得完、脚本的提示词都引用它,脚本里不再有每拍各自的 seconds ——
+    一个数只有一处说了算。选的模型出不了这个时长,运行前检查在任何付费调用之前就拦(时长是开始参数,跑之前就知道)。
+    画外音照旧落在这一拍的实际起点、最长是这一拍实际占的秒数,字幕照旧用实际的起止。
+
+    **花费**:每一拍一次付费出图,动起来时每一拍**再加一次付费视频生成**。拍数约为目标时长 ÷ beat_seconds(默认 30 秒、
+    每拍 5 秒约 6 拍,就是 6 张图加 6 段 5 秒视频),最多 MAX_VARIANTS 拍。
+
+    `db` 让出图尺寸、视频的时长 / 画幅读到用户对这个模型的参数声明;没有库的上下文退回内置目录。
 
     `locale`:图里**给人看的**默认值(新项目的名字、完成通知、念不完的提醒)在建图这一刻定语言,和节点名同一条。
     此前写死中文,官网英文副本里也是中文。
@@ -951,19 +1065,41 @@ def product_pitch_short_graph(
     def text(zh: str, en: str) -> str:
         return pick_text({"zh": zh, "en": en}, locale)
 
+    wants_motion = bool(getattr(video, "model", "")) if motion is None else motion
+    beat_motion: _BeatMotion | None = None
+    clip_seconds, clip_inputs = 0, {}
+    if wants_motion:
+        clip_seconds, clip_parameters, clip_inputs, still_role = _vertical_clip(db, video or ModelChoice())
+        #: 时长接开始参数 `beat_seconds`(见函数说明);认不出时长参数的模型(用户自建、没声明的)不传时长,时间线照旧铺 `beat_seconds`。
+        if "duration_seconds" in clip_parameters:
+            clip_parameters["duration_seconds"] = "{{input.beat_seconds}}"
+        beat_motion = _BeatMotion(video=video or ModelChoice(), parameters=clip_parameters, still_role=still_role)
+
+    if wants_motion:
+        narration_rule = ("- 每一拍正好 {{start.beat_seconds}} 秒（视频模型一段就出这么长），每一拍的 narration 念出来不能超过它："
+                          "中文按每秒约 4 个字估，宁短勿长。")
+        frame_word = "第一帧画面（这一拍的视频从它开始动）"
+        motion_rule = """
+- motion_prompt 用英文写这 {{start.beat_seconds}} 秒里画面怎么动：镜头缓慢推近、平移或环绕，光线在商品表面
+  流动，场景里轻微的动作；动作要小、在这几秒内完成，商品始终完整、清楚、不变形、不换样子。"""
+        cost_rule = "每一拍都要出一张画面、再出一段视频，是两次付费生成。"
+    else:
+        narration_rule = "- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。"
+        frame_word, motion_rule = "画面", ""
+        cost_rule = "每一拍都要出一张画面。"
     #: 时长取开始参数(和提示词里那一行同一个数):此前这里写死「20-45 秒」,开始参数填 60 秒时两句话打架。
     system = f"""你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{{{start.target_duration_seconds}}}} 秒、
 能直接拍的口播脚本，按"拍"拆开。
 
 硬性要求：
 - 前三秒必须给出观看理由，不要从"大家好"开始。
-- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。
-- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里
+{narration_rule}
+- visual_prompt 用英文写这一拍的{frame_word}，**商品必须出现在画面里**；不要写机位参数，不要在画面里
   生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——
-  成片本来就在手机上看。
+  成片本来就在手机上看。{motion_rule}
 - 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。
 - caption 是屏幕上的短句，不是把 narration 原样抄一遍。
-- 最多 {MAX_VARIANTS} 拍：每一拍都要出一张画面。
+- 最多 {MAX_VARIANTS} 拍：{cost_rule}
 
 只输出符合 JSON Schema 的对象。"""
     if presenter:
@@ -971,13 +1107,20 @@ def product_pitch_short_graph(
 
 这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,
 口语、自然,各自念出来不超过 8 秒;它们**也算在成片时长里**。中间的每一拍是商品画面,narration 是画外音。"""
-        timing = "各拍 seconds 之和，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。"
+        timing = (
+            "拍数 × 每拍 {{start.beat_seconds}} 秒，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。"
+            if wants_motion else
+            "各拍 seconds 之和，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。"
+        )
     else:
         system += """
 
 这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,
 首尾不另加。"""
-        timing = "各拍 seconds 之和就是成片时长，要接近目标时长。"
+        timing = (
+            "每拍 {{start.beat_seconds}} 秒，拍数 × 每拍秒数就是成片时长：拍数取目标时长 ÷ 每拍秒数（四舍五入，至少 2 拍）。"
+            if wants_motion else "各拍 seconds 之和就是成片时长，要接近目标时长。"
+        )
 
     shoot_inputs: dict[str, Any] = {
         "product_asset_id": "{{product_photo.asset_id}}",
@@ -987,12 +1130,21 @@ def product_pitch_short_graph(
         "video_track_id": "{{pitch_project.video_track_id}}",
         "audio_track_id": "{{pitch_project.audio_track_id}}",
     }
+    if wants_motion:
+        #: 每拍几秒,以及视频那一步的画幅、分辨率(按尺寸定画幅的模型还有尺寸),见 _vertical_clip。
+        shoot_inputs.update({"beat_seconds": "{{start.beat_seconds}}", **clip_inputs})
     if presenter:
         shoot_inputs.update({"voice_engine": "{{presenter.voice_engine}}", "voice_id": "{{presenter.voice_id}}"})
-        body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}", text=text)
+        body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}", text=text,
+                          motion=beat_motion)
     else:
         engine, voice = _pitch_voice(voice_id)
-        body = _beat_body(db, image, engine=engine, voice=voice, text=text)
+        body = _beat_body(db, image, engine=engine, voice=voice, text=text, motion=beat_motion)
+    voiced = "配画外音" if presenter else "配音"
+    loop_name = (
+        {"zh": f"逐拍出画面、动起来、{voiced}并上时间线", "en": "Paint, animate, voice and place each beat"}
+        if wants_motion else {"zh": f"逐拍出画面、{voiced}并上时间线", "en": "Paint, voice and place each beat"}
+    )
     #: 用的是哪把嗓子:第一拍(开场钩子,总有口播)的配音节点运行时说的那一句。出镜版的嗓子是主播自己的,不另说。
     voice_said = "" if presenter else "{{shoot_beats.results.0.beat_voice.voice_note}}"
 
@@ -1010,6 +1162,10 @@ def product_pitch_short_graph(
                     "selling_points": "",
                     "audience": "刷竖屏短视频的年轻观众",
                     "target_duration_seconds": 30,
+                    #: 每一拍动起来时,每拍几秒(见函数说明):建图时按所选视频模型取它能出的、最接近默认的那一档。
+                    #: **它也定了花多少钱**:拍数约为目标时长 ÷ 每拍几秒,每一拍是一张图加一段这么长的视频(两次付费生成)。
+                    #: 换了视频模型、它出不了这个时长的话,运行前就拦下。
+                    **({"beat_seconds": clip_seconds} if wants_motion else {}),
                     "width": VERTICAL["width"],
                     "height": VERTICAL["height"],
                     "fps": 30,
@@ -1043,7 +1199,7 @@ def product_pitch_short_graph(
 请写出分拍脚本。{timing}""",
                 "response_format": "json_schema",
                 "json_schema_name": "product_pitch_script",
-                "json_schema": _pitch_schema(presenter=presenter),
+                "json_schema": _pitch_schema(presenter=presenter, motion=wants_motion),
                 "json_schema_strict": "true",
                 "temperature": 0.6,
                 "max_tokens": 6000,
@@ -1059,7 +1215,8 @@ def product_pitch_short_graph(
             "config": {
                 "items": "{{pitch_script.json.beats}}",
                 "text_field": "narration",
-                "seconds_field": "seconds",
+                #: 动起来时每一拍一样长,就是 `beat_seconds`(脚本里没有各拍的 seconds,见 _pitch_schema)。
+                **({"seconds": "{{start.beat_seconds}}"} if wants_motion else {"seconds_field": "seconds"}),
                 "profile_id": getattr(chat, "profile_id", ""),
                 "model": getattr(chat, "model", ""),
             },
@@ -1079,11 +1236,7 @@ def product_pitch_short_graph(
         {
             "id": "shoot_beats",
             "type": "loop_foreach",
-            "name": (
-                {"zh": "逐拍出画面、配画外音并上时间线", "en": "Paint, voice and place each beat"}
-                if presenter
-                else {"zh": "逐拍出画面、配音并上时间线", "en": "Paint, voice and place each beat"}
-            ),
+            "name": loop_name,
             "position": {"x": 970, "y": 260},
             "config": {
                 "items": "{{fit_beats.items}}",
@@ -1165,7 +1318,8 @@ def product_pitch_short_graph(
             {
                 #: v4:没有能用的克隆音色时用免费的 Edge 音色念(此前那一格空着,运行前拦住、跑不了)。
                 #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 5, "source": "official"},
+                #: v6:有视频模型时每一拍动起来(见函数说明)。旧图按新版重建时按现在的设置挑视频模型。
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 6, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1739,12 +1893,28 @@ def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
     return normalize_graph(
         {
             #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 5, "source": "official"},
+            #: v6:有视频模型时中间各拍动起来(开场、收尾本来就是主播出镜的视频)。
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 6, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },
         node_types=NODE_TYPES,
     )
+
+
+#: 两条带货口播的官网那一份按「每一拍动起来」导出、视频模型留空(见 templates.blank_template_graphs);应用里建的那一份
+#: 按有没有视频模型自动取舍,用不着这句。只给下载的人听(见 scripts/sync-website-workflows.py)。
+_MOVING_BEATS_DOWNLOAD_NOTE = {
+    "zh": "这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,"
+          "导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,"
+          "再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。"
+          "也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
+    "en": " This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the "
+          "video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after "
+          "importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the "
+          "output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still "
+          "for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills.",
+}
 
 
 #: 模板库里这四条的卡片。和 `TEMPLATE_CATALOG` 里那三条同一个形状,由 templates.py 拼在一起 ——
@@ -1808,8 +1978,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_PITCH_SHORT,
         "name": {"zh": "商品 → 带货口播短视频", "en": "Product into a narrated short"},
         "summary": {
-            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
+            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。",
+            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures. Where a video model is available, every beat moves: its frame becomes the first frame of a clip, the clip is what goes on the timeline, and every beat is the same length (the start node's beat_seconds, a length that model can make). Cost: one paid image per beat, plus one paid video generation per beat when beats move — about target length ÷ beat_seconds beats, so 30 seconds at 5 seconds a beat is about 6 images and 6 clips.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1819,12 +1989,21 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 en="Optional voice: a cloned voice from the voice library (otherwise a free Edge voice)", optional=True,
             ),
             requirement(None, zh="一张商品图", en="A product photo"),
+            requirement(
+                REFERENCE_VIDEO_MODEL,
+                zh="每一拍动起来可选:支持首帧的视频模型(每拍多一次付费视频生成)",
+                en="Optional moving beats: a video model that takes a first frame (one more paid video per beat)",
+                optional=True,
+            ),
         ],
         "stages": {
-            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "写分拍口播脚本", "逐拍出画面、配画外音并铺上时间线", "按每拍的落点铺屏幕短句", "导出竖屏成片"],
+            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "写分拍口播脚本", "逐拍出画面、配画外音并铺上时间线", "可选:每一拍动起来",
+                   "按每拍的落点铺屏幕短句", "导出竖屏成片"],
             "en": ["Product name and selling points (one per line, only claims you can stand behind)", "Write the beat-by-beat script",
-                   "Paint and voice each beat onto the timeline", "Lay each beat's on-screen line", "Export the vertical short"],
+                   "Paint and voice each beat onto the timeline", "Optional: put each beat in motion", "Lay each beat's on-screen line",
+                   "Export the vertical short"],
         },
+        "download_note": _MOVING_BEATS_DOWNLOAD_NOTE,
     },
     {
         "id": FOOTAGE_MONTAGE,
@@ -1887,8 +2066,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_PITCH_PRESENTER,
         "name": {"zh": "商品 → 数字人出镜带货口播", "en": "Product into a presenter-led short"},
         "summary": {
-            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-            "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
+            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。",
+            "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1896,13 +2075,22 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(SPEECH_VIDEO_MODEL, zh="会「说话照片」的视频模型", en="A speaking-photo video model"),
             requirement(None, zh="资产库里一位有正面图和音色的人物", en="A character in the asset library with a front image and a voice"),
             requirement(None, zh="一张商品图", en="A product photo"),
+            requirement(
+                REFERENCE_VIDEO_MODEL,
+                zh="中间各拍动起来可选:支持首帧的视频模型(每拍多一次付费视频生成)",
+                en="Optional moving beats: a video model that takes a first frame (one more paid video per beat)",
+                optional=True,
+            ),
         ],
         "stages": {
-            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "挑一位主播", "写分拍口播脚本", "主播出镜说开场", "逐拍出画面、配画外音", "主播出镜说收尾", "导出竖屏成片"],
+            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "挑一位主播", "写分拍口播脚本", "主播出镜说开场", "逐拍出画面、配画外音",
+                   "可选:中间各拍动起来", "主播出镜说收尾", "导出竖屏成片"],
             "en": ["Product name and selling points (one per line, only claims you can stand behind)", "Pick the presenter",
                    "Write the beat-by-beat script", "Presenter speaks the hook",
-                   "Paint and voice each beat", "Presenter speaks the call to action", "Export the vertical short"],
+                   "Paint and voice each beat", "Optional: put the beats in motion", "Presenter speaks the call to action",
+                   "Export the vertical short"],
         },
+        "download_note": _MOVING_BEATS_DOWNLOAD_NOTE,
     },
 ]
 

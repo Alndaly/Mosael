@@ -169,6 +169,14 @@ def test_会被挑中的视频模型_收得下上身图动起来那一步(video:
     assert _check(_generations(on_model, skipped=set(), item={}), "video") == ["on_model_clip"]
 
 
+@pytest.mark.parametrize("video", _on_model_video_params())
+def test_会被挑中的视频模型_收得下带货口播每一拍动起来那一步(video: ModelChoice) -> None:
+    """和上身图同一个挑法(只交这一拍的画面一张):时长是开始参数「每拍秒数」,建图时取这个模型出得了的那一档。"""
+    for presenter in (False, True):
+        graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=video, presenter=presenter)
+        assert _check(_generations(graph, skipped=set(), item={}), "video") == ["beat_clip"], presenter
+
+
 @pytest.mark.parametrize("video", _video_params())
 def test_会被挑中的视频模型_收得下整片生成的每一种走法(video: ModelChoice) -> None:
     graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=video)

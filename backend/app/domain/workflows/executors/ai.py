@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from jsonschema import SchemaError, ValidationError, validate as validate_json_schema
@@ -492,11 +493,11 @@ def _seconds_of(item: Any, field: str) -> float | None:
     return float(value)
 
 
-def _too_long(items: list[Any], text_field: str, seconds_field: str) -> list[int]:
-    """念不完的那几段(从 0 数)。没给时长、没有口播的不算。"""
+def _too_long(items: list[Any], text_field: str, length: Callable[[Any], float | None]) -> list[int]:
+    """念不完的那几段(从 0 数)。没给时长、没有口播的不算。`length` 给出每一段多长(见 fit_narration)。"""
     return [
         index for index, item in enumerate(items)
-        if (seconds := _seconds_of(item, seconds_field)) is not None
+        if (seconds := length(item)) is not None
         and speech_seconds(str(item.get(text_field) or "")) > seconds + 1e-9
     ]
 
@@ -523,10 +524,10 @@ _REWRITE_SYSTEM = """你是短视频口播编辑。下面几段口播念出来�
 只输出符合 JSON Schema 的对象,index 照抄。"""
 
 
-def _rewrite_prompt(items: list[Any], over: list[int], text_field: str, seconds_field: str) -> str:
+def _rewrite_prompt(items: list[Any], over: list[int], text_field: str, length: Callable[[Any], float | None]) -> str:
     lines = []
     for index in over:
-        seconds = _seconds_of(items[index], seconds_field) or 0
+        seconds = length(items[index]) or 0
         lines.append(
             f"第 {index + 1} 段({seconds:g} 秒,中文不超过 {int(seconds * CJK_CHARS_PER_SECOND)} 个字,"
             f"英文不超过 {int(seconds * LATIN_WORDS_PER_SECOND)} 个词):{items[index].get(text_field) or ''}"
@@ -554,13 +555,20 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         raise WorkflowDomainError("wfErr_fitNarrationItems")
     text_field = str(config.get("text_field") or "narration").strip() or "narration"
     seconds_field = str(config.get("seconds_field") or "seconds").strip() or "seconds"
+    #: 每一段一样长时直接给的秒数:填了就按它量,不读每段里的字段(见节点声明;是不是数字已由 check_number_fields 核过)。
+    raw_seconds = config.get("seconds")
+    fixed = float(raw_seconds) if raw_seconds not in (None, "") and float(raw_seconds) > 0 else None
+
+    def length(item: Any) -> float | None:
+        return fixed if fixed is not None else _seconds_of(item, seconds_field)
+
     rounds = whole_number(config, "max_rewrites", node_type="fit_narration", default=FIT_NARRATION_ROUNDS)
     rounds = max(0, min(rounds, FIT_NARRATION_MAX_ROUNDS))
     items = [dict(item) if isinstance(item, dict) else item for item in raw]
     rewritten: set[int] = set()
     failure = ""
     for _ in range(rounds):
-        over = _too_long(items, text_field, seconds_field)
+        over = _too_long(items, text_field, length)
         if not over:
             break
         try:
@@ -570,7 +578,7 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
                 "model": config.get("model") or "",
                 "preset": "precise",
                 "system": _REWRITE_SYSTEM,
-                "prompt": _rewrite_prompt(items, over, text_field, seconds_field),
+                "prompt": _rewrite_prompt(items, over, text_field, length),
                 "response_format": "json_schema",
                 "json_schema_name": "narration_rewrites",
                 "json_schema": _REWRITE_SCHEMA,
@@ -591,7 +599,7 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             if speech_seconds(text) < speech_seconds(current):
                 items[index - 1][text_field] = text
                 rewritten.add(index - 1)
-    still = _too_long(items, text_field, seconds_field)
+    still = _too_long(items, text_field, length)
     fitted = sorted(index + 1 for index in rewritten if index not in still)
     notes = []
     if fitted:

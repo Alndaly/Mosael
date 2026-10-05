@@ -5,6 +5,8 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
+import pytest
+
 from app.domain.workflows import NODE_TYPES, validate_graph, with_run_params
 from app.domain.workflows.templates import (
     ModelChoice,
@@ -681,6 +683,122 @@ def test_带货短片的画面必须按拍顺序落位() -> None:
     assert _node(graph, "shoot_beats")["config"]["concurrency"] == 1
 
 
+VEO = ModelChoice(profile_id="video-profile", provider="google", model="veo")
+
+
+def _pitch(*, presenter: bool, video: ModelChoice | None) -> dict[str, Any]:
+    return product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=video, voice_id="voice-1", presenter=presenter)
+
+
+def _beats_body(graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {node["id"]: node for node in _node(graph, "shoot_beats")["config"]["body"]["nodes"]}
+
+
+def _beats_wires(graph: dict[str, Any]) -> set[tuple[str, str | None, str, str | None]]:
+    """逐拍循环体里的连线:(上游, 上游的输出, 下游, 下游的输入)。整格写成一条引用的,规范化之后落成数据边。"""
+    return {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input"))
+            for edge in _node(graph, "shoot_beats")["config"]["body"]["edges"]}
+
+
+@pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+@pytest.mark.parametrize("video", [None, SEEDANCE, VEO], ids=["没有视频模型", "seedance-2", "veo"])
+def test_带货口播的图和循环体都成立_动不动起来都是(presenter: bool, video: ModelChoice | None) -> None:
+    graph = _pitch(presenter=presenter, video=video)
+    assert validate_graph(graph, require_config=False) == []
+    assert _invalid_references(graph) == []
+    body = _node(graph, "shoot_beats")["config"]["body"]
+    assert validate_graph(body, require_start=False) == []
+    assert _invalid_references(body, virtual_roots={"loop", "input"}) == []
+
+
+@pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+def test_带货口播_有视频模型时每一拍动起来_画面当首帧_铺上时间线的是视频(presenter: bool) -> None:
+    graph = _pitch(presenter=presenter, video=SEEDANCE)
+    body = _beats_body(graph)
+    assert {"beat_clip", "file_clip", "mute_clip"} <= set(body)
+    clip = body["beat_clip"]["config"]
+    assert (clip["kind"], clip["model"], clip["provider_profile_id"]) == ("video", SEEDANCE.model, SEEDANCE.profile_id)
+    #: 只给这一拍的画面当首帧,不另挂商品图(首帧 + 参考图,内置视频模型没有一个接得住)。
+    assert clip["source_assets"] == ["{{beat_frame.asset_id}}:first_frame"]
+    assert "{{loop.item.motion_prompt}}" in clip["prompt"] and "EXACTLY" in clip["prompt"]
+    place = body["beat_on_timeline"]["config"]
+    wires = _beats_wires(graph)
+    assert ("beat_clip", "asset_id", "beat_on_timeline", "asset_id") in wires, "铺上时间线的是视频"
+    assert ("beat_frame", "asset_id", "beat_on_timeline", "asset_id") not in wires
+    #: 每拍几秒只有一处说了算:开始参数 beat_seconds。视频的时长、时间线截到哪、量口播都引用它。
+    assert clip["parameters"]["duration_seconds"] == "{{input.beat_seconds}}"
+    assert place["end"] == "{{input.beat_seconds}}"
+    assert _node(graph, "shoot_beats")["config"]["inputs"]["beat_seconds"] == "{{start.beat_seconds}}"
+    assert _node(graph, "fit_beats")["config"]["seconds"] == "{{start.beat_seconds}}"
+    assert "seconds_field" not in _node(graph, "fit_beats")["config"]
+    assert _node(graph, "start")["config"]["params"]["beat_seconds"] == 5
+    beat = _node(graph, "pitch_script")["config"]["json_schema"]["properties"]["beats"]["items"]
+    assert "seconds" not in beat["properties"] and "motion_prompt" in beat["required"], "脚本里不另抄一份每拍的时长"
+    assert "{{start.beat_seconds}}" in _node(graph, "pitch_script")["config"]["system"]
+    #: 画面先归档再出视频;视频也归档进项目;视频铺上去之后静音(这一拍的声音是画外音)。
+    assert ("file_frame", None, "beat_clip", None) in wires
+    assert ("beat_clip", "asset_id", "file_clip", "asset_ids") in wires
+    assert body["file_clip"]["config"]["project_id"] == "{{input.project_id}}"
+    assert ("beat_on_timeline", None, "mute_clip", None) in wires
+    assert json.loads(body["mute_clip"]["config"]["operations"].replace("{{beat_on_timeline.clip_id}}", "c")) == [
+        {"kind": "set_clip_gain", "clip_id": "c", "muted": True}]
+    #: 画外音、字幕照旧按这一拍在时间线上的实际起止。
+    assert ("beat_on_timeline", "timeline_start", "beat_voice_place", "at") in wires
+    assert ("beat_on_timeline", "duration", "beat_voice_place", "max_duration") in wires
+    assert _node(graph, "beat_captions")["config"]["end_field"] == "beat_on_timeline.timeline_end"
+    if presenter:
+        #: 开场和收尾本来就是主播出镜的视频,只有循环里的各拍动。
+        assert _node(graph, "hook_talk")["type"] == _node(graph, "cta_talk")["type"] == "entity_speak"
+
+
+def test_带货口播_每拍秒数取视频模型出得了的那一档() -> None:
+    """Veo 只出 4 / 6 / 8 秒(默认 8):写死 5 秒的话它必败。"""
+    assert _node(_pitch(presenter=False, video=VEO), "start")["config"]["params"]["beat_seconds"] == 8
+
+
+@pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+def test_带货口播_没有视频模型时和此前一样每拍一张静图(presenter: bool) -> None:
+    graph = _pitch(presenter=presenter, video=ModelChoice())
+    body = _beats_body(graph)
+    assert not {"beat_clip", "file_clip", "mute_clip"} & set(body)
+    assert ("beat_frame", "asset_id", "beat_on_timeline", "asset_id") in _beats_wires(graph)
+    assert body["beat_on_timeline"]["config"]["end"] == "{{loop.item.seconds}}"
+    assert "beat_seconds" not in _node(graph, "start")["config"]["params"]
+    beat = _node(graph, "pitch_script")["config"]["json_schema"]["properties"]["beats"]["items"]
+    assert "seconds" in beat["required"] and "motion_prompt" not in beat["properties"]
+    assert _node(graph, "fit_beats")["config"]["seconds_field"] == "seconds"
+
+
+def test_带货口播_动起来是第六版_两条卡片都说清要什么_花多少() -> None:
+    from app.domain.workflows.templates import current_template_versions
+
+    versions = current_template_versions()
+    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 6
+    for template_id in ("product_pitch_short", "product_pitch_presenter"):
+        card = next(one for one in TEMPLATE_CATALOG if one["id"] == template_id)
+        video = next(one for one in card["requires"] if one["check"] == "reference_video_model")
+        assert video["optional"] is True, "没有视频模型也能跑,只是每拍一张静图"
+        assert "付费视频生成" in card["summary"]["zh"] and "paid video generation" in card["summary"]["en"]
+        assert "beat_seconds" in card["summary"]["zh"] and "beat_seconds" in card["summary"]["en"]
+        assert {"zh", "en"} <= set(card["download_note"])
+
+
+@pytest.mark.parametrize("template_id", ["product_pitch_short", "product_pitch_presenter"])
+def test_带货口播的官网副本带着动起来那一步_模型留空由导入的人挑(template_id: str) -> None:
+    from app.domain.workflows.templates import blank_template_graphs
+
+    graph = blank_template_graphs("zh")[template_id]
+    assert validate_graph(graph, require_config=False) == []
+    body = _beats_body(graph)
+    clip = body["beat_clip"]["config"]
+    assert clip["model"] == "" and clip["source_assets"] == ["{{beat_frame.asset_id}}:first_frame"]
+    assert clip["parameters"] == {"duration_seconds": "{{input.beat_seconds}}", "aspect_ratio": "{{input.aspect_ratio}}",
+                                  "resolution": "{{input.resolution}}"}
+    assert _node(graph, "start")["config"]["params"]["beat_seconds"] == 5
+    #: 视频模型没挑就跑,运行前当场说缺哪一格(不付一分钱)。
+    assert any("把这一拍动起来" in error for error in validate_graph(graph)), validate_graph(graph)
+
+
 def test_面料规格页不许编数字() -> None:
     """成分、克重、幅宽是要负责任的数字,编一个出来比不写更糟。"""
     graph = fabric_lookbook_graph(chat=CHAT, image=SEEDREAM)
@@ -951,6 +1069,35 @@ class Test旧版模板建的图:
         assert any(node["id"] == "has_clips" for node in rebuilt["graph"]["nodes"]), "是新版的图"
         kept = client.get(f"/api/workflows/{old['id']}").json()
         assert kept["graph"]["meta"]["template_version"] == 2, "旧图原样保留"
+
+    def test_带货口播_旧版按新版重建_配了视频模型就动起来_填过的带过去(self) -> None:
+        """v6 加了「每一拍动起来」。旧图不迁移(是用户的数据),按新版重建时按**现在**的设置挑视频模型。"""
+        from app.core.db import SessionLocal
+        from tests.util import add_provider, fresh_client
+
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        graph = client.post("/api/workflows", json={"workspace_id": workspace, "name": "手串口播",
+                                                     "template_id": "product_pitch_short"}).json()["graph"]
+        assert "beat_clip" not in _beats_body(graph), "建图时还没有视频模型:每拍一张静图"
+        graph["meta"]["template_version"] = 5
+        _node(graph, "start")["config"]["params"].update({"product_name": "珍珠水晶手串", "selling_points": "天然淡水珍珠"})
+        _node(graph, "product_photo")["config"]["asset_id"] = "手串平铺图"
+        old = client.post("/api/workflows", json={"workspace_id": workspace, "name": "手串口播(旧)", "graph": graph}).json()
+        with SessionLocal() as db:
+            add_provider(db, name="Ark", vendor="bytedance", api_key="k", model="doubao-seedance-2-0-260128",
+                         capability_ids=["video"])
+            db.commit()
+
+        response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
+        assert response.status_code == 200, response.text
+        rebuilt = response.json()["graph"]
+        assert rebuilt["meta"]["template_version"] == 6
+        assert {"beat_clip", "file_clip", "mute_clip"} <= set(_beats_body(rebuilt))
+        params = _node(rebuilt, "start")["config"]["params"]
+        assert (params["product_name"], params["selling_points"], params["beat_seconds"]) == ("珍珠水晶手串", "天然淡水珍珠", 5)
+        assert _node(rebuilt, "product_photo")["config"]["asset_id"] == "手串平铺图", "挑过的商品图带过去"
+        assert client.get(f"/api/workflows/{old['id']}").json()["graph"]["meta"]["template_version"] == 5, "旧图原样保留"
 
     def test_不是从官方模板建的图_不重建(self) -> None:
         from tests.util import fresh_client

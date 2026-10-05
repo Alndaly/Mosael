@@ -56,6 +56,8 @@ class Studio:
         self.plans = plans
         self.calls: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.speech_seconds: dict[str, float] = {}
+        #: 按调用顺序,每一段视频**实际**交回多长(模型交回的常比要的长一点或短一点);没给就按要的时长。
+        self.video_seconds: list[float] = []
         self.presenter: dict[str, Any] = {"entity_id": "presenter-1", "found": 1, "voice_engine": "builtin:clone",
                                           "voice_id": "voice-of-presenter", "asset_ids": ["presenter-face"]}
         for node_type, handler in {
@@ -100,7 +102,8 @@ class Studio:
         validate_against_capabilities(config["provider"], config["model"], kind, parameters, sources)
         self.calls["ai_generate"].append({**config, "sources": sources})
         if kind == "video":
-            media = {"duration": float(parameters.get("duration_seconds") or 5)}
+            asked = float(parameters.get("duration_seconds") or 5)
+            media = {"duration": self.video_seconds.pop(0) if self.video_seconds else asked}
         else:
             media = {"width": 720, "height": 1280}
         return {"asset_id": self._asset(db, kind, f"gen-{kind}", media), "asset_ids": [], "generation_id": ""}
@@ -640,6 +643,155 @@ class Test带货口播真跑:
 
 
 # --------------------------------------------------------------------------------------
+# 带货口播 · 每一拍动起来
+# --------------------------------------------------------------------------------------
+
+MOVING_BEATS = [
+    {"narration": "别再买起球的毛衣", "visual_prompt": "sweater on a chair", "motion_prompt": "slow push-in",
+     "caption": "不起球"},
+    {"narration": "细密针织不变形", "visual_prompt": "close-up of the knit", "motion_prompt": "light glides over the knit",
+     "caption": "细密针织"},
+    {"narration": "点下面链接带走它", "visual_prompt": "folded sweater", "motion_prompt": "slow orbit",
+     "caption": "链接在下面"},
+]
+
+
+def _kind_of(asset_id: str | None) -> str:
+    with unit_of_work() as db:
+        return db.get(Asset, asset_id).kind
+
+
+def _moving_pitch(ws: str, *, presenter: bool = False, video: ModelChoice = SEEDANCE) -> dict[str, Any]:
+    graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=video, voice_id="" if presenter else "voice-1",
+                                      presenter=presenter)
+    _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+    if presenter:
+        _pick(graph, "presenter", entity_id="presenter-1")
+    return graph
+
+
+class Test带货口播每一拍动起来:
+    def test_每一拍的画面当首帧出一段视频_铺上时间线的是视频_画外音和字幕对齐每一拍(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": MOVING_BEATS}})
+        context = _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球")
+        sequence_id = context["pitch_project"]["sequence_id"]
+
+        video = _clips(sequence_id, "video")
+        assert [_kind_of(clip.asset_id) for clip in video] == ["video"] * 3, "铺上时间线的是视频,不是那张图"
+        assert [(clip.timeline_start, _span(clip)) for clip in video] == [(0.0, 5.0), (5.0, 5.0), (10.0, 5.0)]
+        assert all(clip.muted for clip in video), "视频自带的声音不能压在画外音底下"
+
+        frames = [one["beat_frame"]["asset_id"] for one in context["shoot_beats"]["results"]]
+        clips = [one for one in studio.calls["ai_generate"] if one["kind"] == "video"]
+        #: 每一拍的视频只拿**这一拍**的画面当首帧,时长就是每拍秒数(建图时按 Seedance 取的 5 秒)。
+        assert [one["sources"] for one in clips] == [[{"asset_id": frame, "role": "first_frame"}] for frame in frames]
+        assert {one["parameters"]["duration_seconds"] for one in clips} == {5}
+        assert [clip.asset_id for clip in video] == [one["beat_clip"]["asset_id"] for one in context["shoot_beats"]["results"]]
+
+        assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [0.0, 5.0, 10.0]
+        assert [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")] == [
+            (0.0, "不起球"), (5.0, "细密针织"), (10.0, "链接在下面")]
+        #: 画面和视频都是付过钱的素材,都归进这条短片的项目。
+        with unit_of_work() as db:
+            filed = db.query(Asset).filter(Asset.project_id == context["pitch_project"]["project_id"]).all()
+            assert sorted(asset.kind for asset in filed) == ["image"] * 3 + ["video"] * 3
+            assert sorted(asset.name for asset in filed if asset.kind == "video") == sorted([
+                "羊毛衫 · 不起球 · 视频", "羊毛衫 · 细密针织 · 视频", "羊毛衫 · 链接在下面 · 视频"])
+        #: 脚本按每拍秒数写:一个数只有一处说了算(开始参数),提示词里引用的就是它。
+        assert "每拍 5 秒" in studio.calls["llm"][0]["prompt"]
+
+    def test_每拍秒数由开始参数说了算_视频时长和时间线都跟着它(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": MOVING_BEATS}})
+        context = _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球", beat_seconds=4)
+        video = _clips(context["pitch_project"]["sequence_id"], "video")
+        assert [(clip.timeline_start, _span(clip)) for clip in video] == [(0.0, 4.0), (4.0, 4.0), (8.0, 4.0)]
+        assert {one["parameters"]["duration_seconds"] for one in studio.calls["ai_generate"] if one["kind"] == "video"} == {4}
+
+    def test_口播按每拍秒数量_超了的那一拍让模型改短(self, monkeypatch) -> None:
+        """脚本里没有各拍的 seconds:「口播按时长收紧」按开始参数的每拍秒数量。5 秒念不完 LONG_NARRATION(约 7 秒)。"""
+        ws = _workspace()
+        beats = [dict(MOVING_BEATS[0]), {**MOVING_BEATS[1], "narration": LONG_NARRATION}, dict(MOVING_BEATS[2])]
+        short = "细密针织不起球"
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": beats},
+                                          "narration_rewrites": {"rewrites": [{"index": 2, "narration": short}]}})
+        _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球")
+        assert [one["name"] for one in studio.calls["llm"]] == ["product_pitch_script", "narration_rewrites"]
+        assert "第 2 段(5 秒" in studio.calls["llm"][1]["prompt"]
+        said = [one["text"] for one in studio.calls["synthesize_speech"]]
+        assert short in said and LONG_NARRATION not in said, said
+
+    def test_视频比要的长或短_按实际长度铺_画外音字幕跟着走_成片尾不留黑(self, monkeypatch) -> None:
+        from app.db.models import Notification
+
+        ws = _workspace()
+        beats = [dict(MOVING_BEATS[0]), dict(MOVING_BEATS[1]), {**MOVING_BEATS[2], "narration": "号" * 40}]
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": beats}})
+        #: 第一段交回 5.4 秒(截到这一拍的 5 秒),后两段比要的短。
+        studio.video_seconds = [5.4, 4.6, 4.2]
+        context = _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球")
+        sequence_id = context["pitch_project"]["sequence_id"]
+
+        video = [(clip.timeline_start, _span(clip)) for clip in _clips(sequence_id, "video")]
+        assert video == [(0.0, 5.0), (5.0, pytest.approx(4.6)), (pytest.approx(9.6), pytest.approx(4.2))]
+        audio = _clips(sequence_id, "audio")
+        assert [clip.timeline_start for clip in audio] == pytest.approx([0.0, 5.0, 9.6]), "画外音落在这一拍实际的起点"
+        assert _span(audio[2]) <= 4.2 + 1e-6, "最长就是这一拍实际占的秒数"
+        assert max(clip.timeline_start + _span(clip) for clip in audio) <= 13.8 + 1e-6, "画外音比画面长,成片尾是一截黑屏"
+        subtitles = [(clip.timeline_start, _span(clip)) for clip in _clips(sequence_id, "subtitle")]
+        assert subtitles == [(0.0, 5.0), (5.0, pytest.approx(4.6)), (pytest.approx(9.6), pytest.approx(4.2))], "字幕用实际的起止"
+        with unit_of_work() as db:
+            titles = [one.title for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert "带货短片:有一拍的画外音念不完" in titles
+
+    def test_画面先归档再出视频_视频那一步失败时画面已在项目里(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": MOVING_BEATS}})
+        generate = studio.generate
+
+        def video_fails(db, scope, config):
+            if config["kind"] == "video":
+                raise WorkflowDomainError("wfErr_cancelled")
+            return generate(db, scope, config)
+
+        monkeypatch.setitem(registry._REGISTRY, "ai_generate", video_fails)
+        with pytest.raises(WorkflowDomainError):
+            _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球")
+        with unit_of_work() as db:
+            project = db.query(Project).filter(Project.workspace_id == ws).one()
+            assert db.query(Asset).filter(Asset.project_id == project.id, Asset.kind == "image").count() == 1
+
+    def test_出镜版_开场收尾是主播出镜_只有中间各拍动起来(self, monkeypatch) -> None:
+        ws = _workspace()
+        script = {"hook_line": "你家毛衣是不是一洗就起球", "beats": MOVING_BEATS, "call_to_action": "现在下单"}
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": script})
+        context = _run(ws, _moving_pitch(ws, presenter=True), product_name="羊毛衫", selling_points="不起球")
+        sequence_id = context["pitch_project"]["sequence_id"]
+
+        video = _clips(sequence_id, "video")
+        assert [clip.timeline_start for clip in video] == [0.0, 6.0, 11.0, 16.0, 21.0], "开场 → 三拍 → 收尾"
+        assert [_kind_of(clip.asset_id) for clip in video] == ["video"] * 5
+        assert [clip.muted for clip in video] == [False, True, True, True, False], "主播说的那两段照旧出声"
+        assert len(studio.calls["entity_speak"]) == 2
+        assert len([one for one in studio.calls["ai_generate"] if one["kind"] == "video"]) == 3
+        assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [6.0, 11.0, 16.0]
+        assert [clip.timeline_start for clip in _clips(sequence_id, "subtitle")] == [6.0, 11.0, 16.0]
+        assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
+
+    def test_没有视频模型时和此前一样每拍一张静图(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=ModelChoice(), voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        assert {one["kind"] for one in studio.calls["ai_generate"]} == {"image"}
+        video = _clips(context["pitch_project"]["sequence_id"], "video")
+        assert [_kind_of(clip.asset_id) for clip in video] == ["image"] * 3
+        assert [_span(clip) for clip in video] == [3.0, 4.0, 3.0], "每拍照旧按脚本的 seconds"
+
+
+# --------------------------------------------------------------------------------------
 # 商品图 → 模特上身图
 # --------------------------------------------------------------------------------------
 
@@ -1102,6 +1254,67 @@ class Test克隆引擎没装:
                 start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "voice_id": voice})
             assert refused.value.key == "voiceErr_noRuntime"
             assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == [], "一个节点都没排"
+
+
+def _loop_body_ids(graph: dict[str, Any], loop_id: str) -> set[str]:
+    loop = next(one for one in graph["nodes"] if one["id"] == loop_id)
+    return {one["id"] for one in loop["config"]["body"]["nodes"]}
+
+
+class Test带货口播动起来_建图与运行前:
+    @pytest.mark.parametrize("template_id", ["product_pitch_short", "product_pitch_presenter"])
+    def test_有能从首帧出片的视频模型就动起来_没有就是静图_卡片的可选项同一个判据(self, template_id: str) -> None:
+        from app.core.db import SessionLocal
+        from app.domain.workflows.templates import requirement_status
+        from tests.util import add_provider, user_id
+
+        client, ws = _template_client()
+        graph = _template_workflow(client, ws, template_id)["graph"]
+        assert "beat_clip" not in _loop_body_ids(graph, "shoot_beats")
+        assert "beat_seconds" not in next(one for one in graph["nodes"] if one["id"] == "start")["config"]["params"]
+        with SessionLocal() as db:
+            assert requirement_status(db, user_id=user_id(), workspace_id=ws, check="reference_video_model") == "missing"
+            profile = add_provider(db, name="Ark", vendor="bytedance", api_key="k", model="doubao-seedance-2-0-260128",
+                                   capability_ids=["video"])
+            db.commit()
+            profile_id = profile.id
+            assert requirement_status(db, user_id=user_id(), workspace_id=ws, check="reference_video_model") == "met"
+
+        graph = _template_workflow(client, ws, template_id)["graph"]
+        loop = next(one for one in graph["nodes"] if one["id"] == "shoot_beats")
+        clip = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "beat_clip")
+        assert (clip["config"]["provider_profile_id"], clip["config"]["model"]) == (profile_id, "doubao-seedance-2-0-260128")
+        assert next(one for one in graph["nodes"] if one["id"] == "start")["config"]["params"]["beat_seconds"] == 5
+
+    def test_选的视频模型出不了每拍秒数_运行前就拦_一个节点都不排(self) -> None:
+        """Veo 只出 4 / 6 / 8 秒。每拍秒数是开始参数,跑之前就知道:改成 5 秒要在写脚本、出图之前就拦下。"""
+        from sqlalchemy import select
+
+        from app.core.db import SessionLocal
+        from app.db.models import Job
+        from app.domain.generation.operations import GenerationDomainError
+        from app.domain.workflows import create_workflow
+        from app.domain.workflows.engine import check_runnable, start_workflow_job
+        from tests.util import add_provider, user_id
+
+        ws = _workspace()
+        with SessionLocal() as db:
+            profile = add_provider(db, name="Google", vendor="google", api_key="k", model="veo", capability_ids=["video"])
+            db.commit()
+            veo = ModelChoice(profile_id=profile.id, provider="google", model="veo")
+        graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, video=veo, voice_id="")
+        assert next(one for one in graph["nodes"] if one["id"] == "start")["config"]["params"]["beat_seconds"] == 8
+        _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        params = {"product_name": "羊毛衫", "selling_points": "不起球"}
+        with SessionLocal() as db:
+            workflow = create_workflow(db, workspace_id=ws, name="带货", graph=graph, created_by=user_id())
+            db.commit()
+            with pytest.raises((WorkflowDomainError, GenerationDomainError)) as refused:
+                start_workflow_job(db, workflow, created_by=user_id(), params={**params, "beat_seconds": 5})
+            assert refused.value.key == "genErr_durationChoices", refused.value
+            assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == [], "一个节点都没排"
+            #: 它出得了的时长照常放行(只查,不排任务)。
+            check_runnable(db, workflow, {**params, "beat_seconds": 6}, user_id())
 
 
 class Test整片改画幅:

@@ -318,21 +318,23 @@
       "en": "Product into a narrated short"
     },
     "summary": {
-      "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-      "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures."
+      "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
+      "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures. Where a video model is available, every beat moves: its frame becomes the first frame of a clip, the clip is what goes on the timeline, and every beat is the same length (the start node's beat_seconds, a length that model can make). Cost: one paid image per beat, plus one paid video generation per beat when beats move — about target length ÷ beat_seconds beats, so 30 seconds at 5 seconds a beat is about 6 images and 6 clips. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills."
     },
     "requires": {
       "zh": [
         "AI 对话模型",
         "能带参考图出图的图像模型",
         "嗓子可选:配音库的克隆音色(没有就用免费的 Edge 音色)",
-        "一张商品图"
+        "一张商品图",
+        "每一拍动起来可选:支持首帧的视频模型(每拍多一次付费视频生成)"
       ],
       "en": [
         "Chat model",
         "Image model that takes reference images",
         "Optional voice: a cloned voice from the voice library (otherwise a free Edge voice)",
-        "A product photo"
+        "A product photo",
+        "Optional moving beats: a video model that takes a first frame (one more paid video per beat)"
       ]
     },
     "stages": {
@@ -340,6 +342,7 @@
         "填商品名与卖点(一行一条,只写你能负责的)",
         "写分拍口播脚本",
         "逐拍出画面、配画外音并铺上时间线",
+        "可选:每一拍动起来",
         "按每拍的落点铺屏幕短句",
         "导出竖屏成片"
       ],
@@ -347,12 +350,13 @@
         "Product name and selling points (one per line, only claims you can stand behind)",
         "Write the beat-by-beat script",
         "Paint and voice each beat onto the timeline",
+        "Optional: put each beat in motion",
         "Lay each beat's on-screen line",
         "Export the vertical short"
       ]
     },
     "author": "Mosael",
-    "version": 5,
+    "version": 6,
     "nodes": 10,
     "download": {
       "zh": "/workflows/product_pitch_short.zh.mosael-workflow.json",
@@ -508,8 +512,8 @@
       "en": "Product into a presenter-led short"
     },
     "summary": {
-      "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-      "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too."
+      "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
+      "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills."
     },
     "requires": {
       "zh": [
@@ -517,14 +521,16 @@
         "能带参考图出图的图像模型",
         "会「说话照片」的视频模型",
         "资产库里一位有正面图和音色的人物",
-        "一张商品图"
+        "一张商品图",
+        "中间各拍动起来可选:支持首帧的视频模型(每拍多一次付费视频生成)"
       ],
       "en": [
         "Chat model",
         "Image model that takes reference images",
         "A speaking-photo video model",
         "A character in the asset library with a front image and a voice",
-        "A product photo"
+        "A product photo",
+        "Optional moving beats: a video model that takes a first frame (one more paid video per beat)"
       ]
     },
     "stages": {
@@ -534,6 +540,7 @@
         "写分拍口播脚本",
         "主播出镜说开场",
         "逐拍出画面、配画外音",
+        "可选:中间各拍动起来",
         "主播出镜说收尾",
         "导出竖屏成片"
       ],
@@ -543,12 +550,13 @@
         "Write the beat-by-beat script",
         "Presenter speaks the hook",
         "Paint and voice each beat",
+        "Optional: put the beats in motion",
         "Presenter speaks the call to action",
         "Export the vertical short"
       ]
     },
     "author": "Mosael",
-    "version": 5,
+    "version": 6,
     "nodes": 22,
     "download": {
       "zh": "/workflows/product_pitch_presenter.zh.mosael-workflow.json",
