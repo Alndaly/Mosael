@@ -157,10 +157,25 @@ def fragment(key: str, **params: Any) -> Any:
     return {"__key": key, "params": params} if key else ""
 
 
+def authored_text(value: Any) -> Any:
+    """**别人写好的**一句话(插件运行时交回的失败原因),它可以按语言分着给:`{"zh": …, "en": …}`。
+
+    和 `fragment` 是一对:那个是我们自己的文案 key,这个是数据自带的翻译(写法和插件清单里给人看的文字一样,
+    挑法见 pick_text)。按语言分的那份**原样留着**、包成一个带 `__text` 的小字典,渲染时再按读的人挑 ——
+    它会落进 JSON 列(连接的出错原因),而写下它的那一刻(后台刷新、另一种界面语言)不是读它的人的语言。
+
+    一个字符串就是那句话本身(只说一种语言的插件);一句话都没有的回空串。
+    """
+    if isinstance(value, dict):
+        texts = {str(lang): one for lang, one in value.items() if isinstance(one, str) and one.strip()}
+        return {"__text": texts} if texts else ""
+    return str(value) if value else ""
+
+
 def stored_param(value: Any) -> Any:
-    """一个参数落库(JSON 列)前的形状:文案片段和列表原样留着,读的时候再翻、再按读的人的
-    习惯连起来(见 _resolve_params);其余写成字。"""
-    if isinstance(value, dict) and "__key" in value:
+    """一个参数落库(JSON 列)前的形状:文案片段、按语言分的话和列表原样留着,读的时候再翻、再挑、
+    再按读的人的习惯连起来(见 _resolve_params);其余写成字。"""
+    if isinstance(value, dict) and ("__key" in value or "__text" in value):
         return value
     if isinstance(value, (list, tuple)):
         return [stored_param(one) for one in value]
@@ -168,11 +183,14 @@ def stored_param(value: Any) -> Any:
 
 
 def _resolve_params(params: dict[str, Any] | None, locale: str) -> dict[str, Any]:
-    """参数里带 `__key` 的那些(见 fragment)先各自按这个语言渲染,再交给外层去填。"""
+    """参数里带 `__key` 的那些(见 fragment)先各自按这个语言渲染、带 `__text` 的(见 authored_text)
+    按这个语言挑一句,再交给外层去填。"""
 
     def resolve(value: Any) -> Any:
         if isinstance(value, dict) and "__key" in value:
             return render_message(str(value["__key"]), locale, value.get("params") or {})
+        if isinstance(value, dict) and "__text" in value:
+            return pick_text(value["__text"], locale)
         if isinstance(value, list):
             # **连接号也随语言变**:中文用顿号,英文用逗号加空格。先翻每一段,再按读的人的
             # 习惯连起来 —— 反过来(先连再翻)得到的是一串翻不动的拼接物。

@@ -46,7 +46,7 @@ from typing import Any
 from app.core.interpreter import base_python
 from app.core.child_process import ChildProcess, ProcessOutputLimitExceeded, kill_tree, own_group, popen_text, run_logged
 from app.core.text import blame_line
-from app.core.i18n import LocalizedError, get_current_locale
+from app.core.i18n import LocalizedError, authored_text, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 from app.domain.plugins.child_env import base_env
@@ -286,7 +286,9 @@ def _final_response(response: Any) -> ToolResult:
         raise PluginRuntimeError("pluginErr_outputNotObject")
     state = response.get("state")
     if not response.get("ok"):
-        said = str(response.get("error") or "")
+        #: 插件可以按语言分着说(`{"zh": …, "en": …}`):原样带着,给人看时再挑 —— 这句会被存下来(连接的出错原因),
+        #: 而存它的那一刻(后台刷新、另一种界面语言)不是读它的人的语言。
+        said = authored_text(response.get("error"))
         error = PluginRuntimeError("pluginErr_upstream", detail=said) if said else PluginRuntimeError(
             "pluginErr_failedNoReason")
         # **失败也可能带着要记住的东西**:令牌续好了、重试却撞上一个与令牌无关的失败。百度换令牌时连

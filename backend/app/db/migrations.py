@@ -7826,6 +7826,73 @@ def _migrate_existing_libraries_get_the_evolink_gpt_image_prices() -> None:
             prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
 
 
+def _migrate_plugin_connection_errors_follow_the_reader() -> None:
+    """连接的出错原因(`plugin_instances.capability_status` 里各项能力的 error)只存文案 key + 参数,给人看时按读的人的语言说。
+
+    此前插件运行时说的那句(ComfyUI 的「连不上这台 ComfyUI……」)按刷新那一刻的语言说好,原样存进 `pluginErr_upstream`
+    的 `detail`;更老的记录连 key 都没有,只存了一句话。中文界面刷新过的连接切到英文仍是中文。现在插件按语言分着交、
+    宿主原样存(`{"__text": …}`,见 core/i18n.authored_text)。库里的旧记录在这里一次改掉:
+
+    - `pluginErr_upstream` 带着一句死文字的:那是插件自己写的话,认不回文案 key —— 清掉;
+    - 没有 key(或 key 已不在文案表里)、只有一句话的:认得出是哪条插件文案填出来的,改成 key + 参数;认不出 —— 清掉。
+
+    清掉的只是这一次失败的原因(error / error_key / error_params),上一次成功的记录(模型数、刷新时间、指纹)留着;
+    启动时后台会把每个连接刷一遍(catalog_watch.refresh_all),原因按新形状重新生成。幂等:新形状不再被认作旧的。
+    """
+    from string import Formatter
+
+    from app.core.i18n import MESSAGES
+
+    def key_for(said: str) -> tuple[str, dict[str, str]] | None:
+        """这句话是哪条插件文案(在哪种语言下)按什么参数填出来的;认不出来回 None。
+        只认**有字面部分**的模板:只有一个槽的(`{detail}`)什么话都套得上,认了等于没认。"""
+        for key, templates in MESSAGES.items():
+            if not key.startswith("pluginErr_"):
+                continue
+            for template in templates.values():
+                parts = list(Formatter().parse(template))
+                if not any(literal.strip() for literal, _, _, _ in parts):
+                    continue
+                pattern, seen = "", set()
+                for literal, field, _, _ in parts:
+                    pattern += re.escape(literal)
+                    if field is not None:
+                        pattern += f"(?P={field})" if field in seen else f"(?P<{field}>.+?)"
+                        seen.add(field)
+                matched = re.fullmatch(pattern, said, re.DOTALL)
+                if matched:
+                    return key, matched.groupdict()
+        return None
+
+    if "plugin_instances" not in set(inspect(engine).get_table_names()):
+        return
+    cleared = {"error": "", "error_key": "", "error_params": {}}
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, capability_status FROM plugin_instances")).fetchall()
+        for instance_id, raw in rows:
+            statuses = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(statuses, dict):
+                continue
+            changed = False
+            for capability, status in statuses.items():
+                if not isinstance(status, dict):
+                    continue
+                key = str(status.get("error_key") or "")
+                params = status.get("error_params") if isinstance(status.get("error_params"), dict) else {}
+                if key == "pluginErr_upstream" and isinstance(params.get("detail"), str):
+                    statuses[capability] = {**status, **cleared}
+                    changed = True
+                elif key not in MESSAGES and (key or status.get("error")):
+                    found = key_for(str(status.get("error") or ""))
+                    statuses[capability] = {**status, **({"error_key": found[0], "error_params": found[1]} if found else cleared)}
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE plugin_instances SET capability_status = :status WHERE id = :id"),
+                    {"status": json.dumps(statuses, ensure_ascii=False), "id": instance_id},
+                )
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -8132,6 +8199,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_guess_where_they_came_from),
             #: 老库里的碎版本真正合并、版本号重排、引用改指:排在补来历之后(恢复出来的版本要单独成版)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_note_revisions_merge_consecutive_edits),
+            #: 连接的出错原因按刷新时的语言存成了死文字:认得回文案 key 的改成 key + 参数,认不回的清掉(启动时后台刷新会重新生成)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_plugin_connection_errors_follow_the_reader),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

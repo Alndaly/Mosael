@@ -30,6 +30,9 @@ For several servers, create several connections; each brings its own set of mode
 **When it can't connect** (1.9.2), the first line of the error only says what to do — "Can't reach this ComfyUI. Make
 sure it is running and the URL is right"; the URL and the raw reason (`[Errno 61] Connection refused` and the like) are
 on the next line, which Mosael puts under "Details" or in a hover note.
+Since 1.12.1 the plugin hands Mosael the failure reason in both Chinese and English, so the reason on the connection
+card follows the interface language you are reading in, even when the refresh happened in the other language or in the
+background (at startup, or when the workflow list changed).
 
 ## How a workflow becomes a model
 

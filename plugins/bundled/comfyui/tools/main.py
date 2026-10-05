@@ -134,7 +134,8 @@ def main() -> None:
             raise ComfyError(say(locale, f"不认识的工具:{tool}", f"Unknown tool: {tool}"))
         emit({"ok": True, "output": output})
     except ComfyError as exc:
-        emit({"ok": False, "error": str(exc)})
+        #: 两种语言都交:连接的出错原因会被宿主存下来,给人看时按读的人的语言挑(见 lines)。
+        emit({"ok": False, "error": exc.said})
     except Exception as exc:  # noqa: BLE001 — 插件自己的 bug:把原因交回去,别只留一个退出码
         traceback.print_exc(file=sys.stderr)
         emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})

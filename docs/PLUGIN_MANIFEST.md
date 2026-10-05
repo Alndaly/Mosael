@@ -85,6 +85,11 @@ except Exception as exc:
 后面:界面把第一行当正文,其余收进「详情」或悬停说明。`连不上这台 ComfyUI,确认它在运行、地址填对` 后面一行
 `http://127.0.0.1:8188:[Errno 61] Connection refused` —— 用户先读到的是该做什么,排查的人展开还看得到原文。
 
+`error` 也可以**按语言分着给**:`{"zh": "连不上这台 ComfyUI……", "en": "Can't reach this ComfyUI……"}`(写法和清单里
+给人看的文字一样,见「多语言」)。失败原因会被**存下来** —— 插件页连接卡片上的出错原因就是上一次刷新时你说的那句,
+而刷新可能是另一种界面语言下点的,也可能是后台(启动时、目录变了)刷的;只给一种语言的话,换了界面语言它也不跟着换。
+按语言分着给,宿主原样存着,给人看时按读的人的语言挑。
+
 ### 要交出一个**文件**
 
 上面那条路只搬 JSON,上限 1MB —— 一个 2GB 的 mp4 塞不进去。要把文件交给素材库,在 `output`
@@ -876,6 +881,9 @@ SOCKS 的话,遇到 `socks5://` 自己说清楚(`plugins/bundled/mineru` 就是�
 locale = request.get("locale") or os.environ.get("MOSAEL_LOCALE", "zh")
 return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Imported 3 files"}
 ```
+
+失败原因例外:它会被存下来、晚些时候换一种语言读,所以两种都写得出就都交(`"error": {"zh": …, "en": …}`,
+见「形态一:本地脚本」里 `error` 那段)。
 
 **不混进 `input`**:语言是这次调用的上下文,不是工具的一个参数 —— 混进去的话,每个工具都得在
 自己的 `input_schema` 里声明一遍,而忘了声明的那个会把它当成非法参数拒掉。

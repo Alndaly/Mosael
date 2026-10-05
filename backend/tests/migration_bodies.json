@@ -122,6 +122,7 @@
   "migrate-permission-modes": "bbacb632b8f0e565",
   "migrate-plugin-array-inputs-are-lists": "69ab494d2805bd4b",
   "migrate-plugin-authorization-rejected": "70b766005c22c0e9",
+  "migrate-plugin-connection-errors-follow-the-reader": "49d1902842bd2193",
   "migrate-plugin-connections-choose-package-sources": "9f8bffdeef1a7d60",
   "migrate-plugin-connections-choose-their-network": "cc07c696f9df91d0",
   "migrate-plugin-generation-columns": "2f050e11c98100aa",
