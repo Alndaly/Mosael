@@ -2,7 +2,7 @@
 title: Model connections
 description: Connect your model services, choose defaults and configure cost estimates.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -73,6 +73,14 @@ This route is independent from the native Volcengine Seedance adapter, so you ca
 different regional, account or content-policy behaviour. Mosael adds no local "real person"
 keyword block, but it cannot promise policy bypass: acceptance still belongs to Evolink's current
 upstream model.
+
+Evolink's **GPT Image** models are `gpt-image-2`, `gpt-image-2-beta`, `gpt-image-2.5-flare` (everyday images),
+`gpt-image-2.5-sunburst` (refinement) and `gpt-image-1.5`. They are billed by token, and the price is mostly decided by
+**quality** and **resolution tier** (a 1K 1:1 low-quality image costs well under a cent, a 2K high-quality one tens of cents), so
+AI Studio, boards and workflow nodes all show both, defaulting to the cheapest: low quality, 1K, 1:1. A line under quality spells
+out the difference: low is about a ninth of medium and high about four times medium, so try low first and raise it for the final
+render. `gpt-image-2-beta` has a fixed price per image, makes only 1K and offers no quality setting. These models are off by default:
+switch on the one you want in your Evolink connection, and make it the default image model if you like.
 
 ### ComfyUI: provided by a plugin
 
@@ -153,6 +161,11 @@ Two things worth stating plainly:
 - **When a model is unrecognised the screen does not pretend it simply has no parameters.** It names the fields that channel **can send** (the request is constructed by Mosael, so that part needs no verification) while saying nobody has verified which values this model accepts, which is why the generation screen does not offer them yet.
 - Saving a parameter set only checks the **shape** (lists must be text, limits must be positive integers, a default must appear in its list). It cannot check "does this endpoint really support it" — only the endpoint knows that, and a wrong value fails when the provider rejects the generation request.
 
+**Parameters a model declares a default for are always sent.** AI Studio's form pre-fills the defaults; when workflows, boards, the
+agent or scheduled tasks submit without some of them, those are written into the request with the model's declared default too,
+instead of being left out and falling back to the provider's own default — Evolink's gpt-image-2, for instance, declares the
+cheapest low quality while the provider's own default is medium. Values you set explicitly are sent as you set them.
+
 ## Subscription plans: authorize instead of pasting a key
 
 Claude Pro/Max, Kimi Code, ChatGPT Plus/Pro, GitHub Copilot, xAI and OpenRouter are **subscriptions** with no key to paste. Pick the matching entry when adding a provider under AI Chat, save, then click **Authorize** on that row:
@@ -174,6 +187,9 @@ Gateway; choose Auto or Frames + transcript instead.
 Subscription rows carry an extra **gauge icon** showing the current plan, each quota, and when it resets.
 
 It is **fetched on click**. None of these quota endpoints is a documented public API (they're what each vendor's own CLI uses internally), so polling them on a timer would both trip rate limits and quietly rot into a permanently failing background task the day a vendor changes something. When a fetch fails, the message distinguishes "this vendor isn't supported" from "this attempt didn't succeed".
+
+Quotas are shown the way the vendor puts them. Kimi Code reports percentages — "Weekly usage 83%", "Rate limit 0%" (a five-hour
+window) — exactly as Kimi's own dashboard does, each with when it resets; not "83 of 100 calls used".
 
 ## Capability providers: who does each job
 
@@ -218,15 +234,45 @@ Rules are grouped by model: one card (or one row in list view) shows every price
 
 **Time-of-day prices.** Some vendors charge differently by the hour (DeepSeek: weekdays 9:00–12:00 and 14:00–18:00 Beijing time are peak, other times half price). When editing a rule, add **Time-of-day prices** under the unit price: pick the time zone the vendor uses (no need to convert), then add slots — start and end time, the weekdays it applies, and that slot's price. It's part of the **same rule**: a call is first matched to the rule by provider and model, then priced by the moment it happened; any time outside the slots uses the base unit price. Public holidays can't be told apart and are estimated at the weekday price.
 
+**Tiers by resolution.** Most video vendors price by output resolution (Wan at 720P and 1080P, Hailuo at 768P and 2K are different
+prices). A rule has a **Resolution** field: the rule with it left empty is the model's base tier, and each other tier gets its own rule
+(write 720p, 1080p or 2K, in any case). A generation is priced by its resolution: the rule for that tier if there is one, otherwise the
+base tier; a resolution with neither its own price nor a base tier is unpriced, never borrowed from another tier. A flat price set up
+for one connection or workspace takes precedence over a general tiered price. Cards and the list name each price's tier, keeping the
+tiers of one unit together with the base tier first.
+
+**What the provider reports is what gets recorded.**
+
+- When the response reports **usage**, that usage is priced: GPT Image's text input, reference-image input and image output tokens
+  each have a unit price (the units include "1M image input tokens"), Seedance is priced on its output tokens, and Qwen image and
+  Seedream on the image count the provider states. Tokens merely estimated from the prompt length are not priced — better to show
+  "unpriced" so you can see what's missing.
+- When the response states the **charge** itself (Evolink), that amount is recorded instead of an estimate. Evolink credits are
+  converted to dollars so the record matches its own billing.
+- **Failed calls**: when the provider returned nothing (the request was refused outright) the cost is 0, regardless of how many images
+  or seconds were asked for; when the provider had already generated and charged and only our download failed, the reported usage
+  or charge is recorded.
+
 **Currencies are kept apart.** CNY and USD spend are never added together: statistics, the overview and the admin page show one amount per currency ("CN¥12.30 + $4.50"), the cost chart draws one currency at a time with a switch when there are several, and nothing is converted. If one call matches rules in different currencies, it's recorded as unpriced with that reason — put those rules in one currency.
 
 **Prefill prices** creates rules in bulk from two sources. The dialog lists one row per provider — prefill them one at a time or all at once with **Prefill all**; each provider's result appears under its own row:
 
 - **The provider's own model catalog**, when it carries prices (OpenRouter, or the catalog a subscription sign-in brings back), takes precedence.
-- When the catalog has no prices (true of most OpenAI-compatible endpoints), the app's built-in **official price list** fills the gap: DeepSeek, Kimi, Alibaba Bailian (chat, Wan video, image, speech), Volcengine Ark (Seedance video, Seedream image), Volcengine speech, MiniMax (chat, Hailuo video), OpenAI (chat, GPT Image, TTS), Anthropic, xAI and Google Veo. Every entry was checked on the vendor's official pricing page; each rule's note cites the page and the check date. Currency follows the vendor's list (CNY for Chinese vendors, USD otherwise), and an international endpoint gets the international price. Prices that change by the hour (DeepSeek's peak/off-peak) become time-of-day prices; other tiers, such as by context length, record one tier and name the rest in the note.
-- Relays (custom OpenAI-compatible addresses, Evolink and the like) borrow a vendor's list price only when the model id belongs to exactly one vendor, and the note warns that the relay may charge differently.
+- When the catalog has no prices (true of most OpenAI-compatible endpoints), the app's built-in **official price list** fills the gap: DeepSeek, Kimi, Alibaba Bailian (chat, Wan video, image, speech), Volcengine Ark (Seedance video, Seedream image), Volcengine speech, MiniMax (chat, Hailuo video), OpenAI (chat, GPT Image, TTS), Anthropic, xAI, Google Veo, and Evolink's own listed prices for Seedance and GPT Image. Every entry was checked on the vendor's official pricing page; each rule's note cites the page and the check date. Currency follows the vendor's list (CNY for Chinese vendors, USD otherwise), and an international endpoint gets the international price. Prices that change by the hour (DeepSeek's peak/off-peak) become time-of-day prices; prices tiered by output resolution get one rule per tier (Wan, Hailuo, Seedance, Veo); other tiers, such as by context length, record one tier and name the rest in the note.
+- Relays (custom OpenAI-compatible addresses, Evolink and the like) look up **their own** entries first (prices the relay lists itself, and model names it made up, such as 147ai's `gpt-image-2-client`, whose note says the real price isn't published and OpenAI's official price is used as a reference); only when there is none do they borrow a vendor's list price, and only when the model id belongs to exactly one vendor, with a note warning that the relay may charge differently.
 
 Two rules stay the same: it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement), and a price of 0 produces no rule — that means "unpriced / included in the subscription", not "free". The result says how many rules came from the catalog and from the price list, and which models still need a price by hand.
+
+**Two things happen on their own when you upgrade:**
+
+- Models newly added to the price list in this version (the resolution tiers, GPT Image's text and reference-image input prices,
+  147ai's gpt-image-2-client, Evolink's Seedance and GPT Image, Hailuo H3 at 2K…) are filled into existing libraries by the same rules
+  as Prefill — only for models your connections actually use, only what's missing, and none of your existing rules change; other models
+  you never prefilled or priced are left to you.
+- **Past usage is recalculated**: image, video and audio generations whose cost was empty and can now be worked out from the price
+  list or the provider's report get a cost; failures refused on the spot that were charged by the request become free; GPT Image calls
+  recorded at a few dozen micros from estimated prompt tokens are repriced on the reported tokens. Any other cost already recorded, anything not
+  computable and anything ambiguous are left alone, and chat usage is not backfilled.
 
 ## Bindings: missing config surfaces where it's needed
 

@@ -2,7 +2,7 @@
 title: Admin console & statistics
 description: Deployment admins use Admin to watch usage, manage members and sign-up, install local engines, set mirrors and the outbound proxy, and back up data; everyone gets their own numbers in Statistics.
 order: 22
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.8.3
 ---
 
@@ -77,6 +77,12 @@ runtime, and installing again fills in what is missing.
 - **Outbound proxy**: the proxy URL and **Bypass hosts** (one per line). AI provider requests and subscription sign-in go through it;
   loopback calls never do. The embedded browser isn't affected (publishing accounts set their own proxy), and a plugin connection can
   choose follow, direct or its own proxy under **Network**.
+- **Internal network access**: the workflow **HTTP request** node, the agent's page fetches and requests, and import from link may
+  reach **only the public internet** by default — loopback, private network and cloud metadata addresses are blocked before anything is
+  sent, and the error says which entry to add. To allow one, **Add address** here: one host name, IP or CIDR range, where host names and
+  IPs may carry a port to allow only that port, such as `127.0.0.1:11434` (a local Ollama), `nas.local` or `10.0.0.0/8`. The check is on
+  the IP the name resolves to, repeated for every redirect. The desktop app works the same way, loopback included — importing someone
+  else's template is just as common there. Plugins' own network access and result addresses returned by providers are not covered by it.
 - **AI runtime**: **Max retries** (0–10, default 3). Every AI call retries with exponential backoff on 429, 5xx and connection failures.
 - **Data & diagnostics**: **Full backup** saves the database, media (including fonts and avatars), plugins and the local secret key (logs,
   exports and model caches are left out); **Restore from backup** validates the archive format, file checksums and database integrity before
