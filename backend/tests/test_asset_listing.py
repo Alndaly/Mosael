@@ -114,7 +114,7 @@ def test_a_card_carries_what_a_card_shows_and_nothing_else() -> None:
     clip = items["clip"]
     assert clip["media_info"] == {
         "duration": 12.0, "width": 1920, "height": 1080, "fps": 25.0, "has_thumbnail": True,
-        "format": None, "pages": None, "size_bytes": None,
+        "format": None, "pages": None, "size_bytes": None, "line_text": None,
     }
     assert "file_key" not in clip, "文件位置是取文件那几个接口的事,卡片不带"
     assert clip["tags"] == ["t"]

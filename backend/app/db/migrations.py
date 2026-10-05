@@ -7644,6 +7644,96 @@ def _migrate_assets_remember_where_they_came_from() -> None:
             conn.execute(text("ALTER TABLE assets ADD COLUMN ai_generated BOOLEAN NOT NULL DEFAULT 0"))
 
 
+def _migrate_assets_know_if_they_are_intermediate() -> None:
+    """素材补一列 `intermediate`:这一份是不是某道工序逐条做出来的零件、是哪一种(见 domain/assets/intermediates);
+    空串 = 素材库里的正常素材。顺手建素材库列表按它筛的索引。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 Asset 已经指望这一列在了。老素材的回填在 AFTER_SCHEMA 的
+    backfill-intermediate-assets —— 它要读任务和时间线。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(assets)"))}
+        if not columns:
+            return
+        if "intermediate" not in columns:
+            conn.execute(text("ALTER TABLE assets ADD COLUMN intermediate VARCHAR(24) NOT NULL DEFAULT ''"))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_assets_workspace_intermediate_created "
+            "ON assets (workspace_id, intermediate, created_at)"
+        ))
+
+
+def _backfill_intermediate_assets() -> None:
+    """老素材里推得出是工序零件的,标上是哪一种;推不出的留在素材库(空串)。
+
+    逐句配音的一句(`dub_line`):
+    - media_info 里记着 `dub_line`(那一句念的什么、谁念的 —— 字幕配音近来给每一句都写);
+    - 更早的没写:来源是合成(tts),而且是字幕配音任务派出去的合成子任务交回的(jobs.parent_job_id 指着一个
+      subtitle_dub 任务),或者放在配音轨(tracks.role = dub)上;
+    - 长稿分段配音拼进一段 / 补过静音的那一句:来源是合成,而且是另一段合成音频的出处(那一段的 derived_from 里
+      op 是 concat / pad)。
+    对口型的一块(`lipsync_chunk`):
+    - media_info 里记着 `dub_lipsync_chunk`(改好口型的那一块);
+    - 切出来交给改口型的原片块、配音块:来源 derived、出处的 op 是 trim / mix(只有对口型这样登记过)。
+
+    导出的成片、合成的整段、人自己拖上配音轨的导入音频都不动。推断规则写在这里、不调领域代码:迁移是历史快照。
+    重跑:已经标上的不再动,其余照旧推不出。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "assets" not in tables:
+        return
+
+    def loads(value: Any, empty: Any) -> Any:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return empty
+        return value if isinstance(value, type(empty)) else empty
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, source, media_info, derived_from FROM assets WHERE intermediate = ''")
+        ).mappings().all()
+        sources = {row["id"]: row["source"] for row in rows}
+        dubbed_by_job: set[str] = set()
+        if "jobs" in tables:
+            for (result,) in conn.execute(text(
+                "SELECT child.result FROM jobs child JOIN jobs parent ON parent.id = child.parent_job_id "
+                "WHERE child.kind = 'tts' AND parent.kind = 'subtitle_dub'"
+            )):
+                made = str(loads(result, {}).get("asset_id") or "")
+                if made:
+                    dubbed_by_job.add(made)
+        on_dub_track: set[str] = set()
+        if {"clips", "tracks"} <= tables:
+            on_dub_track = {one for (one,) in conn.execute(text(
+                "SELECT DISTINCT clips.asset_id FROM clips JOIN tracks ON tracks.id = clips.track_id "
+                "WHERE tracks.role = 'dub' AND clips.asset_id IS NOT NULL"
+            ))}
+
+        marks: dict[str, str] = {}
+        for row in rows:
+            asset_id, source = row["id"], row["source"]
+            info = loads(row["media_info"], {})
+            parents = [one for one in loads(row["derived_from"], []) if isinstance(one, dict)]
+            if "dub_line" in info:
+                marks[asset_id] = "dub_line"
+            elif "dub_lipsync_chunk" in info:
+                marks[asset_id] = "lipsync_chunk"
+            elif source == "tts" and (asset_id in dubbed_by_job or asset_id in on_dub_track):
+                marks[asset_id] = "dub_line"
+            elif source == "derived" and any(one.get("op") in ("trim", "mix") for one in parents):
+                marks[asset_id] = "lipsync_chunk"
+            if source == "tts":
+                for one in parents:
+                    parent = str(one.get("asset_id") or "")
+                    if one.get("op") in ("concat", "pad") and sources.get(parent) == "tts":
+                        marks.setdefault(parent, "dub_line")
+        for asset_id, kind in marks.items():
+            conn.execute(text("UPDATE assets SET intermediate = :kind WHERE id = :id"), {"kind": kind, "id": asset_id})
+
+
 def _backfill_asset_lineage() -> None:
     """老素材补上出处和「含 AI」:从现有记录推得出来的补上,推不出来的留空。
 
@@ -8019,6 +8109,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_generation_jobs_keep_their_failure,
                 # 同上:ORM 上的 Asset 指望出处和「含 AI」两列在。
                 _migrate_assets_remember_where_they_came_from,
+                # 同上:ORM 上的 Asset 指望「是不是中间产物」这一列在。
+                _migrate_assets_know_if_they_are_intermediate,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
                 _migrate_tool_confirmations_name_their_tool_call,
                 # 同上:ORM 上的 NoteRevision 指望来历、作者、恢复自哪一版这三列在。
@@ -8179,6 +8271,8 @@ def migration_plan() -> MigrationPlan:
             ),
             #: 老素材补出处和「含 AI」:读生成记录、任务、时间线(jobs 的 payload / result 在很老的库上也是上面才齐)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_asset_lineage),
+            #: 老素材里逐句配音的一句、对口型的一块标成中间产物:要读任务、时间线和出处(出处由上一步补齐)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_intermediate_assets),
             #: 「本会话始终允许」记成 (工具, 档位)。排在所有改写这份清单(工具改名、去掉退役工具)的迁移之后 ——
             #: 它们认的是旧的工具名列表。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_session_allow_remembers_the_tier),

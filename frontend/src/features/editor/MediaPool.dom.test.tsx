@@ -23,7 +23,7 @@ vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ ope
 
 const asset = (id: string, kind: string, tags: string[]): AssetCard => ({
   id, name: id, workspace_id: "ws", project_id: "p", original_filename: id, kind, source: "imported", tags,
-  derived: false, ai_generated: false,
+  derived: false, ai_generated: false, intermediate: "",
   media_info: { duration: null, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
 });
 
@@ -56,6 +56,7 @@ vi.mock("@/api/client", async (original) => ({
     total: ASSETS.length,
     kinds: { video: 2, image: 1, audio: 1 },
     tags: { sea: 2, dusk: 1, "b-roll": 1, interview: 1 },
+    intermediates: {},
   })),
 }));
 

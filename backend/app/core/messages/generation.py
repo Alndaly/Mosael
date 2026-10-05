@@ -469,6 +469,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "assetErr_wrongKindForPlugin": {"zh": "「{name}」不是这里要的素材:要{kinds}", "en": "“{name}” isn't the kind of asset needed here: expected {kinds}."},
     "assetErr_badCursor": {"zh": "翻页位置不对:它不是这份列表(这种排序)给的,请从第一页重新取", "en": "That page position doesn't belong to this list (or this sort order); fetch from the first page again."},
     "assetErr_unknownSort": {"zh": "不认得的排序「{sort}」:可选 created、updated、name、duration", "en": "Unknown sort “{sort}”: use created, updated, name or duration."},
+    "assetErr_unknownIntermediate": {"zh": "不认得的中间产物「{kind}」:可选 dub_line(配音片段)、lipsync_chunk(对口型分块)", "en": "Unknown intermediate “{kind}”: use dub_line (dub lines) or lipsync_chunk (lip-sync chunks)."},
     "assetErr_unknownTagMatch": {"zh": "不认得的标签匹配方式「{match}」:可选 all(同时带有)、any(带有任一)", "en": "Unknown tag match “{match}”: use all or any."},
     "assetKind_image": {"zh": "图片", "en": "an image"},
     "assetKind_video": {"zh": "视频", "en": "a video"},

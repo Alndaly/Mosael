@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
+from app.domain.assets.intermediates import LIPSYNC_CHUNK
 from app.domain.voices.subtitle_dub import DUB_LINE_KEY
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.common import stop_if_stopping
@@ -217,13 +218,16 @@ def _cached_chunk(db: Session, workspace_id: str, key: str) -> str:
 
 def _remember_chunk(asset_id: str, key: str) -> None:
     """在改好口型的那一块上记下它是哪一块,**单独一个事务马上落库**:后面哪一块失败、这个节点整体回滚,
-    这一块的钱也不白花 —— 重跑时认得出它(见 _cached_chunk)。"""
+    这一块的钱也不白花 —— 重跑时认得出它(见 _cached_chunk)。它也是这道工序的零件:标成中间产物,素材库不列
+    (它是生成漏斗登记的,登记时说不了,只能在这里补)。"""
     from app.core.unit_of_work import unit_of_work
+    from app.db.models import Asset
     from app.domain.assets.media_info import patch_media_info
 
     #: 只补这一个键:这块素材刚登记,代理转码正在别的线程里改它的 media_info(见 assets/media_info)。
     with unit_of_work() as keeper:
         patch_media_info(keeper, asset_id, {CHUNK_KEY: key})
+        keeper.get(Asset, asset_id).intermediate = LIPSYNC_CHUNK
 
 
 @register_preflight("dub_lipsync")
@@ -297,11 +301,12 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         _mix_voice(lines, span, voice)
 
         def keep(path: Path, name: str, derived_from: tuple[Derivation, ...], source: str = "derived",
-                 ai_generated: bool = False) -> str:
+                 ai_generated: bool = False, intermediate: str = LIPSYNC_CHUNK) -> str:
             #: 挂在译配那个项目下,不散落在素材库的「未归属」里(此前每块两份中间素材都是 project_id=None)。
+            #: 切出来的每一块是这道工序的零件(中间产物),素材库不列;接回的整段才是交出去的那一份。
             return register_file_asset(db, workspace_id=scope.workspace_id, project_id=project_id, source_path=path,
                                        name=name, source=source, derived_from=derived_from,
-                                       ai_generated=ai_generated).id
+                                       ai_generated=ai_generated, intermediate=intermediate).id
 
         parts: list[Path] = []
         #: 改过口型的每一块(接回的整段的出处,和原片一起)。
@@ -339,7 +344,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         _join(parts, width, height, fps, joined)
         #: 接回的整段不是哪一条生成记录的产出:标上数字人来源,导出时照样加 AI 标识(ADR 0028 §5)。
         final = keep(joined, f"{video_name} · 对口型", derived(CONCAT, video_id, *lipsynced), DIGITAL_HUMAN_SOURCE,
-                     ai_generated=True)
+                     ai_generated=True, intermediate="")
     #: 接回来的整段可能比原片短几帧(各块按帧取整):铺上去的长度取两者较短的那个。
     length = min(span, float((db.get(Asset, final).media_info or {}).get("duration") or span))
 

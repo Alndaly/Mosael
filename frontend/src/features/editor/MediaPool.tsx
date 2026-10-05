@@ -60,7 +60,7 @@ export function MediaPool({
   const [search, setSearch] = React.useState("");
   const settledSearch = useDebouncedValue(search.trim());
   //: 标签候选和总数:这个项目范围里的(见后端 domain/assets/listing.facets),不跟着搜索走。
-  const facets = useAssetFacets(workspaceId, projectId);
+  const facets = useAssetFacets(workspaceId, { projectId });
   const tagCount = React.useMemo(() => sortedTagCounts(facets.data?.tags ?? {}), [facets.data]);
   const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
   // 存着一个已经没有素材带着的标签时当作没勾(usePersistentSet 自己验),面板不会空得莫名其妙。

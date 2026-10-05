@@ -2820,7 +2820,7 @@
           "assets"
         ],
         "summary": "List Assets",
-        "description": "素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。\n\n`kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,\n其余参数不变。",
+        "description": "素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。\n\n`kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,\n其余参数不变。中间产物(逐句配音的一句……)默认不列,`intermediate=dub_line` 只列那一种。",
         "operationId": "list_assets_api_assets_get",
         "parameters": [
           {
@@ -2928,6 +2928,17 @@
             }
           },
           {
+            "name": "intermediate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 24,
+              "default": "",
+              "title": "Intermediate"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -3002,7 +3013,7 @@
           "assets"
         ],
         "summary": "Asset Facets",
-        "description": "页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。",
+        "description": "页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索);\n另有每种中间产物各几份。",
         "operationId": "asset_facets_api_assets_facets_get",
         "parameters": [
           {
@@ -3028,6 +3039,17 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "name": "intermediate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 24,
+              "default": "",
+              "title": "Intermediate"
             }
           }
         ],
@@ -24749,6 +24771,17 @@
               }
             ],
             "title": "Size Bytes"
+          },
+          "line_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Text"
           }
         },
         "type": "object",
@@ -24808,6 +24841,11 @@
             "type": "boolean",
             "title": "Ai Generated",
             "default": false
+          },
+          "intermediate": {
+            "type": "string",
+            "title": "Intermediate",
+            "default": ""
           },
           "created_at": {
             "anyOf": [
@@ -25039,13 +25077,21 @@
             },
             "type": "object",
             "title": "Tags"
+          },
+          "intermediates": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Intermediates"
           }
         },
         "type": "object",
         "required": [
           "total",
           "kinds",
-          "tags"
+          "tags",
+          "intermediates"
         ],
         "title": "AssetFacetsOut",
         "description": "页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上。"
@@ -25223,6 +25269,11 @@
             "type": "boolean",
             "title": "Ai Generated",
             "default": false
+          },
+          "intermediate": {
+            "type": "string",
+            "title": "Intermediate",
+            "default": ""
           },
           "created_at": {
             "anyOf": [

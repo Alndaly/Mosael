@@ -30,7 +30,7 @@ vi.mock("@/features/media/AssetPreviewModal", () => ({
 
 const card = (id: string, kind = "image"): AssetCard => ({
   id, name: id, workspace_id: "ws", project_id: null, original_filename: `${id}.png`, kind, source: "imported", tags: [],
-  derived: false, ai_generated: false, created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",
+  derived: false, ai_generated: false, intermediate: "", created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",
   media_info: { duration: null, width: 100, height: 100, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
 });
 
@@ -46,7 +46,7 @@ beforeEach(() => {
   window.location.hash = "#/media";
   vi.mocked(listAssetPage).mockReset();
   vi.mocked(getAssetFacets).mockReset();
-  vi.mocked(getAssetFacets).mockResolvedValue({ total: 130, kinds: { video: 30, image: 100 }, tags: { 海边: 4 } });
+  vi.mocked(getAssetFacets).mockResolvedValue({ total: 130, kinds: { video: 30, image: 100 }, tags: { 海边: 4 }, intermediates: {} });
 });
 afterEach(cleanup);
 

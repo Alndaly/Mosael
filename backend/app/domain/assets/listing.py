@@ -5,7 +5,9 @@
 而人一眼看得见的只有十几张。现在:
 
 - 列表一页一页地给(`page`),筛选和排序在这里做,游标认的是「上一页最后那一份」;
-- 页签上的数字和标签筛选的候选另取(`facets`),它们说的是整个范围,不跟着这一页走。
+- 页签上的数字和标签筛选的候选另取(`facets`),它们说的是整个范围,不跟着这一页走;
+- 中间产物(逐句配音的一句……,见 domain/assets/intermediates)默认不列,点名那一种才列 —— 素材库是给人找东西的,
+  工序的零件在时间线上照常用,不必摊在这里。
 
 游标是「排序键 + id」(keyset),不是偏移量:翻到一半有人导入了新素材,偏移量会让页边上的那一份
 重复或漏掉,游标不会。排序键相同的几份(同一时刻导入的一批)按 id 定先后,所以翻页是稳定的。
@@ -27,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Asset
+from app.domain.assets.intermediates import INTERMEDIATE_KINDS
 
 #: 一页默认几份:素材页一屏放得下十几张卡片,多取几行好让往下滚的时候不必马上等下一页。
 DEFAULT_PAGE_SIZE = 60
@@ -57,6 +60,8 @@ class AssetScope:
     tags: Sequence[str] = ()
     #: 勾了几个标签时:同时带有(all)/ 带有任一(any)。
     tag_match: str = "all"
+    #: 看素材库(空串)还是某一种中间产物(见 domain/assets/intermediates)。
+    intermediate: str = ""
 
 
 @dataclass(frozen=True)
@@ -73,6 +78,8 @@ class AssetFacets:
     total: int
     kinds: dict[str, int] = field(default_factory=dict)
     tags: dict[str, int] = field(default_factory=dict)
+    #: 每种中间产物各几份(整个范围的,不管眼下看的是哪一种)—— 素材页切过去的入口上写着它。
+    intermediates: dict[str, int] = field(default_factory=dict)
 
 
 def page(
@@ -85,8 +92,7 @@ def page(
 ) -> AssetPage:
     if sort not in SORTS:
         raise AssetListingError("assetErr_unknownSort", sort=sort)
-    if scope.tag_match not in TAG_MATCHES:
-        raise AssetListingError("assetErr_unknownTagMatch", match=scope.tag_match)
+    _check(scope)
     key, descending = _sort_key(sort)
     conditions = _conditions(scope)
     total = db.scalar(select(func.count()).select_from(Asset).where(*conditions)) or 0
@@ -104,22 +110,40 @@ def page(
     return AssetPage(items=[row[0] for row in rows], next_cursor=next_cursor, total=total)
 
 
-def facets(db: Session, workspace_id: str, *, project_id: str | None = None) -> AssetFacets:
-    """页签上的数字和标签筛选的候选:说的是**整个范围**,不看搜索词、不看勾了哪些标签 ——
-    和此前在浏览器里数全部素材是同一个答案。"""
-    conditions = _conditions(AssetScope(workspace_id=workspace_id, project_id=project_id))
+def facets(db: Session, workspace_id: str, *, project_id: str | None = None, intermediate: str = "") -> AssetFacets:
+    """页签上的数字和标签筛选的候选:说的是**整个范围**(素材库,或点名的那一种中间产物),不看搜索词、
+    不看勾了哪些标签 —— 和此前在浏览器里数全部素材是同一个答案。另交回每种中间产物各几份。"""
+    scope = AssetScope(workspace_id=workspace_id, project_id=project_id, intermediate=intermediate)
+    _check(scope)
+    conditions = _conditions(scope)
     kinds = {kind: count for kind, count in db.execute(
         select(Asset.kind, func.count()).where(*conditions).group_by(Asset.kind))}
     tags: Counter[str] = Counter()
     for tagged in db.scalars(select(Asset.tags).where(*conditions)):
         tags.update(tag for tag in tagged or [] if isinstance(tag, str) and tag)
-    return AssetFacets(total=sum(kinds.values()), kinds=kinds, tags=dict(tags))
+    whole = _range(AssetScope(workspace_id=workspace_id, project_id=project_id))
+    intermediates = {kind: count for kind, count in db.execute(
+        select(Asset.intermediate, func.count()).where(*whole, Asset.intermediate != "").group_by(Asset.intermediate))}
+    return AssetFacets(total=sum(kinds.values()), kinds=kinds, tags=dict(tags), intermediates=intermediates)
 
 
-def _conditions(scope: AssetScope) -> list[ColumnElement[bool]]:
+def _check(scope: AssetScope) -> None:
+    if scope.tag_match not in TAG_MATCHES:
+        raise AssetListingError("assetErr_unknownTagMatch", match=scope.tag_match)
+    if scope.intermediate and scope.intermediate not in INTERMEDIATE_KINDS:
+        raise AssetListingError("assetErr_unknownIntermediate", kind=scope.intermediate)
+
+
+def _range(scope: AssetScope) -> list[ColumnElement[bool]]:
+    """看的是哪片:这个工作区(可选再限定到一个项目 —— 连同工作区级素材)。"""
     conditions: list[ColumnElement[bool]] = [Asset.workspace_id == scope.workspace_id]
     if scope.project_id:
         conditions.append(or_(Asset.project_id == scope.project_id, Asset.project_id.is_(None)))
+    return conditions
+
+
+def _conditions(scope: AssetScope) -> list[ColumnElement[bool]]:
+    conditions = [*_range(scope), Asset.intermediate == scope.intermediate]
     if scope.kinds:
         conditions.append(Asset.kind.in_(list(scope.kinds)))
     if scope.source:
@@ -130,6 +154,8 @@ def _conditions(scope: AssetScope) -> list[ColumnElement[bool]]:
             func.lower(Asset.name).contains(needle, autoescape=True),
             func.lower(Asset.original_filename).contains(needle, autoescape=True),
             _any_tag(lambda tag: func.lower(tag).contains(needle, autoescape=True)),
+            #: 逐句配音的一句名字都一样(「某某音色 · 配音」),认得出它的是念的那句话。
+            func.lower(func.json_extract(Asset.media_info, "$.dub_line.text")).contains(needle, autoescape=True),
         ))
     wanted = [tag for tag in scope.tags if tag]
     if wanted:

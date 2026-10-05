@@ -151,3 +151,13 @@ def test_整图重跑_配音字节变了也认得出_只有改了译文的那块
     third = pipeline.run()
     assert (third["generated_count"], third["reused_count"]) == (1, first["generated_count"] - 1), \
         "只有改了措辞的那一句所在的那块重买"
+
+
+def test_切出来的块和改好口型的块是零件_接回的整段进素材库(pipeline) -> None:
+    """每一块都是这道工序的零件(中间产物,见 assets/intermediates):素材库不列;接回原片长度的那一段才是交出去的。"""
+    out = pipeline.run()
+    with SessionLocal() as db:
+        final = db.get(Asset, out["asset_id"])
+        pieces = {one["asset_id"] for request in pipeline.generations for one in request["source_assets"]}
+        assert final.intermediate == ""
+        assert pieces and {db.get(Asset, one).intermediate for one in pieces} == {"lipsync_chunk"}

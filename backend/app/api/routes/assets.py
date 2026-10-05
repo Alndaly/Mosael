@@ -235,6 +235,7 @@ def list_assets(
     q: Annotated[str, Query(max_length=300)] = "",
     tag: Annotated[list[str] | None, Query()] = None,
     tag_match: Literal["all", "any"] = "all",
+    intermediate: Annotated[str, Query(max_length=24)] = "",
     sort: Literal["created", "updated", "name", "duration"] = "created",
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
@@ -242,11 +243,11 @@ def list_assets(
     """素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。
 
     `kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,
-    其余参数不变。
+    其余参数不变。中间产物(逐句配音的一句……)默认不列,`intermediate=dub_line` 只列那一种。
     """
     scope = AssetScope(
         workspace_id=workspace_id, project_id=project_id, kinds=tuple(kind or ()), source=source or None,
-        query=q, tags=tuple(tag or ()), tag_match=tag_match,
+        query=q, tags=tuple(tag or ()), tag_match=tag_match, intermediate=intermediate,
     )
     try:
         found = use_cases.list_assets(db, user, scope, sort=sort, cursor=cursor, limit=limit)
@@ -256,9 +257,19 @@ def list_assets(
 
 
 @router.get("/assets/facets", response_model=AssetFacetsOut)
-def asset_facets(workspace_id: str, db: DbSession, user: CurrentUser, project_id: str | None = None) -> AssetFacets:
-    """页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。"""
-    return use_cases.asset_facets(db, user, workspace_id, project_id=project_id)
+def asset_facets(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    project_id: str | None = None,
+    intermediate: Annotated[str, Query(max_length=24)] = "",
+) -> AssetFacets:
+    """页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索);
+    另有每种中间产物各几份。"""
+    try:
+        return use_cases.asset_facets(db, user, workspace_id, project_id=project_id, intermediate=intermediate)
+    except AssetListingError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 @router.get("/sequences/{sequence_id}/assets", response_model=list[AssetOut])

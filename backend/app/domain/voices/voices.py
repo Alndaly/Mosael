@@ -414,12 +414,17 @@ def start_synthesis(
     speed: float = 1.0,
     clone_engine: str = "",
     clone_model: str = "",
+    intermediate: str = "",
 ) -> Job:
     """Queue a synthesis job.
 
     The clone engine needs a Voice row — it works from that reference clip. A remote engine does
     not: it speaks in a stock voice, so it needs a workspace to own the result and an engine
     voice id, and requiring a Voice there would mean inventing rows for voices we do not host.
+
+    `intermediate`: the caller is making a part, not a result — each line of a subtitle dub is one
+    (see domain/assets/intermediates). The produced asset is registered as that kind, so the library
+    leaves it out; whoever makes the part says so here, the synthesis itself does not guess.
     """
     if not text.strip():
         raise VoiceError("voiceErr_textEmpty")
@@ -471,6 +476,8 @@ def start_synthesis(
             "engine_voice": engine_voice,
             "provider_profile_id": provider_profile_id,
             "engine_model": engine_model,
+            #: 产出登记成哪种中间产物(见 domain/assets/intermediates);空串 = 进素材库。
+            "intermediate": intermediate,
         },
         message="jobMsg_ttsRunning", message_params={"voice": label},
     )
@@ -538,6 +545,11 @@ def _run_synthesis(
             run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
     else:
         run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
+
+
+def _intermediate_of(job: Job) -> str:
+    """排这次合成的人说产出是哪种中间产物(见 start_synthesis 的 `intermediate`);没说就是进素材库的一段。"""
+    return str((job.payload or {}).get("intermediate") or "")
 
 
 def _update_progress(job_id: str, event: dict) -> None:
@@ -658,6 +670,7 @@ def _run_synthesis_body(
                     source="tts",
                     #: 合成人声(克隆的嗓子也是):成片里有它就要加 AI 标识(《深度合成管理规定》第十七条)。
                     ai_generated=True,
+                    intermediate=_intermediate_of(job),
                 )
                 #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
@@ -862,6 +875,7 @@ def _synthesize_remote(
             name=f"{engine_voice or engine} · 配音",
             source="tts",
             ai_generated=True,
+            intermediate=_intermediate_of(job),
         )
     job = db.get(Job, job.id)
     job.status = "succeeded"

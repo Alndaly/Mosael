@@ -149,10 +149,14 @@ export function listAssetPage(query: AssetQuery, cursor?: string | null): Promis
   return api<AssetPage>(`/api/assets?${params.toString()}`);
 }
 
-/** 页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上(不看搜索)。 */
-export function getAssetFacets(workspaceId: string, projectId?: string | null): Promise<AssetFacets> {
+/**
+ * 页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上(不看搜索)。`intermediate` 给了就是数
+ * 那一种中间产物(逐句配音的一句……);另交回每种中间产物各几份。
+ */
+export function getAssetFacets(workspaceId: string, projectId?: string | null, intermediate?: string): Promise<AssetFacets> {
   const params = new URLSearchParams({ workspace_id: workspaceId });
   if (projectId) params.set("project_id", projectId);
+  if (intermediate) params.set("intermediate", intermediate);
   return api<AssetFacets>(`/api/assets/facets?${params.toString()}`);
 }
 

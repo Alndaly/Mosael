@@ -32,8 +32,9 @@ export const assetKeys = {
    * 不是同一份列表的另一个样子。
    */
   pages: ({ workspace_id, ...rest }: AssetQuery) => ["assets", workspace_id, "pages", rest] as const,
-  /** 取数用:页签上的数字和标签候选(整个范围,不看搜索)。 */
-  facets: (workspaceId: string, projectId?: string | null) => ["assets", workspaceId, "facets", projectId ?? null] as const,
+  /** 取数用:页签上的数字和标签候选(整个范围,不看搜索;素材库或某一种中间产物)。 */
+  facets: (workspaceId: string, projectId?: string | null, intermediate = "") =>
+    ["assets", workspaceId, "facets", projectId ?? null, intermediate] as const,
   /**
    * 取数用:一条时间线用到的素材(完整字段)。`ids` 是时间线上那几份素材的指纹 —— 放进一段新素材、删掉
    * 最后一段时它变,键跟着换、重取一次;只是挪动片段时不变,不重取。

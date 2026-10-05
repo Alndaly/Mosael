@@ -430,6 +430,18 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
     return padded.id
 
 
+def _mark_parts(db: Session, asset_ids: list[str]) -> None:
+    """拼进一段(或补过静音)之后,前面那几份就只是零件了:标成逐句配音的一句(中间产物),素材库不列 ——
+    交给说话照片、铺上时间线的是那一段。"""
+    from app.db.models import Asset
+    from app.domain.assets.intermediates import DUB_LINE
+
+    for asset_id in asset_ids:
+        asset = db.get(Asset, asset_id)
+        if asset is not None:
+            asset.intermediate = DUB_LINE
+
+
 @register("talking_segments")
 def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """长稿分段配音(ADR 0028 阶段 3「稿子 → 数字人口播」):一段稿子 → 一组组**说话照片接得住**的音频 + 字幕时间。
@@ -483,7 +495,10 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     cursor = 0.0
     for index, group in enumerate(groups, start=1):
         name = f"{scope.name} · 口播第 {index} 段"
-        audio = str(group[0][1].id) if len(group) == 1 else _concat_audio(db, scope, [item[1] for item in group], name)
+        #: 这一段是从哪几份做出来的:一句一段的就是那一句;拼起来、补过静音的,拼进去的那几句和补之前的那段是零件。
+        made = [str(item[1].id) for item in group]
+        audio = made[0] if len(group) == 1 else _concat_audio(db, scope, [item[1] for item in group], name)
+        made.append(audio)
         start = cursor
         for sentence, _asset, seconds in group:
             cues.append({"start": round(cursor, 3), "end": round(cursor + seconds, 3), "text": sentence})
@@ -495,6 +510,7 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
             #: 静音处闭着嘴,比被拒强;时间线上这一段按补过的长度排,后面几段接着往后。
             audio = _pad_audio(db, scope, _asset_in(db, scope, audio), floor, name)
             cursor = start + floor
+        _mark_parts(db, [one for one in made if one != audio])
         #: 每段带上 end(字幕、时间线节点按 start/end 读段落)和挑定的模型:下游逐段「让它说话」留空模型时
         #: 各挑各的,可能挑到上限不同的另一个 —— 分段是按这个模型的上限切的,就该用这个模型说。
         segments.append({"index": index, "audio_asset_id": audio, "start": round(start, 3), "end": round(cursor, 3),

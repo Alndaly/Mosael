@@ -172,6 +172,13 @@ _Avoid_: 把「预览和导出不一样」一概当 bug——调色的不一样�
 **归属棘轮**:
 `tests/test_data_ownership_ratchet.py`:存量越界冻结在 allowlist 只减不增;新增越界与修复后未删条目都会失败。
 
+**中间产物(素材)**:
+某道工序**逐条**做出来、只为拼成它的最终产物的那些素材:逐句配音的一句(`dub_line`)、对口型的一块(`lipsync_chunk`)。
+素材行上 `assets.intermediate` 记着是哪一种(空串 = 素材库里的正常素材,取值见 `domain/assets/intermediates`),由做零件的那道
+工序在登记时说。素材库、挑素材的弹窗、剪辑台素材池、智能体的 `list_assets` 默认不列;时间线和工序照常按 id 用它;素材页
+筛选条上按下去看。见 ADR 0036。
+_Avoid_: 靠名字(「· 配音」)、`source` 或 media_info 里的标记去猜一份素材是不是零件;为了让素材库清爽把它删掉(时间线还在用)
+
 **表结构演进**:
 运行时**不跑迁移框架**。`init_db()` = `create_all`(新装机建全表)+ 一串 `_migrate_*`(已装机补差)。
 改表 = 改该领域的 `model_slices/*.py`(尚未切片的表仍在 `models.py`) **且** 加一个 `_migrate_*`,

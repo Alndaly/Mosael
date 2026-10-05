@@ -15,7 +15,11 @@ from app.db.model_base import new_id, now
 
 class Asset(Base):
     __tablename__ = "assets"
-    __table_args__ = (Index("idx_assets_workspace_created", "workspace_id", "created_at"),)
+    __table_args__ = (
+        Index("idx_assets_workspace_created", "workspace_id", "created_at"),
+        #: 素材库的列表按「工作区 + 是不是中间产物」筛、按导入时间排(见 domain/assets/listing)。
+        Index("idx_assets_workspace_intermediate_created", "workspace_id", "intermediate", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
@@ -31,6 +35,9 @@ class Asset(Base):
     derived_from: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     #: 含 AI 生成 / 合成的内容:自己是 AI 做的,或任一出处含 AI。登记时定下(继承),导出按它加标识。
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 中间产物:某道工序逐条做出来的零件是哪一种(逐句配音的一句……,取值见 domain/assets/intermediates),
+    #: 素材库默认不列;空串 = 素材库里的正常素材。登记时由做它的那道工序说。
+    intermediate: Mapped[str] = mapped_column(String(24), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

@@ -73,12 +73,17 @@ export function useAllAssetCards(query: AssetQuery, { enabled = true }: { enable
   return { ...pages, complete: pages.isSuccess && !hasNextPage };
 }
 
-/** 页签上的数字和标签筛选的候选(整个范围,不看搜索)。 */
-export function useAssetFacets(workspaceId: string, projectId?: string | null, { enabled = true }: { enabled?: boolean } = {}) {
+/** 页签上的数字和标签筛选的候选(整个范围,不看搜索)。`intermediate` 给了就数那一种中间产物。 */
+export function useAssetFacets(
+  workspaceId: string,
+  { projectId, intermediate = "", enabled = true }: { projectId?: string | null; intermediate?: string; enabled?: boolean } = {},
+) {
   return useQuery({
-    queryKey: assetKeys.facets(workspaceId, projectId),
-    queryFn: () => getAssetFacets(workspaceId, projectId),
+    queryKey: assetKeys.facets(workspaceId, projectId, intermediate),
+    queryFn: () => getAssetFacets(workspaceId, projectId, intermediate),
     enabled,
+    //: 换一种看的时候先留着上一份:页签上的数字从 243 跳到 985,不先闪成空的。
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -74,10 +74,12 @@ def list_assets(
     return listing.page(db, scope, sort=sort, cursor=cursor, limit=limit)
 
 
-def asset_facets(db: Session, user: User, workspace_id: str, *, project_id: str | None = None) -> AssetFacets:
-    """页签上的数字和标签筛选的候选(整个范围的,不跟着搜索和这一页走)。"""
+def asset_facets(
+    db: Session, user: User, workspace_id: str, *, project_id: str | None = None, intermediate: str = ""
+) -> AssetFacets:
+    """页签上的数字和标签筛选的候选(整个范围的,不跟着搜索和这一页走),和每种中间产物各几份。"""
     ensure_workspace_access(db, user, workspace_id)
-    return listing.facets(db, workspace_id, project_id=project_id)
+    return listing.facets(db, workspace_id, project_id=project_id, intermediate=intermediate)
 
 
 def assets_on_sequence(db: Session, user: User, sequence_id: str) -> list[Asset]:

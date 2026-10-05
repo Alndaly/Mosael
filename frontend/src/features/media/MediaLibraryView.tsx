@@ -19,6 +19,7 @@ import { assetKindKey, documentFacts, IMPORT_ACCEPT, kindHasSound, kindIsVisual 
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
 import { VideoCompareView } from "@/features/media/VideoCompareView";
 import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
@@ -53,6 +54,15 @@ type KindFilter = (typeof KIND_FILTERS)[number];
 
 const SORT_KEYS = ["created", "updated", "name", "duration"] as const satisfies readonly AssetSort[];
 type SortKey = (typeof SORT_KEYS)[number];
+
+/**
+ * 中间产物(某道工序逐条做出来的零件,见后端 domain/assets/intermediates)在界面上叫什么、是什么。
+ * 素材库默认不列它们;筛选条上一枚「配音片段 985」按下去才看。后端多了一种而这里没写的,不摆入口。
+ */
+const INTERMEDIATE_COPY: Record<string, { label: MessageKey; notice: MessageKey }> = {
+  dub_line: { label: "mediaIntermediate_dub_line", notice: "mediaIntermediateHint_dub_line" },
+  lipsync_chunk: { label: "mediaIntermediate_lipsync_chunk", notice: "mediaIntermediateHint_lipsync_chunk" },
+};
 
 /** 网格:一张卡片至少这么宽,一行能放几张就放几张(此前的 `repeat(auto-fill, minmax(220px, 1fr))`)。 */
 const CARD_MIN_PX = 220;
@@ -100,8 +110,18 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [filtersStuck, setFiltersStuck] = React.useState(false);
   const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
 
-  //: 页签上的数字、标签筛选的候选:整个工作区的,不跟着搜索和这一页走(见后端 domain/assets/listing)。
-  const facets = useAssetFacets(workspace.id);
+  //: 看素材库(空串),还是某一种中间产物(逐句配音的一句……)。它是「这一刻在看什么」,不记住:下次进来照旧是素材库 ——
+  //: 停在配音片段上的话,人会以为素材库里只剩这些。
+  const [shelf, setShelf] = React.useState("");
+  //: 页签上的数字、标签筛选的候选:整个工作区的(素材库,或眼下看的那一种中间产物),不跟着搜索和这一页走
+  //: (见后端 domain/assets/listing)。另带着每种中间产物各几份 —— 切过去的入口上写着它。标题旁的数说的
+  //: 一直是素材库(看配音片段时写着「素材 985」会让人以为素材库里就是这些),所以素材库的那份总要有;看素材库时
+  //: 两个是同一个查询。
+  const libraryFacets = useAssetFacets(workspace.id);
+  const facets = useAssetFacets(workspace.id, { intermediate: shelf });
+  const intermediates = Object.entries(facets.data?.intermediates ?? {}).filter(
+    ([kind, count]) => count > 0 && kind in INTERMEDIATE_COPY,
+  );
   const tagCount = React.useMemo(() => sortedTagCounts(facets.data?.tags ?? {}), [facets.data]);
   const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
 
@@ -117,6 +137,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     q: settledSearch || undefined,
     tag: tagFilter.length > 0 ? tagFilter : undefined,
     tag_match: tagMatch,
+    intermediate: shelf || undefined,
     sort: sortKey,
   };
   const assets = useAssetPages(query);
@@ -274,9 +295,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     setPreviewingId(null);
     setKindFilter("all");
     setTagFilter([]);
+    setShelf("");
   });
-  //: 一份都没有(不是「筛完没有」):整个工作区的计数说了算。
-  const libraryEmpty = facets.data?.total === 0;
+  //: 一份都没有(不是「筛完没有」):整个工作区的计数说了算。素材库是空的、却有配音片段时,筛选条照旧在 ——
+  //: 切过去的入口在上面。
+  const libraryEmpty = libraryFacets.data?.total === 0;
+  const nothingAtAll = libraryEmpty && intermediates.length === 0;
   const kindCount = (kind: KindFilter): number | undefined =>
     facets.data === undefined ? undefined : kind === "all" ? facets.data.total : (facets.data.kinds[kind] ?? 0);
 
@@ -292,7 +316,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             else setPreviewingId(asset.id);
           }}
         >
-          <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
+          {/* 读屏念的名字:逐句配音的一句名字都一样,带上念的那句话才分得清。 */}
+        <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.media_info.line_text ? `${asset.name}: ${asset.media_info.line_text}` : asset.name} />
           <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
           {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
           {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
@@ -392,7 +417,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
         }}
       >
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={facets.data?.total} className="py-7 xl:py-8" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="py-7 xl:py-8" actions={<>
               <input
                 ref={importInputRef}
                 type="file"
@@ -424,7 +449,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
-      {!libraryEmpty && (
+      {!nothingAtAll && (
         <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
           {/* **一行,按"这是哪一类动作"分三段。**
               类型标签是最粗的那一刀,锚在左边 —— 它的下划线指示器需要一条稳定的左基线;
@@ -436,7 +461,26 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               其中一半藏起来 —— 而它们没有主次之分,藏哪一半都是错的。 */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-row>
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: kindCount(kind) }))} />
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+            {/* 中间产物的入口:素材库默认不列它们,在这里按下去看(再按一下回到素材库)。数字是那一种一共几份。
+                紧跟在类型标签后面 —— 它和类型一样是「看哪些」,也和页签一样带着数。 */}
+            {intermediates.map(([kind, count]) => (
+              <Button
+                key={kind}
+                variant="outline"
+                size="default"
+                aria-pressed={shelf === kind}
+                aria-label={`${t(INTERMEDIATE_COPY[kind].label)} ${count}`}
+                className={cn("shrink-0 border-border bg-control", shelf === kind && "border-primary/40 bg-accent text-primary")}
+                onClick={() => setShelf((current) => (current === kind ? "" : kind))}
+              >
+                <Layers size={13} />
+                {t(INTERMEDIATE_COPY[kind].label)}
+                <span className="text-ui-xs tabular-nums text-muted-foreground">{count}</span>
+              </Button>
+            ))}
+            {/* 多了「配音片段」那一枚,一行就放不下了(1440 宽的窗口里差一百多像素):搜索那一段整段换到第二行、铺满,
+                视图切换留在第一行最右 —— 不把搜索框和标签筛选挤到压在一起,竖线也不会悬在第二行的行首。 */}
+            <div className={cn("flex min-w-0 flex-1 items-center gap-2", intermediates.length > 0 && "order-last basis-full")}>
               <div className="relative min-w-40 flex-1">
                 <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
                 <Input aria-label={t("searchAssets")} className="border-border bg-control pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
@@ -453,7 +497,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               {allTags.length > 0 && <TagFilter counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
             </div>
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
-            <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
+            <div className={cn("flex items-center gap-2 border-divider max-lg:w-full", intermediates.length > 0 ? "lg:ml-auto" : "lg:border-l lg:pl-4")}>
               <div role="group" className="flex gap-1" aria-label={t("studioGridView")}>
                 <IconButton variant="outline" size="default" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></IconButton>
                 <IconButton variant="outline" size="default" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></IconButton>
@@ -505,6 +549,16 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   </Button>
 
           </div>}
+          {/* 正在看中间产物:说清它们是什么、时间线上照常在用 —— 免得人以为素材库只剩这些,或者以为它们丢过。 */}
+          {shelf && INTERMEDIATE_COPY[shelf] && (
+            <div role="note" className="flex flex-wrap items-center gap-2 border-t border-divider pt-3 text-ui-sm text-muted-foreground">
+              <Layers size={14} className="shrink-0" />
+              <span className="min-w-0 flex-1">{t(INTERMEDIATE_COPY[shelf].notice)}</span>
+              <Button variant="outline" size="default" onClick={() => setShelf("")}>
+                <X size={13} /> {t("mediaBackToLibrary")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       <UrlImportDialog
@@ -659,11 +713,16 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
             {showsContainsAi(asset) ? ` · ${t("mediaSourceContainsAi")}` : ""}
           </small>
         </div>
-        <Truncate className="font-mono text-ui-xs tabular-nums text-muted-foreground">
-          {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${height}` : "—"}
-          {asset.kind === "video" && fps ? ` · ${Math.round(fps)}fps` : ""}
-          {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
-        </Truncate>
+        {/* 逐句配音的一句名字都一样(「某某音色 · 配音」):认得出它的是念的那句话,写在尺寸那一行的位置上。 */}
+        {asset.media_info.line_text ? (
+          <Truncate className="text-ui-xs text-muted-foreground">{asset.media_info.line_text}</Truncate>
+        ) : (
+          <Truncate className="font-mono text-ui-xs tabular-nums text-muted-foreground">
+            {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${height}` : "—"}
+            {asset.kind === "video" && fps ? ` · ${Math.round(fps)}fps` : ""}
+            {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
+          </Truncate>
+        )}
       </div>
     </article>
   );

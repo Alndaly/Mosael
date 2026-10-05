@@ -24,6 +24,7 @@ from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
+from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
@@ -372,6 +373,8 @@ def _run_dub(job_id: str) -> None:
                         text=text,
                         project_id=sequence.project_id if sequence else None,
                         created_by=created_by,
+                        #: 每一句都是这次配音的零件:时间线、配音轨用它,素材库不列(见 domain/assets/intermediates)。
+                        intermediate=DUB_LINE,
                         **synthesis,
                     )
                 except JobError:

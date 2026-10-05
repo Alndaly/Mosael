@@ -1154,7 +1154,7 @@ export interface paths {
          * @description 素材库的一页:筛选、排序在服务端做,只带卡片字段(详情另取 `GET /api/assets/{id}`)。
          *
          *     `kind` / `tag` 可以给几个(`?kind=video&kind=audio`)。翻下一页把上一页的 `next_cursor` 原样交回来,
-         *     其余参数不变。
+         *     其余参数不变。中间产物(逐句配音的一句……)默认不列,`intermediate=dub_line` 只列那一种。
          */
         get: operations["list_assets_api_assets_get"];
         put?: never;
@@ -1174,7 +1174,8 @@ export interface paths {
         };
         /**
          * Asset Facets
-         * @description 页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索)。
+         * @description 页签上的数字和标签筛选的候选:每种各几份、每个标签挂在几份上(整个范围,不看搜索);
+         *     另有每种中间产物各几份。
          */
         get: operations["asset_facets_api_assets_facets_get"];
         put?: never;
@@ -8411,6 +8412,8 @@ export interface components {
             pages?: number | null;
             /** Size Bytes */
             size_bytes?: number | null;
+            /** Line Text */
+            line_text?: string | null;
         };
         /**
          * AssetCardOut
@@ -8443,6 +8446,11 @@ export interface components {
              * @default false
              */
             ai_generated: boolean;
+            /**
+             * Intermediate
+             * @default
+             */
+            intermediate: string;
             /** Created At */
             created_at?: string | null;
             /** Updated At */
@@ -8551,6 +8559,10 @@ export interface components {
             tags: {
                 [key: string]: number;
             };
+            /** Intermediates */
+            intermediates: {
+                [key: string]: number;
+            };
         };
         /**
          * AssetFrameRequest
@@ -8626,6 +8638,11 @@ export interface components {
              * @default false
              */
             ai_generated: boolean;
+            /**
+             * Intermediate
+             * @default
+             */
+            intermediate: string;
             /** Created At */
             created_at?: string | null;
             /** Updated At */
@@ -18405,6 +18422,7 @@ export interface operations {
                 q?: string;
                 tag?: string[] | null;
                 tag_match?: "all" | "any";
+                intermediate?: string;
                 sort?: "created" | "updated" | "name" | "duration";
                 cursor?: string | null;
                 limit?: number;
@@ -18440,6 +18458,7 @@ export interface operations {
             query: {
                 workspace_id: string;
                 project_id?: string | null;
+                intermediate?: string;
             };
             header?: never;
             path?: never;

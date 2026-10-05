@@ -56,6 +56,12 @@ export const agentMemory = {
   mediaCompareGrid: "多图对比",
   mediaCompareGridNeedsThree: "选三张以上才能多图对比",
   mediaCompareTwoUp: "并排对比",
+  // 中间产物(某道工序逐条做出来的零件):素材库默认不列,筛选条上按下去看。
+  mediaIntermediate_dub_line: "配音片段",
+  mediaIntermediate_lipsync_chunk: "对口型分块",
+  mediaIntermediateHint_dub_line: "这些是逐句配音时给每条字幕合成的单句音频。时间线和配音轨照常在用,素材库默认不列出它们。",
+  mediaIntermediateHint_lipsync_chunk: "这些是对口型时切出来、改好口型的一块块片段。接回的整段在素材库里,这些零件默认不列。",
+  mediaBackToLibrary: "回到素材库",
   wfEdgeBezier: "贝塞尔曲线",
   quotaFetch: "查询额度",
   modelSettingsTitle: "模型设置",

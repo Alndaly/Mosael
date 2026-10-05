@@ -278,6 +278,7 @@ def list_assets(
     name_contains: str = "",
     limit: int = 50,
     cursor: str = "",
+    intermediate: str = "",
 ) -> dict[str, Any]:
     """Read-only: list media assets in a workspace, newest first, one page at a time.
 
@@ -289,14 +290,17 @@ def list_assets(
     Markdown, text, web page, EPUB; it has no picture or sound, so it never goes on a
     timeline or into generation as a reference. limit is 1–200 (default 50); when
     next_cursor is not null there are more — call again with cursor=next_cursor and the
-    same filters. Do NOT use for knowledge-base notes or workflow nodes
+    same filters. Per-line pieces a process made on its way to its result (each line of a
+    subtitle dub, each chunk of a lip-sync) are left out; pass intermediate="dub_line" or
+    "lipsync_chunk" to list those. Do NOT use for knowledge-base notes or workflow nodes
     (read_note / list_workflows). Leave workspace_id empty to use this conversation's workspace.
     """
     workspace_id = workspace_id or _default_workspace_id()
     from app.domain.assets import use_cases
     from app.domain.assets.listing import MAX_PAGE_SIZE, AssetScope
 
-    scope = AssetScope(workspace_id=workspace_id, kinds=(kind,) if kind and kind != "all" else (), query=name_contains)
+    scope = AssetScope(workspace_id=workspace_id, kinds=(kind,) if kind and kind != "all" else (), query=name_contains,
+                       intermediate=intermediate)
 
     def one_page(db, user) -> dict[str, Any]:
         # 在事务里摊平:出了会话,ORM 对象的属性就读不到了(见 _use_case)。

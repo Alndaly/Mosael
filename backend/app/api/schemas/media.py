@@ -31,6 +31,8 @@ class AssetOut(OrmModel):
     derived_from: list[AssetDerivationOut] = Field(default_factory=list)
     #: 含 AI 生成 / 合成的内容(自己是,或任一出处是)。导出时据此加 AI 标识。
     ai_generated: bool = False
+    #: 中间产物是哪一种(逐句配音的一句……,见 domain/assets/intermediates);空串 = 素材库里的正常素材。
+    intermediate: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -78,6 +80,8 @@ class AssetCardMediaOut(ApiModel):
     format: str | None = None
     pages: int | None = None
     size_bytes: int | None = None
+    #: 逐句配音的一句念的是什么(media_info.dub_line.text):这些片段名字都一样,认得出它的是这句话。
+    line_text: str | None = None
 
 
 def _card_value(field: str, value: Any) -> Any:
@@ -108,6 +112,8 @@ class AssetCardOut(OrmModel):
     #: 每一份素材,真实的库里有一段两百多份,一张卡片就是十几 KB。要看出处,详情里有、来源链另取。
     derived: bool = Field(default=False, validation_alias="derived_from")
     ai_generated: bool = False
+    #: 中间产物是哪一种;空串 = 素材库里的正常素材(列表默认只给这些)。
+    intermediate: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
     media_info: AssetCardMediaOut
@@ -121,7 +127,12 @@ class AssetCardOut(OrmModel):
     @classmethod
     def _pick_card_fields(cls, info: Any) -> dict[str, Any]:
         info = info if isinstance(info, dict) else {}
-        return {field: _card_value(field, info.get(field)) for field in CARD_MEDIA_FIELDS}
+        line = info.get("dub_line")
+        text = line.get("text") if isinstance(line, dict) else None
+        return {
+            **{field: _card_value(field, info.get(field)) for field in CARD_MEDIA_FIELDS},
+            "line_text": text if isinstance(text, str) else None,
+        }
 
 
 class AssetPageOut(ApiModel):
@@ -138,6 +149,8 @@ class AssetFacetsOut(ApiModel):
     total: int
     kinds: dict[str, int]
     tags: dict[str, int]
+    #: 每种中间产物各几份(整个范围的,不管眼下看的是哪一种):素材页切过去的入口上写着它。
+    intermediates: dict[str, int]
 
 
 class AssetLineageNode(ApiModel):

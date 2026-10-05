@@ -92,6 +92,18 @@ def test_每段带着起止和挑定的模型_下游字幕和说话照片接得�
     assert "model" in declared["outputs"]
 
 
+def test_拼进一段的那几句是零件_素材库不列_一句一段的那句照旧在库里(voicing) -> None:
+    """长稿分段配音逐句合成,几句拼成一段交给说话照片:拼进去的那几句只是零件(中间产物,见 assets/intermediates),
+    交出去的是那一段;一句一段的,那一句就是交出去的那一段,照旧在素材库里。"""
+    voicing.seconds.update({"甲。": 8, "乙。": 7, "丙。": 15})
+    with SessionLocal() as db:
+        talking_segments(db, voicing.scope, {"text": "甲。乙。丙。", "engine": "builtin:edge", "voice": "v"})
+        db.commit()  # 节点跑完由工作流引擎提交,测试就是这里的入口
+    with SessionLocal() as db:
+        marks = {one.name: one.intermediate for one in db.query(Asset).filter(Asset.workspace_id == voicing.ws)}
+    assert marks == {"甲。": "dub_line", "乙。": "dub_line", "丙。": ""}
+
+
 def test_一句一段的直接用那一段_上限只能往小里调(voicing) -> None:
     voicing.seconds.update({"甲。": 8, "乙。": 7})
     with SessionLocal() as db:
