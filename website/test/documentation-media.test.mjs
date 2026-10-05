@@ -25,7 +25,8 @@ test('every current screenshot and recording has an intact live-capture provenan
 test('all scenes have light/dark and Chinese/English MP4 recordings', () => {
   // The scene names are record-doc-media.py's SCENES; a scene dropped there must be dropped here on purpose.
   for (const scene of ['scenes', 'notes', 'annotations', 'home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login',
-    'documents', 'timeline-tools', 'subtitle-panel', 'export', 'agent', 'workflow-editor', 'workflow-templates', 'board-cells', 'entities', 'plugin-market', 'admin']) {
+    'documents', 'timeline-tools', 'subtitle-panel', 'export', 'agent', 'workflow-editor', 'workflow-templates', 'board-cells', 'entities', 'plugin-market', 'admin',
+    'note-history', 'model-library', 'workflow-library', 'generation-models', 'pricing']) {
     for (const locale of ['zh', 'en']) for (const theme of ['light', 'dark']) {
       const directory = `${locale === 'en' ? 'en/' : ''}${theme === 'dark' ? 'dark/' : ''}`;
       assert.ok(manifest.captures[`videos/${directory}${scene}.mp4`], `${scene}/${locale}/${theme}`);

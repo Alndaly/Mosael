@@ -285,20 +285,20 @@
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 87649,
-      "sha256": "60cd353f0f2357047a801f1fa0d7d9cdab48370668bd80120a5ca097b6fe266e"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 105934,
+      "sha256": "2a2109fc409d2923c5f5537604c5ec01b92936c7e0456d3c99f148d19715b295"
     },
     "videos/dark/plugins.mp4": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 255080,
-      "sha256": "4cd3d5dedc28ef61bc70b6230dfc3b328cfa16c18429a46b258b6c85b056e4f8"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 290159,
+      "sha256": "17faa1be2f78fb7267620081533ab1667ffece56c5f454e704dd21df61fa3b37"
     },
     "screens/dark/publish.png": {
       "scene": "publishing",
@@ -745,20 +745,20 @@
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 89861,
-      "sha256": "e83612b8647cb20a1ec50c4e8eb29ff34c010de5385948cacd98621f24d3ff3d"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 107872,
+      "sha256": "6762f2c7002e598cba5e93731280604dc465b09d5f12cdbb102a3edb160e555e"
     },
     "videos/plugins.mp4": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 282925,
-      "sha256": "1dd15ba11b82c59cb219813b6628465bcbb76d6333f271ddd2f081c1d5b35564"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 305174,
+      "sha256": "fc09baeb095c644ea0068db9f93a07b4c80d44acd2211ae25b316a7371415109"
     },
     "screens/publish.png": {
       "scene": "publishing",
@@ -1205,20 +1205,20 @@
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 102223,
-      "sha256": "3e8fdbfa4ee4c3d7f41dc5d08483d8fa4e9554c32f43b14c8967fc0397c9e2d8"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 118624,
+      "sha256": "6847abc830dbf055d7f7d6cb0c8e09c593b7489f9bf27573a93a1ebf48bcdc7d"
     },
     "videos/en/plugins.mp4": {
       "scene": "plugins",
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 329516,
-      "sha256": "969d546d39e192c0ecf27a021f12b05551557c9c7e6bf3ea71f099806950571a"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 365717,
+      "sha256": "b5fd1e8e841971c295efdcdb69dbbfe46c240fac0a57545b2296c39cf061d57f"
     },
     "screens/en/publish.png": {
       "scene": "publishing",
@@ -1385,20 +1385,20 @@
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 102030,
-      "sha256": "52f9330f817bc07efd32c78dfa00a9cf391090743cbd85164b50e1088762a56e"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 118473,
+      "sha256": "149a04bd166a90385a986bf0c681f58fd0fdb29ae4c0e038c1bf82f119e1019c"
     },
     "videos/en/dark/plugins.mp4": {
       "scene": "plugins",
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 310190,
-      "sha256": "59f6c16c0a26d4a66dc2af9207b568ec7d560a437211fb8ce600c6ccd27f5478"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 346570,
+      "sha256": "b3fc8c58d6ee3c0a214534311906129d4ce9a844e49103213228e9f02742a8c7"
     },
     "screens/en/dark/publish.png": {
       "scene": "publishing",
@@ -1905,30 +1905,30 @@
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 141665,
-      "sha256": "47793222872c7144fe6d95b40701616300d63dcd27eef4dd9f10afcb05b59102"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 143793,
+      "sha256": "29cad48df768f59c4592c4cbe8a195e81e7ad8e29a3459bae3f9e77734e1d349"
     },
     "screens/notes-markdown.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 131019,
-      "sha256": "cf7554466449f9d6c1cc7d9f1b24aeb7a94815a4553e1728371e15abd8207d39"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 132876,
+      "sha256": "183a27b389cadaa32dc2eb097066a62b2ef48815b66d75428496ce92fde2d2bd"
     },
     "videos/notes.mp4": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 145857,
-      "sha256": "f6eb298c139492e5798fde8ec6f9a6fb4419abf031b161554757fc1a663e17b2"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 399317,
+      "sha256": "544c6cfa582214544f133b978fada9fa5f91fd942f4ab1e32ae4bea035134e26"
     },
     "screens/annotations.png": {
       "scene": "annotations",
@@ -2025,30 +2025,30 @@
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 141516,
-      "sha256": "1cfd6bd6030635a0edeee09b8a84afe255483c197318e5a72b3e46a28dc870c5"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 143235,
+      "sha256": "d6078dca827c70e124ae22176251015dfafb9d301180d887b41e42c6590f4b2d"
     },
     "screens/dark/notes-markdown.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 130348,
-      "sha256": "f6a5166aec5900b9ed9f70f9691c8b4c735294947ba19c62f6ef1c706a8bb4e9"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 132505,
+      "sha256": "e7d5106bc3d5950edcfa34d08902d995263229edf929e53820ebe1eb8db02108"
     },
     "videos/dark/notes.mp4": {
       "scene": "notes",
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 161028,
-      "sha256": "6b1386fa1cd52a6ee63a3db0d36080f528bdd28a54b081a174d62c474522ba08"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 367778,
+      "sha256": "9f820956a062e42ab321f8d00cb8a8968995931b410c32132bdcdf9fa874f93b"
     },
     "screens/dark/annotations.png": {
       "scene": "annotations",
@@ -2145,30 +2145,30 @@
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 146563,
-      "sha256": "0f0e0a1a478c42050f0e7bca9a605d4f8b17449c4c62106b69cc8e9f36de3c68"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 151308,
+      "sha256": "a4f12c94ec104fa64a3a8989cfd98583821295db8076f10bdb04284428802fc5"
     },
     "screens/en/notes-markdown.png": {
       "scene": "notes",
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 133141,
-      "sha256": "a8fa8e92cfaa38fc841809414188e03d5d7409ead69f67720e25135118eff2c2"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 138169,
+      "sha256": "120a20967a463d92e6fe6c5a4725b66d6db458b0492f3ef90d41fee1db0593dd"
     },
     "videos/en/notes.mp4": {
       "scene": "notes",
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 180789,
-      "sha256": "f5fdd8d856e3a6c22d5a32778b2562bdce5bc4b0e488d5fc777ba345cfb6f4a1"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 514124,
+      "sha256": "7a8406f0467e4a5c992a3ae7a3bec0bdb3376ddc5a265ffdd89971c7af8e83d3"
     },
     "screens/en/annotations.png": {
       "scene": "annotations",
@@ -2265,30 +2265,30 @@
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 146021,
-      "sha256": "0c2523baaa766d4bb40038aecff9f0449db973519b71b189ca77f9c65361d341"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 150797,
+      "sha256": "afac625030d23cb03b6dbf5846425e67e4ac6f4c2d5184fd9e80a38b451b9bcc"
     },
     "screens/en/dark/notes-markdown.png": {
       "scene": "notes",
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 132677,
-      "sha256": "4832a3303d332324893658fd32aa61110363d6dd2331e1f79ae6ebac3c2c8a71"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 137797,
+      "sha256": "b4e53230dc30b1d8bdbb532cd52b8d0e35186fa69eb6d7071ad8567811e36508"
     },
     "videos/en/dark/notes.mp4": {
       "scene": "notes",
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 186399,
-      "sha256": "858db1cea8e609b445a0854d25617fb5fad4f90ee29aa0d5d9ed974b9e01c636"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 540509,
+      "sha256": "71803b6a597477730a1a352239ff2ed1430af96c7d170803428f38b90531bc47"
     },
     "screens/en/dark/annotations.png": {
       "scene": "annotations",
@@ -2325,40 +2325,40 @@
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 341734,
-      "sha256": "ea7e5aebbb0d9f5f237044181c295f6599872e39b9f689be95119fee494a9307"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 297087,
+      "sha256": "a2d9d1a5f8bd8311a240d2b03bfe98dfbe4a8a7285273d1798f072caca198b45"
     },
     "screens/dark/plugin-connection.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 337855,
-      "sha256": "d2d2bb261a4605a9b8c1fef1ed43a0dcc045c0c584b09e693b69506c8d62c0a8"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 296580,
+      "sha256": "404afe4f975727cfccd2c4ca86232b2fe934bf66ad0ef2124fdbcd20e3a3ebcd"
     },
     "screens/en/plugin-connection.png": {
       "scene": "plugins",
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 363928,
-      "sha256": "3c250c051f6b22c982823d9a6e6ad40c007cf9ee899fedd2585bd26322ff4d60"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 316384,
+      "sha256": "f50a44856ecb75f3d6ad187c285741c3239c0e60140c1d6df5fc0d0c5f1b9196"
     },
     "screens/en/dark/plugin-connection.png": {
       "scene": "plugins",
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 365793,
-      "sha256": "265992051840876c6fc7ad0e01173e1a493f23334b1aea3676c3594a20dbcc3a"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 308667,
+      "sha256": "575f744778d938d216ed9f0692f0e9a427586e330fc35d616be31962cf3d3f7a"
     },
     "homepage/zh/boards.png": {
       "scene": "boards",
@@ -2907,10 +2907,10 @@
       "locale": "zh",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 146240,
-      "sha256": "4d852c799ad799ac7ecbae2bfc341f4cefc63f6367e4ebeb9273c4a41e949d00"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 138156,
+      "sha256": "3b7232e8a73e29e01f55a93dee1b6a3cdb8b1d308d4547c8aedf496b22a61080"
     },
     "screens/plugin-market.png": {
       "scene": "plugin-market",
@@ -3477,10 +3477,10 @@
       "locale": "zh",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 143699,
-      "sha256": "eb5ef117242c187b78c491304ecdf6cb09d2a4ac2c170d433b69237e89e25f3f"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 137217,
+      "sha256": "c47755949af0147d0294b4f7b5880a8761ed53c08291b2cd6614872ef426c2dd"
     },
     "screens/dark/plugin-market.png": {
       "scene": "plugin-market",
@@ -4047,10 +4047,10 @@
       "locale": "en",
       "theme": "light",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 160569,
-      "sha256": "83e12b36e03ff4ff5b247f57479c7fbbceaa1f56d9a72524c8f78c23b2fe1770"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 150194,
+      "sha256": "60d45ae2a51bb67785cb6ce52833d3ccae7c1919a47624a277a9b6598469b93a"
     },
     "screens/en/plugin-market.png": {
       "scene": "plugin-market",
@@ -4617,10 +4617,10 @@
       "locale": "en",
       "theme": "dark",
       "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 157839,
-      "sha256": "c7e26af19c71730e3b5eb395385909996b653e52e9c26d6097dd63356939211d"
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 149777,
+      "sha256": "5bce30184e13cfd6b75cddc1ef173932b12693fa36393d636576e771d3b5bfa9"
     },
     "screens/en/dark/plugin-market.png": {
       "scene": "plugin-market",
@@ -4781,11 +4781,891 @@
       "capturedAt": "2026-10-03T21:02:57.158523+00:00",
       "bytes": 120907,
       "sha256": "c7a6c6d6bf31754690dac1b9f7f755c6110b8f53e5cbbcc04146cebff4691fd8"
+    },
+    "screens/ai-generate-models.png": {
+      "scene": "generation-models",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 135727,
+      "sha256": "63624f2d32532d9fc277a1299717c1f0d1ebaef78742bd5f227d24eef5c48b5c"
+    },
+    "videos/generation-models.mp4": {
+      "scene": "generation-models",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 148079,
+      "sha256": "09e628c0c7b51f90f8ef5cbda41c58300f8412bcd7d16811ebfe897ead35ef72"
+    },
+    "screens/notes-hint.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 145991,
+      "sha256": "8a44a620fbd80349cd99107315b7d71decce93f503040cd62cc30e30ed851008"
+    },
+    "screens/notes-insert-menu.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 154671,
+      "sha256": "7db31943e5fcc477d418c64fdd665ffa259e8a8984cf4bbe445819b9d073ec6c"
+    },
+    "screens/notes-selection.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 146048,
+      "sha256": "dcc65bb639cb7c178c7f818efc2d6341d12d2dd4f669dba89c217f81d40acce6"
+    },
+    "screens/notes-ai-actions.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 174136,
+      "sha256": "99c9b3d331f6bed69f21ba9d660fe797ed0572c0947e2252213991a36547518b"
+    },
+    "screens/notes-agent.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 169438,
+      "sha256": "ec34e390efbae63fdfa262d4df1c3ae7e82f376eff97e6d60bb6b39859e4affd"
+    },
+    "screens/notes-history.png": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 258512,
+      "sha256": "0708cd4aac7e57b38d01a647733d35022a841dc8da69057ea170f0db6ba998f9"
+    },
+    "screens/notes-history-compare.png": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 243849,
+      "sha256": "abd8a3d899a1d9e1626c195d826da0fca18dcfdaeb5ccb4c2f82938dffc8c6ee"
+    },
+    "videos/note-history.mp4": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 467928,
+      "sha256": "55ef264bf6ee3c6d0d526d4ca7208faa6b77676d6e9e765b7b4fc3817b2ae913"
+    },
+    "screens/plugin-collapsed.png": {
+      "scene": "plugins",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 110872,
+      "sha256": "f824daedece1e826401acd18ff7319fc23dd40280187db12a12d19537e73f479"
+    },
+    "screens/model-library.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 535498,
+      "sha256": "00453ce172dcb3ce0fd5d693e3ccb098a5d39bce628e0bbcbe12aba5a8e70520"
+    },
+    "screens/model-detail.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 578049,
+      "sha256": "38432b2de194b0bc91650c03860147792019f53139c2d139b6eab906ebb7ee90"
+    },
+    "screens/model-library-error.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 216030,
+      "sha256": "3151cbdb6f0831d5af8a28e6870f67787bc519080b52308f85384358861fcadd"
+    },
+    "videos/model-library.mp4": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 589326,
+      "sha256": "898d22521d42124b6b98e21d93894698cf0083530aff605e778e95ce47703ad8"
+    },
+    "screens/workflow-library.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 214896,
+      "sha256": "01d2693cf19551ea2306a541f8df4929c0066b99ced7252c14522ef0b7bda574"
+    },
+    "screens/workflow-import.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 294987,
+      "sha256": "043c321305a2580f1dea852d3ed5d6e39f7ce21752e8d8c4f37c51e2780c7201"
+    },
+    "screens/workflow-library-detail.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 252611,
+      "sha256": "ab5416cb61c1e1c955ab8c41f8072949213f9df0d7c5e924705b206ad3c62eb5"
+    },
+    "screens/model-download.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 531560,
+      "sha256": "3d2c773243ec0f3b93f30b3fdc0fb081af5cd82038555d59c24e6c0e7670098b"
+    },
+    "videos/workflow-library.mp4": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 788286,
+      "sha256": "0e096381ec41b0b6977cf0b7663e54182c7f8026964c3a04c76d229d67a4616a"
+    },
+    "screens/admin-pricing.png": {
+      "scene": "pricing",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 161649,
+      "sha256": "a05c63d3486ce99d1c504f658cd6ac4186f2eee58ac9f146eca4aef408b83c58"
+    },
+    "videos/pricing.mp4": {
+      "scene": "pricing",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 242106,
+      "sha256": "fa8d0e795aa6d78789422087450ef6b15b2982fcbb772008ad1c459f3a9280ae"
+    },
+    "screens/dark/ai-generate-models.png": {
+      "scene": "generation-models",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 135520,
+      "sha256": "cdd130fe6d512ad1adf1ed67e5ce8efcf017465f8fd13b6f9143ca99e1bc41d6"
+    },
+    "videos/dark/generation-models.mp4": {
+      "scene": "generation-models",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 203020,
+      "sha256": "3fcf4e7b2ffbb6fc497e07c94fc9a6dfe63b82294597b76df7d8c7d6ed2a3d26"
+    },
+    "screens/dark/notes-hint.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 144890,
+      "sha256": "3c2524effccd210ef9c43b4d71c39254c1747cb536b39e35b7e22b28e95b7b61"
+    },
+    "screens/dark/notes-insert-menu.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 153624,
+      "sha256": "b06b325557def609c68ac58fe448d3ff4a551a2a7627e81710ecd6be9caa8081"
+    },
+    "screens/dark/notes-selection.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 145510,
+      "sha256": "62b14b538badcda3aa4586a993834b6229d03d0eb9279712c4c46a829bcae0a8"
+    },
+    "screens/dark/notes-ai-actions.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 171742,
+      "sha256": "70ac84202e82a9c2abd65529da9f4762aabbc30b39e83058df6c0a88f6d45f17"
+    },
+    "screens/dark/notes-agent.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 166875,
+      "sha256": "1e9e4ca2faba03210850fa2e9a90739ea4493250f6bde016ad25e118b3feb436"
+    },
+    "screens/dark/notes-history.png": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 245707,
+      "sha256": "ccf77d54923def039b2e86eb1ac759b6113ce45d1922173b5c2d3f15c7221202"
+    },
+    "screens/dark/notes-history-compare.png": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 227253,
+      "sha256": "892df5ad7b4b5a067fbf606c01a78e1b9d2f6fbe68a5d32e715b50dd643cd5f4"
+    },
+    "videos/dark/note-history.mp4": {
+      "scene": "note-history",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 495195,
+      "sha256": "47bc060d77bbdcb3d43cb76326d53b00c60adf5f5566f696f44232e7ca9d91d6"
+    },
+    "screens/dark/plugin-collapsed.png": {
+      "scene": "plugins",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 108912,
+      "sha256": "0dbca430070631886dbd695d2037d90a11964e32f609b8b112c9fc16e8235afd"
+    },
+    "screens/dark/model-library.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 521683,
+      "sha256": "71dba71294c4ebb277c0fbba8c52b8c012dc484d1185d51a6cfbb30dca90b546"
+    },
+    "screens/dark/model-detail.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 556335,
+      "sha256": "4a766545ff1530e1546262a3df0eef47968b2243900e393c3b6ed11d37e469ce"
+    },
+    "screens/dark/model-library-error.png": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 197414,
+      "sha256": "03559d42fa602d31425026a9885defb77dd23c07c51c99f28284a637cbcfd7bf"
+    },
+    "videos/dark/model-library.mp4": {
+      "scene": "model-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 549079,
+      "sha256": "0fb4255d37a034b24a222608afe1cf72837ef6375e725eaa3de356673528d78e"
+    },
+    "screens/dark/workflow-library.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 194695,
+      "sha256": "104d6f106b316ccc1fa64721a788ed4b1f698fca97aae1f7e5fc9bf927479260"
+    },
+    "screens/dark/workflow-import.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 290005,
+      "sha256": "5c6eeb78476eeb45cad20dd8d2528d4e40feb8ab1f58e2196656dea69f6a6384"
+    },
+    "screens/dark/workflow-library-detail.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 229757,
+      "sha256": "25156b6c3854eeea325470afe3949cbf7723443220d92e5cd4508ebae7bd3c4f"
+    },
+    "screens/dark/model-download.png": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 461732,
+      "sha256": "3ff375fea4ca6d2b9d9888718e4cb4e5714424afc4295ca81eb88931bebe068d"
+    },
+    "videos/dark/workflow-library.mp4": {
+      "scene": "workflow-library",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 764088,
+      "sha256": "affa0ee8548707284bb286db388346faff506ac7fd9d6bda48c0d6738d8195d0"
+    },
+    "screens/dark/admin-pricing.png": {
+      "scene": "pricing",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 162185,
+      "sha256": "ab9c4cc51278f9d331e008e9d61e0056d173d53c76df06ff3e294a385789a8ed"
+    },
+    "videos/dark/pricing.mp4": {
+      "scene": "pricing",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 259902,
+      "sha256": "daaef62be1299d8cab4161e0641e5e7912dd0c91414f0cba03c920018b48162e"
+    },
+    "screens/en/ai-generate-models.png": {
+      "scene": "generation-models",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 142515,
+      "sha256": "71ec7f2af1548f20ba5022c17400cc483318b3d7fb8375c21154dca12fc75ec1"
+    },
+    "videos/en/generation-models.mp4": {
+      "scene": "generation-models",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 194088,
+      "sha256": "252e1901fcd1bce7deb2b25541d2163156c4e4c6ae833c3992b054f90d17b3ab"
+    },
+    "screens/en/notes-hint.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 154173,
+      "sha256": "82d96c0f13ba3231cd78f7d79949bca5e28b36c60c5d3b82ed94fb1d3ff5549c"
+    },
+    "screens/en/notes-insert-menu.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 162369,
+      "sha256": "99dc8599e5b86acc291d527a44144488e3b5e05074573f9249e62d6d69d0f36e"
+    },
+    "screens/en/notes-selection.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 154412,
+      "sha256": "b9b200b653f4701ed9e3f78c2f4eb39ef60b08083bd6287115976f82df11c715"
+    },
+    "screens/en/notes-ai-actions.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 181291,
+      "sha256": "67e64b7325d0aeaf444a89182c82f7324a686b857f7b415581b54d95ad4085e8"
+    },
+    "screens/en/notes-agent.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 169848,
+      "sha256": "400d5c38dbbdc16e8dede01d2d12018c535432e94b6488a4f3a131b910f72f5d"
+    },
+    "screens/en/notes-history.png": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 285392,
+      "sha256": "57e8fd1db1cc2b2a0e538d09766923ad3aa46610df4c7131911d0952aeb8571c"
+    },
+    "screens/en/notes-history-compare.png": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 271014,
+      "sha256": "ce5eafb025f86db05ead072bb8f03966c0e71606b76bc6b294f27475290f519e"
+    },
+    "videos/en/note-history.mp4": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 604531,
+      "sha256": "2192c198a7f4d12e848ac1d2dc5c45d3e74207ab1d5cb034753bd4809a233cb5"
+    },
+    "screens/en/plugin-collapsed.png": {
+      "scene": "plugins",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 121893,
+      "sha256": "2cd4cd43de196f7c2a6b97c742ee0001f94f7d28b521df0376f7d1e99e3c78fe"
+    },
+    "screens/en/model-library.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 536530,
+      "sha256": "3caacb53f2c362ec5f4c10c6e324a79c96b2caf8e669762e47467929ba4d630f"
+    },
+    "screens/en/model-detail.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 584165,
+      "sha256": "20b52f610394693485e4e76b601dbe43839afd14636cc2dcd0d192abdfe67fb4"
+    },
+    "screens/en/model-library-error.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 223763,
+      "sha256": "abf5e034566c24f07f9e1cf4e08d3ff24489684a0d221426d47d5e21ac7bda5f"
+    },
+    "videos/en/model-library.mp4": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 625294,
+      "sha256": "c0194e2b42b12b12476d1b8e31670a976d8b60edc1d16d99bc48361c25726bd3"
+    },
+    "screens/en/workflow-library.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 221314,
+      "sha256": "0b727f66853b1d7bec9d4941768dd495fc213ec10368ac456b9b9d06c989c3ab"
+    },
+    "screens/en/workflow-import.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 302181,
+      "sha256": "6e2151d590fb8498f810c1753c5fb0931108413e5ddf515da83d0a627e9cf69d"
+    },
+    "screens/en/workflow-library-detail.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 264817,
+      "sha256": "a9106075020319c997f29523fceeef51b20ba4189057b15e2ba1dde33ad42d0c"
+    },
+    "screens/en/model-download.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 521503,
+      "sha256": "e8920e281d0ec39791ae3b096a16e0ca92ac4d38d5202acff06c842d8b990af2"
+    },
+    "videos/en/workflow-library.mp4": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 807053,
+      "sha256": "17e68f3b04281162dfa2ade88500c1a9bcd90cc82165e657b3b73044a867d5ff"
+    },
+    "screens/en/admin-pricing.png": {
+      "scene": "pricing",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 160368,
+      "sha256": "c712b2237733c9d382b80cbb76ecb757573d539fa4299e3454fadc5ebe167998"
+    },
+    "videos/en/pricing.mp4": {
+      "scene": "pricing",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 322759,
+      "sha256": "f20931385dd6aa026ae49c943bf1f6629649dfb3f6250a02573b129b811d4156"
+    },
+    "screens/en/dark/ai-generate-models.png": {
+      "scene": "generation-models",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 142648,
+      "sha256": "46fe85fb79ae8b9a4a216f59dae7aaa5cc73277f84f3772bcfcb165b23a8b829"
+    },
+    "videos/en/dark/generation-models.mp4": {
+      "scene": "generation-models",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 183817,
+      "sha256": "96112fcc9a57ec666e3267b02c75d5cdbb6f79a15386641b894e198e6fde7fbc"
+    },
+    "screens/en/dark/notes-hint.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 153755,
+      "sha256": "ffee71657ab1f65a50196a978d60584151f6fc025b81340999b0b753e46d3074"
+    },
+    "screens/en/dark/notes-insert-menu.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 162714,
+      "sha256": "9073ee1eb03794b120284f88e6c44622dc6d2251a639dd581c4e7ed0612493ac"
+    },
+    "screens/en/dark/notes-selection.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 154456,
+      "sha256": "ae6727f6b918cbb4b1589942441ed5434d353392d3b34738657f5d9ac6ee0f4e"
+    },
+    "screens/en/dark/notes-ai-actions.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 180619,
+      "sha256": "97af7860fc3bbe46441cf4e17680a7a1497a62018a42ce8c16773e499c5ce177"
+    },
+    "screens/en/dark/notes-agent.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 170338,
+      "sha256": "68cc361dbc1d058feee28883196d222976b8c4c254d232ca5b90293cd85ef19d"
+    },
+    "screens/en/dark/notes-history.png": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 273683,
+      "sha256": "6599506cc0dd9e55158d7255ea232eabbf12944617ece8f22975e65dd29a5418"
+    },
+    "screens/en/dark/notes-history-compare.png": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 254154,
+      "sha256": "4adbbad872c44eb7e9052b711b44fe11d981f95642c61079dab925018639ad85"
+    },
+    "videos/en/dark/note-history.mp4": {
+      "scene": "note-history",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 602006,
+      "sha256": "d3ba65587630962623af850c95e75f8326902f740420aecc4efbf51ccd0d926d"
+    },
+    "screens/en/dark/plugin-collapsed.png": {
+      "scene": "plugins",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 121534,
+      "sha256": "c98ba46473ad5f8daa6adb6a121325423682bf48a9c6cbad0e8bf907f5e69f96"
+    },
+    "screens/en/dark/model-library.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 529845,
+      "sha256": "5f61a0de16f152324913fb7efe12f73821329b4895c6eddd620586aa40be22e9"
+    },
+    "screens/en/dark/model-detail.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 561817,
+      "sha256": "8434f43d567331404b008b4a0f309d08200d2eb34e08d027d11a1091a3f49149"
+    },
+    "screens/en/dark/model-library-error.png": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 204388,
+      "sha256": "376518983dd704e6c3c4392e623756e370be35aa8bb5fdcf5d1739771a632878"
+    },
+    "videos/en/dark/model-library.mp4": {
+      "scene": "model-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 608188,
+      "sha256": "939149de032d41233f45d15e91bc8263b28e80be5fd78b633dea04b24f40c79f"
+    },
+    "screens/en/dark/workflow-library.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 201651,
+      "sha256": "fc8c78a53711c1114d15f81928e85f91de34523d0694cd30641a393d1a7a6d37"
+    },
+    "screens/en/dark/workflow-import.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 293358,
+      "sha256": "dc215cce1fd67dfc003c3eb78f974c5eefa7b7fcabde471eeae9d88f85cd63f2"
+    },
+    "screens/en/dark/workflow-library-detail.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 240160,
+      "sha256": "da4404bc7dbb7af092c121b7c4c95c9125f4bb7b88105aea3442b4cea708e71e"
+    },
+    "screens/en/dark/model-download.png": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 437001,
+      "sha256": "332d4db64ea133781c821833ea09dcb71d279c0db2e3bfc5a7dd135477f0a8f6"
+    },
+    "videos/en/dark/workflow-library.mp4": {
+      "scene": "workflow-library",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 780316,
+      "sha256": "82f4e1f2b25ffe5c98b37a07c912aa683f69e2fae72fb1bb1a02d5f74998a7d9"
+    },
+    "screens/en/dark/admin-pricing.png": {
+      "scene": "pricing",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 159956,
+      "sha256": "4bab88c7441260c20be8c361932cfaa404b9fe1e0358bf7e6b33817630274b54"
+    },
+    "videos/en/dark/pricing.mp4": {
+      "scene": "pricing",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.8.3",
+      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+      "bytes": 299821,
+      "sha256": "7af50ef2dab2eebc5f65bee2eec20a0ee0ee024a7422d3ecd99c951db57a7261"
     }
   },
   "version": "1.8.3",
-  "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-  "capturedAt": "2026-10-03T21:06:15.806080+00:00",
+  "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
+  "capturedAt": "2026-10-05T03:33:06.494423+00:00",
   "viewport": {
     "width": 1440,
     "height": 900
