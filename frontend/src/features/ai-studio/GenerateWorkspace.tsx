@@ -1489,8 +1489,12 @@ function GenerationTurn({
         ) : outputs.length > 0 ? (
           //: **照 result_asset_ids 出图,不是只出封面。** 图像接口的 n 选了几就出几张,
           //: 只画第一张的话,用户按 4 张付了钱、界面上只多出 1 张(另外 3 张在素材库里
-          //: 躺着,而他不知道)。一张时就是原来的样子,多张时并排铺开。
-          <div className={cn("flex max-w-[min(560px,100%)] flex-wrap gap-1.5")}>
+          //: 躺着,而他不知道)。
+          //:
+          //: **按高度定尺寸,不按宽度铺满。** 此前多张时每张至少占半行、还会伸展:一张竖图(1080×1920)将近 500px 高,
+          //: 单数的最后一张被拉成整行宽(维护者:「生成页面的图片可以稍微小一些 太大了」)。现在一张最高 360px,
+          //: 多张时每张 220px 高、宽跟着比例走、不伸展,一行排得下几张排几张;点开看大图。
+          <div className={cn("flex max-w-[min(720px,100%)] flex-wrap gap-1.5")}>
             {outputs.map((assetId) => (
               <IconButton
                 unstyled
@@ -1499,7 +1503,7 @@ function GenerationTurn({
                 label={t("imagePreviewTitle")}
                 className={cn(
                   "cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring",
-                  outputs.length > 1 ? "min-w-0 flex-[1_1_45%]" : "inline-block max-w-full",
+                  "inline-block max-w-full shrink-0",
                 )}
                 onClick={() =>
                   openImagePreview({
@@ -1512,7 +1516,7 @@ function GenerationTurn({
                 <img
                   className={cn(
                     "block rounded-lg border border-border",
-                    outputs.length > 1 ? "h-auto w-full" : "w-auto max-w-full",
+                    outputs.length > 1 ? "h-[220px] w-auto max-w-full object-contain" : "max-h-[360px] w-auto max-w-full",
                   )}
                   src={assetThumbnailUrl(assetId)}
                   alt=""
@@ -1563,7 +1567,7 @@ function GeneratingTile({ kind, progress }: { kind: string; progress?: number })
           ? "aspect-video max-w-[min(560px,100%)]"
           : kind === "audio"
             ? "h-16 max-w-[min(560px,100%)]"
-            : "aspect-square max-w-[320px]",
+            : "aspect-square max-w-[240px]",
       )}
     >
       <Skeleton className="absolute inset-0 rounded-lg" />

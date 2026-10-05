@@ -202,3 +202,39 @@ describe("失败原因读生成记录自己的", () => {
     await waitFor(() => expect(screen.getByText("genFailed")).toBeInTheDocument());
   });
 });
+
+describe("出图按高度定尺寸,不铺满", () => {
+  const done = (ids: string[]) => ({
+    id: "g1",
+    workspace_id: "w1",
+    session_id: "s1",
+    job_id: null,
+    provider: "comfyui",
+    model: "古风女孩1",
+    kind: "image",
+    request: { prompt: "跳舞的女孩" },
+    result_asset_id: ids[0] ?? null,
+    result_asset_ids: ids,
+    error: null,
+    created_at: "2026-10-05T00:00:00Z",
+    updated_at: "2026-10-05T00:01:00Z",
+    costs: [],
+    cost_confidence: null,
+  });
+
+  it("多张:每张 220px 高、不伸展 —— 单数的最后一张不再被拉成整行宽(维护者:「太大了」)", async () => {
+    renderStudio({ generations: [done(["a1", "a2", "a3"])] });
+    const buttons = await screen.findAllByRole("button", { name: "imagePreviewTitle" });
+    expect(buttons).toHaveLength(3);
+    for (const button of buttons) {
+      expect(button.className).not.toMatch(/flex-\[1_1/);
+      expect(button.querySelector("img")!.className.split(" ")).toEqual(expect.arrayContaining(["h-[220px]", "w-auto"]));
+    }
+  });
+
+  it("一张:最高 360px,宽跟着比例走", async () => {
+    renderStudio({ generations: [done(["a1"])] });
+    const [button] = await screen.findAllByRole("button", { name: "imagePreviewTitle" });
+    expect(button.querySelector("img")!.className.split(" ")).toEqual(expect.arrayContaining(["max-h-[360px]", "w-auto"]));
+  });
+});
