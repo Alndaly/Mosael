@@ -29,6 +29,7 @@ from app.ai.providers import (
 from app.ai.providers.contracts.generation import (
     GenerationAdapter,
     ReportedUsage,
+    source_image_count,
     direct_media_url,
     metering_from_request,
     reported_on_failure,
@@ -541,7 +542,7 @@ def _with_request_facts(
         units["requests"] = 1
     if request.kind == "image":
         units.setdefault("images", int(request.parameters.get("num_images", 1)))
-        units.setdefault("source_images", len(request.sources))
+        units.setdefault("source_images", source_image_count(request))
         if request.parameters.get("size"):
             units.setdefault("size", str(request.parameters["size"]).replace("*", "x"))
     if request.kind == "video":
@@ -552,9 +553,11 @@ def _with_request_facts(
             units.setdefault("video_seconds", float(request.parameters["duration_seconds"]))
         elif measured_seconds is not None:
             units.setdefault("video_seconds", measured_seconds)
-        units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
+        #: 分辨率只记请求说了的(见 contracts.generation.metering_from_request),不猜 720p。
+        if str(request.parameters.get("resolution") or "").strip():
+            units.setdefault("resolution", str(request.parameters["resolution"]))
         units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
-        units.setdefault("source_images", len(request.sources))
+        units.setdefault("source_images", source_image_count(request))
     if request.kind == "audio":
         # 按条:产出了几份就是几份(一次出两首的那家,两首都在库里)。按秒:供应商回报了计费时长
         # 的以它为准(Adapter 已写进 usage),没报的用探测到的真实时长 —— 请求里的时长只是期望,

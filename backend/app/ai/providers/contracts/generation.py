@@ -95,6 +95,13 @@ KEYFRAME_ROLES = (FIRST_FRAME, LAST_FRAME)
 REFERENCE_ROLES = (REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 VIDEO_INPUT_ROLES = (SOURCE_VIDEO, FIRST_CLIP)
 DRIVING_ROLES = (DRIVING_AUDIO,)
+#: 交进去的**图**(计量里的 `source_images` 只数这几种):原视频、驱动音频、参考视频不是图。
+IMAGE_INPUT_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, MASK)
+
+
+def source_image_count(request: "GenerationRequest") -> int:
+    """这次请求交进去几张图。此前数的是全部素材 —— 改口型的原视频加驱动音频被记成两张参考图。"""
+    return sum(1 for item in request.sources if item.role in IMAGE_INPUT_ROLES)
 
 
 #: 能原样交给供应商去下载的媒体后缀。**判的是"这是不是一条直链",不是"这是不是网址"** ——
@@ -362,7 +369,7 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
         units.update(
             {
                 "images": int(request.parameters.get("num_images", 1)),
-                "source_images": len(request.sources),
+                "source_images": source_image_count(request),
             }
         )
         if size:
@@ -371,11 +378,14 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
         units.update(
             {
                 "videos": 1,
-                "resolution": str(request.parameters.get("resolution", "720p")),
                 "aspect_ratio": str(request.parameters.get("aspect_ratio", "")),
-                "source_images": len(request.sources),
+                "source_images": source_image_count(request),
             }
         )
+        #: 分辨率只记请求说了的(模型声明了默认值的,漏斗已经把默认值写进请求)。此前没说就记一个猜的 720p ——
+        #: 改口型的成片跟着原视频(真跑交回 640×640),账上却是 720p,按分辨率分档的价目会算错档。
+        if str(request.parameters.get("resolution") or "").strip():
+            units["resolution"] = str(request.parameters["resolution"])
         # 秒数只在请求说了时长时才记。数字人(说话照片、改口型)的成片长度跟着驱动音频走,请求里没有时长 ——
         # 此前一律按 5 秒记,一段 60 秒的口播被记成 5 秒。没说的由运行器按产出的真实时长补
         # (runner._record_generation_usage,和音频同一条);先记一个猜的值,那一格就改不回真实值了。
