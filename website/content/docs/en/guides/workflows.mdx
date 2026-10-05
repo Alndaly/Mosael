@@ -25,7 +25,7 @@ Downloads contain no account secrets or private assets, and do not automatically
 | Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default; the start node's **Seconds per shot** is set at build time to the duration nearest the default that the chosen video model can make, video length, timeline and storyboard all follow it, and a model that can't make that length is stopped before the run), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
 | Clean-up and montage | **Transcript-based video cleanup** (denoise first, then cut pauses, fillers and repetition by the transcript; for material up to about 30 minutes), **Montage from your own footage** (orders a tagged batch of your clips and adds narration and captions) |
 | Translated dubbing | **Translated dubbing with subtitles** (transcribe, translate and subtitle line by line on the original timecodes, dub each line into its slot, strip the original voice but keep the music), **Translated dubbing with lip-sync** (the same, then the speaker's lips follow the dub) |
-| Products and business | **Product photo into on-model shots** (the outputs list each group's on-model shot and video), **Product into a narrated short** (the script goes through **Fit narration to its length** first; uses a cloned voice when you have one, otherwise the free Edge voice, with nothing to set up, and the finish notice says which voice it used), **Fabric into applications and a spec sheet** |
+| Products and business | **Product photo into on-model shots** (the outputs list each group's on-model shot and video), **Product into a narrated short** (the script goes through **Fit narration to its length** first; uses a cloned voice when you have one, otherwise the free Edge voice, with nothing to set up, and the finish notice says which voice it used; with a video model that takes a first frame, **every beat moves**: the beat's frame becomes the first frame of a clip, the clip goes on the timeline with its own sound muted, and every beat is the same length — the start node's beat_seconds, set at build time to a length that model can make, with a length it can't make stopped before the run; that is one more paid video per beat, about 6 clips for the default 30 seconds at 5 seconds a beat; without a video model it lays one still per beat as before), **Fabric into applications and a spec sheet** |
 | Digital humans | **Script into a talking-head video**, **Product into a presenter-led short** (see [Digital humans](/docs/guides/digital-humans)) |
 | Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience** (see "Analytics templates" below) |
 
@@ -41,7 +41,9 @@ switch it to DeepFilterNet (a deployment admin downloads it first under Admin �
 
 **Graphs from an older template offer "Rebuild from the new version".** When a template has been fixed in ways that would make an old
 copy fail, opening that copy shows a notice: **Rebuild from the new version (keeps this one)** builds a fresh graph, carrying over the
-start parameters and values you filled in, and keeps the old one; dismiss it and a newer version will remind you again.
+start parameters and values you filled in, and keeps the old one; dismiss it and a newer version will remind you again. Models are
+picked again from your current settings: both product pitch templates have since gained moving beats, so rebuilding an older copy
+adds that step when you have a video model.
 
 ## Canvas & nodes
 
