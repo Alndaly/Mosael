@@ -11,6 +11,7 @@ import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { mdxOptions } from "@/lib/mdx-options";
+import { pluginDocSource } from "@/lib/plugin-doc";
 import { findPlugin, listPlugins, readPluginDoc } from "@/lib/registry";
 import { SITE } from "@/lib/site";
 
@@ -33,40 +34,6 @@ export async function generateMetadata({
   };
 }
 
-/**
- * `<https://…>` 是合法的 markdown(autolink),但 **MDX 会把它当成 JSX 标签**,直接编译失败。
- *
- * README 是给人写的、也要在 GitHub 上好看,不该为了我们的渲染器改写法 —— 所以在这里
- * 转成普通链接。这不是"容错",是两种方言之间的翻译:markdown 认 autolink,MDX 不认。
- */
-function unwrapAutolinks(markdown: string): string {
-  return markdown.replace(/<(https?:\/\/[^\s>]+)>/g, "[$1]($1)");
-}
-
-/**
- * README 开头那行 `# 插件名` 在 GitHub 上是标题,在这里和页头的名字重复 —— 页头已经说了
- * 这是谁,正文从第一段说明开始。
- */
-function dropLeadingTitle(markdown: string): string {
-  return markdown.replace(/^\s*#\s+[^\n]*\n+/, "");
-}
-
-/**
- * README 里的相对链接**在网页上是坏的**。
- *
- * 那些路径是按仓库目录写的(`../../../docs/PLUGIN_MANIFEST.md`),在 GitHub 上点得开,
- * 搬到 /plugins/<slug> 这个地址下就指向了不存在的地方。渲染前统一改指回仓库 ——
- * 不改的话,详情页上每一个「见 xxx」都是 404,而写 README 的人完全不知情。
- */
-function rewriteRelativeLinks(markdown: string, source: string): string {
-  return markdown.replace(/\]\((?!https?:\/\/|#)([^)]+)\)/g, (match, target: string) => {
-    const cleaned = String(target).trim();
-    if (cleaned.startsWith("/")) return match;
-    const resolved = new URL(cleaned, `https://x/${source}/`).pathname.replace(/^\//, "");
-    return `](${SITE.repo}/blob/main/${resolved})`;
-  });
-}
-
 export default async function PluginDetailPage({
   params,
 }: {
@@ -81,7 +48,7 @@ export default async function PluginDetailPage({
   const raw = readPluginDoc(slug, locale);
   const doc = raw
     ? await compileMDX({
-        source: rewriteRelativeLinks(unwrapAutolinks(dropLeadingTitle(raw)), plugin.source),
+        source: pluginDocSource(raw, plugin.source),
         components: mdxComponents(locale),
         options: { mdxOptions },
       })
