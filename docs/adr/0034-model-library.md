@@ -50,7 +50,7 @@
 
 - **名字、目录、大小、改动时间**:目录给的原样;
 - **预览图**:有就用;没有就是按目录分的占位(大模型、LoRA、VAE、放大……各一个图标),不留白;
-- **底模家族**:按下面的顺序认,**认到为止**,每一条记下凭的是什么(`metadata` / `filename`),界面上看得到:
+- **底模家族**:按下面的顺序认,**认到为止**,每一条记下凭的是什么(`metadata` / `filename`),界面上看得到(2026-10-06 改:中间加了「权重结构」一档、不适用的目录单独标出,见文末「后续」):
   1. 文件头里的 `ss_base_model_version`(kohya 训练脚本写的,`sdxl_base_v1-0`、`sd_v1`、`flux1`……)—— 它最具体:训练脚本
      不认识的底模(实测有 `anima`),`modelspec.architecture` 会照默认写成 `stable-diffusion-v1`,不能信后者;
   2. 没有它时看 `modelspec.architecture`(SAI 的模型规范,`stable-diffusion-xl-v1-base/lora`、`flux-1-dev/lora`……);
@@ -172,3 +172,58 @@ LoRA 的下拉不在这次范围里加缩略图(见「后续」)。
 - **工作流里声明的地址**:可信来源加上 `https://modelscope.cn/`、`https://modelscope.ai/`(先换成规范域名再比)。这一条比
   ComfyUI 官方前端的白名单宽 —— 魔搭是国内用户最常用的模型站;
 - **权限**:清单加 `network:modelscope`,已有连接升级后照 1.9.0 的规矩先停用、等授予这一项。
+
+## 后续(2026-10-06,插件 1.13.0):底模从权重结构认,修订 §2
+
+维护者:「现在有太多模型都认不出底模」。拿维护者那台 ComfyUI 只读核对(全新缓存):528 个文件认出 361 个。认不出的几类:
+
+- **合并出来的大模型和不少 LoRA 一点元数据都没有**,名字是作者随手起的(`dessertModels_donuts`、`pieModels_honeyPie`);
+  但文件头里的**张量名和形状**一看就知道是什么网络 —— 而且读得起:ComfyUI-Custom-Scripts 的 `/pysssss/view/{目录}/{名字}`
+  认 Range,开头 8 个字节是头长度、再读那么长就是整段 JSON,一个文件几十毫秒(头 90–365 KB);
+- **Civitai 式的驼峰名字**(`novaAnimeXL_ilV160`、`flatbreadIL_v50`)按「两头非字母」的规矩认不出 XL、IL;
+- **表里缺的家族**:Krea 2、Anima、MiniMax H3 / Music、Qwen-Image 2;元数据里的 `anima`、`krea2` 原样显示成小写;
+- **老 kohya LoRA** 只有 `ss_sd_model_name` 和 `ss_v2`,没有底模版本;
+- **缓存记的是结论**:改了规矩,缓存过的文件照旧;
+- 文本编码器、放大、检测这些**本来就不讲底模**的,界面上也写「认不出底模」;
+- ComfyUI-GGUF 把 `unet_gguf` / `clip_gguf` 登记在和 `diffusion_models` / `text_encoders` 同一批文件夹上,**同一个文件列两遍**
+  (实测 23 个,含 Impact Pack 的 `ultralytics` 和 `ultralytics_bbox` / `_segm`)。
+
+决定:
+
+- **认的先后改成:元数据 > 权重结构 > 文件名**。权重结构(`family_source: "weights"`,界面写「从权重结构认出」)用插件自己
+  的一张特征表(`tools/weights.py`):张量名去掉外层包装(`model.diffusion_model.`、`lora_unet_`、`transformer.`……)、点换
+  下划线后按表从上往下认 —— 有独门部件的在前(Krea 2 的 attn.gate、Anima 的 llm_adapter、Flux.2 共用的调制、HiDream 的
+  双 / 单流块、AuraFlow 的 joint_transformer_blocks —— Pony V7 的 diffusers 式 LoRA 因此不会说成 Flux……),只能靠维度
+  分的在后(SD 1 / 2 / XL 看交叉注意力吃的文本宽度 768 / 1024 / 2048,Z-Image 和 Lumina 看 3840 / 2304,Wan 看
+  1536 / 3072 / 5120)。LoRA 照抄底模的层名,大模型、UNet、LoRA、ControlNet、文本反演、IP-Adapter 用同
+  一张表;LoRA 只看 down / A 那一半的宽度(up / B 的第二维是秩)。**分不清的少说**:Wan 14B 的 2.1 和 2.2 结构一样,就说 Wan。
+  表是照公开的网络结构、对着实际文件写的,不照搬 ComfyUI 的 model_detection.py(GPL);
+- **元数据和权重对不上架构时信权重**(实测有 Flux 的 LoRA 写着 `ss_base_model_version: sd_1.5`);元数据更细(权重只看得出
+  SDXL,元数据说 Pony)时用元数据;元数据是表里没有的值时也用权重;
+- **细分**从「SDXL → Illustrious / NoobAI / Pony」推广到 SDXL → Kolors、Wan → 2.1 / 2.2、Flux → Kontext / Chroma、
+  AuraFlow → Pony V7:训练用的底模名、标题,再是文件名;细分用的关键词比单凭文件名猜时宽(`ILL`、`illu`、high noise / low noise),因为那时已经知道是哪一层。Civitai 在线训练
+  在 `ss_sd_model_name` 里写的是底模的版本号(`889818.safetensors`),Illustrious、Pony、NoobAI 的官方版本号记在表里;
+- **文件名**:驼峰拆开再认(XL、IL、ZIT 单独出现才算),补上 Krea 2、Anima、MiniMax H3 / Music、Qwen-Image 2、Kolors、单独的
+  qwen、HiDream 的写法(Kolors 也算 SDXL 下细分的一支:它的 LoRA、IP-Adapter 和 SDXL 的层一模一样,大模型多一层
+  encoder_hid_proj);`anima` 要两头非字母(animagine 不算),`illustri` 认 Illustrious 和 illustrij(illustration 不算),
+  `hunyuan` 只认 hunyuan_video(混元的图像模型是别的结构);
+- **元数据**:`anima` → Anima、`krea2` → Krea 2、`qwen_image_2` → Qwen-Image 2、光写 `wan` 的 → Wan;没有底模版本的老
+  kohya LoRA(有 `ss_network_*`)按 `ss_v2` 认 SD 1 / SD 2。Civitai 的 baseModel 补上 Krea 2、Anima、MiniMax H3 / Music 3、
+  Qwen 2 / 2.1(→ Qwen-Image 2)、ZImageTurbo、Pony V7(AuraFlow 结构,不并进 Pony),「Other」等于没说;
+- **读文件头**:Range 读开头 64 KB,头更长再补读,超过 8 MB 不读;并发照旧 4 个,第一个文件先单独读。**不下整个文件**:对方
+  没有那个地址(404)或不认 Range(回 200)时立刻挂断,这一趟剩下的文件不再试,退回 `/view_metadata` 只拿元数据;
+  GGUF 读张量表(各维倒回 PyTorch 的顺序)走同一张表,认不出时看 `general.architecture`;文本编码器目录里的 GGUF 不读(头里
+  是整张词表);
+- **缓存记原料**:元数据里认底模、触发词、标题要用的那几项,训练标签里最多的几个,权重认成的家族,GGUF 的架构名;家族每次列出
+  时现推。缓存带版本(格式 + 权重表的指纹),对不上整份扔掉重读 —— 它是缓存,不留兼容分支。读的时候没有读头地址的文件,下次
+  有了再补认;
+- **不适用**:文本编码器、CLIP 视觉、放大、检测 / 分割、抠图、语音和大语言模型这些目录(`ultralytics*`、`mmdets*`、
+  `instantid`……)报 `family_source: "not_applicable"`、`family` 空着,宿主照传,界面写「不适用」,不算「认不出」;
+- **去重**:按 `/experiment/models` 报的磁盘位置(斜杠统一、`.` 段去掉,Windows 路径不分大小写)认同一个文件,留在先登记的
+  目录 —— ComfyUI 自己的目录先登记,自定义节点的在后;只有别名目录列着的(`.gguf`)照旧留在那儿。各目录的数目按去重后的算;
+  「工作流缺不缺」仍按 ComfyUI 自己的列法(UnetLoaderGGUF 按 `unet_gguf` 找)。
+
+同一台服务器、全新缓存再核对:505 个文件(去掉 23 个重复)认出 485 个(元数据 274、权重结构 131、文件名 80),19 个不适用,
+1 个认不出(一个 `.pt` 的文本反演,没有可读的文件头,名字里也没有线索);第一次读十来秒,之后一秒。假装那台没装
+ComfyUI-Custom-Scripts(读头地址 404,只试了一次)时认出 408 个。和 Civitai 上登记的 baseModel 对了 73 个:59 个一致;其余是我们说得更少
+(SDXL 对 Illustrious 4 个、Wan 对 Wan 2.2 3 个)、文本编码器标了不适用(5 个),或我们更细(2 个 VAE),没有说错的。

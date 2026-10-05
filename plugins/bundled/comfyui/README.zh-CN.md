@@ -120,18 +120,41 @@ WanVideoDecode…,说明这是一张会生成东西的图),而一个 PreviewImag
 png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位。点开一个看完整的元数据、触发词、哪几张工作流在用。
 决策见 Mosael 仓库的 ADR 0034。
 
-**底模家族怎么认**(认到为止,界面上写明凭的是什么;规矩在 `tools/families.py`):
+**底模家族怎么认**(界面上写明凭的是什么;规矩在 `tools/families.py`,权重结构那张表在 `tools/weights.py`):
 
-1. 文件头里的 `ss_base_model_version`(kohya 训练脚本写的,最具体)。训练脚本不认识的底模(实测有 anima),
-   `modelspec.architecture` 会照默认写成 `stable-diffusion-v1` —— 所以先看它;
-2. 没有时看 `modelspec.architecture`;
-3. 认出是 SDXL 的,训练用的底模名(`ss_sd_model_name`)或文件名里带 illustrious / noob / pony 的,细分成那一支;
-4. 都没有时看文件名(连子目录)里的关键词:`illustrious` / 单独的 `IL` → Illustrious、`noob` → NoobAI、`pony` → Pony、
-   `kontext` → Flux Kontext、`flux` → Flux、`wan2.2` → Wan 2.2、`wan2.1` → Wan 2.1、`qwen_image` → Qwen-Image、
-   `z_image` → Z-Image、`hunyuan` → HunyuanVideo、`ltx` → LTX-Video、`sdxl` / 单独的 `xl` → SDXL、`sd15` / `v1-5` → SD 1.5……
-   只在放「给某个底模用的东西」的目录里按名字猜(checkpoints、loras、diffusion_models、controlnet、embeddings、vae……),
-   文本编码器、放大、检测模型不猜;
-5. 元数据里写了、表里没有的值(anima、krea2)原样显示;什么都没有就空着。
+1. **元数据**:文件头里的 `ss_base_model_version`(kohya 训练脚本写的,最具体)。训练脚本不认识的底模(实测有 anima、
+   krea2)它照写,`modelspec.architecture` 却照默认写成 `stable-diffusion-v1` —— 所以先看它;没有时看
+   `modelspec.architecture`;都没有、又是 kohya 训的(有 `ss_network_*`)老 LoRA 只写了 `ss_v2`:`False` 是 SD 1,`True`
+   是 SD 2。写法规整成家族名(`anima` → Anima、`krea2` → Krea 2、`qwen_image_2` → Qwen-Image 2);
+2. **权重结构**(界面上写「从权重结构认出」):合并出来的大模型、不少 LoRA 一点元数据都没有,但文件头里的张量名和形状
+   一看就知道是什么网络 —— SD 1 / SD 2 / SDXL 看交叉注意力吃的文本宽度(768 / 1024 / 2048),Flux 有 double_blocks /
+   single_blocks,Flux.2 共用一份调制,Krea 2 的注意力多一个 gate,Anima 带 llm_adapter,Wan 的块里是 `self_attn.q` 和
+   `ffn.0`,Z-Image 和 Lumina 同一种结构、宽度不同(3840 / 2304)……LoRA 照抄底模的层名,kohya、diffusers / peft、
+   ComfyUI、LyCORIS 几种写法都认;GGUF 读张量表,认不出时看 `general.architecture`。和元数据对得上(一样,或元数据更细:
+   权重只看得出 SDXL,元数据说 Pony)用元数据;**对不上架构时信权重**(实测有 Flux 的 LoRA 写着 sd_1.5)。分不清的少说:
+   Wan 14B 的 2.1 和 2.2 结构一样,就说 Wan;AuraFlow(Pony V7 用的结构)的 diffusers 式 LoRA 也有
+   single_transformer_blocks,认得出不是 Flux;
+3. 认出的是 SDXL / Wan / Flux / AuraFlow 这一层时再细分:训练用的底模名(`ss_sd_model_name`,Civitai 在线训练写的是
+   底模的版本号,Illustrious、Pony、NoobAI 的官方版本认得)、标题,再是文件名里的 illustrious / `IL` / `ILL` →
+   Illustrious、noob → NoobAI、pony → Pony、kolors → Kolors、`wan2.2` / high noise / low noise → Wan 2.2、kontext →
+   Flux Kontext、pony v7 → Pony V7;
+4. 都没有时看**文件名**(连子目录,驼峰拆开 —— `novaAnimeXL_ilV160` 里的 XL、il 才算单独出现):`illustrious` / 单独的
+   `IL` → Illustrious、`noob` → NoobAI、`pony` → Pony、`kontext` → Flux Kontext、`flux` → Flux、`krea2` → Krea 2、
+   单独的 `anima` → Anima(animagine 不算)、`minimax_h3` → MiniMax H3、`qwen_image_2` / `qwen21` → Qwen-Image 2、
+   `qwen` → Qwen-Image、`kolors` → Kolors、`wan2.2` → Wan 2.2、`wan2.1` → Wan 2.1、`z_image` / 单独的 `ZIT` → Z-Image、
+   `hunyuan_video` → HunyuanVideo、`ltx` → LTX-Video、`sdxl` / 单独的 `xl` → SDXL、`sd15` / `v1-5` → SD 1.5……只在放「给某个底模用的东西」
+   的目录里按名字猜(checkpoints、loras、diffusion_models、controlnet、embeddings、vae……);
+5. 元数据里写了、表里没有、权重也认不出的值原样显示;什么都没有就空着(「认不出底模」)。
+6. 文本编码器、CLIP 视觉、放大、检测 / 分割这类目录里的文件不是给某一个底模做的:不猜,标「不适用」(`family_source`
+   是 `not_applicable`),和「认不出」分开。
+
+**读文件头**:走 ComfyUI-Custom-Scripts 的 `/pysssss/view/`,按 Range 只读开头(safetensors 的头一般几十到几百 KB,
+超过 8 MB 不读),一个文件几十毫秒、几个并发。没装它(404)或那台不认 Range(回 200 要整个发)时,第一个文件试过就不再试、
+立刻挂断,退回 ComfyUI 的 `/view_metadata` 只拿元数据 —— 那样就认不了权重结构,装上之后下次打开会补认。
+
+**同一个文件只列一次**:ComfyUI-GGUF 把 `unet_gguf` / `clip_gguf` 登记在和 `diffusion_models` / `text_encoders` 同一批文件夹
+上,Impact Pack 的 `ultralytics` 包着 `ultralytics_bbox` / `ultralytics_segm` —— 按磁盘上的位置认,留在先登记的目录
+(ComfyUI 自己的先登记);只有别名目录列着的(`.gguf`)照旧在那儿。
 
 **触发词**:作者写在文件头里的(`modelspec.trigger_phrase` / `ss_trigger_words`);没有时取训练标签(`ss_tag_frequency`)
 里出现最多的几个,并标明「不一定是作者指定的触发词」。**在用的工作流**:保存的工作流里,节点输入写着这个文件名的。
@@ -141,7 +164,7 @@ png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位
 Civitai 的另外几个域名(`civitai.red`、`civitai.green`)是同一个站:贴进来的链接、工作流里写的地址都先换成 `civitai.com`
 再解析和下载,令牌也只交给 `civitai.com`(1.9.1);ModelScope 带 `www.` 的同样先去掉。
 
-逐个读的元数据按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要几秒,之后只读目录。
+逐个读到的原料(认底模、触发词、标题要用的那几项元数据,权重认成的家族,GGUF 的架构名)按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要十来秒,之后只读目录。家族每次列出时现推,认的规矩改了马上生效;权重那张表一改,记着的整份作废、重读。
 
 **下载**:贴一个链接 —— HuggingFace 的文件(`/blob/` 或 `/resolve/`)、Civitai 的模型页(带不带 `modelVersionId`)或
 下载链接、ModelScope(魔搭)的模型页或文件、别的直链 —— 先解析出文件名、大小、建议放进哪个目录(Civitai 按模型类型定;
@@ -284,7 +307,7 @@ KJNodes 的 Set / Get、rgthree 的 Fast Groups Bypasser / Label / Bookmark 这�
 - `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
-- `library.py` / `families.py` / `model_files.py` —— 模型库:列出模型文件、读元数据、认底模家族、找在用的和缺的;
+- `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
 - `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 

@@ -199,8 +199,12 @@ tool call. Longer runs belong in generation.
 and **Generate with it** on the right; below, the preview on the left and the overview, workflows and metadata on the right, each
 column scrolling on its own.
 
-- **Base model**: SDXL, Illustrious, Pony, Flux, Wan, Qwen-Image… with a lighter line saying whether it came from the file's
-  metadata or its name (the latter may be wrong).
+- **Base model**: SDXL, Illustrious, Pony, Flux, Wan, Qwen-Image, Anima, Krea 2… with a lighter line saying how it was
+  recognized: written in the file's metadata, recognized from the structure of its weights (this covers merged checkpoints
+  and LoRAs without metadata; it needs ComfyUI-Custom-Scripts on that ComfyUI), or guessed from its name (which may be
+  wrong). Text encoders, upscalers, detectors and the like aren't made for one base model, so they say "Not applicable"
+  rather than unknown. A file registered under several folders (ComfyUI-GGUF's `unet_gguf` points at the same folders
+  as `diffusion_models`) is listed once.
 - **Trigger words**: the ones the author wrote into the file, copied with a click; without those, the most frequent training tags,
   marked as not necessarily the author's trigger words.
 - **Used by workflows**: saved workflows that use it, each with a button to show it in the workflow library.

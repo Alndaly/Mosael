@@ -45,6 +45,22 @@ commit list and downloadable artifacts.
   「新建」。在 ComfyUI 里搭好、Ctrl+S 存好,回到 Mosael,工作流库自己刷新,新的那张就在列表里。这版 ComfyUI 前端没有「新建」命令时,
   说清楚、画布照样开着,自己点就行。以前只能导入别处的 JSON、或者先在 ComfyUI 里建好再回来。
 
+### 模型库认得出更多底模(ComfyUI 插件 1.13.0)
+
+- **没写元数据的模型也认得出底模。** 合并出来的大模型、不少 LoRA 文件头里一个字都没写,名字也是作者随手起的;现在看文件头里
+  各层的名字和尺寸(权重的结构)就知道是 SD 1.5、SDXL、Flux、Flux.2、Wan、Qwen-Image、Z-Image、Anima、Krea 2、MiniMax H3……
+  界面上写明「从权重结构认出」。只读文件开头几十到几百 KB,不下整个文件;要那台 ComfyUI 装着 ComfyUI-Custom-Scripts,没装的
+  照旧只看元数据和文件名。在维护者那台服务器上,认得出的从 361 个涨到 485 个(另有 19 个标了不适用)。
+- **元数据写错的以权重为准。** 有的 Flux LoRA 文件头里写着 sd_1.5,现在认成 Flux;元数据说得更细(权重只看得出 SDXL,
+  元数据说 Pony)的照旧用元数据。Civitai 在线训练的 LoRA 记着它用的底模版本,Illustrious、Pony、NoobAI 认得出来。
+- **文件名按单词认。** `novaAnimeXL_ilV160`、`flatbreadIL_v50` 这种 Civitai 式的驼峰名字拆开再认,XL、IL、ZIT 单独出现才算;
+  补上 Krea 2、Anima、MiniMax H3、Qwen-Image 2 的写法,animagine、illustration 这类不再误认。元数据里写着 anima、krea2 的
+  显示成 Anima、Krea 2,老 LoRA 只写了 `ss_v2` 的认成 SD 1.5 / SD 2。
+- **文本编码器、放大模型、检测模型标「不适用」**,不再写「认不出底模」—— 它们本来就不是给某一个底模做的。
+- **同一个文件不再列两遍。** ComfyUI-GGUF 的 `unet_gguf` / `clip_gguf` 和 `diffusion_models` / `text_encoders` 指着同一批
+  文件夹,以前一个模型在两个目录下各出现一次;现在按磁盘上的位置只列一次,留在 ComfyUI 自己的目录里。
+- 认底模的规矩更新后,下次打开模型库马上生效,不必等文件变了才重新认。
+
 ### 界面修复
 
 - **悬停说明不再在别处一闪而过,关掉菜单后也不再冒出来。** 画板生成面板的「4×」、参数芯片这类外面套着一条说明的下拉:鼠标从发送键移过来,

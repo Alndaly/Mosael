@@ -152,22 +152,52 @@ base-model filter and search. Files with a preview (a png / jpg / webp of the sa
 safetensors) show it; the others get a per-folder placeholder. Open one for its full metadata, trigger words and the
 workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
 
-**How the base model is recognised** (first match wins, and the interface says which; the rules live in
-`tools/families.py`):
+**How the base model is recognised** (the interface says which source it came from; the rules live in
+`tools/families.py`, the weight-structure table in `tools/weights.py`):
 
-1. `ss_base_model_version` in the file header (written by kohya's training scripts; the most specific). For base models
-   the training script doesn't know (anima, seen on a real server), `modelspec.architecture` defaults to
-   `stable-diffusion-v1`, so this one is read first;
-2. otherwise `modelspec.architecture`;
-3. once it is known to be SDXL, a training base model name (`ss_sd_model_name`) or file name containing illustrious /
-   noob / pony narrows it to that branch;
-4. otherwise keywords in the file name (including subfolders): `illustrious` / a standalone `IL` → Illustrious, `noob` →
-   NoobAI, `pony` → Pony, `kontext` → Flux Kontext, `flux` → Flux, `wan2.2` → Wan 2.2, `wan2.1` → Wan 2.1, `qwen_image` →
-   Qwen-Image, `z_image` → Z-Image, `hunyuan` → HunyuanVideo, `ltx` → LTX-Video, `sdxl` / a standalone `xl` → SDXL,
-   `sd15` / `v1-5` → SD 1.5, and so on. Names are only read in folders holding things made for a base model
-   (checkpoints, loras, diffusion_models, controlnet, embeddings, vae…), never for text encoders, upscalers or detectors;
-5. values written in the metadata but not in the table (anima, krea2) are shown as they are; with nothing to go on it
-   stays empty.
+1. **Metadata**: `ss_base_model_version` in the file header (written by kohya's training scripts; the most specific).
+   For base models the training script doesn't know (anima and krea2, seen on a real server) it is written as is while
+   `modelspec.architecture` defaults to `stable-diffusion-v1`, so it is read first; otherwise `modelspec.architecture`;
+   with neither, old kohya LoRAs (with `ss_network_*`) only carry `ss_v2`: `False` means SD 1, `True` SD 2. Values are
+   normalized to family names (`anima` → Anima, `krea2` → Krea 2, `qwen_image_2` → Qwen-Image 2);
+2. **Weight structure** (shown as "recognized from the weights"): merged checkpoints and many LoRAs have no metadata at
+   all, but the tensor names and shapes in the header give the network away. SD 1 / SD 2 / SDXL differ in the text width
+   their cross-attention takes (768 / 1024 / 2048), Flux has double_blocks / single_blocks, Flux.2 shares one
+   modulation, Krea 2's attention has a gate, Anima carries an llm_adapter, Wan's blocks hold `self_attn.q` and
+   `ffn.0`, Z-Image and Lumina share a layout at different widths (3840 / 2304)… LoRAs copy their base model's layer
+   names, in kohya, diffusers / peft, ComfyUI and LyCORIS spellings alike; GGUF files are read through their tensor
+   table, falling back to `general.architecture`. When the metadata agrees (the same, or narrower: the weights only
+   tell SDXL, the metadata says Pony) the metadata is used; **when it names a different architecture the weights win**
+   (a real Flux LoRA claims sd_1.5). What can't be told apart is said less precisely: Wan 14B is the same network in 2.1
+   and 2.2, so it is just Wan; diffusers-style AuraFlow (Pony V7's architecture) LoRAs also have
+   single_transformer_blocks and are told apart from Flux;
+3. once it is SDXL / Wan / Flux / AuraFlow, the training base model (`ss_sd_model_name`; Civitai's on-site trainer
+   writes the base model's version number, and the official Illustrious, Pony and NoobAI versions are known), the
+   title, then the file name narrow it: illustrious / `IL` / `ILL` → Illustrious, noob → NoobAI, pony → Pony,
+   `wan2.2` / high noise / low noise → Wan 2.2, kontext → Flux Kontext, kolors → Kolors, pony v7 → Pony V7;
+4. otherwise keywords in the **file name** (including subfolders, with camelCase split, so the XL and il in
+   `novaAnimeXL_ilV160` count as words): `illustrious` / a standalone `IL` → Illustrious, `noob` → NoobAI, `pony` →
+   Pony, `kontext` → Flux Kontext, `flux` → Flux, `krea2` → Krea 2, a standalone `anima` → Anima (not animagine),
+   `minimax_h3` → MiniMax H3, `qwen_image_2` / `qwen21` → Qwen-Image 2, `qwen` → Qwen-Image, `kolors` → Kolors,
+   `wan2.2` → Wan 2.2,
+   `wan2.1` → Wan 2.1, `z_image` / a standalone `ZIT` → Z-Image, `hunyuan_video` → HunyuanVideo, `ltx` → LTX-Video,
+   `sdxl` / a standalone `xl` → SDXL, `sd15` / `v1-5` → SD 1.5, and so on. Names are only read in folders holding things
+   made for a base model (checkpoints, loras, diffusion_models, controlnet, embeddings, vae…);
+5. values written in the metadata but in no table, with weights that say nothing either, are shown as they are; with
+   nothing to go on it stays empty ("Unknown base model");
+6. files in text encoder, CLIP vision, upscaler and detection / segmentation folders aren't made for one base model:
+   they are not guessed and are marked "Not applicable" (`family_source` is `not_applicable`), apart from "unknown".
+
+**Reading file headers**: through ComfyUI-Custom-Scripts' `/pysssss/view/`, reading only the start with a Range request
+(a safetensors header is tens to hundreds of KB; anything over 8 MB is skipped), a few tens of milliseconds per file, a
+few at a time. Without it (404), or on a server that ignores Range (answering 200 with the whole file), the first file
+is the only one tried and the connection is dropped at once; the library falls back to ComfyUI's `/view_metadata` for
+metadata only, so weights can't be recognized until it is installed, after which the next visit fills them in.
+
+**Each file is listed once**: ComfyUI-GGUF registers `unet_gguf` / `clip_gguf` on the same folders as
+`diffusion_models` / `text_encoders`, and Impact Pack's `ultralytics` contains `ultralytics_bbox` / `ultralytics_segm`.
+Files are matched by their location on disk and kept under the folder registered first (ComfyUI's own come first);
+files only an alias folder lists (`.gguf`) stay there.
 
 **Trigger words**: the ones the author wrote into the header (`modelspec.trigger_phrase` / `ss_trigger_words`);
 otherwise the most frequent training tags (`ss_tag_frequency`), marked as "not necessarily trigger words".
@@ -179,8 +209,11 @@ domains (`civitai.red`, `civitai.green`) are the same site: pasted links and lin
 `civitai.com` before resolving and downloading, and the token only goes to `civitai.com` (1.9.1); ModelScope's `www.`
 hosts are rewritten the same way.
 
-Metadata read file by file is remembered in the plugin's data folder by server, folder, name, size and modification
-time: the first look at a few hundred files takes seconds, later ones only list the folders.
+What is read file by file (the few metadata fields the base model, trigger words and title need, the family the weights
+were recognized as, a GGUF's architecture) is remembered in the plugin's data folder by server, folder, name, size and
+modification time: the first look at a few hundred files takes ten seconds or so, later ones only list the folders.
+Families are worked out again on every listing, so changed rules apply at once; when the weight table changes, the
+remembered results are dropped and read again.
 
 **Downloading**: paste a link (a HuggingFace file, `/blob/` or `/resolve/`; a Civitai model page, with or without
 `modelVersionId`, or download link; a ModelScope model page or file; any other direct link). It is looked up first (file
@@ -372,8 +405,9 @@ they pick the workflow; a workflow without an app form still lists everything au
 - `workflows.py`: `list_workflows` / `import_outputs`, and the part that returns outputs;
 - `tooling.py`: one tool per workflow: derives inputs and outputs from the graph and runs the current graph;
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
-- `library.py` / `families.py` / `model_files.py`: the model library (model files, metadata, base-model
-  families, which workflows use a file and which models they miss);
+- `library.py` / `families.py` / `weights.py` / `model_files.py`: the model library (model files, file headers with
+  metadata and tensor tables, base-model families from metadata, weights and file names, which workflows use a file
+  and which models they miss);
 - `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading via the
   Manager → same machine → explain order;
 - `comfy_http.py` / `ws.py`: talking to ComfyUI.

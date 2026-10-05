@@ -1131,11 +1131,13 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 
   ```jsonc
   {
-    "folders": [{"name": "loras", "count": 350}],
+    "folders": [{"name": "loras", "count": 350}],                // 同一个文件挂在几个目录下时只列一次、只算一次
     "models": [{
       "folder": "loras", "name": "sub\\style.safetensors",        // 目录内的相对路径
       "size": 228456516, "modified": 1762011065.7,
-      "family": "Illustrious", "family_source": "metadata",       // 推断的底模家族、凭的是什么(metadata / filename)
+      "family": "Illustrious", "family_source": "metadata",       // 推断的底模家族、凭的是什么(metadata / weights / filename);
+                                                                  // 这类文件不讲底模(文本编码器、放大模型……)时 family 空着、
+                                                                  // family_source 是 not_applicable,界面写「不适用」
       "triggers": ["1girl"], "triggers_source": "tags",           // metadata = 作者写的;tags = 训练标签里最多的几个
       "title": "…", "used_by": [{"id": "flows/a.json", "label": "人像"}],
       "preview": "loras/0/sub%5Cstyle.safetensors"               // 宿主去取、缓存,不交给界面;没有就别给。可以是相对 preview_base 的一段
