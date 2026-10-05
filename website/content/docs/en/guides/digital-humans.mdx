@@ -2,7 +2,7 @@
 title: "Digital humans: make a face talk, re-sync a video's lips"
 description: Turn a character asset or a portrait plus a voice-over into a talking video, or make an existing video's lips match new audio; how consent and AI labels work.
 order: 20
-updated: 2026-10-04
+updated: 2026-10-05
 version: 1.9.0
 ---
 
@@ -80,6 +80,22 @@ A digital human needs the pictured person's consent. Mosael checks three things,
 
 Whatever is missing is named when you submit — which character, which voice. The agent says so when it opens the
 confirmation card, not after you approve it.
+
+### Cloned voices spoken through Bailian
+
+The driving audio can also be a library voice spoken by Bailian's CosyVoice: when you pick a voice for a character asset, on a board
+or in a workflow, choose the engine **Alibaba Bailian (CosyVoice)** and the list gains your library voices (the **My cloned voices**
+group in dropdowns, "Cloned · name" on asset pages and workflow nodes). What speaks is that voice's copy cloned into your Bailian
+account, with no local engine to install.
+
+- **Consent follows the same line**: the voices that can be cloned on Bailian are the ones that can be used for a digital human —
+  voices whose owner has been declared. Undeclared voices are never cloned and aren't listed.
+- **One more yes**: the first time a voice is used with CosyVoice you agree, once, to upload its reference clip to your Bailian
+  account. Voicing in AI Studio's **Audio** or in an audio cell on a board asks on the spot; a character's "Make it talk" and workflow
+  nodes run in the background where nobody can be asked, so without that agreement they stop at the voicing step and say why — click
+  **Clone on Bailian** on the voice under **Settings → Dubbing & voices** first.
+- For cloning, copies that follow the key and the model, and deleting a voice along with its remote copies, see
+  [Editing → Your own voice through Bailian](/docs/guides/editing).
 
 ## AI-generated label
 

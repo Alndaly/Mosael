@@ -107,6 +107,11 @@ The start node's parameters are a three-column table — **Name / Default / Requ
 - **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
 - **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
   voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice.
+  With **Alibaba Bailian (CosyVoice)** the list also carries, after the stock voices, the library voices whose owner has been
+  declared, shown as "Cloned · name": what speaks is that voice's copy cloned into your Bailian account, billed at CosyVoice's
+  per-character price, with no local engine to install (see [Editing → Your own voice through Bailian](/docs/guides/editing)). The
+  first use of a voice needs your agreement to upload its reference clip, and nobody is there to agree while a workflow runs — click
+  **Clone on Bailian** on the voice under **Settings → Dubbing & voices** first; without it, the run stops at the voicing step and says so.
 
 ### Top toolbar
 

@@ -94,6 +94,24 @@ the Plugins page (one connection per server). Once connected it appears under th
 “Provided by a plugin”; its models are the workflows saved in ComfyUI and can be set as defaults. See
 [Generating with ComfyUI](/docs/guides/comfyui).
 
+### Alibaba Bailian: CosyVoice can speak your library voices
+
+A Bailian connection's speech synthesis has two engines on the same key: **Alibaba Bailian (qwen-tts)** and **Alibaba Bailian
+(CosyVoice)**. Besides its stock voices, CosyVoice can **clone a voice from your voice library into your own Bailian account** and
+speak with it: the voice dropdown gains a **My cloned voices** group, and each voice in the library gets **Clone on Bailian**.
+
+- Cloning is free; speaking is billed at CosyVoice's per-character price. Uploading a voice the first time needs your agreement once,
+  and a voice nobody has declared ownership of is never cloned.
+- Copies follow the **key**: on a shared connection everyone uses their own key, and a cloned voice lives only in that person's
+  account. They also follow the **model**: when the connection's CosyVoice model changes, a new copy is cloned on the new model the next
+  time it's used, and the old one is left alone.
+- If Bailian deletes a copy (copies unused for a year are removed automatically), it's rebuilt the next time it's used; deleting the
+  voice in Mosael deletes its copies on Bailian too, and any that can't be removed are listed.
+- When Bailian speech synthesis fails, the error carries Bailian's own words from the response (`code: message`) — a missing voice,
+  the wrong model — not just a status line.
+
+See [Editing → Your own voice through Bailian](/docs/guides/editing) for how to use it, and Cost rules below for pricing CosyVoice.
+
 ### Music and sound
 
 "Music & sound generation" in the **AI audio** section holds connections that *generate* audio. It is a different

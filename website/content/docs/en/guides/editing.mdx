@@ -215,7 +215,7 @@ Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itsel
 
 A voice from the library can also be spoken by **Alibaba Cloud Bailian's CosyVoice**: pick the engine **Alibaba Bailian (CosyVoice)** and the voice dropdown gains a **My cloned voices** group under the stock voices. What speaks is a copy of that voice cloned into **your own Bailian account** — no local engine to install, no gigabytes of weights; in exchange it is billed at CosyVoice's per-character price (the cloning step itself is free). Local cloning keeps working: the same voice is spoken from its reference clip locally, or from its copy on CosyVoice.
 
-- **You agree once, the first time.** The reference clip (the 5–15 seconds you created the voice from) is uploaded to your Bailian account; the dialog says which connection and which model it goes to, and nothing is uploaded until you agree. Cloning runs in the background (about ten seconds) and the dub waits for it. After that, a new model or a copy Bailian deleted (copies unused for a year are removed automatically) is rebuilt as needed without asking again. You can also clone ahead of time with **Clone on Bailian** on the voice under **Settings → Dubbing & voices**.
+- **You agree once, the first time.** The reference clip (the 5–15 seconds you created the voice from) is uploaded to your Bailian account; the dialog says which connection and which model it goes to, and nothing is uploaded until you agree. Cloning runs in the background (about ten seconds) and the dub waits for it. After that, a new model or a copy Bailian deleted (copies unused for a year are removed automatically) is rebuilt as needed without asking again. You can also clone ahead of time with **Clone on Bailian** on the voice under **Settings → Dubbing & voices** (it runs as a task, and the task center tells you when it's ready).
 - **A voice nobody has declared ownership of is never cloned** (the same line as [digital humans](/docs/guides/digital-humans)) and is not listed — add the declaration in the voice library first.
 - Each cloned voice in the library shows where it can speak: **This computer**, **Bailian · cosyvoice-v3-flash**; cloning, failed (hover for the reason) and deleted-by-Bailian are shown there too.
 - **Deleting the voice in Mosael deletes its copies on Bailian.** Any that can't be removed (an expired key, no network) are listed so you can check Voice Cloning in the Bailian console.
@@ -223,6 +223,9 @@ A voice from the library can also be spoken by **Alibaba Cloud Bailian's CosyVoi
 - A voice is tied to the model it was built on: when the CosyVoice model on the connection changes, a new copy is cloned on the new model the next time it's used, and the old one is left alone.
 
 AI Studio's **Audio**, speaking on a board, the workflow dubbing node and the **Spoken replies** voice can all pick library voices once CosyVoice is the engine.
+Workflows and a character's "Make it talk" run in the background and can't ask you, so click **Clone on Bailian** before the first use; without that agreement they stop at the voicing step and say why. The agent can name CosyVoice with a library voice too; if you haven't agreed yet, it says so the moment it opens the confirmation card and asks you to click **Clone on Bailian** first.
+
+To see what CosyVoice costs in your usage, run **Prefill prices** once for the Bailian connection under **Admin → Cost rules** (see [Model connections → Cost rules](/docs/guides/providers)). When synthesis fails, the error carries Bailian's own words from the response (a missing voice, the wrong model).
 
 ## Export
 
