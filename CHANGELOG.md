@@ -5,6 +5,8 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-05
+
 ### 克隆音色能交给百炼 CosyVoice 念:不装本机引擎也能用自己的嗓子配音
 
 - **配音库里的嗓子复刻到你自己的百炼账号,之后像系统音色一样按字符计费地念。** 选引擎「阿里云百炼(CosyVoice)」时,
