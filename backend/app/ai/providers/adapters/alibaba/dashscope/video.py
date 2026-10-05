@@ -195,14 +195,16 @@ class WanVideoAdapter(GenerationAdapter):
     supports_resume = True
 
     def reported_usage(self, raw_usage: dict[str, Any]) -> ReportedUsage:
-        """回包 `usage` 里出了几秒(`output_video_duration`,没有就 `duration`)、什么分辨率档(`SR`)—— 只拿来核对。"""
+        """回包 `usage` 里出了几秒、什么分辨率档(`SR`)—— 只拿来核对。秒数各家模型写在不同的格里:万相文生 / 图生视频是
+        `output_video_duration`(没有就 `duration`),说话照片是 `duration`,改口型是 `video_duration`(都是真跑回包)。"""
         usage = raw_usage.get("usage") if isinstance(raw_usage, dict) else None
         if not isinstance(usage, dict):
             return ReportedUsage()
         observed: dict[str, Any] = {}
-        seconds = _seconds(usage.get("output_video_duration"))
-        if seconds is None:
-            seconds = _seconds(usage.get("duration"))
+        seconds = next(
+            (found for key in ("output_video_duration", "duration", "video_duration") if (found := _seconds(usage.get(key)))),
+            None,
+        )
         if seconds is not None:
             observed["video_seconds"] = seconds
         if usage.get("SR") not in (None, ""):

@@ -46,6 +46,14 @@ def test_万相回包里出了几秒_什么分辨率() -> None:
     assert reported.units == {} and reported.cost_micros is None, "只核对,不改记账的依据"
 
 
+def test_百炼数字人的回包_说话照片和改口型各报各的时长字段() -> None:
+    """真跑:说话照片(wan2.2-s2v)回 usage.duration + SR,改口型(videoretalk)回 usage.video_duration —— 同一个适配器读。"""
+    talk = WanVideoAdapter().reported_usage({"usage": {"duration": 5.56, "size": "512*512", "fps": 16, "video_count": 1, "SR": 480}})
+    assert talk.observed == {"video_seconds": 5.56, "resolution": "480"}
+    retalk = WanVideoAdapter().reported_usage({"usage": {"video_duration": 6.19, "size": "640*640", "video_ratio": "standard", "fps": 16}})
+    assert retalk.observed == {"video_seconds": 6.19}
+
+
 def test_MiniMax_回包里出了几秒_什么分辨率() -> None:
     reported = MiniMaxVideoAdapter().reported_usage(MINIMAX_5S_768P)
     assert reported.observed == {"video_seconds": 5, "resolution": "768P"}
