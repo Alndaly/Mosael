@@ -435,32 +435,57 @@ describe("the foreground view and the toolbar's page tools", () => {
     expect(viewOf("pool-b").visible).toBe(true);
   });
 
-  it("snapshots the page as shown and where it's shown, for the page list to lay over while it peeks out", async () => {
+  it("snapshots the page as shown and where it's shown, for the page list to lay over while it moves", async () => {
     manager.registerSession("pool-a", "persist:pool-a");
     expect(await manager.snapshotForeground()).toBeNull();
     manager.show("pool-a");
     manager.setPagesInset(48);
+    const shown = { x: 48, y: HEADER, width: 1440 - 48, height: 900 - HEADER };
     expect(await manager.snapshotForeground()).toEqual({
       frame: `data:image/jpeg;base64,${Buffer.from("frame").toString("base64")}`,
-      bounds: { x: 48, y: HEADER, width: 1440 - 48, height: 900 - HEADER },
+      bounds: shown,
     });
+    // 已经盖着(视图挪开了)再拍:说的还是网页在窗口里该在的位置。
+    manager.setForegroundHidden("cover", true);
+    expect((await manager.snapshotForeground())?.bounds).toEqual(shown);
   });
 
-  it("keeps the page hidden while the peek or a region pick still needs it, the session's next page included", () => {
+  it("moves the page out of the window while the page list covers it — still laid out, still drawing — and back where it belongs", () => {
     manager.registerSession("pool-a", "persist:pool-a");
     manager.show("pool-a");
-    manager.setForegroundHidden("peek", true);
+    manager.setPagesInset(220);
+    manager.setForegroundHidden("cover", true);
+    const page = viewOf("pool-a");
+    // 不是藏起来(藏起来的视图不出帧,揭开时第一帧是旧的):照常显示,只是整块在窗口外面、大小不变。
+    expect(page.visible).toBe(true);
+    expect(page.bounds.x + page.bounds.width).toBeLessThanOrEqual(0);
+    expect([page.bounds.y, page.bounds.width, page.bounds.height]).toEqual([HEADER, 1440 - 220, 900 - HEADER]);
+    // 盖着的时候列表收起了:宽度跟着变,人还在窗口外。
+    manager.setPagesInset(48);
+    expect(page.bounds.width).toBe(1440 - 48);
+    expect(page.bounds.x + page.bounds.width).toBeLessThanOrEqual(0);
+    manager.setForegroundHidden("cover", false);
+    expect(page.bounds).toEqual({ x: 48, y: HEADER, width: 1440 - 48, height: 900 - HEADER });
+  });
+
+  it("keeps the page out of sight while the cover or a region pick still needs it, the session's next page included", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    const offWindow = () => viewOf("pool-a").bounds.x + viewOf("pool-a").bounds.width <= 0;
+    manager.setForegroundHidden("cover", true);
     manager.setForegroundHidden("region", true);
-    manager.setForegroundHidden("peek", false);
+    manager.setForegroundHidden("cover", false);
     expect(viewOf("pool-a").visible).toBe(false);
+    expect(offWindow()).toBe(false);
     manager.setForegroundHidden("region", false);
     expect(viewOf("pool-a").visible).toBe(true);
-    // 临时展开的列表里切到了另一页:那一页也先藏着(列表还盖在画面上),收回时才亮出来。
-    manager.setForegroundHidden("peek", true);
+    // 临时展开的列表里切到了另一页:那一页也先在窗口外(列表还盖在画面上),揭开时才回来。
+    manager.setForegroundHidden("cover", true);
     openWindow(viewOf("pool-a"), "https://example.com/next");
     expect(viewOf("pool-a").webContents.getURL()).toBe("https://example.com/next");
-    expect(viewOf("pool-a").visible).toBe(false);
-    manager.setForegroundHidden("peek", false);
+    expect(offWindow()).toBe(true);
+    manager.setForegroundHidden("cover", false);
+    expect(offWindow()).toBe(false);
     expect(viewOf("pool-a").visible).toBe(true);
   });
 

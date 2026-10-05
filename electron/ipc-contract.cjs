@@ -41,7 +41,7 @@ const IPC = Object.freeze({
     publishReorderPages: "publish:reorderPages",
     publishNewPage: "publish:newPage",
     publishPagesInset: "publish:pagesInset",
-    // 收起的页面列表临时展开:拍下前台网页的画面、藏起 / 亮回原生视图(列表盖在那张画面上)。
+    // 页面列表展开 / 收起 / 临时展开:拍下前台网页的画面、把原生视图挪开 / 放回(列表在那张画面上变形)。
     publishSnapshotPage: "publish:snapshotPage",
     publishCoverPage: "publish:coverPage",
     browserOpenLogin: "browser:openLogin",
@@ -356,7 +356,7 @@ function parsePagesInset(value) {
   return { left };
 }
 
-/** 藏起 / 亮回前台网页(页面列表临时展开时盖在它的画面上)。 */
+/** 把前台网页挪开 / 放回(页面列表在它的画面上变形)。 */
 function parseCoverPage(value) {
   const channel = IPC.invoke.publishCoverPage;
   const payload = record(value, channel);

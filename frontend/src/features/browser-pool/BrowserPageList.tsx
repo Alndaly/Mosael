@@ -10,8 +10,8 @@ import { APP_CHROME } from "@/components/ui/appChrome";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
-import { moveBefore, readCollapsed, writeCollapsed } from "./pageListState";
-import { usePagePeek } from "./usePagePeek";
+import { moveBefore } from "./pageListState";
+import { usePageListMotion } from "./usePageListMotion";
 
 type Page = NonNullable<PublishViewState["pages"]>[number];
 
@@ -23,7 +23,8 @@ const NOTICE_MS = 6_000;
 /**
  * 浏览器会话左侧的**页面列表**(像 Arc 左边那一列):这个会话开着的每一页 —— 网站图标、标题,悬停看网址;
  * 当前页高亮,点哪页切哪页;单页可关(只剩一页时不关),拖动排顺序;可以收起成一条图标;顶上「新建页面」。
- * 收起时鼠标停上去、键盘切进来,列表临时展开盖在网页上(见 usePagePeek),移开就收回;「收起」本身记在本机。
+ * 收起时鼠标停上去、键盘切进来,列表临时展开盖在网页上,移开就收回;「收起」本身记在本机。展开、收起、临时展开
+ * 都带过渡,原生网页视图在过渡期间由一张画面替着(见 usePageListMotion)。
  *
  * 页面在新窗口打开(target=_blank、window.open)时会进这个列表并切过去,不再弹一个独立小窗(见
  * electron/publish/accountViews.openWindow)。列表是渲染层的 DOM,原生网页视图盖不住它 —— 所以挂着时
@@ -46,19 +47,20 @@ function PageList({
 }) {
   const t = useI18n();
   const pages = React.useMemo(() => state.pages ?? [], [state.pages]);
-  const [collapsed, setCollapsed] = React.useState(readCollapsed);
   const [adding, setAdding] = React.useState(false);
   const [address, setAddress] = React.useState("");
   const [dragging, setDragging] = React.useState<string | null>(null);
   // 拖的是哪一页也记在 ref 里:放下那一刻 state 可能还没轮到重渲染。
   const draggingRef = React.useRef<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
-  const peek = usePagePeek(bridge, collapsed, adding);
-  //: 只剩图标条的样子:收起了、也没临时展开。
-  const compact = collapsed && !peek.open;
+  const motion = usePageListMotion(bridge, adding);
+  const { collapsed, shape, compact, snapshot } = motion;
   //: 网页左侧让出多宽:临时展开时也只让图标条那么宽 —— 列表盖在网页上,不推挤它。
-  const inset = collapsed ? PAGE_LIST_COLLAPSED_WIDTH : PAGE_LIST_WIDTH;
-  const width = compact ? PAGE_LIST_COLLAPSED_WIDTH : PAGE_LIST_WIDTH;
+  const inset = shape.collapsed ? PAGE_LIST_COLLAPSED_WIDTH : PAGE_LIST_WIDTH;
+  const width = shape.collapsed && !shape.peek ? PAGE_LIST_COLLAPSED_WIDTH : PAGE_LIST_WIDTH;
+  //: 画面盖着的时候,它的右沿钉在网页原来的右沿,左沿跟着网页该在的位置滑。
+  const backdropRight = snapshot ? snapshot.bounds.x + snapshot.bounds.width : 0;
+  const edge = useEdgeColor(snapshot?.frame ?? null);
   //: 列表右边就是原生网页视图(临时展开时是那张画面):说明夹在这一列里往下出,伸出去会被网页盖住。
   const hintRegion = React.useMemo(() => ({ area: { top, left: 0, width }, side: "bottom" as const }), [top, width]);
 
@@ -81,13 +83,6 @@ function PageList({
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const toggle = () => {
-    // 刚点了收起,鼠标还停在列表上:不该马上又临时展开,等移开再回来。
-    if (!collapsed) peek.dismiss();
-    writeCollapsed(!collapsed);
-    setCollapsed(!collapsed);
-  };
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const value = address.trim();
@@ -95,7 +90,7 @@ function PageList({
     void bridge.newPage(value);
     setAddress("");
     setAdding(false);
-    if (collapsed) peek.dismiss(); // 收回,让人看到新开的那一页
+    if (collapsed) motion.dismiss({ instant: true }); // 收回,让人看到新开的那一页
   };
 
   const drop = (movedId: string, targetId: string) => {
@@ -110,24 +105,24 @@ function PageList({
     <>
       <nav
         {...APP_CHROME}
-        ref={peek.ref}
-        data-page-list={!collapsed ? "expanded" : peek.open ? "peek" : "collapsed"}
+        ref={motion.ref}
+        data-page-list={!shape.collapsed ? "expanded" : shape.peek ? "peek" : "collapsed"}
         aria-label={t("browserPagesTitle")}
         className={cn(
-          "fixed bottom-0 left-0 z-[190] flex flex-col border-r border-border bg-panel",
-          peek.open && "shadow-[var(--shadow-raised)]",
+          "fixed bottom-0 left-0 z-[190] flex flex-col overflow-hidden border-r border-border bg-panel",
+          shape.peek && "shadow-[var(--shadow-raised)]",
         )}
-        style={{ top, width }}
-        {...peek.handlers}
+        style={{ top, width, transition: motion.transition("width") }}
+        {...motion.handlers}
         onBlur={(event) => {
-          peek.handlers.onBlur(event);
+          motion.handlers.onBlur(event);
           // 临时展开时地址框也让它开着;焦点离开了列表,地址框就收起(不然列表收不回去)。
           if (collapsed && !event.currentTarget.contains(event.relatedTarget as Node | null)) setAdding(false);
         }}
         onKeyDown={(event) => {
-          if (event.key !== "Escape" || !peek.open || isImeKeystroke(event)) return;
+          if (event.key !== "Escape" || !shape.peek || isImeKeystroke(event)) return;
           if ((event.target as HTMLElement).closest("[data-page-list-address]")) return; // 地址框自己处理 Esc
-          peek.dismiss();
+          motion.dismiss();
         }}
       >
         <HintRegion.Provider value={hintRegion}>
@@ -152,9 +147,9 @@ function PageList({
               type="button"
               data-page-list-toggle
               className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
-              label={t(!collapsed ? "browserPagesCollapse" : peek.open ? "browserPagesPin" : "browserPagesExpand")}
-              hint={peek.open ? t("browserPagesPinHint") : undefined}
-              onClick={toggle}
+              label={t(!collapsed ? "browserPagesCollapse" : shape.peek ? "browserPagesPin" : "browserPagesExpand")}
+              hint={collapsed && shape.peek ? t("browserPagesPinHint") : undefined}
+              onClick={motion.toggle}
             >
               {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
             </IconButton>
@@ -192,7 +187,7 @@ function PageList({
                 closeLabel={t("browserPagesClose")}
                 onSelect={() => {
                   void bridge.switchPage(page.id);
-                  if (collapsed) peek.dismiss(); // 收回,让人看到切过去的那一页
+                  if (collapsed) motion.dismiss({ instant: true }); // 收回,让人看到切过去的那一页
                 }}
                 onClose={() => void bridge.closePage(page.id)}
                 onDragStart={() => {
@@ -215,22 +210,31 @@ function PageList({
           )}
         </HintRegion.Provider>
       </nav>
-      {/* 临时展开时铺在原生网页视图原处的那张画面:视图藏起来以后,看上去网页还在,列表盖在它上面。 */}
-      {peek.snapshot && (
-        <img
-          data-page-peek-backdrop=""
-          alt=""
-          src={peek.snapshot.frame}
-          draggable={false}
-          onLoad={peek.backdropReady}
-          className="fixed z-[189] select-none"
+      {/* 过渡和临时展开期间替着原生网页视图的那张画面:裁切框的右沿钉在网页原来的右沿,左沿跟着网页该在的位置滑;
+          画面贴着左沿走,收起时右边空出来的那一截用画面边上的颜色补上。 */}
+      {snapshot && (
+        <div
+          data-page-backdrop=""
+          className="fixed z-[189] overflow-hidden select-none"
           style={{
-            left: peek.snapshot.bounds.x,
-            top: peek.snapshot.bounds.y,
-            width: peek.snapshot.bounds.width,
-            height: peek.snapshot.bounds.height,
+            top: snapshot.bounds.y,
+            height: snapshot.bounds.height,
+            left: inset,
+            width: Math.max(0, backdropRight - inset),
+            background: edge ?? undefined,
+            transition: motion.transition("left") === "none" ? "none" : `${motion.transition("left")}, ${motion.transition("width")}`,
           }}
-        />
+        >
+          <img
+            key={snapshot.take}
+            alt=""
+            src={snapshot.frame}
+            draggable={false}
+            onLoad={motion.backdropReady}
+            className="block max-w-none"
+            style={{ width: snapshot.bounds.width, height: snapshot.bounds.height }}
+          />
+        </div>
       )}
     </>
   );
@@ -320,6 +324,36 @@ function PageRow({
       )}
     </li>
   );
+}
+
+/**
+ * 画面右沿最常见的颜色(多数网页右边是底色)。收起时画面往左滑,右边空出来的那一截用它补上,看上去像网页本来的
+ * 底色在延伸,而不是一条白边。取不到(没有 canvas)就不补。
+ */
+function useEdgeColor(frame: string | null): string | null {
+  const [color, setColor] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setColor(null);
+    if (!frame) return;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 24;
+      const context = canvas.getContext("2d");
+      if (!context || !image.naturalWidth) return;
+      context.drawImage(image, image.naturalWidth - 2, 0, 1, image.naturalHeight, 0, 0, 1, 24);
+      const pixels = context.getImageData(0, 0, 1, 24).data;
+      const counts = new Map<string, number>();
+      for (let i = 0; i < pixels.length; i += 4) {
+        const key = `rgb(${pixels[i]}, ${pixels[i + 1]}, ${pixels[i + 2]})`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      setColor([...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
+    };
+    image.src = frame;
+  }, [frame]);
+  return color;
 }
 
 /** 网站图标;没有或取不到就画一个地球。 */

@@ -112,8 +112,9 @@ export interface MosaelPublishBridge {
   newPage(url: string): Promise<boolean>;
   setPagesInset(left: number): Promise<void>;
   /**
-   * 收起的页面列表临时展开(见 BrowserPageList):先拍下前台网页此刻的画面和它在窗口里的位置,渲染层铺回
-   * 原处;再 coverPage(true) 藏起原生视图,列表就盖得住网页。收回时 coverPage(false)。没有前台网页时 null。
+   * 页面列表展开、收起、临时展开(见 usePageListMotion):先拍下前台网页此刻的画面和它在窗口里该在的位置,渲染层
+   * 铺回原处;再 coverPage(true) 把原生视图挪到窗口外,列表就在那张画面上变形。变完 coverPage(false)。没有前台
+   * 网页时 null。
    */
   snapshotPage(): Promise<PageSnapshot | null>;
   coverPage(covered: boolean): Promise<void>;

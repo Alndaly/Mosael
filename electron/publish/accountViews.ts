@@ -113,10 +113,13 @@ const tabId = (tab: PageTab): string => String(tab.view.webContents.id);
  * (不带约束),比例、上下限与窗口边界由 panelGeometry 定。
  */
 /**
- * 前台视图为什么暂时藏着:框选截图(渲染层在原处铺冻结的画面让人拖框)、页面列表临时展开(列表盖在网页
- * 那张画面上)。两件事可能同时在 —— 哪一件还要它藏着,它就藏着。
+ * 前台视图为什么暂时不在原处:框选截图(渲染层在原处铺冻结的画面让人拖框)、页面列表在网页那张画面上展开 /
+ * 收起 / 临时展开(`cover`)。两件事可能同时在 —— 哪一件还要它让开,它就让开。
+ *
+ * 两种让法不一样:框选时**藏起来**;`cover` 是**挪到窗口外面**、照常显示 —— 网页一直在出帧,揭开时回来的就是
+ * 它此刻的样子。藏起来的视图揭开那一下可能先闪一帧藏之前的画面。
  */
-export type ForegroundHideReason = "region" | "peek";
+export type ForegroundHideReason = "region" | "cover";
 
 /** 前台网页此刻的画面和它在窗口里的位置(CSS 像素):渲染层照这个把画面铺回原处。 */
 export interface ForegroundSnapshot {
@@ -738,17 +741,19 @@ export class AccountViewManager {
     this.layout();
   }
 
-  /** 为某件事藏起 / 亮回前台视图;别的事还要它藏着就接着藏(见 foregroundHiddenFor)。 */
+  /** 为某件事让开 / 回到原处;别的事还要它让开就接着让(见 ForegroundHideReason)。 */
   setForegroundHidden(reason: ForegroundHideReason, hidden: boolean): void {
     if (hidden) this.foregroundHiddenFor.add(reason);
     else this.foregroundHiddenFor.delete(reason);
     const view = this.visibleId ? this.views.get(this.visibleId) : null;
-    if (this.alive(view)) view.setVisible(this.foregroundHiddenFor.size === 0);
+    if (this.alive(view)) view.setVisible(!this.foregroundHiddenFor.has("region"));
+    this.layout();
   }
 
   /**
-   * 页面列表临时展开前拍下前台网页此刻的画面:渲染层铺回原处,再请这边藏起原生视图,列表就能盖在上面
-   * (见 setForegroundHidden 的 "peek")。没有前台网页 / 拍不到时 null。
+   * 页面列表变形之前拍下前台网页此刻的画面:渲染层铺回原处,再请这边把原生视图挪开(见 setForegroundHidden 的
+   * "cover"),列表就能在那张画面上展开、收起。`bounds` 是网页在窗口里**该在**的位置 —— 已经挪开了也一样。
+   * 没有前台网页 / 拍不到时 null。
    */
   async snapshotForeground(): Promise<ForegroundSnapshot | null> {
     const view = this.visibleId ? this.views.get(this.visibleId) : null;
@@ -756,7 +761,18 @@ export class AccountViewManager {
     const image = await view.webContents.capturePage();
     if (image.isEmpty()) return null;
     // JPEG:整窗大小的画面编 PNG 要上百毫秒,鼠标停上去等它就显得迟钝;只是临时铺一下的底图。
-    return { frame: `data:image/jpeg;base64,${image.toJPEG(90).toString("base64")}`, bounds: view.getBounds() };
+    return { frame: `data:image/jpeg;base64,${image.toJPEG(90).toString("base64")}`, bounds: this.foregroundBounds() };
+  }
+
+  /** 前台网页在窗口里该在的位置:顶栏下面,左边让出页面列表、右边让出侧栏。 */
+  private foregroundBounds(): { x: number; y: number; width: number; height: number } {
+    const [width, height] = this.window && !this.window.isDestroyed() ? this.window.getContentSize() : [0, 0];
+    return {
+      x: this.shellInsetLeft,
+      y: EMBED_HEADER_HEIGHT,
+      width: Math.max(0, width - this.shellInsetLeft - this.shellInsetRight),
+      height: Math.max(0, height - EMBED_HEADER_HEIGHT),
+    };
   }
 
   /** 换了前台视图 / 收起了:侧栏让出的宽度和暂时的隐藏都不该留给下一个视图。 */
@@ -1053,7 +1069,7 @@ export class AccountViewManager {
       if (shown) {
         tab.view.webContents.setZoomFactor(1);
         void tab.driver.clearMetricsOverride();
-        tab.view.setVisible(this.foregroundHiddenFor.size === 0);
+        tab.view.setVisible(!this.foregroundHiddenFor.has("region"));
       } else {
         this.applyPanelZoom(accountId);
         // addChildView 把它放到了最上面;卡片堆里排在它上面的那几张(和前台视图)要回到它上面去。
@@ -1217,15 +1233,11 @@ export class AccountViewManager {
     }
     const [width, height] = this.window.getContentSize();
 
-    // 前台全屏视图:铺满内容区(顶部留出渲染层自己画的工具条)。
+    // 前台全屏视图:铺满内容区(顶部留出渲染层自己画的工具条)。页面列表盖着它变形时整块挪到窗口外,大小照旧。
     const visible = this.visibleId ? this.views.get(this.visibleId) : null;
     if (this.alive(visible)) {
-      visible.setBounds({
-        x: this.shellInsetLeft,
-        y: EMBED_HEADER_HEIGHT,
-        width: Math.max(0, width - this.shellInsetLeft - this.shellInsetRight),
-        height: Math.max(0, height - EMBED_HEADER_HEIGHT),
-      });
+      const bounds = this.foregroundBounds();
+      visible.setBounds(this.foregroundHiddenFor.has("cover") ? { ...bounds, x: -(bounds.width + OFF_WINDOW_GAP) } : bounds);
     }
 
     // 悬浮面板:右下角卡片堆,后挂的在上,下层的卡片往上错开、露出标题条;网页全部叠在最上面那张

@@ -46,14 +46,30 @@ function state(extra: Partial<PublishViewState> = {}): PublishViewState {
 const row = (id: string) => document.querySelector(`[data-page-row="${id}"]`) as HTMLElement;
 const nav = () => document.querySelector("[data-page-list]") as HTMLElement;
 const listState = () => nav().getAttribute("data-page-list");
-const backdrop = () => document.querySelector("[data-page-peek-backdrop]") as HTMLImageElement | null;
+/** 铺在原处的那张画面(一个裁切框里放着画面本身)。 */
+const backdrop = () => document.querySelector("[data-page-backdrop] img") as HTMLImageElement | null;
+const backdropFrame = () => document.querySelector("[data-page-backdrop]") as HTMLElement | null;
 const pause = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+/** 某一次调用排在第几(跨 mock 比先后)。 */
+const order = (fn: { mock: { calls: unknown[][]; invocationCallOrder: number[] } }, ...args: unknown[]) => {
+  const index = fn.mock.calls.findIndex((call) => JSON.stringify(call) === JSON.stringify(args));
+  return index < 0 ? Number.POSITIVE_INFINITY : fn.mock.invocationCallOrder[index];
+};
 
-/** 临时展开:先等那张画面铺好(它加载完才藏原生视图),再等列表展开。 */
+/** 等新拍的那张画面铺上(它加载完才挪开原生视图)。上一张可能还没拿掉,只认没加载过的那张。 */
+async function coverLoads() {
+  await waitFor(() => expect(backdrop() && !backdrop()!.dataset.loaded).toBe(true));
+  const image = backdrop()!;
+  image.dataset.loaded = "1";
+  const covers = bridge.coverPage.mock.calls.filter(([covered]) => covered).length;
+  fireEvent.load(image);
+  await waitFor(() => expect(bridge.coverPage.mock.calls.filter(([covered]) => covered).length).toBe(covers + 1));
+}
+
+/** 临时展开:先等画面铺好,再等列表展开。 */
 async function peekOut(start: () => void) {
   start();
-  await waitFor(() => expect(backdrop()).not.toBeNull());
-  fireEvent.load(backdrop()!);
+  await coverLoads();
   await waitFor(() => expect(listState()).toBe("peek"));
 }
 
@@ -99,13 +115,15 @@ describe("页面列表", () => {
     expect(bridge.reorderPages).toHaveBeenCalledWith(["3", "1", "2"]);
   });
 
-  it("挂上时左侧让出列表那么宽;收起成图标条变窄并记住;卸载时还回去", () => {
+  it("挂上时左侧让出列表那么宽;收起成图标条变窄并记住;卸载时还回去", async () => {
     const { unmount } = render(<BrowserPageList state={state()} top={56} />);
     expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH);
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
-    expect(document.querySelector("[data-page-list]")?.getAttribute("data-page-list")).toBe("collapsed");
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBe("1");
+    await coverLoads();
+    await waitFor(() => expect(listState()).toBe("collapsed"));
+    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
     unmount();
     expect(bridge.setPagesInset).toHaveBeenLastCalledWith(0);
 
@@ -153,9 +171,10 @@ describe("收起时临时展开(像 Arc)", () => {
     expect(listState()).toBe("collapsed");
     await peekOut(() => fireEvent.mouseEnter(nav()));
     expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
-    const shot = backdrop()!;
-    expect(shot.getAttribute("src")).toBe(SNAPSHOT.frame);
-    expect([shot.style.left, shot.style.top, shot.style.width, shot.style.height]).toEqual(["48px", "56px", "1392px", "844px"]);
+    expect(backdrop()!.getAttribute("src")).toBe(SNAPSHOT.frame);
+    const frame = backdropFrame()!;
+    expect([frame.style.left, frame.style.top, frame.style.width, frame.style.height]).toEqual(["48px", "56px", "1392px", "844px"]);
+    expect([backdrop()!.style.width, backdrop()!.style.height]).toEqual(["1392px", "844px"]);
     expect(bridge.coverPage).toHaveBeenLastCalledWith(true);
     expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
     // 盖在网页上,不推挤它:左侧让出的还是图标条那么宽。
@@ -191,7 +210,7 @@ describe("收起时临时展开(像 Arc)", () => {
     await peekOut(() => act(() => row("2").querySelector("button")!.focus()));
     act(() => (document.querySelector("[data-outside]") as HTMLElement).focus());
     await waitFor(() => expect(listState()).toBe("collapsed"));
-    expect(bridge.coverPage).toHaveBeenLastCalledWith(false);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
   });
 
   it("在展开的列表里点一页:切过去,马上收回让人看到那一页;鼠标移开再回来才再展开", async () => {
@@ -259,5 +278,96 @@ describe("收起时临时展开(像 Arc)", () => {
     expect(listState()).toBe("collapsed");
     expect(backdrop()).toBeNull();
     expect(bridge.coverPage).not.toHaveBeenCalled();
+  });
+});
+
+describe("展开、收起的过渡", () => {
+  it("固定展开 → 收起:先拍下画面盖住网页,再让网页左侧变窄;列表和画面一起滑过去,走完才揭开", async () => {
+    render(<BrowserPageList state={state()} top={56} />);
+    bridge.snapshotPage.mockImplementation(async () => ({ ...SNAPSHOT, bounds: { ...SNAPSHOT.bounds, x: 220, width: 1220 } }));
+    fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
+    // 画面没盖好之前,网页和列表都不动。
+    expect(bridge.setPagesInset).not.toHaveBeenCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
+    expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
+    await coverLoads();
+    // 画面先铺在网页原来的位置,对齐到像素。
+    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH));
+    // 盖着的时候列表和画面的左沿一起往回滑(同一条过渡)。
+    expect(nav().style.width).toBe(`${PAGE_LIST_COLLAPSED_WIDTH}px`);
+    expect(nav().style.transition).toContain("width 180ms");
+    expect(backdropFrame()!.style.left).toBe(`${PAGE_LIST_COLLAPSED_WIDTH}px`);
+    expect(backdropFrame()!.style.transition).toContain("left 180ms");
+    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(backdrop()).toBeNull());
+    expect(order(bridge.snapshotPage)).toBeLessThan(order(bridge.coverPage, true));
+    expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH));
+    expect(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+  });
+
+  it("画面起步时就在网页原来的位置(收起前是 220)", async () => {
+    render(<BrowserPageList state={state()} top={56} />);
+    bridge.snapshotPage.mockImplementation(async () => ({ ...SNAPSHOT, bounds: { ...SNAPSHOT.bounds, x: 220, width: 1220 } }));
+    fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
+    await waitFor(() => expect(backdrop()).not.toBeNull());
+    expect(backdropFrame()!.style.left).toBe("220px");
+    expect(backdropFrame()!.style.width).toBe("1220px");
+    expect(backdrop()!.style.width).toBe("1220px");
+  });
+
+  it("收起 → 展开(图标条上的按钮,不等临时展开):一样先盖后揭,网页挪好了才揭开", async () => {
+    window.localStorage.setItem("mosael.browserPages.collapsed", "1");
+    render(<BrowserPageList state={state()} top={56} />);
+    fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
+    await coverLoads();
+    await waitFor(() => expect(listState()).toBe("expanded"));
+    expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_WIDTH));
+    expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+    expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBeNull();
+  });
+
+  it("临时展开 → 固定展开:一直盖着,中途不揭开(不会先露出窄的网页再跳到宽的)", async () => {
+    window.localStorage.setItem("mosael.browserPages.collapsed", "1");
+    render(<BrowserPageList state={state()} top={56} />);
+    await peekOut(() => fireEvent.mouseEnter(nav()));
+    fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
+    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH));
+    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
+    expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+  });
+
+  it("临时展开、收回也是滑出去滑回来:列表宽度带过渡,收回时滑完了才揭开", async () => {
+    window.localStorage.setItem("mosael.browserPages.collapsed", "1");
+    render(<BrowserPageList state={state()} top={56} />);
+    await peekOut(() => fireEvent.mouseEnter(nav()));
+    expect(nav().style.transition).toContain("width 180ms");
+    fireEvent.mouseLeave(nav());
+    await waitFor(() => expect(listState()).toBe("collapsed"));
+    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
+    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+  });
+
+  it("要求减少动态:不过渡,但照样先盖后揭", async () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(<BrowserPageList state={state()} top={56} />);
+      expect(nav().style.transition).toBe("none");
+      fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
+      await coverLoads();
+      await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+      expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH));
+    } finally {
+      window.matchMedia = matchMedia;
+    }
   });
 });
