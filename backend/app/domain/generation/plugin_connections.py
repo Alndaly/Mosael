@@ -373,6 +373,7 @@ class PluginGenerationAdapter(GenerationAdapter):
             parameters=dict(request.parameters),
             inputs=inputs,
             resume=resume,
+            graph=request.graph,
         )
         with SessionLocal() as db:
             profile = db.get(ProviderProfile, context.connection_id) if context.connection_id else None

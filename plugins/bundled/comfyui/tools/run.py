@@ -7,6 +7,10 @@
 - **停下远端**:宿主建了取消文件,就把这一个任务从 ComfyUI 里停掉 —— 在跑的 `/interrupt`,
   在排队的从队列里删掉。不去停的话,ComfyUI 会把它跑完,占着显卡,而结果没人要;
 - **交回回执**:提交拿到 `prompt_id` 就交给宿主,宿主落库。后端重启后带着它再来,这里接着等,不再提交。
+
+宿主还可以带着**工作台画布上现在这张图**来(`graph`,ADR 0038 §6):不从文件读、直接提交,`client_id` 用前端的那个
+(画布上照常亮起正在跑的节点),`extra_pnginfo.workflow` 带上界面格式(产出拖回 ComfyUI 有布局);只按历史轮询跟到完成,
+不另开 WebSocket 去抢那个 `client_id`(ComfyUI 一个 `client_id` 只留一条连接,后连的会把画布那条挤掉)。
 """
 
 from __future__ import annotations
@@ -189,9 +193,13 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
         raise ComfyError(say(locale, "".join(zh), " ".join(en)))
 
 
-def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str) -> str:
+def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
+           extra_data: dict[str, Any] | None = None) -> str:
+    body: dict[str, Any] = {"prompt": prompt, "client_id": client_id}
+    if extra_data:
+        body["extra_data"] = extra_data
     try:
-        answer = comfy.post("/prompt", {"prompt": prompt, "client_id": client_id})
+        answer = comfy.post("/prompt", body)
     except ComfyError as exc:
         if exc.status == 400:
             try:
@@ -598,6 +606,8 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         prompt_id = str(resume["prompt_id"])
         progress(emit, 0.05, say(locale, "接着等 ComfyUI 里的任务", "Resuming the ComfyUI task"))
         entry = follow_poll(comfy, prompt_id, emit, locale)
+    elif isinstance(request.get("graph"), dict):
+        return _generate_canvas(request["graph"], comfy, locale, emit, kind)
     else:
         object_info = comfy.object_info()
         model_id = str(request.get("model") or "")
@@ -628,6 +638,12 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
+    return _delivered(comfy, entry, kind, wanted, prompt_id, locale)
+
+
+def _delivered(comfy: Comfy, entry: dict[str, Any] | None, kind: str, wanted: set[str] | None, prompt_id: str,
+               locale: str) -> dict[str, Any]:
+    """跑完的这一次交回什么:这一种的产出(`wanted` 只要那几个节点的),取回到本地,每份带上它来自的节点。"""
     files = graph.collect_outputs(entry or {}, kind, wanted)
     if not files:
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
@@ -638,6 +654,34 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
                for one in download(comfy, [{**one, "media": kind} for one in files], "comfyui")]
     usage = {_USAGE_UNITS.get(kind, "images"): len(outputs)}
     return {"outputs": outputs, "usage": usage, "raw": {"prompt_id": prompt_id}}
+
+
+#: 前端的 clientId:ComfyUI 前端自己生成的一串(uuid 去掉横线,或带横线);认不出就换成我们自己的。
+_CLIENT_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+
+
+def _generate_canvas(canvas: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str) -> dict[str, Any]:
+    """跑工作台画布上现在这张(ADR 0038 §6,含没存的改动):宿主给的是前端 `graphToPrompt` 出来的 API 图、界面格式、前端的
+    `clientId`。不读文件、不填参数(画布上就是用户要的样子),提交之前照样查一遍缺的节点和模型;只按历史轮询跟到完成 ——
+    不开 WebSocket,免得把画布那条连接挤掉(细进度工作台自己看前端的事件)。交回这一种的**全部**产出、各带来自哪个节点:
+    工作台按节点分组摆出来,用户在那里挑「以后只要这张」。"""
+    prompt = canvas.get("prompt")
+    if not isinstance(prompt, dict) or not prompt or not all(
+            isinstance(node, dict) and isinstance(node.get("class_type"), str) and isinstance(node.get("inputs"), dict)
+            for node in prompt.values()):
+        raise ComfyError(say(locale, "画布上的图形状不对,没有提交", "The canvas graph is malformed; nothing was submitted."))
+    workflow = canvas.get("workflow")
+    client_id = str(canvas.get("client_id") or "")
+    if not _CLIENT_ID.match(client_id):
+        client_id = uuid.uuid4().hex
+    preflight(prompt, comfy.object_info(), locale)
+    extra = ({"extra_pnginfo": {"workflow": workflow}}
+             if isinstance(workflow, dict) and isinstance(workflow.get("nodes"), list) else None)
+    prompt_id = submit(comfy, prompt, client_id, locale, extra)
+    emit({"event": "task", "task": {"prompt_id": prompt_id, "client_id": client_id}})
+    progress(emit, 0.02, say(locale, "已交给 ComfyUI(画布上这张)", "Submitted to ComfyUI (the canvas graph)"))
+    entry = follow_poll(comfy, prompt_id, emit, locale)
+    return _delivered(comfy, entry, kind, None, prompt_id, locale)
 
 
 def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str,

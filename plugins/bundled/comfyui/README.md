@@ -374,6 +374,31 @@ they pick the workflow; a workflow without an app form still lists everything au
   one confirmation — the reading side doesn't understand old versions. On a graph without `extra.mosael`, marks on nodes
   don't count (they came along with nodes copied from another workflow).
 
+## Workbench (1.13.0)
+
+The second slice of ADR 0038: the Mosael desktop app opens ComfyUI's own canvas full screen in the connection's built-in browser (every
+custom node works as usual) and docks Mosael's panels on the right: models, missing items, app, run & results. The canvas is reached
+through a hard-coded script the Mosael main process injects (pull-only); on the plugin side there are only a few ops, none of which
+touches files on that machine:
+
+- `node_folders`: which model folder each input of the node selected on the canvas (node type + input name) picks from — the same
+  table as the generation form's `x-model-folder` (`labels.model_folder`), a lookup only.
+- `app` with `content`: reads the graph on the canvas right now (unsaved changes included); the same answer as for a file, without a
+  path or modification time.
+- `app_marks`: what an app form / result marks change on the canvas (`properties.mosael` on each marked top-level node, `extra.mosael`
+  on the graph). It is the same function `annotate` writes files with (`app_form.apply`), so the mark format lives in one place;
+  changing the canvas and saving is ComfyUI's own save.
+- `generate` with `graph` (`prompt` / `workflow` / `client_id`): runs the graph on the canvas right now, without reading the file or
+  filling parameters; missing nodes and models are still checked before submitting; the frontend's `client_id` is used (the canvas
+  highlights the running node as usual) and the UI-format graph goes into `extra_pnginfo.workflow` (outputs dragged back into ComfyUI
+  keep their layout). It follows the run by polling the history only, **without opening a WebSocket**: ComfyUI keeps one connection
+  per `client_id`, and a second one would push the canvas off. Every output of the kind comes back with the node it came from
+  (`source_node`); the workbench groups them by node and offers “Only this from now on”. Resuming after a restart still goes by prompt id.
+
+Tested frontend: ComfyUI 0.38.0 / frontend 1.53.10 (read-only checks: injecting the bridge, probing, selection, export, `graphToPrompt`,
+the dirty flag, plus the trackpad / mouse setting's key and the two requests it tries to write back to the server; nothing was
+queued or saved). If a frontend lacks something the bridge uses, that panel says it isn't supported and the canvas keeps working.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -397,6 +422,8 @@ they pick the workflow; a workflow without an app form still lists everything au
 - `graph.py`: finds prompts / seeds / sizes / slots / output nodes, gathers them into one list of what can be filled in
   (`items`) and a form (`Form`), describes the graph as a model, fills the graph in and collects outputs;
 - `app_form.py`: app forms: reads, checks and writes the `mosael` marks in a workflow;
+- `workbench.py`: what the workbench asks the plugin: which model folder a selected node's input picks from, and the marks an app
+  form changes on the canvas;
 - `labels.py`: plain names for tunable inputs, their order, whether they are common, and the few that aren't tuned in
   Mosael;
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;

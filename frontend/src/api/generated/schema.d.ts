@@ -6514,6 +6514,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/model-library/node-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Model Node Folders
+         * @description 工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格各选的是哪个模型目录的文件。只查表,不改那台机器。
+         */
+        post: operations["get_model_node_folders_api_plugins_instances__instance_id__model_library_node_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library": {
         parameters: {
             query?: never;
@@ -6590,6 +6610,66 @@ export interface paths {
          *     就不写,回 409 `stale`。
          */
         post: operations["annotate_workflow_api_plugins_instances__instance_id__workflow_library_annotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/app/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Canvas App
+         * @description 工作台的「应用」面板(ADR 0038 §3):画布上现在这张(含没存的改动)的应用表单。不读、不写那台机器上的文件。
+         */
+        post: operations["get_canvas_app_api_plugins_instances__instance_id__workflow_library_app_live_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/app/marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Canvas Marks
+         * @description 应用表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。
+         */
+        post: operations["get_canvas_marks_api_plugins_instances__instance_id__workflow_library_app_marks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Canvas
+         * @description 工作台的「运行」(ADR 0038 §6):跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流)。
+         */
+        post: operations["run_canvas_api_plugins_instances__instance_id__workflow_library_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11373,6 +11453,29 @@ export interface components {
             label: string;
         };
         /**
+         * ModelNodeFolderIn
+         * @description 画布上选中的节点的一格:节点类型 + 输入名。
+         */
+        ModelNodeFolderIn: {
+            /** Class Type */
+            class_type: string;
+            /** Input */
+            input: string;
+        };
+        /** ModelNodeFoldersOut */
+        ModelNodeFoldersOut: {
+            /** Folders */
+            folders?: string[];
+        };
+        /**
+         * ModelNodeFoldersRequest
+         * @description 工作台的「模型库」面板(ADR 0038 §6):这几格各选的是哪个模型目录的文件。
+         */
+        ModelNodeFoldersRequest: {
+            /** Nodes */
+            nodes: components["schemas"]["ModelNodeFolderIn"][];
+        };
+        /**
          * ModelResolveOut
          * @description 一个链接指的是什么。`exists`:这个名字在建议的目录里已经有了(不覆盖,界面要求换名)。
          */
@@ -15650,6 +15753,70 @@ export interface components {
              * @default 0
              */
             fields: number;
+        };
+        /**
+         * WorkflowCanvasMarksOut
+         * @description 画布上每个带标记的根图节点要有的 `properties.mosael`(别的节点上的去掉),和图上的 `extra.mosael`(null = 去掉)。
+         */
+        WorkflowCanvasMarksOut: {
+            /** Nodes */
+            nodes?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * WorkflowCanvasMarksRequest
+         * @description 应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」;不写文件)。
+         */
+        WorkflowCanvasMarksRequest: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            app?: components["schemas"]["WorkflowAppIn"] | null;
+            /** Results */
+            results?: string[];
+        };
+        /**
+         * WorkflowCanvasRequest
+         * @description 工作台画布上现在这张(界面格式,含没存的改动;主进程的桥从内嵌的 ComfyUI 里导出来)。
+         */
+        WorkflowCanvasRequest: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * WorkflowCanvasRunRequest
+         * @description 工作台的「运行」(ADR 0038 §6):跑画布上现在这张。模型是 `path` 那张工作流,图放在任务的载荷里。
+         */
+        WorkflowCanvasRunRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Path */
+            path: string;
+            /** Prompt */
+            prompt: {
+                [key: string]: unknown;
+            };
+            /** Workflow */
+            workflow?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Client Id
+             * @default
+             */
+            client_id: string;
         };
         /** WorkflowContentOut */
         WorkflowContentOut: {
@@ -29929,6 +30096,41 @@ export interface operations {
             };
         };
     };
+    get_model_node_folders_api_plugins_instances__instance_id__model_library_node_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelNodeFoldersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelNodeFoldersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_workflow_library_api_plugins_instances__instance_id__workflow_library_get: {
         parameters: {
             query?: {
@@ -30050,6 +30252,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowAnnotateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_canvas_app_api_plugins_instances__instance_id__workflow_library_app_live_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCanvasRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowAppOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_canvas_marks_api_plugins_instances__instance_id__workflow_library_app_marks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCanvasMarksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowCanvasMarksOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_canvas_api_plugins_instances__instance_id__workflow_library_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCanvasRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCreateResponse"];
                 };
             };
             /** @description Validation Error */

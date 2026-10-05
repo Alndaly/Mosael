@@ -7,7 +7,7 @@
     {"op": "models"}      → 一行结果:这台 ComfyUI 上有哪些模型(内置文生图、粘贴的模板、保存的每张工作流)+ 指纹
     {"op": "tools"}       → 一行结果:每张工作流一个工具(入参、输出都从那张图推出来)+ 指纹
     {"op": "fingerprint"} → 一行结果:清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
-    {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果
+    {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果;带 `graph` 跑工作台画布上现在这张(见 run)
 
 **模型库**(ADR 0034,同一个工具认领 `model_library`):
 
@@ -15,6 +15,7 @@
     {"op": "detail", "folder", "name"}     → 一个文件的完整元数据
     {"op": "resolve", "url"}               → 一个链接指的是哪个文件(见 sources)
     {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
+    {"op": "node_folders", "nodes"}         → 工作台:选中节点上选模型文件的那几格各是哪个模型目录(见 workbench)
 
 **工作流库**(ADR 0035,同一个工具认领 `workflow_library`,见 workflow_library):
 
@@ -23,7 +24,9 @@
     {"op": "copy_workflow" | "rename_workflow" | "restore_workflow", "path", "new_path"} → 不覆盖,撞名回 conflict
     {"op": "trash_workflow", "path"}                    → 挪进回收目录(不硬删)
     {"op": "app", "path"}                               → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、改动时间
+    {"op": "app", "content"}                            → 同上,读的是工作台画布上现在这张(不读文件,没有改动时间)
     {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
+    {"op": "app_marks", "content", "app", "results"}    → 工作台:应用表单写进画布要改成的那几处标记(不写文件,见 workbench)
 
 **给智能体和工作流的工具**:
 
@@ -51,6 +54,7 @@ import server
 import sources
 import tooling
 import workflow_import
+import workbench
 import workflow_library
 import workflows
 from comfy_http import Comfy, env_access_token, env_base_url
@@ -81,6 +85,8 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return sources.resolve(payload, comfy, locale)
     if op == "download":
         return install.download(payload, comfy, locale, emit)
+    if op == "node_folders":
+        return workbench.node_folders(payload, comfy, locale)
     if op == "install_nodes":
         return workflow_import.install_nodes(payload, comfy, locale, emit)
     if op in _WORKFLOW_LIBRARY:
@@ -98,6 +104,7 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "restore_workflow": workflow_library.restore_workflow,
     "app": workflow_library.app,
     "annotate": workflow_library.annotate,
+    "app_marks": workbench.app_marks,
     "inspect_import": workflow_import.inspect_import,
     "save_workflow": workflow_import.save_workflow,
     "reboot": workflow_import.reboot,

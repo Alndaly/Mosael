@@ -191,6 +191,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 negative_prompt=str(generation.request.get("negative_prompt", "")),
                 parameters=dict(generation.request.get("parameters") or {}),
                 sources=_sources_for_generation(db, generation),
+                #: 工作台跑画布上那张图(ADR 0038 §6):图在任务载荷里,不在生成参数里
+                graph=_workbench_graph(job),
             )
             adapter.validate_request(request)
             #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
@@ -297,6 +299,14 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _workbench_graph(job: Job) -> dict | None:
+    """工作台交来的那张图(见 operations.WORKBENCH_GRAPH);普通的生成没有。"""
+    from app.domain.generation.operations import WORKBENCH_GRAPH
+
+    graph = (job.payload or {}).get(WORKBENCH_GRAPH)
+    return graph if isinstance(graph, dict) else None
 
 
 def _job_callbacks(db, job: Job):

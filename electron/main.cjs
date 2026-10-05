@@ -35,6 +35,8 @@ const {
   parseBrowserLogin,
   parseComfyNavigation,
   parseComfyNewWorkflow,
+  parseComfyWorkbenchCall,
+  parseComfyWorkbenchOpen,
   parseComfyWorkflow,
   parseBrowserProfile,
   parseCaptureMode,
@@ -720,6 +722,10 @@ function createWindow() {
         onDownload: (notice) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.pageToolsDownload, notice);
         },
+        // ComfyUI 工作台:主进程轮询内嵌画布里的桥看到的(选中、脏标记、能力、事件),规整过才发;null 是会话结束了。
+        onWorkbench: (update) => {
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.comfyuiWorkbench, update);
+        },
         // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
         // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
         // 因为内部分了两个 worker 就冒出两个窗口。
@@ -914,6 +920,23 @@ app.whenReady().then(async () => {
     }
   });
   // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):写死的脚本经前端的设置仓库设好,写回服务器的那一下只在这个分区上拦下。
+  // ComfyUI 工作台(ADR 0038 §3):开 = 亮出视图、注入写死的桥、开始轮询(视图收起就停);面板要桥做的事逐项校验后以 JSON
+  // 数据嵌进写死的调用脚本。两条都只认按连接 id 拼出来的分区。
+  ipcMain.handle(IPC.invoke.comfyuiOpenWorkbench, async (_e, payload) => {
+    try {
+      const request = parseComfyWorkbenchOpen(payload);
+      return { ok: true, outcome: await requirePublish().openComfyWorkbench(request) };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  ipcMain.handle(IPC.invoke.comfyuiWorkbenchCall, async (_e, payload) => {
+    try {
+      return await requirePublish().comfyWorkbenchCall(parseComfyWorkbenchCall(payload));
+    } catch (err) {
+      return { ok: false, error: "invalid", message: String(err && err.message ? err.message : err) };
+    }
+  });
   ipcMain.handle(IPC.invoke.comfyuiNavigation, async (_e, payload) => {
     try {
       const request = parseComfyNavigation(payload);

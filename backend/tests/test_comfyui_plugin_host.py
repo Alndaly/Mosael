@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.models import GeneratedAsset, Job, ProviderProfile
+from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderProfile
 from tests.fake_comfyui import comfyui_grants, PNG, FakeComfyUI
 from tests.util import fresh_client, wait_status
 
@@ -197,3 +197,40 @@ def test_目录变了才重新拉_问指纹不留调用记录(connected) -> None
     with SessionLocal() as db:
         rows = db.query(PluginInvocation).filter_by(instance_id=instance_id).all()
     assert len(rows) == calls_before + 2, "只有真的重新拉目录的那两次留记录;问指纹不留"
+
+
+def test_工作台跑画布上的图_从头到尾_普通的生成任务_产出标来源节点(connected) -> None:
+    """ADR 0038 §6:工作台的「运行」跑画布上现在这张(含没存的改动)。真插件、假 ComfyUI、普通的生成执行器:图在任务载荷里交给
+    插件,原样提交(前端的 clientId、界面格式进 extra_pnginfo),不读文件、不填参数,产出进素材库、各带来自哪个节点。"""
+    from tests.fake_comfyui import PORTRAIT_UI
+
+    client, comfy, instance_id = connected
+    workspace = client.post("/api/workspaces", json={"name": "工作台"}).json()["id"]
+    comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]},
+                           "12": {"images": [{"filename": "b.png", "subfolder": "", "type": "temp"}]}}
+    canvas = json.loads(json.dumps(PORTRAIT_UI))
+    prompt = {
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base.safetensors"}},
+        "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "canvas", "images": ["4", 0]}},
+    }
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/run", json={
+        "workspace_id": workspace, "path": "portrait.json", "prompt": prompt, "workflow": canvas,
+        "client_id": "4f1c0e2a9b7d4c51a3e8",
+    })
+    assert response.status_code == 200, response.text
+    job_id = response.json()["job"]["id"]
+    assert wait_status(client, job_id, timeout=60) == "succeeded"
+    body = comfy.posted("/prompt")[0]
+    assert body["prompt"] == prompt, "画布上的图原样提交"
+    assert body["client_id"] == "4f1c0e2a9b7d4c51a3e8"
+    assert body["extra_data"]["extra_pnginfo"]["workflow"] == canvas
+    job = client.get(f"/api/jobs/{job_id}").json()
+    assert "workbench_graph" not in job["payload"], "任务出口不带那张图"
+    [asset_id] = job["result"]["asset_ids"]
+    assert job["result"]["output_parameters"] == [{"asset_id": asset_id, "parameters": {"source_node": "9"}}]
+    with SessionLocal() as db:
+        generated = db.get(GeneratedAsset, asset_id)
+        assert generated.parameters == {"source_node": "9"}, "图不进生成参数"
+        generation = db.scalar(select(GenerationJob).where(GenerationJob.job_id == job_id))
+        assert generation.request["workbench"] is True and "workbench_graph" not in generation.request
+        assert db.get(GenerationSession, generation.session_id).title == "portrait", "会话按那张工作流的名字叫"

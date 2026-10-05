@@ -508,11 +508,25 @@ def _item_out(item: dict[str, Any]) -> dict[str, Any]:
                                        "class_type", "common", "schema") if key in item}
 
 
+def live_graph(payload: dict[str, Any], locale: str) -> dict[str, Any]:
+    """宿主带来的**画布上现在这张**(工作台,ADR 0038 §3):界面格式的图,有 `nodes` 才认。"""
+    content = payload.get("content")
+    if not isinstance(content, dict) or not isinstance(content.get("nodes"), list):
+        raise ComfyError(say(locale, "画布上的图不是界面格式的工作流", "The canvas graph is not a UI-format workflow."))
+    return content
+
+
 def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     """一张工作流的应用表单,给编辑器用:这张图**全部能填的项**(graph.items)、交回结果的输出节点(标「以后只要这张」用)、
-    文件里的标记(对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记(`editable: false`)。"""
-    path = check_path(payload.get("path"), locale)
-    source, modified = _read(comfy, path, locale)
+    文件里的标记(对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记(`editable: false`)。
+
+    带着 `content`(工作台画布上现在这张,含没存的改动)来就不读文件:同样的回答,没有路径和改动时间 —— 改的是画布,
+    存盘是 ComfyUI 自己的保存。"""
+    if payload.get("content") is not None:
+        path, source, modified = "", live_graph(payload, locale), None
+    else:
+        path = check_path(payload.get("path"), locale)
+        source, modified = _read(comfy, path, locale)
     object_info = comfy.object_info()
     api = graph.live(convert.to_api(source, object_info, locale), object_info)
     titles = convert.titles_of(api)

@@ -40,6 +40,10 @@ from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
 
+#: 工作台跑画布上那张图时,图放在任务载荷的这一格(见 `_create_generation_job` 的 `workbench_graph`)。任务出口不带它
+#: (api/schemas/jobs.JobOut 摘掉同名的一格):几百 KB,执行器要,界面不要。
+WORKBENCH_GRAPH = "workbench_graph"
+
 
 class GenerationDomainError(LocalizedError, ValueError):
     """生成提交被拒。带文案 key(`genErr_*`,见 core/i18n),按请求方的语言翻。"""
@@ -215,6 +219,7 @@ def _create_generation_job(
     name_sources: bool = False,
     documents: Sequence[ReferenceDocument] = (),
     digital_human_consent: bool = False,
+    workbench_graph: dict[str, Any] | None = None,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -230,6 +235,11 @@ def _create_generation_job(
     `digital_human_consent`:带驱动音频的生成(说话照片、对口型,即数字人)必须由调用方声明「已取得画面中人物的
     授权」(ADR 0028 §5),否则当场拒 —— AI 工作台、智能体、画板、工作流、定时任务都从这里过,一处都漏不掉。
     工作流里人物说话 / 图片说话 / 对口型的节点在自己那一层已经查过(资产声明或面板上的确认),传 True 进来。
+
+    `workbench_graph`:ComfyUI 工作台跑**画布上现在这张**(ADR 0038 §6):前端 `graphToPrompt` 出来的 API 图、界面格式、前端的
+    `clientId`(工作流库那一侧规整过,见 workflow_library.run_canvas)。图就是用户要跑的样子 —— 不补声明的默认值、不按模型的
+    提示词 / 参数 / 素材规矩判(那些说的是存着的那张),调用方也不给提示词、参数和素材。它放在**任务的载荷**里交给执行器
+    (几百 KB,不进生成参数、不进生成记录的请求,任务出口也不带它),生成记录上只记一句 `workbench: true`。
 
     **请求里的 `prompt` 只是用户写的那段。** 连进来的文档、白模说明、资产描述、素材对照是漏斗替他补给模型的,各成一段记在
     `prompt_notes` 里,交给供应商时由 `prompt_for_provider` 接在后面 —— 生成记录上画的是他说的话,不是
@@ -264,8 +274,12 @@ def _create_generation_job(
         raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
 
     capabilities = resolved.capabilities if resolved.capabilities_known else None
+    if workbench_graph is not None and (prompt.strip() or parameters or source_assets or entity_ids or scene_reference
+                                        or documents):
+        raise GenerationDomainError("genErr_workbenchGraphAlone")
     #: 从这里往下(校验、请求记录、交给适配器、按参数估价)看的都是**真要发出去的**那一份参数。
-    parameters = with_declared_defaults(parameters, capabilities, kind)
+    if workbench_graph is None:
+        parameters = with_declared_defaults(parameters, capabilities, kind)
     #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
     legend = source_legend(db, workspace_id, source_assets) if name_sources and prompt.strip() else ""
     #: 文档排在补充的最前面,紧跟用户写的那句 —— 画板此前在前端把它直接拼在正文后面,模型收到的顺序不变。
@@ -312,19 +326,20 @@ def _create_generation_job(
     notes.extend(note for note in (expansion.note, tr("genPromptSourceLegend", legend=legend) if legend else "") if note)
     request_text = {"prompt": prompt, **({"prompt_notes": notes} if notes else {})}
 
-    validate_against_capabilities(
-        provider,
-        model,
-        kind,
-        parameters,
-        source_assets,
-        capabilities=resolved.capabilities if resolved.capabilities_known else None,
-    )
-    #: 规矩按**模型收到的**那段判:只 `@` 了资产、自己一个字没写,描述也算提示词(此前两者本来就拼在一起判)。
-    validate_text_inputs(
-        provider, model, kind, prompt_for_provider(request_text), parameters,
-        capabilities=resolved.capabilities if resolved.capabilities_known else None,
-    )
+    if workbench_graph is None:
+        validate_against_capabilities(
+            provider,
+            model,
+            kind,
+            parameters,
+            source_assets,
+            capabilities=resolved.capabilities if resolved.capabilities_known else None,
+        )
+        #: 规矩按**模型收到的**那段判:只 `@` 了资产、自己一个字没写,描述也算提示词(此前两者本来就拼在一起判)。
+        validate_text_inputs(
+            provider, model, kind, prompt_for_provider(request_text), parameters,
+            capabilities=resolved.capabilities if resolved.capabilities_known else None,
+        )
     uploaded = _validate_source_assets(
         db, workspace_id, source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
@@ -342,7 +357,8 @@ def _create_generation_job(
         db,
         workspace_id=workspace_id,
         named=named,
-        prompt=prompt,
+        #: 工作台跑画布上的图没有提示词:会话按那张工作流的名字叫,不是一串「新生成」
+        prompt=prompt if workbench_graph is None else model.rsplit("/", 1)[-1].removesuffix(".json"),
         created_by=created_by,
         engine=(provider_profile.id if provider_profile else None, model, kind),
     )
@@ -360,18 +376,21 @@ def _create_generation_job(
     if talking:
         #: 谁、在这一次声明了授权:生成记录上留底(提交的人就是 created_by)。
         request["digital_human_consent"] = True
+    if workbench_graph is not None:
+        request["workbench"] = True
     job = create_job(
         db,
         workspace_id=workspace_id,
         kind="ai_generation",
         created_by=created_by,
         payload={
-            "subject": (prompt or prompt_for_provider(request_text))[:80],
+            "subject": (prompt or prompt_for_provider(request_text))[:80] or model[:80],
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,
             "kind": kind,
             "request": request,
+            **({WORKBENCH_GRAPH: workbench_graph} if workbench_graph is not None else {}),
         },
         message="jobMsg_generationQueued",
     )

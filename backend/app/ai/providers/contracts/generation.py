@@ -153,6 +153,9 @@ class GenerationRequest:
     negative_prompt: str = ""
     parameters: dict[str, Any] = field(default_factory=dict)
     sources: tuple[SourceAsset, ...] = ()
+    #: 调用方交来的一整张图,跑它而不是模型存着的那张(ComfyUI 工作台的「运行」,ADR 0038 §6):`prompt`(API 格式)、
+    #: `workflow`(界面格式)、`client_id`。只有插件的生成适配器转交它;别的供应商没有「图」,不看这一格。
+    graph: dict[str, Any] | None = None
 
     def source_for(self, role: str) -> Path | None:
         """取这个角色的素材;没有就是 None。同一角色给了多份时取第一份。"""

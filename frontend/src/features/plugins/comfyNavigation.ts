@@ -10,6 +10,9 @@ export type ComfyNavigation = "trackpad" | "mouse";
 const PREFIX = "persist:pool-comfyui-";
 const storageKey = (connectionId: string) => `mosael:comfy-navigation:${connectionId}`;
 
+/** ComfyUI 连接 id → 它的内嵌视图分区(和主进程契约拼的是同一个,见 electron/ipc-contract.cjs comfyPartition)。 */
+export const comfyPartition = (connectionId: string) => `${PREFIX}${connectionId}`;
+
 /** 内嵌视图的分区 → ComfyUI 连接 id;不是 ComfyUI 连接的视图是 null。 */
 export function comfyConnectionOf(partition: string | null | undefined): string | null {
   if (!partition?.startsWith(PREFIX)) return null;

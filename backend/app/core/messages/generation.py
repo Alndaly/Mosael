@@ -53,6 +53,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{provider}/{kind} 没有可用的生成适配器",
         "en": "No generation adapter is available for {provider}/{kind}.",
     },
+    "genErr_workbenchGraphAlone": {
+        "zh": "跑工作台画布上的图时,提示词、参数和素材都在图里 —— 不能再另给",
+        "en": "When running the workbench canvas graph, the prompt, parameters and media are all in the graph; none can be given separately.",
+    },
     "genErr_digitalHumanNeedsConsent": {
         "zh": "这是数字人生成(带驱动音频):先确认已取得画面中人物的授权 —— 本人,或已取得其单独同意",
         "en": "This is a digital-human generation (it has driving audio): confirm you have the pictured person's consent first — it's you, or they agreed separately.",

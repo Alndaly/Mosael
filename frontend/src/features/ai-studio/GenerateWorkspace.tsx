@@ -36,6 +36,7 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
+import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -989,6 +990,16 @@ export function GenerateWorkspace({
                   className={PARAMETER_CONTROL_CLASS}
                 />
               </ParameterField>
+              {/* 选中的是某台 ComfyUI 上的一张工作流:在工作台里打开它(画布 + 模型库、缺失项、应用、运行,ADR 0038) */}
+              {selectedModel?.plugin_instance_id && (
+                <OpenInWorkbench
+                  key={`${selectedModel.plugin_instance_id}:${selectedModel.model}`}
+                  instanceId={selectedModel.plugin_instance_id}
+                  instanceName={selectedModel.profile_name || selectedModel.provider}
+                  model={selectedModel.model}
+                  workspaceId={workspace.id}
+                />
+              )}
             </ParameterSection>
           )}
           {selectedModel && (

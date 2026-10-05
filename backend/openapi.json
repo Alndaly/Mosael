@@ -19849,6 +19849,59 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/model-library/node-folders": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Model Node Folders",
+        "description": "工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格各选的是哪个模型目录的文件。只查表,不改那台机器。",
+        "operationId": "get_model_node_folders_api_plugins_instances__instance_id__model_library_node_folders_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelNodeFoldersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelNodeFoldersOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library": {
       "get": {
         "tags": [
@@ -20042,6 +20095,165 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkflowAnnotateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/app/live": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Canvas App",
+        "description": "工作台的「应用」面板(ADR 0038 §3):画布上现在这张(含没存的改动)的应用表单。不读、不写那台机器上的文件。",
+        "operationId": "get_canvas_app_api_plugins_instances__instance_id__workflow_library_app_live_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCanvasRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowAppOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/app/marks": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Canvas Marks",
+        "description": "应用表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。",
+        "operationId": "get_canvas_marks_api_plugins_instances__instance_id__workflow_library_app_marks_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCanvasMarksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCanvasMarksOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/run": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Run Canvas",
+        "description": "工作台的「运行」(ADR 0038 §6):跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流)。",
+        "operationId": "run_canvas_api_plugins_instances__instance_id__workflow_library_run_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCanvasRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCreateResponse"
                 }
               }
             }
@@ -31629,6 +31841,58 @@
         "title": "ModelLibraryRefOut",
         "description": "一张工作流:id 和给人看的名字。"
       },
+      "ModelNodeFolderIn": {
+        "properties": {
+          "class_type": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Class Type"
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Input"
+          }
+        },
+        "type": "object",
+        "required": [
+          "class_type",
+          "input"
+        ],
+        "title": "ModelNodeFolderIn",
+        "description": "画布上选中的节点的一格:节点类型 + 输入名。"
+      },
+      "ModelNodeFoldersOut": {
+        "properties": {
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Folders"
+          }
+        },
+        "type": "object",
+        "title": "ModelNodeFoldersOut"
+      },
+      "ModelNodeFoldersRequest": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ModelNodeFolderIn"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Nodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "title": "ModelNodeFoldersRequest",
+        "description": "工作台的「模型库」面板(ADR 0038 §6):这几格各选的是哪个模型目录的文件。"
+      },
       "ModelResolveOut": {
         "properties": {
           "source": {
@@ -40461,6 +40725,137 @@
         "type": "object",
         "title": "WorkflowAppSummaryOut",
         "description": "一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。"
+      },
+      "WorkflowCanvasMarksOut": {
+        "properties": {
+          "nodes": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Nodes"
+          },
+          "extra": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowCanvasMarksOut",
+        "description": "画布上每个带标记的根图节点要有的 `properties.mosael`(别的节点上的去掉),和图上的 `extra.mosael`(null = 去掉)。"
+      },
+      "WorkflowCanvasMarksRequest": {
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowAppIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "results": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "WorkflowCanvasMarksRequest",
+        "description": "应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」;不写文件)。"
+      },
+      "WorkflowCanvasRequest": {
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "WorkflowCanvasRequest",
+        "description": "工作台画布上现在这张(界面格式,含没存的改动;主进程的桥从内嵌的 ComfyUI 里导出来)。"
+      },
+      "WorkflowCanvasRunRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "prompt": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Prompt"
+          },
+          "workflow": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow"
+          },
+          "client_id": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Client Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "path",
+          "prompt"
+        ],
+        "title": "WorkflowCanvasRunRequest",
+        "description": "工作台的「运行」(ADR 0038 §6):跑画布上现在这张。模型是 `path` 那张工作流,图放在任务的载荷里。"
       },
       "WorkflowContentOut": {
         "properties": {

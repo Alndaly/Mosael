@@ -140,7 +140,7 @@ export function WorkflowAppEditor({
     );
   } else {
     body = (
-      <EditorBody
+      <AppFormEditor
         instance={instance}
         data={data}
         draft={draft}
@@ -214,16 +214,22 @@ function whereOf(item: WorkflowFillable | undefined): string {
   return `${item.node_title || item.class_type} #${item.node} · ${item.input}`;
 }
 
-function EditorBody({
+/**
+ * 编辑器的正文:表单上的项、结果、其余能填的项,和预览。工作流库里的编辑器(弹窗,左右两栏)和工作台的「应用」面板(画布旁边
+ * 那一列,`stacked`:上下排)共用 —— 工作台里改的是画布上的节点(见 comfy-workbench/canvasMarks)。
+ */
+export function AppFormEditor({
   instance,
   data,
   draft,
   onChange,
+  stacked = false,
 }: {
-  instance: PluginInstance;
+  instance: Pick<PluginInstance, "id">;
   data: WorkflowApp;
   draft: AppDraft;
   onChange: (next: AppDraft) => void;
+  stacked?: boolean;
 }) {
   const t = useI18n();
   const [query, setQuery] = React.useState("");
@@ -237,7 +243,7 @@ function EditorBody({
   const preview = React.useMemo(() => previewOption(data, draft, instance.id), [data, draft, instance.id]);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+    <div className={cn("grid gap-5", !stacked && "lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]")}>
       <div className="grid min-w-0 content-start gap-5">
         {data.app?.status === "unsupported" && (
           <Notice tone="warning">{t("workflowAppUnsupported").replace("{version}", data.app?.version || "?")}</Notice>
@@ -342,7 +348,8 @@ function EditorBody({
         </LibrarySection>
       </div>
 
-      <aside aria-label={t("workflowAppPreview")} className="grid min-w-0 content-start gap-3 lg:sticky lg:top-0 lg:self-start">
+      <aside aria-label={t("workflowAppPreview")}
+             className={cn("grid min-w-0 content-start gap-3", !stacked && "lg:sticky lg:top-0 lg:self-start")}>
         <div className="grid gap-0.5">
           <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
             <ListChecks size={14} aria-hidden />

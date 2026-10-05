@@ -196,6 +196,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "目录「{name}」不行:选这台服务器上的一个模型目录(如 loras)",
         "en": "The folder “{name}” won't do: pick one of the server's model folders (e.g. loras)",
     },
+    "modelLibErr_tooManyNodes": {
+        "zh": "一次最多查 {n} 格",
+        "en": "At most {n} inputs can be looked up at once",
+    },
+    "modelLibErr_badAnswer": {
+        "zh": "{name} 的回答形状不对",
+        "en": "{name} gave a malformed answer",
+    },
     "modelLibErr_instanceGone": {
         "zh": "这个插件连接已经删掉了,下载没开始",
         "en": "This plugin connection was deleted; the download did not start",
@@ -243,6 +251,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     "workflowLibErr_badAppItem": {
         "zh": "应用表单里的「{item}」不对:只认根图上的节点(节点号是数字)和图级的种子 / 尺寸 / 跑几遍",
         "en": "“{item}” in the app form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
+    },
+    "workflowLibErr_canvasNotUi": {
+        "zh": "画布上的图不是界面格式的工作流",
+        "en": "The canvas graph is not a UI-format workflow",
+    },
+    "workflowLibErr_canvasTooBig": {
+        "zh": "画布上的图太大了(超过 {mb} MB)",
+        "en": "The canvas graph is too big (over {mb} MB)",
+    },
+    "workflowLibErr_canvasBadPrompt": {
+        "zh": "画布导出的 API 图形状不对,没有运行",
+        "en": "The API graph exported from the canvas is malformed, so it wasn't run",
+    },
+    "workflowLibErr_runNotModel": {
+        "zh": "「{path}」还不是这个连接下的生成模型:先在 ComfyUI 里保存这张工作流(新建的要起个名字存一次),回到工作流库刷新出来再运行",
+        "en": "“{path}” isn't a generation model on this connection yet: save the workflow in ComfyUI first (a new one needs a name), refresh the workflow library, then run it",
+    },
+    "workflowLibErr_badMarks": {
+        "zh": "{name} 交回的画布标记形状不对",
+        "en": "{name} returned malformed canvas marks",
     },
     "workflowLibErr_appTooBig": {
         "zh": "应用表单太大了:最多 {items} 项、每项最多 {choices} 个可选值、最多标 {results} 个结果",

@@ -9,6 +9,7 @@ import {
   FolderTree,
   Info,
   LayoutGrid,
+  LayoutPanelLeft,
   MoreHorizontal,
   PencilLine,
   Plus,
@@ -87,6 +88,7 @@ import {
   NEW_NOTE_PATH,
   embeddedCreate,
   embeddedEditor,
+  embeddedWorkbench,
   useWorkflowEditor,
   type EditorNote,
   type WorkflowEditor,
@@ -215,7 +217,7 @@ export function WorkflowLibraryDialog({
         invalidatePluginDependents(qc);
       });
   }, [instance.id, qc]);
-  const editor = useWorkflowEditor(instance, editorReturned);
+  const editor = useWorkflowEditor(instance, editorReturned, workspaceId);
 
   const workflows = React.useMemo(() => library.data?.workflows ?? [], [library.data]);
   const trash = library.data?.trash ?? [];
@@ -263,7 +265,8 @@ export function WorkflowLibraryDialog({
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
   const editorTarget = library.data?.editor ?? null;
   const newButton = editorTarget ? (
-    <Hint label={t(embeddedCreate(editorTarget) ? "workflowNewHint" : "workflowNewHintTab")}>
+    <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint"
+      : embeddedCreate(editorTarget) ? "workflowNewHint" : "workflowNewHintTab")}>
       <Button disabled={editor.opening} onClick={() => void editor.create(editorTarget)}>
         <Plus size={13} />
         {t("workflowNew")}
@@ -448,6 +451,7 @@ export function WorkflowLibraryDialog({
             opening={editor.opening}
             note={editor.note?.path === detail.path ? editor.note : null}
             onOpenEditor={(where) => void editor.open(where, detail)}
+            onOpenWorkbench={(where) => void editor.workbench(where, detail)}
             onShowModel={onShowModel}
             manager={library.data?.manager?.version ?? ""}
             installs={sessionInstalls.filter((job) => packsOf(job).some((id) =>
@@ -790,6 +794,7 @@ function WorkflowDetail({
   opening,
   note,
   onOpenEditor,
+  onOpenWorkbench,
   onShowModel,
   manager,
   installs,
@@ -811,6 +816,8 @@ function WorkflowDetail({
   opening: boolean;
   note: EditorNote | null;
   onOpenEditor: (editor: WorkflowEditor) => void;
+  /** 在工作台里打开(ADR 0038):桌面版、编辑器是 ComfyUI 时才有 */
+  onOpenWorkbench: (editor: WorkflowEditor) => void;
   onShowModel?: (focus: ModelFocus) => void;
   manager: string;
   installs: Job[];
@@ -882,6 +889,14 @@ function WorkflowDetail({
             {t("modelUseToGenerate")}
           </Button>
         </Hint>
+        {editor && embeddedWorkbench(editor) && (
+          <Hint label={t("workflowOpenInWorkbenchHint")}>
+            <Button variant="outline" disabled={opening} onClick={() => onOpenWorkbench(editor)}>
+              <LayoutPanelLeft size={13} />
+              {t("workflowOpenInWorkbench")}
+            </Button>
+          </Hint>
+        )}
         {editor && (
           <Hint label={t(embeddedEditor(editor) ? "workflowOpenInEditorHint" : "workflowOpenInEditorHintTab")}>
             <Button variant="outline" disabled={opening} onClick={() => onOpenEditor(editor)}>

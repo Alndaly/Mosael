@@ -15,10 +15,32 @@ export const APP_CHROME = { "data-app-chrome": "" } as const;
 
 type OutsideEvent = Event & { detail?: { originalEvent?: Event } | number };
 
-const inChrome = (target: EventTarget | null | undefined) => target instanceof Element && target.closest("[data-app-chrome]") !== null;
+/**
+ * 按下那一刻在外壳里的元素。Radix 的 Dialog 把「点了外面」推迟到 click 才判(deferPointerDownOutside),判的是按下的那个
+ * 元素 —— 而那时它可能已经被这一下点击卸掉了:工作台「应用」面板里勾一项放进表单,那一行就没了;「装上」换成就地确认。
+ * 脱离了文档的元素查不出它曾经在外壳里,弹窗就被当成点了外面关掉(工作台里勾一项,底下的工作流库没了)。所以按下时记一笔。
+ */
+const pressedInChrome = new WeakSet<EventTarget>();
+let trackedDocument: Document | null = null;
+
+function trackPresses(doc: Document | undefined) {
+  if (!doc || trackedDocument === doc) return;
+  trackedDocument = doc;
+  doc.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-app-chrome]")) pressedInChrome.add(event.target);
+    },
+    true,
+  );
+}
+
+const inChrome = (target: EventTarget | null | undefined) =>
+  target instanceof Element && (target.closest("[data-app-chrome]") !== null || pressedInChrome.has(target));
 
 /** 包一层弹窗的 onInteractOutside / onEscapeKeyDown:发生在窗口外壳上就拦下,别的照旧交给调用方给的那个。 */
 export function keepOpenOnAppChrome<E extends OutsideEvent>(handler?: (event: E) => void) {
+  trackPresses(typeof document === "undefined" ? undefined : document);
   return (event: E) => {
     const detail = typeof event.detail === "object" ? event.detail : undefined;
     const target = detail?.originalEvent?.target ?? event.target;

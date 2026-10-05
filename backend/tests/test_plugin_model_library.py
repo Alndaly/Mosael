@@ -74,6 +74,9 @@ elif op == "library":
         "preview_headers": {"Authorization": "Bearer secret-for-previews"},
         "preview_base": f"http://127.0.0.1:{port}/",
     }})
+elif op == "node_folders":
+    emit({"ok": True, "output": {"folders": ["checkpoints" if one["input"] == "ckpt_name" else
+                                             "../etc" if one["input"] == "evil" else "" for one in payload["nodes"]]}})
 elif op == "detail":
     emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["name"],
                                  "metadata": {"ss_base_model_version": "sdxl_base_v1-0", "modelspec.title": "Style"},
@@ -553,3 +556,17 @@ def test_不提供模型库的连接_说清楚(library, tmp_path: Path) -> None:
     response = client.get(f"/api/plugins/instances/{instance_id}/model-library")
     assert response.status_code == 422
     assert "模型库" in response.json()["detail"]
+
+
+def test_工作台_选中节点那一格是哪个模型目录_插件给的不像目录名就当不是(library) -> None:
+    client, instance_id, _ = library
+    response = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
+        {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"}, {"class_type": "KSampler", "input": "steps"},
+        {"class_type": "X", "input": "evil"}]})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"folders": ["checkpoints", "", ""]}
+    sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
+    assert sent["nodes"][0] == {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"}
+    too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders",
+                           json={"nodes": [{"class_type": "X", "input": "y"}] * 65})
+    assert too_many.status_code == 422

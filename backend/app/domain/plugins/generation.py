@@ -266,6 +266,8 @@ class GenerationCall:
     inputs: tuple[tuple[str, Path], ...] = ()
     #: 重启后接着等的那个远端任务(插件上次用 `task` 事件交回的回执)。有它就**不再提交**。
     resume: dict[str, Any] | None = None
+    #: 工作台画布上现在这张(ADR 0038 §6):插件跑它而不是模型存着的那张(`prompt` / `workflow` / `client_id`)。
+    graph: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -324,6 +326,8 @@ def generate(
         "parameters": call.parameters,
         "inputs": [role for role, _ in call.inputs],
         "resume": call.resume is not None,
+        #: 画布上的那张图不进调用记录(几百 KB),只记一句是它
+        **({"graph": True} if call.graph is not None else {}),
     }
 
     def prepare(scratch: Path) -> dict[str, Any]:
@@ -344,6 +348,7 @@ def generate(
             "parameters": call.parameters,
             "inputs": inputs,
             "resume": call.resume,
+            **({"graph": call.graph} if call.graph is not None else {}),
         }
 
     def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:

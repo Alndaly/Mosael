@@ -175,7 +175,32 @@ export interface MosaelBrowserBridge {
     connectionId: string;
     mode: "trackpad" | "mouse";
   }): Promise<{ ok: boolean; outcome?: "applied" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
+  /**
+   * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图,注入写死的桥、开始轮询;`path` 给了就打开那一张,`fresh` 是新建一张,
+   * 都不给就回到画布上开着的那张。`outcome` 和「在编辑器里打开」「新建」同一套。
+   */
+  openComfyWorkbench(opts: {
+    connectionId: string;
+    url: string;
+    name?: string;
+    path?: string | null;
+    fresh?: boolean;
+  }): Promise<{
+    ok: boolean;
+    outcome?: "opened" | "created" | "missing" | "unsupported" | "elsewhere" | "notReady";
+    error?: string;
+  }>;
+  /** 工作台面板要桥做的一件事(逐项校验;会话不在、桥不在都回原因码,不做)。 */
+  comfyWorkbench(opts: { connectionId: string; call: ComfyWorkbenchCall }): Promise<ComfyWorkbenchCallResult>;
+  /** 桥那边看到的(主进程规整过):选中、脏标记、能力、事件。`state: null` 是会话结束了(视图收起)。 */
+  onComfyWorkbench(callback: (update: { connectionId: string; state: ComfyWorkbenchState | null }) => void): () => void;
 }
+
+export type ComfyWorkbenchCall = import("./publish/comfyWorkbench").WorkbenchCall;
+export type ComfyWorkbenchCallResult = import("./publish/comfyWorkbench").WorkbenchCallResult | { ok: false; error: "invalid"; message?: string };
+export type ComfyWorkbenchState = import("./publish/comfyWorkbench").WorkbenchState;
+export type ComfyWorkbenchEvent = import("./publish/comfyWorkbench").WorkbenchEvent;
+export type ComfyWorkbenchExport = import("./publish/comfyWorkbench").WorkbenchExport;
 
 /** 页面工具作用的那一页。 */
 export interface PageToolsPage {

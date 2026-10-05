@@ -172,6 +172,10 @@ const browserBridge = {
   newComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiNewWorkflow, opts),
   // 内嵌 ComfyUI 画布的操控方式(见 main.cjs comfyui:navigation)。
   setComfyNavigation: (opts) => invoke(IPC.invoke.comfyuiNavigation, opts),
+  // ComfyUI 工作台(见 main.cjs comfyui:openWorkbench / workbenchCall / closeWorkbench,事件 comfyui:workbench)。
+  openComfyWorkbench: (opts) => invoke(IPC.invoke.comfyuiOpenWorkbench, opts),
+  comfyWorkbench: (opts) => invoke(IPC.invoke.comfyuiWorkbenchCall, opts),
+  onComfyWorkbench: (callback) => onEvent(IPC.event.comfyuiWorkbench, callback),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 

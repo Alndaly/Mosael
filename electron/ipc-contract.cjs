@@ -55,6 +55,9 @@ const IPC = Object.freeze({
     comfyuiNewWorkflow: "comfyui:newWorkflow",
     // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):只在这个视图里生效,写回服务器的那一下由主进程拦下。
     comfyuiNavigation: "comfyui:navigation",
+    // ComfyUI 工作台(ADR 0038 §3):开(注入桥、轮询,视图收起就停)、面板要桥做的一件事。
+    comfyuiOpenWorkbench: "comfyui:openWorkbench",
+    comfyuiWorkbenchCall: "comfyui:workbenchCall",
     // 浏览器会话顶栏的页面工具:只作用于前台那个内嵌视图(主进程自己认是哪个,渲染层不点名)。
     pageToolsCapture: "pageTools:capture",
     pageToolsRegionStart: "pageTools:regionStart",
@@ -88,6 +91,8 @@ const IPC = Object.freeze({
     browserFrame: "browser:frame",
     // 用户在内嵌浏览器里点的下载:进度、下好了、没下成(见 publish/downloads.ts)。
     pageToolsDownload: "pageTools:download",
+    // ComfyUI 工作台:主进程轮询画布里的桥看到的(选中、脏标记、能力、事件);state 为 null 是会话结束了。
+    comfyuiWorkbench: "comfyui:workbench",
   }),
 });
 
@@ -235,6 +240,72 @@ function parseComfyNavigation(value) {
   const payload = record(value, channel);
   onlyKeys(payload, ["connectionId", "mode"], channel);
   return { partition: comfyPartition(payload, channel), mode: oneOf(payload, "mode", ["trackpad", "mouse"], channel) };
+}
+
+/**
+ * 开 ComfyUI 工作台:同一个视图、同一道闸。`path` 给了就打开那一张(和「在编辑器里打开」同一套路径规矩),`fresh` 是新建一张;
+ * 两样都不给就回到画布上开着的那张。
+ */
+function parseComfyWorkbenchOpen(value) {
+  const channel = IPC.invoke.comfyuiOpenWorkbench;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["connectionId", "url", "name", "path", "fresh"], channel);
+  const path = payload.path === undefined || payload.path === null ? null : comfyWorkflowPath(payload.path, channel);
+  if (payload.fresh !== undefined && typeof payload.fresh !== "boolean") throw new TypeError(`${channel}: fresh must be a boolean`);
+  const fresh = payload.fresh === true;
+  if (path && fresh) throw new TypeError(`${channel}: path and fresh are exclusive`);
+  return { ...comfyConnection(payload, channel), path, fresh };
+}
+
+//: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)、根图上的节点号(应用表单的标记只认根图)
+const CANVAS_NODE = /^-?\d{1,10}$/;
+const ROOT_NODE = /^\d{1,9}$/;
+//: 写进画布的标记最大多大(整份;和宿主那一侧一个节点 2 MB 的上限同一个量级)
+const MAX_MARKS_CHARS = 8 * 1024 * 1024;
+
+/**
+ * 工作台面板要桥做的一件事。**只认这几种,每一种的字段逐项校验**;数据随后由主进程以 JSON 编码嵌进写死的调用脚本,
+ * 渲染层送不进代码:
+ *
+ * - setWidget:节点号、widget 名字(不带控制字符)、值(字符串 / 有限的数 / 布尔);下拉里有没有它由桥查;
+ * - refreshCombos / export / save:不带别的;
+ * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null)。
+ */
+function parseComfyWorkbenchCall(value) {
+  const channel = IPC.invoke.comfyuiWorkbenchCall;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["connectionId", "call"], channel);
+  const partition = comfyPartition(payload, channel);
+  const call = record(payload.call, channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks"], channel);
+  if (op === "setWidget") {
+    onlyKeys(call, ["op", "node", "widget", "value"], channel);
+    if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
+    if (typeof call.widget !== "string" || !call.widget || call.widget.length > 200 || /[\x00-\x1f]/.test(call.widget)) {
+      throw new TypeError(`${channel}: widget must be a widget name`);
+    }
+    const v = call.value;
+    const ok = (typeof v === "string" && v.length <= 4000) || (typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean";
+    if (!ok) throw new TypeError(`${channel}: value must be a string, a finite number or a boolean`);
+    return { partition, call: { op, node: call.node, widget: call.widget, value: v } };
+  }
+  if (op === "setMarks") {
+    onlyKeys(call, ["op", "marks"], channel);
+    const marks = record(call.marks, channel);
+    onlyKeys(marks, ["nodes", "extra"], channel);
+    const nodes = record(marks.nodes, channel);
+    const entries = Object.entries(nodes);
+    if (entries.length > 1000) throw new TypeError(`${channel}: too many marked nodes`);
+    for (const [id, own] of entries) {
+      if (!ROOT_NODE.test(id)) throw new TypeError(`${channel}: marks.nodes keys must be top-level node ids`);
+      record(own, channel);
+    }
+    const extra = marks.extra === null || marks.extra === undefined ? null : record(marks.extra, channel);
+    if (JSON.stringify({ nodes, extra }).length > MAX_MARKS_CHARS) throw new TypeError(`${channel}: marks are too big`);
+    return { partition, call: { op, marks: JSON.parse(JSON.stringify({ nodes, extra })) } };
+  }
+  onlyKeys(call, ["op"], channel);
+  return { partition, call: { op } };
 }
 
 /** 一个 ComfyUI 连接的内嵌视图:分区按连接 id 拼(渲染层点不了别的分区)、地址只认 http(s)、名字只用来显示。 */
@@ -527,6 +598,8 @@ module.exports = {
   parseCaptureMode,
   parseComfyNavigation,
   parseComfyNewWorkflow,
+  parseComfyWorkbenchCall,
+  parseComfyWorkbenchOpen,
   parseComfyWorkflow,
   parseImageUrls,
   parseLocale,

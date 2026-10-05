@@ -8,6 +8,8 @@ export {
   openComfyWorkflow,
   newComfyWorkflow,
   setComfyViewNavigation,
+  openComfyWorkbench,
+  comfyWorkbenchCall,
   openPage,
   signOutAccount,
   clearPoolProfile,

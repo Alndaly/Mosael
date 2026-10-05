@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { APP_CHROME, installAppChromeGuards } from "@/components/ui/appChrome";
+import { APP_CHROME, installAppChromeGuards, keepOpenOnAppChrome } from "@/components/ui/appChrome";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
@@ -53,6 +53,36 @@ describe("点在窗口外壳(浏览器顶栏、页面列表)上不算点了弹�
       expect(screen.queryByText("工作流库")).toBeNull();
     });
   }
+});
+
+describe("外壳里点一下就卸掉的东西(勾进表单的那一行、换成就地确认的按钮)也不算点了弹窗外面", () => {
+  // 工作台「应用」面板里勾一项放进表单:Radix Dialog 等到 click 才判「点了外面」(deferPointerDownOutside),判的是按下的那个
+  // 元素 —— 那时勾选框已经随那一行卸掉、脱离了文档,查不出它在外壳里,底下的工作流库就被关掉了(真 Chromium 里复现过;
+  // jsdom 里 React 刷新的时机不一样,所以这里直接照 Radix 的顺序走一遍:按下 → 卸掉 → 判)。
+  it("按下时在外壳里就算外壳里,哪怕判的时候它已经不在文档里了", () => {
+    const chrome = document.createElement("div");
+    chrome.setAttribute("data-app-chrome", "");
+    const checkbox = document.createElement("button");
+    chrome.appendChild(checkbox);
+    document.body.appendChild(chrome);
+    const elsewhere = document.createElement("button");
+    document.body.appendChild(elsewhere);
+    const outside = keepOpenOnAppChrome();
+    fireEvent.pointerDown(checkbox);
+    fireEvent.pointerDown(elsewhere);
+    checkbox.remove();
+    const judge = (target: Element) => {
+      const originalEvent = new Event("pointerdown");
+      Object.defineProperty(originalEvent, "target", { value: target });
+      const event = new CustomEvent("dismissableLayer.pointerDownOutside", { cancelable: true, detail: { originalEvent } });
+      outside(event);
+      return event.defaultPrevented;
+    };
+    expect(judge(checkbox), "按下时在外壳里:不关").toBe(true);
+    expect(judge(elsewhere), "别处:照样关").toBe(false);
+    chrome.remove();
+    elsewhere.remove();
+  });
 });
 
 describe("底下开着模态弹窗时,窗口外壳照样能用", () => {

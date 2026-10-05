@@ -474,6 +474,33 @@ describe("工作流库", () => {
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
   });
 
+  it("在工作台里打开(桌面版带工作台的那座桥):详情头上有,开的是工作台;「新建」也开工作台;回到 Mosael 时刷新", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "opened" });
+    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
+    vi.stubGlobal("mosaelBrowser", { ...window.mosaelBrowser, openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    await openDetail("portrait");
+    expect(screen.getByRole("button", { name: "workflowOpenInEditor" }), "「在编辑器里打开」还在").toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
+      connectionId: "i1", url: EDITOR.url, name: instance.name, path: "portrait.json",
+    }));
+    expect(bridge.openComfyWorkflow).not.toHaveBeenCalled();
+    const partition = "persist:pool-comfyui-i1";
+    bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
+    bridge.emit({ visible: false, accountId: null, accountName: null });
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryBack" }));
+    openComfyWorkbench.mockResolvedValueOnce({ ok: true, outcome: "unsupported" });
+    fireEvent.click(await screen.findByRole("button", { name: "workflowNew" }));
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenLastCalledWith({
+      connectionId: "i1", url: EDITOR.url, name: instance.name, fresh: true,
+    }));
+    expect(bridge.newComfyWorkflow, "能开工作台就在工作台里新建").not.toHaveBeenCalled();
+    expect((await screen.findByRole("status")).textContent).toContain("workflowNewUnsupported");
+  });
+
   it("插件没给编辑器地址就没有「新建」;一张都没有时空状态里也给「新建」", async () => {
     await openLibrary();
     expect(screen.queryByRole("button", { name: "workflowNew" })).toBeNull();

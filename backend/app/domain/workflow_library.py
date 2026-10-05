@@ -499,13 +499,17 @@ def app_form(db: Session, instance: PluginInstance, path: str) -> dict[str, Any]
     path = workflow_path(path)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "app", "path": path},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    return _app_answer(db, instance, output, path)
+
+
+def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], path: str) -> dict[str, Any]:
     if not isinstance(output.get("items"), list):
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
     text = inst.manifest_for(db, instance).text
     items = [one for one in (_app_item(raw, text) for raw in output["items"][:_MAX_APP_FOUND]) if one]
     return {
         "path": path,
-        "modified": _number(output.get("modified")),
+        "modified": _number(output.get("modified")) if path else None,
         "kind": _text(output.get("kind"), 20),
         "editable": output.get("editable") is True,
         "items": items,
@@ -574,6 +578,100 @@ def annotate(db: Session, instance: PluginInstance, path: str, *, modified: floa
     # 生成选项、工具清单跟着变(只剩表单那几项、名字换成作者起的),不等那一分钟的指纹
     host_capabilities.notify(db, instance, refresh=True)
     return {"path": path, "modified": _number(output.get("modified"))}
+
+
+# --- 工作台(ADR 0038 §3、§6)------------------------------------------------------
+#
+# 画布是那台 ComfyUI 自己的,开在桌面版的内嵌视图里;主进程注入的桥把画布上**现在这张**(含没存的改动)导出来,界面交到这里。
+# 这几样不写那台机器上的文件:应用表单改的是画布上的节点(经桥),存盘是 ComfyUI 自己的保存;运行建的是一个普通的生成任务。
+# 从页面拿到的一律先规整:界面格式要有 `nodes`、API 图每个节点要有 `class_type` 和 `inputs`、整张有大小上限。
+
+#: 前端的 clientId(ComfyUI 前端自己生成的 uuid):认不出就不带,插件用自己的。
+_CLIENT_ID = re.compile(r"[A-Za-z0-9_-]{1,100}")
+
+
+def _canvas(content: Any) -> dict[str, Any]:
+    """画布上的那张(界面格式):有 `nodes`、不超过导入的上限。"""
+    if not isinstance(content, dict) or not isinstance(content.get("nodes"), list):
+        raise WorkflowLibraryError("workflowLibErr_canvasNotUi")
+    if len(json.dumps(content, ensure_ascii=False)) > MAX_IMPORT_CHARS:
+        raise WorkflowLibraryError("workflowLibErr_canvasTooBig", mb=str(MAX_IMPORT_CHARS // (1024 * 1024)))
+    return content
+
+
+def app_live(db: Session, instance: PluginInstance, content: dict[str, Any]) -> dict[str, Any]:
+    """工作台的「应用」面板:画布上现在这张的应用表单 —— 全部能填的项、交回结果的输出节点、画布上的标记。和读文件的
+    `app_form` 同一个形状,没有路径和改动时间(改的是画布,不是文件)。"""
+    _require(db, instance)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "app", "content": _canvas(content)},
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    return _app_answer(db, instance, output, "")
+
+
+#: 一个节点上的 Mosael 标记最大多大(一张应用表单最多 200 项、每项最多 1000 个可选值,放在一个节点上也够)。
+_MAX_MARK_CHARS = 2 * 1024 * 1024
+
+
+def app_marks(db: Session, instance: PluginInstance, content: dict[str, Any], *, app: dict[str, Any] | None,
+              results: list[str]) -> dict[str, Any]:
+    """应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」):插件按和 `annotate` 同一个函数算,
+    交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`;界面经桥改画布上的节点,存盘是 ComfyUI 自己的
+    保存。插件交回的先规整:只认根图节点号、值是对象、大小有上限。"""
+    _require(db, instance)
+    results = [str(one) for one in results]
+    form = _form_payload(app, results)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
+                               {"op": "app_marks", "content": _canvas(content), "app": form, "results": results},
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    raw_nodes, extra = output.get("nodes"), output.get("extra")
+    if not isinstance(raw_nodes, dict) or not (extra is None or isinstance(extra, dict)):
+        raise WorkflowLibraryError("workflowLibErr_badMarks", name=instance.name)
+    nodes: dict[str, Any] = {}
+    for node, marks in raw_nodes.items():
+        if not isinstance(node, str) or not _ROOT_NODE.fullmatch(node) or not isinstance(marks, dict) \
+                or len(json.dumps(marks, ensure_ascii=False)) > _MAX_MARK_CHARS:
+            raise WorkflowLibraryError("workflowLibErr_badMarks", name=instance.name)
+        nodes[node] = marks
+    if extra is not None and len(json.dumps(extra, ensure_ascii=False)) > _MAX_MARK_CHARS:
+        raise WorkflowLibraryError("workflowLibErr_badMarks", name=instance.name)
+    return {"nodes": nodes, "extra": extra}
+
+
+def _api_graph(prompt: Any) -> dict[str, Any]:
+    """画布导出的 API 图(`graphToPrompt` 的 `output`):节点号 → `{class_type, inputs}`,不超过上限。"""
+    if not isinstance(prompt, dict) or not prompt or len(prompt) > 5000 or not all(
+            isinstance(key, str) and isinstance(node, dict) and isinstance(node.get("class_type"), str)
+            and isinstance(node.get("inputs"), dict) for key, node in prompt.items()):
+        raise WorkflowLibraryError("workflowLibErr_canvasBadPrompt")
+    if len(json.dumps(prompt, ensure_ascii=False)) > MAX_IMPORT_CHARS:
+        raise WorkflowLibraryError("workflowLibErr_canvasTooBig", mb=str(MAX_IMPORT_CHARS // (1024 * 1024)))
+    return prompt
+
+
+def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, path: str,
+               prompt: dict[str, Any], workflow: dict[str, Any] | None, client_id: str,
+               project_id: str | None = None) -> tuple[GenerationJob, Job]:
+    """工作台的「运行」(ADR 0038 §6):跑画布上现在这张(含没存的改动)。建一个**普通的生成任务** —— 模型是这张工作流
+    (`path`,得已经是这个连接下的生成模型:新建的要先在 ComfyUI 里存一次),图放在任务的载荷里(不进生成参数),插件
+    提交它、`client_id` 用前端的那个、按历史轮询跟到完成。取消、重启后接着等、用量、素材入库都是生成任务已有的那一套。"""
+    from app.domain.generation.use_cases import generate
+
+    _require(db, instance)
+    path = workflow_path(path)
+    graph = {
+        "prompt": _api_graph(prompt),
+        **({"workflow": _canvas(workflow)} if workflow is not None else {}),
+        **({"client_id": client_id} if _CLIENT_ID.fullmatch(client_id or "") else {}),
+    }
+    profile = _profile(db, instance)
+    row = next((one for one in provider_models.list_models(db, profile.id) if one.model_id == path), None) \
+        if profile is not None else None
+    kinds = [kind for kind in (row.capability_ids or []) if kind in ("image", "video", "audio")] if row is not None else []
+    if profile is None or row is None or not row.enabled or not kinds:
+        raise WorkflowLibraryError("workflowLibErr_runNotModel", path=path)
+    return generate(db, user, workspace_id, session_id=None, project_id=project_id, provider=profile.vendor, model=path,
+                    kind=kinds[0], prompt="", negative_prompt="", parameters={}, source_assets=[],
+                    provider_profile_id=profile.id, workbench_graph=graph)
 
 
 # --- 导入 ---------------------------------------------------------------------

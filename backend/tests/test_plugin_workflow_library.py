@@ -14,7 +14,10 @@
   连接最近的几次;重启经插件,回来以后让这个连接的目录重拉一遍;
 - 应用表单(ADR 0038):列出来的每一张带着它的应用表单(规整过);编辑器读一张全部能填的项(名字按语言挑好、JSON Schema
   片段和生成目录同一套规整、子图里的节点标着不能放);写之前宿主先查形状(根图上的节点、几项、可选值几个),插件说那张在
-  这之间被改过就回 409 `stale`,写成了让这个连接的目录马上重拉。
+  这之间被改过就回 409 `stale`,写成了让这个连接的目录马上重拉;
+- 工作台(ADR 0038 §3、§6):画布上现在这张的应用表单(没有路径和改动时间)、写进画布的标记(宿主规整插件交回的)、选中节点
+  那一格是哪个模型目录(见 test_plugin_model_library.py)、跑画布上的图(普通的生成任务,图在任务载荷里、不进生成参数、任务出口不带它;还不是生成模型的不跑)。
+  这几样都不写那台机器上的文件。
 """
 
 from __future__ import annotations
@@ -128,9 +131,17 @@ elif op == "install_nodes":
         emit({"ok": True, "output": {"installed": payload["packs"], "restart": True}})
 elif op == "reboot":
     emit({"ok": True, "output": {"back": True}})
+elif op == "app_marks":
+    if payload["content"].get("evil"):
+        emit({"ok": True, "output": {"nodes": {"12:5": {"result": True}}, "extra": None}})
+    else:
+        emit({"ok": True, "output": {"nodes": {"9": {"result": True}, "10": {"expose": {"image": {"order": 0}}}},
+                                     "extra": {"version": 1, "app": {"title": "人像应用"}}, "ignored": 1}})
+elif op == "generate":
+    emit({"ok": False, "error": "测试插件不真的跑:收到了" + ("画布上的图" if payload.get("graph") else "存着的那张")})
 elif op == "app":
     emit({"ok": True, "output": {
-        "path": payload["path"], "modified": 1776098682.9, "kind": "image", "editable": True,
+        "path": payload.get("path", ""), "modified": 1776098682.9, "kind": "image", "editable": True,
         "items": [
             {"key": "6.text", "node": "6", "input": "text", "kind": "text", "role": "prompt",
              "title": {"zh": "提示词", "en": "Prompt"}, "common": True,
@@ -544,3 +555,65 @@ def test_写应用表单_宿主先查形状_改动时间对不上回409_成了�
     removed = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "app": None, "results": []})
     assert removed.status_code == 200 and [op for op in _ops() if op["op"] == "annotate"][-1]["app"] is None
 
+
+
+#: 工作台画布上的一张(界面格式)和它导出的 API 图。
+CANVAS = {"nodes": [{"id": 9, "type": "SaveImage"}, {"id": 10, "type": "LoadImage"}], "links": []}
+CANVAS_PROMPT = {"9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}}}
+
+
+def test_工作台_画布上这张的应用表单_没有路径和改动时间_不是界面格式的不交给插件(library) -> None:
+    client, instance_id = library
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/app/live"
+    response = client.post(url, json={"content": CANVAS})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["path"] == "" and body["modified"] is None, "改的是画布,不是文件"
+    assert [one["key"] for one in body["items"]][:2] == ["6.text", "10.image"]
+    sent = [op for op in _ops() if op["op"] == "app"][-1]
+    assert sent == {"op": "app", "content": CANVAS}, "读的是画布上这张,不带路径"
+    calls = len(_ops())
+    assert client.post(url, json={"content": {"3": {"class_type": "KSampler"}}}).status_code == 422
+    assert len(_ops()) == calls
+
+
+def test_工作台_写进画布的标记_宿主先查形状_规整插件交回的(library) -> None:
+    client, instance_id = library
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/app/marks"
+    response = client.post(url, json={"content": CANVAS, "app": {"title": " 人像应用 ", "items": [
+        {"node": "10", "input": "image", "label": "人物"}]}, "results": ["9"]})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"nodes": {"9": {"result": True}, "10": {"expose": {"image": {"order": 0}}}},
+                               "extra": {"version": 1, "app": {"title": "人像应用"}}}
+    sent = [op for op in _ops() if op["op"] == "app_marks"][-1]
+    assert sent["app"]["title"] == "人像应用" and sent["results"] == ["9"]
+    assert not [op for op in _ops() if op["op"] == "annotate"], "画布开着时不写文件"
+    calls = len(_ops())
+    assert client.post(url, json={"content": CANVAS, "results": ["12:5"]}).status_code == 422, "子图里的节点不能标"
+    assert len(_ops()) == calls, "形状不对的不交给插件"
+    evil = client.post(url, json={"content": {**CANVAS, "evil": True}, "results": []})
+    assert evil.status_code == 422, "插件交回的节点号不是根图上的:不交给界面去改画布"
+
+
+def test_工作台_跑画布上的图_普通的生成任务_图在任务载荷里_出口不带(library) -> None:
+    client, instance_id = library
+    workspace_id = client.post("/api/workspaces", json={"name": "工作台"}).json()["id"]
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/run"
+    not_model = client.post(url, json={"workspace_id": workspace_id, "path": "新的.json", "prompt": CANVAS_PROMPT})
+    assert not_model.status_code == 422 and "还不是" in not_model.json()["detail"], "新建的要先存一次、刷新出来"
+    bad = client.post(url, json={"workspace_id": workspace_id, "path": "portrait.json", "prompt": {"9": "SaveImage"}})
+    assert bad.status_code == 422
+    response = client.post(url, json={"workspace_id": workspace_id, "path": "portrait.json", "prompt": CANVAS_PROMPT,
+                                      "workflow": CANVAS, "client_id": "4f1c0e2a9b7d4c51a3e8"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    generation, job = body["generation"], body["job"]
+    assert generation["model"] == "portrait.json" and generation["kind"] == "image"
+    assert generation["request"]["parameters"] == {} and generation["request"]["workbench"] is True, \
+        "图不进生成参数、不进生成记录的请求"
+    assert "workbench_graph" not in job["payload"], "任务出口不带那张图"
+    assert wait_status(client, job["id"]) == "failed"
+    sent = [op for op in _ops() if op["op"] == "generate"][-1]
+    assert sent["graph"] == {"prompt": CANVAS_PROMPT, "workflow": CANVAS, "client_id": "4f1c0e2a9b7d4c51a3e8"}
+    assert sent["parameters"] == {} and sent["prompt"] == ""
+    assert "画布上的图" in client.get(f"/api/jobs/{job['id']}").json()["error"]

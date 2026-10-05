@@ -30,6 +30,8 @@ import { createAdapter } from "./adapters";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
 import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "./comfyViews";
+import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "./comfyWorkbench";
+import { WorkbenchSessions } from "./comfyWorkbenchSessions";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
@@ -38,6 +40,8 @@ import type { LiveViewFrame, PublishTask, ViewState } from "./types";
 import * as backend from "./publishBackend";
 
 let views: AccountViewManager | null = null;
+/** ComfyUI 工作台的会话(ADR 0038 §3):主进程轮询内嵌画布里的桥,交给渲染层。 */
+let workbench: WorkbenchSessions | null = null;
 let floatLayer: FloatLayer | null = null;
 // 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
 const running = new Set<string>();
@@ -545,6 +549,8 @@ export function startPublishWorker(opts: {
   onPanels?: (cards: PanelCard[]) => void;
   /** 用户在内嵌浏览器里点的下载:进度、下好了、没下成(渲染层据此存进素材库并在顶栏说一句)。 */
   onDownload?: (notice: DownloadNotice) => void;
+  /** ComfyUI 工作台:桥那边看到的(选中、脏标记、能力、事件);`state: null` 是会话结束了。 */
+  onWorkbench?: (update: { connectionId: string; state: WorkbenchState | null }) => void;
 }): void {
   if (views) return;
   stopped = false;
@@ -562,6 +568,12 @@ export function startPublishWorker(opts: {
   // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
   views = createSharedViews(onViewChanged, opts.onPanels, opts.onDownload);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
+  workbench = new WorkbenchSessions({
+    driver: (partition) => views?.existingDriver(partition) ?? null,
+    visible: (partition) => views?.visibleAccountId === partition,
+    emit: (partition, state) =>
+      opts.onWorkbench?.({ connectionId: partition.slice(COMFY_PARTITION_PREFIX.length), state }),
+  });
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
   void backend.markDue().catch(() => undefined);
@@ -582,6 +594,7 @@ export function stopPublishWorker(): void {
   // 在磁盘分区里(persist:mosael-<id>),销毁视图不丢登录态。
   destroySharedViews();
   views = null;
+  workbench = null;
   floatLayer?.destroy();
   floatLayer = null;
   onFrame = null;
@@ -648,10 +661,43 @@ export async function openComfyWorkflow(opts: {
   name: string;
   path: string;
 }): Promise<ComfyOpenOutcome> {
+  // 开成普通的编辑器:这个视图不再是工作台(渲染层换回浏览器的顶栏)
+  workbench?.stop(opts.partition);
   const driver = await showComfyView(opts);
   if (!driver) return "notReady";
   return openWorkflowInPage(driver, opts);
 }
+
+const COMFY_PARTITION_PREFIX = "persist:pool-comfyui-";
+
+/** 开工作台的结果:打开了那一张 / 新建了一张 / 只是回到画布,或者没成的原因(和「在编辑器里打开」「新建」同一套)。 */
+export type WorkbenchOpenOutcome = ComfyOpenOutcome | ComfyNewOutcome;
+
+/**
+ * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图,开始一个工作台会话(注入桥、轮询),再打开 `path` 那一张、
+ * 或者新建一张、或者什么都不开(回到画布上开着的那张)。
+ */
+export async function openComfyWorkbench(opts: {
+  partition: string;
+  url: string;
+  name: string;
+  path: string | null;
+  fresh: boolean;
+}): Promise<WorkbenchOpenOutcome> {
+  const driver = await showComfyView(opts);
+  if (!driver || !workbench) return "notReady";
+  workbench.start(opts.partition, new URL(opts.url).origin);
+  if (opts.path) return openWorkflowInPage(driver, { url: opts.url, path: opts.path });
+  if (opts.fresh) return newWorkflowInPage(driver, { url: opts.url });
+  return "opened";
+}
+
+/** 工作台面板要桥做的一件事(填值、刷新下拉、导出、保存、写标记)。会话不在就不做。 */
+export function comfyWorkbenchCall(opts: { partition: string; call: WorkbenchCall }): Promise<WorkbenchCallResult> {
+  if (!workbench) return Promise.resolve({ ok: false, error: "closed" });
+  return workbench.call(opts.partition, opts.call);
+}
+
 
 /** 亮出一个 ComfyUI 连接的内嵌视图(还开着就接着用):先记下来源、装上设置写回的闸,亮出来之后挂上「载入完」的监听。 */
 async function showComfyView(opts: { partition: string; url: string; name: string }) {
@@ -671,6 +717,7 @@ export function setComfyViewNavigation(opts: { partition: string; mode: ComfyNav
  * (见 comfyEditor.comfyNewWorkflowScript)。存盘照旧是 ComfyUI 自己的,视图收起时工作流库重拉。
  */
 export async function newComfyWorkflow(opts: { partition: string; url: string; name: string }): Promise<ComfyNewOutcome> {
+  workbench?.stop(opts.partition);
   const driver = await showComfyView(opts);
   if (!driver) return "notReady";
   return newWorkflowInPage(driver, opts);

@@ -64,6 +64,15 @@ class JobOut(OrmModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("payload", mode="before")
+    @classmethod
+    def _without_workbench_graph(cls, value: object) -> object:
+        """工作台跑画布上那张图时,图本身放在任务载荷里交给执行器(ADR 0038 §6,见 generation.operations.WORKBENCH_GRAPH):
+        几百 KB,任务中心、画板、工作台都不读它 —— 出口不带。"""
+        if isinstance(value, dict) and "workbench_graph" in value:
+            return {key: item for key, item in value.items() if key != "workbench_graph"}
+        return value
+
     @field_validator("message_key", "error_key", mode="before")
     @classmethod
     def _key_or_empty(cls, value: object) -> object:

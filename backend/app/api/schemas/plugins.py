@@ -469,6 +469,24 @@ class ModelDownloadRequest(ApiModel):
     filename: str = Field(max_length=300)
 
 
+class ModelNodeFolderIn(ApiModel):
+    """画布上选中的节点的一格:节点类型 + 输入名。"""
+
+    class_type: str = Field(max_length=200)
+    input: str = Field(max_length=200)
+
+
+class ModelNodeFoldersRequest(ApiModel):
+    """工作台的「模型库」面板(ADR 0038 §6):这几格各选的是哪个模型目录的文件。"""
+
+    nodes: list[ModelNodeFolderIn] = Field(max_length=64)
+
+
+class ModelNodeFoldersOut(ApiModel):
+    #: 和 `nodes` 一一对应;不是选模型文件的格子是空串
+    folders: list[str] = Field(default_factory=list)
+
+
 # --- 工作流库(ADR 0035) ---------------------------------------------------
 
 class WorkflowGraphNodeOut(ApiModel):
@@ -732,6 +750,42 @@ class WorkflowAnnotateOut(ApiModel):
     path: str
     #: 写完之后的改动时间:接着改用它
     modified: float | None = None
+
+
+class WorkflowCanvasRequest(ApiModel):
+    """工作台画布上现在这张(界面格式,含没存的改动;主进程的桥从内嵌的 ComfyUI 里导出来)。"""
+
+    content: dict[str, Any]
+
+
+class WorkflowCanvasMarksRequest(ApiModel):
+    """应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」;不写文件)。"""
+
+    content: dict[str, Any]
+    #: 不给(null)= 去掉应用表单
+    app: WorkflowAppIn | None = None
+    results: list[str] = Field(default_factory=list, max_length=64)
+
+
+class WorkflowCanvasMarksOut(ApiModel):
+    """画布上每个带标记的根图节点要有的 `properties.mosael`(别的节点上的去掉),和图上的 `extra.mosael`(null = 去掉)。"""
+
+    nodes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    extra: dict[str, Any] | None = None
+
+
+class WorkflowCanvasRunRequest(ApiModel):
+    """工作台的「运行」(ADR 0038 §6):跑画布上现在这张。模型是 `path` 那张工作流,图放在任务的载荷里。"""
+
+    workspace_id: str
+    project_id: str | None = None
+    path: str = Field(min_length=1, max_length=500)
+    #: 前端 `graphToPrompt` 的 `output`(API 格式)
+    prompt: dict[str, Any]
+    #: 前端 `graphToPrompt` 的 `workflow`(界面格式):带进产出的元数据,拖回 ComfyUI 有布局
+    workflow: dict[str, Any] | None = None
+    #: 前端的 clientId:画布上照常亮起正在跑的节点
+    client_id: str = Field(default="", max_length=100)
 
 
 class WorkflowOtherFileOut(ApiModel):

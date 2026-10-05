@@ -69,6 +69,8 @@ import { BrowserSessionTools } from "@/features/browser-pool/session-tools/Brows
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { comfyConnectionOf } from "@/features/plugins/comfyNavigation";
+import { ComfyWorkbench } from "@/features/plugins/workbench/ComfyWorkbench";
+import { isWorkbenchPartition, useWorkbench } from "@/features/plugins/workbench/workbenchSession";
 import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -159,6 +161,8 @@ function PublishViewBar() {
   });
   const [address, setAddress] = React.useState("");
   const [editing, setEditing] = React.useState(false);
+  //: 开着的 ComfyUI 工作台(ADR 0038):那个连接的视图亮着时,顶栏和右边那一列是工作台的
+  const workbench = useWorkbench();
   React.useEffect(
     () => window.mosaelPublish?.onViewState((next) => setState(next)),
     [],
@@ -168,6 +172,7 @@ function PublishViewBar() {
     if (!editing) setAddress(state.url ?? "");
   }, [state.url, editing]);
   if (!state.visible) return null;
+  if (isWorkbenchPartition(workbench.target, state.partition)) return <ComfyWorkbench barHeight={PUBLISH_BAR_HEIGHT} />;
   //: 这是一个 ComfyUI 连接的视图(工作流库「在编辑器里打开」):顶栏多一个画布操控方式的开关
   const comfyConnection = comfyConnectionOf(state.partition);
 

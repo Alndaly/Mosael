@@ -21,6 +21,8 @@ from app.api.schemas import (
     ModelDetailOut,
     ModelDownloadRequest,
     ModelLibraryOut,
+    ModelNodeFoldersOut,
+    ModelNodeFoldersRequest,
     ModelResolveOut,
     ModelResolveRequest,
     PluginOAuthCode,
@@ -45,6 +47,9 @@ from app.api.schemas import (
     WorkflowAnnotateOut,
     WorkflowAnnotateRequest,
     WorkflowAppOut,
+    WorkflowCanvasMarksOut,
+    WorkflowCanvasMarksRequest,
+    WorkflowCanvasRequest,
     WorkflowContentOut,
     WorkflowCopyRequest,
     WorkflowInstallNodesRequest,
@@ -55,6 +60,7 @@ from app.api.schemas import (
     WorkflowRenameRequest,
     WorkflowRebootOut,
     WorkflowRestoreRequest,
+    WorkflowCanvasRunRequest,
     WorkflowLibrarySaveRequest,
     WorkflowTrashRequest,
 )
@@ -62,8 +68,10 @@ from app.core.config import settings
 from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
 from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, User
+from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
 from app.domain import model_library
 from app.domain import workflow_library
+from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.plugins import bundled
@@ -571,6 +579,16 @@ def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, u
         raise _model_library_failed(exc) from exc
 
 
+@router.post("/plugins/instances/{instance_id}/model-library/node-folders", response_model=ModelNodeFoldersOut)
+def get_model_node_folders(instance_id: str, body: ModelNodeFoldersRequest, db: DbSession, user: CurrentUser) -> dict:
+    """工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格各选的是哪个模型目录的文件。只查表,不改那台机器。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.node_folders(db, instance, [one.model_dump() for one in body.nodes])
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
 # 认领 `workflow_library` 的连接上存着哪些工作流(ADR 0035):列出、取原文、复制、改名、挪进 / 挪出回收目录。改的是那台
 # 服务器上的文件:撞名回 409(带一个建议名,不覆盖);插件那一头说的错(连不上、它自己的报错)和路径不对回 422,原话交给界面。
 
@@ -628,6 +646,44 @@ def annotate_workflow(instance_id: str, body: WorkflowAnnotateRequest, db: Tx, u
         )
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/app/live", response_model=WorkflowAppOut)
+def get_canvas_app(instance_id: str, body: WorkflowCanvasRequest, db: DbSession, user: CurrentUser) -> dict:
+    """工作台的「应用」面板(ADR 0038 §3):画布上现在这张(含没存的改动)的应用表单。不读、不写那台机器上的文件。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.app_live(db, instance, body.content)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/app/marks", response_model=WorkflowCanvasMarksOut)
+def get_canvas_marks(instance_id: str, body: WorkflowCanvasMarksRequest, db: DbSession, user: CurrentUser) -> dict:
+    """应用表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.app_marks(
+            db, instance, body.content, app=body.app.model_dump() if body.app is not None else None, results=body.results,
+        )
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/run", response_model=GenerationCreateResponse)
+def run_canvas(instance_id: str, body: WorkflowCanvasRunRequest, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    """工作台的「运行」(ADR 0038 §6):跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        created, job = workflow_library.run_canvas(
+            db, user, instance, workspace_id=body.workspace_id, project_id=body.project_id, path=body.path,
+            prompt=body.prompt, workflow=body.workflow, client_id=body.client_id,
+        )
+    except GenerationDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+    return GenerationCreateResponse(generation=GenerationJobOut.model_validate(created), job=job)
 
 
 @router.post("/plugins/instances/{instance_id}/workflow-library/inspect", response_model=WorkflowLibraryImportOut)

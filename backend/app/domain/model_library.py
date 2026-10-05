@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import re
 import shutil
 import threading
 import time
@@ -456,6 +457,29 @@ def resolve(db: Session, instance: PluginInstance, url: str) -> dict[str, Any]:
         "uses_token": bool(output.get("uses_token")),
         "note": _text(output.get("note"), 2000),
     }
+
+
+#: 工作台一次最多问几格(和插件那一侧同一个数)。
+MAX_NODE_FOLDERS = 64
+
+
+def node_folders(db: Session, instance: PluginInstance, nodes: list[dict[str, str]]) -> dict[str, list[str]]:
+    """工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件 ——
+    面板据此只列那个目录的模型,点一个填进那一格。不是选模型文件的格子是空串。插件只查表,不问 ComfyUI。"""
+    _require(db, instance)
+    if len(nodes) > MAX_NODE_FOLDERS:
+        raise ModelLibraryError("modelLibErr_tooManyNodes", n=str(MAX_NODE_FOLDERS))
+    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200)} for one in nodes]
+    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "node_folders", "nodes": asked},
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    folders = output.get("folders")
+    if not isinstance(folders, list) or len(folders) != len(asked):
+        raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
+    return {"folders": [one if isinstance(one, str) and _MODEL_FOLDER.fullmatch(one) else "" for one in folders]}
+
+
+#: 一个模型目录的名字(ComfyUI 的 folder_paths 名:loras、checkpoints、unet_gguf……)。
+_MODEL_FOLDER = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 
 
 def _plain_name(value: str, *, key: str) -> str:

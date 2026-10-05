@@ -41,6 +41,9 @@ export type WorkflowAppSummary = components["schemas"]["WorkflowAppSummaryOut"];
 export type WorkflowFillable = components["schemas"]["WorkflowFillableOut"];
 export type WorkflowAppOutput = components["schemas"]["WorkflowAppOutputOut"];
 export type WorkflowAnnotate = components["schemas"]["WorkflowAnnotateRequest"];
+/** 工作台(ADR 0038 §3、§6):写进画布的标记、跑画布上的图。 */
+export type WorkflowCanvasMarks = components["schemas"]["WorkflowCanvasMarksOut"];
+export type WorkflowCanvasRun = components["schemas"]["WorkflowCanvasRunRequest"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -127,6 +130,13 @@ export const startModelDownload = (
   body: { workspace_id: string; url: string; folder: string; filename: string },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
 
+/** 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件(不是的为空串)。 */
+export const getNodeFolders = (instanceId: string, nodes: { class_type: string; input: string }[]) =>
+  api<{ folders: string[] }>(`/api/plugins/instances/${instanceId}/model-library/node-folders`, {
+    method: "POST",
+    body: JSON.stringify({ nodes }),
+  });
+
 // --- 工作流库(ADR 0035) -------------------------------------------------------
 
 /** 现问插件:这个连接上存着的全部工作流;给了工作区就带上那个工作区里最近一次用它生成的产出、谁在用它。 */
@@ -182,6 +192,28 @@ export const annotateWorkflow = (instanceId: string, body: WorkflowAnnotate) =>
     method: "POST",
     body: JSON.stringify(body),
   });
+
+/** 工作台的「应用」面板:画布上现在这张(界面格式,含没存的改动)的应用表单。没有路径和改动时间 —— 改的是画布。 */
+export const getCanvasApp = (instanceId: string, content: Record<string, unknown>) =>
+  api<WorkflowApp>(`/api/plugins/instances/${instanceId}/workflow-library/app/live`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+/** 应用表单和结果标记写进画布要改成的样子(界面经桥改画布上的节点;存盘是 ComfyUI 自己的保存)。不写文件。 */
+export const getCanvasMarks = (
+  instanceId: string,
+  body: { content: Record<string, unknown>; app: WorkflowAnnotate["app"]; results: string[] },
+) =>
+  api<WorkflowCanvasMarks>(`/api/plugins/instances/${instanceId}/workflow-library/app/marks`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+/** 工作台的「运行」:跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流;新建的要先存一次)。 */
+export const runCanvas = (instanceId: string, body: WorkflowCanvasRun) =>
+  api<{ generation: { id: string; job_id?: string | null }; job: Job }>(
+    `/api/plugins/instances/${instanceId}/workflow-library/run`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
 
 /** 经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。 */
 export const startNodeInstall = (instanceId: string, body: { workspace_id: string; packs: string[] }) =>

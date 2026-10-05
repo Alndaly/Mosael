@@ -23,6 +23,8 @@ const contract = require("./ipc-contract.cjs") as {
   parseComfyWorkflow: (value: unknown) => { partition: string; url: string; name: string; path: string };
   parseComfyNewWorkflow: (value: unknown) => { partition: string; url: string; name: string };
   parseComfyNavigation: (value: unknown) => { partition: string; mode: string };
+  parseComfyWorkbenchOpen: (value: unknown) => { partition: string; url: string; name: string; path: string | null; fresh: boolean };
+  parseComfyWorkbenchCall: (value: unknown) => { partition: string; call: Record<string, unknown> };
   parsePanelLayout: (value: unknown) => Record<string, number | string>;
   parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
@@ -143,6 +145,40 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "standard" })).toThrow(/mode/);
     expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse", key: "Comfy.X" })).toThrow(/unexpected/);
     expect(() => contract.parseComfyNavigation({ connectionId: "../c1", mode: "mouse" })).toThrow(/connectionId/);
+
+    // 工作台:开 —— 同一道闸,路径和「在编辑器里打开」同一套规矩;新建和打开一张只能选一样。
+    const bench = { connectionId: "c1", url: "http://127.0.0.1:8188", name: "本机" };
+    expect(contract.parseComfyWorkbenchOpen(bench)).toEqual({ partition: "persist:pool-comfyui-c1", url: bench.url, name: "本机",
+                                                              path: null, fresh: false });
+    expect(contract.parseComfyWorkbenchOpen({ ...bench, path: "人像/a.json" }).path).toBe("人像/a.json");
+    expect(contract.parseComfyWorkbenchOpen({ ...bench, fresh: true }).fresh).toBe(true);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path: "../a.json" })).toThrow(/path/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path: "a.json", fresh: true })).toThrow(/exclusive/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, fresh: "yes" })).toThrow(/fresh/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, partition: "persist:mosael-x" })).toThrow(/unexpected/);
+
+    // 工作台:面板要桥做的事 —— 只认这几种,每种逐项校验;渲染层送不进代码、点不了别的分区。
+    const callOf = (call: unknown) => contract.parseComfyWorkbenchCall({ connectionId: "c1", call });
+    expect(callOf({ op: "setWidget", node: "4", widget: "ckpt_name", value: "sdxl.safetensors" })).toEqual({
+      partition: "persist:pool-comfyui-c1", call: { op: "setWidget", node: "4", widget: "ckpt_name", value: "sdxl.safetensors" },
+    });
+    expect(callOf({ op: "setWidget", node: "-3", widget: "steps", value: 30 }).call.value).toBe(30);
+    for (const op of ["refreshCombos", "export", "save"]) expect(callOf({ op })).toEqual({ partition: "persist:pool-comfyui-c1", call: { op } });
+    expect(() => callOf({ op: "poll" }), "轮询是主进程自己的").toThrow(/op/);
+    expect(() => callOf({ op: "eval", code: "alert(1)" })).toThrow(/op/);
+    expect(() => callOf({ op: "save", script: "alert(1)" })).toThrow(/unexpected/);
+    expect(() => callOf({ op: "setWidget", node: "4; alert(1)", widget: "w", value: 1 })).toThrow(/node/);
+    expect(() => callOf({ op: "setWidget", node: "4", widget: "a\nb", value: 1 })).toThrow(/widget/);
+    expect(() => callOf({ op: "setWidget", node: "4", widget: "w", value: { toString: "x" } })).toThrow(/value/);
+    expect(() => callOf({ op: "setWidget", node: "4", widget: "w", value: Number.NaN })).toThrow(/value/);
+    expect(() => callOf({ op: "setWidget", node: "4", widget: "w", value: "x".repeat(4001) })).toThrow(/value/);
+    const marks = { nodes: { "4": { expose: { ckpt_name: { order: 0 } } } }, extra: { version: 1 } };
+    expect(callOf({ op: "setMarks", marks }).call).toEqual({ op: "setMarks", marks });
+    expect(callOf({ op: "setMarks", marks: { nodes: {}, extra: null } }).call).toEqual({ op: "setMarks", marks: { nodes: {}, extra: null } });
+    expect(() => callOf({ op: "setMarks", marks: { nodes: { "12:5": {} }, extra: null } }), "只认根图上的节点").toThrow(/top-level/);
+    expect(() => callOf({ op: "setMarks", marks: { nodes: { "4": "x" }, extra: null } })).toThrow(/object/);
+    expect(() => callOf({ op: "setMarks", marks: { nodes: {}, extra: null, more: 1 } })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyWorkbenchCall({ connectionId: "../x", call: { op: "save" } })).toThrow(/connectionId/);
 
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
