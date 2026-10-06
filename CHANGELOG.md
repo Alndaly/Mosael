@@ -5,6 +5,11 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### ComfyUI 模型库:VOSR 2.0 超分不讲底模(ComfyUI 插件 1.15.1)
+
+- `vosr2` 目录(VOSR 2.0 超分:LightningDiT + 它专配的 Qwen-Image 2D VAE + DINOv2-L,一整套)标「不适用」,和放大模型一样。
+  此前里面那个 VAE 按权重结构会被认成「Qwen-Image」,可它只能配 VOSR 自己用。
+
 ### 成片默认不再烧「AI 生成」
 
 - **导出的视频画面上默认没有「AI 生成」字样了。** 剪辑页导出框里「给 AI 生成的内容加「AI 生成」标识」每次从不勾开始,工作流的

@@ -269,6 +269,8 @@ def test_GGUF的架构名_表里认得的才认(plugin) -> None:
     # 不讲底模的目录:不适用(不是「认不出」)
     ("text_encoders", "qwen3vl_4b_fp8_scaled.safetensors", {}, "", ("", "not_applicable")),
     ("upscale_models", "4x-UltraSharp.pth", {}, "", ("", "not_applicable")),
+    # VOSR 2.0 超分里那个 VAE:权重认得出 Qwen-Image 的结构,可它只配 VOSR 自己用
+    ("vosr2", "VOSR2/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors", {}, "Qwen-Image", ("", "not_applicable")),
     ("ultralytics_bbox", "face_yolov8m.pt", {}, "", ("", "not_applicable")),
     ("clip_gguf", "t5-v1_1-xxl-encoder-Q8_0.gguf", {"ss_base_model_version": "sdxl"}, "", ("", "not_applicable")),
     # 别的自定义目录:认不出就空着
@@ -338,7 +340,7 @@ def test_Civitai写的底模(plugin, base, expected) -> None:
 def test_不讲底模的目录(plugin) -> None:
     applies = plugin.families.family_applies
     assert not any(applies(one) for one in ("text_encoders", "clip_gguf", "clip_vision", "upscale_models", "sams",
-                                            "instantid", "ultralytics", "ultralytics_bbox", "mmdets_segm", "LLM"))
+                                            "instantid", "ultralytics", "ultralytics_bbox", "mmdets_segm", "LLM", "vosr2"))
     assert all(applies(one) for one in ("checkpoints", "loras", "diffusion_models", "unet_gguf", "vae", "photomaker"))
 
 

@@ -189,7 +189,8 @@ workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
    made for a base model (checkpoints, loras, diffusion_models, controlnet, embeddings, vae…);
 5. values written in the metadata but in no table, with weights that say nothing either, are shown as they are; with
    nothing to go on it stays empty ("Unknown base model");
-6. files in text encoder, CLIP vision, upscaler and detection / segmentation folders aren't made for one base model:
+6. files in text encoder, CLIP vision, upscaler and super-resolution (including VOSR 2.0's `vosr2`) and detection /
+   segmentation folders aren't made for one base model:
    they are not guessed and are marked "Not applicable" (`family_source` is `not_applicable`), apart from "unknown".
 
 **Reading file headers**: through ComfyUI-Custom-Scripts' `/pysssss/view/`, reading only the start with a Range request

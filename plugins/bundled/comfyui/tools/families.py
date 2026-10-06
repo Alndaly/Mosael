@@ -15,11 +15,13 @@ NAME_INFERRED_FOLDERS = frozenset({
 })
 #: 「底模」这件事不适用的目录:文本编码器、CLIP 视觉、放大、检测 / 分割、抠图、语音和大语言模型……它们不是为某一个底模
 #: 做的(一个叫 qwen3vl_4b 的文本编码器不是 Qwen-Image),界面上写「不适用」,不写「认不出」。按小写比。
+#: `vosr2` 是 VOSR 2.0 超分的一整套(LightningDiT + 它专配的 Qwen-Image 2D VAE + DINOv2-L,一起训练、不能拆换):不是哪个
+#: 底模的,里面那个 VAE 按权重认得出 Qwen-Image 的结构,却只能配它自己用。
 NOT_APPLICABLE_FOLDERS = frozenset({
     "text_encoders", "clip", "clip_gguf", "t5", "clip_vision", "upscale_models", "sams", "sam2", "instantid",
     "insightface", "facerestore_models", "facedetection", "onnx", "rembg", "rmbg", "background_removal", "mediapipe",
     "detection", "frame_interpolation", "optical_flow", "geometry_estimation", "audio_encoders", "wav2vec2", "llm",
-    "prompt_generator",
+    "prompt_generator", "vosr2",
 })
 #: 同一类的一串目录(Impact Pack 的 ultralytics_bbox / ultralytics_segm,mmdets_bbox……)
 NOT_APPLICABLE_PREFIXES = ("ultralytics", "mmdets")

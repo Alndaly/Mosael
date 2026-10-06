@@ -147,7 +147,7 @@ png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位
    `hunyuan_video` → HunyuanVideo、`ltx` → LTX-Video、`sdxl` / 单独的 `xl` → SDXL、`sd15` / `v1-5` → SD 1.5……只在放「给某个底模用的东西」
    的目录里按名字猜(checkpoints、loras、diffusion_models、controlnet、embeddings、vae……);
 5. 元数据里写了、表里没有、权重也认不出的值原样显示;什么都没有就空着(「认不出底模」)。
-6. 文本编码器、CLIP 视觉、放大、检测 / 分割这类目录里的文件不是给某一个底模做的:不猜,标「不适用」(`family_source`
+6. 文本编码器、CLIP 视觉、放大和超分(包括 VOSR 2.0 的 `vosr2`)、检测 / 分割这类目录里的文件不是给某一个底模做的:不猜,标「不适用」(`family_source`
    是 `not_applicable`),和「认不出」分开。
 
 **读文件头**:走 ComfyUI-Custom-Scripts 的 `/pysssss/view/`,按 Range 只读开头(safetensors 的头一般几十到几百 KB,
