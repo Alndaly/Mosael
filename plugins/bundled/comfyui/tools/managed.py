@@ -26,9 +26,11 @@ Python),venv 和装进去的包作废、重装,源码、pysssss 和模型不动;
 **PyTorch 装哪种全在这里**(最容易出错的一步):
 
 - Apple 芯片 Mac:PyPI 上的就带 MPS(测试场实测),走 pip 源;
-- Windows + NVIDIA:PyPI 上的只有 CPU 版,走 PyTorch 自己的 CUDA 源。`nvidia-smi` 读驱动版本、显卡、显存和算力,按
-  `CUDA_CHANNELS` 挑这块显卡能用、这个驱动撑得住的最高那个;
-- 别的(Intel Mac、AMD、只有 CPU、Linux)这一版不装,说清楚,建议「用我自己装的」或者连一台服务器。
+- Windows / Linux(x86_64)+ NVIDIA:Windows 上 PyPI 只有 CPU 版,两边都走 PyTorch 自己的 CUDA 源(Linux 上 CUDA 版另要的
+  nvidia-cudnn / nccl / cusparselt / nvshmem 和 triton 那个源里也有)。`nvidia-smi` 读驱动版本、显卡、显存和算力,按
+  `CUDA_CHANNELS` 挑这块显卡能用、这个驱动撑得住的最高那个(驱动下限两个系统不一样);Linux 还要 glibc 2.28 以上(PyTorch 的包
+  是 manylinux_2_28);
+- 别的(Intel Mac、AMD、只有 CPU、ARM 的 Windows / Linux)这一版不装,说清楚,建议「用我自己装的」或者连一台服务器。
 
 依赖都**钉死版本**:ComfyUI 的源码包(sha256)、PyTorch 三件(版本号,CUDA 的连同 `+cu130` 这类后缀)、pysssss(sha256)。
 要升级就一起换:`COMFYUI_PINNED`、`TORCH`、`CUDA_CHANNELS`(和测试里的那一份)。
@@ -83,24 +85,32 @@ TORCH = (("torch", "2.14.1"), ("torchvision", "0.29.1"), ("torchaudio", "2.11.0"
 
 @dataclass(frozen=True)
 class CudaChannel:
-    """PyTorch 的一个 CUDA 源(`<PyTorch 源>/cu130`)。`driver` 是 Windows 上 NVIDIA 驱动的最低版本(NVIDIA 的 CUDA 发行说明:
-    13.x 要 R580 及以上,12.6 GA 要 560.76);`lowest` / `highest` 是这个源的包支持的显卡算力(含两端)。"""
+    """PyTorch 的一个 CUDA 源(`<PyTorch 源>/cu130`)。`windows` / `linux` 是那个系统上 NVIDIA 驱动的最低版本(NVIDIA 的 CUDA
+    发行说明:13.x 要 R580 及以上 —— Linux 上那一支的第一版是 580.65.06,CUDA 13.0 的发行说明里就是这一行;12.6 GA 要 Windows
+    560.76、Linux 560.28.03);`lowest` / `highest` 是这个源的包支持的显卡算力(含两端)。"""
 
     key: str
     cuda: str
-    driver: tuple[int, ...]
+    windows: tuple[int, ...]
+    linux: tuple[int, ...]
     lowest: tuple[int, int]
     highest: tuple[int, int] | None = None
 
+    def driver(self, system: str) -> tuple[int, ...]:
+        """这个系统上要的最低驱动版本。"""
+        return self.windows if system == "win32" else self.linux
+
 
 #: **对照表**(2026-10-06 查过 download.pytorch.org:torch 2.14.1 + Python 3.13 + Windows 只有 cu126 / cu130 / cu132 三个源有包,
-#: cu132 没有 torchaudio,不用)。cu130 是 ComfyUI 0.39.0 自己的 Windows 便携版用的那个,README 说 20 系及以上**必须**用它;
+#: cu132 没有 torchaudio,不用;Linux x86_64 两个源都有 manylinux_2_28 的三件,另要的 nvidia-* 和 triton 同一个源里有)。cu130 是 ComfyUI 0.39.0 自己的 Windows 便携版用的那个,README 说 20 系及以上**必须**用它;
 #: cu126 给 10 系及更老的显卡(README:「DO NOT USE THIS ON NEWER 20 SERIES AND ABOVE GPUS」)。CUDA 13 去掉了 Maxwell / Pascal /
 #: Volta,所以两行的算力不重叠。按从新到旧排:挑第一个这块显卡能用、驱动也撑得住的。
 CUDA_CHANNELS = (
-    CudaChannel("cu130", "13.0", (580, 0), (7, 5)),
-    CudaChannel("cu126", "12.6", (560, 76), (5, 0), (7, 0)),
+    CudaChannel("cu130", "13.0", windows=(580, 0), linux=(580, 65, 6), lowest=(7, 5)),
+    CudaChannel("cu126", "12.6", windows=(560, 76), linux=(560, 28, 3), lowest=(5, 0), highest=(7, 0)),
 )
+#: PyTorch 的 Linux 包是 manylinux_2_28:系统的 glibc 要这么新(CentOS 7 那种 2.17 的装不上,pip 只会说「找不到这个版本」)。
+GLIBC_NEED = (2, 28)
 
 #: 空间按十进制的 GB 算(和界面上 formatBytes、系统的「存储空间」说的是同一个数);显存按 GiB(驱动报的是 MiB)。
 GB = 1000 ** 3
@@ -168,7 +178,7 @@ class Gpu:
 
 @dataclass(frozen=True)
 class Machine:
-    """装之前要知道的:系统、建 venv 用的那个 Python 是什么架构、哪个小版本;Windows 上还有 NVIDIA 驱动和显卡。"""
+    """装之前要知道的:系统、建 venv 用的那个 Python 是什么架构、哪个小版本;Windows、Linux 上还有 NVIDIA 驱动和显卡。"""
 
     system: str  # sys.platform:darwin / win32 / linux
     arch: str  # platform.machine():arm64 / x86_64 / AMD64 / ARM64
@@ -179,13 +189,17 @@ class Machine:
     nvidia_error: str = ""
     #: Windows 的长路径支持开了没有(别的系统没这回事)。
     long_paths: bool = True
+    #: Linux 上系统的 C 库(`glibc-2.35`;认不出是空串,比如 Alpine 的 musl)。
+    libc: str = ""
 
 
-_PYTHON_FACTS = "import platform, sys; print('MOSAEL_PY', f'{sys.version_info[0]}.{sys.version_info[1]}', platform.machine(), sys.platform)"
+_PYTHON_FACTS = ("import platform, sys; lib, ver = platform.libc_ver(); print('MOSAEL_PY', "
+                 "f'{sys.version_info[0]}.{sys.version_info[1]}', platform.machine(), sys.platform, f'{lib}-{ver}' if lib else '-')")
 
 
-def _python_facts(python: Path, locale: str) -> tuple[str, str, str]:
-    """建 venv 用的那个 Python:小版本、架构、系统。跑它一次(它就是宿主随包的那一个,几十毫秒)。"""
+def _python_facts(python: Path, locale: str) -> tuple[str, str, str, str]:
+    """建 venv 用的那个 Python:小版本、架构、系统、C 库(Linux 上是系统的 glibc,`platform.libc_ver` 问的是运行时的那个;
+    别处是空串)。跑它一次(它就是宿主随包的那一个,几十毫秒)。"""
     try:
         done = subprocess.run([str(python), "-c", _PYTHON_FACTS], capture_output=True, text=True, timeout=60, **_flags())
     except (OSError, subprocess.SubprocessError) as exc:
@@ -193,8 +207,8 @@ def _python_facts(python: Path, locale: str) -> tuple[str, str, str]:
                              f"The Python Mosael provided won't run: {python} ({exc})")) from exc
     for line in (done.stdout or "").splitlines():
         parts = line.split()
-        if len(parts) == 4 and parts[0] == "MOSAEL_PY":
-            return parts[1], parts[2], parts[3]
+        if len(parts) == 5 and parts[0] == "MOSAEL_PY":
+            return parts[1], parts[2], parts[3], "" if parts[4] == "-" else parts[4]
     raise ComfyError(say(locale, f"宿主给的 Python 跑不起来:{python}\n{(done.stderr or '').strip()[-300:]}",
                          f"The Python Mosael provided won't run: {python}\n{(done.stderr or '').strip()[-300:]}"))
 
@@ -238,12 +252,14 @@ def parse_compute(text: str) -> list[tuple[int, int] | None]:
 
 
 def _nvidia_smi() -> str | None:
-    """nvidia-smi 在哪:PATH 上的,或者驱动装在的那两个老地方。"""
+    """nvidia-smi 在哪:PATH 上的,或者驱动常装的那几个地方(Windows 的两个老地方;Linux 上后端作为服务跑时 PATH 可能很短,
+    容器里 NVIDIA 运行时放在 /usr/local/nvidia/bin)。"""
     found = shutil.which("nvidia-smi")
     if found:
         return found
     for candidate in (Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "nvidia-smi.exe",
-                      Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe"):
+                      Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe",
+                      Path("/usr/bin/nvidia-smi"), Path("/usr/local/nvidia/bin/nvidia-smi")):
         if candidate.is_file():
             return str(candidate)
     return None
@@ -289,12 +305,12 @@ def _long_paths_enabled() -> bool:
 
 
 def probe_machine(python: Path, locale: str) -> Machine:
-    minor, arch, system = _python_facts(python, locale)
-    if system != "win32":
+    minor, arch, system, libc = _python_facts(python, locale)
+    if system == "darwin":
         return Machine(system=system, arch=arch, python_minor=minor)
     driver, gpus, problem = read_nvidia()
     return Machine(system=system, arch=arch, python_minor=minor, driver=driver, gpus=gpus, nvidia_error=problem,
-                   long_paths=_long_paths_enabled())
+                   long_paths=_long_paths_enabled() if system == "win32" else True, libc=libc)
 
 
 # --- 能不能装、装哪种 --------------------------------------------------------------
@@ -319,13 +335,20 @@ def _version(numbers: tuple[int, ...] | tuple[int, int]) -> str:
     return ".".join(str(one) for one in numbers)
 
 
+def _driver_text(numbers: tuple[int, ...]) -> str:
+    """驱动版本照 NVIDIA 的写法:Linux 的三段式后两段补成两位(580.65.06),Windows 的两段式照写(581.57)。"""
+    if len(numbers) == 3:
+        return f"{numbers[0]}.{numbers[1]:02d}.{numbers[2]:02d}"
+    return _version(numbers)
+
+
 def _other_ways(zh: str, en: str) -> dict[str, str]:
     return {"zh": f"{zh}。可以「用我自己装的」(选一个装好的 ComfyUI 目录),或者连一台服务器",
             "en": f"{en}. You can use your own install (pick an installed ComfyUI folder) or connect to a server instead"}
 
 
 def judge(machine: Machine) -> Verdict:
-    """ADR 0041 拍板 3:Apple 芯片 Mac、Windows + NVIDIA 这一版装;别的说清楚为什么不装。"""
+    """ADR 0041 拍板 3:Apple 芯片 Mac、Windows / Linux(x86_64)+ NVIDIA 装;别的说清楚为什么不装。"""
     if machine.system == "darwin":
         if machine.arch == "arm64":
             return Verdict(True, "mps", {"zh": "Apple 芯片 Mac", "en": "Mac with Apple silicon"},
@@ -341,24 +364,42 @@ def judge(machine: Machine) -> Verdict:
                            _other_ways("这一版只给 x64 的 Windows 装", "This version installs only on x64 Windows"))
         return _judge_nvidia(machine)
     if machine.system.startswith("linux"):
-        return Verdict(False, "", {"zh": "Linux", "en": "Linux"},
-                       _other_ways("Linux 这一版不装(之后提供)", "Linux isn't supported in this version (it's planned)"))
+        if machine.arch.lower() not in ("x86_64", "amd64"):
+            return Verdict(False, "", {"zh": f"Linux({machine.arch})", "en": f"Linux ({machine.arch})"},
+                           _other_ways("这一版只给 x86_64 的 Linux 装", "This version installs only on x86_64 Linux"))
+        glibc = _glibc(machine.libc)
+        if glibc is None or glibc < GLIBC_NEED:
+            have_zh = machine.libc.replace("-", " ") if glibc else "认不出是 glibc(Alpine 这类 musl 系统)"
+            have_en = machine.libc.replace("-", " ") if glibc else "not recognised as glibc (musl systems such as Alpine)"
+            return Verdict(False, "", {"zh": "Linux", "en": "Linux"}, _other_ways(
+                f"PyTorch 的 Linux 包要 glibc {_version(GLIBC_NEED)} 以上,这台是 {have_zh}",
+                f"PyTorch's Linux packages need glibc {_version(GLIBC_NEED)} or newer; this machine has {have_en}"))
+        return _judge_nvidia(machine)
     return Verdict(False, "", {"zh": machine.system, "en": machine.system},
                    _other_ways("这个系统这一版不装", "This system isn't supported in this version"))
 
 
+def _glibc(libc: str) -> tuple[int, ...] | None:
+    """`glibc-2.35` → (2, 35);不是 glibc(或认不出)是 None。"""
+    name, _, version = libc.partition("-")
+    return parse_driver(version) if name == "glibc" else None
+
+
 def _judge_nvidia(machine: Machine) -> Verdict:
+    system = "Windows" if machine.system == "win32" else "Linux"
     if not machine.gpus or machine.driver is None:
-        return Verdict(False, "", {"zh": "Windows,没找到 NVIDIA 显卡", "en": "Windows, no NVIDIA GPU found"},
+        linux_zh = ";Linux 上要装 NVIDIA 的专有驱动,在容器里要把显卡带进来(比如 docker run --gpus all)" if system == "Linux" else ""
+        linux_en = "; on Linux the proprietary NVIDIA driver is needed, and a container needs the GPU passed in (such as "                    "docker run --gpus all)" if system == "Linux" else ""
+        return Verdict(False, "", {"zh": f"{system},没找到 NVIDIA 显卡", "en": f"{system}, no NVIDIA GPU found"},
                        _other_ways("这一版只给 NVIDIA 显卡装:没找到 nvidia-smi,或者它没列出显卡(没装 NVIDIA 驱动、"
-                                   f"是 AMD / Intel 显卡、或者只有 CPU)。{machine.nvidia_error}".rstrip(),
+                                   f"是 AMD / Intel 显卡、或者只有 CPU){linux_zh}。{machine.nvidia_error}".rstrip(),
                                    "This version installs only for NVIDIA GPUs: nvidia-smi wasn't found or listed no GPU "
-                                   f"(no NVIDIA driver, an AMD / Intel GPU, or CPU only). {machine.nvidia_error}".rstrip()))
+                                   f"(no NVIDIA driver, an AMD / Intel GPU, or CPU only){linux_en}. {machine.nvidia_error}".rstrip()))
     gpu = machine.gpus[0]  # ComfyUI 缺省用第 0 块
     memory = f"{gpu.memory / GIB:.0f} GB" if gpu.memory else "?"
-    driver = _version(machine.driver)
-    named = {"zh": f"Windows + {gpu.name}(显存 {memory},驱动 {driver})",
-             "en": f"Windows + {gpu.name} ({memory} VRAM, driver {driver})"}
+    driver = _driver_text(machine.driver)
+    named = {"zh": f"{system} + {gpu.name}(显存 {memory},驱动 {driver})",
+             "en": f"{system} + {gpu.name} ({memory} VRAM, driver {driver})"}
     compute = gpu.compute
     fits = [channel for channel in CUDA_CHANNELS
             if compute is None or (channel.lowest <= compute and (channel.highest is None or compute <= channel.highest))]
@@ -366,25 +407,26 @@ def _judge_nvidia(machine: Machine) -> Verdict:
         return Verdict(False, "", named, _other_ways(
             f"这块显卡太老(算力 {_version(compute or (0, 0))}):PyTorch {TORCH[0][1]} 已经不支持它",
             f"This GPU is too old (compute capability {_version(compute or (0, 0))}): PyTorch {TORCH[0][1]} no longer supports it"))
-    usable = [channel for channel in fits if machine.driver >= channel.driver]
+    usable = [channel for channel in fits if machine.driver >= channel.driver(machine.system)]
     if not usable:
         newest = fits[0]
+        need = _driver_text(newest.driver(machine.system))
         return Verdict(False, "", named, {
-            "zh": f"驱动 {driver} 太旧:这块显卡要用 CUDA {newest.cuda} 版的 PyTorch,得 {_version(newest.driver)} 以上的驱动。"
+            "zh": f"驱动 {driver} 太旧:这块显卡要用 CUDA {newest.cuda} 版的 PyTorch,得 {need} 以上的驱动。"
                   f"先到 NVIDIA 官网升级显卡驱动,再回来装",
             "en": f"Driver {driver} is too old: this GPU needs the CUDA {newest.cuda} build of PyTorch, which requires driver "
-                  f"{_version(newest.driver)} or newer. Update the NVIDIA driver first, then come back and install",
+                  f"{need} or newer. Update the NVIDIA driver first, then come back and install",
         })
     channel = usable[0]
+    need = _driver_text(channel.driver(machine.system))
     warnings: tuple[dict[str, str], ...] = ()
     if compute is None:
         warnings = ({"zh": "nvidia-smi 没说这块显卡的算力,按 20 系及以上挑的;装完 PyTorch 会试一下显卡,不行会说",
                      "en": "nvidia-smi didn't report this GPU's compute capability, so a 20-series-or-newer GPU was assumed; "
                            "the GPU is tried right after PyTorch is installed"},)
     return Verdict(True, channel.key, named, {
-        "zh": f"装 CUDA {channel.cuda} 版的 PyTorch(驱动 {driver} 撑得住,要 {_version(channel.driver)} 以上)",
-        "en": f"Installs the CUDA {channel.cuda} build of PyTorch (driver {driver} is new enough; it needs "
-              f"{_version(channel.driver)} or newer)",
+        "zh": f"装 CUDA {channel.cuda} 版的 PyTorch(驱动 {driver} 撑得住,要 {need} 以上)",
+        "en": f"Installs the CUDA {channel.cuda} build of PyTorch (driver {driver} is new enough; it needs {need} or newer)",
     }, warnings)
 
 

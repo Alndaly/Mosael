@@ -1,8 +1,9 @@
 """ComfyUI 插件的「让 Mosael 装」(ADR 0041 §4):安装计划和安装本身,对着本地的假下载源、假解释器走一遍。
 
-- **这台机器能不能装、装哪种 PyTorch**:Apple 芯片 Mac → MPS;Windows + NVIDIA 按 `nvidia-smi` 的驱动版本、显卡算力挑 CUDA 源
-  (对照表钉着 NVIDIA 的发行说明和 download.pytorch.org 上真有的那几个);Intel Mac、Linux、没有 NVIDIA 显卡、驱动太旧、
-  显卡太老都说清楚为什么。nvidia-smi 的输出用夹具解析(这台机器跑不了 Windows);
+- **这台机器能不能装、装哪种 PyTorch**:Apple 芯片 Mac → MPS;Windows / Linux + NVIDIA 按 `nvidia-smi` 的驱动版本、显卡算力挑
+  CUDA 源(对照表钉着 NVIDIA 的发行说明和 download.pytorch.org 上真有的那几个,驱动下限两个系统各一行);Intel Mac、ARM、
+  没有 NVIDIA 显卡、驱动太旧、显卡太老、Linux 的 glibc 太旧都说清楚为什么。nvidia-smi 的输出用夹具解析(这台机器跑不了
+  Windows、没有 NVIDIA);
 - **装**:查空间、下源码(按 sha256 校验)、解开(不越界)、建 venv、装 PyTorch(试一下显卡)、装依赖(不升级 torch)、装 pysssss;
   每一步做完记一笔。假的 Python 是 shell 脚本:建 venv 时放一个假的 venv 解释器,它回答 pip(按字节报进度)、试显卡、问版本;
 - **接着装**:取消(下载中、pip 中)、失败之后再来,从没做完的那一步开始;Python 小版本变了只重建 venv 和装进去的包,
@@ -63,6 +64,13 @@ def _windows(managed, *, driver: str = "581.57", name: str = "NVIDIA GeForce RTX
                            gpus=(managed.Gpu(name, memory, compute),), long_paths=long_paths)
 
 
+def _linux(managed, *, driver: str = "580.65.06", name: str = "NVIDIA GeForce RTX 4090", compute: tuple[int, int] | None = (8, 9),
+           arch: str = "x86_64", libc: str = "glibc-2.35", gpus: bool = True):
+    return managed.Machine(system="linux", arch=arch, python_minor="3.13", driver=managed.parse_driver(driver) if gpus else None,
+                           gpus=(managed.Gpu(name, 24 * GB, compute),) if gpus else (), libc=libc,
+                           nvidia_error="" if gpus else "nvidia-smi not found")
+
+
 # ---- nvidia-smi 和对照表 ------------------------------------------------------------
 
 
@@ -106,8 +114,10 @@ def test_没有_nvidia_smi_就是没找到(managed, monkeypatch: pytest.MonkeyPa
 def test_对照表_从新到旧_算力不重叠_驱动下限照_NVIDIA_的发行说明(managed) -> None:
     channels = managed.CUDA_CHANNELS
     assert [one.key for one in channels] == ["cu130", "cu126"], "torch 2.14.1 + cp313 + Windows 真有包的(cu132 没有 torchaudio)"
-    assert channels[0].driver == (580, 0), "CUDA 13.x:R580 及以上"
-    assert channels[1].driver == (560, 76), "CUDA 12.6 GA:Windows 560.76"
+    assert channels[0].driver("win32") == (580, 0), "CUDA 13.x:R580 及以上"
+    assert channels[0].driver("linux") == (580, 65, 6), "CUDA 13.0 GA:Linux x86_64 580.65.06(R580 在 Linux 上的第一版)"
+    assert channels[1].driver("win32") == (560, 76), "CUDA 12.6 GA:Windows 560.76"
+    assert channels[1].driver("linux") == (560, 28, 3), "CUDA 12.6 GA:Linux x86_64 560.28.03"
     assert channels[0].lowest == (7, 5) and channels[1].highest == (7, 0), "20 系及以上只用 cu130,10 系及更老只用 cu126(ComfyUI README)"
     assert managed.TORCH == (("torch", "2.14.1"), ("torchvision", "0.29.1"), ("torchaudio", "2.11.0"))
 
@@ -143,12 +153,56 @@ def test_别的平台这一版不装_说清楚换哪条路(managed) -> None:
     assert managed.judge(managed.Machine(**MAC)).flavour == "mps"
     for machine, word in [
         (managed.Machine(system="darwin", arch="x86_64", python_minor="3.13"), "Intel"),
-        (managed.Machine(system="linux", arch="x86_64", python_minor="3.13"), "Linux"),
+        (_linux(managed, arch="aarch64"), "x86_64"),
         (managed.Machine(system="win32", arch="ARM64", python_minor="3.13"), "x64"),
     ]:
         verdict = managed.judge(machine)
         assert not verdict.ok and verdict.flavour == ""
         assert word in verdict.reason["zh"] and "连一台服务器" in verdict.reason["zh"] and "server" in verdict.reason["en"]
+
+
+@pytest.mark.parametrize(("driver", "name", "compute", "flavour"), [
+    ("580.65.06", "NVIDIA GeForce RTX 4090", (8, 9), "cu130"),
+    ("580.95.05", "NVIDIA A100-SXM4-80GB", (8, 0), "cu130"),
+    ("590.44.01", "NVIDIA GeForce RTX 2080 Ti", (7, 5), "cu130"),
+    ("560.28.03", "Tesla P100-PCIE-16GB", (6, 0), "cu126"),
+    ("575.57.08", "Tesla V100-SXM2-32GB", (7, 0), "cu126"),
+])
+def test_Linux_NVIDIA_同一张对照表_驱动下限按_Linux_那一列(managed, driver: str, name: str, compute, flavour: str) -> None:
+    verdict = managed.judge(_linux(managed, driver=driver, name=name, compute=compute))
+    assert verdict.ok and verdict.flavour == flavour
+    assert verdict.platform["zh"].startswith("Linux + ") and name in verdict.platform["zh"] and driver in verdict.platform["en"]
+
+
+def test_Linux_驱动太旧_ARM_glibc_太旧_没有_NVIDIA_都说清楚(managed) -> None:
+    old = managed.judge(_linux(managed, driver="575.64.05", compute=(8, 9)))
+    assert not old.ok and "580.65.06" in old.reason["zh"], "Linux 上 R580 要 580.65.06,不是 Windows 那一列的 580"
+    old_pascal = managed.judge(_linux(managed, driver="555.42.06", name="Tesla P100", compute=(6, 0)))
+    assert not old_pascal.ok and "560.28.03" in old_pascal.reason["en"]
+    arm = managed.judge(_linux(managed, arch="aarch64"))
+    assert not arm.ok and "x86_64" in arm.reason["zh"]
+    centos7 = managed.judge(_linux(managed, libc="glibc-2.17"))
+    assert not centos7.ok and "glibc 2.28" in centos7.reason["zh"] and "glibc 2.17" in centos7.reason["zh"]
+    musl = managed.judge(_linux(managed, libc=""))
+    assert not musl.ok and "musl" in musl.reason["zh"] and "musl" in musl.reason["en"]
+    none = managed.judge(_linux(managed, gpus=False))
+    assert not none.ok and none.platform["zh"] == "Linux,没找到 NVIDIA 显卡"
+    assert "--gpus all" in none.reason["zh"] and "nvidia-smi" in none.reason["en"] and "用我自己装的" in none.reason["zh"]
+    windows_none = managed.judge(managed.Machine(system="win32", arch="AMD64", python_minor="3.13"))
+    assert "--gpus" not in windows_none.reason["zh"], "容器那一句只对 Linux 说"
+
+
+def test_Linux_问一遍这台机器_C_库_nvidia_smi(managed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    python = tmp_path / "python"
+    python.write_text("#!/bin/sh\necho 'MOSAEL_PY 3.13 x86_64 linux glibc-2.35'\n", encoding="utf-8")
+    python.chmod(0o755)
+    monkeypatch.setattr(managed, "read_nvidia", lambda: ((580, 65, 6), (managed.Gpu("NVIDIA L4", 24 * GB, (8, 9)),), ""))
+    machine = managed.probe_machine(python, "zh")
+    assert (machine.system, machine.arch, machine.libc, machine.driver) == ("linux", "x86_64", "glibc-2.35", (580, 65, 6))
+    assert machine.long_paths is True, "长路径只是 Windows 的事"
+    python.write_text("#!/bin/sh\necho 'MOSAEL_PY 3.13 arm64 darwin -'\n", encoding="utf-8")
+    monkeypatch.setattr(managed, "read_nvidia", lambda: pytest.fail("Mac 不问 nvidia-smi"))
+    assert managed.probe_machine(python, "zh") == managed.Machine(system="darwin", arch="arm64", python_minor="3.13")
 
 
 def test_PyTorch_三件钉死版本_CUDA_的带后缀_从哪个源装(managed) -> None:
@@ -200,10 +254,16 @@ def test_安装计划_空间不够_Windows_要_8_GB(managed, tmp_path: Path, mon
 
 
 def test_安装计划_不能装的也摆出原因_不报空间(managed, tmp_path: Path) -> None:
-    planned = managed.plan({"directory": str(tmp_path), "python": sys.executable}, "zh",
-                           machine=managed.Machine(system="linux", arch="x86_64", python_minor="3.13"))
+    planned = managed.plan({"directory": str(tmp_path), "python": sys.executable}, "zh", machine=_linux(managed, gpus=False))
     assert not planned["ok"] and planned["flavour"] == "" and planned["downloads"] == [] and planned["problems"] == []
-    assert "Linux" in planned["verdict"]["zh"]
+    assert "NVIDIA" in planned["verdict"]["zh"]
+
+
+def test_安装计划_Linux_NVIDIA_走_PyTorch_源的_CUDA_频道_要_8_GB(managed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(managed, "_free_space", lambda _root: 200 * GB)
+    planned = managed.plan({"directory": str(tmp_path / "x"), "python": sys.executable}, "zh", machine=_linux(managed))
+    assert planned["ok"] and planned["flavour"] == "cu130" and planned["disk_bytes"] == 8 * GB
+    assert planned["downloads"][1]["url"] == "https://download.pytorch.org/whl/cu130" and planned["downloads"][1]["source"] == "pytorch"
 
 
 # ---- 安装:假的下载源、假的 Python --------------------------------------------------------
@@ -397,6 +457,16 @@ def test_装_Windows_CUDA_走_PyTorch_源的那个频道_venv_是_Scripts_python
     done = setup.install(setup.managed.Machine(system="win32", arch="AMD64", python_minor="3.13", driver=(581, 57),
                                                gpus=(setup.managed.Gpu("RTX 4090", 24 * GB, (8, 9)),)), flavour="cu130")
     assert done["python"] == str(setup.root / ".venv" / "Scripts" / "python.exe") and done["flavour"] == "cu130"
+    torch = setup.pip_calls()[1]
+    assert "--index-url https://torch.example/whl/cu130" in torch
+    assert torch.endswith("torch==2.14.1+cu130 torchvision==0.29.1+cu130 torchaudio==2.11.0+cu130")
+    assert "--index-url https://pypi.example/simple" in setup.pip_calls()[2], "依赖照样走 pip 源"
+
+
+@posix_only
+def test_装_Linux_CUDA_走_PyTorch_源的那个频道_venv_是_bin_python(setup: Setup) -> None:
+    done = setup.install(_linux(setup.managed), flavour="cu130")
+    assert done["python"] == str(setup.root / ".venv" / "bin" / "python") and done["flavour"] == "cu130"
     torch = setup.pip_calls()[1]
     assert "--index-url https://torch.example/whl/cu130" in torch
     assert torch.endswith("torch==2.14.1+cu130 torchvision==0.29.1+cu130 torchaudio==2.11.0+cu130")
