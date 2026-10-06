@@ -15,16 +15,20 @@
  * `app.refreshComboInNodes`、`app.graphToPrompt`、`app.rootGraph`、`app.api`(EventTarget,`clientId`)、
  * `app.extensionManager.workflow.activeWorkflow`(`path` / `isModified` / `isTemporary` / `changeTracker.activeState`)、
  * `app.extensionManager.command`(`Comfy.SaveWorkflow`)、定位节点用的 `app.canvas.selectItems / selectNode`、
- * `centerOnNode / animateToBounds`、子图的 `rootGraph.subgraphs` 和 `canvas.openSubgraph / setGraph`。每个调用先探测,缺了只关掉
- * 那一样(能力表里是 false)。
+ * `centerOnNode / animateToBounds`、子图的 `rootGraph.subgraphs` 和 `canvas.openSubgraph / setGraph`、「运行」前后的
+ * `widget.beforeQueued / afterQueued` 和 `window.comfyAPI.promotedWidgetControl.applyPromotedWidgetControl`。每个调用先探测,缺了
+ * 只关掉那一样(能力表里是 false)。
  *
  * **画布上开着的是哪一张**:用户可能在 ComfyUI 自己的标签栏 / 侧栏里换一张。轮询里的 `workflow.key` 是那一张在前端工作流仓库里的
  * 路径(没存过的也有,形如 `workflows/Unsaved Workflow (2).json`),面板按它认「换了一张」;`revision` 是这一张的图**改过几回**
  * —— 前端自己的改动跟踪(`changeTracker`)每认一次改动就换一份 `activeState`,桥看到换了就加一(选中节点不算改动)。
  */
 
-/** 桥的版本:页面里已经有同一版的就不再注入;形状变了加一。2:轮询报开着的是哪一张、改过几回;能定位节点。 */
-export const WORKBENCH_VERSION = 2;
+/**
+ * 桥的版本:页面里已经有同一版的就不再注入;形状变了加一。2:轮询报开着的是哪一张、改过几回;能定位节点。
+ * 3:「运行」前后照前端自己的「生成后怎样」换种子(runControls)。
+ */
+export const WORKBENCH_VERSION = 3;
 
 /** 队列里最多留几条事件(没人取的时候丢最老的)。 */
 export const MAX_EVENTS = 200;
@@ -40,7 +44,12 @@ export type WorkbenchCall =
   | { op: "save" }
   | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null } }
   /** 在画布上找到这个节点:选中、移到画面中间;在子图里的先进那张子图(`subgraph` 是子图的 id,根图上的是 null)。 */
-  | { op: "locate"; node: string; subgraph: string | null };
+  | { op: "locate"; node: string; subgraph: string | null }
+  /**
+   * 「运行」画布上这张的前后各一次(`before` 导出之前、`after` 任务建好之后):和在 ComfyUI 里点「运行」一样,让每个 widget
+   * 走前端自己的 beforeQueued / afterQueued —— 「生成后怎样」是 randomize / increment 的种子在这里换,不然连点两次运行是同一张图。
+   */
+  | { op: "runControls"; phase: "before" | "after" };
 
 /** 页面里定义 `window.__mosaelWorkbench` 的脚本。回 installed / present(同一版已经在)/ elsewhere / notReady。 */
 export function workbenchInstallScript(origin: string): string {
@@ -251,6 +260,28 @@ export function workbenchInstallScript(origin: string): string {
       touched(graph);
       return { ok: true };
     },
+    runControls(phase) {
+      // 照 ComfyUI 自己的 app.queuePrompt(1.53.10):提交前每个节点(连同子图里的)的每个 widget 走 beforeQueued,排上之后走
+      // afterQueued,提升到子图节点上的那一格交给前端自己的 applyPromotedWidgetControl。没有这些钩子的前端:什么都不做
+      const hook = phase === "before" ? "beforeQueued" : "afterQueued";
+      const helpers = window.comfyAPI && window.comfyAPI.promotedWidgetControl;
+      const promoted = helpers && typeof helpers.applyPromotedWidgetControl === "function"
+        ? helpers.applyPromotedWidgetControl : null;
+      const visit = (graph, depth) => {
+        if (depth > 16) return;
+        for (const node of nodesOf(graph)) {
+          if (!node) continue;
+          if (typeof node.isSubgraphNode === "function" && node.isSubgraphNode() && node.subgraph) visit(node.subgraph, depth + 1);
+          for (const widget of Array.isArray(node.widgets) ? node.widgets : []) {
+            if (widget && typeof widget[hook] === "function") widget[hook]({ isPartialExecution: false });
+          }
+          if (promoted) promoted(node, hook);
+        }
+      };
+      visit(rootGraph(), 0);
+      touched(rootGraph());
+      return { ok: true };
+    },
     locate(id, subgraphId) {
       const canvas = app.canvas;
       const root = rootGraph();
@@ -296,6 +327,7 @@ export function workbenchCallScript(origin: string, call: WorkbenchCall): string
     save: "return bridge.save();",
     setMarks: "return bridge.setMarks(call.marks);",
     locate: "return bridge.locate(call.node, call.subgraph);",
+    runControls: "return bridge.runControls(call.phase);",
   }[call.op];
   return callShell(origin, `const call = ${data};\n    ${body}`);
 }

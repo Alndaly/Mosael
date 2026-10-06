@@ -33,6 +33,7 @@ const CALL_BUDGET_MS: Record<WorkbenchCall["op"], number> = {
   save: 5_000,
   setMarks: 10_000,
   locate: 5_000,
+  runControls: 5_000,
 };
 
 type Driver = Pick<PageDriver, "evaluate">;

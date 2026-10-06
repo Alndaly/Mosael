@@ -355,6 +355,33 @@ describe("ComfyUI 工作台", () => {
     expect(await screen.findByText("workbenchRunMarked")).toBeTruthy();
   });
 
+  it("运行:和在 ComfyUI 里点「运行」一样,导出之前、任务建好之后各让桥走一遍「生成后怎样」;没建成的不走第二遍", async () => {
+    //: 沙盒实测:种子设成 randomize,连点两次运行此前用的是同一个存着的种子,出同一张图
+    const bridge = await mount();
+    api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
+    api.getJob.mockResolvedValue({ id: "job-9", status: "running", message: "ComfyUI 生成中" });
+    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "runControls", phase: "after" }));
+    const ops = calls(bridge).map((one) => (one.op === "runControls" ? `runControls:${one.phase}` : one.op));
+    const before = ops.indexOf("runControls:before");
+    const after = ops.indexOf("runControls:after");
+    expect(before, "先走一遍再导出").toBeGreaterThanOrEqual(0);
+    expect(ops.indexOf("export", before)).toBeGreaterThan(before);
+    expect(ops.indexOf("export", before)).toBeLessThan(after);
+    expect(ops.filter((op) => op.startsWith("runControls"))).toEqual(["runControls:before", "runControls:after"]);
+    expect(api.runCanvas.mock.invocationCallOrder[0], "任务建好了才换种子")
+      .toBeLessThan(bridge.comfyWorkbench.mock.invocationCallOrder[calls(bridge).findIndex((one) => one.op === "runControls" &&
+                                                                       one.phase === "after")]);
+
+    bridge.comfyWorkbench.mockClear();
+    api.runCanvas.mockRejectedValue(Object.assign(new Error("ComfyUI 拒绝了"), { status: 500 }));
+    fireEvent.click(screen.getByRole("button", { name: "workbenchRun" }));
+    await waitFor(() => expect(api.runCanvas).toHaveBeenCalledTimes(2));
+    await act(async () => undefined);
+    expect(calls(bridge).filter((one) => one.op === "runControls"), "没排上:种子不换(ComfyUI 自己也是)")
+      .toEqual([{ op: "runControls", phase: "before" }]);
+  });
+
   it("运行:刚存的那张宿主的目录还没刷新到(422)就刷新一次再试", async () => {
     await mount();
     api.runCanvas.mockRejectedValueOnce(Object.assign(new Error("还不是生成模型"), { status: 422 }))

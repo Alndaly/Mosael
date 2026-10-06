@@ -17,6 +17,7 @@ import {
   WorkbenchCallError,
   exportCanvas,
   rememberRun,
+  workbenchCall,
   type WorkbenchRun,
   type WorkbenchTarget,
 } from "@/features/plugins/workbench/workbenchSession";
@@ -25,11 +26,15 @@ import { cn } from "@/lib/utils";
 /**
  * 跑画布上现在这张(ADR 0038 §6,含没存的改动):经桥导出(API 格式 + 界面格式 + 前端的 clientId),建一个普通的生成任务
  * (模型 = 这张工作流,图在任务的载荷里)。新存的那张宿主的目录还没刷新到就刷新一次再试。记下跑的是画布上的哪一张。
+ *
+ * 和在 ComfyUI 里点「运行」一样:导出之前、任务建好之后各让桥走一遍前端自己的「生成后怎样」(runControls)—— 种子设成
+ * randomize 的,连点两次运行此前用的是同一个存着的种子,出同一张图(沙盒实测)。桥做不了(主进程是旧的)不拦着跑。
  */
 export function useCanvasRun(target: WorkbenchTarget | null) {
   return useMutation({
     mutationFn: async ({ path, workflowKey, workflowName }: { path: string; workflowKey: string; workflowName: string }) => {
       if (!target) throw new WorkbenchCallError("closed");
+      await workbenchCall({ op: "runControls", phase: "before" });
       const exported = await exportCanvas();
       const body = { workspace_id: target.workspaceId, path, prompt: exported.prompt, workflow: exported.workflow,
                      client_id: exported.clientId };
@@ -42,6 +47,7 @@ export function useCanvasRun(target: WorkbenchTarget | null) {
         await refreshPluginInstance(target.instanceId);
         created = await runCanvas(target.instanceId, body);
       }
+      void workbenchCall({ op: "runControls", phase: "after" });
       rememberRun({ jobId: created.job.id, path, workflowKey, workflowName, kind: created.generation.kind ?? "image",
                     startedAt: Date.now(), labels: [...nodeLabels(exported.workflow)] });
       return created.job;

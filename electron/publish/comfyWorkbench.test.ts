@@ -262,6 +262,32 @@ describe("工作台的桥(注入的脚本)", () => {
       .toEqual({ error: "noNode", nodes: ["99"] });
   });
 
+  it("「运行」前后:每个 widget(连同子图里的)走前端自己的 beforeQueued / afterQueued,提升出来的交给前端的 applyPromotedWidgetControl", async () => {
+    //: 沙盒实测:种子设成 randomize,工作台里连点两次「运行」用的是同一个存着的种子、出同一张图 —— ComfyUI 自己点「运行」时
+    //: (app.queuePrompt)提交前走 beforeQueued、排上之后走 afterQueued,「生成后怎样」在这里换种子。
+    const page = await installed();
+    const seed = { name: "seed", type: "number", value: 42, options: {}, beforeQueued: vi.fn(), afterQueued: vi.fn() };
+    page.sampler.widgets.push(seed as never);
+    const innerSeed = { name: "noise_seed", type: "number", value: 7, options: {}, beforeQueued: vi.fn(), afterQueued: vi.fn() };
+    (page.inner.widgets as unknown[]).push(innerSeed);
+    page.graph.nodes.push({ id: 12, type: page.subgraph.id, title: "细节", properties: {}, widgets: [],
+                            isSubgraphNode: () => true, subgraph: page.subgraph } as never);
+    const promoted = vi.fn();
+    page.window.comfyAPI = { promotedWidgetControl: { applyPromotedWidgetControl: promoted } };
+
+    expect(await call(page, { op: "runControls", phase: "before" })).toEqual({ ok: true });
+    expect(seed.beforeQueued).toHaveBeenCalledWith({ isPartialExecution: false });
+    expect(innerSeed.beforeQueued, "子图里的节点也走").toHaveBeenCalledOnce();
+    expect(seed.afterQueued).not.toHaveBeenCalled();
+    expect(promoted).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }), "beforeQueued");
+
+    expect(await call(page, { op: "runControls", phase: "after" })).toEqual({ ok: true });
+    expect(seed.afterQueued).toHaveBeenCalledWith({ isPartialExecution: false });
+    expect(innerSeed.afterQueued).toHaveBeenCalledOnce();
+    expect(promoted).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }), "afterQueued");
+    expect(page.tracker.captureCanvasState, "种子换了:改动跟踪记一笔(和 ComfyUI 里一样,工作流显示有改动)").toHaveBeenCalled();
+  });
+
   it("桥上的方法抛了错:说「没成」和原话,不把异常抛给主进程", async () => {
     const page = await installed();
     page.app.graphToPrompt.mockRejectedValueOnce(new Error("graph is broken"));

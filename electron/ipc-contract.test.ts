@@ -185,6 +185,11 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "locate", node: "12; alert(1)" })).toThrow(/node/);
     expect(() => callOf({ op: "locate", node: "12", subgraph: 'x"); alert(1)' })).toThrow(/subgraph/);
     expect(() => callOf({ op: "locate", node: "12", zoom: 3 })).toThrow(/unexpected/);
+    expect(callOf({ op: "runControls", phase: "before" }).call).toEqual({ op: "runControls", phase: "before" });
+    expect(callOf({ op: "runControls", phase: "after" }).call).toEqual({ op: "runControls", phase: "after" });
+    expect(() => callOf({ op: "runControls", phase: "during" })).toThrow(/phase/);
+    expect(() => callOf({ op: "runControls" })).toThrow(/phase/);
+    expect(() => callOf({ op: "runControls", phase: "after", hook: "alert(1)" })).toThrow(/unexpected/);
     expect(() => contract.parseComfyWorkbenchCall({ connectionId: "../x", call: { op: "save" } })).toThrow(/connectionId/);
 
     // 挪位置:只有 x/y。

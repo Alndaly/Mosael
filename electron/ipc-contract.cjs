@@ -273,7 +273,8 @@ const MAX_MARKS_CHARS = 8 * 1024 * 1024;
  *
  * - setWidget:节点号、widget 名字(不带控制字符)、值(字符串 / 有限的数 / 布尔);下拉里有没有它由桥查;
  * - refreshCombos / export / save:不带别的;
- * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null)。
+ * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null);
+ * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子)。
  */
 function parseComfyWorkbenchCall(value) {
   const channel = IPC.invoke.comfyuiWorkbenchCall;
@@ -281,7 +282,7 @@ function parseComfyWorkbenchCall(value) {
   onlyKeys(payload, ["connectionId", "call"], channel);
   const partition = comfyPartition(payload, channel);
   const call = record(payload.call, channel);
-  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate"], channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "runControls"], channel);
   if (op === "setWidget") {
     onlyKeys(call, ["op", "node", "widget", "value"], channel);
     if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
@@ -316,6 +317,10 @@ function parseComfyWorkbenchCall(value) {
       throw new TypeError(`${channel}: subgraph must be a subgraph id`);
     }
     return { partition, call: { op, node: call.node, subgraph } };
+  }
+  if (op === "runControls") {
+    onlyKeys(call, ["op", "phase"], channel);
+    return { partition, call: { op, phase: oneOf(call, "phase", ["before", "after"], channel) } };
   }
   onlyKeys(call, ["op"], channel);
   return { partition, call: { op } };
