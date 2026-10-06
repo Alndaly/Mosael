@@ -7,13 +7,15 @@
 
 1. 插件页 → ComfyUI → 「新建连接」,填服务器地址(本机默认 `http://127.0.0.1:8188`)。放在要登录的反向代理或
    ComfyUI-Login 后面的,把 `用户名:密码`(Basic)或令牌(Bearer)填进凭据「访问凭据」,HTTP 和 WebSocket 都带上。
-2. 授予它要的权限,打开连接(1.10.0 起如实申报五项):
+2. 授予它要的权限,打开连接(如实申报八项):
    - `network:comfyui`:连这台 ComfyUI;
    - `network:huggingface`、`network:civitai`、`network:modelscope`:模型库解析链接、下载模型时连这几个站;
+   - `network:github`、`network:pypi`、`network:pytorch`(1.15.0):让 Mosael 装本机 ComfyUI 时下 ComfyUI 源码和 pysssss(GitHub)、
+     装依赖(PyPI)和 CUDA 版 PyTorch(PyTorch 源);选目录那一种的「补装 pysssss」也要连 GitHub;
    - `filesystem:write`:ComfyUI 和 Mosael 在同一台电脑上时,把下载的模型写进它的 models 目录。
 
-   **从旧版本升级**:升上来的连接会**先停用**,等你授予新增的那几项 —— 从 1.9 升上来的多一项 `network:modelscope`
-   (1.10.0),从 1.8 及更早升上来的多四项。连接卡片最上面写着多要了哪几项,点「授予这 N 项」马上恢复,之前授予的
+   **从旧版本升级**:升上来的连接会**先停用**,等你授予新增的那几项 —— 从 1.14 升上来的多三项(`network:github`、`network:pypi`、
+   `network:pytorch`,1.15.0),从 1.9 升上来的再多一项 `network:modelscope`(1.10.0),从 1.8 及更早升上来的再多四项。连接卡片最上面写着多要了哪几项,点「授予这 N 项」马上恢复,之前授予的
    不受影响;插件列表上它标着「待授权」。
 3. 它在 ComfyUI 里**保存的每张工作流**会作为一个模型出现在 AI 工作台、画板、工作流「AI 生成素材」节点的
    模型选择器里;新存的工作流一分钟内出现(宿主每分钟问一次清单的指纹),等不及就在插件页点「刷新模型」。
@@ -372,6 +374,24 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
   `custom_nodes/ComfyUI-Custom-Scripts`,下次启动生效。
 - **本机发现**:插件页上探一下本机 8188 和 8000(官方 Desktop 的缺省端口)的 `/system_stats`,有 ComfyUI 就提示「要连上吗」——
   建的是「连一台服务器」那一种。
+
+## 本机 ComfyUI:让 Mosael 装(1.15.0)
+
+没装过的,「在哪跑」选「让 Mosael 装」(ADR 0041 §4):
+
+- **先看安装计划**:这台机器能不能装 —— Apple 芯片 Mac(PyPI 上的 PyTorch 直接带 MPS)、Windows + NVIDIA(读 `nvidia-smi` 的驱动
+  版本和显卡算力:20 系及以上装 CUDA 13.0 版、要 580 以上的驱动;10 系及更老装 CUDA 12.6 版、要 560.76 以上);Intel Mac、AMD、只有 CPU、
+  Linux 这一版不装,说清楚原因 —— 装哪种 PyTorch、至少要多少空间(Mac 5 GB、Windows 8 GB)、装在哪、分几步、会从哪几处下载。确认框写明
+  在哪台机器上运行下载来的代码。
+- **装什么**(都钉死版本):ComfyUI 0.39.0 源码(按 sha256 校验)、用随 Mosael 一起发的 Python 建的 `.venv`、PyTorch 2.14.1 /
+  torchvision 0.29.1 / torchaudio 2.11.0(CUDA 版从「管理 → 下载源」的「PyTorch 源」装,Mac 的走 pip 源)、`requirements.txt` 和
+  `manager_requirements.txt`(pip 版 ComfyUI-Manager,起的时候加 `--enable-manager`)、pysssss(`609f3af`)。装在 Mosael 数据目录的
+  `local-services/<连接>/` 里,不放插件目录 —— 卸载插件不会把模型带走。
+- **装的时候**:第几步、正在下哪个文件、下了多少、多快;能取消。每一步做完记一笔(`mosael-install.json`),取消、断网、关机之后
+  「接着装」从没做完的那一步开始,下过的包在共用的 pip 缓存里不重下。没装成说人话,并说该换哪个源;「安装日志」是每一步的完整输出。
+  最后由 Mosael 试起一次,健康检查通过才算装好。**不替你下模型**:装好之后去模型库挑。
+- **Mosael 换了随包的 Python 小版本时**:连接页说「运行环境要重建」,点一下只重建 `.venv` 和装进去的包,源码和模型不动。
+- **GitHub 慢**:「管理 → 下载源」里填一个 GitHub 镜像前缀(接在原地址前面);压缩包按 sha256 校验,镜像换不了内容。下载走设置里的代理。
 
 ## 进度、取消、重启
 

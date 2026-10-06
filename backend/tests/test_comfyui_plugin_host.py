@@ -43,9 +43,10 @@ def test_随应用装好_卸不掉() -> None:
     client = fresh_client()
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
     assert package["bundled"] is True and package["provides"] == ["generation", "tools", "model_library", "workflow_library"]
-    # 如实申报(ADR 0034):解析和下载模型会连 HuggingFace / Civitai / ModelScope,ComfyUI 在同一台电脑上时会写它的 models 目录
+    # 如实申报(ADR 0034):解析和下载模型会连 HuggingFace / Civitai / ModelScope,ComfyUI 在同一台电脑上时会写它的 models 目录;
+    # 让 Mosael 装本机 ComfyUI(ADR 0041 §4)要连 GitHub(源码、pysssss)、PyPI(依赖)、PyTorch 源(CUDA 版 torch)
     assert package["permissions"] == ["network:comfyui", "network:huggingface", "network:civitai", "network:modelscope",
-                                      "filesystem:write"]
+                                      "network:github", "network:pypi", "network:pytorch", "filesystem:write"]
     assert package["summary_field"] == "server_url", "收起的连接那一行摆服务器地址"
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
     template = package["config_fields"][1]

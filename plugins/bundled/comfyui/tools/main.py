@@ -13,6 +13,8 @@
 
     {"op": "service_detect" | "service_launch" | "service_add_nodes" | "service_discover" | "service_readdress", …}
                                            → 怎么认一个装好的目录、怎么起、补装 pysssss、本机发现、改端口时搬数据
+    {"op": "service_plan", …}              → 让 Mosael 装:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(见 managed)
+    {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
 
 **模型库**(ADR 0034,同一个工具认领 `model_library`):
 
@@ -60,8 +62,10 @@ from typing import Any, Callable
 import install
 import library
 import lookup
+import managed
 import model_search
 import models
+import pinned
 import previews
 import run
 import server
@@ -134,6 +138,9 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "reboot": workflow_import.reboot,
 }
 
+#: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划在 managed。
+_SERVICE: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {**service.OPS, "service_plan": managed.plan}
+
 #: 一问一答的工具。
 _PLAIN: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
     "list_workflows": workflows.list_workflows,
@@ -155,10 +162,14 @@ def main() -> None:
     locale = str(request.get("locale") or os.environ.get("MOSAEL_LOCALE") or "zh")
     tool = request.get("tool")
     try:
-        if tool == "comfyui_generation" and payload.get("op") in service.OPS:
+        if tool == "comfyui_generation" and payload.get("op") in _SERVICE:
             # 本机服务的操作(ADR 0041):只描述、不起进程,也不和那台服务器说话 —— 问怎么起的时候它当然还没起
-            output = service.OPS[payload["op"]](payload, locale)
+            output = _SERVICE[payload["op"]](payload, locale)
             emit({"ok": True, "output": output})
+            return
+        if tool == "comfyui_generation" and payload.get("op") == "service_install":
+            # 让 Mosael 装(流式:一步一行,宿主建取消文件就停在那一步,下次接着装)
+            emit({"ok": True, "output": managed.install(payload, locale, emit)})
             return
         comfy = Comfy(env_base_url(), locale, env_access_token())
         if tool == "comfyui_generation":
@@ -176,6 +187,9 @@ def main() -> None:
     except ComfyError as exc:
         #: 两种语言都交:连接的出错原因会被宿主存下来,给人看时按读的人的语言挑(见 lines)。
         emit({"ok": False, "error": exc.said})
+    except pinned.Cancelled:
+        # 宿主建了取消文件:它自己知道是取消,这一行只是交代一声
+        emit({"ok": False, "error": {"zh": "取消了", "en": "Cancelled"}})
     except Exception as exc:  # noqa: BLE001 — 插件自己的 bug:把原因交回去,别只留一个退出码
         traceback.print_exc(file=sys.stderr)
         emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})

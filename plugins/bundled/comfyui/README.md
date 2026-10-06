@@ -10,15 +10,19 @@ One connection brings two things: **models** (every saved workflow is an image /
 1. Plugins page → ComfyUI → "New connection", and fill in the server URL (`http://127.0.0.1:8188` by default on this
    machine). If it sits behind a reverse proxy with login or behind ComfyUI-Login, put `user:password` (Basic) or a
    token (Bearer) into the "Access credential" credential; it is sent on both HTTP and WebSocket requests.
-2. Grant the permissions it asks for and turn the connection on (since 1.10.0 it declares five):
+2. Grant the permissions it asks for and turn the connection on (it declares eight):
    - `network:comfyui`: talk to this ComfyUI;
    - `network:huggingface`, `network:civitai`, `network:modelscope`: the model library looks up links and downloads
      models from these sites;
+   - `network:github`, `network:pypi`, `network:pytorch` (1.15.0): when Mosael installs a local ComfyUI it downloads the
+     ComfyUI source and pysssss (GitHub), the dependencies (PyPI) and the CUDA build of PyTorch (the PyTorch source); "Add
+     pysssss" for your own install also downloads from GitHub;
    - `filesystem:write`: when ComfyUI runs on the same computer as Mosael, downloaded models are written into its
      models folder.
 
-   **Upgrading from an older version**: an upgraded connection is **paused** until you grant the new ones: one more
-   (`network:modelscope`, 1.10.0) when coming from 1.9, four more when coming from 1.8 or earlier. The top of the
+   **Upgrading from an older version**: an upgraded connection is **paused** until you grant the new ones: three more
+   (`network:github`, `network:pypi`, `network:pytorch`, 1.15.0) when coming from 1.14, plus `network:modelscope`
+   (1.10.0) when coming from 1.9, plus four more when coming from 1.8 or earlier. The top of the
    connection card lists them, and "Grant these N" resumes it right away; earlier grants are kept. The plugin list marks
    it "Needs permission".
 3. **Every workflow saved** in that ComfyUI shows up as a model in the model pickers of AI Studio, boards and the
@@ -494,6 +498,31 @@ and enter its folder (ADR 0041).
   (`609f3af`, checked by sha256) into `custom_nodes/ComfyUI-Custom-Scripts`; it loads on the next start.
 - **Found on this computer**: the plugin page probes `/system_stats` on local ports 8188 and 8000 (the official Desktop's
   default) and offers to connect to a ComfyUI it finds, as a regular "Connect to a server" connection.
+
+## Local ComfyUI: let Mosael install it (1.15.0)
+
+If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install it" (ADR 0041 §4):
+
+- **The install plan first**: whether this machine can install it — a Mac with Apple silicon (PyTorch from PyPI comes with MPS)
+  or Windows + NVIDIA (it reads the driver version and the GPU's compute capability from `nvidia-smi`: 20 series and newer get the
+  CUDA 13.0 build and need driver 580 or newer; 10 series and older get the CUDA 12.6 build and need 560.76 or newer); Intel Macs,
+  AMD, CPU only and Linux aren't supported in this version, and it says why — which PyTorch, how much disk space at least (5 GB
+  on a Mac, 8 GB on Windows), where it goes, the steps, and where it downloads from. The confirmation names the machine the
+  downloaded code runs on.
+- **What it installs** (all pinned): the ComfyUI 0.39.0 source (checked by sha256), a `.venv` built with the Python that ships
+  with Mosael, PyTorch 2.14.1 / torchvision 0.29.1 / torchaudio 2.11.0 (the CUDA build comes from the PyTorch source under Admin
+  → Download sources; on a Mac from the pip source), `requirements.txt` and `manager_requirements.txt` (the pip ComfyUI-Manager,
+  started with `--enable-manager`), and pysssss (`609f3af`). It goes into `local-services/<connection>/` in Mosael's data folder,
+  not the plugin folder, so uninstalling the plugin doesn't take the models with it.
+- **While it installs**: the step, the file being downloaded, how much and how fast; you can cancel. Each finished step is recorded
+  (`mosael-install.json`), so after a cancel, a dropped network or a shutdown, "Resume" starts from the first unfinished step, and
+  packages already downloaded stay in the shared pip cache. Failures are explained in plain words, including which source to
+  switch; "Install log" has the full output of every step. Mosael then starts it once and counts it as installed only after a
+  healthy start. **No models are downloaded**: pick them in the model library afterwards.
+- **When Mosael ships a different Python minor version**: the connection says the environment needs a rebuild; one click rebuilds
+  only `.venv` and what's installed in it, leaving the source and models alone.
+- **If GitHub is slow**: set a GitHub mirror prefix under Admin → Download sources (put in front of the original address); the
+  archives are checked by sha256, so a mirror can't change their content. Downloads use the proxy from Settings.
 
 ## Progress, cancelling, restarts
 

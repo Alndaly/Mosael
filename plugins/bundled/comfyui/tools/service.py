@@ -9,6 +9,9 @@
     {"op": "service_discover"}                         → 本机 8188 / 8000(Desktop 的缺省端口)上有没有已经在跑的
     {"op": "service_readdress", "from", "to"}           → 端口改了:按旧地址存的本地数据搬到新地址名下
 
+「让 Mosael 装」的两个(`service_plan` / `service_install`)在 managed:装好的那一份就是一个普通的目录(源码旁边一个
+`.venv`),认目录、怎么起都走这里。
+
 **只描述、不起进程** —— 起、停、看健康、收日志是宿主的事。认目录时会试跑一次 `import torch`(30 秒上限),
 那一步宿主先问过人。**不改用户的安装**:补装 pysssss 之外,不往那个目录里写任何东西。
 
@@ -19,19 +22,17 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import re
-import shutil
 import subprocess
-import tarfile
 import uuid
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
-from urllib import error, request
+from urllib import request
 
+import pinned
 from lines import ComfyError, say
 
 #: 健康检查问这条:ComfyUI 起来以后它立刻回一份系统信息(显卡、版本),比首页轻。
@@ -47,16 +48,18 @@ DISCOVER_PORTS = (8188, 8000)
 DISCOVER_TIMEOUT_SECONDS = 1.5
 
 #: pysssss(ComfyUI-Custom-Scripts):模型库的 Range 读、算哈希、存预览图靠它。**钉死一个提交**,按 sha256 校验 ——
-#: 下载走代理、走镜像都换不了内容。要升级就换这三行(和测试里的那一份)。
+#: 下载走代理、走镜像都换不了内容(见 pinned)。要升级就换提交和 sha256(和测试里的那一份)。那个包 140 KB、解开 500 多 KB;
+#: 个数、大小的上限只防一个不对的下载。
 PYSSSSS_COMMIT = "609f3afaa74b2f88ef9ce8d939626065e3247469"
-PYSSSSS_URL = f"https://codeload.github.com/pythongosssss/ComfyUI-Custom-Scripts/tar.gz/{PYSSSSS_COMMIT}"
-PYSSSSS_SHA256 = "0146fa4f61e09281e82bee34098a9c1f6703442c163dcbf527cd396c4b941844"
+PYSSSSS = pinned.Archive(
+    name=f"pysssss({PYSSSSS_COMMIT[:7]})",
+    url=f"https://codeload.github.com/pythongosssss/ComfyUI-Custom-Scripts/tar.gz/{PYSSSSS_COMMIT}",
+    sha256="0146fa4f61e09281e82bee34098a9c1f6703442c163dcbf527cd396c4b941844",
+    size=140_477,
+    max_members=2000,
+    max_unpacked=100 * 1024 * 1024,
+)
 PYSSSSS_DIR = "ComfyUI-Custom-Scripts"
-#: 压缩包最大多大、解开最多多少个文件、多大(那个包 140 KB、解开 500 多 KB;上限只防一个不对的下载)。
-MAX_ARCHIVE_BYTES = 20 * 1024 * 1024
-MAX_MEMBERS = 2000
-MAX_UNPACKED_BYTES = 100 * 1024 * 1024
-DOWNLOAD_TIMEOUT_SECONDS = 120
 
 #: 端口和监听地址由宿主给(建连接时选定、局域网开关),写在附加参数里会和它打架。
 _HOST_FLAGS = ("--port", "--listen")
@@ -409,51 +412,25 @@ def launch(payload: dict[str, Any], locale: str, *, windows: bool | None = None,
 # --- 补装 pysssss ---------------------------------------------------------------
 
 
-def _download(url: str, locale: str) -> bytes:
-    try:
-        with request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:  # noqa: S310 — 地址是上面钉死的
-            data = response.read(MAX_ARCHIVE_BYTES + 1)
-    except (error.URLError, OSError) as exc:
-        raise ComfyError(say(locale, f"下载 pysssss 失败:{getattr(exc, 'reason', exc)}\n{url}",
-                             f"Downloading pysssss failed: {getattr(exc, 'reason', exc)}\n{url}")) from exc
-    if len(data) > MAX_ARCHIVE_BYTES:
-        raise ComfyError(say(locale, "下载到的 pysssss 压缩包大得不对,没有装", "The downloaded pysssss archive is far too big; nothing was installed"))
-    return data
+def github_mirror(payload: dict[str, Any]) -> str:
+    """宿主在「管理 → 下载源」里配的 GitHub 镜像前缀(经输入的 `sources` 交进来;没配是空串)。"""
+    sources = payload.get("sources")
+    return str(sources.get("github_mirror") or "").strip() if isinstance(sources, dict) else ""
 
 
-def _unpack(data: bytes, target: Path, locale: str) -> None:
-    """解进 target(去掉压缩包里那一层顶目录)。先解到旁边一个临时目录,全部解完再改名 —— 半截的不留在 custom_nodes 里。
-    只收普通文件和目录:链接、绝对路径、`..` 一概不收。"""
-    staging = target.parent / f".mosael-{uuid.uuid4().hex[:8]}"
-    total = 0
+def install_pysssss(root: Path, locale: str, *, mirror: str = "", is_cancelled=pinned.never,
+                    on_bytes=None) -> Path:
+    """把钉死版本的 pysssss 解进 `root/custom_nodes/ComfyUI-Custom-Scripts`:先下到 custom_nodes 旁边的临时文件,对上 sha256
+    再解(半截的不留下)。补装和「让 Mosael 装」的最后一步都走这里。"""
+    target = root / "custom_nodes" / PYSSSSS_DIR
+    target.parent.mkdir(parents=True, exist_ok=True)
+    archive = target.parent / f".mosael-{uuid.uuid4().hex[:8]}.tar.gz"
     try:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-            members = archive.getmembers()
-            if len(members) > MAX_MEMBERS:
-                raise ValueError("too many members")
-            for member in members:
-                parts = PurePosixPath(member.name).parts
-                if member.name.startswith("/") or ".." in parts:
-                    raise ValueError(member.name)
-                inner = parts[1:]
-                if not inner or member.isdir():
-                    continue
-                if not member.isfile():
-                    continue  # 链接、设备文件:pysssss 里没有,有就不收
-                total += member.size
-                if total > MAX_UNPACKED_BYTES:
-                    raise ValueError("too big")
-                destination = staging.joinpath(*inner)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                source = archive.extractfile(member)
-                if source is None:
-                    continue
-                with source, open(destination, "wb") as out:
-                    shutil.copyfileobj(source, out)
-        staging.replace(target)
-    except (tarfile.TarError, ValueError, OSError) as exc:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise ComfyError(say(locale, f"pysssss 压缩包解不开,没有装:{exc}", f"The pysssss archive couldn't be unpacked; nothing was installed: {exc}")) from exc
+        pinned.download(PYSSSSS, archive, locale, mirror=mirror, is_cancelled=is_cancelled, on_bytes=on_bytes)
+        pinned.unpack(archive, target, PYSSSSS, locale, is_cancelled=is_cancelled)
+    finally:
+        archive.unlink(missing_ok=True)
+    return target
 
 
 def add_nodes(payload: dict[str, Any], locale: str) -> dict[str, Any]:
@@ -465,14 +442,7 @@ def add_nodes(payload: dict[str, Any], locale: str) -> dict[str, Any]:
     if existing is not None:
         return {"installed": [], "path": str(existing),
                 "message": {"zh": f"已经装着了:{existing}", "en": f"Already installed: {existing}"}}
-    data = _download(PYSSSSS_URL, locale)
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != PYSSSSS_SHA256:
-        raise ComfyError(say(locale, f"下载到的 pysssss 和钉死的版本对不上(sha256 {digest[:12]}…),没有装",
-                             f"The downloaded pysssss doesn't match the pinned version (sha256 {digest[:12]}…); nothing was installed"))
-    target = layout.root / "custom_nodes" / PYSSSSS_DIR
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _unpack(data, target, locale)
+    target = install_pysssss(layout.root, locale, mirror=github_mirror(payload))
     return {"installed": [PYSSSSS_DIR], "path": str(target),
             "message": {"zh": f"装好了:{target}。下次启动 ComfyUI 时生效", "en": f"Installed in {target}. It takes effect the next time ComfyUI starts"}}
 
@@ -539,5 +509,6 @@ def local_service() -> str:
     return os.environ.get("MOSAEL_LOCAL_SERVICE", "").strip()
 
 
-__all__ = ["HEALTH_PATH", "Layout", "OPS", "PYSSSSS_DIR", "add_nodes", "detect", "discover", "find_layout", "find_python",
-           "launch", "local_service", "readdress", "venv_python"]
+__all__ = ["HEALTH_PATH", "Layout", "OPS", "PYSSSSS", "PYSSSSS_DIR", "add_nodes", "comfyui_version", "detect", "discover",
+           "find_layout", "find_python", "github_mirror", "install_pysssss", "launch", "local_service", "readdress",
+           "venv_python"]

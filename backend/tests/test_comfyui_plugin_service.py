@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import json
@@ -28,11 +29,13 @@ import pytest
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="假解释器是 shell 脚本")
+#: 插件 tools/ 下这几个模块按顶层名字导入(插件进程里就是这样):测试之间换掉,免得拿到别的测试改过的那一份。
+_PLUGIN_MODULES = ("service", "lines", "pinned", "managed")
 
 
 @pytest.fixture
 def service(monkeypatch):
-    saved = {name: sys.modules.pop(name) for name in ("service", "lines") if name in sys.modules}
+    saved = {name: sys.modules.pop(name) for name in _PLUGIN_MODULES if name in sys.modules}
     sys.path.insert(0, str(TOOLS))
     try:
         import service as module
@@ -40,7 +43,7 @@ def service(monkeypatch):
         yield module
     finally:
         sys.path.remove(str(TOOLS))
-        for name in ("service", "lines"):
+        for name in _PLUGIN_MODULES:
             sys.modules.pop(name, None)
         sys.modules.update(saved)
 
@@ -362,8 +365,8 @@ def _archive(members: dict[str, bytes], top: str = "ComfyUI-Custom-Scripts-abc")
 def _serve_archive(service, monkeypatch, tmp_path: Path, data: bytes, *, sha: str | None = None) -> None:
     source = tmp_path / "pysssss.tar.gz"
     source.write_bytes(data)
-    monkeypatch.setattr(service, "PYSSSSS_URL", source.as_uri())
-    monkeypatch.setattr(service, "PYSSSSS_SHA256", sha or hashlib.sha256(data).hexdigest())
+    monkeypatch.setattr(service, "PYSSSSS", dataclasses.replace(
+        service.PYSSSSS, url=source.as_uri(), sha256=sha or hashlib.sha256(data).hexdigest(), size=len(data)))
 
 
 def test_补装_按钉死的_sha256_校验_解进_custom_nodes(service, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -400,8 +403,51 @@ def test_补装_压缩包里有越界路径就不装_半截的不留下(service,
     assert not (tmp_path / "evil.py").exists()
 
 
+class _Mirror(BaseHTTPRequestHandler):
+    """假的 GitHub 镜像:记下被要的路径(前缀后面接的是原地址),回同一个压缩包。"""
+
+    body = b""
+    asked: list[str] = []
+
+    def do_GET(self) -> None:  # noqa: N802
+        type(self).asked.append(self.path)
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(self.body)))
+        self.end_headers()
+        self.wfile.write(self.body)
+
+    def log_message(self, *_args: object) -> None:
+        return
+
+
+def test_补装_走_GitHub_镜像前缀_内容照样按_sha256_校验(service, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    data = _archive({"__init__.py": b"# pysssss\n"})
+    handler = type("Mirror", (_Mirror,), {"body": data, "asked": []})
+    mirror = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=mirror.serve_forever, daemon=True).start()
+    prefix = f"http://127.0.0.1:{mirror.server_address[1]}"
+    try:
+        root = _comfy(tmp_path / "ComfyUI")
+        monkeypatch.setattr(service, "PYSSSSS", dataclasses.replace(service.PYSSSSS, sha256=hashlib.sha256(data).hexdigest()))
+        done = service.add_nodes({"directory": str(root), "sources": {"github_mirror": prefix}}, "zh")
+        assert done["installed"] == ["ComfyUI-Custom-Scripts"]
+        assert handler.asked == [f"/{service.PYSSSSS.url}"], "前缀后面接原地址(常见的 GitHub 加速都这么用)"
+        # 镜像给了别的内容:sha256 对不上,不装
+        other = _comfy(tmp_path / "other" / "ComfyUI")
+        monkeypatch.setattr(service, "PYSSSSS", dataclasses.replace(service.PYSSSSS, sha256="0" * 64))
+        from lines import ComfyError
+
+        with pytest.raises(ComfyError, match="sha256") as caught:
+            service.add_nodes({"directory": str(other), "sources": {"github_mirror": prefix + "/"}}, "zh")
+        assert prefix in str(caught.value), "说清楚是从哪个地址下的"
+        assert list((other / "custom_nodes").iterdir()) == []
+    finally:
+        mirror.shutdown()
+
+
 def test_钉死的_pysssss_地址就是那个提交(service) -> None:
-    assert service.PYSSSSS_COMMIT in service.PYSSSSS_URL and len(service.PYSSSSS_SHA256) == 64
+    assert service.PYSSSSS_COMMIT in service.PYSSSSS.url and len(service.PYSSSSS.sha256) == 64
+    assert service.PYSSSSS.url.startswith("https://codeload.github.com/"), "GitHub 上的:能接 GitHub 镜像前缀"
 
 
 # ---- 本机发现、搬数据 --------------------------------------------------------------
