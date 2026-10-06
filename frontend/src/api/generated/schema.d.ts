@@ -8324,6 +8324,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/local-service/touch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Touch Local Service
+         * @description 还在用它(工作台、内嵌编辑器开着 —— 那边直接和它说话,不经插件调用):闲置的钟从现在算。不替它起;没用本机服务的
+         *     连接什么都不做。只要是这个连接的主人。
+         */
+        post: operations["touch_local_service_api_plugins_instances__instance_id__local_service_touch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/local-service/logs": {
         parameters: {
             query?: never;
@@ -12542,6 +12563,16 @@ export interface components {
             /** Shared Models */
             shared_models?: string[];
             /**
+             * Idle Stop Minutes
+             * @default 30
+             */
+            idle_stop_minutes: number;
+            /**
+             * Idle Stopped
+             * @default false
+             */
+            idle_stopped: boolean;
+            /**
              * State
              * @enum {string}
              */
@@ -12730,6 +12761,8 @@ export interface components {
             port?: number | null;
             /** Shared Models */
             shared_models?: string[] | null;
+            /** Idle Stop Minutes */
+            idle_stop_minutes?: number | null;
             /**
              * Confirm Run Code
              * @default false
@@ -35545,6 +35578,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocalServiceOut"] | null;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    touch_local_service_api_plugins_instances__instance_id__local_service_touch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -14,6 +14,7 @@
 | `service_plan` | 连接页上选了「让 Mosael 装」:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(给确认页) |
 | `service_install` | 确认之后(流式:一步一行,取消停在那一步;再来从没做完的那一步接着装) |
 | `service_model_folders` | 连接页上加共用的模型文件夹之前(认得出才存),和看每一处它加载了没有、几个模型的时候 |
+| `service_busy` | 闲置够久、要自动停它之前:任务队列里有没有在跑、在排的(有就不停) |
 """
 
 from __future__ import annotations
@@ -50,6 +51,8 @@ MAX_STEPS = 20
 MODEL_FOLDERS_TIMEOUT_SECONDS = 120
 #: 最多共用几处(和插件那边同一个数)。
 MAX_SHARED_FOLDERS = 20
+#: 问它有没有活:一次本机 HTTP 请求,加上起插件进程。
+BUSY_TIMEOUT_SECONDS = 30
 #: 插件给的就绪上限,收在这个范围里:太短的第一次启动(解包前端、加载自定义节点)根本等不到,太长的让「起不来」迟迟说不出来。
 READY_TIMEOUT_RANGE = (5.0, 1800.0)
 #: 一次认目录最多摆几条事实、几个问题。
@@ -193,6 +196,14 @@ def model_folders(db: Session, instance: PluginInstance, row: LocalService, fold
     return {"folders": found, "running": output.get("running") is True}
 
 
+def busy(db: Session, instance: PluginInstance, row: LocalService) -> bool:
+    """闲置自动停之前:它此刻有没有活(插件去问它的任务队列)。插件说不清(形状不对)当作有活 —— 宁可多开一会儿,
+    也不在它跑着任务时停掉;问不到(插件失败、它不应答)照抛,调用方不停。"""
+    output = tools.invoke_service(db, instance.package_id, row.service, {"op": "service_busy"}, instance=instance,
+                                  timeout=BUSY_TIMEOUT_SECONDS)
+    return output.get("busy") is not False
+
+
 def _listed(value: Any, limit: int) -> list[Any]:
     return list(value)[:limit] if isinstance(value, list) else []
 
@@ -248,4 +259,4 @@ def install(db: Session, instance: PluginInstance, service: str, payload: dict[s
                                 timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
 
 
-__all__ = ["add_nodes", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress"]
+__all__ = ["add_nodes", "busy", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress"]

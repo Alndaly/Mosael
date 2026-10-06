@@ -8130,6 +8130,18 @@ def _migrate_local_services_share_model_folders() -> None:
             conn.execute(text("ALTER TABLE local_services ADD COLUMN shared_models JSON NOT NULL DEFAULT '[]'"))
 
 
+def _migrate_local_services_stop_when_idle() -> None:
+    """本机服务那一行补一列 `idle_stop_minutes`:闲置多少分钟自动停(释放显存),0 = 不停。已有的行按缺省 30 分钟 —— 第三步的
+    「闲置自动停」对它们一样生效(「保持运行」的照旧不停)。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 LocalService 已经指望它在了。表还没有就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(local_services)"))}
+        if columns and "idle_stop_minutes" not in columns:
+            conn.execute(text("ALTER TABLE local_services ADD COLUMN idle_stop_minutes INTEGER NOT NULL DEFAULT 30"))
+
+
 def _migrate_install_sources_get_pytorch_and_github() -> None:
     """「管理 → 下载源」多两行:PyTorch 源(`tts_config.pytorch_index`)、GitHub 镜像前缀(`tts_config.github_mirror`),
     给「让 Mosael 装」用(ADR 0041 §4)。空 = 官方 / 直连,和老库的行为一样。
@@ -8290,6 +8302,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_install_sources_get_pytorch_and_github,
                 # 同上:ORM 上的 LocalService 指望「共用的模型文件夹」那一列在。
                 _migrate_local_services_share_model_folders,
+                # 同上:「闲置多久自动停」那一列。
+                _migrate_local_services_stop_when_idle,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

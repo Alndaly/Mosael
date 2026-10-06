@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   getLocalService: vi.fn(),
   getLocalServiceLogs: vi.fn(),
   startLocalService: vi.fn(),
+  touchLocalService: vi.fn(),
   listPluginInstanceModels: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
@@ -23,7 +24,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 
 import type { LocalService, PluginInstance, PluginPackage } from "@/api/client";
-import { ConnectionFailureActions, explainOpenFailure, serviceIssue } from "./localServiceStatus";
+import { ConnectionFailureActions, KEEP_AWAKE_MS, explainOpenFailure, serviceIssue, useKeepServiceAwake } from "./localServiceStatus";
 import { GenerationModelsRow } from "./ProvidedModels";
 import { connectionIssue } from "./PluginsView";
 
@@ -35,7 +36,8 @@ function service(kind: Kind | null, overrides: Partial<LocalService> = {}): Loca
     service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/x", python: "", port: 8189, url: "http://127.0.0.1:8189",
     listen_lan: false, keep_running: false, extra_args: [], state: kind === "starting" ? "starting" : kind === "failed" ? "failed" : "stopped",
     pid: null, started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
-    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null,
+    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null, idle_stop_minutes: 30,
+    idle_stopped: false,
     issue: kind ? { kind, text: `本机的 ComfyUI:${kind}` } : null,
     ...overrides,
   };
@@ -184,5 +186,29 @@ describe("打开工作台、内嵌编辑器没成", () => {
     expect(await explainOpenFailure("c1", "页面没就绪")).toBe("页面没就绪");
     api.getLocalService.mockRejectedValueOnce(new Error("offline"));
     expect(await explainOpenFailure("c1", "页面没就绪")).toBe("页面没就绪");
+  });
+});
+
+describe("ComfyUI 的视图亮着时告诉宿主「还在用」(闲置自动停)", () => {
+  function Viewing({ id }: { id: string | null }) {
+    useKeepServiceAwake(id);
+    return null;
+  }
+
+  it("亮着:马上说一声,之后每隔一会儿说一声;收起就不说了;不是 ComfyUI 的视图什么都不说", () => {
+    vi.useFakeTimers();
+    try {
+      api.touchLocalService.mockResolvedValue(undefined);
+      const view = render(<Viewing id="c1" />);
+      expect(api.touchLocalService).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(KEEP_AWAKE_MS * 2);
+      expect(api.touchLocalService).toHaveBeenCalledTimes(3);
+      expect(api.touchLocalService).toHaveBeenLastCalledWith("c1");
+      view.rerender(<Viewing id={null} />);
+      vi.advanceTimersByTime(KEEP_AWAKE_MS * 3);
+      expect(api.touchLocalService).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

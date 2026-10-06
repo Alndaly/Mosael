@@ -16,6 +16,7 @@
     {"op": "service_plan", …}              → 让 Mosael 装:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(见 managed)
     {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
     {"op": "service_model_folders", …}     → 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型(见 shared_models)
+    {"op": "service_busy"}                 → 闲置自动停之前:任务队列里有没有在跑、在排的
 
 **模型库**(ADR 0034,同一个工具认领 `model_library`):
 
@@ -173,6 +174,10 @@ def main() -> None:
             # 共用的模型文件夹:认每一处;它在跑的话顺带问那台 ComfyUI 加载了没有、从那里看到几个模型
             comfy = Comfy(env_base_url(), locale, env_access_token()) if env_base_url() else None
             emit({"ok": True, "output": shared_models.model_folders(payload, locale, comfy=comfy)})
+            return
+        if tool == "comfyui_generation" and payload.get("op") == "service_busy":
+            # 闲置自动停之前:它的任务队列里有没有在跑、在排的
+            emit({"ok": True, "output": service.busy(payload, locale, comfy=Comfy(env_base_url(), locale, env_access_token()))})
             return
         if tool == "comfyui_generation" and payload.get("op") == "service_install":
             # 让 Mosael 装(流式:一步一行,宿主建取消文件就停在那一步,下次接着装)

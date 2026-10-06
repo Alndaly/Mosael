@@ -73,6 +73,7 @@ def put_local_service(instance_id: str, body: LocalServiceUpdate, db: Tx, user: 
         local_services.configure(
             db, instance, mode=body.mode, directory=body.directory, python=body.python, listen_lan=body.listen_lan,
             keep_running=body.keep_running, extra_args=body.extra_args, port=body.port, shared_models=body.shared_models,
+            idle_stop_minutes=body.idle_stop_minutes,
             confirm_run_code=body.confirm_run_code,
         )
     except _ERRORS as exc:
@@ -159,6 +160,14 @@ def ensure_local_service(instance_id: str, db: DbSession, user: CurrentUser) -> 
     except _ERRORS as exc:
         raise _failed(exc) from exc
     return _required(db, instance, user)
+
+
+@router.post("/plugins/instances/{instance_id}/local-service/touch", status_code=204)
+def touch_local_service(instance_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """还在用它(工作台、内嵌编辑器开着 —— 那边直接和它说话,不经插件调用):闲置的钟从现在算。不替它起;没用本机服务的
+    连接什么都不做。只要是这个连接的主人。"""
+    local_services.touch(my_instance(db, instance_id, user).id)
+    return Response(status_code=204)
 
 
 @router.get("/plugins/instances/{instance_id}/local-service/logs", response_model=LocalServiceLogsOut)

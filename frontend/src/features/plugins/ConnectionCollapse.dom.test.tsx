@@ -244,7 +244,8 @@ describe("本机服务的连接(ADR 0041)", () => {
       service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
       url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
       started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
-      installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null,
+      installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null, idle_stop_minutes: 30,
+      idle_stopped: false,
     });
     const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
     wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://127.0.0.1:8189" } })} workspaceId="w1"
@@ -283,7 +284,8 @@ describe("本机服务的连接(ADR 0041)", () => {
       service: "comfyui", title: "ComfyUI", mode: "managed", directory: "/data/local-services/c1/ComfyUI", python: "", port: 8190,
       url: "http://127.0.0.1:8190", listen_lan: false, keep_running: false, extra_args: [], state: "running", pid: 42,
       started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
-      installed: true, python_minor: "3.13", base_python_minor: "3.13", needs_rebuild: false, install: null,
+      installed: true, python_minor: "3.13", base_python_minor: "3.13", needs_rebuild: false, install: null, idle_stop_minutes: 30,
+      idle_stopped: false,
     });
     const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
     wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://127.0.0.1:8190" } })}

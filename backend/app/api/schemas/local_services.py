@@ -64,6 +64,10 @@ class LocalServiceOut(ApiModel):
     extra_args: list[str] = Field(default_factory=list)
     #: 共用的模型文件夹(ADR 0041 拍板 5),一项一个绝对路径。
     shared_models: list[str] = Field(default_factory=list)
+    #: 闲置多少分钟自动停(0 = 不停;「保持运行」的不看它)。
+    idle_stop_minutes: int = 30
+    #: 停着,而且是因为闲置太久停的。
+    idle_stopped: bool = False
     state: LocalServiceState
     #: 进程在的时候是它的 pid、什么时候起的(ISO 8601,UTC)。
     pid: int | None = None
@@ -104,6 +108,8 @@ class LocalServiceUpdate(ApiModel):
     port: int | None = None
     #: 共用的模型文件夹(整份换掉;一项一个绝对路径)。插件认得出每一处才存,下次起生效。
     shared_models: list[str] | None = Field(default=None, max_length=40)
+    #: 闲置多少分钟自动停(0 = 不停)。
+    idle_stop_minutes: int | None = None
     confirm_run_code: bool = False
 
 

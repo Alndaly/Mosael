@@ -78,6 +78,11 @@ SERVICE_ENV = "MOSAEL_LOCAL_SERVICE"
 SHARED_ENV = "MOSAEL_LOCAL_SERVICE_SHARED"
 #: 最多共用几处。
 MAX_SHARED = 20
+#: 闲置多少分钟自动停:0 = 不停,最多一天。
+IDLE_MINUTES_RANGE = (0, 1440)
+#: 闲置自动停多久看一眼;一分钟按多少秒算(测试里调小)。
+IDLE_CHECK_SECONDS = 60.0
+SECONDS_PER_MINUTE = 60.0
 #: 等它就绪时,在插件给的就绪上限之外多等的余量(崩溃重启的退避、健康检查本身的那一两秒)。
 ENSURE_MARGIN_SECONDS = 30.0
 #: 日志里最多一次交给界面多少行。
@@ -183,6 +188,8 @@ def issue_of(db: Session, instance: PluginInstance) -> tuple[str, LocalServiceEr
         if needs_rebuild(row):
             return said("rebuild", have=row.python_minor, want=base_minor())
     if state == STOPPED or process is None:
+        if process is not None and process.idle_stopped:
+            return "stopped", LocalServiceError("localServiceIssue_idleStopped", name=name, minutes=row.idle_stop_minutes)
         return said("stopped")
     if state in (STARTING, RESTARTING):
         return said("starting")
@@ -229,6 +236,9 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         "keep_running": row.keep_running,
         "extra_args": list(row.extra_args or []),
         "shared_models": list(row.shared_models or []),
+        "idle_stop_minutes": row.idle_stop_minutes,
+        # 上一次停下是因为闲置太久(停着、而且没人手动起停过)
+        "idle_stopped": bool(process is not None and state == STOPPED and process.idle_stopped),
         "state": state,
         "pid": process.pid if process is not None and state in ACTIVE else None,
         "started_at": process.started_at.isoformat() if process is not None and process.started_at and state in ACTIVE
@@ -282,6 +292,7 @@ def configure(
     port: int | None = None,
     mode: str | None = None,
     shared_models: list[str] | None = None,
+    idle_stop_minutes: int | None = None,
     confirm_run_code: bool = False,
 ) -> None:
     """建或改这个连接的本机服务。**换一个要运行的东西(目录、解释器)要确认过**(`confirm_run_code`):起它就是在这台
@@ -335,6 +346,11 @@ def configure(
         row.extra_args = args
     if shared_models is not None:
         row.shared_models = _checked_shared(db, instance, row, shared_models)
+    if idle_stop_minutes is not None:
+        low, high = IDLE_MINUTES_RANGE
+        if not low <= idle_stop_minutes <= high:
+            raise LocalServiceError("localServiceErr_badIdleMinutes", status=422, low=low, high=high)
+        row.idle_stop_minutes = idle_stop_minutes
     db.flush()
 
 
@@ -501,6 +517,7 @@ def begin_using(
     调用方可以先交还连接再调它(插件调用在 plugins/tools._plugin_slot 里等)。本来就在跑,交回的那个立刻回来。"""
     row = _require_row(db, instance)
     process = _process(instance.id)
+    process.touch()
     if process.state == RUNNING:
         return _ready_now
     title = _title(db, instance, row)
@@ -512,6 +529,13 @@ def begin_using(
 
 def _ready_now() -> None:
     return None
+
+
+def touch(instance_id: str) -> None:
+    """有人在用它(插件调用用完了、工作台 / 内嵌编辑器还开着):闲置的钟从现在算。没在管的就什么都不做,也不替它起。"""
+    process = supervisor.get(instance_id)
+    if process is not None:
+        process.touch()
 
 
 def _wait_ready(process: ServiceProcess, title: str) -> None:
@@ -535,7 +559,8 @@ def _prepare(
         return service_gate.NO_SERVICE
     env = {SERVICE_ENV: row.service, SHARED_ENV: json.dumps(list(row.shared_models or []), ensure_ascii=False)}
     if start_it:
-        return service_gate.Prepared(env=env, wait_ready=begin_using(db, instance, progress=progress))
+        return service_gate.Prepared(env=env, wait_ready=begin_using(db, instance, progress=progress),
+                                     done=partial(touch, instance.id))
     process = supervisor.get(instance.id)
     if process is None or process.state != RUNNING:
         # 后台刷新目录不替它起:说它此刻是什么状态(停着 / 正在起 / 起不来 / 还没装好……),连接页照这一句摆
@@ -742,9 +767,77 @@ def start_kept_running() -> threading.Thread:
     return thread
 
 
+def check_idle() -> list[str]:
+    """闲置自动停,看一遍(看护线程每分钟一次;测试直接调):在跑的、不是「保持运行」的、设了闲置分钟数的,闲置够久了就**先问它
+    有没有活**(插件问它的任务队列):有在跑、在排的就当它在用(钟重新算);问不到(插件失败、它不应答)不停 —— 宁可多开一会儿;
+    空的就停,记下是闲置停的(界面说「闲置 N 分钟,自动停了」)。下次用到时照常起(用到时起)。交回停了哪几个连接。"""
+    stopped: list[str] = []
+    for process in supervisor.everyone():
+        if process.state != RUNNING:
+            continue
+        instance_id = process.instance_id
+        with SessionLocal() as db:
+            row = records.row_of(db, instance_id)
+            instance = db.get(PluginInstance, instance_id)
+            if row is None or instance is None or row.keep_running or row.idle_stop_minutes <= 0:
+                continue
+            if process.idle_seconds() < row.idle_stop_minutes * SECONDS_PER_MINUTE or installer.installing(instance_id):
+                continue
+            asked_at = process.last_used
+            try:
+                busy = plugin_ops.busy(db, instance, row)
+            except Exception:  # noqa: BLE001 — 问不到它有没有活就不停(在跑的任务比显存要紧)
+                logger.warning("本机服务 %s 闲置够久了,但问不到它有没有活,先不停", instance_id, exc_info=True)
+                continue
+        if busy:
+            process.touch()
+            continue
+        if process.last_used != asked_at:
+            continue  # 问的这一会儿又有人用上了
+        logger.info("本机服务 %s 闲置 %s 分钟,自动停下(释放显存)", instance_id, row.idle_stop_minutes)
+        process.stop()
+        process.idle_stopped = True
+        stopped.append(instance_id)
+    return stopped
+
+
+class _IdleWatch:
+    """闲置自动停的看护线程:每 IDLE_CHECK_SECONDS 看一遍(check_idle)。后端起来时开,退出时停。"""
+
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="local-services-idle")
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _run(self) -> None:
+        while not self._stop.wait(IDLE_CHECK_SECONDS):
+            try:
+                check_idle()
+            except Exception:  # noqa: BLE001 — 看一遍出错不该让看护线程死掉
+                logger.exception("闲置自动停看一遍时出错")
+
+
+_idle_watch = _IdleWatch()
+
+
+def start_idle_watch() -> None:
+    """后端起来时:开闲置自动停的看护线程。"""
+    _idle_watch.start()
+
+
 def stop_all() -> None:
     """后端退出时:Mosael 起的进程不留在后台(拍板 4)。正在装的先取消(插件停掉 pip、记下停在哪一步,下次接着装),
     再停全部本机服务 —— 几个一起停,不让一个慢的拖着别的。"""
+    _idle_watch.stop()
     installer.cancel_all()
     running = [process for process in supervisor.everyone() if process.active]
     threads = [threading.Thread(target=process.stop, daemon=True) for process in running]
@@ -756,8 +849,9 @@ def stop_all() -> None:
 
 __all__ = [
     "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
-    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using",
+    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using", "check_idle",
     "cancel_install", "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package",
     "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "plan", "prepare_install",
-    "recent_install_logs", "recent_logs", "remove", "restart", "start", "start_kept_running", "status", "stop", "stop_all",
+    "recent_install_logs", "recent_logs", "remove", "restart", "start", "start_idle_watch", "start_kept_running", "status",
+    "stop", "stop_all", "touch",
 ]

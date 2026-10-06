@@ -903,7 +903,17 @@ function ServiceRows({
               )}
             </div>
             <span className="timecode text-ui-xs text-muted-foreground">{meta.join(" · ")}</span>
-            {service.state === "stopped" && <small className="text-ui-sm text-muted-foreground">{t("localServiceStoppedDesc")}</small>}
+            {service.state === "stopped" && (
+              <small className="text-ui-sm text-muted-foreground">
+                {service.idle_stopped ? service.issue?.text ?? t("localServiceStoppedDesc") : t("localServiceStoppedDesc")}
+              </small>
+            )}
+            {/* 闲置自动停(释放显存):不是「保持运行」的才有 */}
+            {!service.keep_running && (service.idle_stop_minutes ?? 0) > 0 && service.state !== "stopped" && (
+              <small className="text-ui-sm text-muted-foreground" data-idle-stop>
+                {t("localServiceIdleStop").replace("{minutes}", String(service.idle_stop_minutes))}
+              </small>
+            )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {active ? (
@@ -1030,6 +1040,18 @@ function ServiceRows({
               }}
             />
           </SettingsRow>
+          <SettingsRow label={t("localServiceIdleLabel")} description={t("localServiceIdleDesc")}>
+            <DraftField
+              label={t("localServiceIdleLabel")}
+              value={String(service.idle_stop_minutes ?? 0)}
+              disabled={!manage}
+              inputMode="numeric"
+              onCommit={(text) => {
+                const minutes = Number.parseInt(text, 10);
+                if (Number.isFinite(minutes) && minutes !== service.idle_stop_minutes) save.mutate({ idle_stop_minutes: minutes });
+              }}
+            />
+          </SettingsRow>
         </>
       )}
       {logsOpen && <LocalServiceLogDialog instanceId={instanceId} title={service.title} onClose={() => setLogsOpen(false)} />}
@@ -1109,7 +1131,8 @@ function SharedModelFolders({ instanceId, service }: { instanceId: string; servi
                   </small>
                 </span>
                 <Button variant="ghost" size="sm" aria-label={t("localServiceSharedRemove").replace("{path}", path)}
-                        disabled={save.isPending} onClick={() => save.mutate(current.filter((item) => item !== path))}>
+                        disabled={save.isPending} loading={save.isPending && !(save.variables ?? []).includes(path)}
+                        onClick={() => save.mutate(current.filter((item) => item !== path))}>
                   {t("localServiceSharedRemoveShort")}
                 </Button>
               </li>

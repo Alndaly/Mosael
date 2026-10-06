@@ -54,7 +54,7 @@ function service(overrides: Partial<LocalService> = {}): LocalService {
     service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
     url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
     started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
-    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null, shared_models: [], issue: null,
+    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null, shared_models: [], issue: null, idle_stop_minutes: 30, idle_stopped: false,
     ...overrides,
   };
 }
@@ -178,6 +178,36 @@ describe("路径格旁边的「选择…」", () => {
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "localServiceConfirmRun" }));
     await waitFor(() => expect(api.detectLocalService)
       .toHaveBeenCalledWith("i1", "/Users/me/Apps/ComfyUI", "/Users/me/Apps/ComfyUI/.venv/bin/python"));
+  });
+});
+
+describe("闲置自动停", () => {
+  it("在跑、不是保持运行:写明闲置几分钟会自动停;保持运行的不写", async () => {
+    api.getLocalService.mockResolvedValue(service({ state: "running", idle_stop_minutes: 30 }));
+    const view = mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect((await screen.findByText("localServiceIdleStop")).hasAttribute("data-idle-stop")).toBe(true);
+    view.unmount();
+    api.getLocalService.mockResolvedValue(service({ state: "running", keep_running: true }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    await screen.findByText("localServiceStateRunning");
+    expect(screen.queryByText("localServiceIdleStop")).toBeNull();
+  });
+
+  it("闲置停下的:说是闲置停的;「高级」里改分钟数,离开框时存", async () => {
+    api.getLocalService.mockResolvedValue(service({
+      idle_stopped: true, issue: { kind: "stopped", text: "本机的 ComfyUI 闲置了 30 分钟,自动停了" },
+    }));
+    api.putLocalService.mockResolvedValue(service({ idle_stop_minutes: 10 }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("本机的 ComfyUI 闲置了 30 分钟,自动停了")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /localServiceAdvanced/ }));
+    const field = screen.getByLabelText("localServiceIdleLabel") as HTMLInputElement;
+    expect(field.value).toBe("30");
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "10" } });
+    expect(api.putLocalService).not.toHaveBeenCalled();
+    fireEvent.blur(field);
+    await waitFor(() => expect(api.putLocalService).toHaveBeenCalledWith("i1", { idle_stop_minutes: 10 }));
   });
 });
 

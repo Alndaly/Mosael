@@ -144,6 +144,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     catalog_watch.start_watching()
     # 「保持运行」的本机服务:Mosael 一启动就起,不等用到(后台起,起得慢的不拖慢启动)。
     local_services.start_kept_running()
+    # 闲置自动停(释放显存):不是「保持运行」的,闲置够久、问过它没有活就停(用到时再起)。
+    local_services.start_idle_watch()
     # 本机引擎「装好了没有」要起子进程 import 一遍才知道(funasr、demucs 各一两秒),答案进程内缓存。启动后在后台
     # 先探一遍:「设置 → 能力提供方」、转写 / 分离的下拉第一次打开时不必现等 —— 开发态每改一次代码后端就重启,
     # 那一页每次都白屏好几秒(用户:「要加载很久,会有很长时间的白屏」)。

@@ -222,6 +222,10 @@ class ServiceProcess:
         self.directory_key = ""
         #: 健康检查的地址(起的、接回来的那一份):「进程在,却没有应答」由它判(见 local_services.issue)。
         self.health_url = ""
+        #: 上一次有人用它的时刻(monotonic):插件调用、工作台开着、请它起好……闲置自动停按它算(见 local_services.idle)。
+        self.last_used = time.monotonic()
+        #: 上一次停下是因为闲置太久(界面上说「闲置 N 分钟,自动停了」);再起就清掉。
+        self.idle_stopped = False
         #: 健康检查通过时叫一声(在另一个线程里叫:它可能要问插件刷新目录,不能挡着看护)。
         self.on_ready: Callable[[], None] | None = None
         #: 这一次起法给的就绪上限(等它就绪的人据此决定等多久)。
@@ -250,6 +254,8 @@ class ServiceProcess:
             self._policy = RestartPolicy()
             self._respawn = respawn
             self.error, self.failure_lines, self.adopted, self.ready_seconds = None, [], False, None
+            self.idle_stopped = False
+            self.touch()
             try:
                 handle = self._spawn(spec, fresh=True)
             except OSError as exc:
@@ -271,6 +277,8 @@ class ServiceProcess:
             self._policy = RestartPolicy()
             self._respawn = respawn
             self.error, self.failure_lines, self.ready_seconds = None, [], None
+            self.idle_stopped = False
+            self.touch()
             self._handle = _Handle(record.pid)
             self.pid, self.port, self.adopted = record.pid, record.port, True
             self.started_at = _parse_time(record.started_at)
@@ -304,6 +312,13 @@ class ServiceProcess:
         with self._cond:
             if self._handle is handle or self.active:
                 self._finish_locked(STOPPED)
+
+    def touch(self) -> None:
+        """有人在用它:闲置的钟从现在重新算。"""
+        self.last_used = time.monotonic()
+
+    def idle_seconds(self) -> float:
+        return time.monotonic() - self.last_used
 
     def wait_settled(self, timeout: float) -> str:
         """等到它不再是「启动中 / 重启中」(就绪了、起不来了、被停了),最多 `timeout` 秒。回那时的状态。"""
@@ -402,6 +417,7 @@ class ServiceProcess:
     def _became_ready(self) -> None:
         with self._cond:
             self.ready_seconds = round(time.monotonic() - self._spawned_at, 1)
+            self.touch()  # 闲置从就绪那一刻算:冷启动的那一两分钟不算闲着
             self._set_locked(RUNNING)
             callback = self.on_ready
         logger.info("本机服务 %s 就绪(%.1f 秒)", self.instance_id, self.ready_seconds or 0)

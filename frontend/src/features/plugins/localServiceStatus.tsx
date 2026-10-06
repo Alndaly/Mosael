@@ -18,6 +18,7 @@ import {
   getLocalService,
   getLocalServiceLogs,
   startLocalService,
+  touchLocalService,
   type LocalService,
   type LocalServiceLogSource,
   type LocalServiceState,
@@ -46,6 +47,23 @@ export function useLocalService(instanceId: string, enabled: boolean) {
       return UNSETTLED.includes(data.state) || data.install?.state === "installing" ? 1200 : 5000;
     },
   });
+}
+
+/** 工作台、内嵌编辑器开着时隔多久告诉宿主一声「还在用」(闲置自动停按分钟算,这里远小于一分钟的若干倍就够)。 */
+export const KEEP_AWAKE_MS = 2 * 60_000;
+
+/**
+ * ComfyUI 的视图(工作台、内嵌编辑器)亮着时:那边直接和它说话、不经插件调用,宿主看不见 —— 隔一会儿告诉宿主一声「还在用」,
+ * 闲置自动停就不会在人用着画布的时候把它停掉。`instanceId` 为 null(没亮着、不是 ComfyUI 的视图)时什么都不做。不替它起。
+ */
+export function useKeepServiceAwake(instanceId: string | null): void {
+  React.useEffect(() => {
+    if (!instanceId) return;
+    const tell = () => void touchLocalService(instanceId).catch(() => undefined);
+    tell();
+    const timer = window.setInterval(tell, KEEP_AWAKE_MS);
+    return () => window.clearInterval(timer);
+  }, [instanceId]);
 }
 
 /** 连接卡片里这个连接的某一格(本机服务、网络、配置……):滚到那里、把焦点交过去。 */

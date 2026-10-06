@@ -39,7 +39,9 @@ export const restartLocalService = (instanceId: string) =>
 /** 要用它了:停着就起,**等它就绪再回来**(第一次启动可能一两分钟)。没用本机服务的连接回 null。 */
 export const ensureLocalService = (instanceId: string) =>
   api<LocalService | null>(`${base(instanceId)}/ensure`, { method: "POST" });
-export const getLocalServiceLogs = (instanceId: string, limit = 400, source: LocalServiceLogSource = "service") =>
+/** 还在用它(工作台、内嵌编辑器开着):闲置的钟从现在算。不替它起。 */
+export const touchLocalService = (instanceId: string) => api(`${base(instanceId)}/touch`, { method: "POST" });
+export const getLocalServiceLogs =(instanceId: string, limit = 400, source: LocalServiceLogSource = "service") =>
   api<LocalServiceLogs>(`${base(instanceId)}/logs?limit=${limit}&source=${source}`);
 export const addLocalServiceNodes = (instanceId: string) =>
   api<LocalServiceAddNodes>(`${base(instanceId)}/add-nodes`, { method: "POST", body: JSON.stringify({ confirm: true }) });

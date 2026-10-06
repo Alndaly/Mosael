@@ -8,6 +8,7 @@
     {"op": "service_add_nodes", "directory", "python"?} → 把钉死版本的 pysssss 解进 custom_nodes(用户点头之后)
     {"op": "service_discover"}                         → 本机 8188 / 8000(Desktop 的缺省端口)上有没有已经在跑的
     {"op": "service_readdress", "from", "to"}           → 端口改了:按旧地址存的本地数据搬到新地址名下
+    {"op": "service_busy"}                             → 闲置自动停之前:它的任务队列里有没有在跑、在排的(问那台服务器)
 
 「让 Mosael 装」的两个(`service_plan` / `service_install`)在 managed:装好的那一份就是一个普通的目录(源码旁边一个
 `.venv`),认目录、怎么起都走这里。
@@ -440,6 +441,19 @@ def launch(payload: dict[str, Any], locale: str, *, windows: bool | None = None,
     }
 
 
+# --- 闲置自动停之前 ----------------------------------------------------------------
+
+
+def busy(payload: dict[str, Any], locale: str, *, comfy: Any) -> dict[str, Any]:
+    """`{"op": "service_busy"}`:宿主要因为闲置太久停掉它之前问一句 —— 它的任务队列(`/queue`)里有没有在跑、在排的。
+    问不到(没在跑、不应答)就抛:宿主那边问不到就不停。"""
+    queue = comfy.get("/queue")
+    queue = queue if isinstance(queue, dict) else {}
+    running = len(queue.get("queue_running") or [])
+    pending = len(queue.get("queue_pending") or [])
+    return {"busy": running + pending > 0, "running": running, "pending": pending}
+
+
 # --- 补装 pysssss ---------------------------------------------------------------
 
 
@@ -540,6 +554,6 @@ def local_service() -> str:
     return os.environ.get("MOSAEL_LOCAL_SERVICE", "").strip()
 
 
-__all__ = ["HEALTH_PATH", "Layout", "OPS", "PYSSSSS", "PYSSSSS_DIR", "add_nodes", "comfyui_version", "detect", "discover",
+__all__ = ["HEALTH_PATH", "Layout", "OPS", "PYSSSSS", "PYSSSSS_DIR", "add_nodes", "busy", "comfyui_version", "detect", "discover",
            "find_layout", "find_python", "github_mirror", "install_pysssss", "launch", "local_service", "readdress",
            "venv_python"]

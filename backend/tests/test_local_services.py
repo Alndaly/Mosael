@@ -58,6 +58,12 @@ def svc(payload):
                                       {"label": "", "value": "没有名字的不摆"}],
                 "problems": [{"level": "warning", "text": {"zh": "少了点东西", "en": "Something is missing"}}],
                 "add_nodes": {"title": {"zh": "补装", "en": "Add it"}, "description": "装进 custom_nodes"}}
+    if op == "service_busy":
+        control = Path(os.environ["MOSAEL_PLUGIN_DATA_DIR"]) / "busy.json"
+        said = json.loads(control.read_text(encoding="utf-8")) if control.is_file() else {"busy": False}
+        if said.get("fail"):
+            raise RuntimeError("问不到它的队列")
+        return {"busy": said.get("busy", False)}
     if op == "service_model_folders":
         found = []
         for path in payload.get("shared_models") or []:
@@ -103,8 +109,13 @@ def reach(payload):
 def boom(payload):
     raise RuntimeError("这张工作流本身坏了")
 
+def slow(payload):
+    import time
+    time.sleep(0.4)  # 像一次要跑一会儿的生成
+    return {"done": True}
+
 request = json.loads(sys.stdin.read())
-handler = {"svc": svc, "ping": ping, "reach": reach, "boom": boom}[request["tool"]]
+handler = {"svc": svc, "ping": ping, "reach": reach, "boom": boom, "slow": slow}[request["tool"]]
 try:
     json.dump({"ok": True, "output": handler(request.get("input") or {})}, sys.stdout, ensure_ascii=False)
 except Exception as exc:
@@ -128,6 +139,7 @@ def _manifest(path: Path) -> dict[str, Any]:
                 {"name": "ping", "effects": "none", "input_schema": {"type": "object"}},
                 {"name": "reach", "effects": "none", "input_schema": {"type": "object"}},
                 {"name": "boom", "effects": "none", "input_schema": {"type": "object"}},
+                {"name": "slow", "effects": "none", "input_schema": {"type": "object"}},
             ],
         },
         "services": [{"key": "fake", "title": {"zh": "假服务", "en": "Fake service"}, "tool": "svc"}],
@@ -696,6 +708,88 @@ def test_共用的模型文件夹那一块_每处认成什么_卸载时保留下
     assert body["running"] is False and body["folders"][0]["loaded"] is None
     assert body["suggestions"] == [], "已经加进来的不再提"
     shutil.rmtree(kept, ignore_errors=True)
+
+
+# ---- 闲置自动停(释放显存) ----------------------------------------------------------------------
+
+
+def _busy(**said: Any) -> None:
+    """测试插件的 service_busy 照这个答(放在插件的持久目录里)。"""
+    from app.domain.plugins.tools import _ensure_data_dir
+
+    (_ensure_data_dir(PACKAGE_ID) / "busy.json").write_text(json.dumps(said), encoding="utf-8")
+
+
+@pytest.fixture
+def minute(monkeypatch: pytest.MonkeyPatch):
+    """一分钟按 0.05 秒算:闲置分钟数 1 就是 0.05 秒。"""
+    monkeypatch.setattr(local_services, "SECONDS_PER_MINUTE", 0.05)
+
+
+def _running(client, tmp_path: Path, **extra: Any) -> str:
+    instance_id = _connection(client)
+    _configure(client, instance_id, _folder(tmp_path), **extra)
+    client.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    assert _wait_state(client, instance_id, "running")["state"] == "running"
+    return instance_id
+
+
+def test_闲置够久_问过它没有活_就停_说是闲置停的_用到时再起(plugged, tmp_path: Path, minute) -> None:
+    instance_id = _running(plugged, tmp_path)
+    url = f"/api/plugins/instances/{instance_id}/local-service"
+    assert plugged.put(url, json={"idle_stop_minutes": 1}).json()["idle_stop_minutes"] == 1
+    _busy(busy=False)
+    time.sleep(0.1)
+    assert local_services.check_idle() == [instance_id]
+    status = _status(plugged, instance_id)
+    assert status["state"] == "stopped" and status["idle_stopped"] is True
+    assert "闲置了 1 分钟,自动停了" in status["issue"]["text"]
+    with SessionLocal() as db:
+        invocation = tools.invoke(db, instance_id, "ping", {})
+    assert invocation.status == "succeeded", "用到时照常起"
+    status = _status(plugged, instance_id)
+    assert status["state"] == "running" and status["idle_stopped"] is False
+
+
+def test_有活不停_问不到也不停_保持运行和_0_不停(plugged, tmp_path: Path, minute) -> None:
+    instance_id = _running(plugged, tmp_path)
+    url = f"/api/plugins/instances/{instance_id}/local-service"
+    plugged.put(url, json={"idle_stop_minutes": 1})
+    _busy(busy=True)
+    time.sleep(0.1)
+    assert local_services.check_idle() == [], "队列里有在跑、在排的:不停"
+    assert supervisor.get(instance_id).idle_seconds() < 0.05, "有活就当它在用:钟重新算"
+    _busy(fail=True)
+    time.sleep(0.1)
+    assert local_services.check_idle() == [], "问不到它有没有活:不停"
+    _busy(busy=False)
+    plugged.put(url, json={"keep_running": True})
+    time.sleep(0.1)
+    assert local_services.check_idle() == [], "保持运行的不停"
+    plugged.put(url, json={"keep_running": False, "idle_stop_minutes": 0})
+    time.sleep(0.1)
+    assert local_services.check_idle() == [], "0 = 不自动停"
+    assert _status(plugged, instance_id)["state"] == "running"
+    assert plugged.put(url, json={"idle_stop_minutes": -1}).status_code == 422
+    assert plugged.put(url, json={"idle_stop_minutes": 1441}).status_code == 422
+
+
+def test_插件调用用完了_工作台开着时告诉一声_闲置的钟都重新算(plugged, tmp_path: Path, minute) -> None:
+    instance_id = _running(plugged, tmp_path)
+    plugged.put(f"/api/plugins/instances/{instance_id}/local-service", json={"idle_stop_minutes": 1})
+    _busy(busy=False)
+    process = supervisor.get(instance_id)
+    time.sleep(0.1)
+    with SessionLocal() as db:
+        assert tools.invoke(db, instance_id, "slow", {}).status == "succeeded"
+    assert process.idle_seconds() < 0.2, "一次跑了 0.4 秒的调用用完:从它跑完算,不从它开始算"
+    time.sleep(0.1)
+    assert plugged.post(f"/api/plugins/instances/{instance_id}/local-service/touch").status_code == 204
+    assert process.idle_seconds() < 0.05, "工作台开着:告诉一声就重新算"
+    assert local_services.check_idle() == []
+    other = _connection(plugged)
+    assert plugged.post(f"/api/plugins/instances/{other}/local-service/touch").status_code == 204, "没有本机服务:什么都不做"
+    assert _status(plugged, other) is None
 
 
 # ---- 用不了的时候,按本机服务的状态说(不说「检查地址」) ------------------------------------------

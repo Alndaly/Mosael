@@ -69,6 +69,7 @@ import { BrowserSessionTools } from "@/features/browser-pool/session-tools/Brows
 import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { comfyConnectionOf } from "@/features/plugins/comfyNavigation";
+import { useKeepServiceAwake } from "@/features/plugins/localServiceStatus";
 import { ComfyWorkbench } from "@/features/plugins/workbench/ComfyWorkbench";
 import { isWorkbenchPartition, useWorkbench } from "@/features/plugins/workbench/workbenchSession";
 import { StartupLoading } from "@/components/layout/StartupLoading";
@@ -171,6 +172,8 @@ function PublishViewBar() {
   React.useEffect(() => {
     if (!editing) setAddress(state.url ?? "");
   }, [state.url, editing]);
+  //: ComfyUI 的视图(工作台、内嵌编辑器)亮着:背后的本机服务正被人用着,告诉宿主别因为闲置把它停了(ADR 0041)
+  useKeepServiceAwake(state.visible ? comfyConnectionOf(state.partition) : null);
   if (!state.visible) return null;
   if (isWorkbenchPartition(workbench.target, state.partition)) return <ComfyWorkbench barHeight={PUBLISH_BAR_HEIGHT} />;
   //: 这是一个 ComfyUI 连接的视图(工作流库「在编辑器里打开」):顶栏多一个画布操控方式的开关

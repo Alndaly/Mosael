@@ -476,6 +476,9 @@ def _run_process(
         if explained is not None:
             raise explained from exc
         raise
+    finally:
+        # 用完了:闲置的钟从现在算(本机服务;没有本机服务时什么都不做)
+        service.done()
     plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
     return result.output
 

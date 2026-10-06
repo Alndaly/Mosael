@@ -46,5 +46,7 @@ class LocalService(Base):
     #: 它**只读**:插件按它们写一份配置交给服务(ComfyUI 是 extra_model_paths.yaml,放在宿主的数据目录里,不写进人家的目录),
     #: 模型库下载的新文件仍落在服务自己的模型目录。
     shared_models: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    #: 闲置多少分钟自动停(释放显存);0 = 不自动停。「保持运行」的不看它。停之前先问它的任务队列:有在跑、在排的就不停。
+    idle_stop_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

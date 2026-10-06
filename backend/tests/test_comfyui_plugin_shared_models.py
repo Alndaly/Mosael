@@ -247,6 +247,29 @@ def test_共用文件夹里的模型_不按哈希找_按文件名和大小找(mo
     assert comfy.state.hashed == ["checkpoints/v1-5.ckpt"], "没共用的照常按哈希找"
 
 
+# ---- service_busy:闲置自动停之前问它有没有活 ------------------------------------------------------
+
+
+def test_闲置自动停之前_问它的队列_有在跑在排的就是有活(comfy, data_dir) -> None:
+    def asked() -> tuple:
+        out = _call(comfy, {"op": "service_busy"}, data_dir)
+        return out["busy"], out["running"], out["pending"]
+
+    assert asked() == (False, 0, 0)
+    comfy.state.running = ["p1"]
+    assert asked() == (True, 1, 0)
+    comfy.state.running, comfy.state.pending = [], ["p2", "p3"]
+    assert asked() == (True, 0, 2)
+
+
+def test_闲置自动停之前_问不到就报错_宿主那边不停(data_dir) -> None:
+    from app.domain.plugins import runtime
+
+    with pytest.raises(PluginRuntimeError):
+        runtime.execute_tool(base.PLUGIN, base.ENTRY, "comfyui_generation", {"op": "service_busy"},
+                             {"SERVER_URL": "http://127.0.0.1:9"}, data_dir=data_dir, timeout=60)
+
+
 # ---- service_model_folders:在跑的那台加载了哪几处、每处几个 ---------------------------------------
 
 

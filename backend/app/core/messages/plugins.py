@@ -639,6 +639,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{minutes} 分钟里重启了 {count} 次还是崩,不再自动重启。看看日志里说了什么",
         "en": "It kept crashing after {count} restarts in {minutes} minutes, so it won't restart automatically. Check the log.",
     },
+    "localServiceErr_badIdleMinutes": {
+        "zh": "闲置多久自动停要在 {low}–{high} 分钟之间(0 = 不自动停)",
+        "en": "The idle time before stopping must be between {low} and {high} minutes (0 = never).",
+    },
     "localServiceErr_tooManyShared": {
         "zh": "共用的模型文件夹最多 {limit} 处",
         "en": "At most {limit} shared models folders.",
@@ -651,6 +655,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "localServiceIssue_stopped": {
         "zh": "本机的 {name} 没在运行:用到时会自动启动,也可以现在点「启动」",
         "en": "The local {name} isn't running: it starts automatically when it's used, or choose Start now.",
+    },
+    "localServiceIssue_idleStopped": {
+        "zh": "本机的 {name} 闲置了 {minutes} 分钟,自动停了(释放显存):用到时会自动启动,也可以现在点「启动」",
+        "en": "The local {name} was idle for {minutes} min and stopped to free GPU memory: it starts automatically when "
+              "it's used, or choose Start now.",
     },
     "localServiceIssue_starting": {
         "zh": "本机的 {name} 正在启动…",
