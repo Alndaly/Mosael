@@ -49,6 +49,23 @@ describe("界面文案", () => {
     expect(offenders).toEqual([]);
   });
 
+  //: 沙盒实测:AI 工作台「调参」里那一格写着「Seed」—— 中文界面里留了一个没翻的英文词(工作流节点里的大模型参数
+  //: 「Seed」「Temperature」、对话里的「Steer」同样)。中文表里和英文一模一样、又是一个英文词的,只能是专名和术语。
+  it("中文表里没有留着没翻的英文词(专名、术语除外)", () => {
+    const zh = messages["zh-CN"] as Record<string, string>;
+    const en = messages["en-US"] as Record<string, string>;
+    const untranslated = Object.keys(zh)
+      .filter((key) => zh[key] === en[key] && /^[A-Za-z][a-z]+( [a-z]+)*$/.test(zh[key]))
+      .sort();
+    expect(untranslated).toEqual([
+      "homeChartPlatformWebhook", // Webhook:术语
+      "languageEn", // 语言名「English」就写它自己
+      "modelDownloadSourceCivitai", // 站名
+      "revision", // 没找到读它的地方,不是界面上看得到的字
+      "trigger_webhook", // Webhook:术语
+    ]);
+  });
+
   it("扫得到文案表 —— 别变成空转", () => {
     expect(areaNames("zh-CN").length).toBeGreaterThan(5);
   });
