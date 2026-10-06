@@ -36,7 +36,8 @@ export const embeddedWorkbench = (editor: WorkflowEditor) => editor.kind === "co
 
 export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void, workspaceId = "") {
   const [note, setNote] = React.useState<EditorNote | null>(null);
-  const [opening, setOpening] = React.useState(false);
+  //: 正在开哪一张(新建是 `NEW_NOTE_PATH`):转圈的是开它的那颗按钮,别的在这期间点不了。网页版开新标签页是当场的,不算
+  const [opening, setOpening] = React.useState<string | null>(null);
   //: 打开过、还没回来:开的是内嵌视图还是新标签页;`shown`:我们开的那个内嵌视图已经亮出来过(收起时才算回来)
   const away = React.useRef<"view" | "tab" | null>(null);
   const shown = React.useRef(false);
@@ -83,7 +84,7 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     const path = flow?.path ?? NEW_NOTE_PATH;
     away.current = "view";
     shown.current = false;
-    setOpening(true);
+    setOpening(path);
     try {
       const result = await openWorkbench(
         { instanceId: instance.id, instanceName: instance.name, workspaceId, url: editor.url },
@@ -105,7 +106,7 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
       away.current = null;
       setNote({ kind: "error", path, message: await explainOpenFailure(instance.id, errorText(error)) });
     } finally {
-      setOpening(false);
+      setOpening(null);
     }
   };
 

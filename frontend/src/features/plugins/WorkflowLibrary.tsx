@@ -323,7 +323,8 @@ export function WorkflowLibraryDialog({
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
   const newButton = editorTarget ? (
     <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint" : "workflowNewHintTab")}>
-      <Button disabled={editor.opening} onClick={() => void editor.create(editorTarget)}>
+      <Button disabled={editor.opening !== null} loading={editor.opening === NEW_NOTE_PATH}
+              onClick={() => void editor.create(editorTarget)}>
         <Plus size={13} />
         {t("workflowNew")}
       </Button>
@@ -498,7 +499,7 @@ export function WorkflowLibraryDialog({
       //: 只有一个:桌面版「在工作台里打开」,网页版「在 ComfyUI 里打开」(新标签页)
       {
         group: "open", label: t(workbench ? "workflowOpenInWorkbench" : "workflowOpenInComfy"),
-        icon: workbench ? <LayoutPanelLeft /> : <ExternalLink />, disabled: !editorTarget || editor.opening,
+        icon: workbench ? <LayoutPanelLeft /> : <ExternalLink />, disabled: !editorTarget || editor.opening !== null,
         description: editorTarget ? undefined : t("workflowMenuNoEditor"),
         onSelect: () => { if (editorTarget) void editor.open(editorTarget, flow); },
       },
@@ -1179,7 +1180,8 @@ function WorkflowDetail({
 }: {
   flow: WorkflowFile;
   editor: WorkflowEditor | null;
-  opening: boolean;
+  /** 正在开哪一张(新建是 `NEW_NOTE_PATH`);`null` 是没在开 */
+  opening: string | null;
   note: EditorNote | null;
   /** 桌面版在工作台里打开(ADR 0038),网页版在新标签页里打开那台 ComfyUI */
   onOpen: (editor: WorkflowEditor) => void;
@@ -1268,14 +1270,14 @@ function WorkflowDetail({
         </Hint>
         {editor && (embeddedWorkbench(editor) ? (
           <Hint label={t("workflowOpenInWorkbenchHint")}>
-            <Button variant="outline" disabled={opening} onClick={() => onOpen(editor)}>
+            <Button variant="outline" disabled={opening !== null} loading={opening === flow.path} onClick={() => onOpen(editor)}>
               <LayoutPanelLeft size={13} />
               {t("workflowOpenInWorkbench")}
             </Button>
           </Hint>
         ) : (
           <Hint label={t("workflowOpenInComfyHint")}>
-            <Button variant="outline" disabled={opening} onClick={() => onOpen(editor)}>
+            <Button variant="outline" disabled={opening !== null} onClick={() => onOpen(editor)}>
               <ExternalLink size={13} />
               {t("workflowOpenInComfy")}
             </Button>

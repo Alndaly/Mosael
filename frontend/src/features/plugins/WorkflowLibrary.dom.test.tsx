@@ -419,6 +419,21 @@ describe("工作流库", () => {
     }
   });
 
+  it("工作台开的时候(要等本机服务起来、页面就绪)按钮转圈,不只是变灰;开好了停", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "opened" });
+    let opened: (value: unknown) => void = () => undefined;
+    bridge.openComfyWorkbench.mockReturnValueOnce(new Promise((resolve) => { opened = resolve; }));
+    await openDetail("portrait");
+    const open = () => screen.getByRole("button", { name: "workflowOpenInWorkbench" });
+    fireEvent.click(open());
+    await waitFor(() => expect(open().getAttribute("aria-busy")).toBe("true"));
+    expect(open().querySelector("svg.animate-mosael-spin")).not.toBeNull();
+    await act(async () => opened({ ok: true, outcome: "opened" }));
+    await waitFor(() => expect(open().getAttribute("aria-busy")).toBeNull());
+    expect((open() as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("在工作台里打开:那台机器上没找到这一张、或者没打开成,回来时看得到怎么办", async () => {
     api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
     const bridge = desktop({ ok: true, outcome: "missing" });
@@ -469,6 +484,22 @@ describe("工作流库", () => {
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
     await waitFor(() => expect(names()).toContain("新的"));
     expect(screen.queryByRole("status"), "新建成了不留话").toBeNull();
+  });
+
+  it("新建(桌面版):工作台开的时候「新建」转圈;卡片菜单里打开的那一项这期间点不了", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    const bridge = desktop({ ok: true, outcome: "created" });
+    let created: (value: unknown) => void = () => undefined;
+    bridge.openComfyWorkbench.mockReturnValueOnce(new Promise((resolve) => { created = resolve; }));
+    await openLibrary();
+    const create = () => screen.getByRole("button", { name: "workflowNew" });
+    fireEvent.click(create());
+    await waitFor(() => expect(create().getAttribute("aria-busy")).toBe("true"));
+    fireEvent.contextMenu(cardOf("portrait"));
+    expect(menuRows(await screen.findByRole("menu"))).toContain("workflowOpenInWorkbench(禁用)");
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    await act(async () => created({ ok: true, outcome: "created" }));
+    await waitFor(() => expect(create().getAttribute("aria-busy")).toBeNull());
   });
 
   it("新建:这版 ComfyUI 前端没有「新建」命令就说清楚(画布照样开着,自己点),回来时照样刷新", async () => {
