@@ -107,6 +107,7 @@ import {
   inFolder,
   sortModels,
   withLookupFound,
+  withPreviewSaved,
   type GenerationTarget,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
@@ -255,6 +256,16 @@ export function ModelLibraryDialog({
   //: 「存为预览图」「为缺预览图的模型补图」先确认:写的是那台服务器
   const [saving, setSaving] = React.useState<ModelFile | null>(null);
   const [filling, setFilling] = React.useState(false);
+  const save = useMutation({
+    mutationFn: ({ model, confirmed }: { model: ModelFile; confirmed: boolean }) =>
+      saveModelPreview(instance.id, { folder: model.folder, name: model.name, pick: previewPick(previewSettings), confirmed }),
+    onSuccess: (_saved, { model }) => {
+      setSaving(null);
+      //: 存好了那一条当场就是那台服务器上的:「存为预览图」不会在重列回来之前又亮起来、能再点一次
+      qc.setQueriesData<ModelLibrary>({ queryKey: libraryPrefix }, (old) => withPreviewSaved(old, model));
+      void qc.invalidateQueries({ queryKey: libraryPrefix });
+    },
+  });
   const tools = library.data?.preview_tools;
   const actions = useModelActions({
     instanceId: instance.id,
@@ -264,19 +275,12 @@ export function ModelLibraryDialog({
     settings: previewSettings,
     tools,
     lookingUp: lookups.running,
+    previewSaving: save.isPending ? save.variables.model : null,
     onLookup: lookups.add,
     onSave: setSaving,
     onOpen: (model, section) => {
       setDetailSection(section);
       setDetailKey(keyOf(model));
-    },
-  });
-  const save = useMutation({
-    mutationFn: ({ model, confirmed }: { model: ModelFile; confirmed: boolean }) =>
-      saveModelPreview(instance.id, { folder: model.folder, name: model.name, pick: previewPick(previewSettings), confirmed }),
-    onSuccess: () => {
-      setSaving(null);
-      void qc.invalidateQueries({ queryKey: libraryPrefix });
     },
   });
   const fill = useMutation({
@@ -586,6 +590,7 @@ function useModelActions({
   settings,
   tools,
   lookingUp,
+  previewSaving,
   onLookup,
   onSave,
   onOpen,
@@ -596,8 +601,10 @@ function useModelActions({
   shown: ModelFile[];
   settings: ModelPreviewSettings;
   tools: ModelPreviewTools | undefined;
-  /** 正在找的文件(`目录/名字`) */
+  /** 有任务在找的文件(`目录/名字`) */
   lookingUp: Set<string>;
+  /** 正在存回预览图的那一个(确认之后、存好之前) */
+  previewSaving: ModelFile | null;
   onLookup: (job: Job) => void;
   onSave: (model: ModelFile) => void;
   onOpen: (model: ModelFile, section: "used" | null) => void;
@@ -625,14 +632,18 @@ function useModelActions({
     }),
     onSuccess: (job) => onLookupRef.current(job),
   });
+  //: 点下去到任务建好之间(发起的那个请求还没回来)也算在找:不然按钮要等请求回来才转圈,中间那一下能再点一次
+  const starting = lookup.isPending ? keyOf(lookup.variables.model) : null;
   const latest = React.useRef({ onOpen, shown, settings, generation, openImagePreview, mark: mark.mutate, t, tools, lookingUp,
-                                onLookup, onSave, lookup: lookup.mutate });
-  latest.current = { onOpen, shown, settings, generation, openImagePreview, mark: mark.mutate, t, tools, lookingUp, onLookup,
-                     onSave, lookup: lookup.mutate };
+                                starting, previewSaving, onLookup, onSave, lookup: lookup.mutate });
+  latest.current = { onOpen, shown, settings, generation, openImagePreview, mark: mark.mutate, t, tools, lookingUp, starting,
+                     previewSaving, onLookup, onSave, lookup: lookup.mutate };
   return React.useMemo<ModelActions>(() => {
     //: 能跟着翻的:看得清的(模糊着、不显示的不进来 —— 点开一张是明确要看这一张,翻到别的就等于没经同意替人把它们都看清了)
     const visible = (model: ModelFile) =>
       model.has_preview && previewTreatment(latest.current.settings, Boolean(model.nsfw?.flagged)) === "clear";
+    const lookupRunning = (model: ModelFile) =>
+      latest.current.starting === keyOf(model) || latest.current.lookingUp.has(keyOf(model));
     return {
       open: (model) => latest.current.onOpen(model, null),
       openUsed: (model) => latest.current.onOpen(model, "used"),
@@ -666,16 +677,21 @@ function useModelActions({
       },
       lookUp: (model) => latest.current.lookup({ model, pick: previewPick(latest.current.settings) }),
       lookupUnavailable: (model) => {
-        const { tools: ways, lookingUp: running, t: say } = latest.current;
-        if (running.has(keyOf(model))) return say("modelLookupRunning");
+        const { tools: ways, t: say } = latest.current;
+        if (lookupRunning(model)) return say("modelLookupRunning");
         if (ways && !ways.lookup) return say("modelLookupUnavailable");
         return null;
       },
+      lookupRunning,
       savePreview: (model) => latest.current.onSave(model),
       saveUnavailable: () => {
         const { tools: ways, t: say } = latest.current;
         if (ways && !ways.save) return ways.save_note || say("modelSavePreviewUnavailable");
         return null;
+      },
+      savingPreview: (model) => {
+        const { previewSaving } = latest.current;
+        return previewSaving !== null && keyOf(previewSaving) === keyOf(model);
       },
     };
   }, [instanceId]);
@@ -1488,7 +1504,7 @@ function SavePreviewButton({ model, actions, className }: { model: ModelFile; ac
   return (
     <Hint label={t(model.preview_kind === "video" ? "modelSavePreviewHintVideo" : "modelSavePreviewHint")} disabledReason={why}>
       <Button variant="secondary" size="sm" className={cn("shadow-[var(--shadow-floating)]", className)} disabled={Boolean(why)}
-              onClick={() => actions.savePreview(model)}>
+              loading={actions.savingPreview(model)} onClick={() => actions.savePreview(model)}>
         <ImageUp size={13} />
         {t("modelSavePreview")}
       </Button>
@@ -1512,10 +1528,12 @@ function SourceRow({ model }: { model: ModelFile }) {
   const actions = React.useContext(ModelActionsContext);
   const source = model.source;
   const how = source ? HOW_NOTES[source.how as keyof typeof HOW_NOTES] : undefined;
-  const busy = actions?.lookupUnavailable(model);
+  //: 在找的时候转圈,直到任务做完(不是发起任务的那个请求回来);说明里照旧写为什么点不了(正在找、这台找不了)
+  const why = actions?.lookupUnavailable(model);
   const find = actions && (
-    <Hint label={t("modelLookupHint")} disabledReason={busy}>
-      <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => actions.lookUp(model)}>
+    <Hint label={t("modelLookupHint")} disabledReason={why}>
+      <Button variant="ghost" size="sm" disabled={Boolean(why)} loading={actions.lookupRunning(model)}
+              onClick={() => actions.lookUp(model)}>
         <SearchCheck size={13} />
         {t(model.has_preview ? "modelLookup" : "modelLookupPreview")}
       </Button>

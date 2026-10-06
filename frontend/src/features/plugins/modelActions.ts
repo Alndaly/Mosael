@@ -27,9 +27,13 @@ export type ModelActions = {
   /** 在 Civitai 上找(一个后台任务);找不了、正在找时说为什么。 */
   lookUp: (model: ModelFile) => void;
   lookupUnavailable: (model: ModelFile) => string | null;
+  /** 这个文件正在找:从点下去(发起任务的请求还没回来)一直到任务做完 —— 按钮转圈就看它,不看那一个请求。 */
+  lookupRunning: (model: ModelFile) => boolean;
   /** 存为预览图(先确认);写不回时说缺什么。 */
   savePreview: (model: ModelFile) => void;
   saveUnavailable: (model: ModelFile) => string | null;
+  /** 这个文件的预览图正在存回那台服务器(确认之后、存好之前)。 */
+  savingPreview: (model: ModelFile) => boolean;
 };
 
 export const ModelActionsContext = React.createContext<ModelActions | null>(null);

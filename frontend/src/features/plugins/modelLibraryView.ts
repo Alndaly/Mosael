@@ -151,3 +151,19 @@ export function withLookupFound(library: ModelLibrary | undefined, found: readon
   });
   return changed ? { ...library, models } : library;
 }
+
+/**
+ * 「存为预览图」存好了:那一条当场就是那台服务器上的预览图 —— 详情里的「存为预览图」、卡片角上的「来自 Civitai」马上撤掉,
+ * 不等整份重列(和 withLookupFound 同一个道理;宿主在补图任务里存好一张时也是这样改那一条)。重列在后台照样做。
+ */
+export function withPreviewSaved(library: ModelLibrary | undefined, saved: Pick<ModelFile, "folder" | "name">): ModelLibrary | undefined {
+  if (!library) return library;
+  const key = `${saved.folder}\n${normModelName(saved.name)}`;
+  let changed = false;
+  const models = (library.models ?? []).map((model) => {
+    if (`${model.folder}\n${normModelName(model.name)}` !== key) return model;
+    changed = true;
+    return { ...model, has_preview: true, preview_origin: "server" };
+  });
+  return changed ? { ...library, models } : library;
+}

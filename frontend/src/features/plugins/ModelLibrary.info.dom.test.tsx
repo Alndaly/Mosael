@@ -448,6 +448,45 @@ describe("Civitai 的示例图、原链接", () => {
     await waitFor(() => expect(api.getModelLibrary).toHaveBeenCalledTimes(2), { timeout: 3000 });
   });
 
+  it("「为缺预览图的模型补图」:确认之后工具条上那颗转圈,一直转到补图任务做完", async () => {
+    let finished = false;
+    api.startModelLookup.mockResolvedValue(job("j10", { save: true, files: [] }));
+    api.getModelLookup.mockImplementation(async () => (finished
+      ? { job: job("j10", { save: true, files: [] }, "succeeded"), result: { found: [] } }
+      : { job: job("j10", { save: true, files: [] }), result: null }));
+    await open();
+    const fill = () => screen.getByRole("button", { name: "modelFillPreviews" }) as HTMLButtonElement;
+    fireEvent.click(fill());
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "modelFillPreviewsStart" }));
+    await waitFor(() => expect(fill().getAttribute("aria-busy")).toBe("true"));
+    expect(fill().querySelector("svg.animate-mosael-spin")).not.toBeNull();
+    await waitFor(() => expect(api.getModelLookup).toHaveBeenCalledWith("i1", "j10"), { timeout: 3000 });
+    expect(fill().getAttribute("aria-busy"), "任务还在跑:接着转").toBe("true");
+    finished = true;
+    await waitFor(() => expect(fill().getAttribute("aria-busy")).toBeNull(), { timeout: 4000 });
+    expect(fill().disabled).toBe(false);
+  });
+
+  it("「存为预览图」:存的时候那颗按钮转圈;存好了它和「来自 Civitai」当场撤掉,不等重列回来", async () => {
+    let saved: (value: unknown) => void = () => undefined;
+    api.saveModelPreview.mockReturnValue(new Promise((resolve) => { saved = resolve; }));
+    api.getModelLibrary.mockResolvedValueOnce(library([FROM_CIVITAI])).mockImplementation(() => new Promise(() => undefined));
+    await open();
+    fireEvent.click(within(card("from-civitai.safetensors")).getByRole("button", { name: "from-civitai.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    const media = () => document.querySelector<HTMLElement>("[data-library-detail-pane='media']")!;
+    fireEvent.click(within(media()).getByRole("button", { name: "modelSavePreview" }));
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "modelSavePreview" }));
+    await waitFor(() => expect(within(media()).getByRole("button", { name: "modelSavePreview", hidden: true })
+      .getAttribute("aria-busy")).toBe("true"));
+    await act(async () => saved({ folder: "loras", name: "from-civitai.safetensors", saved: "loras/from-civitai.png" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(within(media()).queryByRole("button", { name: "modelSavePreview" }), "存好了:没有可存的了").toBeNull();
+    expect(media().querySelector("[data-preview-origin='civitai']"), "预览图已经是那台服务器上的").toBeNull();
+    expect(api.getModelLibrary, "重列还在后台跑(这里永远回不来)").toHaveBeenCalledTimes(2);
+  });
+
   it("详情:原链接点开是原站那一页,下面说怎么知道的;没有的说没有,「在 Civitai 上找」起一个任务、找的时候点不了", async () => {
     api.startModelLookup.mockResolvedValue(job("j1", { files: [{ folder: "loras", name: "on-server.safetensors" }] }));
     api.getModelLookup.mockResolvedValue({ job: job("j1", { files: [{ folder: "loras", name: "on-server.safetensors" }] }), result: null });
@@ -470,6 +509,53 @@ describe("Civitai 的示例图、原链接", () => {
       workspace_id: "w1", files: [{ folder: "loras", name: "on-server.safetensors" }], refresh: true, pick: "safest",
     }));
     await waitFor(() => expect((within(screen.getByText("modelSourceRow").closest("div")!).getByRole("button", { name: /modelLookup/ }) as HTMLButtonElement).disabled).toBe(true));
+  });
+
+  it("「在 Civitai 上找」:点下去就转圈(不只是变灰),一直转到任务做完 —— 不是发起任务的那个请求一回来就停", async () => {
+    //: 维护者:点了之后没有 loading,只是 disable 了。那一趟要那台机器把整个文件读一遍,好一阵什么都看不出来。
+    const files = [{ folder: "loras", name: "on-server.safetensors" }];
+    let created: (value: unknown) => void = () => undefined;
+    api.startModelLookup.mockReturnValue(new Promise((resolve) => { created = resolve; }));
+    let finished = false;
+    api.getModelLookup.mockImplementation(async () => (finished
+      ? { job: job("j7", { files }, "succeeded"), result: { found: [] } }
+      : { job: job("j7", { files }), result: null }));
+    await open();
+    fireEvent.click(within(card("on-server.safetensors")).getByRole("button", { name: "on-server.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    const find = () => within(screen.getByText("modelSourceRow").closest("div")!).getByRole("button", { name: /modelLookup/ }) as HTMLButtonElement;
+    expect(find().getAttribute("aria-busy")).toBeNull();
+    fireEvent.click(find());
+
+    await waitFor(() => expect(find().getAttribute("aria-busy"), "发起任务的请求还没回来:已经在转").toBe("true"));
+    expect(find().disabled).toBe(true);
+    expect(find().querySelector("svg.animate-mosael-spin"), "图标换成转圈").not.toBeNull();
+    expect(await readHint(find()), "说明里照旧写为什么点不了").toContain("modelLookupRunning");
+
+    await act(async () => created(job("j7", { files })));
+    await waitFor(() => expect(api.getModelLookup).toHaveBeenCalledWith("i1", "j7"), { timeout: 3000 });
+    expect(find().getAttribute("aria-busy"), "任务还在跑:接着转").toBe("true");
+
+    finished = true;
+    await waitFor(() => expect(find().getAttribute("aria-busy"), "任务做完:不转了").toBeNull(), { timeout: 4000 });
+    expect(find().disabled, "做完能再找一次").toBe(false);
+    expect(find().querySelector("svg.animate-mosael-spin")).toBeNull();
+  });
+
+  it("右键菜单里找:菜单关上;正在找时再打开,这一行点不了、写着进度在任务中心、图标在转", async () => {
+    const files = [{ folder: "loras", name: "on-server.safetensors" }];
+    api.startModelLookup.mockResolvedValue(job("j8", { files }));
+    api.getModelLookup.mockResolvedValue({ job: job("j8", { files }), result: null });
+    await open();
+    const opener = () => within(card("on-server.safetensors")).getByRole("button", { name: "on-server.safetensors" });
+    fireEvent.contextMenu(opener(), { clientX: 10, clientY: 10 });
+    fireEvent.click(entry("lookup")!);
+    await waitFor(() => expect(api.startModelLookup).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    fireEvent.contextMenu(opener(), { clientX: 10, clientY: 10 });
+    await waitFor(() => expect(entry("lookup")!.getAttribute("aria-disabled")).toBe("true"));
+    expect(entry("lookup")!.textContent).toContain("modelLookupRunning");
+    expect(entry("lookup")!.querySelector("svg.animate-mosael-spin")).not.toBeNull();
   });
 
   it("「在 Civitai 上找」做完:原链接和 Civitai 那张示例图当场就有,不等整份重列", async () => {

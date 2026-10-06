@@ -6,6 +6,7 @@ import {
   FolderTree,
   ImageDown,
   ImageUp,
+  Loader2,
   PanelRightOpen,
   RotateCcw,
   SearchCheck,
@@ -100,8 +101,11 @@ export function modelMenuGroups(model: ModelFile, actions: ModelActions, t: Retu
         ? [{ kind: "item" as const, key: "source", label: t("modelMenuOpenSource"), icon: <ExternalLink />,
              description: model.source.page.replace(/^https?:\/\//, ""), onSelect: () => actions.openSource(model) }]
         : []),
-      // 有预览图的(那台服务器上的、别处的):去 Civitai 上找出处、NSFW 标记;没有的:找来一张示例图当预览图
-      { kind: "item", key: "lookup", icon: model.has_preview ? <SearchCheck /> : <ImageDown />,
+      // 有预览图的(那台服务器上的、别处的):去 Civitai 上找出处、NSFW 标记;没有的:找来一张示例图当预览图。
+      // 点了菜单就关上,进度在任务中心;正在找时再打开,这一行点不了、图标在转(和剪辑素材池右键的「分离人声与背景音」一样)
+      { kind: "item", key: "lookup",
+        icon: actions.lookupRunning(model) ? <Loader2 className="animate-mosael-spin" />
+          : model.has_preview ? <SearchCheck /> : <ImageDown />,
         label: t(model.has_preview ? "modelLookup" : "modelLookupPreview"),
         disabledReason: actions.lookupUnavailable(model), onSelect: () => actions.lookUp(model) },
     ],
