@@ -37,7 +37,7 @@
   "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
   "name": { "zh": "文本工具", "en": "Text Toolkit" },   // 给人看的文字可按语言写,见「多语言」
   "version": "1.0.0",
-  "manifest_version": 7,
+  "manifest_version": 8,
 
   "runtime": { "kind": "process", "entry": "main.py" },
 
@@ -247,7 +247,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   "id": "com.example.thing",
   "name": "示例服务",
   "version": "1.0.0",
-  "manifest_version": 7,
+  "manifest_version": 8,
 
   // 本地进程:spawn 一个子进程
   "runtime": { "kind": "mcp", "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
@@ -960,7 +960,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;只能用字母、数字和 `._-`,以字母或数字开头(它就是插件目录名);`name` 可写成按语言分的对象;`version` 按语义化版本写(`1.2.0`、`1.3.0-beta.1`):市场按它比先后决定「有新版」,写不成语义化版本的只能按「不相等」判 |
 | `summary` | 可选。一句话简介,纯文字,可按语言分,每种语言最长 140 字;市场卡片、详情页头、安装确认先摆它(见「一句话简介」) |
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
-| `manifest_version` | 当前是 `7`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升;装包时先升再校验 |
+| `manifest_version` | 当前是 `8`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升;装包时先升再校验 |
 | `homepage` | **你的文档站**。没写 `docs` 时,界面在插件详情页、市场条目、安装确认三处的「文档」指向它;写了 `docs` 就列在详情「关于」的信息里。只认 `http(s)` |
 | `docs` | 在 Mosael 里怎么用的文档,可按语言分;有它时「文档」指向它 |
 | `author` | `{name, url}`,`name` 可按语言分;显示在名字旁边,`url` 可点 |
@@ -974,6 +974,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `permissions` | 自由字符串,逐项授权 |
 | `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation` / `tools`(见「声明『我能替宿主做成什么』」「运行时报出的工具」) |
 | `toolsets` | 给别的智能体看的高层描述;第一条的 `description` 是市场里的长介绍(版本 7 之前叫 `skills`) |
+| `services` | 清单版本 8:这个插件能让宿主在本机起停的常驻服务,每条 `{key, title, tool}`(见「本机服务」) |
 | 包里的 `skills/` 目录 | 不是清单字段:插件带的技能(SKILL.md 文件夹),装包时校验,见「带技能」 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
@@ -1485,6 +1486,46 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 
 一次调用照样留一条调用记录(插件页看得到),只是记录里不留那几个一次性的暂存路径。
 
+## 本机服务:`services`
+
+有的插件背后是一个**要一直开着**的程序(ComfyUI):插件工具一次调用一个子进程、跑完就退,扛不住它。清单版本 8 起,插件可以
+声明「我有一种本机服务」,由**宿主**替它起停、看健康、收日志,插件只回答几个问题(ADR 0041):
+
+```jsonc
+"services": [
+  { "key": "comfyui", "title": "ComfyUI", "tool": "comfyui_generation" }
+]
+```
+
+- `key`:小写字母开头,只用小写字母、数字、`_`、`-`,最长 40;
+- `title`:给人看的名字,可以按语言分(「本机 ComfyUI」「正在启动本机 ComfyUI」);
+- `tool`:回答下面那几个操作的工具,必须是清单里声明过的(和能力一样,一种服务只归一个工具);
+- 只有本地脚本形态的插件能声明;声明了就得有一格文本配置叫 `server_url` —— 宿主把本机服务的地址写进去,插件、工作台、
+  模型库读的还是那一个地址,一行都不用改。
+
+连接页上多一块「本机服务」:**在哪跑** —— 连一台服务器(和以前一样,只连)/ 用我自己装的(选一个目录,由 Mosael 起停)。
+选了目录,宿主从 8189 往上挑一个空端口,写进 `server_url`,以后一直用它。
+
+宿主经 `tool` 按 `op` 问(**只描述、不起进程**;不需要服务器已经在跑,也不留调用记录):
+
+| `op` | 输入 | 交回 |
+| --- | --- | --- |
+| `service_detect` | `directory`、可选 `python` | `ok`(认出来、能起)、`facts: [{label, value}]`、`problems: [{level: "error"\|"warning", text}]`、可选 `add_nodes: {title, description}` —— `label` / `text` / `title` / `description` 可以按语言分(`{"zh": …, "en": …}`)。会试跑那个目录里的代码,所以宿主先问过人 |
+| `service_launch` | `directory`、`python`、`port`、`listen_lan`、`extra_args` | `argv`、`env`(插件那一半;宿主再加 HuggingFace 镜像和这个连接的出站代理,`MOSAEL_*` 和代理变量插件盖不掉)、`cwd`、`health_path`(回 2xx 就算就绪)、`ready_timeout`(秒,5–1800,缺省 180) |
+| `service_add_nodes` | `directory`、`python` | `installed`、`path`、`message`;宿主只在人点了「补装」并确认之后才问 |
+| `service_discover` | — | `servers: [{url, label}]`:本机已经在跑的(只收本机地址);插件页据此提示「本机发现一个,要连上吗」,建的是「连一台服务器」那一种 |
+| `service_readdress` | `from`、`to` | 端口改了:把按旧地址存的本地数据搬到新地址名下。做不到只是少了缓存 |
+
+宿主那一半(插件不用管):起的时候自成一组、stdout / stderr 写进 `logs/service-<连接>.log`(界面上能看最近 2000 行);每 500 ms
+问一次健康检查;运行中崩了 1 秒起翻倍重起,5 分钟内最多 3 次,再崩停在「起不来」并摆出最后 40 行日志;停是先请整组退、
+10 秒后强杀;**用到时起**(插件工具、模型库、生成要用它时停着就先起,任务里报一句「正在启动本机 …」),退出 Mosael 时停,
+「保持运行」的跟着 Mosael 一起起;后端没来得及停的(被强杀、断电),下次启动时 pid 在、命令行一样、健康检查通过就接回来。
+同一个目录只起一份。
+
+插件进程里的 `MOSAEL_LOCAL_SERVICE`(值是服务的 `key`)说「这个连接的服务器归宿主起停」:**不要自己去重启它** ——
+要重启时交回 `{"host_restart": true}`,由宿主停了再起(ComfyUI 插件装完节点包的「重启」就是这么做的;它要是自己经
+Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为它崩了)。
+
 ## 接口
 
 | | |
@@ -1501,6 +1542,10 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `GET /api/plugins/instances/{id}/models` | 替宿主做生成的连接**提供的模型**(缓存的那一份):名字、种类、模式、收什么、参数 |
 | `GET /api/plugins/tools` | 所有可用连接**已开放**的工具 |
 | `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
+| `GET`/`PUT`/`DELETE` `/api/plugins/instances/{id}/local-service` | 本机服务的配置与状态(见「本机服务」);建、改、删要部署管理员,换目录要带 `confirm_run_code` |
+| `POST /api/plugins/instances/{id}/local-service/{detect,start,stop,restart,ensure,add-nodes}` | 认目录、起停、「用它之前请宿主起好」(等它就绪再回来)、补装;`ensure` 之外都要部署管理员 |
+| `GET /api/plugins/instances/{id}/local-service/logs` | 最近的日志和完整日志在哪个文件 |
+| `GET /api/plugins/{包id}/local-services/discover` | 本机已经在跑的(部署管理员) |
 
 智能体、工作流、手动试跑走的是**同一条**执行路径:权限校验、凭据注入、调用留痕都在那里。
 
