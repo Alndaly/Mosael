@@ -29,6 +29,9 @@ vi.mock("@/api/client", () => ({
   getModelLibrary: vi.fn().mockResolvedValue({ folders: [], models: [], missing: [], download: { route: "none", note: "" }, downloads: [] }),
   getLocalService: vi.fn().mockResolvedValue(null),
   discoverLocalServices: vi.fn().mockResolvedValue({ servers: [] }),
+  //: 「让 Mosael 装」去看安装计划:这里不关心计划长什么样,一直等着
+  getLocalServicePlan: vi.fn(() => new Promise(() => {})),
+  isCustomServer: vi.fn(() => false),
 }));
 //: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
 const imagePreview = vi.hoisted(() => vi.fn());
@@ -251,6 +254,47 @@ describe("本机服务的连接(ADR 0041)", () => {
     expect(within(row).getByText("http://127.0.0.1:8189")).toBeTruthy();
     expect(within(row).queryByRole("textbox"), "地址跟着端口走,手改了就对不上").toBeNull();
     expect(screen.getByRole("radiogroup", { name: "localServiceWhere" })).toBeTruthy();
+  });
+
+  it("服务器地址那一格只在「连一台服务器」时有;本机的两种一选上(还没确认也一样)就换成卡片里只读的地址", async () => {
+    vi.mocked(getLocalService).mockResolvedValue(null);
+    const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
+    wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://192.168.3.20:8188" } })}
+                         workspaceId="w1" open onOpenChange={vi.fn()} />);
+    const where = await screen.findByRole("radiogroup", { name: "localServiceWhere" });
+    const addressRows = () => [...document.querySelectorAll<HTMLElement>("[data-connection-section='config:server_url']")];
+    const editable = () => within(addressRows()[0]).queryByRole("textbox") as HTMLInputElement | null;
+
+    expect(addressRows()).toHaveLength(1);
+    expect(editable()?.value, "连一台服务器:照常能改,是这个连接现在的地址").toBe("http://192.168.3.20:8188");
+    for (const mode of ["localServiceModeDirectory", "localServiceModeManaged"]) {
+      fireEvent.click(within(where).getByRole("radio", { name: mode }));
+      expect(addressRows(), mode).toHaveLength(1);
+      expect(editable(), `${mode}:还没确认,那一格就不该能填(本机默认是 8188 那句提示会让人填错)`).toBeNull();
+      expect(screen.queryByDisplayValue("http://192.168.3.20:8188"), mode).toBeNull();
+      expect(within(addressRows()[0]).getByText("localServiceAddressPending"), "说端口确认后由 Mosael 分").toBeTruthy();
+    }
+    fireEvent.click(within(where).getByRole("radio", { name: "localServiceModeServer" }));
+    expect(editable()?.value, "换回连一台服务器:那一格回来,还是现在的值").toBe("http://192.168.3.20:8188");
+  });
+
+  it("让 Mosael 装的那一份:地址只读,是它写进去的那个", async () => {
+    vi.mocked(getLocalService).mockResolvedValue({
+      service: "comfyui", title: "ComfyUI", mode: "managed", directory: "/data/local-services/c1/ComfyUI", python: "", port: 8190,
+      url: "http://127.0.0.1:8190", listen_lan: false, keep_running: false, extra_args: [], state: "running", pid: 42,
+      started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
+      installed: true, python_minor: "3.13", base_python_minor: "3.13", needs_rebuild: false, install: null,
+    });
+    const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
+    wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://127.0.0.1:8190" } })}
+                         workspaceId="w1" open onOpenChange={vi.fn()} />);
+    await screen.findByText("localServiceAddressManaged");
+    const rows = document.querySelectorAll<HTMLElement>("[data-connection-section='config:server_url']");
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(within(row).getByText("http://127.0.0.1:8190")).toBeTruthy();
+    expect(within(row).queryByRole("textbox")).toBeNull();
+    expect(within(row).getByText("localServiceAddressManaged"), "改端口在「高级」里").toBeTruthy();
   });
 
   it("没声明本机服务的插件:没有这一块,也不去问", () => {

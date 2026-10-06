@@ -677,11 +677,13 @@ export function ConnectionCard({
     },
   });
 
-  //: 声明了本机服务的插件(ADR 0041):连接页多一块「本机服务」;用着它时服务器地址由宿主填,这一格只读
+  //: 声明了本机服务的插件(ADR 0041):连接页多一块「本机服务」。服务器地址那一格(SERVICE_ADDRESS_FIELD)归它摆 ——
+  //: 「连一台服务器」时就是这一格;本机的两种一选上就换成卡片里只读的地址(端口由 Mosael 分,在「高级」里改)
   const services = pkg.services ?? [];
   const localService = useLocalService(instance.id, services.length > 0);
-  const addressManaged = Boolean(localService.data);
   useRefreshWhenRunning(localService.data?.state);
+  const configFields = pkg.config_fields ?? [];
+  const serviceAddressField = services.length > 0 ? configFields.find((field) => field.key === SERVICE_ADDRESS_FIELD) : undefined;
   const exposedCount = (instance.tools ?? []).filter((tool) => tool.exposed).length;
   const tools = instance.tools ?? [];
   //: 替宿主做生成的插件(ComfyUI 这类)把模型交给选择器,而不是把工具交给智能体 —— 它的
@@ -744,6 +746,29 @@ export function ConnectionCard({
     // 只在展开的那一刻(或被要求定位时)跑:展开着时改别的(刷新、保存)不该把焦点拽回去
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, focusRequest]);
+
+  //: 清单声明的一格配置(一行):一段代码的只放摘要和「编辑」,别的就地改、离开时存。
+  const configRow = (field: (typeof configFields)[number]) => (
+    <div key={field.key} data-connection-section={`config:${field.key}`}>
+      <SettingsRow label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
+        {isCodeField(field) ? (
+          /* 一段代码塞不进这一栏:这里只放摘要和「编辑」,编辑在大弹窗里(见 CodeConfigField)。 */
+          <CodeConfigControl
+            field={field}
+            value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
+            onSave={(value) => patch.mutateAsync({ config: { [field.key]: value } })}
+          />
+        ) : (
+          <FieldInput
+            field={field}
+            value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
+            commit="blur"
+            onChange={(value) => patch.mutate({ config: { [field.key]: value } })}
+          />
+        )}
+      </SettingsRow>
+    </div>
+  );
 
   return (
     <section data-connection={instance.id} className="grid min-w-0 rounded-xl border border-border bg-panel">
@@ -861,35 +886,16 @@ export function ConnectionCard({
         />
       </SettingsRow>
 
-      {services.length > 0 && <ConnectionLocalService pkg={pkg} instance={instance} workspaceId={workspaceId} />}
+      {services.length > 0 && (
+        <ConnectionLocalService
+          pkg={pkg}
+          instance={instance}
+          workspaceId={workspaceId}
+          serverAddress={serviceAddressField && configRow(serviceAddressField)}
+        />
+      )}
 
-      {(pkg.config_fields ?? []).map((field) => (
-        <div key={field.key} data-connection-section={`config:${field.key}`}>
-        <SettingsRow label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
-          {addressManaged && field.key === SERVICE_ADDRESS_FIELD ? (
-            /* 本机服务的地址由宿主选端口、写进来(插件、工作台、模型库读的都是它):这里只摆着,改端口在本机服务的「高级」里 */
-            <span className="grid justify-items-end gap-1 text-right">
-              <code className="timecode text-ui-sm">{String((instance.config as Record<string, unknown>)[field.key] ?? "")}</code>
-              <small className="text-ui-xs text-muted-foreground">{t("localServiceAddressManaged")}</small>
-            </span>
-          ) : isCodeField(field) ? (
-            /* 一段代码塞不进这一栏:这里只放摘要和「编辑」,编辑在大弹窗里(见 CodeConfigField)。 */
-            <CodeConfigControl
-              field={field}
-              value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
-              onSave={(value) => patch.mutateAsync({ config: { [field.key]: value } })}
-            />
-          ) : (
-            <FieldInput
-              field={field}
-              value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
-              commit="blur"
-              onChange={(value) => patch.mutate({ config: { [field.key]: value } })}
-            />
-          )}
-        </SettingsRow>
-        </div>
-      ))}
+      {configFields.filter((field) => field !== serviceAddressField).map(configRow)}
 
       {(pkg.credential_fields ?? []).length > 0 && (
         <div data-connection-section="credentials" className="grid [&>*+*]:border-t [&>*+*]:border-divider">

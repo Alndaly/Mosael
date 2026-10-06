@@ -140,10 +140,16 @@ export function ConnectionLocalService({
   pkg,
   instance,
   workspaceId,
+  serverAddress,
 }: {
   pkg: PluginPackage;
   instance: PluginInstance;
   workspaceId: string;
+  /**
+   * 「连一台服务器」时的那一格服务器地址(清单里 SERVICE_ADDRESS_FIELD 那一格,连接页照常画好交进来)。本机的两种一选上
+   * 就不摆它 —— 地址由 Mosael 分端口、写进去,这里换成只读的那一行。
+   */
+  serverAddress?: React.ReactNode;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -177,6 +183,8 @@ export function ConnectionLocalService({
   const managedPending = service?.mode === "managed" && (!service.installed || installing);
   const showManaged = mode === "managed" && (choosing === "managed" || managedPending || rebuilding);
   const showDirectory = mode === "directory" && (!service || choosing === "directory");
+  //: 存好了、不在换:状态、起停、「高级」里的端口
+  const showRows = Boolean(service) && !choosing && !showManaged;
 
   const choose = (next: Where) => {
     if (next === mode) return;
@@ -207,6 +215,7 @@ export function ConnectionLocalService({
         onCancel={() => setConfirmServer(false)}
         onConfirm={() => remove.mutate()}
       />
+      {mode === "server" ? serverAddress : <ServiceAddress service={service} portBelow={showRows} />}
       {showDirectory && (
         <DirectorySetup
           instanceId={instance.id}
@@ -230,7 +239,7 @@ export function ConnectionLocalService({
           }}
         />
       )}
-      {service && !choosing && !showManaged && (
+      {service && showRows && (
         <>
           {service.mode === "managed" && (
             <ManagedNotices instance={instance} workspaceId={workspaceId} service={service} onRebuild={() => setRebuilding(true)} />
@@ -238,6 +247,27 @@ export function ConnectionLocalService({
           <ServiceRows instanceId={instance.id} service={service} onChangeFolder={() => setChoosing("directory")} />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * 本机的两种「在哪跑」时,服务器地址在这里只读:还没确认(没建过这一行)时说端口确认后由 Mosael 分;建好了就是它写进连接的那个
+ * 地址(在两种本机方式之间换,端口不变)。改端口在下面「高级」里(要先停,改完插件把按旧地址存的数据搬过去)。
+ *
+ * 外面那一层带着 `config:<SERVICE_ADDRESS_FIELD>` 的标记:模型库读不出来时「去检查连接设置」定位到的就是这一行。
+ */
+function ServiceAddress({ service, portBelow }: { service: LocalService | null; portBelow: boolean }) {
+  const t = useI18n();
+  return (
+    <div data-connection-section={`config:${SERVICE_ADDRESS_FIELD}`}>
+      <SettingsRow label={t("localServiceAddress")} description={service && portBelow ? t("localServiceAddressManaged") : undefined}>
+        {service ? (
+          <code className="timecode text-ui-sm">{service.url}</code>
+        ) : (
+          <span className="text-ui-sm text-muted-foreground">{t("localServiceAddressPending")}</span>
+        )}
+      </SettingsRow>
     </div>
   );
 }
