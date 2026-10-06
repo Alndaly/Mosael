@@ -54,8 +54,10 @@ _LAST_FRAME_INPUTS = frozenset({"end_image", "last_frame", "end_frame", "last_fr
 #: 输出节点 → 这张图产出什么。CreateVideo **不是**输出节点:它把帧和声音合成一段视频交给下游(SaveVideo 才存),
 #: 算进来的话一张「CreateVideo → SaveVideo」的图就成了两个视频产出。
 _VIDEO_OUTPUT_TYPES = frozenset({"VHS_VideoCombine", "SaveVideo", "SaveWEBM", "SaveAnimatedWEBP", "SaveAnimatedPNG"})
-_AUDIO_OUTPUT_TYPES = frozenset({"SaveAudio", "SaveAudioMP3", "SaveAudioOpus", "PreviewAudio"})
-_IMAGE_OUTPUT_TYPES = frozenset({"SaveImage", "PreviewImage", "Image Save", "SaveImageWebsocket"})
+#: 核心节点里带「Advanced」的两个(ComfyUI 0.39 的 comfy_extras:选格式的保存节点)也是成品 —— 维护者的
+#: 「minimax+music3+文生音乐」只有 SaveAudioAdvanced 一个输出,此前被当成交不出音频的图像模型。
+_AUDIO_OUTPUT_TYPES = frozenset({"SaveAudio", "SaveAudioMP3", "SaveAudioOpus", "SaveAudioAdvanced", "PreviewAudio"})
+_IMAGE_OUTPUT_TYPES = frozenset({"SaveImage", "SaveImageAdvanced", "PreviewImage", "Image Save", "SaveImageWebsocket"})
 #: 把文字显示出来的输出节点(描述图片、反推提示词这一类工作流的产出就是一段字)。
 _TEXT_OUTPUT_TYPES = frozenset({"ShowText|pysssss", "PreviewAny", "PreviewText", "Display Any (rgthree)",
                                 "ShowText", "easy showAnything"})

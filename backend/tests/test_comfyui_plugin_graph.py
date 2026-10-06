@@ -667,6 +667,24 @@ def test_视频输入是待编辑的视频_音频是驱动音频(graph) -> None:
     assert {"role": "source_video", "max": 1, "required": True} in model["inputs"]
 
 
+def test_核心的_Advanced_保存节点也是成品_文生音乐是音频模型(graph) -> None:
+    """维护者真实的「minimax+music3+文生音乐」:唯一的输出是 ComfyUI 0.39 核心的 SaveAudioAdvanced(选格式的保存节点)。
+    此前它不在音频输出里,整张图被兜成图像模型、输出是 any。SaveImageAdvanced 同理。"""
+    music = {
+        "10": {"class_type": "EmptyMiniMaxMusic3LatentAudio", "inputs": {"seconds": 120.0, "batch_size": 1}},
+        "56": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["10", 0], "filename_prefix": "audio/ComfyUI",
+                                                             "format": "flac"}},
+    }
+    assert graph.kind_of(music) == "audio"
+    assert [(one["node"], one["media"]) for one in graph.output_nodes(music, OBJECT_INFO)] == [("56", "audio")]
+    still = {
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
+        "9": {"class_type": "SaveImageAdvanced", "inputs": {"images": ["5", 0], "filename_prefix": "x", "format": "webp"}},
+    }
+    assert graph.kind_of(still) == "image"
+    assert [(one["node"], one["media"]) for one in graph.output_nodes(still, OBJECT_INFO)] == [("9", "image")]
+
+
 def test_输出节点认object_info的output_node(graph) -> None:
     api = {
         "4": {"class_type": "SaveImage", "inputs": {}},
