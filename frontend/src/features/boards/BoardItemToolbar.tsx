@@ -6,7 +6,7 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { NodeToolbar, Position, type Node } from "@xyflow/react";
-import { BookOpen, BookPlus, ChevronDown, Copy, Download, NotebookPen, ExternalLink, Group, Maximize2, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, BookPlus, ChevronDown, Copy, FileOutput, NotebookPen, ExternalLink, Group, Maximize2, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, type BoardItem, type BoardProducer, type BoardProducerInfo } from "@/api/client";
 import { noteKeys } from "@/api/queryKeys";
@@ -418,7 +418,7 @@ export function ItemToolbar({
           {onPanel && canOpenOnDemand(item) && (
             <ToolbarIcon
               name="sequence-export"
-              icon={Download}
+              icon={FileOutput}
               label={t("boardSequenceExport")}
               hint={t("boardSequenceExportHint")}
               pressed={open(SEQUENCE_EXPORT_PANEL)}

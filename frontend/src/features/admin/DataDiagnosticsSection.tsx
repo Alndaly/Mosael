@@ -1,5 +1,5 @@
 import React from "react";
-import { Archive, FileDown, Loader2, RotateCcw } from "lucide-react";
+import { Archive, FileOutput, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
@@ -58,7 +58,7 @@ export function DataDiagnosticsSection() {
                 }
               }}
             >
-              {exporting ? <Loader2 size={13} className="animate-mosael-spin" /> : <FileDown size={13} />}
+              {exporting ? <Loader2 size={13} className="animate-mosael-spin" /> : <FileOutput size={13} />}
               {t("dataDiagnosticsExport")}
             </Button>
           ) : (

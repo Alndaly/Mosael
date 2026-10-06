@@ -5,8 +5,8 @@ import {
   CircleAlert,
   ClipboardCopy,
   Copy,
-  Download,
-  FileUp,
+  FileOutput,
+  Import,
   Folder,
   FolderInput,
   FolderOpen,
@@ -31,7 +31,6 @@ import {
   Trash2,
   TriangleAlert,
   Unplug,
-  Upload,
   Workflow,
   X,
 } from "lucide-react";
@@ -317,7 +316,7 @@ export function WorkflowLibraryDialog({
   const importButton = (
     <Hint label={t("workflowImportDesc")}>
       <Button variant="outline" onClick={() => setImporting({})}>
-        <Upload size={13} />
+        <Import size={13} />
         {t("workflowImport")}
       </Button>
     </Hint>
@@ -477,7 +476,7 @@ export function WorkflowLibraryDialog({
     { group: "file", label: t("workflowRename"), icon: <PencilLine />,
       onSelect: () => setAction({ kind: "rename", path: flow.path, initial: flow.path }) },
     { group: "file", label: t("workflowMove"), icon: <FolderInput />, onSelect: () => setMoving({ flow }) },
-    { group: "file", label: t("workflowExport"), icon: <Download />, description: t("workflowExportDesc"), onSelect: () => exportFlow(flow) },
+    { group: "file", label: t("workflowExport"), icon: <FileOutput />, description: t("workflowExportDesc"), onSelect: () => exportFlow(flow) },
     { group: "path", label: t("workflowCopyPath"), icon: <ClipboardCopy />, onSelect: () => copyPath(flow) },
     { group: "delete", label: t("workflowDelete"), icon: <Trash2 />, destructive: true, onSelect: () => setAction({ kind: "delete", flow }) },
   ];
@@ -671,7 +670,7 @@ export function WorkflowLibraryDialog({
               overlay: drop.active ? (
                 <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
                   <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
-                    <FileUp size={20} />
+                    <Import size={20} />
                     {t("workflowImportDropOverlay")}
                   </span>
                 </div>

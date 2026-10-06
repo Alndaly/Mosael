@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { FileOutput } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ export function SceneExportMenu({
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" disabled={disabled}>
-          <Download size={15} />
+          <FileOutput size={15} />
           {t("sceneExportFiles")}
         </Button>
       </PopoverTrigger>

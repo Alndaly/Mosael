@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, FileUp, ListChecks, Pencil, Play, Plus, Store, Trash2, Workflow as WorkflowIcon, X } from "lucide-react";
+import { Check, FileOutput, Import, ListChecks, Pencil, Play, Plus, Store, Trash2, Workflow as WorkflowIcon, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -181,7 +181,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const cardActions = (workflow: Workflow): MenuAction[] => [
     { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow) },
     { label: t("rename"), icon: <Pencil />, onSelect: () => setMenuRenaming(workflow) },
-    { label: t("wfExport"), icon: <Download />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
+    { label: t("wfExport"), icon: <FileOutput />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
     { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setMenuDeleting(workflow) },
   ];
 
@@ -283,7 +283,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 <Plus size={15} /> {t("wfCreate")}
               </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <FileUp size={15} /> {t("wfImport")}
+                <Import size={15} /> {t("wfImport")}
               </Button>
               <input
                 ref={importInputRef}
@@ -371,7 +371,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <FileUp size={13} /> {t("wfImport")}
+                <Import size={13} /> {t("wfImport")}
               </Button>
               <Button variant="outline" onClick={() => setCommunityOpen(true)}>
                 <Store size={13} /> {t("wfCommunity")}

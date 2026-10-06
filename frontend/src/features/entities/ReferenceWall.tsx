@@ -22,7 +22,7 @@ import {
   MoreHorizontal,
   Star,
   Trash2,
-  Upload,
+  Upload, Import,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -230,7 +230,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
           {busy && (
             <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
               <span className="flex items-center gap-2 text-ui-sm font-semibold text-primary">
-                {upload.isPending ? <Loader2 size={16} className="animate-mosael-spin" /> : <Upload size={16} />}
+                {upload.isPending ? <Loader2 size={16} className="animate-mosael-spin" /> : <Import size={16} />}
                 {t(upload.isPending ? "entityImporting" : "entityDropToImport")}
               </span>
             </div>

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2 } from "lucide-react";
+import { FileOutput, Loader2 } from "lucide-react";
 
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
 import { getJob } from "@/api/domains/jobs";
@@ -91,7 +91,7 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
         </span>
       )}
       <Button size="sm" disabled={busy} onClick={() => setConfigOpen(true)}>
-        {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <Download size={13} />}
+        {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <FileOutput size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
       <ModalShell
@@ -103,7 +103,7 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
           <>
             <span className="mr-auto text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
             <Button size="sm" loading={startExport.isPending} onClick={() => startExport.mutate({ ...params, ai_label: aiLabel })}>
-              <Download size={13} /> {t("exportStart")}
+              <FileOutput size={13} /> {t("exportStart")}
             </Button>
           </>
         }

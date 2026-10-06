@@ -5,6 +5,13 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### 「导入」「导出」的图标方向对上了
+
+- 导入用箭头指进来的图标(`Import` / `FileInput` / `FolderInput`),导出用箭头指出去的(`FileOutput`)。此前技能的「导入 .zip」
+  「导入文件夹」用的是往外的箭头,工作流、笔记、字幕、诊断包、3D 场景、剪辑和画板的「导出」用的是往里的下载箭头,一共 25 处。
+  「上传」「下载 / 保存到本地 / 安装」不变。新加一道棘轮(`design/importExportIcons.test.ts`):图标旁边那句话说「导入」「导出」时,
+  方向不对就报。
+
 ### ComfyUI 模型库:VOSR 2.0 超分不讲底模(ComfyUI 插件 1.15.1)
 
 - `vosr2` 目录(VOSR 2.0 超分:LightningDiT + 它专配的 Qwen-Image 2D VAE + DINOv2-L,一整套)标「不适用」,和放大模型一样。

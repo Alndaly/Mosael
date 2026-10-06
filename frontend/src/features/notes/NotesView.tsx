@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, FileCode, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, FileCode, Loader2, PenLine, X, Plus, Star, FileOutput, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -405,7 +405,7 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
       <IconButton unstyled className="note-icon" label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></IconButton>
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><IconButton unstyled className="note-icon" label={s.actions} aria-haspopup="menu"><MoreHorizontal size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>{/* 和笔记列表的右键菜单同一套条目(MenuItem / MenuItemBody)。 */}
       <MenuContent label={s.actions} align="end">
-        <MenuItem icon={<Download />} label={s.export} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }} />
+        <MenuItem icon={<FileOutput />} label={s.export} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }} />
         <MenuItem icon={<History />} label={s.history} onClick={() => { setMoreOpen(false); setHistoryFocus(null); setHistory(true); }} />
         <MenuItem icon={<Info />} label={s.source} onClick={() => { setMoreOpen(false); setProperties(!properties); }} />
         <MenuSeparator />

@@ -1,5 +1,5 @@
 import React from "react";
-import { FileUp, Info, TriangleAlert } from "lucide-react";
+import { Import, Info, TriangleAlert } from "lucide-react";
 
 import { inspectWorkflowImport, saveImportedWorkflow, type PluginInstance, type WorkflowImport } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -118,7 +118,7 @@ export function WorkflowImportDialog({
               overlay: drop.active ? (
                 <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
                   <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
-                    <FileUp size={20} />
+                    <Import size={20} />
                     {t("workflowImportDropOverlay")}
                   </span>
                 </div>
@@ -185,7 +185,7 @@ export function WorkflowImportDialog({
       ) : (
         <div className="grid gap-4">
           <div className="grid justify-items-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-8 text-center">
-            <FileUp size={22} aria-hidden className="text-muted-foreground" />
+            <Import size={22} aria-hidden className="text-muted-foreground" />
             <p className="m-0 text-ui-sm font-medium text-foreground">{t("workflowImportDrop")}</p>
             <p className="m-0 max-w-[460px] text-ui-xs leading-relaxed text-muted-foreground">{t("workflowImportDropHint")}</p>
             <Button variant="outline" size="sm" disabled={reading} onClick={() => fileRef.current?.click()}>

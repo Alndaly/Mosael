@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { FileDown, FileUp } from "lucide-react";
+import { FileOutput, FileInput } from "lucide-react";
 import { toast } from "sonner";
 
 import { exportSubtitleFile, type Sequence, type SubtitleFileFormat } from "@/api/client";
@@ -63,7 +63,7 @@ export function SubtitleFiles({
         <Hint label={t("subtitleFileImportHint")}>
           <PopoverTrigger asChild>
             <button type="button" className={PILL}>
-              <FileUp size={12} /> {t("subtitleFileImport")}
+              <FileInput size={12} /> {t("subtitleFileImport")}
             </button>
           </PopoverTrigger>
         </Hint>
@@ -104,7 +104,7 @@ export function SubtitleFiles({
             }}
           />
           <Button size="sm" loading={importing} onClick={() => fileInput.current?.click()}>
-            <FileUp size={13} /> {t("subtitleFileChoose")}
+            <FileInput size={13} /> {t("subtitleFileChoose")}
           </Button>
         </PopoverContent>
       </Popover>
@@ -112,7 +112,7 @@ export function SubtitleFiles({
         <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger asChild>
             <button type="button" className={PILL}>
-              <FileDown size={12} /> {t("subtitleFileExport")}
+              <FileOutput size={12} /> {t("subtitleFileExport")}
             </button>
           </PopoverTrigger>
           <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
@@ -161,7 +161,7 @@ export function SubtitleFiles({
               </label>
             )}
             <Button size="sm" loading={download.isPending} onClick={() => download.mutate()}>
-              <FileDown size={13} /> {t("subtitleFileExport")}
+              <FileOutput size={13} /> {t("subtitleFileExport")}
             </Button>
           </PopoverContent>
         </Popover>

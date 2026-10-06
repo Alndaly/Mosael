@@ -4,7 +4,7 @@ import {
   AlertTriangle,
   Bot,
   CircleCheck,
-  Download,
+  FileOutput,
   GitCommitVertical,
   History,
   ListChecks,
@@ -314,7 +314,7 @@ export function workflowEditorToolbar({
                 },
                 {
                   label: t("wfExport"),
-                  icon: <Download />,
+                  icon: <FileOutput />,
                   disabled: exportFile.isPending,
                   onSelect: () => exportFile.mutate(),
                 },

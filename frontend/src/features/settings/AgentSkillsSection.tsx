@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, Eye, FolderUp, Pencil, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { Copy, FileOutput, Eye, FolderInput, Pencil, Plus, Sparkles, Trash2, Import } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -109,10 +109,10 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
             <Button variant="outline" size="sm" loading={stage.isPending} onClick={() => zipInput.current?.click()}>
-              <Upload size={13} /> {t("agentSkillsImportZip")}
+              <Import size={13} /> {t("agentSkillsImportZip")}
             </Button>
             <Button variant="outline" size="sm" disabled={stage.isPending} onClick={() => folderInput.current?.click()}>
-              <FolderUp size={13} /> {t("agentSkillsImportFolder")}
+              <FolderInput size={13} /> {t("agentSkillsImportFolder")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setEditor({ kind: "create" })}>
               <Plus size={13} /> {t("agentSkillsNew")}
@@ -257,7 +257,7 @@ function SkillRow({
           {skill.editable ? <Pencil size={13} /> : <Eye size={13} />}
         </IconButton>
         <IconButton label={t("agentSkillsExport")} onClick={onExport}>
-          <Download size={13} />
+          <FileOutput size={13} />
         </IconButton>
         {!skill.editable && (
           <IconButton label={t("agentSkillsCopy")} onClick={onCopy}>

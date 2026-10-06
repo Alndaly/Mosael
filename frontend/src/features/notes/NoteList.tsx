@@ -3,7 +3,7 @@ import { noteSnippet } from "@/features/notes/noteSnippet";
 import {
   CheckSquare,
   Copy,
-  Download,
+  FileOutput,
   FileText,
   Pencil,
   RotateCcw,
@@ -247,7 +247,7 @@ export function NoteList({
             disabled={!targets.length || busy}
             onSelect={() => void run("export", targets)}
           >
-            <MenuItemBody icon={<Download />} label={s.export} />
+            <MenuItemBody icon={<FileOutput />} label={s.export} />
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
@@ -331,7 +331,7 @@ export function NoteList({
               disabledReason={!chosen.length && s.noneSelected}
               onClick={() => void run("export", chosen)}
             >
-              <Download />
+              <FileOutput />
             </IconButton>
             <Hint disabledReason={!chosen.length && s.noneSelected}>
               <Button
