@@ -738,14 +738,14 @@ _LABEL_PAD = 0.25
 def _ai_label_dialogue(item: AiLabelItem, w: int, h: int) -> str:
     """一块标识 → 一条 ASS Dialogue(Layer 1,压在字幕和花字上面)。
 
-    角标用 \\an9(右上角为锚点)贴在离右边、上边各 margin 的地方:锚的是**字**,底框还要往外多出
-    一圈 pad,所以锚点再往里收 pad —— 框的外沿正好落在 margin 上。"""
+    右上角那行用 \\an9(右上角为锚点)、片头那块用 \\an7(左上角为锚点),贴在离边各 margin 的地方:锚的是**字**,
+    底框还要往外多出一圈 pad,所以锚点再往里收 pad —— 框的外沿正好落在 margin 上。"""
     size = item.font_size * _ASS_FONTSIZE_SCALE
     pad = round(item.font_size * _LABEL_PAD)
     if item.placement == "top_right":
         anchor = f"\\an9\\pos({w - item.margin - pad:.1f},{item.margin + pad:.1f})"
     else:
-        anchor = f"\\an5\\pos({w / 2:.1f},{h / 2:.1f})"
+        anchor = f"\\an7\\pos({item.margin + pad:.1f},{item.margin + pad:.1f})"
     override = "{" + anchor + f"\\fs{size:g}\\bord{pad}\\shad0" + "}"
     return (f"Dialogue: 1,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
             f"Label,,0,0,0,,{override}{_ass_text(item.text)}")
@@ -757,10 +757,10 @@ def _escape_filter_path(path: Path) -> str:
 
 
 def _ai_label_position(label: AiLabelItem, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:
-    """标识 PNG(已带底框)左上角坐标:片头那块居中;角标的右边、上边各离画面边缘 margin。"""
+    """标识 PNG(已带底框)左上角坐标:右上角那行的右边、上边,片头那块的左边、上边,各离画面边缘 margin。"""
     if label.placement == "top_right":
         return int(round(w - label.margin - pw)), int(round(label.margin))
-    return (w - pw) // 2, (h - ph) // 2
+    return int(round(label.margin)), int(round(label.margin))
 
 
 def _subtitle_overlay_pos(style, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:

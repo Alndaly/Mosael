@@ -1,6 +1,6 @@
 """AI 生成内容的标识(ADR 0028 §5、《人工智能生成合成内容标识办法》):成片里用了 AI 生成 / 合成的素材时 ——
 
-- 显式:片头正中一块、整片右上角一行「AI 生成」,**默认开、允许关**;
+- 显式:片头左上角一块大字、整片右上角一行「AI 生成」,**默认开、允许关**;
 - 隐式:成片元数据里的 AIGC 字段,**总写**,不随显式开关变,而且 remux / 转码之后还在;
 - 一份 AI 素材都没有的成片一样都不加。
 
@@ -78,13 +78,37 @@ def test_数字人成片_片头和角上加标识_元数据写_AIGC() -> None:
     sequence_id = _sequence(video="talking")
     plan = _plan(sequence_id)
     labels = [(item.start, item.duration, item.text, item.placement) for item in plan.ai_labels]
-    assert labels == [(0.0, 3.0, "AI 生成", "center"), (0.0, 8.0, "AI 生成", "top_right")], "片头 3 秒一块,整片角上一行"
+    assert labels == [(0.0, 3.0, "AI 生成", "top_left"), (0.0, 8.0, "AI 生成", "top_right")], "片头 3 秒一块,整片角上一行"
     assert plan.text_overlays == (), "标识不是花字"
     aigc = json.loads(dict(plan.output.metadata)["comment"])["AIGC"]
     assert aigc["Label"] == "1" and aigc["ProduceID"].startswith(sequence_id)
     command = build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4"))
     assert "-metadata" in command
     assert "+faststart" in command and "+faststart+use_metadata_tags" not in command, "自定义键 remux 后会丢,只写标准键"
+
+
+@pytest.mark.parametrize(("width", "height"), [(1080, 1920), (1920, 1080), (480, 854)], ids=["竖屏", "横屏", "480p"])
+def test_片头那块标识不压人脸也不压字幕_贴在左上角(width: int, height: int) -> None:
+    """付费实测:数字人出镜的片头,标识大字在画面正中,整整三秒压在主播嘴上。人脸在画面中间、字幕在下方,
+    片头那块要落在两样都不挡的地方 —— 左上角,起始画面上照样显著。"""
+    from app.media.render_executor import _ai_label_dialogue, _ai_label_position
+    from app.media.render_plan import _ai_label_items
+
+    opening, corner = _ai_label_items("AI 生成", 8.0, width, height)
+    assert (opening.placement, corner.placement) == ("top_left", "top_right")
+    assert opening.font_size > corner.font_size, "片头那块仍是大字(显著)"
+    box_w, box_h = round(opening.font_size * 4.5), round(opening.font_size * 1.6)  # 「AI 生成」连底框的大致尺寸
+    x, y = _ai_label_position(opening, box_w, box_h, width, height)
+    assert (x, y) == (opening.margin, opening.margin)
+    face = (width * 0.3, height * 0.15, width * 0.7, height * 0.65)  # 出镜 / 口播时人脸的那一块
+    subtitles = (0, height * 0.75, width, height)  # 字幕默认在下方
+
+    def overlaps(a: tuple, b: tuple) -> bool:
+        return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+    box = (x, y, x + box_w, y + box_h)
+    assert not overlaps(box, face) and not overlaps(box, subtitles), (box, face)
+    assert "\\an7" in _ai_label_dialogue(opening, width, height), "ASS 那条路同一个位置"
 
 
 @pytest.mark.parametrize(("video", "voice"), [("i2v", None), ("plain", "tts")], ids=["图生视频", "AI配音"])

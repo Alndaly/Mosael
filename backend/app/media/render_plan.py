@@ -295,14 +295,18 @@ class AiLabelItem:
     (白字 + 黑描边),浏览器的描边是骑在字形轮廓上画的,小字号下黑边把白芯吃掉大半,压在深色画面上
     几乎看不见。字号、边距都是**输出像素**,按画幅短边算(_ai_label_items):换分辨率导出跟着缩放。
 
-    placement:center 是片头正中那一块;top_right 是整片右上角那一行 —— **按边距贴边**,标识的右边、
-    上边各离画面边缘 margin 像素,长短不同的文字(「AI 生成」/「AI-generated」)都不会被裁。"""
+    placement:top_left 是片头那一块大字,贴左上角;top_right 是整片右上角那一行。两块都**按边距贴边**:标识的
+    外沿离画面边缘 margin 像素,长短不同的文字(「AI 生成」/「AI-generated」)都不会被裁。
+
+    片头那块此前在画面**正中**:数字人出镜、口播的片头,人脸正好在中间,那块大字整整三秒压在主播嘴上(付费实测)。
+    挪到左上角:起始画面上照样显著(标识办法要的是「起始画面」加显著提示,没有要求居中),而人脸在中间、字幕在
+    下方,左上角两样都不挡。"""
 
     start: float
     duration: float
     text: str
     font_size: float
-    placement: str  # center | top_right
+    placement: str  # top_left | top_right
     margin: float = 0.0
 
 
@@ -614,14 +618,16 @@ AI_LABEL_MIN_SIZE = 16.0
 
 
 def _ai_label_items(text: str, duration: float, width: int, height: int) -> tuple[AiLabelItem, ...]:
-    """显式标识(ADR 0028 §5):片头正中一块大字,整片右上角一行小字。成片里有,预览里没有(预览不是要发布的东西)。"""
+    """显式标识(ADR 0028 §5):片头左上角一块大字,整片右上角一行小字。成片里有,预览里没有(预览不是要发布的东西)。"""
     short = min(width, height)
+    margin = round(short * AI_LABEL_CORNER_MARGIN)
     return (
         AiLabelItem(start=0.0, duration=round(min(AI_LABEL_OPENING_SECONDS, duration), 6), text=text,
-                    font_size=round(max(AI_LABEL_MIN_SIZE, short * AI_LABEL_OPENING_SIZE), 1), placement="center"),
+                    font_size=round(max(AI_LABEL_MIN_SIZE, short * AI_LABEL_OPENING_SIZE), 1), placement="top_left",
+                    margin=margin),
         AiLabelItem(start=0.0, duration=round(duration, 6), text=text,
                     font_size=round(max(AI_LABEL_MIN_SIZE, short * AI_LABEL_CORNER_SIZE), 1), placement="top_right",
-                    margin=round(short * AI_LABEL_CORNER_MARGIN)),
+                    margin=margin),
     )
 
 
