@@ -15,7 +15,8 @@ vi.mock("@/api/client", async (importOriginal) => ({
   ...apiMocks,
 }));
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  //: 花费那一句是个模板(「花费 {cost} · …」):留着 {cost} 才看得出填进去的是哪一句
+  useI18n: () => (key: string) => (key === "wfHistoryCost" ? "wfHistoryCost[{cost}]" : key),
   usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
 }));
 
@@ -102,6 +103,22 @@ it("选中的那一次说清楚花了多少钱、几次计费调用、几次没�
   const line = await screen.findByTestId("run-costs");
   expect(line.textContent).toContain("wfHistoryCost");
   expect(line.textContent).toContain("wfHistoryCostUnpriced");
+});
+
+it("调用都没扣钱(失败了服务商什么都没回、免费的):说「未扣费」,不是「未定价」", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    {
+      id: "j1", kind: "workflow", status: "failed", message: "失败", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {},
+      result: { costs: { amounts: [], calls: 2, unpriced: 0 } },
+    },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+
+  const line = await screen.findByTestId("run-costs");
+  expect(line.textContent).toContain("wfHistoryCostNotCharged");
+  expect(line.textContent).not.toContain("wfHistoryCostNone");
 });
 
 it("一次计费调用都没有的运行不显示花费那一行", async () => {

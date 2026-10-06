@@ -76,5 +76,6 @@ export const bulkSelection = {
   usageTokens: "{n} tokens",
   usageCost: "Cost {cost}",
   usageCostUnknown: "Unpriced",
+  usageCostNotBilled: "Not charged",
   usageCostMixedCurrency: "Unpriced (rules mix currencies)",
 } as const;

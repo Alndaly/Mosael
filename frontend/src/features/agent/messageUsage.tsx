@@ -68,6 +68,7 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
   let hasDuration = false;
   let unknownCostEvents = 0;
   let mixedCurrencyEvents = 0;
+  let notBilledEvents = 0;
   const priced: CostAmount[] = [];
 
   for (const event of events) {
@@ -82,7 +83,10 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
       durationSeconds += event.duration_seconds;
       hasDuration = true;
     }
-    if (typeof event.cost_micros === "number") {
+    if (NOT_SPENT.has(event.cost_confidence)) {
+      // 记了 0、但不是一笔花费(免费的引擎、失败了没扣钱):不当成「费用 US$0.00」,和后端汇总同一个口径
+      if (event.cost_confidence === "not_billed") notBilledEvents += 1;
+    } else if (typeof event.cost_micros === "number") {
       priced.push({ currency: event.currency || "USD", micros: event.cost_micros });
     } else {
       unknownCostEvents += 1;
@@ -99,8 +103,12 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
     costs: sumByCurrency(priced),
     unknownCostEvents,
     mixedCurrencyEvents,
+    notBilledEvents,
   };
 }
+
+/** 账上记 0、但不是一笔花费的两种(后端 billing.usage.NOT_SPENT)。 */
+const NOT_SPENT = new Set(["free", "not_billed"]);
 
 function formatTokenCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
@@ -114,7 +122,8 @@ function formatUsageCost(
   if (events.costs.length > 0) return t("usageCost").replace("{cost}", formatCosts(events.costs, locale));
   // 规则配了、只是币种不一致 —— 说「未定价」会让人以为没配,说清是哪一种没定上。
   if (events.mixedCurrencyEvents > 0) return t("usageCostMixedCurrency");
-  return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
+  if (events.unknownCostEvents > 0) return t("usageCostUnknown");
+  return events.notBilledEvents > 0 ? t("usageCostNotBilled") : null;
 }
 
 /**

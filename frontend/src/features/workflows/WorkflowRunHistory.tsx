@@ -70,7 +70,8 @@ function RunCosts({ job }: { job: Job }) {
   return (
     <p data-testid="run-costs" className="m-0 mb-2 px-1.5 text-ui-2xs text-muted-foreground">
       {t("wfHistoryCost")
-        .replace("{cost}", formatCosts(costs.amounts, locale) || t("wfHistoryCostNone"))
+        //: 一笔钱都没有:有没定价的就是「未定价」,否则都是免费的、失败了没扣钱的(后端不把它们的 0 算成钱)——「未扣费」
+        .replace("{cost}", formatCosts(costs.amounts, locale) || t(costs.unpriced > 0 ? "wfHistoryCostNone" : "wfHistoryCostNotCharged"))
         .replace("{calls}", String(costs.calls))}
       {costs.unpriced > 0 && ` ${t("wfHistoryCostUnpriced").replace("{count}", String(costs.unpriced))}`}
     </p>

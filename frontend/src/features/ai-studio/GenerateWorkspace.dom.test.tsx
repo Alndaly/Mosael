@@ -203,6 +203,34 @@ describe("失败原因读生成记录自己的", () => {
   });
 });
 
+describe("花费那一句照实说:花了多少 / 未定价 / 未扣费", () => {
+  const generation = (id: string, prompt: string, extra: Record<string, unknown>) => ({
+    id, workspace_id: "w1", session_id: "s1", job_id: null, provider: "plugin:dev.mosael.comfyui", model: "girl.json",
+    kind: "image", request: { prompt }, result_asset_id: null, result_asset_ids: [], error: null,
+    created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z", ...extra,
+  });
+
+  //: 沙盒实测:本机 ComfyUI 没配价,成功的那次「未定价」、失败的那次「费用 US$0.00」—— 失败了没扣钱不是一笔 $0
+  it("成功了没价说「未定价」;失败了没扣钱说「未扣费」,不说「费用 US$0.00」;有价的照金额", async () => {
+    renderStudio({
+      generations: [
+        generation("g1", "成功没价", { result_asset_id: "a1", result_asset_ids: ["a1"], costs: [], cost_confidence: "unknown" }),
+        generation("g2", "失败没扣", { error: "Prompt outputs failed validation", costs: [], cost_confidence: "not_billed" }),
+        generation("g3", "成功有价", { result_asset_id: "a3", result_asset_ids: ["a3"],
+                                     costs: [{ currency: "CNY", micros: 250_000 }], cost_confidence: "estimated" }),
+      ],
+    });
+    const footer = async (prompt: string) =>
+      (await screen.findAllByText(prompt)).map((one) => one.closest("article")!).find(Boolean)!;
+    expect((await footer("成功没价")).textContent).toContain("usageCostUnknown");
+    const failed = await footer("失败没扣");
+    expect(failed.textContent).toContain("usageCostNotBilled");
+    expect(failed.textContent).not.toMatch(/usageCost[^NU]|\$0/);
+    expect((await footer("成功有价")).textContent).toContain("usageCost");
+    expect((await footer("成功有价")).textContent).not.toContain("usageCostNotBilled");
+  });
+});
+
 describe("出图按高度定尺寸,不铺满", () => {
   const done = (ids: string[]) => ({
     id: "g1",

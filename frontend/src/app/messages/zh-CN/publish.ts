@@ -467,6 +467,7 @@ export const publish = {
   wfHistoryCost: "花费 {cost} · {calls} 次计费调用",
   wfHistoryCostUnpriced: "(其中 {count} 次没能定价,没算进去)",
   wfHistoryCostNone: "未定价",
+  wfHistoryCostNotCharged: "未扣费",
   wfHistoryLoading: "正在读取执行记录…",
   wfHistoryLoadFailed: "执行记录读取失败",
   wfHistoryNoSteps: "没有节点步骤",

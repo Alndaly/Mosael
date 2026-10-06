@@ -47,6 +47,10 @@ class CostAmount:
     micros: int
 
 
+#: 账上记 0、但不是一笔花费的两种:免费的引擎、失败了没扣钱。汇总金额时不算它们(见 costs_by_currency)。
+NOT_SPENT = ("free", "not_billed")
+
+
 def costs_by_currency(
     db: Session,
     *where: Any,
@@ -74,9 +78,11 @@ def costs_by_currency(
     ).select_from(ProviderUsageEvent)
     for target, onclause in join:
         stmt = stmt.join(target, onclause)
-    #: 免费的那几条(`free`)不是钱:混进来的话一个人民币部署的账上会冒出一笔 $0,还按次数把美元排成主要币种。
+    #: 没花的钱不是钱:免费的引擎(`free`)、失败了服务商什么都没回(`not_billed`)都记 0,混进来的话账上会冒出一笔
+    #: 「$0.00」—— 一个人民币部署里一笔美元的零,一次没扣钱的失败显示成「费用 US$0.00」(没定价的模型失败了,币种
+    #: 只能猜成美元),还按次数把它排成主要币种。界面另说「未扣费」(见 NOT_SPENT)。
     stmt = stmt.where(
-        ProviderUsageEvent.cost_micros.is_not(None), ProviderUsageEvent.cost_confidence != "free", *where
+        ProviderUsageEvent.cost_micros.is_not(None), ProviderUsageEvent.cost_confidence.not_in(NOT_SPENT), *where
     ).group_by(*keys, ProviderUsageEvent.currency)
     counted: dict[tuple[Any, ...], list[tuple[int, CostAmount]]] = {}
     for row in db.execute(stmt).all():

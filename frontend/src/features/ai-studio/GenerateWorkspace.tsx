@@ -1498,13 +1498,15 @@ function GenerationTurn({
       ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
       : "";
   // 计费:与对话页同一套格式化(lib/money)。有已知费用显示金额 —— 每个币种一笔,不相加;
-  // 有事件但无定价显示「未定价」。
+  // 有事件但无定价显示「未定价」;失败了没扣钱说「未扣费」(不是「费用 US$0.00」:没价的模型那笔 0 的币种是猜的)。
   const costLabel =
     (generation.costs ?? []).length > 0
       ? t("usageCost").replace("{cost}", formatCosts(generation.costs, locale))
       : generation.cost_confidence === "unknown"
         ? t("usageCostUnknown")
-        : "";
+        : generation.cost_confidence === "not_billed"
+          ? t("usageCostNotBilled")
+          : "";
   return (
     <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
       <div className="grid justify-items-end gap-1">

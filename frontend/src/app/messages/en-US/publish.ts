@@ -465,6 +465,7 @@ export const publish = {
   wfHistoryCost: "Cost {cost} · {calls} billed calls",
   wfHistoryCostUnpriced: "({count} could not be priced and are not included)",
   wfHistoryCostNone: "unpriced",
+  wfHistoryCostNotCharged: "not charged",
   wfHistoryLoading: "Loading runs…",
   wfHistoryLoadFailed: "Couldn’t load the run history",
   wfHistoryNoSteps: "No node steps",

@@ -184,24 +184,33 @@ def _attach_costs(db: Session, generations: list[GenerationJob]) -> None:
     """把各生成记录的计费(用量事件 source_type=generation_job)贴到瞬态属性上,供 GenerationJobOut 读。
 
     一条生成可能有多个事件(started/succeeded…):已知费用按币种各自求和(usage.costs_by_currency,
-    人民币和美元不相加);有事件但都无价则计 unknown。
+    人民币和美元不相加;免费的、没扣钱的不算钱)。`cost_confidence` 是界面说哪一句的依据,按先后:花了钱的那几条的
+    (估的、报的……)→ 有没定价的就是 `unknown`(「未定价」)→ 只有没扣钱的失败是 `not_billed`(「未扣费」,不是
+    「费用 US$0.00」—— 没定价的模型失败了,账上那笔 0 的币种只是猜的)→ 只有免费的是 `free`。
     """
     ids = [g.id for g in generations]
     if not ids:
         return
     scope = (ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id.in_(ids))
     costs = usage.costs_by_currency(db, *scope, group_by=(ProviderUsageEvent.source_id,))
-    # 置信度取计过价的那几条的(它们同出一处估算);一条都没计上价的就是 unknown。
-    confidence: dict[str, str] = {}
+    seen: dict[str, set[str]] = {}
     for source_id, cost_micros, cost_confidence in db.execute(
         select(ProviderUsageEvent.source_id, ProviderUsageEvent.cost_micros, ProviderUsageEvent.cost_confidence).where(
             *scope
         )
     ).all():
-        if cost_micros is not None:
-            confidence[source_id] = cost_confidence
-        else:
-            confidence.setdefault(source_id, "unknown")
+        seen.setdefault(source_id, set()).add(cost_confidence if cost_micros is not None else "unknown")
     for gen in generations:
         gen.costs = costs.get((gen.id,), [])  # type: ignore[attr-defined]
-        gen.cost_confidence = confidence.get(gen.id)  # type: ignore[attr-defined]
+        gen.cost_confidence = _cost_state(seen.get(gen.id, set()))  # type: ignore[attr-defined]
+
+
+def _cost_state(found: set[str]) -> str | None:
+    """一条生成的那几条账合起来该怎么说(见 _attach_costs)。"""
+    spent = sorted(found - {"unknown", *usage.NOT_SPENT})
+    if spent:
+        return spent[0]
+    for state in ("unknown", "not_billed", "free"):
+        if state in found:
+            return state
+    return None

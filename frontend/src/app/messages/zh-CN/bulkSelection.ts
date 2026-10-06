@@ -76,5 +76,6 @@ export const bulkSelection = {
   usageTokens: "{n} Token",
   usageCost: "费用 {cost}",
   usageCostUnknown: "未定价",
+  usageCostNotBilled: "未扣费",
   usageCostMixedCurrency: "未定价(规则币种不一致)",
 } as const;
