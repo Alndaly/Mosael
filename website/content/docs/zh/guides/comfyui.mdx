@@ -48,13 +48,25 @@ ComfyUI 由随 Mosael 一起发的 **ComfyUI 插件**接入：装好就在「插
 - **用我自己装的**：填装好的 ComfyUI 目录(Windows 便携版选外层或里面那层都行；桌面版可以点旁边的「选择…」从系统对话框里挑)，Mosael 先试跑一次，摆出 ComfyUI 版本、PyTorch、
   显卡、缺什么；能起才存。ComfyUI-Manager 要 pip 版(V4,新的 ComfyUI 自带)：装了就随 ComfyUI 一起开；克隆进
   `custom_nodes` 的老 Manager Mosael 不支持，检查时会提醒，并给出换成 pip 版的命令(`pip install -r manager_requirements.txt`)。
-- **让 Mosael 装**：先看安装计划 —— 这台机器能不能装(Apple 芯片 Mac、Windows + NVIDIA;别的这一版不装，会说原因)、装哪种 PyTorch、
-  至少要多少空间(Mac 5 GB、Windows 8 GB)、分几步、从哪儿下载。确认后 Mosael 下载钉死版本的 ComfyUI、建一个独立的 Python 环境、
+- **让 Mosael 装**：先看安装计划 —— 这台机器能不能装(Apple 芯片 Mac;Windows 或 Linux 服务器(x86_64)+ NVIDIA 显卡;别的这一版不装，
+  会说原因)、装哪种 PyTorch、至少要多少空间(Mac 5 GB、Windows 和 Linux 8 GB)、分几步、从哪儿下载、下载走哪个代理。确认后 Mosael 下载钉死版本的 ComfyUI、建一个独立的 Python 环境、
   装 PyTorch、依赖、ComfyUI-Manager 和 pysssss,最后试起一次。装的时候看得到第几步、正在下哪个文件、多快，能取消，「接着装」从没做完的
   那一步继续。Apple 芯片的 Mac 上全新装一次 4–5 分钟，装完约 2 GB。**不替你下模型**：装好之后点「打开模型库」挑要用的。
 - 国内网络慢：在「管理 → 引擎 → 下载源」里换 pip 源，Windows 装 CUDA 版 PyTorch 选「PyTorch 源」里的南京大学镜像，GitHub 慢就填一个
   「GitHub 镜像前缀」(压缩包按 sha256 校验，镜像换不了内容)。下载照样走「设置 → 网络」里的代理。
 - Mosael 升级换了自带的 Python 版本时，连接卡片上会说「运行环境要重建」，点一下只重装 Python 环境，源码和模型不动。
+- **Linux 服务器**：要 NVIDIA 显卡和它的专有驱动(`nvidia-smi` 能用;在容器里要把显卡带进来，比如 `docker run --gpus all`)、x86_64、
+  系统的 glibc 2.28 以上(CentOS 7 那种太旧)。驱动要求和 Windows 一样按显卡挑，只是 Linux 上的驱动版本号自成一列。
+- **共用模型文件夹**：已经有一堆模型(另一份 ComfyUI 的 `models`、A1111 / Forge 的 webui 目录)的，在卡片的「共用的模型文件夹」里加上它，
+  不用拷第二份。认得出才加，重启后生效;卡片上写明认成什么、加载了没有、看到几个模型。Mosael 只读这些文件夹 —— 模型库下载的新文件
+  仍放在它自己的 `models` 里，也不往共用文件夹里写预览图;配置写在 Mosael 的数据目录里，不改你的 ComfyUI 目录。
+- **闲置自动停**：不是「保持运行」的，闲置 30 分钟(「高级」里改，0 = 不停)就停下、把显存让出来，下次用到时自己起。有任务在跑或排着时
+  不停;工作台、内嵌编辑器开着也算在用。
+- **更新、回到上一版**(让 Mosael 装的那一份):卡片上「版本」一行写着装的是哪个，有新的钉死版本就有「更新到 …」。更新会先停下它、换上新源码
+  和依赖、试起一次 —— 哪一步没成、或者起不来，都自动换回原来那一版;成了以后能「回到上一版」(不用重下)。模型、自定义节点、工作流和设置
+  跟着走。
+- **删掉**：删连接时可以一起删 Mosael 装的那一份，并「保留模型」(挪到数据目录的 `local-services/kept-models`,以后在共用模型文件夹里
+  一键加回来);不删就留在磁盘上。「用我自己装的」那个目录 Mosael 从来不删。
 
 ## 保存的工作流就是模型
 

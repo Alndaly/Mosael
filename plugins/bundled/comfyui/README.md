@@ -510,7 +510,7 @@ If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install 
 - **The install plan first**: whether this machine can install it — a Mac with Apple silicon (PyTorch from PyPI comes with MPS)
   or Windows + NVIDIA (it reads the driver version and the GPU's compute capability from `nvidia-smi`: 20 series and newer get the
   CUDA 13.0 build and need driver 580 or newer; 10 series and older get the CUDA 12.6 build and need 560.76 or newer); Intel Macs,
-  AMD, CPU only and Linux aren't supported in this version, and it says why — which PyTorch, how much disk space at least (5 GB
+  AMD and CPU only aren't supported in this version, and it says why (Linux servers arrived in 1.16.0, see the next section) — which PyTorch, how much disk space at least (5 GB
   on a Mac, 8 GB on Windows), where it goes, the steps, and where it downloads from. The confirmation names the machine the
   downloaded code runs on.
 - **What it installs** (all pinned): the ComfyUI 0.39.0 source (checked by sha256), a `.venv` built with the Python that ships
@@ -527,6 +527,37 @@ If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install 
   only `.venv` and what's installed in it, leaving the source and models alone.
 - **If GitHub is slow**: set a GitHub mirror prefix under Admin → Download sources (put in front of the original address); the
   archives are checked by sha256, so a mirror can't change their content. Downloads use the proxy from Settings.
+
+## More for the local ComfyUI (1.16.0)
+
+ADR 0041, step 3:
+
+- **Shared models folders**: both local ways of running it can also use models folders you already have — another ComfyUI's
+  `models` (picking the ComfyUI folder works too), an A1111 / Forge webui folder or its `models`, or a copy kept when uninstalling —
+  without copying them. A folder is saved only if it's recognised: ComfyUI subfolders match by name (the old `clip` / `unet` names count
+  as `text_encoders` / `diffusion_models`), A1111 / Forge follow the table ComfyUI ships. It goes through ComfyUI's own
+  `--extra-model-paths-config`; that file lives in Mosael's data folder (`local-services/<connection>/extra_model_paths.yaml`),
+  **never in your ComfyUI folder**. The connection page shows what each folder was recognised as, whether the running ComfyUI loaded
+  it and how many models it sees there (a new one takes effect after a restart). **Read-only**: new downloads from the model library go
+  into its own `models`; models in shared folders get no preview images written next to them and aren't looked up by hash (that writes
+  a `.sha256`), only by file name and size.
+- **Stop when idle**: unless it's set to keep running, it stops after a while without use (30 minutes by default, under Advanced;
+  0 = never) to free GPU memory, and starts again when it's used. Before stopping it asks its own queue (`/queue`): running or queued
+  jobs keep it up, and so does not getting an answer; an open workbench or embedded editor counts as use.
+- **Update and go back** (the copy Mosael installed): the connection page's Version row says which version is installed and offers
+  “Update to x” when a newer pinned version exists. An update unpacks the new source next to the old one, records the installed packages
+  (`pip freeze`) before installing dependencies, switches to the new source (`models`, `custom_nodes`, `user`, `input` and `output` move
+  along), installs the new dependencies and starts it once; **if any step fails, or it doesn't start healthily, it goes back to the
+  earlier version** (source moved back, changed packages reinstalled from that record). After a successful update the earlier version is
+  kept, so “Go back to y” doesn't download anything; the next update replaces it. A change cut short (Mosael closed forcibly) refuses to
+  start and says so; “Go back to y” tidies it up. Pinned versions: 0.38.0 and 0.39.0 (new installs get 0.39.0).
+- **Uninstalling**: deleting a connection or uninstalling the plugin asks whether to delete the copy Mosael installed too, optionally
+  keeping the models (moved to `local-services/kept-models/<connection name>` in the data folder, ready to add back as a shared models
+  folder). Only that install folder in Mosael's data folder is deleted, without following links out of it; a folder you picked yourself
+  is never touched.
+- **Linux servers** (x86_64 + NVIDIA): the same table as Windows picks the CUDA build of PyTorch, using the Linux driver minimums
+  (580.65.06 for CUDA 13.0, 560.28.03 for CUDA 12.6), and the system needs glibc 2.28 or newer; ARM Linux and machines without an
+  NVIDIA GPU (or a container without the GPU passed in) are told why.
 
 ## Progress, cancelling, restarts
 
@@ -560,6 +591,11 @@ If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install 
   the workflow tools);
 - `service.py`: the local service: recognising a folder (portable build, venv, trial torch import), the launch command,
   adding pysssss, finding a local server, moving data when the port changes;
+- `managed.py` / `versions.py` / `pinned.py`: letting Mosael install it: the plan, installing (or resuming), saying where the
+  models are before uninstalling; changing versions (update, go back, tidying up after an interruption); the pinned archives
+  (download, sha256 check, unpacking without escaping the folder);
+- `shared_models.py`: shared models folders: recognising ComfyUI / A1111 / Forge layouts, writing `extra_model_paths.yaml`,
+  counting what each folder contributes;
 - `workflows.py`: `list_workflows` / `import_outputs`, and the part that returns outputs;
 - `tooling.py`: one tool per workflow: derives inputs and outputs from the graph and runs the current graph;
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;

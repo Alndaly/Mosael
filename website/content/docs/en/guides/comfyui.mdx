@@ -61,9 +61,9 @@ the code runs on.
   if it can start. ComfyUI-Manager has to be the pip version (V4, built into recent ComfyUI): if it's installed, it's turned on
   with ComfyUI. Mosael doesn't support the old Manager cloned into `custom_nodes`; the check warns about it and gives the
   command to switch to the pip version (`pip install -r manager_requirements.txt`).
-- **Let Mosael install it**: first the install plan — whether this machine can install it (Macs with Apple silicon and Windows +
-  NVIDIA; other systems aren't supported in this version, and it says why), which PyTorch, how much disk space at least (5 GB on
-  a Mac, 8 GB on Windows), the steps and where it downloads from. After you confirm, Mosael downloads a pinned ComfyUI release,
+- **Let Mosael install it**: first the install plan — whether this machine can install it (Macs with Apple silicon; Windows or a
+  Linux server (x86_64) with an NVIDIA GPU; other systems aren't supported in this version, and it says why), which PyTorch, how
+  much disk space at least (5 GB on a Mac, 8 GB on Windows and Linux), the steps, where it downloads from and through which proxy. After you confirm, Mosael downloads a pinned ComfyUI release,
   creates its own Python environment, installs PyTorch, the dependencies, ComfyUI-Manager and pysssss, and starts it once at the
   end. While it installs you see the step, the file being downloaded and the speed; you can cancel, and Resume continues from the
   first unfinished step. A fresh install takes 4–5 minutes on an Apple silicon Mac and uses about 2 GB. **No models are
@@ -73,6 +73,24 @@ the code runs on.
   can't change their content). Downloads use the proxy from Settings → Network.
 - When a Mosael update ships a different Python version, the connection card says the environment needs a rebuild; one click
   reinstalls only the Python environment, leaving the source and models alone.
+- **Linux servers**: an NVIDIA GPU with its proprietary driver (`nvidia-smi` works; in a container, pass the GPU in, for example
+  `docker run --gpus all`), x86_64, and glibc 2.28 or newer (CentOS 7 is too old). The driver is chosen per GPU just as on
+  Windows; Linux driver version numbers simply have their own column.
+- **Shared models folders**: if you already have models (another ComfyUI's `models`, an A1111 / Forge webui folder), add the
+  folder under Shared models folders on the card instead of copying it. It's added only if it's recognised and takes effect after
+  a restart; the card shows what it was recognised as, whether it's loaded and how many models it sees. Mosael only reads these
+  folders — new downloads from the model library still go into its own `models`, and no preview images are written into a shared
+  folder; the configuration lives in Mosael's data folder, not in your ComfyUI folder.
+- **Stop when idle**: unless it's set to keep running, it stops after 30 minutes without use (change it under Advanced; 0 = never)
+  to free GPU memory, and starts again the next time it's used. It doesn't stop while jobs are running or queued; an open workbench
+  or embedded editor counts as use.
+- **Update and go back** (the copy Mosael installed): the Version row on the card says which version is installed and offers
+  “Update to …” when a newer pinned version exists. An update stops it, switches to the new source and dependencies and starts it
+  once — if any step fails or it won't start, it goes back to the earlier version automatically; after a successful update you can
+  go back to the earlier version without downloading it again. Models, custom nodes, workflows and settings come along.
+- **Deleting**: when you delete the connection you can delete the copy Mosael installed too and keep the models (moved to
+  `local-services/kept-models` in the data folder, ready to add back as a shared models folder); otherwise it stays on disk. A
+  folder you picked with Use my own install is never deleted.
 
 ## Saved workflows are models
 

@@ -1512,12 +1512,14 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `op` | 输入 | 交回 |
 | --- | --- | --- |
 | `service_detect` | `directory`、可选 `python` | `ok`(认出来、能起)、`facts: [{label, value}]`、`problems: [{level: "error"\|"warning", text}]`、可选 `add_nodes: {title, description}` —— `label` / `text` / `title` / `description` 可以按语言分(`{"zh": …, "en": …}`)。会试跑那个目录里的代码,所以宿主先问过人 |
-| `service_launch` | `directory`、`python`、`port`、`listen_lan`、`extra_args` | `argv`、`env`(插件那一半;宿主再加 HuggingFace 镜像和这个连接的出站代理,`MOSAEL_*` 和代理变量插件盖不掉)、`cwd`、`health_path`(回 2xx 就算就绪)、`ready_timeout`(秒,5–1800,缺省 180) |
+| `service_launch` | `directory`、`python`、`port`、`listen_lan`、`extra_args`、`shared_models`(共用的模型文件夹,绝对路径)、`config_dir`(宿主给这个连接的那一格 `<数据目录>/local-services/<连接>/`,插件要写配置就写这里,不写进用户的目录) | `argv`、`env`(插件那一半;宿主再加 HuggingFace 镜像和这个连接的出站代理,`MOSAEL_*` 和代理变量插件盖不掉)、`cwd`、`health_path`(回 2xx 就算就绪)、`ready_timeout`(秒,5–1800,缺省 180) |
 | `service_add_nodes` | `directory`、`python`、`sources` | `installed`、`path`、`message`;宿主只在人点了「补装」并确认之后才问 |
 | `service_discover` | — | `servers: [{url, label}]`:本机已经在跑的(只收本机地址);插件页据此提示「本机发现一个,要连上吗」,建的是「连一台服务器」那一种 |
 | `service_readdress` | `from`、`to` | 端口改了:把按旧地址存的本地数据搬到新地址名下。做不到只是少了缓存 |
 | `service_plan` | `directory`(宿主分的安装目录)、`python`(建 venv 用的随包 Python)、`sources` | 让 Mosael 装之前:`ok`(这台机器能装)、`platform` / `verdict`(是什么机器、为什么能 / 不能装)、`flavour`(装哪种,确认后原样带回)、`torch`、`comfyui`(版本)、`disk_bytes` / `free_bytes`、`steps: [{key, title, done}]`(接着装时做完的打勾)、`downloads: [{label, url, source}]`(`url` 是按下载源改写过的地址,`source` 说是被哪一项改写的:`github` / `pytorch` / `pip`;宿主据此在旁边写明那一项此刻的设置,并按这个连接的出站代理标出绕过列表里直连的那几个)、`problems`(同 `service_detect`;有一条 error 就开始不了)。只看、不写 |
 | `service_install` | `directory`、`python`、`flavour`、`sources`、`log`(宿主给的日志文件)、`pip_cache` | **流式**(见下):一步一行进度,最后交回装好的那一份(宿主据此试起一次,健康检查通过才算装好)。取消文件出现就停在手上那一步;再来一次从没做完的那一步接着装 |
+| `service_model_folders` | `directory`、`python`、`shared_models` | 共用的模型文件夹:`folders: [{path, ok, layout, folders, problem, loaded, models}]`(每一处认成什么样子、对上哪几个模型目录、认不出的原因;服务在跑的话插件顺带问它加载了没有、从那里看到几个模型,没在跑是 null)、`running`。宿主只存认得出的那几处。只读 |
+| `service_busy` | — | 闲置够久、要自动停它之前:`busy`(任务队列里有没有在跑、在排的)。插件说不清当作有活;问不到(插件失败、它不应答)宿主不停 |
 | `service_versions` | `directory` | 让 Mosael 装的那一份:`current`(装着的版本)、`latest`、`update`(能更新到哪个,没有是空串)、`previous`(「回到上一版」回到哪个,没有是空串)、`unfinished`(`update` 更新被强行打断、`rollback` 回退时依赖还没装回去;这时要先回退收拾,`previous` 就是回到哪个)。只看、不写 |
 | `service_update` | `directory`、`version`(空 = 最新)、`sources`、`log`、`pip_cache` | **流式**,和 `service_install` 一样一步一行:换到一个更新的版本。没成(或取消)由插件自己换回原来那一版再报错;成了交回 `comfyui`(新版本)、`previous`(上一版),宿主接着试起一次 —— 试起没通过,宿主调 `service_rollback` |
 | `service_rollback` | `directory`、`sources`、`log`、`pip_cache` | **流式**:回到上一版(也收拾被打断的更新 / 回退),交回 `comfyui`;宿主接着试起一次 |
@@ -1549,6 +1551,14 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 「运行环境要重建」—— 再装一次,插件只重建 venv 和装进去的包。没装好、正在装时也不让起(用到时起同样报这一句)。安装进度在
 宿主内存里,后端重启就没了;磁盘上的安装记录是插件的,安装计划据此打勾,「接着装」从没做完的那一步开始。
 
+让 Mosael 装的那一份还能**换版本**(`service_versions` / `service_update` / `service_rollback`,进度、取消、日志和安装同一套;
+更新后试起没通过宿主让插件换回去)和**卸载**(删连接、卸载插件时问要不要一起删安装目录、要不要保留模型;`service_uninstall` 说模型
+文件夹在哪,挪走、删目录都是宿主做,只删宿主分的那个目录、不跟着链接出去;它的连接留着这样的目录时卸载插件不说怎么处置就 409)。
+宿主还会让**闲置够久**的本机服务自动停(缺省 30 分钟,停之前问 `service_busy`),用到时照常起。
+
+插件进程里的 `MOSAEL_LOCAL_SERVICE_SHARED` 是这个连接共用的模型文件夹(JSON 数组,绝对路径):服务只读它们,插件别往里写
+(下载的新文件、预览图都落在服务自己那一处)。
+
 插件进程里的 `MOSAEL_LOCAL_SERVICE`(值是服务的 `key`)说「这个连接的服务器归宿主起停」:**不要自己去重启它** ——
 要重启时交回 `{"host_restart": true}`,由宿主停了再起(ComfyUI 插件装完节点包的「重启」就是这么做的;它要是自己经
 Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为它崩了)。
@@ -1559,7 +1569,7 @@ Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为�
 | --- | --- |
 | `POST /api/plugins/scan` | 扫描;顺带迁移老清单、清掉目录已不在的包 |
 | `GET /api/plugins` | 包 + 它们的连接 + 每个连接的工具与开关;`provides`、`bundled`、`oauth`(声明了授权时是 `{fills: [授权会填的凭据键]}`),以及每个连接的 `capability_status`(几个生成模型、何时刷新、为什么没刷出来)和 `authorization`(见「连接的授权状态」) |
-| `DELETE /api/plugins/{包id}` | 卸载:删目录 + 删记录 |
+| `DELETE /api/plugins/{包id}` | 卸载:删目录 + 删记录。它的连接在数据目录里留着本机服务的安装目录时要带 `local_services=keep\|remove`(和 `keep_models`),不带就 409 |
 | `POST /api/plugins/{包id}/instances` | 新建连接 |
 | `PATCH /api/plugins/instances/{id}` | 改名 / 改配置 / 启停 |
 | `GET`/`PATCH` `/api/plugins/instances/{id}/credentials` | 凭据(掩码回显) |
@@ -1574,6 +1584,13 @@ Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为�
 | `GET /api/plugins/instances/{id}/local-service/logs` | 最近的日志和完整日志在哪个文件;`source=install` 是让 Mosael 装那几步的输出 |
 | `GET /api/plugins/instances/{id}/local-service/plan` | 让 Mosael 装的安装计划(部署管理员) |
 | `POST /api/plugins/instances/{id}/local-service/install`、`…/install/cancel` | 装 / 接着装 / 重建运行环境(要带 `confirm_run_code` 和计划里的 `flavour`)、取消(部署管理员) |
+| `GET /api/plugins/instances/{id}/local-service/model-folders` | 共用的模型文件夹:每一处认成什么、加载了没有、几个模型,和卸载时保留下来、还没加进来的那几份(部署管理员) |
+| `POST /api/plugins/instances/{id}/local-service/touch` | 还在用它(工作台、内嵌编辑器开着):闲置的钟从现在算,不替它起(连接的主人) |
+| `GET /api/plugins/instances/{id}/local-service/versions` | 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有没做完的(部署管理员) |
+| `POST /api/plugins/instances/{id}/local-service/{update,rollback}` | 更新(要带 `confirm_run_code`,`version` 空 = 最新)/ 回到上一版;进度看状态里的 `install`,取消也是 `…/install/cancel`(部署管理员) |
+| `GET /api/plugins/instances/{id}/local-service/footprint` | 删连接之前:它在数据目录里留着什么(一份让 Mosael 装的、多大、模型多大、保留的话挪到哪;部署管理员) |
+| `DELETE /api/plugins/instances/{id}?install=keep\|remove&keep_models=…` | 删连接;安装目录缺省留着,`remove` 一起删(部署管理员) |
+| `GET /api/plugins/{包id}/local-services/installs` | 卸载插件之前:它的连接留着的那几个安装目录(部署管理员) |
 | `GET /api/plugins/{包id}/local-services/discover` | 本机已经在跑的(部署管理员) |
 
 智能体、工作流、手动试跑走的是**同一条**执行路径:权限校验、凭据注入、调用留痕都在那里。

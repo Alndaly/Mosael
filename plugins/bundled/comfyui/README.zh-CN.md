@@ -381,8 +381,8 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 没装过的,「在哪跑」选「让 Mosael 装」(ADR 0041 §4):
 
 - **先看安装计划**:这台机器能不能装 —— Apple 芯片 Mac(PyPI 上的 PyTorch 直接带 MPS)、Windows + NVIDIA(读 `nvidia-smi` 的驱动
-  版本和显卡算力:20 系及以上装 CUDA 13.0 版、要 580 以上的驱动;10 系及更老装 CUDA 12.6 版、要 560.76 以上);Intel Mac、AMD、只有 CPU、
-  Linux 这一版不装,说清楚原因 —— 装哪种 PyTorch、至少要多少空间(Mac 5 GB、Windows 8 GB)、装在哪、分几步、会从哪几处下载。确认框写明
+  版本和显卡算力:20 系及以上装 CUDA 13.0 版、要 580 以上的驱动;10 系及更老装 CUDA 12.6 版、要 560.76 以上);Intel Mac、AMD、只有 CPU
+  这一版不装,说清楚原因(Linux 服务器在 1.16.0 补上,见下一节) —— 装哪种 PyTorch、至少要多少空间(Mac 5 GB、Windows 8 GB)、装在哪、分几步、会从哪几处下载。确认框写明
   在哪台机器上运行下载来的代码。
 - **装什么**(都钉死版本):ComfyUI 0.39.0 源码(按 sha256 校验)、用随 Mosael 一起发的 Python 建的 `.venv`、PyTorch 2.14.1 /
   torchvision 0.29.1 / torchaudio 2.11.0(CUDA 版从「管理 → 下载源」的「PyTorch 源」装,Mac 的走 pip 源)、`requirements.txt` 和
@@ -393,6 +393,27 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
   最后由 Mosael 试起一次,健康检查通过才算装好。**不替你下模型**:装好之后去模型库挑。
 - **Mosael 换了随包的 Python 小版本时**:连接页说「运行环境要重建」,点一下只重建 `.venv` 和装进去的包,源码和模型不动。
 - **GitHub 慢**:「管理 → 下载源」里填一个 GitHub 镜像前缀(接在原地址前面);压缩包按 sha256 校验,镜像换不了内容。下载走设置里的代理。
+
+## 本机 ComfyUI 的补充(1.16.0)
+
+ADR 0041 第三步:
+
+- **共用的模型文件夹**:本机的两种「在哪跑」都能把别处已有的模型文件夹也给它用 —— 另一份 ComfyUI 的 `models`(选 ComfyUI 目录也认)、
+  A1111 / Forge 的 webui 目录或它的 `models`、卸载时保留下来的那一份;不拷第二份。认得出才存:ComfyUI 的子目录同名对上(`clip`、`unet`
+  这些老名字并到 `text_encoders`、`diffusion_models`),A1111 / Forge 照 ComfyUI 自带的对照表。走 ComfyUI 自己的
+  `--extra-model-paths-config`,那份配置写在 Mosael 的数据目录里(`local-services/<连接>/extra_model_paths.yaml`),**不写进你的
+  ComfyUI 目录**。连接页上每一处写明认成什么、在跑的话它加载了没有、从那里看到几个模型(刚加的重启后生效)。**只读**:模型库下载的新文件
+  落在它自己的 `models`;共用那几处的模型不往旁边存预览图、不按哈希找(那会写一份 `.sha256`),改按文件名和大小找。
+- **闲置自动停**:不是「保持运行」的,闲置一段时间(缺省 30 分钟,「高级」里改,0 = 不停)就停下、释放显存,用到时照常再起。停之前先问它
+  自己的队列(`/queue`),有在跑、在排的任务就不停,问不到也不停;工作台、内嵌编辑器开着算在用。
+- **更新、回到上一版**(让 Mosael 装的那一份):连接页「版本」一行写着装的是哪个,有更新的钉死版本就有「更新到 x」。更新 = 新源码解到
+  旁边、装依赖之前记下装着的包(`pip freeze`)、换上新源码(`models`、`custom_nodes`、`user`、`input`、`output` 跟着走)、装新依赖、试起一次;
+  **哪一步没成、试起不通过都换回原来那一版**(源码搬回去,变了版本的包按那份记录装回去)。成了以后上一版留着,「回到上一版」不重下,
+  下一次更新时换掉。Mosael 被强行关掉、换到一半的,起不来并说明,点「换回 x」收拾好。钉死的版本:0.38.0、0.39.0(新装装 0.39.0)。
+- **卸载**:删连接、卸载插件时问要不要一起删 Mosael 装的那一份,可以「保留模型」(挪到数据目录的 `local-services/kept-models/<连接的名字>`,
+  以后在「共用的模型文件夹」里一键加回来)。只删 Mosael 数据目录里的那个安装目录,不跟着链接出去;「用我自己装的」那个目录从来不碰。
+- **Linux 服务器**(x86_64 + NVIDIA):和 Windows 同一张对照表挑 CUDA 版 PyTorch,驱动要 Linux 那一列(CUDA 13.0 版 580.65.06 以上、
+  12.6 版 560.28.03 以上),系统的 glibc 要 2.28 以上;ARM 的 Linux、没有 NVIDIA 显卡(容器里没把显卡带进来)都说清楚。
 
 ## 进度、取消、重启
 
@@ -420,6 +441,9 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 - `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `service.py` —— 本机服务:认目录(便携版、venv、试跑 torch)、给出启动命令、补装 pysssss、本机发现、改端口时搬数据;
+- `managed.py` / `versions.py` / `pinned.py` —— 让 Mosael 装:安装计划、装(或接着装)、卸载前说模型在哪;换版本(更新、回到上一版、
+  被打断之后收拾);钉死的压缩包(下载、按 sha256 校验、解开不越界);
+- `shared_models.py` —— 共用的模型文件夹:认 ComfyUI / A1111 / Forge 的样子、写 `extra_model_paths.yaml`、数每一处加载了几个模型;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
 - `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 同一台机器 → Manager → 说清楚 的顺序下载;
