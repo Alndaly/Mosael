@@ -145,6 +145,27 @@ def test_用到的模型在不在_缺的节点排除虚拟节点和子图_带节
     assert "CR Prompt Text" in laid["problem"], "缺节点转不过来:原因照说"
 
 
+def test_节点包按_Manager_的_nodename_pattern_认_不锚在开头(library, comfy) -> None:
+    """Manager 的映射里 rgthree 只列了 Rgthree* 这类内部名,它的显示名节点(「Any Switch (rgthree)」)靠
+    `nodename_pattern: " \\(rgthree\\)$"` 认 —— Manager 自己用 re.search。维护者的 DaSiWa WAN 2.2 缺的正是这几个,
+    此前一个「装上」都不给。"""
+    comfy.state.manager_mappings["rgthree-comfy"] = [
+        ["RgthreeAnySwitch", "RgthreePowerLoraLoader"],
+        {"title_aux": "rgthree's ComfyUI Nodes", "nodename_pattern": " \\(rgthree\\)$"}]
+    comfy.state.manager_installed = {}
+    comfy.state.workflows["switch.json"] = {
+        "nodes": [{"id": 1, "type": "Any Switch (rgthree)", "pos": [0, 0], "size": [200, 80]},
+                  {"id": 2, "type": "Power Lora Loader (rgthree)", "pos": [0, 100], "size": [200, 80]}],
+        "links": [],
+    }
+    switch = {one["path"]: one for one in _listed(library, comfy)["workflows"]}["switch.json"]
+    rgthree = {"id": "rgthree-comfy", "title": "rgthree's ComfyUI Nodes", "installed": False}
+    assert switch["missing_nodes"] == [
+        {"type": "Any Switch (rgthree)", "count": 1, "packs": [rgthree]},
+        {"type": "Power Lora Loader (rgthree)", "count": 1, "packs": [rgthree]},
+    ]
+
+
 def test_新版的下拉写成_COMBO_加options_也认得出模型在不在(library, comfy) -> None:
     """ComfyUI 0.38 里用新写法定义的节点(放大模型加载器这类),object_info 里的下拉是 ["COMBO", {"options": [...]}]。"""
     comfy.state.object_info["UpscaleModelLoader"]["input"]["required"]["model_name"] = [

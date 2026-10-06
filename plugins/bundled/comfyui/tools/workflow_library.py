@@ -355,8 +355,10 @@ def _packs(comfy: Comfy, types: list[str]) -> dict[str, list[dict[str, Any]]]:
             pattern = meta.get("nodename_pattern")
             matched = class_type in names
             if not matched and isinstance(pattern, str):
+                # 照 Manager 自己的认法:不锚在开头(它找缺的节点包用 re.search,前端用 RegExp.test)。rgthree 的写法是
+                # 「 \(rgthree\)$」—— 用 re.match 的话,「Any Switch (rgthree)」这类节点永远认不出出自它
                 try:
-                    matched = re.match(pattern, class_type) is not None
+                    matched = re.search(pattern, class_type) is not None
                 except re.error:
                     matched = False
             if matched:
