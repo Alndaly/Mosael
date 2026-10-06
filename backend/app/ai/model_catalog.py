@@ -1,4 +1,10 @@
-"""供应商端点上的模型目录:打一次 OpenAI 兼容的 `/models`,拿到 id 与上下文/输出上限。
+"""供应商端点上的模型目录:打一次 `/models`,拿到 id 与上下文/输出上限。
+
+**两种说法**(`protocol`,由供应商预设的 `model_catalog` 声明):OpenAI 兼容的 `GET /models` 回
+`{"data": [{"id": …}]}`、Bearer 鉴权;Gemini 原生的 `GET /v1beta/models` 回 `{"models": [{"name": "models/…",
+"inputTokenLimit", "outputTokenLimit", "supportedGenerationMethods"}], "nextPageToken"}`、`x-goog-api-key` 鉴权,
+而且同一份清单里混着 Veo、Imagen、向量、语音这些不是对话的模型(见 ai/gemini_models)。把 AI Studio 的 Key
+当 Bearer 发过去,Google 回 401「Expected OAuth 2 access token」—— 目录恒空,探活说「凭据被拒」。
 
 为什么单独成模块:这份数据有**两个消费方** —— 设置页的模型选择器,和智能体启动一轮前需要
 知道的 contextWindow / maxTokens。同一个 HTTP 响应各取一次是「同一效果两条链路」的经典形态,
@@ -17,6 +23,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.ai.gemini_models import is_chat_model as is_gemini_chat_model
 from app.core.http_retry import auth_headers
 
 #: 目录变动很慢(供应商上新模型),但也不能永不刷新。
@@ -26,6 +33,8 @@ _FETCH_TIMEOUT = 8
 #: 而调用方里有"每轮对话都要问一次"的那种,于是配了个连不通的地址,每句话都先卡八秒。
 #: 短是因为端点恢复了不该等五分钟才发现。
 _FAILURE_TTL_SECONDS = 60
+#: Gemini 的目录分页(每页上限 1000)。翻这么多页还没完说明回包不对,不再追。
+_GEMINI_MAX_PAGES = 5
 
 
 @dataclass(frozen=True)
@@ -41,12 +50,22 @@ class CatalogModel:
     cache_write_cost: float | None = None
 
 
+#: 缓存键:(端点, 钥匙, 说哪种话)。同一个地址按两种说法问出来的是两份目录,不能互相顶替。
+_CacheKey = tuple[str, str, str]
 #: (取到的时刻, 模型, 这次是不是取成功了)。第三项决定用哪个 TTL —— 失败也要记,
 #: 否则连不通的端点会被反复重试。
-_cache: dict[tuple[str, str], tuple[float, list[CatalogModel], bool]] = {}
+_cache: dict[_CacheKey, tuple[float, list[CatalogModel], bool]] = {}
 _cache_lock = threading.Lock()
 #: 正在后台刷新的键。去重用:同一个端点没必要同时有十个线程去问。
-_refreshing: set[tuple[str, str]] = set()
+_refreshing: set[_CacheKey] = set()
+
+
+def catalog_headers(protocol: str, api_key: str | None) -> dict[str, str]:
+    """问目录(以及探活)时带的鉴权头。空钥匙一律不发头(见 core/http_retry.auth_headers)。"""
+    if protocol == "gemini":
+        key = (api_key or "").strip()
+        return {"x-goog-api-key": key} if key else {}
+    return auth_headers(api_key)
 
 
 def _positive_int(value: object) -> int | None:
@@ -98,24 +117,76 @@ def _parse(rows: object) -> list[CatalogModel]:
     return [models[key] for key in sorted(models)]
 
 
-def fetch_models(base_url: str, api_key: str, *, use_cache: bool = True) -> list[CatalogModel]:
+def _parse_gemini(rows: list) -> list[CatalogModel]:
+    """Gemini 原生目录里的**对话**模型。
+
+    两道筛:支持 `generateContent`(Imagen 的 predict、实时模型的 bidiGenerateContent 都不算),且名字是对话模型
+    (`ai/gemini_models.is_chat_model` —— 出图、念字、转写这些也支持 generateContent)。`inputTokenLimit` 就是
+    服务端按它拒请求的输入上限,当窗口用。
+    """
+    models: dict[str, CatalogModel] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        model_id = str(row.get("name") or "").strip().removeprefix("models/")
+        methods = row.get("supportedGenerationMethods")
+        if not model_id or model_id in models or not isinstance(methods, list):
+            continue
+        if "generateContent" not in methods or not is_gemini_chat_model(model_id):
+            continue
+        models[model_id] = CatalogModel(
+            id=model_id,
+            context_window=_positive_int(row.get("inputTokenLimit")),
+            max_output_tokens=_positive_int(row.get("outputTokenLimit")),
+        )
+    return [models[key] for key in sorted(models)]
+
+
+def _fetch_gemini(base: str, api_key: str) -> list[CatalogModel]:
+    rows: list = []
+    page_token = ""
+    for _ in range(_GEMINI_MAX_PAGES):
+        params: dict[str, str | int] = {"pageSize": 1000}
+        if page_token:
+            params["pageToken"] = page_token
+        resp = httpx.get(
+            f"{base}/models",
+            headers=catalog_headers("gemini", api_key),
+            params=params,
+            timeout=_FETCH_TIMEOUT,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        rows.extend(body.get("models") or [])
+        page_token = str(body.get("nextPageToken") or "")
+        if not page_token:
+            break
+    return _parse_gemini(rows)
+
+
+def fetch_models(
+    base_url: str, api_key: str, *, protocol: str = "openai", use_cache: bool = True
+) -> list[CatalogModel]:
     """列出该端点的模型。**取不到时返回空列表** —— 调用方自行决定回退。"""
     base = (base_url or "").rstrip("/")
     if not base:
         return []
-    key = (base, api_key or "")
+    key = (base, api_key or "", protocol)
     if use_cache:
         fresh = _fresh(key)
         if fresh is not None:
             return fresh
     try:
-        resp = httpx.get(
-            f"{base}/models",
-            headers=auth_headers(api_key),
-            timeout=_FETCH_TIMEOUT,
-        )
-        resp.raise_for_status()
-        models = _parse(resp.json().get("data"))
+        if protocol == "gemini":
+            models = _fetch_gemini(base, api_key)
+        else:
+            resp = httpx.get(
+                f"{base}/models",
+                headers=auth_headers(api_key),
+                timeout=_FETCH_TIMEOUT,
+            )
+            resp.raise_for_status()
+            models = _parse(resp.json().get("data"))
     except Exception:  # noqa: BLE001 - 端点不可达/不实现 /models 都只是「没有目录」,不是错误
         with _cache_lock:
             _cache[key] = (time.monotonic(), [], False)
@@ -125,7 +196,7 @@ def fetch_models(base_url: str, api_key: str, *, use_cache: bool = True) -> list
     return models
 
 
-def _fresh(key: tuple[str, str]) -> list[CatalogModel] | None:
+def _fresh(key: _CacheKey) -> list[CatalogModel] | None:
     """缓存里还没过期的那份;没有就 None。失败记录的有效期短得多(见 _FAILURE_TTL_SECONDS)。"""
     with _cache_lock:
         hit = _cache.get(key)
@@ -136,7 +207,9 @@ def _fresh(key: tuple[str, str]) -> list[CatalogModel] | None:
     return models if time.monotonic() - stamped < ttl else None
 
 
-def cached_models(base_url: str, api_key: str) -> list[CatalogModel] | None:
+def cached_models(
+    base_url: str, api_key: str, *, protocol: str = "openai"
+) -> list[CatalogModel] | None:
     """**只看缓存,绝不在调用方线程里发请求**;缺了就在后台去取,并返回 None。
 
     `None` 和 `[]` 是两回事:`[]` 是「问过了,这个端点没列出模型」,`None` 是「还没问到」。
@@ -150,7 +223,7 @@ def cached_models(base_url: str, api_key: str) -> list[CatalogModel] | None:
     base = (base_url or "").rstrip("/")
     if not base:
         return []
-    key = (base, api_key or "")
+    key = (base, api_key or "", protocol)
     fresh = _fresh(key)
     if fresh is not None:
         return fresh
@@ -158,7 +231,7 @@ def cached_models(base_url: str, api_key: str) -> list[CatalogModel] | None:
     return None
 
 
-def _refresh_soon(key: tuple[str, str]) -> None:
+def _refresh_soon(key: _CacheKey) -> None:
     """在后台把这个端点的目录取回来。同一个键同时只有一个在跑。"""
     with _cache_lock:
         if key in _refreshing:
@@ -167,7 +240,7 @@ def _refresh_soon(key: tuple[str, str]) -> None:
 
     def run() -> None:
         try:
-            fetch_models(key[0], key[1], use_cache=False)
+            fetch_models(key[0], key[1], protocol=key[2], use_cache=False)
         except Exception:  # noqa: BLE001 — 后台刷新失败只是"还是没有目录"
             pass
         finally:
@@ -177,13 +250,15 @@ def _refresh_soon(key: tuple[str, str]) -> None:
     threading.Thread(target=run, daemon=True, name="model-catalog-refresh").start()
 
 
-def cached_model(base_url: str, api_key: str, model_id: str) -> CatalogModel | None:
+def cached_model(
+    base_url: str, api_key: str, model_id: str, *, protocol: str = "openai"
+) -> CatalogModel | None:
     """目录里这一个模型的元数据。取不到(还没问到 / 端点没列出它)一律 None ——
     自定义名、私有部署、别名模型都很常见,那不是错误。"""
     target = (model_id or "").strip()
     if not target:
         return None
-    models = cached_models(base_url, api_key)
+    models = cached_models(base_url, api_key, protocol=protocol)
     if not models:
         return None
     return next((m for m in models if m.id == target), None)

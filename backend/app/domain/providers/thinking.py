@@ -93,6 +93,55 @@ _GROK = ThinkingProfile(
 )
 
 
+#: ── Google Gemini(2026-10 查证 https://ai.google.dev/gemini-api/docs/generate-content/thinking)──
+#:
+#: 这几家的值不是发给供应商的原词,而是 **pi 的原生 Gemini Provider** 认的档位名:pi 再按模型翻成 Gemini 3 的
+#: `thinkingLevel`(LOW / MEDIUM / HIGH),或 2.5 的 `thinkingBudget`(token 数)。值只能是 minimal / low / medium / high。
+#:
+#: **Gemini 3 一律关不掉**(没有 off 这一档,`minimal` 也写明「不保证不思考」),2.5 Pro 也关不掉(预算下限 128)。
+#: 关不掉的模型,「关」在界面上是「模型默认」,sidecar 据 `off: None` 不发任何思考配置,由模型自己定
+#: (见 agent-sidecar 的 leaveThinkingToModel)—— 而不是像 pi 默认那样把 2.5 Pro 发成 `thinkingBudget: 0`,那是一个 400。
+
+#: Gemini 3 的 Pro / Flash(3.1 Pro、3.5–3.8 Flash、3 / 3.1 / 3.5 Flash-Lite):`thinkingLevel` 收 low / medium / high。
+_GEMINI_3 = ThinkingProfile(
+    can_disable=False,
+    level_map={"off": None, "low": "low", "medium": "medium", "high": "high"},
+)
+
+#: Gemini 3 Pro Preview:只有 low / high,没有 medium(思考文档的模型表)。
+_GEMINI_3_PRO = ThinkingProfile(
+    can_disable=False,
+    level_map={"off": None, "low": "low", "medium": None, "high": "high"},
+)
+
+#: Gemini 2.5 Pro:`thinkingBudget` 128–32768,「Cannot disable thinking」。pi 按档位给 2048 / 8192 / 32768。
+_GEMINI_25_PRO = ThinkingProfile(
+    can_disable=False,
+    level_map={"off": None, "low": "low", "medium": "medium", "high": "high"},
+)
+
+#: Gemini 2.5 Flash / Flash-Lite:`thinkingBudget = 0` 就是关(Flash-Lite 默认本来就不思考)。
+#: off 的值不会发出去 —— pi 走的是它的关思考分支(预算 0),这里只要不是 None。
+_GEMINI_25_FLASH = ThinkingProfile(
+    can_disable=True,
+    level_map={"off": "off", "low": "low", "medium": "medium", "high": "high"},
+)
+
+
+def _gemini(name: str) -> ThinkingProfile:
+    """Gemini 按家族给。认不出的(2.0 及更老的、以后的新家族)走 UNKNOWN —— 不发任何思考配置,而不是猜一个。"""
+    name = name.removeprefix("models/")
+    if name.startswith("gemini-2.5-pro"):
+        return _GEMINI_25_PRO
+    if name.startswith("gemini-2.5-flash"):
+        return _GEMINI_25_FLASH
+    if name.startswith("gemini-3-pro"):
+        return _GEMINI_3_PRO
+    if name.startswith("gemini-3") or name in {"gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest"}:
+        return _GEMINI_3
+    return UNKNOWN
+
+
 def _by_model_name(name: str) -> ThinkingProfile:
     """只看模型名判家族。**给中转端点用的。**
 
@@ -163,6 +212,8 @@ def profile_for(vendor: str, model_id: str) -> ThinkingProfile:
         return _DEEPSEEK if name.startswith("deepseek-v4") else UNKNOWN
     if vendor == "xai":
         return _GROK if name.startswith("grok-4") else UNKNOWN
+    if vendor == "google":
+        return _gemini(name)
     if vendor == "openai-compatible":
         return _by_model_name(name)
     return UNKNOWN

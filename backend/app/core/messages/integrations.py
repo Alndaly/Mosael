@@ -208,6 +208,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "连接「{name}」是订阅授权(如 Kimi Code),当前操作只支持直连 API;请改用支持订阅网关的画板、工作流或智能体入口",
         "en": "Connection \"{name}\" uses a subscription sign-in (e.g. Kimi Code), while this operation only supports a direct API. Use a board, workflow or agent entry point that supports the subscription gateway.",
     },
+    "aiChat_nativeOnly": {
+        "zh": "连接「{name}」的对话走它自己的原生协议(如 Gemini),当前操作只支持 OpenAI 兼容直连;请改用画板、工作流或智能体入口",
+        "en": "Connection \"{name}\" chats over its own native protocol (e.g. Gemini), while this operation only supports an OpenAI-compatible direct API. Use a board, workflow or agent entry point instead.",
+    },
     "aiChat_oauthRequired": {
         "zh": "连接「{name}」还没有完成订阅授权,请先到设置里登录",
         "en": "Connection \"{name}\" has not completed its subscription sign-in. Sign in from Settings first.",

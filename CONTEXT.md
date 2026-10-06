@@ -263,9 +263,11 @@ _Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生�
 
 **执行面(execution surface)**:
 能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Agent Adapter,API Key 与 OAuth
-订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只认有 `base_url` 的 API Key 连接;`gateway` 走
-sidecar 的**无工具、无记忆单次补全** Adapter,只给已登录 OAuth 连接。画板写作、工作流 LLM 选择
-`automation` 集合(=`direct` + `gateway`),运行时按连接鉴权方式分派;无限画布与工作流 LLM 共用这条
+订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只认有 `base_url`、**不由 pi 承载**的 API Key 连接;`gateway` 走
+sidecar 的**无工具、无记忆单次补全** Adapter,只给**由 pi 原生 Provider 承载**的连接:已登录的 OAuth 订阅,以及预设点名了
+`pi_provider` 的 API Key 连接(Google Gemini —— 它的原生协议要在多轮工具调用里回传思考签名,OpenAI 兼容层做不到;
+判据是 `presets.served_by_pi`,看预设不看鉴权方式)。画板写作、工作流 LLM 选择
+`automation` 集合(=`direct` + `gateway`),运行时按连接是否由 pi 承载分派;无限画布与工作流 LLM 共用这条
 无状态 Interface,但工作流节点目前只组装文本消息。普通 HTTP 调用的素材分析仍独立选一个 `direct`
 模型;AI Studio 的 `analyze_asset` 工具调用则从短期服务令牌绑定的 `agent_session_id` 解析当前连接与模型，
 API Key 走 `direct`、OAuth 走 `gateway`。图片直接送视觉输入；视频在 Gateway 上用采样帧 + 已有转写，

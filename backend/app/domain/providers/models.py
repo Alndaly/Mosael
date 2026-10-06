@@ -23,12 +23,18 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
+from app.ai import gemini_models, model_catalog
 from app.ai.model_catalog import CatalogModel, fetch_models
 from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
 from app.domain.providers import thinking
 from app.domain.providers.credentials import ResolvedConnection
-from app.domain.providers.presets import capability_ids_for_vendor, normalize_capability_ids
+from app.domain.providers.presets import (
+    capability_ids_for_vendor,
+    catalog_protocol,
+    normalize_capability_ids,
+    served_by_pi,
+)
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
 RUNTIME_FIELDS = (
@@ -77,6 +83,21 @@ _CAPABILITY_HINTS: dict[str, tuple[tuple[tuple[str, ...], str], ...]] = {
 #: 播客只有单能力的连接在做,由下面「预设只有一种能力」那条覆盖。
 PRESET_FALLBACK_CAPABILITIES: tuple[str, ...] = ("chat",)
 
+#: 预设替对话作保之前,先问这一家「这个名字是不是对话模型」。
+#:
+#: 只给**清单里混着大批非对话模型、而且命名定死**的那几家:Google 同一把 Key 下 `GET /v1beta/models` 列着 Imagen、
+#: Veo、向量、语音、实时音频(见 ai/gemini_models)。预设说「这家能对话」不等于每个名字都能对话 —— 不问的话,
+#: 手动加进来的 `imagen-4.0-generate-001` 会被认成对话模型,出现在智能体的模型下拉里。
+_CHAT_MODEL_RULES: dict[str, Callable[[str], bool]] = {
+    "google": gemini_models.is_chat_model,
+}
+
+
+def chat_by_name(vendor: str, model_id: str) -> bool:
+    """这个名字在这一家能不能由预设兜底成对话模型。没有规则的那几家一律能(见 `_CHAT_MODEL_RULES`)。"""
+    rule = _CHAT_MODEL_RULES.get(vendor)
+    return rule is None or rule(model_id)
+
 
 def infer_capabilities(vendor: str, model_id: str) -> list[str]:
     """从模型名推它提供哪种能力;推不出来回空。
@@ -119,7 +140,8 @@ def evidenced_capabilities(
          (可以给一个无参函数:目录认得的时候就不必去查库);
       3. 供应商预设**只有一种能力**(火山语音、火山播客、火山音乐……):连接本身就是证据。
 
-    都没有时,多能力预设只替 `PRESET_FALLBACK_CAPABILITIES` 作保(今天只有对话)。认不出的模型于是
+    都没有时,多能力预设只替 `PRESET_FALLBACK_CAPABILITIES` 作保(今天只有对话),而且名字要过这一家的对话模型
+    规则(`_CHAT_MODEL_RULES`,今天只有 Google:`imagen-*`、`gemini-*-tts` 不是对话模型)。认不出的模型于是
     **不出现在任何生成入口里**;要用它出图,在设置里给这一行标上能力 —— 那一格写的就是模型行的
     `capability_ids`,它排在这整条规则之前。
 
@@ -139,7 +161,11 @@ def evidenced_capabilities(
     preset = capability_ids_for_vendor(vendor)
     if len(preset) == 1:
         return preset
-    return [capability for capability in preset if capability in PRESET_FALLBACK_CAPABILITIES]
+    return [
+        capability
+        for capability in preset
+        if capability in PRESET_FALLBACK_CAPABILITIES and (capability != "chat" or chat_by_name(vendor, model_id))
+    ]
 
 
 def _declared_kinds(model: ProviderModel) -> list[str]:
@@ -214,14 +240,15 @@ def models_for_capability(
         stmt = stmt.where(ProviderProfile.owner_user_id == user_id)
     rows = db.scalars(stmt).all()
     if surface in {"direct", "gateway", "automation"}:
-        # OAuth 订阅由 pi Adapter 持有端点和凭据；后端直连 Adapter 没有 base_url/api_key 可用。
-        # 能力同为 chat 只说明模型会对话，不代表两条执行通道可以互换。
+        # 由 pi 承载的连接(OAuth 订阅,以及 Google Gemini 这类预设点名了 pi Provider 的 API Key 连接)只走
+        # pi 的 Adapter:后端直连那条只会说 OpenAI 兼容协议。能力同为 chat 只说明模型会对话，不代表两条执行
+        # 通道可以互换。
         from app.domain.providers import credentials as provider_credentials
 
         def direct(model: ProviderModel) -> bool:
             return (
                 model.profile is not None
-                and model.profile.auth_type != "oauth"
+                and not served_by_pi(model.profile.vendor)
                 and bool((model.profile.base_url or "").strip())
             )
 
@@ -229,7 +256,7 @@ def models_for_capability(
             return (
                 user_id is not None
                 and model.profile is not None
-                and model.profile.auth_type == "oauth"
+                and served_by_pi(model.profile.vendor)
                 and provider_credentials.resolve_connection(db, model.profile, user_id) is not None
             )
         if surface == "direct":
@@ -440,9 +467,13 @@ def catalog(connection: ResolvedConnection) -> list[CatalogModel]:
     两种来源:订阅计划的目录只有登录才知道(Copilot 随档位变、OpenRouter 有几百个),登录时由 pi
     带回、存在他自己那把钥匙上;API Key 连接现打 /models(带 TTL 缓存)。此前模型页和计价页各自
     分一次这个支、各取一半字段。参数是**解析过的**连接(连接 + 这个人的钥匙)。
+
+    API Key 连接的目录按预设说的那种话问(`catalog_protocol`):Google 的是 Gemini 原生目录,只列对话模型。
     """
     if connection.auth_type != "oauth":
-        return fetch_models(connection.base_url or "", connection.api_key or "")
+        return fetch_models(
+            connection.base_url or "", connection.api_key or "", protocol=catalog_protocol(connection.vendor)
+        )
     models = []
     for item in connection.model_catalog or []:
         if not isinstance(item, dict) or not item.get("id"):
@@ -461,3 +492,17 @@ def catalog(connection: ResolvedConnection) -> list[CatalogModel]:
             )
         )
     return models
+
+
+def catalog_entry(connection: ResolvedConnection, model_id: str) -> CatalogModel | None:
+    """目录里这一个模型(只看缓存,缺了在后台去取 —— 见 ai/model_catalog.cached_models)。
+
+    智能体启动一轮和直连对话算输出上限时都要它。此前两处各自 `cached_model(base_url, api_key, model)`,按 OpenAI
+    兼容的说法去问 —— Gemini 的目录这样问永远是空的,窗口和输出上限只能落到内置表或回退值上。
+    """
+    return model_catalog.cached_model(
+        connection.base_url or "",
+        connection.api_key or "",
+        model_id,
+        protocol=catalog_protocol(connection.vendor),
+    )

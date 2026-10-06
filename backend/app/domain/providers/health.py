@@ -21,9 +21,10 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.i18n import tr
+from app.ai.model_catalog import catalog_headers
 from app.domain.providers.credentials import ResolvedConnection
-from app.core.http_retry import RetryingClient, auth_headers
-from app.domain.providers.presets import provider_definition
+from app.core.http_retry import RetryingClient
+from app.domain.providers.presets import catalog_protocol, provider_definition
 
 #: 探活要快。这不是业务请求 —— 慢到几秒的端点,用户想知道的也正是"它慢"。
 PROBE_TIMEOUT_SECONDS = 6
@@ -56,7 +57,9 @@ def probe(profile: ResolvedConnection) -> HealthResult:
         # 没有 base_url 又不是订阅制:多半是还没配完,说不出在线与否。
         return HealthResult(supported=False)
     url = base + health_path_for(profile.vendor)
-    headers = auth_headers(profile.api_key)
+    # 鉴权头按这家目录说的那种话给:Gemini 认 `x-goog-api-key`,把 AI Studio 的 Key 当 Bearer 发过去会被回 401 ——
+    # 界面上就成了一行「凭据被拒」,而钥匙明明是对的。
+    headers = catalog_headers(catalog_protocol(profile.vendor), profile.api_key)
     started = time.monotonic()
     try:
         # 探活**不重试**:重试会把"慢"和"不通"都拉长成一个数字,而这里要的恰恰是当下这一次

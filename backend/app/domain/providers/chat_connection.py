@@ -18,6 +18,7 @@ from app.db.models import ProviderProfile
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
 from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.presets import served_by_pi
 
 #: 调用方在哪条通道上发对话请求(和 ai_chat.target_for 的 `surface` 同一个意思)。
 ChatSurface = Literal["direct", "automation"]
@@ -26,10 +27,11 @@ ChatSurface = Literal["direct", "automation"]
 def reachable_on(profile: ProviderProfile, surface: ChatSurface) -> bool:
     """这条连接在这个调用通道上调不调得通 —— 和 ai_chat.target_for 的判据是同一个。
 
-    订阅授权(OAuth,Kimi Code 这类)的连接没有服务地址,只能经网关(automation:工作流节点、画板)调;
-    直连(direct:界面上的翻译、发布文案、提示词优化)发不出去,target_for 报「只能给智能体用」。
+    由 pi 承载的连接(订阅授权,Kimi Code 这类;以及 Google Gemini 这类预设点名了 pi Provider 的 API Key 连接)只能经
+    网关(automation:工作流节点、画板)调;直连(direct:界面上的翻译、发布文案、提示词优化)只会说 OpenAI 兼容协议,
+    发不出去,target_for 报「只能给智能体用」。
     """
-    return surface == "automation" or not (profile.auth_type == "oauth" and not (profile.base_url or "").strip())
+    return surface == "automation" or not served_by_pi(profile.vendor)
 
 
 def default_chat_connection(db: Session, *, owner_user_id: str | None, surface: ChatSurface) -> ProviderProfile | None:

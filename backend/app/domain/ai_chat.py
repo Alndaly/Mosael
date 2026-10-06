@@ -40,6 +40,7 @@ from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.providers.credentials import ResolvedConnection
 from app.core import http_retry
 from app.domain.providers import models as provider_models
+from app.domain.providers.presets import served_by_pi
 from app.domain.billing.usage import BillableCall
 
 logger = logging.getLogger(__name__)
@@ -134,8 +135,15 @@ def target_for(
     resolved = model or provider_models.model_id_for(db, profile, "chat", profile.owner_user_id)
     if not resolved:
         raise AiChatError("aiChat_noChatModel", name=profile.name)
-    if profile.auth_type == "oauth" and surface == "automation":
-        if not profile.oauth_credential or not profile.owner_user_id:
+    #: **由 pi 承载的连接只走网关**(订阅授权,以及 Gemini 这类预设点名了 pi Provider 的 API Key 连接):端点、协议都在
+    #: pi 的 Provider 里,后端这条直连只会说 OpenAI 兼容协议。Gemini 的连接**有**服务地址,不拦的话会拼出
+    #: `…/v1beta/chat/completions` 打过去 —— 一个 404,用户看不出是哪里不对。
+    if served_by_pi(profile.vendor):
+        oauth = profile.auth_type == "oauth"
+        if surface != "automation":
+            # 订阅授权(Kimi Code 这类)**没有服务地址可填** —— 指人去设置里填地址是把他引向一条走不通的修复路径。
+            raise AiChatError("aiChat_agentOnly" if oauth else "aiChat_nativeOnly", name=profile.name)
+        if oauth and (not profile.oauth_credential or not profile.owner_user_id):
             raise AiChatError("aiChat_oauthRequired", name=profile.name)
         from app.core.config import settings
         from app.core.security import mint_service_session
@@ -152,20 +160,16 @@ def target_for(
             max_output_tokens=_max_output_tokens(db, profile, resolved),
             gateway_provider=sidecar_provider(db, profile, resolved),
             gateway_api_base=f"http://{settings.backend_host}:{settings.backend_port}",
-            # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。
-            gateway_token=mint_service_session(db, profile.owner_user_id),
-            gateway_user_id=profile.owner_user_id,
+            # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。API Key 连接没有要回写的
+            # 东西(钥匙随帧带下去,用完即弃),就不铸 —— 不需要的令牌一枚都不发。
+            gateway_token=mint_service_session(db, profile.owner_user_id) if oauth else "",
+            gateway_user_id=(profile.owner_user_id or "") if oauth else "",
             structured_output=_structured_output(db, profile, resolved),
         )
     #: **地址空着就在这儿说清楚。** 不拦的话拼出来的是 "/chat/completions",httpx 抛的是
     #: 「Request URL is missing an 'http://' or 'https://' protocol」—— 用户看到这句,
     #: 完全想不到要去设置里补一个服务地址。而且这是所有调用方共用的一层,拦在这里全都受益。
     if not (profile.base_url or "").strip():
-        # 订阅授权(Kimi Code 这类 OAuth 连接)**没有服务地址可填** —— 端点、模型目录都在 pi 的
-        # Provider 定义里,后端只递身份(host.resolve_chat_provider)。指人去设置里填地址是把他
-        # 引向一条走不通的修复路径:填了 base_url 也没有 api_key,依然调不通。
-        if profile.auth_type == "oauth":
-            raise AiChatError("aiChat_agentOnly", name=profile.name)
         raise AiChatError("aiChat_noBaseUrl", name=profile.name)
     return ChatTarget(
         base_url=profile.base_url,
@@ -187,10 +191,9 @@ def _max_output_tokens(db: Session, profile: ResolvedConnection, model: str) -> 
     """
     from app.domain.providers import model_limits
     from app.domain.providers import models as provider_models
-    from app.ai.model_catalog import cached_model
 
     row = provider_models.get_model(db, profile.id, model)
-    catalog = cached_model(profile.base_url or "", profile.api_key or "", model)
+    catalog = provider_models.catalog_entry(profile, model)
     return model_limits.resolve(
         model_id=model,
         base_url=profile.base_url or "",

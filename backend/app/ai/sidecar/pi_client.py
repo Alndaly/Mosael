@@ -86,6 +86,36 @@ class GatewayResult:
     usage: dict | None = None
 
 
+def _provider_frame(provider: dict) -> dict:
+    """`sidecar_provider` 那份供应商描述 → sidecar 协议里的 `provider`(见 agent-sidecar/src/protocol.ts)。
+
+    **三种帧共用这一份**(一轮对话、网关单次补全、手动压缩)。此前三处各拼一遍,压缩那份少了思考档位表等几格:
+    手动压缩时摘要请求按「不知道这个模型怎么思考」发 —— 对关不掉思考的 Gemini 2.5 Pro,那是一次 `thinkingBudget: 0`,
+    直接 400。
+    """
+    return {
+        "baseUrl": provider.get("base_url", ""),
+        "apiKey": provider.get("api_key", ""),
+        "vendor": provider.get("vendor", ""),
+        # 供应商目录给了才带上;没有就不传,由 sidecar 用保守回退而不是硬编一个大数。
+        "contextWindow": provider.get("context_window"),
+        "maxOutputTokens": provider.get("max_output_tokens"),
+        # 按模型的手动覆盖。都对应 pi 里真实生效的开关(thinking 格式、图片输入、
+        # reasoning_effort、developer 角色),没填就不传,由 sidecar 保持保守默认。
+        "reasoning": provider.get("reasoning"),
+        "vision": provider.get("vision"),
+        "reasoningEffort": provider.get("reasoning_effort"),
+        # 某一档发什么值、发不发得出去 —— 各家不是同一套词,见 domain/providers/thinking。
+        "thinkingLevelMap": provider.get("thinking_level_map"),
+        "developerRole": provider.get("developer_role"),
+        # 由 pi 的原生 Provider 承载时它的 id(订阅计划,或 Gemini 这类 API Key 连接);订阅的另带当前 OAuth 凭据,
+        # 刷新后由 sidecar 写回后端。
+        "piProvider": provider.get("pi_provider", ""),
+        "credential": provider.get("credential"),
+        "profileId": provider.get("profile_id", ""),
+    }
+
+
 def gateway_complete(
     *,
     system_prompt: str,
@@ -105,22 +135,7 @@ def gateway_complete(
         "systemPrompt": system_prompt,
         "prompt": prompt,
         "images": images or [],
-        "provider": {
-            "baseUrl": provider.get("base_url", ""),
-            "apiKey": provider.get("api_key", ""),
-            "vendor": provider.get("vendor", ""),
-            "contextWindow": provider.get("context_window"),
-            "maxOutputTokens": provider.get("max_output_tokens"),
-            "reasoning": provider.get("reasoning"),
-            "vision": provider.get("vision"),
-            "reasoningEffort": provider.get("reasoning_effort"),
-            # 某一档发什么值、发不发得出去 —— 各家不是同一套词,见 domain/providers/thinking。
-            "thinkingLevelMap": provider.get("thinking_level_map"),
-            "developerRole": provider.get("developer_role"),
-            "piProvider": provider.get("pi_provider", ""),
-            "credential": provider.get("credential"),
-            "profileId": provider.get("profile_id", ""),
-        },
+        "provider": _provider_frame(provider),
         "model": model,
         "apiBase": api_base,
         "token": token,
@@ -401,26 +416,7 @@ def _run_pi(
         "workspaceId": workspace_id,
         "apiBase": api_base,
         "token": token,
-        "provider": {
-            "baseUrl": provider.get("base_url", ""),
-            "apiKey": provider.get("api_key", ""),
-            "vendor": provider.get("vendor", ""),
-            # 供应商目录给了才带上;没有就不传,由 sidecar 用保守回退而不是硬编一个大数。
-            "contextWindow": provider.get("context_window"),
-            "maxOutputTokens": provider.get("max_output_tokens"),
-            # 按模型的手动覆盖。都对应 pi 里真实生效的开关(thinking 格式、图片输入、
-            # reasoning_effort、developer 角色),没填就不传,由 sidecar 保持保守默认。
-            "reasoning": provider.get("reasoning"),
-            "vision": provider.get("vision"),
-            "reasoningEffort": provider.get("reasoning_effort"),
-            # 某一档发什么值、发不发得出去 —— 各家不是同一套词,见 domain/providers/thinking。
-            "thinkingLevelMap": provider.get("thinking_level_map"),
-            "developerRole": provider.get("developer_role"),
-            # 订阅计划(OAuth):pi 内置 Provider 的 id + 当前凭据。刷新后由 sidecar 写回后端。
-            "piProvider": provider.get("pi_provider", ""),
-            "credential": provider.get("credential"),
-            "profileId": provider.get("profile_id", ""),
-        },
+        "provider": _provider_frame(provider),
         "model": model,
         "sessionState": adapter_state,
         # 界面上的「立即压缩」:跳过水位判断,本轮开始前先整理一次上下文。
@@ -595,16 +591,7 @@ def compact_session(
         "systemPrompt": "",
         "apiBase": api_base,
         "token": token,
-        "provider": {
-            "baseUrl": provider.get("base_url", ""),
-            "apiKey": provider.get("api_key", ""),
-            "vendor": provider.get("vendor", ""),
-            "contextWindow": provider.get("context_window"),
-            "maxOutputTokens": provider.get("max_output_tokens"),
-            "piProvider": provider.get("pi_provider", ""),
-            "credential": provider.get("credential"),
-            "profileId": provider.get("profile_id", ""),
-        },
+        "provider": _provider_frame(provider),
         "model": model,
         "sessionState": adapter_state,
     }

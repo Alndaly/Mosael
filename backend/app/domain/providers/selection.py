@@ -17,6 +17,7 @@ from app.domain.providers.presets import (  # noqa: F401 —— 两个 vendor �
     capability_ids_for_vendor,
     normalize_capability_ids,
     provider_definition,
+    served_by_pi,
 )
 from app.domain.providers.credentials import ResolvedConnection
 
@@ -35,7 +36,10 @@ def default_auth_type(vendor: str) -> str:
 
 
 def pi_provider_id(vendor: str) -> str:
-    """该 vendor 对应的 pi 内置 Provider id;非订阅制的返回空串(走自建的 OpenAI 兼容 provider)。"""
+    """该 vendor 对应的 pi 内置 Provider id;不由 pi 承载的返回空串(走自建的 OpenAI 兼容 provider)。
+
+    有 id 的不只是订阅制:Google Gemini 的 API Key 连接同样由 pi 的原生 Provider 承载(见 presets.served_by_pi)。
+    """
     definition = provider_definition(vendor)
     return definition.pi_provider if definition else ""
 

@@ -62,8 +62,13 @@ def test_多能力供应商下认不出的模型不进任何生成入口(vendor:
         preset = provider_definition(vendor).capability_ids
         effective = provider_models.effective_capabilities(row)
         assert not set(effective) & set(NEEDS_EVIDENCE), f"{vendor} 上的陌生模型被认成了 {effective}"
-        # 预设里有对话的,陌生模型只当对话模型;没有对话的(Evolink、方舟……)什么都不是
-        assert effective == [c for c in preset if c in provider_models.PRESET_FALLBACK_CAPABILITIES]
+        # 预设里有对话的,陌生模型只当对话模型;没有对话的(Evolink、方舟……)什么都不是。命名定死的那几家(Google)
+        # 还要名字像个对话模型才算 —— 同一把 Key 下混着 Imagen、向量、语音(见 provider_models.chat_by_name)。
+        assert effective == [
+            c for c in preset
+            if c in provider_models.PRESET_FALLBACK_CAPABILITIES
+            and (c != "chat" or provider_models.chat_by_name(vendor, UNKNOWN))
+        ]
         for kind in GENERATION_KINDS:
             assert UNKNOWN not in [m.model_id for m in provider_models.models_for_capability(db, kind, me)]
             assert UNKNOWN not in [option["model"] for option in generation_options(db, kind, user_id=me)]

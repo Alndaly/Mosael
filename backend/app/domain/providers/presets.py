@@ -19,6 +19,8 @@ from typing import Any
 KNOWN_CAPABILITY_IDS = ("chat", "image", "video", "audio", "tts", "podcast")
 KNOWN_AUTH_TYPES = ("oauth", "api_key")
 KNOWN_FIELD_STORAGES = ("api_key", "base_url", "default_model", "extra")
+#: 模型目录怎么问(见 ai/model_catalog):OpenAI 兼容的 `GET /models`,或 Gemini 原生的 `GET /v1beta/models`。
+KNOWN_CATALOG_PROTOCOLS = ("openai", "gemini")
 
 
 @dataclass(frozen=True)
@@ -70,8 +72,11 @@ class ProviderDefinition:
     capabilities: str = ""
     fields: tuple[ProviderField, ...] = ()
     auth_types: tuple[str, ...] = ("api_key",)
+    #: 由 pi 的哪个原生 Provider 承载对话(见 `served_by_pi`)。空 = 后端自己按 OpenAI 兼容协议调。
     pi_provider: str = ""
     health_path: str = ""
+    #: 这家的模型目录说哪种话(`KNOWN_CATALOG_PROTOCOLS`)。
+    model_catalog: str = "openai"
 
     @classmethod
     def from_mapping(cls, vendor: str, value: Mapping[str, object]) -> ProviderDefinition:
@@ -105,6 +110,9 @@ class ProviderDefinition:
         health_path = str(value.get("health_path") or "")
         if health_path and not health_path.startswith("/"):
             raise ValueError(f"Provider {vendor!r}: health_path must start with /")
+        model_catalog = str(value.get("model_catalog") or "openai")
+        if model_catalog not in KNOWN_CATALOG_PROTOCOLS:
+            raise ValueError(f"Provider {vendor!r} declares unknown model catalog {model_catalog!r}")
         return cls(
             vendor=vendor,
             label=str(value.get("label") or vendor),
@@ -116,6 +124,7 @@ class ProviderDefinition:
             auth_types=auth_types,
             pi_provider=str(value.get("pi_provider") or ""),
             health_path=health_path,
+            model_catalog=model_catalog,
         )
 
     def field(self, key: str) -> ProviderField | None:
@@ -483,14 +492,24 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         ],
     },
     "google": {
-        "label": "Google (Veo/Gemini)",
+        # 对话由 pi 的**原生** Gemini Provider 承载(`pi_provider`),不走 Gemini 的 OpenAI 兼容层:Gemini 3 在多轮
+        # 工具调用里要把每次函数调用带回来的思考签名(thoughtSignature)原样发回去,兼容层把它丢了,第二步起
+        # 整轮 400「Function call is missing a thought_signature」。Veo / Lyria 仍由后端自己的 Adapter 直连。
+        #
+        # **只收 API Key,没有订阅登录。**Gemini 订阅(Google AI Pro / Ultra,即 Gemini CLI / Antigravity 的那种
+        # 登录)自 2026-03 起明确禁止第三方使用 —— 这里不提供、也不该加。
+        "label": "Google AI Studio(Gemini / Veo / Lyria)",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "capabilities": "视频生成(Veo)与音乐生成(Lyria 3 / 3.5)。Gemini/Imagen/Embedding 待对应 Adapter 接入后再开放。",
-        "capability_ids": ["video", "audio"],
+        "capabilities": "对话(Gemini)、视频生成(Veo)与音乐生成(Lyria 3 / 3.5)。Imagen 与 Embedding 待接入。"
+        "Gemini 订阅(Google AI Pro/Ultra)不能给第三方用,这里填 AI Studio 的 API Key。",
+        "capability_ids": ["chat", "video", "audio"],
+        "auth": ["api_key"],
+        "pi_provider": "google",
+        "model_catalog": "gemini",
         "fields": [
             {
                 "key": "api_key",
-                "label": "Google API Key",
+                "label": "Gemini API Key",
                 "storage": "api_key",
                 "secret": True,
                 "required": True,
@@ -500,6 +519,7 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "label": "Generative Language Endpoint",
                 "storage": "base_url",
                 "default": "https://generativelanguage.googleapis.com/v1beta",
+                "hint": "通常保持默认。Gemini 对话、Veo、Lyria 共用这一个地址。",
             },
             {
                 "key": "default_model",
@@ -652,6 +672,23 @@ def capability_ids_for_vendor(vendor: str) -> list[str]:
     """
     definition = provider_definition(vendor)
     return list(definition.capability_ids) if definition else []
+
+
+def served_by_pi(vendor: str) -> bool:
+    """这家的对话由 pi 的原生 Provider 承载:端点、协议细节、模型元数据都在 pi 那边,后端不直连。
+
+    订阅授权(OAuth)的几家一律是;API Key 连接在预设点名了 pi Provider 时也是(Google Gemini)。
+    **判据看预设,不看鉴权方式** —— 此前各处问的是 `auth_type == "oauth"`,那只在「pi 承载 = 订阅」的年代成立。
+    这类连接走智能体(`agent`)与无工具网关(`gateway`),不走后端的 OpenAI 兼容直连(`direct`)。
+    """
+    definition = provider_definition(vendor)
+    return bool(definition and definition.pi_provider)
+
+
+def catalog_protocol(vendor: str) -> str:
+    """这家的模型目录说哪种话(`KNOWN_CATALOG_PROTOCOLS`);认不出的 vendor 按 OpenAI 兼容。"""
+    definition = provider_definition(vendor)
+    return definition.model_catalog if definition else "openai"
 
 
 def normalize_capability_ids(values: list[str] | None) -> list[str] | None:
