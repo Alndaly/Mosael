@@ -204,7 +204,12 @@ describe("闲置自动停", () => {
     api.putLocalService.mockResolvedValue(service({ idle_stop_minutes: 10 }));
     mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     expect(await screen.findByText("本机的 ComfyUI 闲置了 30 分钟,自动停了")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /localServiceAdvanced/ }));
+    const advanced = screen.getByRole("button", { name: /localServiceAdvanced/ });
+    expect(advanced.hasAttribute("data-disclosure-trigger"), "「高级」是一行字(共用的折叠开关),不是一颗按钮").toBe(true);
+    expect(advanced.className).not.toMatch(/(^|\s)(hover:)?bg-(?!transparent)|(^|\s)px-|(^|\s)h-\d/);
+    expect(screen.queryByLabelText("localServiceIdleLabel"), "收着的时候不挂载").toBeNull();
+    fireEvent.click(advanced);
+    expect(advanced.getAttribute("aria-expanded")).toBe("true");
     const field = screen.getByLabelText("localServiceIdleLabel") as HTMLInputElement;
     expect(field.value).toBe("30");
     fireEvent.focus(field);

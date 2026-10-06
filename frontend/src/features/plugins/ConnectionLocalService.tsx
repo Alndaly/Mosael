@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, CircleAlert, CircleCheck, FileText, Info, Library, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, FileText, Info, Library, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -35,6 +35,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { PathField } from "@/components/settings/PathField";
 import { SETTINGS_FIELD_WIDTH, SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
+import { Disclosure } from "@/components/ui/disclosure";
 import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -1016,50 +1017,49 @@ function ServiceRows({
         onConfirm={() => save.mutate({ listen_lan: true }, { onSettled: () => setConfirmLan(false) })}
       />
 
-      <div className="py-3">
-        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
-          <ChevronRight className={cn("transition-transform duration-100", advanced && "rotate-90")} />
-          {t("localServiceAdvanced")}
-        </Button>
-      </div>
-      {advanced && (
-        <>
-          <SettingsRow label={t("localServicePortLabel")} description={t("localServicePortDesc")}>
-            <DraftField
-              label={t("localServicePortLabel")}
-              value={String(service.port)}
-              disabled={!manage || active}
-              inputMode="numeric"
-              onCommit={(text) => {
-                const port = Number.parseInt(text, 10);
-                if (Number.isFinite(port) && port !== service.port) save.mutate({ port });
-              }}
-            />
-          </SettingsRow>
-          <SettingsRow label={t("localServiceExtraArgs")} description={t("localServiceExtraArgsDesc")}>
-            <DraftField
-              label={t("localServiceExtraArgs")}
-              value={joinArgs(service.extra_args ?? [])}
-              disabled={!manage}
-              onCommit={(text) => {
-                if (text.trim() !== joinArgs(service.extra_args ?? [])) save.mutate({ extra_args: text });
-              }}
-            />
-          </SettingsRow>
-          <SettingsRow label={t("localServiceIdleLabel")} description={t("localServiceIdleDesc")}>
-            <DraftField
-              label={t("localServiceIdleLabel")}
-              value={String(service.idle_stop_minutes ?? 0)}
-              disabled={!manage}
-              inputMode="numeric"
-              onCommit={(text) => {
-                const minutes = Number.parseInt(text, 10);
-                if (Number.isFinite(minutes) && minutes !== service.idle_stop_minutes) save.mutate({ idle_stop_minutes: minutes });
-              }}
-            />
-          </SettingsRow>
-        </>
-      )}
+      {/* 「高级」是一行字、不是按钮:和上面设置行的标签左对齐;展开的那几行照样一行一条分隔线 */}
+      <Disclosure
+        label={t("localServiceAdvanced")}
+        open={advanced}
+        onOpenChange={setAdvanced}
+        triggerClassName="py-3"
+        contentClassName="grid border-t border-divider [&>*+*]:border-t [&>*+*]:border-divider"
+      >
+        <SettingsRow label={t("localServicePortLabel")} description={t("localServicePortDesc")}>
+          <DraftField
+            label={t("localServicePortLabel")}
+            value={String(service.port)}
+            disabled={!manage || active}
+            inputMode="numeric"
+            onCommit={(text) => {
+              const port = Number.parseInt(text, 10);
+              if (Number.isFinite(port) && port !== service.port) save.mutate({ port });
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow label={t("localServiceExtraArgs")} description={t("localServiceExtraArgsDesc")}>
+          <DraftField
+            label={t("localServiceExtraArgs")}
+            value={joinArgs(service.extra_args ?? [])}
+            disabled={!manage}
+            onCommit={(text) => {
+              if (text.trim() !== joinArgs(service.extra_args ?? [])) save.mutate({ extra_args: text });
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow label={t("localServiceIdleLabel")} description={t("localServiceIdleDesc")}>
+          <DraftField
+            label={t("localServiceIdleLabel")}
+            value={String(service.idle_stop_minutes ?? 0)}
+            disabled={!manage}
+            inputMode="numeric"
+            onCommit={(text) => {
+              const minutes = Number.parseInt(text, 10);
+              if (Number.isFinite(minutes) && minutes !== service.idle_stop_minutes) save.mutate({ idle_stop_minutes: minutes });
+            }}
+          />
+        </SettingsRow>
+      </Disclosure>
       {logsOpen && <LocalServiceLogDialog instanceId={instanceId} title={service.title} onClose={() => setLogsOpen(false)} />}
     </>
   );

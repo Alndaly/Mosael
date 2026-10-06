@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import {
   createGenerationProfile,
@@ -24,6 +24,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { Truncate } from "@/components/ui/truncate";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { Disclosure } from "@/components/ui/disclosure";
 import { GENERATION_KINDS, type GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
@@ -525,19 +526,15 @@ export function ModelSettingsDialog({
         {isChat && (
           /* 高级是**对话那一组里**的折叠开关,不是又一个区段 —— 它此前顶着同样的标题字号、
              上面还有自己的分隔线,于是读起来像第三个并列的标题。 */
-          <div className="-mt-1">
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left"
-              onClick={() => setAdvancedOpen((v) => !v)}
-            >
-              <span className="text-ui-sm font-medium text-muted-foreground">{t("modelSettingsAdvanced")}</span>
-              <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
-                {t("modelSettingsAdvancedHint")}
-                <ChevronDown size={13} className={cn("transition-transform", advancedOpen && "rotate-180")} />
-              </span>
-            </button>
-            {advancedOpen && current && (
+          <Disclosure
+            className="-mt-1"
+            label={t("modelSettingsAdvanced")}
+            hint={t("modelSettingsAdvancedHint")}
+            wide
+            open={advancedOpen}
+            onOpenChange={setAdvancedOpen}
+          >
+            {current && (
               <div className="mt-1.5 grid gap-1.5">
                 <AdvancedToggle
                   label={t("modelSettingsReasoning")}
@@ -592,7 +589,7 @@ export function ModelSettingsDialog({
                 </p>
               </div>
             )}
-          </div>
+          </Disclosure>
         )}
 
         {/* 「生成」组头只说一遍:双能力模型的两个 kind 共享这一组,kind 落在字段名后面,

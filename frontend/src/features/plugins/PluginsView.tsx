@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -54,6 +54,7 @@ import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
+import { Disclosure } from "@/components/ui/disclosure";
 import { DeleteConnectionDialog, UninstallPluginDialog } from "@/features/plugins/LocalServiceRemoval";
 import { ConnectionLibraries } from "@/features/plugins/ConnectionLibraries";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
@@ -1352,19 +1353,10 @@ export function ToolTryForm({
     <>
       {basic.length > 0 && <div className="grid gap-4">{form(basic)}</div>}
       {advanced.length > 0 && (
-        <div className="grid gap-4">
-          <button
-            type="button"
-            aria-expanded={showAdvanced}
-            className="inline-flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-ui-sm font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => setShowAdvanced((value) => !value)}
-          >
-            {showAdvanced ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            {t("wfAdvanced")}
-            <span className="text-ui-xs font-normal">{advanced.length}</span>
-          </button>
-          {showAdvanced && form(advanced)}
-        </div>
+        <Disclosure label={t("wfAdvanced")} count={advanced.length} open={showAdvanced} onOpenChange={setShowAdvanced}
+                    contentClassName="pt-4">
+          {form(advanced)}
+        </Disclosure>
       )}
       {/* **把理由摆在按钮旁边。** 「未启用」这句话本来只写在整组的标题下,而工具行
           可能在它下面好几百像素处 —— 用户看到的就只是一个灰着的按钮,试不出所以然。
