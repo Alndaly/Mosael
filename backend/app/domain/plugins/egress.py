@@ -76,6 +76,23 @@ class Egress:
             return {"NO_PROXY": BYPASS_ALL, "no_proxy": BYPASS_ALL, **mirrors}
         return mirrors
 
+    def bypasses(self, url: str) -> bool:
+        """走代理时,`url` 的主机在绕过列表里(这一个直连)。不走代理时总是假 —— 那时谈不上「绕过」。"""
+        if not self.proxy_url:
+            return False
+        return bool(proxy_bypass_environment(urlsplit(url).hostname or "", {"no": self.no_proxy}))
+
+    @property
+    def shown_proxy(self) -> str:
+        """给人看的代理地址:地址里的用户名、密码换成 `***`(安装计划这类地方要写明走哪个代理,但不该把密码摆出来)。"""
+        parts = urlsplit(self.proxy_url)
+        if not parts.username and not parts.password:
+            return self.proxy_url
+        host = parts.hostname or ""
+        host = f"[{host}]" if ":" in host else host
+        netloc = f"***@{host}" + (f":{parts.port}" if parts.port else "")
+        return parts._replace(netloc=netloc).geturl()
+
     def httpx_options(self, url: str) -> dict[str, Any]:
         """后端替这个连接请求 `url` 时交给 httpx 的参数 —— 和 `child_env()` 是同一个决定。
 
@@ -84,8 +101,7 @@ class Egress:
         返回空字典,httpx 照后端自己的出站办。
         """
         if self.proxy_url:
-            host = urlsplit(url).hostname or ""
-            if proxy_bypass_environment(host, {"no": self.no_proxy}):
+            if self.bypasses(url):
                 return {"trust_env": False}
             return {"trust_env": False, "proxy": self.proxy_url}
         if self.no_proxy == BYPASS_ALL:

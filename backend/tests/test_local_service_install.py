@@ -65,7 +65,10 @@ def plan(payload):
             "flavour": "fake", "torch": {"zh": "假 torch", "en": "Fake torch"}, "comfyui": "9.9.9",
             "disk_bytes": 5, "free_bytes": 100,
             "steps": [{"key": key, "title": TITLES[key], "done": key in done} for key in STEPS],
-            "downloads": [{"label": "源码", "url": payload["sources"]["github_mirror"] + "https://codeload.github.com/x"}],
+            "downloads": [{"label": "源码", "url": payload["sources"]["github_mirror"] + "https://codeload.github.com/x",
+                           "source": "github"},
+                          {"label": "依赖", "url": "https://pypi.internal.example/simple", "source": "pip"},
+                          {"label": "别的", "url": "https://other.example/x", "source": "ftp"}],
             "problems": control(root).get("problems", [])}
 
 def install(payload):
@@ -236,6 +239,37 @@ def test_安装计划_只给部署管理员_宿主加上试起那一步_写明�
     member = second_client("member")
     assert member.get(_url(_connection(member), "/plan")).status_code == 403, "那是这台机器上的事:部署管理员"
     runtime_config.refresh()
+
+
+def test_安装计划写明下载怎么走_跟随全局_自己的代理_直连_绕过列表_每个地址被哪一项下载源改写(plugged) -> None:
+    """维护者问「这里的下载是不能走代理的吗」:计划里说清楚插件进程拿到的是哪条路(egress 的同一个决定),密码不摆出来。"""
+    from app.ai.runtime import config as runtime_config
+
+    instance_id = _connection(plugged)
+    assert plugged.put("/api/settings/install-source", json={"pip_index": "tsinghua"}).status_code == 200
+    try:
+        # 跟随全局,全局没设代理:Mosael 什么都不给
+        body = plugged.get(_url(instance_id, "/plan")).json()
+        assert body["route"] == {"kind": "system", "proxy": ""}
+        assert all(one["bypass"] is False for one in body["downloads"])
+        # 跟随全局,全局设了代理(带账号密码),依赖源的主机在绕过列表里
+        assert plugged.put("/api/settings/network", json={"proxy_url": "http://me:secret@127.0.0.1:7897",
+                                                          "no_proxy": "pypi.internal.example"}).status_code == 200
+        body = plugged.get(_url(instance_id, "/plan")).json()
+        assert body["route"] == {"kind": "global", "proxy": "http://***@127.0.0.1:7897"}, "密码不摆出来"
+        assert [(one["source"], one["setting"], one["bypass"]) for one in body["downloads"]] == [
+            ("github", "", False), ("pip", "清华大学", True), ("", "", False)], "不认的 source 当没有"
+        # 这个连接自己的代理:绕过列表只有回环
+        plugged.patch(f"/api/plugins/instances/{instance_id}", json={"network": {"mode": "proxy", "proxy_url": "socks5://10.0.0.2:1080"}})
+        body = plugged.get(_url(instance_id, "/plan")).json()
+        assert body["route"] == {"kind": "own", "proxy": "socks5://10.0.0.2:1080"}
+        assert all(one["bypass"] is False for one in body["downloads"])
+        # 直连
+        plugged.patch(f"/api/plugins/instances/{instance_id}", json={"network": {"mode": "direct"}})
+        assert plugged.get(_url(instance_id, "/plan")).json()["route"] == {"kind": "direct", "proxy": ""}
+    finally:
+        plugged.put("/api/settings/network", json={"proxy_url": "", "no_proxy": ""})
+        runtime_config.refresh()
 
 
 def test_安装计划里插件说的问题_有一条_error_就不能装(plugged) -> None:

@@ -32,6 +32,20 @@ def for_plugin() -> dict[str, str]:
     }
 
 
+def labels() -> dict[str, str]:
+    """三项此刻在界面上叫什么(安装计划在每个下载地址旁边写明它被哪一项改写了):`pip`、`pytorch` 是预设的名字或自填的地址,
+    `github` 是前缀本身(空 = 没设,直连 GitHub)。"""
+    from app.domain.plugins import package_sources
+
+    current = runtime_config.get()
+    key = (current.pytorch_index or "").strip() or runtime_config.OFFICIAL_PYTORCH
+    return {
+        "pip": package_sources.choice_label("pypi", current.pip_index or ""),
+        "pytorch": tr(_PYTORCH_LABELS[key]) if key in _PYTORCH_LABELS else key,
+        "github": current.github_mirror or "",
+    }
+
+
 def _http_url(value: str) -> bool:
     parts = urlsplit(value)
     return parts.scheme in ("http", "https") and bool(parts.hostname)
@@ -65,4 +79,4 @@ def pytorch_presets() -> list[dict[str, str]]:
             for key, url in runtime_config.PYTORCH_INDEXES.items()]
 
 
-__all__ = ["for_plugin", "normalize_github_mirror", "normalize_pytorch_index", "pytorch_presets"]
+__all__ = ["for_plugin", "labels", "normalize_github_mirror", "normalize_pytorch_index", "pytorch_presets"]

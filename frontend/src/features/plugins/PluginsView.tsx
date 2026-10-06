@@ -904,7 +904,9 @@ export function ConnectionCard({
       )}
 
       {/* 网络是宿主给**每个**连接的一行(不是清单里的配置),排在插件自己声明的配置与凭据之后。 */}
-      <ConnectionNetwork instanceId={instance.id} network={instance.network ?? { mode: "follow", proxy_url: "" }} />
+      <div data-connection-section="network">
+        <ConnectionNetwork instanceId={instance.id} network={instance.network ?? { mode: "follow", proxy_url: "" }} />
+      </div>
       {(instance.package_sources ?? []).length > 0 && (
         <ConnectionPackageSources instanceId={instance.id} sources={instance.package_sources ?? []} />
       )}

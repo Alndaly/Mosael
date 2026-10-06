@@ -574,13 +574,16 @@ def plan(payload: dict[str, Any], locale: str, *, machine: Machine | None = None
     downloads = []
     if verdict.ok:
         index = torch_index(verdict.flavour, sources)
+        # 地址已经是改写过的(GitHub 镜像前缀接在前面、pip / PyTorch 源换过);`source` 说是被下载源里的哪一项改写的
         downloads = [
             {"label": {"zh": f"ComfyUI {COMFYUI_VERSION} 源码", "en": f"ComfyUI {COMFYUI_VERSION} source"},
-             "url": pinned.source_url(COMFYUI.url, sources["github_mirror"])},
-            {"label": _torch_label(verdict.flavour), "url": index or "https://pypi.org/simple"},
+             "url": pinned.source_url(COMFYUI.url, sources["github_mirror"]), "source": "github"},
+            {"label": _torch_label(verdict.flavour), "url": index or "https://pypi.org/simple",
+             "source": "pip" if verdict.flavour == "mps" else "pytorch"},
             {"label": {"zh": "ComfyUI 的依赖、ComfyUI-Manager", "en": "ComfyUI's dependencies, ComfyUI-Manager"},
-             "url": sources["pip_index_url"] or "https://pypi.org/simple"},
-            {"label": {"zh": "pysssss", "en": "pysssss"}, "url": pinned.source_url(service.PYSSSSS.url, sources["github_mirror"])},
+             "url": sources["pip_index_url"] or "https://pypi.org/simple", "source": "pip"},
+            {"label": {"zh": "pysssss", "en": "pysssss"}, "url": pinned.source_url(service.PYSSSSS.url, sources["github_mirror"]),
+             "source": "github"},
         ]
     return {
         "ok": verdict.ok,

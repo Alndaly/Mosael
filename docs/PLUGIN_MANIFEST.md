@@ -1516,7 +1516,7 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `service_add_nodes` | `directory`、`python`、`sources` | `installed`、`path`、`message`;宿主只在人点了「补装」并确认之后才问 |
 | `service_discover` | — | `servers: [{url, label}]`:本机已经在跑的(只收本机地址);插件页据此提示「本机发现一个,要连上吗」,建的是「连一台服务器」那一种 |
 | `service_readdress` | `from`、`to` | 端口改了:把按旧地址存的本地数据搬到新地址名下。做不到只是少了缓存 |
-| `service_plan` | `directory`(宿主分的安装目录)、`python`(建 venv 用的随包 Python)、`sources` | 让 Mosael 装之前:`ok`(这台机器能装)、`platform` / `verdict`(是什么机器、为什么能 / 不能装)、`flavour`(装哪种,确认后原样带回)、`torch`、`comfyui`(版本)、`disk_bytes` / `free_bytes`、`steps: [{key, title, done}]`(接着装时做完的打勾)、`downloads: [{label, url}]`、`problems`(同 `service_detect`;有一条 error 就开始不了)。只看、不写 |
+| `service_plan` | `directory`(宿主分的安装目录)、`python`(建 venv 用的随包 Python)、`sources` | 让 Mosael 装之前:`ok`(这台机器能装)、`platform` / `verdict`(是什么机器、为什么能 / 不能装)、`flavour`(装哪种,确认后原样带回)、`torch`、`comfyui`(版本)、`disk_bytes` / `free_bytes`、`steps: [{key, title, done}]`(接着装时做完的打勾)、`downloads: [{label, url, source}]`(`url` 是按下载源改写过的地址,`source` 说是被哪一项改写的:`github` / `pytorch` / `pip`;宿主据此在旁边写明那一项此刻的设置,并按这个连接的出站代理标出绕过列表里直连的那几个)、`problems`(同 `service_detect`;有一条 error 就开始不了)。只看、不写 |
 | `service_install` | `directory`、`python`、`flavour`、`sources`、`log`(宿主给的日志文件)、`pip_cache` | **流式**(见下):一步一行进度,最后交回装好的那一份(宿主据此试起一次,健康检查通过才算装好)。取消文件出现就停在手上那一步;再来一次从没做完的那一步接着装 |
 
 `sources` 是「管理 → 下载源」里的三个地址:`pip_index_url`(空 = 官方 PyPI)、`pytorch_index_url`(PyTorch 的 simple 索引根,

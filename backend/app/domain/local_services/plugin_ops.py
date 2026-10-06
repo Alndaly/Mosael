@@ -51,6 +51,8 @@ READY_TIMEOUT_RANGE = (5.0, 1800.0)
 MAX_FACTS = 30
 MAX_PROBLEMS = 20
 MAX_TEXT = 1000
+#: 安装计划里一个下载地址可以说「我被下载源里的哪一项改写」:GitHub 镜像前缀、PyTorch 源、pip 源(见 local_services.sources)。
+DOWNLOAD_SOURCES = ("github", "pytorch", "pip")
 
 
 def _said(value: Any, manifest: Manifest) -> str:
@@ -176,7 +178,9 @@ def plan(db: Session, instance: PluginInstance, service: str, payload: dict[str,
         if isinstance(one, dict) and one.get("key") and _said(one.get("title"), manifest)
     ]
     downloads = [
-        {"label": _said(one.get("label"), manifest), "url": str(one.get("url") or "")[:MAX_TEXT]}
+        {"label": _said(one.get("label"), manifest), "url": str(one.get("url") or "")[:MAX_TEXT],
+         # 这个地址被「管理 → 下载源」里的哪一项改写(github / pytorch / pip;别的不认)
+         "source": one.get("source") if one.get("source") in DOWNLOAD_SOURCES else ""}
         for one in _listed(output.get("downloads"), MAX_FACTS)
         if isinstance(one, dict) and _said(one.get("label"), manifest)
     ]

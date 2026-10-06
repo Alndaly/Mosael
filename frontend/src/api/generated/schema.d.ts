@@ -12332,6 +12332,22 @@ export interface components {
              * @default
              */
             url: string;
+            /**
+             * Source
+             * @default
+             * @enum {string}
+             */
+            source: "" | "github" | "pytorch" | "pip";
+            /**
+             * Setting
+             * @default
+             */
+            setting: string;
+            /**
+             * Bypass
+             * @default false
+             */
+            bypass: boolean;
         };
         /** LocalServiceFactOut */
         LocalServiceFactOut: {
@@ -12580,6 +12596,7 @@ export interface components {
             steps?: components["schemas"]["LocalServiceInstallStepOut"][];
             /** Downloads */
             downloads?: components["schemas"]["LocalServiceDownloadOut"][];
+            route: components["schemas"]["LocalServiceRouteOut"];
             /** Problems */
             problems?: components["schemas"]["LocalServiceProblemOut"][];
             /**
@@ -12597,6 +12614,22 @@ export interface components {
             level: "error" | "warning";
             /** Text */
             text: string;
+        };
+        /**
+         * LocalServiceRouteOut
+         * @description 装的时候下载走哪条路(插件进程拿到的就是这一份,见 plugins/egress)。
+         */
+        LocalServiceRouteOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "global" | "own" | "direct" | "system";
+            /**
+             * Proxy
+             * @default
+             */
+            proxy: string;
         };
         /**
          * LocalServiceUpdate

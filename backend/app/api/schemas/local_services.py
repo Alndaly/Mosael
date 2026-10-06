@@ -161,6 +161,22 @@ class LocalServiceDownloadOut(ApiModel):
 
     label: str
     url: str = ""
+    #: 这个地址被「管理 → 下载源」里的哪一项改写:`github`(GitHub 镜像前缀)/ `pytorch`(PyTorch 源)/ `pip`(pip 源);空 = 都不管它。
+    source: Literal["", "github", "pytorch", "pip"] = ""
+    #: 那一项此刻的设置在界面上叫什么(预设的名字、自填的地址;GitHub 镜像前缀没设是空串)。
+    setting: str = ""
+    #: 走代理时这个地址的主机在绕过列表里:它直连,不经代理。
+    bypass: bool = False
+
+
+class LocalServiceRouteOut(ApiModel):
+    """装的时候下载走哪条路(插件进程拿到的就是这一份,见 plugins/egress)。"""
+
+    #: `global` 跟随全局网络设置、全局设了代理;`own` 这个连接自己的代理;`direct` 这个连接直连;
+    #: `system` 跟随全局、全局没设代理(Mosael 不给代理,照系统的代理设置走)。
+    kind: Literal["global", "own", "direct", "system"]
+    #: 走的代理(账号密码换成 `***`);不走代理时是空串。
+    proxy: str = ""
 
 
 class LocalServicePlanOut(ApiModel):
@@ -183,6 +199,8 @@ class LocalServicePlanOut(ApiModel):
     free_bytes: int = 0
     steps: list[LocalServiceInstallStepOut] = Field(default_factory=list)
     downloads: list[LocalServiceDownloadOut] = Field(default_factory=list)
+    #: 下载走哪条路。
+    route: LocalServiceRouteOut
     problems: list[LocalServiceProblemOut] = Field(default_factory=list)
     #: 装在哪(宿主分的安装目录)。
     directory: str = ""

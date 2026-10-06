@@ -499,7 +499,24 @@ def plan(db: Session, instance: PluginInstance) -> dict[str, Any]:
                                                          "sources": sources.for_plugin()})
     installed = row is not None and row.mode == records.MANAGED and bool(row.python_minor) and not needs_rebuild(row)
     found["steps"].append({"key": installer.TRIAL, "title": tr("localServiceInstall_trial"), "done": installed})
-    return {**found, "directory": root}
+    egress = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
+    configured = sources.labels()
+    downloads = [{**one, "bypass": egress.bypasses(one["url"]), "setting": configured.get(one["source"], "")}
+                 for one in found["downloads"]]
+    return {**found, "downloads": downloads, "route": _route(instance, egress), "directory": root}
+
+
+def _route(instance: PluginInstance, egress: plugin_egress.Egress) -> dict[str, str]:
+    """装的时候下载走哪条路 —— 插件进程拿到的就是这一份(`egress.resolve`,和 child_env 同一个决定),安装计划照着说:
+    `global` 跟随全局、全局设了代理;`own` 这个连接自己的代理;`direct` 这个连接直连;`system` 跟随全局、全局没设代理
+    (Mosael 什么都不给,下载和 pip 照系统的代理设置走,系统也没设就是直连)。代理地址里的账号密码不摆出来。"""
+    if instance.network_mode == plugin_egress.DIRECT:
+        return {"kind": "direct", "proxy": ""}
+    if instance.network_mode == plugin_egress.PROXY:
+        return {"kind": "own", "proxy": egress.shown_proxy}
+    if egress.proxy_url:
+        return {"kind": "global", "proxy": egress.shown_proxy}
+    return {"kind": "system", "proxy": ""}
 
 
 def prepare_install(db: Session, instance: PluginInstance) -> None:

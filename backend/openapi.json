@@ -34168,6 +34168,27 @@
             "type": "string",
             "title": "Url",
             "default": ""
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "",
+              "github",
+              "pytorch",
+              "pip"
+            ],
+            "title": "Source",
+            "default": ""
+          },
+          "setting": {
+            "type": "string",
+            "title": "Setting",
+            "default": ""
+          },
+          "bypass": {
+            "type": "boolean",
+            "title": "Bypass",
+            "default": false
           }
         },
         "type": "object",
@@ -34613,6 +34634,9 @@
             "type": "array",
             "title": "Downloads"
           },
+          "route": {
+            "$ref": "#/components/schemas/LocalServiceRouteOut"
+          },
           "problems": {
             "items": {
               "$ref": "#/components/schemas/LocalServiceProblemOut"
@@ -34628,7 +34652,8 @@
         },
         "type": "object",
         "required": [
-          "ok"
+          "ok",
+          "route"
         ],
         "title": "LocalServicePlanOut",
         "description": "让 Mosael 装之前的安装计划(插件看过这台机器):能不能装、装哪种 PyTorch、要多少空间、分几步、从哪儿下。"
@@ -34654,6 +34679,31 @@
           "text"
         ],
         "title": "LocalServiceProblemOut"
+      },
+      "LocalServiceRouteOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "global",
+              "own",
+              "direct",
+              "system"
+            ],
+            "title": "Kind"
+          },
+          "proxy": {
+            "type": "string",
+            "title": "Proxy",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "LocalServiceRouteOut",
+        "description": "装的时候下载走哪条路(插件进程拿到的就是这一份,见 plugins/egress)。"
       },
       "LocalServiceUpdate": {
         "properties": {

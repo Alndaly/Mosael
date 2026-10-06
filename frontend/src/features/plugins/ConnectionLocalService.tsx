@@ -46,6 +46,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { ModelLibraryDialog } from "@/features/plugins/ModelLibrary";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { gotoAdmin } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
 /** 本机服务的地址写进连接配置的这一格(清单格式的约定,见 mosael_formats.plugin_manifest.SERVICE_ADDRESS_FIELD)。 */
@@ -493,7 +494,7 @@ function ManagedInstall({
       ) : plan.error ? (
         <p role="alert" className="m-0 text-ui-sm text-destructive">{(plan.error as Error).message}</p>
       ) : found ? (
-        <PlanFacts plan={found} />
+        <PlanFacts instanceId={instanceId} plan={found} />
       ) : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {onCancel && (
@@ -533,8 +534,93 @@ function ManagedInstall({
   );
 }
 
-/** 安装计划:这台机器(能不能装、为什么)、问题、PyTorch、空间、装在哪、分几步、从哪儿下;不下模型。 */
-function PlanFacts({ plan }: { plan: LocalServicePlan }) {
+const ROUTE_TEXT: Record<LocalServicePlan["route"]["kind"], MessageKey> = {
+  global: "localServicePlanRouteGlobal",
+  own: "localServicePlanRouteOwn",
+  direct: "localServicePlanRouteDirect",
+  system: "localServicePlanRouteSystem",
+};
+
+const SETTING_LABEL: Record<string, MessageKey> = {
+  github: "localServicePlanSettingGithub",
+  pytorch: "localServicePlanSettingPytorch",
+  pip: "localServicePlanSettingPip",
+};
+
+/** 一个下载地址被「管理 → 下载源」里的哪一项改写了、那一项现在是什么(GitHub 镜像前缀没设时说直连 GitHub)。 */
+function SettingNote({ source, setting }: { source: string; setting: string }) {
+  const t = useI18n();
+  const label = SETTING_LABEL[source];
+  if (!label) return null;
+  if (source === "github" && !setting) return <span>{t("localServicePlanSettingGithubNone")}</span>;
+  return (
+    <span>
+      {t(label)}
+      <span className="ml-1 break-all" data-setting-value>{setting}</span>
+    </span>
+  );
+}
+
+/** 连接卡片里这个连接的某一格(网络、配置……):滚到那里、把焦点交过去。 */
+function focusConnectionSection(instanceId: string, section: string): void {
+  const target = document.querySelector<HTMLElement>(`[data-connection="${instanceId}"] [data-connection-section="${section}"]`);
+  if (!target) return;
+  target.scrollIntoView({ block: "center" });
+  target.querySelector<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true });
+}
+
+/**
+ * 会从这几处下载,以及**怎么连过去**:插件进程拿到的出站代理(跟随全局 / 这个连接自己的 / 直连,宿主按 egress 算的那一份),
+ * 绕过列表里的地址标出来;每个地址旁边写明它被下载源里的哪一项改写(GitHub 镜像前缀、PyTorch 源、pip 源)。改的地方链过去:
+ * 这个连接的「网络」、管理页的全局网络和下载源。
+ */
+function PlanDownloads({ instanceId, plan }: { instanceId: string; plan: LocalServicePlan }) {
+  const t = useI18n();
+  const route = plan.route;
+  return (
+    <div className="grid gap-2 text-ui-sm">
+      <p className="m-0" data-plan-route={route.kind}>
+        <span className="text-muted-foreground">{t("localServicePlanRoute")}</span>{" "}
+        <span>{t(ROUTE_TEXT[route.kind])}</span>
+        {route.proxy && <code className="timecode ml-1 break-all" data-plan-proxy>{route.proxy}</code>}
+      </p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-ui-xs">
+        <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-primary underline-offset-2 hover:underline"
+                onClick={() => focusConnectionSection(instanceId, "network")}>
+          {t("localServicePlanChangeNetwork")}
+        </button>
+        <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-primary underline-offset-2 hover:underline"
+                onClick={() => gotoAdmin("deployment")}>
+          {t("localServicePlanChangeGlobalNetwork")}
+        </button>
+        <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-primary underline-offset-2 hover:underline"
+                onClick={() => gotoAdmin("engines")}>
+          {t("localServicePlanChangeSources")}
+        </button>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-muted-foreground">{t("localServicePlanDownloads")}</summary>
+        <ul className="m-0 mt-2 grid gap-1.5 pl-4">
+          {(plan.downloads ?? []).map((one) => (
+            <li key={one.label} data-download-source={one.source || undefined}>
+              {one.label}
+              {one.url && <code className="timecode ml-2 break-all text-ui-xs text-muted-foreground">{one.url}</code>}
+              {(one.source || one.bypass) && (
+                <span className="flex flex-wrap gap-x-2 text-ui-xs text-muted-foreground">
+                  <SettingNote source={one.source ?? ""} setting={one.setting ?? ""} />
+                  {one.bypass && <span className="text-warning" data-bypass>{t("localServicePlanBypass")}</span>}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
+/** 安装计划:这台机器(能不能装、为什么)、问题、PyTorch、空间、装在哪、分几步、从哪儿下、怎么连过去;不下模型。 */
+function PlanFacts({ instanceId, plan }: { instanceId: string; plan: LocalServicePlan }) {
   const t = useI18n();
   //: 这台机器本身能不能装(平台);能装但这一次开始不了(空间、路径)的原因在下面的问题里
   const supported = plan.supported ?? false;
@@ -577,19 +663,7 @@ function PlanFacts({ plan }: { plan: LocalServicePlan }) {
           <StepList steps={plan.steps ?? []} />
         </div>
       )}
-      {(plan.downloads ?? []).length > 0 && (
-        <details className="text-ui-sm">
-          <summary className="cursor-pointer text-muted-foreground">{t("localServicePlanDownloads")}</summary>
-          <ul className="m-0 mt-2 grid gap-1 pl-4">
-            {(plan.downloads ?? []).map((one) => (
-              <li key={one.label}>
-                {one.label}
-                {one.url && <code className="timecode ml-2 break-all text-ui-xs text-muted-foreground">{one.url}</code>}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {(plan.downloads ?? []).length > 0 && <PlanDownloads instanceId={instanceId} plan={plan} />}
       {supported && <small className="text-ui-sm text-muted-foreground">{t("localServicePlanNoModels")}</small>}
     </div>
   );

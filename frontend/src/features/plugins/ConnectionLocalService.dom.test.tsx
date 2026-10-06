@@ -307,8 +307,9 @@ const PLAN = {
     { key: "trial", title: "试起一次", done: false },
   ],
   downloads: [{ label: "ComfyUI 0.39.0 源码", url: "https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/refs/tags/v0.39.0" }],
+  route: { kind: "system", proxy: "" },
   problems: [],
-};
+} as const;
 
 function managedService(overrides: Partial<LocalService> = {}): LocalService {
   return service({ mode: "managed", directory: "/data/local-services/i1", installed: false, ...overrides });
@@ -348,6 +349,46 @@ describe("让 Mosael 装", () => {
     expect(within(dialog).getByText("localServiceInstallConfirmTitle")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "localServiceInstallStart" }));
     await waitFor(() => expect(api.installLocalService).toHaveBeenCalledWith("i1", "mps"));
+  });
+
+  it.each([
+    ["global", "http://***@127.0.0.1:7897", "localServicePlanRouteGlobal"],
+    ["own", "socks5://10.0.0.2:1080", "localServicePlanRouteOwn"],
+    ["direct", "", "localServicePlanRouteDirect"],
+    ["system", "", "localServicePlanRouteSystem"],
+  ] as const)("安装计划写明下载怎么走:%s", async (kind, proxy, text) => {
+    api.getLocalServicePlan.mockResolvedValue({ ...PLAN, route: { kind, proxy } });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeManaged" }));
+    const line = (await screen.findByText(text)).closest("[data-plan-route]") as HTMLElement;
+    expect(line.getAttribute("data-plan-route")).toBe(kind);
+    expect(line.querySelector("[data-plan-proxy]")?.textContent ?? "", "走代理就写出是哪个(密码由后端换成 ***)").toBe(proxy);
+    expect(screen.getByRole("button", { name: "localServicePlanChangeNetwork" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "localServicePlanChangeGlobalNetwork" })).toBeTruthy();
+  });
+
+  it("每个地址旁边写明被下载源里的哪一项改写;绕过列表里的那个标出来直连", async () => {
+    api.getLocalServicePlan.mockResolvedValue({
+      ...PLAN,
+      route: { kind: "global", proxy: "http://127.0.0.1:7897" },
+      downloads: [
+        { label: "源码", url: "https://gh.example/https://codeload.github.com/x", source: "github", setting: "https://gh.example/", bypass: false },
+        { label: "PyTorch", url: "https://mirror.nju.edu.cn/pytorch/whl/cu130", source: "pytorch", setting: "南京大学", bypass: false },
+        { label: "依赖", url: "https://pypi.internal.example/simple", source: "pip", setting: "https://pypi.internal.example/simple", bypass: true },
+        { label: "pysssss", url: "https://codeload.github.com/y", source: "github", setting: "", bypass: false },
+      ],
+    });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeManaged" }));
+    const item = (label: string) => (screen.getByText(label, { selector: "li > :not(code), li" }).closest("li") as HTMLElement);
+    await screen.findByText("源码");
+    expect(within(item("源码")).getByText("localServicePlanSettingGithub")).toBeTruthy();
+    expect(item("源码").querySelector("[data-setting-value]")?.textContent).toBe("https://gh.example/");
+    expect(item("PyTorch").querySelector("[data-setting-value]")?.textContent).toBe("南京大学");
+    expect(within(item("pysssss")).getByText("localServicePlanSettingGithubNone"), "没设前缀:直连 GitHub").toBeTruthy();
+    expect(item("依赖").querySelector("[data-bypass]"), "pip 源的主机在 no_proxy 里").toBeTruthy();
+    expect(item("源码").querySelector("[data-bypass]")).toBeNull();
+    expect(item("PyTorch").querySelector("[data-bypass]")).toBeNull();
   });
 
   it("这台机器装不了:摆出原因,按钮是灰的;取消回到原来那种", async () => {
