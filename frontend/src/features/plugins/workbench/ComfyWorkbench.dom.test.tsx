@@ -48,7 +48,8 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  //: 「结果取自 {nodes}」留着占位:看得出填进去的节点名
+  useI18n: () => (key: string) => (key === "workbenchRunResultsFrom" ? "workbenchRunResultsFrom {nodes}" : key),
   usePreferences: () => ({ locale: "zh" }),
 }));
 
@@ -641,6 +642,25 @@ describe("模型库:换模型不闪;点缩略图看大图", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
     await waitFor(() => expect(document.activeElement).toBe(thumb));
+  });
+});
+
+describe("运行与结果:节点名和应用表单、「结果取自」同一种叫法", () => {
+  //: 沙盒实测:面板上写「PreviewImage #12」,表单和「结果取自」写「预览图像」—— 同一个节点两种叫法
+  it("产出那一组、「现在取自」都用插件报的名字(预览图像),不是类名", async () => {
+    await mount();
+    api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
+    api.getJob.mockResolvedValue(SUCCEEDED);
+    api.getCanvasApp.mockResolvedValue(appData({
+      outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
+                { node: "17", title: "PreviewImage", label: "预览图像", class_type: "PreviewImage", media: "image" }],
+      names: { "4": "Checkpoint 加载器", "9": "高清", "17": "预览图像" },
+      app: { status: "ok", version: "1", app: false, title: "", description: "", items: [], results: ["17"], invalid: 0, fields: 0 },
+    }));
+    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
+    expect(await screen.findByRole("region", { name: "预览图像 #17" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "PreviewImage #17" })).toBeNull();
+    await waitFor(() => expect(document.querySelector("[data-results-from]")?.textContent).toContain("预览图像 #17"));
   });
 });
 

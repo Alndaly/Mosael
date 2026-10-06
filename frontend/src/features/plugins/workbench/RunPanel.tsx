@@ -2,7 +2,16 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, History, Loader2, Pin, Square, Undo2 } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, cancelJob, refreshPluginInstance, runCanvas, type Job } from "@/api/client";
+import {
+  assetFileUrl,
+  assetPreviewUrl,
+  assetThumbnailUrl,
+  cancelJob,
+  getCanvasApp,
+  refreshPluginInstance,
+  runCanvas,
+  type Job,
+} from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -16,6 +25,7 @@ import { PANEL_ROOT, PanelEmpty, PanelNote, jobDone, useJobWatch } from "@/featu
 import {
   WorkbenchCallError,
   exportCanvas,
+  nameRun,
   rememberRun,
   workbenchCall,
   type WorkbenchRun,
@@ -29,6 +39,9 @@ import { cn } from "@/lib/utils";
  *
  * 和在 ComfyUI 里点「运行」一样:导出之前、任务建好之后各让桥走一遍前端自己的「生成后怎样」(runControls)—— 种子设成
  * randomize 的,连点两次运行此前用的是同一个存着的种子,出同一张图(沙盒实测)。桥做不了(主进程是旧的)不拦着跑。
+ *
+ * 节点叫什么:先记图里的标题(没起就是类型),同时问插件这张图每个节点给人看的名字(和应用表单、「结果取自」同一种叫法),
+ * 到了就换上 —— 不等它才记下这一次,问不到就留着标题和类型。
  */
 export function useCanvasRun(target: WorkbenchTarget | null) {
   return useMutation({
@@ -48,8 +61,13 @@ export function useCanvasRun(target: WorkbenchTarget | null) {
         created = await runCanvas(target.instanceId, body);
       }
       void workbenchCall({ op: "runControls", phase: "after" });
+      const labels = nodeLabels(exported.workflow);
       rememberRun({ jobId: created.job.id, path, workflowKey, workflowName, kind: created.generation.kind ?? "image",
-                    startedAt: Date.now(), labels: [...nodeLabels(exported.workflow)] });
+                    startedAt: Date.now(), labels: [...labels] });
+      const jobId = created.job.id;
+      void getCanvasApp(target.instanceId, exported.workflow)
+        .then((app) => nameRun(jobId, [...labels, ...Object.entries(app.names ?? {})]))
+        .catch(() => undefined);
       return created.job;
     },
   });

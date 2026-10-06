@@ -606,8 +606,21 @@ def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], p
         "outputs": [{**one, "label": _picked(source.get("label"), 200) or one["title"]}
                     for one, source in _outputs(output.get("outputs"), {"node": 40, "title": 200, "class_type": 200,
                                                                         "media": 20})],
+        "names": _node_names(output.get("names")),
         "app": _app_summary(output.get("app")) or _app_summary({"status": "none"}),
     }
+
+
+#: 一张图最多报多少个节点的名字(一张大工作流几百个节点;再多的不报,界面退回节点号前的类名)。
+_MAX_NAMED_NODES = 2000
+
+
+def _node_names(value: Any) -> dict[str, str]:
+    """插件报的每个节点给人看的名字(按看的人的语言挑好):节点号 → 名字。工作台「运行与结果」说节点用它。"""
+    if not isinstance(value, dict):
+        return {}
+    named = ((_text(node, 40), _picked(name, 200)) for node, name in list(value.items())[:_MAX_NAMED_NODES])
+    return {node: name for node, name in named if node and name}
 
 
 def _outputs(value: Any, keys: dict[str, int]) -> list[tuple[dict[str, str], dict[str, Any]]]:

@@ -888,6 +888,8 @@ class WorkflowAppOut(ApiModel):
     editable: bool = False
     items: list[WorkflowFillableOut] = Field(default_factory=list)
     outputs: list[WorkflowAppOutputOut] = Field(default_factory=list)
+    #: 节点号 → 给人看的节点名(和表单项、「结果取自」同一种叫法):工作台「运行与结果」说正在跑哪个、产出来自哪个
+    names: dict[str, str] = Field(default_factory=dict)
     app: WorkflowAppSummaryOut = Field(default_factory=WorkflowAppSummaryOut)
 
 

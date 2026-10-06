@@ -665,7 +665,10 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     文件里的标记(对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记(`editable: false`)。
 
     带着 `content`(工作台画布上现在这张,含没存的改动)来就不读文件:同样的回答,没有路径和改动时间 —— 改的是画布,
-    存盘是 ComfyUI 自己的保存。"""
+    存盘是 ComfyUI 自己的保存。
+
+    `names`:这张图里每个会跑的节点给人看的名字(`{"zh", "en"}`,和表单项、「结果取自」同一种叫法,见 labels.node_name)。
+    工作台的「运行与结果」按节点号说正在跑哪个、产出来自哪个,用的就是它 —— 不再是 `PreviewImage #12` 这种类名。"""
     if payload.get("content") is not None:
         path, source, modified = "", live_graph(payload, locale), None
     else:
@@ -685,6 +688,8 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
         "editable": isinstance(source.get("nodes"), list),
         "items": [_item_out(item) for item in found],
         "outputs": graph.generation_nodes(api, kind, object_info, titles),
+        "names": {node_id: labels.node_name(str(node.get("class_type", "")), titles.get(node_id, ""), object_info)
+                  for node_id, node in api.items()},
         "app": app_form.summary(marks, form, invalid, locale),
     }
 

@@ -164,6 +164,8 @@ elif op == "app":
         "outputs": [{"node": "9", "title": "SaveImage", "class_type": "SaveImage", "media": "image",
                      "label": {"zh": "保存图像", "en": "Save Image"}},
                     {"node": "12", "title": "高清", "class_type": "SaveImage", "media": "image"}],
+        "names": {"9": {"zh": "保存图像", "en": "Save Image"}, "12:5": {"zh": "K采样器", "en": "KSampler"}, "3": "",
+                  "": {"zh": "无名", "en": "Nameless"}},
         "app": {"status": "unsupported", "version": 2, "items": [], "results": []},
     }})
 elif op == "annotate":
@@ -663,6 +665,8 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
     assert [one["key"] for one in body["items"]][:2] == ["6.text", "10.image"]
     sent = [op for op in _ops() if op["op"] == "app"][-1]
     assert sent == {"op": "app", "content": CANVAS}, "读的是画布上这张,不带路径"
+    #: 工作台「运行与结果」说节点用它:和表单项、「结果取自」同一种叫法,按看的人的语言挑好;没名字、没节点号的不要
+    assert body["names"] == {"9": "保存图像", "12:5": "K采样器"}
     calls = len(_ops())
     assert client.post(url, json={"content": {"3": {"class_type": "KSampler"}}}).status_code == 422
     assert len(_ops()) == calls

@@ -16691,6 +16691,10 @@ export interface components {
             items?: components["schemas"]["WorkflowFillableOut"][];
             /** Outputs */
             outputs?: components["schemas"]["WorkflowAppOutputOut"][];
+            /** Names */
+            names?: {
+                [key: string]: string;
+            };
             app?: components["schemas"]["WorkflowAppSummaryOut"];
         };
         /**

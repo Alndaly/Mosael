@@ -486,6 +486,10 @@ def test_读应用表单_全部能填的项和读到时的改动时间(comfy) ->
     assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}, "节点给人看的名字一路带到编辑器"
     assert "node_label" not in by_key["seed"], "图级的项没有节点"
     assert [one["node"] for one in out["outputs"]] == ["9", "17"]
+    #: 每个节点给人看的名字(工作台「运行与结果」用):和「结果取自」同一种叫法,不是类名
+    assert out["names"]["17"]["zh"] == "保存图像", "核心节点没起标题:ComfyUI 给这类节点的中文名,不是 SaveImage"
+    assert out["names"]["17"] == next(one["label"] for one in out["outputs"] if one["node"] == "17")
+    assert out["names"]["13"] == by_key["13.image"]["node_label"]
     assert out["app"]["status"] == "none" and out["app"]["items"] == []
 
 

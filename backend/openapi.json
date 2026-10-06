@@ -43032,6 +43032,13 @@
             "type": "array",
             "title": "Outputs"
           },
+          "names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Names"
+          },
           "app": {
             "$ref": "#/components/schemas/WorkflowAppSummaryOut"
           }

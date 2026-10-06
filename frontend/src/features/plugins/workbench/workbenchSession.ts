@@ -29,7 +29,10 @@ export interface WorkbenchRun {
   /** 产出是什么(image / video / audio …,生成记录的 kind):看大图时视频换播放器 */
   kind: string;
   startedAt: number;
-  /** 跑的那一刻导出的图里每个节点叫什么(产出按节点分组时标名字) */
+  /**
+   * 跑的那一刻导出的图里每个节点叫什么(产出按节点分组、正在跑哪个时标名字):先是图里的标题(没起就是类型),插件报来
+   * 给人看的名字之后换成那个(见 nameRun)
+   */
   labels: [string, string][];
 }
 
@@ -144,6 +147,12 @@ export async function exportCanvas(): Promise<ComfyWorkbenchExport> {
 export function rememberRun(run: WorkbenchRun): void {
   if (!snapshot.target) return;
   set({ ...snapshot, runs: [run, ...snapshot.runs].slice(0, 20) });
+}
+
+/** 跑的那一次的节点名换成插件报的(和应用表单、「结果取自」同一种叫法,如「预览图像」而不是 PreviewImage)。 */
+export function nameRun(jobId: string, labels: [string, string][]): void {
+  if (!snapshot.target) return;
+  set({ ...snapshot, runs: snapshot.runs.map((run) => (run.jobId === jobId ? { ...run, labels } : run)) });
 }
 
 /** 测试用:回到没开的样子(连同订阅)。 */

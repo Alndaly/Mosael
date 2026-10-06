@@ -23,7 +23,7 @@ export async function writeCanvasApp(instanceId: string, draft: AppDraft): Promi
   if (!result.ok) throw new WorkbenchCallError(result.error, "message" in result ? result.message : "");
 }
 
-/** 画布上这张现在标着哪几个输出节点是结果,和每个输出节点叫什么(标题,没有就是类型)。 */
+/** 画布上这张现在标着哪几个输出节点是结果,和每个输出节点叫什么(插件报的给人看的名字,和应用表单同一种叫法)。 */
 export interface CanvasResults {
   results: string[];
   labels: Record<string, string>;
@@ -31,7 +31,7 @@ export interface CanvasResults {
 
 const resultsOf = (data: WorkflowApp, results: string[]): CanvasResults => ({
   results,
-  labels: Object.fromEntries((data.outputs ?? []).map((one) => [one.node, one.title || one.class_type])),
+  labels: Object.fromEntries((data.outputs ?? []).map((one) => [one.node, one.label || one.title || one.class_type])),
 });
 
 export async function readCanvasResults(instanceId: string): Promise<CanvasResults> {
