@@ -1,15 +1,18 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ChevronRight, CircleAlert, FileText, Info, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, CircleCheck, FileText, Info, Library, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addLocalServiceNodes,
+  cancelLocalServiceInstall,
   createPluginInstance,
   detectLocalService,
   discoverLocalServices,
   getLocalService,
   getLocalServiceLogs,
+  getLocalServicePlan,
+  installLocalService,
   putLocalService,
   removeLocalService,
   restartLocalService,
@@ -17,6 +20,9 @@ import {
   stopLocalService,
   type LocalService,
   type LocalServiceDetection,
+  type LocalServiceInstall,
+  type LocalServiceLogSource,
+  type LocalServicePlan,
   type LocalServiceState,
   type LocalServiceUpdate,
   type PluginInstance,
@@ -32,10 +38,13 @@ import { SETTINGS_FIELD_WIDTH, SettingsRow } from "@/components/settings/setting
 import { Button } from "@/components/ui/button";
 import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
+import { ModelLibraryDialog } from "@/features/plugins/ModelLibrary";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
 /** 本机服务的地址写进连接配置的这一格(清单格式的约定,见 mosael_formats.plugin_manifest.SERVICE_ADDRESS_FIELD)。 */
@@ -44,8 +53,9 @@ export const SERVICE_ADDRESS_FIELD = "server_url";
 /** 这个连接的本机服务在缓存里的键(连接卡上的「服务器地址」也读它:本机服务的地址由宿主填,不让手改)。 */
 export const localServiceKey = (instanceId: string) => ["local-service", instanceId] as const;
 const detectionKey = (instanceId: string) => ["local-service-detection", instanceId] as const;
+const planKey = (instanceId: string) => ["local-service-plan", instanceId] as const;
 
-/** 还在变的两种状态按 1200 ms 问(和引擎安装同一个节奏);别的时候隔几秒看一眼 —— 运行中崩了要看得见它在重启。 */
+/** 还在变的两种状态按 1200 ms 问(和引擎安装同一个节奏),正在装时也是;别的时候隔几秒看一眼 —— 运行中崩了要看得见它在重启。 */
 const UNSETTLED: readonly LocalServiceState[] = ["starting", "restarting"];
 
 export function useLocalService(instanceId: string, enabled: boolean) {
@@ -54,9 +64,9 @@ export function useLocalService(instanceId: string, enabled: boolean) {
     queryFn: () => getLocalService(instanceId),
     enabled,
     refetchInterval: (query) => {
-      const state = query.state.data?.state;
-      if (!state) return false;
-      return UNSETTLED.includes(state) ? 1200 : 5000;
+      const data = query.state.data;
+      if (!data) return false;
+      return UNSETTLED.includes(data.state) || data.install?.state === "installing" ? 1200 : 5000;
     },
   });
 }
@@ -109,50 +119,83 @@ function settle(qc: QueryClient, instanceId: string, next: LocalService | null |
   invalidatePluginDependents(qc);
 }
 
+/** 「在哪跑」的三种。 */
+type Where = "server" | "directory" | "managed";
+
 /**
  * 连接页上的「本机服务」(ADR 0041):插件声明了一种本机服务(清单的 `services`)就有这一块,和是哪个插件无关。
  *
- * - 「在哪跑」:连一台服务器(只连,不管进程)/ 用我自己装的(选目录,由 Mosael 起停)/ 让 Mosael 装(下一步提供);
+ * - 「在哪跑」:连一台服务器(只连,不管进程)/ 用我自己装的(选目录,由 Mosael 起停)/ 让 Mosael 装(装在 Mosael 的数据目录里);
  * - 选目录:先确认「会在这台机器上运行这个目录里的代码」,再让插件认一遍(试跑一次),认出来、能起才存;
+ * - 让 Mosael 装:先看安装计划(这台机器能不能装、装哪种 PyTorch、要多少空间、分几步、从哪儿下),确认写明在哪台机器上装;
+ *   装的时候看得到第几步、多少字节、多快,能取消;没装成说人话、给日志,「接着装」从没做完的那一步来;装好了链到模型库(不替你下模型);
+ *   Mosael 换了 Python 小版本时说「运行环境要重建」,一键重装依赖,源码和模型不动;
  * - 存好之后:状态(已停止 / 启动中 / 运行中 / 重启中 / 起不来)、启动 / 停止 / 重启、日志、端口、补装、保持运行、局域网,
  *   附加参数和端口在「高级」里。
  *
- * 建、改、起、停都要部署管理员(后端拦);别人看得到状态,控件是灰的、说明为什么。
+ * 建、改、起、停、装都要部署管理员(后端拦);别人看得到状态,控件是灰的、说明为什么。
  */
-export function ConnectionLocalService({ pkg, instance }: { pkg: PluginPackage; instance: PluginInstance }) {
+export function ConnectionLocalService({
+  pkg,
+  instance,
+  workspaceId,
+}: {
+  pkg: PluginPackage;
+  instance: PluginInstance;
+  workspaceId: string;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const declared = (pkg.services ?? [])[0];
   const query = useLocalService(instance.id, Boolean(declared));
   const service = query.data ?? null;
-  const [choosing, setChoosing] = React.useState(false);
+  //: 正在换成另一种(还没存下来);null = 照存着的那种显示
+  const [choosing, setChoosing] = React.useState<"directory" | "managed" | null>(null);
+  const [rebuilding, setRebuilding] = React.useState(false);
   const [confirmServer, setConfirmServer] = React.useState(false);
   const remove = useMutation({
     mutationFn: () => removeLocalService(instance.id),
     onSuccess: () => {
       setConfirmServer(false);
-      setChoosing(false);
+      setChoosing(null);
       qc.removeQueries({ queryKey: detectionKey(instance.id) });
       settle(qc, instance.id, null);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      setConfirmServer(false);
+      toast.error(error.message);
+    },
   });
   if (!declared || query.isPending) return null;
   const title = service?.title ?? declared.title;
-  const mode: "server" | "directory" = service || choosing ? "directory" : "server";
+  const current: Where = service ? (service.mode === "managed" ? "managed" : "directory") : "server";
+  const mode: Where = choosing ?? current;
   const canManage = service?.can_manage ?? true;
+  const installing = service?.install?.state === "installing";
+  //: 让 Mosael 装的那一份还没装好(或正在装):这一块就是安装计划 / 进度,不是状态和起停
+  const managedPending = service?.mode === "managed" && (!service.installed || installing);
+  const showManaged = mode === "managed" && (choosing === "managed" || managedPending || rebuilding);
+  const showDirectory = mode === "directory" && (!service || choosing === "directory");
 
-  const choose = (next: "server" | "directory") => {
+  const choose = (next: Where) => {
     if (next === mode) return;
-    if (next === "directory") setChoosing(true);
-    else if (service) setConfirmServer(true);
-    else setChoosing(false);
+    setRebuilding(false);
+    if (next === "server") {
+      if (service) setConfirmServer(true);
+      else setChoosing(null);
+      return;
+    }
+    setChoosing(next === current ? null : next);
   };
 
   return (
     <div data-connection-section="local-service" className="grid [&>*+*]:border-t [&>*+*]:border-divider">
       <SettingsRow label={t("localServiceWhere")} description={t("localServiceWhereDesc").replace("{title}", title)}>
-        <WhereChoice mode={mode} disabled={Boolean(service) && !canManage} onChoose={choose} />
+        <WhereChoice
+          mode={mode}
+          disabledReason={installing ? t("localServiceInstallingLocked") : service && !canManage ? t("localServiceAdminOnly") : undefined}
+          onChoose={choose}
+        />
       </SettingsRow>
       <ConfirmDialog
         open={confirmServer}
@@ -163,56 +206,75 @@ export function ConnectionLocalService({ pkg, instance }: { pkg: PluginPackage; 
         onCancel={() => setConfirmServer(false)}
         onConfirm={() => remove.mutate()}
       />
-      {mode === "directory" && (!service || choosing) && (
+      {showDirectory && (
         <DirectorySetup
           instanceId={instance.id}
           title={title}
-          service={service}
-          onDone={() => setChoosing(false)}
-          onCancel={service ? () => setChoosing(false) : undefined}
+          service={service?.mode === "directory" ? service : null}
+          onDone={() => setChoosing(null)}
+          onCancel={service ? () => setChoosing(null) : undefined}
         />
       )}
-      {service && !choosing && <ServiceRows instanceId={instance.id} service={service} onChangeFolder={() => setChoosing(true)} />}
+      {showManaged && (
+        <ManagedInstall
+          instanceId={instance.id}
+          title={title}
+          service={service?.mode === "managed" ? service : null}
+          rebuild={rebuilding || Boolean(service?.needs_rebuild)}
+          canManage={canManage}
+          onCancel={rebuilding ? () => setRebuilding(false) : choosing === "managed" && current !== "managed" ? () => setChoosing(null) : undefined}
+          onStarted={() => {
+            setChoosing(null);
+            setRebuilding(false);
+          }}
+        />
+      )}
+      {service && !choosing && !showManaged && (
+        <>
+          {service.mode === "managed" && (
+            <ManagedNotices instance={instance} workspaceId={workspaceId} service={service} onRebuild={() => setRebuilding(true)} />
+          )}
+          <ServiceRows instanceId={instance.id} service={service} onChangeFolder={() => setChoosing("directory")} />
+        </>
+      )}
     </div>
   );
 }
 
 function WhereChoice({
   mode,
-  disabled,
+  disabledReason,
   onChoose,
 }: {
-  mode: "server" | "directory";
-  disabled: boolean;
-  onChoose: (mode: "server" | "directory") => void;
+  mode: Where;
+  /** 换不了(不是部署管理员、正在装)时说为什么;给了就整组变灰。 */
+  disabledReason?: string;
+  onChoose: (mode: Where) => void;
 }) {
   const t = useI18n();
-  const options: { value: "server" | "directory"; label: MessageKey }[] = [
+  const options: { value: Where; label: MessageKey }[] = [
     { value: "server", label: "localServiceModeServer" },
     { value: "directory", label: "localServiceModeDirectory" },
+    { value: "managed", label: "localServiceModeManaged" },
   ];
   return (
-    <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(SEGMENTED_LIST, "flex-wrap")}>
-      {options.map((one) => (
-        <button
-          key={one.value}
-          type="button"
-          role="radio"
-          aria-checked={mode === one.value}
-          disabled={disabled}
-          className={segmentedTriggerClass(mode === one.value)}
-          onClick={() => onChoose(one.value)}
-        >
-          {t(one.label)}
-        </button>
-      ))}
-      {/* 第三种(让 Mosael 装)看得见、点不了:写明下一步提供,免得以为只能自己装 */}
-      <Hint label={t("localServiceManagedSoon")}>
-        <span tabIndex={0} aria-disabled className={cn(segmentedTriggerClass(false), "cursor-not-allowed opacity-50")}>
-          {t("localServiceModeManaged")}
-        </span>
-      </Hint>
-    </div>
+    <Hint disabledReason={disabledReason}>
+      <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(SEGMENTED_LIST, "flex-wrap")}>
+        {options.map((one) => (
+          <button
+            key={one.value}
+            type="button"
+            role="radio"
+            aria-checked={mode === one.value}
+            disabled={Boolean(disabledReason)}
+            className={segmentedTriggerClass(mode === one.value)}
+            onClick={() => onChoose(one.value)}
+          >
+            {t(one.label)}
+          </button>
+        ))}
+      </div>
+    </Hint>
   );
 }
 
@@ -313,11 +375,356 @@ function DirectorySetup({
   );
 }
 
-/** 插件认目录时交回的事实和问题:一行一条,问题按轻重标色。 */
-function DetectionFacts({ detection }: { detection: LocalServiceDetection }) {
+/**
+ * 让 Mosael 装:还没装好(或正在装、要重建)时这一块就是它。
+ *
+ * - 没在装:安装计划(这台机器能不能装、装哪种 PyTorch、空间、装在哪、分几步 —— 接着装时做完的打勾 —— 从哪儿下),上一次
+ *   没装成就把原因和「安装日志」摆在最上面;「开始安装 / 接着装 / 重建运行环境」先确认,写明在哪台机器上运行下载来的代码;
+ * - 在装:第几步、这一步手上那个文件下了多少、多快,「取消安装」「安装日志」。
+ */
+function ManagedInstall({
+  instanceId,
+  title,
+  service,
+  rebuild,
+  canManage,
+  onCancel,
+  onStarted,
+}: {
+  instanceId: string;
+  title: string;
+  /** 已经是「让 Mosael 装」的那一行(还没装好、正在装、要重建);从别的方式换过来时是 null。 */
+  service: LocalService | null;
+  rebuild: boolean;
+  canManage: boolean;
+  onCancel?: () => void;
+  onStarted: () => void;
+}) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const run = service?.install ?? null;
+  const installing = run?.state === "installing";
+  const plan = useQuery({
+    queryKey: planKey(instanceId),
+    queryFn: () => getLocalServicePlan(instanceId),
+    enabled: !installing && canManage,
+    retry: false,
+  });
+  //: 一次安装落定了(没装成、取消了):重读安装计划,做完的那几步打上勾
+  const settledAt = run && !installing ? run.finished_at : null;
+  React.useEffect(() => {
+    if (settledAt) void qc.invalidateQueries({ queryKey: planKey(instanceId) });
+  }, [settledAt, qc, instanceId]);
+  const [confirming, setConfirming] = React.useState(false);
+  const [logsOpen, setLogsOpen] = React.useState(false);
+  const start = useMutation({
+    mutationFn: (flavour: string) => installLocalService(instanceId, flavour),
+    onSuccess: (next) => {
+      setConfirming(false);
+      settle(qc, instanceId, next);
+      onStarted();
+    },
+    onError: (error: Error) => {
+      setConfirming(false);
+      toast.error(error.message);
+    },
+  });
+  const cancel = useMutation({
+    mutationFn: () => cancelLocalServiceInstall(instanceId),
+    onSuccess: (next) => settle(qc, instanceId, next),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const logs = logsOpen && <LogDialog instanceId={instanceId} title={title} source="install" onClose={() => setLogsOpen(false)} />;
+
+  if (run && installing) {
+    return (
+      <>
+        <InstallProgress title={title} run={run} canManage={canManage} cancelling={cancel.isPending} onCancel={() => cancel.mutate()}
+                         onLogs={() => setLogsOpen(true)} />
+        {logs}
+      </>
+    );
+  }
+  const found = plan.data;
+  const stopped = run ? (run.steps ?? []).find((one) => one.key === run.step)?.title ?? run.step : "";
+  const resumable = Boolean(found?.steps?.some((one) => one.done && one.key !== "disk")) || run?.state === "failed" || run?.state === "cancelled";
+  const action: MessageKey = rebuild ? "localServiceInstallRebuild" : resumable ? "localServiceInstallResume" : "localServiceInstallStart";
+  const where = t(machineKey());
   return (
-    <div className="grid gap-2">
-      {(detection.problems ?? []).map((problem, index) => (
+    <div className="grid gap-4 py-5">
+      {run?.state === "failed" && (
+        <div role="alert" className="grid gap-1 text-ui-sm text-destructive">
+          <span className="font-medium">{t("localServiceInstallFailed").replace("{step}", stopped ?? "")}</span>
+          <span className="whitespace-pre-wrap break-words">{run.error}</span>
+        </div>
+      )}
+      {run?.state === "cancelled" && (
+        <p className="m-0 text-ui-sm text-muted-foreground">{t("localServiceInstallCancelled").replace("{step}", stopped ?? "")}</p>
+      )}
+      {rebuild && service && <RebuildNote title={title} service={service} />}
+      {!canManage ? (
+        <p className="m-0 text-ui-sm text-muted-foreground">{t("localServiceAdminOnly")}</p>
+      ) : plan.isPending ? (
+        <p className="m-0 text-ui-sm text-muted-foreground">{t("localServicePlanChecking")}</p>
+      ) : plan.error ? (
+        <p role="alert" className="m-0 text-ui-sm text-destructive">{(plan.error as Error).message}</p>
+      ) : found ? (
+        <PlanFacts plan={found} />
+      ) : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {onCancel && (
+          <Button variant="ghost" onClick={onCancel} disabled={start.isPending}>
+            {t("cancel")}
+          </Button>
+        )}
+        {run && (
+          <Button variant="outline" onClick={() => setLogsOpen(true)}>
+            <FileText /> {t("localServiceInstallLog")}
+          </Button>
+        )}
+        {plan.error && (
+          <Button variant="outline" onClick={() => void plan.refetch()}>
+            {t("localServicePlanRetry")}
+          </Button>
+        )}
+        <Button disabled={!canManage || !found?.ok} loading={start.isPending} onClick={() => setConfirming(true)}>
+          {t(action)}
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        title={t(rebuild ? "localServiceRebuildConfirmTitle" : "localServiceInstallConfirmTitle").replace("{where}", where).replace("{title}", title)}
+        body={t(rebuild ? "localServiceRebuildConfirmBody" : "localServiceInstallConfirmBody")
+          .replace("{title}", title)
+          .replace("{version}", found?.version ?? "")
+          .replace("{directory}", found?.directory ?? "")
+          .replace("{where}", where)}
+        confirmLabel={t(action)}
+        pending={start.isPending}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => found && start.mutate(found.flavour ?? "")}
+      />
+      {logs}
+    </div>
+  );
+}
+
+/** 安装计划:这台机器(能不能装、为什么)、问题、PyTorch、空间、装在哪、分几步、从哪儿下;不下模型。 */
+function PlanFacts({ plan }: { plan: LocalServicePlan }) {
+  const t = useI18n();
+  //: 这台机器本身能不能装(平台);能装但这一次开始不了(空间、路径)的原因在下面的问题里
+  const supported = plan.supported ?? false;
+  return (
+    <div className="grid gap-3">
+      <p className={cn("m-0 flex items-start gap-2 text-ui-sm", supported ? "text-foreground" : "text-destructive")}>
+        {supported ? (
+          <CircleCheck size={15} aria-hidden className="mt-0.5 shrink-0 text-success" />
+        ) : (
+          <CircleAlert size={15} aria-hidden className="mt-0.5 shrink-0" />
+        )}
+        <span className="min-w-0 whitespace-pre-wrap break-words">
+          <span className="font-medium">{plan.platform}</span>
+          {plan.verdict && <span className={supported ? "text-muted-foreground" : undefined}>{` · ${plan.verdict}`}</span>}
+        </span>
+      </p>
+      {!supported && <p className="m-0 text-ui-sm text-destructive">{t("localServicePlanUnsupported")}</p>}
+      <Problems problems={plan.problems ?? []} />
+      <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-ui-sm">
+        {plan.torch && (
+          <>
+            <dt className="text-muted-foreground">{t("localServicePlanTorch")}</dt>
+            <dd className="m-0 min-w-0 break-words">{plan.torch}</dd>
+          </>
+        )}
+        {(plan.disk_bytes ?? 0) > 0 && (
+          <>
+            <dt className="text-muted-foreground">{t("localServicePlanDisk")}</dt>
+            <dd className="m-0 min-w-0 break-words">
+              {t("localServicePlanDiskValue").replace("{need}", formatBytes(plan.disk_bytes ?? 0)).replace("{free}", formatBytes(plan.free_bytes ?? 0))}
+            </dd>
+          </>
+        )}
+        <dt className="text-muted-foreground">{t("localServicePlanWhere")}</dt>
+        <dd className="m-0 min-w-0"><code className="timecode break-all">{plan.directory}</code></dd>
+      </dl>
+      {supported && (
+        <div className="grid gap-1.5">
+          <span className="text-ui-sm text-muted-foreground">{t("localServicePlanSteps")}</span>
+          <StepList steps={plan.steps ?? []} />
+        </div>
+      )}
+      {(plan.downloads ?? []).length > 0 && (
+        <details className="text-ui-sm">
+          <summary className="cursor-pointer text-muted-foreground">{t("localServicePlanDownloads")}</summary>
+          <ul className="m-0 mt-2 grid gap-1 pl-4">
+            {(plan.downloads ?? []).map((one) => (
+              <li key={one.label}>
+                {one.label}
+                {one.url && <code className="timecode ml-2 break-all text-ui-xs text-muted-foreground">{one.url}</code>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {supported && <small className="text-ui-sm text-muted-foreground">{t("localServicePlanNoModels")}</small>}
+    </div>
+  );
+}
+
+/** 一步一行:做完的打勾,正在做的标出来,别的标序号。 */
+function StepList({ steps, current }: { steps: readonly { key: string; title: string; done?: boolean }[]; current?: string }) {
+  return (
+    <ol className="m-0 grid list-none gap-1 p-0 text-ui-sm">
+      {steps.map((one, index) => {
+        const active = one.key === current && !one.done;
+        return (
+          <li
+            key={one.key}
+            data-step={one.key}
+            aria-current={active ? "step" : undefined}
+            className={cn("flex items-start gap-2", one.done ? "text-muted-foreground" : active ? "font-medium text-foreground" : "text-foreground")}
+          >
+            <span className="mt-0.5 inline-flex w-4 shrink-0 justify-center tabular-nums">
+              {one.done ? <Check size={14} aria-label="✓" className="text-success" /> : <span className="text-ui-xs">{index + 1}</span>}
+            </span>
+            <span className="min-w-0 break-words">{one.title}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** 正在装:第几步、整体进度、每一步、这一步手上那个文件(下了多少 / 一共多少 · 多快),取消和安装日志。 */
+function InstallProgress({
+  title,
+  run,
+  canManage,
+  cancelling,
+  onCancel,
+  onLogs,
+}: {
+  title: string;
+  run: LocalServiceInstall;
+  canManage: boolean;
+  cancelling: boolean;
+  onCancel: () => void;
+  onLogs: () => void;
+}) {
+  const t = useI18n();
+  const steps = run.steps ?? [];
+  const index = steps.findIndex((one) => one.key === run.step);
+  const finished = steps.filter((one) => one.done).length;
+  const within = run.total_bytes ? Math.min(1, (run.done_bytes ?? 0) / run.total_bytes) : 0;
+  const overall = steps.length ? Math.round(((finished + within) / steps.length) * 100) : 0;
+  const detail = [
+    run.item,
+    run.total_bytes ? `${formatBytes(run.done_bytes ?? 0)} / ${formatBytes(run.total_bytes)}` : "",
+    run.speed ? formatSpeed(run.speed) : "",
+  ].filter(Boolean);
+  const label = t("localServiceInstalling").replace("{title}", title);
+  return (
+    <div className="grid gap-3 py-5" role="status" aria-live="polite">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <span className="text-ui-md font-medium">{label}</span>
+        {index >= 0 && (
+          <span className="text-ui-xs tabular-nums text-muted-foreground">
+            {t("localServiceInstallStepOf").replace("{n}", String(index + 1)).replace("{total}", String(steps.length))}
+          </span>
+        )}
+      </div>
+      <Progress value={overall} aria-label={label} className="h-1.5" />
+      <StepList steps={steps} current={run.step} />
+      {detail.length > 0 && <p className="timecode m-0 break-all text-ui-xs text-muted-foreground">{detail.join(" · ")}</p>}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onLogs}>
+          <FileText /> {t("localServiceInstallLog")}
+        </Button>
+        <Hint disabledReason={canManage ? undefined : t("localServiceAdminOnly")}>
+          <Button variant="outline" size="sm" disabled={!canManage} loading={cancelling} onClick={onCancel}>
+            <Square /> {t("localServiceInstallCancel")}
+          </Button>
+        </Hint>
+      </div>
+    </div>
+  );
+}
+
+/** 运行环境要重建:哪个 Python 装的、现在是哪个,源码和模型不动。 */
+function RebuildNote({ title, service }: { title: string; service: LocalService }) {
+  const t = useI18n();
+  return (
+    <div role="alert" className="grid gap-1 text-ui-sm text-warning">
+      <span className="flex items-center gap-2 font-medium">
+        <TriangleAlert size={14} aria-hidden /> {t("localServiceRebuildTitle")}
+      </span>
+      <span>
+        {t("localServiceRebuildBody")
+          .replace("{title}", title)
+          .replace("{have}", service.python_minor ?? "")
+          .replace("{want}", service.base_python_minor ?? "")}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * 让 Mosael 装的那一份装好以后,状态上面的那一条:要重建运行环境(一键重建),或者刚装好(去模型库挑模型 —— 不替你下,拍板 7)。
+ */
+function ManagedNotices({
+  instance,
+  workspaceId,
+  service,
+  onRebuild,
+}: {
+  instance: PluginInstance;
+  workspaceId: string;
+  service: LocalService;
+  onRebuild: () => void;
+}) {
+  const t = useI18n();
+  const [library, setLibrary] = React.useState(false);
+  if (service.needs_rebuild) {
+    return (
+      <div className="grid gap-3 py-4">
+        <RebuildNote title={service.title} service={service} />
+        <div className="flex justify-end">
+          <Hint disabledReason={service.can_manage ? undefined : t("localServiceAdminOnly")}>
+            <Button size="sm" disabled={!service.can_manage} onClick={onRebuild}>
+              <RotateCw /> {t("localServiceInstallRebuild")}
+            </Button>
+          </Hint>
+        </div>
+      </div>
+    );
+  }
+  if (service.install?.state !== "succeeded") return null;
+  return (
+    <div role="status" className="flex min-w-0 flex-wrap items-center gap-3 py-4">
+      <CircleCheck size={16} aria-hidden className="shrink-0 text-success" />
+      <div className="grid min-w-0 flex-1 basis-[280px] gap-0.5">
+        <span className="text-ui-sm font-medium">{t("localServiceInstalledTitle").replace("{title}", service.title)}</span>
+        <small className="text-ui-xs text-muted-foreground">{t("localServiceInstalledBody")}</small>
+      </div>
+      {/* 和标题行上那颗一样:连接停用、缺授权时点不了,说为什么 */}
+      <Hint disabledReason={instance.blocked_reason || undefined}>
+        <Button size="sm" disabled={Boolean(instance.blocked_reason)} onClick={() => setLibrary(true)}>
+          <Library /> {t("localServiceOpenModelLibrary")}
+        </Button>
+      </Hint>
+      {library && (
+        <ModelLibraryDialog open onOpenChange={(open) => !open && setLibrary(false)} instance={instance} workspaceId={workspaceId}
+                            focus={null} />
+      )}
+    </div>
+  );
+}
+
+/** 一条一行的问题,按轻重标色(认目录、安装计划共用)。 */
+function Problems({ problems }: { problems: readonly { level: "error" | "warning"; text: string }[] }) {
+  return (
+    <>
+      {problems.map((problem, index) => (
         <p
           key={`p${index}`}
           className={cn(
@@ -333,6 +740,15 @@ function DetectionFacts({ detection }: { detection: LocalServiceDetection }) {
           <span className="min-w-0">{problem.text}</span>
         </p>
       ))}
+    </>
+  );
+}
+
+/** 插件认目录时交回的事实和问题:一行一条,问题按轻重标色。 */
+function DetectionFacts({ detection }: { detection: LocalServiceDetection }) {
+  return (
+    <div className="grid gap-2">
+      <Problems problems={detection.problems ?? []} />
       {(detection.facts ?? []).length > 0 && (
         <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-ui-sm">
           {(detection.facts ?? []).map((fact) => (
@@ -385,7 +801,10 @@ function ServiceRows({
   const [advanced, setAdvanced] = React.useState(false);
   const busy = act.isPending ? act.variables : null;
   const manage = service.can_manage;
+  const managed = service.mode === "managed";
   const denied = manage ? undefined : t("localServiceAdminOnly");
+  //: 运行环境要重建的那一份起不来(后端也会拦):启动按钮灰着,说为什么
+  const startDenied = denied ?? (service.needs_rebuild ? t("localServiceRebuildTitle") : undefined);
   const active = service.state === "starting" || service.state === "running" || service.state === "restarting";
   const meta = [
     t("localServicePort").replace("{port}", String(service.port)),
@@ -429,8 +848,8 @@ function ServiceRows({
                 </Hint>
               </>
             ) : (
-              <Hint disabledReason={denied}>
-                <Button size="sm" disabled={!manage} loading={busy === "start"} onClick={() => act.mutate("start")}>
+              <Hint disabledReason={startDenied}>
+                <Button size="sm" disabled={Boolean(startDenied)} loading={busy === "start"} onClick={() => act.mutate("start")}>
                   <Play /> {t("localServiceStart")}
                 </Button>
               </Hint>
@@ -455,15 +874,21 @@ function ServiceRows({
         )}
       </div>
 
-      <SettingsRow label={t("localServiceFolder")} description={<code className="timecode break-all">{service.directory}</code>}>
+      <SettingsRow
+        label={t(managed ? "localServiceInstallLocation" : "localServiceFolder")}
+        description={<code className="timecode break-all">{service.directory}</code>}
+      >
         <Button variant="outline" size="sm" loading={detection.isFetching} disabled={!manage} onClick={recheck}>
           {t("localServiceRecheck")}
         </Button>
-        <Hint disabledReason={denied}>
-          <Button variant="outline" size="sm" disabled={!manage} onClick={onChangeFolder}>
-            {t("localServiceChangeFolder")}
-          </Button>
-        </Hint>
+        {/* 让 Mosael 装的那一份装在宿主分的目录里,不换;要用自己的,「在哪跑」选「用我自己装的」 */}
+        {!managed && (
+          <Hint disabledReason={denied}>
+            <Button variant="outline" size="sm" disabled={!manage} onClick={onChangeFolder}>
+              {t("localServiceChangeFolder")}
+            </Button>
+          </Hint>
+        )}
       </SettingsRow>
       {detection.error && <p role="alert" className="m-0 py-3 text-ui-sm text-destructive">{(detection.error as Error).message}</p>}
       {detection.data && (
@@ -607,12 +1032,22 @@ function AddNodesRow({
   );
 }
 
-/** 日志:它自己说的话原样摆出来,开着的时候每 1.5 秒拉一次,停在最底下;完整日志在哪个文件写明。 */
-function LogDialog({ instanceId, title, onClose }: { instanceId: string; title: string; onClose: () => void }) {
+/** 日志:它自己说的话(或「让 Mosael 装」那几步的输出)原样摆出来,开着的时候每 1.5 秒拉一次,停在最底下;完整日志在哪个文件写明。 */
+function LogDialog({
+  instanceId,
+  title,
+  source = "service",
+  onClose,
+}: {
+  instanceId: string;
+  title: string;
+  source?: LocalServiceLogSource;
+  onClose: () => void;
+}) {
   const t = useI18n();
   const logs = useQuery({
-    queryKey: ["local-service-logs", instanceId],
-    queryFn: () => getLocalServiceLogs(instanceId, 2000),
+    queryKey: ["local-service-logs", instanceId, source],
+    queryFn: () => getLocalServiceLogs(instanceId, 2000, source),
     refetchInterval: 1500,
   });
   const bottom = React.useRef<HTMLPreElement>(null);
@@ -622,7 +1057,8 @@ function LogDialog({ instanceId, title, onClose }: { instanceId: string; title: 
     if (element) element.scrollTop = element.scrollHeight;
   }, [lines.length]);
   return (
-    <ModalShell open onOpenChange={(open) => !open && onClose()} title={t("localServiceLogTitle").replace("{title}", title)}
+    <ModalShell open onOpenChange={(open) => !open && onClose()}
+                title={t(source === "install" ? "localServiceInstallLogTitle" : "localServiceLogTitle").replace("{title}", title)}
                 className="w-[min(960px,calc(100vw-2rem))]">
       <div className="grid gap-2">
         <pre

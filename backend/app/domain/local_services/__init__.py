@@ -4,14 +4,22 @@
 认出一个装好的目录、给出命令行和健康检查的路径、补装节点、本机发现。算出来的地址写进连接的 `server_url` ——
 插件、工作台、模型库、工作流库读的还是那一个地址,一行都不用改。以后别的插件要常驻进程,走同一套。
 
-分三层:
+分几层:
 
-- `records`:人定下的东西(`local_services` 表,一行对一个连接):目录、解释器、端口、局域网、保持运行、附加参数;
-- `plugin_ops`:问插件(只描述、不起进程),核对它交回来的东西;
-- `supervisor`:进程本身 —— 起、就绪、崩溃退避、停、pid 文件与接回、同一个目录只起一份。不认识库,也不认识插件。
+- `records`:人定下的东西(`local_services` 表,一行对一个连接):在哪跑、目录、解释器、端口、局域网、保持运行、附加参数,
+  让 Mosael 装的那一份装好时的 Python 小版本;
+- `plugin_ops`:问插件(只描述、不起进程 —— 安装那一件除外),核对它交回来的东西;
+- `supervisor`:进程本身 —— 起、就绪、崩溃退避、停、pid 文件与接回、同一个目录只起一份。不认识库,也不认识插件;
+- `installer`:让 Mosael 装的那一次安装 —— 后台线程、到了哪一步、取消;`sources`:从哪儿下(「管理 → 下载源」)。
 
-这里把三层接起来,对外的几件事:配置、起 / 停 / 重启、**用到时起**(`ensure_running`,经插件域的 `service_gate` 接进
-每一次插件调用)、启动时接回上一个后端没来得及停的、「保持运行」的跟着起、退出时全部停掉。
+这里把它们接起来,对外的几件事:配置、起 / 停 / 重启、**用到时起**(`ensure_running`,经插件域的 `service_gate` 接进
+每一次插件调用)、启动时接回上一个后端没来得及停的、「保持运行」的跟着起、退出时全部停掉;**让 Mosael 装**:安装计划、
+装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好。
+
+**让 Mosael 装的那一份**(`mode = managed`)装在宿主分的 `<数据目录>/local-services/<连接>/`,目录就记这个(插件在里面认
+源码和 `.venv`,认目录、怎么起和「用我自己装的」走同一条路)。它的 venv 是随包的 Python 建的:装好时记下 Python 小版本,
+以后对不上(Mosael 升级换了随包的 Python)就不让起,连接页说「运行环境要重建」—— 再装一次,插件只重建 venv 和装进去的包,
+源码和模型不动。
 
 **谁能动它**:建、改、起、停都要部署管理员(路由那一层 `ensure_deployment_admin`)—— 起一个目录里的代码就是在这台
 机器上运行它。用到时起不要:那是用一个管理员建好的连接,和用别人建好的连接一样。
@@ -19,9 +27,11 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import threading
+import time
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -32,9 +42,11 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.core.i18n import tr
+from app.core.interpreter import base_python, python_minor
 from app.core.run_log import logs_dir
+from app.core.unit_of_work import unit_of_work
 from app.db.models import LocalService, PluginInstance, PluginPackage
-from app.domain.local_services import pidfiles, plugin_ops, records, supervisor
+from app.domain.local_services import installer, pidfiles, plugin_ops, records, sources, supervisor
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.logs import ServiceLog
 from app.domain.local_services.supervisor import (
@@ -53,6 +65,7 @@ from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import service_gate
 from app.domain.plugins.manifest import SERVICE_ADDRESS_FIELD, manifest_of
+from app.domain.plugins.runtime import StreamHooks
 from mosael_formats.plugin_env import EGRESS_KEYS, HOST_PREFIX
 
 logger = logging.getLogger(__name__)
@@ -68,6 +81,41 @@ MAX_LOG_LINES = 2000
 
 def log_path(instance_id: str) -> Path:
     return logs_dir() / f"service-{instance_id}.log"
+
+
+def install_log_path(instance_id: str) -> Path:
+    """让 Mosael 装的那几步的完整输出(每一步的命令、pip 说的话;插件往里写)。每装一次滚一份,上一次的留成 `.1`。"""
+    return logs_dir() / f"service-install-{instance_id}.log"
+
+
+@functools.lru_cache(maxsize=4)
+def _minor_of(python: str) -> str:
+    return python_minor(python)
+
+
+def base_minor() -> str:
+    """建 venv 用的那个 Python(随包的)现在是哪个「主.次」版本;找不到是空串。按路径缓存:换解释器就是换了应用,后端会重启。"""
+    base = base_python()
+    return _minor_of(base) if base else ""
+
+
+def needs_rebuild(row: LocalService) -> bool:
+    """让 Mosael 装的那一份装好了,但建它 venv 的 Python 小版本和现在随包的对不上:venv 跑不起来,要重建。"""
+    current = base_minor()
+    return row.mode == records.MANAGED and bool(row.python_minor) and bool(current) and row.python_minor != current
+
+
+def _runnable(db: Session, instance: PluginInstance, row: LocalService) -> None:
+    """让 Mosael 装的那一份,起之前先看它装好没有、运行环境对不对 —— 对不上就别起(起了只会在日志里崩一遍),说清楚下一步。"""
+    if row.mode != records.MANAGED:
+        return
+    title = _title(db, instance, row)
+    if installer.installing(instance.id):
+        raise LocalServiceError("localServiceErr_installing")
+    if not row.python_minor:
+        raise LocalServiceError("localServiceErr_notInstalled", name=title)
+    if needs_rebuild(row):
+        raise LocalServiceError("localServiceErr_rebuildNeeded", name=title, have=row.python_minor, want=base_minor())
 
 
 def _process(instance_id: str) -> ServiceProcess:
@@ -102,6 +150,7 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         return None
     process = supervisor.get(instance.id)
     state = process.state if process is not None else STOPPED
+    run = installer.current(instance.id)
     return {
         "instance_id": instance.id,
         "service": row.service,
@@ -123,6 +172,12 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         "restarts": process.restarts() if process is not None else 0,
         "error": str(process.error) if process is not None and state == FAILED and process.error else "",
         "failure_lines": list(process.failure_lines) if process is not None and state == FAILED else [],
+        # 让 Mosael 装的那一份:装好了没有、建 venv 的 Python 小版本、要不要重建、这一次安装到了哪一步(后端重启后没了)
+        "installed": row.mode != records.MANAGED or bool(row.python_minor),
+        "python_minor": row.python_minor or "",
+        "base_python_minor": base_minor() if row.mode == records.MANAGED else "",
+        "needs_rebuild": needs_rebuild(row),
+        "install": run.snapshot() if run is not None and row.mode == records.MANAGED else None,
     }
 
 
@@ -161,15 +216,23 @@ def configure(
     confirm_run_code: bool = False,
 ) -> None:
     """建或改这个连接的本机服务。**换一个要运行的东西(目录、解释器)要确认过**(`confirm_run_code`):起它就是在这台
-    机器上运行那个目录里的代码。端口只能停着改(改完让插件把按旧地址存的本地数据搬过去)。在跑的时候改别的,下次起生效。"""
-    if mode is not None and mode not in records.MODES:
+    机器上运行那个目录里的代码。端口只能停着改(改完让插件把按旧地址存的本地数据搬过去)。在跑的时候改别的,下次起生效。
+
+    这里建、改的是「用我自己装的」;让 Mosael 装的那一份由安装建(`prepare_install`)。它的端口、局域网、保持运行、附加参数
+    照样在这里改;给了目录就是换成「用我自己装的」(安装目录留着,第三步的卸载再管它)。正在装的时候不能换。"""
+    if mode is not None and mode != records.DIRECTORY:
         raise LocalServiceError("localServiceErr_unknownMode", status=422, mode=mode)
     row = records.row_of(db, instance.id)
+    switching = row is not None and row.mode != records.DIRECTORY and (mode is not None or directory is not None)
+    if (switching or directory is not None) and installer.installing(instance.id):
+        raise LocalServiceError("localServiceErr_installing")
+    if switching and directory is None:
+        raise LocalServiceError("localServiceErr_noDirectory", status=422)
     new_directory = directory.strip() if directory is not None else (row.directory if row else "")
     new_python = python.strip() if python is not None else (row.python if row else "")
     if not new_directory:
         raise LocalServiceError("localServiceErr_noDirectory", status=422)
-    runs_something_new = row is None or new_directory != row.directory or new_python != row.python
+    runs_something_new = row is None or switching or new_directory != row.directory or new_python != row.python
     if runs_something_new and not confirm_run_code:
         raise LocalServiceError("localServiceErr_confirmRequired", status=422)
     args = records.split_args(extra_args) if extra_args is not None else None
@@ -192,6 +255,8 @@ def configure(
             plugin_ops.readdress(db, instance, row, before, after)
         except Exception:  # noqa: BLE001 — 搬不过去只是少了缓存(下次列模型库时重建),不挡改端口
             logger.warning("本机服务 %s 改端口后,插件没搬动按旧地址存的数据", instance.id, exc_info=True)
+    if switching:
+        row.mode, row.python_minor = records.DIRECTORY, ""
     row.directory, row.python = new_directory, new_python
     if listen_lan is not None:
         row.listen_lan = listen_lan
@@ -203,7 +268,10 @@ def configure(
 
 
 def remove(db: Session, instance: PluginInstance) -> None:
-    """不用本机服务了(回到「连一台服务器」):停掉,删掉这一行。连接的地址留着,用户自己改成要连的那台。"""
+    """不用本机服务了(回到「连一台服务器」):停掉,删掉这一行。连接的地址留着,用户自己改成要连的那台。
+    让 Mosael 装的那一份的安装目录留着(再选「让 Mosael 装」就接着用它;删它是第三步的卸载)。正在装的先取消。"""
+    if installer.installing(instance.id):
+        raise LocalServiceError("localServiceErr_installing")
     supervisor.forget(instance.id)
     row = records.row_of(db, instance.id)
     if row is not None:
@@ -211,13 +279,15 @@ def remove(db: Session, instance: PluginInstance) -> None:
 
 
 def forget_instance(instance_id: str) -> None:
-    """连接要删了:先停掉它的本机服务(那一行随外键级联删)。"""
+    """连接要删了:正在装的先取消、等它停下,再停掉它的本机服务(那一行随外键级联删)。"""
+    installer.forget(instance_id)
     supervisor.forget(instance_id)
 
 
 def forget_package(db: Session, package_id: str) -> None:
-    """插件要卸载了:它每个连接的本机服务都先停掉。"""
+    """插件要卸载了:它每个连接正在装的先取消,本机服务都先停掉。"""
     for instance_id in db.scalars(select(PluginInstance.id).where(PluginInstance.package_id == package_id)):
+        installer.forget(instance_id)
         supervisor.forget(instance_id)
 
 
@@ -273,8 +343,15 @@ def _became_ready(instance_id: str) -> None:
 
 def start(db: Session, instance: PluginInstance) -> None:
     """起(已经在跑、正在起、正在重启就什么都不做)。起不来当场抛:目录被别的连接占着、端口被占、插件说这个目录不对、
-    找不到解释器。抛之前状态停在「起不来」的(插件说不行、起不来),界面上看得到原因。"""
+    找不到解释器;让 Mosael 装的那一份还没装好、正在装、运行环境要重建。抛之前状态停在「起不来」的(插件说不行、起不来),
+    界面上看得到原因。"""
     row = _require_row(db, instance)
+    _runnable(db, instance, row)
+    _launch(db, instance, row)
+
+
+def _launch(db: Session, instance: PluginInstance, row: LocalService) -> None:
+    """真的起进程(不看装没装好:安装的最后一步「试起一次」也走这里)。"""
     process = _process(instance.id)
     with process.start_lock:
         if process.active:
@@ -401,6 +478,105 @@ def add_nodes(db: Session, instance: PluginInstance) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 让 Mosael 装(ADR 0041 §4)
+# ---------------------------------------------------------------------------
+
+
+def _base_python_or_fail() -> str:
+    base = base_python()
+    if not base:
+        raise LocalServiceError("localServiceErr_noBasePython", status=422)
+    return base
+
+
+def plan(db: Session, instance: PluginInstance) -> dict[str, Any]:
+    """确认页要的:插件说这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(接着装时哪几步已经做完)、要从哪几处下载;
+    宿主再加上自己那一步(试起一次)和装在哪。只问、不写(会跑一次随包的 Python、Windows 上问 nvidia-smi)。"""
+    row = records.row_of(db, instance.id)
+    service = records.service_of(db, instance, row)
+    root = str(records.install_root(instance.id))
+    found = plugin_ops.plan(db, instance, service.key, {"directory": root, "python": _base_python_or_fail(),
+                                                         "sources": sources.for_plugin()})
+    installed = row is not None and row.mode == records.MANAGED and bool(row.python_minor) and not needs_rebuild(row)
+    found["steps"].append({"key": installer.TRIAL, "title": tr("localServiceInstall_trial"), "done": installed})
+    return {**found, "directory": root}
+
+
+def prepare_install(db: Session, instance: PluginInstance) -> None:
+    """装之前:这个连接改成(或建成)「让 Mosael 装」,端口选好、地址写进 `server_url`。在跑的先停(重建运行环境要换掉 venv;
+    原来是「用我自己装的」的也不该接着跑那一份)。**调用方提交之后**再 `begin_install`:安装线程要读这一行。"""
+    if installer.installing(instance.id):
+        raise LocalServiceError("localServiceErr_installing")
+    _base_python_or_fail()
+    stop(instance.id)
+    records.make_managed(db, instance)
+
+
+def begin_install(db: Session, instance: PluginInstance, *, flavour: str) -> None:
+    """开始装(或接着装、重建运行环境):后台线程里先让插件做它那几步,再试起一次。`flavour` 是确认页上那种 PyTorch ——
+    插件装之前再看一次这台机器,对不上就不装(换了驱动之类),请人重新看一眼安装计划。"""
+    row = _require_row(db, instance)
+    if row.mode != records.MANAGED:
+        raise LocalServiceError("localServiceErr_notManaged", status=422)
+    base = _base_python_or_fail()
+    manifest = inst.manifest_for(db, instance)
+    installer.begin(instance.id, install_log_path(instance.id), author_locale=manifest.default_locale,
+                    work=partial(_install, instance.id, row.service, base, flavour))
+
+
+def cancel_install(instance_id: str) -> bool:
+    """取消正在装的(插件停在手上那一步,下次接着装)。没在装回 False。"""
+    return installer.cancel(instance_id)
+
+
+def recent_install_logs(instance_id: str, limit: int = 400) -> list[str]:
+    """安装的日志(每一步的命令、pip 说的话)。"""
+    run = installer.current(instance_id)
+    log = run.log if run is not None else ServiceLog(install_log_path(instance_id))
+    return log.tail(max(1, min(limit, MAX_LOG_LINES)))
+
+
+#: 试起那一步等就绪时多久看一眼取消了没有。
+_TRIAL_POLL_SECONDS = 0.5
+
+
+def _install(instance_id: str, service: str, base: str, flavour: str, run: installer.InstallRun) -> None:
+    """安装线程:插件做它那几步(流式),宿主试起一次;健康检查通过了才记成装好(`python_minor`)。起来之后就让它开着 ——
+    装完下一步多半就是去模型库(退出 Mosael 时照样停)。"""
+    with SessionLocal() as db:
+        instance = inst.get(db, instance_id)
+        row = _require_row(db, instance)
+        payload = {
+            "directory": row.directory, "python": base, "flavour": flavour, "sources": sources.for_plugin(),
+            "log": str(install_log_path(instance_id)), "pip_cache": str(records.pip_cache_dir()),
+        }
+        hooks = StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _task: None,
+                            is_cancelled=run.cancel.is_set, on_step=run.on_step)
+        plugin_ops.install(db, instance, service, payload, hooks)
+    run.begin_trial()
+    with SessionLocal() as db:
+        instance = inst.get(db, instance_id)
+        _launch(db, instance, _require_row(db, instance))
+    process = _process(instance_id)
+    deadline = time.monotonic() + process.ready_timeout + ENSURE_MARGIN_SECONDS
+    state = process.state
+    while state in (STARTING, RESTARTING) and time.monotonic() < deadline and not run.cancel.is_set():
+        state = process.wait_settled(_TRIAL_POLL_SECONDS)
+    if run.cancel.is_set():
+        stop(instance_id)
+        raise installer.InstallCancelled
+    if state != RUNNING:
+        # 停在「试起一次」这一步(界面写明是哪一步);原因原样转述(带着 key,按看的人的语言说),日志在服务自己的日志里
+        if state == FAILED and process.error is not None:
+            raise LocalServiceError.relay(process.error)
+        stop(instance_id)
+        raise LocalServiceError("localServiceErr_readyTimeout", seconds=int(process.ready_timeout))
+    with unit_of_work() as db:
+        row = _require_row(db, inst.get(db, instance_id))
+        row.python_minor = base_minor()
+
+
+# ---------------------------------------------------------------------------
 # 后端起来、退出
 # ---------------------------------------------------------------------------
 
@@ -450,7 +626,9 @@ def start_kept_running() -> threading.Thread:
 
 
 def stop_all() -> None:
-    """后端退出时:Mosael 起的进程不留在后台(拍板 4)。几个一起停,不让一个慢的拖着别的。"""
+    """后端退出时:Mosael 起的进程不留在后台(拍板 4)。正在装的先取消(插件停掉 pip、记下停在哪一步,下次接着装),
+    再停全部本机服务 —— 几个一起停,不让一个慢的拖着别的。"""
+    installer.cancel_all()
     running = [process for process in supervisor.everyone() if process.active]
     threads = [threading.Thread(target=process.stop, daemon=True) for process in running]
     for thread in threads:
@@ -461,7 +639,8 @@ def stop_all() -> None:
 
 __all__ = [
     "ACTIVE", "FAILED", "GATE", "RESTARTING", "RUNNING", "SERVICE_ENV", "STARTING", "STATES", "STOPPED",
-    "LocalServiceError", "add_nodes", "adopt_orphans", "begin_using", "configure", "detect", "discover", "ensure_running",
-    "forget_instance", "forget_package", "log_path", "recent_logs", "remove", "restart", "start", "start_kept_running",
-    "status", "stop", "stop_all",
+    "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using", "cancel_install",
+    "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package", "install_log_path", "log_path",
+    "needs_rebuild", "plan", "prepare_install", "recent_install_logs", "recent_logs", "remove", "restart", "start",
+    "start_kept_running", "status", "stop", "stop_all",
 ]

@@ -3,7 +3,7 @@
 /**
  * 连接页上的「本机服务」(ADR 0041),和插件页上的「本机发现」。钉的是这几条规矩:
  *
- * - 「在哪跑」三种:连一台服务器 / 用我自己装的 / 让 Mosael 装(看得见、点不了,写明下一步提供);
+ * - 「在哪跑」三种:连一台服务器 / 用我自己装的 / 让 Mosael 装;
  * - 选目录之后要**先确认**「会在这台机器上运行这个目录里的代码」,确认了才认目录;认出来、能起才存,认不出就把问题摆出来、不存;
  * - 存好之后:状态、启动 / 停止 / 重启、日志;起不来时摆原因和最后几行日志;打开局域网要再确认一次;
  * - 不是部署管理员:状态看得到,控件是灰的;
@@ -27,8 +27,14 @@ const api = vi.hoisted(() => ({
   addLocalServiceNodes: vi.fn(),
   discoverLocalServices: vi.fn(),
   createPluginInstance: vi.fn(),
+  getLocalServicePlan: vi.fn(),
+  installLocalService: vi.fn(),
+  cancelLocalServiceInstall: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
+vi.mock("@/features/plugins/ModelLibrary", () => ({
+  ModelLibraryDialog: ({ instance }: { instance: { id: string } }) => <div role="dialog" aria-label={`model-library:${instance.id}`} />,
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -46,6 +52,7 @@ function service(overrides: Partial<LocalService> = {}): LocalService {
     service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
     url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
     started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
+    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null,
     ...overrides,
   };
 }
@@ -66,13 +73,14 @@ afterEach(() => {
 });
 
 describe("在哪跑", () => {
-  it("没用本机服务:连一台服务器;让 Mosael 装看得见、点不了", async () => {
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+  it("没用本机服务:连一台服务器;三种都能选", async () => {
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     const group = await screen.findByRole("radiogroup", { name: "localServiceWhere" });
     expect(within(group).getByRole("radio", { name: "localServiceModeServer" }).getAttribute("aria-checked")).toBe("true");
-    const managed = within(group).getByText("localServiceModeManaged");
-    expect(managed.getAttribute("aria-disabled")).toBe("true");
+    const managed = within(group).getByRole("radio", { name: "localServiceModeManaged" });
+    expect((managed as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByLabelText("localServiceDirectory")).toBeNull();
+    expect(api.getLocalServicePlan, "没选「让 Mosael 装」不去看这台机器").not.toHaveBeenCalled();
   });
 
   it("选目录:先确认会运行这个目录里的代码,认出来能起才存", async () => {
@@ -80,7 +88,7 @@ describe("在哪跑", () => {
       ok: true, facts: [{ label: "ComfyUI 版本", value: "0.39.0" }], problems: [], add_nodes: null,
     });
     api.putLocalService.mockResolvedValue(service());
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeDirectory" }));
     fireEvent.change(screen.getByLabelText("localServiceDirectory"), { target: { value: " /Users/me/ComfyUI " } });
     fireEvent.click(screen.getByRole("button", { name: "localServiceCheck" }));
@@ -100,7 +108,7 @@ describe("在哪跑", () => {
       ok: false, facts: [], add_nodes: null,
       problems: [{ level: "error", text: "这个 Python 导入不了 torch" }, { level: "warning", text: "没装 ComfyUI-Manager" }],
     });
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeDirectory" }));
     fireEvent.change(screen.getByLabelText("localServiceDirectory"), { target: { value: "/x" } });
     fireEvent.click(screen.getByRole("button", { name: "localServiceCheck" }));
@@ -117,7 +125,7 @@ describe("存好之后", () => {
       state: "running", pid: 4321, ready_seconds: 18.4, started_at: "2026-10-06T06:00:00+00:00", restarts: 1,
     }));
     api.stopLocalService.mockResolvedValue(service());
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     expect(await screen.findByText("localServiceStateRunning")).toBeTruthy();
     expect(screen.getByText(/localServicePort/)).toBeTruthy();
     expect(screen.getByRole("radio", { name: "localServiceModeDirectory" }).getAttribute("aria-checked")).toBe("true");
@@ -125,7 +133,7 @@ describe("存好之后", () => {
     await waitFor(() => expect(api.stopLocalService).toHaveBeenCalledWith("i1"));
     fireEvent.click(screen.getByRole("button", { name: /localServiceLogs/ }));
     expect(await screen.findByText(/To see the GUI go to/)).toBeTruthy();
-    expect(api.getLocalServiceLogs).toHaveBeenCalledWith("i1", 2000);
+    expect(api.getLocalServiceLogs).toHaveBeenCalledWith("i1", 2000, "service");
   });
 
   it("起不来:摆原因和最后几行日志,可以再启动", async () => {
@@ -133,7 +141,7 @@ describe("存好之后", () => {
       state: "failed", error: "还没就绪就退出了(退出码 1)", failure_lines: ["ModuleNotFoundError: No module named 'torch'"],
     }));
     api.startLocalService.mockResolvedValue(service({ state: "starting" }));
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByText("还没就绪就退出了(退出码 1)")).toBeTruthy();
     expect(screen.getByText(/No module named 'torch'/)).toBeTruthy();
@@ -144,7 +152,7 @@ describe("存好之后", () => {
   it("打开局域网要再确认一次;关掉不用", async () => {
     api.getLocalService.mockResolvedValue(service());
     api.putLocalService.mockResolvedValue(service({ listen_lan: true }));
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     fireEvent.click(await screen.findByRole("switch", { name: "localServiceLan" }));
     expect(api.putLocalService).not.toHaveBeenCalled();
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "localServiceLanConfirmRun" }));
@@ -154,7 +162,7 @@ describe("存好之后", () => {
   it("改回连一台服务器:先确认,停掉并删掉本机服务", async () => {
     api.getLocalService.mockResolvedValue(service());
     api.removeLocalService.mockResolvedValue(undefined);
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeServer" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "localServiceBackToServerRun" }));
     await waitFor(() => expect(api.removeLocalService).toHaveBeenCalledWith("i1"));
@@ -167,7 +175,7 @@ describe("存好之后", () => {
       add_nodes: { title: "补装 pysssss", description: "从 GitHub 下载固定版本,解到 /Users/me/ComfyUI/custom_nodes/ComfyUI-Custom-Scripts" },
     });
     api.addLocalServiceNodes.mockResolvedValue({ installed: ["ComfyUI-Custom-Scripts"], path: "/x", message: "装好了" });
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     fireEvent.click(await screen.findByRole("button", { name: "localServiceRecheck" }));
     fireEvent.click(await screen.findByRole("button", { name: "localServiceAddNodesRun" }));
     expect(api.addLocalServiceNodes).not.toHaveBeenCalled();
@@ -177,7 +185,7 @@ describe("存好之后", () => {
 
   it("不是部署管理员:状态看得到,启动、换目录、开关都是灰的", async () => {
     api.getLocalService.mockResolvedValue(service({ can_manage: false }));
-    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} />);
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     expect(await screen.findByText("localServiceStateStopped")).toBeTruthy();
     expect((screen.getByRole("button", { name: /localServiceStart/ }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "localServiceChangeFolder" }) as HTMLButtonElement).disabled).toBe(true);
@@ -225,5 +233,157 @@ describe("本机发现", () => {
     mount(<LocalServiceDiscovery pkg={PKG} onConnected={vi.fn()} />);
     await waitFor(() => expect(api.discoverLocalServices).toHaveBeenCalled());
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+const PLAN = {
+  ok: true, supported: true, platform: "Apple 芯片 Mac", verdict: "PyPI 上的 PyTorch 直接带 MPS", flavour: "mps",
+  torch: "PyTorch 2.14.1(MPS)",
+  version: "0.39.0", disk_bytes: 5 * 1024 ** 3, free_bytes: 200 * 1024 ** 3, directory: "/data/local-services/i1",
+  steps: [
+    { key: "disk", title: "查剩余空间", done: false },
+    { key: "download", title: "下载 ComfyUI 0.39.0 源码", done: false },
+    { key: "torch", title: "装 PyTorch", done: false },
+    { key: "trial", title: "试起一次", done: false },
+  ],
+  downloads: [{ label: "ComfyUI 0.39.0 源码", url: "https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/refs/tags/v0.39.0" }],
+  problems: [],
+};
+
+function managedService(overrides: Partial<LocalService> = {}): LocalService {
+  return service({ mode: "managed", directory: "/data/local-services/i1", installed: false, ...overrides });
+}
+
+function run(overrides: Partial<NonNullable<LocalService["install"]>> = {}): NonNullable<LocalService["install"]> {
+  return {
+    state: "installing", step: "torch", started_at: "2026-10-06T06:00:00+00:00", finished_at: null, error: "", item: "",
+    done_bytes: null, total_bytes: null, speed: null,
+    steps: [
+      { key: "disk", title: "查剩余空间", done: true },
+      { key: "download", title: "下载源码", done: true },
+      { key: "torch", title: "装 PyTorch", done: false },
+      { key: "trial", title: "试起一次", done: false },
+    ],
+    ...overrides,
+  };
+}
+
+describe("让 Mosael 装", () => {
+  it("选它:先看安装计划(这台机器、PyTorch、空间、装在哪、几步、从哪儿下),确认写明在哪台机器上装", async () => {
+    api.getLocalServicePlan.mockResolvedValue(PLAN);
+    api.installLocalService.mockResolvedValue(managedService({ install: run({ step: "disk", steps: [] }) }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeManaged" }));
+    expect(await screen.findByText("PyTorch 2.14.1(MPS)")).toBeTruthy();
+    expect(screen.getByText("Apple 芯片 Mac")).toBeTruthy();
+    expect(screen.getByText(/PyPI 上的 PyTorch 直接带 MPS/)).toBeTruthy();
+    expect(screen.getByText("/data/local-services/i1")).toBeTruthy();
+    expect(screen.getByText("localServicePlanDiskValue")).toBeTruthy();
+    expect(screen.getByText("试起一次")).toBeTruthy();
+    expect(screen.getByText(/codeload\.github\.com/)).toBeTruthy();
+    expect(screen.getByText("localServicePlanNoModels"), "不下模型(拍板 7)").toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "localServiceInstallStart" }));
+    expect(api.installLocalService, "没确认之前不装").not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("localServiceInstallConfirmTitle")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "localServiceInstallStart" }));
+    await waitFor(() => expect(api.installLocalService).toHaveBeenCalledWith("i1", "mps"));
+  });
+
+  it("这台机器装不了:摆出原因,按钮是灰的;取消回到原来那种", async () => {
+    api.getLocalServicePlan.mockResolvedValue({
+      ...PLAN, ok: false, supported: false, flavour: "", torch: "", platform: "Linux", verdict: "Linux 这一版不装。可以「用我自己装的」", steps: [],
+      downloads: [],
+    });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeManaged" }));
+    expect(await screen.findByText(/Linux 这一版不装/)).toBeTruthy();
+    expect(screen.getByText("localServicePlanUnsupported")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "localServiceInstallStart" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "cancel" }));
+    expect(screen.getByRole("radio", { name: "localServiceModeServer" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("空间不够:那一条 error 摆出来(不再说「这台机器装不了」),不让装", async () => {
+    // 后端的约定:有一条 error 就是 ok = false
+    api.getLocalServicePlan.mockResolvedValue({ ...PLAN, ok: false, problems: [{ level: "error", text: "这块盘只剩 3.0 GB" }] });
+    api.getLocalService.mockResolvedValue(managedService());
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("这块盘只剩 3.0 GB")).toBeTruthy();
+    expect(screen.queryByText("localServicePlanUnsupported")).toBeNull();
+    expect((screen.getByRole("button", { name: "localServiceInstallStart" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("在装:第几步、手上那个文件下了多少多快;能取消;这时换不了「在哪跑」", async () => {
+    api.getLocalService.mockResolvedValue(managedService({
+      install: run({ item: "torch-2.14.1-cp313-cp313-macosx_14_0_arm64.whl", done_bytes: 1_500_000, total_bytes: 3_000_000, speed: 2_000_000 }),
+    }));
+    api.cancelLocalServiceInstall.mockResolvedValue(managedService({ install: run({ state: "cancelled" }) }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceInstalling")).toBeTruthy();
+    expect(screen.getByText("localServiceInstallStepOf")).toBeTruthy();
+    expect(screen.getByText("装 PyTorch").closest("li")?.getAttribute("aria-current")).toBe("step");
+    expect(screen.getByText(/torch-2\.14\.1-cp313.*1\.5 MB \/ 3\.0 MB · 2\.0 MB\/s/)).toBeTruthy();
+    expect(api.getLocalServicePlan, "在装时不再去看计划").not.toHaveBeenCalled();
+    for (const radio of screen.getAllByRole("radio")) expect((radio as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /localServiceInstallCancel/ }));
+    await waitFor(() => expect(api.cancelLocalServiceInstall).toHaveBeenCalledWith("i1"));
+  });
+
+  it("没装成:说停在哪一步、原因;安装日志;按钮变成「接着装」", async () => {
+    api.getLocalService.mockResolvedValue(managedService({
+      install: run({ state: "failed", step: "torch", error: "装 PyTorch 失败:下载超时或断流。换一个「PyTorch 源」再「接着装」" }),
+    }));
+    api.getLocalServicePlan.mockResolvedValue({ ...PLAN, steps: PLAN.steps.map((one, index) => ({ ...one, done: index < 2 })) });
+    api.getLocalServiceLogs.mockResolvedValue({ lines: ["$ python -m pip install torch==2.14.1"], path: "/data/logs/service-install-i1.log" });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceInstallFailed")).toBeTruthy();
+    expect(screen.getByText(/下载超时或断流/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "localServiceInstallResume" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /localServiceInstallLog/ }));
+    expect(await screen.findByText(/pip install torch/)).toBeTruthy();
+    expect(api.getLocalServiceLogs).toHaveBeenCalledWith("i1", 2000, "install");
+  });
+
+  it("装好了:链到模型库(不替你下模型);安装位置不给换", async () => {
+    api.getLocalService.mockResolvedValue(managedService({
+      installed: true, python_minor: "3.13", base_python_minor: "3.13", state: "running",
+      install: run({ state: "succeeded", step: "", finished_at: "2026-10-06T06:10:00+00:00" }),
+    }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceInstalledTitle")).toBeTruthy();
+    expect(screen.getByText("localServiceStateRunning")).toBeTruthy();
+    expect(screen.getByText("localServiceInstallLocation")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "localServiceChangeFolder" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "localServiceModeManaged" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /localServiceOpenModelLibrary/ }));
+    expect(await screen.findByRole("dialog", { name: "model-library:i1" })).toBeTruthy();
+  });
+
+  it("运行环境要重建:说清楚哪个 Python 装的,启动是灰的;一键重建先确认", async () => {
+    api.getLocalService.mockResolvedValue(managedService({
+      installed: true, python_minor: "3.13", base_python_minor: "3.14", needs_rebuild: true,
+    }));
+    api.getLocalServicePlan.mockResolvedValue({ ...PLAN, steps: PLAN.steps.map((one) => ({ ...one, done: one.key === "download" })) });
+    api.installLocalService.mockResolvedValue(managedService({ install: run() }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceRebuildTitle")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /localServiceStart/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /localServiceInstallRebuild/ }));
+    const button = await screen.findByRole("button", { name: "localServiceInstallRebuild" });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(button);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("localServiceRebuildConfirmTitle")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "localServiceInstallRebuild" }));
+    await waitFor(() => expect(api.installLocalService).toHaveBeenCalledWith("i1", "mps"));
+  });
+
+  it("不是部署管理员:不去看计划,装不了", async () => {
+    api.getLocalService.mockResolvedValue(managedService({ can_manage: false }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceAdminOnly")).toBeTruthy();
+    expect(api.getLocalServicePlan).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: "localServiceInstallStart" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

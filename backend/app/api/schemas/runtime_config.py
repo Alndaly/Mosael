@@ -120,12 +120,20 @@ class InstallSourceOut(ApiModel):
     #: 两行下拉的预设 —— 名字由后端给,界面不写死镜像清单。
     pip_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
     npm_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
+    #: 「让 Mosael 装」装 CUDA 版 PyTorch 的源:预设 key(nju)或自定义的 simple 索引根地址;空 = 官方(ADR 0041 §4)。
+    pytorch_index: str = ""
+    pytorch_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
+    #: 下 GitHub 上钉死的压缩包时接在前面的镜像前缀(以 `/` 结尾);空 = 直连。
+    github_mirror: str = ""
 
 
 class InstallSourceUpdate(ApiModel):
     #: 只改给了的那一行;空串 = 官方源。
     pip_index: str | None = Field(default=None, max_length=200)
     npm_registry: str | None = Field(default=None, max_length=200)
+    pytorch_index: str | None = Field(default=None, max_length=200)
+    #: 空串 = 直连。
+    github_mirror: str | None = Field(default=None, max_length=500)
 
 
 class DenoiseEngineOut(ApiModel):

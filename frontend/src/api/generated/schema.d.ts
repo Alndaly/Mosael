@@ -5700,7 +5700,8 @@ export interface paths {
         };
         /**
          * Get Install Source
-         * @description 「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。
+         * @description 「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像;「让 Mosael 装」本机服务时
+         *     装 CUDA 版 PyTorch 的源和 GitHub 镜像前缀(ADR 0041 §4)。
          *
          *     **为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
          *     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),
@@ -8311,11 +8312,75 @@ export interface paths {
         };
         /**
          * Get Local Service Logs
-         * @description 最近的日志(它自己说的话,原样),和完整日志在哪个文件。
+         * @description 最近的日志(它自己说的话,原样),和完整日志在哪个文件。`source=install`:让 Mosael 装的那几步的输出。
          */
         get: operations["get_local_service_logs_api_plugins_instances__instance_id__local_service_logs_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan Local Service
+         * @description 让 Mosael 装之前的安装计划:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(接着装时哪几步已经做完)、从哪儿下。
+         *     只看、不写;部署管理员(那是这台机器上的事)。
+         */
+        get: operations["plan_local_service_api_plugins_instances__instance_id__local_service_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Local Service
+         * @description 让 Mosael 装(或接着装、重建运行环境):这个连接改成「让 Mosael 装」、选好端口,后台开始装,马上回来,界面接着轮询。
+         *     要确认过(会在这台机器上下载、运行代码)。
+         *
+         *     **先提交、再开始装**:安装线程自己开会话读这一行 —— 没提交它就看不见(所以这里不用 `Tx`,提交写在中间)。
+         */
+        post: operations["install_local_service_api_plugins_instances__instance_id__local_service_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/install/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Local Service Install
+         * @description 取消正在装的:插件停在手上那一步,下次「接着装」从它开始。
+         */
+        post: operations["cancel_local_service_install_api_plugins_instances__instance_id__local_service_install_cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11981,6 +12046,18 @@ export interface components {
             pip_presets?: components["schemas"]["PackageSourcePresetOut"][];
             /** Npm Presets */
             npm_presets?: components["schemas"]["PackageSourcePresetOut"][];
+            /**
+             * Pytorch Index
+             * @default
+             */
+            pytorch_index: string;
+            /** Pytorch Presets */
+            pytorch_presets?: components["schemas"]["PackageSourcePresetOut"][];
+            /**
+             * Github Mirror
+             * @default
+             */
+            github_mirror: string;
         };
         /** InstallSourceUpdate */
         InstallSourceUpdate: {
@@ -11988,6 +12065,10 @@ export interface components {
             pip_index?: string | null;
             /** Npm Registry */
             npm_registry?: string | null;
+            /** Pytorch Index */
+            pytorch_index?: string | null;
+            /** Github Mirror */
+            github_mirror?: string | null;
         };
         /** InvitationListOut */
         InvitationListOut: {
@@ -12239,6 +12320,19 @@ export interface components {
             /** Servers */
             servers?: components["schemas"]["LocalServiceFoundOut"][];
         };
+        /**
+         * LocalServiceDownloadOut
+         * @description 安装要从哪儿下一样东西(给确认页:会连哪几个站)。
+         */
+        LocalServiceDownloadOut: {
+            /** Label */
+            label: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
         /** LocalServiceFactOut */
         LocalServiceFactOut: {
             /** Label */
@@ -12252,6 +12346,73 @@ export interface components {
             url: string;
             /** Label */
             label: string;
+        };
+        /**
+         * LocalServiceInstallOut
+         * @description 这一次安装到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。
+         */
+        LocalServiceInstallOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "installing" | "succeeded" | "failed" | "cancelled";
+            /**
+             * Step
+             * @default
+             */
+            step: string;
+            /** Steps */
+            steps?: components["schemas"]["LocalServiceInstallStepOut"][];
+            /** Done Bytes */
+            done_bytes?: number | null;
+            /** Total Bytes */
+            total_bytes?: number | null;
+            /** Speed */
+            speed?: number | null;
+            /**
+             * Item
+             * @default
+             */
+            item: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Started At */
+            started_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /**
+         * LocalServiceInstallRequest
+         * @description 装、接着装、重建运行环境。界面问过人了(会在这台机器上下载、运行代码),带 `confirm_run_code: true`;`flavour` 是确认页上
+         *     那种 PyTorch —— 插件装之前再看一次这台机器,对不上就不装。
+         */
+        LocalServiceInstallRequest: {
+            /**
+             * Confirm Run Code
+             * @default false
+             */
+            confirm_run_code: boolean;
+            /** Flavour */
+            flavour: string;
+        };
+        /**
+         * LocalServiceInstallStepOut
+         * @description 安装的一步:插件说的那几步(查空间、下源码……),最后是宿主的「试起一次」。
+         */
+        LocalServiceInstallStepOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Done
+             * @default false
+             */
+            done: boolean;
         };
         /** LocalServiceLogsOut */
         LocalServiceLogsOut: {
@@ -12287,9 +12448,9 @@ export interface components {
             title: string;
             /**
              * Mode
-             * @constant
+             * @enum {string}
              */
-            mode: "directory";
+            mode: "directory" | "managed";
             /** Directory */
             directory: string;
             /**
@@ -12342,10 +12503,90 @@ export interface components {
             /** Failure Lines */
             failure_lines?: string[];
             /**
+             * Installed
+             * @default true
+             */
+            installed: boolean;
+            /**
+             * Python Minor
+             * @default
+             */
+            python_minor: string;
+            /**
+             * Base Python Minor
+             * @default
+             */
+            base_python_minor: string;
+            /**
+             * Needs Rebuild
+             * @default false
+             */
+            needs_rebuild: boolean;
+            install?: components["schemas"]["LocalServiceInstallOut"] | null;
+            /**
              * Can Manage
              * @default false
              */
             can_manage: boolean;
+        };
+        /**
+         * LocalServicePlanOut
+         * @description 让 Mosael 装之前的安装计划(插件看过这台机器):能不能装、装哪种 PyTorch、要多少空间、分几步、从哪儿下。
+         */
+        LocalServicePlanOut: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Supported
+             * @default false
+             */
+            supported: boolean;
+            /**
+             * Platform
+             * @default
+             */
+            platform: string;
+            /**
+             * Verdict
+             * @default
+             */
+            verdict: string;
+            /**
+             * Flavour
+             * @default
+             */
+            flavour: string;
+            /**
+             * Torch
+             * @default
+             */
+            torch: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Disk Bytes
+             * @default 0
+             */
+            disk_bytes: number;
+            /**
+             * Free Bytes
+             * @default 0
+             */
+            free_bytes: number;
+            /** Steps */
+            steps?: components["schemas"]["LocalServiceInstallStepOut"][];
+            /** Downloads */
+            downloads?: components["schemas"]["LocalServiceDownloadOut"][];
+            /** Problems */
+            problems?: components["schemas"]["LocalServiceProblemOut"][];
+            /**
+             * Directory
+             * @default
+             */
+            directory: string;
         };
         /** LocalServiceProblemOut */
         LocalServiceProblemOut: {
@@ -35171,6 +35412,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                source?: "service" | "install";
             };
             header?: never;
             path: {
@@ -35187,6 +35429,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocalServiceLogsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_local_service_api_plugins_instances__instance_id__local_service_plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServicePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_local_service_api_plugins_instances__instance_id__local_service_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalServiceInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_local_service_install_api_plugins_instances__instance_id__local_service_install_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
                 };
             };
             /** @description Validation Error */

@@ -294,8 +294,10 @@ export function getInstallSource(): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source");
 }
 
-/** 只改给了的那一行(pip / npm);空串 = 官方源。 */
-export function updateInstallSource(body: { pip_index?: string; npm_registry?: string }): Promise<InstallSource> {
+/** 只改给了的那一行(pip / npm / 「让 Mosael 装」的 PyTorch 源、GitHub 镜像前缀);空串 = 官方源 / 直连。 */
+export function updateInstallSource(
+  body: { pip_index?: string; npm_registry?: string; pytorch_index?: string; github_mirror?: string },
+): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify(body) });
 }
 

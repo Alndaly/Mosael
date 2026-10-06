@@ -1,0 +1,497 @@
+"""让 Mosael 装(ADR 0041 §4)的宿主那一半:一个声明了 `services` 的测试插件,它的 `service_plan` / `service_install` 按控制文件
+做几步假的安装(一步一行进度、看取消文件、写安装记录和日志),`service_launch` 让宿主起 tests/fake_local_service.py。走一遍:
+
+- **安装计划**:只给部署管理员;宿主在插件那几步后面加上自己的「试起一次」,写明装在哪(`<数据目录>/local-services/<连接>/`);
+- **装**:要确认;连接改成「让 Mosael 装」、端口选好写进地址;插件拿到的是随包的 Python、「管理 → 下载源」里的地址、宿主给的
+  日志和 pip 缓存;插件那几步做完宿主试起一次,**健康检查通过才记成装好**(Python 小版本);进度(哪一步、字节、速度)看得到;
+- **没装好不让起**(用到时起也一样)、正在装时不能换目录 / 删 / 再装一次;**取消**停在那一步、「接着装」从没做完的开始;
+  插件失败原因照说、日志看得到;试起没通过不算装好;
+- **运行环境要重建**:Python 小版本对不上就不让起,再装一次就好;
+- 后端退出、删连接时正在装的先取消;托管 venv 的对账不碰安装目录;「PyTorch 源」「GitHub 镜像前缀」两项设置。
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import socket
+import time
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from app.core.config import settings
+from app.core.db import SessionLocal
+from app.db.models import LocalService, PluginInstance, PluginPackage
+from app.domain import local_services
+from app.domain.local_services import installer, pidfiles, records, supervisor
+from app.domain.plugins.runtime import StreamHooks, _dispatch
+from tests.util import fresh_client, second_client
+
+FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
+PACKAGE_ID = "dev.test.managedsvc"
+
+#: 测试插件。控制文件在安装目录的上一层(`local-services/control.json`):每一步多慢、哪一步失败、起的时候带什么参数。
+PLUGIN = r'''
+import json, os, sys, time
+from pathlib import Path
+
+FAKE = __FAKE__
+STEPS = ["disk", "fetch", "build"]
+TITLES = {"disk": {"zh": "查空间", "en": "Check space"}, "fetch": {"zh": "下载", "en": "Download"},
+          "build": {"zh": "装依赖", "en": "Install dependencies"}}
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+def cancelled():
+    path = os.environ.get("MOSAEL_PLUGIN_CANCEL_FILE", "")
+    return bool(path) and os.path.exists(path)
+
+def control(root):
+    path = Path(root).parent / "control.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+def record(root):
+    path = Path(root) / "record.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"done": []}
+
+def plan(payload):
+    root = payload["directory"]
+    done = record(root)["done"]
+    return {"ok": True, "platform": {"zh": "测试机", "en": "Test machine"}, "verdict": {"zh": "能装", "en": "Can install"},
+            "flavour": "fake", "torch": {"zh": "假 torch", "en": "Fake torch"}, "comfyui": "9.9.9",
+            "disk_bytes": 5, "free_bytes": 100,
+            "steps": [{"key": key, "title": TITLES[key], "done": key in done} for key in STEPS],
+            "downloads": [{"label": "源码", "url": payload["sources"]["github_mirror"] + "https://codeload.github.com/x"}],
+            "problems": control(root).get("problems", [])}
+
+def install(payload):
+    root = Path(payload["directory"])
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "payload.json").write_text(json.dumps(payload), encoding="utf-8")
+    options = control(root)
+    state = record(root)
+    log = open(payload["log"], "a", encoding="utf-8")
+    emit({"event": "step", "outline": [{"key": key, "title": TITLES[key], "done": key in state["done"]} for key in STEPS]})
+    for key in STEPS:
+        if key in state["done"]:
+            emit({"event": "step", "key": key, "state": "done"})
+            continue
+        emit({"event": "step", "key": key, "state": "running"})
+        log.write(f"== {key}\n")
+        log.flush()
+        for done in range(0, 101, 10):
+            if cancelled():
+                log.write(f"cancelled at {key}\n")
+                emit({"ok": False, "error": "cancelled"})
+                return None
+            emit({"event": "step", "key": key, "state": "running", "done_bytes": done * 1000, "total_bytes": 100000,
+                  "item": f"{key}.whl"})
+            time.sleep(options.get("slow", {}).get(key, 0))
+        if options.get("fail") == key:
+            log.write(f"ERROR: {key} broke\n")
+            emit({"ok": False, "error": {"zh": f"{key} 这一步坏了", "en": f"step {key} broke"}})
+            return None
+        state["done"].append(key)
+        (root / "record.json").write_text(json.dumps(state), encoding="utf-8")
+        emit({"event": "step", "key": key, "state": "done"})
+    log.close()
+    return {"directory": str(root), "python_minor": "3.13"}
+
+def svc(payload):
+    op = payload.get("op")
+    if op == "service_plan":
+        return plan(payload)
+    if op == "service_launch":
+        flags = control(payload["directory"]).get("launch_flags", [])
+        argv = [sys.executable, FAKE, "--port", str(payload["port"]), "--listen", "127.0.0.1", *flags]
+        return {"argv": argv, "env": {}, "cwd": payload["directory"], "health_path": "/system_stats", "ready_timeout": 20}
+    if op == "service_detect":
+        return {"ok": True, "facts": [], "problems": []}
+    raise ValueError(op)
+
+request = json.loads(sys.stdin.read())
+payload = request.get("input") or {}
+try:
+    if payload.get("op") == "service_install":
+        output = install(payload)
+        if output is not None:
+            emit({"ok": True, "output": output})
+    else:
+        emit({"ok": True, "output": svc(payload)})
+except Exception as exc:
+    emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+'''
+
+
+def _manifest(path: Path) -> dict[str, Any]:
+    return {
+        "id": PACKAGE_ID, "name": "让 Mosael 装的测试", "version": "1.0.0", "manifest_version": 8,
+        "runtime": {"kind": "process", "entry": "main.py"},
+        "instance": {"multiple": True, "config": [{"key": "server_url", "label": "地址", "type": "string", "required": True,
+                                                    "default": "http://127.0.0.1:8188"}]},
+        "tools": {"expose": "all", "declare": [{"name": "svc", "internal": True, "input_schema": {"type": "object"}}]},
+        "services": [{"key": "fake", "title": {"zh": "假服务", "en": "Fake service"}, "tool": "svc"}],
+        "_path": str(path),
+    }
+
+
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+@pytest.fixture(autouse=True)
+def _fast(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(supervisor, "HEALTH_POLL_SECONDS", 0.05)
+    monkeypatch.setattr(supervisor, "WATCH_SECONDS", 0.05)
+    monkeypatch.setattr(supervisor, "STOP_GRACE_SECONDS", 3.0)
+    monkeypatch.setattr(records, "FIRST_PORT", _free_port())
+    monkeypatch.setattr(local_services, "base_minor", lambda: "3.13")
+    shutil.rmtree(pidfiles.pid_dir(), ignore_errors=True)
+    shutil.rmtree(settings.data_dir / records.INSTALLS, ignore_errors=True)
+    yield
+    installer.cancel_all(wait=10)
+    local_services.stop_all()
+    installer._runs.clear()
+    supervisor._services.clear()
+    supervisor._directories.clear()
+
+
+@pytest.fixture
+def plugged(tmp_path: Path):
+    client = fresh_client()
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "main.py").write_text(PLUGIN.replace("__FAKE__", repr(str(FAKE))), encoding="utf-8")
+    with SessionLocal() as db:
+        db.add(PluginPackage(id=PACKAGE_ID, name="让 Mosael 装的测试", version="1.0.0", manifest=_manifest(plugin)))
+        db.commit()
+    return client
+
+
+def _connection(client) -> str:
+    created = client.post(f"/api/plugins/{PACKAGE_ID}/instances", json={"name": "本机"})
+    assert created.status_code == 200, created.text
+    instance_id = created.json()["id"]
+    assert client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
+    return instance_id
+
+
+def _control(**options: Any) -> None:
+    path = settings.data_dir / records.INSTALLS / "control.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(options), encoding="utf-8")
+
+
+def _url(instance_id: str, tail: str = "") -> str:
+    return f"/api/plugins/instances/{instance_id}/local-service{tail}"
+
+
+def _install(client, instance_id: str, **extra: Any):
+    return client.post(_url(instance_id, "/install"), json={"confirm_run_code": True, "flavour": "fake", **extra})
+
+
+def _status(client, instance_id: str) -> dict[str, Any]:
+    response = client.get(_url(instance_id))
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _wait(client, instance_id: str, done, timeout: float = 30.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while True:
+        status = _status(client, instance_id)
+        if done(status) or time.monotonic() > deadline:
+            return status
+        time.sleep(0.05)
+
+
+def _install_state(state: str):
+    return lambda status: (status.get("install") or {}).get("state") == state
+
+
+# ---- 安装计划 ----------------------------------------------------------------------
+
+
+def test_安装计划_只给部署管理员_宿主加上试起那一步_写明装在哪(plugged, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.ai.runtime import config as runtime_config
+
+    instance_id = _connection(plugged)
+    assert plugged.put("/api/settings/install-source", json={"github_mirror": "https://gh.example"}).status_code == 200
+    planned = plugged.get(_url(instance_id, "/plan"))
+    assert planned.status_code == 200, planned.text
+    body = planned.json()
+    assert body["ok"] and body["flavour"] == "fake" and body["version"] == "9.9.9" and body["platform"] == "测试机"
+    assert [one["key"] for one in body["steps"]] == ["disk", "fetch", "build", "trial"]
+    assert body["steps"][-1]["title"] == "试起一次,健康检查通过才算装好"
+    assert body["directory"] == str(settings.data_dir / "local-services" / instance_id)
+    assert body["downloads"][0]["url"] == "https://gh.example/https://codeload.github.com/x", "插件拿到的是下载源里的地址"
+    english = plugged.get(_url(instance_id, "/plan"), headers={"Accept-Language": "en"}).json()
+    assert english["platform"] == "Test machine" and english["steps"][-1]["title"].startswith("Start it once")
+    member = second_client("member")
+    assert member.get(_url(_connection(member), "/plan")).status_code == 403, "那是这台机器上的事:部署管理员"
+    runtime_config.refresh()
+
+
+def test_安装计划里插件说的问题_有一条_error_就不能装(plugged) -> None:
+    instance_id = _connection(plugged)
+    _control(problems=[{"level": "error", "text": {"zh": "空间不够", "en": "No space"}},
+                       {"level": "warning", "text": "提醒一下"}])
+    body = plugged.get(_url(instance_id, "/plan")).json()
+    assert body["ok"] is False and body["supported"] is True, "机器能装,这一次开始不了"
+    assert [one["level"] for one in body["problems"]] == ["error", "warning"]
+
+
+# ---- 装 ----------------------------------------------------------------------------
+
+
+def test_装要确认_建成让Mosael装_试起通过才记成装好(plugged) -> None:
+    instance_id = _connection(plugged)
+    refused = plugged.post(_url(instance_id, "/install"), json={"flavour": "fake"})
+    assert refused.status_code == 422 and "确认" in refused.json()["detail"]
+    started = _install(plugged, instance_id)
+    assert started.status_code == 200, started.text
+    body = started.json()
+    root = settings.data_dir / "local-services" / instance_id
+    assert body["mode"] == "managed" and body["directory"] == str(root) and body["installed"] is False
+    assert body["install"]["state"] == "installing"
+    with SessionLocal() as db:
+        assert db.get(PluginInstance, instance_id).config["server_url"] == body["url"], "插件、工作台、模型库读的还是那一个地址"
+
+    status = _wait(plugged, instance_id, _install_state("succeeded"))
+    assert status["install"]["state"] == "succeeded", status
+    assert status["state"] == "running" and status["installed"] is True and status["python_minor"] == "3.13"
+    assert [one["key"] for one in status["install"]["steps"]] == ["disk", "fetch", "build", "trial"]
+    assert all(one["done"] for one in status["install"]["steps"])
+    payload = json.loads((root / "payload.json").read_text(encoding="utf-8"))
+    assert payload["flavour"] == "fake" and payload["python"] and Path(payload["python"]).is_file(), "随包的 Python"
+    assert payload["pip_cache"] == str(settings.data_dir / "local-services" / "pip-cache")
+    assert set(payload["sources"]) == {"pip_index_url", "pytorch_index_url", "github_mirror"}
+    assert payload["sources"]["pytorch_index_url"] == "https://download.pytorch.org/whl", "没配就是官方"
+    assert payload["log"].endswith(f"service-install-{instance_id}.log")
+    logs = plugged.get(_url(instance_id, "/logs"), params={"source": "install"}).json()
+    assert "== fetch" in logs["lines"] and logs["path"] == payload["log"]
+    with SessionLocal() as db:
+        row = db.get(LocalService, instance_id)
+        assert (row.mode, row.python, row.python_minor) == ("managed", "", "3.13")
+
+
+def test_进度_哪一步_字节_正在下哪个(plugged) -> None:
+    instance_id = _connection(plugged)
+    _control(slow={"fetch": 0.2})
+    _install(plugged, instance_id)
+    status = _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("done_bytes"))
+    install = status["install"]
+    assert install["step"] == "fetch" and install["item"] == "fetch.whl" and install["total_bytes"] == 100000
+    assert [one["done"] for one in install["steps"]] == [True, False, False, False]
+    assert install["steps"][1]["title"] == "下载"
+    speedy = _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("speed"))
+    assert speedy["install"]["speed"] and speedy["install"]["speed"] > 0, "速度由宿主按字节和时间算"
+    plugged.post(_url(instance_id, "/install/cancel"))
+    _wait(plugged, instance_id, _install_state("cancelled"))
+
+
+def test_没装好_不让起_用到时起也说清楚(plugged) -> None:
+    instance_id = _connection(plugged)
+    _control(fail="build")
+    _install(plugged, instance_id)
+    failed = _wait(plugged, instance_id, _install_state("failed"))
+    assert failed["install"]["error"] == "build 这一步坏了", "插件说的原因原样交回"
+    assert failed["install"]["step"] == "build", "停在哪一步"
+    english = plugged.get(_url(instance_id), headers={"Accept-Language": "en"}).json()
+    assert "step build broke" in english["install"]["error"], "插件按语言分着说的原因,按读的人的语言挑"
+    started = plugged.post(_url(instance_id, "/start"))
+    assert started.status_code == 409 and "还没装好" in started.json()["detail"]
+    ensured = plugged.post(_url(instance_id, "/ensure"))
+    assert ensured.status_code == 409 and "接着装" in ensured.json()["detail"]
+    logs = plugged.get(_url(instance_id, "/logs"), params={"source": "install"}).json()["lines"]
+    assert "ERROR: build broke" in logs
+
+
+def test_取消_停在那一步_接着装从没做完的开始(plugged) -> None:
+    instance_id = _connection(plugged)
+    _control(slow={"build": 0.3})
+    _install(plugged, instance_id)
+    _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("step") == "build")
+    cancelled = plugged.post(_url(instance_id, "/install/cancel"))
+    assert cancelled.status_code == 200
+    status = _wait(plugged, instance_id, _install_state("cancelled"))
+    assert status["install"]["state"] == "cancelled" and status["install"]["step"] == "build"
+    plan = plugged.get(_url(instance_id, "/plan")).json()
+    assert [one["done"] for one in plan["steps"]] == [True, True, False, False], "插件记下了做完的那几步"
+    _control()
+    _install(plugged, instance_id)
+    done = _wait(plugged, instance_id, _install_state("succeeded"))
+    assert done["install"]["state"] == "succeeded" and done["installed"] is True
+    log = (settings.data_dir / "logs" / f"service-install-{instance_id}.log").read_text(encoding="utf-8")
+    assert "== fetch" not in log and "== build" in log, "接着装:做完的不再做(上一次的日志滚成了 .1)"
+
+
+def test_试起没通过_不算装好(plugged) -> None:
+    instance_id = _connection(plugged)
+    _control(launch_flags=["--exit-at-start", "3"])
+    _install(plugged, instance_id)
+    status = _wait(plugged, instance_id, _install_state("failed"))
+    assert status["install"]["step"] == "trial" and "退出码 3" in status["install"]["error"]
+    assert status["installed"] is False and status["python_minor"] == ""
+    assert status["state"] == "failed" and status["failure_lines"], "服务自己的日志照样摆出来"
+
+
+def test_正在装时_不能换目录_不能删_不能再装一次_不能起(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _control(slow={"fetch": 0.3})
+    _install(plugged, instance_id)
+    for response in (
+        plugged.put(_url(instance_id), json={"directory": str(tmp_path), "confirm_run_code": True}),
+        plugged.delete(_url(instance_id)),
+        _install(plugged, instance_id),
+        plugged.post(_url(instance_id, "/start")),
+    ):
+        assert response.status_code == 409 and "正在装" in response.json()["detail"], response.text
+    assert plugged.put(_url(instance_id), json={"keep_running": True}).status_code == 200, "别的设置照样能改"
+    plugged.post(_url(instance_id, "/install/cancel"))
+    _wait(plugged, instance_id, _install_state("cancelled"))
+
+
+def test_运行环境要重建_对不上就不让起_再装一次就好(plugged, monkeypatch: pytest.MonkeyPatch) -> None:
+    instance_id = _connection(plugged)
+    _install(plugged, instance_id)
+    _wait(plugged, instance_id, _install_state("succeeded"))
+    plugged.post(_url(instance_id, "/stop"))
+    monkeypatch.setattr(local_services, "base_minor", lambda: "3.14")
+    status = _status(plugged, instance_id)
+    assert status["needs_rebuild"] is True and (status["python_minor"], status["base_python_minor"]) == ("3.13", "3.14")
+    refused = plugged.post(_url(instance_id, "/start"))
+    assert refused.status_code == 409 and "3.13" in refused.json()["detail"] and "重建运行环境" in refused.json()["detail"]
+    plan = plugged.get(_url(instance_id, "/plan")).json()
+    assert plan["steps"][-1] == {"key": "trial", "title": "试起一次,健康检查通过才算装好", "done": False}
+    _install(plugged, instance_id)
+    rebuilt = _wait(plugged, instance_id, _install_state("succeeded"))
+    assert rebuilt["needs_rebuild"] is False and rebuilt["python_minor"] == "3.14" and rebuilt["state"] == "running"
+
+
+def test_换回用我自己装的_要给目录要确认_装好的记录清掉(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _install(plugged, instance_id)
+    _wait(plugged, instance_id, _install_state("succeeded"))
+    assert plugged.put(_url(instance_id), json={"mode": "directory"}).status_code == 422, "换成自己的要给目录"
+    assert plugged.put(_url(instance_id), json={"mode": "directory", "directory": str(tmp_path)}).status_code == 422, "要确认"
+    switched = plugged.put(_url(instance_id), json={"mode": "directory", "directory": str(tmp_path), "confirm_run_code": True})
+    assert switched.status_code == 200, switched.text
+    body = switched.json()
+    assert (body["mode"], body["directory"], body["python_minor"], body["install"]) == ("directory", str(tmp_path), "", None)
+    assert (settings.data_dir / "local-services" / instance_id).is_dir(), "安装目录留着(删它是第三步的卸载)"
+
+
+def test_后端退出_删连接时_正在装的先取消(plugged) -> None:
+    first, second = _connection(plugged), _connection(plugged)
+    _control(slow={"fetch": 0.3})
+    _install(plugged, first)
+    _wait(plugged, first, lambda one: (one.get("install") or {}).get("step") == "fetch")
+    local_services.stop_all()
+    run = installer.current(first)
+    assert run is not None and run.state == installer.CANCELLED and not run.thread.is_alive()
+    _install(plugged, second)
+    _wait(plugged, second, lambda one: (one.get("install") or {}).get("step") == "fetch")
+    thread = installer.current(second).thread
+    assert plugged.delete(f"/api/plugins/instances/{second}").status_code == 204
+    assert not thread.is_alive() and installer.current(second) is None
+
+
+# ---- 速度、流式协议 ------------------------------------------------------------------
+
+
+def test_速度按同一个文件的字节和时间算_换文件重新量(monkeypatch: pytest.MonkeyPatch) -> None:
+    """和别的下载同一个算法(core/rate 的滑动平均):第一个点没有速度,之后收敛到真实速率;换了文件重新量。"""
+    from app.domain.local_services.logs import ServiceLog
+
+    clock = [100.0]
+    monkeypatch.setattr(installer.time, "monotonic", lambda: clock[0])
+    run = installer.InstallRun("x", ServiceLog(Path("/nonexistent/x.log")), author_locale="zh")
+    run.on_step({"event": "step", "outline": [{"key": "fetch", "title": {"zh": "下载", "en": "Download"}}]})
+    assert [one.key for one in run.steps] == ["fetch", installer.TRIAL]
+
+    def sample(done: int, item: str = "a.whl") -> float | None:
+        run.on_step({"event": "step", "key": "fetch", "state": "running", "done_bytes": done, "total_bytes": 10**9,
+                     "item": item})
+        return run.speed
+
+    assert sample(0) is None, "只有一个点没有速度"
+    for second in range(1, 31):
+        clock[0] = 100.0 + second
+        speed = sample(second * 4_000_000)
+    assert speed is not None and 3_800_000 <= speed <= 4_200_000, speed
+    assert sample(10, item="b.whl") is None, "换了文件重新量"
+    run.on_step({"event": "step", "key": "fetch", "state": "done"})
+    assert run.steps[0].done and run.done_bytes is None and run.speed is None
+    run.on_step({"event": "step", "key": "later", "state": "running"})
+    assert [one.key for one in run.steps] == ["fetch", "later", installer.TRIAL], "没先说的步骤排在试起之前"
+
+
+def test_流式协议_step_一行交给_on_step_别的照旧() -> None:
+    progress: list[tuple[float, str]] = []
+    steps: list[dict[str, Any]] = []
+    hooks = StreamHooks(on_progress=lambda f, m: progress.append((f, m)), on_task=lambda _t: None, is_cancelled=lambda: False,
+                        on_step=steps.append)
+    _dispatch({"event": "step", "key": "fetch", "done_bytes": 1}, hooks)
+    _dispatch({"event": "progress", "progress": 0.5, "message": "半"}, hooks)
+    _dispatch({"event": "step", "key": "x" * 9000}, hooks)
+    assert steps == [{"event": "step", "key": "fetch", "done_bytes": 1}] and progress == [(0.5, "半")], "太大的一行不看"
+    quiet = StreamHooks(on_progress=lambda f, m: None, on_task=lambda _t: None, is_cancelled=lambda: False)
+    _dispatch({"event": "step", "key": "fetch"}, quiet)  # 没给 on_step:不看,也不出错
+
+
+# ---- 托管 venv 的对账、下载源设置 ---------------------------------------------------------
+
+
+def test_托管_venv_的对账不碰本机服务的安装目录(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """随包 Python 换了次版本时,对账删掉 `<托管目录>/venv-*` 里建在旧版本上的;让 Mosael 装的那份 venv 叫 `.venv`、
+    住在 `local-services/<连接>/` 下,不归它管 —— 由连接页的「重建运行环境」处理(源码和模型不动)。"""
+    from app.ai.runtime import asr_models, config as tts_config, separation_models
+    from app.core import interpreter
+    from app.db import migrations
+
+    roots = {name: tmp_path / name for name in ("tts", "asr", "sep")}
+    monkeypatch.setattr(tts_config, "MANAGED_TTS_ROOT", roots["tts"])
+    monkeypatch.setattr(asr_models, "MANAGED_ASR_ROOT", roots["asr"])
+    monkeypatch.setattr(separation_models, "MANAGED_SEPARATION_ROOT", roots["sep"])
+    monkeypatch.setattr(interpreter, "python_minor", lambda _python: "3.13")
+    engine = roots["tts"] / "venv-f5-tts"
+    managed = settings.data_dir / records.INSTALLS / "abc" / ".venv"
+    for venv in (engine, managed):
+        venv.mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = /old\nversion = 3.12.9\n", encoding="utf-8")
+    migrations._drop_venvs_built_on_another_python()
+    assert not engine.exists(), "对账还在干活(引擎的旧 venv 删了)"
+    assert managed.is_dir(), "让 Mosael 装的那份不归它管"
+    shutil.rmtree(settings.data_dir / records.INSTALLS, ignore_errors=True)
+
+
+def test_下载源设置_PyTorch_源和_GitHub_镜像前缀(plugged) -> None:
+    from app.ai.runtime import config as runtime_config
+    from app.domain.local_services import sources
+
+    url = "/api/settings/install-source"
+    initial = plugged.get(url).json()
+    assert initial["pytorch_index"] == "" and initial["github_mirror"] == ""
+    assert [(one["value"], one["url"]) for one in initial["pytorch_presets"]] == [
+        ("pytorch", ""), ("nju", "https://mirror.nju.edu.cn/pytorch/whl")], "官方那一项地址空着(空值 = 官方)"
+    assert initial["pytorch_presets"][0]["label"] == "官方(download.pytorch.org)"
+    assert plugged.put(url, json={"pytorch_index": "nju"}).json()["pytorch_index"] == "nju"
+    assert sources.for_plugin()["pytorch_index_url"] == "https://mirror.nju.edu.cn/pytorch/whl"
+    assert plugged.put(url, json={"pytorch_index": "https://torch.example/whl/"}).json()["pytorch_index"] == "https://torch.example/whl"
+    assert plugged.put(url, json={"pytorch_index": "pytorch"}).json()["pytorch_index"] == "", "选回官方存空串"
+    assert sources.for_plugin()["pytorch_index_url"] == "https://download.pytorch.org/whl"
+    assert plugged.put(url, json={"pytorch_index": "mirror.example/whl"}).status_code == 422, "缺 scheme 当场拒"
+    saved = plugged.put(url, json={"github_mirror": " https://gh.example "})
+    assert saved.json()["github_mirror"] == "https://gh.example/" and sources.for_plugin()["github_mirror"] == "https://gh.example/"
+    assert plugged.put(url, json={"github_mirror": "ftp://gh.example"}).status_code == 422
+    assert plugged.put(url, json={"github_mirror": ""}).json()["github_mirror"] == ""
+    assert plugged.get(url).json()["pip_index"] == initial["pip_index"], "只写给了的那几项"
+    assert second_client("member").put(url, json={"github_mirror": "https://x.example"}).status_code == 403
+    runtime_config.refresh()

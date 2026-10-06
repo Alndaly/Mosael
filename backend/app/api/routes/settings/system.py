@@ -71,7 +71,8 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: Tx, user: CurrentUser) -> Ai
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)
 def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
-    """「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。
+    """「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像;「让 Mosael 装」本机服务时
+    装 CUDA 版 PyTorch 的源和 GitHub 镜像前缀(ADR 0041 §4)。
 
     **为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),
@@ -82,6 +83,7 @@ def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
 
 def _install_source_out() -> InstallSourceOut:
     from app.ai.runtime import config as runtime_config
+    from app.domain.local_services import sources as service_sources
     from app.domain.plugins import package_sources
 
     current = runtime_config.get()
@@ -90,6 +92,9 @@ def _install_source_out() -> InstallSourceOut:
         npm_registry=current.npm_registry or "",
         pip_presets=package_sources.presets_out("pypi"),
         npm_presets=package_sources.presets_out("npm"),
+        pytorch_index=current.pytorch_index or "",
+        pytorch_presets=service_sources.pytorch_presets(),
+        github_mirror=current.github_mirror or "",
     )
 
 
@@ -98,6 +103,7 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
     # 往这台机器上装东西用哪个源,是部署级的设置 —— 和装引擎本身同一条权限。
     ensure_deployment_admin(db, user)
     from app.ai.runtime import config as runtime_config
+    from app.domain.local_services import sources as service_sources
     from app.domain.plugins import package_sources
     from app.domain.plugins.errors import PluginDomainError
 
@@ -108,6 +114,11 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
             row.pip_index = package_sources.normalize("pypi", body.pip_index)
         if body.npm_registry is not None:
             row.npm_registry = package_sources.normalize("npm", body.npm_registry)
+        # 「让 Mosael 装」的两行(ADR 0041 §4):PyTorch 源、GitHub 镜像前缀
+        if body.pytorch_index is not None:
+            row.pytorch_index = service_sources.normalize_pytorch_index(body.pytorch_index)
+        if body.github_mirror is not None:
+            row.github_mirror = service_sources.normalize_github_mirror(body.github_mirror)
     except PluginDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()

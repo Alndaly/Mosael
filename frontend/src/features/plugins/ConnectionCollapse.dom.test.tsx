@@ -241,6 +241,7 @@ describe("本机服务的连接(ADR 0041)", () => {
       service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
       url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
       started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
+      installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null,
     });
     const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
     wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://127.0.0.1:8189" } })} workspaceId="w1"

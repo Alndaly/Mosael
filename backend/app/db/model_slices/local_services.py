@@ -25,9 +25,9 @@ class LocalService(Base):
     instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
     #: 清单里那种服务的 key(`services[].key`)。
     service: Mapped[str] = mapped_column(String(40), nullable=False)
-    #: 在哪跑。`directory` = 用我自己装的(选一个目录);第二步加 `managed`(让 Mosael 装)。
+    #: 在哪跑。`directory` = 用我自己装的(选一个目录);`managed` = 让 Mosael 装(装在宿主分的 `<数据目录>/local-services/<连接>/`)。
     mode: Mapped[str] = mapped_column(String(16), nullable=False, default="directory")
-    #: 用户选的目录,原样存(插件认得出便携版外层那一层,宿主不替它改)。
+    #: 用户选的目录,原样存(插件认得出便携版外层那一层,宿主不替它改)。让 Mosael 装的是宿主分的那个安装目录。
     directory: Mapped[str] = mapped_column(Text, nullable=False, default="")
     #: 用户指定的解释器。空 = 由插件按目录自己认(便携版自带的、目录里或上一层的 venv)。
     python: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -39,5 +39,8 @@ class LocalService(Base):
     keep_running: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     #: 附加的启动参数(「高级」里填的,如 `--lowvram`),一项一个。
     extra_args: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    #: 让 Mosael 装的那一份**装好了**(试起一次、健康检查通过)时,建 venv 用的那个 Python 的「主.次」版本(`3.13`);空 = 还没装好。
+    #: 随包的 Python 换了次版本,venv 就跑不起来了:和它对不上时连接页说「运行环境要重建」,起之前先拦下(ADR 0041 §4)。
+    python_minor: Mapped[str] = mapped_column(String(16), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

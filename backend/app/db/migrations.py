@@ -8086,6 +8086,34 @@ def _migrate_generation_results_keep_output_parameters_apart() -> None:
                          {"result": json.dumps(moved, ensure_ascii=False), "id": job_id})
 
 
+def _migrate_local_services_remember_their_python() -> None:
+    """本机服务那一行补一列 `python_minor`:让 Mosael 装的那一份装好时建 venv 用的 Python 小版本(ADR 0041 §4)。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 LocalService 已经指望它在了。已有的行都是「用我自己装的」(第一步只有这一种),
+    留空就对 —— 那一种不看它。表还没有(从没用过本机服务的库)就什么都不做,SCHEMA 会建出带这一列的表。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(local_services)"))}
+        if columns and "python_minor" not in columns:
+            conn.execute(text("ALTER TABLE local_services ADD COLUMN python_minor VARCHAR(16) NOT NULL DEFAULT ''"))
+
+
+def _migrate_install_sources_get_pytorch_and_github() -> None:
+    """「管理 → 下载源」多两行:PyTorch 源(`tts_config.pytorch_index`)、GitHub 镜像前缀(`tts_config.github_mirror`),
+    给「让 Mosael 装」用(ADR 0041 §4)。空 = 官方 / 直连,和老库的行为一样。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 TtsConfig 已经指望它们在了。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(tts_config)"))}
+        if not columns:
+            return
+        if "pytorch_index" not in columns:
+            conn.execute(text("ALTER TABLE tts_config ADD COLUMN pytorch_index VARCHAR(200) NOT NULL DEFAULT ''"))
+        if "github_mirror" not in columns:
+            conn.execute(text("ALTER TABLE tts_config ADD COLUMN github_mirror VARCHAR(500) NOT NULL DEFAULT ''"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -8224,6 +8252,10 @@ def migration_plan() -> MigrationPlan:
                 _migrate_notes_count_their_saves,
                 # 同上:ORM 上的 NoteRevision 指望 started_at 和字数那几列在、group_start 不在。
                 _migrate_note_revisions_take_the_merged_shape,
+                # 同上:ORM 上的 LocalService 指望 python_minor 在(让 Mosael 装,ADR 0041)。
+                _migrate_local_services_remember_their_python,
+                # 同上:ORM 上的 TtsConfig 指望「PyTorch 源」「GitHub 镜像前缀」两列在。
+                _migrate_install_sources_get_pytorch_and_github,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

@@ -46,6 +46,8 @@ def load() -> TtsRuntimeConfig:
                     source=row.source,
                     pip_index=row.pip_index or "",
                     npm_registry=row.npm_registry or "",
+                    pytorch_index=row.pytorch_index or "",
+                    github_mirror=row.github_mirror or "",
                     fish_repo_dir=row.fish_repo_dir or "",
                     fish_model_dir=row.fish_model_dir or "",
                 )

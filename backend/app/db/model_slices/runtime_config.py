@@ -85,6 +85,10 @@ class TtsConfig(Base):
     pip_index: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     #: 插件装 npm 依赖用的源(预设 key 或自定义 URL);空 = 官方。和 pip_index 一起是「管理 → 下载源」。
     npm_registry: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    #: 「让 Mosael 装」装 CUDA 版 PyTorch 用的源(预设 key 或自定义的 simple 索引根地址,下面按 `cu130` 这类分频道);空 = 官方。
+    pytorch_index: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    #: 下 GitHub 上钉死的压缩包(ComfyUI 源码、pysssss)时接在地址前面的镜像前缀;空 = 直连。压缩包按 sha256 校验,镜像换不了内容。
+    github_mirror: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     # Fish Speech runs from a source checkout + a local weights dir (with codec.pth);
     # empty = fall back to the app-managed install. See domain/tts_config.py.
     fish_repo_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")

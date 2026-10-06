@@ -6,18 +6,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.models import LocalService, PluginInstance
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.supervisor import port_in_use
 from app.domain.plugins import instances as inst
 from app.domain.plugins.manifest import SERVICE_ADDRESS_FIELD, Service
 
-#: 在哪跑。第一步只有「用我自己装的」;第二步加 `managed`(让 Mosael 装,ADR 0041 §4)。
+#: 在哪跑:「用我自己装的」(选一个目录)、「让 Mosael 装」(装在宿主分的目录里,ADR 0041 §4)。
 DIRECTORY = "directory"
-MODES = (DIRECTORY,)
+MANAGED = "managed"
+MODES = (DIRECTORY, MANAGED)
+#: 让 Mosael 装的那些装在数据目录下的这里,一个连接一个子目录。**不放插件的持久目录**:那个卸载插件时一起删,模型也会跟着没。
+INSTALLS = "local-services"
+#: 它们共用的 pip 缓存(接着装、重建运行环境时已经下过的包不重下;不撑大这个人自己的 pip 缓存)。
+PIP_CACHE = "pip-cache"
 #: 从这里往上找空端口。常见的本机 AI 服务缺省端口(ComfyUI 的 8188 一类)留给用户自己开的那一台。
 FIRST_PORT = 8189
 #: 往上最多找多少个。
@@ -41,6 +49,15 @@ def service_of(db: Session, instance: PluginInstance, row: LocalService | None =
     if not manifest.services:
         raise LocalServiceError("localServiceErr_noService", status=422, name=manifest.name)
     return manifest.services[0]
+
+
+def install_root(instance_id: str) -> Path:
+    """让 Mosael 装的那一份装在哪:`<数据目录>/local-services/<连接>/`(里面是插件放的源码和 `.venv`)。"""
+    return settings.data_dir / INSTALLS / instance_id
+
+
+def pip_cache_dir() -> Path:
+    return settings.data_dir / INSTALLS / PIP_CACHE
 
 
 def address(port: int) -> str:
@@ -111,6 +128,26 @@ def create(
     return row
 
 
+def make_managed(db: Session, instance: PluginInstance) -> LocalService:
+    """改成(或建成)「让 Mosael 装」:目录是宿主分的安装目录,解释器留空(插件在安装目录里认 `.venv`),还没装好
+    (`python_minor` 空)。已经是这一种的不动 —— 接着装、重建运行环境都是同一个目录。端口、局域网、保持运行、附加参数照旧。"""
+    root = str(install_root(instance.id))
+    row = row_of(db, instance.id)
+    if row is None:
+        service = service_of(db, instance)
+        row = LocalService(instance_id=instance.id, service=service.key, mode=MANAGED, directory=root, python="",
+                           port=free_port(db), listen_lan=False, keep_running=False, extra_args=[], python_minor="")
+        db.add(row)
+        db.flush()
+        inst.set_config(db, instance, {SERVICE_ADDRESS_FIELD: address(row.port)}, notify=False)
+        return row
+    if row.mode != MANAGED:
+        row.mode, row.directory, row.python, row.python_minor = MANAGED, root, "", ""
+        db.flush()
+    return row
+
+
 __all__ = [
-    "DIRECTORY", "FIRST_PORT", "MODES", "address", "check_port", "create", "free_port", "row_of", "service_of", "split_args",
+    "DIRECTORY", "FIRST_PORT", "MANAGED", "MODES", "address", "check_port", "create", "free_port", "install_root",
+    "make_managed", "pip_cache_dir", "row_of", "service_of", "split_args",
 ]

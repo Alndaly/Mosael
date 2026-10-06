@@ -17620,7 +17620,7 @@
           "settings"
         ],
         "summary": "Get Install Source",
-        "description": "「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。\n\n**为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里\n也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),\n但界面和接口不再挂在克隆名下。",
+        "description": "「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像;「让 Mosael 装」本机服务时\n装 CUDA 版 PyTorch 的源和 GitHub 镜像前缀(ADR 0041 §4)。\n\n**为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里\n也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),\n但界面和接口不再挂在克隆名下。",
         "operationId": "get_install_source_api_settings_install_source_get",
         "responses": {
           "200": {
@@ -25158,7 +25158,7 @@
           "local-services"
         ],
         "summary": "Get Local Service Logs",
-        "description": "最近的日志(它自己说的话,原样),和完整日志在哪个文件。",
+        "description": "最近的日志(它自己说的话,原样),和完整日志在哪个文件。`source=install`:让 Mosael 装的那几步的输出。",
         "operationId": "get_local_service_logs_api_plugins_instances__instance_id__local_service_logs_get",
         "parameters": [
           {
@@ -25179,6 +25179,20 @@
               "default": 400,
               "title": "Limit"
             }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "service",
+                "install"
+              ],
+              "type": "string",
+              "default": "service",
+              "title": "Source"
+            }
           }
         ],
         "responses": {
@@ -25188,6 +25202,145 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocalServiceLogsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/plan": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Plan Local Service",
+        "description": "让 Mosael 装之前的安装计划:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(接着装时哪几步已经做完)、从哪儿下。\n只看、不写;部署管理员(那是这台机器上的事)。",
+        "operationId": "plan_local_service_api_plugins_instances__instance_id__local_service_plan_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServicePlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/install": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Install Local Service",
+        "description": "让 Mosael 装(或接着装、重建运行环境):这个连接改成「让 Mosael 装」、选好端口,后台开始装,马上回来,界面接着轮询。\n要确认过(会在这台机器上下载、运行代码)。\n\n**先提交、再开始装**:安装线程自己开会话读这一行 —— 没提交它就看不见(所以这里不用 `Tx`,提交写在中间)。",
+        "operationId": "install_local_service_api_plugins_instances__instance_id__local_service_install_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalServiceInstallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/install/cancel": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Cancel Local Service Install",
+        "description": "取消正在装的:插件停在手上那一步,下次「接着装」从它开始。",
+        "operationId": "cancel_local_service_install_api_plugins_instances__instance_id__local_service_install_cancel_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
                 }
               }
             }
@@ -33346,6 +33499,23 @@
             },
             "type": "array",
             "title": "Npm Presets"
+          },
+          "pytorch_index": {
+            "type": "string",
+            "title": "Pytorch Index",
+            "default": ""
+          },
+          "pytorch_presets": {
+            "items": {
+              "$ref": "#/components/schemas/PackageSourcePresetOut"
+            },
+            "type": "array",
+            "title": "Pytorch Presets"
+          },
+          "github_mirror": {
+            "type": "string",
+            "title": "Github Mirror",
+            "default": ""
           }
         },
         "type": "object",
@@ -33377,6 +33547,30 @@
               }
             ],
             "title": "Npm Registry"
+          },
+          "pytorch_index": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pytorch Index"
+          },
+          "github_mirror": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Mirror"
           }
         },
         "type": "object",
@@ -33964,6 +34158,25 @@
         "title": "LocalServiceDiscoveryOut",
         "description": "本机已经在跑的(插件知道去哪几个端口问)。建的是「连一台服务器」那一种,Mosael 不去起停它。"
       },
+      "LocalServiceDownloadOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "LocalServiceDownloadOut",
+        "description": "安装要从哪儿下一样东西(给确认页:会连哪几个站)。"
+      },
       "LocalServiceFactOut": {
         "properties": {
           "label": {
@@ -33999,6 +34212,142 @@
           "label"
         ],
         "title": "LocalServiceFoundOut"
+      },
+      "LocalServiceInstallOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "installing",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State"
+          },
+          "step": {
+            "type": "string",
+            "title": "Step",
+            "default": ""
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceInstallStepOut"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "done_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done Bytes"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes"
+          },
+          "speed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item",
+            "default": ""
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "started_at"
+        ],
+        "title": "LocalServiceInstallOut",
+        "description": "这一次安装到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。"
+      },
+      "LocalServiceInstallRequest": {
+        "properties": {
+          "confirm_run_code": {
+            "type": "boolean",
+            "title": "Confirm Run Code",
+            "default": false
+          },
+          "flavour": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Flavour"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flavour"
+        ],
+        "title": "LocalServiceInstallRequest",
+        "description": "装、接着装、重建运行环境。界面问过人了(会在这台机器上下载、运行代码),带 `confirm_run_code: true`;`flavour` 是确认页上\n那种 PyTorch —— 插件装之前再看一次这台机器,对不上就不装。"
+      },
+      "LocalServiceInstallStepOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "LocalServiceInstallStepOut",
+        "description": "安装的一步:插件说的那几步(查空间、下源码……),最后是宿主的「试起一次」。"
       },
       "LocalServiceLogsOut": {
         "properties": {
@@ -34049,7 +34398,10 @@
           },
           "mode": {
             "type": "string",
-            "const": "directory",
+            "enum": [
+              "directory",
+              "managed"
+            ],
             "title": "Mode"
           },
           "directory": {
@@ -34152,6 +34504,36 @@
             "type": "array",
             "title": "Failure Lines"
           },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": true
+          },
+          "python_minor": {
+            "type": "string",
+            "title": "Python Minor",
+            "default": ""
+          },
+          "base_python_minor": {
+            "type": "string",
+            "title": "Base Python Minor",
+            "default": ""
+          },
+          "needs_rebuild": {
+            "type": "boolean",
+            "title": "Needs Rebuild",
+            "default": false
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalServiceInstallOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "can_manage": {
             "type": "boolean",
             "title": "Can Manage",
@@ -34170,6 +34552,86 @@
         ],
         "title": "LocalServiceOut",
         "description": "一个连接的本机服务:人定下的配置 + 进程此刻怎么样。界面按 1200 ms 轮询它(和引擎安装一样)。"
+      },
+      "LocalServicePlanOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "supported": {
+            "type": "boolean",
+            "title": "Supported",
+            "default": false
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": ""
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict",
+            "default": ""
+          },
+          "flavour": {
+            "type": "string",
+            "title": "Flavour",
+            "default": ""
+          },
+          "torch": {
+            "type": "string",
+            "title": "Torch",
+            "default": ""
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "disk_bytes": {
+            "type": "integer",
+            "title": "Disk Bytes",
+            "default": 0
+          },
+          "free_bytes": {
+            "type": "integer",
+            "title": "Free Bytes",
+            "default": 0
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceInstallStepOut"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "downloads": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceDownloadOut"
+            },
+            "type": "array",
+            "title": "Downloads"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceProblemOut"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "LocalServicePlanOut",
+        "description": "让 Mosael 装之前的安装计划(插件看过这台机器):能不能装、装哪种 PyTorch、要多少空间、分几步、从哪儿下。"
       },
       "LocalServiceProblemOut": {
         "properties": {

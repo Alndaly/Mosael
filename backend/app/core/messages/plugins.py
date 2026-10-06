@@ -16,6 +16,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pkgSource_tencent": {"zh": "腾讯云", "en": "Tencent Cloud"},
     "pkgSource_huawei": {"zh": "华为云", "en": "Huawei Cloud"},
     "pkgSource_npmmirror": {"zh": "npmmirror(阿里)", "en": "npmmirror (Alibaba)"},
+    "pkgSource_pytorchOfficial": {"zh": "官方(download.pytorch.org)", "en": "Official (download.pytorch.org)"},
+    "pkgSource_nju": {"zh": "南京大学", "en": "Nanjing University"},
     "pluginErr_packageSourceUnknown": {"zh": "认不出的包生态:{source}", "en": "Unknown package ecosystem: {source}"},
     "pluginErr_packageSourceUrl": {
         "zh": "镜像地址要以 http:// 或 https:// 开头:{url}",
@@ -644,5 +646,36 @@ MESSAGES: dict[str, dict[str, str]] = {
     "localServiceErr_stopped": {
         "zh": "本机 {name} 在启动时被停下了",
         "en": "The local {name} was stopped while it was starting.",
+    },
+    # ---- 让 Mosael 装(ADR 0041 §4) ----
+    "localServiceInstall_trial": {
+        "zh": "试起一次,健康检查通过才算装好",
+        "en": "Start it once; it counts as installed only after a healthy start",
+    },
+    "localServiceErr_installing": {
+        "zh": "正在装:装好了(或者取消了)再来",
+        "en": "It's being installed. Wait until it finishes (or cancel it).",
+    },
+    "localServiceErr_notInstalled": {
+        "zh": "本机 {name} 还没装好:到连接页上「接着装」",
+        "en": "The local {name} isn't installed yet. Choose Resume on the connection page.",
+    },
+    "localServiceErr_rebuildNeeded": {
+        "zh": "本机 {name} 的运行环境要重建:它是用 Python {have} 建的,Mosael 现在带的是 {want}。到连接页上点「重建运行环境」"
+              "(源码和模型不动)",
+        "en": "The local {name} needs its environment rebuilt: it was built with Python {have}, and Mosael now ships {want}. "
+              "Choose Rebuild environment on the connection page (the source and models stay).",
+    },
+    "localServiceErr_notManaged": {
+        "zh": "这个连接不是「让 Mosael 装」的那一种",
+        "en": "This connection isn't one Mosael installs.",
+    },
+    "localServiceErr_noBasePython": {
+        "zh": "找不到建运行环境用的 Python(随 Mosael 一起发的那一个),装不了",
+        "en": "The Python Mosael uses to build environments (the one it ships with) wasn't found, so nothing can be installed.",
+    },
+    "localServiceErr_installCrashed": {
+        "zh": "安装时出错了:{detail}",
+        "en": "The install hit an error: {detail}",
     },
 }

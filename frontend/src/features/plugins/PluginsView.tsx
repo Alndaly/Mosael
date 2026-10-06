@@ -861,7 +861,7 @@ export function ConnectionCard({
         />
       </SettingsRow>
 
-      {services.length > 0 && <ConnectionLocalService pkg={pkg} instance={instance} />}
+      {services.length > 0 && <ConnectionLocalService pkg={pkg} instance={instance} workspaceId={workspaceId} />}
 
       {(pkg.config_fields ?? []).map((field) => (
         <div key={field.key} data-connection-section={`config:${field.key}`}>

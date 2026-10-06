@@ -1,11 +1,13 @@
 """本机服务的接口(ADR 0041):一个连接背后由宿主起停的那个进程。
 
-**建、改、起、停、认目录、补装都要部署管理员** —— 起一个目录里的代码就是在这台机器上运行它(多人部署时进程跑在服务器
-上)。看状态、看日志、`ensure`(工作台打开前请宿主先起好)只要是这个连接的主人:那是用它,不是管它。连接归人(见
+**建、改、起、停、认目录、补装、看安装计划、装、取消安装都要部署管理员** —— 起一个目录里的代码就是在这台机器上运行它
+(多人部署时进程跑在服务器上)。看状态、看日志、`ensure`(工作台打开前请宿主先起好)只要是这个连接的主人:那是用它,不是管它。连接归人(见
 `plugins.my_instance`),别人的连接一律 404。
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Response
 
@@ -17,8 +19,10 @@ from app.api.schemas import (
     LocalServiceDetectOut,
     LocalServiceDetectRequest,
     LocalServiceDiscoveryOut,
+    LocalServiceInstallRequest,
     LocalServiceLogsOut,
     LocalServiceOut,
+    LocalServicePlanOut,
     LocalServiceUpdate,
 )
 from app.core.i18n import tr
@@ -79,7 +83,10 @@ def put_local_service(instance_id: str, body: LocalServiceUpdate, db: Tx, user: 
 def delete_local_service(instance_id: str, db: Tx, user: CurrentUser) -> Response:
     """不用本机服务了(回到「连一台服务器」):停掉它,删掉这份配置。"""
     ensure_deployment_admin(db, user)
-    local_services.remove(db, my_instance(db, instance_id, user))
+    try:
+        local_services.remove(db, my_instance(db, instance_id, user))
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
     return Response(status_code=204)
 
 
@@ -143,11 +150,58 @@ def ensure_local_service(instance_id: str, db: DbSession, user: CurrentUser) -> 
 
 
 @router.get("/plugins/instances/{instance_id}/local-service/logs", response_model=LocalServiceLogsOut)
-def get_local_service_logs(instance_id: str, db: DbSession, user: CurrentUser, limit: int = 400) -> dict:
-    """最近的日志(它自己说的话,原样),和完整日志在哪个文件。"""
+def get_local_service_logs(
+    instance_id: str, db: DbSession, user: CurrentUser, limit: int = 400,
+    source: Literal["service", "install"] = "service",
+) -> dict:
+    """最近的日志(它自己说的话,原样),和完整日志在哪个文件。`source=install`:让 Mosael 装的那几步的输出。"""
     instance = my_instance(db, instance_id, user)
     _required(db, instance, user)
+    if source == "install":
+        return {"lines": local_services.recent_install_logs(instance.id, limit),
+                "path": str(local_services.install_log_path(instance.id))}
     return {"lines": local_services.recent_logs(instance.id, limit), "path": str(local_services.log_path(instance.id))}
+
+
+@router.get("/plugins/instances/{instance_id}/local-service/plan", response_model=LocalServicePlanOut)
+def plan_local_service(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """让 Mosael 装之前的安装计划:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(接着装时哪几步已经做完)、从哪儿下。
+    只看、不写;部署管理员(那是这台机器上的事)。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    try:
+        return local_services.plan(db, instance)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/local-service/install", response_model=LocalServiceOut)
+def install_local_service(instance_id: str, body: LocalServiceInstallRequest, db: DbSession, user: CurrentUser) -> dict:
+    """让 Mosael 装(或接着装、重建运行环境):这个连接改成「让 Mosael 装」、选好端口,后台开始装,马上回来,界面接着轮询。
+    要确认过(会在这台机器上下载、运行代码)。
+
+    **先提交、再开始装**:安装线程自己开会话读这一行 —— 没提交它就看不见(所以这里不用 `Tx`,提交写在中间)。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    if not body.confirm_run_code:
+        raise HTTPException(status_code=422, detail=tr("localServiceErr_confirmRequired"))
+    try:
+        local_services.prepare_install(db, instance)
+        db.commit()
+        local_services.begin_install(db, instance, flavour=body.flavour)
+    except _ERRORS as exc:
+        db.rollback()
+        raise _failed(exc) from exc
+    return _required(db, instance, user)
+
+
+@router.post("/plugins/instances/{instance_id}/local-service/install/cancel", response_model=LocalServiceOut)
+def cancel_local_service_install(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """取消正在装的:插件停在手上那一步,下次「接着装」从它开始。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    local_services.cancel_install(instance.id)
+    return _required(db, instance, user)
 
 
 @router.post("/plugins/instances/{instance_id}/local-service/add-nodes", response_model=LocalServiceAddNodesOut)

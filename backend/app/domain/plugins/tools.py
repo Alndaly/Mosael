@@ -574,9 +574,13 @@ def invoke_service(
     *,
     instance: PluginInstance | None = None,
     timeout: float = SERVICE_OP_TIMEOUT_SECONDS,
+    hooks: StreamHooks | None = None,
 ) -> dict[str, Any]:
     """宿主问插件**一种本机服务**的事(ADR 0041 的 `service_*` 操作,payload 里的 `op` 说是哪一件):怎么认出一个装好的
-    目录、怎么起、补装节点、本机有没有已经在跑的……交给清单 `services` 里那种服务的 `tool`。
+    目录、怎么起、补装节点、本机有没有已经在跑的、装一份……交给清单 `services` 里那种服务的 `tool`。
+
+    给了 `hooks` 就走流式协议(`service_install`:一步一行、取消文件停在那一步,见 runtime.stream_tool),而且**不占插件名额**:
+    一次安装要十几分钟,别的插件调用不该陪它等(和流式的生成同一个道理)。
 
     和 `invoke_host` 不同的几处,都因为这是宿主的**管理动作**、不是一次用它干活:
 
@@ -600,12 +604,15 @@ def invoke_service(
     env = inst.process_env(db, instance) if instance is not None else {}
     egress = plugin_egress.resolve(db, instance, manifest) if instance is not None else plugin_egress.UNDECIDED
     scratch = make_scratch_dir()
+    run_kwargs: dict[str, Any] = {"scratch_dir": scratch, "data_dir": _ensure_data_dir(manifest.id), "egress": egress,
+                                  "timeout": timeout}
     try:
-        with _plugin_slot(db):
-            result = execute_tool(
-                Path(manifest.path), manifest.runtime.entry, service.tool, payload, env,
-                scratch_dir=scratch, data_dir=_ensure_data_dir(manifest.id), egress=egress, timeout=timeout,
-            )
+        with _plugin_slot(db, take=hooks is None):
+            if hooks is not None:
+                result = stream_tool(Path(manifest.path), manifest.runtime.entry, service.tool, payload, env, hooks=hooks,
+                                     **run_kwargs)
+            else:
+                result = execute_tool(Path(manifest.path), manifest.runtime.entry, service.tool, payload, env, **run_kwargs)
     finally:
         cleanup_scratch_dir(scratch)
     return result.output

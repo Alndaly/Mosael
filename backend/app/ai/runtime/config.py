@@ -37,6 +37,22 @@ NPM_REGISTRIES = {
     "huawei": "https://repo.huaweicloud.com/repository/npm/",
 }
 
+#: PyTorch 源预设(「让 Mosael 装」装 CUDA 版 PyTorch 用,ADR 0041 §4):值是 PEP 503 simple 索引的**根**,下面按
+#: `cu130` 这类分频道,`--index-url <根>/cu130`。空 = 官方。2026-10-06 实测,只收真能这样用的:
+#:
+#: - 南京大学:download.pytorch.org/whl 的镜像,simple 索引带 sha256,torch / torchvision / torchaudio 和它们的依赖都在,
+#:   cu126 / cu130 都解析得通(pip 对着 Windows cp313 做过一遍 dry-run);教育网的 mirrors.cernet.edu.cn 也是跳到它;
+#: - 不收的:阿里云的 pytorch-wheels 是 find-links 那种平铺目录,而且没同步到 torch 2.14.1;上海交大的是 simple 索引,但从这里
+#:   连它每次都要 30 秒才连上;清华、中科大、腾讯、华为、北外、浙大、南科大、北大这几家没有这个镜像(404 / 403 / 门户页)。
+#:
+#: Apple 芯片 Mac 的 PyTorch 是 PyPI 上的那个,走 pip 源,不看这一项。
+PYTORCH_INDEXES = {
+    "pytorch": "https://download.pytorch.org/whl",
+    "nju": "https://mirror.nju.edu.cn/pytorch/whl",
+}
+#: 空的「PyTorch 源」就是官方那一个。
+OFFICIAL_PYTORCH = "pytorch"
+
 # Model-download source → the HF endpoint the worker/download subprocess should use.
 # 只有 HuggingFace 系的源在这里 —— 它们的区别就是一个 base URL。
 # ModelScope 不在:它不是 HF 兼容端点,走的是另一个客户端(见 ai/runtime/tts_worker),
@@ -181,6 +197,20 @@ class TtsRuntimeConfig:
     pip_index: str = ""
     #: 插件装 npm 依赖时用的源(预设 key 或自定义 URL);空 = 官方。
     npm_registry: str = ""
+    #: 「让 Mosael 装」装 CUDA 版 PyTorch 用的源(PYTORCH_INDEXES 的 key 或自定义的 simple 索引根地址);空 = 官方。
+    pytorch_index: str = ""
+    #: 下 GitHub 上钉死的压缩包时接在地址前面的镜像前缀(`https://…/`);空 = 直连。
+    github_mirror: str = ""
+
+    @property
+    def pytorch_index_url(self) -> str:
+        """PyTorch 源的根地址(下面按 `cu130` 分频道)。空、认不出 → 官方那一个:这一项和 pip 源不同,总得给一个地址。"""
+        key = (self.pytorch_index or "").strip()
+        if key in PYTORCH_INDEXES:
+            return PYTORCH_INDEXES[key]
+        if key.startswith(("http://", "https://")):
+            return key.rstrip("/")
+        return PYTORCH_INDEXES[OFFICIAL_PYTORCH]
 
     @property
     def pip_index_url(self) -> str:

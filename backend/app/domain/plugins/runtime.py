@@ -333,13 +333,17 @@ class StreamHooks:
     可能在花钱,回执只活在这个进程里的话,后端一重启就再也找不回来。
     `is_cancelled()`:用户要停。至多每秒问一次。
 
-    三个回调都在**调用 stream_tool 的那个线程**里被调 —— 调用方拿着的数据库会话不是线程安全的,
+    `on_step(事件)`(可选):一件分几步做的长活(本机服务的 `service_install`)说到了哪一步、多少字节 ——
+    `{"event": "step", …}` 那一行原样交过来(已确认是对象、不超过 MAX_TASK_BYTES),形状由那个操作的约定定。没给就不看。
+
+    回调都在**调用 stream_tool 的那个线程**里被调 —— 调用方拿着的数据库会话不是线程安全的,
     所以读 stdout 的那个线程只负责把行放进队列,解释和回调都回到这里做。
     """
 
     on_progress: Callable[[float, str], None]
     on_task: Callable[[dict[str, Any]], None]
     is_cancelled: Callable[[], bool]
+    on_step: Callable[[dict[str, Any]], None] | None = None
 
 
 _EOF = object()
@@ -537,6 +541,11 @@ def _dispatch(event: dict[str, Any], hooks: StreamHooks) -> None:
             hooks.on_task(task)
         else:
             logger.warning("插件交回的回执不是对象或太大(上限 %d 字节),没有记下", MAX_TASK_BYTES)
+    elif kind == "step" and hooks.on_step is not None:
+        if len(json.dumps(event, ensure_ascii=False)) <= MAX_TASK_BYTES:
+            hooks.on_step(event)
+        else:
+            logger.warning("插件说的一步太大(上限 %d 字节),没有看", MAX_TASK_BYTES)
 
 
 __all__ = [
