@@ -94,6 +94,12 @@ CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, 
 #: 由某一个工具认领的能力(两类合起来):只能是进程插件、恰好一个工具认领。
 CLAIMED_CAPABILITIES = CATALOG_CAPABILITIES | CALL_CAPABILITIES
 
+#: 本机服务的 key(ADR 0041):宿主按它找清单里的那一条、记在连接的本机服务上。小写字母开头,只用小写字母、数字和 `_` `-`。
+SERVICE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
+#: 本机服务的地址写进连接配置的**这一格**(ADR 0041 §1):插件、工作台、模型库、工作流库读的都是它,一行都不用改 ——
+#: 所以声明了服务的插件,`instance.config` 里必须有一格叫这个名字的文本配置。
+SERVICE_ADDRESS_FIELD = "server_url"
+
 #: 清单 `summary`(一句话说清这个插件是干嘛的)最长多少字。它排在卡片和详情页头上、名字下面,两行放得下;
 #: 写成一段介绍的话卡片只剩省略号,详情页头被撑成一大块 —— 长的介绍归第一条工具集的 `description`。
 SUMMARY_MAX_CHARS = 140
@@ -237,6 +243,20 @@ class ToolOverride:
 
 
 @dataclass(frozen=True)
+class Service:
+    """插件声明的一种**本机服务**(ADR 0041):一个要一直开着的进程,由宿主替它起停、看健康、收日志。
+
+    宿主不认识它是什么:怎么认出一个装好的目录、命令行怎么写、健康检查问哪条路径,都由 `tool` 那个工具按
+    `service_*` 操作回答(见 docs/PLUGIN_MANIFEST.md「本机服务」)。和能力一样,一种服务只归一个工具。
+    """
+
+    key: str
+    #: 给人看的名字(可以按语言分),界面上「本机 {title}」「正在启动本机 {title}」。
+    title: str
+    tool: str
+
+
+@dataclass(frozen=True)
 class Author:
     """谁做的、去哪儿找他。名字可以按语言分(和清单里别的文案一样),主页只认 http(s)。"""
 
@@ -297,6 +317,8 @@ class Manifest:
     #: **一句话说清这个插件是干嘛的**(可以按语言分)。市场卡片、详情页头、安装确认都先摆它;长的介绍是
     #: `description`(第一条工具集的说明),在详情里折起来,点开才看全。不写就是空串,界面只摆介绍。
     summary: str = ""
+    #: 这个插件能起哪几种**本机服务**(清单版本 8,ADR 0041)。没声明就是没有 —— 它的连接只能连一台已经在跑的服务器。
+    services: list[Service] = field(default_factory=list)
 
     @property
     def description(self) -> str:
@@ -316,6 +338,10 @@ class Manifest:
             if isinstance(provides, list) and capability in provides:
                 return str(tool.get("name") or "")
         return ""
+
+    def service(self, key: str) -> Service | None:
+        """清单里 key 是 `key` 的那种本机服务;没有就是 None。"""
+        return next((one for one in self.services if one.key == key), None)
 
     def text(self, value: Any, locale: str | None = None) -> str:
         """按这份清单的语言习惯挑一段文字(见 text_of)。清单在手时一律走它。"""
@@ -605,7 +631,47 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         oauth=oauth_spec(instance.get("oauth")),
         package_sources=_package_sources(raw.get("package_sources"), path),
         summary=_summary(raw.get("summary"), path, pick),
+        services=_services(raw.get("services"), declared, runtime_of(raw), config, path, pick),
     )
+
+
+def _services(
+    raw: Any, declared: list[dict[str, Any]], runtime: Runtime, config: list[Field], path: str, pick: Callable[[Any], str]
+) -> list[Service]:
+    """`services`:每一条 `{key, title, tool}`。**写错在装的那一刻就说**:宿主按 key 记连接上的本机服务、按 tool 找回答
+    `service_*` 的那个工具 —— 一条认不出的声明,界面上会长出一个点了必然失败的「用我自己装的」。
+
+    - 只有进程插件能声明(和认领能力同一条:MCP 是别人的协议,我们不往里加操作);
+    - `tool` 必须是清单里声明过的工具;
+    - 声明了服务就得有 `server_url` 那一格配置:宿主把算出来的地址写进去(SERVICE_ADDRESS_FIELD)。
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ManifestError("pluginErr_manifestServicesShape", path=path)
+    tools = {str(tool.get("name")) for tool in declared}
+    services: list[Service] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ManifestError("pluginErr_manifestServicesShape", path=path)
+        key = entry.get("key")
+        if not isinstance(key, str) or not SERVICE_KEY_RE.match(key):
+            raise ManifestError("pluginErr_manifestServiceBadKey", path=path, service=str(key)[:40])
+        if any(one.key == key for one in services):
+            raise ManifestError("pluginErr_manifestServiceDuplicate", path=path, service=key)
+        if runtime.kind != "process":
+            raise ManifestError("pluginErr_manifestServiceNeedsProcess", path=path, service=key)
+        title = pick(entry.get("title")).strip()
+        if not title:
+            raise ManifestError("pluginErr_manifestMissingField", path=path, field=f"services[{key}].title")
+        tool = entry.get("tool")
+        if not isinstance(tool, str) or tool not in tools:
+            raise ManifestError("pluginErr_manifestServiceUnknownTool", path=path, service=key, tool=str(tool)[:80])
+        services.append(Service(key=key, title=title, tool=tool))
+    address = next((one for one in config if one.key == SERVICE_ADDRESS_FIELD), None)
+    if services and (address is None or address.type != "string"):
+        raise ManifestError("pluginErr_manifestServiceNeedsAddress", path=path, field=SERVICE_ADDRESS_FIELD)
+    return services
 
 
 def _summary(raw: Any, path: str, pick: Callable[[Any], str]) -> str:
@@ -853,6 +919,9 @@ __all__ = [
     "OAuthSpec",
     "PLUGIN_ID_RE",
     "Runtime",
+    "SERVICE_ADDRESS_FIELD",
+    "SERVICE_KEY_RE",
+    "Service",
     "TOOLS",
     "TOOL_NAME_RE",
     "ToolOverride",

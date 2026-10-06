@@ -98,6 +98,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path}:summary 是一句话,最长 {max} 个字 —— 长的介绍写在第一条技能的 description 里",
         "en": "In plugin manifest {path}, summary is one sentence of at most {max} characters; put a longer introduction in the first skill's description.",
     },
+    "pluginErr_manifestServicesShape": {
+        "zh": "插件清单 {path}:services 要写成一组 {{\"key\", \"title\", \"tool\"}}",
+        "en": "In plugin manifest {path}, services must be a list of {{\"key\", \"title\", \"tool\"}} objects.",
+    },
+    "pluginErr_manifestServiceBadKey": {
+        "zh": "插件清单 {path}:本机服务的 key「{service}」不合法:小写字母开头,只能用小写字母、数字、_ 和 -,最长 40 个字符",
+        "en": "In plugin manifest {path}, the local service key “{service}” is invalid: start with a lowercase letter and use only lowercase letters, digits, _ and -, up to 40 characters.",
+    },
+    "pluginErr_manifestServiceDuplicate": {
+        "zh": "插件清单 {path} 里有两种本机服务都叫 {service}",
+        "en": "Plugin manifest {path} declares two local services named {service}.",
+    },
+    "pluginErr_manifestServiceNeedsProcess": {
+        "zh": "插件清单 {path}:本机服务 {service} 只能由本地脚本形态的插件声明(MCP 插件不支持)",
+        "en": "In plugin manifest {path}, the local service {service} can only be declared by a local-script plugin (not MCP).",
+    },
+    "pluginErr_manifestServiceUnknownTool": {
+        "zh": "插件清单 {path}:本机服务 {service} 的 tool 写的是「{tool}」,清单里没有这个工具",
+        "en": "In plugin manifest {path}, the local service {service} names the tool “{tool}”, which the manifest doesn't declare.",
+    },
+    "pluginErr_manifestServiceNeedsAddress": {
+        "zh": "插件清单 {path} 声明了本机服务,instance.config 里就要有一格文本配置叫 {field}:宿主把本机服务的地址写进这一格",
+        "en": "Plugin manifest {path} declares a local service, so instance.config needs a text field named {field}: the host writes the local service's address there.",
+    },
     # ---- 插件包 ----
     "pluginErr_archiveTooLarge": {
         "zh": "插件包超过大小上限",

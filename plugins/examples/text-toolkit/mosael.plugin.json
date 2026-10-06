@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.text-toolkit",
-  "manifest_version": 7,
+  "manifest_version": 8,
   "name": "Text Toolkit",
   "summary": {
     "zh": "文本小工具:数字数、断字幕行、截短、清理格式、提取话题和链接,全在本机算。",

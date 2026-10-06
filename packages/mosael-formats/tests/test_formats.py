@@ -296,12 +296,13 @@ def test_清单v7_skills改名toolsets_幂等_两个都在时以toolsets为准()
     """ADR 0040 §8:「技能」现在指智能体按需读的做法,插件清单里那份工具目录改叫工具集。"""
     from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION, upgrade
 
-    assert MANIFEST_VERSION == 7
+    assert MANIFEST_VERSION >= 7
     skills = [{"id": "s", "description": {"zh": "长的介绍", "en": "A longer introduction"}}]
     runtime = {"kind": "process", "entry": "m.py"}
     raw = {"id": "a", "version": "1", "name": "n", "manifest_version": 6, "runtime": runtime, "skills": skills}
     assert upgrade(raw)
-    assert raw == {"id": "a", "version": "1", "name": "n", "manifest_version": 7, "runtime": runtime, "toolsets": skills}
+    assert raw == {"id": "a", "version": "1", "name": "n", "manifest_version": MANIFEST_VERSION, "runtime": runtime,
+                   "toolsets": skills}
     assert not upgrade(raw), "升过的不再动"
     assert parse(raw, "x").description == "长的介绍"
 
@@ -316,3 +317,89 @@ def test_当前版本的清单里不认skills这个键() -> None:
     manifest = parse({"id": "a", "version": "1", "name": "n", "manifest_version": 7,
                       "skills": [{"id": "s", "description": "x"}]}, "x")
     assert manifest.toolsets == [] and manifest.description == ""
+
+
+# ---------------- 本机服务(清单版本 8,ADR 0041) ----------------
+
+
+def _with_service(**changes: object) -> dict:
+    """一份声明了本机服务的进程插件清单:有 `server_url` 那一格配置、有回答 service_* 的那个工具。"""
+    raw: dict = {
+        "id": "a.b", "version": "1.0.0", "name": "n", "manifest_version": 8,
+        "runtime": {"kind": "process", "entry": "main.py"},
+        "instance": {"config": [{"key": "server_url", "label": "地址", "type": "string"}]},
+        "tools": {"declare": [{"name": "gen", "description": "x"}]},
+        "services": [{"key": "comfyui", "title": {"zh": "ComfyUI 服务", "en": "ComfyUI"}, "tool": "gen"}],
+    }
+    raw.update(changes)
+    return raw
+
+
+def test_清单v8_本机服务按声明解析_标题按语言挑() -> None:
+    token = i18n.CURRENT_LOCALE.set("en")
+    try:
+        manifest = parse(_with_service(), "x")
+    finally:
+        i18n.CURRENT_LOCALE.reset(token)
+    assert [(one.key, one.title, one.tool) for one in manifest.services] == [("comfyui", "ComfyUI", "gen")]
+    assert manifest.service("comfyui") is manifest.services[0]
+    assert manifest.service("nope") is None
+    assert parse({"id": "a", "version": "1", "name": "n"}, "x").services == [], "没写就是没有服务"
+
+
+@pytest.mark.parametrize(
+    ("services", "key"),
+    [
+        ({"key": "comfyui"}, "pluginErr_manifestServicesShape"),
+        (["comfyui"], "pluginErr_manifestServicesShape"),
+        ([{"key": "Comfy UI", "title": "t", "tool": "gen"}], "pluginErr_manifestServiceBadKey"),
+        ([{"title": "t", "tool": "gen"}], "pluginErr_manifestServiceBadKey"),
+        ([{"key": "comfyui", "title": "t", "tool": "gen"}, {"key": "comfyui", "title": "u", "tool": "gen"}],
+         "pluginErr_manifestServiceDuplicate"),
+        ([{"key": "comfyui", "title": " ", "tool": "gen"}], "pluginErr_manifestMissingField"),
+        ([{"key": "comfyui", "title": "t", "tool": "nope"}], "pluginErr_manifestServiceUnknownTool"),
+        ([{"key": "comfyui", "title": "t"}], "pluginErr_manifestServiceUnknownTool"),
+    ],
+)
+def test_本机服务写错在装的那一刻就说(services: object, key: str) -> None:
+    with pytest.raises(ManifestError) as caught:
+        parse(_with_service(services=services), "x")
+    assert caught.value.key == key
+
+
+def test_本机服务只能由进程插件声明() -> None:
+    raw = _with_service(runtime={"kind": "mcp", "url": "https://mcp.example.com"})
+    with pytest.raises(ManifestError) as caught:
+        parse(raw, "x")
+    assert caught.value.key == "pluginErr_manifestServiceNeedsProcess"
+
+
+@pytest.mark.parametrize(
+    "config",
+    [[], [{"key": "host", "label": "地址"}], [{"key": "server_url", "label": "地址", "type": "number"}]],
+)
+def test_声明了本机服务就得有_server_url_那一格文本配置(config: list) -> None:
+    """宿主把算出来的地址写进 `server_url`:没有这一格(或它不是文本),插件、工作台、模型库就读不到本机服务的地址。"""
+    with pytest.raises(ManifestError) as caught:
+        parse(_with_service(instance={"config": config}), "x")
+    assert caught.value.key == "pluginErr_manifestServiceNeedsAddress"
+
+
+def test_清单v8_老清单就是没有服务_手写过的同名键升级时丢掉() -> None:
+    """版本 8 之前 `services` 不是字段:升级不替它补任何东西;手写过一个(当时没人校验)就丢掉,免得按新规矩整份装不上。"""
+    from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION, upgrade
+
+    assert MANIFEST_VERSION == 8
+    runtime = {"kind": "process"}
+    plain = {"id": "a", "version": "1", "name": "n", "manifest_version": 7, "runtime": runtime}
+    assert upgrade(plain)
+    assert plain == {"id": "a", "version": "1", "name": "n", "manifest_version": 8, "runtime": runtime}
+
+    stray = {"id": "a", "version": "1", "name": "n", "manifest_version": 7, "services": "随手写的"}
+    assert upgrade(stray)
+    assert "services" not in stray and parse(stray, "x").services == []
+    assert not upgrade(stray), "升过的不再动"
+
+    current = _with_service()
+    assert not upgrade(current), "版本 8 的清单不经过这一步"
+    assert parse(current, "x").services[0].key == "comfyui"

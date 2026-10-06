@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.comfyui",
-  "manifest_version": 7,
+  "manifest_version": 8,
   "name": "ComfyUI",
   "summary": {
     "zh": "接一台 ComfyUI:存着的工作流变成生成模型和工具,还能在 Mosael 里管它的模型和工作流。",

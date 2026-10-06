@@ -163,7 +163,7 @@ def test_v6的skills在库里和磁盘上都改名成toolsets_介绍照旧取第
         package = db.get(PluginPackage, "dev.example.tikhub")
         stored, manifest = dict(package.manifest), manifest_of(package)
     assert "skills" not in stored and stored["toolsets"] == V6_WITH_SKILLS["skills"]
-    assert stored["manifest_version"] == MANIFEST_VERSION == 7
+    assert stored["manifest_version"] == MANIFEST_VERSION
     assert [one["id"] for one in manifest.toolsets] == ["tikhub"]
     assert manifest.description == "抓取各平台的公开数据"
 

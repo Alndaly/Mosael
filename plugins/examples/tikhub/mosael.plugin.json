@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.tikhub",
-  "manifest_version": 7,
+  "manifest_version": 8,
   "name": "TikHub",
   "summary": {
     "zh": "读抖音、TikTok、小红书、B站、快手等平台的公开数据,做选题和对标分析。",

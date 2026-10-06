@@ -24,7 +24,7 @@ from mosael_formats.plugin_manifest import ASSET_FORMAT, CALL_CONTRACTS, unbacke
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见后端
 #: db/migrations 的 `upgrade-stored-plugin-manifests`)、装包时也先升(plugin_archive),所以**收紧清单规则时,
 #: 老清单要能被某一步改合格**。
-MANIFEST_VERSION = 7
+MANIFEST_VERSION = 8
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -248,6 +248,18 @@ def _skills_become_toolsets(raw: dict[str, Any]) -> bool:
     return True
 
 
+def _services_arrive_in_v8(raw: dict[str, Any]) -> bool:
+    """清单版本 8 加了 `services`(本机服务,ADR 0041):**老清单就是没有服务** —— 它的连接只能连一台已经在跑的服务器。
+
+    版本 8 之前这个键不是字段、没人校验,手写过一个同名的键也装得上;它说的不是今天的意思,按今天的规矩校验只会让
+    整份清单装不上。所以老清单里有这个键就丢掉,没有就什么都不动。
+    """
+    if "services" not in raw:
+        return False
+    raw.pop("services")
+    return True
+
+
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
 _STEPS = (
     _to_runtime_block,
@@ -260,6 +272,7 @@ _STEPS = (
     _node_config_assets_follow_schema,
     _override_node_config_assets_follow_schema,
     _skills_become_toolsets,
+    _services_arrive_in_v8,
 )
 
 
