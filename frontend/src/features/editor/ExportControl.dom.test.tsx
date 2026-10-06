@@ -52,22 +52,25 @@ it("有 AI 生成的片段:开关出现,并说清有几段", async () => {
   expect(document.querySelector("[data-export-ai-label]")?.textContent).toContain("exportAiLabelFound");
 });
 
-it("默认开着;关掉当场写明后果,导出时带上 ai_label: false;下一次打开又是开着的", async () => {
+it("默认关着(画面上不加「AI 生成」);打开才带上 ai_label: true;不记住,下一次打开又是关着的", async () => {
+  // 维护者 2026-10-06:「生成的视频不要有『AI 生成』这种额外字幕」(ADR 0028 后续修正)。
   const user = userEvent.setup();
   mount();
   await user.click(screen.getByRole("button", { name: "exportVideo" }));
   const toggle = screen.getByRole("checkbox", { name: /exportAiLabel/ });
-  expect(toggle).toBeChecked();
-  expect(document.querySelector("[data-export-ai-label-off]")).toBeNull();
-
-  await user.click(toggle);
-  expect(screen.getByRole("alert").textContent).toBe("exportAiLabelOffWarning");
+  expect(toggle).not.toBeChecked();
   await user.click(screen.getByRole("button", { name: "exportStart" }));
-  expect(exportSequence).toHaveBeenCalledWith("seq-1", expect.objectContaining({ ai_label: false }));
+  expect(exportSequence).toHaveBeenLastCalledWith("seq-1", expect.objectContaining({ ai_label: false }));
+
+  await user.click(await screen.findByRole("button", { name: "exportVideo" }));
+  await user.click(screen.getByRole("checkbox", { name: /exportAiLabel/ }));
+  expect(screen.queryByRole("alert"), "开着关着都不再弹警告").toBeNull();
+  await user.click(screen.getByRole("button", { name: "exportStart" }));
+  expect(exportSequence).toHaveBeenLastCalledWith("seq-1", expect.objectContaining({ ai_label: true }));
   expect(localStorage.getItem("mosael.export.params") ?? "").not.toContain("ai_label");
 
   await user.click(await screen.findByRole("button", { name: "exportVideo" }));
-  expect(screen.getByRole("checkbox", { name: /exportAiLabel/ })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: /exportAiLabel/ })).not.toBeChecked();
 });
 
 it("响度标准化默认关;打开后导出带上 loudness_normalize: true,下一次还记得", async () => {

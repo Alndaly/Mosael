@@ -753,7 +753,7 @@ describe("选中之后挂什么", () => {
       config: {
         resolution: { type: "string", default: "original", options: ["original", "720p"], option_labels: { original: "原样", "720p": "720p" }, label: "resolution" },
         quality: { type: "string", default: "standard", options: ["standard", "compact"], label: "quality" },
-        ai_label: { type: "string", default: "yes", options: ["yes", "no"], label: "ai_label" },
+        ai_label: { type: "string", default: "no", options: ["yes", "no"], label: "ai_label" },
       },
     };
     const board = {

@@ -73,10 +73,10 @@ def _plan(sequence_id: str, params: dict | None = None):
         return build_plan_for_sequence(db, sequence_id, params if params is not None else {})
 
 
-def test_数字人成片_片头和角上加标识_元数据写_AIGC() -> None:
+def test_打开标识_数字人成片_片头和角上加_元数据写_AIGC() -> None:
     fresh_client()
     sequence_id = _sequence(video="talking")
-    plan = _plan(sequence_id)
+    plan = _plan(sequence_id, {"ai_label": True})
     labels = [(item.start, item.duration, item.text, item.placement) for item in plan.ai_labels]
     assert labels == [(0.0, 3.0, "AI 生成", "top_left"), (0.0, 8.0, "AI 生成", "top_right")], "片头 3 秒一块,整片角上一行"
     assert plan.text_overlays == (), "标识不是花字"
@@ -112,9 +112,9 @@ def test_片头那块标识不压人脸也不压字幕_贴在左上角(width: in
 
 
 @pytest.mark.parametrize(("video", "voice"), [("i2v", None), ("plain", "tts")], ids=["图生视频", "AI配音"])
-def test_不是数字人的_AI_素材也加标识(video, voice) -> None:
+def test_打开标识_不是数字人的_AI_素材也加(video, voice) -> None:
     fresh_client()
-    plan = _plan(_sequence(video=video, voice=voice))
+    plan = _plan(_sequence(video=video, voice=voice), {"ai_label": True})
     assert len(plan.ai_labels) == 2
     assert "AIGC" in json.loads(dict(plan.output.metadata)["comment"])
 
@@ -125,11 +125,23 @@ def test_静音的_AI_配音不进成片_不算() -> None:
     assert plan.ai_labels == () and plan.output.metadata == ()
 
 
-def test_关掉显式标识_画面上没有_元数据照写() -> None:
+@pytest.mark.parametrize("params", [{}, {"ai_label": False}], ids=["没说", "关着"])
+def test_默认画面上不加标识_元数据照写(params) -> None:
+    # 维护者 2026-10-06:「生成的视频不要有『AI 生成』这种额外字幕」—— 画面上的标识只在导出时明确打开才烧(ADR 0028 后续修正)。
     fresh_client()
-    plan = _plan(_sequence(video="talking"), {"ai_label": False})
+    plan = _plan(_sequence(video="talking"), params)
     assert plan.ai_labels == ()
-    assert "AIGC" in json.loads(dict(plan.output.metadata)["comment"])
+    assert "AIGC" in json.loads(dict(plan.output.metadata)["comment"]), "隐式标识不随开关变,总写"
+
+
+def test_各处导出的默认都是不加() -> None:
+    from app.api.schemas.sequences import ExportRequest
+    from app.domain.boards.producers import SequenceExportConfig
+    from app.domain.workflows.node_types import NODE_TYPES
+
+    assert ExportRequest().ai_label is False, "剪辑页 / 接口"
+    assert SequenceExportConfig().ai_label == "no", "画板的时间线格"
+    assert NODE_TYPES["export_sequence"]["config"]["ai_label"]["default"] == "no", "工作流的导出节点"
 
 
 def test_一份_AI_素材都没有_一样都不加() -> None:

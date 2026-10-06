@@ -46,16 +46,16 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
       return next;
     });
   };
-  //: 「AI 生成」显式标识(ADR 0028 §5):**默认开、允许关,不记住关** —— 每次导出都从开着开始,关掉是这一次的决定。
-  //: 记住的话,关过一次之后每一片都悄悄不带标识,而发布的人未必记得自己关过。
-  const [aiLabel, setAiLabel] = React.useState(true);
+  //: 画面上的「AI 生成」(ADR 0028 §5,2026-10-06 改成默认关):**每次导出都从关着开始**,打开是这一次的决定 ——
+  //: 发到要求显式标识的平台时勾上。文件里的 AIGC 隐式标识不随它变,总写。
+  const [aiLabel, setAiLabel] = React.useState(false);
   //: 时间线上有几段 AI 生成的片段(后端认的,见 SequenceOut.ai_asset_ids)。
   const aiClipCount = React.useMemo(() => {
     const ai = new Set(sequence.ai_asset_ids ?? []);
     return (sequence.tracks ?? []).flatMap((track) => track.clips ?? []).filter((clip) => clip.asset_id && ai.has(clip.asset_id)).length;
   }, [sequence]);
   React.useEffect(() => {
-    if (configOpen) setAiLabel(true);
+    if (configOpen) setAiLabel(false);
   }, [configOpen]);
   const startExport = useMutation({
     mutationFn: (body: ExportParams) => exportSequence(sequenceId, body),
@@ -166,11 +166,6 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
               <span className="col-start-2 text-ui-xs leading-relaxed text-muted-foreground">
                 {t("exportAiLabelFound").replace("{n}", String(aiClipCount))} {t("exportAiLabelHint")}
               </span>
-              {!aiLabel && (
-                <span role="alert" data-export-ai-label-off="" className="col-start-2 text-ui-xs leading-relaxed text-warning">
-                  {t("exportAiLabelOffWarning")}
-                </span>
-              )}
             </label>
           )}
         </div>

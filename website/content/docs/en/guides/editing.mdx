@@ -239,13 +239,13 @@ To see what CosyVoice costs in your usage, run **Prefill prices** once for the B
 | Frame rate | Match sequence, or 24 / 25 / 30 / 50 / 60 | Match sequence |
 | Quality | High (larger file), Standard, Compact (smaller file) | Standard |
 | Normalize loudness (−14 LUFS) | Brings the whole mix to −14 LUFS with peaks at or below −1 dB, for places that don't even out volume; not audible in the preview | Off |
-| Label AI-generated content "AI-generated" | Shown only when the timeline has AI-generated clips (they carry an "AI" badge) | On, and on again every export |
+| Label AI-generated content "AI-generated" | Shown only when the timeline has AI-generated clips (they carry an "AI" badge) | Off, and off again every export |
 
 ![Export settings: resolution, frame rate, quality and loudness normalization. This timeline has no AI-generated clips, so the “AI-generated” label option is absent](/media/screens/en/export-dialog.png)
 
 The first four are remembered. **Leaving loudness off won't clip**: the mix is always limited.
 
-- **AI label**: when the export uses AI-generated or synthesized media (including anything trimmed, denoised or separated from it), a centred "AI-generated" shows for the first 3 seconds and a small line sits in the top-right corner throughout; the file always gets the standard implicit-label metadata. Turning the on-screen label off warns that the publisher is responsible — see "AI-generated label" in [Digital humans](/docs/guides/digital-humans).
+- **AI label**: when the export uses AI-generated or synthesized media (including anything trimmed, denoised or separated from it), the file always gets the standard implicit-label metadata. The on-screen label is off by default; tick it to show "AI-generated" in the top-left corner for the first 3 seconds and a small line in the top-right corner throughout — see "AI-generated label" in [Digital humans](/docs/guides/digital-humans).
 - **Faster**: subtitles and static titles are composited into one transparent layer and each line is rendered once; consecutive pieces of the same asset share one input; heavily layered timelines render in chunks that are joined losslessly. A 270-second timeline with 150 jump cuts and 200 subtitles went from 106 seconds to about 17, using less than half the memory, and asset-heavy timelines no longer fail with "too many open files".
 - **More accurate**: each export uses its own working folder, so two exports of one timeline don't collide; segment boundaries land on whole frames; assets whose sound starts late stay in sync; in-points that fall exactly on a keyframe keep their first syllable; if hardware encoding can't start, software encoding takes over before the render begins.
 - A timeline with an "asset deleted" placeholder refuses to export and names the missing asset, rather than quietly leaving a gap.

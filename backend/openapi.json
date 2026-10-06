@@ -31640,7 +31640,7 @@
           "ai_label": {
             "type": "boolean",
             "title": "Ai Label",
-            "default": true
+            "default": false
           },
           "loudness_normalize": {
             "type": "boolean",

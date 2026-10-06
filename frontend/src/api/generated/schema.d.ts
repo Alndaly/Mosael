@@ -11290,7 +11290,7 @@ export interface components {
             quality: "high" | "standard" | "compact";
             /**
              * Ai Label
-             * @default true
+             * @default false
              */
             ai_label: boolean;
             /**

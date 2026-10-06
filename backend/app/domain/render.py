@@ -227,11 +227,11 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         sequence.width, sequence.height, sequence.fps, export_params
     )
     #: 成片里用了 AI 生成 / 合成的素材就加标识(ADR 0028 §5):**隐式的总写**(不影响画面,没有关掉的理由),
-    #: 显式的按导出时的开关。听得见的才算:静音的音频片段不进成片。
+    #: 画面上的「AI 生成」**只在导出时明确打开才烧**(默认关,见 ADR 0028 后续修正 2026-10-06)。听得见的才算:静音的音频片段不进成片。
     used = {clip["asset_id"] for clip in base_clips + overlay_clips if clip["asset_id"]}
     used |= {clip["asset_id"] for clip in audio_clips if clip["asset_id"] and not clip.get("muted")}
     generated = ai_generated_assets(db, used)
-    ai_label = tr("exportAiLabelText") if generated and (export_params or {}).get("ai_label", True) is not False else ""
+    ai_label = tr("exportAiLabelText") if generated and (export_params or {}).get("ai_label") is True else ""
     metadata = aigc_metadata(sequence) if generated else ()
     return build_render_plan(
         sequence_id=sequence.id,

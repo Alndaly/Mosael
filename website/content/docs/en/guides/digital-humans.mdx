@@ -104,16 +104,14 @@ account, with no local engine to install.
 
 It is not just digital humans: an export that uses **any AI-generated or synthesized media** — generated images, video or
 music, AI voiceover, digital humans, and anything trimmed, denoised or separated from them (the "contains AI-generated
-content" flag follows an asset's sources) — gets labelled. Muted audio clips don't count.
+content" flag follows an asset's sources) — gets labelled in the file. Muted audio clips don't count.
 
-- **In the picture**: a large "AI-generated" in the centre for the first 3 seconds, and a small line in the top-right corner
-  (white text on a translucent box) for the whole video, sized from the frame's short edge so it scales with the export
-  resolution. It appears in the exported file only, not in the editor preview.
-- **In the file**: the standard implicit-label (AIGC) metadata is always written, whatever the on-screen setting.
-
-The export dialog's **Label AI-generated content "AI-generated"** is on by default. Turning it off states that Chinese rules
-on labelling AI-generated content and on deep synthesis require published AI content to be clearly labelled, and that the
-publisher is responsible once it's off. The digital-human templates always export with the label.
+- **In the file**: the standard implicit-label (AIGC) metadata is always written; it doesn't touch the picture.
+- **In the picture**: off by default. Tick **Label AI-generated content "AI-generated"** in the export dialog to burn it in:
+  a large "AI-generated" in the top-left corner for the first 3 seconds and a small line in the top-right corner (white text
+  on a translucent box) for the whole video, sized from the frame's short edge so it scales with the export resolution.
+  The box starts unticked on every export; tick it for platforms that require an on-screen label. The workflow "Export
+  timeline" node and a board's timeline cell have the same option, also off by default.
 
 ## Cost
 

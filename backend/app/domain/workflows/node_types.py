@@ -747,7 +747,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                            "description": "wfNode_export_sequence_resolution"},
             "quality": {"type": "string", "default": "standard", "options": list(EXPORT_QUALITIES),
                         "description": "wfNode_export_sequence_quality"},
-            "ai_label": {"type": "string", "default": "yes", "options": ["yes", "no"],
+            "ai_label": {"type": "string", "default": "no", "options": ["yes", "no"],
                          "description": "wfNode_export_sequence_ai_label"},
         },
         "outputs": ["asset_id"],
