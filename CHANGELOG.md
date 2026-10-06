@@ -5,6 +5,8 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-10-07
+
 ### Gemini 对话:填 AI Studio 的 API Key,智能体能用 Gemini 了
 
 - **Google 连接能对话了**(设置 → AI 对话 → 添加「Google AI Studio(Gemini / Veo / Lyria)」)。同一把 AI Studio 的 API Key,
