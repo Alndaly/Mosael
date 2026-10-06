@@ -109,24 +109,24 @@ def test_下载只给部署管理员_状态谁都能看(monkeypatch) -> None:
     assert answer.json()["size_bytes"] == 22_404_720 and answer.json()["pending"] == 0
 
 
-def _thumbnail(path: Path, color: tuple[int, int, int]) -> Path:
+def _original(path: Path, color: tuple[int, int, int], kind: str = "image/webp") -> model_nsfw_local.Source:
+    """宿主缓存里取回来的一份原样(和它的类型)。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 96), color).save(path, "WEBP")
-    return path
+    return model_nsfw_local.Source(path, kind)
 
 
 @pytest.fixture
 def classifier(monkeypatch):
-    """权重「下好了」(正式位置上有个文件),识别换成看颜色:偏红的算 NSFW。记下每次识别的是哪张。"""
+    """权重「下好了」(正式位置上有个文件),识别换成看颜色:偏红的算 NSFW。记下每次看的是什么颜色。"""
     path = nsfw_models.weights_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"weights")
-    seen: list[str] = []
+    seen: list[tuple[int, int, int]] = []
 
-    def probability(thumbnail: Path) -> float:
-        seen.append(thumbnail.name)
-        with Image.open(thumbnail) as image:
-            red, green, _blue = image.convert("RGB").getpixel((8, 8))
+    def probability(image: Image.Image) -> float:
+        red, green, blue = image.convert("RGB").getpixel((8, 8))
+        seen.append((red, green, blue))
         return 0.93 if red > 150 and green < 100 else 0.04
 
     monkeypatch.setattr(model_nsfw_local, "_probability", probability)
@@ -134,10 +134,10 @@ def classifier(monkeypatch):
 
 
 def test_没算过的排进队_下次就有_按图的内容记_重启之后从盘上读(classifier, tmp_path) -> None:
-    red = _thumbnail(tmp_path / "a.thumbnail.webp", (210, 30, 40))
-    same = tmp_path / "b.thumbnail.webp"
-    same.write_bytes(red.read_bytes())
-    green = _thumbnail(tmp_path / "c.thumbnail.webp", (30, 170, 60))
+    red = _original(tmp_path / "a", (210, 30, 40))
+    same = model_nsfw_local.Source(tmp_path / "b", "image/webp")
+    same.original.write_bytes(red.original.read_bytes())
+    green = _original(tmp_path / "c", (30, 170, 60))
 
     assert model_nsfw_local.signal(red) is None, "列的时候不等它"
     model_nsfw_local.signal(same)
@@ -146,7 +146,7 @@ def test_没算过的排进队_下次就有_按图的内容记_重启之后从�
     assert model_nsfw_local.signal(red) == {"source": "local", "nsfw": True, "score": 0.93}
     assert model_nsfw_local.signal(same) == {"source": "local", "nsfw": True, "score": 0.93}, "同一张图换了名字不再算"
     assert model_nsfw_local.signal(green) == {"source": "local", "nsfw": False, "score": 0.04}
-    assert sorted(classifier) == ["a.thumbnail.webp", "c.thumbnail.webp"]
+    assert len(classifier) == 2, "两张不同的图各算一次"
     assert model_nsfw_local.status() == {"pending": 0, "scored": 2}
 
     model_nsfw_local.forget()
@@ -155,14 +155,60 @@ def test_没算过的排进队_下次就有_按图的内容记_重启之后从�
 
 
 def test_权重没下就什么都不做_认不出的不说话(classifier, tmp_path, monkeypatch) -> None:
-    picture = _thumbnail(tmp_path / "a.thumbnail.webp", (210, 30, 40))
+    picture = _original(tmp_path / "a", (210, 30, 40))
     nsfw_models.weights_path().unlink()
     assert model_nsfw_local.signal(picture) is None
     assert model_nsfw_local.status()["pending"] == 0 and not classifier, "没下权重:不排队"
 
     nsfw_models.weights_path().write_bytes(b"weights")
-    monkeypatch.setattr(model_nsfw_local, "_probability", lambda _path: (_ for _ in ()).throw(OSError("broken")))
+    monkeypatch.setattr(model_nsfw_local, "_probability", lambda _image: (_ for _ in ()).throw(OSError("broken")))
     model_nsfw_local.signal(picture)
     assert model_nsfw_local.wait_idle()
     assert model_nsfw_local.signal(picture) is None, "认不出:不当成「安全」,也不说是"
     assert model_nsfw_local.status() == {"pending": 0, "scored": 0}
+
+
+def test_有原文件就看原文件_不看ComfyUI现转的有损那张_取不到才退回(classifier, tmp_path, monkeypatch) -> None:
+    """沙盒实测:Big Buck Bunny 的兔脸特写,原 PNG 0.47、ComfyUI 预览接口现转的 WebP 0.69、宿主再缩的缩略图 0.78 ——
+    一层层有损压缩把一张卡通特写推过了 0.5。这里用颜色替分数:缓存里那份(有损)偏红,原文件是绿的。"""
+    from io import BytesIO
+
+    from app.domain import model_previews
+
+    lossy = _original(tmp_path / "lossy", (210, 30, 40))
+    raw = BytesIO()
+    Image.new("RGB", (64, 96), (30, 170, 60)).save(raw, "PNG")
+    asked: list[str] = []
+
+    def fetch(_instance, _route, url, headers):
+        asked.append(url)
+        assert headers == {"Authorization": "Bearer t"}, "原文件在那台服务器上:带它的头"
+        return (raw.getvalue(), "image/png") if url.endswith("raw.png") else None
+
+    monkeypatch.setattr(model_previews, "fetch_media", fetch)
+    source = model_nsfw_local.Source(lossy.original, "image/webp", "i1", model_previews.Media(
+        "http://comfy/pysssss/view/loras%2Fraw.png", {"Authorization": "Bearer t"}, True))
+    model_nsfw_local.signal(source)
+    assert model_nsfw_local.wait_idle()
+    assert model_nsfw_local.signal(source) == {"source": "local", "nsfw": False, "score": 0.04}, "看的是原文件(绿的)"
+    assert classifier == [(30, 170, 60)] and asked == ["http://comfy/pysssss/view/loras%2Fraw.png"]
+
+    # 原文件取不到(那台机器上删了):退回缓存里那份,照样有结果
+    other = _original(tmp_path / "other", (200, 20, 30))
+    gone = model_nsfw_local.Source(other.original, "image/webp", "i1", model_previews.Media(
+        "http://comfy/pysssss/view/loras%2Fgone.png", {"Authorization": "Bearer t"}, True))
+    model_nsfw_local.signal(gone)
+    assert model_nsfw_local.wait_idle()
+    assert model_nsfw_local.signal(gone)["nsfw"] is True
+
+
+def test_按缩略图记的老结果作废(classifier, tmp_path) -> None:
+    """此前按缩略图(有损的那张)记的结果文件:读的时候删掉、重新算。"""
+    old = nsfw_models.root() / f"scores-{nsfw_models.REVISION[:12]}.json"
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text('{"abc": 0.9}', encoding="utf-8")
+    picture = _original(tmp_path / "a", (30, 170, 60))
+    model_nsfw_local.signal(picture)
+    assert model_nsfw_local.wait_idle()
+    assert not old.exists()
+    assert model_nsfw_local.scores_path().is_file() and model_nsfw_local.status()["scored"] == 1

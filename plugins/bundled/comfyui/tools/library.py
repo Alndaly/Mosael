@@ -448,8 +448,13 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
     if info is not None and ways["save"]:
         # 模型旁边的预览视频、文件名带 [ ] 的那几张图:按名字直接读(和 /pysssss/save 同一个模块的 /pysssss/view)
         out["sidecar_base"] = f"{comfy.base}/pysssss/view/"
+        # 预览图的原文件(本机识别看它,不看 ComfyUI 转出来的有损 WebP):一个目录问一次
+        originals = previews.originals(comfy, sorted({entry["folder"] for entry in out_models}))
         for entry in out_models:
             entry["sidecars"] = previews.sidecars(entry["folder"], entry["name"])
+            original = originals.get((entry["folder"], entry["name"].replace("\\", "/")))
+            if original:
+                entry["preview_file"] = original
     if info is not None:
         out["preview_base"] = f"{comfy.base}/experiment/models/preview/"
         if comfy.headers:
@@ -462,7 +467,7 @@ def _within_budget(out: dict[str, Any], locale: str) -> dict[str, Any]:
     def size() -> int:
         return len(json.dumps(out, ensure_ascii=False).encode("utf-8"))
 
-    for trim in ("triggers", "used_by", "title", "sidecars"):
+    for trim in ("preview_file", "triggers", "used_by", "title", "sidecars"):
         if size() <= OUTPUT_BUDGET:
             return out
         for entry in out["models"]:

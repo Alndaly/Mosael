@@ -58,6 +58,7 @@ elif op == "library":
             {"folder": "checkpoints", "name": "sdxl_base.safetensors", "size": 6938041004, "modified": 1700000000.5,
              "family": "SDXL", "family_source": "metadata", "used_by": [{"id": "wf.json", "label": "人像"}],
              "preview": f"http://127.0.0.1:{port}/preview/a",
+             **({"preview_file": "raw%2Fsdxl_base.png"} if (data / "lossless").exists() else {}),
              "nsfw_signals": [{"source": "metadata", "nsfw": True, "tags": ["nude"], "words": []},
                               {"source": "local", "nsfw": True}, {"source": "civitai"}, "junk"]},
             {"folder": "loras", "name": "sub\\style.safetensors", "size": 228456516, "modified": 1700000001,
@@ -251,6 +252,14 @@ class _Previews:
                     body = _sample_video()
                     self.send_response(200)
                     self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                if self.path == "/sidecar/raw%2Fsdxl_base.png":
+                    body = _colored_png((20, 160, 80), (384, 480))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
@@ -1022,6 +1031,8 @@ def test_示例只有视频的_用视频当预览_存回的是视频本身(libra
 @pytest.fixture
 def local_classifier(monkeypatch):
     """本机识别的权重「下好了」,识别换成看颜色:偏红的算 NSFW。"""
+    import hashlib
+
     from PIL import Image
 
     from app.ai.runtime import nsfw_models
@@ -1036,12 +1047,11 @@ def local_classifier(monkeypatch):
     nsfw_models.weights_path().write_bytes(b"weights")
     seen: list[str] = []
 
-    def probability(thumbnail: Path) -> float:
-        seen.append(thumbnail.name)
-        with Image.open(thumbnail) as image:
-            if image.width < 8:
-                raise OSError("too small to tell")
-            red, green, _blue = image.convert("RGB").getpixel((4, 4))
+    def probability(image: Image.Image) -> float:
+        seen.append(hashlib.sha1(image.convert("RGB").tobytes()).hexdigest())
+        if image.width < 8:
+            raise OSError("too small to tell")
+        red, green, _blue = image.convert("RGB").getpixel((4, 4))
         return 0.91 if red > 150 and green < 100 else 0.06
 
     monkeypatch.setattr(model_nsfw_local, "_probability", probability)
@@ -1092,3 +1102,46 @@ def test_本机识别_认不出的不说话_那台服务器上的预览图也看
     assert model_nsfw_local.wait_idle()
     assert local_classifier, "那台服务器上的那张缩出来也排进去"
     assert not _local(_origin(client, instance_id, "sdxl_base.safetensors"))
+
+
+def test_本机识别_那台服务器上的预览图看原文件_不看ComfyUI现转的有损WebP(library, local_classifier) -> None:
+    """沙盒实测:Big Buck Bunny 的兔脸特写,原 PNG 0.47、ComfyUI 预览接口现转的 WebP 0.69、再缩一次的缩略图 0.78 ——
+    判成了 NSFW。插件报了原文件(ComfyUI-Custom-Scripts 原样交出)时看原文件。这里用颜色替分数:预览接口那张偏红,
+    原文件是绿的。"""
+    from app.domain import model_nsfw_local
+
+    client, instance_id, previews = library
+    previews.body, previews.kind = _colored_png((200, 30, 30), (384, 480)), "image/png"
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    sdxl = {"folder": "checkpoints", "name": "sdxl_base.safetensors"}
+
+    # 没报原文件:只能看预览接口那一张(红的)
+    client.get(base)
+    client.get(f"{base}/thumbnail", params=sdxl)
+    assert model_nsfw_local.wait_idle()
+    assert [(one["nsfw"], one["score"]) for one in _local(_origin(client, instance_id, sdxl["name"]))] == [(True, 0.91)]
+
+    # 报了原文件:看它(绿的)。卡片第一次露面时就排进队(缓存清掉,列的时候还没有那张)
+    from app.domain import model_library
+
+    model_nsfw_local.forget()
+    model_nsfw_local.scores_path().unlink()
+    model_library.drop_cache(instance_id)
+    _flag("lossless")
+    assert not _local(_origin(client, instance_id, sdxl["name"])), "还没取回来:没有这条依据"
+    client.get(f"{base}/thumbnail", params=sdxl)
+    assert model_nsfw_local.wait_idle()
+    assert [(one["nsfw"], one["score"]) for one in _local(_origin(client, instance_id, sdxl["name"]))] == [(False, 0.06)]
+
+    # 那张已经在缓存里、结果没了(换了模型版本):列的时候排进队,同样看原文件
+    model_nsfw_local.forget()
+    model_nsfw_local.scores_path().unlink()
+    client.get(base)
+    assert model_nsfw_local.wait_idle()
+    listed = _origin(client, instance_id, sdxl["name"])
+    assert [(one["nsfw"], one["score"]) for one in _local(listed)] == [(False, 0.06)]
+    raw = [one for one in previews.requests if one["path"] == "/sidecar/raw%2Fsdxl_base.png"]
+    assert raw and all(one["auth"] == "Bearer secret-for-previews" for one in raw), "原文件在那台服务器上:带它的头"
+    shown = client.get(f"{base}/preview", params=sdxl)
+    assert _pixel(shown.content)[:3] == (200, 30, 30), "显示的照旧是预览接口那一张"
+

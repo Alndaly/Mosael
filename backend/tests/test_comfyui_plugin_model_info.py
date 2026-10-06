@@ -337,11 +337,27 @@ def test_模型旁边的预览视频_按名字直接读_带方括号的图也是
     assert brackets[-2:] == ["loras%2FStyle%20%5Bv2%5D.mp4", "loras%2FStyle%20%5Bv2%5D.webm"]
 
 
+def test_预览图的原文件_一个目录问一次_宿主的本机识别看它(comfy, data_dir) -> None:
+    """ComfyUI 的预览接口把图现转成有损的 WebP 再给(沙盒实测:兔脸特写原 PNG 0.47,转过一次 0.69):本机识别要看原文件,
+    ComfyUI-Custom-Scripts 的 /pysssss/images 一个目录一问就知道每个模型旁边是哪张图,经 /pysssss/view 原样取。"""
+    comfy.state.model_bytes["loras/detail.png"] = b"png"
+    comfy.state.model_folders["loras"].append("sub/deep.safetensors")
+    comfy.state.model_bytes["loras/sub/deep.preview.png"] = b"png"
+    out = _call(comfy, {"op": "library"}, data_dir)
+    by_key = _by_key(out)
+    assert by_key[("loras", "detail.safetensors")]["preview_file"] == "loras%2Fdetail.png"
+    assert by_key[("loras", "sub/deep.safetensors")]["preview_file"] == "loras%2Fsub%2Fdeep.preview.png"
+    assert all("preview_file" not in one for one in out["models"] if one["name"] not in ("detail.safetensors", "sub/deep.safetensors"))
+    asked = [call for call in comfy.state.calls if call[0] == "GET" and str(call[1]).startswith("/pysssss/images/")]
+    assert len(asked) == len({one["folder"] for one in out["models"]}), "一个目录问一次"
+
+
 def test_没有pysssss就不列旁边的文件(comfy, data_dir) -> None:
     comfy.state.pysssss_scripts = ("modelInfo.js",)
+    comfy.state.model_bytes["loras/detail.png"] = b"png"
     out = _call(comfy, {"op": "library"}, data_dir)
     assert "sidecar_base" not in out
-    assert all("sidecars" not in one for one in out["models"])
+    assert all("sidecars" not in one and "preview_file" not in one for one in out["models"])
 
 
 def test_示例只有视频的_交512宽的转码视频_有图就只交图(modules) -> None:

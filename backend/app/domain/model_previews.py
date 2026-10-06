@@ -232,12 +232,12 @@ class _Cached:
         return (self.thumbnail.read_bytes(), THUMBNAIL_MEDIA_TYPE) if self.thumbnail.is_file() else None
 
 
-def cached_thumbnail(instance_id: str, urls: list[str]) -> Path | None:
-    """这几处(按先后)里头一个已经缩好缩略图的那个文件;都没有就是 None。本机识别看的就是它(见 model_nsfw_local)。"""
+def cached_original(instance_id: str, urls: list[str]) -> tuple[Path, str] | None:
+    """这几处(按先后)里头一个已经取回来的原样(文件、类型);都没有就是 None。本机识别按它记结果(见 model_nsfw_local)。"""
     for url in urls:
-        path = _Cached.of(instance_id, url).thumbnail
-        if path.is_file():
-            return path
+        cached = _Cached.of(instance_id, url)
+        if cached.original.is_file() and cached.kind.is_file():
+            return cached.original, cached.kind.read_text(encoding="utf-8")
     return None
 
 
@@ -277,6 +277,9 @@ class PreviewSource:
     name: str
     candidates: tuple[Media, ...]
     route: plugin_egress.Egress
+    #: 卡片第一次露面(缩略图刚缩出来)时告诉谁:(原样文件、它的类型、是不是那台服务器上的)。本机识别据此排队,不等下一次
+    #: 列 —— 这里不认识本机识别,由组装它的模型库接上(见 model_library.preview_source)
+    on_thumbnail: Callable[[Path, str, bool], None] | None = None
 
     def _live(self) -> list[Media]:
         """这一次要试的:那台服务器上的刚说过没有(十分钟内),就跳过它。"""
@@ -325,7 +328,12 @@ class PreviewSource:
                 if media.server:
                     note_server(self.instance_id, self.folder, self.name, "found",
                                 "video" if original[1].startswith("video/") else "image")
-                return _shrink(self.instance_id, cached, original) if thumbnail else original
+                if not thumbnail:
+                    return original
+                shrunk = _shrink(self.instance_id, cached, original)
+                if self.on_thumbnail is not None:
+                    self.on_thumbnail(cached.original, original[1], media.server)
+                return shrunk
         if missing_on_server and not noted:
             note_server(self.instance_id, self.folder, self.name, "absent")
         return None
@@ -393,8 +401,8 @@ def _cacheable_video(data: bytes) -> tuple[bytes, str] | None:
         return (target.read_bytes(), "video/mp4") if ok and target.is_file() and target.stat().st_size else None
 
 
-def _first_frame(data: bytes) -> Image.Image | None:
-    """一段视频的第一帧(卡片上的缩略图)。"""
+def first_frame(data: bytes) -> Image.Image | None:
+    """一段视频的第一帧(卡片上的缩略图、本机识别看的那一帧),无损解出来的。"""
     with tempfile.TemporaryDirectory(prefix="mosael-model-preview-") as tmp:
         source, frame = Path(tmp) / "in", Path(tmp) / "frame.png"
         source.write_bytes(data)
@@ -408,7 +416,7 @@ def _first_frame(data: bytes) -> Image.Image | None:
 def _shrink(instance_id: str, cached: _Cached, original: tuple[bytes, str]) -> tuple[bytes, str]:
     try:
         if original[1].startswith("video/"):
-            image = _first_frame(original[0])
+            image = first_frame(original[0])
             if image is None:
                 return original
         else:
@@ -420,10 +428,6 @@ def _shrink(instance_id: str, cached: _Cached, original: tuple[bytes, str]) -> t
         logger.info("模型预览图缩不出缩略图(连接 %s),给原图:%s", instance_id, exc)
         return original
     _write(cached.thumbnail, buffer.getvalue())
-    # 本机识别看的就是这张(权重下好了才排队,见 model_nsfw_local)
-    from app.domain import model_nsfw_local
-
-    model_nsfw_local.offer(cached.thumbnail)
     return buffer.getvalue(), THUMBNAIL_MEDIA_TYPE
 
 

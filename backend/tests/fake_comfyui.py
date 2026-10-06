@@ -930,6 +930,17 @@ class _Handler(BaseHTTPRequestHandler):
                             for index, name in enumerate(state.model_folders[folder])])
         elif path.startswith("/pysssss/view/") and state.pysssss != "missing":
             self._model_bytes(unquote(path[len("/pysssss/view/"):]))
+        elif path.startswith("/pysssss/images/") and state.pysssss != "missing":
+            # 照 ComfyUI-Custom-Scripts 的 get_images:这个目录里每个模型旁边那张图(只认这几种扩展名)
+            folder = unquote(path[len("/pysssss/images/"):])
+            images = {}
+            for name in state.model_folders.get(folder, []):
+                stem = name.rsplit(".", 1)[0]
+                for ext in ("png", "jpg", "jpeg", "preview.png", "preview.jpeg"):
+                    if f"{folder}/{stem}.{ext}" in state.model_bytes:
+                        images[name] = f"{folder}/{stem}.{ext}"
+                        break
+            self._json(images)
         elif path == "/extensions":
             scripts = state.pysssss_scripts if state.pysssss != "missing" else ()
             self._json(["/extensions/core/linkRenderMode.js",

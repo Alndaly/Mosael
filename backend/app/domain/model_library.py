@@ -21,6 +21,7 @@ import logging
 import re
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -73,6 +74,8 @@ class _Snapshot:
     previews: dict[tuple[str, str], str] = field(default_factory=dict)
     #: 那台服务器上模型旁边的几处(预览视频、带 [ ] 的文件名的图),预览接口没有时按名字直接读
     sidecars: dict[tuple[str, str], list[str]] = field(default_factory=dict)
+    #: 那台服务器上预览图的原文件(预览接口给的是现转的有损 WebP):本机识别看它
+    originals: dict[tuple[str, str], str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     signals: dict[tuple[str, str], list[dict[str, Any]]] = field(default_factory=dict)
     elsewhere: dict[tuple[str, str], list[model_previews.Elsewhere]] = field(default_factory=dict)
@@ -212,6 +215,16 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
     snapshot = _Snapshot(headers={str(k): str(v) for k, v in (output.get("preview_headers") or {}).items()},
                          tools=_preview_tools(output.get("preview_tools")))
     marks = _marks(db, instance.id)
+    route: list[plugin_egress.Egress] = []
+
+    def lossless(url: str) -> model_previews.Media | None:
+        """原文件那一处(取它走这个连接的出站,只问一次出站)。"""
+        if not url:
+            return None
+        if not route:
+            route.append(plugin_egress.resolve(db, instance, inst.manifest_for(db, instance)))
+        return model_previews.Media(url, dict(snapshot.headers), server=True)
+
     for raw in (output.get("models") or [])[:_MAX_MODELS]:
         found = _model(raw, _http(output.get("preview_base")))
         if found is None:
@@ -219,13 +232,18 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
         model, preview = found
         key = (model["folder"], model["name"])
         sidecars = _sidecars(raw.get("sidecars"), _http(output.get("sidecar_base")))
+        original = next(iter(_sidecars([raw.get("preview_file")], _http(output.get("sidecar_base")))), "")
         choices = model.pop("elsewhere")
         fields, shown = _preview_fields(instance.id, model, preview or (sidecars[0] if sidecars else ""), choices, pick)
         model.update(fields)
         signals = with_elsewhere_signal(model.pop("nsfw_signals"), shown)
-        # 本机识别:看的是显示着的那张的缩略图(别处的那张,或那台服务器上先后试的那几处里已经缩好的)
-        local = model_nsfw_local.signal(model_previews.cached_thumbnail(
-            instance.id, [shown.url] if shown else [one for one in (preview, *sidecars) if one]))
+        # 本机识别:显示着的那张(别处的那张,或那台服务器上先后试的那几处里已经取回来的),按缓存里那份原样记结果;
+        # 那台服务器上的有原文件就看原文件(不看 ComfyUI 现转的有损 WebP)
+        cached = model_previews.cached_original(
+            instance.id, [shown.url] if shown else [one for one in (preview, *sidecars) if one])
+        local = model_nsfw_local.signal(model_nsfw_local.Source(
+            cached[0], cached[1], instance.id, None if shown else lossless(original), route[0] if route else None,
+        )) if cached else None
         if local:
             signals = [*signals, local]
         model["nsfw"] = nsfw_verdict(marks.get((model["folder"], _norm(model["name"]))), signals)
@@ -237,6 +255,8 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
             snapshot.previews[key] = preview
         if sidecars:
             snapshot.sidecars[key] = sidecars
+        if original:
+            snapshot.originals[key] = original
     with _lock:
         _snapshots[instance.id] = snapshot
     folders = [
@@ -367,7 +387,14 @@ def preview_source(db: Session, instance: PluginInstance, folder: str, name: str
     if not candidates:
         return None
     route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
-    return model_previews.PreviewSource(instance.id, folder, name, tuple(candidates), route)
+    original = snapshot.originals.get(key)
+    lossless = model_previews.Media(original, dict(snapshot.headers), server=True) if original else None
+
+    def offer(path: Path, kind: str, server: bool) -> None:
+        """卡片第一次露面:本机识别排进队(那台服务器上的那张有原文件就看原文件,见 model_nsfw_local)。"""
+        model_nsfw_local.offer(model_nsfw_local.Source(path, kind, instance.id, lossless if server else None, route))
+
+    return model_previews.PreviewSource(instance.id, folder, name, tuple(candidates), route, offer)
 
 
 def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:

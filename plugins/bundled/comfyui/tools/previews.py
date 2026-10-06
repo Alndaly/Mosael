@@ -41,6 +41,24 @@ def sidecars(folder: str, name: str) -> list[str]:
     return [model_path(folder, f"{stem}{suffix}") for suffix in suffixes]
 
 
+def originals(comfy: Comfy, folders: list[str]) -> dict[tuple[str, str], str]:
+    """每个模型那张预览图的**原文件**(相对 `/pysssss/view/` 的一段):ComfyUI-Custom-Scripts 的 `/pysssss/images/{目录}`
+    一个目录问一次,回「模型名 → 目录/那张图的文件名」(它只认 png、jpg、jpeg、.preview.png、.preview.jpeg)。
+
+    ComfyUI 自己的预览接口把图现转成有损的 WebP 再给;宿主的本机识别要看原图(同一张图,转过一次 WebP 的分数能从
+    0.47 变成 0.69,沙盒实测),按这一段经 `/pysssss/view` 原样取。问不到的目录跳过。键是 (目录, 名字),名字统一成正斜杠。"""
+    found: dict[tuple[str, str], str] = {}
+    for folder in folders:
+        try:
+            listed = comfy.get(f"/pysssss/images/{parse.quote(folder, safe='')}")
+        except ComfyError:
+            continue
+        for name, image in (listed.items() if isinstance(listed, dict) else ()):
+            if isinstance(name, str) and isinstance(image, str) and image.startswith(f"{folder}/"):
+                found[(folder, name.replace("\\", "/"))] = parse.quote(image, safe="")
+    return found
+
+
 def tools(comfy: Comfy) -> dict[str, bool]:
     """这台 ComfyUI 上 pysssss 的那两条路在不在:`hash`(按哈希找)、`save`(写回预览图)。读不到就当都不在。"""
     try:

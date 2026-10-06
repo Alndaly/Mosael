@@ -1,11 +1,16 @@
 """本机识别模型预览图是不是 NSFW(ADR 0038 §9 的第四种依据,「本地识别怎么带」那一节)。
 
-**识别的是宿主已经缩好的缩略图**(长边 512 的 WebP,视频是它的第一帧;见 model_previews),不碰原图。结果按**缩略图内容的
-SHA-256** 记在磁盘上(`<数据目录>/nsfw-classifier/scores-<版本>.json`)—— 同一张图换了名字、换了连接都不再算;换了模型版本
-是另一个文件。
+**看的是手上最原样的那一张**,不是缩略图:那台服务器上的预览图有原文件(ComfyUI-Custom-Scripts 经 `/pysssss/view` 原样
+交出,见 Source)就看原文件;没有就看宿主缓存里取回来的原样(Civitai 的示例图;ComfyUI 预览接口现转的 WebP);视频看
+无损解出来的第一帧。沙盒实测:Big Buck Bunny 的兔脸特写,原 PNG 0.47、ComfyUI 转出来的 WebP 0.69、宿主再缩一次的
+缩略图 0.78 —— 有损压缩一层层把一张卡通特写推过了 0.5。
 
-**列模型库不等它**:列的时候,缓存里有结果的带上(一条 `local` 依据:NSFW 的可能、过没过 0.5);缩略图已经有了、还没识别
-的排进队里,一个后台线程一张一张地算(全进程同时只算一张),下次列出就有。缩略图是新缩出来的(卡片第一次露面)也排进去。
+结果按**缓存里那份原样的内容 SHA-256** 记在磁盘上(`<数据目录>/nsfw-classifier/scores-<版本>-original.json`)—— 同一张图
+换了名字、换了连接都不再算;换了模型版本是另一个文件。此前按缩略图记的那一份(`scores-<版本>.json`)看的是有损的那张,
+读的时候删掉、重新算。
+
+**列模型库不等它**:列的时候,缓存里有结果的带上(一条 `local` 依据:NSFW 的可能、过没过 0.5);原样已经取回来了、还没
+识别的排进队里,一个后台线程一张一张地算(全进程同时只算一张),下次列出就有。卡片第一次露面(缩略图刚缩出来)也排进去。
 权重没下(见 ai/runtime/nsfw_models)就什么都不做;识别不出(图坏了)就不说话 —— 不当成「安全」。
 
 **只是提示**:排在手动标记之下(model_library.nsfw_verdict),图、模型、结果都不出这台电脑。
@@ -14,17 +19,20 @@ SHA-256** 记在磁盘上(`<数据目录>/nsfw-classifier/scores-<版本>.json`)
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
 import threading
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
 from app.ai.runtime import nsfw_models
+from app.domain import model_previews
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +43,27 @@ MAX_SCORES = 50_000
 #: 攒够几条写一次盘(队列空了也写)
 _FLUSH_EVERY = 20
 
+@dataclass(frozen=True)
+class Source:
+    """要识别的那一张:宿主缓存里取回来的原样(`original`,图或视频,`kind` 是它的类型),结果按它的内容记;那台服务器上
+    同一张图的原文件(`lossless`,有就看它,经这个连接的出站 `route` 去取,取不到退回缓存里那份)。"""
+
+    original: Path
+    kind: str
+    instance_id: str = ""
+    lossless: model_previews.Media | None = None
+    route: Any = None
+
+
 _lock = threading.Lock()
-#: 缩略图内容的 SHA-256 → NSFW 的可能(0–1)。第一次用到时从盘上读
+#: 缓存里那份原样内容的 SHA-256 → NSFW 的可能(0–1)。第一次用到时从盘上读
 _scores: dict[str, float] | None = None
 #: 识别不出的(图坏了):这次进程里不再排
 _unreadable: set[str] = set()
-#: 排着队的(内容哈希, 缩略图文件)和它们的哈希(不重复排)
-_queue: deque[tuple[str, Path]] = deque()
+#: 排着队的(内容哈希, 那一张)和它们的哈希(不重复排)
+_queue: deque[tuple[str, Source]] = deque()
 _queued: set[str] = set()
-#: 缩略图文件 → (修改时间, 大小, 内容哈希):列一次几百个文件,不必每次都把它们读一遍
+#: 原样文件 → (修改时间, 大小, 内容哈希):列一次几百个文件,不必每次都把它们读一遍
 _digests: dict[str, tuple[int, int, str]] = {}
 #: 读进内存的权重(第一次识别时读,二十来 MB)
 _weights: dict[str, Any] | None = None
@@ -52,13 +72,16 @@ _dirty = 0
 
 
 def scores_path() -> Path:
-    return nsfw_models.root() / f"scores-{nsfw_models.REVISION[:12]}.json"
+    return nsfw_models.root() / f"scores-{nsfw_models.REVISION[:12]}-original.json"
 
 
 def _loaded() -> dict[str, float]:
-    """拿着 `_lock` 调。"""
+    """拿着 `_lock` 调。第一次读的时候删掉别的结果文件:按缩略图记的老的那一份、换掉的模型版本的。"""
     global _scores
     if _scores is None:
+        for stale in nsfw_models.root().glob("scores-*.json"):
+            if stale != scores_path():
+                stale.unlink(missing_ok=True)
         try:
             raw = json.loads(scores_path().read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -86,37 +109,37 @@ def _digest(path: Path) -> str | None:
     return digest
 
 
-def signal(thumbnail: Path | None) -> dict[str, Any] | None:
-    """列模型库时调:这张缩略图的本机识别结果(一条 NSFW 依据),还没有就是 None。权重下好了、还没算过的排进队里。"""
-    if thumbnail is None:
+def signal(source: Source | None) -> dict[str, Any] | None:
+    """列模型库时调:这一张的本机识别结果(一条 NSFW 依据),还没有就是 None。权重下好了、还没算过的排进队里。"""
+    if source is None:
         return None
-    digest = _digest(thumbnail)
+    digest = _digest(source.original)
     if digest is None:
         return None
     with _lock:
         score = _loaded().get(digest)
     if score is not None:
         return {"source": "local", "nsfw": score >= THRESHOLD, "score": round(score, 4)}
-    _enqueue(digest, thumbnail)
+    _enqueue(digest, source)
     return None
 
 
-def offer(thumbnail: Path) -> None:
-    """一张缩略图刚缩出来:权重下好了就排进队里(卡片第一次露面时就开始算,不等下一次列)。"""
+def offer(source: Source) -> None:
+    """卡片第一次露面(缩略图刚缩出来):权重下好了就排进队里,不等下一次列。"""
     if nsfw_models.ready():
-        digest = _digest(thumbnail)
+        digest = _digest(source.original)
         if digest is not None:
-            _enqueue(digest, thumbnail)
+            _enqueue(digest, source)
 
 
-def _enqueue(digest: str, thumbnail: Path) -> None:
+def _enqueue(digest: str, source: Source) -> None:
     global _worker
     if not nsfw_models.ready():
         return
     with _lock:
         if digest in _queued or digest in _unreadable or digest in _loaded():
             return
-        _queue.append((digest, thumbnail))
+        _queue.append((digest, source))
         _queued.add(digest)
         if _worker is None or not _worker.is_alive():
             _worker = threading.Thread(target=_work, daemon=True, name="model-nsfw-local")
@@ -129,16 +152,37 @@ def status() -> dict[str, int]:
         return {"pending": len(_queued), "scored": len(_loaded())}
 
 
-def _probability(thumbnail: Path) -> float:
-    """一张缩略图是 NSFW 的可能。拿不到权重、图读不懂就抛。"""
+def _image(source: Source) -> Image.Image:
+    """要看的那一张:有原文件先取原文件(取不到、不是图就退回缓存里那份);视频无损解出第一帧。读不懂就抛。"""
+    if source.lossless is not None:
+        try:
+            fetched = model_previews.fetch_media(source.instance_id, source.route, source.lossless.url,
+                                                 source.lossless.headers)
+        except model_previews.PreviewNotNow:
+            fetched = None
+        if fetched is not None and fetched[1].startswith("image/"):
+            image = Image.open(io.BytesIO(fetched[0]))
+            image.load()
+            return image
+    data = source.original.read_bytes()
+    if source.kind.startswith("video/"):
+        frame = model_previews.first_frame(data)
+        if frame is None:
+            raise OSError("no first frame")
+        return frame
+    image = Image.open(io.BytesIO(data))
+    image.load()
+    return image
+
+
+def _probability(image: Image.Image) -> float:
+    """一张图是 NSFW 的可能。拿不到权重就抛。"""
     global _weights
     from app.ai.runtime import nsfw_vit
 
     if _weights is None:
         _weights = nsfw_vit.load(nsfw_models.weights_path())
-    with Image.open(thumbnail) as image:
-        image.load()
-        return nsfw_vit.nsfw_probability(_weights, image)
+    return nsfw_vit.nsfw_probability(_weights, image)
 
 
 def _work() -> None:
@@ -149,11 +193,12 @@ def _work() -> None:
             if not _queue:
                 _worker = None  # 之后排进来的另起一个线程(这个只剩写盘)
                 break
-            digest, thumbnail = _queue.popleft()
+            digest, source = _queue.popleft()
         try:
-            score: float | None = _probability(thumbnail)
+            with _image(source) as image:
+                score: float | None = _probability(image)
         except Exception as exc:  # noqa: BLE001 — 一张图读不懂不该停下整个队列;不说话,不当成「安全」
-            logger.info("本机识别没认出这张预览图(%s):%s", thumbnail.name, exc)
+            logger.info("本机识别没认出这张预览图(%s):%s", source.original.name, exc)
             score = None
         with _lock:
             _queued.discard(digest)
