@@ -44,6 +44,22 @@ describe("只有图标的按钮", () => {
     expect(screen.getByRole("button", { name: "乙" }).className).toBe("note-tool");
   });
 
+  it("unstyled 也认 loading:图标换成同样大小的转圈、aria-busy、点不了;没有图标的内容不补转圈", () => {
+    const Sized = ({ size }: { size?: number }) => <svg data-icon="" width={size} />;
+    const { rerender } = render(<IconButton label="上传" unstyled><Sized size={12} /></IconButton>);
+    const button = screen.getByRole("button", { name: "上传" });
+    expect(button.getAttribute("aria-busy")).toBeNull();
+    rerender(<IconButton label="上传" unstyled loading><Sized size={12} /></IconButton>);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.querySelector("[data-icon]"), "图标让位给转圈").toBeNull();
+    expect(button.querySelector("svg.animate-mosael-spin")?.getAttribute("width"), "转圈和原来的图标一样大").toBe("12");
+
+    rerender(<IconButton label="上传" unstyled loading><img alt="" /><span>A</span></IconButton>);
+    expect(button.querySelector("svg"), "头像这种自绘的内容:转圈由调用方画").toBeNull();
+    expect(button.querySelector("img")).not.toBeNull();
+  });
+
   it("能当 Popover 的触发器:点开浮层、浮层的状态挂在按钮上", () => {
     const onClick = vi.fn();
     render(

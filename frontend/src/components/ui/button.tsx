@@ -88,16 +88,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }
 )
 
-/** 把第一个 svg 图标替换成转圈;一个图标都没有就在最前面补一个。 */
-function BusyChildren({ children }: { children?: React.ReactNode }) {
-  const spinner = <Loader2 key="__busy" className="animate-mosael-spin" />
+/**
+ * 把第一个图标替换成转圈,大小沿用它的 `size`(不带 Button 外观的按钮里,图标的大小多半就靠它)。
+ * 一个图标都没有时,`prepend` 就在最前面补一个;不补的(IconButton unstyled 的头像、整块自绘的内容)
+ * 由调用方自己在里面画转圈。
+ */
+function BusyChildren({ children, prepend = true }: { children?: React.ReactNode; prepend?: boolean }) {
   const nodes = React.Children.toArray(children)
   const iconAt = nodes.findIndex(
     (node) => React.isValidElement(node) && typeof node.type !== "string",
   )
-  if (iconAt < 0) return <>{spinner}{children}</>
+  if (iconAt < 0) {
+    return prepend ? <><Loader2 key="__busy" className="animate-mosael-spin" />{children}</> : <>{children}</>
+  }
+  const icon = nodes[iconAt] as React.ReactElement<{ size?: number | string }>
+  const spinner = <Loader2 key="__busy" size={icon.props.size} className="animate-mosael-spin" />
   return <>{nodes.map((node, index) => (index === iconAt ? spinner : node))}</>
 }
 Button.displayName = "Button"
 
-export { Button, buttonVariants }
+export { BusyChildren, Button, buttonVariants }

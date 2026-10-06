@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { Button, type ButtonProps } from "./button"
+import { BusyChildren, Button, type ButtonProps } from "./button"
 import { Hint, type HintShortcut } from "./tooltip"
 
 export type IconButtonProps = Omit<ButtonProps, "aria-label" | "title"> & {
@@ -16,7 +16,7 @@ export type IconButtonProps = Omit<ButtonProps, "aria-label" | "title"> & {
   tooltipAlign?: "start" | "center" | "end"
   /**
    * 不要 Button 的外观:渲染原生 `<button>`,样式全由 className(或外层 CSS,如笔记工具栏的
-   * `.note-format button`)给。名字、说明、禁用原因照旧。
+   * `.note-format button`)给。名字、说明、禁用原因照旧;`loading` 也照旧(图标换成转圈、`aria-busy`)。
    */
   unstyled?: boolean
 }
@@ -37,8 +37,13 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ) => {
     let button: React.ReactNode
     if (unstyled) {
-      const { loading, asChild: _asChild, disabled, ...rest } = props
-      button = <button ref={ref} aria-label={label} aria-busy={loading || undefined} disabled={disabled || loading} {...rest} />
+      //: 在跑时和 Button 一样把图标换成转圈(大小沿用那个图标的);没有图标的(头像那种自绘的内容)不补,转圈由调用方画
+      const { loading, asChild: _asChild, disabled, children, ...rest } = props
+      button = (
+        <button ref={ref} aria-label={label} aria-busy={loading || undefined} disabled={disabled || loading} {...rest}>
+          {loading ? <BusyChildren prepend={false}>{children}</BusyChildren> : children}
+        </button>
+      )
     } else {
       button = <Button ref={ref} variant={variant} size={size} aria-label={label} {...props} />
     }
