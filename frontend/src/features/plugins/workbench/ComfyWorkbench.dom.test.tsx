@@ -603,6 +603,29 @@ describe("底下开着模态弹窗(工作流库)时:那一列滚得动、小眼�
   });
 });
 
+describe("模型库:每一行的第二行不重复第一行", () => {
+  //: 沙盒实测:没有标题、没有触发词的模型,第一行是文件名,第二行又是一遍文件名
+  it("有触发词写触发词;有标题写文件名;都没有就写子目录,再没有就不写", async () => {
+    api.getModelLibrary.mockResolvedValue({
+      folders: [], missing: [], downloads: [], download: { route: "local", note: "" },
+      models: [
+        { folder: "checkpoints", name: "sdxl.safetensors", family: "SDXL", title: "SDXL Base", triggers: [], has_preview: false },
+        { folder: "checkpoints", name: "flux-dev.safetensors", family: "", title: "", triggers: ["film grain"], has_preview: false },
+        { folder: "checkpoints", name: "plain.safetensors", family: "SD 1.5", title: "", triggers: [], has_preview: false },
+        { folder: "checkpoints", name: "Qwen_Image/qwen.safetensors", family: "", title: "", triggers: [], has_preview: false },
+      ],
+    });
+    await mount();
+    const list = await screen.findByRole("list", { name: "workbenchModelsList" });
+    const row = (name: RegExp) => within(list).getByRole("button", { name }).textContent;
+    expect(row(/SDXL Base/)).toContain("sdxl.safetensors");
+    expect(row(/flux-dev/)).toContain("film grain");
+    expect(row(/plain\.safetensors/)!.split("plain.safetensors")).toHaveLength(2);
+    expect(row(/qwen\.safetensors/)).toContain("Qwen_Image");
+    expect(row(/qwen\.safetensors/)!.split("qwen.safetensors")).toHaveLength(2);
+  });
+});
+
 describe("模型库:换模型不闪;点缩略图看大图", () => {
   it("点一行:上一句话一直留着、回话到了原地换成新的一句;列表里的每一行不重挂", async () => {
     const bridge = await mount();

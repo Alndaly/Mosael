@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
-import { ModelThumb, NsfwMark, PreviewOriginMark, modelBaseName } from "@/components/generation/ModelThumb";
+import { ModelThumb, NsfwMark, PreviewOriginMark, modelBaseName, modelSubFolder } from "@/components/generation/ModelThumb";
 import { previewPick, previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -226,6 +226,9 @@ function SlotPicker({
             const chosen = model.name.replace(/\\/g, "/") === slot.value.replace(/\\/g, "/");
             const filling = pick.isPending && pick.variables?.name === model.name;
             const name = model.title || modelBaseName(model.name);
+            //: 第二行:前几个触发词;没有就说上面没说的 —— 有标题时是文件名,没标题(上面已经是文件名)时是子目录,都没有就不写
+            const subtitle = (model.triggers ?? []).slice(0, 3).join(", ")
+              || (model.title ? modelBaseName(model.name) : modelSubFolder(model.name));
             const thumb = (
               <ModelThumb compact instanceId={target.instanceId} model={model} treatment={treatmentOf(model)}
                           onFailed={() => setFailed((current) => new Set([...current, model.name]))} />
@@ -263,10 +266,12 @@ function SlotPicker({
                 >
                   <span className="grid min-w-0 flex-1 gap-0.5">
                     <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                    <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
-                      {model.family && <CatalogBadge tone="muted">{model.family}</CatalogBadge>}
-                      <Truncate>{(model.triggers ?? []).slice(0, 3).join(", ") || modelBaseName(model.name)}</Truncate>
-                    </span>
+                    {(model.family || subtitle) && (
+                      <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
+                        {model.family && <CatalogBadge tone="muted">{model.family}</CatalogBadge>}
+                        {subtitle && <Truncate>{subtitle}</Truncate>}
+                      </span>
+                    )}
                   </span>
                   {/* 同一格:填的过程中是转圈,填好了是对勾 —— 宽度不变,这一行不跳 */}
                   <span className="grid size-4 shrink-0 place-items-center">
