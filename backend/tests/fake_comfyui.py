@@ -672,6 +672,8 @@ class State:
     log_entries: list[dict[str, str]] = field(default_factory=list)
     #: workflows/ 以外的 userdata(回收目录 `.mosael-trash/…`):键是相对用户目录的路径。
     userdata: dict[str, Any] = field(default_factory=dict)
+    #: 按原文交出的那几份(键是相对用户目录的路径):测「照原来的排版写回」。写它时原文跟着换成写进来的那一份。
+    raw_texts: dict[str, str] = field(default_factory=dict)
     #: 每张工作流的改动时间(毫秒,和 ComfyUI 0.38 的 full_info 一样);没写过的是 1。每写一次往后走一格(`touch`),
     #: 测 `annotate` 带着读到时的改动时间、文件在这之间被改过就不写。
     workflow_modified: dict[str, int] = field(default_factory=dict)
@@ -989,6 +991,13 @@ class _Handler(BaseHTTPRequestHandler):
             found = state.userdata_get(name)
             if found is None:
                 self._json({"error": "not found"}, 404)
+            elif name in state.raw_texts:
+                body = state.raw_texts[name].encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self._json(found)
         elif path.startswith("/history/"):
@@ -1050,6 +1059,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"File already exists")
             return
         state.userdata_put(name, json.loads(raw or b"null"))
+        if name in state.raw_texts:
+            state.raw_texts[name] = raw.decode("utf-8")
         stamp = state.modified(name[len("workflows/"):]) if name.startswith("workflows/") else 1791000000000
         self._json({"path": name, "size": len(raw), "modified": stamp})
 

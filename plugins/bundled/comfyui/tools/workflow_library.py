@@ -50,6 +50,7 @@ from typing import Any
 import app_form
 import convert
 import graph
+import json_style
 import labels
 import models
 import workflows as described
@@ -714,10 +715,11 @@ def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, An
         raise _gone(locale, path)
     if not _same_time(current, payload.get("modified")):
         return {"stale": True, "modified": current}
-    source = comfy.fetch_workflow(path)
+    source, text = comfy.fetch_workflow_text(path)
     if not _same_time(_modified(comfy, path), current):
         return {"stale": True, "modified": _modified(comfy, path)}
     updated = app_form.apply(source, app, [str(one) for one in results], locale)
-    info = comfy.overwrite_userdata(f"workflows/{path}", updated)
+    # 照原来的排版写回:ComfyUI 自己存的是紧凑的 JSON,只改了 `mosael` 那几处,别的字节一个不变(见 json_style)
+    info = comfy.overwrite_userdata(f"workflows/{path}", json_style.dumps_like(updated, text))
     written = _seconds(info.get("modified"))
     return {"path": path, "modified": written if written is not None else _modified(comfy, path)}

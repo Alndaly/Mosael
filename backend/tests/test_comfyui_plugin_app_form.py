@@ -527,6 +527,54 @@ def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: P
     assert [one["title"] for one in flow["inputs"]] == ["人物照片", "背景"]
 
 
+def _integral_floats_as_ints(value: Any) -> Any:
+    """JSON.stringify 把 1.0 写成 1:读回来就是整数。夹具照它的样子。"""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _integral_floats_as_ints(one) for key, one in value.items()}
+    if isinstance(value, list):
+        return [_integral_floats_as_ints(one) for one in value]
+    return value
+
+
+def test_annotate_照原来的排版写回_没改的字节一个不变(comfy) -> None:
+    """沙盒实测:annotate 一律按两格缩进写回,ComfyUI 自己存的紧凑 JSON(JSON.stringify)整份重排 —— 那台机器上的版本
+    记录、同步盘里每次都是「整个文件都改了」。照原来的写:紧凑的还是紧凑的,数字照 JavaScript 的写法(0.00001 不写成
+    1e-05)、中文不转义;缩进的照它的缩进和冒号后面有没有空格。"""
+    source = _integral_floats_as_ints(copy.deepcopy(comfy.state.workflows["multi.json"]))
+    source["extra"] = {**source.get("extra", {}), "ds": {"scale": 0.00001, "offset": [1222.054086911212, -3.5]}}
+    source["备注"] = "中文,不转义"
+    #: JSON.stringify 写出来的样子:Python 的紧凑写法,只有浮点数的写法不一样
+    compact = json.dumps(source, ensure_ascii=False, separators=(",", ":")).replace("1e-05", "0.00001")
+    comfy.state.workflows["multi.json"] = source
+    comfy.state.raw_texts["workflows/multi.json"] = compact
+
+    # 什么都不改(没有表单、没标结果):写回去的就是原文,一个字节不差
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=None, results=[])
+    assert comfy.state.raw_texts["workflows/multi.json"] == compact
+
+    # 改了:还是紧凑的、JS 的数字写法、中文原样;再写一遍同样的,一个字节都不变
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    once = comfy.state.raw_texts["workflows/multi.json"]
+    assert "\n" not in once and '": ' not in once and '", "' not in once, "紧凑的还是紧凑的"
+    assert '"scale":0.00001' in once and "1e-05" not in once and "中文,不转义" in once
+    assert json.loads(once)["extra"]["mosael"]["app"]["title"] == "换装"
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    assert comfy.state.raw_texts["workflows/multi.json"] == once, "同样的标记再写一遍:不多一个字节的改动"
+
+    # 缩进的(制表符、冒号后面没空格,有的编辑器就这么存):照它的
+    tabbed = json.dumps(source, ensure_ascii=False, indent="\t", separators=(",", ":")).replace("1e-05", "0.00001") + "\n"
+    comfy.state.raw_texts["workflows/multi.json"] = tabbed
+    comfy.state.workflows["multi.json"] = json.loads(tabbed)
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=None, results=[])
+    assert comfy.state.raw_texts["workflows/multi.json"] == tabbed
+
+
 def test_annotate_文件在这之间被改过_不写(comfy) -> None:
     seen = _host("app", comfy.url, path="multi.json")
     comfy.state.touch("multi.json")  # 有人在 ComfyUI 里存了一次

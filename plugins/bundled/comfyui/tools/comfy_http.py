@@ -166,6 +166,21 @@ class Comfy:
             raise ComfyError(say(self.locale, f"工作流「{path}」不是一个 JSON 对象", f"Workflow “{path}” is not a JSON object"))
         return graph
 
+    def fetch_workflow_text(self, path: str) -> tuple[dict[str, Any], str]:
+        """一张工作流读出来的图和它的原文(`annotate` 照原文的排版写回,见 json_style)。"""
+        try:
+            with self._open("GET", f"/api/userdata/{parse.quote('workflows/' + path, safe='')}") as response:
+                text = response.read().decode("utf-8")
+        except error.HTTPError as exc:
+            raise self._http_error(exc) from exc
+        try:
+            graph = json.loads(text)
+        except ValueError:
+            graph = None
+        if not isinstance(graph, dict):
+            raise ComfyError(say(self.locale, f"工作流「{path}」不是一个 JSON 对象", f"Workflow “{path}” is not a JSON object"))
+        return graph, text
+
     def workflow_listing(self) -> list[dict[str, Any]]:
         """保存的工作流连同大小和修改时间。**便宜** —— 只列目录,不取内容;判「有没有变」用它。"""
         try:
@@ -215,12 +230,12 @@ class Comfy:
             raise self._http_error(exc) from exc
         return True
 
-    def overwrite_userdata(self, path: str, value: Any) -> dict[str, Any]:
-        """**覆盖写**用户目录里已有的一份,回 ComfyUI 给的文件信息(`{path, size, modified}`)。
+    def overwrite_userdata(self, path: str, text: str) -> dict[str, Any]:
+        """**覆盖写**用户目录里已有的一份(写好的 JSON 原文),回 ComfyUI 给的文件信息(`{path, size, modified}`)。
 
-        只有 `annotate`(改应用表单的标记,ADR 0038 §2)用它,而且调用方先核对过改动时间 —— 别的写操作一律走
-        `write_userdata` / `move_userdata`,不覆盖。"""
-        body = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+        只有 `annotate`(改应用表单的标记,ADR 0038 §2)用它,而且调用方先核对过改动时间、照那张原来的排版写好了原文
+        (json_style)—— 别的写操作一律走 `write_userdata` / `move_userdata`,不覆盖。"""
+        body = text.encode("utf-8")
         try:
             with self._open("POST", f"/api/userdata/{parse.quote(path, safe='')}",
                             params={"overwrite": "true", "full_info": "true"}, body=body,
