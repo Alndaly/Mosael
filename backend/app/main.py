@@ -41,6 +41,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.fonts import router as fonts_router
 from app.api.routes.luts import router as luts_router
 from app.api.routes.plugins import router as plugins_router
+from app.api.routes.local_services import router as local_services_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.scenes import router as scenes_router
 from app.api.routes.blender import router as blender_router
@@ -129,11 +130,20 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     for table, count in settled.items():
         if count:
             logger.info("reconciled %d orphaned %s left by a previous restart", count, table)
+    # 本机服务(ADR 0041):上一个后端被强杀、没来得及停的那几个,对得上就接回来当作运行中 —— 排在目录巡检之前,
+    # 接回来的那几个这一轮就刷得到目录;停着的不刷(用到时才起)。
+    from app.domain import local_services
+
+    adopted = local_services.adopt_orphans()
+    if adopted:
+        logger.info("adopted %d local service(s) left running by a previous backend", adopted)
     # 插件生成供应商(ComfyUI 等)的模型清单在后台刷一遍,之后隔一会儿看一眼指纹:ComfyUI 里新存的工作流,
     # 一分钟内就在选择器里。后台做:一台没开的 ComfyUI 不该拖慢启动(见 generation/plugin_connections)。
     from app.domain.plugins import catalog_watch
 
     catalog_watch.start_watching()
+    # 「保持运行」的本机服务:Mosael 一启动就起,不等用到(后台起,起得慢的不拖慢启动)。
+    local_services.start_kept_running()
     # 本机引擎「装好了没有」要起子进程 import 一遍才知道(funasr、demucs 各一两秒),答案进程内缓存。启动后在后台
     # 先探一遍:「设置 → 能力提供方」、转写 / 分离的下拉第一次打开时不必现等 —— 开发态每改一次代码后端就重启,
     # 那一页每次都白屏好几秒(用户:「要加载很久,会有很长时间的白屏」)。
@@ -161,6 +171,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     logger.info("Mosael backend shutting down")
     catalog_watch.stop_watching()
+    # Mosael 起的本机服务不留在后台(ADR 0041 拍板 4):最先停 —— 先请它自己退、10 秒后强杀,几个一起停。
+    local_services.stop_all()
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()
@@ -388,6 +400,12 @@ def _wire_seams() -> None:
         on_instance_change=dynamic_tools.refresh,
     ))
     host_capabilities.use_table(capabilities.instance_hooks)
+    # 本机服务(ADR 0041):每一次插件调用之前先问一声 —— 连接背后的本机服务停着就起(用到时起),后台刷新目录跳过停着的。
+    # 插件域不 import 本机服务(它要反过来调插件),由这里把实现交给插件域的那道缝。
+    from app.domain import local_services
+    from app.domain.plugins import service_gate
+
+    service_gate.use(local_services.GATE)
     # 调用类能力的收尾(ADR 0033 §3):智能体、工作流直接调了认领文档解析的工具,结果存成那份文档的一次解析。
     from app.domain.documents import extraction as document_extraction
 
@@ -558,6 +576,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_credentials_router, prefix="/api", dependencies=protected)
     app.include_router(agent_browser_router, prefix="/api", dependencies=protected)
     app.include_router(browser_profiles_router, prefix="/api", dependencies=protected)
+    app.include_router(local_services_router, prefix="/api", dependencies=protected)
     return app
 
 

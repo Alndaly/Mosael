@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ getWorkflowLibrary: vi.fn() }));
+const api = vi.hoisted(() => ({ getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn() }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -27,6 +27,9 @@ function mount(model = "人像/古风.json") {
 }
 
 beforeEach(() => {
+  api.getLocalService.mockReset();
+  api.getLocalService.mockResolvedValue(null);
+  api.ensureLocalService.mockReset();
   api.getWorkflowLibrary.mockReset();
   api.getWorkflowLibrary.mockResolvedValue({
     workflows: [{ path: "人像/古风.json" }], editor: { kind: "comfyui", url: "http://127.0.0.1:8188" },
@@ -64,5 +67,31 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     mount();
     expect(screen.queryByRole("button", { name: "workflowOpenInWorkbench" })).toBeNull();
     expect(api.getWorkflowLibrary, "网页版不去问").toHaveBeenCalledTimes(2);
+  });
+
+  it("连接背后是停着的本机服务:先请宿主起好,按钮上写「正在启动」,就绪了才开", async () => {
+    let ready: (value: unknown) => void = () => undefined;
+    api.getLocalService.mockResolvedValue({ state: "stopped" });
+    api.ensureLocalService.mockReturnValue(new Promise((resolve) => (ready = resolve)));
+    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    expect(await screen.findByRole("button", { name: "localServiceOpenStarting" })).toBeTruthy();
+    expect(api.ensureLocalService).toHaveBeenCalledWith("i1");
+    expect(openComfyWorkbench, "等它就绪再开").not.toHaveBeenCalled();
+    ready({ state: "running" });
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: "workflowOpenInWorkbench" })).toBeTruthy();
+  });
+
+  it("本机服务已经在跑:不等、不摆「正在启动」", async () => {
+    api.getLocalService.mockResolvedValue({ state: "running" });
+    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalled());
+    expect(api.ensureLocalService).not.toHaveBeenCalled();
   });
 });

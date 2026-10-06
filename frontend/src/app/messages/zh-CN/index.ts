@@ -8,6 +8,7 @@ import { bulkSelection } from "./bulkSelection";
 import { canvasMarkers } from "./canvasMarkers";
 import { community } from "./community";
 import { desktop } from "./desktop";
+import { localServices } from "./localServices";
 import { mediaLibrary } from "./mediaLibrary";
 import { nodeToolbar } from "./nodeToolbar";
 import { otherUi } from "./otherUi";
@@ -28,6 +29,7 @@ export const zhCN = {
   ...otherUi,
   ...aiStudio,
   ...plugins,
+  ...localServices,
   ...canvasMarkers,
   ...desktop,
   ...community,

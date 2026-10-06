@@ -122,6 +122,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
     "PluginCapabilityDefault": ("app/domain/plugins/",),
+    #: 连接背后由宿主起停的本机服务(ADR 0041):只由本机服务的领域模块写。
+    "LocalService": ("app/domain/local_services/",),
     #: 模型文件的手动 NSFW 标记(ADR 0038 §9):只由模型库的领域模块写。
     "ModelFileMark": ("app/domain/model_library.py",),
     #: 素材外链的缓存由生成链路写(传完记下、过期重传),见 generation/public_links。

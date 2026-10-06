@@ -1139,6 +1139,7 @@ function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () =
     notReady: created ? "workflowNewNotReady" : "workflowEditorNotReady",
     unsupported: "workflowNewUnsupported",
     newTab: "workflowNewTab",
+    starting: "localServiceStartingNote",
   };
   const text =
     note.kind === "error"

@@ -9,6 +9,7 @@
 import React from "react";
 
 import { comfyPartition } from "@/features/plugins/comfyNavigation";
+import { readyLocalService } from "@/features/plugins/localServiceReady";
 
 /** 开的是哪个 ComfyUI 连接(面板问插件、建任务都要它)。 */
 export interface WorkbenchTarget {
@@ -96,11 +97,15 @@ export type WorkbenchOpenOutcome = "opened" | "created" | "missing" | "unsupport
 /**
  * 开工作台:先记下要开的是谁(视图一亮出来顶栏就是工作台的),再让主进程亮出视图、注入桥;`path` 打开那一张,`fresh` 新建一张。
  * 没开成(前台被别的视图占着、参数不对)回原因,会话撤掉。
+ *
+ * 连接背后是宿主起停的本机服务(ADR 0041)时,先请宿主起好、等它就绪;真要起的时候叫一声 `onStarting`(界面摆「启动中」)。
  */
 export async function openWorkbench(
   target: WorkbenchTarget,
   open: { path?: string | null; fresh?: boolean } = {},
+  onStarting: () => void = () => {},
 ): Promise<{ ok: true; outcome: WorkbenchOpenOutcome } | { ok: false; error: string }> {
+  await readyLocalService(target.instanceId, onStarting);
   listen();
   const same = snapshot.target?.instanceId === target.instanceId;
   set({ ...EMPTY, target, runs: same ? snapshot.runs : [] });

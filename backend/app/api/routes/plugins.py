@@ -82,6 +82,7 @@ from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHol
 from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
 from app.ai.runtime import nsfw_models
 from app.ai.runtime.errors import RuntimeSetupError
+from app.domain import local_services
 from app.domain import model_library
 from app.domain import model_nsfw_local
 from app.domain import workflow_library
@@ -324,6 +325,8 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                     else None
                 ),
                 "provides": manifest.provides,
+                #: 能起哪几种本机服务(ADR 0041):连接页上据此摆「本机服务」那张卡。
+                "services": [{"key": one.key, "title": one.title} for one in manifest.services],
                 "bundled": package.id in shipped,
                 "instances": [
                     _instance(db, i)
@@ -468,7 +471,10 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: Tx, user: 
 @router.delete("/plugins/instances/{instance_id}", status_code=204)
 def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
     try:
-        db.delete(my_instance(db, instance_id, user))
+        instance = my_instance(db, instance_id, user)
+        # 连接背后的本机服务先停掉(那一行随外键级联删):Mosael 起的进程不留在后台
+        local_services.forget_instance(instance.id)
+        db.delete(instance)
         db.commit()
         # 模型库记着的预览图(内存里的地址、磁盘上的图)跟着连接走。
         model_library.drop_cache(instance_id)
@@ -1027,6 +1033,7 @@ def uninstall_package(package_id: str, db: Tx, user: CurrentUser) -> None:
     """
     ensure_deployment_admin(db, user)
     try:
+        local_services.forget_package(db, package_id)
         pkg.uninstall(db, package_id, settings.plugins_dir)
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc

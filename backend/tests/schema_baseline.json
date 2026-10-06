@@ -915,5 +915,18 @@
     "id",
     "name",
     "updated_at"
+  ],
+  "local_services": [
+    "created_at",
+    "directory",
+    "extra_args",
+    "instance_id",
+    "keep_running",
+    "listen_lan",
+    "mode",
+    "port",
+    "python",
+    "service",
+    "updated_at"
   ]
 }

@@ -96,20 +96,27 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
     「改配置」这个操作报错,那会让用户以为配置没存上。
     """
     from app.domain.plugins import instances as inst
+    from app.domain.plugins import service_gate
 
     try:
         provides = inst.manifest_for(db, instance).provides
     except Exception:  # noqa: BLE001 — 包刚被卸载之类:没有宿主侧可对齐
         return
-    for capability in provides:
-        handler = _lookup(capability)[0]
-        if handler is None:
-            continue
-        try:
-            handler(db, instance, refresh)
-        except Exception:  # noqa: BLE001 — 见上:宿主侧的失败不回灌给插件操作
-            db.rollback()
-            logger.exception("插件实例 %s 的「%s」宿主侧没能对齐", instance.id, capability)
+    # 连接背后的本机服务没在跑(ADR 0041):这次不重问插件 —— 为了刷新目录把它起起来违背「用到时才起」,
+    # 不起又只会记下一句「连不上」。目录留着上次的;它起来以后会自己通知一次刷新(见 local_services)。
+    # 问的这一会儿里它停了、崩了,也不替它起(`no_autostart`):对齐目录不是「用它」。
+    if refresh and service_gate.idle(db, instance):
+        refresh = False
+    with service_gate.no_autostart():
+        for capability in provides:
+            handler = _lookup(capability)[0]
+            if handler is None:
+                continue
+            try:
+                handler(db, instance, refresh)
+            except Exception:  # noqa: BLE001 — 见上:宿主侧的失败不回灌给插件操作
+                db.rollback()
+                logger.exception("插件实例 %s 的「%s」宿主侧没能对齐", instance.id, capability)
 
 
 __all__ = ["CapabilityCall", "Finish", "Handler", "Listing", "Lookup", "finisher", "handles", "listing", "notify", "refresh",

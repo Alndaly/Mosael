@@ -24,6 +24,7 @@ from app.core.db import SessionLocal
 from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
+from app.domain.plugins import service_gate
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import manifest_of
@@ -77,11 +78,14 @@ def refresh_all() -> None:
 
 
 def check_for_changes() -> int:
-    """问一遍每个**可用、上次交过指纹**的(实例, 能力):指纹变了就让那项能力重新刷。返回刷了几项。"""
+    """问一遍每个**可用、上次交过指纹**的(实例, 能力):指纹变了就让那项能力重新刷。返回刷了几项。
+
+    不替本机服务起进程(ADR 0041):停着的那几个直接跳过,问的这一会儿里它停了也不替它起(`no_autostart`)。"""
     refreshed = 0
-    with SessionLocal() as db:
+    with SessionLocal() as db, service_gate.no_autostart():
         for instance, capabilities in _instances_with_capabilities(db):
-            if inst.blocked_reason(db, instance):
+            # 停着的本机服务不问(ADR 0041):为了看一眼指纹把它起起来违背「用到时才起」;它起来时会自己刷新一次。
+            if inst.blocked_reason(db, instance) or service_gate.idle(db, instance):
                 continue
             for capability in capabilities:
                 known = str(((instance.capability_status or {}).get(capability) or {}).get("fingerprint") or "")

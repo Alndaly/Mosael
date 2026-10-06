@@ -8174,6 +8174,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/local-service": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Service
+         * @description 这个连接的本机服务:配置和此刻的状态。没用本机服务(连一台服务器)是 null。
+         */
+        get: operations["get_local_service_api_plugins_instances__instance_id__local_service_get"];
+        /**
+         * Put Local Service
+         * @description 建或改。第一次建时选定端口、写进连接的服务器地址。换目录、换解释器要带 `confirm_run_code`。
+         */
+        put: operations["put_local_service_api_plugins_instances__instance_id__local_service_put"];
+        post?: never;
+        /**
+         * Delete Local Service
+         * @description 不用本机服务了(回到「连一台服务器」):停掉它,删掉这份配置。
+         */
+        delete: operations["delete_local_service_api_plugins_instances__instance_id__local_service_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detect Local Service
+         * @description 认一个目录:认没认出来、用哪个解释器、显卡、缺什么。会试跑一次插件说的那几行,所以要先确认过。不存任何东西。
+         */
+        post: operations["detect_local_service_api_plugins_instances__instance_id__local_service_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Local Service
+         * @description 起。马上回来(状态是「启动中」),界面接着轮询。
+         */
+        post: operations["start_local_service_api_plugins_instances__instance_id__local_service_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Local Service
+         * @description 停:先请它自己退,10 秒后强杀整组。
+         */
+        post: operations["stop_local_service_api_plugins_instances__instance_id__local_service_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Local Service
+         * @description 重启:停了再起。马上回来,界面接着轮询。
+         */
+        post: operations["restart_local_service_api_plugins_instances__instance_id__local_service_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ensure Local Service
+         * @description 要用它了(工作台打开之前):停着就起,**等它就绪再回来**。没用本机服务的连接回 null,什么都不做。
+         */
+        post: operations["ensure_local_service_api_plugins_instances__instance_id__local_service_ensure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Service Logs
+         * @description 最近的日志(它自己说的话,原样),和完整日志在哪个文件。
+         */
+        get: operations["get_local_service_logs_api_plugins_instances__instance_id__local_service_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/add-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Local Service Nodes
+         * @description 补装插件说缺的节点(界面问过人:会往那个目录里写、要下载)。装进去下次起才加载。
+         */
+        post: operations["add_local_service_nodes_api_plugins_instances__instance_id__local_service_add_nodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{package_id}/local-services/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Local Services
+         * @description 本机有没有已经在跑的这种服务(插件页上「本机发现一个,要连上吗」)。只给部署管理员:那是这台机器上的事。
+         */
+        get: operations["discover_local_services_api_plugins__package_id__local_services_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11992,6 +12180,208 @@ export interface components {
             /** Project Id */
             project_id?: string | null;
         };
+        /** LocalServiceAddNodesOut */
+        LocalServiceAddNodesOut: {
+            /** Installed */
+            installed?: string[];
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /** LocalServiceAddNodesRequest */
+        LocalServiceAddNodesRequest: {
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
+        /** LocalServiceDetectOut */
+        LocalServiceDetectOut: {
+            /** Ok */
+            ok: boolean;
+            /** Facts */
+            facts?: components["schemas"]["LocalServiceFactOut"][];
+            /** Problems */
+            problems?: components["schemas"]["LocalServiceProblemOut"][];
+            add_nodes?: components["schemas"]["LocalServiceOfferOut"] | null;
+        };
+        /**
+         * LocalServiceDetectRequest
+         * @description 认一个目录。会试跑一次插件说的那几行(比如 `import torch`),所以要带 `confirm_run_code: true`。
+         */
+        LocalServiceDetectRequest: {
+            /** Directory */
+            directory: string;
+            /**
+             * Python
+             * @default
+             */
+            python: string;
+            /**
+             * Confirm Run Code
+             * @default false
+             */
+            confirm_run_code: boolean;
+        };
+        /**
+         * LocalServiceDiscoveryOut
+         * @description 本机已经在跑的(插件知道去哪几个端口问)。建的是「连一台服务器」那一种,Mosael 不去起停它。
+         */
+        LocalServiceDiscoveryOut: {
+            /** Servers */
+            servers?: components["schemas"]["LocalServiceFoundOut"][];
+        };
+        /** LocalServiceFactOut */
+        LocalServiceFactOut: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+        };
+        /** LocalServiceFoundOut */
+        LocalServiceFoundOut: {
+            /** Url */
+            url: string;
+            /** Label */
+            label: string;
+        };
+        /** LocalServiceLogsOut */
+        LocalServiceLogsOut: {
+            /** Lines */
+            lines?: string[];
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+        };
+        /**
+         * LocalServiceOfferOut
+         * @description 插件说可以补装的东西(ComfyUI:模型库要的 pysssss)。界面给一颗「补装」,确认框里摆 description。
+         */
+        LocalServiceOfferOut: {
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /**
+         * LocalServiceOut
+         * @description 一个连接的本机服务:人定下的配置 + 进程此刻怎么样。界面按 1200 ms 轮询它(和引擎安装一样)。
+         */
+        LocalServiceOut: {
+            /** Service */
+            service: string;
+            /** Title */
+            title: string;
+            /**
+             * Mode
+             * @constant
+             */
+            mode: "directory";
+            /** Directory */
+            directory: string;
+            /**
+             * Python
+             * @default
+             */
+            python: string;
+            /** Port */
+            port: number;
+            /** Url */
+            url: string;
+            /**
+             * Listen Lan
+             * @default false
+             */
+            listen_lan: boolean;
+            /**
+             * Keep Running
+             * @default false
+             */
+            keep_running: boolean;
+            /** Extra Args */
+            extra_args?: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "stopped" | "starting" | "running" | "restarting" | "failed";
+            /** Pid */
+            pid?: number | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Ready Seconds */
+            ready_seconds?: number | null;
+            /**
+             * Adopted
+             * @default false
+             */
+            adopted: boolean;
+            /**
+             * Restarts
+             * @default 0
+             */
+            restarts: number;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Failure Lines */
+            failure_lines?: string[];
+            /**
+             * Can Manage
+             * @default false
+             */
+            can_manage: boolean;
+        };
+        /** LocalServiceProblemOut */
+        LocalServiceProblemOut: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "error" | "warning";
+            /** Text */
+            text: string;
+        };
+        /**
+         * LocalServiceUpdate
+         * @description 建或改。没给的不动。换一个要运行的东西(目录、解释器)要带 `confirm_run_code: true` —— 界面先问过人。
+         */
+        LocalServiceUpdate: {
+            /** Mode */
+            mode?: "directory" | null;
+            /** Directory */
+            directory?: string | null;
+            /** Python */
+            python?: string | null;
+            /** Listen Lan */
+            listen_lan?: boolean | null;
+            /** Keep Running */
+            keep_running?: boolean | null;
+            /** Extra Args */
+            extra_args?: string | null;
+            /** Port */
+            port?: number | null;
+            /**
+             * Confirm Run Code
+             * @default false
+             */
+            confirm_run_code: boolean;
+        };
         /** LutOut */
         LutOut: {
             /** Id */
@@ -13566,6 +13956,8 @@ export interface components {
             oauth?: components["schemas"]["PluginOAuthOut"] | null;
             /** Provides */
             provides?: string[];
+            /** Services */
+            services?: components["schemas"]["PluginServiceOut"][];
             /**
              * Bundled
              * @default false
@@ -13681,6 +14073,16 @@ export interface components {
              * @default false
              */
             advanced: boolean;
+        };
+        /**
+         * PluginServiceOut
+         * @description 插件声明的一种本机服务:key 和给人看的名字(「本机 ComfyUI」)。
+         */
+        PluginServiceOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /**
          * PluginToolOut
@@ -34498,6 +34900,359 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_service_api_plugins_instances__instance_id__local_service_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_local_service_api_plugins_instances__instance_id__local_service_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalServiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_local_service_api_plugins_instances__instance_id__local_service_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_local_service_api_plugins_instances__instance_id__local_service_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalServiceDetectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceDetectOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_local_service_api_plugins_instances__instance_id__local_service_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_local_service_api_plugins_instances__instance_id__local_service_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_local_service_api_plugins_instances__instance_id__local_service_restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_local_service_api_plugins_instances__instance_id__local_service_ensure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_service_logs_api_plugins_instances__instance_id__local_service_logs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceLogsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_local_service_nodes_api_plugins_instances__instance_id__local_service_add_nodes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalServiceAddNodesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceAddNodesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_local_services_api_plugins__package_id__local_services_discover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceDiscoveryOut"];
                 };
             };
             /** @description Validation Error */

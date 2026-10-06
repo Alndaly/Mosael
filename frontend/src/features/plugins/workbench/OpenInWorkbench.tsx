@@ -35,6 +35,8 @@ export function OpenInWorkbench({
   });
   const [failure, setFailure] = React.useState("");
   const [opening, setOpening] = React.useState(false);
+  //: 连接背后的本机服务正在起(ADR 0041):按钮上写「正在启动…」,第一次启动可能要一两分钟
+  const [starting, setStarting] = React.useState(false);
   const editor = library.data?.editor;
   const known = Boolean(editor && editor.kind === "comfyui" && (library.data?.workflows ?? []).some((one) => one.path === model));
   if (!available || !known || !editor) return null;
@@ -42,7 +44,8 @@ export function OpenInWorkbench({
     setFailure("");
     setOpening(true);
     try {
-      const result = await openWorkbench({ instanceId, instanceName, workspaceId, url: editor.url }, { path: model });
+      const result = await openWorkbench({ instanceId, instanceName, workspaceId, url: editor.url }, { path: model },
+                                         () => setStarting(true));
       if (!result.ok) setFailure(result.error || t("workflowEditorFailed"));
       else if (result.outcome === "missing") setFailure(t("workflowEditorMissing").replace("{name}", model));
       else if (result.outcome === "notReady") setFailure(t("workflowEditorNotReady").replace("{name}", model));
@@ -50,6 +53,7 @@ export function OpenInWorkbench({
       setFailure(errorText(error));
     } finally {
       setOpening(false);
+      setStarting(false);
     }
   };
   return (
@@ -57,7 +61,7 @@ export function OpenInWorkbench({
       <Hint label={t("workflowOpenInWorkbenchHint")}>
         <Button variant="outline" size="xs" className="justify-self-start" loading={opening} onClick={() => void open()}>
           <LayoutPanelLeft size={12} />
-          {t("workflowOpenInWorkbench")}
+          {starting ? t("localServiceOpenStarting") : t("workflowOpenInWorkbench")}
         </Button>
       </Hint>
       {failure && <p role="alert" className="m-0 text-ui-xs text-destructive">{failure}</p>}

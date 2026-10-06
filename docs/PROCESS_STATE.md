@@ -36,6 +36,7 @@
 | `app/domain/agent/login.py:_sessions` | 平台登录会话(带子进程句柄) | 轮询进度的请求打到另一个进程上就查无此会话,而浏览器窗口正开在第一个进程那边。 |
 | `app/domain/blender/bridge.py:_locks` | 每个 Blender 连接一把互斥锁,保证同一个连接同时只有一次同步 | 两个进程各持各的锁,于是同一个 Blender 会被两次同步同时驱动。它们写的是同一份 `.blend` 与同一个传输目录,**后完成的覆盖先完成的** —— 而用户看到的是「发过去的场景不对」,不像并发问题。锁只在进程内有意义,这条路径没有数据库层面的兜底。 |
 | `app/domain/voices/remote.py:_copy_locks` | 每份克隆音色远端副本(嗓子 × 引擎 × 连接 × 钥匙主人 × 模型)一把锁,保证同一份副本同时只有一个线程在建(ADR 0037) | 两个进程各锁各的,配音库的「复刻到百炼」和一次配音同时要同一份副本时会在远端**各建一个**:多出来的那个没人登记、白占账号的复刻名额(一个账号最多 1000 个)。它们名字里带着这把嗓子的前缀,删嗓子时按前缀列出来一起删,所以不会永远留着;但多进程下这里该换成库里的租约。 |
+| `app/domain/local_services/supervisor.py:_services`、`app/domain/local_services/supervisor.py:_directories` | 本机服务的进程(ADR 0041):每个连接一个看护对象(子进程句柄、状态、崩溃重启的计数、日志缓冲),以及「同一个目录只起一份」的那把目录锁 | 两个后端进程各起各的:同一个连接的 ComfyUI 起两份,第二份撞端口起不来、却被当成「崩了」反复重启;目录锁各锁各的,拦不住两个连接起同一个目录。重启时进程内的这份没了,但子进程自成一组还活着 —— 下次启动按 pid 文件(`<数据目录>/local-services/pids/`)核对后接回来(见 `local_services/pidfiles`),对不上的不碰。 |
 | `app/core/rate_limit.py:WindowLimiter._events` | 远程部署的登录、OAuth 与计费操作限流窗口 | 两个进程各有自己的计数，同一客户端可在每个进程分别用满额度。当前单进程拓扑下限额准确；横向扩展时必须先把这份窗口搬到共享存储或入口网关。 |
 
 ## 二、单进程是**功能在场**的前提
@@ -142,6 +143,8 @@
 - `app/domain/plugins/host_capabilities.py:_lookup` — 插件实例变了,去哪查宿主那一侧的对齐钩子:组装根交给它
   `capabilities.instance_hooks`。钩子本身登记在能力表 `_registry` 里(生成:实例 → 连接 + 模型行,见 ADR 0020;
   工具清单:重问插件报了哪些工具),这里不另存一张表(ADR 0032 §1)。
+- `app/domain/plugins/service_gate.py:_gate` —— 插件调用之前问一声本机服务(ADR 0041):停着就起、后台刷新目录跳过停着的。
+  组装根把 `local_services.GATE` 交给它;插件域不 import 本机服务(那边要反过来调插件)。
 - `app/domain/plugins/dynamic_tools.py:_listeners` —— 插件报出的工具清单刷新之后跟着动的那一侧(工作流域:把存着的老节点改写成取代它的工具)。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。

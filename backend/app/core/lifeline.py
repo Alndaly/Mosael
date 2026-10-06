@@ -15,11 +15,12 @@ import hashlib
 import logging
 import os
 import signal
-import sys
 import threading
 import time
 import uuid
 from collections.abc import Callable
+
+from app.core.child_process import process_alive
 
 logger = logging.getLogger(__name__)
 
@@ -40,36 +41,8 @@ def data_dir_id(data_dir: object) -> str:
 
 
 def parent_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    if sys.platform == "win32":
-        return _windows_process_alive(pid)
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True  # 在,只是不归我们管
-    return True
-
-
-def _windows_process_alive(pid: int) -> bool:
-    """Windows 上**不能**用 os.kill(pid, 0) 探活:那会以退出码 0 直接结束对方。"""
-    import ctypes
-
-    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    STILL_ACTIVE = 259
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
-        return False
-    try:
-        code = ctypes.c_ulong()
-        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
-            return False
-        return code.value == STILL_ACTIVE
-    finally:
-        kernel32.CloseHandle(handle)
+    """壳还在不在。探活本身(Windows 上不能用 os.kill(pid, 0))住在 child_process —— 本机服务接回上一个后端起的进程时也要它。"""
+    return process_alive(pid)
 
 
 def _shut_down() -> None:

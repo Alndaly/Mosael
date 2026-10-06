@@ -74,23 +74,108 @@ def kill_tree(process: subprocess.Popen) -> None:
     POSIX:新会话里 pgid 就是它的 pid,`killpg` 一次停下整组 —— 入口进程已经自己退了、只剩孙进程
     攥着管道时也一样。Windows:`taskkill /T` 按父子关系往下找。
     """
-    if sys.platform == "win32":
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                capture_output=True, timeout=10, check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    else:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass  # 整组都已经退了
+    kill_group(process.pid)
     try:
         process.kill()
     except Exception:  # noqa: BLE001 — already gone
         pass
+
+
+def kill_group(pid: int) -> None:
+    """按 pid 强杀它那一组(它得是按 `own_group()` 起的)。手上只有 pid、没有 Popen 时用 —— 上一个后端起的、
+    这次启动接回来的本机服务(见 domain/local_services)。可以重复调。"""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass  # 整组都已经退了
+
+
+def terminate_group(pid: int) -> None:
+    """请它那一组**自己收尾退出**:POSIX 上 SIGTERM 整组;Windows 上给新进程组发 CTRL_BREAK(按
+    `CREATE_NEW_PROCESS_GROUP` 起的才收得到)。收不到、不听的,由调用方过一会儿再 `kill_group`。"""
+    try:
+        if sys.platform == "win32":
+            os.kill(pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+        else:
+            os.killpg(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        pass  # 已经退了,或者这台机器上发不出去 —— 后面的强杀兜底
+
+
+def process_alive(pid: int) -> bool:
+    """这个 pid 现在还在不在。在、只是不归我们管(PermissionError)也算在。"""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        return _windows_process_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _windows_process_alive(pid: int) -> bool:
+    """Windows 上**不能**用 os.kill(pid, 0) 探活:那会以退出码 0 直接结束对方。"""
+    import ctypes
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return False
+        return code.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def process_command_line(pid: int) -> str | None:
+    """这个 pid 的命令行(一整行);读不到(不在了、没权限、这台机器上没有那个命令)是 None。
+
+    POSIX 用 `ps -ww -o command=`(参数以空格隔开,不带引号);Windows 问 Win32_Process 的 CommandLine
+    (原样那一行,带引号)。比对的一方要按同一个平台的写法拼(见 `command_line_of`)。
+    """
+    if sys.platform == "win32":
+        query = f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"
+        args = ["powershell", "-NoProfile", "-NonInteractive", "-Command", query]
+    else:
+        args = ["ps", "-ww", "-o", "command=", "-p", str(int(pid))]
+    try:
+        result = run_logged(args, what="读进程命令行", level=logging.DEBUG, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    line = (result.stdout or "").strip()
+    return line if result.returncode == 0 and line else None
+
+
+def command_line_of(args: Sequence[str]) -> str:
+    """一组参数在 `process_command_line` 里会是什么样子:Windows 按 CreateProcess 的引号规则拼,POSIX 用空格连起来。"""
+    return subprocess.list2cmdline(list(args)) if sys.platform == "win32" else " ".join(args)
+
+
+def spawn_to_file(args: Sequence[str], *, log: Any, cwd: str, env: dict[str, str]) -> subprocess.Popen:
+    """起一个**常驻**的子进程:自成一组、stdin 关着、stdout 和 stderr 一起直接写进 `log`(打开着的文件)。
+
+    不给管道,因为它要能**活过后端**:后端被强杀(或断电后没来得及收尾)时,管道的读端跟着关掉,子进程下一次
+    往 stdout 写就是 EPIPE —— 一个本机 ComfyUI 的进度条写不出去,正在跑的那次生成就失败了。写文件不受影响,
+    后端重新起来以后接着读同一个文件(见 domain/local_services)。它不按行和我们说话,所以不走 `popen_text`。
+    """
+    return subprocess.Popen(
+        list(args), cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **own_group()
+    )
 
 
 def popen_text(args, **kwargs) -> subprocess.Popen:

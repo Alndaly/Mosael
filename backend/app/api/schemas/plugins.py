@@ -169,6 +169,13 @@ class PluginMarketTool(ApiModel):
     effects: str = ""
 
 
+class PluginServiceOut(ApiModel):
+    """插件声明的一种本机服务:key 和给人看的名字(「本机 ComfyUI」)。"""
+
+    key: str
+    title: str
+
+
 class PluginPackageOut(ApiModel):
     id: str
     name: str
@@ -196,6 +203,8 @@ class PluginPackageOut(ApiModel):
     oauth: PluginOAuthOut | None = None
     #: 它能替宿主做成哪些事(`public_url` / `generation`)。
     provides: list[str] = Field(default_factory=list)
+    #: 能起哪几种本机服务(清单版本 8 的 `services`,ADR 0041)。有的话连接页上多一张「本机服务」卡。
+    services: list[PluginServiceOut] = Field(default_factory=list)
     #: 随应用一起发的(见 domain/plugins/bundled)。卸不掉,界面不给「卸载」。
     bundled: bool = False
     instances: list[PluginInstanceOut] = Field(default_factory=list)

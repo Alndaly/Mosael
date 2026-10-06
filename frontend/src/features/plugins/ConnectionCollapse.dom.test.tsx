@@ -27,6 +27,8 @@ vi.mock("@/api/client", () => ({
   updatePluginInstance: vi.fn().mockResolvedValue({}),
   createPluginInstance: vi.fn(),
   getModelLibrary: vi.fn().mockResolvedValue({ folders: [], models: [], missing: [], download: { route: "none", note: "" }, downloads: [] }),
+  getLocalService: vi.fn().mockResolvedValue(null),
+  discoverLocalServices: vi.fn().mockResolvedValue({ servers: [] }),
 }));
 //: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
 const imagePreview = vi.hoisted(() => vi.fn());
@@ -36,7 +38,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh" }),
 }));
 
-import { getModelLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
+import { getLocalService, getModelLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
 import { ConnectionCard, PackageDetail } from "./PluginsView";
 import { CONNECTIONS_OPEN_KEY, readOpenConnections } from "./connectionOpen";
 
@@ -230,5 +232,30 @@ describe("插件头部:默认状态、全部收起 / 展开、记在本机", () 
     fireEvent.click(screen.getByRole("button", { name: /甲/ }));
     expect(screen.getByRole("button", { name: /甲/ }).getAttribute("aria-expanded")).toBe("true");
     expect(within(document.body).getAllByRole("button", { name: /乙/ })[0].getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+describe("本机服务的连接(ADR 0041)", () => {
+  it("服务器地址由本机服务填写:只摆着,不给改", async () => {
+    vi.mocked(getLocalService).mockResolvedValue({
+      service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
+      url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
+      started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
+    });
+    const withService = { ...pkg, services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
+    wrap(<ConnectionCard pkg={withService} instance={connection({ config: { server_url: "http://127.0.0.1:8189" } })} workspaceId="w1"
+                         open onOpenChange={vi.fn()} />);
+    expect(await screen.findByText("localServiceAddressManaged")).toBeTruthy();
+    const row = screen.getByText("localServiceAddressManaged").closest("[data-connection-section]") as HTMLElement;
+    expect(within(row).getByText("http://127.0.0.1:8189")).toBeTruthy();
+    expect(within(row).queryByRole("textbox"), "地址跟着端口走,手改了就对不上").toBeNull();
+    expect(screen.getByRole("radiogroup", { name: "localServiceWhere" })).toBeTruthy();
+  });
+
+  it("没声明本机服务的插件:没有这一块,也不去问", () => {
+    vi.mocked(getLocalService).mockClear();
+    wrap(<ConnectionCard pkg={pkg} instance={connection({})} workspaceId="w1" open onOpenChange={vi.fn()} />);
+    expect(screen.queryByRole("radiogroup", { name: "localServiceWhere" })).toBeNull();
+    expect(getLocalService).not.toHaveBeenCalled();
   });
 });

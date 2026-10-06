@@ -560,4 +560,89 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件状态过长(上限 {limit} 字符): {keys}",
         "en": "Plugin state is too long (limit {limit} characters): {keys}",
     },
+    # ---- 本机服务(ADR 0041) ----
+    "pluginErr_noSuchService": {
+        "zh": "「{name}」没有声明叫 {service} 的本机服务,请到插件页更新这个插件",
+        "en": "“{name}” declares no local service named {service}. Update the plugin from the Plugins page.",
+    },
+    "localService_starting": {
+        "zh": "正在启动本机 {name}",
+        "en": "Starting the local {name}",
+    },
+    "localServiceErr_notConfigured": {
+        "zh": "这个连接没有用本机服务",
+        "en": "This connection doesn't use a local service.",
+    },
+    "localServiceErr_noService": {
+        "zh": "「{name}」不能在本机起服务:它的清单里没有声明本机服务",
+        "en": "“{name}” can't run a local service: its manifest declares none.",
+    },
+    "localServiceErr_unknownMode": {
+        "zh": "认不出的运行方式:{mode}",
+        "en": "Unknown way to run it: {mode}",
+    },
+    "localServiceErr_noDirectory": {
+        "zh": "先选一个装好的目录",
+        "en": "Choose an installed folder first.",
+    },
+    "localServiceErr_confirmRequired": {
+        "zh": "运行这个目录里的代码之前要先确认一次:它会在这台机器上运行",
+        "en": "Confirm before running the code in this folder: it runs on this machine.",
+    },
+    "localServiceErr_directoryBusy": {
+        "zh": "这个目录已经由连接「{name}」在跑:同一个目录只起一份",
+        "en": "This folder is already running for the connection “{name}”: one folder runs only once.",
+    },
+    "localServiceErr_portBusy": {
+        "zh": "端口 {port} 被别的程序占着:关掉它,或者在「高级」里换一个端口",
+        "en": "Port {port} is taken by another program. Close it, or choose another port under Advanced.",
+    },
+    "localServiceErr_portTaken": {
+        "zh": "端口 {port} 已经分给连接「{name}」了",
+        "en": "Port {port} is already assigned to the connection “{name}”.",
+    },
+    "localServiceErr_badPort": {
+        "zh": "端口要在 {low}–{high} 之间",
+        "en": "The port must be between {low} and {high}.",
+    },
+    "localServiceErr_noFreePort": {
+        "zh": "从 {start} 往上找不到空着的端口",
+        "en": "No free port found from {start} upwards.",
+    },
+    "localServiceErr_stopFirst": {
+        "zh": "先停下它,再改端口",
+        "en": "Stop it before changing the port.",
+    },
+    "localServiceErr_badArgs": {
+        "zh": "附加参数没写完:{detail}",
+        "en": "The extra arguments are incomplete: {detail}",
+    },
+    "localServiceErr_badLaunch": {
+        "zh": "「{name}」给的启动方式不对:{detail}",
+        "en": "“{name}” gave an invalid way to start it: {detail}",
+    },
+    "localServiceErr_spawnFailed": {
+        "zh": "起不来:{detail}",
+        "en": "It couldn't start: {detail}",
+    },
+    "localServiceErr_readyTimeout": {
+        "zh": "等了 {seconds} 秒还没就绪,已经停掉了。看看日志里卡在哪一步",
+        "en": "It wasn't ready after {seconds} seconds, so it was stopped. Check the log to see where it got stuck.",
+    },
+    "localServiceErr_exitedDuringStart": {
+        "zh": "还没就绪就退出了(退出码 {code}),看看日志里说了什么",
+        "en": "It exited before it was ready (exit code {code}). Check the log for what it said.",
+    },
+    "localServiceErr_crashedTooOften": {
+        "zh": "{minutes} 分钟里重启了 {count} 次还是崩,不再自动重启。看看日志里说了什么",
+        "en": "It kept crashing after {count} restarts in {minutes} minutes, so it won't restart automatically. Check the log.",
+    },
+    "localServiceErr_notRunning": {
+        "zh": "本机 {name} 没在运行",
+        "en": "The local {name} isn't running.",
+    },
+    "localServiceErr_stopped": {
+        "zh": "本机 {name} 在启动时被停下了",
+        "en": "The local {name} was stopped while it was starting.",
+    },
 }

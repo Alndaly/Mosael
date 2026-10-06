@@ -48,7 +48,7 @@ from app.core.i18n import LocalizedError, fragment, pick_text
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Board, GenerationJob, Job, PluginInstance, ProviderProfile, User, Workflow
 from app.db.references import generation_model_key
-from app.domain import capabilities
+from app.domain import capabilities, local_services
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import generation as plugin_generation
@@ -944,11 +944,19 @@ def node_installs(db: Session, instance: PluginInstance) -> list[Job]:
 
 
 def reboot(db: Session, instance: PluginInstance) -> dict[str, bool]:
-    """经插件(ComfyUI-Manager)重启那台 ComfyUI,等它回来;回来以后这个连接的目录重拉一遍 —— 新装的节点包这时才加载。"""
+    """经插件(ComfyUI-Manager)重启那台 ComfyUI,等它回来;回来以后这个连接的目录重拉一遍 —— 新装的节点包这时才加载。
+
+    那台服务器是宿主起停的本机服务时(ADR 0041),插件不自己去重启它,交回 `host_restart`:由宿主停了再起、等它就绪。
+    插件自己重启它(Windows 上是另起一个进程、旧的退出),宿主会以为它崩了,也就再也停不掉它。"""
     _require(db, instance)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "reboot"}, timeout=REBOOT_TIMEOUT_SECONDS)
+    if output.get("host_restart") is True:
+        local_services.restart(db, instance, wait=True)
+        back = True
+    else:
+        back = output.get("back") is True
     host_capabilities.notify(db, instance, refresh=True)
-    return {"back": output.get("back") is True}
+    return {"back": back}
 
 
 def register_uses() -> None:

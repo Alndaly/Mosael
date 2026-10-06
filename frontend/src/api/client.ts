@@ -18,6 +18,7 @@ export * from "@/api/domains/entities";
 export * from "@/api/domains/generation";
 export * from "@/api/domains/identity";
 export * from "@/api/domains/jobs";
+export * from "@/api/domains/localServices";
 export * from "@/api/domains/notes";
 export * from "@/api/domains/notifications";
 export * from "@/api/domains/plugins";

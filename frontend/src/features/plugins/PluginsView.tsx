@@ -64,6 +64,13 @@ import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { ConnectionPermissionNotice, waitingForPermissions } from "@/features/plugins/ConnectionPermissions";
 import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
+import {
+  ConnectionLocalService,
+  LocalServiceDiscovery,
+  SERVICE_ADDRESS_FIELD,
+  useLocalService,
+  useRefreshWhenRunning,
+} from "@/features/plugins/ConnectionLocalService";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
@@ -370,6 +377,15 @@ export function PackageDetail({
         {/* 连接是这一页的**主体**。有几个就是几个;一个都没有时空状态在中间、带「新建」—— 页面空着时
             人的视线落在中央,页头那颗容易整个错过。重复的是按钮,不是说明文字。 */}
         <TabsContent value="connections" className="mt-0 grid min-w-0 content-start gap-4">
+          {(pkg.services ?? []).length > 0 && (
+            <LocalServiceDiscovery
+              pkg={pkg}
+              onConnected={(id) => {
+                setTab("connections");
+                opened.setOpen(id, true);
+              }}
+            />
+          )}
           {instances.map((instance) => (
             <ConnectionCard
               key={instance.id}
@@ -661,6 +677,11 @@ export function ConnectionCard({
     },
   });
 
+  //: 声明了本机服务的插件(ADR 0041):连接页多一块「本机服务」;用着它时服务器地址由宿主填,这一格只读
+  const services = pkg.services ?? [];
+  const localService = useLocalService(instance.id, services.length > 0);
+  const addressManaged = Boolean(localService.data);
+  useRefreshWhenRunning(localService.data?.state);
   const exposedCount = (instance.tools ?? []).filter((tool) => tool.exposed).length;
   const tools = instance.tools ?? [];
   //: 替宿主做生成的插件(ComfyUI 这类)把模型交给选择器,而不是把工具交给智能体 —— 它的
@@ -840,10 +861,18 @@ export function ConnectionCard({
         />
       </SettingsRow>
 
+      {services.length > 0 && <ConnectionLocalService pkg={pkg} instance={instance} />}
+
       {(pkg.config_fields ?? []).map((field) => (
         <div key={field.key} data-connection-section={`config:${field.key}`}>
         <SettingsRow label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
-          {isCodeField(field) ? (
+          {addressManaged && field.key === SERVICE_ADDRESS_FIELD ? (
+            /* 本机服务的地址由宿主选端口、写进来(插件、工作台、模型库读的都是它):这里只摆着,改端口在本机服务的「高级」里 */
+            <span className="grid justify-items-end gap-1 text-right">
+              <code className="timecode text-ui-sm">{String((instance.config as Record<string, unknown>)[field.key] ?? "")}</code>
+              <small className="text-ui-xs text-muted-foreground">{t("localServiceAddressManaged")}</small>
+            </span>
+          ) : isCodeField(field) ? (
             /* 一段代码塞不进这一栏:这里只放摘要和「编辑」,编辑在大弹窗里(见 CodeConfigField)。 */
             <CodeConfigControl
               field={field}

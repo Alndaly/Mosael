@@ -17,6 +17,7 @@ import React from "react";
 import type { PluginInstance, WorkflowFile, WorkflowLibrary } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
+import { readyLocalService } from "@/features/plugins/localServiceReady";
 import { comfyPartition } from "@/features/plugins/comfyNavigation";
 
 export type WorkflowEditor = NonNullable<WorkflowLibrary["editor"]>;
@@ -26,7 +27,7 @@ export type WorkflowEditor = NonNullable<WorkflowLibrary["editor"]>;
  * 这版前端没有「新建」命令(`unsupported`)、页面没就绪(`notReady`)、开了新标签页(`newTab`)。
  */
 export type EditorNote =
-  | { kind: "missing" | "notReady" | "tab" | "unsupported" | "newTab"; path: string }
+  | { kind: "missing" | "notReady" | "tab" | "unsupported" | "newTab" | "starting"; path: string }
   | { kind: "error"; path: string; message: string };
 
 /** 新建的那几句话(`path` 是空的):摆在工作流库列表上面,不在某一张的详情里。 */
@@ -80,6 +81,13 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     };
   }, [instance.id]);
 
+  /** 本机服务的连接(ADR 0041):开内嵌视图之前请宿主起好;真要起时摆一句「正在启动」,起好了收掉。 */
+  const ready = async (path: string) => {
+    await readyLocalService(instance.id, () => setNote({ kind: "starting", path }));
+    setNote((now) => (now?.kind === "starting" ? null : now));
+  };
+  const starting = (path: string) => () => setNote({ kind: "starting", path });
+
   const open = async (editor: WorkflowEditor, flow: WorkflowFile) => {
     setNote(null);
     if (!embeddedEditor(editor)) {
@@ -93,6 +101,7 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     shown.current = false;
     setOpening(true);
     try {
+      await ready(flow.path);
       const result = await window.mosaelBrowser!.openComfyWorkflow({
         connectionId: instance.id,
         url: editor.url,
@@ -127,7 +136,9 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
       const result = await openWorkbench(
         { instanceId: instance.id, instanceName: instance.name, workspaceId, url: editor.url },
         flow ? { path: flow.path } : { fresh: true },
+        starting(path),
       );
+      setNote((now) => (now?.kind === "starting" ? null : now));
       if (!result.ok) {
         away.current = null;
         setNote({ kind: "error", path, message: result.error });
@@ -163,6 +174,7 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     shown.current = false;
     setOpening(true);
     try {
+      await ready(NEW_NOTE_PATH);
       const result = await window.mosaelBrowser!.newComfyWorkflow({ connectionId: instance.id, url: editor.url, name: instance.name });
       if (!result.ok) {
         away.current = null;

@@ -24782,6 +24782,524 @@
           }
         }
       }
+    },
+    "/api/plugins/instances/{instance_id}/local-service": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service",
+        "description": "这个连接的本机服务:配置和此刻的状态。没用本机服务(连一台服务器)是 null。",
+        "operationId": "get_local_service_api_plugins_instances__instance_id__local_service_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalServiceOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Local Service Api Plugins Instances  Instance Id  Local Service Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Put Local Service",
+        "description": "建或改。第一次建时选定端口、写进连接的服务器地址。换目录、换解释器要带 `confirm_run_code`。",
+        "operationId": "put_local_service_api_plugins_instances__instance_id__local_service_put",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalServiceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Delete Local Service",
+        "description": "不用本机服务了(回到「连一台服务器」):停掉它,删掉这份配置。",
+        "operationId": "delete_local_service_api_plugins_instances__instance_id__local_service_delete",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/detect": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Detect Local Service",
+        "description": "认一个目录:认没认出来、用哪个解释器、显卡、缺什么。会试跑一次插件说的那几行,所以要先确认过。不存任何东西。",
+        "operationId": "detect_local_service_api_plugins_instances__instance_id__local_service_detect_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalServiceDetectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceDetectOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/start": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Start Local Service",
+        "description": "起。马上回来(状态是「启动中」),界面接着轮询。",
+        "operationId": "start_local_service_api_plugins_instances__instance_id__local_service_start_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/stop": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Stop Local Service",
+        "description": "停:先请它自己退,10 秒后强杀整组。",
+        "operationId": "stop_local_service_api_plugins_instances__instance_id__local_service_stop_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/restart": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Restart Local Service",
+        "description": "重启:停了再起。马上回来,界面接着轮询。",
+        "operationId": "restart_local_service_api_plugins_instances__instance_id__local_service_restart_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/ensure": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Ensure Local Service",
+        "description": "要用它了(工作台打开之前):停着就起,**等它就绪再回来**。没用本机服务的连接回 null,什么都不做。",
+        "operationId": "ensure_local_service_api_plugins_instances__instance_id__local_service_ensure_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalServiceOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Ensure Local Service Api Plugins Instances  Instance Id  Local Service Ensure Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/logs": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service Logs",
+        "description": "最近的日志(它自己说的话,原样),和完整日志在哪个文件。",
+        "operationId": "get_local_service_logs_api_plugins_instances__instance_id__local_service_logs_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 400,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceLogsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/add-nodes": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Add Local Service Nodes",
+        "description": "补装插件说缺的节点(界面问过人:会往那个目录里写、要下载)。装进去下次起才加载。",
+        "operationId": "add_local_service_nodes_api_plugins_instances__instance_id__local_service_add_nodes_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalServiceAddNodesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceAddNodesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/{package_id}/local-services/discover": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Discover Local Services",
+        "description": "本机有没有已经在跑的这种服务(插件页上「本机发现一个,要连上吗」)。只给部署管理员:那是这台机器上的事。",
+        "operationId": "discover_local_services_api_plugins__package_id__local_services_discover_get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceDiscoveryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -33334,6 +33852,440 @@
         "title": "LocalImportRequest",
         "description": "按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。"
       },
+      "LocalServiceAddNodesOut": {
+        "properties": {
+          "installed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Installed"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "default": ""
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceAddNodesOut"
+      },
+      "LocalServiceAddNodesRequest": {
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceAddNodesRequest"
+      },
+      "LocalServiceDetectOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceFactOut"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceProblemOut"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "add_nodes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalServiceOfferOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "LocalServiceDetectOut"
+      },
+      "LocalServiceDetectRequest": {
+        "properties": {
+          "directory": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Directory"
+          },
+          "python": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Python",
+            "default": ""
+          },
+          "confirm_run_code": {
+            "type": "boolean",
+            "title": "Confirm Run Code",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "directory"
+        ],
+        "title": "LocalServiceDetectRequest",
+        "description": "认一个目录。会试跑一次插件说的那几行(比如 `import torch`),所以要带 `confirm_run_code: true`。"
+      },
+      "LocalServiceDiscoveryOut": {
+        "properties": {
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceFoundOut"
+            },
+            "type": "array",
+            "title": "Servers"
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceDiscoveryOut",
+        "description": "本机已经在跑的(插件知道去哪几个端口问)。建的是「连一台服务器」那一种,Mosael 不去起停它。"
+      },
+      "LocalServiceFactOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "LocalServiceFactOut"
+      },
+      "LocalServiceFoundOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "label"
+        ],
+        "title": "LocalServiceFoundOut"
+      },
+      "LocalServiceLogsOut": {
+        "properties": {
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceLogsOut"
+      },
+      "LocalServiceOfferOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "LocalServiceOfferOut",
+        "description": "插件说可以补装的东西(ComfyUI:模型库要的 pysssss)。界面给一颗「补装」,确认框里摆 description。"
+      },
+      "LocalServiceOut": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mode": {
+            "type": "string",
+            "const": "directory",
+            "title": "Mode"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory"
+          },
+          "python": {
+            "type": "string",
+            "title": "Python",
+            "default": ""
+          },
+          "port": {
+            "type": "integer",
+            "title": "Port"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "listen_lan": {
+            "type": "boolean",
+            "title": "Listen Lan",
+            "default": false
+          },
+          "keep_running": {
+            "type": "boolean",
+            "title": "Keep Running",
+            "default": false
+          },
+          "extra_args": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extra Args"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "stopped",
+              "starting",
+              "running",
+              "restarting",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "ready_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ready Seconds"
+          },
+          "adopted": {
+            "type": "boolean",
+            "title": "Adopted",
+            "default": false
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts",
+            "default": 0
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "failure_lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failure Lines"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "title": "Can Manage",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "title",
+          "mode",
+          "directory",
+          "port",
+          "url",
+          "state"
+        ],
+        "title": "LocalServiceOut",
+        "description": "一个连接的本机服务:人定下的配置 + 进程此刻怎么样。界面按 1200 ms 轮询它(和引擎安装一样)。"
+      },
+      "LocalServiceProblemOut": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Level"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "text"
+        ],
+        "title": "LocalServiceProblemOut"
+      },
+      "LocalServiceUpdate": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "directory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "directory": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory"
+          },
+          "python": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python"
+          },
+          "listen_lan": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listen Lan"
+          },
+          "keep_running": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Running"
+          },
+          "extra_args": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Args"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "confirm_run_code": {
+            "type": "boolean",
+            "title": "Confirm Run Code",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceUpdate",
+        "description": "建或改。没给的不动。换一个要运行的东西(目录、解释器)要带 `confirm_run_code: true` —— 界面先问过人。"
+      },
       "LutOut": {
         "properties": {
           "id": {
@@ -36297,6 +37249,13 @@
             "type": "array",
             "title": "Provides"
           },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/PluginServiceOut"
+            },
+            "type": "array",
+            "title": "Services"
+          },
           "bundled": {
             "type": "boolean",
             "title": "Bundled",
@@ -36509,6 +37468,25 @@
           "key"
         ],
         "title": "PluginProvidedParameterOut"
+      },
+      "PluginServiceOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "PluginServiceOut",
+        "description": "插件声明的一种本机服务:key 和给人看的名字(「本机 ComfyUI」)。"
       },
       "PluginToolOut": {
         "properties": {

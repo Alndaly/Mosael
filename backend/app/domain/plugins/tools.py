@@ -23,6 +23,7 @@ from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
+from app.domain.plugins import service_gate
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import (
@@ -31,6 +32,7 @@ from app.domain.plugins.manifest import (
     GENERATION,
     Manifest,
     localized_tool,
+    manifest_of,
     text_of,
     tool_label,
 )
@@ -446,17 +448,20 @@ def _run_process(
     素材也只有一道暂存(`inputs.materialize`):调用方给的素材 id,和宿主入口手上的文件(`files`)。此前宿主那条
     自己拷文件、自己把路径塞进 payload,插件工具因此分成了两种。
     """
+    # 连接背后是宿主起停的本机服务(ADR 0041):停着就先替它起进程(任务里报一句进度),等它就绪在交还连接之后
+    # (_plugin_slot)。拿回来的变量告诉插件「这台服务器归宿主管」(装完节点要重启时请宿主重启,不自己去重启它)。
+    service = service_gate.prepare(db, instance, progress=hooks.on_progress if hooks is not None else report_progress)
     # 在这里换而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,那是隔离边界的一部分。
     resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id, files=files)
     injected.baseline = inst.secrets_for(db, instance)
-    env = inst.process_env(db, instance)
+    env = {**inst.process_env(db, instance), **service.env}
     run_kwargs: dict[str, Any] = {
         "scratch_dir": scratch,
         "data_dir": _ensure_data_dir(manifest.id),
         "egress": egress,
         **({"timeout": timeout} if timeout is not None else {}),
     }
-    with _plugin_slot(db, take=take_slot):
+    with _plugin_slot(db, take=take_slot, wait_ready=service.wait_ready):
         if hooks is not None:
             result = stream_tool(
                 Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, hooks=hooks, **run_kwargs,
@@ -507,6 +512,9 @@ def invoke_host(
 
     `record=False` 不留调用记录:宿主**隔一会儿就问一次**的那种(目录指纹,见 generation/plugin_connections)
     不是一次「调用」,每分钟一行会把插件页的调用记录淹掉,真正的调用反而找不到。失败照样抛。
+
+    连接背后是本机服务时,停着就先起、等它就绪(用到时起,ADR 0041);后台刷新目录包在 `service_gate.no_autostart` 里,
+    不替它起。
     """
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
@@ -553,6 +561,56 @@ def invoke_host(
         cleanup_scratch_dir(scratch)
 
 
+#: 问插件一种本机服务的事(`service_*`)缺省等多久。它们只描述、不起进程;最慢的是认目录时试跑一次 `import torch`
+#: (插件自己给那一步 30 秒上限),补装节点要下载 —— 那两个由调用方给更长的预算。
+SERVICE_OP_TIMEOUT_SECONDS = 30
+
+
+def invoke_service(
+    db: Session,
+    package_id: str,
+    service_key: str,
+    payload: dict[str, Any],
+    *,
+    instance: PluginInstance | None = None,
+    timeout: float = SERVICE_OP_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """宿主问插件**一种本机服务**的事(ADR 0041 的 `service_*` 操作,payload 里的 `op` 说是哪一件):怎么认出一个装好的
+    目录、怎么起、补装节点、本机有没有已经在跑的……交给清单 `services` 里那种服务的 `tool`。
+
+    和 `invoke_host` 不同的几处,都因为这是宿主的**管理动作**、不是一次用它干活:
+
+    - 不走「用到时起」那道门 —— 问怎么起的时候它当然还没起;
+    - 不留调用记录(插件页的调用记录是给人翻「用它干过什么」的),不落 state;
+    - 不看连接停没停用、配没配全:管理员在连接页上给它配本机服务,那时它可能还没启用。只认权限 —— 插件声明的
+      权限没授予,它就不该替这个连接做任何事;
+    - 没有连接时(插件页上的「本机发现」)什么都不注入:没有配置、没有凭据,也不走代理(问的是本机)。
+
+    失败照抛(`PluginRuntimeError` / `PluginDomainError`)。
+    """
+    package = db.get(PluginPackage, package_id)
+    if package is None:
+        raise PluginDomainError("pluginErr_notFound")
+    manifest = manifest_of(package)
+    service = manifest.service(service_key)
+    if service is None:
+        raise PluginDomainError("pluginErr_noSuchService", name=manifest.name, service=service_key)
+    if instance is not None and inst.pending_permissions(db, instance):
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=inst.blocked_reason(db, instance))
+    env = inst.process_env(db, instance) if instance is not None else {}
+    egress = plugin_egress.resolve(db, instance, manifest) if instance is not None else plugin_egress.UNDECIDED
+    scratch = make_scratch_dir()
+    try:
+        with _plugin_slot(db):
+            result = execute_tool(
+                Path(manifest.path), manifest.runtime.entry, service.tool, payload, env,
+                scratch_dir=scratch, data_dir=_ensure_data_dir(manifest.id), egress=egress, timeout=timeout,
+            )
+    finally:
+        cleanup_scratch_dir(scratch)
+    return result.output
+
+
 def _persist_failed_state(
     db: Session,
     instance: PluginInstance,
@@ -594,21 +652,29 @@ def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["COLLECTED_AS", "all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "output_port",
-           "quiet_hooks", "refresh_tools", "staged_artifact", "staged_output"]
+__all__ = ["COLLECTED_AS", "SERVICE_OP_TIMEOUT_SECONDS", "all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host",
+           "invoke_service", "output_port", "quiet_hooks", "refresh_tools", "staged_artifact", "staged_output"]
 
 
 @contextmanager
-def _plugin_slot(db: Session, *, take: bool = True) -> Iterator[None]:
-    """跑插件进程的那一段:**先交还连接**,`take` 时再占一个插件名额(jobs.PLUGIN_SLOTS)。
+def _plugin_slot(
+    db: Session, *, take: bool = True, wait_ready: Callable[[], None] | None = None,
+) -> Iterator[None]:
+    """跑插件进程的那一段:**先交还连接**,等连接背后的本机服务就绪(`wait_ready`,见 service_gate),`take` 时
+    再占一个插件名额(jobs.PLUGIN_SLOTS)。
 
     前面读实例、凭据、素材时会话攥上了一条连接(和一个没结束的读事务),而接下来是等一个子进程 ——
     排队的、跑着的线程都不该一直攥着它(见 jobs 的 RENDER_SLOTS 那段)。流式的生成一跑就是几十分钟到
     几小时:此前那条路不经过这里,每一次插件生成都攥着一条连接和一个读事务直到结束 —— 连接池被几次
     生成占满,SQLite 的 WAL 因为一直有读者而没法回卷。这里提交不会带出半截东西 —— 调用记录在前面
     已经提交过,从那以后到这里只读过实例、凭据和素材。
+
+    等本机服务就绪夹在交还连接和占名额之间:第一次起一台 ComfyUI 可能要一两分钟,这一段既不该攥着连接,也不该
+    让别的插件调用陪它等。
     """
     db.commit()
+    if wait_ready is not None:
+        wait_ready()
     if not take:
         yield
         return
