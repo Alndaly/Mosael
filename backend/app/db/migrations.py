@@ -7959,6 +7959,27 @@ def _migrate_existing_libraries_get_the_s2v_detect_price() -> None:
             prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
 
 
+def _migrate_existing_libraries_get_the_gemini_chat_prices() -> None:
+    """老库补上 Gemini 对话的内置参考价(见 domain/billing/price_reference 的 Gemini 一段)。
+
+    Google 连接这一版才能对话,此前它下面挂着的 Gemini 对话模型行只有一种来路:有人手动加了、标成对话,给素材分析的
+    「原生视频」用 —— 那些调用一直在记账,却一直未定价。规则和点「预填」一样:只补模型行上配了的、只补不改、不混币种。
+    连接上还没加这几个型号的,加了之后点一次「预填」。型号写死在这里:迁移说的是这一版补了哪些,不跟着价目表往后变。
+    """
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import ProviderProfile
+    from app.domain.billing.pricing_prefill import prefill_profile_pricing
+
+    models = frozenset({
+        "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3.1-pro-preview-customtools", "gemini-3-flash-preview",
+        "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
+    })
+    with unit_of_work() as db:
+        for profile in db.query(ProviderProfile).filter(ProviderProfile.vendor == "google").order_by(ProviderProfile.created_at):
+            prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
+
+
 def _migrate_speech_usage_follows_todays_booking() -> None:
     """语音合成的老账照现在的口径改:记在**连接的厂商**名下,免费的引擎记 0、可信度「免费」。
 
@@ -8438,6 +8459,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_generation_results_keep_output_parameters_apart),
             #: 百炼说话照片之前的人像预检(wan2.2-s2v-detect)补上参考价:预检此前一笔都没进账。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_s2v_detect_price),
+            #: Google 连接能对话了:已有 Gemini 对话模型行的补上 Gemini 的参考价。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_gemini_chat_prices),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

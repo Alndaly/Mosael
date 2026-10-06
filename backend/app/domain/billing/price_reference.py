@@ -50,7 +50,7 @@
   qwen-image-3.0-pro(1K / 2K 两价)、Seedream 5.0 pro(按像素两档)、MiniMax-H3-Max(480P / 768P)。
 - **计量对不上的**:qwen-tts-flash、gpt-4o-mini-tts 按 token 计价,而语音合成记的是字符数。
 - **对应关系要靠推断的**:火山 seed-tts-1.0(价目页不用这个名字)。
-- **应用里的连接做不了的**:方舟的豆包对话模型、MiniMax 语音与生图、Gemini 对话与生图 —— 价查到了,
+- **应用里的连接做不了的**:方舟的豆包对话模型、MiniMax 语音与生图、Gemini 生图(Nano Banana)与 Imagen —— 价查到了,
   等对应的适配器接入、预设声明了能力再收(测试盯着「能力必须是这家连接提供的」)。
 - **可灵(Kling)**:按「单位 / 积分」计价,国内 1 积分 = 1 元、国际 1 单位 = $0.14,一家两币;而应用
   判断不出这条连接开的是哪边的账户,又分有声 / 无声、带不带视频输入 —— 不收。
@@ -113,6 +113,7 @@ _INTL_HOSTS: dict[str, tuple[str, ...]] = {
 #: 这几家有自己的官方 Endpoint;连接的 Endpoint 改到了别处,就是拿它的协议接了中转。
 _OFFICIAL_HOSTS: dict[str, tuple[str, ...]] = {
     "openai": ("api.openai.com",),
+    "google": ("generativelanguage.googleapis.com",),
 }
 
 
@@ -739,8 +740,8 @@ _OPENAI_PRICES = [
        remark=("官方价 $30/百万字符", "Listed at $30 per 1M characters")),
 ]
 
-# —— Google(Veo)——(应用里的 Google 连接只做 Veo 视频;Gemini 对话/生图的价查到了,用不上,不收)
-# 只公布了「带音频(默认)」的价,按输出分辨率分档:720P 是基础档,其余档各一条。
+# —— Google(Gemini 对话、Veo)——(Gemini 生图 / Imagen 的价查到了,应用里的 Google 连接还不做,不收)
+# Veo 只公布了「带音频(默认)」的价,按输出分辨率分档:720P 是基础档,其余档各一条。
 # Veo 3.0 / 2.0 已于 2026-06-30 下线,价目页不再列,不收。
 _GOOGLE = "https://ai.google.dev/gemini-api/docs/pricing"
 _VOLCANO_MUSIC = "https://www.volcengine.com/docs/84992/1404661"
@@ -757,6 +758,55 @@ _GOOGLE_PRICES = [
     _veo("veo-3.1-fast-generate-preview", "0.3", "4K 的价", "4K price", "4k"),
     _veo("veo-3.1-lite-generate-preview", "0.05", "720P 的价(基础档)", "720p price (base tier)"),
     _veo("veo-3.1-lite-generate-preview", "0.08", "1080P 的价", "1080p price", "1080p"),
+]
+
+# Gemini 对话(2026-10 查证,同一页):记的是 Standard 档(Batch / Flex / Priority 是**调用方式**,应用不用),
+# 每百万 token。缓存命中价是「Context caching price」那一格的 token 价;显式缓存另按存储时长收费(每百万 token 每小时),
+# 那不是 token 价,不收。三种分档都只记一档、其余写进备注(约定 3):
+#   - 2.5 Pro、3.1 Pro 按**提示词长度**分档:记 ≤200K 那档,>200K 的价写在备注里(提示词超过 200K 的请求整单按那一档计);
+#   - 3.6 / 3.7 / 3.8 Flash 写明「through December 31, 2026」,2027-01-01 起翻倍:记现价,新价写在备注里;
+#   - 部分型号音频输入另价:记文字 / 图片 / 视频的价(对话只发这几种),音频价写在备注里。
+# 没收的:gemini-flash-latest 这类别名(价目页不列,背后的型号会变)、3.1 Flash-Lite Preview(价目页已不列)、
+# Live / TTS / 转写 / Omni / Robotics(应用里不做这些)。
+
+
+def _gemini(model: str, i: str, o: str, r: str, remark: tuple[str, str] = ("", "")) -> list[ListPrice]:
+    return _chat("google", model, "USD", _GOOGLE, input=i, output=o, cache_read=r, checked="2026-10", remark=remark)
+
+
+def _long_prompt(i: str, o: str, r: str) -> tuple[str, str]:
+    return (
+        f"提示词不超过 200K 的价;超过 200K 的请求整单按 ${i} / ${o} / 缓存命中 ${r} 计",
+        f"Price for prompts up to 200K tokens; requests above 200K are billed at ${i} / ${o} / cached ${r} for every token",
+    )
+
+
+_GEMINI_2027 = (
+    "2026-12-31 前的价;2027-01-01 起为 $1.50 / $7.50 / 缓存命中 $0.15",
+    "Price through 2026-12-31; from 2027-01-01 it is $1.50 / $7.50 / cached $0.15",
+)
+
+
+def _audio_input(i: str, r: str) -> tuple[str, str]:
+    return (
+        f"文字 / 图片 / 视频输入的价;音频输入为 ${i}、音频缓存命中为 ${r}",
+        f"Text / image / video input price; audio input is ${i} and cached audio ${r}",
+    )
+
+
+_GEMINI_PRICES = [
+    *_gemini("gemini-3.8-flash", "0.75", "3.75", "0.075", _GEMINI_2027),
+    *_gemini("gemini-3.7-flash", "0.75", "3.75", "0.075", _GEMINI_2027),
+    *_gemini("gemini-3.6-flash", "0.75", "3.75", "0.075", _GEMINI_2027),
+    *_gemini("gemini-3.5-flash", "1.5", "9", "0.15"),
+    *_gemini("gemini-3.5-flash-lite", "0.3", "2.5", "0.03"),
+    *_gemini("gemini-3.1-flash-lite", "0.25", "1.5", "0.025", _audio_input("0.50", "0.05")),
+    *_gemini("gemini-3.1-pro-preview", "2", "12", "0.2", _long_prompt("4", "18", "0.40")),
+    *_gemini("gemini-3.1-pro-preview-customtools", "2", "12", "0.2", _long_prompt("4", "18", "0.40")),
+    *_gemini("gemini-3-flash-preview", "0.5", "3", "0.05", _audio_input("1.00", "0.10")),
+    *_gemini("gemini-2.5-pro", "1.25", "10", "0.125", _long_prompt("2.50", "15", "0.25")),
+    *_gemini("gemini-2.5-flash", "0.3", "2.5", "0.03", _audio_input("1.00", "0.10")),
+    *_gemini("gemini-2.5-flash-lite", "0.1", "0.4", "0.01", _audio_input("0.30", "0.03")),
 ]
 
 # —— Evolink(中转,它自己的价目页,约定 5)—— 2026-10 查证。
@@ -896,6 +946,7 @@ LIST_PRICES: tuple[ListPrice, ...] = (
     *_MINIMAX_PRICES,
     *_OPENAI_PRICES,
     *_GOOGLE_PRICES,
+    *_GEMINI_PRICES,
     *_EVOLINK_PRICES,
     *_AUDIO_PRICES,
 )
