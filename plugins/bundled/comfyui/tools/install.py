@@ -29,6 +29,7 @@ from typing import Any, Callable
 from urllib import parse
 
 import provenance
+import shared_models
 import sources
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -126,8 +127,11 @@ def same_machine(comfy: Comfy, info: dict[str, list[str]] | None,
 
 
 def _local_dir(info: dict[str, list[str]], folder: str) -> Path | None:
-    """本机那条路写进哪个目录:那个模型目录报的第一处(不存在就在它的上一级存在时建出来)。"""
-    paths = info.get(folder) or []
+    """本机那条路写进哪个目录:那个模型目录报的第一处(不存在就在它的上一级存在时建出来)。**共用的模型文件夹不算**
+    (ADR 0041 拍板 5:那是别处的,只读)—— 新下的文件落在这台 ComfyUI 自己的那一处;这个模型目录只在共用的那几处有,
+    就不走本机这条路。"""
+    shared = shared_models.shared_roots()
+    paths = [path for path in info.get(folder) or [] if not shared_models.in_shared(path, shared)]
     for path in paths:
         if Path(path).is_dir():
             return Path(path)

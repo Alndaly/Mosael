@@ -24919,6 +24919,49 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/local-service/model-folders": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service Model Folders",
+        "description": "共用的模型文件夹:每一处认成什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。另外列出卸载时保留下来、\n还没加进来的那几份。只读(不替它起)。",
+        "operationId": "get_local_service_model_folders_api_plugins_instances__instance_id__local_service_model_folders_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceModelFoldersOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/local-service/detect": {
       "post": {
         "tags": [
@@ -34416,6 +34459,32 @@
         "type": "object",
         "title": "LocalServiceLogsOut"
       },
+      "LocalServiceModelFoldersOut": {
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/LocalServiceSharedFolderOut"
+            },
+            "type": "array",
+            "title": "Folders"
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceModelFoldersOut",
+        "description": "「共用的模型文件夹」那一块。"
+      },
       "LocalServiceOfferOut": {
         "properties": {
           "title": {
@@ -34486,6 +34555,13 @@
             },
             "type": "array",
             "title": "Extra Args"
+          },
+          "shared_models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shared Models"
           },
           "state": {
             "type": "string",
@@ -34743,6 +34819,64 @@
         "title": "LocalServiceRouteOut",
         "description": "装的时候下载走哪条路(插件进程拿到的就是这一份,见 plugins/egress)。"
       },
+      "LocalServiceSharedFolderOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "layout": {
+            "type": "string",
+            "title": "Layout",
+            "default": ""
+          },
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Folders"
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          },
+          "loaded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "ok"
+        ],
+        "title": "LocalServiceSharedFolderOut",
+        "description": "共用的一处模型文件夹:插件认成了什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。"
+      },
       "LocalServiceUpdate": {
         "properties": {
           "mode": {
@@ -34825,6 +34959,21 @@
               }
             ],
             "title": "Port"
+          },
+          "shared_models": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Models"
           },
           "confirm_run_code": {
             "type": "boolean",

@@ -24,7 +24,7 @@ from tests.fake_comfyui import FakeComfyUI, subgraph_promoting
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
-_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "workflows",
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "shared_models", "workflows",
             "tooling", "library", "sources", "install", "model_files", "families", "workflow_library")
 
 #: 一张带布局的界面格式工作流:文生图 + 一个只在前端的虚拟节点、一个没装的节点、一个子图实例、一个分组。

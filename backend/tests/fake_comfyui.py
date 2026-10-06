@@ -641,6 +641,8 @@ class State:
     #: 目录)、每个文件的大小(键是「目录/名字」)、文件头里的元数据、哪几个有预览图。
     experiment_models: bool = True
     folder_paths: dict[str, list[str]] = field(default_factory=dict)
+    #: 文件在那个目录的第几处(`pathIndex`,键是「目录/名字」;没写的是 0)—— 共用的模型文件夹是排在后面的那几处
+    model_path_index: dict[str, int] = field(default_factory=dict)
     model_sizes: dict[str, int] = field(default_factory=dict)
     model_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
     model_previews: set[str] = field(default_factory=set)
@@ -927,7 +929,8 @@ class _Handler(BaseHTTPRequestHandler):
             if folder not in state.model_folders:
                 self._json({"error": "not found"}, 404)
             else:
-                self._json([{"name": name, "pathIndex": 0, "modified": 1700000000.0 + index, "created": 1700000000.0,
+                self._json([{"name": name, "pathIndex": state.model_path_index.get(f"{folder}/{name}", 0),
+                             "modified": 1700000000.0 + index, "created": 1700000000.0,
                              "size": state.model_sizes.get(f"{folder}/{name}", 1000)}
                             for index, name in enumerate(state.model_folders[folder])])
         elif path.startswith("/pysssss/view/") and state.pysssss != "missing":

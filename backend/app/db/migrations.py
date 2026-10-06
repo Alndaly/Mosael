@@ -8119,6 +8119,17 @@ def _migrate_local_services_remember_their_python() -> None:
             conn.execute(text("ALTER TABLE local_services ADD COLUMN python_minor VARCHAR(16) NOT NULL DEFAULT ''"))
 
 
+def _migrate_local_services_share_model_folders() -> None:
+    """本机服务那一行补一列 `shared_models`:共用的模型文件夹(ADR 0041 拍板 5),一项一个绝对路径。已有的行一个都没有(`[]`)。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 LocalService 已经指望它在了。表还没有就什么都不做(SCHEMA 建的表带这一列)。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(local_services)"))}
+        if columns and "shared_models" not in columns:
+            conn.execute(text("ALTER TABLE local_services ADD COLUMN shared_models JSON NOT NULL DEFAULT '[]'"))
+
+
 def _migrate_install_sources_get_pytorch_and_github() -> None:
     """「管理 → 下载源」多两行:PyTorch 源(`tts_config.pytorch_index`)、GitHub 镜像前缀(`tts_config.github_mirror`),
     给「让 Mosael 装」用(ADR 0041 §4)。空 = 官方 / 直连,和老库的行为一样。
@@ -8277,6 +8288,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_local_services_remember_their_python,
                 # 同上:ORM 上的 TtsConfig 指望「PyTorch 源」「GitHub 镜像前缀」两列在。
                 _migrate_install_sources_get_pytorch_and_github,
+                # 同上:ORM 上的 LocalService 指望「共用的模型文件夹」那一列在。
+                _migrate_local_services_share_model_folders,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

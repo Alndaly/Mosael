@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   getLocalServicePlan: vi.fn(),
   installLocalService: vi.fn(),
   cancelLocalServiceInstall: vi.fn(),
+  getLocalServiceModelFolders: vi.fn(),
   isCustomServer: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
@@ -53,7 +54,7 @@ function service(overrides: Partial<LocalService> = {}): LocalService {
     service: "comfyui", title: "ComfyUI", mode: "directory", directory: "/Users/me/ComfyUI", python: "", port: 8189,
     url: "http://127.0.0.1:8189", listen_lan: false, keep_running: false, extra_args: [], state: "stopped", pid: null,
     started_at: null, ready_seconds: null, adopted: false, restarts: 0, error: "", failure_lines: [], can_manage: true,
-    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null,
+    installed: true, python_minor: "", base_python_minor: "", needs_rebuild: false, install: null, shared_models: [], issue: null,
     ...overrides,
   };
 }
@@ -66,6 +67,7 @@ function mount(node: React.ReactNode) {
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLocalService.mockResolvedValue(null);
+  api.getLocalServiceModelFolders.mockResolvedValue({ folders: [], running: false, suggestions: [] });
   api.getLocalServiceLogs.mockResolvedValue({ lines: ["Starting server", "To see the GUI go to: http://127.0.0.1:8189"], path: "/data/logs/service-i1.log" });
 });
 afterEach(() => {
@@ -176,6 +178,69 @@ describe("路径格旁边的「选择…」", () => {
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "localServiceConfirmRun" }));
     await waitFor(() => expect(api.detectLocalService)
       .toHaveBeenCalledWith("i1", "/Users/me/Apps/ComfyUI", "/Users/me/Apps/ComfyUI/.venv/bin/python"));
+  });
+});
+
+describe("共用的模型文件夹", () => {
+  const OTHER = "/Users/me/ComfyUI/models";
+  const WEBUI = "/Users/me/stable-diffusion-webui";
+
+  it("每一处:认成什么、对上哪几个模型目录;在跑的话加载了没有、几个模型;认不出的照原话说", async () => {
+    api.getLocalService.mockResolvedValue(service({ state: "running", shared_models: [OTHER, WEBUI, "/gone"] }));
+    api.getLocalServiceModelFolders.mockResolvedValue({
+      running: true, suggestions: [],
+      folders: [
+        { path: OTHER, ok: true, layout: "ComfyUI 的模型文件夹", folders: ["checkpoints", "loras"], problem: "", loaded: true, models: 128 },
+        { path: WEBUI, ok: true, layout: "A1111 / Forge", folders: ["checkpoints"], problem: "", loaded: false, models: 0 },
+        { path: "/gone", ok: false, layout: "", folders: [], problem: "这台机器上没有这个文件夹:/gone", loaded: null, models: null },
+      ],
+    });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    const row = async (path: string) => (await screen.findByText(path)).closest("[data-shared-folder]") as HTMLElement;
+    await waitFor(async () => expect((await row(OTHER)).textContent).toContain("checkpoints · loras"));
+    expect((await row(OTHER)).textContent).toContain("localServiceSharedModels");
+    expect((await row(WEBUI)).textContent, "刚加的:还没加载").toContain("localServiceSharedRestart");
+    expect((await row("/gone")).textContent).toContain("这台机器上没有这个文件夹");
+  });
+
+  it("加:插件认得出才存(整份交上去);移除;卸载时保留下来的可以一键加回来", async () => {
+    api.getLocalService.mockResolvedValue(service({ shared_models: [OTHER] }));
+    api.getLocalServiceModelFolders.mockResolvedValue({
+      running: false, suggestions: ["/data/local-services/kept-models/本机"],
+      folders: [{ path: OTHER, ok: true, layout: "ComfyUI 的模型文件夹", folders: ["checkpoints"], problem: "", loaded: null, models: null }],
+    });
+    api.putLocalService.mockResolvedValue(service({ shared_models: [OTHER, WEBUI] }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceSharedNextStart", { exact: false })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("localServiceSharedPath"), { target: { value: ` ${WEBUI} ` } });
+    fireEvent.click(screen.getAllByRole("button", { name: "localServiceSharedAdd" })[0]);
+    await waitFor(() => expect(api.putLocalService).toHaveBeenCalledWith("i1", { shared_models: [OTHER, WEBUI] }));
+    // 存好之后列表是 [OTHER, WEBUI]:移除第一处,交上去的是剩下的那一处
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "localServiceSharedRemove" })).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole("button", { name: "localServiceSharedRemove" })[0]);
+    await waitFor(() => expect(api.putLocalService).toHaveBeenLastCalledWith("i1", { shared_models: [WEBUI] }));
+    fireEvent.click(screen.getAllByRole("button", { name: "localServiceSharedAdd" })[1]);
+    await waitFor(() => expect(api.putLocalService).toHaveBeenLastCalledWith("i1", {
+      shared_models: [OTHER, WEBUI, "/data/local-services/kept-models/本机"] }));
+  });
+
+  it("插件认不出:不存,照它的原话说", async () => {
+    const { toast } = await import("sonner");
+    api.getLocalService.mockResolvedValue(service());
+    api.putLocalService.mockRejectedValue(new Error("这一处不能当共用的模型文件夹:认不出这是模型文件夹"));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.change(await screen.findByLabelText("localServiceSharedPath"), { target: { value: "/Users/me/Pictures" } });
+    fireEvent.click(screen.getByRole("button", { name: "localServiceSharedAdd" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("这一处不能当共用的模型文件夹:认不出这是模型文件夹"));
+    expect((screen.getByLabelText("localServiceSharedPath") as HTMLInputElement).value, "没存:格子里的留着").toBe("/Users/me/Pictures");
+  });
+
+  it("不是部署管理员:没有这一块(看不到、也加不了)", async () => {
+    api.getLocalService.mockResolvedValue(service({ can_manage: false, shared_models: [OTHER] }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceStateStopped")).toBeTruthy();
+    expect(screen.queryByText("localServiceShared")).toBeNull();
+    expect(api.getLocalServiceModelFolders).not.toHaveBeenCalled();
   });
 });
 

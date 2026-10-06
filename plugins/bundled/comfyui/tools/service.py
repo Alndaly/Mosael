@@ -3,7 +3,7 @@
 宿主经 `comfyui_generation` 这个工具按 op 问(见 main):
 
     {"op": "service_detect", "directory", "python"?}  → 认没认出来、摆给人看的事实、问题,以及能不能补装 pysssss
-    {"op": "service_launch", "directory", "python"?, "port", "listen_lan", "extra_args"}
+    {"op": "service_launch", "directory", "python"?, "port", "listen_lan", "extra_args", "shared_models", "config_dir"}
                                                       → argv / env / cwd / 健康检查的路径 / 第一次就绪最多等多久
     {"op": "service_add_nodes", "directory", "python"?} → 把钉死版本的 pysssss 解进 custom_nodes(用户点头之后)
     {"op": "service_discover"}                         → 本机 8188 / 8000(Desktop 的缺省端口)上有没有已经在跑的
@@ -13,7 +13,8 @@
 `.venv`),认目录、怎么起都走这里。
 
 **只描述、不起进程** —— 起、停、看健康、收日志是宿主的事。认目录时会试跑一次 `import torch`(30 秒上限),
-那一步宿主先问过人。**不改用户的安装**:补装 pysssss 之外,不往那个目录里写任何东西。
+那一步宿主先问过人。**不改用户的安装**:补装 pysssss 之外,不往那个目录里写任何东西 —— 共用的模型文件夹那份配置写在宿主给的
+`config_dir`(数据目录里这个连接的那一格)里,见 shared_models。
 
 **Windows 的路径**全在这里认(便携版 `python_embeded\\python.exe`、venv 的 `Scripts\\python.exe`);函数都带
 `windows` 参数,测试在 mac 上用夹具目录把两边都走一遍。
@@ -33,6 +34,7 @@ from typing import Any
 from urllib import request
 
 import pinned
+import shared_models
 from lines import ComfyError, say
 
 #: 健康检查问这条:ComfyUI 起来以后它立刻回一份系统信息(显卡、版本),比首页轻。
@@ -420,6 +422,13 @@ def launch(payload: dict[str, Any], locale: str, *, windows: bool | None = None,
              "--port", str(port)]
     if has_manager(python, layout.root):
         argv.append("--enable-manager")
+    # 共用的模型文件夹(ADR 0041 拍板 5):配置写在宿主给的目录里(不写进这个 ComfyUI 目录),交给 ComfyUI 自己的参数;
+    # 一处能用的都没有就不加(上一份删掉)。认不出、已经不在了的那一处跳过,不挡着起
+    shared = [shared_models.inspect(one, locale, own_models=layout.root / "models")
+              for one in payload.get("shared_models") or [] if str(one).strip()]
+    written = shared_models.write_config(str(payload.get("config_dir") or ""), shared)
+    if written is not None:
+        argv += ["--extra-model-paths-config", str(written)]
     argv += extra
     return {
         "argv": argv,

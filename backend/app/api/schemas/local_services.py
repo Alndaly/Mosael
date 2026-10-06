@@ -62,6 +62,8 @@ class LocalServiceOut(ApiModel):
     listen_lan: bool = False
     keep_running: bool = False
     extra_args: list[str] = Field(default_factory=list)
+    #: 共用的模型文件夹(ADR 0041 拍板 5),一项一个绝对路径。
+    shared_models: list[str] = Field(default_factory=list)
     state: LocalServiceState
     #: 进程在的时候是它的 pid、什么时候起的(ISO 8601,UTC)。
     pid: int | None = None
@@ -100,7 +102,34 @@ class LocalServiceUpdate(ApiModel):
     #: 附加参数,一整行(空白分隔,带空格的一项用双引号括起来;反斜杠原样)。
     extra_args: str | None = Field(default=None, max_length=4000)
     port: int | None = None
+    #: 共用的模型文件夹(整份换掉;一项一个绝对路径)。插件认得出每一处才存,下次起生效。
+    shared_models: list[str] | None = Field(default=None, max_length=40)
     confirm_run_code: bool = False
+
+
+class LocalServiceSharedFolderOut(ApiModel):
+    """共用的一处模型文件夹:插件认成了什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。"""
+
+    path: str
+    ok: bool
+    #: 认成哪种(「ComfyUI 的模型文件夹」「A1111 / Forge」);认不出是空串,原因在 `problem`。
+    layout: str = ""
+    folders: list[str] = Field(default_factory=list)
+    problem: str = ""
+    #: 在跑的那一份加载了这一处没有(没在跑是 null;刚加的要重启才加载)。
+    loaded: bool | None = None
+    #: 它从这一处看到几个模型文件(没在跑、没加载是 null / 0)。
+    models: int | None = None
+
+
+class LocalServiceModelFoldersOut(ApiModel):
+    """「共用的模型文件夹」那一块。"""
+
+    folders: list[LocalServiceSharedFolderOut] = Field(default_factory=list)
+    #: 问到了在跑的那一份(各处的 `loaded` / `models` 才有数)。
+    running: bool = False
+    #: 卸载时保留下来的模型(`<数据目录>/local-services/kept-models/` 下的),还没加进来的那几份。
+    suggestions: list[str] = Field(default_factory=list)
 
 
 class LocalServiceDetectRequest(ApiModel):

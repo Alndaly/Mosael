@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import threading
@@ -73,6 +74,10 @@ logger = logging.getLogger(__name__)
 #: 插件进程里的这个变量说「这个连接的服务器归宿主起停」,值是服务的 key。插件据此不自己去重启它
 #: (ComfyUI:装完节点不调 Manager 的重启,交回 `host_restart`,由宿主停了再起)。
 SERVICE_ENV = "MOSAEL_LOCAL_SERVICE"
+#: 插件进程里的这个变量列出共用的那几处(JSON,绝对路径):服务只读它们,插件别往里写(下载的新文件、预览图都落在服务自己那一处)。
+SHARED_ENV = "MOSAEL_LOCAL_SERVICE_SHARED"
+#: 最多共用几处。
+MAX_SHARED = 20
 #: 等它就绪时,在插件给的就绪上限之外多等的余量(崩溃重启的退避、健康检查本身的那一两秒)。
 ENSURE_MARGIN_SECONDS = 30.0
 #: 日志里最多一次交给界面多少行。
@@ -223,6 +228,7 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         "listen_lan": row.listen_lan,
         "keep_running": row.keep_running,
         "extra_args": list(row.extra_args or []),
+        "shared_models": list(row.shared_models or []),
         "state": state,
         "pid": process.pid if process is not None and state in ACTIVE else None,
         "started_at": process.started_at.isoformat() if process is not None and process.started_at and state in ACTIVE
@@ -275,6 +281,7 @@ def configure(
     extra_args: str | None = None,
     port: int | None = None,
     mode: str | None = None,
+    shared_models: list[str] | None = None,
     confirm_run_code: bool = False,
 ) -> None:
     """建或改这个连接的本机服务。**换一个要运行的东西(目录、解释器)要确认过**(`confirm_run_code`):起它就是在这台
@@ -326,7 +333,36 @@ def configure(
         row.keep_running = keep_running
     if args is not None:
         row.extra_args = args
+    if shared_models is not None:
+        row.shared_models = _checked_shared(db, instance, row, shared_models)
     db.flush()
+
+
+def _checked_shared(db: Session, instance: PluginInstance, row: LocalService, folders: list[str]) -> list[str]:
+    """共用的模型文件夹存之前:去掉空的、重复的,最多 MAX_SHARED 处;**插件认得出每一处**才存(要么 ComfyUI 的 models、要么
+    A1111 / Forge,而且不是它自己的模型文件夹),认不出的照插件的原话说是哪一处、为什么。在跑的话下次起生效。"""
+    cleaned = list(dict.fromkeys(one.strip() for one in folders if one and one.strip()))
+    if len(cleaned) > MAX_SHARED:
+        raise LocalServiceError("localServiceErr_tooManyShared", status=422, limit=MAX_SHARED)
+    if not cleaned:
+        return []
+    found = plugin_ops.model_folders(db, instance, row, cleaned)
+    bad = next((one for one in found["folders"] if not one["ok"]), None)
+    if bad is not None or len(found["folders"]) != len(cleaned):
+        raise LocalServiceError("localServiceErr_sharedNotRecognized", status=422,
+                                detail=bad["problem"] if bad is not None else ", ".join(cleaned))
+    return cleaned
+
+
+def model_folders(db: Session, instance: PluginInstance) -> dict[str, Any]:
+    """连接页上「共用的模型文件夹」那一块:每一处认成什么、对上哪几个模型目录;它在跑的话加载了没有、看到几个模型(刚加的要
+    重启才加载)。另外列出卸载时保留下来的模型(`kept-models` 下),可以一键加进来。"""
+    row = _require_row(db, instance)
+    shared = list(row.shared_models or [])
+    found = plugin_ops.model_folders(db, instance, row, shared) if shared else {"folders": [], "running": False}
+    taken = {_directory_key(one) for one in shared}
+    found["suggestions"] = [str(one) for one in records.kept_models() if _directory_key(str(one)) not in taken]
+    return found
 
 
 def remove(db: Session, instance: PluginInstance) -> None:
@@ -497,7 +533,7 @@ def _prepare(
     row = records.row_of(db, instance.id)
     if row is None:
         return service_gate.NO_SERVICE
-    env = {SERVICE_ENV: row.service}
+    env = {SERVICE_ENV: row.service, SHARED_ENV: json.dumps(list(row.shared_models or []), ensure_ascii=False)}
     if start_it:
         return service_gate.Prepared(env=env, wait_ready=begin_using(db, instance, progress=progress))
     process = supervisor.get(instance.id)
@@ -719,9 +755,9 @@ def stop_all() -> None:
 
 
 __all__ = [
-    "ACTIVE", "FAILED", "GATE", "RESTARTING", "RUNNING", "SERVICE_ENV", "STARTING", "STATES", "STOPPED",
-    "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using", "cancel_install",
-    "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package", "install_log_path", "log_path",
-    "needs_rebuild", "plan", "prepare_install", "recent_install_logs", "recent_logs", "remove", "restart", "start",
-    "start_kept_running", "status", "stop", "stop_all",
+    "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
+    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using",
+    "cancel_install", "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package",
+    "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "plan", "prepare_install",
+    "recent_install_logs", "recent_logs", "remove", "restart", "start", "start_kept_running", "status", "stop", "stop_all",
 ]

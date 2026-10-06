@@ -113,6 +113,7 @@
   "migrate-job-worker-leases": "96ded71e21f2035a",
   "migrate-line-fields-are-lists": "7b87009b22fc77c8",
   "migrate-local-services-remember-their-python": "371ac92de8a2d42f",
+  "migrate-local-services-share-model-folders": "8ae0236ad7aa4408",
   "migrate-loop-scopes-are-not-outer-data-edges": "15505b678c3edbcf",
   "migrate-migration-revisions-keep-their-vouchers": "97c16965599653a9",
   "migrate-model-structured-output": "1ace9375f453b53b",

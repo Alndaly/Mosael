@@ -26,6 +26,8 @@ MODES = (DIRECTORY, MANAGED)
 INSTALLS = "local-services"
 #: 它们共用的 pip 缓存(接着装、重建运行环境时已经下过的包不重下;不撑大这个人自己的 pip 缓存)。
 PIP_CACHE = "pip-cache"
+#: 卸载时保留下来的模型(一份一个子目录)。
+KEPT_MODELS = "kept-models"
 #: 从这里往上找空端口。常见的本机 AI 服务缺省端口(ComfyUI 的 8188 一类)留给用户自己开的那一台。
 FIRST_PORT = 8189
 #: 往上最多找多少个。
@@ -58,6 +60,19 @@ def install_root(instance_id: str) -> Path:
 
 def pip_cache_dir() -> Path:
     return settings.data_dir / INSTALLS / PIP_CACHE
+
+
+def kept_models_dir() -> Path:
+    """卸载让 Mosael 装的那一份时选了「保留模型」,模型挪到这里(一份一个子目录),下次能当共用的模型文件夹加回来。"""
+    return settings.data_dir / INSTALLS / KEPT_MODELS
+
+
+def kept_models() -> list[Path]:
+    """保留下来的那几份(按名字排)。"""
+    try:
+        return sorted(one for one in kept_models_dir().iterdir() if one.is_dir() and not one.name.startswith("."))
+    except OSError:
+        return []
 
 
 def address(port: int) -> str:
@@ -149,5 +164,5 @@ def make_managed(db: Session, instance: PluginInstance) -> LocalService:
 
 __all__ = [
     "DIRECTORY", "FIRST_PORT", "MANAGED", "MODES", "address", "check_port", "create", "free_port", "install_root",
-    "make_managed", "pip_cache_dir", "row_of", "service_of", "split_args",
+    "kept_models", "kept_models_dir", "make_managed", "pip_cache_dir", "row_of", "service_of", "split_args",
 ]

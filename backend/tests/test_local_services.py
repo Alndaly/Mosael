@@ -58,7 +58,16 @@ def svc(payload):
                                       {"label": "", "value": "没有名字的不摆"}],
                 "problems": [{"level": "warning", "text": {"zh": "少了点东西", "en": "Something is missing"}}],
                 "add_nodes": {"title": {"zh": "补装", "en": "Add it"}, "description": "装进 custom_nodes"}}
+    if op == "service_model_folders":
+        found = []
+        for path in payload.get("shared_models") or []:
+            ok = Path(path).is_dir() and (Path(path).name == "models" or "kept-models" in path)
+            found.append({"path": path, "ok": ok, "layout": {"zh": "模型文件夹", "en": "Models folder"} if ok else "",
+                          "folders": ["checkpoints"] if ok else [], "loaded": None, "models": None,
+                          "problem": "" if ok else {"zh": f"认不出:{path}", "en": f"Not recognized: {path}"}})
+        return {"folders": found, "running": False}
     if op == "service_launch":
+        (Path(directory) / "launch.json").write_text(json.dumps(payload), encoding="utf-8") if Path(directory).is_dir() else None
         flags = options(directory).get("flags", [])
         argv = [sys.executable, FAKE, "--port", str(payload["port"]),
                 "--listen", "0.0.0.0" if payload.get("listen_lan") else "127.0.0.1", *flags, *payload.get("extra_args", [])]
@@ -78,7 +87,8 @@ def svc(payload):
     raise ValueError(op)
 
 def ping(payload):
-    return {"service": os.environ.get("MOSAEL_LOCAL_SERVICE", ""), "server": os.environ.get("SERVER_URL", "")}
+    return {"service": os.environ.get("MOSAEL_LOCAL_SERVICE", ""), "server": os.environ.get("SERVER_URL", ""),
+            "shared": os.environ.get("MOSAEL_LOCAL_SERVICE_SHARED", "")}
 
 def reach(payload):
     # 像 ComfyUI 插件那样问一下服务器;连不上就说插件自己那句(只适合「连一台服务器」)
@@ -632,6 +642,60 @@ def test_调用本机服务的操作不走用到时起_没有连接也能问(plu
     assert caught.value.key == "pluginErr_noSuchService"
     assert _status(plugged, instance_id)["state"] == "stopped"
     assert sys.executable  # 插件跑在后端的解释器上(仓库里没有随包解释器时)
+
+
+# ---- 共用的模型文件夹(拍板 5) ------------------------------------------------------------------
+
+
+def test_共用的模型文件夹_插件认得出才存_起的时候交给插件_插件调用看得到(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    directory = _folder(tmp_path)
+    _configure(plugged, instance_id, directory)
+    other = tmp_path / "Other" / "models"
+    other.mkdir(parents=True)
+    url = f"/api/plugins/instances/{instance_id}/local-service"
+    refused = plugged.put(url, json={"shared_models": [str(tmp_path)]})
+    assert refused.status_code == 422 and f"认不出:{tmp_path}" in refused.json()["detail"], "照插件的原话说是哪一处"
+    assert plugged.put(url, json={"shared_models": [str(i) for i in range(21)]}).status_code == 422
+    saved = plugged.put(url, json={"shared_models": [f" {other} ", str(other), ""]})
+    assert saved.status_code == 200 and saved.json()["shared_models"] == [str(other)], "去空白、去重复"
+    # 起的时候交给插件:那几处、宿主给这个连接的那一格(配置写在这里,不写进人家的目录)
+    plugged.post(f"{url}/start")
+    _wait_state(plugged, instance_id, "running")
+    told = json.loads((Path(directory) / "launch.json").read_text(encoding="utf-8"))
+    assert told["shared_models"] == [str(other)]
+    assert told["config_dir"] == str(records.install_root(instance_id))
+    # 插件调用的环境里有它们(下载、写预览图别往里写)
+    with SessionLocal() as db:
+        invocation = tools.invoke(db, instance_id, "ping", {})
+    assert json.loads(invocation.output["shared"]) == [str(other)]
+    # 清空
+    assert plugged.put(url, json={"shared_models": []}).json()["shared_models"] == []
+    member = second_client("member")
+    assert member.get(f"/api/plugins/instances/{_connection(member)}/local-service/model-folders").status_code == 403
+
+
+def test_共用的模型文件夹那一块_每处认成什么_卸载时保留下来的可以加回来(plugged, tmp_path: Path) -> None:
+    from app.core.config import settings
+
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path))
+    other = tmp_path / "Other" / "models"
+    other.mkdir(parents=True)
+    kept = settings.data_dir / "local-services" / "kept-models"
+    shutil.rmtree(kept, ignore_errors=True)
+    (kept / "ComfyUI · 本机").mkdir(parents=True)
+    (kept / ".hidden").mkdir()
+    url = f"/api/plugins/instances/{instance_id}/local-service"
+    empty = plugged.get(f"{url}/model-folders").json()
+    assert empty["folders"] == [] and empty["suggestions"] == [str(kept / "ComfyUI · 本机")]
+    assert plugged.put(url, json={"shared_models": [str(other), str(kept / "ComfyUI · 本机")]}).status_code == 200
+    body = plugged.get(f"{url}/model-folders").json()
+    assert [(one["path"], one["ok"], one["layout"], one["folders"]) for one in body["folders"]] == [
+        (str(other), True, "模型文件夹", ["checkpoints"]), (str(kept / "ComfyUI · 本机"), True, "模型文件夹", ["checkpoints"])]
+    assert body["running"] is False and body["folders"][0]["loaded"] is None
+    assert body["suggestions"] == [], "已经加进来的不再提"
+    shutil.rmtree(kept, ignore_errors=True)
 
 
 # ---- 用不了的时候,按本机服务的状态说(不说「检查地址」) ------------------------------------------

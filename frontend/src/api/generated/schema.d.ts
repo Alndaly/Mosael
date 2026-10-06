@@ -8203,6 +8203,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/local-service/model-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Service Model Folders
+         * @description 共用的模型文件夹:每一处认成什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。另外列出卸载时保留下来、
+         *     还没加进来的那几份。只读(不替它起)。
+         */
+        get: operations["get_local_service_model_folders_api_plugins_instances__instance_id__local_service_model_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/local-service/detect": {
         parameters: {
             query?: never;
@@ -12454,6 +12475,21 @@ export interface components {
             path: string;
         };
         /**
+         * LocalServiceModelFoldersOut
+         * @description 「共用的模型文件夹」那一块。
+         */
+        LocalServiceModelFoldersOut: {
+            /** Folders */
+            folders?: components["schemas"]["LocalServiceSharedFolderOut"][];
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /** Suggestions */
+            suggestions?: string[];
+        };
+        /**
          * LocalServiceOfferOut
          * @description 插件说可以补装的东西(ComfyUI:模型库要的 pysssss)。界面给一颗「补装」,确认框里摆 description。
          */
@@ -12503,6 +12539,8 @@ export interface components {
             keep_running: boolean;
             /** Extra Args */
             extra_args?: string[];
+            /** Shared Models */
+            shared_models?: string[];
             /**
              * State
              * @enum {string}
@@ -12646,6 +12684,32 @@ export interface components {
             proxy: string;
         };
         /**
+         * LocalServiceSharedFolderOut
+         * @description 共用的一处模型文件夹:插件认成了什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。
+         */
+        LocalServiceSharedFolderOut: {
+            /** Path */
+            path: string;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Layout
+             * @default
+             */
+            layout: string;
+            /** Folders */
+            folders?: string[];
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+            /** Loaded */
+            loaded?: boolean | null;
+            /** Models */
+            models?: number | null;
+        };
+        /**
          * LocalServiceUpdate
          * @description 建或改。没给的不动。换一个要运行的东西(目录、解释器)要带 `confirm_run_code: true` —— 界面先问过人。
          */
@@ -12664,6 +12728,8 @@ export interface components {
             extra_args?: string | null;
             /** Port */
             port?: number | null;
+            /** Shared Models */
+            shared_models?: string[] | null;
             /**
              * Confirm Run Code
              * @default false
@@ -35289,6 +35355,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_service_model_folders_api_plugins_instances__instance_id__local_service_model_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceModelFoldersOut"];
+                };
             };
             /** @description Validation Error */
             422: {

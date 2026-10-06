@@ -42,5 +42,9 @@ class LocalService(Base):
     #: 让 Mosael 装的那一份**装好了**(试起一次、健康检查通过)时,建 venv 用的那个 Python 的「主.次」版本(`3.13`);空 = 还没装好。
     #: 随包的 Python 换了次版本,venv 就跑不起来了:和它对不上时连接页说「运行环境要重建」,起之前先拦下(ADR 0041 §4)。
     python_minor: Mapped[str] = mapped_column(String(16), nullable=False, default="", server_default="")
+    #: 共用的模型文件夹(ADR 0041 拍板 5):别处已有的模型文件夹(A1111 / Forge / 另一份 ComfyUI 的 `models`),绝对路径,一项一个。
+    #: 它**只读**:插件按它们写一份配置交给服务(ComfyUI 是 extra_model_paths.yaml,放在宿主的数据目录里,不写进人家的目录),
+    #: 模型库下载的新文件仍落在服务自己的模型目录。
+    shared_models: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

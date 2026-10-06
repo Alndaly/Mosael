@@ -25,6 +25,7 @@ from urllib import parse
 import civitai
 import previews
 import provenance
+import shared_models
 import sources
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -110,7 +111,8 @@ def lookup(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]
     if known(record) and not payload.get("refresh"):
         return _answer(record, locale)
     ways = previews.tools(comfy)
-    if ways["hash"]:
+    # 按哈希找时 pysssss 会在模型旁边写一份 `.sha256`:共用的模型文件夹(只读,ADR 0041 拍板 5)里的模型按文件名和大小找
+    if ways["hash"] and shared_models.shared_file(comfy, folder, name) is None:
         digest = _hash(comfy, folder, name, locale)
         info = civitai.by_hash(digest, locale)
         entry: dict[str, Any] = {"how": "sha256" if info else "none", "sha256": digest, "checked": round(time.time())}

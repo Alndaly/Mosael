@@ -54,6 +54,10 @@ export const installLocalService = (instanceId: string, flavour: string) =>
 /** 取消正在装的:停在手上那一步,下次「接着装」从它开始。 */
 export const cancelLocalServiceInstall = (instanceId: string) =>
   api<LocalService>(`${base(instanceId)}/install/cancel`, { method: "POST" });
+export type LocalServiceModelFolders = components["schemas"]["LocalServiceModelFoldersOut"];
+/** 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型;卸载时保留下来、还没加进来的那几份。 */
+export const getLocalServiceModelFolders = (instanceId: string) =>
+  api<LocalServiceModelFolders>(`${base(instanceId)}/model-folders`);
 /** 本机已经在跑的(插件知道去哪几个端口问)。只给部署管理员。 */
 export const discoverLocalServices = (packageId: string) =>
   api<LocalServiceDiscovery>(`/api/plugins/${packageId}/local-services/discover`);

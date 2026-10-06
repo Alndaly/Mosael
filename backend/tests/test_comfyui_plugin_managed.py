@@ -28,7 +28,7 @@ import pytest
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
-_PLUGIN_MODULES = ("service", "lines", "pinned", "managed")
+_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed")
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="假解释器是 shell 脚本")
 GB = 1000 ** 3  # 空间按十进制的 GB(和插件一样)
 

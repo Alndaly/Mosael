@@ -639,6 +639,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{minutes} 分钟里重启了 {count} 次还是崩,不再自动重启。看看日志里说了什么",
         "en": "It kept crashing after {count} restarts in {minutes} minutes, so it won't restart automatically. Check the log.",
     },
+    "localServiceErr_tooManyShared": {
+        "zh": "共用的模型文件夹最多 {limit} 处",
+        "en": "At most {limit} shared models folders.",
+    },
+    "localServiceErr_sharedNotRecognized": {
+        "zh": "这一处不能当共用的模型文件夹:{detail}",
+        "en": "This can't be used as a shared models folder: {detail}",
+    },
     # ---- 本机服务此刻为什么用不了(插件调用失败、目录刷不出来时按它说;见 local_services.issue_of) ----
     "localServiceIssue_stopped": {
         "zh": "本机的 {name} 没在运行:用到时会自动启动,也可以现在点「启动」",

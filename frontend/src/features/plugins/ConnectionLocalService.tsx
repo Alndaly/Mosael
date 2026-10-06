@@ -9,6 +9,7 @@ import {
   createPluginInstance,
   detectLocalService,
   discoverLocalServices,
+  getLocalServiceModelFolders,
   getLocalServicePlan,
   installLocalService,
   putLocalService,
@@ -971,6 +972,7 @@ function ServiceRows({
         <AddNodesRow instanceId={instanceId} offer={detection.data.add_nodes} running={service.state === "running"} disabled={!manage}
                      onInstalled={recheck} />
       )}
+      {manage && <SharedModelFolders instanceId={instanceId} service={service} />}
 
       <SettingsRow label={t("localServiceKeepRunning")} description={t("localServiceKeepRunningDesc")}>
         <Switch
@@ -1032,6 +1034,110 @@ function ServiceRows({
       )}
       {logsOpen && <LocalServiceLogDialog instanceId={instanceId} title={service.title} onClose={() => setLogsOpen(false)} />}
     </>
+  );
+}
+
+const modelFoldersKey = (instanceId: string) => ["local-service-model-folders", instanceId] as const;
+/** 对上的模型目录最多摆几个名字(一份 ComfyUI 的 models 有二三十个子目录)。 */
+const FOLDERS_SHOWN = 5;
+
+/** 对上的模型目录:几个就全摆,多了摆前几个和一共几个。 */
+function folderList(t: ReturnType<typeof useI18n>, folders: readonly string[]): string {
+  if (folders.length <= FOLDERS_SHOWN + 1) return folders.join(" · ");
+  return t("localServiceSharedFolders").replace("{list}", folders.slice(0, FOLDERS_SHOWN).join(" · ")).replace("{n}", String(folders.length));
+}
+
+/**
+ * 共用的模型文件夹(ADR 0041 拍板 5):别处已有的模型文件夹(A1111 / Forge、另一份 ComfyUI 的 models、卸载时保留下来的)也给它用,
+ * 不拷第二份。一处一行:插件认成了什么、在跑的话它加载了没有、从那里看到几个模型(刚加的要重启才加载);加的时候插件先认一遍,
+ * 认不出的照它的原话说。它只读这些文件夹,模型库下载的新文件仍落在它自己的那一处。
+ */
+function SharedModelFolders({ instanceId, service }: { instanceId: string; service: LocalService }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const folders = useQuery({
+    queryKey: modelFoldersKey(instanceId),
+    queryFn: () => getLocalServiceModelFolders(instanceId),
+    staleTime: 30_000,
+  });
+  //: 它刚就绪:重新问一遍加载了哪几处、几个模型
+  React.useEffect(() => {
+    if (service.state === "running") void qc.invalidateQueries({ queryKey: modelFoldersKey(instanceId) });
+  }, [service.state, qc, instanceId]);
+  const [draft, setDraft] = React.useState("");
+  const save = useMutation({
+    mutationFn: (next: string[]) => putLocalService(instanceId, { shared_models: next }),
+    onSuccess: (next) => {
+      setDraft("");
+      settle(qc, instanceId, next);
+      void qc.invalidateQueries({ queryKey: modelFoldersKey(instanceId) });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const current = service.shared_models ?? [];
+  const add = (path: string) => {
+    const trimmed = path.trim();
+    if (trimmed && !current.includes(trimmed)) save.mutate([...current, trimmed]);
+  };
+  const shown = folders.data?.folders ?? [];
+  const running = Boolean(folders.data?.running);
+  return (
+    <div className="grid gap-3 py-4" data-connection-section="shared-models">
+      <div className="grid gap-0.5">
+        <span className="text-ui-md font-medium">{t("localServiceShared")}</span>
+        <small className="text-ui-sm text-muted-foreground">{t("localServiceSharedDesc").replace("{title}", service.title)}</small>
+      </div>
+      {current.length > 0 && (
+        <ul className="m-0 grid list-none gap-2 p-0">
+          {current.map((path) => {
+            const one = shown.find((item) => item.path === path);
+            const status = !one
+              ? ""
+              : !one.ok
+                ? one.problem
+                : running && one.loaded
+                  ? t("localServiceSharedModels").replace("{n}", String(one.models ?? 0))
+                  : running
+                    ? t("localServiceSharedRestart")
+                    : t("localServiceSharedNextStart");
+            return (
+              <li key={path} data-shared-folder={path} className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                <span className="grid min-w-0 flex-1 basis-[260px] gap-0.5">
+                  <code className="timecode break-all text-ui-sm">{path}</code>
+                  <small className={cn("text-ui-xs", one && !one.ok ? "text-warning" : "text-muted-foreground")}>
+                    {[one?.layout, folderList(t, one?.folders ?? []), status].filter(Boolean).join(" — ")}
+                  </small>
+                </span>
+                <Button variant="ghost" size="sm" aria-label={t("localServiceSharedRemove").replace("{path}", path)}
+                        disabled={save.isPending} onClick={() => save.mutate(current.filter((item) => item !== path))}>
+                  {t("localServiceSharedRemoveShort")}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <PathField kind="directory" label={t("localServiceSharedPath")} value={draft} onChange={setDraft}
+                   placeholder={t("localServiceSharedPlaceholder")} />
+        <Button variant="outline" disabled={!draft.trim()} loading={save.isPending} onClick={() => add(draft)}>
+          {t("localServiceSharedAdd")}
+        </Button>
+      </div>
+      {(folders.data?.suggestions ?? []).length > 0 && (
+        <div className="grid gap-1 text-ui-sm">
+          <span className="text-muted-foreground">{t("localServiceSharedKept")}</span>
+          {(folders.data?.suggestions ?? []).map((path) => (
+            <span key={path} className="flex min-w-0 flex-wrap items-center gap-2">
+              <code className="timecode break-all">{path}</code>
+              <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => add(path)}>
+                {t("localServiceSharedAdd")}
+              </Button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

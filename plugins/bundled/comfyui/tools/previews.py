@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib import parse
 
+import shared_models
 from comfy_http import Comfy
 from lines import ComfyError, say
 
@@ -98,6 +99,10 @@ def save(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
         raise ComfyError(say(locale, f"这种文件不能当预览图:{suffix}", f"This kind of file can't be a preview: {suffix}"))
     if not tools(comfy)["save"]:
         raise ComfyError(missing_tool(locale))
+    # 共用的模型文件夹(ADR 0041 拍板 5)只读:pysssss 会把图写到模型旁边,那是别处的文件夹
+    location = shared_models.shared_file(comfy, folder, name)
+    if location is not None:
+        raise shared_models.refuse_write(location, locale)
     stored = comfy.upload_file(source, f"mosael-{uuid.uuid4().hex[:12]}{suffix}", kind="temp", subfolder=TEMP_SUBFOLDER)
     answer = comfy.post(f"/pysssss/save/{model_path(folder, name)}",
                         {"filename": stored["name"], "subfolder": stored["subfolder"], "type": "temp"})

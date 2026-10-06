@@ -21,6 +21,7 @@ from app.api.schemas import (
     LocalServiceDiscoveryOut,
     LocalServiceInstallRequest,
     LocalServiceLogsOut,
+    LocalServiceModelFoldersOut,
     LocalServiceOut,
     LocalServicePlanOut,
     LocalServiceUpdate,
@@ -71,12 +72,23 @@ def put_local_service(instance_id: str, body: LocalServiceUpdate, db: Tx, user: 
     try:
         local_services.configure(
             db, instance, mode=body.mode, directory=body.directory, python=body.python, listen_lan=body.listen_lan,
-            keep_running=body.keep_running, extra_args=body.extra_args, port=body.port,
+            keep_running=body.keep_running, extra_args=body.extra_args, port=body.port, shared_models=body.shared_models,
             confirm_run_code=body.confirm_run_code,
         )
     except _ERRORS as exc:
         raise _failed(exc) from exc
     return _required(db, instance, user)
+
+
+@router.get("/plugins/instances/{instance_id}/local-service/model-folders", response_model=LocalServiceModelFoldersOut)
+def get_local_service_model_folders(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """共用的模型文件夹:每一处认成什么、对上哪几个模型目录;在跑的话它加载了没有、从那里看到几个模型。另外列出卸载时保留下来、
+    还没加进来的那几份。只读(不替它起)。"""
+    ensure_deployment_admin(db, user)
+    try:
+        return local_services.model_folders(db, my_instance(db, instance_id, user))
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
 
 
 @router.delete("/plugins/instances/{instance_id}/local-service", status_code=204)

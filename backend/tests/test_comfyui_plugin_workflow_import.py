@@ -31,7 +31,7 @@ from tests.fake_comfyui import MANAGER_POLICY_MESSAGE, OBJECT_INFO, FakeComfyUI
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
-_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "workflows",
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "shared_models", "workflows",
             "tooling", "library", "sources", "install", "model_files", "families", "workflow_library", "workflow_import")
 
 #: 文生图的 API 格式(ComfyUI「导出 (API)」那种):没有位置,值和连线都在 inputs 里。

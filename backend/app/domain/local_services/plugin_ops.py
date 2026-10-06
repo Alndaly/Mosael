@@ -13,6 +13,7 @@
 | `service_readdress` | 端口改了:插件按服务器地址分文件存的本地数据搬到新地址名下 |
 | `service_plan` | 连接页上选了「让 Mosael 装」:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(给确认页) |
 | `service_install` | 确认之后(流式:一步一行,取消停在那一步;再来从没做完的那一步接着装) |
+| `service_model_folders` | 连接页上加共用的模型文件夹之前(认得出才存),和看每一处它加载了没有、几个模型的时候 |
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale
 from app.db.models import LocalService, PluginInstance
-from app.domain.local_services import sources
+from app.domain.local_services import records, sources
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.supervisor import DEFAULT_READY_TIMEOUT
 from app.domain.plugins import instances as inst
@@ -45,6 +46,10 @@ PLAN_TIMEOUT_SECONDS = 60
 INSTALL_TIMEOUT_SECONDS = 6 * 3600
 #: 安装计划最多摆几步。
 MAX_STEPS = 20
+#: 共用的模型文件夹:认目录只看几层子目录;在跑的话再按每个模型目录问一次 ComfyUI 列文件(一个 100 多 GB 的模型文件夹几秒)。
+MODEL_FOLDERS_TIMEOUT_SECONDS = 120
+#: 最多共用几处(和插件那边同一个数)。
+MAX_SHARED_FOLDERS = 20
 #: 插件给的就绪上限,收在这个范围里:太短的第一次启动(解包前端、加载自定义节点)根本等不到,太长的让「起不来」迟迟说不出来。
 READY_TIMEOUT_RANGE = (5.0, 1800.0)
 #: 一次认目录最多摆几条事实、几个问题。
@@ -97,7 +102,9 @@ def launch(db: Session, instance: PluginInstance, row: LocalService) -> dict[str
     output = tools.invoke_service(
         db, instance.package_id, row.service,
         {"op": "service_launch", "directory": row.directory, "python": row.python, "port": row.port,
-         "listen_lan": row.listen_lan, "extra_args": list(row.extra_args or [])},
+         "listen_lan": row.listen_lan, "extra_args": list(row.extra_args or []),
+         # 共用的模型文件夹(拍板 5):插件按它们写一份配置 —— 写在宿主给这个连接的那一格里,不写进人家的目录
+         "shared_models": list(row.shared_models or []), "config_dir": str(records.install_root(instance.id))},
         instance=instance, timeout=LAUNCH_TIMEOUT_SECONDS,
     )
 
@@ -157,6 +164,35 @@ def readdress(db: Session, instance: PluginInstance, row: LocalService, before: 
     )
 
 
+def model_folders(db: Session, instance: PluginInstance, row: LocalService, folders: list[str]) -> dict[str, Any]:
+    """共用的模型文件夹:插件认每一处(哪种样子、对上哪几个模型目录、有什么问题);服务在跑的话插件顺带问它加载了没有、
+    从那里看到几个模型(`loaded` / `models`,没在跑是 null)。只读、不写。"""
+    manifest = inst.manifest_for(db, instance)
+    output = tools.invoke_service(
+        db, instance.package_id, row.service,
+        {"op": "service_model_folders", "directory": row.directory, "python": row.python, "shared_models": folders},
+        instance=instance, timeout=MODEL_FOLDERS_TIMEOUT_SECONDS,
+    )
+
+    def count(value: Any) -> int | None:
+        return int(value) if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+    found = []
+    for one in _listed(output.get("folders"), MAX_SHARED_FOLDERS):
+        if not isinstance(one, dict) or not isinstance(one.get("path"), str):
+            continue
+        found.append({
+            "path": one["path"][:MAX_TEXT],
+            "ok": one.get("ok") is True,
+            "layout": _said(one.get("layout"), manifest),
+            "folders": [str(name)[:80] for name in _listed(one.get("folders"), MAX_FACTS * 4) if isinstance(name, str)],
+            "problem": _said(one.get("problem"), manifest),
+            "loaded": one["loaded"] if isinstance(one.get("loaded"), bool) else None,
+            "models": count(one.get("models")),
+        })
+    return {"folders": found, "running": output.get("running") is True}
+
+
 def _listed(value: Any, limit: int) -> list[Any]:
     return list(value)[:limit] if isinstance(value, list) else []
 
@@ -212,4 +248,4 @@ def install(db: Session, instance: PluginInstance, service: str, payload: dict[s
                                 timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
 
 
-__all__ = ["add_nodes", "detect", "discover", "install", "launch", "plan", "readdress"]
+__all__ = ["add_nodes", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress"]
