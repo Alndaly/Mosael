@@ -242,13 +242,15 @@ Downloads take the first route that works:
    straight in, first as `name.mosael-part` and then given the real name; with byte progress and cancel (only its own
    partial file is removed), and a free-space check before starting. This comes first even when ComfyUI-Manager is
    installed (1.13.2): the Manager can't show progress or stop, and tokens would have to go into its download URL;
-3. **ComfyUI-Manager (V4)**, for a ComfyUI on another machine: that machine downloads it, without byte progress and without
+3. **ComfyUI-Manager (V4 or later; the old Manager cloned into custom_nodes isn't supported, 1.15.0)**, for a ComfyUI on
+   another machine: that machine downloads it, without byte progress and without
    a way to stop it once started (the Manager can't stop a single task; cancelling only stops Mosael waiting). Its security
    policy only allows this when ComfyUI listens on a local address or `network_mode = personal_cloud` in
    `user/__manager/config.ini`; a LAN ComfyUI started with `--listen 0.0.0.0` refuses by default, so the plugin turns the
    reason in the log into plain words, remembers it and warns in the model library next time;
-4. none of these: it says so and gives the step you can take (install the Manager, change `network_mode`, or put the
-   direct link into `models/<folder>/` yourself).
+4. none of these: it says so and gives the step you can take (install the V4 Manager, built into ComfyUI 0.4.0 and later:
+   `pip install -r manager_requirements.txt` and start with `--enable-manager`; change `network_mode`; or put the direct
+   link into `models/<folder>/` yourself).
 
 **Nothing existing is overwritten**: a name already taken must be changed first (a `name (1).ext` suggestion is
 offered), and it is checked again when writing (a hard link gives the file its real name and fails if the name exists).
@@ -483,12 +485,13 @@ and enter its folder (ADR 0041).
   `ComfyUI_windows_portable` or the inner `ComfyUI` works. The interpreter is, in order: the one you chose, the portable build's
   `python_embeded\python.exe`, a `venv` / `.venv` in the folder or the one above (`Scripts\python.exe` on Windows). A trial
   `import torch` (30-second cap) reports the ComfyUI version, Python, PyTorch, GPU (MPS / CUDA / CPU only) and its memory,
-  the Manager (pip package / legacy node / none) and pysssss; if torch can't be imported, the folder can't be used.
+  the Manager (pip package / none; with only the old Manager in custom_nodes it warns that it isn't supported and gives the
+  commands to switch to the pip version, 1.15.0) and pysssss; if torch can't be imported, the folder can't be used.
   Importing torch isn't enough: it also checks which required packages from ComfyUI's requirements.txt are missing
   (installed or not, versions aren't compared); if any are, the folder can't be used either, and the message says which
   environment to run `pip install -r requirements.txt` in.
 - **The command**: `python main.py --listen 127.0.0.1 --port <port>`, plus `--enable-manager` only when the Manager's pip package
-  (`comfyui_manager`) is installed, plus `-s` for the portable build like its own launcher; extra arguments from Advanced go at
+  (`comfyui_manager`) is installed (the old Manager in custom_nodes is ignored; it still starts), plus `-s` for the portable build like its own launcher; extra arguments from Advanced go at
   the end (the port and listen address may not be set there). None of its files are changed. Mosael picks the port when the
   folder is set up (the first free one from 8189) and writes it into the server address; when you change the port, the plugin
   moves the local data it kept under the old address (model-library cache, tool map).

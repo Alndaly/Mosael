@@ -60,6 +60,8 @@ PYSSSSS = pinned.Archive(
     max_unpacked=100 * 1024 * 1024,
 )
 PYSSSSS_DIR = "ComfyUI-Custom-Scripts"
+#: 克隆进 custom_nodes 的老 ComfyUI-Manager(3.x)的目录(认的时候不分大小写)。Mosael 不支持它,认目录时提醒换 pip 版。
+OLD_MANAGER_DIR = "comfyui-manager"
 
 #: 端口和监听地址由宿主给(建连接时选定、局域网开关),写在附加参数里会和它打架。
 _HOST_FLAGS = ("--port", "--listen")
@@ -192,6 +194,20 @@ def _custom_node(root: Path, name: str) -> Path | None:
     return next((one for one in entries if one.is_dir() and one.name.lower() == name.lower()), None)
 
 
+def _old_manager_steps(layout: Layout, python: Path | None) -> tuple[str, str]:
+    """只有老 Manager 时怎么换成 pip 版(中、英):装 manager_requirements.txt、启动加 --enable-manager。ComfyUI 老到还没有
+    那个文件(0.4.0 起才有)就先升级。"""
+    requirements = layout.root / "manager_requirements.txt"
+    if not requirements.is_file():
+        return ("这个 ComfyUI 还没有 manager_requirements.txt(0.4.0 起才有):先升级 ComfyUI,再装 pip 版、启动时加 --enable-manager",
+                "This ComfyUI has no manager_requirements.txt yet (it comes with 0.4.0): update ComfyUI first, then install the "
+                "pip version and start with --enable-manager")
+    install = f"{python or 'python'} -m pip install -r {requirements}"
+    return (f"在这个环境里装上 pip 版:{install};启动时加 --enable-manager(Mosael 起它时会自己加)",
+            f"Install the pip version in this environment: {install}, then start with --enable-manager (Mosael adds it "
+            f"when it starts ComfyUI)")
+
+
 def required_packages(root: Path) -> list[str]:
     """ComfyUI 自己的 requirements.txt 里必需的那几个包名(「non essential」那句注释以下的不算)。读不到就是空的 —— 不报缺。
 
@@ -322,17 +338,22 @@ def detect(payload: dict[str, Any], locale: str, *, windows: bool | None = None)
                                  f"或者指另一个装好了的 Python",
                         f"This Python is missing packages ComfyUI needs, so ComfyUI won't start: {shown_en}. Install them "
                         f"in this environment ({install}) or choose another Python that has them")
-    legacy = _custom_node(layout.root, "comfyui-manager")
+    # Manager 只认 pip 包(V4,ComfyUI 0.4.0 起自带)。克隆进 custom_nodes 的老 Manager 不支持:提醒一句,不碰那个目录
     if manager_pip:
         fact("ComfyUI-Manager", "ComfyUI-Manager", say(locale, "pip 包(启动时加 --enable-manager)",
                                                       "pip package (started with --enable-manager)"))
-    elif legacy is not None:
-        fact("ComfyUI-Manager", "ComfyUI-Manager", say(locale, "老式节点(custom_nodes/comfyui-manager)",
-                                                      "legacy node (custom_nodes/comfyui-manager)"))
     else:
         fact("ComfyUI-Manager", "ComfyUI-Manager", say(locale, "没装", "not installed"))
-        problem("warning", "没装 ComfyUI-Manager:工作流库里缺的节点包要自己装",
-                "ComfyUI-Manager isn't installed: you'll have to install missing node packs for the workflow library yourself")
+        old = _custom_node(layout.root, OLD_MANAGER_DIR)
+        if old is not None:
+            zh, en = _old_manager_steps(layout, python)
+            problem("warning", f"custom_nodes/{old.name} 是老的 ComfyUI-Manager,Mosael 不支持:装缺的节点包、经它下模型要 pip 版"
+                               f"(V4)。{zh}",
+                    f"custom_nodes/{old.name} is the old ComfyUI-Manager, which Mosael doesn't support: installing missing node "
+                    f"packs and downloading models through it need the pip version (V4). {en}")
+        else:
+            problem("warning", "没装 ComfyUI-Manager:工作流库里缺的节点包要自己装",
+                    "ComfyUI-Manager isn't installed: you'll have to install missing node packs for the workflow library yourself")
     pysssss = _custom_node(layout.root, PYSSSSS_DIR)
     fact("ComfyUI-Custom-Scripts(pysssss)", "ComfyUI-Custom-Scripts (pysssss)",
          say(locale, "已装", "installed") if pysssss else say(locale, "没装", "not installed"))
@@ -359,7 +380,8 @@ def detect(payload: dict[str, Any], locale: str, *, windows: bool | None = None)
 
 
 def manager_pip(python: Path, root: Path) -> bool:
-    """那个环境里装没装 Manager 的 pip 包(`comfyui_manager`)。装了才加 `--enable-manager`(老式节点不用加)。"""
+    """那个环境里装没装 Manager 的 pip 包(`comfyui_manager`)。装了就加 `--enable-manager`,没装不加 —— custom_nodes 里的
+    老 Manager 不支持,起的时候不看它(照样能起,ComfyUI 自己决定加不加载它)。"""
     try:
         said = _run_python(python, _MANAGER_PROBE, root, PROBE_TIMEOUT_SECONDS)
     except (OSError, subprocess.TimeoutExpired):

@@ -347,6 +347,25 @@ def test_有Manager就走Manager(comfy, data_dir) -> None:
     assert out["download"]["route"] == "manager"
 
 
+@pytest.mark.parametrize("answer", ["V3.38.1", "V3", "4.2.1", "Vx", ""])
+def test_V4_以前的_Manager_不支持_当作没有_说要_V4_和那两条命令(comfy, data_dir, tmp_path, answer: str) -> None:
+    """维护者 2026-10-06 定:克隆进 custom_nodes 的老 Manager(3.x)不支持,哪怕它也答 /v2/manager/version。"""
+    comfy.state.manager = answer
+    note = _call(comfy, {"op": "library"}, data_dir)["download"]
+    assert note["route"] == "none"
+    assert all(one in note["note"] for one in ("V4", "manager_requirements.txt", "--enable-manager")), note["note"]
+    with pytest.raises(PluginRuntimeError, match="manager_requirements.txt"):
+        _download(comfy, {"url": "https://huggingface.co/a/b/resolve/main/tiny.safetensors", "folder": "vae",
+                          "filename": "tiny.safetensors"}, data_dir, tmp_path)
+    assert not comfy.posted("/v2/manager/queue/install_model"), "不经老 Manager 下"
+
+
+@pytest.mark.parametrize("answer", ["V4.2.2", "V4", "v5.0.1", "V10.1"])
+def test_V4_起的_Manager_都认(comfy, data_dir, answer: str) -> None:
+    comfy.state.manager = answer
+    assert _call(comfy, {"op": "library"}, data_dir)["download"]["route"] == "manager"
+
+
 def test_同一台机器_本机那条路(comfy, data_dir, tmp_path) -> None:
     _same_machine(comfy, tmp_path / "models")
     out = _call(comfy, {"op": "library"}, data_dir)

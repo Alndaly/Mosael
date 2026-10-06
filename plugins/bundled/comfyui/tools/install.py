@@ -42,6 +42,9 @@ MANAGER_CLIENT = "mosael"
 MANAGER_POLL_SECONDS = 2.0
 #: Manager 的历史里一直没有这个任务、队列也不在跑:多久之后判它丢了。
 MANAGER_LOST_SECONDS = 120.0
+#: Mosael 只认这个大版本起的 Manager(`/v2/manager/version` 回 `V4.2.1` 这样)。更老的不支持(维护者 2026-10-06 定)。
+MANAGER_MAJOR_SUPPORTED = 4
+_MANAGER_MAJOR = re.compile(r"^[Vv](\d+)(?:\.|$)")
 #: 剩余空间要比文件多留多少(文件系统的元数据、别的程序同时在写)。
 DISK_MARGIN = 256 * 1024 * 1024
 #: 进度多久报一次。
@@ -72,19 +75,22 @@ def _human(size: float) -> str:
 # --- 走哪条路 -----------------------------------------------------------------
 
 def manager_version(comfy: Comfy) -> str:
-    """ComfyUI-Manager V4 的版本(`V4.2.1`);没装、或是只有老接口的旧版 → 空串。"""
+    """ComfyUI-Manager 的版本(`V4.2.1`)。**只认 V4 起**(pip 包 `comfyui_manager`,ComfyUI 0.4.0 起自带):没装、或者更老
+    (克隆进 custom_nodes 的 3.x,不管它答不答 `/v2/manager/version`)→ 空串,当作没有 Mosael 能用的 Manager。"""
     try:
-        found = comfy.get_text("/v2/manager/version")
+        found = (comfy.get_text("/v2/manager/version") or "").strip()
     except ComfyError:
         return ""
-    return found if found and found.upper().startswith("V") else ""
+    major = _MANAGER_MAJOR.match(found)
+    return found if major and int(major.group(1)) >= MANAGER_MAJOR_SUPPORTED else ""
 
 
-def _legacy_manager(comfy: Comfy) -> bool:
-    try:
-        return bool(comfy.get_text("/manager/version"))
-    except ComfyError:
-        return False
+def manager_needed(locale: str) -> str:
+    """没有 Mosael 能用的 Manager 时那一句该做什么(下模型、装节点包、重启都说这一句)。"""
+    return say(locale, "Mosael 要 ComfyUI-Manager V4(ComfyUI 0.4.0 起自带):在那台机器上 "
+                       "pip install -r manager_requirements.txt,启动 ComfyUI 时加 --enable-manager",
+               "Mosael needs ComfyUI-Manager V4 (built into ComfyUI 0.4.0 and later): on that machine run "
+               "pip install -r manager_requirements.txt and start ComfyUI with --enable-manager")
 
 
 def same_machine(comfy: Comfy, info: dict[str, list[str]] | None,
@@ -151,19 +157,16 @@ def _policy_steps(locale: str, url: str = "", folder: str = "", filename: str = 
     return f"{steps}{manual}"
 
 
-def _none_steps(locale: str, legacy: bool, url: str = "", folder: str = "", filename: str = "") -> str:
+def _none_steps(locale: str, url: str = "", folder: str = "", filename: str = "") -> str:
     manual = say(locale, f"或者手动把 {url} 下到那台机器的 models/{folder}/{filename}",
                  f"or download {url} yourself into models/{folder}/{filename} on that machine") if url else \
         say(locale, "或者手动把文件放进那台机器的 models/<目录>/", "or put the file into models/<folder>/ on that machine yourself")
-    if legacy:
-        return say(locale, f"这台 ComfyUI 的 ComfyUI-Manager 太旧(没有 V4 的接口),Mosael 经它下不了:升级 Manager,{manual}",
-                   f"This ComfyUI's ComfyUI-Manager is too old (no V4 API) for Mosael to download through it. Update it, {manual}")
     return say(
         locale,
-        f"这台 ComfyUI 没装 ComfyUI-Manager,ComfyUI 自己也没有下载接口,它又不在这台电脑上 —— Mosael 没法替它下。在那台机器上"
-        f"装 ComfyUI-Manager(V4),{manual}",
-        f"This ComfyUI has no ComfyUI-Manager, ComfyUI itself has no download API, and it isn't on this computer, so Mosael "
-        f"can't download for it. Install ComfyUI-Manager (V4) on that machine, {manual}",
+        f"这台 ComfyUI 没有 Mosael 能用的 ComfyUI-Manager,ComfyUI 自己也没有下载接口,它又不在这台电脑上 —— Mosael 没法替它下。"
+        f"{manager_needed(locale)};{manual}",
+        f"This ComfyUI has no ComfyUI-Manager that Mosael can use, ComfyUI itself has no download API, and it isn't on this "
+        f"computer, so Mosael can't download for it. {manager_needed(locale)}; {manual}",
     )
 
 
@@ -182,7 +185,7 @@ def describe(comfy: Comfy, info: dict[str, list[str]] | None, listing: dict[str,
         if refused:
             note = f"{note} · {say(locale, '上次被拒绝了:', 'Refused last time: ')}{_policy_steps(locale)}"
         return {"route": "manager", "note": note}
-    return {"route": "none", "note": _none_steps(locale, _legacy_manager(comfy))}
+    return {"route": "none", "note": _none_steps(locale)}
 
 
 # --- Manager ------------------------------------------------------------------
@@ -433,4 +436,4 @@ def _download_by_route(comfy: Comfy, info: dict[str, list[str]], direct: str, fo
         return via_local(local, direct, folder, filename, locale, emit)
     if manager_version(comfy):
         return via_manager(comfy, info, direct, folder, filename, locale, emit)
-    raise ComfyError(_none_steps(locale, _legacy_manager(comfy), direct, folder, filename))
+    raise ComfyError(_none_steps(locale, direct, folder, filename))

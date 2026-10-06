@@ -44,7 +44,7 @@ import convert
 import sources
 from comfy_http import Comfy
 from install import MANAGER_CLIENT, MANAGER_LOST_SECONDS, MANAGER_POLL_SECONDS, _cancelled, _log_cursor, _log_reason, \
-    manager_version
+    manager_needed, manager_version
 from lines import ComfyError, say
 from run import Emit
 from service import local_service
@@ -577,10 +577,10 @@ def install_nodes(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit
     if not manager_version(comfy):
         raise ComfyError(say(
             locale,
-            f"这台 ComfyUI 没装 ComfyUI-Manager(V4),Mosael 没法替它装节点包:在那台机器上装好 Manager 再来,或者自己把 "
+            f"这台 ComfyUI 没有 Mosael 能用的 ComfyUI-Manager,没法替它装节点包。{manager_needed(locale)};或者自己把 "
             f"{'、'.join(packs)} 放进 ComfyUI/custom_nodes 再重启",
-            f"This ComfyUI has no ComfyUI-Manager (V4), so Mosael can't install node packs on it. Install the Manager there "
-            f"first, or put {', '.join(packs)} into ComfyUI/custom_nodes yourself and restart",
+            f"This ComfyUI has no ComfyUI-Manager that Mosael can use, so Mosael can't install node packs on it. "
+            f"{manager_needed(locale)}; or put {', '.join(packs)} into ComfyUI/custom_nodes yourself and restart",
         ))
     installed: list[str] = []
     for number, pack in enumerate(packs, start=1):
@@ -644,8 +644,10 @@ def reboot(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]
     if local_service():
         return {"host_restart": True}
     if not manager_version(comfy):
-        raise ComfyError(say(locale, "这台 ComfyUI 没装 ComfyUI-Manager,Mosael 没法替它重启:在那台机器上手动重启",
-                             "This ComfyUI has no ComfyUI-Manager, so Mosael can't restart it. Restart it on that machine"))
+        raise ComfyError(say(locale, f"这台 ComfyUI 没有 Mosael 能用的 ComfyUI-Manager,没法替它重启:在那台机器上手动重启。"
+                                     f"{manager_needed(locale)}",
+                             f"This ComfyUI has no ComfyUI-Manager that Mosael can use, so Mosael can't restart it. Restart "
+                             f"it on that machine. {manager_needed(locale)}"))
     try:
         comfy.post("/v2/manager/reboot", {})
     except ComfyError as exc:

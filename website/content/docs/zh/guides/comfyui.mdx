@@ -46,7 +46,8 @@ ComfyUI 由随 Mosael 一起发的 **ComfyUI 插件**接入：装好就在「插
 只有部署管理员能设置，确认框会写明代码在哪台机器上运行。
 
 - **用我自己装的**：填装好的 ComfyUI 目录(Windows 便携版选外层或里面那层都行)，Mosael 先试跑一次，摆出 ComfyUI 版本、PyTorch、
-  显卡、缺什么；能起才存。
+  显卡、缺什么；能起才存。ComfyUI-Manager 要 pip 版(V4,新的 ComfyUI 自带)：装了就随 ComfyUI 一起开；克隆进
+  `custom_nodes` 的老 Manager Mosael 不支持，检查时会提醒，并给出换成 pip 版的命令(`pip install -r manager_requirements.txt`)。
 - **让 Mosael 装**：先看安装计划 —— 这台机器能不能装(Apple 芯片 Mac、Windows + NVIDIA;别的这一版不装，会说原因)、装哪种 PyTorch、
   至少要多少空间(Mac 5 GB、Windows 8 GB)、分几步、从哪儿下载。确认后 Mosael 下载钉死版本的 ComfyUI、建一个独立的 Python 环境、
   装 PyTorch、依赖、ComfyUI-Manager 和 pysssss,最后试起一次。装的时候看得到第几步、正在下哪个文件、多快，能取消，「接着装」从没做完的
@@ -394,7 +395,7 @@ Ctrl+S 存好，回到 Mosael，工作流库自己刷新，新的那张就在列
 **补齐缺的节点包**：那台 ComfyUI 装了 ComfyUI-Manager 时，「缺的节点」里没装的节点包后面有一颗「**装上**」。确认框写明会改动那台机器
 (经 Manager 装进 `ComfyUI/custom_nodes`，连同它要的 Python 依赖)、装完要重启 ComfyUI 才加载、重启时正在跑的任务会中断。装是一个后台任务，
 下面一块说装到哪了；装好了点「**重启 ComfyUI**」(同样先确认)，回来以后工作流库重新列一遍。Manager 的安全策略不让装或不让重启时，
-会说怎么改、或者怎么在那台机器上手动装；没装 Manager 的就说在那台机器上手动装。**补齐缺的模型**走模型库的下载(见上)。
+会说怎么改、或者怎么在那台机器上手动装；没有 Mosael 能用的 Manager(要 pip 版的 V4,老的不支持)就说怎么装上它、或者在那台机器上手动装。**补齐缺的模型**走模型库的下载(见上)。
 
 <Recording src="/media/videos/workflow-library.mp4" poster="/media/screens/workflow-library.png" caption="实机操作：打开工作流库，贴一段工作流 JSON 认一下、看预览(没有保存)；打开一张缺节点和模型的工作流，从缺的模型打开下载框(没有下载)" />
 

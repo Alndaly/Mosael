@@ -187,11 +187,12 @@ ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope �
 2. **ComfyUI 就在这台电脑上**(它报的模型目录在本机存在,且本机的文件和它报的一致):直接写进去,先写 `名字.mosael-part`、
    下完挂上正式的名字;按字节报进度、能取消(只删自己的半截文件);开始前查剩余空间,不够就不下。装了 ComfyUI-Manager
    也先走这条(1.13.2):Manager 那条路看不到进度、停不下,令牌还得拼进它的下载地址;
-3. **ComfyUI-Manager(V4)**,ComfyUI 在另一台机器上时:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停
+3. **ComfyUI-Manager(V4 起;克隆进 custom_nodes 的老 Manager 不支持,1.15.0)**,ComfyUI 在另一台机器上时:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停
    单个任务的接口,取消只是 Mosael 不再等)。它的安全策略只在 ComfyUI 监听本机地址、或 `user/__manager/config.ini` 里
    `network_mode = personal_cloud` 时才放行 —— 用 `--listen 0.0.0.0` 开着的局域网 ComfyUI 默认不让,插件把日志里的原因说成
    人话,并记下来,下次在模型库里提前提醒;
-4. 都不行:说清楚,并给出能做的那一步(装 Manager、改 `network_mode`、或手动把直链下到 `models/<目录>/`)。
+4. 都不行:说清楚,并给出能做的那一步(装 V4 的 Manager —— ComfyUI 0.4.0 起自带,`pip install -r manager_requirements.txt`、
+   启动加 `--enable-manager`;改 `network_mode`;或手动把直链下到 `models/<目录>/`)。
 
 **不覆盖任何已有文件**:同名的先要求换名(给一个 `名字 (1).扩展名` 的建议),写盘时再查一遍(硬链接挂正式名字,目标已在就失败)。
 不删、不改名、不移动模型文件;不装自定义节点、不改 Manager 的配置。
@@ -363,11 +364,11 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 - **先确认再运行**:点「检查并使用」先问一次(会在这台机器上运行那个目录里的代码),确认后插件认一遍目录 —— 有 `main.py` 和
   `comfy/` 的那一层;Windows 便携版选外层的 `ComfyUI_windows_portable` 或里面的 `ComfyUI` 都行。解释器按顺序找:你指定的、
   便携版自带的 `python_embeded\python.exe`、目录里或上一层的 `venv` / `.venv`(Windows 是 `Scripts\python.exe`)。试跑一次
-  `import torch`(30 秒上限),摆出 ComfyUI 版本、Python、PyTorch、显卡(MPS / CUDA / 只有 CPU)和显存、Manager(pip 包 / 老式
-  节点 / 没装)、pysssss;导入不了 torch 就不让用。torch 能导入还不够:ComfyUI 的 requirements.txt 里必需的包
+  `import torch`(30 秒上限),摆出 ComfyUI 版本、Python、PyTorch、显卡(MPS / CUDA / 只有 CPU)和显存、Manager(pip 包 /
+  没装;只有 custom_nodes 里老的 Manager 时提醒不支持,给出换成 pip 版的命令,1.15.0)、pysssss;导入不了 torch 就不让用。torch 能导入还不够:ComfyUI 的 requirements.txt 里必需的包
   缺哪几个也查(只认装没装,不比版本),缺了同样不让用,写明在哪个环境里 `pip install -r requirements.txt`。
 - **起的命令**:`python main.py --listen 127.0.0.1 --port <端口>`,装了 Manager 的 pip 包(`comfyui_manager`)才加
-  `--enable-manager`,便携版照它自己的启动脚本加 `-s`;「高级」里的附加参数接在后面(端口、监听地址不许写在那里)。不改它的任何文件。
+  `--enable-manager`(custom_nodes 里的老 Manager 不看,照样起),便携版照它自己的启动脚本加 `-s`;「高级」里的附加参数接在后面(端口、监听地址不许写在那里)。不改它的任何文件。
   端口 Mosael 建的时候选(8189 往上第一个空的)、写进服务器地址;改端口时插件把按旧地址存的本地数据(模型库缓存、工具对照)搬过去。
 - **用到时起、退出时停**,崩了 Mosael 自己重起;装完节点包要重启时,本机这台由 Mosael 停了再起,不经 Manager 的重启。
 - **补装 pysssss**:没装就在连接页上说明少了什么;点「补装」并确认后,下载钉死的提交(`609f3af`,按 sha256 校验)解到

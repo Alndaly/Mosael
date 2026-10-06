@@ -17,7 +17,7 @@ commit list and downloadable artifacts.
   Mosael 从 8189 往上挑一个空端口、写进连接的服务器地址,模型库、工作流库、工作台、生成读的还是那一个地址。
 - **先确认再运行**:选目录时问一次「会在这台机器上运行这个目录里的代码」,确认了才认目录 —— 认得出 Windows 便携版的两种选法
   (外层 `ComfyUI_windows_portable` 或里面那层)、目录里或上一层的 `venv` / `.venv`,也可以自己指一个解释器(conda);试跑一次
-  `import torch`(30 秒上限),把 ComfyUI 版本、Python、PyTorch、显卡(MPS / CUDA / 只有 CPU)和显存、Manager(pip 包 / 老式节点)、
+  `import torch`(30 秒上限),把 ComfyUI 版本、Python、PyTorch、显卡(MPS / CUDA / 只有 CPU)和显存、Manager、
   pysssss 摆出来。torch 导入不了就不让存,说清楚哪一步不行。
 - **用到时自动起**:生成、打开模型库或工作流库、智能体和工作流调它的工具时,停着就先起、等它就绪(任务里写「正在启动本机 ComfyUI」);
   退出 Mosael 时停下。「保持运行」打开后 Mosael 一启动就起。打开工作台、在编辑器里打开之前也先请它起好,按钮上写「正在启动…」。
@@ -51,6 +51,9 @@ commit list and downloadable artifacts.
   地址前面;按 sha256 校验,镜像换不了内容)。下载照样走设置里的代理。
 - **ComfyUI 插件多申报三项权限**:`network:github`(下 ComfyUI 源码和 pysssss;选目录那一种的「补装 pysssss」本来就要)、`network:pypi`、
   `network:pytorch`。升上来的连接会先停用,等你授予这三项,之前授予的不受影响。
+- **ComfyUI-Manager 只认 pip 版(V4,ComfyUI 0.4.0 起自带)**,克隆进 `custom_nodes` 的老 Manager(3.x)不再支持:下模型、装缺的节点包、
+  重启碰上它都当作没有 Manager,说清楚要 V4 —— `pip install -r manager_requirements.txt`、启动加 `--enable-manager`。「用我自己装的」
+  目录里只有老 Manager 时,检查会提醒并给出这两条命令;照样能起、不加参数,也不动那个目录。
 
 ### 界面修复
 

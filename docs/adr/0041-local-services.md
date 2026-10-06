@@ -37,7 +37,8 @@ ComfyUI 插件现在只会**连一台已经在跑的服务器**:填 `server_url`
 - **ComfyUI 0.39.0** 的 README:Python 3.13「支持得很好」(3.14 能跑,个别自定义节点有问题);NVIDIA 装 torch 用
   `--extra-index-url https://download.pytorch.org/whl/cu130`;**Manager 已经并进 ComfyUI**:
   `pip install -r manager_requirements.txt`(装的是 pip 包 `comfyui_manager`,当前 4.2.2),启动加 `--enable-manager`。
-  老办法(git clone 进 `custom_nodes/comfyui-manager`)还能用。
+  老办法(git clone 进 `custom_nodes/comfyui-manager`,3.x)ComfyUI 那边还认,但 **Mosael 不支持它**(维护者 2026-10-06 定,
+  见「第二步做成了什么」)。
 - **Manager 的安全档**(`user/__manager/config.ini`):不只听本机(`--listen` 不是回环地址)时,从未登记来源装节点、
   `pip install` 这类高风险操作默认被拦。
 - **在测试场实测**(Apple 芯片、随包 CPython 3.13.15、经代理;脚本和日志在会话的 scratchpad,不进仓库):
@@ -95,7 +96,7 @@ ComfyUI 连接多一项**在哪跑**:
 
 | 操作 | 输入 | 回什么 |
 | --- | --- | --- |
-| `service_detect` | 目录;可选:用户指定的 Python | 认没认出来;ComfyUI 版本、用哪个 Python、torch 版本、显卡(mps / cuda / 只有 CPU)、显存;有没有 Manager(pip 包 / 老式节点 / 没有)、pysssss;能读懂的问题列表 |
+| `service_detect` | 目录;可选:用户指定的 Python | 认没认出来;ComfyUI 版本、用哪个 Python、torch 版本、显卡(mps / cuda / 只有 CPU)、显存;有没有 Manager(pip 包 / 没有;只有 custom_nodes 里的老 Manager 时提醒不支持、给出换成 pip 版的命令)、pysssss;能读懂的问题列表 |
 | `service_launch` | 目录、Python、端口、听不听局域网、附加参数 | `argv`、`env`、`cwd`、健康检查的路径(`/system_stats`)、首次就绪最多等多久 |
 | `service_plan` | 目标目录 | 这台机器能不能装、装哪种 torch、要多少空间、分几步 —— 给确认页 |
 | `service_install` | 目标目录、`service_plan` 的结果 | 流式进度(第几步、多少字节),可取消、可接着装 |
@@ -129,7 +130,8 @@ ComfyUI 连接多一项**在哪跑**:
 - **认出 Python**,按顺序:便携版的 `python_embeded`;目录里或上一层的 `venv` / `.venv`;都没有就请用户自己指一个
   (conda、系统 Python)。认出来先**试跑一次**(`import torch`,看 MPS / CUDA 能不能用,30 秒上限),结果直接摆出来;
   torch 都导入不了就不让起,说清楚是哪一步不行。
-- **起的参数**:`--listen 127.0.0.1 --port <端口>`;装了 Manager 的 pip 包就加 `--enable-manager`(老式节点不用加);
+- **起的参数**:`--listen 127.0.0.1 --port <端口>`;装了 Manager 的 pip 包就加 `--enable-manager`,没装不加(custom_nodes 里的老
+  Manager 不支持,起的时候不看它);
   「高级」里能加 `--lowvram` 这类参数。不改它的任何文件。
 - **pysssss**:模型库的哈希、预览图要靠它。没装就在连接页上说明少了什么,点「补装」并确认后,把**插件里钉死版本**的压缩包
   解到它的 `custom_nodes/ComfyUI-Custom-Scripts`,写明装到了哪儿,下次起生效。
@@ -265,6 +267,12 @@ ComfyUI 连接多一项**在哪跑**:
 - **安装计划分 `supported` 和 `ok`**:前者是这台机器本身能不能装,后者还看空间、路径 —— 「这块盘只剩 2 GB」不该说成「这台机器装不了」。
 - **权限一次补齐**:清单加 `network:github`、`network:pypi`、`network:pytorch`(插件 1.15.0)—— 第一步的补装 pysssss 本来就要连 codeload,
   当时没申报。升上来的连接照规矩先停用、等授予。
+- **不再支持老的 ComfyUI-Manager**(维护者 2026-10-06 定,取代第一步的「老式节点」一档):Manager 要么是 pip 包(V4,ComfyUI 0.4.0 起
+  自带 —— 核对过 v0.3.78 没有 `manager_requirements.txt`、v0.4.0 起有),要么当作没有。`/v2/manager/version` 只认 V4 起,回 V3 也当
+  没有;不再探老的 `/manager/version`。下模型、装节点包、重启碰上没有能用的 Manager 时说同一句:要 V4,`pip install -r
+  manager_requirements.txt`、启动加 `--enable-manager`。「用我自己装的」:装了 pip 包就加 `--enable-manager`;只有
+  `custom_nodes/comfyui-manager` 时认目录报一条 warning(不支持、装缺的节点包和经它下模型要 pip 版,给出那两条命令;ComfyUI 老到还没有
+  `manager_requirements.txt` 就先升级),照样能起、不加参数、不碰那个目录。「让 Mosael 装」的那一份装的就是 pip 包,总是加。
 
 实测(Apple 芯片 M 系列、经代理、官方 PyPI,隔离数据目录,经界面):pip 缓存是热的(测试场那份)从确认到试起通过 85 秒(源码 5 秒、
 torch 21 秒、依赖 24 秒、试起 23 秒);全新的缓存 280 秒(torch 68 秒、依赖 181 秒、试起 23 秒);装完 1.9 GB,pip 缓存另 0.8 GB。

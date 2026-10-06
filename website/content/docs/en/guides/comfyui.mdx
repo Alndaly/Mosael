@@ -58,7 +58,9 @@ the code runs on.
 
 - **Use my own install**: enter the folder of an installed ComfyUI (for the Windows portable build either the outer or the inner
   folder works). Mosael runs a quick trial and shows the ComfyUI version, PyTorch, GPU and anything missing; it's saved only
-  if it can start.
+  if it can start. ComfyUI-Manager has to be the pip version (V4, built into recent ComfyUI): if it's installed, it's turned on
+  with ComfyUI. Mosael doesn't support the old Manager cloned into `custom_nodes`; the check warns about it and gives the
+  command to switch to the pip version (`pip install -r manager_requirements.txt`).
 - **Let Mosael install it**: first the install plan — whether this machine can install it (Macs with Apple silicon and Windows +
   NVIDIA; other systems aren't supported in this version, and it says why), which PyTorch, how much disk space at least (5 GB on
   a Mac, 8 GB on Windows), the steps and where it downloads from. After you confirm, Mosael downloads a pinned ComfyUI release,
@@ -509,7 +511,8 @@ under Missing nodes. The confirmation says this changes that machine (the Manage
 Python dependencies), that ComfyUI must restart to load it, and that a restart interrupts running tasks. Installing is a background
 task with progress shown below; when it's done, **Restart ComfyUI** (also confirmed first), and the workflow library lists everything
 again once ComfyUI is back. If the Manager's security settings refuse to install or restart, you're told what to change or how to
-install by hand; without the Manager you're told to install it on that machine yourself. **Missing models** are downloaded through
+install by hand; without a Manager Mosael can use (the pip version, V4; the old one isn't supported) you're told how to add it, or
+to install the pack on that machine yourself. **Missing models** are downloaded through
 the model library (see above).
 
 <Recording src="/media/videos/en/workflow-library.mp4" poster="/media/screens/en/workflow-library.png" caption="Live interaction: open the workflow library, paste a workflow JSON and look at the preview (not saved); open a workflow missing a node and models, and open the download dialog from a missing model (nothing is downloaded)" />

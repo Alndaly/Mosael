@@ -187,21 +187,44 @@ def test_认目录_MPS_的事实_Manager_是_pip_包_没装_pysssss_给补装(se
 
 
 @posix_only
-def test_认目录_CUDA_老式_Manager_装了_pysssss(service, tmp_path: Path) -> None:
+def test_认目录_CUDA_只有老_Manager_提醒不支持_给出那两条命令_不加参数_不碰它(service, tmp_path: Path) -> None:
+    """维护者 2026-10-06 定:克隆进 custom_nodes 的老 Manager(3.x)不支持 —— Manager 要么是 pip 包,要么没有。"""
     root = _comfy(tmp_path / "ComfyUI")
-    (root / "custom_nodes" / "ComfyUI-Manager").mkdir()
+    old = root / "custom_nodes" / "ComfyUI-Manager"
+    old.mkdir()
+    (old / "__init__.py").write_text("# old manager\n", encoding="utf-8")
     (root / "custom_nodes" / "comfyui-custom-scripts").mkdir()
-    _fake_python(root / ".venv" / "bin" / "python", {
+    (root / "manager_requirements.txt").write_text("comfyui_manager==4.2.2\n", encoding="utf-8")
+    python = root / ".venv" / "bin" / "python"
+    _fake_python(python, {
         "python": "3.12.8", "manager": False, "torch": "2.9.0+cu130", "device": "cuda", "gpu": "NVIDIA GeForce RTX 4090",
         "vram": 24 * 1024 ** 3, "cuda": "13.0",
     })
     found = service.detect({"directory": str(root)}, "zh", windows=False)
-    assert found["ok"] is True and found["add_nodes"] is None
+    assert found["ok"] is True and found["add_nodes"] is None, "提醒不挡路:照样能起"
     facts = _facts(found)
     assert facts["显卡"] == "CUDA 13.0 · NVIDIA GeForce RTX 4090 · 显存 24 GB"
-    assert facts["ComfyUI-Manager"].startswith("老式节点"), "Manager 的老装法(custom_nodes 里,不分大小写)"
+    assert facts["ComfyUI-Manager"] == "没装", "Manager 要么是 pip 包,要么没有;没有「老式节点」这一种"
     assert facts["ComfyUI-Custom-Scripts(pysssss)"] == "已装"
-    assert found["problems"] == []
+    [(level, text)] = _problems(found)
+    assert level == "warning" and "custom_nodes/ComfyUI-Manager" in text and "不支持" in text
+    assert f"{python} -m pip install -r {root / 'manager_requirements.txt'}" in text and "--enable-manager" in text
+    english = service.detect({"directory": str(root)}, "en", windows=False)
+    assert "the old ComfyUI-Manager, which Mosael doesn't support" in _problems(english, "en")[0][1]
+    # 起的时候不看它:没有 pip 包就不加参数(加了 ComfyUI 会说要先装 pip 包),照样起
+    argv = service.launch({"directory": str(root), "port": 8189}, "zh", windows=False, has_manager=lambda *_: False)["argv"]
+    assert "--enable-manager" not in argv
+    assert sorted(one.name for one in old.iterdir()) == ["__init__.py"], "不碰那个目录"
+
+
+@posix_only
+def test_认目录_只有老_Manager_ComfyUI_老到没有_manager_requirements_先升级(service, tmp_path: Path) -> None:
+    root = _comfy(tmp_path / "ComfyUI", version="0.3.60")
+    (root / "custom_nodes" / "comfyui-manager").mkdir()
+    _fake_python(root / "venv" / "bin" / "python", {**MPS, "manager": False})
+    [(level, text)] = [one for one in _problems(service.detect({"directory": str(root)}, "zh", windows=False))
+                       if "Manager" in one[1]]
+    assert level == "warning" and "先升级 ComfyUI" in text and "0.4.0" in text
 
 
 @posix_only
@@ -241,7 +264,7 @@ def test_认目录_torch_能导入但缺_ComfyUI_要的包_也不让起(service,
     found = service.detect({"directory": str(root), "python": str(python)}, "zh", windows=False)
     assert found["ok"] is False, "起不来的不让存"
     assert _facts(found)["PyTorch"] == "2.14.1", "torch 那一半照样摆出来"
-    [(level, text)] = _problems(found)
+    [(level, text)] = [one for one in _problems(found) if one[0] == "error"]
     assert level == "error" and "alembic、comfy-aimdo" in text
     assert f"{python} -m pip install -r {root / 'requirements.txt'}" in text, "说清楚在哪个环境里装什么"
 
@@ -300,7 +323,7 @@ def test_起_只听本机_装了_Manager_的_pip_包才加_enable_manager(servic
     lan = service.launch({"directory": str(root), "port": 8190, "listen_lan": True}, "zh", windows=False,
                          has_manager=lambda *_: False)
     assert lan["argv"][2:6] == ["--listen", "0.0.0.0", "--port", "8190"] and "--enable-manager" not in lan["argv"], \
-        "老式节点或没装 Manager 不加 --enable-manager"
+        "没装 Manager 的 pip 包不加 --enable-manager"
 
 
 def test_起_便携版用自带的解释器加_s(service, tmp_path: Path) -> None:
