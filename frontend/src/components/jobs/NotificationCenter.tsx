@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, Bot, Check, CheckCheck, GitBranch, Send, Trash2, Users, X } from "lucide-react";
+import { Bell, BellOff, Bot, Check, CheckCheck, GitBranch, Loader2, Send, Trash2, Users, X } from "lucide-react";
 
 import {
   clearReadNotifications,
@@ -120,9 +120,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                 type="button"
                 className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"
                 disabled={readAll.isPending}
+                aria-busy={readAll.isPending || undefined}
                 onClick={() => readAll.mutate()}
               >
-                <CheckCheck size={11} /> {t("notifReadAll")}
+                {readAll.isPending ? <Loader2 size={11} className="animate-mosael-spin" /> : <CheckCheck size={11} />} {t("notifReadAll")}
               </button>
             )}
             {/* 全是已读时头部原来空空如也 —— 50 条旧通知只能一直霸着面板。
@@ -132,9 +133,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                 type="button"
                 className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
                 disabled={clearRead.isPending}
+                aria-busy={clearRead.isPending || undefined}
                 onClick={() => clearRead.mutate()}
               >
-                <Trash2 size={11} /> {t("notifClearRead")}
+                {clearRead.isPending ? <Loader2 size={11} className="animate-mosael-spin" /> : <Trash2 size={11} />} {t("notifClearRead")}
               </button>
             )}
           </span>

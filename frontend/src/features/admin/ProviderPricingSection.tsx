@@ -520,7 +520,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </Button>
             )}
             <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
-            <Button type="submit" form={pricingFormId} size="sm" disabled={!canSubmit || create.isPending || update.isPending}>
+            <Button type="submit" form={pricingFormId} size="sm" disabled={!canSubmit} loading={create.isPending || update.isPending}>
               {editing ? t("save") : t("pricingRuleAdd")}
             </Button>
           </>

@@ -323,7 +323,8 @@ function VoiceRow({
             variant="ghost"
             className="text-muted-foreground hover:text-foreground"
             //: 没声明是谁的嗓子,不往外传(和数字人同一条线)—— 灰掉并说为什么,点编辑去补。
-            disabled={voice.consent_kind === "undeclared" || copy.isPending}
+            disabled={voice.consent_kind === "undeclared"}
+            loading={copy.isPending}
             disabledReason={voice.consent_kind === "undeclared" ? t("voiceCopyNeedsConsent") : undefined}
             label={t("voiceCopyToBailian")}
             data-voice-copy=""

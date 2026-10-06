@@ -19,6 +19,9 @@ import { useNoteStrings } from "./strings";
 /** 一种可选的正文形状。给了两份以上,对话框就多一排切换;只给正文的调用方什么都不用改。 */
 export type SaveToNoteVariant = { id: string; label: string; markdown: string; sources: NoteSource[] };
 
+/** 正在存的是「新建一篇」(笔记 id 不会长这样)。 */
+const NEW_NOTE = "__new__";
+
 /**
  * 「保存到笔记」对话框。逐字稿、字幕、对话气泡、画板节点共用这一个。
  *
@@ -33,7 +36,9 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
   trigger?: (props: {open: () => void; disabled: boolean; label: string}) => React.ReactNode;
 }) {
   const s = useNoteStrings(); const qc = useQueryClient(); const { locale } = usePreferences();
-  const [open, setOpen] = React.useState(false); const [title, setTitle] = React.useState(""); const [q, setQ] = React.useState(""); const [busy, setBusy] = React.useState(false);
+  const [open, setOpen] = React.useState(false); const [title, setTitle] = React.useState(""); const [q, setQ] = React.useState("");
+  //: 正在存到哪:新建(`NEW_NOTE`)还是追加到哪一篇(它的 id)。转圈的是那一处,别的在这期间都点不了
+  const [savingTo, setSavingTo] = React.useState<string | null>(null); const busy = savingTo !== null;
   const [variantId, setVariantId] = React.useState(variants?.[0]?.id ?? "");
   // 打字过程中沿用上一份结果,不让列表在每个字之间塌成"载入中"再弹回来。
   const notes = useQuery({queryKey: noteKeys.search(workspaceId, q), queryFn: () => listNotes(workspaceId, q), enabled: open, placeholderData: keepPreviousData});
@@ -44,11 +49,11 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
   const markdown = chosen ? chosen.markdown : (content ?? "");
   const chosenSources = chosen ? chosen.sources : sources;
   const candidates = notes.data?.filter(n => !n.trashed) ?? [];
-  async function save(target?: Note) { setBusy(true); try {
+  async function save(target?: Note) { setSavingTo(target?.id ?? NEW_NOTE); try {
     const n = target ? await appendNote(target, markdown, chosenSources) : await createNote(workspaceId, {title: title.trim() || markdown.replace(/[#*>\n]/g, " ").slice(0, 60), markdown, sources: chosenSources});
     void qc.invalidateQueries({queryKey: noteKeys.lists(workspaceId)}); void qc.invalidateQueries({queryKey: noteKeys.detail(workspaceId, n.id)});
     toast.success(s.done); onSaved?.(n); setOpen(false);
-  } catch (e) { toast.error(errorText(e)); } finally { setBusy(false); } }
+  } catch (e) { toast.error(errorText(e)); } finally { setSavingTo(null); } }
 
   // 列表的键盘走法:上下键在行之间挪、Home/End 到两端,从搜索框按 ↓ 进列表、在第一行按 ↑ 回搜索框。
   // 每一行是一个普通按钮(Tab 也能走到),Enter / 空格就是追加 —— 不另造一套"高亮项"状态。
@@ -82,7 +87,7 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
           {/* 标题框和它的动作同一行、同一高度(40px);回车等于点「新建」。 */}
           <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (!busy) void save(); }}>
             <Input aria-label={s.noteTitle} value={title} onChange={e => setTitle(e.target.value)} placeholder={s.untitled} maxLength={240} disabled={busy} />
-            <Button type="submit" className="shrink-0" disabled={busy}>{s.create}</Button>
+            <Button type="submit" className="shrink-0" disabled={busy} loading={savingTo === NEW_NOTE}>{s.create}</Button>
           </form>
           <small>{s.titleHint}</small>
         </section>
@@ -103,10 +108,11 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
               : !candidates.length ? <p className="m-auto px-3 text-center text-ui-sm text-muted-foreground">{q.trim() ? s.noResults : s.listEmpty}</p>
               : candidates.map((n, index) => <div role="listitem" key={n.id} className="min-w-0">
                 {/* 挑选列表(role=list)里的一行,不是菜单:样子和菜单项同一套,角色仍是按钮。 */}
-                <MenuItem role="button" data-note-row="" disabled={busy}
+                <MenuItem role="button" data-note-row="" disabled={busy} aria-busy={savingTo === n.id || undefined}
                   className="group/row focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   onKeyDown={e => moveFocus(e, index)} onClick={() => void save(n)}
-                  icon={<FileText className="text-muted-foreground" />} label={n.title || s.untitled} truncate
+                  icon={savingTo === n.id ? <Loader2 className="animate-mosael-spin" /> : <FileText className="text-muted-foreground" />}
+                  label={n.title || s.untitled} truncate
                   //: 静止时是更新时间;悬停 / 聚焦时换成回车符号,说明"点它就是追加到这里"。
                   hint={<>
                     <span className="group-hover/row:hidden group-focus-visible/row:hidden">{relativeTime(n.updated_at, locale)}</span>

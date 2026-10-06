@@ -97,3 +97,19 @@ it("handles reversed ranges and an anchor no longer in the filtered list", () =>
   expect(rangeSelection(["a", "b", "c"], "c", "a")).toEqual(["a", "b", "c"]);
   expect(rangeSelection(["b", "c"], "a", "c")).toEqual(["c"]);
 });
+it("批量操作在跑时转圈的是点的那一颗,别的动作只是点不了;做完都恢复", async () => {
+  let finish: (ids: string[]) => void = () => undefined;
+  const action = vi.fn(() => new Promise<string[]>((resolve) => { finish = resolve; }));
+  const { row } = mount(action);
+  fireEvent.click(row("a"), { metaKey: true });
+  const exportButton = () => screen.getByRole("button", { name: "导出 Markdown" });
+  const trashButton = () => screen.getByRole("button", { name: "移入回收站" });
+  fireEvent.click(exportButton());
+  await waitFor(() => expect(exportButton().getAttribute("aria-busy")).toBe("true"));
+  expect(exportButton().querySelector("svg.animate-mosael-spin")).not.toBeNull();
+  expect((trashButton() as HTMLButtonElement).disabled, "别的动作这期间点不了").toBe(true);
+  expect(trashButton().getAttribute("aria-busy"), "但不转圈:在跑的不是它").toBeNull();
+  finish(["a"]);
+  await waitFor(() => expect(exportButton().getAttribute("aria-busy")).toBeNull());
+  expect((trashButton() as HTMLButtonElement).disabled).toBe(false);
+});

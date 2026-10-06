@@ -395,6 +395,8 @@ function SceneEditor({
     [viewMode, setViewMode] = React.useState(() => readSceneView(initial.workspace_id, initial.id).mode),
     [playing, setPlaying] = React.useState(false),
     [busy, setBusy] = React.useState(""),
+    //: 「生成素材」里点的是哪一种(三颗共用一句「正在准备」):转圈的是点的那一颗
+    [bridging, setBridging] = React.useState<SceneReferenceUse | null>(null),
     [progress, setProgress] = React.useState(0),
     [agent, setAgent] = React.useState<CanvasAgentMode | null>(null),
     [revisions, setRevisions] = React.useState(false),
@@ -793,39 +795,44 @@ function SceneEditor({
    * 提示词里先写好画面里有什么、打光是什么(白模说明由服务端附上)。
    */
   async function bridge(use: SceneReferenceUse) {
-    await work(t("sceneBusyPrepareGenerate"), async () => {
-      //: 服务端渲的是**存着的**那一版:没存完的先存上。
-      if (!(await autosave.flush())) throw new Error(t("sceneGenerateUnsaved"));
-      const board = await createBoard({
-        workspace_id: initial.workspace_id,
-        name: `${draft.name} · ${shot.name}`,
+    setBridging(use);
+    try {
+      await work(t("sceneBusyPrepareGenerate"), async () => {
+        //: 服务端渲的是**存着的**那一版:没存完的先存上。
+        if (!(await autosave.flush())) throw new Error(t("sceneGenerateUnsaved"));
+        const board = await createBoard({
+          workspace_id: initial.workspace_id,
+          name: `${draft.name} · ${shot.name}`,
+        });
+        const sceneItem: BoardItem = { id: uid(), kind: "scene", scene_id: initial.id, text: draft.name, x: -440, y: 0 };
+        const kind = use === "composition" ? "image" : "video";
+        const generator: BoardItem = {
+          id: uid(),
+          kind,
+          x: 0,
+          y: 0,
+          form: {
+            prompt: sceneBriefPrompt({ objects: draft.content.objects, lighting: lightingPrompt(draft.content.lighting, t), t }),
+            scene_reference: { shot_id: shot.id, use },
+            parameters: { aspect_ratio: shot.aspect, ...(kind === "video" ? { duration_seconds: shot.duration } : {}) },
+          },
+        };
+        await updateBoard(board.id, {
+          workspace_id: initial.workspace_id,
+          base_revision: board.revision,
+          //: 每一格过新建格子的那一处(api/domains/boards 的 withSlotProducer):产出者由它补上 —— 和画布上放下的一格同一个样子。
+          canvas: {
+            items: [sceneItem, generator].map((item) => withSlotProducer(item)),
+            edges: [{ id: uid(), source: sceneItem.id, target: generator.id }],
+          },
+        });
+        await qc.invalidateQueries({ queryKey: ["boards", initial.workspace_id] });
+        location.hash = `#/boards?board=${board.id}`;
+        toast.success(kind === "image" ? t("sceneBridgeImageDone") : t("sceneBridgeVideoDone"));
       });
-      const sceneItem: BoardItem = { id: uid(), kind: "scene", scene_id: initial.id, text: draft.name, x: -440, y: 0 };
-      const kind = use === "composition" ? "image" : "video";
-      const generator: BoardItem = {
-        id: uid(),
-        kind,
-        x: 0,
-        y: 0,
-        form: {
-          prompt: sceneBriefPrompt({ objects: draft.content.objects, lighting: lightingPrompt(draft.content.lighting, t), t }),
-          scene_reference: { shot_id: shot.id, use },
-          parameters: { aspect_ratio: shot.aspect, ...(kind === "video" ? { duration_seconds: shot.duration } : {}) },
-        },
-      };
-      await updateBoard(board.id, {
-        workspace_id: initial.workspace_id,
-        base_revision: board.revision,
-        //: 每一格过新建格子的那一处(api/domains/boards 的 withSlotProducer):产出者由它补上 —— 和画布上放下的一格同一个样子。
-        canvas: {
-          items: [sceneItem, generator].map((item) => withSlotProducer(item)),
-          edges: [{ id: uid(), source: sceneItem.id, target: generator.id }],
-        },
-      });
-      await qc.invalidateQueries({ queryKey: ["boards", initial.workspace_id] });
-      location.hash = `#/boards?board=${board.id}`;
-      toast.success(kind === "image" ? t("sceneBridgeImageDone") : t("sceneBridgeVideoDone"));
-    });
+    } finally {
+      if (mounted.current) setBridging(null);
+    }
   }
   function applyCameraPose(patch: Partial<Pick<SceneObject, "position" | "target" | "fov">>) {
     if (!rig) return;
@@ -977,6 +984,7 @@ function SceneEditor({
                 <button
                   className="scene-choice"
                   disabled={!!busy}
+                  aria-busy={bridging === "composition" || undefined}
                   onClick={() => void bridge("composition")}
                 >
                   <ImageIcon size={20} />
@@ -984,11 +992,12 @@ function SceneEditor({
                     <strong>{t("sceneGenerateFromFrame")}</strong>
                     <small>{t("sceneGenerateFromFrameHint")}</small>
                   </span>
-                  <ChevronRight size={16} />
+                  {bridging === "composition" ? <Loader2 size={16} className="animate-mosael-spin" /> : <ChevronRight size={16} />}
                 </button>
                 <button
                   className="scene-choice"
                   disabled={!!busy}
+                  aria-busy={bridging === "frames" || undefined}
                   onClick={() => void bridge("frames")}
                 >
                   <Camera size={20} />
@@ -996,11 +1005,12 @@ function SceneEditor({
                     <strong>{t("sceneGenerateFromFrames")}</strong>
                     <small>{t("sceneGenerateFromFramesHint")}</small>
                   </span>
-                  <ChevronRight size={16} />
+                  {bridging === "frames" ? <Loader2 size={16} className="animate-mosael-spin" /> : <ChevronRight size={16} />}
                 </button>
                 <button
                   className="scene-choice"
                   disabled={!!busy}
+                  aria-busy={bridging === "motion" || undefined}
                   onClick={() => void bridge("motion")}
                 >
                   <Play size={20} />
@@ -1008,7 +1018,7 @@ function SceneEditor({
                     <strong>{t("sceneGenerateFromVideo")}</strong>
                     <small>{t("sceneGenerateFromVideoHint")}</small>
                   </span>
-                  <ChevronRight size={16} />
+                  {bridging === "motion" ? <Loader2 size={16} className="animate-mosael-spin" /> : <ChevronRight size={16} />}
                 </button>
                 <p>
                   {t("sceneGenerateLightingNote").replace("{lighting}", t(presetById(draft.content.lighting.preset)?.label ?? "sceneLightingCustom"))}{" "}

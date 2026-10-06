@@ -545,7 +545,7 @@ function OpenSiteDialog({
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>{t("poolOpen")}</Button>
+          <Button size="sm" disabled={!url.trim()} loading={pending} onClick={open}>{t("poolOpen")}</Button>
         </>
       }
     >
@@ -583,7 +583,7 @@ function CreateProfileDialog({
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={pending || !name.trim()} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>{t("poolCreate")}</Button>
+          <Button size="sm" disabled={!name.trim()} loading={pending} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>{t("poolCreate")}</Button>
         </>
       }
     >
@@ -622,7 +622,7 @@ function ProxyDialog({
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={pending} onClick={() => onSave(proxy.trim() || null)}>{t("save")}</Button>
+          <Button size="sm" loading={pending} onClick={() => onSave(proxy.trim() || null)}>{t("save")}</Button>
         </>
       }
     >

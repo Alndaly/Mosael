@@ -146,9 +146,9 @@ export function HomeHero({
             className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
             label={t("homePoemRefresh")}
             onClick={onRefreshPoem}
-            disabled={poemLoading}
+            loading={poemLoading}
           >
-            <RefreshCcw size={12} className={poemLoading ? "animate-mosael-spin" : undefined} />
+            <RefreshCcw size={12} />
           </IconButton>
         </figure>
       {actions}

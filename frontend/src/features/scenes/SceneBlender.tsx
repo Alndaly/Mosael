@@ -38,6 +38,9 @@ import {
 } from "@/components/ui/popover";
 import { Pick } from "./SceneControls";
 
+/** 这块面板上会跑一阵的几样。 */
+type BlenderAction = "check" | "send" | "receive" | "receive-as-new" | "download";
+
 export function SceneBlender({
   scene,
   pending,
@@ -91,18 +94,25 @@ export function SceneBlender({
     setFailure("");
     setSelectedTransfer("");
   }, [instance]);
-  async function run(label: string, action: () => Promise<void>) {
+  //: 这块面板里在跑的是哪一样:转圈的是点的那一颗(`busy` 只说「场景这边有事在跑」,不知道是哪一颗)
+  const [running, setRunning] = React.useState<BlenderAction | null>(null);
+  async function run(what: BlenderAction, label: string, action: () => Promise<void>) {
     setFailure("");
     setMessage("");
-    await work(label, async () => {
-      try {
-        await action();
-      } catch (e) {
-        setFailure(errorText(e));
-      } finally {
-        void transfers.refetch();
-      }
-    });
+    setRunning(what);
+    try {
+      await work(label, async () => {
+        try {
+          await action();
+        } catch (e) {
+          setFailure(errorText(e));
+        } finally {
+          void transfers.refetch();
+        }
+      });
+    } finally {
+      setRunning(null);
+    }
   }
   const unavailable = busy || !instance || !connections.data?.local;
   return (
@@ -208,8 +218,9 @@ export function SceneBlender({
                 size="sm"
                 variant="secondary"
                 disabled={unavailable}
+                loading={running === "check"}
                 onClick={() =>
-                  void run(t("sceneBlenderChecking"), async () => {
+                  void run("check", t("sceneBlenderChecking"), async () => {
                     const result = await checkBlenderConnection(instance);
                     setChecked(true);
                     setMessage(t("sceneBlenderConnected").replace("{name}", result.name));
@@ -222,8 +233,9 @@ export function SceneBlender({
             <button
               className="scene-blender-action"
               disabled={unavailable || pending}
+              aria-busy={running === "send" || undefined}
               onClick={() =>
-                void run(t("sceneBlenderSending"), async () => {
+                void run("send", t("sceneBlenderSending"), async () => {
                   const ready = await prepare();
                   const result = await sendToBlender(scene, {
                     instance_id: instance,
@@ -235,7 +247,7 @@ export function SceneBlender({
                 })
               }
             >
-              <ArrowUpRight size={19} />
+              {running === "send" ? <Loader2 size={19} className="animate-mosael-spin" /> : <ArrowUpRight size={19} />}
               <span>
                 <strong>{t("sceneBlenderSend")}</strong>
                 <small>
@@ -252,15 +264,16 @@ export function SceneBlender({
             <button
               className="scene-blender-action"
               disabled={unavailable || !latest}
+              aria-busy={running === "receive" || undefined}
               onClick={() =>
-                void run(t("sceneBlenderReceive"), async () => {
+                void run("receive", t("sceneBlenderReceive"), async () => {
                   const result = await receiveIntoScene(scene, latest!.id);
                   apply(result.content);
                   setMessage(t("sceneBlenderReceivedCurrent"));
                 })
               }
             >
-              <ArrowDownToLine size={19} />
+              {running === "receive" ? <Loader2 size={19} className="animate-mosael-spin" /> : <ArrowDownToLine size={19} />}
               <span>
                 <strong>{t("sceneBlenderReceive")}</strong>
                 <small>
@@ -297,8 +310,9 @@ export function SceneBlender({
                     size="sm"
                     variant="outline"
                     disabled={unavailable}
+                    loading={running === "receive-as-new"}
                     onClick={() =>
-                      void run(t("sceneBlenderReceiveAsNew"), async () => {
+                      void run("receive-as-new", t("sceneBlenderReceiveAsNew"), async () => {
                         const result = await receiveAsNewScene(scene, latest.id);
                         setMessage(
                           result.received_scene_id
@@ -327,8 +341,9 @@ export function SceneBlender({
                     size="sm"
                     variant="outline"
                     disabled={busy}
+                    loading={running === "download"}
                     onClick={() =>
-                      void run(t("sceneBlenderDownloading"), async () => {
+                      void run("download", t("sceneBlenderDownloading"), async () => {
                         saveBlobToDisk(await downloadBlenderProject(scene, latest.id), `${scene.name}.blend`);
                       })
                     }

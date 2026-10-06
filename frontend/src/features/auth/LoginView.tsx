@@ -247,7 +247,9 @@ export function LoginView() {
 function OAuthButtons() {
   const t = useI18n();
   const { adoptAuth } = useAuth();
-  const [pendingId, setPendingId] = React.useState<string | null>(null);
+  //: 点了哪一家:从去拿授权地址起,到这边取到票(或出错、取消)为止 —— 那一颗转圈,另一颗点不了
+  const [pending, setPending] = React.useState<{ provider: string; id: string | null } | null>(null);
+  const pendingId = pending?.id ?? null;
   const [failure, setFailure] = React.useState<string | null>(null);
   const providers = useQuery({ queryKey: ["oauth-providers"], queryFn: oauthProviders, staleTime: 60_000 });
 
@@ -257,10 +259,10 @@ function OAuthButtons() {
       try {
         const state = await oauthPending(pendingId);
         if (state.status === "done" && state.token && state.user) {
-          setPendingId(null);
+          setPending(null);
           adoptAuth({ token: state.token, user: state.user });
         } else if (state.status === "error" || state.status === "expired") {
-          setPendingId(null);
+          setPending(null);
           setFailure(state.error || t("authOauthFailed"));
         }
       } catch {
@@ -272,11 +274,13 @@ function OAuthButtons() {
 
   const begin = async (provider: string) => {
     setFailure(null);
+    setPending({ provider, id: null });
     try {
       const { pending_id, url } = await oauthStart(provider);
       window.open(url, "_blank", "noopener");
-      setPendingId(pending_id);
+      setPending({ provider, id: pending_id });
     } catch (err) {
+      setPending(null);
       setFailure(String((err as Error).message));
     }
   };
@@ -290,21 +294,21 @@ function OAuthButtons() {
         {t("authOr")}
       </div>
       {list.includes("google") && (
-        <Button variant="outline" className="w-full" disabled={pendingId !== null} onClick={() => begin("google")}>
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z"/><path fill="currentColor" opacity=".7" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="currentColor" opacity=".5" d="M6.4 14a6 6 0 0 1 0-3.9V7.5H3.1a10 10 0 0 0 0 9.1L6.4 14Z"/><path fill="currentColor" opacity=".85" d="M12 6c1.5 0 2.8.5 3.8 1.5L18.7 4.7A10 10 0 0 0 3.1 7.5L6.4 10c.8-2.3 3-4 5.6-4Z"/></svg>
+        <Button variant="outline" className="w-full" disabled={pending !== null} loading={pending?.provider === "google"} onClick={() => begin("google")}>
+          <GoogleMark />
           {t("authContinueGoogle")}
         </Button>
       )}
       {list.includes("apple") && (
-        <Button variant="outline" className="w-full" disabled={pendingId !== null} onClick={() => begin("apple")}>
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M16.7 12.9c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.9-.8-3.1-.8-1.6 0-3 .9-3.9 2.4-1.6 2.9-.4 7.1 1.2 9.4.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.7-3.9ZM14.4 5.6c.6-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.5-.6.7-1.2 1.9-1 3 1 .1 2.1-.6 2.8-1.5Z"/></svg>
+        <Button variant="outline" className="w-full" disabled={pending !== null} loading={pending?.provider === "apple"} onClick={() => begin("apple")}>
+          <AppleMark />
           {t("authContinueApple")}
         </Button>
       )}
       {pendingId && (
         <p className="m-0 flex items-center justify-between gap-2 text-ui-xs leading-normal text-muted-foreground">
           {t("authOauthWaiting")}
-          <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline underline-offset-2" onClick={() => setPendingId(null)}>
+          <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline underline-offset-2" onClick={() => setPending(null)}>
             {t("authOauthCancel")}
           </button>
         </p>
@@ -312,6 +316,15 @@ function OAuthButtons() {
       {failure && <p className="m-0 text-ui-xs text-destructive">{failure}</p>}
     </div>
   );
+}
+
+//: 两家的标做成组件:按钮在跑时 Button 会把「第一个图标」换成转圈,认的是组件 —— 直接写的 <svg> 会被留着,转圈另加在前面。
+function GoogleMark() {
+  return <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z"/><path fill="currentColor" opacity=".7" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="currentColor" opacity=".5" d="M6.4 14a6 6 0 0 1 0-3.9V7.5H3.1a10 10 0 0 0 0 9.1L6.4 14Z"/><path fill="currentColor" opacity=".85" d="M12 6c1.5 0 2.8.5 3.8 1.5L18.7 4.7A10 10 0 0 0 3.1 7.5L6.4 10c.8-2.3 3-4 5.6-4Z"/></svg>;
+}
+
+function AppleMark() {
+  return <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M16.7 12.9c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.9-.8-3.1-.8-1.6 0-3 .9-3.9 2.4-1.6 2.9-.4 7.1 1.2 9.4.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.7-3.9ZM14.4 5.6c.6-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.5-.6.7-1.2 1.9-1 3 1 .1 2.1-.6 2.8-1.5Z"/></svg>;
 }
 
 /** 左侧英雄面板:满幅背景图(加载失败时退回品牌渐变),底部叠加品牌语。

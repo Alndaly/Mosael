@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Download, Link2, Search } from "lucide-react";
+import { Download, Link2, Loader2, Search } from "lucide-react";
 
 import {
   resolveModelLink,
@@ -195,6 +195,7 @@ function CandidateRow({ candidate, pending, onPick }: { candidate: Candidate; pe
       type="button"
       data-candidate={candidate.exact ? "exact" : "similar"}
       disabled={pending}
+      aria-busy={pending || undefined}
       aria-label={t("workbenchSearchPick").replace("{name}", candidate.filename).replace("{repo}", candidate.repo || candidate.title)}
       className={cn(
         "grid w-full min-w-0 cursor-pointer gap-0.5 rounded-md border p-1.5 text-left text-ui-xs",
@@ -203,6 +204,7 @@ function CandidateRow({ candidate, pending, onPick }: { candidate: Candidate; pe
       onClick={onPick}
     >
       <span className="flex min-w-0 items-center gap-1.5">
+        {pending && <Loader2 size={12} className="shrink-0 animate-mosael-spin" />}
         <Truncate className="min-w-0 flex-1 font-medium text-foreground">{candidate.filename}</Truncate>
         {candidate.exact
           ? <CatalogBadge tone="success">{t("workbenchSearchExact")}</CatalogBadge>

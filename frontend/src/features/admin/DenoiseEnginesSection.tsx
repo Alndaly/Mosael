@@ -89,12 +89,12 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
       {!engine.installable && !engine.ready && <AdminRowState>{t("denoiseUnavailableLabel")}</AdminRowState>}
       {engine.status === "installing" && <AdminRowState icon={<Loader2 size={13} className="animate-mosael-spin" />} />}
       {engine.status === "missing" && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+        <Button size="sm" variant="outline" loading={busy} onClick={onInstall}>
           <Download size={13} /> {t("denoiseInstall")}
         </Button>
       )}
       {engine.status === "failed" && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+        <Button size="sm" variant="outline" loading={busy} onClick={onInstall}>
           <RotateCw size={13} /> {t("denoiseRetry")}
         </Button>
       )}

@@ -72,7 +72,7 @@ export function LutPicker({
           type="button"
           className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
           label={t("lutUpload")}
-          disabled={upload.isPending}
+          loading={upload.isPending}
           onClick={() => fileRef.current?.click()}
         >
           <Upload size={12} />
@@ -83,7 +83,7 @@ export function LutPicker({
             type="button"
             className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             label={t("lutDelete")}
-            disabled={remove.isPending}
+            loading={remove.isPending}
             onClick={() => remove.mutate(selectValue)}
           >
             <Trash2 size={12} />

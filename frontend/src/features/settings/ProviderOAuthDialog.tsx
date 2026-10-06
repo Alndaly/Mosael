@@ -120,6 +120,8 @@ export function AuthPromptField({
   onSubmit: (value: string) => void;
 }) {
   const [answer, setAnswer] = React.useState("");
+  //: 选项型:交上去的是哪一项 —— 在路上时那一行转圈,别的几行点不了
+  const [picked, setPicked] = React.useState("");
 
   return (
     <div className="grid gap-1.5">
@@ -145,13 +147,19 @@ export function AuthPromptField({
                 autoFocus={index === 0}
                 className="flex w-full items-center gap-2 rounded-md border border-field-border bg-field px-3 py-2 text-left transition-colors hover:border-border-strong hover:bg-panel focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={pending}
-                onClick={() => onSubmit(id)}
+                aria-busy={(pending && picked === id) || undefined}
+                onClick={() => {
+                  setPicked(id);
+                  onSubmit(id);
+                }}
               >
                 <span className="grid min-w-0 flex-1 gap-px">
                   <Truncate className="text-ui-sm font-medium text-foreground">{label}</Truncate>
                   {description && <span className="text-ui-2xs text-muted-foreground">{description}</span>}
                 </span>
-                <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+                {pending && picked === id
+                  ? <Loader2 size={13} className="shrink-0 animate-mosael-spin text-muted-foreground" />
+                  : <ChevronRight size={13} className="shrink-0 text-muted-foreground" />}
               </button>
             );
           })}
@@ -170,7 +178,7 @@ export function AuthPromptField({
             }}
           />
           {/* 与旁边的输入框同高(40px);size="sm" 是 32px,贴着输入框会矮一截。 */}
-          <Button type="button" disabled={!answer.trim() || pending} onClick={() => onSubmit(answer.trim())}>
+          <Button type="button" disabled={!answer.trim()} loading={pending} onClick={() => onSubmit(answer.trim())}>
             {submitLabel}
           </Button>
         </div>

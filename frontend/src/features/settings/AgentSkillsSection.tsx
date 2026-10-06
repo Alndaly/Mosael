@@ -108,10 +108,13 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
         description={t("agentSkillsDesc")}
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Button variant="outline" size="sm" loading={stage.isPending} onClick={() => zipInput.current?.click()}>
+            {/* 两种导入共用一个暂存请求:转圈的是这次用的那一颗,另一颗点不了 */}
+            <Button variant="outline" size="sm" disabled={stage.isPending} loading={stage.isPending && "archive" in stage.variables}
+                    onClick={() => zipInput.current?.click()}>
               <Import size={13} /> {t("agentSkillsImportZip")}
             </Button>
-            <Button variant="outline" size="sm" disabled={stage.isPending} onClick={() => folderInput.current?.click()}>
+            <Button variant="outline" size="sm" disabled={stage.isPending} loading={stage.isPending && "folder" in stage.variables}
+                    onClick={() => folderInput.current?.click()}>
               <FolderInput size={13} /> {t("agentSkillsImportFolder")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setEditor({ kind: "create" })}>

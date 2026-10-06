@@ -76,7 +76,9 @@ export function NoteList({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const anchor = React.useRef<string | null>(null);
   const [context, setContext] = React.useState<string[]>([]);
-  const [busy, setBusy] = React.useState(false);
+  //: 在跑的是哪一样(收藏、导出、移到回收站……):转圈的是点的那一颗;别的动作和整列在这期间都点不了
+  const [running, setRunning] = React.useState<NoteListAction | null>(null);
+  const busy = running !== null;
   const [remove, setRemove] = React.useState<Note[]>([]);
   const [rename, setRename] = React.useState<Note | null>(null);
   const [title, setTitle] = React.useState("");
@@ -113,7 +115,7 @@ export function NoteList({
   }
   async function run(action: NoteListAction, rows: Note[], value?: string) {
     if (busy || !rows.length) return;
-    setBusy(true);
+    setRunning(action);
     try {
       const done = await onAction(action, rows, value);
       if (["trash", "restore", "delete"].includes(action))
@@ -123,7 +125,7 @@ export function NoteList({
       if (action === "rename" && done.length) setRename(null);
       setRemove([]);
     } finally {
-      setBusy(false);
+      setRunning(null);
     }
   }
   function contextAt(event: React.MouseEvent) {
@@ -315,6 +317,7 @@ export function NoteList({
                   : s.favorite
               }
               disabled={!chosen.length || busy}
+              loading={running === "favorite" || running === "unfavorite"}
               disabledReason={!chosen.length && s.noneSelected}
               onClick={() =>
                 void run(
@@ -328,6 +331,7 @@ export function NoteList({
             <IconButton
               label={s.export}
               disabled={!chosen.length || busy}
+              loading={running === "export"}
               disabledReason={!chosen.length && s.noneSelected}
               onClick={() => void run("export", chosen)}
             >
@@ -338,6 +342,7 @@ export function NoteList({
                 variant="ghost"
                 size="sm"
                 disabled={!chosen.length || busy}
+                loading={running === "trash" || running === "restore"}
                 onClick={() =>
                   void run(chosen[0]?.trashed ? "restore" : "trash", chosen)
                 }
@@ -382,7 +387,7 @@ export function NoteList({
               onChange={(e) => setTitle(e.target.value)}
             />
             <div className="mt-4 flex justify-end">
-              <Button type="submit" disabled={busy}>
+              <Button type="submit" disabled={busy} loading={running === "rename"}>
                 {s.apply}
               </Button>
             </div>
@@ -396,7 +401,7 @@ export function NoteList({
         onCancel={() => {
           if (!busy) setRemove([]);
         }}
-        pending={busy}
+        pending={running === "delete"}
         onConfirm={() => void run("delete", remove)}
       />
     </>

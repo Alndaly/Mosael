@@ -25,6 +25,9 @@ function rememberBoard(workspaceId: string, boardId: string) {
   try { window.localStorage.setItem(lastBoardKey(workspaceId), boardId); } catch { /* 记不住只是少一个便利 */ }
 }
 
+/** 正在加的是「新建画板」那一行(画板 id 不会长这样)。 */
+const NEW_BOARD = "__new__";
+
 /**
  * 「加到画板」的画板选择器:上次加过的那张排最前,其余按最近改过的排;能搜;找不到就新建一张(用搜索框里的字当名字)。
  *
@@ -44,7 +47,9 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [q, setQ] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
+  //: 正在加到哪一行:哪块画板(它的 id),或「新建画板」(`NEW_BOARD`)。那一行图标转圈,别的行在这期间都点不了
+  const [addingTo, setAddingTo] = React.useState<string | null>(null);
+  const busy = addingTo !== null;
   const boards = useQuery({ queryKey: boardKeys.list(workspaceId), queryFn: () => listBoards(workspaceId) });
   const recent = lastBoard(workspaceId);
   const ordered = React.useMemo(() => {
@@ -54,8 +59,8 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
   const term = q.trim().toLowerCase();
   const shown = term ? ordered.filter((board) => board.name.toLowerCase().includes(term)) : ordered;
 
-  async function addTo(boardId: string, name: string) {
-    setBusy(true);
+  async function addTo(boardId: string, name: string, row = boardId) {
+    setAddingTo(row);
     try {
       const added = await appendBoardNote(boardId, {
         workspace_id: workspaceId,
@@ -69,19 +74,19 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
     } catch (error) {
       toast.error(errorText(error));
     } finally {
-      setBusy(false);
+      setAddingTo(null);
     }
   }
 
   async function addToNew() {
-    setBusy(true);
+    setAddingTo(NEW_BOARD);
     try {
       const name = q.trim() || sb.defaultName;
       const board = await createBoard({ workspace_id: workspaceId, name });
-      await addTo(board.id, board.name || name);
+      await addTo(board.id, board.name || name, NEW_BOARD);
     } catch (error) {
       toast.error(errorText(error));
-      setBusy(false);
+      setAddingTo(null);
     }
   }
 
@@ -112,16 +117,18 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
           ) : shown.map((board) => (
             <div role="listitem" key={board.id} className="min-w-0">
               {/* 挑选列表(role=list)里的一行,不是菜单:样子和菜单项同一套,角色仍是按钮。 */}
-              <MenuItem role="button" data-board-row={board.id} disabled={busy}
+              <MenuItem role="button" data-board-row={board.id} disabled={busy} aria-busy={addingTo === board.id || undefined}
                 className="focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() => void addTo(board.id, board.name)}
-                icon={<LayoutGrid className="text-muted-foreground" />} label={board.name} truncate
+                icon={addingTo === board.id ? <Loader2 className="animate-mosael-spin" /> : <LayoutGrid className="text-muted-foreground" />}
+                label={board.name} truncate
                 hint={relativeTime(board.updated_at, locale)} />
             </div>
           ))}
         </div>
-        <MenuItem role="button" disabled={busy} className="text-primary" onClick={() => void addToNew()}
-          icon={<Plus />} label={q.trim() ? sb.newBoardNamed(q.trim()) : sb.newBoard} truncate />
+        <MenuItem role="button" disabled={busy} aria-busy={addingTo === NEW_BOARD || undefined} className="text-primary"
+          onClick={() => void addToNew()} icon={addingTo === NEW_BOARD ? <Loader2 className="animate-mosael-spin" /> : <Plus />}
+          label={q.trim() ? sb.newBoardNamed(q.trim()) : sb.newBoard} truncate />
       </div>
     </ModalShell>
   );

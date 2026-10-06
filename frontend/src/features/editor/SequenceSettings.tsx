@@ -1,4 +1,5 @@
-import { ChevronDown, Proportions } from "lucide-react";
+import React from "react";
+import { ChevronDown, Loader2, Proportions } from "lucide-react";
 
 import type { Sequence } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -29,7 +30,7 @@ const SECTION_LABEL = "text-ui-xs font-medium text-muted-foreground";
 //: 剪辑台自己那套分段(.editor-mode-tab,见 editor.css),和左栏、检查器页签同一个长相。
 const OPTIONS = "grid auto-cols-fr grid-flow-col gap-1";
 const option = (active: boolean) =>
-  cn("editor-mode-tab px-1 disabled:cursor-default disabled:opacity-50", active && "is-active");
+  cn("editor-mode-tab gap-1 px-1 disabled:cursor-default disabled:opacity-50", active && "is-active");
 
 export function fillModeOf(sequence: Sequence): FillMode {
   const raw = (sequence.reframe as { fill_mode?: unknown } | null)?.fill_mode;
@@ -50,6 +51,9 @@ export function SequenceSettings({
   pending?: boolean;
 }) {
   const t = useI18n();
+  //: 改的请求在路上时,点的那一档转圈(别的几档点不了):不然一排选项只是一起变灰,看不出点没点上
+  const [picked, setPicked] = React.useState("");
+  const busy = (key: string) => pending && picked === key;
   const fill = fillModeOf(sequence);
   const preset = ASPECT_PRESETS.find((one) => one.width === sequence.width && one.height === sequence.height);
   const size = `${sequence.width}×${sequence.height}`;
@@ -79,10 +83,16 @@ export function SequenceSettings({
                 type="button"
                 role="radio"
                 aria-checked={one === preset}
+                aria-busy={busy(one.label) || undefined}
                 disabled={pending}
                 className={cn(option(one === preset), "tabular-nums")}
-                onClick={() => one !== preset && onReframe(one.width, one.height, fill)}
+                onClick={() => {
+                  if (one === preset) return;
+                  setPicked(one.label);
+                  onReframe(one.width, one.height, fill);
+                }}
               >
+                {busy(one.label) && <Loader2 size={12} className="animate-mosael-spin" />}
                 {one.label}
               </button>
             ))}
@@ -97,10 +107,16 @@ export function SequenceSettings({
                 type="button"
                 role="radio"
                 aria-checked={mode === fill}
+                aria-busy={busy(mode) || undefined}
                 disabled={pending}
                 className={option(mode === fill)}
-                onClick={() => mode !== fill && onReframe(sequence.width, sequence.height, mode)}
+                onClick={() => {
+                  if (mode === fill) return;
+                  setPicked(mode);
+                  onReframe(sequence.width, sequence.height, mode);
+                }}
               >
+                {busy(mode) && <Loader2 size={12} className="animate-mosael-spin" />}
                 {t(FILL_LABELS[mode])}
               </button>
             ))}

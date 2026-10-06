@@ -116,7 +116,7 @@ export function AccountSection() {
             type="button"
             className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
             label={t("avatarChange")}
-            disabled={avatarPending}
+            loading={avatarPending}
             onClick={() => avatarInputRef.current?.click()}
           >
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}

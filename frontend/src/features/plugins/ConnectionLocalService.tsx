@@ -1103,6 +1103,8 @@ function SharedModelFolders({ instanceId, service }: { instanceId: string; servi
     onError: (error: Error) => toast.error(error.message),
   });
   const current = service.shared_models ?? [];
+  //: 正在加的那一个(存的是加上它之后的整份清单,多出来的那条就是它):转圈的是加它的那颗按钮
+  const adding = save.isPending ? save.variables.find((path) => !current.includes(path)) : undefined;
   const add = (path: string) => {
     const trimmed = path.trim();
     if (trimmed && !current.includes(trimmed)) save.mutate([...current, trimmed]);
@@ -1149,7 +1151,8 @@ function SharedModelFolders({ instanceId, service }: { instanceId: string; servi
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <PathField kind="directory" label={t("localServiceSharedPath")} value={draft} onChange={setDraft}
                    placeholder={t("localServiceSharedPlaceholder")} />
-        <Button variant="outline" disabled={!draft.trim()} loading={save.isPending} onClick={() => add(draft)}>
+        <Button variant="outline" disabled={!draft.trim() || save.isPending} loading={adding !== undefined && adding === draft.trim()}
+                onClick={() => add(draft)}>
           {t("localServiceSharedAdd")}
         </Button>
       </div>
@@ -1159,7 +1162,7 @@ function SharedModelFolders({ instanceId, service }: { instanceId: string; servi
           {(folders.data?.suggestions ?? []).map((path) => (
             <span key={path} className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="timecode break-all">{path}</code>
-              <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => add(path)}>
+              <Button variant="outline" size="sm" disabled={save.isPending} loading={adding === path} onClick={() => add(path)}>
                 {t("localServiceSharedAdd")}
               </Button>
             </span>

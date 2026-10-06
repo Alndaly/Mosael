@@ -43,6 +43,24 @@ describe("序列设置", () => {
     expect(onReframe).toHaveBeenCalledTimes(2);
   });
 
+  it("改的请求在路上:点的那一档转圈,别的几档点不了也不转;请求回来就停", async () => {
+    const onReframe = vi.fn();
+    const { rerender } = render(<SequenceSettings sequence={sequence()} onReframe={onReframe} />);
+    await userEvent.click(screen.getByRole("button", { name: /sequenceSettings/ }));
+    await userEvent.click(screen.getByRole("radio", { name: "9:16" }));
+    rerender(<SequenceSettings sequence={sequence()} onReframe={onReframe} pending />);
+    const picked = screen.getByRole("radio", { name: "9:16" });
+    expect(picked).toHaveAttribute("aria-busy", "true");
+    expect(picked.querySelector("svg.animate-mosael-spin")).not.toBeNull();
+    const other = screen.getByRole("radio", { name: "1:1" });
+    expect(other).toBeDisabled();
+    expect(other).not.toHaveAttribute("aria-busy");
+    expect(screen.getByRole("radio", { name: "fillBlur" })).not.toHaveAttribute("aria-busy");
+    rerender(<SequenceSettings sequence={sequence({ width: 1080, height: 1920 })} onReframe={onReframe} />);
+    expect(screen.getByRole("radio", { name: "9:16" })).not.toHaveAttribute("aria-busy");
+    expect(screen.getByRole("radio", { name: "9:16" }).querySelector("svg")).toBeNull();
+  });
+
   it("不在预设里的尺寸照样显示,没有哪一档亮着;没写填充方式就是裁剪", async () => {
     await open(sequence({ width: 1280, height: 720, reframe: {} }));
     expect(screen.getByRole("button", { name: /sequenceSettings/ })).toHaveTextContent("1280×720");

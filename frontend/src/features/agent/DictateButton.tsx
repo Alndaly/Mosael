@@ -16,7 +16,7 @@
  */
 
 import React from "react";
-import { Loader2, Mic, Square } from "lucide-react";
+import { Mic, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { ApiError, dictate } from "@/api/client";
@@ -111,12 +111,11 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
       size={recording ? "xs" : "icon-xs"}
       className={cn(recording && "gap-1.5 text-destructive")}
       label={recording ? t("dictateStop") : t("dictate")}
-      disabled={disabled || busy}
+      disabled={disabled}
+      loading={busy}
       onClick={() => (recording ? stop() : void start())}
     >
-      {busy ? (
-        <Loader2 size={14} className="animate-mosael-spin" />
-      ) : recording ? (
+      {recording ? (
         <>
           <Square size={11} className="fill-current" />
           {/* 计时是"还能说多久"的唯一线索 —— 到点会自动收,不说的话那一下看着像卡了。 */}

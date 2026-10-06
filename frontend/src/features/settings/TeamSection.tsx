@@ -366,7 +366,7 @@ function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; r
           />
         </div>
         <div className="flex items-center gap-2.5">
-          <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
+          <Button type="submit" size="sm" loading={form.formState.isSubmitting}>
             <UserPlus size={13} /> {t("teamInvite")}
           </Button>
           <span className="text-ui-xs text-muted-foreground">{t("teamInviteHint")}</span>

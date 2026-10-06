@@ -450,7 +450,7 @@ export function CanvasAgentChat({
           type="button"
           className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           label={t("wfAgentNewSession")}
-          disabled={newSession.isPending}
+          loading={newSession.isPending}
           onClick={() => newSession.mutate()}
         >
           <Plus size={13} />

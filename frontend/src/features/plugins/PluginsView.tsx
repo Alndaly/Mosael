@@ -1068,7 +1068,12 @@ function CapabilityPicker({
 
   const exposedCount = tools.filter((tool) => tool.exposed).length;
   // 批量操作只作用于**当前筛出来的**那些 —— 搜了"字幕"再点全选,意思就是"这些字幕相关的全开"。
-  const bulk = (exposed: boolean) => onToggle(Object.fromEntries(matched.map((tool) => [tool.name, exposed])));
+  //: 记下点的是全开还是全关:存的时候转圈的是那一颗(单个工具的开关自己当场就变了,不算)
+  const [bulkTo, setBulkTo] = React.useState<boolean | null>(null);
+  const bulk = (exposed: boolean) => {
+    setBulkTo(exposed);
+    onToggle(Object.fromEntries(matched.map((tool) => [tool.name, exposed])));
+  };
 
   return (
     <SettingsBlock>
@@ -1092,10 +1097,10 @@ function CapabilityPicker({
             >
               {t("pluginToolOnlyExposed").replace("{n}", String(exposedCount))}
             </Button>
-            <Button variant="outline" disabled={pending || !matched.length} onClick={() => bulk(true)}>
+            <Button variant="outline" disabled={pending || !matched.length} loading={pending && bulkTo === true} onClick={() => bulk(true)}>
               {t("pluginToolEnableAll")}
             </Button>
-            <Button variant="outline" disabled={pending || !matched.length} onClick={() => bulk(false)}>
+            <Button variant="outline" disabled={pending || !matched.length} loading={pending && bulkTo === false} onClick={() => bulk(false)}>
               {t("pluginToolDisableAll")}
             </Button>
           </div>
@@ -1120,7 +1125,10 @@ function CapabilityPicker({
                 tool={tool}
                 // 传**理由**而不是布尔:一个灰着的按钮不说明自己为什么灰,等于没有反馈。
                 blockedReason={blockedReason || (tool.exposed ? "" : t("pluginToolNotExposed"))}
-                onToggle={(exposed) => onToggle({ [tool.name]: exposed })}
+                onToggle={(exposed) => {
+                  setBulkTo(null);
+                  onToggle({ [tool.name]: exposed });
+                }}
               />
             ))}
           </div>

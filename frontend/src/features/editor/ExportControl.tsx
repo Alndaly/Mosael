@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileOutput, Loader2 } from "lucide-react";
+import { FileOutput } from "lucide-react";
 
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
 import { getJob } from "@/api/domains/jobs";
@@ -90,8 +90,8 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
           <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
         </span>
       )}
-      <Button size="sm" disabled={busy} onClick={() => setConfigOpen(true)}>
-        {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <FileOutput size={13} />}
+      <Button size="sm" loading={busy} onClick={() => setConfigOpen(true)}>
+        <FileOutput size={13} />
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
       <ModalShell

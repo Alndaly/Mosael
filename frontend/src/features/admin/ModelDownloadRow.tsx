@@ -64,7 +64,7 @@ export function ModelDownloadRow({
 
   const action = (icon: React.ReactNode, label: string) => (
     <Hint label={busy ? undefined : actionHint} disabledReason={busy ? busyReason : undefined}>
-      <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+      <Button size="sm" variant="outline" loading={busy} onClick={onDownload}>
         {icon} {label}
       </Button>
     </Hint>

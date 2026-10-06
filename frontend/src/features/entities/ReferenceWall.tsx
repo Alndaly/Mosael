@@ -204,7 +204,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
           <span className="flex flex-wrap gap-2">
             {/* 照现有的图再画几张同一个:一张图片参考都没有时画不出「同一个」,先传一张。 */}
             <DrawMenu entity={entity} workspaceId={workspaceId} disabled={!refs.some((one) => one.asset_kind === "image")} />
-            <Button variant="outline" onClick={() => fileInput.current?.click()} disabled={upload.isPending}>
+            <Button variant="outline" onClick={() => fileInput.current?.click()} loading={upload.isPending}>
               <Upload />
               {t("entityUpload")}
             </Button>

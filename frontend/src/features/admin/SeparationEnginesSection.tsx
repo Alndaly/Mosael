@@ -91,12 +91,12 @@ function EngineRow({
         <AdminRowState icon={<Loader2 size={13} className="animate-mosael-spin" />} />
       )}
       {engine.status === "missing" && engine.runtime_checked && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+        <Button size="sm" variant="outline" loading={busy} onClick={onInstall}>
           <Download size={13} /> {t("separationInstall")}
         </Button>
       )}
       {engine.status === "failed" && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+        <Button size="sm" variant="outline" loading={busy} onClick={onInstall}>
           <RotateCw size={13} /> {t("separationRetry")}
         </Button>
       )}

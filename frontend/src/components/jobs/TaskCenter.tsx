@@ -187,9 +187,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               type="button"
               className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
               disabled={clearFinished.isPending}
+              aria-busy={clearFinished.isPending || undefined}
               onClick={() => clearFinished.mutate()}
             >
-              <Trash2 size={11} /> {t("clearEnded")}
+              {clearFinished.isPending ? <Loader2 size={11} className="animate-mosael-spin" /> : <Trash2 size={11} />} {t("clearEnded")}
             </button>
           )}
         </div>

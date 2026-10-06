@@ -318,7 +318,7 @@ export function ProviderProfilesSection({
         footer={
           <>
             <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
-            <Button type="submit" form={profileFormId} size="sm" disabled={editing ? update.isPending : create.isPending}>
+            <Button type="submit" form={profileFormId} size="sm" loading={editing ? update.isPending : create.isPending}>
               {editing ? t("save") : <><Plus size={13} /> {t("providerAdd")}</>}
             </Button>
           </>
@@ -448,10 +448,10 @@ export function ProviderProfilesSection({
         <SettingsListBlock
           toolbar={bulk.selectMode ? (
             <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: true })}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && bulkPatch.variables.enabled} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: true })}>
                 {t("bulkEnable")}
               </Button>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: false })}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && !bulkPatch.variables.enabled} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: false })}>
                 {t("bulkDisable")}
               </Button>
               <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
