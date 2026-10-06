@@ -2,9 +2,9 @@
 title: Model connections
 description: Connect your model services with an API key or a subscription sign-in, choose defaults and configure cost estimates.
 seo_title: Bring your own API keys: Seedance, Kling, Veo, Wan
-keywords: bring your own API key, Seedance API, Kling API, Veo, Wan, DeepSeek, OpenRouter, Ollama
+keywords: bring your own API key, Seedance API, Kling API, Veo, Gemini API, Wan, DeepSeek, OpenRouter, Ollama
 order: 1
-updated: 2026-10-05
+updated: 2026-10-06
 version: 1.9.2
 ---
 
@@ -42,9 +42,9 @@ Click the chevron on a provider row to see that connection's model list.
 Click **Add provider** in the relevant section:
 
 1. Pick a **vendor**. The list is filtered by section and grows over time:
-   - **AI Chat**: Alibaba Bailian, Kimi, DeepSeek, MiniMax, OpenAI, OpenAI-compatible endpoints, plus the subscription group below;
+   - **AI Chat**: Alibaba Bailian, Kimi, DeepSeek, MiniMax, OpenAI, Google AI Studio (Gemini, see below), OpenAI-compatible endpoints, plus the subscription group below;
    - **AI Image**: Alibaba Bailian, Volcengine ARK, OpenAI, OpenAI-compatible endpoints, Evolink;
-   - **AI Video**: Alibaba Bailian, Volcengine ARK, MiniMax, Volcengine Jimeng AI (vision), HeyGen, Hedra, Google (Veo), Evolink, Kuaishou Kling — the digital-human models from Jimeng, HeyGen, Hedra and Kling are covered in [Digital humans](/docs/guides/digital-humans);
+   - **AI Video**: Alibaba Bailian, Volcengine ARK, MiniMax, Volcengine Jimeng AI (vision), HeyGen, Hedra, Google AI Studio (Veo), Evolink, Kuaishou Kling — the digital-human models from Jimeng, HeyGen, Hedra and Kling are covered in [Digital humans](/docs/guides/digital-humans);
    - **AI Audio**: speech synthesis (Alibaba Bailian, OpenAI, Volcengine TTS), podcast dialogue (Volcengine podcast), music & sound (below).
 2. Give it a **name** (e.g. "My Kimi").
 3. Paste the **API key** (subscription plans have no key field — you authorize after saving instead). A "Get API key ↗" link jumps straight to that vendor's key console.
@@ -88,6 +88,31 @@ AI Studio, boards and workflow nodes all show both, defaulting to the cheapest: 
 out the difference: low is about a ninth of medium and high about four times medium, so try low first and raise it for the final
 render. `gpt-image-2-beta` has a fixed price per image, makes only 1K and offers no quality setting. These models are off by default:
 switch on the one you want in your Evolink connection, and make it the default image model if you like.
+
+### Google Gemini: use an AI Studio API key
+
+In **AI Chat**, add **Google AI Studio (Gemini / Veo / Lyria)** and paste an API key from
+[AI Studio](https://aistudio.google.com/app/apikey) (the "Get API key ↗" link next to the field goes there). The same key
+also drives Veo video and Lyria music. If you already have a Google connection for Veo, you don't need a new one: after
+the update it can chat too, so just add the Gemini models you want from its model list.
+
+- **API key only, no subscription sign-in.** Since March 2026 Google explicitly forbids third-party apps from using a
+  Gemini subscription (Google AI Pro / Ultra, the sign-in that Gemini CLI and Antigravity use), so Mosael doesn't offer one
+  and won't add one. A subscription and API usage are billed separately; the API is pay-as-you-go.
+- **The model list comes from Gemini's own catalog** (`GET /v1beta/models`) and only lists Gemini models that can chat.
+  Imagen, Veo, embeddings, text-to-speech, live audio and transcription models don't appear in chat pickers, and adding one
+  by hand doesn't turn it into a chat model.
+- **Where it works:** the agent (AI Studio), writing and image reading on the infinite canvas, and workflow LLM nodes.
+  Direct calls such as subtitle translation, publish copy and prompt optimization don't use Gemini yet (same as
+  subscription connections); they pick one of your other chat connections. Asset analysis in native-video mode still reads
+  the whole video directly.
+- **Tool calls:** chat uses Gemini's native protocol, not its OpenAI-compatible layer. Every Gemini 3 tool call carries a
+  "thought signature" that the next step must send back unchanged; the compatibility layer can't, and fails on the second
+  step with `Function call is missing a thought_signature`.
+- **Thinking levels:** 2.5 Flash / Flash-Lite can be switched off and offer low / medium / high. 2.5 Pro and all of Gemini 3
+  can't be switched off, so the "off" entry reads **Model default**: Mosael sends no thinking setting and the model decides.
+  Gemini 3 Pro Preview only has low / high.
+- **Network:** reaching the Gemini API from mainland China needs the outbound proxy in Settings.
 
 ### ComfyUI: provided by a plugin
 
@@ -306,7 +331,7 @@ sub-jobs it starts), the run history shows what each run cost, and the admin pag
 **Prefill prices** creates rules in bulk from two sources. The dialog lists one row per provider — prefill them one at a time or all at once with **Prefill all**; each provider's result appears under its own row:
 
 - **The provider's own model catalog**, when it carries prices (OpenRouter, or the catalog a subscription sign-in brings back), takes precedence.
-- When the catalog has no prices (true of most OpenAI-compatible endpoints), the app's built-in **official price list** fills the gap: DeepSeek, Kimi, Alibaba Bailian (chat, Wan video, image, speech), Volcengine Ark (Seedance video, Seedream image), Volcengine speech, MiniMax (chat, Hailuo video), OpenAI (chat, GPT Image, TTS), Anthropic, xAI, Google Veo, and Evolink's own listed prices for Seedance and GPT Image. Every entry was checked on the vendor's official pricing page; each rule's note cites the page and the check date. Currency follows the vendor's list (CNY for Chinese vendors, USD otherwise), and an international endpoint gets the international price. Prices that change by the hour (DeepSeek's peak/off-peak) become time-of-day prices; prices tiered by output resolution get one rule per tier (Wan, Hailuo, Seedance, Veo); other tiers, such as by context length, record one tier and name the rest in the note.
+- When the catalog has no prices (true of most OpenAI-compatible endpoints), the app's built-in **official price list** fills the gap: DeepSeek, Kimi, Alibaba Bailian (chat, Wan video, image, speech), Volcengine Ark (Seedance video, Seedream image), Volcengine speech, MiniMax (chat, Hailuo video), OpenAI (chat, GPT Image, TTS), Anthropic, xAI, Google (Gemini chat, Veo, Lyria), and Evolink's own listed prices for Seedance and GPT Image. Every entry was checked on the vendor's official pricing page; each rule's note cites the page and the check date. Currency follows the vendor's list (CNY for Chinese vendors, USD otherwise), and an international endpoint gets the international price. Prices that change by the hour (DeepSeek's peak/off-peak) become time-of-day prices; prices tiered by output resolution get one rule per tier (Wan, Hailuo, Seedance, Veo); other tiers, such as by context length, record one tier and name the rest in the note.
 - Relays (custom OpenAI-compatible addresses, Evolink and the like) look up **their own** entries first (prices the relay lists itself, and model names it made up, such as 147ai's `gpt-image-2-client`, whose note says the real price isn't published and OpenAI's official price is used as a reference); only when there is none do they borrow a vendor's list price, and only when the model id belongs to exactly one vendor, with a note warning that the relay may charge differently.
 
 Two rules stay the same: it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement), and a price of 0 produces no rule — that means "unpriced / included in the subscription", not "free". The result says how many rules came from the catalog and from the price list, and which models still need a price by hand.

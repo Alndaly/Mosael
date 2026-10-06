@@ -2,9 +2,9 @@
 title: 模型连接与配置
 description: 用自己的 API Key 或订阅授权连接模型服务商，选择默认模型并设置用量价格。
 seo_title: 自带 API Key 接入 Seedance、可灵、Veo、万相等模型
-keywords: 自带 API Key, Seedance API, 可灵 API, Veo, 万相, DeepSeek, OpenRouter, Ollama
+keywords: 自带 API Key, Seedance API, 可灵 API, Veo, Gemini API, 万相, DeepSeek, OpenRouter, Ollama
 order: 1
-updated: 2026-10-05
+updated: 2026-10-06
 version: 1.9.2
 ---
 
@@ -40,9 +40,9 @@ Mosael 的 AI 能力(智能体对话、文生图 / 视频、配音、转写等)�
 进对应分区点「**添加供应商**」：
 
 1. 选**服务商**。列表按分区过滤，目录随版本扩充：
-   - **AI 对话**：阿里云百炼、Kimi、DeepSeek、MiniMax、OpenAI、OpenAI 兼容端点，以及下面「订阅计划」那一组；
+   - **AI 对话**：阿里云百炼、Kimi、DeepSeek、MiniMax、OpenAI、Google AI Studio(Gemini,见下)、OpenAI 兼容端点，以及下面「订阅计划」那一组；
    - **AI 绘图**：阿里云百炼、火山方舟 ARK、OpenAI、OpenAI 兼容端点、Evolink；
-   - **AI 视频**：阿里云百炼、火山方舟 ARK、MiniMax、火山引擎 即梦 AI(视觉)、HeyGen、Hedra、Google(Veo)、Evolink、快手可灵 —— 其中即梦、HeyGen、Hedra 和可灵的数字人模型见[数字人](/docs/guides/digital-humans)；
+   - **AI 视频**：阿里云百炼、火山方舟 ARK、MiniMax、火山引擎 即梦 AI(视觉)、HeyGen、Hedra、Google AI Studio(Veo)、Evolink、快手可灵 —— 其中即梦、HeyGen、Hedra 和可灵的数字人模型见[数字人](/docs/guides/digital-humans)；
    - **AI 音频**：语音合成（阿里云百炼、OpenAI、火山引擎语音合成）、播客对话（火山引擎播客）、音乐与音效（见下）。
 2. 填**名称**(便于区分，如「我的 Kimi」)。
 3. 贴 **API Key**(订阅计划没有这一项，改为保存后授权登录)。字段旁有「**获取 API Key ↗**」直达该服务商的密钥控制台。
@@ -77,6 +77,24 @@ Evolink 的 **GPT Image** 有 `gpt-image-2`、`gpt-image-2-beta`、`gpt-image-2.
 所以 AI Studio、画板和工作流节点里都摆出这两项，默认取最便宜的 —— 低画质、1K、1:1。画质下面有一句价差说明：低画质约是中画质的九分之一、
 高画质约是中画质的 4 倍，先用低画质试，定稿再往上调。`gpt-image-2-beta` 固定一张一价、只出 1K，不开放画质。这几个型号默认不启用：
 在 Evolink 连接里打开要用的那个，需要的话设成默认生图模型。
+
+### Google Gemini:填 AI Studio 的 API Key
+
+在「AI 对话」分区添加「**Google AI Studio(Gemini / Veo / Lyria)**」,贴一把 [AI Studio](https://aistudio.google.com/app/apikey)
+的 API Key(字段旁的「获取 API Key ↗」直达)。同一把 Key 也给 Veo 视频和 Lyria 音乐用 —— 已经为 Veo 配过 Google 连接的,
+不用新建,升级后它就能对话,在模型列表里加上要用的 Gemini 模型即可。
+
+- **只有 API Key,没有订阅登录。** Gemini 订阅(Google AI Pro / Ultra,也就是 Gemini CLI、Antigravity 里的那种登录)
+  Google 自 2026 年 3 月起明确不许第三方应用使用,所以这里不提供、也不会加。订阅额度和 API 用量是两套账，API 按用量计费。
+- **模型列表读的是 Gemini 自己的目录**(`GET /v1beta/models`),只列能对话的 Gemini 模型：Imagen、Veo、向量、语音合成、
+  实时音频、转写这些不会出现在对话下拉里。手动加进来的这类型号也不会被当成对话模型。
+- **在哪能用**：智能体(AI Studio)、无限画布的写作 / 看图、工作流的 LLM 节点。字幕翻译、发布文案、提示词优化这类**直连**调用
+  暂时不走 Gemini(和订阅授权的连接一样),在那里会挑你别的对话连接。素材分析的「原生视频」照旧直接读整段视频。
+- **工具调用**：对话走 Gemini 的原生协议，不走它的 OpenAI 兼容层 —— Gemini 3 每次调用工具都带一个「思考签名」,下一步必须
+  原样发回去，兼容层做不到，会在第二步报 `Function call is missing a thought_signature`。
+- **思考档位**:2.5 Flash / Flash-Lite 可以关，另有低 / 中 / 高;2.5 Pro 和整个 Gemini 3 关不掉，「关」那一档显示为「**模型默认**」——
+  不发任何思考配置，由模型自己决定;Gemini 3 Pro Preview 只有低 / 高。
+- **网络**：国内网络访问 Gemini API 需要在设置里配好出站代理。
 
 ### ComfyUI:由插件提供
 
@@ -270,7 +288,7 @@ AI Studio 用订阅模型分析已有图片或视频时，会继续使用**当�
 「**预填价格**」按两个来源批量生成规则。弹窗里一家一行，可以逐家点「预填」，也可以「**全部预填**」，每家的结果就写在它那一行底下：
 
 - **服务商自己的模型目录**带报价时(如 OpenRouter、订阅登录带回来的目录)以它为准。
-- 目录不报价时(多数 OpenAI 兼容端点如此)，用应用内置的**官方价目表**补：DeepSeek、Kimi、阿里云百炼(对话、通义万相视频、图像、语音)、火山方舟(Seedance 视频、Seedream 图像)、火山语音、MiniMax(对话、海螺视频)、OpenAI(对话、GPT Image、TTS)、Anthropic、xAI、Google Veo，以及 Evolink 自己挂牌的 Seedance 和 GPT Image。每条都是在厂商官方定价页上逐条核对过的，规则的备注里写着出处和核对日期；币种按厂商挂牌(国内厂商人民币、海外美元)，接入点是国际站时取国际站价格。按时段变的价(如 DeepSeek 的峰谷)收成分时段价格；按输出分辨率分档的每档一条(万相、海螺、Seedance、Veo)；按上下文长度等分档的只记一档，其余写在备注里。
+- 目录不报价时(多数 OpenAI 兼容端点如此)，用应用内置的**官方价目表**补：DeepSeek、Kimi、阿里云百炼(对话、通义万相视频、图像、语音)、火山方舟(Seedance 视频、Seedream 图像)、火山语音、MiniMax(对话、海螺视频)、OpenAI(对话、GPT Image、TTS)、Anthropic、xAI、Google(Gemini 对话、Veo、Lyria)，以及 Evolink 自己挂牌的 Seedance 和 GPT Image。每条都是在厂商官方定价页上逐条核对过的，规则的备注里写着出处和核对日期；币种按厂商挂牌(国内厂商人民币、海外美元)，接入点是国际站时取国际站价格。按时段变的价(如 DeepSeek 的峰谷)收成分时段价格；按输出分辨率分档的每档一条(万相、海螺、Seedance、Veo)；按上下文长度等分档的只记一档，其余写在备注里。
 - 中转服务(自定义 OpenAI 兼容地址、Evolink 等)先查**它自己的**条目(它自己挂的价、它自己起的型号名，比如 147ai 的 `gpt-image-2-client`，备注写明实价未公开、按 OpenAI 官方价参考)；查不到，才在模型 id 唯一对应一家厂商时借用那家的挂牌价，备注会提醒中转商的实际收费可能不同。
 
 两条规矩不变：**只补缺失的，已填的一律不动**(你核对过的价格可能含折扣或企业协议)；标价为 0 的不建规则 —— 那是「未标价 / 订阅内含」，不是「免费」。结果说清从目录、从价目表各建了几条，还有哪些模型没有价格要手动填。

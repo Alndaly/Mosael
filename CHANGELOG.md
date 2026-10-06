@@ -5,6 +5,26 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### Gemini 对话:填 AI Studio 的 API Key,智能体能用 Gemini 了
+
+- **Google 连接能对话了**(设置 → AI 对话 → 添加「Google AI Studio(Gemini / Veo / Lyria)」)。同一把 AI Studio 的 API Key,
+  Veo 视频、Lyria 音乐照旧;为 Veo 配过的 Google 连接升级后不用改,在它的模型列表里加上 Gemini 模型就能用。
+- **只收 API Key,不提供 Gemini 订阅登录**:Google 自 2026 年 3 月起明确不许第三方应用使用 Gemini 订阅(Google AI Pro / Ultra,
+  也就是 Gemini CLI、Antigravity 里那种登录),所以这里不做、以后也不会加。
+- **模型列表读 Gemini 自己的目录**(`GET /v1beta/models`),只列能对话的 Gemini 模型:Imagen、Veo、向量、语音合成、实时音频、
+  转写不会混进对话下拉;手动加进来的这类型号也不会被当成对话模型。
+- **对话走 Gemini 的原生协议**(pi 的原生 Gemini Provider),不走它的 OpenAI 兼容层:Gemini 3 每次调用工具都带一个思考签名,
+  下一步必须原样发回去,兼容层做不到,第二步就报 `Function call is missing a thought_signature`。多轮、多步的工具调用和发图片都可以。
+- **在哪能用**:智能体、无限画布写作 / 看图、工作流 LLM 节点。字幕翻译、发布文案、提示词优化这类直连调用暂不走 Gemini
+  (和订阅授权的连接一样),在那里调到时会说清楚。
+- **思考档位**:2.5 Flash / Flash-Lite 可关、低 / 中 / 高;2.5 Pro 和整个 Gemini 3 关不掉,「关」显示为「模型默认」,真的一个思考配置
+  都不发(此前那一档在 2.5 Pro 上会被发成 `thinkingBudget: 0`,是一个 400);Gemini 3 Pro Preview 只有低 / 高。
+- **内置了 Gemini 的官方价目**(输入 / 输出 / 缓存命中,每百万 token,2026-10 对照 ai.google.dev/gemini-api/docs/pricing):
+  2.5 Pro / Flash / Flash-Lite、3 Flash Preview、3.1 Pro Preview、3.1 / 3.5 Flash-Lite、3.5–3.8 Flash。超过 200K 提示词的那一档
+  (2.5 Pro、3.1 Pro)和 3.6–3.8 Flash 在 2027-01-01 起的新价写在规则备注里。已有 Gemini 对话模型行的老库升级时补上这几条。
+- 顺带修好:Google 连接的模型目录和「探活」此前把 AI Studio 的 Key 当 Bearer 发,Google 回 401 —— 目录恒空、探活说「凭据被拒」;
+  现在按 `x-goog-api-key` 发。
+
 ### 「导入」「导出」的图标方向对上了
 
 - 导入用箭头指进来的图标(`Import` / `FileInput` / `FolderInput`),导出用箭头指出去的(`FileOutput`)。此前技能的「导入 .zip」
