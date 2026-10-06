@@ -45,7 +45,8 @@ def _tools(url: str, data_dir: Path, **env: str) -> dict[str, dict[str, Any]]:
 
 
 def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
-    template = '{"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}}}'
+    template = ('{"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}}, '
+                '"9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}}}')
     tools = _tools(comfy.url, tmp_path, API_WORKFLOW=template)
     assert set(tools) == {PORTRAIT_TOOL, UPSCALE_TOOL, "wf_api_template", "wf_builtin_txt2img",
                           "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, "通用的 run_workflow 能跑的每一种图都有工具"
@@ -285,6 +286,22 @@ def test_工作流删掉了说清楚(comfy, tmp_path: Path) -> None:
         runtime.stream_tool(PLUGIN, ENTRY, "wf_000000000000", {}, {"SERVER_URL": comfy.url},
                             hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
                             scratch_dir=scratch, timeout=60)
+
+
+def test_一个输出节点都没有的图_不做成工具(comfy, tmp_path: Path) -> None:
+    """沙盒实测(维护者的 minimax-music.json:只有文本编码和三个加载器):它的工具写着「交回它全部 0 个输出节点的产出」——
+    ComfyUI 不跑没有输出节点的图(Prompt has no outputs),原样跑一遍什么也交不回。不做成工具;列工作流时也不说它的工具。"""
+    comfy.state.workflows["loaders-only.json"] = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a song", "clip": ["1", 1]}},
+    }
+    tools = _tools(comfy.url, tmp_path)
+    assert "wf_" + hashlib.sha1(b"loaders-only.json").hexdigest()[:12] not in tools
+    assert PORTRAIT_TOOL in tools and UPSCALE_TOOL in tools, "别的照旧"
+    assert all("0 个输出节点" not in tool["description"]["zh"] for tool in tools.values())
+    listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
+    loaders = next(one for one in listed["workflows"] if one["id"] == "loaders-only.json")
+    assert "tool" not in loaders and loaders["outputs"] == []
 
 
 def test_list_workflows_说出每张工作流自己的工具(comfy) -> None:

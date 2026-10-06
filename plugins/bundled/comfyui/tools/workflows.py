@@ -61,8 +61,8 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
             continue
         described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale,
                             models.form_of(entry, object_info))
-        if entry.id in names:
-            # 跑它用的工具(输入就是它自己的节点)
+        if entry.id in names and tooling.runnable(entry, object_info):
+            # 跑它用的工具(输入就是它自己的节点);一个输出节点都没有的图没有工具
             described["tool"] = names[entry.id]
         found.append(described)
     return {

@@ -440,13 +440,20 @@ def _remember(comfy: Comfy, names: dict[str, str]) -> None:
         pass  # 记不下来只是下次要多扫一遍
 
 
+def runnable(entry: models.Entry, object_info: dict[str, Any]) -> bool:
+    """这张图跑得起来吗:一个输出节点(保存、预览、显示文字……)都没有的,ComfyUI 不跑(`Prompt has no outputs`),
+    原样跑一遍什么也交不回 —— 不做成工具(此前它的工具写着「交回它全部 0 个输出节点的产出」)。"""
+    return bool(graph.output_nodes(entry.api, object_info, entry.titles))
+
+
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
-    """`op: tools`:每张工作流(和粘贴的模板)一个工具。"""
+    """`op: tools`:每张跑得起来的工作流(和粘贴的模板)一个工具。"""
     object_info = comfy.object_info()
     entries = list(models.each(comfy, object_info, locale))
     names = tool_names(entries)
     _remember(comfy, names)
-    return [tool_for(entry, names[entry.id], object_info) for entry in entries if entry.id in names]
+    return [tool_for(entry, names[entry.id], object_info) for entry in entries
+            if entry.id in names and runnable(entry, object_info)]
 
 
 def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) -> models.Entry:
