@@ -544,7 +544,9 @@ export function ModelLibraryDialog({
             open={saving !== null}
             title={t("modelSavePreviewTitle").replace("{name}", saving ? baseName(saving.name) : "")}
             body={[
-              t("modelSavePreviewBody").replace("{server}", instance.name).replace("{place}", saving ? placeOf(saving) : ""),
+              //: 视频写回去 ComfyUI 自己看不到(它和 pysssss 只认图):照实说,不说「ComfyUI 里也看得到」
+              t(saving?.preview_kind === "video" ? "modelSavePreviewBodyVideo" : "modelSavePreviewBody")
+                .replace("{server}", instance.name).replace("{place}", saving ? placeOf(saving) : ""),
               saving?.source?.how === "filename" ? t("modelSavePreviewFilenameMatch") : "",
               save.isError ? errorText(save.error) : "",
             ].filter(Boolean).join("\n\n")}
@@ -1486,12 +1488,12 @@ function OverviewRow({ label, note, children }: { label: string; note?: string; 
   );
 }
 
-/** 「存为预览图」:把 Mosael 里显示的那张别处的示例图写回那台服务器(先确认);写不回时点不了并说缺什么。 */
+/** 「存为预览图」:把 Mosael 里显示的那张别处的示例图(或那段示例视频)写回那台服务器(先确认);写不回时点不了并说缺什么。 */
 function SavePreviewButton({ model, actions, className }: { model: ModelFile; actions: ModelActions; className?: string }) {
   const t = useI18n();
   const why = actions.saveUnavailable(model);
   return (
-    <Hint label={t("modelSavePreviewHint")} disabledReason={why}>
+    <Hint label={t(model.preview_kind === "video" ? "modelSavePreviewHintVideo" : "modelSavePreviewHint")} disabledReason={why}>
       <Button variant="secondary" size="sm" className={cn("shadow-[var(--shadow-floating)]", className)} disabled={Boolean(why)}
               onClick={() => actions.savePreview(model)}>
         <ImageUp size={13} />

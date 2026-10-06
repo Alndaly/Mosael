@@ -373,6 +373,7 @@ describe("Civitai 的示例图、原链接", () => {
     fireEvent.click(entry("save-preview")!);
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm.textContent).toContain("modelSavePreviewBody");
+    expect(confirm.textContent).not.toContain("modelSavePreviewBodyVideo");
     expect(confirm.textContent).not.toContain("modelSavePreviewFilenameMatch");
     expect(api.saveModelPreview).not.toHaveBeenCalled();
     fireEvent.click(within(confirm).getByRole("button", { name: "modelSavePreview" }));
@@ -381,6 +382,23 @@ describe("Civitai 的示例图、原链接", () => {
     }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     await waitFor(() => expect(api.getModelLibrary, "存回之后重新列:预览图换成那台服务器上的").toHaveBeenCalledTimes(2));
+  });
+
+  it("示例是一段视频:按钮的说明、确认框都照实说写的是视频、ComfyUI 自己看不到 —— 不说「512 宽的图」「ComfyUI 里也看得到」", async () => {
+    const CLIP = model("clip-only.safetensors", { preview_origin: "civitai", preview_kind: "video",
+      source: { page: "https://civitai.com/models/153022?modelVersionId=171354", site: "civitai", how: "download" } });
+    api.getModelLibrary.mockResolvedValue(library([CLIP, FROM_CIVITAI]));
+    await open();
+    fireEvent.click(within(card("clip-only.safetensors")).getByRole("button", { name: "clip-only.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    const media = document.querySelector<HTMLElement>("[data-library-detail-pane='media']")!;
+    const button = within(media).getByRole("button", { name: "modelSavePreview" });
+    expect(await hoverHint(button)).toContain("modelSavePreviewHintVideo");
+    fireEvent.click(button);
+    const confirm = await screen.findByRole("alertdialog");
+    expect(confirm.textContent).toContain("modelSavePreviewBodyVideo");
+    //: 图的那一份是另一个键(「modelSavePreviewBody」是视频那一份的前缀,按整段去掉视频那一份再查)
+    expect(confirm.textContent!.replace("modelSavePreviewBodyVideo", "")).not.toContain("modelSavePreviewBody");
   });
 
   it("按文件名对上的:确认框多说一句「不一定是同一个文件」,确认了才带 confirmed", async () => {
