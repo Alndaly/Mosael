@@ -182,12 +182,13 @@ ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope �
 下载按优先级走:
 
 1. ComfyUI 自己的下载接口 —— 0.38.0 没有;
-2. **ComfyUI-Manager(V4)**:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停单个任务的接口,取消只是
-   Mosael 不再等)。它的安全策略只在 ComfyUI 监听本机地址、或 `user/__manager/config.ini` 里 `network_mode = personal_cloud`
-   时才放行 —— 用 `--listen 0.0.0.0` 开着的局域网 ComfyUI 默认不让,插件把日志里的原因说成人话,并记下来,下次在模型库里
-   提前提醒;
-3. **ComfyUI 就在这台电脑上**(它报的模型目录在本机存在,且本机的文件和它报的一致):直接写进去,先写 `名字.mosael-part`、
-   下完挂上正式的名字;按字节报进度、能取消(只删自己的半截文件);开始前查剩余空间,不够就不下;
+2. **ComfyUI 就在这台电脑上**(它报的模型目录在本机存在,且本机的文件和它报的一致):直接写进去,先写 `名字.mosael-part`、
+   下完挂上正式的名字;按字节报进度、能取消(只删自己的半截文件);开始前查剩余空间,不够就不下。装了 ComfyUI-Manager
+   也先走这条(1.13.2):Manager 那条路看不到进度、停不下,令牌还得拼进它的下载地址;
+3. **ComfyUI-Manager(V4)**,ComfyUI 在另一台机器上时:那台机器自己下,看不到字节进度,开始之后停不下(Manager 没有停
+   单个任务的接口,取消只是 Mosael 不再等)。它的安全策略只在 ComfyUI 监听本机地址、或 `user/__manager/config.ini` 里
+   `network_mode = personal_cloud` 时才放行 —— 用 `--listen 0.0.0.0` 开着的局域网 ComfyUI 默认不让,插件把日志里的原因说成
+   人话,并记下来,下次在模型库里提前提醒;
 4. 都不行:说清楚,并给出能做的那一步(装 Manager、改 `network_mode`、或手动把直链下到 `models/<目录>/`)。
 
 **不覆盖任何已有文件**:同名的先要求换名(给一个 `名字 (1).扩展名` 的建议),写盘时再查一遍(硬链接挂正式名字,目标已在就失败)。
@@ -380,9 +381,10 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
-- `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 Manager → 同一台机器 → 说清楚 的顺序下载;
+- `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 同一台机器 → Manager → 说清楚 的顺序下载;
 - `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py` —— 模型信息:Civitai 的接口和回答的形状、按哈希或
   文件名找、NSFW 依据、出处、旁边的预览文件和写回预览图;
+- `json_style.py` —— 照工作流原来的排版写回(`annotate` 只改 `mosael` 那几处标记,别的字节一个不变);
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 
 协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」「流式工具」「一次交出几份」。

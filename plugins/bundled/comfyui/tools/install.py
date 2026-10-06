@@ -1,13 +1,15 @@
-"""把一个模型下到这台 ComfyUI 上(ADR 0034 §3)。按优先级,前一条走不通才试下一条:
+"""把一个模型下到这台 ComfyUI 上(ADR 0034 §3,2026-10-06 的后续调了 2、3 的先后)。按优先级,前一条走不通才试下一条:
 
 1. ComfyUI 自己的下载接口 —— 0.38.0 没有(`/api/assets` 默认关着,里面也没有下载;官方前端缺模型时只是在浏览器里
    打开链接),今天不去探测不存在的接口;
-2. **ComfyUI-Manager** 的装模型接口(`/v2/manager/version` 回 V4 时):那台机器自己去下。不报字节进度,也没有停下单个
-   任务的接口;它的安全策略只在 ComfyUI 监听回环地址、或 `network_mode = personal_cloud` 时才放行 —— 被拒时历史里
-   只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
-3. **ComfyUI 和 Mosael 在同一台机器上**:它报的模型目录在本机存在、且本机的文件和它报的一致 → 直接写进去。先写
+2. **ComfyUI 和 Mosael 在同一台机器上**:它报的模型目录在本机存在、且本机的文件和它报的一致 → 直接写进去。先写
    `<名字>.mosael-part`,下完用硬链接挂上正式的名字(目标已存在就失败,不覆盖);按字节报进度;取消时删掉**自己的**
-   半截文件;开始前查剩余空间;
+   半截文件;开始前查剩余空间。装了 Manager 也走这条:它看得到进度、停得下、令牌走请求头(不拼进地址、不留在
+   Manager 的任务记录里),Manager 那条路一样都做不到(沙盒实测:本机 ComfyUI 装着 Manager,下载走了 Manager,
+   没有进度 —— 和指南、下载框说的「这台电脑上的看得到进度」对不上);
+3. **ComfyUI-Manager** 的装模型接口(`/v2/manager/version` 回 V4 时,ComfyUI 在另一台机器上):那台机器自己去下。不报
+   字节进度,也没有停下单个任务的接口;它的安全策略只在 ComfyUI 监听回环地址、或 `network_mode = personal_cloud` 时
+   才放行 —— 被拒时历史里只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
 4. 都走不通:如实说明,并给出能做的那一步。
 
     {"op": "download", "url", "folder", "filename"} → 流式:进度行;结果 {folder, name, size, route, page}
@@ -168,32 +170,22 @@ def _none_steps(locale: str, legacy: bool, url: str = "", folder: str = "", file
 def describe(comfy: Comfy, info: dict[str, list[str]] | None, listing: dict[str, list[dict[str, Any]]],
              locale: str) -> dict[str, str]:
     """模型库里那一行「下载走哪条路」:`manager` / `local` / `none`,外加给人看的一句。"""
-    version = manager_version(comfy)
-    local = same_machine(comfy, info, listing)
-    refused = _refusal(comfy)
-    if version and refused and local:
+    if same_machine(comfy, info, listing):
         return {"route": "local", "note": say(
-            locale, "ComfyUI-Manager 上次拒绝了装模型;ComfyUI 就在这台电脑上,直接写进它的 models 目录(看得到进度、能取消)",
-            "ComfyUI-Manager refused to install models last time; ComfyUI is on this computer, so files go straight into its "
-            "models folder (with progress and cancel)")}
+            locale, "ComfyUI 就在这台电脑上:直接写进它的 models 目录,看得到进度、能取消",
+            "ComfyUI is on this computer: files go straight into its models folder, with progress and cancel")}
+    version = manager_version(comfy)
+    refused = _refusal(comfy)
     if version:
         note = say(locale, f"经 ComfyUI-Manager({version})下载:由那台机器自己去下",
                    f"Downloads go through ComfyUI-Manager ({version}): that machine downloads by itself")
         if refused:
             note = f"{note} · {say(locale, '上次被拒绝了:', 'Refused last time: ')}{_policy_steps(locale)}"
         return {"route": "manager", "note": note}
-    if local:
-        return {"route": "local", "note": say(
-            locale, "ComfyUI 就在这台电脑上:直接写进它的 models 目录,看得到进度、能取消",
-            "ComfyUI is on this computer: files go straight into its models folder, with progress and cancel")}
     return {"route": "none", "note": _none_steps(locale, _legacy_manager(comfy))}
 
 
 # --- Manager ------------------------------------------------------------------
-
-class ManagerRefused(ComfyError):
-    """Manager 的安全策略拒绝了这次装模型(能换一条路试)。"""
-
 
 def _manager_save_path(info: dict[str, list[str]], folder: str) -> str:
     """Manager 的 `save_path` 是相对 ComfyUI 的 models 目录的路径:按这个目录报的第一处推(`unet_gguf` 实际在
@@ -292,7 +284,7 @@ def via_manager(comfy: Comfy, info: dict[str, list[str]], url: str, folder: str,
     reason = _log_reason(comfy, cursor)
     if "security_level" in reason or "network_mode" in reason:
         save_json(data_file(comfy, "manager-refused"), {"at": time.time()})
-        raise ManagerRefused(_policy_steps(locale, url, folder, filename))
+        raise ComfyError(_policy_steps(locale, url, folder, filename))
     detail = reason or "; ".join(str(one) for one in (entry.get("status") or {}).get("messages") or []) or "failed"
     raise ComfyError(say(locale, f"ComfyUI-Manager 没下成:{_scrub(detail, token)}",
                          f"ComfyUI-Manager didn't download it: {_scrub(detail, token)}"))
@@ -436,18 +428,9 @@ def download(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
 
 def _download_by_route(comfy: Comfy, info: dict[str, list[str]], direct: str, folder: str, filename: str, locale: str,
                        emit: Emit) -> dict[str, Any]:
-    version = manager_version(comfy)
     local = _local_dir(info, folder) if same_machine(comfy, info) else None
-    refused = bool(_refusal(comfy))
-    if version and not (refused and local is not None):
-        try:
-            return via_manager(comfy, info, direct, folder, filename, locale, emit)
-        except ManagerRefused:
-            if local is None:
-                raise
-            emit({"event": "progress", "progress": 0.0,
-                  "message": say(locale, "ComfyUI-Manager 拒绝了;ComfyUI 就在这台电脑上,改为直接写进它的 models 目录",
-                                 "ComfyUI-Manager refused; ComfyUI is on this computer, so writing into its models folder instead")})
     if local is not None:
         return via_local(local, direct, folder, filename, locale, emit)
+    if manager_version(comfy):
+        return via_manager(comfy, info, direct, folder, filename, locale, emit)
     raise ComfyError(_none_steps(locale, _legacy_manager(comfy), direct, folder, filename))

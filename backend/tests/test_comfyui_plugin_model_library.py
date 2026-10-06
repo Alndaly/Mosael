@@ -464,20 +464,19 @@ def test_Manager被拒绝_日志缓冲满了也找得到原因(comfy, data_dir, 
                           "filename": "mosael-test-tiny.safetensors"}, data_dir, tmp_path)
 
 
-def test_Manager被拒绝_同一台机器就改走本机(comfy, data_dir, tmp_path, files) -> None:
+def test_同一台机器_装了Manager也直接写进去_看得到进度(comfy, data_dir, tmp_path, files) -> None:
+    """沙盒实测:本机的 ComfyUI 装着 Manager,下载走了 Manager —— 没有进度、取消停不下,和指南、下载框说的「这台电脑上的
+    看得到进度、能取消」对不上。同一台机器上直接写更好:看得到进度、停得下、查空间、令牌走请求头不留在 Manager 的记录里。"""
     root = _same_machine(comfy, tmp_path / "models")
     comfy.state.manager = "V4.2.1"
-    comfy.state.manager_outcome = "policy"
+    out = _call(comfy, {"op": "library"}, data_dir)
+    assert out["download"]["route"] == "local" and "进度" in out["download"]["note"], "下载框照它说:看得到进度"
     site = files({"/tiny.safetensors": b"abc"})
-    out, _ = _download(comfy, {"url": f"{site.url}/tiny.safetensors", "folder": "vae", "filename": "a.safetensors"},
-                       data_dir, tmp_path)
-    assert out["route"] == "local" and (root / "vae" / "a.safetensors").read_bytes() == b"abc"
-    assert len(comfy.posted("/v2/manager/queue/install_model")) == 1
-    # 第二次:记着被拒过、本机走得通,就不再去碰 Manager
-    _download(comfy, {"url": f"{site.url}/tiny.safetensors", "folder": "vae", "filename": "b.safetensors"},
-              data_dir, tmp_path)
-    assert len(comfy.posted("/v2/manager/queue/install_model")) == 1
-    assert (comfy.posted("/v2/manager/queue/install_model")[0]["filename"]) == "a.safetensors"
+    done, progress = _download(comfy, {"url": f"{site.url}/tiny.safetensors", "folder": "vae", "filename": "a.safetensors"},
+                               data_dir, tmp_path)
+    assert done["route"] == "local" and (root / "vae" / "a.safetensors").read_bytes() == b"abc"
+    assert not comfy.posted("/v2/manager/queue/install_model"), "不经 Manager"
+    assert progress.events and progress.events[-1][0] == pytest.approx(1.0)
 
 
 def test_Manager下载失败_原因从日志里找出来(comfy, data_dir, tmp_path) -> None:

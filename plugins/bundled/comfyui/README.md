@@ -234,14 +234,15 @@ token).
 Downloads take the first route that works:
 
 1. ComfyUI's own download API: 0.38.0 has none;
-2. **ComfyUI-Manager (V4)**: that machine downloads it, without byte progress and without a way to stop it once started
-   (the Manager can't stop a single task; cancelling only stops Mosael waiting). Its security policy only allows this when
-   ComfyUI listens on a local address or `network_mode = personal_cloud` in `user/__manager/config.ini`; a LAN ComfyUI
-   started with `--listen 0.0.0.0` refuses by default, so the plugin turns the reason in the log into plain words,
-   remembers it and warns in the model library next time;
-3. **ComfyUI runs on this computer** (its model folders exist here and the files match what it reports): written
+2. **ComfyUI runs on this computer** (its model folders exist here and the files match what it reports): written
    straight in, first as `name.mosael-part` and then given the real name; with byte progress and cancel (only its own
-   partial file is removed), and a free-space check before starting;
+   partial file is removed), and a free-space check before starting. This comes first even when ComfyUI-Manager is
+   installed (1.13.2): the Manager can't show progress or stop, and tokens would have to go into its download URL;
+3. **ComfyUI-Manager (V4)**, for a ComfyUI on another machine: that machine downloads it, without byte progress and without
+   a way to stop it once started (the Manager can't stop a single task; cancelling only stops Mosael waiting). Its security
+   policy only allows this when ComfyUI listens on a local address or `network_mode = personal_cloud` in
+   `user/__manager/config.ini`; a LAN ComfyUI started with `--listen 0.0.0.0` refuses by default, so the plugin turns the
+   reason in the log into plain words, remembers it and warns in the model library next time;
 4. none of these: it says so and gives the step you can take (install the Manager, change `network_mode`, or put the
    direct link into `models/<folder>/` yourself).
 
@@ -504,10 +505,12 @@ queued or saved). If a frontend lacks something the bridge uses, that panel says
 - `library.py` / `families.py` / `weights.py` / `model_files.py`: the model library (model files, file headers with
   metadata and tensor tables, base-model families from metadata, weights and file names, which workflows use a file
   and which models they miss);
-- `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading via the
-  Manager → same machine → explain order;
+- `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading in the
+  same machine → Manager → explain order;
 - `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py`: model info: Civitai's API and answer shapes,
   finding by hash or file name, NSFW signals, source, preview files next to the model and saving a preview back;
+- `json_style.py`: writing a workflow back in its own formatting (`annotate` changes only the `mosael` marks, every
+  other byte stays the same);
 - `comfy_http.py` / `ws.py`: talking to ComfyUI.
 
 For the protocol, see `docs/PLUGIN_MANIFEST.md` in the Mosael repository: the sections on doing generation for the host,
