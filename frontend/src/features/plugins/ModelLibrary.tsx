@@ -20,7 +20,6 @@ import {
   Search,
   SearchCheck,
   SearchX,
-  Settings2,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -90,6 +89,7 @@ import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
+import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { ModelActionsContext, type ModelActions } from "@/features/plugins/modelActions";
 import { ModelContextMenu, isMenuKey } from "@/features/plugins/ModelMenu";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
@@ -431,14 +431,7 @@ export function ModelLibraryDialog({
           error={library.error}
           onRetry={() => void library.refetch()}
           retrying={library.isFetching}
-          actions={
-            onCheckSettings ? (
-              <Button variant="outline" onClick={onCheckSettings}>
-                <Settings2 size={13} />
-                {t("modelLibraryCheckSettings")}
-              </Button>
-            ) : undefined
-          }
+          actions={<ConnectionFailureActions instanceId={instance.id} onCheckSettings={onCheckSettings} />}
         />
       );
     }

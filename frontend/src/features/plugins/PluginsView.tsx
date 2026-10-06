@@ -26,6 +26,7 @@ import {
   setPluginPermissions,
   updatePluginInstance,
   type PluginField,
+  type LocalService,
   type PluginInstance,
   type PluginInvocation,
   type PluginPackage,
@@ -68,9 +69,9 @@ import {
   ConnectionLocalService,
   LocalServiceDiscovery,
   SERVICE_ADDRESS_FIELD,
-  useLocalService,
   useRefreshWhenRunning,
 } from "@/features/plugins/ConnectionLocalService";
+import { serviceIssue, useLocalService } from "@/features/plugins/localServiceStatus";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
@@ -704,7 +705,7 @@ export function ConnectionCard({
   })();
 
   //: 收起时那一行说的话:这个连接此刻怎么样(可用 / 已停用 / 要处理的原因)、开了几个工具或几个模型。
-  const issue = connectionIssue(pkg, instance);
+  const issue = connectionIssue(pkg, instance, localService.data);
   const summaryText = ((): string => {
     if (generates && tools.length === 0) {
       const models = instance.capability_status?.generation?.models;
@@ -803,7 +804,8 @@ export function ConnectionCard({
               </span>
               {issue.detail && (
                 /* 只说第一行那句人话;原文(errno、地址)悬停看 —— 并进标题行那条「展开」的说明里(见 tooltip.tsx 的 HintScope) */
-                <Truncate lines={2} className="text-ui-xs leading-relaxed text-warning" hint={splitErrorText(issue.detail).detail || undefined}>
+                <Truncate lines={2} className={cn("text-ui-xs leading-relaxed", issue.tone === "warning" ? "text-warning" : "text-muted-foreground")}
+                          hint={splitErrorText(issue.detail).detail || undefined}>
                   {splitErrorText(issue.detail).summary}
                 </Truncate>
               )}
@@ -916,6 +918,7 @@ export function ConnectionCard({
           <GenerationModelsRow
             instance={instance}
             status={instance.capability_status?.generation}
+            service={localService.data}
             refreshing={refresh.isPending}
             onRefresh={() => refresh.mutate()}
           />
@@ -962,18 +965,25 @@ export function ConnectionCard({
   );
 }
 
-type IssueTone = "success" | "warning" | "muted";
+type IssueTone = "success" | "warning" | "muted" | "primary";
+
+/** 目录没刷出来:生成模型那一格或工具表那一格记着的原因。 */
+function capabilityError(instance: PluginInstance): string {
+  return String(instance.capability_status?.generation?.error || instance.capability_status?.tools?.error || "");
+}
 
 /**
  * 一个连接此刻怎么样 —— 收起的那一行上那枚标记、下面那句原因,以及展开时该定位到哪一项(`data-connection-section`)。
  *
  * 先后:用户自己停用的(已停用,不算出错)→ 缺必填配置(定位到那一格)→ 没授权 / 对方不认了(定位到授权那一条)→
  * 缺权限(插件更新后多要了几项 = 需要重新授权;定位到权限那一条)→ 别的不可用原因(缺凭据,定位到凭据)→
- * 目录没刷出来(连不上 ComfyUI 之类,定位到生成模型那一行或工具表)→ 可用。
+ * **背后的本机服务用不了**(按它的状态说,定位到本机服务那一块;见 localServiceStatus.serviceIssue —— 插件那句「检查地址」
+ * 只适合「连一台服务器」)→ 目录没刷出来(连不上 ComfyUI 之类,定位到生成模型那一行或工具表)→ 可用。
  */
 export function connectionIssue(
   pkg: PluginPackage,
   instance: PluginInstance,
+  service?: LocalService | null,
 ): { tone: IssueTone; label: MessageKey; detail: string; target: string } {
   if (!instance.enabled) return { tone: "muted", label: "pluginConnStateOff", detail: "", target: "" };
   const config = (instance.config ?? {}) as Record<string, unknown>;
@@ -1002,6 +1012,8 @@ export function connectionIssue(
   }
   const generationError = instance.capability_status?.generation?.error;
   const toolsError = instance.capability_status?.tools?.error;
+  const local = serviceIssue(service, Boolean(capabilityError(instance)));
+  if (local) return { tone: local.tone, label: local.label, detail: local.text, target: "local-service" };
   if (generationError || toolsError) {
     return {
       tone: "warning",

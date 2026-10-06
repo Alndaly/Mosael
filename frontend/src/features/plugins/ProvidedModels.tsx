@@ -4,6 +4,7 @@ import { ChevronRight, RefreshCcw } from "lucide-react";
 
 import {
   listPluginInstanceModels,
+  type LocalService,
   type PluginCapabilityStatus,
   type PluginInstance,
   type PluginProvidedModel,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { ServiceIssueNote, focusConnectionSection, serviceIssue } from "@/features/plugins/localServiceStatus";
 import { ROLE_COPY, type SourceRole } from "@/lib/sourceFrames";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -74,11 +76,14 @@ const SEARCH_THRESHOLD = 6;
 export function GenerationModelsRow({
   instance,
   status,
+  service,
   refreshing,
   onRefresh,
 }: {
   instance: PluginInstance;
   status?: PluginCapabilityStatus;
+  /** 连接背后的本机服务(没有是 null):目录没刷出来、而它此刻用不了时,按它的状态说(见 localServiceStatus)。 */
+  service?: LocalService | null;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -86,6 +91,7 @@ export function GenerationModelsRow({
   const { locale } = usePreferences();
   const [open, setOpen] = React.useState(false);
   const models = status?.models;
+  const local = serviceIssue(service, Boolean(status?.error));
   //: 原因只说第一行那句人话;原文(errno、地址)悬停看
   const error = status?.error ? splitErrorText(status.error) : null;
   const summary = error
@@ -98,12 +104,18 @@ export function GenerationModelsRow({
   return (
     <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
       <div className="flex min-w-0 items-center gap-2">
-        <Truncate
-          className={cn("max-w-[22rem] text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}
-          hint={error?.detail || undefined}
-        >
-          {summary}
-        </Truncate>
+        {local && service ? (
+          // 本机服务此刻用不了:说它的状态(停着给「启动」、起不来给「日志」),不说插件那句「检查地址」
+          <ServiceIssueNote instanceId={instance.id} service={service} issue={local} className="max-w-[22rem]"
+                            onInstall={() => focusConnectionSection(instance.id, "local-service")} />
+        ) : (
+          <Truncate
+            className={cn("max-w-[22rem] text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}
+            hint={error?.detail || undefined}
+          >
+            {summary}
+          </Truncate>
+        )}
         <Button variant="outline" disabled={!models} onClick={() => setOpen(true)}>
           {t("pluginModelsView")}
         </Button>

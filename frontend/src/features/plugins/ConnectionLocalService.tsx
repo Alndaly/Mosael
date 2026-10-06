@@ -9,8 +9,6 @@ import {
   createPluginInstance,
   detectLocalService,
   discoverLocalServices,
-  getLocalService,
-  getLocalServiceLogs,
   getLocalServicePlan,
   installLocalService,
   putLocalService,
@@ -21,7 +19,6 @@ import {
   type LocalService,
   type LocalServiceDetection,
   type LocalServiceInstall,
-  type LocalServiceLogSource,
   type LocalServicePlan,
   type LocalServiceState,
   type LocalServiceUpdate,
@@ -33,7 +30,7 @@ import type { MessageKey } from "@/app/messages";
 import { CatalogBadge, type CatalogTone } from "@/components/app/CatalogDialog";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ConfirmDialog } from "@/components/app/modals";
 import { PathField } from "@/components/settings/PathField";
 import { SETTINGS_FIELD_WIDTH, SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
@@ -43,6 +40,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
+import { LocalServiceLogDialog, focusConnectionSection, localServiceKey, useLocalService } from "@/features/plugins/localServiceStatus";
 import { ModelLibraryDialog } from "@/features/plugins/ModelLibrary";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
@@ -52,26 +50,8 @@ import { cn } from "@/lib/utils";
 /** 本机服务的地址写进连接配置的这一格(清单格式的约定,见 mosael_formats.plugin_manifest.SERVICE_ADDRESS_FIELD)。 */
 export const SERVICE_ADDRESS_FIELD = "server_url";
 
-/** 这个连接的本机服务在缓存里的键(连接卡上的「服务器地址」也读它:本机服务的地址由宿主填,不让手改)。 */
-export const localServiceKey = (instanceId: string) => ["local-service", instanceId] as const;
 const detectionKey = (instanceId: string) => ["local-service-detection", instanceId] as const;
 const planKey = (instanceId: string) => ["local-service-plan", instanceId] as const;
-
-/** 还在变的两种状态按 1200 ms 问(和引擎安装同一个节奏),正在装时也是;别的时候隔几秒看一眼 —— 运行中崩了要看得见它在重启。 */
-const UNSETTLED: readonly LocalServiceState[] = ["starting", "restarting"];
-
-export function useLocalService(instanceId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: localServiceKey(instanceId),
-    queryFn: () => getLocalService(instanceId),
-    enabled,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      return UNSETTLED.includes(data.state) || data.install?.state === "installing" ? 1200 : 5000;
-    },
-  });
-}
 
 /**
  * 本机服务刚就绪:宿主在它停着时没刷新目录(用到时才起,见后端 host_capabilities.notify),就绪时自己刷了一遍(模型、工具)——
@@ -459,7 +439,7 @@ function ManagedInstall({
     onSuccess: (next) => settle(qc, instanceId, next),
     onError: (error: Error) => toast.error(error.message),
   });
-  const logs = logsOpen && <LogDialog instanceId={instanceId} title={title} source="install" onClose={() => setLogsOpen(false)} />;
+  const logs = logsOpen && <LocalServiceLogDialog instanceId={instanceId} title={title} source="install" onClose={() => setLogsOpen(false)} />;
 
   if (run && installing) {
     return (
@@ -561,13 +541,6 @@ function SettingNote({ source, setting }: { source: string; setting: string }) {
   );
 }
 
-/** 连接卡片里这个连接的某一格(网络、配置……):滚到那里、把焦点交过去。 */
-function focusConnectionSection(instanceId: string, section: string): void {
-  const target = document.querySelector<HTMLElement>(`[data-connection="${instanceId}"] [data-connection-section="${section}"]`);
-  if (!target) return;
-  target.scrollIntoView({ block: "center" });
-  target.querySelector<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true });
-}
 
 /**
  * 会从这几处下载,以及**怎么连过去**:插件进程拿到的出站代理(跟随全局 / 这个连接自己的 / 直连,宿主按 egress 算的那一份),
@@ -1057,7 +1030,7 @@ function ServiceRows({
           </SettingsRow>
         </>
       )}
-      {logsOpen && <LogDialog instanceId={instanceId} title={service.title} onClose={() => setLogsOpen(false)} />}
+      {logsOpen && <LocalServiceLogDialog instanceId={instanceId} title={service.title} onClose={() => setLogsOpen(false)} />}
     </>
   );
 }
@@ -1127,52 +1100,6 @@ function AddNodesRow({
         onConfirm={() => install.mutate()}
       />
     </SettingsRow>
-  );
-}
-
-/** 日志:它自己说的话(或「让 Mosael 装」那几步的输出)原样摆出来,开着的时候每 1.5 秒拉一次,停在最底下;完整日志在哪个文件写明。 */
-function LogDialog({
-  instanceId,
-  title,
-  source = "service",
-  onClose,
-}: {
-  instanceId: string;
-  title: string;
-  source?: LocalServiceLogSource;
-  onClose: () => void;
-}) {
-  const t = useI18n();
-  const logs = useQuery({
-    queryKey: ["local-service-logs", instanceId, source],
-    queryFn: () => getLocalServiceLogs(instanceId, 2000, source),
-    refetchInterval: 1500,
-  });
-  const bottom = React.useRef<HTMLPreElement>(null);
-  const lines = logs.data?.lines ?? [];
-  React.useEffect(() => {
-    const element = bottom.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [lines.length]);
-  return (
-    <ModalShell open onOpenChange={(open) => !open && onClose()}
-                title={t(source === "install" ? "localServiceInstallLogTitle" : "localServiceLogTitle").replace("{title}", title)}
-                className="w-[min(960px,calc(100vw-2rem))]">
-      <div className="grid gap-2">
-        <pre
-          ref={bottom}
-          className="m-0 h-[min(60vh,560px)] overflow-auto whitespace-pre-wrap break-words rounded-md bg-panel-subtle p-3 font-mono text-ui-xs"
-        >
-          {lines.length > 0 ? lines.join("\n") : t("localServiceLogEmpty")}
-        </pre>
-        {logs.data?.path && (
-          <small className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-            <Info size={12} aria-hidden />
-            <span className="break-all">{t("localServiceLogPath").replace("{path}", logs.data.path)}</span>
-          </small>
-        )}
-      </div>
-    </ModalShell>
   );
 }
 

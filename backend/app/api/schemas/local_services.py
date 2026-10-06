@@ -38,6 +38,13 @@ class LocalServiceInstallOut(ApiModel):
     finished_at: str | None = None
 
 
+class LocalServiceIssueOut(ApiModel):
+    """本机服务此刻为什么用不了。`kind` 给界面挑语气和该给的那一下(启动、看日志、去装);`text` 是那一句话。"""
+
+    kind: Literal["installing", "not_installed", "rebuild", "stopped", "starting", "failed", "unresponsive"]
+    text: str
+
+
 class LocalServiceOut(ApiModel):
     """一个连接的本机服务:人定下的配置 + 进程此刻怎么样。界面按 1200 ms 轮询它(和引擎安装一样)。"""
 
@@ -76,6 +83,8 @@ class LocalServiceOut(ApiModel):
     needs_rebuild: bool = False
     #: 这一次安装(正在装、刚装完、没装成、取消了);没有就是 null。
     install: LocalServiceInstallOut | None = None
+    #: 此刻用不了的话为什么(停着、正在起、起不来、还没装好、要重建、进程在却不应答);在跑而且应答是 null。
+    issue: LocalServiceIssueOut | None = None
     #: 看的人能不能动它(建、改、起、停都要部署管理员)。
     can_manage: bool = False
 

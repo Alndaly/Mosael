@@ -24,7 +24,6 @@ import {
   RotateCcw,
   Search,
   SearchX,
-  Settings2,
   SlidersHorizontal,
   Sparkles,
   SquarePen,
@@ -84,6 +83,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
+import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
@@ -581,14 +581,7 @@ export function WorkflowLibraryDialog({
           error={library.error}
           onRetry={() => void library.refetch()}
           retrying={library.isFetching}
-          actions={
-            onCheckSettings ? (
-              <Button variant="outline" onClick={onCheckSettings}>
-                <Settings2 size={13} />
-                {t("modelLibraryCheckSettings")}
-              </Button>
-            ) : undefined
-          }
+          actions={<ConnectionFailureActions instanceId={instance.id} onCheckSettings={onCheckSettings} />}
         />
       );
     }

@@ -11,7 +11,8 @@
   这几件事不是「用它」,不替它起进程,没在跑就直接说没在跑(拍板 4:用到时才起)。此前只在调用处挑:一个刚就绪
   就崩的服务,就绪后那次刷新正好撞上它崩了,于是替它又起了一次,「5 分钟内最多重启 3 次」就此失效;
 - `idle`:有本机服务、而它现在没在跑。后台刷新先看这个,停着的连接干脆不问(目录留着上次的;它起来以后会自己
-  通知刷新一次)。
+  通知刷新一次);
+- `explain`:一次插件调用失败之后,本机服务此刻为什么用不了 —— 调用方拿它替掉插件那句「连不上,检查地址」。
 """
 
 from __future__ import annotations
@@ -53,6 +54,8 @@ class Gate:
     #: (库, 连接, 停着要不要起, 报进度) → 见 Prepared。没在跑又不让起时抛。
     prepare: Callable[[Session, PluginInstance, bool, Progress], Prepared]
     idle: Callable[[Session, PluginInstance], bool]
+    #: (库, 连接) → 一次调用失败后,背后的本机服务此刻为什么用不了(它好好的、没有本机服务都是 None)。
+    explain: Callable[[Session, PluginInstance], Exception | None]
 
 
 def _no_service(_db: Session, _instance: PluginInstance, _start: bool, _progress: Progress) -> Prepared:
@@ -63,7 +66,11 @@ def _never_idle(_db: Session, _instance: PluginInstance) -> bool:
     return False
 
 
-_gate = Gate(prepare=_no_service, idle=_never_idle)
+def _nothing_to_explain(_db: Session, _instance: PluginInstance) -> Exception | None:
+    return None
+
+
+_gate = Gate(prepare=_no_service, idle=_never_idle, explain=_nothing_to_explain)
 
 #: 这一段调用能不能替本机服务起进程。缺省能(用到时起);后台刷新目录时关掉(见 no_autostart)。
 _autostart: ContextVar[bool] = ContextVar("mosael_service_autostart", default=True)
@@ -91,9 +98,16 @@ def prepare(db: Session, instance: PluginInstance, *, progress: Progress) -> Pre
     return _gate.prepare(db, instance, _autostart.get(), progress)
 
 
+def explain(db: Session, instance: PluginInstance) -> Exception | None:
+    """一次插件调用失败了:连接背后的本机服务此刻为什么用不了(停着、正在起、起不来、还没装好、进程在却不应答……),
+    调用方拿它替掉插件那句「连不上,确认它在运行、地址填对」—— 本机服务的地址和进程都归宿主管,检查地址无从谈起。
+    它好好的(或者没有本机服务)是 None:失败原因照插件说的。"""
+    return _gate.explain(db, instance)
+
+
 def idle(db: Session, instance: PluginInstance) -> bool:
     """这个连接有本机服务、而它现在没在跑。"""
     return _gate.idle(db, instance)
 
 
-__all__ = ["NO_SERVICE", "Gate", "Prepared", "Progress", "idle", "no_autostart", "prepare", "use"]
+__all__ = ["NO_SERVICE", "Gate", "Prepared", "Progress", "explain", "idle", "no_autostart", "prepare", "use"]

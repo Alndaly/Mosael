@@ -12430,6 +12430,19 @@ export interface components {
              */
             done: boolean;
         };
+        /**
+         * LocalServiceIssueOut
+         * @description 本机服务此刻为什么用不了。`kind` 给界面挑语气和该给的那一下(启动、看日志、去装);`text` 是那一句话。
+         */
+        LocalServiceIssueOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "installing" | "not_installed" | "rebuild" | "stopped" | "starting" | "failed" | "unresponsive";
+            /** Text */
+            text: string;
+        };
         /** LocalServiceLogsOut */
         LocalServiceLogsOut: {
             /** Lines */
@@ -12539,6 +12552,7 @@ export interface components {
              */
             needs_rebuild: boolean;
             install?: components["schemas"]["LocalServiceInstallOut"] | null;
+            issue?: components["schemas"]["LocalServiceIssueOut"] | null;
             /**
              * Can Manage
              * @default false

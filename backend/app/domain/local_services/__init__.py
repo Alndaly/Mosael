@@ -41,7 +41,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import tr
+from app.core.i18n import fragment, is_message_key, tr
 from app.core.interpreter import base_python, python_minor
 from app.core.run_log import logs_dir
 from app.core.unit_of_work import unit_of_work
@@ -139,6 +139,65 @@ def _title(db: Session, instance: PluginInstance, row: LocalService | None = Non
 
 
 # ---------------------------------------------------------------------------
+# 用不了的时候,为什么
+# ---------------------------------------------------------------------------
+
+#: 本机服务此刻为什么用不了 → 那一句话的 key。插件说「连不上这台服务器,确认它在运行、地址填对」只适合「连一台服务器」:
+#: 本机服务的地址和进程都归宿主管,该说的是它此刻的状态。
+ISSUE_KEYS = {
+    "installing": "localServiceIssue_installing",
+    "not_installed": "localServiceIssue_notInstalled",
+    "rebuild": "localServiceIssue_rebuild",
+    "stopped": "localServiceIssue_stopped",
+    "starting": "localServiceIssue_starting",
+    "failed": "localServiceIssue_failed",
+    "unresponsive": "localServiceIssue_unresponsive",
+}
+
+
+def issue_of(db: Session, instance: PluginInstance) -> tuple[str, LocalServiceError] | None:
+    """这个连接背后的本机服务此刻为什么用不了:(哪一种, 那一句话)。没有本机服务、或者它在跑而且应答,是 None。
+
+    按状态说,不认识是哪个插件:正在装 / 还没装好 / 要重建(让 Mosael 装的那一份)、停着(用到时会起)、正在起、起不来
+    (带它停下时的原因)、**进程在却没有应答**(健康检查不过 —— 只在它说自己在跑时问一次,本机回环,几毫秒)。"""
+    row = records.row_of(db, instance.id)
+    if row is None:
+        return None
+    name = _title(db, instance, row)
+    process = supervisor.get(instance.id)
+    state = process.state if process is not None else STOPPED
+
+    def said(kind: str, **params: object) -> tuple[str, LocalServiceError]:
+        return kind, LocalServiceError(ISSUE_KEYS[kind], name=name, **params)
+
+    if row.mode == records.MANAGED:
+        if installer.installing(instance.id):
+            return said("installing")
+        if not row.python_minor:
+            return said("not_installed")
+        if needs_rebuild(row):
+            return said("rebuild", have=row.python_minor, want=base_minor())
+    if state == STOPPED or process is None:
+        return said("stopped")
+    if state in (STARTING, RESTARTING):
+        return said("starting")
+    if state == FAILED:
+        error = process.error
+        reason = fragment(error.key, **error.params) if error is not None and is_message_key(error.key) else \
+            str(error or "") or (process.failure_lines[-1] if process.failure_lines else "")
+        return said("failed", reason=reason)
+    if process.health_url and not supervisor.healthy(process.health_url):
+        return said("unresponsive")
+    return None
+
+
+def _explain(db: Session, instance: PluginInstance) -> LocalServiceError | None:
+    """插件域的 `service_gate.explain`:一次插件调用失败了,背后的本机服务此刻为什么用不了(它好好的就是 None,失败原因照旧)。"""
+    found = issue_of(db, instance)
+    return found[1] if found is not None else None
+
+
+# ---------------------------------------------------------------------------
 # 看
 # ---------------------------------------------------------------------------
 
@@ -151,6 +210,7 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
     process = supervisor.get(instance.id)
     state = process.state if process is not None else STOPPED
     run = installer.current(instance.id)
+    found = issue_of(db, instance)
     return {
         "instance_id": instance.id,
         "service": row.service,
@@ -178,6 +238,8 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         "base_python_minor": base_minor() if row.mode == records.MANAGED else "",
         "needs_rebuild": needs_rebuild(row),
         "install": run.snapshot() if run is not None and row.mode == records.MANAGED else None,
+        # 此刻用不了的话为什么(连接页的「出错了」、生成模型那一行、模型库、工作流库照它说,不说「检查地址」)
+        "issue": {"kind": found[0], "text": str(found[1])} if found is not None else None,
     }
 
 
@@ -440,7 +502,9 @@ def _prepare(
         return service_gate.Prepared(env=env, wait_ready=begin_using(db, instance, progress=progress))
     process = supervisor.get(instance.id)
     if process is None or process.state != RUNNING:
-        raise LocalServiceError("localServiceErr_notRunning", name=_title(db, instance, row))
+        # 后台刷新目录不替它起:说它此刻是什么状态(停着 / 正在起 / 起不来 / 还没装好……),连接页照这一句摆
+        found = issue_of(db, instance)
+        raise found[1] if found is not None else LocalServiceError("localServiceIssue_stopped", name=_title(db, instance, row))
     return service_gate.Prepared(env=env)
 
 
@@ -453,7 +517,7 @@ def _idle(db: Session, instance: PluginInstance) -> bool:
 
 
 #: 组装根交给插件域的那道缝(见 app.main._wire_seams)。
-GATE = service_gate.Gate(prepare=_prepare, idle=_idle)
+GATE = service_gate.Gate(prepare=_prepare, idle=_idle, explain=_explain)
 
 
 # ---------------------------------------------------------------------------

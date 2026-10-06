@@ -639,9 +639,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{minutes} 分钟里重启了 {count} 次还是崩,不再自动重启。看看日志里说了什么",
         "en": "It kept crashing after {count} restarts in {minutes} minutes, so it won't restart automatically. Check the log.",
     },
-    "localServiceErr_notRunning": {
-        "zh": "本机 {name} 没在运行",
-        "en": "The local {name} isn't running.",
+    # ---- 本机服务此刻为什么用不了(插件调用失败、目录刷不出来时按它说;见 local_services.issue_of) ----
+    "localServiceIssue_stopped": {
+        "zh": "本机的 {name} 没在运行:用到时会自动启动,也可以现在点「启动」",
+        "en": "The local {name} isn't running: it starts automatically when it's used, or choose Start now.",
+    },
+    "localServiceIssue_starting": {
+        "zh": "本机的 {name} 正在启动…",
+        "en": "The local {name} is starting…",
+    },
+    "localServiceIssue_failed": {
+        "zh": "本机的 {name} 起不来:{reason}",
+        "en": "The local {name} couldn't start: {reason}",
+    },
+    "localServiceIssue_installing": {
+        "zh": "本机的 {name} 正在装,装好之后就能用",
+        "en": "The local {name} is being installed; it can be used once that finishes.",
+    },
+    "localServiceIssue_notInstalled": {
+        "zh": "本机的 {name} 还没装好:到连接页上「接着装」",
+        "en": "The local {name} isn't installed yet. Choose Resume on the connection page.",
+    },
+    "localServiceIssue_rebuild": {
+        "zh": "本机的 {name} 运行环境要重建(用 Python {have} 建的,Mosael 现在带的是 {want}):到连接页上点「重建运行环境」",
+        "en": "The local {name} needs its environment rebuilt (built with Python {have}; Mosael now ships {want}). "
+              "Choose Rebuild environment on the connection page.",
+    },
+    "localServiceIssue_unresponsive": {
+        "zh": "本机的 {name} 进程在跑,但没有应答:看看它的日志",
+        "en": "The local {name} process is running but not answering. Check its log.",
     },
     "localServiceErr_stopped": {
         "zh": "本机 {name} 在启动时被停下了",

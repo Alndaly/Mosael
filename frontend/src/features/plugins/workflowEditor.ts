@@ -18,6 +18,7 @@ import type { PluginInstance, WorkflowFile, WorkflowLibrary } from "@/api/client
 import { errorText } from "@/api/errorMessage";
 import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 import { readyLocalService } from "@/features/plugins/localServiceReady";
+import { explainOpenFailure } from "@/features/plugins/localServiceStatus";
 import { comfyPartition } from "@/features/plugins/comfyNavigation";
 
 export type WorkflowEditor = NonNullable<WorkflowLibrary["editor"]>;
@@ -87,6 +88,11 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
     setNote((now) => (now?.kind === "starting" ? null : now));
   };
   const starting = (path: string) => () => setNote({ kind: "starting", path });
+  /** 页面没就绪:背后的本机服务此刻用不了就说它那一句(不应答、起不来……),否则照「没就绪」说。 */
+  const notReady = async (path: string) => {
+    const said = await explainOpenFailure(instance.id, "");
+    setNote(said ? { kind: "error", path, message: said } : { kind: "notReady", path });
+  };
 
   const open = async (editor: WorkflowEditor, flow: WorkflowFile) => {
     setNote(null);
@@ -110,13 +116,15 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
       });
       if (!result.ok) {
         away.current = null;
-        setNote({ kind: "error", path: flow.path, message: result.error ?? "" });
+        setNote({ kind: "error", path: flow.path, message: await explainOpenFailure(instance.id, result.error ?? "") });
+      } else if (result.outcome === "missing") {
+        setNote({ kind: "missing", path: flow.path });
       } else if (result.outcome && result.outcome !== "opened") {
-        setNote({ kind: result.outcome === "missing" ? "missing" : "notReady", path: flow.path });
+        await notReady(flow.path);
       }
     } catch (error) {
       away.current = null;
-      setNote({ kind: "error", path: flow.path, message: errorText(error) });
+      setNote({ kind: "error", path: flow.path, message: await explainOpenFailure(instance.id, errorText(error)) });
     } finally {
       setOpening(false);
     }
@@ -141,17 +149,17 @@ export function useWorkflowEditor(instance: PluginInstance, onReturn: () => void
       setNote((now) => (now?.kind === "starting" ? null : now));
       if (!result.ok) {
         away.current = null;
-        setNote({ kind: "error", path, message: result.error });
+        setNote({ kind: "error", path, message: await explainOpenFailure(instance.id, result.error) });
       } else if (result.outcome === "missing") {
         setNote({ kind: "missing", path });
       } else if (result.outcome === "unsupported") {
         setNote({ kind: "unsupported", path });
       } else if (result.outcome === "notReady" || result.outcome === "elsewhere") {
-        setNote({ kind: "notReady", path });
+        await notReady(path);
       }
     } catch (error) {
       away.current = null;
-      setNote({ kind: "error", path, message: errorText(error) });
+      setNote({ kind: "error", path, message: await explainOpenFailure(instance.id, errorText(error)) });
     } finally {
       setOpening(false);
     }

@@ -34370,6 +34370,34 @@
         "title": "LocalServiceInstallStepOut",
         "description": "安装的一步:插件说的那几步(查空间、下源码……),最后是宿主的「试起一次」。"
       },
+      "LocalServiceIssueOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "installing",
+              "not_installed",
+              "rebuild",
+              "stopped",
+              "starting",
+              "failed",
+              "unresponsive"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "LocalServiceIssueOut",
+        "description": "本机服务此刻为什么用不了。`kind` 给界面挑语气和该给的那一下(启动、看日志、去装);`text` 是那一句话。"
+      },
       "LocalServiceLogsOut": {
         "properties": {
           "lines": {
@@ -34549,6 +34577,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/LocalServiceInstallOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalServiceIssueOut"
               },
               {
                 "type": "null"

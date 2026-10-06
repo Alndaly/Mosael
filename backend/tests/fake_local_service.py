@@ -1,7 +1,7 @@
 """本机服务测试用的假服务(ADR 0041 §6「测试」):几行 Python 的 HTTP 服务,能按指令慢启动、崩、不响应、起孙进程。
 
     python fake_local_service.py --port 8189 [--slow 2] [--hang] [--exit-at-start 3] [--crash-after 0.5]
-                                 [--crash-first 2] [--count FILE] [--child FILE] [--ignore-term]
+                                 [--crash-first 2] [--count FILE] [--child FILE] [--ignore-term] [--mute-after 0.5]
 
 - `GET /system_stats` 回 200 和一小段 JSON(像 ComfyUI 那样),别的路径 404;
 - `--slow`:先睡这么久再开始听(第一次启动要解包前端的那种);
@@ -11,7 +11,8 @@
 - `--crash-first N`:配 `--count`,前 N 次启动都在就绪之后崩掉,之后稳住(崩溃重启之后能恢复);
 - `--count`:每次启动往这个文件追加一行(数它起了几次);
 - `--child`:起一个孙进程(一直睡),把它的 pid 写进这个文件(验「停整组」);
-- `--ignore-term`:不理 SIGTERM(验「10 秒后强杀」)。
+- `--ignore-term`:不理 SIGTERM(验「10 秒后强杀」);
+- `--mute-after`:就绪之后过这么久不再应答(关掉监听),进程照样活着(「进程在、却没有应答」)。
 
 启动时往 stdout 打几行日志:一行中文、一段用回车刷新的进度条 —— 日志缓冲按终端的样子收。
 """
@@ -58,6 +59,7 @@ def main() -> None:
     parser.add_argument("--count", default="")
     parser.add_argument("--child", default="")
     parser.add_argument("--ignore-term", action="store_true")
+    parser.add_argument("--mute-after", type=float, default=None)
     args = parser.parse_args()
 
     starts = 1
@@ -99,6 +101,17 @@ def main() -> None:
             os._exit(1)
 
         threading.Thread(target=crash, daemon=True).start()
+    if args.mute_after is not None:
+        def mute() -> None:
+            time.sleep(args.mute_after)
+            print("不再应答(进程还在)", flush=True)
+            server.shutdown()
+            server.server_close()
+
+        threading.Thread(target=mute, daemon=True).start()
+        server.serve_forever()
+        while True:
+            time.sleep(1)
     server.serve_forever()
 
 

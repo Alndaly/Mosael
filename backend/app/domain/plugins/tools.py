@@ -461,13 +461,21 @@ def _run_process(
         "egress": egress,
         **({"timeout": timeout} if timeout is not None else {}),
     }
-    with _plugin_slot(db, take=take_slot, wait_ready=service.wait_ready):
-        if hooks is not None:
-            result = stream_tool(
-                Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, hooks=hooks, **run_kwargs,
-            )
-        else:
-            result = execute_tool(Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, **run_kwargs)
+    try:
+        with _plugin_slot(db, take=take_slot, wait_ready=service.wait_ready):
+            if hooks is not None:
+                result = stream_tool(
+                    Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, hooks=hooks, **run_kwargs,
+                )
+            else:
+                result = execute_tool(Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, **run_kwargs)
+    except (PluginRuntimeError, PluginDomainError) as exc:
+        # 背后是本机服务、而它此刻用不了(停了、在起、起不来、进程在却不应答):原因按它的状态说 —— 插件那句「连不上,
+        # 确认它在运行、地址填对」只适合「连一台服务器」。它好好的就照插件说的(工作流本身的错)
+        explained = service_gate.explain(db, instance)
+        if explained is not None:
+            raise explained from exc
+        raise
     plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
     return result.output
 

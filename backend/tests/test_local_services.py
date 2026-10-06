@@ -80,8 +80,21 @@ def svc(payload):
 def ping(payload):
     return {"service": os.environ.get("MOSAEL_LOCAL_SERVICE", ""), "server": os.environ.get("SERVER_URL", "")}
 
+def reach(payload):
+    # 像 ComfyUI 插件那样问一下服务器;连不上就说插件自己那句(只适合「连一台服务器」)
+    import urllib.request
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+                os.environ.get("SERVER_URL", "") + "/system_stats", timeout=1) as response:
+            return {"status": response.status}
+    except Exception:
+        raise RuntimeError("连不上这台服务器,确认它在运行、地址填对")
+
+def boom(payload):
+    raise RuntimeError("这张工作流本身坏了")
+
 request = json.loads(sys.stdin.read())
-handler = {"svc": svc, "ping": ping}[request["tool"]]
+handler = {"svc": svc, "ping": ping, "reach": reach, "boom": boom}[request["tool"]]
 try:
     json.dump({"ok": True, "output": handler(request.get("input") or {})}, sys.stdout, ensure_ascii=False)
 except Exception as exc:
@@ -103,6 +116,8 @@ def _manifest(path: Path) -> dict[str, Any]:
             "declare": [
                 {"name": "svc", "internal": True, "input_schema": {"type": "object"}},
                 {"name": "ping", "effects": "none", "input_schema": {"type": "object"}},
+                {"name": "reach", "effects": "none", "input_schema": {"type": "object"}},
+                {"name": "boom", "effects": "none", "input_schema": {"type": "object"}},
             ],
         },
         "services": [{"key": "fake", "title": {"zh": "假服务", "en": "Fake service"}, "tool": "svc"}],
@@ -436,7 +451,7 @@ def test_后台问指纹不替它起_没在跑就说没在跑(plugged, tmp_path:
         assert service_gate.idle(db, instance)
         with pytest.raises(PluginDomainError) as caught, service_gate.no_autostart():
             service_gate.prepare(db, instance, progress=lambda *_: None)
-    assert caught.value.key == "localServiceErr_notRunning"
+    assert caught.value.key == "localServiceIssue_stopped"
     catalog_watch.check_for_changes()
     assert _status(plugged, instance_id)["state"] == "stopped", "为了看一眼目录变没变把它起起来违背「用到时才起」"
 
@@ -617,3 +632,94 @@ def test_调用本机服务的操作不走用到时起_没有连接也能问(plu
     assert caught.value.key == "pluginErr_noSuchService"
     assert _status(plugged, instance_id)["state"] == "stopped"
     assert sys.executable  # 插件跑在后端的解释器上(仓库里没有随包解释器时)
+
+
+# ---- 用不了的时候,按本机服务的状态说(不说「检查地址」) ------------------------------------------
+
+
+def _invoke(instance_id: str, tool: str, *, autostart: bool = True):
+    from app.domain.plugins import service_gate
+
+    with SessionLocal() as db:
+        if autostart:
+            return tools.invoke(db, instance_id, tool, {})
+        with service_gate.no_autostart():
+            return tools.invoke(db, instance_id, tool, {})
+
+
+def test_连一台服务器_连不上照插件说的(plugged) -> None:
+    """没有本机服务:那句「确认它在运行、地址填对」就是对的,原样留着。"""
+    instance_id = _connection(plugged)
+    plugged.patch(f"/api/plugins/instances/{instance_id}", json={"config": {"server_url": f"http://127.0.0.1:{_free_port()}"}})
+    invocation = _invoke(instance_id, "reach")
+    assert invocation.status == "failed" and "地址填对" in invocation.error
+
+
+def test_停着_后台刷新不替它起_说没在运行_用到时会起(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path))
+    invocation = _invoke(instance_id, "reach", autostart=False)
+    assert invocation.status == "failed" and "没在运行" in invocation.error and "用到时会自动启动" in invocation.error
+    assert "地址" not in invocation.error
+    issue = _status(plugged, instance_id)["issue"]
+    assert issue["kind"] == "stopped" and "点「启动」" in issue["text"]
+    english = plugged.get(f"/api/plugins/instances/{instance_id}/local-service", headers={"Accept-Language": "en"}).json()
+    assert english["issue"]["text"].startswith("The local Fake service isn't running")
+
+
+def test_正在起_不当错误说(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path, flags=["--slow", "3"]))
+    plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    status = _wait_state(plugged, instance_id, "starting", timeout=5)
+    assert status["issue"]["kind"] == "starting" and "正在启动" in status["issue"]["text"]
+    invocation = _invoke(instance_id, "reach", autostart=False)
+    assert "正在启动" in invocation.error
+
+
+def test_起不来_带上原因(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path, flags=["--exit-at-start", "3"]))
+    plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    status = _wait_state(plugged, instance_id, "failed")
+    assert status["issue"]["kind"] == "failed"
+    assert "起不来" in status["issue"]["text"] and "退出码 3" in status["issue"]["text"], "停下时的原因跟着(按读的人的语言)"
+    english = plugged.get(f"/api/plugins/instances/{instance_id}/local-service", headers={"Accept-Language": "en"}).json()
+    assert "exit code 3" in english["issue"]["text"]
+
+
+def test_进程在却不应答_说看日志_不说检查地址(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path, flags=["--mute-after", "0.3"]))
+    plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    assert _wait_state(plugged, instance_id, "running")["state"] == "running"
+    deadline = time.monotonic() + 10
+    while (_status(plugged, instance_id)["issue"] or {}).get("kind") != "unresponsive" and time.monotonic() < deadline:
+        time.sleep(0.1)
+    status = _status(plugged, instance_id)
+    assert status["state"] == "running" and status["issue"]["kind"] == "unresponsive"
+    invocation = _invoke(instance_id, "reach")
+    assert invocation.status == "failed" and "没有应答" in invocation.error and "地址" not in invocation.error
+
+
+def test_在跑而且应答_插件自己的错照说(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    _configure(plugged, instance_id, _folder(tmp_path))
+    plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    assert _wait_state(plugged, instance_id, "running")["issue"] is None
+    invocation = _invoke(instance_id, "boom")
+    assert invocation.status == "failed" and "工作流本身坏了" in invocation.error, "服务好好的:失败原因是插件说的那一句"
+
+
+@pytest.mark.parametrize(("minor", "kind", "text"), [("", "not_installed", "还没装好"), ("3.12", "rebuild", "运行环境要重建")])
+def test_让Mosael装的那一份_还没装好_要重建(plugged, monkeypatch: pytest.MonkeyPatch, minor: str, kind: str, text: str) -> None:
+    monkeypatch.setattr(local_services, "base_minor", lambda: "3.13")
+    instance_id = _connection(plugged)
+    with SessionLocal() as db:
+        records.make_managed(db, db.get(PluginInstance, instance_id))
+        db.get(LocalService, instance_id).python_minor = minor
+        db.commit()
+    issue = _status(plugged, instance_id)["issue"]
+    assert issue["kind"] == kind and text in issue["text"]
+    invocation = _invoke(instance_id, "reach")
+    assert invocation.status == "failed" and text in invocation.error

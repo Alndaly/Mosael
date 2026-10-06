@@ -220,6 +220,8 @@ class ServiceProcess:
         #: 这个进程是上一个后端起的、这次接回来的。
         self.adopted = False
         self.directory_key = ""
+        #: 健康检查的地址(起的、接回来的那一份):「进程在,却没有应答」由它判(见 local_services.issue)。
+        self.health_url = ""
         #: 健康检查通过时叫一声(在另一个线程里叫:它可能要问插件刷新目录,不能挡着看护)。
         self.on_ready: Callable[[], None] | None = None
         #: 这一次起法给的就绪上限(等它就绪的人据此决定等多久)。
@@ -276,6 +278,7 @@ class ServiceProcess:
             self._set_locked(RUNNING)
             spec = LaunchSpec(argv=record.argv, env={}, cwd=record.cwd, port=record.port, health_path=record.health_path,
                               directory=record.directory)
+            self.health_url = spec.health_url
             self._thread = threading.Thread(
                 target=self._supervise, args=(self._handle, spec, True), daemon=True,
                 name=f"local-service-{self.instance_id[:8]}",
@@ -419,6 +422,7 @@ class ServiceProcess:
         self.ready_timeout = spec.ready_timeout
         self._handle = _Handle(popen.pid, popen)
         self.pid, self.port, self.started_at, self.adopted = popen.pid, spec.port, now, False
+        self.health_url = spec.health_url
         pidfiles.write(pidfiles.PidRecord(
             instance_id=self.instance_id, pid=popen.pid, argv=list(spec.argv), port=spec.port,
             health_path=spec.health_path, started_at=now.isoformat(), directory=spec.directory, cwd=spec.cwd,
