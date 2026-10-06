@@ -1,10 +1,51 @@
 import { humanError } from "@/api/errorMessage";
 
 const SERVER_KEY = "mosael.server.url";
-export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
-export const API_BASE = (
-  typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
-).replace(/\/+$/, "");
+
+/** 桌面版和 `pnpm dev` 连的那台:本机 8800。 */
+const LOCAL_API_BASE = "http://127.0.0.1:8800";
+/** `pnpm dev` 钉死的端口(frontend/package.json 的 `--port 5173 --strictPort`,测试钉着两边一致)。 */
+export const DEV_PORT = "5173";
+/** 解析不出来的地址(`.invalid` 永远不会被解析,RFC 2606):请求当场失败、落到「连不上」,不会打到任何一台机器。 */
+export const UNCONFIGURED_API_BASE = "http://backend-not-configured.invalid";
+
+/**
+ * 这一页该连哪台后端。先看用户在「服务器」里选过的(`stored`),再看构建 / 启动 Vite 时给的 `VITE_MOSAEL_API_URL`
+ * (`env`),都没有才是本机 8800 —— 但**开发服务器开在 5173 以外的端口、又什么都没配时不退回 8800**:
+ *
+ * 隔离环境(自己的后端开在 8833 这类端口、Vite 开在 5291 这类端口)此前是页面先按 8800 加载、再写 localStorage 切过去,
+ * 第一批请求(探活、登录页要的那几样)已经打到了维护者正在用的那台开发后端上。`pnpm dev` 钉死 5173,别的端口上的开发
+ * 服务器只会是手动或脚本起的,它们该带 `VITE_MOSAEL_API_URL`;没带就让它连不上,并在控制台说清楚,而不是悄悄碰 8800。
+ * 打包出来的应用(`dev: false`)不受影响:没给环境变量就照旧是 8800。
+ */
+export function resolveApiBase({ stored, env, dev, port }: {
+  stored: string | null;
+  env: string | undefined;
+  dev: boolean;
+  port: string;
+}): string {
+  const pick = stored || env || (dev && port !== DEV_PORT ? UNCONFIGURED_API_BASE : LOCAL_API_BASE);
+  return pick.replace(/\/+$/, "");
+}
+
+/** 「没在『服务器』里选过」时连的那台:构建时给了 `VITE_MOSAEL_API_URL` 就是它,否则本机 8800。 */
+export const DEFAULT_API_BASE = (import.meta.env.VITE_MOSAEL_API_URL || LOCAL_API_BASE).replace(/\/+$/, "");
+export const API_BASE = typeof window === "undefined"
+  ? DEFAULT_API_BASE
+  : resolveApiBase({
+      stored: window.localStorage.getItem(SERVER_KEY),
+      env: import.meta.env.VITE_MOSAEL_API_URL,
+      // 只管 Vite 开发服务器:vitest 也报 DEV,但它的页面地址是 jsdom 的 localhost:3000,不是谁起的开发服务器
+      dev: import.meta.env.DEV && import.meta.env.MODE !== "test",
+      port: window.location.port,
+    });
+
+if (API_BASE === UNCONFIGURED_API_BASE) {
+  console.error(
+    `Mosael: this dev server runs on port ${window.location.port} without a backend address. ` +
+      "Start Vite with VITE_MOSAEL_API_URL=http://127.0.0.1:<backend port>; it no longer falls back to 8800.",
+  );
+}
 
 /** 后端在「这次请求建了任务」时带的响应头(见 backend 的 app/api/middleware.AnnounceNewJobs)。 */
 export const NEW_JOBS_HEADER = "X-Mosael-New-Jobs";

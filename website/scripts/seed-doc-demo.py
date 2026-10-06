@@ -425,7 +425,10 @@ def start_servers(base: Path) -> None:
         # compiles each page on first visit, and its half-second "Loading…" would end up in the recordings.
         vite = ROOT / "frontend/node_modules/.bin/vite"
         dist = base / "dist"
+        # 构建时就把后端地址烧进去(api/transport.resolveApiBase):页面第一次加载就连演示后端,不先按 8800 打一轮
+        # 探活和登录页的请求、再写 localStorage 切过来 —— 8800 是维护者正在用的那台开发后端。
         run([str(vite), "build", "--outDir", str(dist), "--emptyOutDir"], cwd=ROOT / "frontend",
+            env={**os.environ, "VITE_MOSAEL_API_URL": f"http://127.0.0.1:{API_PORT}"},
             stdout=open(logs / "frontend-build.log", "ab"), stderr=subprocess.STDOUT)
         frontend = subprocess.Popen(
             [str(vite), "preview", "--outDir", str(dist), "--host", "127.0.0.1", "--port", str(APP_PORT), "--strictPort"],

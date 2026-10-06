@@ -3,6 +3,11 @@
 /** 构建时由 vite.config 从 package.json 注入的应用版本号。 */
 declare const __APP_VERSION__: string;
 
+interface ImportMetaEnv {
+  /** 这一份前端连哪台后端(见 api/transport.resolveApiBase):隔离环境、截图脚本起 Vite / 构建时给;打包发版不给。 */
+  readonly VITE_MOSAEL_API_URL?: string;
+}
+
 type PublishViewState = import("../../electron/preload-api").PublishViewState;
 type LivePanelCard = import("../../electron/preload-api").LivePanelCard;
 type LivePanelHandle = import("../../electron/preload-api").LivePanelHandle;

@@ -806,7 +806,10 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 
 ## 服务器切换(团队模式)
 
-`API_BASE` 在**模块加载时**从 `localStorage["mosael.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
+`API_BASE` 在**模块加载时**解析一次(`api/transport.resolveApiBase`):先看 `localStorage["mosael.server.url"]`,再看
+起 Vite / 构建时给的 `VITE_MOSAEL_API_URL`,都没有才是 `http://127.0.0.1:8800`。例外:开发服务器开在 5173(`pnpm dev`
+钉死的端口)以外、又什么都没配时,不退回 8800,而是一个解析不出来的 `.invalid` 地址 —— 隔离环境此前是先按 8800 加载、
+再写 localStorage 切过去,第一批请求打到了维护者正在用的那台开发后端。发版构建不带这个变量,行为不变。
 切服务器 = 写 localStorage + **整页 reload** 让它重新解析(会话随之失效,落回登录页)。
 
 因为 `hasUsers` 探测与 `login` 都打向 `API_BASE`,**服务器入口必须在登录之前**——所以 `ServerPicker`

@@ -269,6 +269,16 @@ code: a notice at the bottom says the main process code was updated, and **Resta
 Vite and the backend keep running (the browser session's top bar shows a restart badge too). The main-window DevTools
 shortcut on macOS is `Cmd+Option+I`.
 
+For a separate, isolated stack (its own backend on another port, `MOSAEL_DATA_DIR` pointing at a scratch directory),
+start Vite with the backend address so the very first page load talks to it:
+
+```bash
+cd frontend && VITE_MOSAEL_API_URL=http://127.0.0.1:8833 pnpm exec vite --host 127.0.0.1 --port 5291 --strictPort
+```
+
+A dev server on any port other than 5173 without this variable no longer falls back to 8800; it can't connect and
+says why in the console. `vite build` reads the variable too; release builds don't set it and keep using 8800.
+
 ### Tests and checks
 
 ```bash
