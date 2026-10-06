@@ -221,6 +221,60 @@ ComfyUI 连接多一项**在哪跑**:
 **Windows 上没验过**:`CREATE_NEW_PROCESS_GROUP` 加 CTRL_BREAK 的「请它自己退」、`taskkill /T` 停整组、PowerShell 读进程命令行
 (接回时核对)、便携版 / `Scripts\python.exe` 的真机路径、端口探测在 Windows 上的语义,都只有单测(夹具目录)或照文档写的。
 
+### 第二步做成了什么(2026-10-06,实现记录)
+
+照 §4 做的;ADR 没说、实现时定下的:
+
+- **谁做哪几步**:插件的 `service_install` 在自己的进程里做前七步(查空间、下源码、解开、建 venv 并升级 pip、装 PyTorch、装依赖、装
+  pysssss),流式报进度、看取消文件,每一步做完在安装目录的 `mosael-install.json` 记一笔;**「试起一次」是宿主的**:走的就是以后真起它的
+  那条路(supervisor:同一条命令、同一份环境、同一个健康检查),通过了才把这一行记成装好。起来之后让它开着(装完下一步多半就是去模型库)。
+- **两份记录,说的是两件事**:插件的安装记录是续装用的流水账(做完了哪几步、venv 建在哪个 Python 小版本上、哪种 PyTorch、源码是哪个
+  版本);宿主新加的 `local_services.python_minor`(带迁移)是「装好了、试起过,用的是哪个小版本」—— 连接页的「已装好 / 要重建」、
+  起之前那道拦都只看它,不读插件的文件。
+- **目录就是安装目录**:让 Mosael 装的那一行 `directory` 记宿主分的 `<数据目录>/local-services/<连接>/`,解释器留空;插件原来那套认目录
+  (`main.py` 在 `ComfyUI/` 里、上一层有 `.venv`)正好认得出,认目录、怎么起、补装和「用我自己装的」走同一段代码。
+- **pip 缓存由宿主给**:`<数据目录>/local-services/pip-cache`,几份安装共用 —— 接着装、重建运行环境不重下,也不把几个 GB 塞进这个人自己
+  的 pip 缓存;第三步卸载时一起清。源码包不做字节级续传:codeload 现打包、不给长度也不认 Range,12.6 MB,断了整个重下。
+- **PyTorch 钉版本,CUDA 的带后缀**:`torch==2.14.1`、`torchvision==0.29.1`、`torchaudio==2.11.0`(torchaudio 从 2.11 起不跟着 torch
+  发版);CUDA 版写成 `torch==2.14.1+cu130`,换了 CUDA 源 pip 才认得「不是装着的那个」,PyPI 上同版本号的 CPU 版也混不进来。CUDA 版只用
+  PyTorch 源(`--index-url <根>/cu130`,依赖也在那个索引里),Mac 的走 pip 源。**装依赖不加 `--upgrade`**:requirements.txt 里没写版本的
+  `torch` 会被升级成 pip 源上的那个 —— Windows 上就是 CPU 版(ComfyUI README 里「Torch not compiled with CUDA enabled」的来历);装完依赖
+  再核对一次 torch 的版本没变。装完 PyTorch 在显卡上真算一次 1 + 1:CUDA 版在算力不对的卡上能导入、`is_available()` 也是真,第一次算才报错。
+- **对照表**(2026-10-06 查 download.pytorch.org 和 NVIDIA 的 CUDA 13.4 Update 1 发行说明):torch 2.14.1 + cp313 + Windows 只有 cu126 /
+  cu130 / cu132 三个源有包,cu128 停在 2.11.0,cu132 没有 torchaudio;ComfyUI 0.39.0 自己的 Windows 便携版用 cu130,README 说 20 系及以上
+  必须 cu130、cu126 那一版「DO NOT USE … ON NEWER 20 SERIES AND ABOVE」。所以表里两行:cu130 要 R580 以上、算力 ≥ 7.5;cu126 要 560.76
+  以上、算力 5.0–7.0。算力另问一次 `nvidia-smi --query-gpu=compute_cap`(老驱动不认这一项,问不到就按 20 系及以上挑,装完试显卡会兜住)。
+  20 系的卡配 570 系的驱动不降级到 cu126,直说升级驱动。
+- **空间**按十进制 GB(和界面、系统一个数):要「至少 5 / 8 GB」减去安装目录已经占的。Windows 没开长路径支持、安装目录又长到放不下 torch
+  最深的那个文件(wheel 中央目录实测 127 个字符)时,计划里就报错、不开始。
+- **同一个目录两次一起装**:插件装的时候攥着 `install.lock`(fcntl / msvcrt,进程没了锁自己松开)—— 后端被强杀时上一次的插件进程可能还在跑。
+- **pip 失败说人话在插件里**:插件进程只有标准库、碰不到宿主的 `core/pip_install`,所以那套规矩(`--prefer-binary`、`--timeout 60`、
+  `--retries 10`、挑 `ERROR:` 结论行不取尾巴、常见病因)照抄了一份,双语,并按这一步说下一步换哪个源(CUDA 版 PyTorch → 「PyTorch 源」,
+  别的 → pip 源);完整输出写进宿主给的 `logs/service-install-<连接>.log`(raw 进度行不进日志),界面上「安装日志」看它。
+- **进度**:流式协议多一种 `{"event": "step", …}`(`StreamHooks.on_step`,可选):开头一行列出有哪几步,之后每一步开始、字节、正在下哪个
+  文件(pip 用 `--progress-bar raw`)、做完;速度由宿主按两次之间的字节和时间算。安装不占插件名额(和流式生成一样)。进度在宿主内存里,
+  界面 1200 ms 轮询;后端重启就没了,磁盘上的流水账还在 —— 安装计划据此打勾,「接着装」从没做完的那一步开始。后端退出、删连接、卸插件时
+  正在装的先取消。
+- **没装好、正在装、要重建都不让起**,用到时起也报这一句;正在装时不能换目录、不能改回「连一台服务器」、不能再装一次。
+- **换成「用我自己装的」时安装目录留着**(再选「让 Mosael 装」接着用它);删连接也留着 —— 删它、保留模型是第三步的卸载。
+- **「PyTorch 源」只收实测能当 simple 索引用的**:官方、南京大学(download.pytorch.org/whl 的镜像,带 sha256,cu126 / cu130 对着
+  Windows cp313 用 pip dry-run 解析通;教育网 mirrors.cernet.edu.cn 也跳到它)。阿里云的 pytorch-wheels 是 find-links 那种平铺目录、而且
+  没同步到 2.14.1;上海交大是 simple 索引,但从这台机器连它每次都要 30 秒;清华、中科大、腾讯、华为、北外、浙大、南科大、北大没有这个镜像。
+  自定义的填 simple 索引的根。「GitHub 镜像前缀」存成以 `/` 结尾,只接在 GitHub 的地址前面;选目录那一种的「补装 pysssss」也走它。
+- **确认之后机器变了就不装**:安装带着确认页上的 `flavour`,插件装之前再看一次,对不上(换了驱动)请人重新看计划。
+- **安装计划分 `supported` 和 `ok`**:前者是这台机器本身能不能装,后者还看空间、路径 —— 「这块盘只剩 2 GB」不该说成「这台机器装不了」。
+- **权限一次补齐**:清单加 `network:github`、`network:pypi`、`network:pytorch`(插件 1.15.0)—— 第一步的补装 pysssss 本来就要连 codeload,
+  当时没申报。升上来的连接照规矩先停用、等授予。
+
+实测(Apple 芯片 M 系列、经代理、官方 PyPI,隔离数据目录,经界面):pip 缓存是热的(测试场那份)从确认到试起通过 85 秒(源码 5 秒、
+torch 21 秒、依赖 24 秒、试起 23 秒);全新的缓存 280 秒(torch 68 秒、依赖 181 秒、试起 23 秒);装完 1.9 GB,pip 缓存另 0.8 GB。
+重建运行环境(Python 小版本改成 3.12 造出来)61 秒,源码和 models 里的文件不动。下载中取消、pip 下 torch 下到一半取消再「接着装」,
+半截的都不留下,从那一步接着来;镜像给了别的内容时 sha256 拦下、什么都不解;放在 2 GB 的盘上,计划里就说空间不够、按钮是灰的,硬调接口
+也停在查空间那一步。
+
+**Windows 上没验过**:nvidia-smi 的解析、对照表、Windows 路径、计划的判定只有夹具单测;CUDA 版 PyTorch 真装、真跑、长路径、`msvcrt`
+锁都要一台 Windows + NVIDIA 的真机(验收清单在交付说明里)。
+
 ## 这一版不做
 
 - 管官方 ComfyUI Desktop 的进程(只发现、只连)。

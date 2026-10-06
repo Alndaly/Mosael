@@ -4,7 +4,7 @@ description: Connect a ComfyUI server on this machine or your LAN; every saved w
 seo_title: ComfyUI client: workflows as models, model library
 keywords: ComfyUI client, ComfyUI desktop, ComfyUI workflows, ComfyUI model manager, LoRA trigger words, ComfyUI app
 order: 18
-updated: 2026-10-05
+updated: 2026-10-06
 version: 1.9.2
 ---
 
@@ -33,8 +33,9 @@ brings two things:
    auth, the latter as a Bearer token); don't put a user name and password in the URL.
 3. Grant the permissions it asks for and switch the connection on: `network:comfyui` (talk to this ComfyUI),
    `network:huggingface`, `network:civitai` and `network:modelscope` (the model library looks up links and downloads
-   models from these sites), and `filesystem:write` (when ComfyUI runs on this computer, downloaded models are written
-   into its models folder). These are exactly the things the plugin does; connections carried over from an earlier version
+   models from these sites), `network:github`, `network:pypi` and `network:pytorch` (when Mosael installs ComfyUI on this
+   computer it downloads the source, dependencies and PyTorch; see the next section), and `filesystem:write` (when ComfyUI
+   runs on this computer, downloaded models are written into its models folder). These are exactly the things the plugin does; connections carried over from an earlier version
    are switched off until you grant the new ones (see the upgrade section at the end).
 
 Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
@@ -46,6 +47,30 @@ they fold into one line each (see [Plugins](/docs/guides/plugins)).
 
 Under Settings → AI image / AI video, a ComfyUI connection is shown as “Provided by a plugin”: rename it or change
 its URL on the Plugins page. Its models can be set as default models like any other.
+
+## Running ComfyUI on this computer
+
+**Where it runs** on a connection card has three options: connect to a server that's already running (as above), **Use my
+own install**, or **Let Mosael install it**. With the last two Mosael starts and stops it for you: it starts when it's used (a
+generation, opening the model library or the workbench) and stops when you quit Mosael; Mosael picks a free port from 8189
+upwards and writes it into the server URL. Only a deployment admin can set this up, and the confirmation names the machine
+the code runs on.
+
+- **Use my own install**: enter the folder of an installed ComfyUI (for the Windows portable build either the outer or the inner
+  folder works). Mosael runs a quick trial and shows the ComfyUI version, PyTorch, GPU and anything missing; it's saved only
+  if it can start.
+- **Let Mosael install it**: first the install plan — whether this machine can install it (Macs with Apple silicon and Windows +
+  NVIDIA; other systems aren't supported in this version, and it says why), which PyTorch, how much disk space at least (5 GB on
+  a Mac, 8 GB on Windows), the steps and where it downloads from. After you confirm, Mosael downloads a pinned ComfyUI release,
+  creates its own Python environment, installs PyTorch, the dependencies, ComfyUI-Manager and pysssss, and starts it once at the
+  end. While it installs you see the step, the file being downloaded and the speed; you can cancel, and Resume continues from the
+  first unfinished step. A fresh install takes 4–5 minutes on an Apple silicon Mac and uses about 2 GB. **No models are
+  downloaded**: once it's installed, choose Open model library and pick the ones you need.
+- On a slow network, switch the pip source under Admin → Engines → Download sources; on Windows pick a PyTorch source mirror for
+  the CUDA build of PyTorch, and if GitHub is slow set a GitHub mirror prefix (the archives are checked by sha256, so a mirror
+  can't change their content). Downloads use the proxy from Settings → Network.
+- When a Mosael update ships a different Python version, the connection card says the environment needs a rebuild; one click
+  reinstalls only the Python environment, leaving the source and models alone.
 
 ## Saved workflows are models
 
@@ -563,7 +588,8 @@ ComfyUI connections you already have get the new tools automatically after upgra
 permissions — `network:huggingface`, `network:civitai`, `network:modelscope` (the model library looks up links and downloads models
 from these sites) and `filesystem:write` (writing into ComfyUI's models folder when it runs on this computer). The top of the
 connection card lists them and **Grant these 4** resumes it right away; earlier grants are kept. The plugin list marks it
-**Needs permission**. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
+**Needs permission**. This plugin version declares three more (`network:github`, `network:pypi`, `network:pytorch`, which installing
+ComfyUI on this computer needs), so an upgraded connection is switched off once more until you grant them. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
 forms (such as one image per run) follow without a manual refresh.
 
 ## Workflows it can't read: the API template

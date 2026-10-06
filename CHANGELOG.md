@@ -34,6 +34,24 @@ commit list and downloadable artifacts.
 - 写插件的人:清单版本 8 加了 `services`(`[{key, title, tool}]`),声明一种由宿主起停的本机服务,插件按 `service_*` 操作回答怎么认、
   怎么起(见 PLUGIN_MANIFEST「本机服务」)。老清单自动迁移,就是没有服务。
 
+### 让 Mosael 装一台本机 ComfyUI(ADR 0041 第二步,ComfyUI 插件 1.15.0)
+
+- **「在哪跑」的第三种能点了**:选「让 Mosael 装」,先看安装计划 —— 这台机器能不能装、装哪种 PyTorch、至少要多少空间(Mac 5 GB,
+  Windows + NVIDIA 8 GB)、装在哪、分几步、会从哪几处下载;确认框写明在哪台机器上运行下载来的代码。装的是钉死的 ComfyUI 0.39.0
+  (按 sha256 校验)、随 Mosael 一起发的 Python 建的环境、PyTorch 2.14.1、ComfyUI 的依赖和 ComfyUI-Manager(pip 版)、pysssss;
+  装在 Mosael 数据目录的 `local-services/<连接>/` 里(不放插件目录,卸载插件不会把模型带走)。
+- **这一版装得了的**:Apple 芯片 Mac(PyPI 上的 PyTorch 直接带 MPS);Windows + NVIDIA(读 `nvidia-smi` 的驱动版本和显卡算力,20 系
+  及以上装 CUDA 13.0 版、10 系及更老装 12.6 版;驱动太旧、显卡太老都说清楚)。Intel Mac、AMD、只有 CPU、Linux 这一版不装,写明原因,
+  建议「用我自己装的」或者连一台服务器。
+- **装的时候看得到第几步、正在下哪个文件、下了多少、多快**,能取消;每一步做完记一笔,取消、断网、关机之后点「接着装」从没做完的那一步
+  开始,下过的包不重下。没装成说人话(空间不够、找不到版本、下载断流……并说该换哪个源),「安装日志」里是每一步的完整输出。最后试起
+  一次,健康检查通过才算装好,然后链到模型库 —— **不替你下模型**。实测(Apple 芯片、经代理、官方 PyPI):pip 缓存是热的 85 秒装好,全新的 4 分 40 秒(依赖那一步占 3 分钟);装完 1.9 GB,pip 缓存另 0.8 GB。
+- **Mosael 换了随包的 Python 小版本时**,连接页说「运行环境要重建」,用到时起也会拦下说清楚;点一下重装 PyTorch 和依赖,源码和模型不动。
+- **「管理 → 下载源」多两行**:「PyTorch 源」(官方 / 南京大学镜像 / 自定义的 simple 索引)、「GitHub 镜像前缀」(下钉死的压缩包时接在
+  地址前面;按 sha256 校验,镜像换不了内容)。下载照样走设置里的代理。
+- **ComfyUI 插件多申报三项权限**:`network:github`(下 ComfyUI 源码和 pysssss;选目录那一种的「补装 pysssss」本来就要)、`network:pypi`、
+  `network:pytorch`。升上来的连接会先停用,等你授予这三项,之前授予的不受影响。
+
 ### 界面修复
 
 - **ComfyUI 工作台模型库的小眼睛(预览图和 NSFW 设置)点得开了。** 外壳(工作台那一列、内嵌浏览器的顶栏和侧栏)里打开的浮层 ——

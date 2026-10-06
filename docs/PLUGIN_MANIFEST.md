@@ -1503,8 +1503,9 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 - 只有本地脚本形态的插件能声明;声明了就得有一格文本配置叫 `server_url` —— 宿主把本机服务的地址写进去,插件、工作台、
   模型库读的还是那一个地址,一行都不用改。
 
-连接页上多一块「本机服务」:**在哪跑** —— 连一台服务器(和以前一样,只连)/ 用我自己装的(选一个目录,由 Mosael 起停)。
-选了目录,宿主从 8189 往上挑一个空端口,写进 `server_url`,以后一直用它。
+连接页上多一块「本机服务」:**在哪跑** —— 连一台服务器(和以前一样,只连)/ 用我自己装的(选一个目录,由 Mosael 起停)/
+让 Mosael 装(装在宿主分的 `<数据目录>/local-services/<连接>/`,不是插件的持久目录 —— 那个卸载插件时一起删)。后两种都由
+宿主从 8189 往上挑一个空端口,写进 `server_url`,以后一直用它。
 
 宿主经 `tool` 按 `op` 问(**只描述、不起进程**;不需要服务器已经在跑,也不留调用记录):
 
@@ -1512,15 +1513,37 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | --- | --- | --- |
 | `service_detect` | `directory`、可选 `python` | `ok`(认出来、能起)、`facts: [{label, value}]`、`problems: [{level: "error"\|"warning", text}]`、可选 `add_nodes: {title, description}` —— `label` / `text` / `title` / `description` 可以按语言分(`{"zh": …, "en": …}`)。会试跑那个目录里的代码,所以宿主先问过人 |
 | `service_launch` | `directory`、`python`、`port`、`listen_lan`、`extra_args` | `argv`、`env`(插件那一半;宿主再加 HuggingFace 镜像和这个连接的出站代理,`MOSAEL_*` 和代理变量插件盖不掉)、`cwd`、`health_path`(回 2xx 就算就绪)、`ready_timeout`(秒,5–1800,缺省 180) |
-| `service_add_nodes` | `directory`、`python` | `installed`、`path`、`message`;宿主只在人点了「补装」并确认之后才问 |
+| `service_add_nodes` | `directory`、`python`、`sources` | `installed`、`path`、`message`;宿主只在人点了「补装」并确认之后才问 |
 | `service_discover` | — | `servers: [{url, label}]`:本机已经在跑的(只收本机地址);插件页据此提示「本机发现一个,要连上吗」,建的是「连一台服务器」那一种 |
 | `service_readdress` | `from`、`to` | 端口改了:把按旧地址存的本地数据搬到新地址名下。做不到只是少了缓存 |
+| `service_plan` | `directory`(宿主分的安装目录)、`python`(建 venv 用的随包 Python)、`sources` | 让 Mosael 装之前:`ok`(这台机器能装)、`platform` / `verdict`(是什么机器、为什么能 / 不能装)、`flavour`(装哪种,确认后原样带回)、`torch`、`comfyui`(版本)、`disk_bytes` / `free_bytes`、`steps: [{key, title, done}]`(接着装时做完的打勾)、`downloads: [{label, url}]`、`problems`(同 `service_detect`;有一条 error 就开始不了)。只看、不写 |
+| `service_install` | `directory`、`python`、`flavour`、`sources`、`log`(宿主给的日志文件)、`pip_cache` | **流式**(见下):一步一行进度,最后交回装好的那一份(宿主据此试起一次,健康检查通过才算装好)。取消文件出现就停在手上那一步;再来一次从没做完的那一步接着装 |
+
+`sources` 是「管理 → 下载源」里的三个地址:`pip_index_url`(空 = 官方 PyPI)、`pytorch_index_url`(PyTorch 的 simple 索引根,
+下面按 `cu130` 这类分频道)、`github_mirror`(下 GitHub 上的压缩包时接在原地址前面的前缀;空 = 直连)。代理不在这里:插件进程
+的环境里本来就是这个连接的出站代理。
+
+`service_install` 的进度行是 `{"event": "step", …}`(宿主转给安装进度,不进任务的进度条):
+
+```jsonc
+{"event": "step", "outline": [{"key": "disk", "title": {"zh": "查剩余空间", "en": "…"}, "done": false}, …]}  // 开头一行:有哪几步
+{"event": "step", "key": "torch", "state": "running", "done_bytes": 1500000, "total_bytes": 3000000, "item": "torch-…whl"}
+{"event": "step", "key": "torch", "state": "done"}
+```
+
+速度由宿主按两次之间的字节和时间算;`item` 可以是文件名,也可以是按语言分的一句话。宿主在插件那几步后面加上自己的
+「试起一次」。
 
 宿主那一半(插件不用管):起的时候自成一组、stdout / stderr 写进 `logs/service-<连接>.log`(界面上能看最近 2000 行);每 500 ms
 问一次健康检查;运行中崩了 1 秒起翻倍重起,5 分钟内最多 3 次,再崩停在「起不来」并摆出最后 40 行日志;停是先请整组退、
 10 秒后强杀;**用到时起**(插件工具、模型库、生成要用它时停着就先起,任务里报一句「正在启动本机 …」),退出 Mosael 时停,
 「保持运行」的跟着 Mosael 一起起;后端没来得及停的(被强杀、断电),下次启动时 pid 在、命令行一样、健康检查通过就接回来。
 同一个目录只起一份。
+
+让 Mosael 装的那一份(`mode = managed`):目录就是宿主分的安装目录(插件在里面认源码和 venv,认目录、怎么起和选目录那一种
+走同一条路)。装好(试起通过)时宿主记下建 venv 用的那个 Python 的小版本;以后随包的 Python 换了小版本,宿主不让起,连接页说
+「运行环境要重建」—— 再装一次,插件只重建 venv 和装进去的包。没装好、正在装时也不让起(用到时起同样报这一句)。安装进度在
+宿主内存里,后端重启就没了;磁盘上的安装记录是插件的,安装计划据此打勾,「接着装」从没做完的那一步开始。
 
 插件进程里的 `MOSAEL_LOCAL_SERVICE`(值是服务的 `key`)说「这个连接的服务器归宿主起停」:**不要自己去重启它** ——
 要重启时交回 `{"host_restart": true}`,由宿主停了再起(ComfyUI 插件装完节点包的「重启」就是这么做的;它要是自己经
@@ -1544,7 +1567,9 @@ Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为�
 | `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
 | `GET`/`PUT`/`DELETE` `/api/plugins/instances/{id}/local-service` | 本机服务的配置与状态(见「本机服务」);建、改、删要部署管理员,换目录要带 `confirm_run_code` |
 | `POST /api/plugins/instances/{id}/local-service/{detect,start,stop,restart,ensure,add-nodes}` | 认目录、起停、「用它之前请宿主起好」(等它就绪再回来)、补装;`ensure` 之外都要部署管理员 |
-| `GET /api/plugins/instances/{id}/local-service/logs` | 最近的日志和完整日志在哪个文件 |
+| `GET /api/plugins/instances/{id}/local-service/logs` | 最近的日志和完整日志在哪个文件;`source=install` 是让 Mosael 装那几步的输出 |
+| `GET /api/plugins/instances/{id}/local-service/plan` | 让 Mosael 装的安装计划(部署管理员) |
+| `POST /api/plugins/instances/{id}/local-service/install`、`…/install/cancel` | 装 / 接着装 / 重建运行环境(要带 `confirm_run_code` 和计划里的 `flavour`)、取消(部署管理员) |
 | `GET /api/plugins/{包id}/local-services/discover` | 本机已经在跑的(部署管理员) |
 
 智能体、工作流、手动试跑走的是**同一条**执行路径:权限校验、凭据注入、调用留痕都在那里。
