@@ -52,6 +52,7 @@ export const IPC: {
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
+    pickPath: "dialog:pickPath";
   }>;
   readonly send: Readonly<{
     titleOverlay: "mosael:title-overlay";
@@ -84,6 +85,7 @@ export function parseUrlRequest(value: unknown, channel: string): { url: string 
 export function parsePanelId(value: unknown): { id: string };
 export function parsePanelMuted(value: unknown): { id: string; muted: boolean };
 export function parsePanelLayout(value: unknown): import("./preload-api").LivePanelLayoutChange;
+export function parsePickPath(value: unknown): Required<import("./preload-api").PickPathRequest>;
 export function parseBrowserProfile(value: unknown): { partition: string };
 export function parseBrowserLogin(value: unknown): {
   resume: boolean;

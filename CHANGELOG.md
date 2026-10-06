@@ -51,6 +51,9 @@ commit list and downloadable artifacts.
   地址前面;按 sha256 校验,镜像换不了内容)。下载照样走设置里的代理。
 - **ComfyUI 插件多申报三项权限**:`network:github`(下 ComfyUI 源码和 pysssss;选目录那一种的「补装 pysssss」本来就要)、`network:pypi`、
   `network:pytorch`。升上来的连接会先停用,等你授予这三项,之前授予的不受影响。
+- **目录、解释器两格旁边多一个「选择…」**:弹系统的选文件夹 / 选文件对话框,从格子里现在的值开始;选好的和敲进去的一样,确认之后才拿去
+  检查。只在桌面版连着本机后端时有 —— 网页版、或者桌面版连着别处的服务器时,这台电脑上的路径在那边没有意义,只留输入框。选解释器时
+  显示隐藏文件(`.venv`),也不把 `.venv/bin/python` 这个链接解析成基础解释器。**桌面版的主进程有改动,装上新版本(或开发时重启 Electron)才有。**
 - **ComfyUI-Manager 只认 pip 版(V4,ComfyUI 0.4.0 起自带)**,克隆进 `custom_nodes` 的老 Manager(3.x)不再支持:下模型、装缺的节点包、
   重启碰上它都当作没有 Manager,说清楚要 V4 —— `pip install -r manager_requirements.txt`、启动加 `--enable-manager`。「用我自己装的」
   目录里只有老 Manager 时,检查会提醒并给出这两条命令;照样能起、不加参数,也不动那个目录。

@@ -297,6 +297,16 @@ export interface PageDownloadNotice {
   error?: string;
 }
 
+export interface PickPathRequest {
+  kind: "directory" | "file";
+  /** 对话框标题(一般就是那一格的名字)。 */
+  title?: string;
+  /** 从哪儿开始:格子里现在的值;空着由系统决定。 */
+  defaultPath?: string;
+  /** 只给选文件用:`[{ name: "Python", extensions: ["exe"] }]`。 */
+  filters?: { name: string; extensions: string[] }[];
+}
+
 export interface MosaelDesktopBridge {
   platform: string;
   setTitleOverlay(colors: { color: string; symbolColor: string }): void;
@@ -312,6 +322,11 @@ export interface MosaelDesktopBridge {
     request(kind: Exclude<RecordingPermissionKind, "screen">): Promise<boolean | null>;
     openSettings(kind: RecordingPermissionKind): Promise<boolean>;
   };
+  /**
+   * 系统的选文件 / 选文件夹对话框(路径格旁边的「选择…」),从 `defaultPath` 开始;交回选中的路径,取消是 null。
+   * 选出来的是**这台电脑**上的路径:只在连着本机后端时有意义(见 frontend components/settings/PathField)。
+   */
+  pickPath(request: PickPathRequest): Promise<string | null>;
   data: {
     exportDiagnostics(): Promise<{ status: "saved" | "cancelled"; path?: string }>;
     createBackup(token: string): Promise<{ status: "saved" | "cancelled"; path?: string }>;

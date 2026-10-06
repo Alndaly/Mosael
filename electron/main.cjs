@@ -27,6 +27,7 @@ const {
   writeDiagnosticArchive,
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
+const { pickPath } = require("./path-picker.cjs");
 const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
@@ -53,6 +54,7 @@ const {
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
+  parsePickPath,
   parsePublishTarget,
   parseReadMode,
   parseRegionSelection,
@@ -1000,6 +1002,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
   ipcMain.handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
   ipcMain.handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  // 路径格旁边的「选择…」:挂在发起的那个窗口上(找不到就用前台窗口),交回选中的路径或 null。
+  ipcMain.handle(IPC.invoke.pickPath, (event, payload) =>
+    pickPath(dialog, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow(), parsePickPath(payload)),
+  );
   ipcMain.handle(IPC.invoke.dataExportDiagnostics, async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const picked = await dialog.showSaveDialog({

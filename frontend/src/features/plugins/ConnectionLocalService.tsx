@@ -34,6 +34,7 @@ import { CatalogBadge, type CatalogTone } from "@/components/app/CatalogDialog";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { PathField } from "@/components/settings/PathField";
 import { SETTINGS_FIELD_WIDTH, SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { useDraftText } from "@/components/ui/draft-text";
@@ -327,24 +328,17 @@ function DirectorySetup({
   return (
     <>
       <SettingsRow label={t("localServiceDirectory")} description={t("localServiceDirectoryDesc").replace("{title}", title)}>
-        <Input
-          className={SETTINGS_FIELD_WIDTH}
-          aria-label={t("localServiceDirectory")}
+        <PathField
+          kind="directory"
+          label={t("localServiceDirectory")}
           placeholder={t("localServiceDirectoryPlaceholder")}
           value={directory}
-          onChange={(event) => setDirectory(event.target.value)}
-          spellCheck={false}
+          onChange={setDirectory}
           autoFocus={!service}
         />
       </SettingsRow>
       <SettingsRow label={t("localServicePython")} description={t("localServicePythonDesc")}>
-        <Input
-          className={SETTINGS_FIELD_WIDTH}
-          aria-label={t("localServicePython")}
-          value={python}
-          onChange={(event) => setPython(event.target.value)}
-          spellCheck={false}
-        />
+        <PathField kind="file" label={t("localServicePython")} value={python} onChange={setPython} />
       </SettingsRow>
       <SettingsRow label={check.isPending ? t("localServiceChecking") : t("localServiceFacts")}>
         {onCancel && (

@@ -92,6 +92,8 @@ const desktopBridge = {
     request: (kind) => invoke(IPC.invoke.recordingRequest, kind),
     openSettings: (kind) => invoke(IPC.invoke.recordingOpenSettings, kind),
   },
+  // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框,交回选中的路径(取消是 null)。
+  pickPath: (request) => invoke(IPC.invoke.pickPath, request),
   data: {
     exportDiagnostics: () => invoke(IPC.invoke.dataExportDiagnostics),
     createBackup: (token) => invoke(IPC.invoke.dataCreateBackup, { token }),

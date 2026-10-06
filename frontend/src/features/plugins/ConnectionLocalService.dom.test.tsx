@@ -12,7 +12,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   getLocalServicePlan: vi.fn(),
   installLocalService: vi.fn(),
   cancelLocalServiceInstall: vi.fn(),
+  isCustomServer: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/features/plugins/ModelLibrary", () => ({
@@ -116,6 +117,65 @@ describe("在哪跑", () => {
     expect(await screen.findByText("这个 Python 导入不了 torch")).toBeTruthy();
     expect(screen.getByText("localServiceNotUsable")).toBeTruthy();
     expect(api.putLocalService).not.toHaveBeenCalled();
+  });
+});
+
+describe("路径格旁边的「选择…」", () => {
+  const desktop = window as unknown as { mosaelDesktop?: { platform: string; pickPath?: ReturnType<typeof vi.fn> } };
+  afterEach(() => {
+    delete desktop.mosaelDesktop;
+  });
+
+  async function chooseDirectoryMode() {
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "localServiceModeDirectory" }));
+    await screen.findByLabelText("localServiceDirectory");
+  }
+
+  it("只在桌面版、连着本机后端时有:网页版、桌面版连着别处的服务器都只给输入框", async () => {
+    await chooseDirectoryMode();
+    expect(screen.queryAllByRole("button", { name: "pathFieldChooseLabel" }), "网页版:没有系统对话框").toHaveLength(0);
+    cleanup();
+
+    desktop.mosaelDesktop = { platform: "darwin", pickPath: vi.fn() };
+    api.isCustomServer.mockReturnValue(true);
+    await chooseDirectoryMode();
+    expect(screen.queryAllByRole("button", { name: "pathFieldChooseLabel" }), "选出来的路径在那台服务器上不存在").toHaveLength(0);
+    cleanup();
+
+    api.isCustomServer.mockReturnValue(false);
+    await chooseDirectoryMode();
+    expect(screen.getAllByRole("button", { name: "pathFieldChooseLabel" }), "装在哪、解释器各一个").toHaveLength(2);
+  });
+
+  it("从格子里现在的值开始;选好的路径填进格子,和敲进去的一样:确认之后才拿去检查", async () => {
+    const pickPath = vi.fn()
+      .mockResolvedValueOnce("/Users/me/Apps/ComfyUI")
+      .mockResolvedValueOnce("/Users/me/Apps/ComfyUI/.venv/bin/python")
+      .mockResolvedValueOnce(null);
+    desktop.mosaelDesktop = { platform: "darwin", pickPath };
+    api.detectLocalService.mockResolvedValue({ ok: false, facts: [], problems: [], add_nodes: null });
+    await chooseDirectoryMode();
+    fireEvent.change(screen.getByLabelText("localServiceDirectory"), { target: { value: " /Users/me " } });
+    const [folder, interpreter] = screen.getAllByRole("button", { name: "pathFieldChooseLabel" });
+
+    fireEvent.click(folder);
+    await waitFor(() => expect((screen.getByLabelText("localServiceDirectory") as HTMLInputElement).value).toBe("/Users/me/Apps/ComfyUI"));
+    expect(pickPath).toHaveBeenLastCalledWith({ kind: "directory", title: "localServiceDirectory", defaultPath: "/Users/me" });
+    fireEvent.click(interpreter);
+    await waitFor(() => expect((screen.getByLabelText("localServicePython") as HTMLInputElement).value)
+      .toBe("/Users/me/Apps/ComfyUI/.venv/bin/python"));
+    expect(pickPath.mock.calls[1][0], "解释器格是空的:由系统决定从哪儿开始").toMatchObject({ kind: "file", defaultPath: undefined });
+    fireEvent.click(interpreter);
+    await waitFor(() => expect(pickPath).toHaveBeenCalledTimes(3));
+    expect((screen.getByLabelText("localServicePython") as HTMLInputElement).value, "取消了:格子不动")
+      .toBe("/Users/me/Apps/ComfyUI/.venv/bin/python");
+
+    expect(api.detectLocalService, "选好了也不自己跑:检查会运行那个目录里的代码").not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "localServiceCheck" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "localServiceConfirmRun" }));
+    await waitFor(() => expect(api.detectLocalService)
+      .toHaveBeenCalledWith("i1", "/Users/me/Apps/ComfyUI", "/Users/me/Apps/ComfyUI/.venv/bin/python"));
   });
 });
 

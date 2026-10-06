@@ -24,6 +24,8 @@ const IPC = Object.freeze({
     dataExportDiagnostics: "data:exportDiagnostics",
     dataCreateBackup: "data:createBackup",
     dataApplyRestore: "data:applyRestore",
+    // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框(见 path-picker.cjs)。
+    pickPath: "dialog:pickPath",
     publishLogin: "publish:login",
     publishOpenPage: "publish:openPage",
     publishInspect: "publish:inspect",
@@ -602,6 +604,41 @@ function parseTaskNotice(value) {
   };
 }
 
+/** 路径、标题这类可选的短字符串:不是字符串或空白是 ""(超长的拒掉,别让渲染层往原生对话框里塞一大段)。 */
+function optionalText(payload, key, channel, limit) {
+  const text = typeof payload[key] === "string" ? payload[key].trim() : "";
+  if (text.length > limit) throw new TypeError(`${channel}: ${key} is too long`);
+  return text;
+}
+
+/**
+ * 「选择…」要一个什么样的对话框:`kind` 是 directory / file;`title`、`defaultPath`(从哪儿开始,格子里现在的值)可选;
+ * `filters` 只给选文件用,扩展名只收字母数字(`exe`、`py`),最多几组。
+ */
+function parsePickPath(value) {
+  const channel = IPC.invoke.pickPath;
+  const payload = record(value, channel);
+  if (payload.kind !== "directory" && payload.kind !== "file") {
+    throw new TypeError(`${channel}: kind must be directory or file`);
+  }
+  const raw = payload.filters === undefined ? [] : payload.filters;
+  if (!Array.isArray(raw) || raw.length > 8) throw new TypeError(`${channel}: filters must be a short array`);
+  const filters = raw.map((one) => {
+    const filter = record(one, channel);
+    const extensions = Array.isArray(filter.extensions) ? filter.extensions : [];
+    if (extensions.length === 0 || extensions.length > 16 || !extensions.every((ext) => typeof ext === "string" && /^(\*|[A-Za-z0-9]{1,16})$/.test(ext))) {
+      throw new TypeError(`${channel}: filter extensions are invalid`);
+    }
+    return { name: requiredString(filter, "name", channel).slice(0, 80), extensions };
+  });
+  return {
+    kind: payload.kind,
+    title: optionalText(payload, "title", channel, 200),
+    defaultPath: optionalText(payload, "defaultPath", channel, 4096),
+    filters,
+  };
+}
+
 /**
  * 渲染层的界面语言(`<html lang>` 上那个值,如 `en-US`)。主进程只认 zh / en,归一在
  * i18n.cjs 里做;这里只保证它是一个像样的语言标签,不是任意长的字符串。
@@ -641,6 +678,7 @@ module.exports = {
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,
+  parsePickPath,
   parsePublishTarget,
   parseReadMode,
   parseRegionSelection,

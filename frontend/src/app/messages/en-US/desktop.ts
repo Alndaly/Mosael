@@ -8,4 +8,7 @@ export const desktop = {
   mainStaleFiles: "Changed: {files}",
   mainStaleBadgeHint: "Click to restart; vite and the backend keep running",
   mainStaleCannotRestart: "Mosael wasn't started by pnpm dev, so it can't restart itself",
+  // The "Choose…" button next to a path field: the system file / folder dialog (see components/settings/PathField).
+  pathFieldChoose: "Choose…",
+  pathFieldChooseLabel: "Choose “{label}”",
 } as const;

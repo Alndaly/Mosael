@@ -8,4 +8,7 @@ export const desktop = {
   mainStaleFiles: "变了的:{files}",
   mainStaleBadgeHint: "点一下就重启,vite 和后端不受影响",
   mainStaleCannotRestart: "这次不是经 pnpm dev 拉起的,没法替你重启",
+  // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框(见 components/settings/PathField)。
+  pathFieldChoose: "选择…",
+  pathFieldChooseLabel: "选择「{label}」",
 } as const;

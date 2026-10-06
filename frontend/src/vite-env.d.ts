@@ -15,6 +15,7 @@ type MosaelUpdateInfo = import("../../electron/preload-api").MosaelUpdateInfo;
 type LiveViewFrame = import("../../electron/preload-api").LiveViewFrame;
 type RecordingPermissionKind = import("../../electron/preload-api").RecordingPermissionKind;
 type RecordingPermissionStatus = import("../../electron/preload-api").RecordingPermissionStatus;
+type PickPathRequest = import("../../electron/preload-api").PickPathRequest;
 /** ComfyUI 工作台的桥那边看到的(主进程规整过,见 electron/publish/comfyWorkbench)。 */
 type ComfyWorkbenchState = import("../../electron/preload-api").ComfyWorkbenchState;
 type ComfyWorkbenchEvent = import("../../electron/preload-api").ComfyWorkbenchEvent;
