@@ -60,6 +60,8 @@ it("GitHub 镜像前缀离开框时才存,去掉两头空白;没改不存", asyn
   const input = (await screen.findByLabelText("installSourceGithub")) as HTMLInputElement;
   fireEvent.focus(input);
   fireEvent.change(input, { target: { value: " https://gh.example " } });
+  // 存是经 mutation 发的(不在 change 的同一拍里):等它有机会发出去,再看有没有发
+  await new Promise((resolve) => setTimeout(resolve, 50));
   expect(updates, "敲字的时候不存").toEqual([]);
   fireEvent.blur(input);
   await waitFor(() => expect(updates).toEqual([{ github_mirror: "https://gh.example" }]));
