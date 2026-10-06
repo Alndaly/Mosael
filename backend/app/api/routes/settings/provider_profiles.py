@@ -21,7 +21,7 @@ from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import health as provider_health
 from app.domain.agent.host import mint_tool_token
 from app.domain.permissions import require_own_profile
-from app.domain.providers.presets import provider_definitions
+from app.domain.providers.presets import provider_definitions, served_by_pi
 
 router = APIRouter(tags=["settings"])
 
@@ -45,6 +45,7 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
             capabilities=definition.capabilities,
             fields=[VendorFieldOut(**vars(field)) for field in definition.fields],
             auth=list(definition.auth_types),
+            native_chat="chat" in definition.capability_ids and served_by_pi(definition.vendor),
         )
         for definition in provider_definitions()
     ]

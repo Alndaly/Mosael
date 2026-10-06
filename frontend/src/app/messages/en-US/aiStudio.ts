@@ -384,6 +384,7 @@ export const aiStudio = {
   providerOauthDone: "Signed in. {count} models available",
   providerOauthFailed: "Authorization failed",
   providerOauthSaveFirst: "Save this provider first, then click Sign in from the list.",
+  providerNativeChatHint: "Chat with this provider uses its own native protocol: it works in the agent, board writing and workflow LLM nodes. Direct calls such as subtitle translation, publish copy and prompt optimization don't use it yet; they use one of your other chat connections.",
   providerNoCapabilityProfiles: "No provider configured for this capability yet.",
   providerDisabled: "Disabled",
   providerEnable: "Enable this connection",

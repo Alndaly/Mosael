@@ -120,6 +120,34 @@ describe("供应商连接列表", () => {
     expect(screen.queryByText("初始模型(可选)")).not.toBeInTheDocument();
   });
 
+  it("在对话分区加 Google:说明 Gemini 的对话在哪能用;视频分区不说这句", async () => {
+    /* Gemini(以及订阅授权那几家)的对话走 pi 的原生协议,字幕翻译这类直连调用不走它 —— 不说的话,配好之后在翻译里
+       找不到它,人会以为配错了。在视频分区加 Google 的人是来配 Veo 的,这句话对他是噪音。 */
+    const user = userEvent.setup();
+    vendorsResult = [{
+      vendor: "google",
+      label: "Google AI Studio(Gemini / Veo / Lyria)",
+      capability_ids: ["chat", "video", "audio"],
+      capabilities: "对话(Gemini)、视频生成(Veo)与音乐生成。Gemini 订阅(Google AI Pro/Ultra)不能给第三方用,这里填 AI Studio 的 API Key。",
+      auth: ["api_key"],
+      native_chat: true,
+      fields: [{ key: "api_key", label: "Gemini API Key", storage: "api_key", required: true, secret: true }],
+    }];
+    providersResult = [];
+
+    const chat = renderSection("chat");
+    await user.click(await screen.findByText("providerAdd"));
+    expect(await screen.findByText("Gemini API Key")).toBeInTheDocument();
+    expect(screen.getByText(/Google AI Pro\/Ultra/)).toBeInTheDocument();
+    expect(screen.getByText("providerNativeChatHint")).toBeInTheDocument();
+    chat.unmount();
+
+    renderSection("video");
+    await user.click(await screen.findByText("providerAdd"));
+    expect(await screen.findByText("Gemini API Key")).toBeInTheDocument();
+    expect(screen.queryByText("providerNativeChatHint")).not.toBeInTheDocument();
+  });
+
   it("模型列表的动作收口在连接的溢出菜单里;参数组不在这 —— 它的入口在绑定的地方", async () => {
     /* 列表底下的常驻输入框和浮在右上角的「选择」都撤掉了 —— 入口统一在 ⋯ 菜单,
        同一样式。参数组的管理入口在「参数按什么来」选择器里(见 ModelSettingsDialog),

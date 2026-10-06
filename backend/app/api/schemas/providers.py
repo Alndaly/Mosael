@@ -407,3 +407,6 @@ class VendorPresetOut(ApiModel):
     fields: list[VendorFieldOut] = Field(default_factory=list)
     #: 支持的鉴权方式,顺序即优先级。含 "oauth" 的档案表单渲染「登录」而不是密钥输入框。
     auth: list[str] = Field(default_factory=lambda: ["api_key"])
+    #: 这家的对话由 pi 的原生 Provider 承载(订阅授权的几家、Google Gemini):只在智能体、画板、工作流里能用,
+    #: 字幕翻译、发布文案、提示词优化这类直连调用不走它。表单据此多说一句,免得人以为配错了。
+    native_chat: bool = False

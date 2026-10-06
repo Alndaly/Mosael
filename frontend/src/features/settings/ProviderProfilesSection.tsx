@@ -353,6 +353,11 @@ export function ProviderProfilesSection({
                   {preset?.capabilities && (
                     <FormDescription className="mt-0.5 leading-[1.4] text-muted-foreground">{preset.capabilities}</FormDescription>
                   )}
+                  {/* 对话由 pi 原生 Provider 承载的那几家(订阅授权、Gemini)只在智能体、画板、工作流里能用。不说的话,
+                      配好之后在字幕翻译里找不到它,人会以为是自己配错了。只在对话分区说:在视频分区加 Google 的人不关心这句。 */}
+                  {preset?.native_chat && (!capability || capability === "chat") && (
+                    <FormDescription className="mt-0.5 leading-[1.4] text-muted-foreground">{t("providerNativeChatHint")}</FormDescription>
+                  )}
                 </FormItem>
               )}
             />

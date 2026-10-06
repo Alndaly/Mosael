@@ -386,6 +386,7 @@ export const aiStudio = {
   providerOauthDone: "授权成功,已可用的模型:{count} 个",
   providerOauthFailed: "授权失败",
   providerOauthSaveFirst: "先保存这个供应商,再回到列表里点「授权登录」。",
+  providerNativeChatHint: "这家的对话走它自己的原生协议:智能体、画板写作和工作流的 LLM 节点能用;字幕翻译、发布文案、提示词优化这类直连调用暂不走它,会用你别的对话连接。",
   providerNoCapabilityProfiles: "还没有配置支持该能力的供应商。",
   providerDisabled: "已停用",
   providerEnable: "启用这条连接",

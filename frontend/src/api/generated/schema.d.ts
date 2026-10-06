@@ -17083,6 +17083,11 @@ export interface components {
             fields?: components["schemas"]["VendorFieldOut"][];
             /** Auth */
             auth?: string[];
+            /**
+             * Native Chat
+             * @default false
+             */
+            native_chat: boolean;
         };
         /**
          * VideoToGifRequest

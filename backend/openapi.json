@@ -43935,6 +43935,11 @@
             },
             "type": "array",
             "title": "Auth"
+          },
+          "native_chat": {
+            "type": "boolean",
+            "title": "Native Chat",
+            "default": false
           }
         },
         "type": "object",
