@@ -144,6 +144,9 @@ def _answer(record: dict[str, Any], locale: str) -> dict[str, Any]:
         note = say(locale, "Civitai 上没找到这个文件", "This file isn't on Civitai")
     out: dict[str, Any] = {"match": match, "page": str(record.get("page") or ""), "note": note,
                            "remote_previews": civitai.remote_previews(info)}
+    if record.get("page"):
+        # 和列模型库时同一个形状(library.source_of):宿主拿它马上改那一条的「原链接」,不等整份重列
+        out["source"] = {"page": str(record["page"]), "site": str(record.get("site") or ""), "how": how}
     if info:
         out["civitai"] = info
     if record.get("sha256"):

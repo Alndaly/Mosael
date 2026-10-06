@@ -447,6 +447,34 @@ class ModelLookupRequest(ApiModel):
     refresh: bool = False
 
 
+class ModelLookupFoundOut(ApiModel):
+    """「在 Civitai 上找」这一趟对上的一个文件,在模型库里**现在**该是什么样:界面拿它当场改那一条(原链接、预览图从哪来、
+    NSFW),不等整份重列 —— 一台几百个模型的服务器重列要好几秒。`match`:`sha256` / `filename` / `download`。"""
+
+    folder: str
+    name: str
+    match: str = ""
+    source: ModelSourceOut | None = None
+    has_preview: bool = False
+    preview_origin: str = ""
+    preview_kind: str = "image"
+    nsfw: ModelNsfwOut = Field(default_factory=ModelNsfwOut)
+
+
+class ModelLookupResultOut(ApiModel):
+    """找、补预览图任务做完交回的里面,模型库界面要的那一份:对上的那几条现在的样子(`found`)。找了几个、对上几个、存回
+    几张由任务完成时的那句话说(任务中心显示),这里不重发。"""
+
+    found: list[ModelLookupFoundOut] = Field(default_factory=list)
+
+
+class ModelLookupJobOut(ApiModel):
+    """一个找、补预览图任务现在怎样:任务本身,做完了再带上它交回的(`result`,没做完是 None)。"""
+
+    job: JobOut
+    result: ModelLookupResultOut | None = None
+
+
 class ModelSavePreviewRequest(ApiModel):
     folder: str = Field(min_length=1, max_length=200)
     name: str = Field(min_length=1, max_length=1000)

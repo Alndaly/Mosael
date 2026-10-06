@@ -673,6 +673,17 @@ def start_lookup(
     return job
 
 
+def lookup_job(db: Session, user: User, instance: PluginInstance, job_id: str) -> dict[str, Any]:
+    """一个找、补预览图任务现在怎样(界面轮询它):任务本身,做完了带上它交回的(对上的那几条现在的样子在 `found` 里)。
+    不是这个连接的找图任务一律当没有。"""
+    _require(db, instance)
+    job = db.get(Job, job_id)
+    if job is None or job.kind != INFO_KIND or (job.payload or {}).get("instance_id") != instance.id:
+        raise ModelLibraryError("modelLibErr_noSuchLookup")
+    ensure_workspace_perm(db, user, job.workspace_id, "view")
+    return {"job": job, "result": dict(job.result or {}) if job.status == "succeeded" else None}
+
+
 def _probe_server(instance_id: str, folder: str, name: str) -> str:
     """那台服务器上有没有这个文件的预览图;没取过就取一次(顺手落进缓存)。回 `found` / `absent` / ``(这次没取到)。"""
     status = model_previews.server_status(instance_id, folder, name)
@@ -711,7 +722,8 @@ def _lookups(job_id: str) -> None:
     instance_id = str(payload["instance_id"])
     files = [one for one in payload.get("files") or [] if isinstance(one, dict)]
     save, pick, refresh = bool(payload.get("save")), _picked(str(payload.get("pick") or "")), bool(payload.get("refresh"))
-    result: dict[str, Any] = {"looked": 0, "matched": 0, "saved": 0, "had_preview": 0, "confirm": [], "failed": []}
+    result: dict[str, Any] = {"looked": 0, "matched": 0, "saved": 0, "had_preview": 0, "confirm": [], "failed": [],
+                              "found": []}
     for index, one in enumerate(files):
         if _cancelled(job_id):
             return
@@ -735,24 +747,30 @@ def _lookups(job_id: str) -> None:
                                            timeout=LOOKUP_TIMEOUT_SECONDS, record=False)
             result["looked"] += 1
             match = _text(output.get("match"), 20)
-            if match in ("sha256", "filename", "download"):
-                result["matched"] += 1
-            if not save or match not in ("sha256", "filename", "download"):
+            if match not in ("sha256", "filename", "download"):
                 continue
-            if match == "filename":
-                result["confirm"].append({"folder": folder, "name": name})
-                continue
+            result["matched"] += 1
+            # 对上的马上记进宿主记着的那份列表(示例图、怎么对上的),再交给界面这一条现在的样子(原链接、预览图从哪来、
+            # NSFW):详情里的「原链接」和 Civitai 那张示例图当场就有,不等整份重列 —— 一台几百个模型的服务器重列要好几秒
             with unit_of_work() as db:
                 instance = db.get(PluginInstance, instance_id)
                 if instance is None:
                     return
-                _remember_lookup(db, instance, folder, name, output)
+                found = _remember_lookup(db, instance, folder, name, output, pick)
+                if found is not None:
+                    result["found"].append(found)
+                if not save:
+                    continue
+                if match == "filename":
+                    result["confirm"].append({"folder": folder, "name": name})
+                    continue
                 _save_preview(db, instance, folder, name, pick)
+                if found is not None:
+                    found.update(has_preview=True, preview_origin="server",
+                                 preview_kind=model_previews.server_kind(instance_id, folder, name) or "image")
             result["saved"] += 1
         except (ModelLibraryError, PluginDomainError, PluginRuntimeError) as exc:
             result["failed"].append({"folder": folder, "name": name, "error": str(exc)[:500]})
-    # 记着的列表作废:下一次打开模型库重新列,来源、示例图、预览图从哪来都是新的
-    forget(instance_id)
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is not None and finish_job(db, job, status="succeeded", progress=1.0, result=result):
@@ -761,14 +779,26 @@ def _lookups(job_id: str) -> None:
             emit_job_event(db, job.id, "job.succeeded", {"saved": result["saved"]})
 
 
-def _remember_lookup(db: Session, instance: PluginInstance, folder: str, name: str, output: dict[str, Any]) -> None:
-    """插件刚在 Civitai 上找到的(示例图、怎么对上的)记进宿主记着的那份列表:接着要存回,不必为一个文件让插件再列一遍。"""
+def _remember_lookup(db: Session, instance: PluginInstance, folder: str, name: str, output: dict[str, Any],
+                     pick: str) -> dict[str, Any] | None:
+    """插件刚在 Civitai 上找到的(示例图、怎么对上的)记进宿主记着的那份列表 —— 取预览图、存回都照它,不必为一个文件让插件
+    再列一遍 —— 并回这一条在界面上现在该是什么样(`folder` / `name` / `match` / `source` / 预览图那几格 / `nsfw`):界面拿它
+    当场改模型库里那一条。记着的列表里没有这个文件(这期间换了服务器)回 None。"""
     snapshot = _snapshot_for(db, instance)
-    if snapshot is None:
-        return
+    key = (folder, name)
+    if snapshot is None or key not in snapshot.elsewhere:
+        return None
+    choices = model_previews.elsewhere(output.get("remote_previews"))
+    match = _text(output.get("match"), 20)
+    server = snapshot.previews.get(key) or next(iter(snapshot.sidecars.get(key, [])), "")
+    fields, shown = _preview_fields(instance.id, {"folder": folder, "name": name}, server, choices, pick)
+    signals = with_elsewhere_signal([one for one in snapshot.signals.get((folder, _norm(name)), [])], shown)
     with _lock:
-        snapshot.elsewhere[(folder, name)] = model_previews.elsewhere(output.get("remote_previews"))
-        snapshot.how[(folder, name)] = _text(output.get("match"), 20)
+        snapshot.elsewhere[key] = choices
+        snapshot.how[key] = match
+        snapshot.signals[(folder, _norm(name))] = signals
+    return {"folder": folder, "name": name, "match": match, "source": _source(output.get("source")), **fields,
+            "nsfw": nsfw_verdict(_marks(db, instance.id).get((folder, _norm(name))), signals)}
 
 
 def save_preview(db: Session, instance: PluginInstance, folder: str, name: str, *, pick: str = "safest",

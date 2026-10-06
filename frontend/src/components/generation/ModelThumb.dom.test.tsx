@@ -70,6 +70,22 @@ it("同一枚换了文件(下拉的触发器):上一个文件取不到、载好�
   expect(visibleImg(container)).toBeNull();
 });
 
+it("预览图从哪来变了:之前没取到的换回图再取一次;载好的那张照样看得见(同一个地址,浏览器不会再发 load)", () => {
+  //: 「在 Civitai 上找」刚找到一张示例图:地址没变,之前取不到的这回去取
+  const { container, rerender } = render(<ModelThumb instanceId="i1" model={{ ...lora, preview_origin: "" }} full />);
+  fireEvent.error(container.querySelector("img")!);
+  expect(container.querySelector("img")).toBeNull();
+  rerender(<ModelThumb instanceId="i1" model={{ ...lora, preview_origin: "civitai" }} full />);
+  const img = container.querySelector("img")!;
+  expect(img.getAttribute("src")).toBe("preview://i1/loras/style.safetensors");
+  fireEvent.load(img);
+  expect(visibleImg(container)).toBe(img);
+  //: 「存为预览图」:来源从 Civitai 变成那台服务器,地址和 <img> 都没变 —— 不能因此变回透明
+  rerender(<ModelThumb instanceId="i1" model={{ ...lora, preview_origin: "server" }} full />);
+  expect(container.querySelector("img")).toBe(img);
+  expect(visibleImg(container)).toBe(img);
+});
+
 it("没有预览图:一开始就是占位,不去要图", () => {
   const { container } = render(<ModelThumb instanceId="i1" model={{ ...lora, has_preview: false }} />);
   expect(container.querySelector("img")).toBeNull();

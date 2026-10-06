@@ -34,6 +34,7 @@ import {
   cancelJob,
   getJob,
   getModelDetail,
+  getModelLookup,
   markModelNsfw,
   modelPreviewUrl,
   modelThumbnailUrl,
@@ -45,6 +46,7 @@ import {
   type MissingModel,
   type ModelFile,
   type ModelLibrary,
+  type ModelLookupFound,
   type ModelNsfw,
   type ModelPreviewTools,
   type ModelResolved,
@@ -104,6 +106,7 @@ import {
   generationTargets,
   inFolder,
   sortModels,
+  withLookupFound,
   type GenerationTarget,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
@@ -242,8 +245,13 @@ export function ModelLibraryDialog({
     [scope, activeFamilies, query, sort],
   );
   const detail = detailKey ? models.find((model) => keyOf(model) === detailKey) ?? null : null;
-  //: 「在 Civitai 上找」「补图」:后台任务,这次打开之后发起的;做完了重新列一遍
-  const lookups = useLookupJobs(() => void qc.invalidateQueries({ queryKey: libraryPrefix }));
+  //: 「在 Civitai 上找」「补图」:后台任务,这次打开之后发起的。做完了先把对上的那几条当场改进记着的模型库(原链接、预览图
+  //: 从哪来、NSFW —— 不等重列),再在后台重新列一遍
+  const lookups = useLookupJobs(
+    instance.id,
+    (found) => qc.setQueriesData<ModelLibrary>({ queryKey: libraryPrefix }, (old) => withLookupFound(old, found)),
+    () => void qc.invalidateQueries({ queryKey: libraryPrefix }),
+  );
   //: 「存为预览图」「为缺预览图的模型补图」先确认:写的是那台服务器
   const [saving, setSaving] = React.useState<ModelFile | null>(null);
   const [filling, setFilling] = React.useState(false);
@@ -704,25 +712,34 @@ function FillPreviewsButton({ tools, running, onClick }: { tools: ModelPreviewTo
 }
 
 /**
- * 这次打开之后发起的「在 Civitai 上找」「补图」任务:在跑的隔一会儿读一次任务本身,有一个做完了就让模型库重新列一遍。
+ * 这次打开之后发起的「在 Civitai 上找」「补图」任务:在跑的隔一会儿读一次(模型库自己的那个口,做完了带着对上的那几条
+ * 现在的样子)。有一个做完了:先把对上的交给 `onFound`(当场改记着的模型库),再 `onDone`(后台重列)。
  * 交出哪些文件正在找(详情里那颗「在 Civitai 上找」转圈)、有没有一批补图在跑。
  */
-function useLookupJobs(onDone: () => void): { add: (job: Job) => void; running: Set<string>; batchRunning: boolean } {
+function useLookupJobs(
+  instanceId: string,
+  onFound: (found: ModelLookupFound[]) => void,
+  onDone: () => void,
+): { add: (job: Job) => void; running: Set<string>; batchRunning: boolean } {
   const [jobs, setJobs] = React.useState<Job[]>([]);
   const watching = jobs.filter((job) => ACTIVE.has(job.status)).map((job) => job.id);
   const live = useQuery({
-    queryKey: ["model-lookups", watching],
-    queryFn: () => Promise.all(watching.map((id) => getJob(id))),
+    queryKey: ["model-lookups", instanceId, watching],
+    queryFn: () => Promise.all(watching.map((id) => getModelLookup(instanceId, id))),
     enabled: watching.length > 0,
     refetchInterval: 1500,
   });
-  const callback = React.useRef(onDone);
-  callback.current = onDone;
+  const callback = React.useRef({ onFound, onDone });
+  callback.current = { onFound, onDone };
   React.useEffect(() => {
     const fresh = live.data ?? [];
     if (!fresh.length) return;
-    setJobs((list) => list.map((job) => fresh.find((one) => one.id === job.id) ?? job));
-    if (fresh.some((job) => !ACTIVE.has(job.status))) callback.current();
+    setJobs((list) => list.map((job) => fresh.find((one) => one.job.id === job.id)?.job ?? job));
+    const done = fresh.filter((one) => !ACTIVE.has(one.job.status));
+    if (!done.length) return;
+    const found = done.flatMap((one) => one.result?.found ?? []);
+    if (found.length) callback.current.onFound(found);
+    callback.current.onDone();
   }, [live.data]);
   const add = React.useCallback((job: Job) => setJobs((list) => [job, ...list]), []);
   const active = jobs.filter((job) => ACTIVE.has(job.status));
@@ -1797,7 +1814,10 @@ function ModelDetail({
   //: 说有预览图、这张却没取到:和没有预览图一样,画那个 3:4 的框。这不是少见的情况 —— 新版 ComfyUI 给每个文件都报
   //: 预览地址,有没有图要取了才知道(没有就 404),没配预览图的文件走的都是这条。不能留给 ModelThumb 自己的占位:
   //: 它沿用给图片的 max-h,自己没有高度,缩成顶上一条图标、下面整栏空着;外面那层的「看清」按钮也没东西可看。
-  const [previewFailed, setPreviewFailed] = React.useState(false);
+  //: 记的是「从哪来的那张」没取到:预览图从哪来变了(刚在 Civitai 上找到一张、存回了那台服务器),换一张再试
+  const [failedOrigin, setFailedOrigin] = React.useState<string | null>(null);
+  const previewFailed = failedOrigin === (model.preview_origin ?? "");
+  const setPreviewFailed = (failed: boolean) => setFailedOrigin(failed ? model.preview_origin ?? "" : null);
   const [allTags, setAllTags] = React.useState(false);
   //: 「用它生成」能交给哪几张工作流:生成选项里这个连接上、有一格能选这个文件的
   const generation = useGenerationOptions(GENERATION_KINDS);

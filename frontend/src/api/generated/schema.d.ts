@@ -6558,6 +6558,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/model-library/lookups/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Lookup
+         * @description 一个找、补预览图任务现在怎样:任务本身,做完了带上它交回的 —— 对上的那几条现在的样子(`found`),界面当场改模型库里
+         *     那几条,不等整份重列。
+         */
+        get: operations["get_model_lookup_api_plugins_instances__instance_id__model_library_lookups__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/model-library/save-preview": {
         parameters: {
             query?: never;
@@ -12176,6 +12197,47 @@ export interface components {
             name: string;
         };
         /**
+         * ModelLookupFoundOut
+         * @description 「在 Civitai 上找」这一趟对上的一个文件,在模型库里**现在**该是什么样:界面拿它当场改那一条(原链接、预览图从哪来、
+         *     NSFW),不等整份重列 —— 一台几百个模型的服务器重列要好几秒。`match`:`sha256` / `filename` / `download`。
+         */
+        ModelLookupFoundOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Match
+             * @default
+             */
+            match: string;
+            source?: components["schemas"]["ModelSourceOut"] | null;
+            /**
+             * Has Preview
+             * @default false
+             */
+            has_preview: boolean;
+            /**
+             * Preview Origin
+             * @default
+             */
+            preview_origin: string;
+            /**
+             * Preview Kind
+             * @default image
+             */
+            preview_kind: string;
+            nsfw?: components["schemas"]["ModelNsfwOut"];
+        };
+        /**
+         * ModelLookupJobOut
+         * @description 一个找、补预览图任务现在怎样:任务本身,做完了再带上它交回的(`result`,没做完是 None)。
+         */
+        ModelLookupJobOut: {
+            job: components["schemas"]["JobOut"];
+            result?: components["schemas"]["ModelLookupResultOut"] | null;
+        };
+        /**
          * ModelLookupRequest
          * @description 在 Civitai 上找(`files`;不给是「这台服务器上没有预览图的全部」),`save` 时找到的顺手存成预览图。
          */
@@ -12199,6 +12261,15 @@ export interface components {
              * @default false
              */
             refresh: boolean;
+        };
+        /**
+         * ModelLookupResultOut
+         * @description 找、补预览图任务做完交回的里面,模型库界面要的那一份:对上的那几条现在的样子(`found`)。找了几个、对上几个、存回
+         *     几张由任务完成时的那句话说(任务中心显示),这里不重发。
+         */
+        ModelLookupResultOut: {
+            /** Found */
+            found?: components["schemas"]["ModelLookupFoundOut"][];
         };
         /**
          * ModelNodeFolderIn
@@ -31126,6 +31197,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_lookup_api_plugins_instances__instance_id__model_library_lookups__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelLookupJobOut"];
                 };
             };
             /** @description Validation Error */

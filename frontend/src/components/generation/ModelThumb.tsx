@@ -99,7 +99,7 @@ export function ModelThumb({
   onFailed,
 }: {
   instanceId: string;
-  model: Pick<ModelFile, "folder" | "name" | "has_preview"> & Partial<Pick<ModelFile, "preview_kind">>;
+  model: Pick<ModelFile, "folder" | "name" | "has_preview"> & Partial<Pick<ModelFile, "preview_kind" | "preview_origin">>;
   /**
    * 图片和占位**共用**。占位没有固有尺寸,所以这里要给出一个框(`aspect-*`、`size-*`,或外层用 `[&>*]:size-full`
    * 撑满);只给 `max-h` + `w-full`、靠图片自己的宽高撑开的(详情页的预览框),占位就只剩一条图标那么高 ——
@@ -133,12 +133,15 @@ export function ModelThumb({
   const video = model.preview_kind === "video";
   //: 视频的「原图」是那段视频本身,<img> 放不了它:图那一层一律用第一帧(缩略图)
   const src = (full && !video ? modelPreviewUrl : modelThumbnailUrl)(instanceId, model.folder, model.name, pick);
-  //: 记的是哪一个地址载好了 / 没取到:同一枚(下拉的触发器)换了文件,上一个文件的结果不带过去。
+  //: 记的是哪一个地址载好了 / 没取到:同一枚(下拉的触发器)换了文件,上一个文件的结果不带过去。没取到的还要连上预览图从哪来:
+  //: 「在 Civitai 上找」刚找到一张,地址没变,之前没取到的这回去取(换回 <img>,浏览器重新取)。载好的只认地址 —— 同一个
+  //: <img>、同一个地址,浏览器不会再发一次 load;「存为预览图」后来源从 Civitai 变成那台服务器,画着的这张不能因此变透明
+  const attempt = `${src}#${model.preview_origin ?? ""}`;
   const [loaded, setLoaded] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState<string | null>(null);
   const Icon = folderIcon(model.folder);
   const hidden = treatment === "hidden" && model.has_preview;
-  if (!model.has_preview || failed === src || hidden) {
+  if (!model.has_preview || failed === attempt || hidden) {
     return (
       <span
         aria-hidden
@@ -166,7 +169,7 @@ export function ModelThumb({
       decoding="async"
       onLoad={() => setLoaded(src)}
       onError={() => {
-        setFailed(src);
+        setFailed(attempt);
         onFailed?.();
       }}
       data-loaded={loaded === src ? "" : undefined}

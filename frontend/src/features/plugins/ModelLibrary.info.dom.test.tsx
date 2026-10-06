@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
   markModelNsfw: vi.fn(),
   saveModelPreview: vi.fn(),
   startModelLookup: vi.fn(),
+  getModelLookup: vi.fn(),
   getJob: vi.fn(),
   cancelJob: vi.fn(),
   listGenerationOptions: vi.fn(),
@@ -410,20 +411,20 @@ describe("Civitai 的示例图、原链接", () => {
 
   it("「为缺预览图的模型补图」:先确认,是一个后台任务;做完重新列一遍", async () => {
     api.startModelLookup.mockResolvedValue(job("j9", { save: true, files: [] }));
-    api.getJob.mockResolvedValue(job("j9", { save: true, files: [] }, "succeeded"));
+    api.getModelLookup.mockResolvedValue({ job: job("j9", { save: true, files: [] }, "succeeded"), result: { found: [] } });
     await open();
     fireEvent.click(screen.getByRole("button", { name: "modelFillPreviews" }));
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm.textContent).toContain("modelFillPreviewsBody");
     fireEvent.click(within(confirm).getByRole("button", { name: "modelFillPreviewsStart" }));
     await waitFor(() => expect(api.startModelLookup).toHaveBeenCalledWith("i1", { workspace_id: "w1", save: true, pick: "safest" }));
-    await waitFor(() => expect(api.getJob).toHaveBeenCalledWith("j9"), { timeout: 3000 });
+    await waitFor(() => expect(api.getModelLookup).toHaveBeenCalledWith("i1", "j9"), { timeout: 3000 });
     await waitFor(() => expect(api.getModelLibrary).toHaveBeenCalledTimes(2), { timeout: 3000 });
   });
 
   it("详情:原链接点开是原站那一页,下面说怎么知道的;没有的说没有,「在 Civitai 上找」起一个任务、找的时候点不了", async () => {
     api.startModelLookup.mockResolvedValue(job("j1", { files: [{ folder: "loras", name: "on-server.safetensors" }] }));
-    api.getJob.mockResolvedValue(job("j1", { files: [{ folder: "loras", name: "on-server.safetensors" }] }));
+    api.getModelLookup.mockResolvedValue({ job: job("j1", { files: [{ folder: "loras", name: "on-server.safetensors" }] }), result: null });
     await open();
     fireEvent.click(within(card("from-civitai.safetensors")).getByRole("button", { name: "from-civitai.safetensors" }));
     await screen.findByRole("button", { name: "modelLibraryBack" });
@@ -443,6 +444,66 @@ describe("Civitai 的示例图、原链接", () => {
       workspace_id: "w1", files: [{ folder: "loras", name: "on-server.safetensors" }], refresh: true, pick: "safest",
     }));
     await waitFor(() => expect((within(screen.getByText("modelSourceRow").closest("div")!).getByRole("button", { name: /modelLookup/ }) as HTMLButtonElement).disabled).toBe(true));
+  });
+
+  it("「在 Civitai 上找」做完:原链接和 Civitai 那张示例图当场就有,不等整份重列", async () => {
+    //: 维护者:找到之后详情里的原链接要过好一阵才出来 —— 此前要等任务做完再整份重列(几百个模型的服务器上好几秒)。
+    //: 这里让重列永远回不来:原链接照样出来,靠的是任务交回的那一条(`found`)当场改进记着的模型库。
+    //: 和真的一样:新版 ComfyUI 给每个文件都报预览地址(has_preview),取了才知道没有(404)
+    const PLAIN = model("plain.safetensors", { preview_origin: "" });
+    api.getModelLibrary.mockResolvedValueOnce(library([PLAIN])).mockImplementation(() => new Promise(() => undefined));
+    const files = [{ folder: "loras", name: "plain.safetensors" }];
+    api.startModelLookup.mockResolvedValue(job("j2", { files }));
+    api.getModelLookup.mockResolvedValue({
+      job: job("j2", { files }, "succeeded"),
+      result: { found: [{
+        folder: "loras", name: "plain.safetensors", match: "sha256",
+        source: { page: "https://civitai.com/models/58390?modelVersionId=62833", site: "civitai", how: "sha256" },
+        has_preview: true, preview_origin: "civitai", preview_kind: "image", nsfw: SAFE,
+      }] },
+    });
+    await open();
+    fireEvent.click(within(card("plain.safetensors")).getByRole("button", { name: "plain.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    expect(document.querySelector("[data-model-source]")).toBeNull();
+    const pane = () => document.querySelector<HTMLElement>("[data-library-detail-pane='media']")!;
+    fireEvent.error(pane().querySelector("img")!);
+    expect(pane().querySelector("img"), "那台服务器上没有:换成占位").toBeNull();
+    fireEvent.click(within(screen.getByText("modelSourceRow").closest("div")!).getByRole("button", { name: /modelLookup/ }));
+    const link = await waitFor(() => {
+      const found = document.querySelector<HTMLAnchorElement>("[data-model-source]");
+      expect(found).not.toBeNull();
+      return found!;
+    }, { timeout: 3000 });
+    expect(link.href).toBe("https://civitai.com/models/58390?modelVersionId=62833");
+    expect(pane().querySelector("[data-preview-origin='civitai']"), "预览图换成 Civitai 那张,角上标出来").not.toBeNull();
+    expect(pane().querySelector("img")?.getAttribute("src"), "刚才没取到的那张不算数:从哪来变了,再取一次")
+      .toBe("preview://i1/loras/plain.safetensors");
+    expect(api.getModelLibrary, "重列还在后台跑(这里永远回不来)").toHaveBeenCalledTimes(2);
+  });
+
+  it("在卡片的右键菜单里找:卡片一直开着,刚才没取到的缩略图在找到之后换上 Civitai 那张", async () => {
+    const PLAIN = model("plain.safetensors", { preview_origin: "" });
+    api.getModelLibrary.mockResolvedValueOnce(library([PLAIN])).mockImplementation(() => new Promise(() => undefined));
+    const files = [{ folder: "loras", name: "plain.safetensors" }];
+    api.startModelLookup.mockResolvedValue(job("j3", { files }));
+    api.getModelLookup.mockResolvedValue({
+      job: job("j3", { files }, "succeeded"),
+      result: { found: [{
+        folder: "loras", name: "plain.safetensors", match: "sha256", source: null,
+        has_preview: true, preview_origin: "civitai", preview_kind: "image", nsfw: SAFE,
+      }] },
+    });
+    await open();
+    fireEvent.error(card("plain.safetensors").querySelector("img")!);
+    expect(card("plain.safetensors").querySelector("img"), "那台服务器上没有:卡片换成占位").toBeNull();
+    fireEvent.contextMenu(within(card("plain.safetensors")).getByRole("button", { name: "plain.safetensors" }),
+                         { clientX: 10, clientY: 10 });
+    fireEvent.click(entry("lookup")!);
+    await waitFor(() => expect(card("plain.safetensors").querySelector("[data-preview-origin='civitai']")).not.toBeNull(),
+                  { timeout: 3000 });
+    expect(card("plain.safetensors").querySelector("img")?.getAttribute("src"), "从哪来变了:再取一次")
+      .toBe("thumbnail://i1/loras/plain.safetensors");
   });
 
   it("右键菜单:有原链接的「打开原链接」在浏览器里开;没有的不摆", async () => {

@@ -1,4 +1,4 @@
-import type { ModelFile, ModelLibrary } from "@/api/client";
+import type { ModelFile, ModelLibrary, ModelLookupFound } from "@/api/client";
 import type { GenerationOption } from "@/api/domains/generation";
 import type { MessageKey } from "@/app/messages";
 import { modelBaseName, normModelName } from "@/components/generation/ModelThumb";
@@ -124,4 +124,30 @@ export function generationTargets(options: readonly GenerationOption[], instance
     }
   }
   return out.sort((a, b) => Number(b.uses) - Number(a.uses) || a.name.localeCompare(b.name));
+}
+
+
+/**
+ * 「在 Civitai 上找」做完了:把对上的那几条(任务交回的 `found`)当场改进记着的模型库 —— 原链接、预览图从哪来、NSFW。
+ * 详情里的「原链接」和 Civitai 那张示例图马上就有,不等整份重列(几百个模型的服务器上要好几秒);重列在后台照样做,
+ * 回来的是同一份。没对上的、列表里没有的不动;一条都没改回原来那一份(不触发重画)。
+ */
+export function withLookupFound(library: ModelLibrary | undefined, found: readonly ModelLookupFound[]): ModelLibrary | undefined {
+  if (!library || found.length === 0) return library;
+  const byKey = new Map(found.map((one) => [`${one.folder}\n${normModelName(one.name)}`, one]));
+  let changed = false;
+  const models = (library.models ?? []).map((model) => {
+    const hit = byKey.get(`${model.folder}\n${normModelName(model.name)}`);
+    if (!hit) return model;
+    changed = true;
+    return {
+      ...model,
+      source: hit.source ?? model.source,
+      has_preview: hit.has_preview,
+      preview_origin: hit.preview_origin,
+      preview_kind: hit.preview_kind,
+      nsfw: hit.nsfw,
+    };
+  });
+  return changed ? { ...library, models } : library;
 }

@@ -22,6 +22,7 @@ from app.api.schemas import (
     ModelDownloadRequest,
     ModelLibraryOut,
     ModelLocalNsfwOut,
+    ModelLookupJobOut,
     ModelLookupRequest,
     ModelNsfwMarkRequest,
     ModelSavePreviewOut,
@@ -617,6 +618,17 @@ def start_model_lookup(instance_id: str, body: ModelLookupRequest, db: Tx, user:
             files=[one.model_dump() for one in body.files] if body.files is not None else None,
             save=body.save, pick=body.pick, refresh=body.refresh,
         )
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/model-library/lookups/{job_id}", response_model=ModelLookupJobOut)
+def get_model_lookup(instance_id: str, job_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """一个找、补预览图任务现在怎样:任务本身,做完了带上它交回的 —— 对上的那几条现在的样子(`found`),界面当场改模型库里
+    那几条,不等整份重列。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.lookup_job(db, user, instance, job_id)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
 

@@ -182,6 +182,8 @@ def test_按哈希找_那台机器算SHA256_对上版本_记进来源_第二次�
     out = lookup.lookup({"folder": "checkpoints", "name": "AWPainting_IL.safetensors"}, Comfy(comfy.url), "zh")
     assert out["match"] == "sha256" and out["sha256"] == digest
     assert out["page"] == "https://civitai.com/models/795765?modelVersionId=889818"
+    assert out["source"] == {"page": "https://civitai.com/models/795765?modelVersionId=889818", "site": "civitai",
+                             "how": "sha256"}, "和列模型库时同一个形状:宿主拿它当场改那一条的原链接"
     assert out["civitai"]["base_model"] == "Illustrious"
     assert comfy.state.hashed == ["checkpoints/AWPainting_IL.safetensors"]
     previews = out["remote_previews"]

@@ -91,9 +91,11 @@ elif op == "library":
                           "save_note": "缺 ComfyUI-Custom-Scripts" if (data / "no-save").exists() else ""},
     }})
 elif op == "lookup":
-    found = payload["name"] != "plain.safetensors"
+    found = payload["name"] != "plain.safetensors" or (data / "plain-found").exists()
     match = (data / "lookup-match").read_text() if (data / "lookup-match").exists() else "sha256"
-    emit({"ok": True, "output": {"match": match if found else "none", "page": "", "note": "",
+    page = "https://civitai.com/models/9?modelVersionId=10"
+    emit({"ok": True, "output": {"match": match if found else "none", "page": page if found else "", "note": "",
+                                 **({"source": {"page": page, "site": "civitai", "how": match}} if found else {}),
                                  "remote_previews": [{"url": f"http://127.0.0.1:{port}/elsewhere/safe", "kind": "image",
                                                       "site": "civitai", "level": 1, "nsfw": False}] if found else []}})
 elif op == "save_preview":
@@ -906,6 +908,36 @@ def test_在Civitai上找是一个后台任务_补图时那台服务器上有预
     assert [one["refresh"] for one in _ops() if one["op"] == "lookup"][-1] is True
     unknown = client.post(f"{base}/lookups", json={"workspace_id": workspace, "files": [{"folder": "loras", "name": "nobody"}]})
     assert unknown.status_code == 422, "列表里没有的文件不找"
+
+
+def test_只找不存_对上的当场记进宿主的列表_任务交回那一条现在的样子_不必整份重列(library) -> None:
+    """维护者:「在 Civitai 上找」成功之后,详情里的「原链接」和 Civitai 那张示例图要过好一阵才出来。此前任务做完把宿主
+    记着的整份列表扔掉(只找不存时也不记下找到的),界面拿到「做完了」再整份重列 —— 几百个模型的服务器上要好几秒,
+    这期间取预览图还得先替它列一遍。现在对上的当场记进去,任务交回这一条现在的样子(`found`),预览图不重列就取得到。"""
+    client, instance_id, _ = library
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    plain = next(one for one in client.get(base).json()["models"] if one["name"] == "plain.safetensors")
+    assert (plain["has_preview"], plain["source"]) == (False, None), "前提:那台服务器上没有预览图,也不知道出处"
+    _flag("plain-found")
+    listed = sum(1 for one in _ops() if one["op"] == "library")
+    started = client.post(f"{base}/lookups", json={"workspace_id": _workspace(client),
+                                                   "files": [{"folder": "loras", "name": "plain.safetensors"}]})
+    assert wait_status(client, started.json()["id"]) == "succeeded"
+    lookup = client.get(f"{base}/lookups/{started.json()['id']}")
+    assert lookup.status_code == 200, lookup.text
+    found = lookup.json()["result"]["found"]
+    assert found == [{
+        "folder": "loras", "name": "plain.safetensors", "match": "sha256",
+        "source": {"page": "https://civitai.com/models/9?modelVersionId=10", "site": "civitai", "how": "sha256"},
+        "has_preview": True, "preview_origin": "civitai", "preview_kind": "image",
+        "nsfw": {"flagged": False, "manual": None,
+                 "reasons": [{"source": "civitai", "nsfw": False, "tags": [], "words": [], "level": 1, "score": None}]},
+    }]
+    shown = client.get(f"{base}/preview", params={"folder": "loras", "name": "plain.safetensors"})
+    assert shown.status_code == 200 and _pixel(shown.content)[:3] == (20, 160, 80), "Civitai 那张(分级最低的)当场取得到"
+    assert sum(1 for one in _ops() if one["op"] == "library") == listed, "找完、取图都不必让插件整份重列"
+    other = client.get(f"/api/plugins/instances/{instance_id}/model-library/lookups/nope")
+    assert other.status_code == 422
 
 
 def test_补图时按文件名对上的不替你存_列出来等你确认(library) -> None:

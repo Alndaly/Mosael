@@ -37,6 +37,9 @@ export type ModelNsfwReason = components["schemas"]["ModelNsfwReasonOut"];
 export type ModelSource = components["schemas"]["ModelSourceOut"];
 /** 这台服务器上找预览图、写回预览图的路。 */
 export type ModelPreviewTools = components["schemas"]["ModelPreviewToolsOut"];
+/** 一个「在 Civitai 上找」任务现在怎样:做完了带上它交回的,对上的那几条现在的样子在 `result.found` 里。 */
+export type ModelLookupJob = components["schemas"]["ModelLookupJobOut"];
+export type ModelLookupFound = components["schemas"]["ModelLookupFoundOut"];
 /**
  * 那台服务器上没有预览图、用别处(Civitai)的示例图时挑哪一张:`safest` 分级最低的(缺省),`cover` 作者排在最前的。
  * 界面按「NSFW 预览」那组设置要(照常 → cover,别的 → safest);预览图从哪来、NSFW 的判断都照它。
@@ -161,6 +164,10 @@ export const startModelLookup = (
   body: { workspace_id: string; files?: { folder: string; name: string }[] | null; save?: boolean; pick?: ModelPreviewPick;
           refresh?: boolean },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/lookups`, { method: "POST", body: JSON.stringify(body) });
+
+/** 一个找、补预览图任务现在怎样(界面轮询它):做完了带上对上的那几条现在的样子,当场改模型库里那几条,不等整份重列。 */
+export const getModelLookup = (instanceId: string, jobId: string) =>
+  api<ModelLookupJob>(`/api/plugins/instances/${instanceId}/model-library/lookups/${jobId}`);
 
 /** 把 Mosael 里显示的那张 Civitai 示例图存成这个文件在那台服务器上的预览图。按文件名对上的要 `confirmed`。 */
 export const saveModelPreview = (

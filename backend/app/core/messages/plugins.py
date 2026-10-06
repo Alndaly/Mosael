@@ -212,6 +212,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没有要找的文件:这台服务器上的模型都有预览图了",
         "en": "Nothing to look up: every model on this server already has a preview",
     },
+    "modelLibErr_noSuchLookup": {
+        "zh": "没有这个找图任务(不是这个连接的,或者已经清掉了)",
+        "en": "No such preview lookup (it belongs to another connection, or was cleared)",
+    },
     "modelLibErr_noElsewherePreview": {
         "zh": "这个文件还没有从 Civitai 取来的预览图:先「在 Civitai 上找」",
         "en": "This file has no preview from Civitai yet: use “Find on Civitai” first",
