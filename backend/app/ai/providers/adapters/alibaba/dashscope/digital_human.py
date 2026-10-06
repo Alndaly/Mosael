@@ -26,6 +26,7 @@ from app.ai.providers.contracts.generation import (
     SOURCE_VIDEO,
     GenerationAdapterError,
     GenerationRequest,
+    report_side_call,
     source_url_values,
 )
 from app.core.http_retry import RetryingClient
@@ -106,7 +107,10 @@ def check_portrait(client: RetryingClient, image_url: str) -> None:
     request.headers.pop("X-DashScope-Async", None)
     response = client.send(request)
     response.raise_for_status()
-    output = (response.json() or {}).get("output") or {}
+    body = response.json() or {}
+    #: 请求成功就计费,不管过没过 —— 先记这一笔,再看结果(见 contracts.generation.report_side_call)。
+    report_side_call(S2V_DETECT_MODEL, {"requests": 1, "images": 1}, body)
+    output = body.get("output") or {}
     if not output.get("check_pass"):
         detail = str(output.get("message") or output.get("code") or "").strip()
         raise GenerationAdapterError("providerErr_noUsableFace", vendor="DashScope", detail=detail)

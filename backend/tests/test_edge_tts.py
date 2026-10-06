@@ -99,6 +99,58 @@ def test_empty_audio_is_an_error_not_a_silent_asset(fake_communicate, tmp_path) 
         EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好"), tmp_path / "c.mp3")
 
 
+class _Flaky(_FakeCommunicate):
+    """前几次连不上(付费实测里那句原话),之后照常交回音频。"""
+
+    failures: list[BaseException] = []
+
+    async def save(self, path: str) -> None:
+        if type(self).failures:
+            raise type(self).failures.pop(0)
+        await super().save(path)
+
+
+@pytest.fixture()
+def flaky(monkeypatch):
+    import edge_tts
+
+    from app.ai.providers.adapters.microsoft import edge_speech
+
+    _Flaky.calls, _Flaky.write_bytes, _Flaky.failures = [], b"fake-mp3", []
+    monkeypatch.setattr(edge_tts, "Communicate", _Flaky)
+    monkeypatch.setattr(edge_speech, "backoff_seconds", lambda attempt: 0)
+    return _Flaky
+
+
+def test_连不上就再连一次_免费的配音一失败_同一条流程里付过钱的东西跟着作废(flaky, tmp_path) -> None:
+    """付费实测:带货口播第 5 拍连 speech.platform.bing.com 超时,整条循环失败,前 4 拍 ¥8.47 的画面和视频没能导出。"""
+    import aiohttp
+
+    flaky.failures = [aiohttp.ServerTimeoutError("Connection timeout to host wss://speech.platform.bing.com/...")]
+    out = tmp_path / "d.mp3"
+    EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="中间一颗银转运珠"), out)
+    assert len(flaky.calls) == 2 and out.read_bytes() == b"fake-mp3"
+
+
+def test_重连次数跟着出站调用的重试设置_用完了照旧报错(flaky, tmp_path, monkeypatch) -> None:
+    from app.core import http_retry
+
+    monkeypatch.setattr(http_retry, "_max_retries", 1)
+    flaky.failures = [TimeoutError("timeout"), TimeoutError("timeout"), TimeoutError("timeout")]
+    with pytest.raises(SpeechSynthesisError, match="timeout"):
+        EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好"), tmp_path / "e.mp3")
+    assert len(flaky.calls) == 2, "设置是重试 1 次:一共连两次"
+
+
+def test_服务回了没有音频_不是连接问题_不重来(flaky, tmp_path) -> None:
+    from edge_tts.exceptions import NoAudioReceived
+
+    flaky.failures = [NoAudioReceived("No audio was received")]
+    with pytest.raises(SpeechSynthesisError):
+        EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好", voice="zh-CN-NoSuchNeural"), tmp_path / "f.mp3")
+    assert len(flaky.calls) == 1
+
+
 def test_每个引擎都说得出自己能不能用() -> None:
     """「这个引擎现在能不能用」是**所有**引擎都要回答的问题。
 

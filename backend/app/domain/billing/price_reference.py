@@ -462,8 +462,14 @@ _ALIBABA_VIDEO = [
 # 数字人(每秒,按成功生成的视频时长;ADR 0028)。价目表总页里没有这两个,单价写在各自的模型文档页上。
 # 成片时长跟着驱动音频走,计量记的是产出的真实时长(runner._record_generation_usage)。
 _BAILIAN_S2V = "https://help.aliyun.com/zh/model-studio/wan-s2v-api"
+_BAILIAN_S2V_DETECT = "https://help.aliyun.com/zh/model-studio/wan-s2v-detect-api"
 _BAILIAN_RETALK = "https://help.aliyun.com/zh/model-studio/videoretalk/"
 _ALIBABA_DIGITAL_HUMAN = [
+    # 说话照片提交之前,适配器先拿这张人像调一次 wan2.2-s2v-detect(见 adapters/alibaba/dashscope/digital_human.check_portrait)。
+    # 文档页原话「wan2.2-s2v-detect 0.004元/张」「无论检测是否通过,只要请求成功就计费」,仅北京地域。
+    _p("alibaba", "wan2.2-s2v-detect", "video", "image", "0.004", "CNY", _BAILIAN_S2V_DETECT, region="cn",
+       remark=("说话照片之前的人像预检,按张计;检测不通过也计费;另有免费额度",
+               "The portrait pre-check before a talking photo, per image; billed even when the check fails; free quota available")),
     _p("alibaba", "wan2.2-s2v", "video", "video_second", "0.5", "CNY", _BAILIAN_S2V, region="cn",
        remark=("480P 的价(应用默认,基础档);另有 100 秒免费额度", "480P price (the app default, base tier); 100 free seconds")),
     _p("alibaba", "wan2.2-s2v", "video", "video_second", "0.9", "CNY", _BAILIAN_S2V, region="cn", resolution="720p",
@@ -931,6 +937,21 @@ def _best(entries: list[ListPrice], model_id: str) -> list[ListPrice]:
         return []
     longest = max(len(entry.model) for entry in prefixed)
     return [entry for entry in prefixed if len(entry.model) == longest]
+
+
+#: 调这个模型时**顺带**会调另一个按次计费的模型 —— 那一个不出现在连接的模型目录里,用户也不会单独配它(说话照片之前的
+#: 人像预检)。给前者预填价格时把后者一起补上,不然那笔顺带的钱一直「未定价」。
+BILLED_ALONGSIDE: dict[tuple[str, str], tuple[str, ...]] = {
+    ("alibaba", "wan2.2-s2v"): ("wan2.2-s2v-detect",),
+}
+
+
+def billed_alongside(vendor: str, model_ids: list[str]) -> list[str]:
+    """这几个型号连同它们顺带会调的那几个(去重,保持顺序)。"""
+    out = list(model_ids)
+    for model_id in model_ids:
+        out.extend(BILLED_ALONGSIDE.get((vendor, model_id), ()))
+    return list(dict.fromkeys(out))
 
 
 def lookup(vendor: str, model_id: str, *, region: str = "cn") -> list[ListPrice]:

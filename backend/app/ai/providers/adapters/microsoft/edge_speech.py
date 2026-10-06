@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from pathlib import Path
 
 from app.ai.providers.contracts.speech import SpeechSynthesisRequest, SpeechSynthesisError
+from app.core.http_retry import backoff_seconds, current_max_retries
+
+logger = logging.getLogger(__name__)
+
+
+def _transient(exc: BaseException) -> bool:
+    """连不上 / 超时 / 连接中途断掉 —— 再连一次多半就好。服务回了「没有音频」(音色名不对之类)不算:重来也一样。"""
+    import aiohttp
+    from edge_tts.exceptions import WebSocketError
+
+    return isinstance(exc, (aiohttp.ClientError, TimeoutError, WebSocketError))
 
 
 class EdgeSpeechAdapter:
@@ -38,13 +51,23 @@ class EdgeSpeechAdapter:
         voice = request.voice or self._default_voice or "zh-CN-XiaoxiaoNeural"
         speed = max(0.5, min(2.0, request.speed))
         rate = f"{round((speed - 1.0) * 100):+d}%"
-        communicate = edge_tts.Communicate(request.text, voice=voice, rate=rate)
-        try:
-            asyncio.run(communicate.save(str(out_path)))
-        except SpeechSynthesisError:
-            raise
-        except Exception as exc:  # noqa: BLE001 — edge_tts raises its own exception family
-            raise SpeechSynthesisError("providerErr_ttsFailed", engine="Edge", detail=str(exc)) from exc
+        #: **连不上就再连。** 它是免费的,重连不多花一分钱;而它一失败,同一条流程里已经付了钱的东西跟着作废 —— 付费实测:
+        #: 带货口播第 5 拍的配音连 speech.platform.bing.com 超时,整条循环失败,前面 4 拍 ¥8.47 的画面和视频没能导出。
+        #: 次数和退避跟着「AI 出站调用」的重试设置走(core/http_retry),和别的出站调用一样。
+        attempts = current_max_retries() + 1
+        for attempt in range(attempts):
+            communicate = edge_tts.Communicate(request.text, voice=voice, rate=rate)
+            try:
+                asyncio.run(communicate.save(str(out_path)))
+                break
+            except SpeechSynthesisError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — edge_tts raises its own exception family
+                if attempt < attempts - 1 and _transient(exc):
+                    logger.info("Edge 语音合成第 %d 次没连上,重试:%s", attempt + 1, exc)
+                    time.sleep(backoff_seconds(attempt))
+                    continue
+                raise SpeechSynthesisError("providerErr_ttsFailed", engine="Edge", detail=str(exc)) from exc
         if not out_path.is_file() or out_path.stat().st_size == 0:
             raise SpeechSynthesisError("providerErr_ttsEmptyAudio", engine="Edge")
 

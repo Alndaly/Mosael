@@ -323,6 +323,16 @@ class GenerationAdapter(ABC):
         """
         raise GenerationAdapterError("providerErr_resumeUnsupported", vendor=self.vendor_id)
 
+    def cancel_remote(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext) -> bool:
+        """在服务商那边撤掉一个**已经提交**的远端任务。撤成了(服务商确认不会再做、不会再扣这一次的钱)回 True;
+        这家没有撤销接口、或者任务已经在做撤不掉,回 False —— 那样它照样会做完、照样扣钱,运行器接着把它等到终态、
+        照实记账(见 runner._settle_after_cancel)。
+
+        本地取消只是我们不等了:付费实测里配音失败把同一拍正在生成的视频取消掉,账上记 ¥0,方舟照样把那段视频做完、
+        扣了 ¥1.87。默认撤不掉。
+        """
+        return False
+
 
 #: 请求侧按提示词估 token 时写进的格(见 metering_from_request)。服务商报了 token 数,它们就让位。
 _ESTIMATED_TOKEN_KEYS = ("input_tokens", "output_tokens", "total_tokens")
@@ -455,6 +465,8 @@ class RemoteTaskWatch:
     remember: Callable[[str], None]
     is_cancelled: Callable[[], bool]
     settled: Callable[[dict[str, Any]], None]
+    #: `side_call(model, units, raw)`:适配器为这次生成**顺带**调了另一个按次计费的模型(见 report_side_call)。
+    side_call: Callable[[str, dict[str, Any], dict[str, Any]], None] = lambda _model, _units, _raw: None
 
 
 _REMOTE_TASK_WATCH: ContextVar[RemoteTaskWatch | None] = ContextVar("remote_task_watch", default=None)
@@ -486,6 +498,18 @@ def remote_task_cancelled() -> bool:
     """用户取消了吗(没装 watch 时是 False)。见 `remember_remote_task`。"""
     watch = _REMOTE_TASK_WATCH.get()
     return bool(watch is not None and watch.is_cancelled())
+
+
+def report_side_call(model: str, units: dict[str, Any], raw: dict[str, Any] | None = None) -> None:
+    """适配器为这次生成**顺带**调了另一个按次计费的模型 —— 百炼说话照片之前的人像预检(wan2.2-s2v-detect):报给运行器,
+    单独记一笔(没装 watch 时什么都不做)。
+
+    那一笔和这次生成成不成无关:预检不通过也扣(文档原话「无论检测是否通过,只要请求成功就计费」),所以不能等生成结束、
+    随生成那一条账一起记 —— 预检没过时生成那一条是「失败、没扣费」,预检那 ¥0.004 就没了(付费实测时它一笔都没进账)。
+    """
+    watch = _REMOTE_TASK_WATCH.get()
+    if watch is not None:
+        watch.side_call(model, dict(units), dict(raw or {}))
 
 
 def provider_payload_settled(payload: dict[str, Any]) -> None:

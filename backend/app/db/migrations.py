@@ -7942,6 +7942,23 @@ def _migrate_existing_libraries_get_the_evolink_gpt_image_prices() -> None:
             prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
 
 
+def _migrate_existing_libraries_get_the_s2v_detect_price() -> None:
+    """老库补上百炼说话照片人像预检(wan2.2-s2v-detect)的内置参考价,¥0.004/张(见 domain/billing/price_reference)。
+
+    预检是说话照片**顺带**调的,不在连接的模型目录里,用户也不会把它配成模型行:预填现在跟着 wan2.2-s2v 一起补它
+    (price_reference.BILLED_ALONGSIDE)。老库里配了 wan2.2-s2v 的百炼连接这里补一次;规则和点「预填」一样:只补不改、
+    不混币种。此前预检每调一次扣一次钱,账上一笔都没有(付费实测)。
+    """
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import ProviderProfile
+    from app.domain.billing.pricing_prefill import prefill_profile_pricing
+
+    models = frozenset({"wan2.2-s2v-detect"})
+    with unit_of_work() as db:
+        for profile in db.query(ProviderProfile).filter(ProviderProfile.vendor == "alibaba").order_by(ProviderProfile.created_at):
+            prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
+
+
 def _migrate_speech_usage_follows_todays_booking() -> None:
     """语音合成的老账照现在的口径改:记在**连接的厂商**名下,免费的引擎记 0、可信度「免费」。
 
@@ -8387,6 +8404,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_usage_follows_todays_booking),
             #: 生成任务结果里每份的参数挪出 `outputs`(那个键是「交回了什么」,画板和任务详情只认它)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_generation_results_keep_output_parameters_apart),
+            #: 百炼说话照片之前的人像预检(wan2.2-s2v-detect)补上参考价:预检此前一笔都没进账。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_s2v_detect_price),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

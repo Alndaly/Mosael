@@ -72,7 +72,8 @@ def prefill_profile_pricing(
     catalog_rates: dict[str, dict[str, float | None]] = {}
     for model_id, rates in catalog:
         catalog_rates.setdefault(model_id, rates)
-    model_ids = list(dict.fromkeys([*catalog_rates, *rows]))
+    #: 顺带会调的那几个(说话照片之前的人像预检)不在目录里、也不会配成模型行,跟着它们的「主模型」一起补(见 price_reference)。
+    model_ids = price_reference.billed_alongside(profile.vendor, list(dict.fromkeys([*catalog_rates, *rows])))
     if only_models is not None:
         model_ids = [model_id for model_id in model_ids if model_id in only_models]
 

@@ -180,6 +180,20 @@ class SeedanceAdapter(GenerationAdapter):
         except httpx.HTTPError as exc:
             raise ark_http_error(exc, context.api_key, kind="video") from exc
 
+    def cancel_remote(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext) -> bool:
+        """方舟的 `DELETE /contents/generations/tasks/{id}`:**排队中**的任务撤掉(不做、不扣费);正在做的不让撤;
+        已经做完、失败的,同一个调用是**删掉任务记录**。所以先查一眼:只有还在排队才发 DELETE —— 对做完的任务发它,
+        删掉的正是我们接着要读用量的那份回包。查完到撤之间开始做了的,方舟拒掉撤销,照「撤不掉」算。"""
+        try:
+            with self._client(request, context) as client:
+                status = client.get(poll_path)
+                status.raise_for_status()
+                if str((status.json() or {}).get("status") or "").lower() != "queued":
+                    return False
+                return client.delete(poll_path).is_success
+        except httpx.HTTPError:
+            return False
+
     def _client(self, request: GenerationRequest, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
             raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="ARK")

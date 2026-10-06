@@ -52,6 +52,7 @@ from app.domain.jobs import (
     register_resumer,
     register_settle_listener,
     say,
+    was_cancelled,
 )
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
@@ -197,7 +198,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             adapter.validate_request(request)
             #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
             #: 它在花钱,回执只活在适配器的局部变量里的话,线程一死就再也找不回来。
-            with watching_remote_tasks(_remote_task_watch(db, job, settled=settled.append)):
+            side_calls = _side_call_recorder(db, generation, job, context)
+            with watching_remote_tasks(_remote_task_watch(db, job, settled=settled.append, side_call=side_calls)):
                 if resume_from and adapter.supports_progress_callbacks:
                     # 接着取的那一段也要有进度和取消 —— 一段本地长视频重启后可能还要跑一小时。
                     result = adapter.resume(resume_from, request, context, workdir, callbacks=_job_callbacks(db, job))
@@ -284,8 +286,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             )
         except GenerationAdapterError as exc:
             if request is not None:
-                _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed",
-                                         settled=settled[-1] if settled else None)
+                _record_failed_or_cancelled(db, generation, job, adapter, request, context, result, workdir, started,
+                                            settled)
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
             # 泛化的 Generation failed,取消看起来就像出了错。
             if job.status in ("queued", "running"):
@@ -294,11 +296,91 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                 db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
             if request is not None:
-                _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed",
-                                         settled=settled[-1] if settled else None)
+                _record_failed_or_cancelled(db, generation, job, adapter, request, context, result, workdir, started,
+                                            settled)
             _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _record_failed_or_cancelled(
+    db,
+    generation: GenerationJob,
+    job: Job,
+    adapter: GenerationAdapter,
+    request: GenerationRequest,
+    context: GenerationAdapterContext,
+    result: GenerationResult | None,
+    workdir: Path,
+    started: float,
+    settled: list[dict],
+) -> None:
+    """这次生成失败了,或者被取消了。适配器已经交回了结果(失败在我们这边,登记素材出错之类)的照结果记;没交回、
+    而任务是被取消的,远端任务已经交出去的先把它了结(见 _settle_after_cancel)再记账。"""
+    if result is not None:
+        _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed")
+        return
+    finished, outcome = _settle_after_cancel(db, job, adapter, request, context, workdir, settled)
+    if finished is not None:
+        #: 我们取消了、服务商照样做完:按它回包里实际计费的量记这一笔(成片没留,账照记)。
+        _record_generation_usage(db, generation, job, adapter, request, context, finished, started, "succeeded",
+                                 annotations={"cancelled_locally": True})
+        return
+    _record_generation_usage(
+        db, generation, job, adapter, request, context, None, started, "failed",
+        settled=settled[-1] if settled else None,
+        #: 撤不掉、也接不着取:那一次多半照样扣钱,按请求侧计量估一笔,写明远端任务没了结 —— 不再记成「没扣费」。
+        annotations={"unsettled_remote_task": remote_poll_path(job)} if outcome == "unsettled" else None,
+    )
+
+
+def _settle_after_cancel(
+    db,
+    job: Job,
+    adapter: GenerationAdapter,
+    request: GenerationRequest,
+    context: GenerationAdapterContext,
+    workdir: Path,
+    settled: list[dict],
+) -> tuple[GenerationResult | None, str]:
+    """任务被取消(用户点的,或者工作流里别的节点失败、把它连带取消)时,远端任务已经交出去了的:**它不会因为我们不等了
+    就不扣钱。** 付费实测:配音失败把同一拍正在生成的视频取消掉,账上记 ¥0「没扣费」,方舟照样把那段视频做完、扣了 ¥1.87。
+
+    先请服务商撤掉(见 GenerationAdapter.cancel_remote;方舟排队中的撤得掉,撤掉了才是真的不扣钱)。撤不掉的,接着把它
+    等到终态 —— 交回远端做完的结果,按回包里实际计费的量记账;服务商自己判了失败的,终态回包落在 `settled` 里,照旧按它记。
+    这家撤不掉也接不着取的,结局是 "unsettled"。
+
+    返回 (远端做完交回的结果或 None, 结局):"not_cancelled" / "no_remote_task" / "cancelled_remotely" / "followed" / "unsettled"。
+    """
+    from app.core import abort
+
+    db.refresh(job)
+    if not was_cancelled(job):
+        return None, "not_cancelled"
+    poll_path = remote_poll_path(job)
+    if not poll_path or settled:
+        #: 没交出去(取消在提交之前),或者终态回包已经到手(那份回包说了扣没扣) —— 都不用再问服务商。
+        return None, "no_remote_task"
+    #: 取消掐掉了这件活名下的出站请求、也不许再发(core/abort);撤销和接着等是取消之后**该做的事**,换一个新的作用域发。
+    with abort.scope(abort.AbortScope()):
+        try:
+            if adapter.cancel_remote(poll_path, request, context):
+                #: 不在这里提交:记完账,调用方那条路(_fail 或 db.commit)一起提交。
+                emit_job_event(db, job.id, "job.remote_cancelled", {"poll_path": poll_path})
+                logger.info("generation job %s: remote task %s cancelled at the provider", job.id, poll_path)
+                return None, "cancelled_remotely"
+        except Exception:  # noqa: BLE001 — 撤销是尽力而为;撤不成就照「撤不掉」接着往下走
+            logger.warning("generation job %s: cancelling remote task %s failed", job.id, poll_path, exc_info=True)
+        if not adapter.supports_resume:
+            return None, "unsettled"
+        logger.info("generation job %s: cancelled locally; following remote task %s to settle its charge", job.id, poll_path)
+        follow = RemoteTaskWatch(remember=lambda _path: None, is_cancelled=lambda: False, settled=settled.append)
+        try:
+            with watching_remote_tasks(follow):
+                return adapter.resume(poll_path, request, context, workdir), "followed"
+        except Exception:  # noqa: BLE001 — 服务商判了失败(回包在 settled 里)或者取不回来:照手里有的记
+            logger.info("generation job %s: remote task %s ended without a result", job.id, poll_path, exc_info=True)
+            return None, "followed"
 
 
 def _workbench_graph(job: Job) -> dict | None:
@@ -331,7 +413,33 @@ def _job_callbacks(db, job: Job):
     return GenerationProgressCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
 
 
-def _remote_task_watch(db, job: Job, *, settled: Callable[[dict], None]) -> RemoteTaskWatch:
+def _side_call_recorder(db, generation: GenerationJob, job: Job, context: GenerationAdapterContext):
+    """适配器为这次生成顺带调的那几个按次计费的模型(说话照片之前的人像预检,见 contracts.generation.report_side_call),
+    **一调就记一笔**,和这次生成成不成无关 —— 预检不通过也扣钱,那时生成那一条是「失败、没扣费」。"""
+    seen: dict[str, int] = {}
+
+    def record(model: str, units: dict, raw: dict) -> None:
+        seen[model] = seen.get(model, 0) + 1
+        with billable(
+            db,
+            capability=generation.kind,
+            operation="generation_side_call",
+            workspace_id=job.workspace_id,
+            provider_profile_id=context.connection_id,
+            provider=generation.provider,
+            model=model,
+            source_type="generation_job",
+            source_id=generation.id,
+            job_id=job.id,
+            idempotency_key=f"generation:{generation.id}:side:{model}:{seen[model]}",
+        ) as call:
+            call.meter(units, raw=raw)
+
+    return record
+
+
+def _remote_task_watch(db, job: Job, *, settled: Callable[[dict], None],
+                       side_call: Callable[[str, dict, dict], None]) -> RemoteTaskWatch:
     def remember(poll_path: str) -> None:
         job.payload = {**(job.payload or {}), REMOTE_TASK_FIELD: {"poll_path": poll_path}}
         db.commit()
@@ -341,7 +449,7 @@ def _remote_task_watch(db, job: Job, *, settled: Callable[[dict], None]) -> Remo
         db.refresh(job)
         return job.status not in ("queued", "running")
 
-    return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled, settled=settled)
+    return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled, settled=settled, side_call=side_call)
 
 
 def _fail(db, job: Job, reason: Exception | str) -> None:
@@ -457,8 +565,12 @@ def _record_generation_usage(
     *,
     measured_seconds: float | None = None,
     settled: dict | None = None,
+    annotations: dict | None = None,
 ) -> None:
-    """记这一次生成的账。`settled` 是失败时手里最后一份服务商终态回包(适配器没交回结果就失败了)。"""
+    """记这一次生成的账。`settled` 是失败时手里最后一份服务商终态回包(适配器没交回结果就失败了)。
+
+    `annotations` 记进 raw_usage 的注解(见 BillableCall.annotate)。失败而服务商什么都没回的一条只有在**没有任何
+    凭据**时才记 0(record_usage);远端任务交出去了却没了结(`unsettled_remote_task`)本身就是凭据 —— 它多半在扣钱。"""
     # 服务商在回包里报的(实际计费的 token 数、平台回报的扣费)叠在请求侧计量上,以它为准。读法由适配器
     # 说了算(GenerationAdapter.reported_usage),补算老账的迁移对着库里存的回包读的是同一个函数。
     payload = result.raw_usage if result is not None else (settled or {})
@@ -499,6 +611,8 @@ def _record_generation_usage(
             call.report_cost(reported.cost_micros, reported.currency)
         if check:
             call.annotate(usage_check=check)
+        if annotations:
+            call.annotate(**annotations)
         if status != "succeeded":
             # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
             call.mark_failed()
