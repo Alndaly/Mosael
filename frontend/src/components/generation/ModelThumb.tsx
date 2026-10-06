@@ -19,6 +19,7 @@ import {
 import { modelPreviewUrl, modelThumbnailUrl, type ModelFile, type ModelNsfw, type ModelNsfwReason } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { previewPick, useModelPreviewSettings, type PreviewTreatment } from "@/components/generation/modelPreviewSettings";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -173,6 +174,7 @@ export function ModelThumb({
         onFailed?.();
       }}
       data-loaded={loaded === src ? "" : undefined}
+      data-loading={loaded === src ? undefined : ""}
       data-treatment={treatment}
       className={cn(
         "bg-secondary object-cover opacity-0 transition-opacity duration-150 motion-reduce:transition-none data-[loaded]:opacity-100",
@@ -181,21 +183,30 @@ export function ModelThumb({
       )}
     />
   );
-  if (!video || !play || treatment !== "clear") return poster;
+  //: 还在取的时候(大图:卡片、详情;小图一格四五十像素不画):垫一块全项目同一种加载占位(扫光)在那个框里 —— 第一次露面的
+  //: Civitai 视频要宿主先取视频、抽第一帧,几秒里此前只是一块空白,看不出是在取还是没有。图载好之前是透明的,在它身上画
+  //: 不出来,所以垫在框里(调用处那个框是定位的),载好、取不到就撤掉
+  const skeleton = loaded !== src && !compact
+    ? <Skeleton aria-hidden data-thumb-loading="" className="pointer-events-none absolute inset-0 rounded-none" />
+    : null;
+  //: 三格的位置不变(占位、图、视频,没有的是空):那张图始终是同一个元素 —— 换了位置 React 会重挂一个新的 <img>
   return (
     <>
+      {skeleton}
       {poster}
-      {/* 叠在第一帧上播:同一个框、同样的裁切;播不了就还是第一帧 */}
-      <video
-        data-preview-video=""
-        src={modelPreviewUrl(instanceId, model.folder, model.name, pick)}
-        muted
-        loop
-        autoPlay
-        playsInline
-        aria-hidden
-        className={cn("pointer-events-none absolute inset-0 size-full object-cover", className)}
-      />
+      {video && play && treatment === "clear" && (
+        //: 叠在第一帧上播:同一个框、同样的裁切;播不了就还是第一帧
+        <video
+          data-preview-video=""
+          src={modelPreviewUrl(instanceId, model.folder, model.name, pick)}
+          muted
+          loop
+          autoPlay
+          playsInline
+          aria-hidden
+          className={cn("pointer-events-none absolute inset-0 size-full object-cover", className)}
+        />
+      )}
     </>
   );
 }

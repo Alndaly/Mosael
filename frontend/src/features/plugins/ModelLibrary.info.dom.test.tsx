@@ -384,6 +384,14 @@ describe("Civitai 的示例图、原链接", () => {
     await waitFor(() => expect(api.getModelLibrary, "存回之后重新列:预览图换成那台服务器上的").toHaveBeenCalledTimes(2));
   });
 
+  it("卡片的缩略图还在取(第一次露面的 Civitai 视频要先取视频、抽第一帧):框里是加载占位,不是一块空白", async () => {
+    await open();
+    const frame = card("from-civitai.safetensors").querySelector<HTMLElement>("[data-card-thumb]")!;
+    expect(frame.querySelector("[data-thumb-loading].skeleton")).not.toBeNull();
+    fireEvent.load(frame.querySelector("img")!);
+    expect(frame.querySelector("[data-thumb-loading]"), "载好了:撤掉").toBeNull();
+  });
+
   it("示例是一段视频:按钮的说明、确认框都照实说写的是视频、ComfyUI 自己看不到 —— 不说「512 宽的图」「ComfyUI 里也看得到」", async () => {
     const CLIP = model("clip-only.safetensors", { preview_origin: "civitai", preview_kind: "video",
       source: { page: "https://civitai.com/models/153022?modelVersionId=171354", site: "civitai", how: "download" } });

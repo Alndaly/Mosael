@@ -1193,7 +1193,7 @@ const ModelCard = React.memo(function ModelCard({
         "has-[[data-library-open]:focus-visible]:border-primary has-[[data-library-open]:focus-visible]:ring-2 has-[[data-library-open]:focus-visible]:ring-ring",
       )}
     >
-      <div className="relative overflow-hidden bg-secondary">
+      <div data-card-thumb="" className="relative overflow-hidden bg-secondary">
         <ModelThumb
           instanceId={instanceId}
           model={model}

@@ -46,6 +46,24 @@ it("载好之前是透明的(框照样占着位置),载好了淡入", () => {
   expect(img.className).toContain("data-[loaded]:opacity-100");
 });
 
+//: 沙盒实测:第一次露面的 Civitai 视频卡片空白好几秒(宿主要先取视频、抽第一帧),看不出是在取还是没有
+it("载好之前垫一块加载占位(扫光,和全项目同一种),载好了、取不到都撤掉;小图那一格不画", () => {
+  const { container, rerender } = render(<ModelThumb instanceId="i1" model={lora} />);
+  const img = container.querySelector("img")!;
+  const skeleton = () => container.querySelector("[data-thumb-loading]");
+  expect(img.hasAttribute("data-loading")).toBe(true);
+  expect(skeleton()?.classList.contains("skeleton")).toBe(true);
+  fireEvent.load(img);
+  expect(img.hasAttribute("data-loading")).toBe(false);
+  expect(skeleton(), "载好了:撤掉").toBeNull();
+  rerender(<ModelThumb instanceId="i1" model={{ ...lora, name: "other.safetensors" }} />);
+  expect(skeleton(), "换了一个文件:又在取").not.toBeNull();
+  fireEvent.error(container.querySelector("img")!);
+  expect(skeleton(), "取不到:换成按目录分的占位,不再说在取").toBeNull();
+  rerender(<ModelThumb instanceId="i1" model={{ ...lora, name: "third.safetensors" }} compact />);
+  expect(skeleton(), "下拉那一格四五十像素:不画").toBeNull();
+});
+
 it("取不到:没有哪一刻是看得见的碎图 —— 直接换成按目录分的占位,并告诉调用处", () => {
   const onFailed = vi.fn();
   const { container } = render(<ModelThumb instanceId="i1" model={lora} onFailed={onFailed} />);
