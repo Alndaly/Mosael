@@ -983,6 +983,48 @@ def test_MiniMax_H3_子图里的提示词_展开之后写进里面那个节点(g
     assert graph.describe("h3_flf.json", "h3", framed, VIDEO_INFO)["modes"] == ["keyframes-to-video"]
 
 
+def _with_promoted_unet(ui: dict) -> dict:
+    """维护者那张 video_minimax_h3_t2v 的样子:UNET 也提升到了子图节点上,子图节点上选的是另一个文件(子图里那个
+    UNETLoader 存着的还是模板默认的那个)。"""
+    ui = json.loads(json.dumps(ui))
+    instance = next(node for node in ui["nodes"] if node["id"] == 105)
+    instance["inputs"].append({"name": "unet_name", "type": "COMBO", "widget": {"name": "unet_name"}, "link": None})
+    instance["widgets_values"].append("minimaxH3INT8INT4_fl2vaINT8Pruned.safetensors")
+    sub = ui["definitions"]["subgraphs"][0]
+    sub["inputs"].append({"id": "i6", "name": "unet_name", "type": "COMBO", "linkIds": [221]})
+    unet = next(node for node in sub["nodes"] if node["id"] == 6)
+    unet["widgets_values"][0] = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+    unet["inputs"][0]["link"] = 221
+    sub["links"].append({"id": 221, "origin_id": -10, "origin_slot": 6, "target_id": 6, "target_slot": 0, "type": "COMBO"})
+    return ui
+
+
+def _compressed(ui: dict) -> dict:
+    """前端导出时(graphToPrompt 的 workflow)做的 compressWidgetInputSlots:没连线、没起名的 widget 输入口从 `inputs` 里删掉,
+    子图里的节点也一样;`widgets_values` 不动(ComfyUI 1.53.10 实测)。"""
+    ui = json.loads(json.dumps(ui))
+    keep = lambda entry: not ("widget" in entry and entry.get("link") is None and not entry.get("label"))  # noqa: E731
+    for node in [*ui["nodes"], *(one for sub in ui["definitions"]["subgraphs"] for one in sub["nodes"])]:
+        node["inputs"] = [entry for entry in node.get("inputs") or [] if keep(entry)]
+    return ui
+
+
+def test_子图节点的输入口被前端压掉之后_提升出来的值照样按名字取(convert) -> None:
+    """沙盒实测(ComfyUI 前端 1.53.10):工作台导出画布上的 video_minimax_h3_t2v,子图节点的 `inputs` 只剩连了线、起了名的
+    几格,`widgets_values` 还是九个值。此前按下标找输入口 —— 错位或者取不到,落回子图里 UNETLoader 存着的模板默认值:
+    缺失项报的是没在用的 minimax_h3_fl2va_pruned_int8_convrot,真正选的那个反倒没列。"""
+    saved = _with_promoted_unet(minimax_h3_ui())
+    exported = _compressed(saved)
+    assert [entry["name"] for entry in next(n for n in exported["nodes"] if n["id"] == 105)["inputs"]] == \
+        ["first_frame", "last_frame"], "前提:压完只剩两个插口"
+    for ui in (saved, exported):
+        api = convert.to_api(ui, VIDEO_INFO)
+        assert api["105:6"]["inputs"]["unet_name"] == "minimaxH3INT8INT4_fl2vaINT8Pruned.safetensors"
+        assert api["105:104"]["inputs"]["prompt"] == "Realistic live-action cinematic look"
+        assert (api["105:104"]["inputs"]["width"], api["105:104"]["inputs"]["height"]) == (1344, 768)
+        assert api["105:15"]["inputs"]["noise_seed"] == 556589502035082
+
+
 def test_多参考生视频_提示词写在连进来的文字节点上(graph) -> None:
     """「…MiniMax+H3-多参考生视频…」:提示词在一个自定义的 `Text` 节点上(ComfyUI 不认识它的类型,按名字认),
     连进 MiniMaxH3ReferenceToVideo 的 `prompt`。只存下来一个 VHS 合成(另一个关了 save_output)。"""

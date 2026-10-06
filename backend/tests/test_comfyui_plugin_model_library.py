@@ -28,7 +28,7 @@ import pytest
 
 from app.domain.plugins import runtime
 from app.domain.plugins.runtime import PluginRuntimeError
-from tests.fake_comfyui import FakeComfyUI
+from tests.fake_comfyui import FakeComfyUI, subgraph_promoting
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -282,6 +282,19 @@ def test_工作流声明了地址_节点真在用_这台没有的才算缺_只�
         "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
         "workflows": [{"id": "declaring.json", "label": "declaring"}],
     }]
+
+
+def test_子图里的下载声明_按子图节点上真选的那个判在不在用(comfy, data_dir) -> None:
+    """维护者的 video_minimax_h3_t2v:子图里 UNETLoader 带着官方模板的下载声明(模板默认的那个,十几 GB),子图节点上换成了
+    另一个文件。此前按里层节点自己存的旧值判「在用」,模型库的「工作流缺的模型」里列着那个没在用的文件、带着下载按钮。"""
+    comfy.state.workflows["promoted.json"] = subgraph_promoting("sd_xl_base.safetensors")
+    names = [one["name"] for one in _call(comfy, {"op": "library"}, data_dir)["missing"]]
+    assert "template_default.safetensors" not in names, "子图节点上选的是别的:声明过期了"
+    # 子图节点上选的正是模板默认的那个、这台又没有:照样算缺
+    comfy.state.workflows["promoted.json"] = subgraph_promoting("template_default.safetensors")
+    found = [one for one in _call(comfy, {"op": "library"}, data_dir)["missing"]
+             if one["name"] == "template_default.safetensors"]
+    assert [one["workflows"] for one in found] == [[{"id": "promoted.json", "label": "promoted"}]]
 
 
 def test_元数据记在持久目录_第二次只读目录(comfy, data_dir) -> None:

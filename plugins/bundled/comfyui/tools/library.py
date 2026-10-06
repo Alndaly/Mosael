@@ -34,6 +34,7 @@ from typing import Any
 from urllib import parse
 
 import civitai as civitai_mod
+import convert
 import install
 import models
 import nsfw
@@ -240,19 +241,48 @@ def _nodes(ui_graph: dict[str, Any]) -> list[dict[str, Any]]:
     return [one for one in ui_graph.values() if isinstance(one, dict) and "class_type" in one]
 
 
-def scan_workflow(ui_graph: dict[str, Any]) -> tuple[list[str], list[dict[str, str]]]:
+def _fed(api: dict[str, Any] | None, node: dict[str, Any], inner: bool) -> set[str] | None:
+    """转出来的 API 图里,这个节点**实际**拿到的字符串;图里找不到它(没转、转不过来、不在会跑的那部分)是 None。
+
+    子图里的节点在 API 图里是「子图节点 id:里层 id」(一个子图放了几次就有几份),按里层 id 和类型认,几份并起来。"""
+    if not api or "class_type" in node:
+        return None
+    own, kind = str(node.get("id")), str(node.get("type") or "")
+    found = [entry for key, entry in api.items() if isinstance(entry, dict) and entry.get("class_type") == kind
+             and (key.rsplit(":", 1)[-1] == own if inner else key == own) and (":" in key) == inner]
+    if not found:
+        return None
+    out: set[str] = set()
+    for entry in found:
+        out |= _strings(entry.get("inputs"))
+    return out
+
+
+def scan_workflow(ui_graph: dict[str, Any], api: dict[str, Any] | None = None) -> tuple[list[str], list[dict[str, str]]]:
     """一张图:(节点输入里写着的全部字符串, 真在用的那些下载声明)。
 
     下载声明是节点的 `properties.models`(官方模板的写法)和顶层的 `models`。只收**节点当前真在用**的:节点改选了别的
-    文件,声明就过期了;顶层的声明要在某个节点的输入里写着。"""
-    nodes = _nodes(ui_graph)
+    文件,声明就过期了;顶层的声明要在某个节点的输入里写着。
+
+    给了转出来的 API 图(`api`)时,「节点当前用的是哪个文件」以它为准:子图里的加载节点那一格接的是子图的输入口时,
+    它自己存着的是模板默认值,真正用的是子图节点上提升出来的那一格 —— 维护者的 video_minimax_h3_t2v 在子图节点上
+    换了 UNET,此前照里层存的旧值判「在用」,把一个没在用的十几 GB 的模型列成「缺的模型」、带着下载按钮。"""
     used: set[str] = set()
     declared: list[dict[str, str]] = []
-    for node in nodes:
+    top = [one for one in ui_graph.get("nodes") or [] if isinstance(one, dict)] \
+        if isinstance(ui_graph.get("nodes"), list) else []
+    top_ids = {id(one) for one in top}
+    for node in _nodes(ui_graph):
         values = _strings(node.get("widgets_values")) | _strings(node.get("inputs") if "class_type" in node else None)
         used |= values
+        # 只有「widget 那一格接了线」的节点,它自己存着的值才不算数(值从线那头来:子图的输入口、Primitive……);别的节点
+        # 照存着的判 —— 没装的节点转出来没有 widget 的值,不能拿 API 图里的空着当「没在用」
+        linked = any(isinstance(entry, dict) and "widget" in entry and entry.get("link") is not None
+                     for entry in node.get("inputs") or [] if "class_type" not in node)
+        fed = _fed(api, node, inner=id(node) not in top_ids) if linked else None
+        current = values if fed is None else fed
         for spec in (node.get("properties") or {}).get("models") or [] if isinstance(node.get("properties"), dict) else []:
-            if isinstance(spec, dict) and _norm(str(spec.get("name") or "")) in values:
+            if isinstance(spec, dict) and _norm(str(spec.get("name") or "")) in current:
                 declared.append(spec)
     for spec in ui_graph.get("models") or [] if isinstance(ui_graph.get("models"), list) else []:
         if isinstance(spec, dict) and _norm(str(spec.get("name") or "")) in used:
@@ -265,28 +295,49 @@ def scan_workflow(ui_graph: dict[str, Any]) -> tuple[list[str], list[dict[str, s
     return sorted(used), [one for one in clean if one["name"] and one["folder"]]
 
 
+#: 「工作流里在用哪些文件、声明了哪些下载地址」那份记录的格式:判「在用」的规矩变了就换一个,旧的整份作废重扫。
+#: 2:声明按转出来的 API 图判在不在用(子图里提升出来的那一格,见 scan_workflow)。
+WORKFLOW_SCAN_VERSION = 2
+
+
+def converted(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any] | None:
+    """转成 API 图;转不过来(缺节点、坏文件)是 None —— 那就只能照节点上存着的判。"""
+    try:
+        return convert.to_api(ui_graph, object_info) if object_info else None
+    except Exception:  # noqa: BLE001 — 转不过来不是错,退回老办法判
+        return None
+
+
 def _workflows(comfy: Comfy) -> list[tuple[str, str, list[str], list[dict[str, str]]]]:
-    """每张保存的工作流:(id, 名字, 在用的字符串, 下载声明)。按「路径 + 大小 + 改动时间」记在持久目录里。"""
+    """每张保存的工作流:(id, 名字, 在用的字符串, 下载声明)。按「路径 + 大小 + 改动时间」记在持久目录里。
+
+    要重扫的才去取节点定义(转 API 图要它),都记着的不取。"""
     cache_path = data_file(comfy, "workflow-models")
-    cache = load_json(cache_path)
+    saved = load_json(cache_path)
+    cache = saved.get("files") if saved.get("version") == WORKFLOW_SCAN_VERSION and \
+        isinstance(saved.get("files"), dict) else {}
     fresh: dict[str, Any] = {}
     out: list[tuple[str, str, list[str], list[dict[str, str]]]] = []
     listing = {str(item.get("path")): item for item in comfy.workflow_listing()}
     workflows, _others = comfy.saved_files()
+    object_info: dict[str, Any] | None = None
     for path in workflows:
         item = listing.get(path) or {}
         key = f"{path}\n{item.get('size')}\n{item.get('modified')}"
         entry = cache.get(key)
         if not isinstance(entry, dict):
             try:
-                used, declared = scan_workflow(comfy.fetch_workflow(path))
+                source = comfy.fetch_workflow(path)
+                if object_info is None:
+                    object_info = comfy.object_info()
+                used, declared = scan_workflow(source, converted(source, object_info))
             except ComfyError:
                 continue
             entry = {"used": used, "declared": declared}
         fresh[key] = entry
         out.append((path, models.label_of(path), list(entry.get("used") or []), list(entry.get("declared") or [])))
-    if fresh != cache:
-        save_json(cache_path, fresh)
+    if fresh != cache or saved.get("version") != WORKFLOW_SCAN_VERSION:
+        save_json(cache_path, {"version": WORKFLOW_SCAN_VERSION, "files": fresh})
     return out
 
 

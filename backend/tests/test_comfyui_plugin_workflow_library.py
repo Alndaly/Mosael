@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from tests.fake_comfyui import FakeComfyUI
+from tests.fake_comfyui import FakeComfyUI, subgraph_promoting
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
@@ -164,6 +164,15 @@ def test_节点包按_Manager_的_nodename_pattern_认_不锚在开头(library, 
         {"type": "Any Switch (rgthree)", "count": 1, "packs": [rgthree]},
         {"type": "Power Lora Loader (rgthree)", "count": 1, "packs": [rgthree]},
     ]
+
+
+def test_子图里过期的下载声明_不算用到_也不算缺(library, comfy) -> None:
+    """子图节点上提升出来的那一格选了别的文件(维护者的 video_minimax_h3_t2v):子图里加载节点带着的模板下载声明过期了,
+    「用到的模型」「缺的模型」里都不该有它 —— 此前两边都列着,还带一个能点的「下载」(十几 GB 的 UNET)。"""
+    comfy.state.workflows["promoted.json"] = subgraph_promoting("sd_xl_base.safetensors")
+    row = {one["path"]: one for one in _listed(library, comfy)["workflows"]}["promoted.json"]
+    assert row["models"] == [{"folder": "checkpoints", "name": "sd_xl_base.safetensors", "present": True}]
+    assert row["missing_models"] == []
 
 
 def test_新版的下拉写成_COMBO_加options_也认得出模型在不在(library, comfy) -> None:

@@ -381,6 +381,30 @@ WAN_WRAPPER_API: dict[str, Any] = {
     "16": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["15", 0], "frame_rate": 16}},
 }
 
+def subgraph_promoting(picked: str) -> dict[str, Any]:
+    """一张图:加载 checkpoint 的节点包在子图里,带着官方模板那样的下载声明(模板默认的文件);它那一格接的是子图的输入口,
+    子图节点上提升出来的那一格选的是 `picked`。子图节点的 `inputs` 是前端导出时压过的样子(没连线的 widget 口删掉了)。"""
+    sub = "5d1e2f3a-0000-4000-8000-0000000000aa"
+    return {
+        "nodes": [{"id": 30, "type": sub, "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": []}],
+                   "widgets_values": [picked]}],
+        "links": [],
+        "definitions": {"subgraphs": [{
+            "id": sub, "name": "加载",
+            "inputNode": {"id": -10, "bounding": [0, 0, 1, 1]}, "outputNode": {"id": -20, "bounding": [0, 0, 1, 1]},
+            "inputs": [{"id": "i0", "name": "ckpt_name", "type": "COMBO", "linkIds": [1]}],
+            "outputs": [{"id": "o0", "name": "MODEL", "type": "MODEL", "linkIds": [2]}],
+            "nodes": [{"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["template_default.safetensors"],
+                       "inputs": [{"name": "ckpt_name", "type": "COMBO", "widget": {"name": "ckpt_name"}, "link": 1}],
+                       "properties": {"models": [{
+                           "name": "template_default.safetensors", "directory": "checkpoints",
+                           "url": "https://huggingface.co/Comfy-Org/x/resolve/main/template_default.safetensors"}]}}],
+            "links": [{"id": 1, "origin_id": -10, "origin_slot": 0, "target_id": 4, "target_slot": 0, "type": "COMBO"},
+                      {"id": 2, "origin_id": 4, "origin_slot": 0, "target_id": -20, "target_slot": 0, "type": "MODEL"}],
+        }]},
+    }
+
+
 #: 本地 MiniMax H3 文生视频的那张图(照用户 ComfyUI 里的「video_minimax_h3_t2v.json」缩出来的):整条流程包在**子图**
 #: 「Image to Video (MiniMax H3)」里,提示词是子图节点上提升出来的一格;子图里 BasicGuider 的条件来自
 #: MiniMaxH3ImageToVideo(提示词就是它的 `prompt`),帧和声音由 CreateVideo 合成交出子图,外面的 SaveVideo 存下来。

@@ -396,8 +396,9 @@ def model_options(object_info: dict[str, Any]) -> dict[str, set[str]]:
 
 def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[str]]
             ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    """(用到的模型文件和在不在, 缺的模型)。转得过来的看节点上选模型文件的那几格;再加上工作流声明的下载地址。"""
-    _used, declared = scan_workflow(source)
+    """(用到的模型文件和在不在, 缺的模型)。转得过来的看节点上选模型文件的那几格;再加上工作流声明的下载地址(只收节点
+    当前真在用的,按转出来的图判,见 library.scan_workflow)。"""
+    _used, declared = scan_workflow(source, api or None)
     urls = {(one["folder"], one["name"]): one["url"] for one in declared}
     picked: list[tuple[str, str]] = []
     for node in api.values():

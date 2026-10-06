@@ -389,20 +389,32 @@ class _Converter:
         return self._resolve_output(_Node(scope, source), origin_slot, wanted, visited)
 
     def _from_subgraph_input(self, instance: _Node, slot: int, visited: set) -> tuple | None:
-        """子图里接在输入口第 `slot` 格上的:外面连了线就顺着外面走,没连就用子图节点上那一格的值。"""
-        entries = instance.inputs
-        if slot >= len(entries):
+        """子图里接在输入口第 `slot` 格(子图定义的 `inputs` 里的第几个)上的:外面连了线就顺着外面走,没连就用子图节点上
+        那一格(提升出来的 widget)的值。
+
+        子图节点自己的 `inputs` **按名字找、不按下标**:前端导出的图(`graphToPrompt` 的 workflow —— 工作台导出的画布、
+        「导出」的 JSON、PNG 里带的)会把没连线、没起名的 widget 输入口删掉(前端的 compressWidgetInputSlots),下标就
+        对不上了 —— 此前按下标取,取不到就落回子图里那个节点自己存的旧值:MiniMax H3 那张选的 UNET 是
+        minimaxH3INT8INT4_fl2vaINT8Pruned,缺失项却报模板默认的 minimax_h3_fl2va_pruned_int8_convrot。
+        `widgets_values` 不压,按子图定义里**是 widget 的那几格**排:子图节点上标着 widget 的,或者被删掉了的(被删的只会是
+        没连线的 widget)。"""
+        definition = self.definitions.get(instance.type) or {}
+        declared = [one for one in definition.get("inputs") or [] if isinstance(one, dict)]
+        if slot >= len(declared):
             return None
-        entry = entries[slot]
-        if entry.get("link") is not None:
+        name = declared[slot].get("name")
+        entries = {one.get("name"): one for one in instance.inputs if one.get("name")}
+        entry = entries.get(name)
+        if entry is not None and entry.get("link") is not None:
             return self._resolve_input(instance, entry, visited)
-        if "widget" not in entry:
-            return None
+        if entry is not None and "widget" not in entry:
+            return None  # 是插口,外面没连
         stored = instance.raw.get("widgets_values")
         if isinstance(stored, dict):
-            return ("value", stored[entry.get("name")]) if stored.get(entry.get("name")) is not None else None
-        promoted = [one for one in entries if "widget" in one]
-        index = promoted.index(entry)
+            return ("value", stored[name]) if stored.get(name) is not None else None
+        promoted = [one.get("name") for one in declared
+                    if entries.get(one.get("name")) is None or "widget" in entries[one.get("name")]]
+        index = promoted.index(name)
         if isinstance(stored, list) and index < len(stored) and stored[index] is not None:
             return ("value", stored[index])
         return None  # 没存值:用子图里那个节点自己的 widget 值
