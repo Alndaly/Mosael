@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { APP_CHROME, installAppChromeGuards, keepOpenOnAppChrome } from "@/components/ui/appChrome";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { HintRegion } from "@/components/ui/tooltip";
 
 function Harness({ kind }: { kind: "dialog" | "sheet" }) {
   const [open, setOpen] = React.useState(true);
@@ -110,5 +113,42 @@ describe("底下开着模态弹窗时,窗口外壳照样能用", () => {
   it("外壳自己接得住指针(模态弹窗把 body 设成了 pointer-events: none)", () => {
     const css = readFileSync(join(import.meta.dirname, "..", "..", "app", "styles.css"), "utf8");
     expect(css).toMatch(/\[data-app-chrome\]\s*\{[^}]*pointer-events:\s*auto/);
+  });
+});
+
+describe("外壳里打开的浮层也是外壳", () => {
+  // 外壳 z 200;浮层统一 z 120(styles.css)。从外壳里开出来的不抬上去就压在外壳底下,点了像没反应(工作台模型库的小眼睛)。
+  const floating = (label: string) => (
+    <>
+      <Popover defaultOpen>
+        <PopoverTrigger>{label}</PopoverTrigger>
+        <PopoverContent aria-label={`${label}-popover`}>设置</PopoverContent>
+      </Popover>
+      <Select defaultOpen defaultValue="a">
+        <SelectTrigger aria-label={`${label}-select`}><SelectValue /></SelectTrigger>
+        <SelectContent aria-label={`${label}-listbox`}><SelectItem value="a">一项</SelectItem></SelectContent>
+      </Select>
+    </>
+  );
+
+  it("区域里开的 Popover / Select 抬到外壳之上、挂 APP_CHROME;区域外的什么都不加", () => {
+    const { unmount } = render(<HintRegion.Provider value={{ side: "left" }}>{floating("in")}</HintRegion.Provider>);
+    for (const name of ["in-popover", "in-listbox"]) {
+      const layer = screen.getByLabelText(name);
+      expect(layer.hasAttribute("data-over-chrome"), name).toBe(true);
+      expect(layer.hasAttribute("data-app-chrome"), name).toBe(true);
+    }
+    unmount();
+    render(floating("out"));
+    for (const name of ["out-popover", "out-listbox"]) {
+      const layer = screen.getByLabelText(name);
+      expect(layer.hasAttribute("data-over-chrome"), name).toBe(false);
+      expect(layer.hasAttribute("data-app-chrome"), name).toBe(false);
+    }
+  });
+
+  it("styles.css 把挂着 data-over-chrome 的那层抬到外壳之上", () => {
+    const css = readFileSync(join(import.meta.dirname, "..", "..", "app", "styles.css"), "utf8");
+    expect(css).toMatch(/\[data-radix-popper-content-wrapper\]:has\(> \[data-over-chrome\]\)\s*\{[^}]*z-index:\s*210/);
   });
 });

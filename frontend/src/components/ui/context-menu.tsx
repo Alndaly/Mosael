@@ -7,7 +7,7 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR, MENU_WIDTH, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
-import { HintScopeReset } from "./tooltip"
+import { HintScopeReset, useChromeLayer } from "./tooltip"
 
 const ContextMenu = ContextMenuPrimitive.Root
 
@@ -45,7 +45,9 @@ ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName
 const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => {
+  const chromeLayer = useChromeLayer()
+  return (
   // **必须和 Content 一样套 Portal**。不套的话子菜单渲染成父菜单的 DOM 子节点,落在同一个
   // dismissable layer 里 —— 点子项时那一层先把自己关了,`onSelect` 再也没机会跑:菜单收起来了,
   // 而什么都没发生。「移到分组点了没反应」就是这么来的,而同一个菜单里的「重命名」是好的,
@@ -53,6 +55,7 @@ const ContextMenuSubContent = React.forwardRef<
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.SubContent
       ref={ref}
+      {...chromeLayer}
       collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
         FLOATING_SURFACE, FLOATING_MOTION, MENU_WIDTH,
@@ -64,16 +67,21 @@ const ContextMenuSubContent = React.forwardRef<
       <HintScopeReset>{children}</HintScopeReset>
     </ContextMenuPrimitive.SubContent>
   </ContextMenuPrimitive.Portal>
-))
+  )
+})
 ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName
 
 const ContextMenuContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => {
+  //: 从外壳里开出来的:抬到外壳之上、也算外壳(见 useChromeLayer)
+  const chromeLayer = useChromeLayer()
+  return (
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.Content
       ref={ref}
+      {...chromeLayer}
       collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
         // 宽度规则和点按钮弹出的菜单同一份(MENU_WIDTH):调用方不写宽度。
@@ -86,7 +94,8 @@ const ContextMenuContent = React.forwardRef<
       <HintScopeReset>{children}</HintScopeReset>
     </ContextMenuPrimitive.Content>
   </ContextMenuPrimitive.Portal>
-))
+  )
+})
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName
 
 const ContextMenuItem = React.forwardRef<

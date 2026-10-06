@@ -8,7 +8,7 @@ import type { FieldSize } from "@/components/ui/control-size"
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING, SELECT_CONTENT_WIDTH } from "./floating"
 import { Truncate } from "./truncate"
-import { HintScopeReset } from "./tooltip"
+import { HintScopeReset, useChromeLayer } from "./tooltip"
 
 import { cn } from "@/lib/utils"
 import { swallowClickThrough } from "@/lib/clickThrough"
@@ -77,10 +77,14 @@ SelectScrollDownButton.displayName =
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>(({ className, children, position = "popper", ...props }, ref) => {
+  //: 从外壳里开出来的:抬到外壳之上、也算外壳(见 useChromeLayer)
+  const chromeLayer = useChromeLayer()
+  return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      {...chromeLayer}
       className={cn(
         // 限高两层,缺一不可:Radix 的 available-height 管「不顶出屏幕」,但它允许菜单长到
         // 近千像素(触发器在屏幕底部、向上展开时)——时长区间 4–30s 列成 27 项就是这个下场,
@@ -120,7 +124,8 @@ const SelectContent = React.forwardRef<
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
-))
+  )
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef<

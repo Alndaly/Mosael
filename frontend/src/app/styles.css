@@ -12,7 +12,8 @@
 [data-app-chrome] {
   pointer-events: auto;
 }
-/* 内嵌浏览器的顶栏、侧栏(z 200,压在原生网页视图周围)里出的说明,压在它们上面(见 tooltip.tsx 的 HintRegion)。 */
+/* 内嵌浏览器的顶栏、侧栏、工作台那一列(z 200,压在原生网页视图周围)里出的说明和打开的浮层(Popover / Select / 右键菜单),
+   压在它们上面(见 tooltip.tsx 的 HintRegion、useChromeLayer)。 */
 [data-radix-popper-content-wrapper]:has(> [data-over-chrome]) {
   z-index: 210 !important;
 }

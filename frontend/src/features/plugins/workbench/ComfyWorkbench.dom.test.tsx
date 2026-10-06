@@ -54,7 +54,7 @@ vi.mock("@/app/preferences", () => ({
 
 import type { WorkflowApp } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
-import { resetEmbeddedViewWatch } from "@/components/ui/appChrome";
+import { installAppChromeGuards } from "@/components/ui/appChrome";
 import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
 import { ComfyWorkbench } from "./ComfyWorkbench";
 import { RECHECK_DELAY_MS } from "./MissingPanel";
@@ -183,7 +183,6 @@ beforeEach(() => {
 
 afterEach(() => {
   resetWorkbench();
-  resetEmbeddedViewWatch();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -513,9 +512,16 @@ describe("右边那一列拉宽拉窄", () => {
   });
 });
 
-describe("底下开着模态弹窗(工作流库)时,右边那一列照样滚得动", () => {
-  // 真机上:从工作流库「在工作台里打开」,工作流库留在底下(回来时还在那一张)。它的遮罩带着 react-remove-scroll,在 document
-  // 上拦下弹窗外面的 wheel —— 那一列能点、能悬停,滚轮却滚不动。内嵌视图亮着时遮罩连同滚动锁让开。
+describe("底下开着模态弹窗(工作流库)时:那一列滚得动、小眼睛弹得出来;回来时模糊还在弹窗后面", () => {
+  // 真机上:从工作流库「在工作台里打开」,工作流库留在底下(回来时还在那一张)。它是模态的:遮罩带着 react-remove-scroll,在
+  // document 上拦下弹窗外面的 wheel;焦点圈套把跑到外面的焦点拽回来。那一列是外壳(APP_CHROME),两样都不该碰到它 ——
+  // App 装着 installAppChromeGuards,这里也装上。
+  let uninstall = () => undefined as void;
+  beforeEach(() => {
+    uninstall = installAppChromeGuards(document);
+  });
+  afterEach(() => uninstall());
+
   const library = async () => {
     const { Dialog, DialogContent, DialogTitle } = await import("@/components/ui/dialog");
     return (
@@ -531,18 +537,41 @@ describe("底下开着模态弹窗(工作流库)时,右边那一列照样滚得�
     target.dispatchEvent(event);
     return event.defaultPrevented;
   };
+  const libraryDialog = () => screen.getByRole("dialog", { name: "工作流库", hidden: true });
 
-  it("视图亮着:滚轮在那一列里不被拦下,弹窗本身还开着;视图收起:遮罩和滚动锁回来", async () => {
+  it("滚轮在那一列里不被拦下;弹窗外面的别处照样被它的滚动锁拦着", async () => {
     const bridge = await mount(state(), await library());
-    // 视图还没亮(主进程还没报):弹窗照常是模态的 —— 这一下也证明这里拦得下来
-    expect(wheel(shownPanel()), "遮罩在时,外面的滚轮被拦下").toBe(true);
     bridge.viewUp(true);
-    expect(wheel(shownPanel()), "视图亮着:那一列滚得动").toBe(false);
-    expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
-    expect(screen.getByRole("dialog", { hidden: true }), "工作流库还开着(回来时停在原处)").toBeTruthy();
+    expect(wheel(shownPanel()), "那一列滚得动").toBe(false);
+    expect(wheel(document.body), "滚动锁还在(只是不管外壳)").toBe(true);
+    expect(document.body.hasAttribute("data-scroll-locked")).toBe(true);
+  });
+
+  it("视图亮了又收起(「返回 Mosael」):遮罩一直是那一个,排在弹窗内容前面 —— 模糊不盖住弹窗", async () => {
+    const bridge = await mount(state(), await library());
+    const overlay = document.querySelector(".modal-overlay");
+    expect(overlay).not.toBeNull();
+    bridge.viewUp(true);
     bridge.viewUp(false);
-    await waitFor(() => expect(document.body.hasAttribute("data-scroll-locked")).toBe(true));
-    expect(wheel(shownPanel())).toBe(true);
+    const now = document.querySelector(".modal-overlay")!;
+    expect(now.compareDocumentPosition(libraryDialog()) & Node.DOCUMENT_POSITION_FOLLOWING, "遮罩在内容前面").toBeTruthy();
+    expect(now, "没有卸掉再挂回来(挂回来会追加到 body 末尾)").toBe(overlay);
+  });
+
+  it("模型库的小眼睛:弹得出来、抬在那一列之上;焦点进得去,不被弹窗拽回去关掉;底下的工作流库还在", async () => {
+    const bridge = await mount(state(), await library());
+    bridge.viewUp(true);
+    fireEvent.click(await within(column()).findByRole("button", { name: "modelPreviewSettings" }));
+    const settings = await screen.findByRole("dialog", { name: "modelPreviewSettings", hidden: true });
+    expect(settings.hasAttribute("data-over-chrome"), "抬到 z 200 的那一列之上").toBe(true);
+    expect(settings.hasAttribute("data-app-chrome"), "也算外壳").toBe(true);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(settings.isConnected, "没被当成焦点跑到外面关掉").toBe(true);
+    expect(settings.contains(document.activeElement), "焦点在设置里").toBe(true);
+    const show = within(settings).getByRole("radio", { name: "modelPreviewNsfwShow", hidden: true });
+    fireEvent.click(show);
+    expect(show.getAttribute("aria-checked")).toBe("true");
+    expect(libraryDialog()).toBeTruthy();
   });
 });
 

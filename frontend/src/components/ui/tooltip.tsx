@@ -7,6 +7,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { listenKeys } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
+import { APP_CHROME } from "./appChrome"
 import { FLOATING_COLLISION_PADDING } from "./floating"
 import { useFloatMirror } from "./floatLayer"
 import { Kbd, KbdGroup } from "./kbd"
@@ -165,6 +166,19 @@ const HintRegion = React.createContext<HintRegionValue | null>(null)
 function regionPlacement(region: HintRegionValue | null, side: Side | undefined) {
   if (!region) return { side: side ?? "top" }
   return { side: side ?? region.side ?? "top", "data-over-chrome": "" }
+}
+
+const CHROME_LAYER = { ...APP_CHROME, "data-over-chrome": "" } as const
+
+/**
+ * 外壳(区域)里打开的浮层 —— Popover、Select、右键菜单 —— 也是外壳:portal 到 body 上,却是从外壳里开出来的。
+ * - 标 `data-over-chrome`:层抬到外壳之上。不抬就是 z 120,压在 z 200 的那一列底下,点了像没反应(工作台模型库的小眼睛);
+ * - 挂 `APP_CHROME`:底下开着模态弹窗(工作流库)时,焦点进浮层不被弹窗的焦点圈套拽回去 —— 拽回去,浮层当成焦点跑到外面、
+ *   当场关掉;在里面点、按 Esc 不关底下的弹窗;内嵌网页亮着时里面的按键不被当成落在看不见的地方吞掉(embeddedFocus)。
+ * 不在区域里时什么都不加。
+ */
+function useChromeLayer() {
+  return React.useContext(HintRegion) ? CHROME_LAYER : undefined
 }
 
 /** 浮层内容用它把 Hint 的范围清掉(见 HintScope)。 */
@@ -359,6 +373,7 @@ export {
   Hint,
   HintRegion,
   regionPlacement,
+  useChromeLayer,
   EnsureProvider,
   useExclusiveOpen,
   HintScope,

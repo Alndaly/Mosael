@@ -10,52 +10,17 @@
  * - 按 Esc 就关:在地址栏按 Esc 想撤销输入,底下的弹窗关了。
  * - 锁住滚动:遮罩(Radix 的 Overlay 里那层 react-remove-scroll)在 document 上听 wheel / touchmove,落在弹窗外面的
  *   一律 preventDefault —— 外壳里能点、能悬停,滚轮却滚不动(工作台右边那一列:「应用」面板超出一屏,滚不下去)。
- * 所以外壳挂上 `APP_CHROME`,弹窗的「点了外面」「按了 Esc」碰到它就当没发生(keepOpenOnAppChrome),焦点进出外壳
- * 不让弹窗的焦点圈套看见(installAppChromeGuards);内嵌网页视图亮着的时候,弹窗的遮罩连同它的滚动锁让开
- * (useEmbeddedViewUp,Dialog / Sheet / AlertDialog 的 Content 照它决定画不画遮罩)。
+ * 所以外壳挂上 `APP_CHROME`,弹窗的「点了外面」「按了 Esc」碰到它就当没发生(keepOpenOnAppChrome),焦点进出外壳、
+ * 外壳里的滚轮不让弹窗的焦点圈套和滚动锁看见(installAppChromeGuards)。外壳里打开的浮层(Popover / Select / 右键菜单)
+ * 也是外壳(见 tooltip 的 useChromeLayer)。
+ *
+ * 弹窗的遮罩一直挂着,不因为内嵌网页视图亮着就卸掉:Radix 的 Dialog 给遮罩和内容各开一个 portal,卸掉的遮罩再挂回来
+ * 时追加在 body 末尾、排到了内容**后面** —— 同一个 z,工作台「返回 Mosael」之后模糊盖在了弹窗上面。
  *
  * 全屏看图的灯箱(components/app/image-preview 的宿主)也挂它:它同样盖在弹窗上面、又在弹窗外面 —— 在大图上翻页、
  * 点关闭,不该顺手把底下那个弹窗关掉。
  */
-import * as React from "react";
-
 export const APP_CHROME = { "data-app-chrome": "" } as const;
-
-/**
- * 内嵌网页视图此刻亮着没有(主进程的 onViewState)。
- *
- * 亮着时原生视图盖住了 Mosael 的整个界面:底下开着的弹窗看不见,它的遮罩也看不见 —— 遮罩这时唯一还在起作用的是它带着的
- * **滚动锁**,而锁住的恰好是盖在上面、能看见的外壳(滚轮在外壳里被拦下)。所以亮着时弹窗不画遮罩;弹窗本身(内容、
- * 状态、焦点)原样留着,回来时遮罩重新铺上、滚动锁重新上。为什么不把弹窗改成非模态:Radix 换 modal 会把内容整棵重挂,
- * 回来时工作流库停在哪一张、焦点落回哪个按钮都没了。
- */
-let viewUp = false;
-const viewListeners = new Set<() => void>();
-let stopWatchingView: (() => void) | null = null;
-
-function subscribeViewUp(listener: () => void): () => void {
-  if (!stopWatchingView && typeof window !== "undefined" && typeof window.mosaelPublish?.onViewState === "function") {
-    stopWatchingView = window.mosaelPublish.onViewState((state) => {
-      if (state.visible === viewUp) return;
-      viewUp = state.visible;
-      for (const one of viewListeners) one();
-    });
-  }
-  viewListeners.add(listener);
-  return () => viewListeners.delete(listener);
-}
-
-export function useEmbeddedViewUp(): boolean {
-  return React.useSyncExternalStore(subscribeViewUp, () => viewUp, () => false);
-}
-
-/** 测试用:忘掉看到过的视图状态和订阅(下一个测试换一座桥)。 */
-export function resetEmbeddedViewWatch(): void {
-  stopWatchingView?.();
-  stopWatchingView = null;
-  viewUp = false;
-  viewListeners.clear();
-}
 
 type OutsideEvent = Event & { detail?: { originalEvent?: Event } | number };
 
@@ -97,11 +62,12 @@ export function keepOpenOnAppChrome<E extends OutsideEvent>(handler?: (event: E)
 }
 
 /**
- * 焦点进出窗口外壳时,不让模态弹窗的焦点圈套看见。
+ * 焦点进出窗口外壳、外壳里的滚轮,不让模态弹窗的焦点圈套和滚动锁看见。
  *
- * Radix 的 FocusScope 在 document 上听 focusin / focusout(冒泡阶段):焦点跑到圈外就拽回来。在 body 上(React 的
- * 根之后、document 之前)把「落进外壳」「从圈里跑进外壳」的这两种事件拦住 —— 外壳自己的 onFocus 照常收到
- * (React 在根上听),圈套收不到。返回拆掉它的函数。
+ * Radix 的 FocusScope 在 document 上听 focusin / focusout(冒泡阶段):焦点跑到圈外就拽回来;遮罩的滚动锁同样在
+ * document 上听 wheel / touchmove,落在弹窗外面的就 preventDefault。在 body 上(React 的根之后、document 之前)把
+ * 「落进外壳」「从圈里跑进外壳」的焦点事件和外壳里的滚轮拦住 —— 外壳自己的 onFocus、onWheel 照常收到(React 在根上
+ * 听),滚动照常发生,圈套和锁收不到。返回拆掉它的函数。
  */
 export function installAppChromeGuards(doc: Document): () => void {
   const body = doc.body;
@@ -111,10 +77,17 @@ export function installAppChromeGuards(doc: Document): () => void {
   const onFocusOut = (event: FocusEvent) => {
     if (inChrome(event.relatedTarget)) event.stopPropagation();
   };
+  const onScroll = (event: Event) => {
+    if (inChrome(event.target)) event.stopPropagation();
+  };
   body.addEventListener("focusin", onFocusIn);
   body.addEventListener("focusout", onFocusOut);
+  body.addEventListener("wheel", onScroll, { passive: true });
+  body.addEventListener("touchmove", onScroll, { passive: true });
   return () => {
     body.removeEventListener("focusin", onFocusIn);
     body.removeEventListener("focusout", onFocusOut);
+    body.removeEventListener("wheel", onScroll);
+    body.removeEventListener("touchmove", onScroll);
   };
 }

@@ -7,7 +7,7 @@ import { FLOATING_SURFACE, FLOATING_MOTION, FLOATING_COLLISION_PADDING } from ".
 
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
-import { HintScopeReset } from "./tooltip"
+import { HintScopeReset, useChromeLayer } from "./tooltip"
 
 /**
  * 注意:**放在 Dialog 里、且内容需要滚动的 Popover 必须显式传 `modal`。**
@@ -30,10 +30,14 @@ const PopoverClose = PopoverPrimitive.Close
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 6, onEscapeKeyDown, children, ...props }, ref) => (
+>(({ className, align = "center", sideOffset = 6, onEscapeKeyDown, children, ...props }, ref) => {
+  //: 从外壳(工作台那一列、内嵌浏览器的顶栏)里开出来的:抬到外壳之上、也算外壳(见 useChromeLayer)
+  const chromeLayer = useChromeLayer()
+  return (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
+      {...chromeLayer}
       align={align}
       sideOffset={sideOffset}
       collisionPadding={FLOATING_COLLISION_PADDING}
@@ -50,7 +54,8 @@ const PopoverContent = React.forwardRef<
       <HintScopeReset>{children}</HintScopeReset>
     </PopoverPrimitive.Content>
   </PopoverPrimitive.Portal>
-))
+  )
+})
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverClose }
