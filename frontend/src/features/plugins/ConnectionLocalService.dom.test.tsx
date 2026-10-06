@@ -31,6 +31,9 @@ const api = vi.hoisted(() => ({
   installLocalService: vi.fn(),
   cancelLocalServiceInstall: vi.fn(),
   getLocalServiceModelFolders: vi.fn(),
+  getLocalServiceVersions: vi.fn(),
+  updateLocalService: vi.fn(),
+  rollbackLocalService: vi.fn(),
   isCustomServer: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
@@ -68,6 +71,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLocalService.mockResolvedValue(null);
   api.getLocalServiceModelFolders.mockResolvedValue({ folders: [], running: false, suggestions: [] });
+  api.getLocalServiceVersions.mockResolvedValue({ current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "" });
   api.getLocalServiceLogs.mockResolvedValue({ lines: ["Starting server", "To see the GUI go to: http://127.0.0.1:8189"], path: "/data/logs/service-i1.log" });
 });
 afterEach(() => {
@@ -412,7 +416,8 @@ function managedService(overrides: Partial<LocalService> = {}): LocalService {
 
 function run(overrides: Partial<NonNullable<LocalService["install"]>> = {}): NonNullable<LocalService["install"]> {
   return {
-    state: "installing", step: "torch", started_at: "2026-10-06T06:00:00+00:00", finished_at: null, error: "", item: "",
+    kind: "install", target: "", state: "installing", step: "torch", started_at: "2026-10-06T06:00:00+00:00", finished_at: null,
+    error: "", item: "",
     done_bytes: null, total_bytes: null, speed: null,
     steps: [
       { key: "disk", title: "查剩余空间", done: true },
@@ -581,5 +586,99 @@ describe("让 Mosael 装", () => {
     expect(await screen.findByText("localServiceAdminOnly")).toBeTruthy();
     expect(api.getLocalServicePlan).not.toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "localServiceInstallStart" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("换版本(让 Mosael 装的那一份)", () => {
+  const installed = (overrides: Partial<LocalService> = {}) =>
+    managedService({ installed: true, python_minor: "3.13", base_python_minor: "3.13", state: "running", ...overrides });
+  const versions = (overrides = {}) => ({ current: "0.38.0", latest: "0.39.0", update: "0.39.0", previous: "", unfinished: "", ...overrides });
+
+  it("有更新的钉死版本:写明装着哪个;「更新到 x」先确认(会停下它、在哪台机器上运行),确认了才更新", async () => {
+    api.getLocalService.mockResolvedValue(installed());
+    api.getLocalServiceVersions.mockResolvedValue(versions());
+    api.updateLocalService.mockResolvedValue(installed({ state: "stopped", install: run({ kind: "update", target: "0.39.0" }) }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceVersionDesc")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /localServiceGoBack/ }), "没更新过:没有上一版").toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: /localServiceUpdateTo/ }));
+    expect(api.updateLocalService, "没确认之前不动").not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("localServiceUpdateConfirmTitle")).toBeTruthy();
+    expect(within(dialog).getByText("localServiceUpdateConfirmBody")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: /localServiceUpdateTo/ }));
+    await waitFor(() => expect(api.updateLocalService).toHaveBeenCalledWith("i1", "0.39.0"));
+    expect(await screen.findByText("localServiceUpdating"), "进度和安装是同一块").toBeTruthy();
+  });
+
+  it("更新过:最新的不再给更新;「回到上一版 y」先确认", async () => {
+    api.getLocalService.mockResolvedValue(installed());
+    api.getLocalServiceVersions.mockResolvedValue(versions({ current: "0.39.0", update: "", previous: "0.38.0" }));
+    api.rollbackLocalService.mockResolvedValue(installed({ install: run({ kind: "rollback", target: "0.38.0" }) }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceVersionLatest")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /localServiceUpdateTo/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /localServiceGoBack$/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("localServiceRollbackConfirmTitle")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: /localServiceGoBack/ }));
+    await waitFor(() => expect(api.rollbackLocalService).toHaveBeenCalledWith("i1"));
+    expect(await screen.findByText("localServiceRollingBack")).toBeTruthy();
+  });
+
+  it("正在更新:标题写换到哪个版本,取消的是这一次;这时换不了「在哪跑」", async () => {
+    api.getLocalService.mockResolvedValue(installed({ install: run({ kind: "update", target: "0.39.0", step: "requirements" }) }));
+    api.cancelLocalServiceInstall.mockResolvedValue(installed({ install: run({ kind: "update", target: "0.39.0", state: "cancelled" }) }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceUpdating")).toBeTruthy();
+    for (const radio of screen.getAllByRole("radio")) expect((radio as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /localServiceChangeCancel/ }));
+    await waitFor(() => expect(api.cancelLocalServiceInstall).toHaveBeenCalledWith("i1"));
+    expect(await screen.findByText("localServiceUpdateCancelled")).toBeTruthy();
+  });
+
+  it("更新没成:原因(试起没通过时已经换回去)和安装日志;不出「刚装好」那一条", async () => {
+    api.getLocalService.mockResolvedValue(installed({
+      state: "stopped",
+      install: run({ kind: "update", target: "0.39.0", state: "failed", step: "trial", finished_at: "2026-10-06T07:00:00+00:00",
+                     error: "新版本 0.39.0 试起没通过:还没就绪就退出了。已经换回 0.38.0(源码和依赖)" }),
+    }));
+    api.getLocalServiceLogs.mockResolvedValue({ lines: ["== 换回 0.38.0"], path: "/data/logs/service-install-i1.log" });
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceUpdateFailed")).toBeTruthy();
+    expect(screen.getByText(/已经换回 0.38.0/)).toBeTruthy();
+    expect(screen.queryByText("localServiceInstalledTitle")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /localServiceInstallLog/ }));
+    expect(await screen.findByText(/== 换回 0.38.0/)).toBeTruthy();
+    expect(api.getLocalServiceLogs).toHaveBeenCalledWith("i1", 2000, "install");
+  });
+
+  it("换好了:在「版本」那一行说换到了哪个,不出「刚装好」那一条", async () => {
+    api.getLocalService.mockResolvedValue(installed({
+      install: run({ kind: "update", target: "0.39.0", state: "succeeded", step: "", finished_at: "2026-10-06T07:00:00+00:00" }),
+    }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceUpdated")).toBeTruthy();
+    expect(screen.queryByText("localServiceInstalledTitle")).toBeNull();
+  });
+
+  it("上一次换版本没做完:说清楚起不来,按钮是「换回 y」,不给更新", async () => {
+    api.getLocalService.mockResolvedValue(installed({ state: "failed" }));
+    api.getLocalServiceVersions.mockResolvedValue(versions({ current: "0.39.0", update: "", previous: "0.38.0", unfinished: "update" }));
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await screen.findByText("localServiceChangeUnfinished")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /localServiceGoBackUnfinished/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /localServiceUpdateTo/ })).toBeNull();
+  });
+
+  it("不是部署管理员、要重建、选目录的那种:没有「版本」这一行", async () => {
+    for (const one of [installed({ can_manage: false }), installed({ needs_rebuild: true, base_python_minor: "3.14" }), service({ state: "running" })]) {
+      api.getLocalService.mockResolvedValue(one);
+      const view = mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+      expect(await view.findByText("localServiceStateRunning")).toBeTruthy();
+      expect(view.queryByText("localServiceVersion")).toBeNull();
+      view.unmount();
+    }
+    expect(api.getLocalServiceVersions).not.toHaveBeenCalled();
   });
 });

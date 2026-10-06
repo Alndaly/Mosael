@@ -28,7 +28,7 @@ import pytest
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
-_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed")
+_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed", "versions")
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="假解释器是 shell 脚本")
 GB = 1000 ** 3  # 空间按十进制的 GB(和插件一样)
 
@@ -185,7 +185,7 @@ def test_安装计划_Mac_七步_要多少空间_从哪几处下(managed, tmp_pa
     assert [one["key"] for one in planned["steps"]] == list(managed.STEPS) and not any(one["done"] for one in planned["steps"])
     assert planned["disk_bytes"] == 5 * GB and planned["free_bytes"] == 200 * GB and planned["problems"] == []
     urls = [one["url"] for one in planned["downloads"]]
-    assert urls[0] == "https://ghproxy.example/" + managed.COMFYUI.url, "GitHub 上的接镜像前缀"
+    assert urls[0] == "https://ghproxy.example/" + managed.COMFYUI_PINNED["0.39.0"].url, "GitHub 上的接镜像前缀"
     assert urls[1] == urls[2] == "https://pypi.org/simple", "没配 pip 源:官方 PyPI"
     assert not root.exists(), "只看、不写"
 
@@ -231,9 +231,16 @@ COMFY_FILES = {
 
 #: 假的 venv 解释器:回答 pip(记下参数、按字节报进度,按环境变量失败 / 慢)、试显卡、问 torch 的版本。
 FAKE_VENV_PYTHON = r"""#!/bin/sh
+if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "freeze" ]; then
+  echo "freeze" >> "$FAKE_LOG"
+  if [ -n "$FAKE_FREEZE_FAIL" ]; then echo "ERROR: freeze broke"; exit 2; fi
+  if [ -f "$FAKE_FREEZE" ]; then cat "$FAKE_FREEZE"; fi
+  exit 0
+fi
 if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
   echo "$*" >> "$FAKE_LOG"
   case "$*" in
+    *"--no-deps"*) step=restore ;;
     *" -r "*) step=requirements ;;
     *"--upgrade"*" pip"*) step=pip ;;
     *) step=torch ;;
@@ -255,6 +262,8 @@ if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
   echo "Installing collected packages: $step"
   echo "Successfully installed $step-1.0"
   if [ "$step" = "requirements" ] && [ -n "$FAKE_TORCH_AFTER" ]; then echo "$FAKE_TORCH_AFTER" > "$FAKE_TORCH_FILE"; fi
+  if [ "$step" = "requirements" ] && [ -n "$FAKE_FREEZE_AFTER" ]; then cp "$FAKE_FREEZE_AFTER" "$FAKE_FREEZE"; fi
+  if [ "$step" = "restore" ] && [ -n "$FAKE_FREEZE_RESTORED" ]; then cp "$FAKE_FREEZE_RESTORED" "$FAKE_FREEZE"; fi
   exit 0
 fi
 if [ "$1" = "-c" ]; then
@@ -303,9 +312,11 @@ class Setup:
         for key, value in {"FAKE_LOG": str(self.calls), "FAKE_VENV_SOURCE": str(venv_source),
                            "FAKE_TORCH_FILE": str(tmp_path / "torch-version")}.items():
             monkeypatch.setenv(key, value)
-        for key in ("FAKE_PIP_FAIL", "FAKE_PIP_SLEEP", "FAKE_PIP_SLOW", "FAKE_MINOR", "FAKE_GPU", "FAKE_TORCH_AFTER"):
+        for key in ("FAKE_PIP_FAIL", "FAKE_PIP_SLEEP", "FAKE_PIP_SLOW", "FAKE_MINOR", "FAKE_GPU", "FAKE_TORCH_AFTER", "FAKE_FREEZE",
+                    "FAKE_FREEZE_FAIL", "FAKE_FREEZE_AFTER", "FAKE_FREEZE_RESTORED"):
             monkeypatch.delenv(key, raising=False)
-        self.comfy = tmp_path / "comfy.tar.gz"
+        self.tarballs = tmp_path / "tarballs"
+        self.tarballs.mkdir()
         self.serve_comfy(_tarball(COMFY_FILES), monkeypatch)
         nodes = _tarball({"__init__.py": b"# pysssss\n"}, top="ComfyUI-Custom-Scripts-609f3af")
         source = tmp_path / "pysssss.tar.gz"
@@ -315,10 +326,12 @@ class Setup:
         monkeypatch.setattr(managed, "_free_space", lambda _root: 500 * GB)
         self.events: list[dict[str, Any]] = []
 
-    def serve_comfy(self, data: bytes, monkeypatch: pytest.MonkeyPatch, *, sha: str | None = None) -> None:
-        self.comfy.write_bytes(data)
-        monkeypatch.setattr(self.managed, "COMFYUI", dataclasses.replace(
-            self.managed.COMFYUI, url=self.comfy.as_uri(), sha256=sha or hashlib.sha256(data).hexdigest(), size=len(data)))
+    def serve_comfy(self, data: bytes, monkeypatch: pytest.MonkeyPatch, *, sha: str | None = None, version: str = "0.39.0") -> None:
+        """钉死的那个版本改成从本地这个文件下(sha256 按它算,或者故意给错的)。"""
+        path = self.tarballs / f"ComfyUI-{version}.tar.gz"
+        path.write_bytes(data)
+        monkeypatch.setitem(self.managed.COMFYUI_PINNED, version, dataclasses.replace(
+            self.managed.COMFYUI_PINNED[version], url=path.as_uri(), sha256=sha or hashlib.sha256(data).hexdigest(), size=len(data)))
 
     def payload(self, **extra: Any) -> dict[str, Any]:
         return {"directory": str(self.root), "python": str(self.base), "flavour": "mps", "log": str(self.log),
@@ -619,3 +632,308 @@ def test_主入口_安装计划走一问一答_装走流式(tmp_path: Path) -> N
                             text=True, env=env, timeout=120)
     response = json.loads(result.stdout.strip().splitlines()[-1])
     assert response["ok"] is False and "doesn't exist" in response["error"]["en"]
+    for op, check in (("service_versions", lambda one: one["ok"] and one["output"]["latest"] == "0.39.0"),
+                      ("service_update", lambda one: not one["ok"] and "isn't fully installed" in one["error"]["en"]),
+                      ("service_rollback", lambda one: not one["ok"] and "no earlier version" in one["error"]["en"])):
+        request["input"] = {"op": op, "directory": str(tmp_path / "x")}
+        result = subprocess.run([sys.executable, str(TOOLS / "main.py")], input=json.dumps(request), capture_output=True,
+                                text=True, env=env, timeout=120)
+        assert check(json.loads(result.stdout.strip().splitlines()[-1])), (op, result.stdout)
+
+
+# ---- 换版本(versions:更新、回到上一版、被打断之后收拾)------------------------------------------
+
+
+COMFY_OLD_FILES = {
+    **COMFY_FILES,
+    "main.py": b"print('ComfyUI 0.38')\n",
+    "comfyui_version.py": b'__version__ = "0.38.0"\n',
+    "requirements.txt": b"torch\ncomfy-kitchen==0.2.36\n",
+}
+COMFY_NEW_FILES = {**COMFY_FILES, "models/frame_interpolation/put_here": b"",
+                   "custom_nodes/websocket_image_save.py": b"# 0.39\n", "input/example.png": b"png"}
+#: 装着 0.38.0 时 pip freeze 说的;装 0.39.0 的依赖之后说的(前一个包升了版本、多了一个)。PyTorch 那一行、-e、@ 地址的不进对比。
+FREEZE_OLD = "comfy-kitchen==0.2.36\ntorch==2.14.1\nPillow==11.0.0\n-e vcs+https://example/x#egg=x\nlocal @ file:///tmp/l.whl\n"
+FREEZE_NEW = "comfy-kitchen==0.2.37\ntorch==2.15.0\nPillow==11.0.0\nnewpkg==2.0\n-e vcs+https://example/x#egg=x\n"
+
+
+class Versions:
+    """装着 0.38.0 的一份(两种版本的源码包都从本地下),里面放好五样东西,pip freeze 按文件回答。"""
+
+    def __init__(self, setup: Setup, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import versions
+
+        self.setup = setup
+        self.module = versions
+        setup.serve_comfy(_tarball(COMFY_OLD_FILES, top="ComfyUI-0.38.0"), monkeypatch, version="0.38.0")
+        setup.serve_comfy(_tarball(COMFY_NEW_FILES), monkeypatch, version="0.39.0")
+        self.freeze = tmp_path / "freeze.txt"
+        self.freeze.write_text(FREEZE_OLD, encoding="utf-8")
+        (tmp_path / "freeze-old.txt").write_text(FREEZE_OLD, encoding="utf-8")
+        (tmp_path / "freeze-new.txt").write_text(FREEZE_NEW, encoding="utf-8")
+        monkeypatch.setenv("FAKE_FREEZE", str(self.freeze))
+        monkeypatch.setenv("FAKE_FREEZE_RESTORED", str(tmp_path / "freeze-old.txt"))
+        setup.install(version="0.38.0")
+        monkeypatch.setenv("FAKE_FREEZE_AFTER", str(tmp_path / "freeze-new.txt"))  # 装好以后再装依赖才是新版本的那一套
+        source = setup.root / "ComfyUI"
+        self.mine = {
+            source / "models" / "checkpoints" / "mine.safetensors": b"weights",
+            source / "custom_nodes" / "my-node" / "__init__.py": b"# mine",
+            source / "user" / "default" / "workflows" / "w.json": b"{}",
+            source / "input" / "photo.png": b"in",
+            source / "output" / "out.png": b"out",
+        }
+        for path, data in self.mine.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        setup.reset_calls()
+
+    def payload(self, **extra: Any) -> dict[str, Any]:
+        return {key: value for key, value in self.setup.payload(**extra).items() if key not in ("python", "flavour")}
+
+    def update(self, **extra: Any) -> dict[str, Any]:
+        return self.module.update(self.payload(**extra), "zh", self.setup.events.append)
+
+    def rollback(self) -> dict[str, Any]:
+        return self.module.rollback(self.payload(), "zh", self.setup.events.append)
+
+    def versions(self) -> dict[str, Any]:
+        return self.module.versions({"directory": str(self.setup.root)}, "zh")
+
+    def launch(self) -> dict[str, Any]:
+        return self.module.launch({"directory": str(self.setup.root), "port": 8189}, "zh")
+
+    def version_on_disk(self) -> str:
+        return (self.setup.root / "ComfyUI" / "comfyui_version.py").read_text(encoding="utf-8")
+
+    def assert_mine_in_place(self) -> None:
+        for path, data in self.mine.items():
+            assert path.read_bytes() == data, path
+
+    def assert_back_on_old(self) -> None:
+        root = self.setup.root
+        assert '"0.38.0"' in self.version_on_disk()
+        self.assert_mine_in_place()
+        for name in ("ComfyUI.next", "ComfyUI.previous", "ComfyUI.discarded", "ComfyUI.skeleton"):
+            assert not (root / name).exists(), name
+        record = self.setup.record()
+        assert record["comfyui"] == "0.38.0" and not {"previous", "updating", "restoring"} & set(record), record
+        assert not list(root.glob("pip-freeze-*.txt"))
+
+
+@pytest.fixture
+def versioned(setup: Setup, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Versions:
+    return Versions(setup, tmp_path, monkeypatch)
+
+
+@posix_only
+def test_更新_新源码解到旁边_先记下包_换上_五样搬过去_装新依赖_上一版留着(versioned: Versions) -> None:
+    root = versioned.setup.root
+    assert versioned.versions() == {"current": "0.38.0", "latest": "0.39.0", "update": "0.39.0", "previous": "", "unfinished": ""}
+    done = versioned.update()
+    assert done == {"directory": str(root), "python": str(root / ".venv" / "bin" / "python"), "comfyui": "0.39.0",
+                    "previous": "0.38.0"}
+    assert '"0.39.0"' in versioned.version_on_disk()
+    versioned.assert_mine_in_place()
+    assert (root / "ComfyUI" / "models" / "frame_interpolation" / "put_here").is_file(), "新版本多出来的模型目录补进来"
+    assert (root / "ComfyUI" / "custom_nodes" / "websocket_image_save.py").read_bytes() == b"# 0.39\n", \
+        "新包自带的、旧的里没有的补进来"
+    assert (root / "ComfyUI" / "custom_nodes" / "ComfyUI-Custom-Scripts" / "__init__.py").is_file(), "pysssss 跟着搬过来"
+    previous = root / "ComfyUI.previous"
+    assert '"0.38.0"' in (previous / "comfyui_version.py").read_text(encoding="utf-8"), "上一版留在旁边"
+    assert not any((previous / name).exists() for name in ("models", "custom_nodes", "user", "input", "output")), \
+        "五样搬走了,不留两份"
+    assert (root / "pip-freeze-0.38.0.txt").read_text(encoding="utf-8") == FREEZE_OLD, "装依赖之前记下的那一份"
+    assert not (root / "ComfyUI.next").exists() and not (root / "ComfyUI.skeleton").exists()
+    record = versioned.setup.record()
+    assert record["comfyui"] == "0.39.0" and record["previous"] == {"version": "0.38.0", "freeze": "pip-freeze-0.38.0.txt"}
+    assert "updating" not in record and record["done"] == ["download", "extract", "venv", "torch", "requirements", "nodes"]
+    calls = versioned.setup.calls.read_text(encoding="utf-8").splitlines()
+    assert calls.index("freeze") < next(i for i, line in enumerate(calls) if " -r " in line), "先 freeze 再装依赖"
+    pips = versioned.setup.pip_calls()
+    assert len(pips) == 1 and f"-r {root / 'ComfyUI' / 'requirements.txt'}" in pips[0] and "--upgrade" not in pips[0]
+    assert not [line for line in calls if line.startswith("venv ")], "venv 不重建"
+    outline = versioned.setup.events[0]["outline"]
+    assert [one["key"] for one in outline] == list(versioned.module.UPDATE_STEPS)
+    assert "0.39.0" in outline[1]["title"]["zh"]
+    assert versioned.versions() == {"current": "0.39.0", "latest": "0.39.0", "update": "", "previous": "0.38.0", "unfinished": ""}
+
+
+@posix_only
+def test_回到上一版_五样搬回去_只把变了的包按_freeze_装回_新的那份删掉(versioned: Versions) -> None:
+    versioned.update()
+    versioned.setup.reset_calls()
+    done = versioned.rollback()
+    assert done["comfyui"] == "0.38.0"
+    versioned.assert_back_on_old()
+    pips = versioned.setup.pip_calls()
+    assert len(pips) == 1 and pips[0].endswith("--no-deps comfy-kitchen==0.2.36"), \
+        "只装回变了的;PyTorch、-e、@ 地址的不动,多出来的包留着"
+    assert "--index-url https://pypi.example/simple" in pips[0]
+    assert [one["key"] for one in versioned.setup.events[0]["outline"]] == list(versioned.module.ROLLBACK_STEPS)
+    assert versioned.versions() == {"current": "0.38.0", "latest": "0.39.0", "update": "0.39.0", "previous": "", "unfinished": ""}
+    with pytest.raises(_error_type(), match="没有可以回去的上一版"):
+        versioned.rollback()
+
+
+@posix_only
+def test_再更新一次_上一版又留着_已经是最新的_没钉死的版本都不换(versioned: Versions) -> None:
+    versioned.update()
+    versioned.rollback()
+    versioned.update()
+    assert versioned.versions()["previous"] == "0.38.0" and (versioned.setup.root / "pip-freeze-0.38.0.txt").is_file()
+    with pytest.raises(_error_type(), match="不比 0.39.0 旧"):
+        versioned.update()
+    with pytest.raises(_error_type(), match="没有钉死"):
+        versioned.update(version="9.9.9")
+
+
+@posix_only
+def test_更新_装依赖失败_自己换回去_说已经换回(versioned: Versions, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FAKE_PIP_FAIL", "requirements")
+    with pytest.raises(_error_type()) as caught:
+        versioned.update()
+    text = str(caught.value)
+    assert "源上找不到" in text and "已经换回 0.38.0" in text, text
+    assert "装新版本的依赖" in text and "再「更新」" in text and "接着装" not in text, "说的是这一步、点哪个再来"
+    versioned.assert_back_on_old()
+    assert not [call for call in versioned.setup.pip_calls() if "--no-deps" in call], "包没变(装依赖没成),不用装回"
+    assert "已经换回 0.38.0" in versioned.setup.log.read_text(encoding="utf-8")
+
+
+@posix_only
+def test_更新_换上之前出错_原来的没动(versioned: Versions, monkeypatch: pytest.MonkeyPatch) -> None:
+    versioned.setup.serve_comfy(_tarball(COMFY_NEW_FILES), monkeypatch, sha="0" * 64)
+    with pytest.raises(_error_type(), match="还是 0.38.0") as caught:
+        versioned.update()
+    assert "sha256" in str(caught.value)
+    versioned.assert_back_on_old()
+    assert "freeze" not in versioned.setup.calls.read_text(encoding="utf-8"), "下载没成,还没到 freeze"
+
+
+@posix_only
+def test_更新_换源码时改名失败_换回去(versioned: Versions, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = versioned.module._carry
+
+    def carry(job, origin, destination, *, fresh):
+        if fresh:
+            real(job, origin, destination, fresh=fresh)  # 都搬过去了,最后一下(Windows 上一个文件被占着)失败
+            raise PermissionError("[WinError 32] The process cannot access the file")
+        return real(job, origin, destination, fresh=fresh)
+
+    monkeypatch.setattr(versioned.module, "_carry", carry)
+    with pytest.raises(_error_type(), match="WinError 32") as caught:
+        versioned.update()
+    assert "已经换回 0.38.0" in str(caught.value)
+    versioned.assert_back_on_old()
+
+
+@posix_only
+def test_更新_取消_换回去再停(versioned: Versions, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FAKE_PIP_SLEEP", "0.05")
+    monkeypatch.setenv("FAKE_PIP_SLOW", "requirements")
+    flag = threading.Event()
+
+    def emit(event: dict[str, Any]) -> None:
+        if event.get("key") == "requirements" and (event.get("done_bytes") or 0) >= 5:
+            flag.set()
+
+    with pytest.raises(versioned.setup.pinned.Cancelled):
+        versioned.module.update(versioned.payload(), "zh", emit, is_cancelled=flag.is_set)
+    versioned.assert_back_on_old()
+
+
+@posix_only
+def test_被强行打断_标记留着_不起_不接着装_换回收拾干净(versioned: Versions) -> None:
+    versioned.update()
+    # 后端在装新依赖时被杀:源码换好了、包装了一半、「换到一半」的标记还在
+    record = versioned.setup.record()
+    record["updating"] = "0.39.0"
+    (versioned.setup.root / "mosael-install.json").write_text(json.dumps(record), encoding="utf-8")
+    assert versioned.versions() == {"current": "0.39.0", "latest": "0.39.0", "update": "", "previous": "0.38.0",
+                                    "unfinished": "update"}
+    with pytest.raises(_error_type(), match="换回 0.38.0"):
+        versioned.launch()
+    with pytest.raises(_error_type(), match="没做完"):
+        versioned.setup.install()
+    with pytest.raises(_error_type(), match="没做完"):
+        versioned.update()
+    versioned.rollback()
+    versioned.assert_back_on_old()
+    assert versioned.launch()["argv"][1] == str(versioned.setup.root / "ComfyUI" / "main.py"), "收拾好了就能起"
+
+
+@posix_only
+def test_打断在改名之前_回退只收拾_源码一直是原来那份(versioned: Versions) -> None:
+    root = versioned.setup.root
+    record = versioned.setup.record()
+    (root / "pip-freeze-0.38.0.txt").write_text(FREEZE_OLD, encoding="utf-8")
+    (root / "ComfyUI.next").mkdir()
+    record.update({"previous": {"version": "0.38.0", "freeze": "pip-freeze-0.38.0.txt"}, "updating": "0.39.0"})
+    (root / "mosael-install.json").write_text(json.dumps(record), encoding="utf-8")
+    assert versioned.versions()["unfinished"] == "update"
+    versioned.rollback()
+    versioned.assert_back_on_old()
+    assert not versioned.setup.pip_calls(), "依赖没动过"
+
+
+@posix_only
+def test_打断在搬五样的中途_换回时旧的那份里的真数据不当占位删(versioned: Versions) -> None:
+    """改名做完、models 还没搬过去就断了(新源码里是新包自带的占位 models,真的那份还在旧源码里):换回时旧的那份里已经有
+    models,新源码里那个占位的留在原处、跟着换下来的源码删掉;真的 models 一个文件都不少。"""
+    root = versioned.setup.root
+    (root / "pip-freeze-0.38.0.txt").write_text(FREEZE_OLD, encoding="utf-8")
+    (root / "ComfyUI").replace(root / "ComfyUI.previous")
+    new = root / "ComfyUI"
+    (new / "models" / "checkpoints").mkdir(parents=True)
+    (new / "models" / "checkpoints" / "put_checkpoints_here").write_bytes(b"")
+    (new / "main.py").write_text("print('0.39')\n", encoding="utf-8")
+    (new / "comfyui_version.py").write_text('__version__ = "0.39.0"\n', encoding="utf-8")
+    for name in ("custom_nodes", "user", "input", "output"):
+        (root / "ComfyUI.previous" / name).replace(new / name)
+    record = versioned.setup.record()
+    record.update({"comfyui": "0.39.0", "previous": {"version": "0.38.0", "freeze": "pip-freeze-0.38.0.txt"}, "updating": "0.39.0"})
+    (root / "mosael-install.json").write_text(json.dumps(record), encoding="utf-8")
+    versioned.rollback()
+    versioned.assert_back_on_old()
+
+
+@posix_only
+def test_回退_装回依赖失败_停在那里_下次接着装回(versioned: Versions, monkeypatch: pytest.MonkeyPatch) -> None:
+    versioned.update()
+    monkeypatch.setenv("FAKE_PIP_FAIL", "restore")
+    with pytest.raises(_error_type(), match="把版本变了的包装回") as caught:
+        versioned.rollback()
+    assert "pip 源再「换回 0.38.0」" in str(caught.value), "点哪个再来:换回,不是接着装"
+    assert '"0.38.0"' in versioned.version_on_disk(), "源码已经换回来了"
+    versioned.assert_mine_in_place()
+    assert versioned.versions() == {"current": "0.38.0", "latest": "0.39.0", "update": "", "previous": "0.38.0",
+                                    "unfinished": "rollback"}
+    with pytest.raises(_error_type(), match="没做完"):
+        versioned.launch()
+    monkeypatch.delenv("FAKE_PIP_FAIL")
+    versioned.setup.reset_calls()
+    versioned.rollback()
+    versioned.assert_back_on_old()
+    assert len(versioned.setup.pip_calls()) == 1
+
+
+@posix_only
+def test_换下来的源码里是链接_只删链接_不跟着出去(versioned: Versions, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep", encoding="utf-8")
+    versioned.update()
+    (versioned.setup.root / "ComfyUI" / "linked").symlink_to(outside, target_is_directory=True)
+    versioned.rollback()
+    assert (outside / "keep.txt").read_text(encoding="utf-8") == "keep", "删换下来的那份时链接只删链接"
+    versioned.assert_back_on_old()
+
+
+def test_换版本_还没装好的不让换(managed, tmp_path: Path) -> None:
+    import versions
+
+    with pytest.raises(_error_type(), match="还没装好"):
+        versions.update({"directory": str(tmp_path)}, "zh", lambda _event: None)
+    assert versions.versions({"directory": str(tmp_path / "nothing")}, "zh") == \
+        {"current": "", "latest": "0.39.0", "update": "", "previous": "", "unfinished": ""}

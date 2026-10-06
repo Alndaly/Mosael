@@ -25394,13 +25394,152 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/local-service/versions": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service Versions",
+        "description": "让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的。",
+        "operationId": "get_local_service_versions_api_plugins_instances__instance_id__local_service_versions_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceVersionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/update": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Update Local Service",
+        "description": "更新到更新的钉死版本:先停下它,后台换源码、装依赖、试起一次(没通过就换回去),马上回来,界面接着轮询。要确认过\n(会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。",
+        "operationId": "update_local_service_api_plugins_instances__instance_id__local_service_update_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalServiceNewVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/rollback": {
+      "post": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Rollback Local Service",
+        "description": "回到上一版(也是收拾被打断的更新 / 回退的那一下):先停下它,后台换回源码、装回依赖、试起一次。",
+        "operationId": "rollback_local_service_api_plugins_instances__instance_id__local_service_rollback_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/local-service/install/cancel": {
       "post": {
         "tags": [
           "local-services"
         ],
         "summary": "Cancel Local Service Install",
-        "description": "取消正在装的:插件停在手上那一步,下次「接着装」从它开始。",
+        "description": "取消正在装的(或正在换版本的):插件停在手上那一步,下次「接着装」从它开始;换版本的换回原来那一版。",
         "operationId": "cancel_local_service_install_api_plugins_instances__instance_id__local_service_install_cancel_post",
         "parameters": [
           {
@@ -34315,6 +34454,21 @@
       },
       "LocalServiceInstallOut": {
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "install",
+              "update",
+              "rollback"
+            ],
+            "title": "Kind",
+            "default": "install"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target",
+            "default": ""
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -34402,7 +34556,7 @@
           "started_at"
         ],
         "title": "LocalServiceInstallOut",
-        "description": "这一次安装到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。"
+        "description": "这一次安装(或换版本)到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。"
       },
       "LocalServiceInstallRequest": {
         "properties": {
@@ -34455,6 +34609,7 @@
             "type": "string",
             "enum": [
               "installing",
+              "updating",
               "not_installed",
               "rebuild",
               "stopped",
@@ -34520,6 +34675,24 @@
         "type": "object",
         "title": "LocalServiceModelFoldersOut",
         "description": "「共用的模型文件夹」那一块。"
+      },
+      "LocalServiceNewVersionRequest": {
+        "properties": {
+          "confirm_run_code": {
+            "type": "boolean",
+            "title": "Confirm Run Code",
+            "default": false
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceNewVersionRequest",
+        "description": "更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 插件钉死的最新那个。"
       },
       "LocalServiceOfferOut": {
         "properties": {
@@ -35041,6 +35214,43 @@
         "type": "object",
         "title": "LocalServiceUpdate",
         "description": "建或改。没给的不动。换一个要运行的东西(目录、解释器)要带 `confirm_run_code: true` —— 界面先问过人。"
+      },
+      "LocalServiceVersionsOut": {
+        "properties": {
+          "current": {
+            "type": "string",
+            "title": "Current",
+            "default": ""
+          },
+          "latest": {
+            "type": "string",
+            "title": "Latest",
+            "default": ""
+          },
+          "update": {
+            "type": "string",
+            "title": "Update",
+            "default": ""
+          },
+          "previous": {
+            "type": "string",
+            "title": "Previous",
+            "default": ""
+          },
+          "unfinished": {
+            "type": "string",
+            "enum": [
+              "",
+              "update",
+              "rollback"
+            ],
+            "title": "Unfinished",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceVersionsOut",
+        "description": "让 Mosael 装的那一份:装着哪个版本、插件钉死的最新是哪个、能更新到哪个(没有是空串)、能回到哪个(没有是空串)、\n有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」`previous`)。"
       },
       "LutOut": {
         "properties": {

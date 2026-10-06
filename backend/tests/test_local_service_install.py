@@ -7,7 +7,9 @@
 - **没装好不让起**(用到时起也一样)、正在装时不能换目录 / 删 / 再装一次;**取消**停在那一步、「接着装」从没做完的开始;
   插件失败原因照说、日志看得到;试起没通过不算装好;
 - **运行环境要重建**:Python 小版本对不上就不让起,再装一次就好;
-- 后端退出、删连接时正在装的先取消;托管 venv 的对账不碰安装目录;「PyTorch 源」「GitHub 镜像前缀」两项设置。
+- 后端退出、删连接时正在装的先取消;托管 venv 的对账不碰安装目录;「PyTorch 源」「GitHub 镜像前缀」两项设置;
+- **换版本**:更新(要确认;先停下它,插件换完宿主试起一次,**没通过就让插件换回去**,两件都说)、回到上一版、被打断没做完的先「换回」;
+  进度、取消和安装是同一套,正在换时用不了的那一句说「正在换版本」。
 """
 
 from __future__ import annotations
@@ -104,12 +106,56 @@ def install(payload):
     log.close()
     return {"directory": str(root), "python_minor": "3.13"}
 
+def versions(payload):
+    state = record(payload["directory"])
+    options = control(payload["directory"])
+    current = state.get("version", "1.0")
+    unfinished = options.get("unfinished", "")
+    return {"current": current, "latest": "2.0", "update": "" if current == "2.0" or unfinished else "2.0",
+            "previous": state.get("previous", "") or options.get("unfinished_back", ""), "unfinished": unfinished}
+
+def change(payload, kind):
+    root = Path(payload["directory"])
+    (root / f"{kind}-payload.json").write_text(json.dumps(payload), encoding="utf-8")
+    options = control(root)
+    state = record(root)
+    log = open(payload["log"], "a", encoding="utf-8")
+    keys = ["fetch", "switch"] if kind == "update" else ["switch"]
+    emit({"event": "step", "outline": [{"key": key, "title": TITLES.get(key, {"zh": "换源码", "en": "Switch"}), "done": False}
+                                       for key in keys]})
+    for key in keys:
+        emit({"event": "step", "key": key, "state": "running"})
+        log.write(f"== {kind} {key}\n")
+        log.flush()
+        for done in range(0, 101, 20):
+            if cancelled():
+                emit({"ok": False, "error": "cancelled"})
+                return None
+            emit({"event": "step", "key": key, "state": "running", "done_bytes": done, "total_bytes": 100})
+            time.sleep(options.get("slow", {}).get(kind, 0))
+        emit({"event": "step", "key": key, "state": "done"})
+    current = state.get("version", "1.0")
+    if options.get("fail") == kind:
+        emit({"ok": False, "error": {"zh": f"{kind} 没成,还是 {current}", "en": f"{kind} failed, still {current}"}})
+        return None
+    if kind == "update":
+        state["previous"], state["version"] = current, payload.get("version") or "2.0"
+    else:
+        state["version"], state["previous"] = state.get("previous") or options.get("unfinished_back") or current, ""
+    (root / "record.json").write_text(json.dumps(state), encoding="utf-8")
+    log.close()
+    return {"directory": str(root), "comfyui": state["version"], "previous": state.get("previous", "")}
+
 def svc(payload):
     op = payload.get("op")
     if op == "service_plan":
         return plan(payload)
+    if op == "service_versions":
+        return versions(payload)
     if op == "service_launch":
-        flags = control(payload["directory"]).get("launch_flags", [])
+        options = control(payload["directory"])
+        version = record(payload["directory"]).get("version", "1.0")
+        flags = options.get("launch_flags_by_version", {}).get(version, options.get("launch_flags", []))
         argv = [sys.executable, FAKE, "--port", str(payload["port"]), "--listen", "127.0.0.1", *flags]
         return {"argv": argv, "env": {}, "cwd": payload["directory"], "health_path": "/system_stats", "ready_timeout": 20}
     if op == "service_detect":
@@ -119,8 +165,8 @@ def svc(payload):
 request = json.loads(sys.stdin.read())
 payload = request.get("input") or {}
 try:
-    if payload.get("op") == "service_install":
-        output = install(payload)
+    if payload.get("op") in ("service_install", "service_update", "service_rollback"):
+        output = install(payload) if payload["op"] == "service_install" else change(payload, payload["op"][len("service_"):])
         if output is not None:
             emit({"ok": True, "output": output})
     else:
@@ -529,3 +575,149 @@ def test_下载源设置_PyTorch_源和_GitHub_镜像前缀(plugged) -> None:
     assert plugged.get(url).json()["pip_index"] == initial["pip_index"], "只写给了的那几项"
     assert second_client("member").put(url, json={"github_mirror": "https://x.example"}).status_code == 403
     runtime_config.refresh()
+
+
+# ---- 换版本(更新、回到上一版)------------------------------------------------------------
+
+
+def _installed(client) -> str:
+    instance_id = _connection(client)
+    _install(client, instance_id)
+    status = _wait(client, instance_id, _install_state("succeeded"))
+    assert status["state"] == "running", status
+    return instance_id
+
+
+def _update(client, instance_id: str, **extra: Any):
+    return client.post(_url(instance_id, "/update"), json={"confirm_run_code": True, **extra})
+
+
+def _versions(client, instance_id: str) -> dict[str, Any]:
+    response = client.get(_url(instance_id, "/versions"))
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _record(instance_id: str) -> dict[str, Any]:
+    return json.loads((settings.data_dir / "local-services" / instance_id / "record.json").read_text(encoding="utf-8"))
+
+
+def test_更新_要确认_先停下它_插件换完宿主试起一次_成了让它开着(plugged) -> None:
+    instance_id = _installed(plugged)
+    assert _versions(plugged, instance_id) == {"current": "1.0", "latest": "2.0", "update": "2.0", "previous": "",
+                                               "unfinished": ""}
+    refused = plugged.post(_url(instance_id, "/update"), json={})
+    assert refused.status_code == 422 and "确认" in refused.json()["detail"]
+    started = _update(plugged, instance_id)
+    assert started.status_code == 200, started.text
+    body = started.json()
+    assert body["install"]["kind"] == "update" and body["install"]["target"] == "2.0" and body["install"]["state"] == "installing"
+    assert body["state"] == "stopped", "源码要换:先停下它"
+    assert body["issue"]["kind"] == "updating" and "正在换版本" in body["issue"]["text"]
+    status = _wait(plugged, instance_id, _install_state("succeeded"))
+    assert status["install"]["state"] == "succeeded", status
+    assert status["state"] == "running" and status["installed"] is True
+    assert [one["key"] for one in status["install"]["steps"]] == ["fetch", "switch", "trial"]
+    assert status["install"]["steps"][-1]["title"] == "试起新版本一次,没通过就换回原来的"
+    payload = json.loads((settings.data_dir / "local-services" / instance_id / "update-payload.json").read_text(encoding="utf-8"))
+    assert payload["version"] == "2.0" and payload["directory"] == status["directory"]
+    assert payload["pip_cache"].endswith("pip-cache") and set(payload["sources"]) == {"pip_index_url", "pytorch_index_url", "github_mirror"}
+    assert _versions(plugged, instance_id) == {"current": "2.0", "latest": "2.0", "update": "", "previous": "1.0", "unfinished": ""}
+    assert "== update fetch" in plugged.get(_url(instance_id, "/logs"), params={"source": "install"}).json()["lines"], \
+        "日志和安装是同一个"
+    nothing = _update(plugged, instance_id)
+    assert nothing.status_code == 409 and "已经是最新的版本(2.0)" in nothing.json()["detail"]
+    member = second_client("member")
+    assert member.get(_url(_connection(member), "/versions")).status_code == 403
+
+
+def test_更新后试起没通过_让插件换回去_说没成_已经换回(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(launch_flags_by_version={"2.0": ["--exit-at-start", "3"]})
+    assert _update(plugged, instance_id).status_code == 200
+    status = _wait(plugged, instance_id, _install_state("failed"))
+    error = status["install"]["error"]
+    assert "新版本 2.0 试起没通过" in error and "退出码 3" in error and "已经换回 1.0" in error, error
+    assert (settings.data_dir / "local-services" / instance_id / "rollback-payload.json").is_file(), "宿主让插件换回去"
+    assert _record(instance_id)["version"] == "1.0" and status["state"] != "running"
+    english = plugged.get(_url(instance_id), headers={"Accept-Language": "en"}).json()["install"]["error"]
+    assert "Went back to 1.0" in english and "exit code 3" in english, "原因按读的人的语言说"
+    assert _versions(plugged, instance_id)["update"] == "2.0", "还能再更新"
+
+
+def test_更新后试起没通过_换回去也没成_两件都说(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(launch_flags_by_version={"2.0": ["--exit-at-start", "3"]}, fail="rollback")
+    assert _update(plugged, instance_id).status_code == 200
+    error = _wait(plugged, instance_id, _install_state("failed"))["install"]["error"]
+    assert "试起没通过" in error and "换回 1.0 时也出错了" in error and "rollback 没成" in error and "「换回 1.0」" in error, error
+
+
+def test_插件那几步没成_原因照说(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(fail="update")
+    assert _update(plugged, instance_id).status_code == 200
+    status = _wait(plugged, instance_id, _install_state("failed"))
+    assert status["install"]["error"] == "update 没成,还是 1.0" and status["install"]["step"] == "switch"
+    assert not (settings.data_dir / "local-services" / instance_id / "rollback-payload.json").exists(), "插件自己换回去了"
+
+
+def test_更新_试起时取消_也换回去(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(launch_flags_by_version={"2.0": ["--slow", "20"]})
+    assert _update(plugged, instance_id).status_code == 200
+    _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("step") == "trial")
+    plugged.post(_url(instance_id, "/install/cancel"))
+    status = _wait(plugged, instance_id, _install_state("cancelled"))
+    assert status["install"]["state"] == "cancelled", status
+    assert _record(instance_id)["version"] == "1.0", "试到一半取消:新版本没验过,换回去"
+    assert status["state"] == "stopped"
+
+
+def test_回到上一版_试起一次_再回就没有了(plugged) -> None:
+    instance_id = _installed(plugged)
+    _update(plugged, instance_id)
+    _wait(plugged, instance_id, _install_state("succeeded"))
+    started = plugged.post(_url(instance_id, "/rollback"))
+    assert started.status_code == 200, started.text
+    assert started.json()["install"]["kind"] == "rollback" and started.json()["install"]["target"] == "1.0"
+    status = _wait(plugged, instance_id, _install_state("succeeded"))
+    assert status["state"] == "running" and [one["key"] for one in status["install"]["steps"]] == ["switch", "trial"]
+    assert status["install"]["steps"][-1]["title"] == "试起一次"
+    assert _versions(plugged, instance_id) == {"current": "1.0", "latest": "2.0", "update": "2.0", "previous": "", "unfinished": ""}
+    again = plugged.post(_url(instance_id, "/rollback"))
+    assert again.status_code == 409 and "没有可以回去的上一版" in again.json()["detail"]
+
+
+def test_换版本之前的拦_没装好_不是让Mosael装_正在装_要重建_没做完的先换回(plugged, monkeypatch: pytest.MonkeyPatch,
+                                                                        tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    assert _update(plugged, instance_id).status_code == 404, "没有本机服务"
+    _control(fail="build")
+    _install(plugged, instance_id)
+    _wait(plugged, instance_id, _install_state("failed"))
+    refused = _update(plugged, instance_id)
+    assert refused.status_code == 409 and "还没装好" in refused.json()["detail"]
+    _control(slow={"fetch": 0.3})
+    _install(plugged, instance_id)
+    busy = _update(plugged, instance_id)
+    assert busy.status_code == 409 and "正在装或换版本" in busy.json()["detail"]
+    plugged.post(_url(instance_id, "/install/cancel"))
+    _wait(plugged, instance_id, _install_state("cancelled"))
+    _control()
+    _install(plugged, instance_id)
+    _wait(plugged, instance_id, _install_state("succeeded"))
+    monkeypatch.setattr(local_services, "base_minor", lambda: "3.14")
+    rebuild = plugged.post(_url(instance_id, "/rollback"))
+    assert rebuild.status_code == 409 and "运行环境要重建" in rebuild.json()["detail"]
+    monkeypatch.setattr(local_services, "base_minor", lambda: "3.13")
+    _control(unfinished="update", unfinished_back="1.0")
+    unfinished = _update(plugged, instance_id)
+    assert unfinished.status_code == 409 and "「换回 1.0」" in unfinished.json()["detail"]
+    assert plugged.post(_url(instance_id, "/rollback")).status_code == 200, "换回就是收拾它的那一下"
+    _wait(plugged, instance_id, _install_state("succeeded"))
+    other = _connection(plugged)
+    folder = tmp_path / "own"
+    folder.mkdir()
+    assert plugged.put(_url(other), json={"mode": "directory", "directory": str(folder), "confirm_run_code": True}).status_code == 200
+    assert plugged.get(_url(other, "/versions")).status_code == 422, "选目录的那种没有版本可换"

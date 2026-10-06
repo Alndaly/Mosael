@@ -15,6 +15,8 @@
                                            → 怎么认一个装好的目录、怎么起、补装 pysssss、本机发现、改端口时搬数据
     {"op": "service_plan", …}              → 让 Mosael 装:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(见 managed)
     {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
+    {"op": "service_versions", …}          → 让 Mosael 装的那一份:装着哪个、能更新到哪个、能回到哪个、有没有没做完的(见 versions)
+    {"op": "service_update" | "service_rollback", …} → 流式:换到更新的钉死版本(没成自己换回去)/ 回到上一版
     {"op": "service_model_folders", …}     → 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型(见 shared_models)
     {"op": "service_busy"}                 → 闲置自动停之前:任务队列里有没有在跑、在排的
 
@@ -75,6 +77,7 @@ import service
 import shared_models
 import sources
 import tooling
+import versions
 import workflow_import
 import workbench
 import workflow_library
@@ -141,8 +144,17 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "reboot": workflow_import.reboot,
 }
 
-#: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划在 managed。
-_SERVICE: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {**service.OPS, "service_plan": managed.plan}
+#: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划在 managed、换版本在 versions。
+#: 起之前先经 versions 看一眼:让 Mosael 装的那一份换版本换到一半(被强行打断)就不起它。
+_SERVICE: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {
+    **service.OPS, "service_launch": versions.launch, "service_plan": managed.plan, "service_versions": versions.versions,
+}
+#: 流式的本机服务操作:一步一行进度(`{"event": "step", …}`),宿主建取消文件就停。
+_SERVICE_STREAMING: dict[str, Callable[[dict[str, Any], str, run.Emit], dict[str, Any]]] = {
+    "service_install": managed.install,
+    "service_update": versions.update,
+    "service_rollback": versions.rollback,
+}
 
 #: 一问一答的工具。
 _PLAIN: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
@@ -179,9 +191,9 @@ def main() -> None:
             # 闲置自动停之前:它的任务队列里有没有在跑、在排的
             emit({"ok": True, "output": service.busy(payload, locale, comfy=Comfy(env_base_url(), locale, env_access_token()))})
             return
-        if tool == "comfyui_generation" and payload.get("op") == "service_install":
-            # 让 Mosael 装(流式:一步一行,宿主建取消文件就停在那一步,下次接着装)
-            emit({"ok": True, "output": managed.install(payload, locale, emit)})
+        if tool == "comfyui_generation" and payload.get("op") in _SERVICE_STREAMING:
+            # 让 Mosael 装、换版本(流式:一步一行,宿主建取消文件就停在那一步,下次接着来)
+            emit({"ok": True, "output": _SERVICE_STREAMING[payload["op"]](payload, locale, emit)})
             return
         comfy = Comfy(env_base_url(), locale, env_access_token())
         if tool == "comfyui_generation":

@@ -1,5 +1,5 @@
 /** 本机服务(ADR 0041):插件连接背后由宿主起停的那个进程 —— 配置、状态、日志、认目录、补装、本机发现,
- * 以及「让 Mosael 装」:安装计划、装(接着装、重建运行环境)、取消。
+ * 以及「让 Mosael 装」:安装计划、装(接着装、重建运行环境)、取消,装好的那一份换版本(更新、回到上一版)。
  *
  * 建、改、起、停、认目录、补装、看安装计划、装、取消都要部署管理员(后端 `ensure_deployment_admin`);`ensure`
  * (工作台打开前请宿主先起好)只要是这个连接的主人。
@@ -53,9 +53,17 @@ export const installLocalService = (instanceId: string, flavour: string) =>
     method: "POST",
     body: JSON.stringify({ confirm_run_code: true, flavour }),
   });
-/** 取消正在装的:停在手上那一步,下次「接着装」从它开始。 */
+/** 取消正在装的:停在手上那一步,下次「接着装」从它开始。正在换版本的也是它(换回原来那一版)。 */
 export const cancelLocalServiceInstall = (instanceId: string) =>
   api<LocalService>(`${base(instanceId)}/install/cancel`, { method: "POST" });
+export type LocalServiceVersions = components["schemas"]["LocalServiceVersionsOut"];
+/** 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的。只给部署管理员。 */
+export const getLocalServiceVersions = (instanceId: string) => api<LocalServiceVersions>(`${base(instanceId)}/versions`);
+/** 更新到 `version`(问过人了;空 = 钉死的最新那个):先停下它,后台换版本、试起一次,没通过就换回去。马上回来,界面接着轮询。 */
+export const updateLocalService = (instanceId: string, version = "") =>
+  api<LocalService>(`${base(instanceId)}/update`, { method: "POST", body: JSON.stringify({ confirm_run_code: true, version }) });
+/** 回到上一版(也是收拾被打断的更新 / 回退的那一下)。 */
+export const rollbackLocalService = (instanceId: string) => api<LocalService>(`${base(instanceId)}/rollback`, { method: "POST" });
 export type LocalServiceModelFolders = components["schemas"]["LocalServiceModelFoldersOut"];
 /** 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型;卸载时保留下来、还没加进来的那几份。 */
 export const getLocalServiceModelFolders = (instanceId: string) =>

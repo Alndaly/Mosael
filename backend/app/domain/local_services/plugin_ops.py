@@ -15,6 +15,9 @@
 | `service_install` | 确认之后(流式:一步一行,取消停在那一步;再来从没做完的那一步接着装) |
 | `service_model_folders` | 连接页上加共用的模型文件夹之前(认得出才存),和看每一处它加载了没有、几个模型的时候 |
 | `service_busy` | 闲置够久、要自动停它之前:任务队列里有没有在跑、在排的(有就不停) |
+| `service_versions` | 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的 |
+| `service_update` | 「更新」确认之后(流式,和 service_install 一样;没成插件自己换回去) |
+| `service_rollback` | 「回到上一版」确认之后、更新后试起没通过时(流式;也收拾被打断的更新 / 回退) |
 """
 
 from __future__ import annotations
@@ -47,6 +50,12 @@ PLAN_TIMEOUT_SECONDS = 60
 INSTALL_TIMEOUT_SECONDS = 6 * 3600
 #: 安装计划最多摆几步。
 MAX_STEPS = 20
+#: 问版本:只读安装目录里的那份记录。
+VERSIONS_TIMEOUT_SECONDS = 30
+#: 版本号最长多少个字。
+MAX_VERSION = 40
+#: 「没做完」的那两种:更新换到一半、回退时依赖还没装回去。
+UNFINISHED = ("update", "rollback")
 #: 共用的模型文件夹:认目录只看几层子目录;在跑的话再按每个模型目录问一次 ComfyUI 列文件(一个 100 多 GB 的模型文件夹几秒)。
 MODEL_FOLDERS_TIMEOUT_SECONDS = 120
 #: 最多共用几处(和插件那边同一个数)。
@@ -259,4 +268,32 @@ def install(db: Session, instance: PluginInstance, service: str, payload: dict[s
                                 timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
 
 
-__all__ = ["add_nodes", "busy", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress"]
+def versions(db: Session, instance: PluginInstance, row: LocalService) -> dict[str, str]:
+    """让 Mosael 装的那一份:装着哪个版本(`current`)、能更新到哪个(`update`,没有是空串)、能回到哪个(`previous`)、
+    有没有被打断没做完的(`unfinished`:`update` / `rollback` / 空串)。形状不对的那一格当作没有。"""
+    output = tools.invoke_service(db, instance.package_id, row.service, {"op": "service_versions", "directory": row.directory},
+                                  instance=instance, timeout=VERSIONS_TIMEOUT_SECONDS)
+
+    def version(key: str) -> str:
+        value = output.get(key)
+        return value.strip()[:MAX_VERSION] if isinstance(value, str) else ""
+
+    unfinished = output.get("unfinished")
+    return {"current": version("current"), "latest": version("latest"), "update": version("update"),
+            "previous": version("previous"), "unfinished": unfinished if unfinished in UNFINISHED else ""}
+
+
+def update(db: Session, instance: PluginInstance, service: str, payload: dict[str, Any], hooks: StreamHooks) -> dict[str, Any]:
+    """换到一个更新的钉死版本:流式,和 install 一样一步一行。没成插件自己换回去再报错;成了交回新版本和上一版(宿主接着试起一次)。"""
+    return tools.invoke_service(db, instance.package_id, service, {"op": "service_update", **payload}, instance=instance,
+                                timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
+
+
+def rollback(db: Session, instance: PluginInstance, service: str, payload: dict[str, Any], hooks: StreamHooks) -> dict[str, Any]:
+    """回到上一版(也收拾被打断的更新 / 回退):流式。交回换回到的版本(宿主接着试起一次)。"""
+    return tools.invoke_service(db, instance.package_id, service, {"op": "service_rollback", **payload}, instance=instance,
+                                timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
+
+
+__all__ = ["add_nodes", "busy", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress", "rollback",
+           "update", "versions"]

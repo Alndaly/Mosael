@@ -14,7 +14,8 @@
 
 这里把它们接起来,对外的几件事:配置、起 / 停 / 重启、**用到时起**(`ensure_running`,经插件域的 `service_gate` 接进
 每一次插件调用)、启动时接回上一个后端没来得及停的、「保持运行」的跟着起、退出时全部停掉;**让 Mosael 装**:安装计划、
-装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好。
+装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好;**换版本**:更新到更新的钉死版本(试起没通过
+就换回去)、回到上一版。
 
 **让 Mosael 装的那一份**(`mode = managed`)装在宿主分的 `<数据目录>/local-services/<连接>/`,目录就记这个(插件在里面认
 源码和 `.venv`,认目录、怎么起和「用我自己装的」走同一条路)。它的 venv 是随包的 Python 建的:装好时记下 Python 小版本,
@@ -42,7 +43,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import fragment, is_message_key, tr
+from app.core.i18n import LocalizedError, fragment, is_message_key, t, tr
 from app.core.interpreter import base_python, python_minor
 from app.core.run_log import logs_dir
 from app.core.unit_of_work import unit_of_work
@@ -156,6 +157,7 @@ def _title(db: Session, instance: PluginInstance, row: LocalService | None = Non
 #: 本机服务的地址和进程都归宿主管,该说的是它此刻的状态。
 ISSUE_KEYS = {
     "installing": "localServiceIssue_installing",
+    "updating": "localServiceIssue_updating",
     "not_installed": "localServiceIssue_notInstalled",
     "rebuild": "localServiceIssue_rebuild",
     "stopped": "localServiceIssue_stopped",
@@ -181,8 +183,9 @@ def issue_of(db: Session, instance: PluginInstance) -> tuple[str, LocalServiceEr
         return kind, LocalServiceError(ISSUE_KEYS[kind], name=name, **params)
 
     if row.mode == records.MANAGED:
-        if installer.installing(instance.id):
-            return said("installing")
+        run = installer.current(instance.id)
+        if run is not None and run.state == installer.INSTALLING:
+            return said("installing" if run.kind == installer.INSTALL else "updating")
         if not row.python_minor:
             return said("not_installed")
         if needs_rebuild(row):
@@ -682,19 +685,39 @@ def recent_install_logs(instance_id: str, limit: int = 400) -> list[str]:
 _TRIAL_POLL_SECONDS = 0.5
 
 
+def _plugin_payload(instance_id: str, row: LocalService) -> dict[str, Any]:
+    """装、换版本都给插件的那几样:安装目录、下载源、日志文件、共用的 pip 缓存。"""
+    return {"directory": row.directory, "sources": sources.for_plugin(), "log": str(install_log_path(instance_id)),
+            "pip_cache": str(records.pip_cache_dir())}
+
+
+def _hooks(run: installer.InstallRun, *, cancellable: bool = True) -> StreamHooks:
+    """插件那几步的流式进度交给这一次;`cancellable` 为假时不看取消(试起没通过、正在换回去 —— 半截的环境不能留)。"""
+    return StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _task: None,
+                       is_cancelled=run.cancel.is_set if cancellable else _never, on_step=run.on_step)
+
+
+def _never() -> bool:
+    return False
+
+
 def _install(instance_id: str, service: str, base: str, flavour: str, run: installer.InstallRun) -> None:
     """安装线程:插件做它那几步(流式),宿主试起一次;健康检查通过了才记成装好(`python_minor`)。起来之后就让它开着 ——
     装完下一步多半就是去模型库(退出 Mosael 时照样停)。"""
     with SessionLocal() as db:
         instance = inst.get(db, instance_id)
         row = _require_row(db, instance)
-        payload = {
-            "directory": row.directory, "python": base, "flavour": flavour, "sources": sources.for_plugin(),
-            "log": str(install_log_path(instance_id)), "pip_cache": str(records.pip_cache_dir()),
-        }
-        hooks = StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _task: None,
-                            is_cancelled=run.cancel.is_set, on_step=run.on_step)
-        plugin_ops.install(db, instance, service, payload, hooks)
+        payload = {**_plugin_payload(instance_id, row), "python": base, "flavour": flavour}
+        plugin_ops.install(db, instance, service, payload, _hooks(run))
+    _trial(instance_id, run)
+    with unit_of_work() as db:
+        row = _require_row(db, inst.get(db, instance_id))
+        row.python_minor = base_minor()
+
+
+def _trial(instance_id: str, run: installer.InstallRun) -> None:
+    """宿主那一步:试起一次 —— 走的就是以后真起它的那条路,健康检查通过才算成。取消就停下它;起不来停在这一步,原因原样转述
+    (带着 key,按看的人的语言说),日志在服务自己的日志里。"""
     run.begin_trial()
     with SessionLocal() as db:
         instance = inst.get(db, instance_id)
@@ -708,14 +731,103 @@ def _install(instance_id: str, service: str, base: str, flavour: str, run: insta
         stop(instance_id)
         raise installer.InstallCancelled
     if state != RUNNING:
-        # 停在「试起一次」这一步(界面写明是哪一步);原因原样转述(带着 key,按看的人的语言说),日志在服务自己的日志里
         if state == FAILED and process.error is not None:
             raise LocalServiceError.relay(process.error)
         stop(instance_id)
         raise LocalServiceError("localServiceErr_readyTimeout", seconds=int(process.ready_timeout))
-    with unit_of_work() as db:
-        row = _require_row(db, inst.get(db, instance_id))
-        row.python_minor = base_minor()
+
+
+# ---------------------------------------------------------------------------
+# 让 Mosael 装的那一份换版本(ADR 0041 §4「更新、回滚」)
+# ---------------------------------------------------------------------------
+
+
+def versions(db: Session, instance: PluginInstance) -> dict[str, str]:
+    """装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的(插件读安装目录里的记录;只看)。"""
+    row = _require_row(db, instance)
+    if row.mode != records.MANAGED:
+        raise LocalServiceError("localServiceErr_notManaged", status=422)
+    return plugin_ops.versions(db, instance, row)
+
+
+def _changeable(db: Session, instance: PluginInstance) -> tuple[LocalService, dict[str, str]]:
+    """换版本之前:是让 Mosael 装的、装好了、运行环境不用重建、没在装也没在换。交回这一行和插件说的版本。"""
+    row = _require_row(db, instance)
+    if row.mode != records.MANAGED:
+        raise LocalServiceError("localServiceErr_notManaged", status=422)
+    _runnable(db, instance, row)
+    return row, plugin_ops.versions(db, instance, row)
+
+
+def begin_update(db: Session, instance: PluginInstance, *, version: str = "") -> str:
+    """开始更新到 `version`(没说就是插件钉死的最新那个):先停下它(源码要换),后台让插件换源码、装依赖,再试起一次 ——
+    没通过就换回去。上一次换版本没做完的先「换回」。交回要换到的版本。"""
+    row, told = _changeable(db, instance)
+    if told["unfinished"]:
+        raise LocalServiceError("localServiceErr_changeUnfinished", version=told["previous"])
+    target = version.strip() or told["update"]
+    if not target:
+        raise LocalServiceError("localServiceErr_noUpdate", version=told["current"])
+    stop(instance.id)
+    manifest = inst.manifest_for(db, instance)
+    installer.begin(instance.id, install_log_path(instance.id), author_locale=manifest.default_locale,
+                    work=partial(_update, instance.id, row.service, target), kind=installer.UPDATE, target=target)
+    return target
+
+
+def begin_rollback(db: Session, instance: PluginInstance) -> str:
+    """开始回到上一版(也是收拾被打断的更新 / 回退的那一下):先停下它,后台让插件换回源码、装回依赖,再试起一次。交回要回到的版本。"""
+    row, told = _changeable(db, instance)
+    if not told["previous"]:
+        raise LocalServiceError("localServiceErr_noPrevious")
+    stop(instance.id)
+    manifest = inst.manifest_for(db, instance)
+    installer.begin(instance.id, install_log_path(instance.id), author_locale=manifest.default_locale,
+                    work=partial(_rollback, instance.id, row.service), kind=installer.ROLLBACK, target=told["previous"])
+    return told["previous"]
+
+
+def _reason(error: LocalizedError) -> Any:
+    """一句失败原因拼进另一句里时:我们自己的文案留成 key(按读的人的语言再翻),别的原样。"""
+    return fragment(error.key, **error.params) if is_message_key(error.key) else str(error)
+
+
+def _update(instance_id: str, service: str, version: str, run: installer.InstallRun) -> None:
+    """更新线程:插件换源码、装依赖(没成它自己换回去,原因照说);宿主试起一次。**试起没通过(或者这时取消)就换回去**:
+    让插件回到上一版(不看取消),再说「没成,已经换回 x」;换回去也出错就两件都说,请人点「换回」。成了就让它开着。"""
+    with SessionLocal() as db:
+        instance = inst.get(db, instance_id)
+        row = _require_row(db, instance)
+        told = plugin_ops.update(db, instance, service, {**_plugin_payload(instance_id, row), "version": version}, _hooks(run))
+    previous = str(told.get("previous") or "")
+    try:
+        _trial(instance_id, run)
+    except (LocalizedError, installer.InstallCancelled) as failed:
+        stop(instance_id)
+        run.say({one: t("localServiceUpdate_goingBack", one, version=previous) for one in ("zh", "en")})
+        try:
+            with SessionLocal() as db:
+                instance = inst.get(db, instance_id)
+                plugin_ops.rollback(db, instance, service, _plugin_payload(instance_id, _require_row(db, instance)),
+                                    _hooks(run, cancellable=False))
+        except Exception as back:  # noqa: BLE001 — 换回去失败的原因要说给人听,连同试起没通过的那个
+            logger.warning("本机服务 %s 更新到 %s 试起没通过,换回 %s 也没成", instance_id, version, previous, exc_info=True)
+            detail = _reason(back) if isinstance(back, LocalizedError) else f"{type(back).__name__}: {back}"
+            reason = _reason(failed) if isinstance(failed, LocalizedError) else fragment("localServiceUpdate_cancelled")
+            raise LocalServiceError("localServiceErr_updateRollbackFailed", version=version, previous=previous, reason=reason,
+                                    detail=detail) from back
+        if isinstance(failed, installer.InstallCancelled):
+            raise
+        raise LocalServiceError("localServiceErr_updateRolledBack", version=version, previous=previous,
+                                reason=_reason(failed)) from failed
+
+
+def _rollback(instance_id: str, service: str, run: installer.InstallRun) -> None:
+    """回退线程:插件换回源码、装回依赖,宿主试起一次。"""
+    with SessionLocal() as db:
+        instance = inst.get(db, instance_id)
+        plugin_ops.rollback(db, instance, service, _plugin_payload(instance_id, _require_row(db, instance)), _hooks(run))
+    _trial(instance_id, run)
 
 
 # ---------------------------------------------------------------------------
@@ -849,9 +961,10 @@ def stop_all() -> None:
 
 __all__ = [
     "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
-    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_using", "check_idle",
+    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_rollback",
+    "begin_update", "begin_using", "check_idle",
     "cancel_install", "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package",
     "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "plan", "prepare_install",
     "recent_install_logs", "recent_logs", "remove", "restart", "start", "start_idle_watch", "start_kept_running", "status",
-    "stop", "stop_all", "touch",
+    "stop", "stop_all", "touch", "versions",
 ]

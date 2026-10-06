@@ -1,6 +1,6 @@
 """本机服务的接口(ADR 0041):一个连接背后由宿主起停的那个进程。
 
-**建、改、起、停、认目录、补装、看安装计划、装、取消安装都要部署管理员** —— 起一个目录里的代码就是在这台机器上运行它
+**建、改、起、停、认目录、补装、看安装计划、装、取消安装、换版本都要部署管理员** —— 起一个目录里的代码就是在这台机器上运行它
 (多人部署时进程跑在服务器上)。看状态、看日志、`ensure`(工作台打开前请宿主先起好)只要是这个连接的主人:那是用它,不是管它。连接归人(见
 `plugins.my_instance`),别人的连接一律 404。
 """
@@ -22,9 +22,11 @@ from app.api.schemas import (
     LocalServiceInstallRequest,
     LocalServiceLogsOut,
     LocalServiceModelFoldersOut,
+    LocalServiceNewVersionRequest,
     LocalServiceOut,
     LocalServicePlanOut,
     LocalServiceUpdate,
+    LocalServiceVersionsOut,
 )
 from app.core.i18n import tr
 from app.db.models import PluginInstance, User
@@ -216,9 +218,47 @@ def install_local_service(instance_id: str, body: LocalServiceInstallRequest, db
     return _required(db, instance, user)
 
 
+@router.get("/plugins/instances/{instance_id}/local-service/versions", response_model=LocalServiceVersionsOut)
+def get_local_service_versions(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    try:
+        return local_services.versions(db, instance)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/local-service/update", response_model=LocalServiceOut)
+def update_local_service(instance_id: str, body: LocalServiceNewVersionRequest, db: DbSession, user: CurrentUser) -> dict:
+    """更新到更新的钉死版本:先停下它,后台换源码、装依赖、试起一次(没通过就换回去),马上回来,界面接着轮询。要确认过
+    (会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    if not body.confirm_run_code:
+        raise HTTPException(status_code=422, detail=tr("localServiceErr_confirmRequired"))
+    try:
+        local_services.begin_update(db, instance, version=body.version)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+    return _required(db, instance, user)
+
+
+@router.post("/plugins/instances/{instance_id}/local-service/rollback", response_model=LocalServiceOut)
+def rollback_local_service(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """回到上一版(也是收拾被打断的更新 / 回退的那一下):先停下它,后台换回源码、装回依赖、试起一次。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    try:
+        local_services.begin_rollback(db, instance)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+    return _required(db, instance, user)
+
+
 @router.post("/plugins/instances/{instance_id}/local-service/install/cancel", response_model=LocalServiceOut)
 def cancel_local_service_install(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
-    """取消正在装的:插件停在手上那一步,下次「接着装」从它开始。"""
+    """取消正在装的(或正在换版本的):插件停在手上那一步,下次「接着装」从它开始;换版本的换回原来那一版。"""
     ensure_deployment_admin(db, user)
     instance = my_instance(db, instance_id, user)
     local_services.cancel_install(instance.id)

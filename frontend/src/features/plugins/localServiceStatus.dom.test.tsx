@@ -90,6 +90,8 @@ describe("连接卡片标题行", () => {
     expect(connectionIssue(PKG, instance(), service("unresponsive")).label).toBe("localServiceIssueUnresponsive");
     expect(connectionIssue(PKG, instance(), service(null)).label).toBe("pluginConnStateOk");
     expect(serviceIssue(service("stopped"), false)).toBeNull();
+    expect(connectionIssue(PKG, instance(), service("updating")).label, "正在换版本:不等出错也说,不当错误摆").toBe("localServiceIssueUpdating");
+    expect(serviceIssue(service("updating"), false)?.tone).toBe("primary");
   });
 });
 

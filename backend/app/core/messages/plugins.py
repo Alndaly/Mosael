@@ -673,6 +673,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "本机的 {name} 正在装,装好之后就能用",
         "en": "The local {name} is being installed; it can be used once that finishes.",
     },
+    "localServiceIssue_updating": {
+        "zh": "本机的 {name} 正在换版本,换好之后就能用",
+        "en": "The local {name} is changing versions; it can be used once that finishes.",
+    },
     "localServiceIssue_notInstalled": {
         "zh": "本机的 {name} 还没装好:到连接页上「接着装」",
         "en": "The local {name} isn't installed yet. Choose Resume on the connection page.",
@@ -696,8 +700,46 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Start it once; it counts as installed only after a healthy start",
     },
     "localServiceErr_installing": {
-        "zh": "正在装:装好了(或者取消了)再来",
-        "en": "It's being installed. Wait until it finishes (or cancel it).",
+        "zh": "正在装或换版本:做完了(或者取消了)再来",
+        "en": "It's being installed or changing versions. Wait until that finishes (or cancel it).",
+    },
+    # ---- 让 Mosael 装的那一份换版本(更新、回到上一版) ----
+    "localServiceUpdate_trial": {
+        "zh": "试起新版本一次,没通过就换回原来的",
+        "en": "Start the new version once; if it isn't healthy, go back to the earlier one",
+    },
+    "localServiceRollback_trial": {
+        "zh": "试起一次",
+        "en": "Start it once",
+    },
+    "localServiceUpdate_goingBack": {
+        "zh": "试起没通过,正在换回 {version}…",
+        "en": "It didn't start healthily; going back to {version}…",
+    },
+    "localServiceUpdate_cancelled": {
+        "zh": "取消了",
+        "en": "cancelled",
+    },
+    "localServiceErr_updateRolledBack": {
+        "zh": "新版本 {version} 试起没通过:{reason}。已经换回 {previous}(源码和依赖)",
+        "en": "The new version {version} didn't start healthily: {reason}. Went back to {previous} (source and packages).",
+    },
+    "localServiceErr_updateRollbackFailed": {
+        "zh": "新版本 {version} 试起没通过:{reason}。换回 {previous} 时也出错了:{detail}。到连接页上点「换回 {previous}」再试一次",
+        "en": "The new version {version} didn't start healthily: {reason}. Going back to {previous} failed too: {detail}. "
+              "Choose “Go back to {previous}” on the connection page to try again.",
+    },
+    "localServiceErr_changeUnfinished": {
+        "zh": "上一次换版本没做完:先点「换回 {version}」把它收拾好",
+        "en": "The last version change didn't finish. Choose “Go back to {version}” first to tidy it up.",
+    },
+    "localServiceErr_noUpdate": {
+        "zh": "已经是最新的版本({version})了",
+        "en": "It's already the latest version ({version}).",
+    },
+    "localServiceErr_noPrevious": {
+        "zh": "没有可以回去的上一版(更新之后才有,回到上一版之后就没了)",
+        "en": "There's no earlier version to go back to (there is one after an update, until you go back).",
     },
     "localServiceErr_notInstalled": {
         "zh": "本机 {name} 还没装好:到连接页上「接着装」",

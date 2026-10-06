@@ -30,7 +30,7 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="假解释器是 shell 脚本")
 #: 插件 tools/ 下这几个模块按顶层名字导入(插件进程里就是这样):测试之间换掉,免得拿到别的测试改过的那一份。
-_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed")
+_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed", "versions")
 
 
 @pytest.fixture

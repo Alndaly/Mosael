@@ -16,7 +16,8 @@
     .venv/                用 `python` 建的 venv —— 不叫 `venv-*`:宿主按 Python 小版本清旧 venv 的那条对账不管它
     downloads/            下着的压缩包(解完删掉)
     mosael-install.json   安装记录:做完了哪几步、建 venv 用的 Python 小版本、哪种 PyTorch、源码是哪个版本
-    install.lock          装的时候攥着它:同一个目录不会有两次安装一起写
+    install.lock          装的时候攥着它:同一个目录不会有两次安装(或换版本)一起写
+    ComfyUI.previous/     换了版本之后留着的上一版源码,和它的包清单 `pip-freeze-<版本>.txt`(「回到上一版」用;见 versions)
 
 **每一步做完记一笔**,断了(取消、断网、关机)再装一次就从没做完的那一步接着来。Python 小版本变了(Mosael 升级换了随包的
 Python),venv 和装进去的包作废、重装,源码、pysssss 和模型不动;PyTorch 的种类变了(换了驱动)只重装 PyTorch。
@@ -30,7 +31,7 @@ Python),venv 和装进去的包作废、重装,源码、pysssss 和模型不动;
 - 别的(Intel Mac、AMD、只有 CPU、Linux)这一版不装,说清楚,建议「用我自己装的」或者连一台服务器。
 
 依赖都**钉死版本**:ComfyUI 的源码包(sha256)、PyTorch 三件(版本号,CUDA 的连同 `+cu130` 这类后缀)、pysssss(sha256)。
-要升级就一起换:`COMFYUI`、`TORCH`、`CUDA_CHANNELS`(和测试里的那一份)。
+要升级就一起换:`COMFYUI_PINNED`、`TORCH`、`CUDA_CHANNELS`(和测试里的那一份)。
 
 pip 那几步和宿主装引擎依赖(core/pip_install)是同一套规矩:`--prefer-binary`、`--timeout 60`、`--retries 10`,完整输出落盘
 (宿主给的日志文件),失败时挑结论行、不取尾巴,常见病因说人话 —— 插件进程只有标准库,碰不到宿主的代码,所以照抄了一份,
@@ -62,16 +63,20 @@ Emit = Callable[[dict[str, Any]], None]
 
 # --- 钉死的版本 ------------------------------------------------------------------
 
-COMFYUI_VERSION = "0.39.0"
-#: ComfyUI 的源码包(codeload 现打包、不给 Content-Length;12.6 MB,解开 1455 个文件、49 MB)。sha256 在测试场下过两次一致。
-COMFYUI = pinned.Archive(
-    name=f"ComfyUI {COMFYUI_VERSION}",
-    url=f"https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/refs/tags/v{COMFYUI_VERSION}",
-    sha256="095d95805bdf36e73bbd15d6d2ee15fa627708679a2e67b5f467db4c57e7ff0a",
-    size=12_627_617,
-    max_members=10_000,
-    max_unpacked=400 * 1024 * 1024,
-)
+def _comfyui(version: str, sha256: str, size: int) -> pinned.Archive:
+    """ComfyUI 一个版本的源码包(codeload 现打包、不给 Content-Length;12 MB 上下,解开一千四五百个文件、近 50 MB)。"""
+    return pinned.Archive(name=f"ComfyUI {version}",
+                          url=f"https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/refs/tags/v{version}",
+                          sha256=sha256, size=size, max_members=10_000, max_unpacked=400 * 1024 * 1024)
+
+
+#: **钉死的 ComfyUI 版本**,从旧到新;sha256 都在测试场下过两次一致。最后那个是新装时装的、「更新 ComfyUI」更新到的;前一个留着:
+#: 装着它的能更新上来(「回到上一版」用的是更新前留在旁边的那一份源码和依赖清单,不重下)。要升级就往后加一个、去掉最旧的。
+COMFYUI_PINNED = {
+    "0.38.0": _comfyui("0.38.0", "185a3e55b9d7e06a89064a3b0cc9644295ee033e81fbcec8d0d475ae5590a136", 12_576_846),
+    "0.39.0": _comfyui("0.39.0", "095d95805bdf36e73bbd15d6d2ee15fa627708679a2e67b5f467db4c57e7ff0a", 12_627_617),
+}
+COMFYUI_VERSION = list(COMFYUI_PINNED)[-1]
 #: PyTorch 三件的版本(ComfyUI 0.39.0 的测试场装出来的就是这一组;torchaudio 从 2.11 起不再跟着 torch 发版)。
 TORCH = (("torch", "2.14.1"), ("torchvision", "0.29.1"), ("torchaudio", "2.11.0"))
 
@@ -406,14 +411,14 @@ def _torch_label(flavour: str) -> dict[str, str]:
     return {"zh": f"PyTorch {version}(CUDA {channel.cuda})", "en": f"PyTorch {version} (CUDA {channel.cuda})"}
 
 
-def _titles(flavour: str) -> dict[str, dict[str, str]]:
+def _titles(flavour: str, version: str = COMFYUI_VERSION) -> dict[str, dict[str, str]]:
     torch = _torch_label(flavour) if flavour else {"zh": "PyTorch", "en": "PyTorch"}
     check = {"zh": "试一下 Apple 显卡", "en": "try the Apple GPU"} if flavour == "mps" else \
         {"zh": "试一下显卡", "en": "try the GPU"}
     return {
         "disk": {"zh": "查剩余空间", "en": "Check free disk space"},
-        "download": {"zh": f"下载 ComfyUI {COMFYUI_VERSION} 源码(按 sha256 校验)",
-                     "en": f"Download the ComfyUI {COMFYUI_VERSION} source (checked by sha256)"},
+        "download": {"zh": f"下载 ComfyUI {version} 源码(按 sha256 校验)",
+                     "en": f"Download the ComfyUI {version} source (checked by sha256)"},
         "extract": {"zh": "解开源码", "en": "Unpack the source"},
         "venv": {"zh": "建 Python 环境、升级 pip", "en": "Create the Python environment and upgrade pip"},
         "torch": {"zh": f"装 {torch['zh']},{check['zh']}", "en": f"Install {torch['en']} and {check['en']}"},
@@ -476,7 +481,8 @@ def done_steps(root: Path, record: dict[str, Any], *, python_minor: str, flavour
         done -= {"torch"}
     if not (root / SOURCE / "main.py").is_file():
         done -= {"extract", "nodes"}
-    if "extract" not in done and "download" in done and not (root / DOWNLOADS / _tarball_name()).is_file():
+    if "extract" not in done and "download" in done and \
+            not (root / DOWNLOADS / _tarball_name(installing_version(record))).is_file():
         done -= {"download"}
     if not venv_python(root, windows=windows).is_file() or _venv_minor(root) != python_minor:
         done -= {"venv", "torch", "requirements"}
@@ -485,8 +491,28 @@ def done_steps(root: Path, record: dict[str, Any], *, python_minor: str, flavour
     return done
 
 
-def _tarball_name() -> str:
-    return f"ComfyUI-{COMFYUI_VERSION}.tar.gz"
+def unfinished_change(record: dict[str, Any], locale: str) -> str:
+    """上一次换版本(更新、回到上一版)被强行打断了(后端被杀、断电):记录里留着标记。这时源码和依赖可能半新半旧 —— 不起它、
+    不在它上面接着装,先到连接页上「换回」把它收拾好(versions.rollback)。没有就是空串。"""
+    back_to = str((record.get("restoring") or {}).get("version") or (record.get("previous") or {}).get("version") or "")
+    if not (record.get("updating") or record.get("restoring")):
+        return ""
+    return say(locale, f"上一次换 ComfyUI 版本没做完(Mosael 被强行关掉了,或者断电):到连接页上点「换回 {back_to}」把它收拾好",
+               f"The last ComfyUI version change didn't finish (Mosael was closed forcibly, or the power went out). Choose "
+               f"“Go back to {back_to}” on the connection page to tidy it up")
+
+
+def _tarball_name(version: str) -> str:
+    return f"ComfyUI-{version}.tar.gz"
+
+
+def installing_version(record: dict[str, Any], wanted: str = "") -> str:
+    """装(或接着装)哪个版本:源码已经解开了就是记录里的那个(接着装不换版本);还没解开就是要的那个(没说就是最新钉死的)。
+    记录里的、要的都得是钉死的版本之一。"""
+    recorded = str(record.get("comfyui") or "")
+    if "extract" in (record.get("done") or []) and recorded in COMFYUI_PINNED:
+        return recorded
+    return wanted if wanted in COMFYUI_PINNED else (recorded if recorded in COMFYUI_PINNED else COMFYUI_VERSION)
 
 
 def _size_of(root: Path) -> int:
@@ -558,7 +584,8 @@ def plan(payload: dict[str, Any], locale: str, *, machine: Machine | None = None
     verdict = judge(machine)
     sources = _sources(payload)
     record = read_record(root)
-    titles = _titles(verdict.flavour)
+    version = installing_version(record, str(payload.get("version") or ""))
+    titles = _titles(verdict.flavour, version)
     done = done_steps(root, record, python_minor=machine.python_minor, flavour=verdict.flavour,
                       windows=machine.system == "win32") if verdict.ok else set()
     problems: list[dict[str, Any]] = [{"level": "warning", "text": text} for text in verdict.warnings]
@@ -576,8 +603,8 @@ def plan(payload: dict[str, Any], locale: str, *, machine: Machine | None = None
         index = torch_index(verdict.flavour, sources)
         # 地址已经是改写过的(GitHub 镜像前缀接在前面、pip / PyTorch 源换过);`source` 说是被下载源里的哪一项改写的
         downloads = [
-            {"label": {"zh": f"ComfyUI {COMFYUI_VERSION} 源码", "en": f"ComfyUI {COMFYUI_VERSION} source"},
-             "url": pinned.source_url(COMFYUI.url, sources["github_mirror"]), "source": "github"},
+            {"label": {"zh": f"ComfyUI {version} 源码", "en": f"ComfyUI {version} source"},
+             "url": pinned.source_url(COMFYUI_PINNED[version].url, sources["github_mirror"]), "source": "github"},
             {"label": _torch_label(verdict.flavour), "url": index or "https://pypi.org/simple",
              "source": "pip" if verdict.flavour == "mps" else "pytorch"},
             {"label": {"zh": "ComfyUI 的依赖、ComfyUI-Manager", "en": "ComfyUI's dependencies, ComfyUI-Manager"},
@@ -591,7 +618,7 @@ def plan(payload: dict[str, Any], locale: str, *, machine: Machine | None = None
         "verdict": verdict.reason,
         "flavour": verdict.flavour,
         "torch": _torch_label(verdict.flavour) if verdict.ok else "",
-        "comfyui": str(record.get("comfyui") or COMFYUI_VERSION),
+        "comfyui": version,
         "python_minor": machine.python_minor,
         "disk_bytes": need,
         "free_bytes": free,
@@ -613,15 +640,17 @@ def _disk_text(free: int, remaining: int, need: int) -> dict[str, str]:
 class _Reporter:
     """一步一步地说:开头一行说有哪几步,之后每一步开始、进行中(字节、正在下哪个文件)、做完各一行。进行中的最多每 0.25 秒一行。"""
 
-    def __init__(self, emit: Emit, titles: dict[str, dict[str, str]]) -> None:
+    def __init__(self, emit: Emit, titles: dict[str, dict[str, str]], steps: tuple[str, ...] = STEPS) -> None:
         self._emit = emit
         self._titles = titles
+        self._steps = steps
         self._last = 0.0
         self._item: Any = None
         self.key = ""
 
     def outline(self, done: set[str]) -> None:
-        self._emit({"event": "step", "outline": [{"key": key, "title": self._titles[key], "done": key in done} for key in STEPS]})
+        self._emit({"event": "step", "outline": [{"key": key, "title": self._titles[key], "done": key in done}
+                                                 for key in self._steps]})
 
     def begin(self, key: str) -> None:
         self.key = key
@@ -705,6 +734,12 @@ class _Job:
     report: _Reporter
     is_cancelled: Callable[[], bool]
     record: dict[str, Any] = field(default_factory=dict)
+    #: 装(或换到)哪个钉死的版本。
+    version: str = COMFYUI_VERSION
+    #: 这一次每一步的标题(pip 失败时说是哪一步没成);空就按安装的那几步。
+    titles: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: 失败了点哪个按钮再来(中文、英文):装是「接着装」,换版本是「更新」。
+    retry: tuple[str, str] = ("接着装", "Resume")
 
     @property
     def windows(self) -> bool:
@@ -818,13 +853,16 @@ _PIP_VERDICT = re.compile(r"^ERROR:\s*(.+)$")
 _PIP_NOISE = re.compile(r"^ERROR:\s*(note:|hint:|for more information)", re.I)
 
 
-def explain_pip(job: _Job, tail: list[str], *, torch_step: bool) -> ComfyError:
-    """pip 失败 → 一段人能照做的话:病因、该换哪个源再「接着装」、pip 自己的结论行(挑 `ERROR:` 那几行,不取尾巴)。"""
+def explain_pip(job: _Job, tail: list[str], *, torch_step: bool, title: dict[str, str] | None = None) -> ComfyError:
+    """pip 失败 → 一段人能照做的话:病因、该换哪个源再「接着装」、pip 自己的结论行(挑 `ERROR:` 那几行,不取尾巴)。
+    `title` 是这一次 pip 在做什么(缺省按是不是装 PyTorch 那一步取安装步骤的标题)。"""
     text = "\n".join(tail)
     cause = next(((kind, zh, en) for pattern, kind, zh, en in _PIP_CAUSES if pattern.search(text)), None)
     verdict = [match.group(0) for line in tail if (match := _PIP_VERDICT.match(line.strip())) and not _PIP_NOISE.match(line.strip())]
     verdict = list(dict.fromkeys(verdict))[:3]
-    title = _titles(job.flavour)["torch" if torch_step else "requirements"]
+    key = "torch" if torch_step else "requirements"
+    title = title or job.titles.get(key) or _titles(job.flavour)[key]
+    again_zh, again_en = job.retry
     uses_pytorch_source = torch_step and job.flavour != "mps"
     source_zh = "「管理 → 下载源」里的「PyTorch 源」" if uses_pytorch_source else "「管理 → 下载源」里的 pip 源"
     source_en = "the PyTorch source under Admin → Download sources" if uses_pytorch_source else \
@@ -835,18 +873,19 @@ def explain_pip(job: _Job, tail: list[str], *, torch_step: bool) -> ComfyError:
     else:
         kind, why_zh, why_en = cause
         if kind == "disk":
-            next_zh, next_en = "清出空间后「接着装」,已经下好的不会重下", "free up space, then choose Resume; what's downloaded isn't fetched again"
+            next_zh, next_en = f"清出空间后「{again_zh}」,已经下好的不会重下", \
+                f"free up space, then choose {again_en}; what's downloaded isn't fetched again"
         elif kind == "source":
-            next_zh, next_en = f"换一个{source_zh}再「接着装」", f"switch {source_en} and choose Resume"
+            next_zh, next_en = f"换一个{source_zh}再「{again_zh}」", f"switch {source_en} and choose {again_en}"
         else:
-            next_zh, next_en = "「接着装」再试一次;还不行看看日志", "choose Resume to try again; if it still fails, check the log"
+            next_zh, next_en = f"「{again_zh}」再试一次;还不行看看日志", f"choose {again_en} to try again; if it still fails, check the log"
     tail_text = (" / ".join(verdict))[:400]
     return ComfyError(say(job.locale,
                           f"{title['zh']}失败:{why_zh}。{next_zh}" + (f"\n{tail_text}" if tail_text else ""),
                           f"{title['en']} failed: {why_en}. To fix it, {next_en}" + (f"\n{tail_text}" if tail_text else "")))
 
 
-def _pip_install(job: _Job, args: list[str], *, index: str, torch_step: bool) -> None:
+def _pip_install(job: _Job, args: list[str], *, index: str, torch_step: bool, title: dict[str, str] | None = None) -> None:
     """`pip install` 一次:按字节报进度(raw 进度条)、报正在下哪个文件、装的时候说一声;失败说人话。
 
     **不加 `--upgrade`**:依赖那一步要是升级 requirements.txt 里没写版本的 `torch`,会从 pip 源换上 PyPI 的那一个 —— Windows 上
@@ -869,7 +908,7 @@ def _pip_install(job: _Job, args: list[str], *, index: str, torch_step: bool) ->
     argv = [str(job.python), "-m", "pip", "install", *PIP_ARGS, *(["--index-url", index] if index else []), *args]
     code, tail = _stream(job, argv, timeout=PIP_TIMEOUT_SECONDS, on_line=on_line)
     if code != 0:
-        raise explain_pip(job, tail, torch_step=torch_step)
+        raise explain_pip(job, tail, torch_step=torch_step, title=title)
 
 
 _TORCH_CHECK = r"""
@@ -943,21 +982,22 @@ def _step_disk(job: _Job, left: list[str]) -> None:
 
 
 def _step_download(job: _Job) -> None:
-    target = job.root / DOWNLOADS / _tarball_name()
+    archive = COMFYUI_PINNED[job.version]
+    target = job.root / DOWNLOADS / _tarball_name(job.version)
     if target.is_file():
         target.unlink()  # 上一次没解成的那一份:按记录它没下完(或者不对),重下
-    url = pinned.source_url(COMFYUI.url, job.sources["github_mirror"])
+    url = pinned.source_url(archive.url, job.sources["github_mirror"])
     job.log.line(f"下载 {url}")
-    job.report.progress(done_bytes=0, total_bytes=COMFYUI.size, item=f"{COMFYUI.name}.tar.gz", force=True)
-    pinned.download(COMFYUI, target, job.locale, mirror=job.sources["github_mirror"], is_cancelled=job.is_cancelled,
+    job.report.progress(done_bytes=0, total_bytes=archive.size, item=f"{archive.name}.tar.gz", force=True)
+    pinned.download(archive, target, job.locale, mirror=job.sources["github_mirror"], is_cancelled=job.is_cancelled,
                     on_bytes=lambda done, total: job.report.progress(done_bytes=done, total_bytes=total,
-                                                                     item=f"{COMFYUI.name}.tar.gz"))
-    job.log.line(f"sha256 对上了:{COMFYUI.sha256}")
+                                                                     item=f"{archive.name}.tar.gz"))
+    job.log.line(f"sha256 对上了:{archive.sha256}")
 
 
 def _step_extract(job: _Job) -> None:
     source = job.root / SOURCE
-    tarball = job.root / DOWNLOADS / _tarball_name()
+    tarball = job.root / DOWNLOADS / _tarball_name(job.version)
     if (source / "main.py").is_file():
         job.log.line(f"{source} 已经在了(上一次解完、没来得及记一笔),不重解")
     else:
@@ -966,9 +1006,9 @@ def _step_extract(job: _Job) -> None:
             aside = job.root / f"{SOURCE}.incomplete-{int(time.time())}"
             source.replace(aside)
             job.log.line(f"{source} 不完整,挪到 {aside}")
-        pinned.unpack(tarball, source, COMFYUI, job.locale, is_cancelled=job.is_cancelled)
+        pinned.unpack(tarball, source, COMFYUI_PINNED[job.version], job.locale, is_cancelled=job.is_cancelled)
     tarball.unlink(missing_ok=True)
-    job.record["comfyui"] = service.comfyui_version(source) or COMFYUI_VERSION
+    job.record["comfyui"] = service.comfyui_version(source) or job.version
 
 
 def _step_venv(job: _Job) -> None:
@@ -1047,17 +1087,22 @@ def install(payload: dict[str, Any], locale: str, emit: Emit, *, machine: Machin
                              f"This machine changed since you confirmed ({confirmed} then, {verdict.flavour} now). Review the "
                              f"install plan again, then install"))
     root.mkdir(parents=True, exist_ok=True)
-    titles = _titles(verdict.flavour)
     log = _Log(str(payload.get("log") or ""))
     try:
         with _locked(root, locale):
             record = read_record(root)
+            unfinished = unfinished_change(record, locale)
+            if unfinished:
+                raise ComfyError(unfinished)
+            version = installing_version(record, str(payload.get("version") or ""))
+            titles = _titles(verdict.flavour, version)
             done = done_steps(root, record, python_minor=machine.python_minor, flavour=verdict.flavour,
                               windows=machine.system == "win32")
+            # 记录里别的(换版本时留下的上一版、没做完的标记)原样留着:接着装、重建运行环境不碰它们
             job = _Job(root=root, base=base, machine=machine, flavour=verdict.flavour, sources=_sources(payload),
                        pip_cache=str(payload.get("pip_cache") or ""), locale=locale, log=log, report=_Reporter(emit, titles),
-                       is_cancelled=is_cancelled,
-                       record={"comfyui": record.get("comfyui") or COMFYUI_VERSION, "flavour": record.get("flavour", ""),
+                       is_cancelled=is_cancelled, version=version, titles=titles,
+                       record={**record, "comfyui": version, "flavour": record.get("flavour", ""),
                                "python_minor": record.get("python_minor", ""), "done": sorted(done, key=STEPS.index)})
             log.line(f"== {datetime.now(UTC).isoformat()} 装 ComfyUI 到 {root}({verdict.platform['zh']},{verdict.flavour},"
                      f"Python {machine.python_minor})")
@@ -1086,7 +1131,7 @@ def install(payload: dict[str, Any], locale: str, emit: Emit, *, machine: Machin
                 "directory": str(root),
                 "python": str(job.python),
                 "python_minor": job.record.get("python_minor") or machine.python_minor,
-                "comfyui": job.record.get("comfyui") or COMFYUI_VERSION,
+                "comfyui": job.record.get("comfyui") or version,
                 "flavour": verdict.flavour,
             }
     except pinned.Cancelled:
@@ -1099,7 +1144,7 @@ def install(payload: dict[str, Any], locale: str, emit: Emit, *, machine: Machin
         log.close()
 
 
-__all__ = ["COMFYUI", "COMFYUI_VERSION", "CUDA_CHANNELS", "CudaChannel", "DISK_NEED", "Gpu", "Machine", "STEPS", "TORCH",
-           "Verdict", "done_steps", "explain_pip", "install", "judge", "parse_compute", "parse_driver", "parse_gpus",
+__all__ = ["COMFYUI_PINNED", "COMFYUI_VERSION", "CUDA_CHANNELS", "CudaChannel", "DISK_NEED", "Gpu", "Machine", "STEPS", "TORCH",
+           "Verdict", "done_steps", "explain_pip", "install", "installing_version", "judge", "parse_compute", "parse_driver", "parse_gpus",
            "parse_memory", "plan", "probe_machine", "read_nvidia", "read_record", "torch_index", "torch_requirements",
-           "venv_python"]
+           "unfinished_change", "venv_python"]

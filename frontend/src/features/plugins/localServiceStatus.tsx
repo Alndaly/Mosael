@@ -7,7 +7,8 @@
  *   该说的是它此刻是什么状态、能点什么(启动、看日志、去装);
  * - `ServiceIssueNote`:那一句话和该给的那一下;
  * - `explainOpenFailure`:不在连接页上的地方(工作台、内嵌编辑器打开失败)临时问一次;
- * - `LocalServiceLogDialog`:日志窗口(连接页、出错时的「看日志」共用)。
+ * - `LocalServiceLogDialog`:日志窗口(连接页、出错时的「看日志」共用);
+ * - `machineKey`:确认框里说「在哪台机器上运行」(装、更新都要说)。
  */
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +30,11 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { cn } from "@/lib/utils";
+
+/** 确认框里说「在哪台机器上运行」:桌面版是这台电脑,网页版连的是一台服务器。 */
+export function machineKey(): MessageKey {
+  return typeof window !== "undefined" && window.mosaelDesktop ? "localServiceWhereDesktop" : "localServiceWhereServer";
+}
 
 /** 这个连接的本机服务在缓存里的键。 */
 export const localServiceKey = (instanceId: string) => ["local-service", instanceId] as const;
@@ -92,14 +98,16 @@ const ISSUE: Record<ServiceIssueKind, { tone: ServiceIssueTone; label: MessageKe
   stopped: { tone: "muted", label: "localServiceStateStopped", action: "start" },
   starting: { tone: "primary", label: "localServiceStateStarting", action: null },
   installing: { tone: "primary", label: "localServiceIssueInstalling", action: null },
+  updating: { tone: "primary", label: "localServiceIssueUpdating", action: null },
   failed: { tone: "warning", label: "localServiceStateFailed", action: "logs" },
   unresponsive: { tone: "warning", label: "localServiceIssueUnresponsive", action: "logs" },
   not_installed: { tone: "warning", label: "localServiceIssueNotInstalled", action: "install" },
   rebuild: { tone: "warning", label: "localServiceRebuildTitle", action: "install" },
 };
 
-/** 不等出错也该说的那几种:起不来、不应答、还没装好、要重建、正在装。停着、正在起只在真有一次失败时才替掉原因 —— 平时它们就是常态。 */
-const ALWAYS: readonly ServiceIssueKind[] = ["failed", "unresponsive", "not_installed", "rebuild", "installing"];
+/** 不等出错也该说的那几种:起不来、不应答、还没装好、要重建、正在装、正在换版本。停着、正在起只在真有一次失败时才替掉原因 ——
+ * 平时它们就是常态。 */
+const ALWAYS: readonly ServiceIssueKind[] = ["failed", "unresponsive", "not_installed", "rebuild", "installing", "updating"];
 
 /**
  * 这个连接此刻该怎么说:背后的本机服务用不了时按它的状态说(`failing`:这个连接上有一次失败 —— 目录没刷出来、模型库读不出来;

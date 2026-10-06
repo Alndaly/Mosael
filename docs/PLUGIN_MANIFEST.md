@@ -1518,6 +1518,9 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `service_readdress` | `from`、`to` | 端口改了:把按旧地址存的本地数据搬到新地址名下。做不到只是少了缓存 |
 | `service_plan` | `directory`(宿主分的安装目录)、`python`(建 venv 用的随包 Python)、`sources` | 让 Mosael 装之前:`ok`(这台机器能装)、`platform` / `verdict`(是什么机器、为什么能 / 不能装)、`flavour`(装哪种,确认后原样带回)、`torch`、`comfyui`(版本)、`disk_bytes` / `free_bytes`、`steps: [{key, title, done}]`(接着装时做完的打勾)、`downloads: [{label, url, source}]`(`url` 是按下载源改写过的地址,`source` 说是被哪一项改写的:`github` / `pytorch` / `pip`;宿主据此在旁边写明那一项此刻的设置,并按这个连接的出站代理标出绕过列表里直连的那几个)、`problems`(同 `service_detect`;有一条 error 就开始不了)。只看、不写 |
 | `service_install` | `directory`、`python`、`flavour`、`sources`、`log`(宿主给的日志文件)、`pip_cache` | **流式**(见下):一步一行进度,最后交回装好的那一份(宿主据此试起一次,健康检查通过才算装好)。取消文件出现就停在手上那一步;再来一次从没做完的那一步接着装 |
+| `service_versions` | `directory` | 让 Mosael 装的那一份:`current`(装着的版本)、`latest`、`update`(能更新到哪个,没有是空串)、`previous`(「回到上一版」回到哪个,没有是空串)、`unfinished`(`update` 更新被强行打断、`rollback` 回退时依赖还没装回去;这时要先回退收拾,`previous` 就是回到哪个)。只看、不写 |
+| `service_update` | `directory`、`version`(空 = 最新)、`sources`、`log`、`pip_cache` | **流式**,和 `service_install` 一样一步一行:换到一个更新的版本。没成(或取消)由插件自己换回原来那一版再报错;成了交回 `comfyui`(新版本)、`previous`(上一版),宿主接着试起一次 —— 试起没通过,宿主调 `service_rollback` |
+| `service_rollback` | `directory`、`sources`、`log`、`pip_cache` | **流式**:回到上一版(也收拾被打断的更新 / 回退),交回 `comfyui`;宿主接着试起一次 |
 
 `sources` 是「管理 → 下载源」里的三个地址:`pip_index_url`(空 = 官方 PyPI)、`pytorch_index_url`(PyTorch 的 simple 索引根,
 下面按 `cu130` 这类分频道)、`github_mirror`(下 GitHub 上的压缩包时接在原地址前面的前缀;空 = 直连)。代理不在这里:插件进程

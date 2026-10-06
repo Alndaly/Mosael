@@ -7,6 +7,8 @@
 - **取消**:拉下这一次的开关 → 运行时建取消文件 → 插件停在手上那一步(下次从它开始);试起那一步取消就是停下它。
 - **进度不落库**:后端重启后内存里没了,磁盘上的安装记录还在 —— 连接页按安装计划摆出哪几步做完了,点「接着装」。
 - **速度**由宿主按字节和时间算(同一步、同一个文件里两次之间下了多少),插件只报字节。
+- **换版本也是这样一次**(`kind`:`update` 更新到某个钉死版本、`rollback` 回到上一版):插件那几步换源码、装依赖,宿主试起一次;
+  同一个连接同一时刻只有一次(装、更新、回退互斥),进度、取消、日志都是同一套。
 """
 
 from __future__ import annotations
@@ -34,8 +36,18 @@ SUCCEEDED = "succeeded"
 FAILED = "failed"
 CANCELLED = "cancelled"
 STATES = (INSTALLING, SUCCEEDED, FAILED, CANCELLED)
-#: 宿主自己的那一步(插件的几步之后)。
+#: 这一次在做什么:装(或接着装、重建运行环境)、更新到更新的钉死版本、回到上一版。
+INSTALL = "install"
+UPDATE = "update"
+ROLLBACK = "rollback"
+KINDS = (INSTALL, UPDATE, ROLLBACK)
+#: 宿主自己的那一步(插件的几步之后),按这一次在做什么说。
 TRIAL = "trial"
+TRIAL_TITLES = {
+    INSTALL: "localServiceInstall_trial",
+    UPDATE: "localServiceUpdate_trial",
+    ROLLBACK: "localServiceRollback_trial",
+}
 #: 一份安装计划最多几步(插件说的,再加宿主那一步)。
 MAX_STEPS = 20
 #: 算速度的平滑:这么多秒之前的样本权重减半(core/rate,和别的下载同一个算法)。
@@ -59,10 +71,13 @@ class _Step:
 class InstallRun:
     """一个连接这一次安装。线程安全:安装线程写,看状态的请求读。"""
 
-    def __init__(self, instance_id: str, log: ServiceLog, *, author_locale: str) -> None:
+    def __init__(self, instance_id: str, log: ServiceLog, *, author_locale: str, kind: str = INSTALL, target: str = "") -> None:
         self.instance_id = instance_id
         self.log = log
         self.author_locale = author_locale
+        #: 装、更新、回退;更新 / 回退时换到哪个版本(界面上写「正在更新到 0.39.0」)。
+        self.kind = kind
+        self.target = target
         self.state = INSTALLING
         self.steps: list[_Step] = []
         self.current = ""
@@ -116,6 +131,12 @@ class InstallRun:
             self.current = TRIAL
             self._clear_progress()
 
+    def say(self, item: dict[str, str]) -> None:
+        """宿主在手上这一步里说一句(按语言分着给):试起没通过、正在换回上一版时。"""
+        with self._lock:
+            self._clear_progress()
+            self.item = item
+
     def _step(self, key: str) -> _Step:
         found = next((one for one in self.steps if one.key == key), None)
         if found is None:
@@ -158,9 +179,11 @@ class InstallRun:
                 return text_of(value, locale, author_locale=self.author_locale).strip()[:300] if value else ""
 
             return {
+                "kind": self.kind,
+                "target": self.target,
                 "state": self.state,
                 "step": self.current,
-                "steps": [{"key": one.key, "title": tr("localServiceInstall_trial") if one.key == TRIAL else said(one.title),
+                "steps": [{"key": one.key, "title": tr(TRIAL_TITLES[self.kind]) if one.key == TRIAL else said(one.title),
                            "done": one.done} for one in self.steps],
                 "done_bytes": self.done_bytes,
                 "total_bytes": self.total_bytes,
@@ -195,8 +218,11 @@ def installing(instance_id: str) -> bool:
     return run is not None and run.state == INSTALLING
 
 
-def begin(instance_id: str, log_path: Path, *, author_locale: str, work: Callable[[InstallRun], None]) -> InstallRun:
-    """开一次安装:日志先滚一份(上一次的留成 `.1`),起后台线程跑 `work(run)`。已经在装就拒。
+def begin(
+    instance_id: str, log_path: Path, *, author_locale: str, work: Callable[[InstallRun], None], kind: str = INSTALL,
+    target: str = "",
+) -> InstallRun:
+    """开一次安装(或换版本,见 `kind`):日志先滚一份(上一次的留成 `.1`),起后台线程跑 `work(run)`。已经在装(或在换)就拒。
 
     `work` 正常返回 = 装好了;抛 PluginCancelled / InstallCancelled = 取消了;抛别的 = 没装成(原因照说)。"""
     with _registry_lock:
@@ -205,7 +231,7 @@ def begin(instance_id: str, log_path: Path, *, author_locale: str, work: Callabl
             raise LocalServiceError("localServiceErr_installing")
         log = ServiceLog(log_path)
         log.open_for_child(fresh=True).close()
-        run = InstallRun(instance_id, log, author_locale=author_locale)
+        run = InstallRun(instance_id, log, author_locale=author_locale, kind=kind, target=target)
         _runs[instance_id] = run
     run.thread = threading.Thread(target=_run, args=(run, work), daemon=True, name=f"local-service-install-{instance_id[:8]}")
     run.thread.start()
@@ -217,16 +243,16 @@ def _run(run: InstallRun, work: Callable[[InstallRun], None]) -> None:
         work(run)
     except (PluginCancelled, InstallCancelled):
         run.finish(CANCELLED)
-        logger.info("本机服务 %s 的安装取消了", run.instance_id)
+        logger.info("本机服务 %s 的这一次(%s)取消了", run.instance_id, run.kind)
     except LocalizedError as exc:
         run.finish(FAILED, exc)
-        logger.warning("本机服务 %s 没装成:%s", run.instance_id, exc)
+        logger.warning("本机服务 %s 这一次(%s)没成:%s", run.instance_id, run.kind, exc)
     except Exception as exc:  # noqa: BLE001 — 安装线程里的意外:记下来,停在「没装成」,原因照说
-        logger.exception("本机服务 %s 安装时出错", run.instance_id)
+        logger.exception("本机服务 %s 这一次(%s)出错", run.instance_id, run.kind)
         run.finish(FAILED, LocalServiceError("localServiceErr_installCrashed", detail=f"{type(exc).__name__}: {exc}"))
     else:
         run.finish(SUCCEEDED)
-        logger.info("本机服务 %s 装好了", run.instance_id)
+        logger.info("本机服务 %s 这一次(%s)成了", run.instance_id, run.kind)
 
 
 def cancel(instance_id: str) -> bool:
@@ -262,6 +288,6 @@ def cancel_all(wait: float = SHUTDOWN_WAIT_SECONDS) -> None:
 
 
 __all__ = [
-    "CANCELLED", "FAILED", "INSTALLING", "InstallCancelled", "InstallRun", "STATES", "SUCCEEDED", "TRIAL", "begin", "cancel",
-    "cancel_all", "current", "forget", "installing",
+    "CANCELLED", "FAILED", "INSTALL", "INSTALLING", "KINDS", "ROLLBACK", "InstallCancelled", "InstallRun", "STATES", "SUCCEEDED",
+    "TRIAL", "UPDATE", "begin", "cancel", "cancel_all", "current", "forget", "installing",
 ]

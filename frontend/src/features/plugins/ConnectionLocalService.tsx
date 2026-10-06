@@ -41,7 +41,14 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
-import { LocalServiceLogDialog, focusConnectionSection, localServiceKey, useLocalService } from "@/features/plugins/localServiceStatus";
+import {
+  LocalServiceLogDialog,
+  focusConnectionSection,
+  localServiceKey,
+  machineKey,
+  useLocalService,
+} from "@/features/plugins/localServiceStatus";
+import { ManagedVersion } from "@/features/plugins/LocalServiceVersion";
 import { ModelLibraryDialog } from "@/features/plugins/ModelLibrary";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
@@ -89,11 +96,6 @@ const STATE_TONE: Record<LocalServiceState, CatalogTone> = {
 /** 「附加参数」一项一个 → 一行字(带空格的一项用双引号括起来;和后端 records.split_args 是一对)。 */
 export function joinArgs(args: readonly string[]): string {
   return args.map((one) => (/\s/.test(one) ? `"${one}"` : one)).join(" ");
-}
-
-/** 确认框里说「在哪台机器上运行」:桌面版是这台电脑,网页版连的是一台服务器。 */
-function machineKey(): MessageKey {
-  return typeof window !== "undefined" && window.mosaelDesktop ? "localServiceWhereDesktop" : "localServiceWhereServer";
 }
 
 function settle(qc: QueryClient, instanceId: string, next: LocalService | null | undefined) {
@@ -667,7 +669,7 @@ function StepList({ steps, current }: { steps: readonly { key: string; title: st
   );
 }
 
-/** 正在装:第几步、整体进度、每一步、这一步手上那个文件(下了多少 / 一共多少 · 多快),取消和安装日志。 */
+/** 正在装(或正在换版本):第几步、整体进度、每一步、这一步手上那个文件(下了多少 / 一共多少 · 多快),取消和安装日志。 */
 function InstallProgress({
   title,
   run,
@@ -694,7 +696,9 @@ function InstallProgress({
     run.total_bytes ? `${formatBytes(run.done_bytes ?? 0)} / ${formatBytes(run.total_bytes)}` : "",
     run.speed ? formatSpeed(run.speed) : "",
   ].filter(Boolean);
-  const label = t("localServiceInstalling").replace("{title}", title);
+  const label = t(run.kind === "update" ? "localServiceUpdating" : run.kind === "rollback" ? "localServiceRollingBack" : "localServiceInstalling")
+    .replace("{title}", title)
+    .replace("{version}", run.target ?? "");
   return (
     <div className="grid gap-3 py-5" role="status" aria-live="polite">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -714,7 +718,7 @@ function InstallProgress({
         </Button>
         <Hint disabledReason={canManage ? undefined : t("localServiceAdminOnly")}>
           <Button variant="outline" size="sm" disabled={!canManage} loading={cancelling} onClick={onCancel}>
-            <Square /> {t("localServiceInstallCancel")}
+            <Square /> {t(run.kind === "install" ? "localServiceInstallCancel" : "localServiceChangeCancel")}
           </Button>
         </Hint>
       </div>
@@ -770,7 +774,8 @@ function ManagedNotices({
       </div>
     );
   }
-  if (service.install?.state !== "succeeded") return null;
+  //: 刚装好(换版本的结果在「版本」那一行说)
+  if (service.install?.state !== "succeeded" || service.install.kind !== "install") return null;
   return (
     <div role="status" className="flex min-w-0 flex-wrap items-center gap-3 py-4">
       <CircleCheck size={16} aria-hidden className="shrink-0 text-success" />
@@ -982,6 +987,7 @@ function ServiceRows({
         <AddNodesRow instanceId={instanceId} offer={detection.data.add_nodes} running={service.state === "running"} disabled={!manage}
                      onInstalled={recheck} />
       )}
+      {managed && service.installed && !service.needs_rebuild && <ManagedVersion instanceId={instanceId} service={service} />}
       {manage && <SharedModelFolders instanceId={instanceId} service={service} />}
 
       <SettingsRow label={t("localServiceKeepRunning")} description={t("localServiceKeepRunningDesc")}>

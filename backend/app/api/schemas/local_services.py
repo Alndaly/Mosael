@@ -21,8 +21,11 @@ class LocalServiceInstallStepOut(ApiModel):
 
 
 class LocalServiceInstallOut(ApiModel):
-    """这一次安装到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。"""
+    """这一次安装(或换版本)到了哪一步(内存里的;后端重启后没了,磁盘上的安装记录还在 —— 看安装计划)。"""
 
+    #: 在做什么:装(或接着装、重建运行环境)/ 更新到更新的版本 / 回到上一版;后两种换到哪个版本(`target`)。
+    kind: Literal["install", "update", "rollback"] = "install"
+    target: str = ""
     state: LocalServiceInstallState
     #: 正在做(或停在)哪一步的 key。
     step: str = ""
@@ -41,7 +44,7 @@ class LocalServiceInstallOut(ApiModel):
 class LocalServiceIssueOut(ApiModel):
     """本机服务此刻为什么用不了。`kind` 给界面挑语气和该给的那一下(启动、看日志、去装);`text` 是那一句话。"""
 
-    kind: Literal["installing", "not_installed", "rebuild", "stopped", "starting", "failed", "unresponsive"]
+    kind: Literal["installing", "updating", "not_installed", "rebuild", "stopped", "starting", "failed", "unresponsive"]
     text: str
 
 
@@ -250,6 +253,24 @@ class LocalServicePlanOut(ApiModel):
     directory: str = ""
 
 
+class LocalServiceVersionsOut(ApiModel):
+    """让 Mosael 装的那一份:装着哪个版本、插件钉死的最新是哪个、能更新到哪个(没有是空串)、能回到哪个(没有是空串)、
+    有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」`previous`)。"""
+
+    current: str = ""
+    latest: str = ""
+    update: str = ""
+    previous: str = ""
+    unfinished: Literal["", "update", "rollback"] = ""
+
+
+class LocalServiceNewVersionRequest(ApiModel):
+    """更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 插件钉死的最新那个。"""
+
+    confirm_run_code: bool = False
+    version: str = Field(default="", max_length=40)
+
+
 class LocalServiceInstallRequest(ApiModel):
     """装、接着装、重建运行环境。界面问过人了(会在这台机器上下载、运行代码),带 `confirm_run_code: true`;`flavour` 是确认页上
     那种 PyTorch —— 插件装之前再看一次这台机器,对不上就不装。"""
@@ -262,5 +283,6 @@ __all__ = [
     "LocalServiceAddNodesOut", "LocalServiceAddNodesRequest", "LocalServiceDetectOut", "LocalServiceDetectRequest",
     "LocalServiceDiscoveryOut", "LocalServiceDownloadOut", "LocalServiceFactOut", "LocalServiceFoundOut",
     "LocalServiceInstallOut", "LocalServiceInstallRequest", "LocalServiceInstallStepOut", "LocalServiceLogsOut",
-    "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut", "LocalServiceUpdate",
+    "LocalServiceNewVersionRequest", "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut",
+    "LocalServiceUpdate", "LocalServiceVersionsOut",
 ]
