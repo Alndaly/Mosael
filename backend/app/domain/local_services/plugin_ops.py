@@ -18,6 +18,7 @@
 | `service_versions` | 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的 |
 | `service_update` | 「更新」确认之后(流式,和 service_install 一样;没成插件自己换回去) |
 | `service_rollback` | 「回到上一版」确认之后、更新后试起没通过时(流式;也收拾被打断的更新 / 回退) |
+| `service_uninstall` | 删连接、卸载插件之前:安装目录里是不是一份让 Mosael 装的、模型文件夹在哪、多大(挪走、删目录是宿主做) |
 """
 
 from __future__ import annotations
@@ -52,6 +53,8 @@ INSTALL_TIMEOUT_SECONDS = 6 * 3600
 MAX_STEPS = 20
 #: 问版本:只读安装目录里的那份记录。
 VERSIONS_TIMEOUT_SECONDS = 30
+#: 卸载之前问一声:量一下模型文件夹(几十万个文件也就几秒)。
+UNINSTALL_TIMEOUT_SECONDS = 120
 #: 版本号最长多少个字。
 MAX_VERSION = 40
 #: 「没做完」的那两种:更新换到一半、回退时依赖还没装回去。
@@ -268,6 +271,28 @@ def install(db: Session, instance: PluginInstance, service: str, payload: dict[s
                                 timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
 
 
+def uninstall(db: Session, instance: PluginInstance, service: str, root: Path) -> dict[str, Any]:
+    """卸载之前:这个安装目录里是不是一份让 Mosael 装的(`installed`)、模型文件夹在哪、多大。插件说的模型文件夹**必须在安装目录
+    里面**(不是安装目录本身):宿主要把它挪走,插件指到别处就是不对,说清楚、不挪。"""
+    manifest = inst.manifest_for(db, instance)
+    output = tools.invoke_service(db, instance.package_id, service, {"op": "service_uninstall", "directory": str(root)},
+                                  instance=instance, timeout=UNINSTALL_TIMEOUT_SECONDS)
+    raw = output.get("models")
+    models: Path | None = None
+    if isinstance(raw, str) and raw.strip():
+        candidate = Path(raw.strip())
+        inside = candidate.is_absolute() and candidate.parent.resolve().is_relative_to(root.resolve())
+        if not inside or candidate.resolve(strict=False) == root.resolve():
+            raise LocalServiceError("localServiceErr_badModelsPath", name=manifest.name, path=raw[:MAX_TEXT])
+        models = candidate
+
+    def count(key: str) -> int:
+        value = output.get(key)
+        return int(value) if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+    return {"installed": output.get("installed") is True, "models": models, "models_bytes": count("models_bytes")}
+
+
 def versions(db: Session, instance: PluginInstance, row: LocalService) -> dict[str, str]:
     """让 Mosael 装的那一份:装着哪个版本(`current`)、能更新到哪个(`update`,没有是空串)、能回到哪个(`previous`)、
     有没有被打断没做完的(`unfinished`:`update` / `rollback` / 空串)。形状不对的那一格当作没有。"""
@@ -296,4 +321,4 @@ def rollback(db: Session, instance: PluginInstance, service: str, payload: dict[
 
 
 __all__ = ["add_nodes", "busy", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress", "rollback",
-           "update", "versions"]
+           "uninstall", "update", "versions"]

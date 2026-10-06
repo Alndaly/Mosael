@@ -737,6 +737,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "已经是最新的版本({version})了",
         "en": "It's already the latest version ({version}).",
     },
+    "localServiceErr_badModelsPath": {
+        "zh": "「{name}」说的模型文件夹不在安装目录里,没有挪它:{path}",
+        "en": "“{name}” named a models folder outside the install folder, so it wasn't moved: {path}",
+    },
+    "localServiceErr_uninstallAsk": {
+        "zh": "这个插件还有 {count} 个连接在 Mosael 的数据目录里留着本机服务的安装目录:卸载时先选要不要一起删",
+        "en": "{count} of this plugin's connections still have a local service install folder in Mosael's data folder. "
+              "Choose whether to delete them when uninstalling.",
+    },
     "localServiceErr_noPrevious": {
         "zh": "没有可以回去的上一版(更新之后才有,回到上一版之后就没了)",
         "en": "There's no earlier version to go back to (there is one after an update, until you go back).",

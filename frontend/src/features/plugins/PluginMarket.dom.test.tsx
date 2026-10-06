@@ -60,6 +60,7 @@ vi.mock("@/api/client", () => ({
   previewPluginInstall: mocks.preview,
   installPlugin: mocks.install,
   removePluginPackage: mocks.remove,
+  listLocalServiceInstalls: vi.fn(async () => []),
 }));
 //: 能力的名字和「用在哪」由后端给(ADR 0032 §4),前端不写。
 vi.mock("@/api/domains/capabilities", () => ({

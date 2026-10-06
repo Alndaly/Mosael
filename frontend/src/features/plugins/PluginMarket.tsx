@@ -3,11 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Link2, Settings2, ShieldAlert, ShieldCheck, Search, Store, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
-import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage } from "@/api/client";
+import { installPlugin, listPluginMarket, previewPluginInstall } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { CatalogCard, CatalogDetailFrame, CatalogDialog, CatalogFact } from "@/components/app/CatalogDialog";
 import { DETAIL_HEAD } from "@/components/app/DetailHead";
-import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ModalShell } from "@/components/app/modals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
+import { UninstallPluginDialog } from "@/features/plugins/LocalServiceRemoval";
 import { OptionPicker } from "@/components/ui/option-picker";
 import {
   DocsButton,
@@ -171,15 +172,6 @@ export function PluginMarketDialog({
     },
   });
 
-  const uninstall = useMutation({
-    mutationFn: (entry: MarketEntry) => removePluginPackage(entry.id),
-    onSuccess: () => {
-      setRemoving(null);
-      changed();
-      toast.success(t("pluginMarketUninstalled"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
 
   const entries = market.data?.plugins ?? [];
   //: 远端索引拉不到时,接口照样列出随应用内置的插件,并把原因放在 index_error 里。
@@ -321,14 +313,16 @@ export function PluginMarketDialog({
           onConfirm={() => install.mutate({ target: pending, overwrite: !!pending.preview.installed })}
         />
       )}
-      <ConfirmDialog
+      <UninstallPluginDialog
+        packageId={removing?.id ?? ""}
+        name={removing?.name || removing?.id || ""}
         open={removing !== null}
-        title={t("pluginUninstallTitle").replace("{name}", removing?.name || removing?.id || "")}
-        body={t("pluginUninstallBody")}
-        confirmLabel={t("pluginUninstall")}
-        pending={uninstall.isPending}
         onCancel={() => setRemoving(null)}
-        onConfirm={() => removing && uninstall.mutate(removing)}
+        onDone={() => {
+          setRemoving(null);
+          changed();
+          toast.success(t("pluginMarketUninstalled"));
+        }}
       />
     </CatalogDialog>
   );

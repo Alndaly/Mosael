@@ -19,6 +19,7 @@ from app.api.schemas import (
     LocalServiceDetectOut,
     LocalServiceDetectRequest,
     LocalServiceDiscoveryOut,
+    LocalServiceFootprintOut,
     LocalServiceInstallRequest,
     LocalServiceLogsOut,
     LocalServiceModelFoldersOut,
@@ -286,5 +287,27 @@ def discover_local_services(package_id: str, db: DbSession, user: CurrentUser) -
     ensure_deployment_admin(db, user)
     try:
         return {"servers": local_services.discover(db, package_id)}
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/local-service/footprint", response_model=LocalServiceFootprintOut | None)
+def get_local_service_footprint(instance_id: str, db: DbSession, user: CurrentUser) -> dict | None:
+    """删连接之前:这个连接在 Mosael 的数据目录里留着什么(一份让 Mosael 装的、多大、模型多大;没有是 null)。只给部署管理员 ——
+    删那个目录是这台机器上的事。"""
+    ensure_deployment_admin(db, user)
+    instance = my_instance(db, instance_id, user)
+    try:
+        return local_services.footprint(db, instance)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
+
+
+@router.get("/plugins/{package_id}/local-services/installs", response_model=list[LocalServiceFootprintOut])
+def list_local_service_installs(package_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """卸载插件之前:它的连接里留着的那几个安装目录(各是不是一份让 Mosael 装的、多大、模型多大)。只给部署管理员。"""
+    ensure_deployment_admin(db, user)
+    try:
+        return local_services.package_installs(db, package_id)
     except _ERRORS as exc:
         raise _failed(exc) from exc

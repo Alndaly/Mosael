@@ -68,6 +68,12 @@ export type LocalServiceModelFolders = components["schemas"]["LocalServiceModelF
 /** 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型;卸载时保留下来、还没加进来的那几份。 */
 export const getLocalServiceModelFolders = (instanceId: string) =>
   api<LocalServiceModelFolders>(`${base(instanceId)}/model-folders`);
+export type LocalServiceFootprint = components["schemas"]["LocalServiceFootprintOut"];
+/** 删连接之前:它在 Mosael 数据目录里留着什么(一份让 Mosael 装的、多大、模型多大;没有是 null)。只给部署管理员。 */
+export const getLocalServiceFootprint = (instanceId: string) => api<LocalServiceFootprint | null>(`${base(instanceId)}/footprint`);
+/** 卸载插件之前:它的连接里留着的那几个安装目录。只给部署管理员。 */
+export const listLocalServiceInstalls = (packageId: string) =>
+  api<LocalServiceFootprint[]>(`/api/plugins/${packageId}/local-services/installs`);
 /** 本机已经在跑的(插件知道去哪几个端口问)。只给部署管理员。 */
 export const discoverLocalServices = (packageId: string) =>
   api<LocalServiceDiscovery>(`/api/plugins/${packageId}/local-services/discover`);

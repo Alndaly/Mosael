@@ -67,6 +67,17 @@ def kept_models_dir() -> Path:
     return settings.data_dir / INSTALLS / KEPT_MODELS
 
 
+def kept_models_target(name: str) -> Path:
+    """保留下来的模型挪到哪:`kept-models/<连接的名字>`(去掉路径里不能有的字符;同名的已经在了就加「 (2)」这样的后缀)。"""
+    safe = "".join("_" if char in '/\\:*?"<>|' or ord(char) < 32 else char for char in name).strip(" .")[:80] or "models"
+    target = kept_models_dir() / safe
+    number = 2
+    while target.exists() or target.is_symlink():
+        target = kept_models_dir() / f"{safe} ({number})"
+        number += 1
+    return target
+
+
 def kept_models() -> list[Path]:
     """保留下来的那几份(按名字排)。"""
     try:
@@ -164,5 +175,5 @@ def make_managed(db: Session, instance: PluginInstance) -> LocalService:
 
 __all__ = [
     "DIRECTORY", "FIRST_PORT", "MANAGED", "MODES", "address", "check_port", "create", "free_port", "install_root",
-    "kept_models", "kept_models_dir", "make_managed", "pip_cache_dir", "row_of", "service_of", "split_args",
+    "kept_models", "kept_models_dir", "kept_models_target", "make_managed", "pip_cache_dir", "row_of", "service_of", "split_args",
 ]

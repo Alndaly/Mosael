@@ -15,7 +15,7 @@
 这里把它们接起来,对外的几件事:配置、起 / 停 / 重启、**用到时起**(`ensure_running`,经插件域的 `service_gate` 接进
 每一次插件调用)、启动时接回上一个后端没来得及停的、「保持运行」的跟着起、退出时全部停掉;**让 Mosael 装**:安装计划、
 装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好;**换版本**:更新到更新的钉死版本(试起没通过
-就换回去)、回到上一版。
+就换回去)、回到上一版;**卸载**:删连接、卸载插件时问要不要一起删安装目录,可以保留模型。
 
 **让 Mosael 装的那一份**(`mode = managed`)装在宿主分的 `<数据目录>/local-services/<连接>/`,目录就记这个(插件在里面认
 源码和 `.venv`,认目录、怎么起和「用我自己装的」走同一条路)。它的 venv 是随包的 Python 建的:装好时记下 Python 小版本,
@@ -31,7 +31,9 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import errno
 import os
+import shutil
 import threading
 import time
 from collections.abc import Callable
@@ -393,6 +395,93 @@ def remove(db: Session, instance: PluginInstance) -> None:
     row = records.row_of(db, instance.id)
     if row is not None:
         db.delete(row)
+
+
+# ---------------------------------------------------------------------------
+# 卸载(删连接、卸载插件时;ADR 0041 §4)
+# ---------------------------------------------------------------------------
+
+
+def _tree_bytes(path: Path) -> int:
+    """一个目录占多少字节(不跟着链接走)。"""
+    total = 0
+    for folder, _dirs, names in os.walk(path):
+        for name in names:
+            try:
+                total += os.lstat(os.path.join(folder, name)).st_size
+            except OSError:
+                continue
+    return total
+
+
+def _remove_tree(path: Path) -> None:
+    """删宿主分的那个安装目录:它本身是链接就只删链接;里面的链接 rmtree 也只删链接,不跟着出去删别处的东西。"""
+    if path.is_symlink():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def footprint(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
+    """这个连接在 `<数据目录>/local-services/<连接>/` 下留着什么:没有这个目录是 None;有就问插件是不是一份让 Mosael 装的
+    (`installed`;选目录那一种这里只有宿主写的共用模型配置)、模型文件夹多大,再量一下整个目录。删连接、卸载插件的确认框照它问。"""
+    root = records.install_root(instance.id)
+    if not (root.is_dir() or root.is_symlink()):
+        return None
+    service = records.service_of(db, instance, records.row_of(db, instance.id))
+    told = plugin_ops.uninstall(db, instance, service.key, root)
+    return {
+        "instance_id": instance.id,
+        "name": instance.name,
+        "directory": str(root),
+        "installed": told["installed"],
+        "bytes": _tree_bytes(root) if not root.is_symlink() else 0,
+        "models_bytes": told["models_bytes"] if told["models"] is not None else 0,
+        "has_models": told["models"] is not None,
+        "keep_to": str(records.kept_models_target(instance.name)),
+    }
+
+
+def remove_install(db: Session, instance: PluginInstance, *, keep_models: bool) -> str:
+    """删掉这个连接的安装目录(调用方先 forget 停掉它、取消正在装的)。`keep_models`:先问插件模型文件夹在哪,挪到
+    `kept-models/<连接的名字>`(下次加共用的模型文件夹时会提示它)。只删宿主分的那个目录 —— 选目录那一种指向的用户目录从来不碰。
+    最后一份让 Mosael 装的没了,共用的 pip 缓存一起清。交回模型挪到了哪(没保留是空串)。"""
+    root = records.install_root(instance.id)
+    if not (root.is_dir() or root.is_symlink()):
+        return ""
+    kept = ""
+    if keep_models and not root.is_symlink():
+        service = records.service_of(db, instance, records.row_of(db, instance.id))
+        models = plugin_ops.uninstall(db, instance, service.key, root)["models"]
+        if models is not None:
+            target = records.kept_models_target(instance.name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                models.replace(target)
+            except OSError as exc:
+                if exc.errno != errno.EXDEV:
+                    raise
+                shutil.move(str(models), str(target))  # 数据目录跨盘挂载时
+            kept = str(target)
+            logger.info("本机服务 %s 的模型保留到 %s", instance.id, target)
+    _remove_tree(root)
+    logger.info("删掉了本机服务 %s 的安装目录 %s", instance.id, root)
+    others = db.scalars(select(LocalService.instance_id).where(LocalService.mode == records.MANAGED,
+                                                               LocalService.instance_id != instance.id)).first()
+    if others is None:
+        _remove_tree(records.pip_cache_dir())
+    return kept
+
+
+def package_roots(db: Session, package_id: str) -> list[PluginInstance]:
+    """这个插件的连接里,在 `<数据目录>/local-services/` 下留着目录的那几个(卸载插件前要问一声的;不问插件,它可能用不了)。"""
+    return [instance for instance in db.scalars(select(PluginInstance).where(PluginInstance.package_id == package_id))
+            if records.install_root(instance.id).is_dir() or records.install_root(instance.id).is_symlink()]
+
+
+def package_installs(db: Session, package_id: str) -> list[dict[str, Any]]:
+    """卸载插件的确认框要的:留着目录的每个连接,是不是一份让 Mosael 装的、多大、模型多大(问插件)。"""
+    return [one for instance in package_roots(db, package_id) if (one := footprint(db, instance)) is not None]
 
 
 def forget_instance(instance_id: str) -> None:
@@ -963,8 +1052,8 @@ __all__ = [
     "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
     "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_rollback",
     "begin_update", "begin_using", "check_idle",
-    "cancel_install", "configure", "detect", "discover", "ensure_running", "forget_instance", "forget_package",
-    "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "plan", "prepare_install",
-    "recent_install_logs", "recent_logs", "remove", "restart", "start", "start_idle_watch", "start_kept_running", "status",
+    "cancel_install", "configure", "detect", "discover", "ensure_running", "footprint", "forget_instance", "forget_package",
+    "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "package_installs", "package_roots", "plan", "prepare_install",
+    "recent_install_logs", "recent_logs", "remove", "remove_install", "restart", "start", "start_idle_watch", "start_kept_running", "status",
     "stop", "stop_all", "touch", "versions",
 ]

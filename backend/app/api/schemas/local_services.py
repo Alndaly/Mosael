@@ -264,6 +264,21 @@ class LocalServiceVersionsOut(ApiModel):
     unfinished: Literal["", "update", "rollback"] = ""
 
 
+class LocalServiceFootprintOut(ApiModel):
+    """一个连接在 `<数据目录>/local-services/<连接>/` 下留着什么(删连接、卸载插件的确认框照它问)。`installed`:是一份让 Mosael
+    装的(否则只有宿主写的共用模型配置,删了也不丢东西);`bytes` 整个目录多大;`has_models` / `models_bytes` 有没有模型文件夹、多大;
+    `keep_to` 选「保留模型」时挪到哪。"""
+
+    instance_id: str
+    name: str
+    directory: str
+    installed: bool
+    bytes: int
+    models_bytes: int
+    has_models: bool
+    keep_to: str
+
+
 class LocalServiceNewVersionRequest(ApiModel):
     """更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 插件钉死的最新那个。"""
 
@@ -283,6 +298,6 @@ __all__ = [
     "LocalServiceAddNodesOut", "LocalServiceAddNodesRequest", "LocalServiceDetectOut", "LocalServiceDetectRequest",
     "LocalServiceDiscoveryOut", "LocalServiceDownloadOut", "LocalServiceFactOut", "LocalServiceFoundOut",
     "LocalServiceInstallOut", "LocalServiceInstallRequest", "LocalServiceInstallStepOut", "LocalServiceLogsOut",
-    "LocalServiceNewVersionRequest", "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut",
+    "LocalServiceFootprintOut", "LocalServiceNewVersionRequest", "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut",
     "LocalServiceUpdate", "LocalServiceVersionsOut",
 ]

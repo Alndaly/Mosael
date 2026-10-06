@@ -17,6 +17,7 @@
     {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
     {"op": "service_versions", …}          → 让 Mosael 装的那一份:装着哪个、能更新到哪个、能回到哪个、有没有没做完的(见 versions)
     {"op": "service_update" | "service_rollback", …} → 流式:换到更新的钉死版本(没成自己换回去)/ 回到上一版
+    {"op": "service_uninstall", …}         → 卸载之前:是不是一份让 Mosael 装的、模型文件夹在哪、多大(见 managed)
     {"op": "service_model_folders", …}     → 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型(见 shared_models)
     {"op": "service_busy"}                 → 闲置自动停之前:任务队列里有没有在跑、在排的
 
@@ -144,10 +145,11 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "reboot": workflow_import.reboot,
 }
 
-#: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划在 managed、换版本在 versions。
+#: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划、卸载前问的在 managed,换版本在 versions。
 #: 起之前先经 versions 看一眼:让 Mosael 装的那一份换版本换到一半(被强行打断)就不起它。
 _SERVICE: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {
     **service.OPS, "service_launch": versions.launch, "service_plan": managed.plan, "service_versions": versions.versions,
+    "service_uninstall": managed.uninstall,
 }
 #: 流式的本机服务操作:一步一行进度(`{"event": "step", …}`),宿主建取消文件就停。
 _SERVICE_STREAMING: dict[str, Callable[[dict[str, Any], str, run.Emit], dict[str, Any]]] = {

@@ -157,4 +157,10 @@ export const localServices = {
   localServiceRollbackFailed: "没换回 {version}",
   localServiceUpdateCancelled: "更新取消了,还是原来那一版。",
   localServiceRollbackCancelled: "取消了:依赖还没装回去,点上面的「换回」接着来。",
+  localServiceRemoveInstall: "同时删掉 Mosael 装的这一份({size})",
+  localServiceRemoveInstallDesc: "装在 {where}。不删就留在磁盘上。",
+  localServiceKeepModels: "保留模型({size})",
+  localServiceKeepModelsDesc: "挪到 {where},以后能在「共用的模型文件夹」里一键加回来。",
+  localServiceFootprintError: "问不到安装目录里有什么:{error}。这一次安装目录留在磁盘上。",
+  pluginUninstallLocalServices: "它的连接里还有 {count} 份 Mosael 装的本机服务:",
 } as const;

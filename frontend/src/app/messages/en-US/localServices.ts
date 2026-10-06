@@ -158,4 +158,10 @@ export const localServices = {
   localServiceRollbackFailed: "Didn't go back to {version}",
   localServiceUpdateCancelled: "The update was cancelled; it's still the earlier version.",
   localServiceRollbackCancelled: "Cancelled: the dependencies aren't back yet. Choose “Go back” above to continue.",
+  localServiceRemoveInstall: "Also delete the copy Mosael installed ({size})",
+  localServiceRemoveInstallDesc: "Installed in {where}. If you don't delete it, it stays on disk.",
+  localServiceKeepModels: "Keep the models ({size})",
+  localServiceKeepModelsDesc: "Moved to {where}; you can add them back with one click under Shared models folders later.",
+  localServiceFootprintError: "Couldn't check what's in the install folder: {error}. The install folder stays on disk this time.",
+  pluginUninstallLocalServices: "{count} of its connections still have a local service Mosael installed:",
 } as const;

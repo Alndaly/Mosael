@@ -17,9 +17,7 @@ import {
   listPluginPermissions,
   pluginDir,
   refreshPluginInstance,
-  removePluginInstance,
   removePluginInvocation,
-  removePluginPackage,
   rescanPlugins,
   savePluginCredentials,
   setPluginCapabilities,
@@ -36,7 +34,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OPEN_MARKET_FOR_CAPABILITY, OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
-import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconButton } from "@/components/ui/icon-button";
@@ -56,6 +54,7 @@ import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
+import { DeleteConnectionDialog, UninstallPluginDialog } from "@/features/plugins/LocalServiceRemoval";
 import { ConnectionLibraries } from "@/features/plugins/ConnectionLibraries";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Hint } from "@/components/ui/tooltip";
@@ -276,13 +275,6 @@ export function PackageDetail({
   const [draft, setDraft] = React.useState<Record<string, string>>({});
   const [tab, setTab] = React.useState<"connections" | "about">("connections");
 
-  const uninstall = useMutation({
-    mutationFn: () => removePluginPackage(pkg.id),
-    onSuccess: () => {
-      setConfirmUninstall(false);
-      invalidatePluginDependents(qc);
-    },
-  });
   const instances = pkg.instances ?? [];
   const instanceIds = React.useMemo(() => instances.map((one) => one.id), [instances]);
   //: 每个连接展开还是收起,按连接记在本机(见 connectionOpen):一个连接默认展开,几个默认收起,刚建的展开。
@@ -304,14 +296,16 @@ export function PackageDetail({
 
   return (
     <div className="grid w-full min-w-0 content-start gap-5">
-      {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。 */}
-      <ConfirmDialog
+      {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认;连接还留着本机服务的安装目录时一起问(ADR 0041 §4)。 */}
+      <UninstallPluginDialog
+        packageId={pkg.id}
+        name={pkg.name}
         open={confirmUninstall}
-        title={t("pluginUninstallTitle").replace("{name}", pkg.name)}
-        body={t("pluginUninstallBody")}
         onCancel={() => setConfirmUninstall(false)}
-        pending={uninstall.isPending}
-        onConfirm={() => uninstall.mutate()}
+        onDone={() => {
+          setConfirmUninstall(false);
+          invalidatePluginDependents(qc);
+        }}
       />
 
       {/* **页头,不是卡片。** 包是这一页的身份 —— 它此前和连接一样是个 SettingsGroup,
@@ -646,13 +640,6 @@ export function ConnectionCard({
       updatePluginInstance(instance.id, body),
     onSuccess: () => invalidatePluginDependents(qc),
   });
-  const remove = useMutation({
-    mutationFn: () => removePluginInstance(instance.id),
-    onSuccess: () => {
-      setConfirmDelete(false);
-      invalidatePluginDependents(qc);
-    },
-  });
   const refresh = useMutation({
     mutationFn: () => refreshPluginInstance(instance.id),
     // 失败也刷新:拉不到的原因记在连接上(capability_status.tools),卡片要跟着说出来。
@@ -847,13 +834,14 @@ export function ConnectionCard({
           </IconButton>
         </div>
       </header>
-      <ConfirmDialog
+      {/* 背后有本机服务的安装目录时,确认框里问要不要一起删、要不要保留模型 */}
+      <DeleteConnectionDialog
+        packageId={pkg.id}
+        hasServices={services.length > 0}
+        instance={instance}
         open={confirmDelete}
-        title={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
-        body={t("pluginDeleteConnectionBody")}
         onCancel={() => setConfirmDelete(false)}
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        onDeleted={() => setConfirmDelete(false)}
       />
 
       {open && (

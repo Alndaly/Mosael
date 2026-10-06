@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 import anyio.from_thread
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -83,6 +84,7 @@ from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOu
 from app.ai.runtime import nsfw_models
 from app.ai.runtime.errors import RuntimeSetupError
 from app.domain import local_services
+from app.domain.local_services import LocalServiceError
 from app.domain import model_library
 from app.domain import model_nsfw_local
 from app.domain import workflow_library
@@ -469,15 +471,25 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: Tx, user: 
 
 
 @router.delete("/plugins/instances/{instance_id}", status_code=204)
-def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
+def delete_instance(
+    instance_id: str, db: DbSession, user: CurrentUser, install: Literal["keep", "remove"] = "keep", keep_models: bool = False,
+) -> None:
+    """删连接。背后的本机服务先停掉(那一行随外键级联删):Mosael 起的进程不留在后台。它在 Mosael 数据目录里的安装目录
+    缺省留着;`install=remove` 一起删(部署管理员才行 —— 删的是这台机器上的东西),`keep_models` 先把模型挪到 kept-models。"""
     try:
         instance = my_instance(db, instance_id, user)
-        # 连接背后的本机服务先停掉(那一行随外键级联删):Mosael 起的进程不留在后台
+        if install == "remove":
+            ensure_deployment_admin(db, user)
         local_services.forget_instance(instance.id)
+        if install == "remove":
+            local_services.remove_install(db, instance, keep_models=keep_models)
         db.delete(instance)
         db.commit()
         # 模型库记着的预览图(内存里的地址、磁盘上的图)跟着连接走。
         model_library.drop_cache(instance_id)
+    except (LocalServiceError, PluginRuntimeError) as exc:
+        # 删安装目录时插件说不清模型在哪(保留模型要问它):什么都没删,原话交回
+        raise _fail(exc, exc.status if isinstance(exc, LocalServiceError) else 422) from exc
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
 
@@ -1026,15 +1038,29 @@ def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None 
 # 两条路由都要求部署管理员的年代看不出来:两边都 403/404,像是权限不够。
 
 @router.delete("/plugins/{package_id}", status_code=204)
-def uninstall_package(package_id: str, db: Tx, user: CurrentUser) -> None:
+def uninstall_package(
+    package_id: str, db: Tx, user: CurrentUser, local_services_choice: Literal["keep", "remove"] | None = Query(
+        default=None, alias="local_services"), keep_models: bool = False,
+) -> None:
     """卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
 
     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
+
+    它的连接在 Mosael 数据目录里留着本机服务的安装目录(让 Mosael 装的那一份)时**先问**(ADR 0041 §4):没带
+    `local_services=keep|remove` 就 409;`remove` 一起删(`keep_models` 先把每一份的模型挪到 kept-models),`keep` 留在磁盘上。
     """
     ensure_deployment_admin(db, user)
     try:
+        roots = local_services.package_roots(db, package_id)
+        if roots and local_services_choice is None:
+            raise HTTPException(status_code=409, detail=tr("localServiceErr_uninstallAsk", count=len(roots)))
         local_services.forget_package(db, package_id)
+        if local_services_choice == "remove":
+            for instance in roots:
+                local_services.remove_install(db, instance, keep_models=keep_models)
         pkg.uninstall(db, package_id, settings.plugins_dir)
+    except (LocalServiceError, PluginRuntimeError) as exc:
+        raise _fail(exc, exc.status if isinstance(exc, LocalServiceError) else 422) from exc
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
 

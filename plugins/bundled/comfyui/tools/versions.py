@@ -40,7 +40,7 @@ Emit = Callable[[dict[str, Any]], None]
 
 #: 换版本时用到的几个目录(都在安装目录里,和 `ComfyUI/` 并排)。
 NEXT = f"{managed.SOURCE}.next"
-PREVIOUS = f"{managed.SOURCE}.previous"
+PREVIOUS = managed.PREVIOUS
 DISCARDED = f"{managed.SOURCE}.discarded"
 SKELETON = f"{managed.SOURCE}.skeleton"
 #: 跟着「在用的那一份源码」走的五样:模型、自定义节点(pysssss、Manager 装的)、工作流和设置、输入、输出。

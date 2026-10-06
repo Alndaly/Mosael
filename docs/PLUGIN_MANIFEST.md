@@ -1521,6 +1521,7 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `service_versions` | `directory` | 让 Mosael 装的那一份:`current`(装着的版本)、`latest`、`update`(能更新到哪个,没有是空串)、`previous`(「回到上一版」回到哪个,没有是空串)、`unfinished`(`update` 更新被强行打断、`rollback` 回退时依赖还没装回去;这时要先回退收拾,`previous` 就是回到哪个)。只看、不写 |
 | `service_update` | `directory`、`version`(空 = 最新)、`sources`、`log`、`pip_cache` | **流式**,和 `service_install` 一样一步一行:换到一个更新的版本。没成(或取消)由插件自己换回原来那一版再报错;成了交回 `comfyui`(新版本)、`previous`(上一版),宿主接着试起一次 —— 试起没通过,宿主调 `service_rollback` |
 | `service_rollback` | `directory`、`sources`、`log`、`pip_cache` | **流式**:回到上一版(也收拾被打断的更新 / 回退),交回 `comfyui`;宿主接着试起一次 |
+| `service_uninstall` | `directory`(宿主分的那一格) | 删连接、卸载插件之前:`installed`(这里是不是一份让 Mosael 装的;选目录那一种这里只有宿主写的共用模型配置)、`models`(值得保留的模型文件夹,必须在 `directory` 里面;没有是空串)、`models_bytes`。只看、不写 —— 「保留模型」时宿主把那个文件夹挪到 `kept-models/<连接的名字>`,再删整个目录(不跟着链接出去) |
 
 `sources` 是「管理 → 下载源」里的三个地址:`pip_index_url`(空 = 官方 PyPI)、`pytorch_index_url`(PyTorch 的 simple 索引根,
 下面按 `cu130` 这类分频道)、`github_mirror`(下 GitHub 上的压缩包时接在原地址前面的前缀;空 = 直连)。代理不在这里:插件进程

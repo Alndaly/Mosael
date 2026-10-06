@@ -7,6 +7,8 @@
     {"op": "service_install", "directory", "python", "flavour", "sources", "log", "pip_cache"}
         → 流式:先一行 `{"event": "step", "outline": [...]}` 说有哪几步,之后每一步一行或几行
           `{"event": "step", "key", "state", "done_bytes", "total_bytes", "item"}`;最后交回装好的目录
+    {"op": "service_uninstall", "directory"}
+        → 卸载之前:这里是不是一份让 Mosael 装的 ComfyUI、模型文件夹在哪、多大(宿主据此问要不要保留模型,挪走、删目录都是宿主做)
 
 `directory` 是宿主分的 `<数据目录>/local-services/<连接>/`(不是插件的持久目录:那个卸载插件时一起删,模型也会跟着没),
 `python` 是宿主建 venv 用的那个(随包的 CPython),`sources` 是「管理 → 下载源」里的 pip 源、PyTorch 源、GitHub 镜像前缀。
@@ -125,6 +127,10 @@ DEEPEST_IN_VENV = len(".venv\\Lib\\site-packages\\") + 135
 RECORD = "mosael-install.json"
 LOCK = "install.lock"
 SOURCE = "ComfyUI"
+#: 换了版本之后留着的上一版源码(见 versions)。
+PREVIOUS = f"{SOURCE}.previous"
+#: 模型文件夹(在源码里;换版本时跟着在用的那一份走)。
+MODELS = "models"
 VENV = ".venv"
 DOWNLOADS = "downloads"
 RECORD_VERSION = 1
@@ -559,14 +565,7 @@ def installing_version(record: dict[str, Any], wanted: str = "") -> str:
 
 def _size_of(root: Path) -> int:
     """安装目录已经占了多少(接着装时少要一些空间)。"""
-    total = 0
-    for folder, _dirs, files in os.walk(root):
-        for name in files:
-            try:
-                total += os.lstat(os.path.join(folder, name)).st_size
-            except OSError:
-                continue
-    return total
+    return _tree_size(root)[0]
 
 
 def _free_space(root: Path) -> int:
@@ -674,6 +673,35 @@ def _disk_text(free: int, remaining: int, need: int) -> dict[str, str]:
     return {"zh": f"这块盘只剩 {_gb(free)},装 ComfyUI 还要 {_gb(remaining)}(一共至少 {_gb(need)})。清出空间再装",
             "en": f"Only {_gb(free)} is free on this disk; installing ComfyUI needs {_gb(remaining)} more ({_gb(need)} in "
                   f"total). Free up space, then install"}
+
+
+# --- service_uninstall ----------------------------------------------------------
+
+
+def _tree_size(path: Path) -> tuple[int, int]:
+    """一个目录占多少字节、几个文件(不跟着链接走:链接本身不算,指向的东西也不算)。"""
+    total = files = 0
+    for folder, _dirs, names in os.walk(path):
+        for name in names:
+            try:
+                info = os.lstat(os.path.join(folder, name))
+            except OSError:
+                continue
+            total += info.st_size
+            files += 1
+    return total, files
+
+
+def uninstall(payload: dict[str, Any], locale: str) -> dict[str, Any]:
+    """卸载之前(宿主删连接、卸载插件时问):这个安装目录里是不是一份让 Mosael 装的 ComfyUI(`installed`),模型文件夹在哪、多大。
+    选目录那一种的安装目录里只有宿主写的那份共用模型配置,`installed` 是假的。换版本被打断在搬五样的中途时,模型还在上一版那里。
+    模型文件夹是个链接(指到别的盘)也照样交回 —— 宿主挪的是链接本身,大小不算链接那头的。只看、不写:挪走、删目录都是宿主做。"""
+    root = _root(payload, locale)
+    installed = (root / RECORD).is_file() or (root / SOURCE / "main.py").is_file()
+    models = next((one for one in (root / SOURCE / MODELS, root / PREVIOUS / MODELS) if one.is_dir() or one.is_symlink()), None)
+    size, files = _tree_size(models) if models is not None and not models.is_symlink() else (0, 0)
+    return {"installed": installed, "models": str(models) if models is not None else "", "models_bytes": size,
+            "models_files": files}
 
 
 # --- service_install ------------------------------------------------------------
@@ -1189,4 +1217,4 @@ def install(payload: dict[str, Any], locale: str, emit: Emit, *, machine: Machin
 __all__ = ["COMFYUI_PINNED", "COMFYUI_VERSION", "CUDA_CHANNELS", "CudaChannel", "DISK_NEED", "Gpu", "Machine", "STEPS", "TORCH",
            "Verdict", "done_steps", "explain_pip", "install", "installing_version", "judge", "parse_compute", "parse_driver", "parse_gpus",
            "parse_memory", "plan", "probe_machine", "read_nvidia", "read_record", "torch_index", "torch_requirements",
-           "unfinished_change", "venv_python"]
+           "uninstall", "unfinished_change", "venv_python"]

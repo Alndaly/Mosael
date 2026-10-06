@@ -238,6 +238,7 @@ export function ConfirmDialog({
   confirmLabel,
   onCancel,
   onConfirm,
+  children,
 }: {
   open: boolean;
   title: string;
@@ -247,6 +248,8 @@ export function ConfirmDialog({
   confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
+  /** 说明下面、按钮上面多摆的东西(要人顺带选一下的那几个勾)。 */
+  children?: React.ReactNode;
 }) {
   const t = useI18n();
   return (
@@ -256,6 +259,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           {/* Confirm and cancel share the same control scale as form dialogs. */}
           <AlertDialogCancel disabled={pending}>

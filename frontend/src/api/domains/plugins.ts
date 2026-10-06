@@ -65,14 +65,24 @@ export type WorkflowCanvasRun = components["schemas"]["WorkflowCanvasRunRequest"
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
 export const rescanPlugins = () => api<PluginPackage[]>("/api/plugins/scan", { method: "POST" });
-export const removePluginPackage = (packageId: string) => api(`/api/plugins/${packageId}`, { method: "DELETE" });
+/**
+ * 卸载插件。它的连接在 Mosael 数据目录里留着本机服务的安装目录时要说怎么处置(不说后端回 409):`remove` 一起删
+ * (`keep_models` 先把模型挪到 kept-models)、`keep` 留在磁盘上。
+ */
+export const removePluginPackage = (packageId: string, localServices?: { choice: "keep" | "remove"; keepModels: boolean }) =>
+  api(`/api/plugins/${packageId}${localServices ? `?local_services=${localServices.choice}&keep_models=${localServices.keepModels}` : ""}`, {
+    method: "DELETE",
+  });
 
 export const createPluginInstance = (packageId: string, body: Record<string, unknown>) =>
   api<PluginInstance>(`/api/plugins/${packageId}/instances`, { method: "POST", body: JSON.stringify(body) });
 export const updatePluginInstance = (instanceId: string, body: Record<string, unknown>) =>
   api<PluginInstance>(`/api/plugins/instances/${instanceId}`, { method: "PATCH", body: JSON.stringify(body) });
-export const removePluginInstance = (instanceId: string) =>
-  api(`/api/plugins/instances/${instanceId}`, { method: "DELETE" });
+/** 删连接。背后的本机服务的安装目录缺省留着;`remove` 一起删(部署管理员),`keepModels` 先把模型挪到 kept-models。 */
+export const removePluginInstance = (instanceId: string, install?: { choice: "keep" | "remove"; keepModels: boolean }) =>
+  api(`/api/plugins/instances/${instanceId}${install ? `?install=${install.choice}&keep_models=${install.keepModels}` : ""}`, {
+    method: "DELETE",
+  });
 export const refreshPluginInstance = (instanceId: string) =>
   api<PluginInstance>(`/api/plugins/instances/${instanceId}/refresh`, { method: "POST" });
 /** 替宿主做生成的连接**提供的模型**(缓存的那一份;要最新的先 refresh)。 */

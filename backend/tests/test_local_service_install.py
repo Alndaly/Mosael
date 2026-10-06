@@ -104,7 +104,19 @@ def install(payload):
         (root / "record.json").write_text(json.dumps(state), encoding="utf-8")
         emit({"event": "step", "key": key, "state": "done"})
     log.close()
+    models = root / "models" / "checkpoints"
+    models.mkdir(parents=True, exist_ok=True)
+    (models / "mine.safetensors").write_bytes(b"w" * 1000)
     return {"directory": str(root), "python_minor": "3.13"}
+
+def uninstall(payload):
+    root = Path(payload["directory"])
+    if control(root).get("models_outside"):
+        return {"installed": True, "models": str(root.parent), "models_bytes": 1}
+    models = root / "models"
+    size = sum(one.stat().st_size for one in models.rglob("*") if one.is_file()) if models.is_dir() else 0
+    return {"installed": (root / "record.json").is_file(), "models": str(models) if models.is_dir() else "",
+            "models_bytes": size}
 
 def versions(payload):
     state = record(payload["directory"])
@@ -152,6 +164,8 @@ def svc(payload):
         return plan(payload)
     if op == "service_versions":
         return versions(payload)
+    if op == "service_uninstall":
+        return uninstall(payload)
     if op == "service_launch":
         options = control(payload["directory"])
         version = record(payload["directory"]).get("version", "1.0")
@@ -721,3 +735,109 @@ def test_换版本之前的拦_没装好_不是让Mosael装_正在装_要重建_
     folder.mkdir()
     assert plugged.put(_url(other), json={"mode": "directory", "directory": str(folder), "confirm_run_code": True}).status_code == 200
     assert plugged.get(_url(other, "/versions")).status_code == 422, "选目录的那种没有版本可换"
+
+
+# ---- 卸载(删连接、卸载插件)----------------------------------------------------------------
+
+
+def _root(instance_id: str) -> Path:
+    return settings.data_dir / "local-services" / instance_id
+
+
+def test_删连接_缺省留着安装目录_问过可以一起删_保留模型挪到_kept_models(plugged) -> None:
+    instance_id = _installed(plugged)
+    footprint = plugged.get(_url(instance_id, "/footprint"))
+    assert footprint.status_code == 200, footprint.text
+    body = footprint.json()
+    assert body["installed"] is True and body["has_models"] is True and body["models_bytes"] == 1000
+    assert body["directory"] == str(_root(instance_id)) and body["bytes"] >= 1000
+    assert body["keep_to"] == str(settings.data_dir / "local-services" / "kept-models" / "本机")
+    other = _installed(plugged)
+    (settings.data_dir / "local-services" / "pip-cache").mkdir(parents=True, exist_ok=True)
+    assert plugged.delete(f"/api/plugins/instances/{other}").status_code == 204
+    assert _root(other).is_dir(), "缺省留着:删连接不等于删磁盘上的东西"
+    assert plugged.delete(f"/api/plugins/instances/{instance_id}", params={"install": "remove", "keep_models": True}).status_code == 204
+    assert not _root(instance_id).exists()
+    kept = settings.data_dir / "local-services" / "kept-models" / "本机"
+    assert (kept / "checkpoints" / "mine.safetensors").read_bytes() == b"w" * 1000, "模型整个挪过去"
+    assert not (settings.data_dir / "local-services" / "pip-cache").exists(), "最后一份让 Mosael 装的没了,pip 缓存一起清"
+    assert supervisor.get(instance_id) is None or supervisor.get(instance_id).state == "stopped"
+
+
+def test_删安装目录_不跟着链接出去_同名的保留目录加后缀_还有别的就不清_pip_缓存(plugged, tmp_path: Path) -> None:
+    keep_alive = _installed(plugged)
+    instance_id = _installed(plugged)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "precious.txt").write_text("keep", encoding="utf-8")
+    (_root(instance_id) / "link-out").symlink_to(outside, target_is_directory=True)
+    taken = settings.data_dir / "local-services" / "kept-models" / "本机"
+    taken.mkdir(parents=True)
+    (settings.data_dir / "local-services" / "pip-cache").mkdir(parents=True, exist_ok=True)
+    assert plugged.delete(f"/api/plugins/instances/{instance_id}", params={"install": "remove", "keep_models": True}).status_code == 204
+    assert (outside / "precious.txt").read_text(encoding="utf-8") == "keep", "链接只删链接"
+    assert (settings.data_dir / "local-services" / "kept-models" / "本机 (2)" / "checkpoints" / "mine.safetensors").is_file()
+    assert (settings.data_dir / "local-services" / "pip-cache").is_dir(), "还有一份让 Mosael 装的在用它"
+    assert _root(keep_alive).is_dir()
+
+
+def test_安装目录本身是链接_只删链接(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "precious.txt").write_text("keep", encoding="utf-8")
+    _root(instance_id).parent.mkdir(parents=True, exist_ok=True)
+    _root(instance_id).symlink_to(elsewhere, target_is_directory=True)
+    assert plugged.delete(f"/api/plugins/instances/{instance_id}", params={"install": "remove"}).status_code == 204
+    assert not _root(instance_id).is_symlink() and (elsewhere / "precious.txt").is_file()
+
+
+def test_插件说的模型文件夹不在安装目录里_什么都不删(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(models_outside=True)
+    refused = plugged.delete(f"/api/plugins/instances/{instance_id}", params={"install": "remove", "keep_models": True})
+    assert refused.status_code == 409 and "不在安装目录里" in refused.json()["detail"]
+    assert _root(instance_id).is_dir() and plugged.get(_url(instance_id)).status_code == 200, "连接和目录都还在"
+
+
+def test_删安装目录要部署管理员_选目录那一种只删宿主写的配置(plugged, tmp_path: Path) -> None:
+    member = second_client("member")
+    theirs = _connection(member)
+    _root(theirs).mkdir(parents=True)
+    (_root(theirs) / "config.yaml").write_text("x", encoding="utf-8")
+    assert member.delete(f"/api/plugins/instances/{theirs}", params={"install": "remove"}).status_code == 403
+    assert member.get(_url(theirs, "/footprint")).status_code == 403
+    assert _root(theirs).is_dir(), "没删"
+    instance_id = _connection(plugged)
+    folder = tmp_path / "own-comfyui"
+    folder.mkdir()
+    (folder / "main.py").write_text("x", encoding="utf-8")
+    assert plugged.put(_url(instance_id), json={"mode": "directory", "directory": str(folder), "confirm_run_code": True}).status_code == 200
+    _root(instance_id).mkdir(parents=True)
+    (_root(instance_id) / "config.yaml").write_text("x", encoding="utf-8")
+    assert plugged.get(_url(instance_id, "/footprint")).json()["installed"] is False, "只有宿主写的配置"
+    assert plugged.delete(f"/api/plugins/instances/{instance_id}", params={"install": "remove"}).status_code == 204
+    assert not _root(instance_id).exists() and (folder / "main.py").is_file(), "用户自己的目录从来不碰"
+
+
+def test_卸载插件_有安装目录先问_留着或者一起删(plugged, tmp_path: Path) -> None:
+    first = _installed(plugged)
+    assert plugged.get(f"/api/plugins/{PACKAGE_ID}/local-services/installs").json()[0]["instance_id"] == first
+    asked = plugged.delete(f"/api/plugins/{PACKAGE_ID}")
+    assert asked.status_code == 409 and "先选要不要一起删" in asked.json()["detail"]
+    with SessionLocal() as db:
+        assert db.get(PluginPackage, PACKAGE_ID) is not None, "没问过不卸"
+    assert supervisor.get(first).state == "running", "没问过连服务都不停"
+    gone = plugged.delete(f"/api/plugins/{PACKAGE_ID}", params={"local_services": "remove", "keep_models": True})
+    assert gone.status_code == 204, gone.text
+    assert not _root(first).exists()
+    assert (settings.data_dir / "local-services" / "kept-models" / "本机" / "checkpoints" / "mine.safetensors").is_file()
+    with SessionLocal() as db:
+        assert db.get(PluginPackage, PACKAGE_ID) is None
+
+
+def test_卸载插件_选留着_安装目录留在磁盘上(plugged) -> None:
+    first = _installed(plugged)
+    assert plugged.delete(f"/api/plugins/{PACKAGE_ID}", params={"local_services": "keep"}).status_code == 204
+    assert (_root(first) / "record.json").is_file()
+    assert supervisor.get(first) is None or supervisor.get(first).state == "stopped", "进程照样停掉"

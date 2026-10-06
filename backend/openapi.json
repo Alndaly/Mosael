@@ -19403,6 +19403,7 @@
           "plugins"
         ],
         "summary": "Delete Instance",
+        "description": "删连接。背后的本机服务先停掉(那一行随外键级联删):Mosael 起的进程不留在后台。它在 Mosael 数据目录里的安装目录\n缺省留着;`install=remove` 一起删(部署管理员才行 —— 删的是这台机器上的东西),`keep_models` 先把模型挪到 kept-models。",
         "operationId": "delete_instance_api_plugins_instances__instance_id__delete",
         "parameters": [
           {
@@ -19412,6 +19413,30 @@
             "schema": {
               "type": "string",
               "title": "Instance Id"
+            }
+          },
+          {
+            "name": "install",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "keep",
+                "remove"
+              ],
+              "type": "string",
+              "default": "keep",
+              "title": "Install"
+            }
+          },
+          {
+            "name": "keep_models",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Keep Models"
             }
           }
         ],
@@ -21687,7 +21712,7 @@
           "plugins"
         ],
         "summary": "Uninstall Package",
-        "description": "卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。\n\n**连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是\"我删了它怎么又回来了\"。",
+        "description": "卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。\n\n**连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是\"我删了它怎么又回来了\"。\n\n它的连接在 Mosael 数据目录里留着本机服务的安装目录(让 Mosael 装的那一份)时**先问**(ADR 0041 §4):没带\n`local_services=keep|remove` 就 409;`remove` 一起删(`keep_models` 先把每一份的模型挪到 kept-models),`keep` 留在磁盘上。",
         "operationId": "uninstall_package_api_plugins__package_id__delete",
         "parameters": [
           {
@@ -21697,6 +21722,36 @@
             "schema": {
               "type": "string",
               "title": "Package Id"
+            }
+          },
+          {
+            "name": "local_services",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "keep",
+                    "remove"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Local Services"
+            }
+          },
+          {
+            "name": "keep_models",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Keep Models"
             }
           }
         ],
@@ -25655,6 +25710,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocalServiceDiscoveryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/local-service/footprint": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service Footprint",
+        "description": "删连接之前:这个连接在 Mosael 的数据目录里留着什么(一份让 Mosael 装的、多大、模型多大;没有是 null)。只给部署管理员 ——\n删那个目录是这台机器上的事。",
+        "operationId": "get_local_service_footprint_api_plugins_instances__instance_id__local_service_footprint_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalServiceFootprintOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Local Service Footprint Api Plugins Instances  Instance Id  Local Service Footprint Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/{package_id}/local-services/installs": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "List Local Service Installs",
+        "description": "卸载插件之前:它的连接里留着的那几个安装目录(各是不是一份让 Mosael 装的、多大、模型多大)。只给部署管理员。",
+        "operationId": "list_local_service_installs_api_plugins__package_id__local_services_installs_get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LocalServiceFootprintOut"
+                  },
+                  "title": "Response List Local Service Installs Api Plugins  Package Id  Local Services Installs Get"
                 }
               }
             }
@@ -34433,6 +34586,55 @@
           "value"
         ],
         "title": "LocalServiceFactOut"
+      },
+      "LocalServiceFootprintOut": {
+        "properties": {
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "models_bytes": {
+            "type": "integer",
+            "title": "Models Bytes"
+          },
+          "has_models": {
+            "type": "boolean",
+            "title": "Has Models"
+          },
+          "keep_to": {
+            "type": "string",
+            "title": "Keep To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id",
+          "name",
+          "directory",
+          "installed",
+          "bytes",
+          "models_bytes",
+          "has_models",
+          "keep_to"
+        ],
+        "title": "LocalServiceFootprintOut",
+        "description": "一个连接在 `<数据目录>/local-services/<连接>/` 下留着什么(删连接、卸载插件的确认框照它问)。`installed`:是一份让 Mosael\n装的(否则只有宿主写的共用模型配置,删了也不丢东西);`bytes` 整个目录多大;`has_models` / `models_bytes` 有没有模型文件夹、多大;\n`keep_to` 选「保留模型」时挪到哪。"
       },
       "LocalServiceFoundOut": {
         "properties": {

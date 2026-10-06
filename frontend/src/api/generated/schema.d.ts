@@ -6346,7 +6346,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Instance */
+        /**
+         * Delete Instance
+         * @description 删连接。背后的本机服务先停掉(那一行随外键级联删):Mosael 起的进程不留在后台。它在 Mosael 数据目录里的安装目录
+         *     缺省留着;`install=remove` 一起删(部署管理员才行 —— 删的是这台机器上的东西),`keep_models` 先把模型挪到 kept-models。
+         */
         delete: operations["delete_instance_api_plugins_instances__instance_id__delete"];
         options?: never;
         head?: never;
@@ -7193,6 +7197,9 @@ export interface paths {
          * @description 卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
          *
          *     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
+         *
+         *     它的连接在 Mosael 数据目录里留着本机服务的安装目录(让 Mosael 装的那一份)时**先问**(ADR 0041 §4):没带
+         *     `local_services=keep|remove` 就 409;`remove` 一起删(`keep_models` 先把每一份的模型挪到 kept-models),`keep` 留在磁盘上。
          */
         delete: operations["uninstall_package_api_plugins__package_id__delete"];
         options?: never;
@@ -8522,6 +8529,47 @@ export interface paths {
          * @description 本机有没有已经在跑的这种服务(插件页上「本机发现一个,要连上吗」)。只给部署管理员:那是这台机器上的事。
          */
         get: operations["discover_local_services_api_plugins__package_id__local_services_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/local-service/footprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Service Footprint
+         * @description 删连接之前:这个连接在 Mosael 的数据目录里留着什么(一份让 Mosael 装的、多大、模型多大;没有是 null)。只给部署管理员 ——
+         *     删那个目录是这台机器上的事。
+         */
+        get: operations["get_local_service_footprint_api_plugins_instances__instance_id__local_service_footprint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{package_id}/local-services/installs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Local Service Installs
+         * @description 卸载插件之前:它的连接里留着的那几个安装目录(各是不是一份让 Mosael 装的、多大、模型多大)。只给部署管理员。
+         */
+        get: operations["list_local_service_installs_api_plugins__package_id__local_services_installs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12458,6 +12506,30 @@ export interface components {
             label: string;
             /** Value */
             value: string;
+        };
+        /**
+         * LocalServiceFootprintOut
+         * @description 一个连接在 `<数据目录>/local-services/<连接>/` 下留着什么(删连接、卸载插件的确认框照它问)。`installed`:是一份让 Mosael
+         *     装的(否则只有宿主写的共用模型配置,删了也不丢东西);`bytes` 整个目录多大;`has_models` / `models_bytes` 有没有模型文件夹、多大;
+         *     `keep_to` 选「保留模型」时挪到哪。
+         */
+        LocalServiceFootprintOut: {
+            /** Instance Id */
+            instance_id: string;
+            /** Name */
+            name: string;
+            /** Directory */
+            directory: string;
+            /** Installed */
+            installed: boolean;
+            /** Bytes */
+            bytes: number;
+            /** Models Bytes */
+            models_bytes: number;
+            /** Has Models */
+            has_models: boolean;
+            /** Keep To */
+            keep_to: string;
         };
         /** LocalServiceFoundOut */
         LocalServiceFoundOut: {
@@ -31728,7 +31800,10 @@ export interface operations {
     };
     delete_instance_api_plugins_instances__instance_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                install?: "keep" | "remove";
+                keep_models?: boolean;
+            };
             header?: never;
             path: {
                 instance_id: string;
@@ -33267,7 +33342,10 @@ export interface operations {
     };
     uninstall_package_api_plugins__package_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                local_services?: ("keep" | "remove") | null;
+                keep_models?: boolean;
+            };
             header?: never;
             path: {
                 package_id: string;
@@ -36021,6 +36099,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocalServiceDiscoveryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_service_footprint_api_plugins_instances__instance_id__local_service_footprint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceFootprintOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_local_service_installs_api_plugins__package_id__local_services_installs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceFootprintOut"][];
                 };
             };
             /** @description Validation Error */

@@ -28,6 +28,7 @@ vi.mock("@/api/client", () => ({
   updatePluginInstance: vi.fn().mockResolvedValue({}),
   createPluginInstance: vi.fn(),
   removePluginPackage: vi.fn(),
+  listLocalServiceInstalls: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("@/api/domains/capabilities", () => ({
   listCapabilityTerms: async () => [

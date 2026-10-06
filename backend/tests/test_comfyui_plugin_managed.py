@@ -1007,3 +1007,32 @@ def test_换版本_还没装好的不让换(managed, tmp_path: Path) -> None:
         versions.update({"directory": str(tmp_path)}, "zh", lambda _event: None)
     assert versions.versions({"directory": str(tmp_path / "nothing")}, "zh") == \
         {"current": "", "latest": "0.39.0", "update": "", "previous": "", "unfinished": ""}
+
+
+# ---- 卸载之前问一声(service_uninstall)-------------------------------------------------------
+
+
+@posix_only
+def test_卸载之前_说是不是让_Mosael_装的_模型文件夹在哪_多大_只看不写(setup: Setup, tmp_path: Path) -> None:
+    setup.install()
+    models = setup.root / "ComfyUI" / "models"
+    (models / "checkpoints" / "mine.safetensors").write_bytes(b"w" * 1234)
+    told = setup.managed.uninstall({"directory": str(setup.root)}, "zh")
+    assert told == {"installed": True, "models": str(models), "models_bytes": 1234, "models_files": 2}, "占位文件也算一个"
+    assert (models / "checkpoints" / "mine.safetensors").is_file()
+    # 换版本打断在搬五样的中途:模型还在上一版那里
+    (setup.root / "ComfyUI").replace(setup.root / "ComfyUI.previous")
+    assert setup.managed.uninstall({"directory": str(setup.root)}, "zh")["models"] == str(setup.root / "ComfyUI.previous" / "models")
+    # 模型文件夹是指到别处的链接:交回链接本身,大小不算那头的
+    (setup.root / "ComfyUI.previous").replace(setup.root / "ComfyUI")
+    elsewhere = tmp_path / "big-disk"
+    models.replace(elsewhere)
+    models.symlink_to(elsewhere, target_is_directory=True)
+    linked = setup.managed.uninstall({"directory": str(setup.root)}, "zh")
+    assert linked["models"] == str(models) and linked["models_bytes"] == 0
+
+
+def test_卸载之前_选目录那一种的安装目录里只有宿主写的配置(managed, tmp_path: Path) -> None:
+    (tmp_path / "extra_model_paths.yaml").write_text("{}", encoding="utf-8")
+    assert managed.uninstall({"directory": str(tmp_path)}, "zh") == {"installed": False, "models": "", "models_bytes": 0,
+                                                                    "models_files": 0}
