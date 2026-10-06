@@ -7,7 +7,8 @@
                                                                    缺的节点和节点包、缺的模型)+ 建议的路径 + 说明
     {"op": "save_workflow", "path", "content"(JSON 原文)}          → 存进 workflows/(不覆盖,撞名回建议名)
     {"op": "install_nodes", "packs"}                               → 流式:经 Manager 装节点包,装完说要重启
-    {"op": "reboot"}                                               → 经 Manager 重启 ComfyUI,等它停下再起来
+    {"op": "reboot"}                                               → 经 Manager 重启 ComfyUI,等它停下再起来;本机服务交回
+                                                                   `host_restart`,由宿主重启
 
 **认得什么**:界面里「保存 / 导出」的 JSON(`nodes` / `links`)、「导出 (API)」的 JSON(节点 id → `class_type` /
 `inputs`);ComfyUI 存出来的 PNG(tEXt / iTXt 的 `workflow`、`prompt`)和 WebP(EXIF 里 Make = `workflow:…`、
@@ -46,6 +47,7 @@ from install import MANAGER_CLIENT, MANAGER_LOST_SECONDS, MANAGER_POLL_SECONDS, 
     manager_version
 from lines import ComfyError, say
 from run import Emit
+from service import local_service
 from workflow_library import _BAD_SEGMENT, _free_name, _layout, _taken, check_path, describe, model_options
 
 #: 要导入的东西最大多大(图片里嵌着工作流的 PNG 也就几 MB;压缩包放宽一点)。
@@ -635,7 +637,12 @@ def _up(comfy: Comfy) -> bool:
 
 
 def reboot(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """经 ComfyUI-Manager 重启 ComfyUI,等它停下再起来(最多几分钟)。正在跑的任务会中断 —— 界面上确认过。"""
+    """经 ComfyUI-Manager 重启 ComfyUI,等它停下再起来(最多几分钟)。正在跑的任务会中断 —— 界面上确认过。
+
+    这台 ComfyUI 归宿主起停时(本机服务,ADR 0041;宿主经 MOSAEL_LOCAL_SERVICE 告诉我们)不经 Manager 重启,交回
+    `host_restart`,请宿主停了再起:Manager 在 Windows 上重启是另起一个进程、旧的退出,宿主会以为它崩了,也就再也停不掉它。"""
+    if local_service():
+        return {"host_restart": True}
     if not manager_version(comfy):
         raise ComfyError(say(locale, "这台 ComfyUI 没装 ComfyUI-Manager,Mosael 没法替它重启:在那台机器上手动重启",
                              "This ComfyUI has no ComfyUI-Manager, so Mosael can't restart it. Restart it on that machine"))

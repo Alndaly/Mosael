@@ -33,7 +33,7 @@ from tests.fake_comfyui import FakeComfyUI, subgraph_promoting
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
 TOOLS = PLUGIN / "tools"
-_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "workflows",
             "tooling", "library", "sources", "install", "families", "weights", "model_files", "civitai", "nsfw",
             "provenance", "lookup", "previews")
 

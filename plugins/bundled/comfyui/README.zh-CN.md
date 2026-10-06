@@ -354,6 +354,25 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 鼠标」那个设置的键名和它要写回服务器的两条请求;没有排任务、没有存任何东西)。前端缺了桥要用的哪一样,对应的面板说「不支持」,
 画布照常能用。
 
+## 本机 ComfyUI:选目录,由 Mosael 起停(1.14.0)
+
+装过 ComfyUI 的,不用再开终端:连接页「在哪跑」选「用我自己装的」,填它的目录(ADR 0041)。
+
+- **先确认再运行**:点「检查并使用」先问一次(会在这台机器上运行那个目录里的代码),确认后插件认一遍目录 —— 有 `main.py` 和
+  `comfy/` 的那一层;Windows 便携版选外层的 `ComfyUI_windows_portable` 或里面的 `ComfyUI` 都行。解释器按顺序找:你指定的、
+  便携版自带的 `python_embeded\python.exe`、目录里或上一层的 `venv` / `.venv`(Windows 是 `Scripts\python.exe`)。试跑一次
+  `import torch`(30 秒上限),摆出 ComfyUI 版本、Python、PyTorch、显卡(MPS / CUDA / 只有 CPU)和显存、Manager(pip 包 / 老式
+  节点 / 没装)、pysssss;导入不了 torch 就不让用。torch 能导入还不够:ComfyUI 的 requirements.txt 里必需的包
+  缺哪几个也查(只认装没装,不比版本),缺了同样不让用,写明在哪个环境里 `pip install -r requirements.txt`。
+- **起的命令**:`python main.py --listen 127.0.0.1 --port <端口>`,装了 Manager 的 pip 包(`comfyui_manager`)才加
+  `--enable-manager`,便携版照它自己的启动脚本加 `-s`;「高级」里的附加参数接在后面(端口、监听地址不许写在那里)。不改它的任何文件。
+  端口 Mosael 建的时候选(8189 往上第一个空的)、写进服务器地址;改端口时插件把按旧地址存的本地数据(模型库缓存、工具对照)搬过去。
+- **用到时起、退出时停**,崩了 Mosael 自己重起;装完节点包要重启时,本机这台由 Mosael 停了再起,不经 Manager 的重启。
+- **补装 pysssss**:没装就在连接页上说明少了什么;点「补装」并确认后,下载钉死的提交(`609f3af`,按 sha256 校验)解到
+  `custom_nodes/ComfyUI-Custom-Scripts`,下次启动生效。
+- **本机发现**:插件页上探一下本机 8188 和 8000(官方 Desktop 的缺省端口)的 `/system_stats`,有 ComfyUI 就提示「要连上吗」——
+  建的是「连一台服务器」那一种。
+
 ## 进度、取消、重启
 
 - 进度来自 ComfyUI 的 WebSocket:哪个节点在跑(用界面上的节点名)、采样器第几步、第几个节点;连不上就退回轮询。
@@ -379,6 +398,7 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 - `run.py` —— 传素材、提交、跟进度、取消、取回(生成与工作流的工具共用);
 - `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
+- `service.py` —— 本机服务:认目录(便携版、venv、试跑 torch)、给出启动命令、补装 pysssss、本机发现、改端口时搬数据;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
 - `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 同一台机器 → Manager → 说清楚 的顺序下载;

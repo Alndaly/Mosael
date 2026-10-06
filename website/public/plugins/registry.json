@@ -118,7 +118,7 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.13.2",
+      "version": "1.14.0",
       "summary": {
         "zh": "接一台 ComfyUI:存着的工作流变成生成模型和工具,还能在 Mosael 里管它的模型和工作流。",
         "en": "Connect a ComfyUI server: its saved workflows become generation models and tools, and you manage its models and workflows from Mosael."
@@ -157,8 +157,8 @@
             "en": "ComfyUI generation"
           },
           "description": {
-            "zh": "替 Mosael 在这台 ComfyUI 上列出模型与工具(每张工作流一个)、做一次生成,以及模型库(列出模型文件、解析链接、下载模型)。只给宿主调。",
-            "en": "Lists models and tools (one per workflow), runs generations, and serves the model library (model files, link resolution, downloads) on this ComfyUI server for Mosael. Host-only."
+            "zh": "替 Mosael 在这台 ComfyUI 上列出模型与工具(每张工作流一个)、做一次生成,以及模型库(列出模型文件、解析链接、下载模型);本机服务的那几个操作(认出一个装好的目录、给出启动命令、补装节点)也在这里。只给宿主调。",
+            "en": "Lists models and tools (one per workflow), runs generations, and serves the model library (model files, link resolution, downloads) on this ComfyUI server for Mosael; also answers the local-service operations (recognise an installed folder, give the launch command, add missing nodes). Host-only."
           },
           "effects": "external"
         },

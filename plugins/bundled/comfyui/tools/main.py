@@ -9,6 +9,11 @@
     {"op": "fingerprint"} → 一行结果:清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
     {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果;带 `graph` 跑工作台画布上现在这张(见 run)
 
+**本机服务**(ADR 0041,清单 `services` 里的那一种归这个工具,见 service):
+
+    {"op": "service_detect" | "service_launch" | "service_add_nodes" | "service_discover" | "service_readdress", …}
+                                           → 怎么认一个装好的目录、怎么起、补装 pysssss、本机发现、改端口时搬数据
+
 **模型库**(ADR 0034,同一个工具认领 `model_library`):
 
     {"op": "library"}                      → 全部模型文件、各目录数目、工作流缺的模型、下载走哪条路(见 library)
@@ -60,6 +65,7 @@ import models
 import previews
 import run
 import server
+import service
 import sources
 import tooling
 import workflow_import
@@ -149,6 +155,11 @@ def main() -> None:
     locale = str(request.get("locale") or os.environ.get("MOSAEL_LOCALE") or "zh")
     tool = request.get("tool")
     try:
+        if tool == "comfyui_generation" and payload.get("op") in service.OPS:
+            # 本机服务的操作(ADR 0041):只描述、不起进程,也不和那台服务器说话 —— 问怎么起的时候它当然还没起
+            output = service.OPS[payload["op"]](payload, locale)
+            emit({"ok": True, "output": output})
+            return
         comfy = Comfy(env_base_url(), locale, env_access_token())
         if tool == "comfyui_generation":
             output = _generation(payload, comfy, locale)

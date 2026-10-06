@@ -31,7 +31,7 @@ from tests.fake_comfyui import MANAGER_POLICY_MESSAGE, OBJECT_INFO, FakeComfyUI
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
-_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "workflows",
             "tooling", "library", "sources", "install", "model_files", "families", "workflow_library", "workflow_import")
 
 #: 文生图的 API 格式(ComfyUI「导出 (API)」那种):没有位置,值和连线都在 inputs 里。
@@ -354,6 +354,15 @@ def test_重启_经Manager_等它停下再起来(plugin, comfy) -> None:
     assert out == {"back": True}
     reboots = [one for one in comfy.state.calls if one[1] == "/v2/manager/reboot"]
     assert len(reboots) == 1 and reboots[0][2] == {}, "POST 带 JSON 正文(Manager 拒绝简单表单 POST)"
+
+
+def test_本机服务_不经Manager重启_请宿主停了再起(plugin, comfy, monkeypatch) -> None:
+    """宿主起停的本机服务(ADR 0041,宿主经 MOSAEL_LOCAL_SERVICE 告诉插件):Manager 在 Windows 上重启是另起一个进程、
+    旧的退出,宿主会以为它崩了、再也停不掉它 —— 插件交回 host_restart,一个请求都不发给 Manager。"""
+    monkeypatch.setenv("MOSAEL_LOCAL_SERVICE", "comfyui")
+    module, Comfy, _convert = plugin
+    assert module.reboot({"op": "reboot"}, Comfy(comfy.url), "zh") == {"host_restart": True}
+    assert not [one for one in comfy.state.calls if one[1].startswith("/v2/manager")]
 
 
 def test_Manager不让重启_说为什么(plugin, comfy) -> None:

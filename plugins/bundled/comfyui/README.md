@@ -469,6 +469,32 @@ Tested frontend: ComfyUI 0.38.0 / frontend 1.53.10 (read-only checks: injecting 
 the dirty flag, plus the trackpad / mouse setting's key and the two requests it tries to write back to the server; nothing was
 queued or saved). If a frontend lacks something the bridge uses, that panel says it isn't supported and the canvas keeps working.
 
+## Local ComfyUI: pick a folder, Mosael starts and stops it (1.14.0)
+
+If you already installed ComfyUI, you no longer need a terminal: on the connection, set "Where it runs" to "Use my own install"
+and enter its folder (ADR 0041).
+
+- **Confirm before anything runs**: "Check and use" asks once (it runs code from that folder on this machine); then the plugin
+  checks the folder: the level with `main.py` and `comfy/`; for the Windows portable build either the outer
+  `ComfyUI_windows_portable` or the inner `ComfyUI` works. The interpreter is, in order: the one you chose, the portable build's
+  `python_embeded\python.exe`, a `venv` / `.venv` in the folder or the one above (`Scripts\python.exe` on Windows). A trial
+  `import torch` (30-second cap) reports the ComfyUI version, Python, PyTorch, GPU (MPS / CUDA / CPU only) and its memory,
+  the Manager (pip package / legacy node / none) and pysssss; if torch can't be imported, the folder can't be used.
+  Importing torch isn't enough: it also checks which required packages from ComfyUI's requirements.txt are missing
+  (installed or not, versions aren't compared); if any are, the folder can't be used either, and the message says which
+  environment to run `pip install -r requirements.txt` in.
+- **The command**: `python main.py --listen 127.0.0.1 --port <port>`, plus `--enable-manager` only when the Manager's pip package
+  (`comfyui_manager`) is installed, plus `-s` for the portable build like its own launcher; extra arguments from Advanced go at
+  the end (the port and listen address may not be set there). None of its files are changed. Mosael picks the port when the
+  folder is set up (the first free one from 8189) and writes it into the server address; when you change the port, the plugin
+  moves the local data it kept under the old address (model-library cache, tool map).
+- **Starts when used, stops when you quit**, and Mosael restarts it if it crashes. When installed node packs need a restart, a
+  local server is stopped and started by Mosael rather than through the Manager's restart.
+- **Add pysssss**: if it's missing, the connection says what's missing; "Add" (after a confirmation) downloads the pinned commit
+  (`609f3af`, checked by sha256) into `custom_nodes/ComfyUI-Custom-Scripts`; it loads on the next start.
+- **Found on this computer**: the plugin page probes `/system_stats` on local ports 8188 and 8000 (the official Desktop's
+  default) and offers to connect to a ComfyUI it finds, as a regular "Connect to a server" connection.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -499,6 +525,8 @@ queued or saved). If a frontend lacks something the bridge uses, that panel says
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;
 - `run.py`: uploading assets, submitting, following progress, cancelling and fetching results (shared by generation and
   the workflow tools);
+- `service.py`: the local service: recognising a folder (portable build, venv, trial torch import), the launch command,
+  adding pysssss, finding a local server, moving data when the port changes;
 - `workflows.py`: `list_workflows` / `import_outputs`, and the part that returns outputs;
 - `tooling.py`: one tool per workflow: derives inputs and outputs from the graph and runs the current graph;
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;

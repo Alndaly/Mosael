@@ -36,7 +36,7 @@ from tests.fake_comfyui import (
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
 ENTRY = "tools/main.py"
-_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "workflows",
             "tooling", "library", "sources", "install", "model_files", "families", "workflow_library",
             "workflow_import", "app_form")
 
