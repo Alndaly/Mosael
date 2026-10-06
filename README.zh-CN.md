@@ -72,7 +72,7 @@ AI 工作台用文字、首尾帧或参考图生成图片、视频、音乐和�
 
 ### ComfyUI 客户端：保存的工作流变成模型和工具
 
-接上本机或局域网里的一台 ComfyUI：保存的每张工作流，都是 AI 工作台和画板里一个可选的模型，也是智能体和工作流能直接调用的工具。
+接上本机或局域网里的一台 ComfyUI，或者让 Mosael 替你起停已经装好的那一份、替你装一份(Apple 芯片 Mac、Windows / Linux + NVIDIA)：保存的每张工作流，都是 AI 工作台和画板里一个可选的模型，也是智能体和工作流能直接调用的工具。
 **模型库**按类别列出那台服务器上的 checkpoint、LoRA 等文件，带预览图、基础模型和触发词，没有预览图的能按哈希去 Civitai 找，缺的能下载；
 **工作流库**按文件夹管理工作流，能新建、导入、补齐缺失的模型和自定义节点；**应用表单**只露出别人需要填的那几项(类似 RunningHub 的
 「AI 应用」，但跑在你自己的 ComfyUI 上)；桌面版的 **ComfyUI 工作台**直接打开 ComfyUI 自己的画布，旁边停着模型库、缺失项、应用和运行结果。
@@ -154,7 +154,7 @@ ComfyUI、对象存储和 MinerU 文档解析随应用内置；Blender、Manim�
 | 音乐与音效 | Google(Lyria)、Evolink(Suno)、可灵音效、阿里云百炼(Fun-Music)、火山引擎 AI 音乐 |
 | 语音与配音 | 本机声音克隆(F5-TTS、Fish Speech)、阿里云百炼(CosyVoice)、Edge 音色、OpenAI、火山引擎语音合成与播客 |
 | 转写 | FunASR、WhisperX(本机) |
-| 对话与智能体 | DeepSeek、Kimi、阿里云百炼(通义千问)、MiniMax、OpenAI、OpenRouter、Ollama 等 OpenAI 兼容接口；Claude Pro/Max、ChatGPT Plus/Pro、Kimi Code、GitHub Copilot、xAI 订阅授权 |
+| 对话与智能体 | DeepSeek、Kimi、阿里云百炼(通义千问)、MiniMax、OpenAI、OpenRouter、Ollama 等 OpenAI 兼容接口；Google Gemini(AI Studio 的 API Key)；Claude Pro/Max、ChatGPT Plus/Pro、Kimi Code、GitHub Copilot、xAI 订阅授权 |
 | 你自己的显卡 | 本机或局域网里的任意一台 ComfyUI |
 
 ## 和你熟悉的工具怎么搭配

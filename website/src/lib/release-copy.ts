@@ -1,5 +1,21 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.3": {
+    zh: [
+      "**ComfyUI 可以装在 Mosael 里了。** 自己装过的,选目录、指一个 Python,Mosael 替你起停、看日志,用到时自动启动,闲置一会儿自动停下释放显存;没装过的,选「让 Mosael 装」,先看安装计划(这台机器装哪种 PyTorch、要多大空间、从哪儿下、走不走代理),再一步步装,能取消、能接着装。支持 Apple 芯片 Mac、Windows 和 Linux + NVIDIA,装好的能更新、能回到上一版,卸载时可以留下模型;别处已有的模型文件夹也能直接共用,不拷第二份。升级后 ComfyUI 连接要先在插件页授予三项新的联网权限才恢复。",
+      "**Gemini 能当智能体的对话模型了。** 在「Google AI Studio」连接里填一把 API Key,智能体、画板和工作流的大模型节点都能选 Gemini;调工具时 Gemini 3 的思考签名原样回传,思考档位按型号对上,花费照 Google 官方价记。Google 不许第三方应用借用 Gemini 订阅登录,所以这里只收 API Key。",
+      "**ComfyUI 用起来更顺。** 工作台点「运行」照 ComfyUI 的设置换种子;「在 Civitai 上找」查到后原链接和示例图当场出来;ComfyUI 就在这台电脑上时下载直接写进它的模型目录,看得到进度、能取消;本机 NSFW 识别看原图;子图里的模型照实际选的算,rgthree 这类节点包缺了也能一键装上。旧的 git 版 ComfyUI-Manager 不再支持,只认 ComfyUI 自带的 pip 版。",
+      "**成片默认不再烧「AI 生成」。** 导出的视频画面上默认没有这行字,发到要求标明的平台时在导出框里勾上(片头左上角、整片右上角);文件里的 AIGC 标记照旧总写。另外失败没扣钱的生成说「未扣费」,不再显示「US$0.00」;「导入」「导出」的图标方向和字对上了;工作台模型库的小眼睛点得开了,「返回 Mosael」后模糊不再盖住工作流库。",
+      "**带货口播第 7 版,账记得更准。** 拍数由代码按目标时长卡住,动起来的那一拍不再为用不上的声音付钱,出镜主播的开场和收尾也上字幕;取消生成时远端任务能撤的先撤、撤不掉的按实际用量记账;百炼数字人前的人像检测进账了;免费的 Edge 配音偶尔连不上会自动重连。",
+    ],
+    en: [
+      "**ComfyUI can live inside Mosael.** If you already have one, pick its folder and a Python and Mosael starts and stops it, shows its logs, starts it when needed and stops it after a while idle to free the GPU; if you don't, choose Let Mosael install it, review the plan (which PyTorch for this machine, how much space, where it downloads from and through which proxy), then install step by step with cancel and resume. Apple silicon Macs, Windows and Linux with NVIDIA are supported, installs can be updated or rolled back and uninstalled while keeping models, and model folders you already have can be shared without a second copy. After upgrading, ComfyUI connections resume once you grant three new network permissions on the plugins page.",
+      "**Gemini can be the agent's chat model.** Add an API key to the Google AI Studio connection and the agent, boards and workflow LLM nodes can use Gemini; Gemini 3's thought signatures are sent back on every tool call, thinking levels follow each model, and spending uses Google's published prices. Google forbids third-party apps from reusing Gemini subscription logins, so only API keys are accepted.",
+      "**ComfyUI works more smoothly.** Running from the workbench changes the seed the way ComfyUI does; a Civitai lookup shows the source link and example image right away; when ComfyUI is on this computer, downloads go straight into its models folder with progress and cancel; on-device NSFW detection looks at the original image; models inside subgraphs are counted by what is actually selected, and node packs such as rgthree can be installed in one go. The old git-cloned ComfyUI-Manager is no longer supported; only the pip version bundled with ComfyUI is.",
+      "**Exports no longer burn in \"AI-generated\" by default.** The on-screen label is off unless you tick it in the export dialog for platforms that require it (top-left at the start, top-right throughout); the AIGC tag is still always written into the file. Failed generations that were never charged now say Not charged instead of US$0.00, import and export icons point the right way, the workbench model library's eye button opens again, and returning from the workbench no longer leaves the blur over the workflow library.",
+      "**Product pitch template v7 and more accurate spending.** The number of beats is capped in code by the target length, moving beats no longer pay for sound that is muted anyway, and the presenter's opening and closing lines get subtitles; cancelling a generation cancels the remote task where possible and otherwise records what the provider actually charged; Bailian's portrait check before a digital human is now recorded; and the free Edge voice reconnects when a connection drops.",
+    ],
+  },
   "v1.9.2": {
     zh: [
       "**ComfyUI 工作台。** 桌面版里直接打开 ComfyUI 自己的画布,右边停着 Mosael 的模型库、缺失项、应用和运行结果:选中加载节点就列出那个目录的模型,点一下填进去;缺的节点按包一键装,缺的模型按文件名去 Civitai、HuggingFace、ModelScope 找;跑出来的图标明来自哪个节点。面板能拉宽,画布有「触控板 / 鼠标」两种操控,只在你这边生效。",

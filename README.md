@@ -78,7 +78,8 @@ remember what they were made from. Spending is recorded from the usage and charg
 
 ### ComfyUI client: workflows become models and tools
 
-Connect a ComfyUI server on this computer or your LAN. Every saved workflow becomes a model you can pick in AI Studio
+Connect a ComfyUI server on this computer or your LAN — or let Mosael start one you already installed, or install one
+for you (Apple silicon, Windows or Linux with NVIDIA). Every saved workflow becomes a model you can pick in AI Studio
 and on boards, and a tool the agent and workflows can run. The **model library** lists the server's checkpoints, LoRAs
 and other files with preview images, base model and trigger words, and downloads what's missing; the **workflow
 library** organizes workflows in folders, creates and imports them, and completes missing models and custom nodes. An
@@ -174,7 +175,7 @@ full list with model names is in [Model connections](https://mosael.com/en/docs/
 | Music & sound | Google (Lyria), Evolink (Suno), Kling audio, Alibaba Model Studio (Fun-Music), Volcengine AI music |
 | Speech & voice | Local voice cloning (F5-TTS, Fish Speech), Alibaba Bailian (CosyVoice), Edge voices, OpenAI, Volcengine TTS and podcast |
 | Transcription | FunASR, WhisperX (local) |
-| Chat & agent | DeepSeek, Kimi, Alibaba Bailian (Qwen), MiniMax, OpenAI, OpenRouter, Ollama and other OpenAI-compatible endpoints; Claude Pro/Max, ChatGPT Plus/Pro, Kimi Code, GitHub Copilot and xAI sign-in |
+| Chat & agent | DeepSeek, Kimi, Alibaba Bailian (Qwen), MiniMax, OpenAI, OpenRouter, Ollama and other OpenAI-compatible endpoints; Google Gemini (AI Studio API key); Claude Pro/Max, ChatGPT Plus/Pro, Kimi Code, GitHub Copilot and xAI sign-in |
 | Your own GPU | Any ComfyUI server on this computer or your LAN |
 
 ## How Mosael fits next to the tools you know
