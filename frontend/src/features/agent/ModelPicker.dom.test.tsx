@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+const listCapabilityModels = vi.fn();
 const listProviderModels = vi.fn();
 const api = vi.fn();
 const sessions = vi.hoisted(() => ({
@@ -27,6 +28,8 @@ vi.mock("@/api/client", () => ({
   //: 连接清单与能力默认按路径答(测试里的 api 替身按路径分),模型行单独桩。
   listProviderProfiles: () => api("/api/settings/providers"),
   listProviderDefaults: () => api("/api/settings/provider-defaults"),
+  listCapabilityModels: (...args: unknown[]) => listCapabilityModels(...(args as [])),
+  //: 设置页用的整份目录。选择器**不该**读它(见下面「只列对话模型」那一条)。
   listProviderModels: (...args: unknown[]) => listProviderModels(...(args as [])),
   ...sessions,
 }));
@@ -93,7 +96,7 @@ describe("模型选择器", () => {
   it("还在读的时候不消失,而且先把会话上那个模型名显示出来", async () => {
     // 一直挂着的请求 = 读取中。此前这一刻整个控件是 null。
     api.mockImplementation(() => new Promise(() => {}));
-    listProviderModels.mockImplementation(() => new Promise(() => {}));
+    listCapabilityModels.mockImplementation(() => new Promise(() => {}));
     mount();
     const holder = await screen.findByRole("status");
     expect(holder.textContent).toContain("deepseek-v4-flash");
@@ -101,29 +104,51 @@ describe("模型选择器", () => {
 
   it("会话还没读到也不消失", async () => {
     api.mockImplementation(() => new Promise(() => {}));
-    listProviderModels.mockImplementation(() => new Promise(() => {}));
+    listCapabilityModels.mockImplementation(() => new Promise(() => {}));
     mount(null);
     expect((await screen.findByRole("status")).textContent).toContain("选择模型");
   });
 
-  it("一条连接读失败,别的连接的模型照样能选", async () => {
+  it("对话模型清单读不出来,会话上选着的那个照样在,而且说一声少了东西", async () => {
     api.mockImplementation((path: string) =>
       path.includes("provider-defaults")
         ? Promise.resolve([])
         : Promise.resolve([
             { id: "p1", name: "好的那条", enabled: true },
-            { id: "p2", name: "坏的那条", enabled: true },
+            { id: "p2", name: "另一条", enabled: true },
           ]),
     );
-    listProviderModels.mockImplementation((id: string) =>
-      id === "p1" ? Promise.resolve([{ id: "deepseek-v4-flash" }]) : Promise.reject(new Error("端点挂了")),
-    );
+    listCapabilityModels.mockRejectedValue(new Error("端点挂了"));
     mount();
-    // 此前:p2 一失败,整个控件 return null —— p1 下面的模型也一起没了。
+    // 此前:读失败整个控件 return null。
     const trigger = await screen.findByRole("button", { name: "模型" });
     expect(trigger.textContent).toContain("deepseek-v4-flash");
     //: 少了东西要说一声,不能一声不吭。
     expect(await readHint(trigger)).toBe("有连接的模型列表没读出来");
+  });
+
+  it("只列会对话、配置了的模型 —— 不是每条连接的整份目录", async () => {
+    //: 付费实测:百炼一条连接的目录 277 行,生视频的 wan2.2-s2v、作曲的 fun-music、没配置的 kimi-k3 都摊在对话模型的下拉里。
+    api.mockImplementation((path: string) =>
+      path.includes("provider-defaults")
+        ? Promise.resolve([{ capability: "chat", provider_profile_id: "p2", model: "qwen-plus" }])
+        : Promise.resolve([
+            { id: "p1", name: "Kimi", enabled: true },
+            { id: "p2", name: "阿里云百炼", enabled: true },
+            { id: "p3", name: "火山方舟", enabled: true },
+          ]),
+    );
+    listCapabilityModels.mockResolvedValue([
+      { provider_profile_id: "p1", provider_name: "Kimi", model: "k3" },
+      { provider_profile_id: "p2", provider_name: "阿里云百炼", model: "qwen-plus" },
+    ]);
+    listProviderModels.mockResolvedValue([{ id: "wan2.2-s2v" }, { id: "fun-music-v1" }, { id: "kimi-k3" }]);
+    mount({ id: "s1", provider_profile_id: "p1", model: "k3" });
+    await screen.findByRole("button", { name: "模型" });
+    const offered = [...document.querySelectorAll("[data-option]")].map((one) => one.textContent);
+    expect(offered).toEqual(["Kimi · k3", "阿里云百炼 · qwen-plus"]);
+    expect(listCapabilityModels).toHaveBeenCalledWith("chat");
+    expect(listProviderModels).not.toHaveBeenCalled();
   });
 });
 
@@ -134,7 +159,10 @@ describe("还没有会话时", () => {
         ? Promise.resolve([])
         : Promise.resolve([{ id: "p1", name: "连接", enabled: true }]),
     );
-    listProviderModels.mockResolvedValue([{ id: "m-fast" }, { id: "m-deep" }]);
+    listCapabilityModels.mockResolvedValue([
+      { provider_profile_id: "p1", provider_name: "连接", model: "m-fast" },
+      { provider_profile_id: "p1", provider_name: "连接", model: "m-deep" },
+    ]);
     sessions.listAgentSessions.mockResolvedValue([]);
     sessions.createAgentSession.mockResolvedValue({ id: "s-new", workspace_id: "ws", title: "新对话" });
     sessions.updateAgentSession.mockResolvedValue({});

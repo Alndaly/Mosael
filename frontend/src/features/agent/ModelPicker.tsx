@@ -1,8 +1,8 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Settings2 } from "lucide-react";
 
-import { listProviderDefaults, listProviderModels, listProviderProfiles } from "@/api/client";
+import { listCapabilityModels, listProviderDefaults, listProviderProfiles } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
@@ -18,8 +18,12 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 const SEP = "::";
 
 /**
- * 对话模型选择器:列出每个启用供应商的可用模型(经 /providers/{id}/models),
+ * 对话模型选择器:列出**对话**模型(`/settings/capability-models/chat`:他自己的连接下启用、会对话的那几行),
  * 选中后写回会话的 provider_profile_id + model。会话未选则后端回退默认。
+ *
+ * 此前列的是每条连接的 `/providers/{id}/models` —— 那是设置页用的**整份目录**(加上已配置的行),不分能力、
+ * 不分配没配:付费实测里百炼一条连接就摊出 277 行,生视频的 wan2.2-s2v、改口型的 videoretalk、作曲的 fun-music
+ * 都在对话模型的下拉里,没配置的目录模型(百炼上的 kimi-k3)也在 —— 选中前者这一轮必然失败,选中后者是悄悄走另一份账单。
  *
  * 还没有会话时显示默认模型、照样能选:选了就先建出当前会话再写进去(见 useUpdateAgentSession)。
  */
@@ -34,29 +38,30 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     queryKey: providerKeys.defaults(),
     queryFn: listProviderDefaults,
   });
+  //: 思考档位那边读的是同一份(同一个 queryKey → 同一份缓存,不多打一次请求)。
+  const chatModels = useQuery({
+    queryKey: providerKeys.capabilityModels("chat"),
+    queryFn: () => listCapabilityModels("chat"),
+    staleTime: 60_000,
+  });
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const defaultChat = (defaults.data ?? []).find((item) => item.capability === "chat");
   // 「这轮实际用哪个模型」只有一处算法(effectiveModel),思考档位那边用的是同一个。
   const effective = useEffectiveChatModel(session);
 
-  const modelQueries = useQueries({
-    queries: enabled.map((profile) => ({
-      queryKey: providerKeys.models(profile.id),
-      queryFn: () => listProviderModels(profile.id),
-      staleTime: 60_000,
-    })),
-  });
-
-  //: 读失败的那条连接给空数组 —— 它不该把别的连接的模型一起带走。
-  const options = enabled.flatMap((profile, index) => {
-    const models = new Set((modelQueries[index].data ?? []).map((m) => m.id));
-    if (defaultChat?.provider_profile_id === profile.id && defaultChat.model) models.add(defaultChat.model);
-    if (session?.provider_profile_id === profile.id && session.model) models.add(session.model);
-    return [...models].map((model) => ({
+  //: 按连接分组,连接的顺序照设置页。会话上选过的、能力默认指着的那个总在里面 —— 列表没读出来(或者那一行后来停用了)
+  //: 也认得出「现在用的是哪个」,不显示成「选择模型」。
+  const byProfile = new Map<string, Set<string>>(enabled.map((profile) => [profile.id, new Set<string>()]));
+  for (const model of chatModels.data ?? []) byProfile.get(model.provider_profile_id)?.add(model.model);
+  if (defaultChat?.provider_profile_id && defaultChat.model) byProfile.get(defaultChat.provider_profile_id)?.add(defaultChat.model);
+  if (session?.provider_profile_id && session.model) byProfile.get(session.provider_profile_id)?.add(session.model);
+  const offering = enabled.filter((profile) => (byProfile.get(profile.id)?.size ?? 0) > 0);
+  const options = offering.flatMap((profile) =>
+    [...(byProfile.get(profile.id) ?? [])].map((model) => ({
       value: `${profile.id}${SEP}${model}`,
-      label: enabled.length > 1 ? `${profile.name} · ${model}` : model,
-    }));
-  });
+      label: offering.length > 1 ? `${profile.name} · ${model}` : model,
+    })),
+  );
 
   const update = useUpdateAgentSession(workspaceId, session);
   const setModel = (value: string) => {
@@ -64,8 +69,8 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     update.mutate({ provider_profile_id: providerProfileId, model: rest.join(SEP) });
   };
 
-  const loading = providers.isPending || defaults.isPending || modelQueries.some((query) => query.isPending);
-  const failed = providers.isError || defaults.isError || modelQueries.some((query) => query.isError);
+  const loading = providers.isPending || defaults.isPending || chatModels.isPending;
+  const failed = providers.isError || defaults.isError || chatModels.isError;
 
   /**
    * **这一格永远占着位置。**
@@ -77,7 +82,8 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
    * - 某一条连接的端点挂了,会把**其余所有连接**的模型一起带走 —— 一条坏连接吃掉了整个功能。
    *
    * 现在:读取中显示一个禁用的占位(名字优先用会话上已经存着的那个,所以多数时候你看到的还是
-   * 同一行字);一条出错不再影响别的,能读出来的照样能选。
+   * 同一行字);对话模型清单读不出来时,会话上选着的、能力默认指着的照样在,并说一声少了东西。
+   * (清单现在是后端汇总好的一份,一条连接的目录读不出来不再影响它。)
    */
   if (loading) {
     return (
