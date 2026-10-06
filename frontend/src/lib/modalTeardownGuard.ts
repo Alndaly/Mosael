@@ -47,7 +47,13 @@ export function releaseStaleModalSideEffects(target: ModalTeardownTarget = docum
 }
 
 /** 挂在 Dialog / AlertDialog 的 Content 上:内容卸载后下一拍复查并兜底清理。
- *  逻辑本体放在上面的纯函数里,便于直接单测(不必挂载组件)。 */
+ *  逻辑本体放在上面的纯函数里,便于直接单测(不必挂载组件)。
+ *
+ *  清理的是**它挂上时所在的那份文档**,不在那一拍去读全局的 `document`:卸载之后的下一拍,全局的不一定还在 ——
+ *  测试环境拆掉 jsdom 之后才轮到这一拍,读全局就是 `document is not defined`,整套测试全过、退出码却是 1。 */
 export function useModalTeardownGuard(): void {
-  React.useEffect(() => () => void window.setTimeout(releaseStaleModalSideEffects, 0), []);
+  React.useEffect(() => {
+    const doc = document;
+    return () => void window.setTimeout(() => releaseStaleModalSideEffects(doc), 0);
+  }, []);
 }
