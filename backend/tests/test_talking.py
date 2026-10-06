@@ -82,7 +82,22 @@ def test_人物说话_用它自己的嗓子配音_正面图加这段配音做说
     assert fakes.spoken == [{"text": "大家好,我是小美", "engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}]
     assert _roles(fakes) == [("face", "first_frame"), ("voice-1", "driving_audio")], "正面图是脸,不是挑图先后的第一张"
     assert fakes.generated[-1]["model"] == "wan2.2-s2v", "默认视频模型不会说话照片,就用第一个会的"
-    assert out == {"asset_id": "talk", "asset_ids": ["talk"], "audio_asset_id": "voice-1"}
+    assert out == {"asset_id": "talk", "asset_ids": ["talk"], "audio_asset_id": "voice-1", "cues": []}, "量不出时长就不编字幕"
+
+
+def test_人物说话_交出这段话的字幕_时间在这段视频里_整段一条(setup) -> None:
+    """付费实测:出镜版带货口播里,主播对着镜头说的开场和收尾一个字都没上屏。字幕由说话这一步自己交出来,
+    铺上时间线时由「生成字幕」按片段映射(见 templates_business._with_presenter)。"""
+    from app.db.models import Asset
+
+    client, ws, fakes = setup
+    person = _character(client, ws, voice_engine="builtin:edge", voice_id="zh-CN-XiaoxiaoNeural")
+    with SessionLocal() as db:
+        db.add(Asset(id="talk", workspace_id=ws, kind="video", name="talk", file_key="", media_info={"duration": 2.375}))
+        db.commit()
+    with SessionLocal() as db:
+        out = talking.entity_speak(db, _scope(ws), {"entity_id": person, "text": " 素雅又显贵的手串来了! "})
+    assert out["cues"] == [{"start": 0.0, "end": 2.375, "text": "素雅又显贵的手串来了!"}]
 
 
 def test_人物说话的门槛_真人没声明_没音色_不是人物_都在起任务之前拦(setup) -> None:

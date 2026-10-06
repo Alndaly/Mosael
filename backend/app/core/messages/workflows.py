@@ -244,6 +244,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_fitNarrationItems": {"zh": "「各段」要是一串段落(列表)", "en": "Segments must be a list"},
     "wfFit_rewritten": {"zh": "第 {which} 段的口播比这一段的时长长,已让模型改短。", "en": "Narration for segment {which} was longer than the segment; the model shortened it."},
     "wfFit_stillOver": {"zh": "第 {which} 段的口播改过仍比这一段长:念的时候会加速(最多 1.5 倍),还放不下的尾巴会被裁掉。", "en": "Narration for segment {which} is still longer than the segment after rewriting: it will be sped up (at most 1.5×), and whatever still doesn't fit is trimmed."},
+    "wfFit_trimmed": {"zh": "脚本写了 {total} 段,超出目标 {budget} 秒:按时长只留 {kept} 段,去掉了第 {which} 段(每一段都是一次付费生成)。", "en": "The script had {total} segments, more than the {budget}-second target allows: kept {kept} and dropped segment {which} (each segment is a paid generation)."},
     "wfFit_rewriteFailed": {"zh": "让模型改短口播时出错,照原文念:{reason}", "en": "Shortening the narration failed, so the original is used: {reason}"},
     "wfLoop_itemIncomplete": {"zh": "第 {index} 项的「{step}」没做成,已经做出来的照常交出:{reason}", "en": "Item {index}: “{step}” failed; what was already made is delivered as usual: {reason}"},
     "wfErr_sceneLayoutMissing": {"zh": "没有给布景", "en": "No layout was given"},

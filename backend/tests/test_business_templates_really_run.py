@@ -128,7 +128,11 @@ class Studio:
     def video_node(self, node_type: str):
         def run(db, scope, config):
             self.calls[node_type].append(config)
-            return {"asset_id": self._asset(db, "video", node_type, {"duration": 6.0}), "asset_ids": [], "audio_asset_id": ""}
+            out = {"asset_id": self._asset(db, "video", node_type, {"duration": 6.0}), "asset_ids": [], "audio_asset_id": ""}
+            if node_type == "entity_speak":
+                #: 和真节点同一个形状:这段话的字幕,时间在这段 6 秒的视频里(见 executors.talking._spoken_cues)。
+                out["cues"] = [{"start": 0.0, "end": 6.0, "text": str(config.get("text") or "")}]
+            return out
         return run
 
     def entity_get(self, db, scope, config):
@@ -142,7 +146,10 @@ class Studio:
         return {"text": "", "timed_text": "[]", "segments": [], "language": "zh", "transcript_id": "", "duration": 600}
 
     def export(self, db, scope, config):
-        self.calls["export_sequence"].append(config)
+        #: 导出那一刻时间线上已经有几条字幕 —— 字幕没铺完就导出,成片里就没有它们。
+        subtitles = (db.query(Clip).join(Track, Clip.track_id == Track.id)
+                     .filter(Track.sequence_id == config["sequence_id"], Track.kind == "subtitle").count())
+        self.calls["export_sequence"].append({**config, "subtitles_at_export": subtitles})
         return {"asset_id": f"export-of-{config['sequence_id']}"}
 
 
@@ -483,7 +490,11 @@ class Test带货口播真跑:
         assert sorted(one["text"] for one in studio.calls["entity_speak"]) == sorted([script["hook_line"], script["call_to_action"]])
         assert {one["voice"] for one in studio.calls["synthesize_speech"]} == {"voice-of-presenter"}
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [6.0, 9.0, 13.0]
-        assert [clip.timeline_start for clip in _clips(sequence_id, "subtitle")] == [6.0, 9.0, 13.0]
+        #: 主播说的开场和收尾也上字幕(付费实测时这两句一个字都没上屏),落在它们那两个片段上。
+        subtitles = [(clip.timeline_start, _span(clip), clip.text_override) for clip in _clips(sequence_id, "subtitle")]
+        assert [(start, span) for start, span, _ in subtitles] == [(0.0, 6.0), (6.0, 3.0), (9.0, 4.0), (13.0, 3.0), (16.0, 6.0)]
+        assert (subtitles[0][2], subtitles[-1][2]) == (script["hook_line"], script["call_to_action"])
+        assert studio.calls["export_sequence"][0]["subtitles_at_export"] == 5, "三步字幕都铺完了才导出"
 
     def test_某一拍没有画外音_这一拍只铺画面_整条照样成片(self, monkeypatch) -> None:
         from app.domain.workflows.executors.subjobs import synthesize_speech as real_speak
@@ -531,7 +542,9 @@ class Test带货口播真跑:
         #: (来自「逐拍成片」那条被折掉了):收尾那句是空的、「放收尾」跳过时,字幕、导出、交付整段跟着跳过,
         #: 工作流照样报成功 —— 这里此前只看时间线,看不出来。
         assert [one["sequence_id"] for one in studio.calls["export_sequence"]] == [sequence_id]
-        assert len(_clips(sequence_id, "subtitle")) == 3, "每拍的字幕照样配上"
+        subtitles = [clip.text_override for clip in _clips(sequence_id, "subtitle")]
+        assert len(subtitles) == 4, "每拍的字幕照样配上,说了的那一句也有,空的那一句不加"
+        assert (script["hook_line"] or script["call_to_action"]) in subtitles
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
 
     def test_脚本的目标时长跟着开始参数走_不是写死的一个区间(self, monkeypatch) -> None:
@@ -722,6 +735,27 @@ class Test带货口播每一拍动起来:
         said = [one["text"] for one in studio.calls["synthesize_speech"]]
         assert short in said and LONG_NARRATION not in said, said
 
+    @pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+    def test_模型多写了几拍_按目标时长只出那几拍_钩子和号召留着_通知里说清(self, monkeypatch, presenter: bool) -> None:
+        """付费实测:目标 10 秒、每拍 4 秒,提示词写明 3 拍,qwen-plus 写了 5 拍 —— 多出 2 张图、2 段视频的钱。"""
+        from app.db.models import Notification
+
+        ws = _workspace()
+        middle = [{**MOVING_BEATS[1], "caption": f"卖点{index}"} for index in range(1, 4)]
+        beats = [dict(MOVING_BEATS[0]), *middle, dict(MOVING_BEATS[2])]
+        #: 出镜版的开场和收尾各 8 个字(约 2 秒)也算进 10 秒:剩 6 秒给各拍,每拍 4 秒就是 2 拍(首尾两拍)。
+        script = {"beats": beats, **({"hook_line": "姐妹们看这条手串", "call_to_action": "点下面链接带走"} if presenter else {})}
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": script})
+        context = _run(ws, _moving_pitch(ws, presenter=presenter), product_name="羊毛衫", selling_points="不起球",
+                       target_duration_seconds=10, beat_seconds=4)
+        expected = ["不起球", "链接在下面"] if presenter else ["不起球", "卖点1", "链接在下面"]
+        assert [one["loop"]["item"]["caption"] for one in context["shoot_beats"]["results"]] == expected
+        paid = [one["kind"] for one in studio.calls["ai_generate"]]
+        assert paid.count("image") == paid.count("video") == len(expected), "多写的那几拍一分钱不花"
+        with unit_of_work() as db:
+            bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any("脚本写了 5 段" in body and "10 秒" in body for body in bodies), bodies
+
     def test_视频比要的长或短_按实际长度铺_画外音字幕跟着走_成片尾不留黑(self, monkeypatch) -> None:
         from app.db.models import Notification
 
@@ -776,7 +810,8 @@ class Test带货口播每一拍动起来:
         assert len(studio.calls["entity_speak"]) == 2
         assert len([one for one in studio.calls["ai_generate"] if one["kind"] == "video"]) == 3
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [6.0, 11.0, 16.0]
-        assert [clip.timeline_start for clip in _clips(sequence_id, "subtitle")] == [6.0, 11.0, 16.0]
+        #: 开场和收尾是主播说的,也有字幕。
+        assert [clip.timeline_start for clip in _clips(sequence_id, "subtitle")] == [0.0, 6.0, 11.0, 16.0, 21.0]
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
 
     def test_没有视频模型时和此前一样每拍一张静图(self, monkeypatch) -> None:

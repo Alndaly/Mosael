@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills.",
-  "graph_hash": "f1af698f52c7a112890bbaa73f9b0341e460314ecdde7b102bac3301b67d509e",
+  "graph_hash": "984ec1d397330cbb84eda9efd29095ea2af6aea3d0c44566d16a731f9df44174",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 6,
+      "template_version": 7,
       "source": "official"
     },
     "nodes": [
@@ -134,6 +134,8 @@
           "items": "{{pitch_script.json.beats}}",
           "text_field": "narration",
           "seconds": "{{start.beat_seconds}}",
+          "max_total_seconds": "{{start.target_duration_seconds}}",
+          "reserved_text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
           "profile_id": "",
           "model": ""
         }
@@ -339,6 +341,46 @@
         ]
       },
       {
+        "id": "hook_captions",
+        "type": "generate_subtitles",
+        "name": "Caption the hook",
+        "position": {
+          "x": 1610,
+          "y": 620
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "clip_id": "",
+          "allow_empty": "yes"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments",
+          "clip_id"
+        ]
+      },
+      {
+        "id": "cta_captions",
+        "type": "generate_subtitles",
+        "name": "Caption the call to action",
+        "position": {
+          "x": 1610,
+          "y": 800
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "clip_id": "",
+          "allow_empty": "yes"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments",
+          "clip_id"
+        ]
+      },
+      {
         "id": "shoot_beats",
         "type": "loop_foreach",
         "name": "Paint, animate, voice and place each beat",
@@ -419,7 +461,8 @@
                   "parameters": {
                     "duration_seconds": "{{input.beat_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
-                    "resolution": "{{input.resolution}}"
+                    "resolution": "{{input.resolution}}",
+                    "generate_audio": false
                   },
                   "source_assets": [
                     "{{beat_frame.asset_id}}:first_frame"
@@ -813,7 +856,7 @@
         "source_handle": "true"
       },
       {
-        "id": "cta_captions",
+        "id": "cta_then_captions",
         "source": "cta_place",
         "target": "beat_captions"
       },
@@ -823,8 +866,18 @@
         "target": "beat_captions"
       },
       {
-        "id": "captions_export",
+        "id": "beats_then_hook_captions",
         "source": "beat_captions",
+        "target": "hook_captions"
+      },
+      {
+        "id": "hook_then_cta_captions",
+        "source": "hook_captions",
+        "target": "cta_captions"
+      },
+      {
+        "id": "captions_export",
+        "source": "cta_captions",
         "target": "export_short"
       },
       {
@@ -924,6 +977,54 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-hook_captions-sequence_id",
+        "source": "pitch_project",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-hook_talk-cues-hook_captions-segments",
+        "source": "hook_talk",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "cues",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-hook_place-clip_id-hook_captions-clip_id",
+        "source": "hook_place",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "clip_id",
+        "target_input": "clip_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-cta_captions-sequence_id",
+        "source": "pitch_project",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-cta_talk-cues-cta_captions-segments",
+        "source": "cta_talk",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "cues",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-cta_place-clip_id-cta_captions-clip_id",
+        "source": "cta_place",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "clip_id",
+        "target_input": "clip_id"
       },
       {
         "id": "d-fit_beats-items-shoot_beats-items",

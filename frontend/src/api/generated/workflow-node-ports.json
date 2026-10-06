@@ -1715,7 +1715,8 @@
     "outputs": [
       "asset_id",
       "asset_ids",
-      "audio_asset_id"
+      "audio_asset_id",
+      "cues"
     ],
     "output_labels": {
       "asset_id": {
@@ -1729,6 +1730,10 @@
       "audio_asset_id": {
         "zh": "音频",
         "en": "Audio"
+      },
+      "cues": {
+        "zh": "字幕时间",
+        "en": "Subtitle cues"
       }
     }
   },
@@ -1825,12 +1830,27 @@
           "zh": "最多改几轮",
           "en": "Rewrite rounds"
         }
+      },
+      "max_total_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "总时长上限(秒)",
+          "en": "Max total seconds"
+        }
+      },
+      "reserved_text": {
+        "type": "template",
+        "label": {
+          "zh": "段外也要念的话",
+          "en": "Lines said outside the segments"
+        }
       }
     },
     "outputs": [
       "items",
       "rewritten",
       "over",
+      "dropped",
       "note"
     ],
     "output_labels": {
@@ -1845,6 +1865,10 @@
       "over": {
         "zh": "仍然超长的段",
         "en": "Segments still too long"
+      },
+      "dropped": {
+        "zh": "超出总时长去掉的段",
+        "en": "Segments dropped for the total length"
       },
       "note": {
         "zh": "收紧说明",

@@ -105,3 +105,60 @@ def test_每一段一样长时直接给秒数_按它量_不读每段里的字段
     again = _Writer([{2: "亚麻加棉,透气"}])
     assert _fit(monkeypatch, again, [{**beat, "seconds": 9} for beat in beats], seconds=2)["rewritten"] == 1
     assert "第 2 段(2 秒" in again.prompts[0]
+
+
+FIVE_BEATS = [
+    {"narration": "手腕一戴就温柔", "caption": "钩子"},
+    {"narration": "天然淡水珍珠", "caption": "珍珠"},
+    {"narration": "白水晶通透交替", "caption": "水晶"},
+    {"narration": "弹力绳谁戴都合手", "caption": "弹力绳"},
+    {"narration": "点下方链接带走", "caption": "号召"},
+]
+
+
+def test_段数超出目标时长_从中间去掉_钩子和号召留着(monkeypatch) -> None:
+    """付费实测:目标 10 秒、每拍 4 秒,提示词写明了 3 拍,模型照样写了 5 拍 —— 每一拍是一张图加一段视频的钱。"""
+    writer = _Writer([])
+    out = _fit(monkeypatch, writer, FIVE_BEATS, seconds="4", seconds_field="", max_total_seconds="10")
+    assert [beat["caption"] for beat in out["items"]] == ["钩子", "珍珠", "号召"], "10 ÷ 4 四舍五入是 3 拍"
+    assert out["dropped"] == [3, 4]
+    assert "5 段" in out["note"] and "3 段" in out["note"] and "第 3、4 段" in out["note"], out["note"]
+    assert writer.prompts == []
+
+
+@pytest.mark.parametrize(("budget", "kept"), [("8", 2), ("9.9", 2), ("10", 3), ("14", 4), ("18", 5), ("60", 5)])
+def test_每段一样长时_段数就是总时长除以每段秒数_四舍五入(monkeypatch, budget: str, kept: int) -> None:
+    out = _fit(monkeypatch, _Writer([]), FIVE_BEATS, seconds="4", seconds_field="", max_total_seconds=budget)
+    assert len(out["items"]) == kept
+    assert (out["items"][0]["caption"], out["items"][-1]["caption"]) == ("钩子", "号召")
+
+
+def test_每段各有时长时_按这一段的中点落不落在总时长里决定留不留(monkeypatch) -> None:
+    beats = [{"narration": "一", "seconds": 3}, {"narration": "二", "seconds": 4}, {"narration": "三", "seconds": 1},
+             {"narration": "四", "seconds": 2}]
+    #: 首尾 3 + 2 = 5;第二段 4 秒的中点在 7,超了 6;第三段 1 秒的中点在 5.5,放得下。
+    out = _fit(monkeypatch, _Writer([]), beats, max_total_seconds=6)
+    assert [beat["narration"] for beat in out["items"]] == ["一", "三", "四"] and out["dropped"] == [2]
+
+
+def test_段外也要念的话从总时长里扣掉(monkeypatch) -> None:
+    """出镜版:主播说的开场和收尾也算在成片时长里。8 个字念 2 秒,10 秒只剩 8 秒给各拍,每拍 4 秒就是 2 拍。"""
+    out = _fit(monkeypatch, _Writer([]), FIVE_BEATS, seconds="4", seconds_field="", max_total_seconds="10",
+               reserved_text="姐妹们看这条\n快去下单")
+    assert len(out["items"]) == 2 and out["dropped"] == [2, 3, 4]
+
+
+def test_没给总时长_或者只有两段_一段都不删(monkeypatch) -> None:
+    out = _fit(monkeypatch, _Writer([]), FIVE_BEATS, seconds="4", seconds_field="")
+    assert len(out["items"]) == 5 and out["dropped"] == [] and out["note"] == ""
+    two = _fit(monkeypatch, _Writer([]), FIVE_BEATS[:2], seconds="4", seconds_field="", max_total_seconds="1")
+    assert len(two["items"]) == 2 and two["dropped"] == []
+
+
+def test_先删再改写_要删的那一段不花改写的钱(monkeypatch) -> None:
+    beats = [dict(beat) for beat in FIVE_BEATS]
+    beats[3]["narration"] = "弹力绳穿制手围十五到十七厘米都能戴"
+    writer = _Writer([])
+    out = _fit(monkeypatch, writer, beats, seconds="4", seconds_field="", max_total_seconds="10")
+    assert writer.prompts == [], "念不完的那一段本来就要删,不发给模型改"
+    assert out["dropped"] == [3, 4]

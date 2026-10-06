@@ -751,6 +751,34 @@ def test_带货口播_有视频模型时每一拍动起来_画面当首帧_铺�
         assert _node(graph, "hook_talk")["type"] == _node(graph, "cta_talk")["type"] == "entity_speak"
 
 
+@pytest.mark.parametrize("presenter", [False, True], ids=["不出镜", "出镜"])
+def test_带货口播_每一拍的视频铺上去就静音_出片时就关掉声音_有开关的模型才写(presenter: bool) -> None:
+    """付费实测撞上的:方舟 / Evolink 的 Seedance 默认出有声视频(描述符的 default_generate_audio,提交时补上),
+    有声的比无声的贵,而这一拍铺上时间线就静音 —— 那段声音花了钱、一秒都不出现在成片里。"""
+    clip = _beats_body(_pitch(presenter=presenter, video=SEEDANCE))["beat_clip"]["config"]
+    assert clip["parameters"]["generate_audio"] is False
+    #: 提交时补默认值那一步不能把「关」当成没填又补回「开」。
+    from app.domain.generation.catalog import known_capabilities_for
+    from app.domain.generation.operations import with_declared_defaults
+
+    capabilities = known_capabilities_for(SEEDANCE.provider, SEEDANCE.model, "video")
+    assert capabilities and capabilities.get("default_generate_audio") is True
+    assert with_declared_defaults(clip["parameters"], capabilities, "video")["generate_audio"] is False
+    #: Veo 没有这个开关(总是出声):不写这个键,照旧靠时间线上的静音。
+    veo = _beats_body(_pitch(presenter=presenter, video=VEO))
+    assert "generate_audio" not in veo["beat_clip"]["config"]["parameters"]
+    assert "mute_clip" in veo
+
+
+def test_模特上身图的视频是交付的素材_不替人关声音() -> None:
+    """只有铺上去就静音的那一处关声音;「模特上身图」把视频当素材交出去,有没有声音由挑模型的人定。"""
+    graph = product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
+    loop = next(node for node in graph["nodes"] if node["type"] == "loop_foreach")
+    clips = [node for node in loop["config"]["body"]["nodes"] if node["type"] == "ai_generate"
+             and node["config"].get("kind") == "video"]
+    assert clips and all("generate_audio" not in node["config"]["parameters"] for node in clips)
+
+
 def test_带货口播_每拍秒数取视频模型出得了的那一档() -> None:
     """Veo 只出 4 / 6 / 8 秒(默认 8):写死 5 秒的话它必败。"""
     assert _node(_pitch(presenter=False, video=VEO), "start")["config"]["params"]["beat_seconds"] == 8
@@ -769,11 +797,11 @@ def test_带货口播_没有视频模型时和此前一样每拍一张静图(pre
     assert _node(graph, "fit_beats")["config"]["seconds_field"] == "seconds"
 
 
-def test_带货口播_动起来是第六版_两条卡片都说清要什么_花多少() -> None:
+def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡片都说清要什么_花多少() -> None:
     from app.domain.workflows.templates import current_template_versions
 
     versions = current_template_versions()
-    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 6
+    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 7
     for template_id in ("product_pitch_short", "product_pitch_presenter"):
         card = next(one for one in TEMPLATE_CATALOG if one["id"] == template_id)
         video = next(one for one in card["requires"] if one["check"] == "reference_video_model")
@@ -792,8 +820,9 @@ def test_带货口播的官网副本带着动起来那一步_模型留空由导�
     body = _beats_body(graph)
     clip = body["beat_clip"]["config"]
     assert clip["model"] == "" and clip["source_assets"] == ["{{beat_frame.asset_id}}:first_frame"]
+    #: 声音那一格也写上(关):挑了收这个开关的模型,编辑器留下它;不收的(Veo)由编辑器摘掉(前端 carriedParameters)。
     assert clip["parameters"] == {"duration_seconds": "{{input.beat_seconds}}", "aspect_ratio": "{{input.aspect_ratio}}",
-                                  "resolution": "{{input.resolution}}"}
+                                  "resolution": "{{input.resolution}}", "generate_audio": False}
     assert _node(graph, "start")["config"]["params"]["beat_seconds"] == 5
     #: 视频模型没挑就跑,运行前当场说缺哪一格(不付一分钱)。
     assert any("把这一拍动起来" in error for error in validate_graph(graph)), validate_graph(graph)
@@ -1092,8 +1121,9 @@ class Test旧版模板建的图:
         response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
         assert response.status_code == 200, response.text
         rebuilt = response.json()["graph"]
-        assert rebuilt["meta"]["template_version"] == 6
+        assert rebuilt["meta"]["template_version"] == 7
         assert {"beat_clip", "file_clip", "mute_clip"} <= set(_beats_body(rebuilt))
+        assert _beats_body(rebuilt)["beat_clip"]["config"]["parameters"]["generate_audio"] is False, "按新版重建的也不出声"
         params = _node(rebuilt, "start")["config"]["params"]
         assert (params["product_name"], params["selling_points"], params["beat_seconds"]) == ("珍珠水晶手串", "天然淡水珍珠", 5)
         assert _node(rebuilt, "product_photo")["config"]["asset_id"] == "手串平铺图", "挑过的商品图带过去"

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
-  "graph_hash": "915e7ae0390f49046ecd29cb673d5465a2d45102d22c7e41a8713165e523a134",
+  "graph_hash": "67d140727013841503ac8f67cf05f7e1bfc0ffc809046ad4d762427765449f3c",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 6,
+      "template_version": 7,
       "source": "official"
     },
     "nodes": [
@@ -134,6 +134,8 @@
           "items": "{{pitch_script.json.beats}}",
           "text_field": "narration",
           "seconds": "{{start.beat_seconds}}",
+          "max_total_seconds": "{{start.target_duration_seconds}}",
+          "reserved_text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
           "profile_id": "",
           "model": ""
         }
@@ -339,6 +341,46 @@
         ]
       },
       {
+        "id": "hook_captions",
+        "type": "generate_subtitles",
+        "name": "开场那句上字幕",
+        "position": {
+          "x": 1610,
+          "y": 620
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "clip_id": "",
+          "allow_empty": "yes"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments",
+          "clip_id"
+        ]
+      },
+      {
+        "id": "cta_captions",
+        "type": "generate_subtitles",
+        "name": "收尾那句上字幕",
+        "position": {
+          "x": 1610,
+          "y": 800
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "clip_id": "",
+          "allow_empty": "yes"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments",
+          "clip_id"
+        ]
+      },
+      {
         "id": "shoot_beats",
         "type": "loop_foreach",
         "name": "逐拍出画面、动起来、配画外音并上时间线",
@@ -419,7 +461,8 @@
                   "parameters": {
                     "duration_seconds": "{{input.beat_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
-                    "resolution": "{{input.resolution}}"
+                    "resolution": "{{input.resolution}}",
+                    "generate_audio": false
                   },
                   "source_assets": [
                     "{{beat_frame.asset_id}}:first_frame"
@@ -813,7 +856,7 @@
         "source_handle": "true"
       },
       {
-        "id": "cta_captions",
+        "id": "cta_then_captions",
         "source": "cta_place",
         "target": "beat_captions"
       },
@@ -823,8 +866,18 @@
         "target": "beat_captions"
       },
       {
-        "id": "captions_export",
+        "id": "beats_then_hook_captions",
         "source": "beat_captions",
+        "target": "hook_captions"
+      },
+      {
+        "id": "hook_then_cta_captions",
+        "source": "hook_captions",
+        "target": "cta_captions"
+      },
+      {
+        "id": "captions_export",
+        "source": "cta_captions",
         "target": "export_short"
       },
       {
@@ -924,6 +977,54 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-hook_captions-sequence_id",
+        "source": "pitch_project",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-hook_talk-cues-hook_captions-segments",
+        "source": "hook_talk",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "cues",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-hook_place-clip_id-hook_captions-clip_id",
+        "source": "hook_place",
+        "target": "hook_captions",
+        "kind": "data",
+        "source_output": "clip_id",
+        "target_input": "clip_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-cta_captions-sequence_id",
+        "source": "pitch_project",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-cta_talk-cues-cta_captions-segments",
+        "source": "cta_talk",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "cues",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-cta_place-clip_id-cta_captions-clip_id",
+        "source": "cta_place",
+        "target": "cta_captions",
+        "kind": "data",
+        "source_output": "clip_id",
+        "target_input": "clip_id"
       },
       {
         "id": "d-fit_beats-items-shoot_beats-items",

@@ -279,14 +279,31 @@ def talking_segments_preflight(db: Session, config: dict[str, Any], actor: str |
     preflight_model(db, config, place, SPEECH_TO_VIDEO, actor)
 
 
+def _spoken_cues(db: Session, text: str, video_id: str) -> list[dict[str, Any]]:
+    """这段说话视频的字幕:整句一条,从视频开头到结尾(说话照片的长度就是配音的长度)。
+
+    时间是**这段视频里**的:铺上时间线时由「生成字幕」按片段映射(它的 clip_id),片段截短了、挪了位置都跟着走。
+    此前出镜的人说的话没有字幕 —— 带货口播的出镜版只给中间各拍铺了屏幕短句,开场钩子、收尾号召那两句是主播对着镜头
+    说的,反而一个字都没上屏(付费实测)。"""
+    from app.db.models import Asset
+
+    asset = db.get(Asset, video_id) if video_id else None
+    duration = (asset.media_info or {}).get("duration") if asset is not None else None
+    if not text.strip() or not isinstance(duration, (int, float)) or isinstance(duration, bool) or duration <= 0:
+        return []
+    return [{"start": 0.0, "end": round(float(duration), 3), "text": text.strip()}]
+
+
 @register("entity_speak")
 def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """人物资产说一段话:它自己的音色配音 → 它的正面图 + 这段配音做说话照片。"""
     plan = check_entity_speak(db, scope.workspace_id, config, current_actor(db))
-    audio = _speak(db, scope, _text(config.get("text")), plan["engine"], plan["voice"])
+    text = _text(config.get("text"))
+    audio = _speak(db, scope, text, plan["engine"], plan["voice"])
     videos = _generate(db, scope, plan["model"], [{"asset_id": plan["face"], "role": FIRST_FRAME},
                                                    {"asset_id": audio, "role": DRIVING_AUDIO}], plan["parameters"])
-    return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": audio}
+    video = videos[0] if videos else ""
+    return {"asset_id": video, "asset_ids": videos, "audio_asset_id": audio, "cues": _spoken_cues(db, text, video)}
 
 
 @register("image_speak")

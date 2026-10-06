@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures. Where a video model is available, every beat moves: its frame becomes the first frame of a clip, the clip is what goes on the timeline, and every beat is the same length (the start node's beat_seconds, a length that model can make). Cost: one paid image per beat, plus one paid video generation per beat when beats move — about target length ÷ beat_seconds beats, so 30 seconds at 5 seconds a beat is about 6 images and 6 clips. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills.",
-  "graph_hash": "2b08762e23a0c564551605cd818c815914eeabbe6b58f19175087cee3f38adaf",
+  "graph_hash": "2ae1d0bf7750d3ef013eb3fde45364e22f744a6476148863186a8f14ce031136",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
-      "template_version": 6,
+      "template_version": 7,
       "source": "official"
     },
     "nodes": [
@@ -125,6 +125,7 @@
           "items": "{{pitch_script.json.beats}}",
           "text_field": "narration",
           "seconds": "{{start.beat_seconds}}",
+          "max_total_seconds": "{{start.target_duration_seconds}}",
           "profile_id": "",
           "model": ""
         }
@@ -223,7 +224,8 @@
                   "parameters": {
                     "duration_seconds": "{{input.beat_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
-                    "resolution": "{{input.resolution}}"
+                    "resolution": "{{input.resolution}}",
+                    "generate_audio": false
                   },
                   "source_assets": [
                     "{{beat_frame.asset_id}}:first_frame"

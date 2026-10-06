@@ -156,6 +156,8 @@ _FIELD_LABELS = {
     "text_field": "wfField_text_field",
     "seconds_field": "wfField_seconds_field",
     "max_rewrites": "wfField_max_rewrites",
+    "max_total_seconds": "wfField_max_total_seconds",
+    "reserved_text": "wfField_reserved_text",
     "rewritten": "wfField_rewritten",
     "over": "wfField_over",
     "allow_empty": "wfField_allow_empty",
@@ -686,10 +688,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "profile_id": {"type": "string", "description": "wfNode_llm_profile_id", "options_from": "chat_connections"},
             "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
             "max_rewrites": {"advanced": True, "type": "number", "default": 2, "description": "wfNode_fit_narration_max_rewrites"},
+            #: 几段加起来最多多长:超了从中间去掉几段(第一段、最后一段留着)。段数就是付费次数(带货口播每拍一张图、
+            #: 动起来再加一段视频),不能只写在提示词里(见 executors/ai.fit_narration)。
+            "max_total_seconds": {"advanced": True, "type": "number", "description": "wfNode_fit_narration_max_total_seconds"},
+            "reserved_text": {"advanced": True, "type": "template", "description": "wfNode_fit_narration_reserved_text"},
         },
-        "outputs": ["items", "rewritten", "over", "note"],
-        "output_types": {"items": "json", "rewritten": "number", "over": "json", "note": "text"},
-        "output_labels": {"note": "wfOut_fit_note"},
+        "outputs": ["items", "rewritten", "over", "dropped", "note"],
+        "output_types": {"items": "json", "rewritten": "number", "over": "json", "dropped": "json", "note": "text"},
+        "output_labels": {"note": "wfOut_fit_note", "dropped": "wfOut_fit_dropped"},
     },
     "plugin_tool": {
         "external": True,
@@ -1781,7 +1787,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "resolution": {"advanced": True, "type": "string", "depends_on": "model", "options_from": "speech_video_resolutions",
                            "description": "wfNode_talking_resolution"},
         },
-        "outputs": ["asset_id", "asset_ids", "audio_asset_id"],
+        #: `cues`:这段话的字幕(时间是这段视频里的,铺上时间线时交给「生成字幕」按片段映射,见 executors/talking)。
+        "outputs": ["asset_id", "asset_ids", "audio_asset_id", "cues"],
+        "output_types": {"cues": "json"},
     },
     "image_speak": {
         "external": False,

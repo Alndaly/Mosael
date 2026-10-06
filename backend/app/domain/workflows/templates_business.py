@@ -64,12 +64,20 @@ def _vertical_image_parameters(db: Session | None, image: ModelChoice) -> dict[s
     return {"size": size} if size else {}
 
 
-def _vertical_clip(db: Session | None, video: ModelChoice) -> tuple[int, dict[str, Any], dict[str, str], str]:
+def _vertical_clip(
+    db: Session | None, video: ModelChoice, *, silent: bool = False,
+) -> tuple[int, dict[str, Any], dict[str, str], str]:
     """「把上身图动起来」那一步的时长、参数、循环要给它的几格输入(画幅、分辨率,按尺寸定画幅的模型还有尺寸),
     以及上身图以什么角色交给它。
 
     都从视频模型的能力表里取:写死 5 秒的话 Veo(只收 4 / 6 / 8)必败;画幅优先竖屏,模型不收竖屏就用它自己的
     默认(或它唯一收的那一档)。时长和参数键和整片生成同一个出处(templates_models._video_plan)。
+
+    `silent`:这段视频铺上时间线就静音(带货口播的每一拍,声音是画外音)。模型有「生成音频」开关的就关掉 ——
+    方舟 / Evolink 的 Seedance 默认出有声视频(描述符的 default_generate_audio,提交时补上),有声的比无声的贵,
+    而那段声音一秒都不会出现在成片里(付费实测撞上的)。官网副本模型留空,也写上:挑模型时编辑器只给收这个开关的
+    模型留下它(前端 carriedParameters)。认不出的模型不写 —— 不知道它认不认这个键。没有开关的(Veo 总是出声)
+    照旧靠时间线上的静音。
     """
     plan = _video_plan(db, video)
     capabilities = _capabilities(db, video, "video") or {}
@@ -82,7 +90,10 @@ def _vertical_clip(db: Session | None, video: ModelChoice) -> tuple[int, dict[st
     if plan.sizes:
         #: 按像素尺寸定画幅的模型(万相):尺寸表里竖屏那一档,没有就它自己的默认画幅那一档。
         inputs["video_size"] = plan.sizes.get(VERTICAL_ASPECT) or next(iter(plan.sizes.values()))
-    return plan.clip_seconds, dict(plan.parameters or {}), inputs, _still_role(capabilities)
+    parameters = dict(plan.parameters or {})
+    if silent and (capabilities.get("supports_generate_audio") or not video.model):
+        parameters["generate_audio"] = False
+    return plan.clip_seconds, parameters, inputs, _still_role(capabilities)
 
 
 def _still_role(capabilities: dict[str, Any]) -> str:
@@ -1069,7 +1080,8 @@ def product_pitch_short_graph(
     beat_motion: _BeatMotion | None = None
     clip_seconds, clip_inputs = 0, {}
     if wants_motion:
-        clip_seconds, clip_parameters, clip_inputs, still_role = _vertical_clip(db, video or ModelChoice())
+        #: 这一拍的视频铺上去就静音(见 _beat_body 的 mute_clip),所以出片时就不要声音(见 _vertical_clip 的 silent)。
+        clip_seconds, clip_parameters, clip_inputs, still_role = _vertical_clip(db, video or ModelChoice(), silent=True)
         #: 时长接开始参数 `beat_seconds`(见函数说明);认不出时长参数的模型(用户自建、没声明的)不传时长,时间线照旧铺 `beat_seconds`。
         if "duration_seconds" in clip_parameters:
             clip_parameters["duration_seconds"] = "{{input.beat_seconds}}"
@@ -1217,6 +1229,12 @@ def product_pitch_short_graph(
                 "text_field": "narration",
                 #: 动起来时每一拍一样长,就是 `beat_seconds`(脚本里没有各拍的 seconds,见 _pitch_schema)。
                 **({"seconds": "{{start.beat_seconds}}"} if wants_motion else {"seconds_field": "seconds"}),
+                #: **拍数由代码卡住**:每一拍是一张图(动起来再加一段视频)的钱。提示词里写了「拍数取目标时长 ÷ 每拍秒数」,
+                #: 10 秒、每拍 4 秒,模型照样写了 5 拍(付费实测,多付了 67%)。超了从中间去掉,钩子和号召留着。
+                "max_total_seconds": "{{start.target_duration_seconds}}",
+                #: 出镜版开场和收尾是主播说的,也算在成片时长里(见上面 system 里那一段)。
+                **({"reserved_text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}"}
+                   if presenter else {}),
                 "profile_id": getattr(chat, "profile_id", ""),
                 "model": getattr(chat, "model", ""),
             },
@@ -1319,7 +1337,9 @@ def product_pitch_short_graph(
                 #: v4:没有能用的克隆音色时用免费的 Edge 音色念(此前那一格空着,运行前拦住、跑不了)。
                 #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
                 #: v6:有视频模型时每一拍动起来(见函数说明)。旧图按新版重建时按现在的设置挑视频模型。
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 6, "source": "official"},
+                #: v7:动起来那一步关掉视频自己的声音(铺上去本来就静音,有声的贵,见 _vertical_clip 的 silent);
+                #:     拍数按目标时长卡住(fit_beats 的 max_total_seconds,模型多写的从中间去掉)。
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 7, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1843,6 +1863,25 @@ def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
             "config": {"sequence_id": "{{pitch_project.sequence_id}}", "asset_id": "{{cta_talk.asset_id}}",
                        "track_id": "{{pitch_project.video_track_id}}"},
         },
+        #: **主播说的话也上字幕。** 此前只有中间各拍有屏幕短句,开场钩子、收尾号召是主播对着镜头说的,反而一个字都没上屏
+        #: (付费实测)。字幕是这段话自己交出来的(entity_speak 的 cues,时间在这段视频里),按它在时间线上的那个片段
+        #: 映射过去(clip_id)—— 片段挪了、截了都跟着走。那一句是空的(出镜那步跳过了)就一条都不加(allow_empty)。
+        {
+            "id": "hook_captions",
+            "type": "generate_subtitles",
+            "name": {"zh": "开场那句上字幕", "en": "Caption the hook"},
+            "position": {"x": 1610, "y": 620},
+            "config": {"sequence_id": "{{pitch_project.sequence_id}}", "segments": "{{hook_talk.cues}}",
+                       "clip_id": "{{hook_place.clip_id}}", "allow_empty": "yes"},
+        },
+        {
+            "id": "cta_captions",
+            "type": "generate_subtitles",
+            "name": {"zh": "收尾那句上字幕", "en": "Caption the call to action"},
+            "position": {"x": 1610, "y": 800},
+            "config": {"sequence_id": "{{pitch_project.sequence_id}}", "segments": "{{cta_talk.cues}}",
+                       "clip_id": "{{cta_place.clip_id}}", "allow_empty": "yes"},
+        },
     ]
     shoot = next(node for node in nodes if node["id"] == "shoot_beats")
     kept = list(nodes)
@@ -1883,10 +1922,12 @@ def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
         {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_spoken"},
         {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
         {"id": "cta_place_gate", "source": "cta_spoken", "target": "cta_place", "source_handle": "true"},
-        #: 字幕排在收尾接上**之后**:两步改的是同一条时间线,同时提交时后到的那个撞上版本号。
-        {"id": "cta_captions", "source": "cta_place", "target": "beat_captions"},
+        #: 字幕排在收尾接上**之后**:两步改的是同一条时间线,同时提交时后到的那个撞上版本号。三步字幕也一步接一步。
+        {"id": "cta_then_captions", "source": "cta_place", "target": "beat_captions"},
         {"id": "shoot_captions", "source": "shoot_beats", "target": "beat_captions"},
-        {"id": "captions_export", "source": "beat_captions", "target": "export_short"},
+        {"id": "beats_then_hook_captions", "source": "beat_captions", "target": "hook_captions"},
+        {"id": "hook_then_cta_captions", "source": "hook_captions", "target": "cta_captions"},
+        {"id": "captions_export", "source": "cta_captions", "target": "export_short"},
         {"id": "export_notice", "source": "export_short", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
@@ -1894,7 +1935,9 @@ def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
         {
             #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
             #: v6:有视频模型时中间各拍动起来(开场、收尾本来就是主播出镜的视频)。
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 6, "source": "official"},
+            #: v7:动起来那一步关掉视频自己的声音;拍数按目标时长卡住,主播说的开场和收尾也算在里面(同不出镜那一版);
+            #:     主播说的开场、收尾也上字幕。
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 7, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },

@@ -535,12 +535,38 @@ def _rewrite_prompt(items: list[Any], over: list[int], text_field: str, length: 
     return "把这几段口播改短到念得完(index 写段号):\n" + "\n".join(lines)
 
 
+def _trim_to_budget(items: list[Any], length: Callable[[Any], float | None], budget: float) -> tuple[list[Any], list[int]]:
+    """几段加起来超了总时长:第一段、最后一段留着(带货口播里是钩子和号召),中间的按顺序一段段放,**这一段的中点
+    落在总时长里**才放进来;放不下的去掉。交回留下的那几段和去掉的段号(从 1 数)。
+
+    每段一样长时就是「段数 = 总时长 ÷ 每段秒数,四舍五入」(10 秒、每段 4 秒 → 3 段),和模板提示词里写给模型的
+    是同一条;不到两段的不动。"""
+    if len(items) <= 2:
+        return items, []
+    total = (length(items[0]) or 0.0) + (length(items[-1]) or 0.0)
+    kept: list[Any] = []
+    dropped: list[int] = []
+    for index, item in enumerate(items[1:-1], start=1):
+        seconds = length(item) or 0.0
+        if total + seconds / 2 <= budget + 1e-9:
+            kept.append(item)
+            total += seconds
+        else:
+            dropped.append(index + 1)
+    return [items[0], *kept, items[-1]], dropped
+
+
 @register("fit_narration")
 def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """口播按时长收紧:量一遍每一段念出来要多久,超了的那几段交回给模型改短(只改那几段,最多 `max_rewrites` 轮);
     改短了的换上(没改短的不换)。还超的照旧交给时间线那一步加速 / 裁剪,`over` / `note` 说清楚是哪几段。
 
     提示词里写了「宁短勿长」,模型照样超:10 秒的带货口播给 2 秒那一拍写了 12 个字(真跑)。这条约束得由代码量。
+
+    `max_total_seconds`:几段加起来最多多长。**段数就是付费次数**(带货口播每一拍一张图、动起来再加一段视频):
+    10 秒、每拍 4 秒,提示词写明了 3 拍,模型照样写了 5 拍(付费实测,多付了 67%)。超了的从中间去掉(见
+    _trim_to_budget),`dropped` / `note` 说清楚去掉了哪几段。`reserved_text` 是这几段之外也要念、也算进总时长的话
+    (出镜版主播说的开场和收尾),按念出来的时长从总时长里扣掉。先删再改写:不替要删的那几段花改写的钱。
     """
     from app.core.i18n import tr
     from app.domain.workflows.executors.common import whole_number
@@ -565,6 +591,16 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     rounds = whole_number(config, "max_rewrites", node_type="fit_narration", default=FIT_NARRATION_ROUNDS)
     rounds = max(0, min(rounds, FIT_NARRATION_MAX_ROUNDS))
     items = [dict(item) if isinstance(item, dict) else item for item in raw]
+    dropped: list[int] = []
+    raw_budget = config.get("max_total_seconds")
+    if raw_budget not in (None, "") and float(raw_budget) > 0:
+        budget = float(raw_budget) - speech_seconds(str(config.get("reserved_text") or ""))
+        before = len(items)
+        items, dropped = _trim_to_budget(items, length, budget)
+        trimmed_note = tr("wfFit_trimmed", total=before, kept=len(items), which=dropped, budget=f"{float(raw_budget):g}") \
+            if dropped else ""
+    else:
+        trimmed_note = ""
     rewritten: set[int] = set()
     failure = ""
     for _ in range(rounds):
@@ -601,7 +637,7 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
                 rewritten.add(index - 1)
     still = _too_long(items, text_field, length)
     fitted = sorted(index + 1 for index in rewritten if index not in still)
-    notes = []
+    notes = [trimmed_note] if trimmed_note else []
     if fitted:
         notes.append(tr("wfFit_rewritten", which=fitted))
     if still:
@@ -612,6 +648,8 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         "items": items,
         "rewritten": len(rewritten),
         "over": [index + 1 for index in still],
+        #: 超了总时长、从中间去掉的那几段(原脚本里的段号,从 1 数)。上面 `over` / 改写说明里的段号按留下的这几段数。
+        "dropped": dropped,
         "note": "\n".join(notes),
     }
 

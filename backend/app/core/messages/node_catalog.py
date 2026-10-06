@@ -78,6 +78,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_fit_narration_seconds_field": {"zh": "每段里时长(秒)那一格的字段名", "en": "Field holding each segment's length in seconds"},
     "wfNode_fit_narration_seconds": {"zh": "每一段一样长时,直接填几秒(填了就按它量,不读上面那个字段)", "en": "When every segment is the same length, its length in seconds (used instead of the field above)"},
     "wfNode_fit_narration_max_rewrites": {"zh": "最多让模型改几轮(默认 2,最多 3)", "en": "Rewrite rounds at most (default 2, max 3)"},
+    "wfNode_fit_narration_max_total_seconds": {"zh": "几段加起来最多多长(秒):超了就从中间去掉几段,第一段和最后一段留着(每段的中点落在这个时长里才留)", "en": "Total length in seconds the segments may add up to: beyond it, segments are dropped from the middle, keeping the first and the last (a segment stays if its midpoint falls within this length)"},
+    "wfNode_fit_narration_reserved_text": {"zh": "这几段之外也要念、也算进总时长的话(比如主播出镜说的开场和收尾):按念出来的时长从总时长里扣掉", "en": "Lines said outside these segments that also count toward the total (such as a presenter's on-camera hook and call to action): their spoken length is taken off the total"},
     "wfNode_text_transform": {"zh": "文本处理", "en": "Text transform"},
     "wfNode_text_transform_desc": {"zh": "对文本做去空白/大小写/替换/正则提取/取长度等处理。", "en": "Trim whitespace, change case, replace, extract by regex, take the length, and so on."},
     "wfNode_text_transform_op": {"zh": "处理方式", "en": "Operation"},
