@@ -534,6 +534,24 @@ def test_缺节点缺模型文件_提交之前一次说全_说人话(comfy, tmp_
     assert not comfy.posted("/prompt") and not comfy.posted("/upload/image"), "缺东西的图不提交、不传素材"
 
 
+def test_那个目录一个文件都没有_下拉是空的_也照样说缺(comfy, tmp_path: Path) -> None:
+    """沙盒实测(ComfyUI 0.39 刚装好):维护者的「girl」要 4x-UltraSharp.pth,upscale_models 里一个文件都没有 —— object_info
+    里那一格是 `["COMBO", {"options": []}]`。此前「下拉是空的」当成「不是下拉、不判」,照样提交,回来一句英文的
+    「Value not in list: model_name: '4x-UltraSharp.pth' not in []」。空的下拉也是下拉:选的那个不在里面就是缺。"""
+    comfy.state.object_info["UpscaleModelLoader"]["input"]["required"]["model_name"] = [
+        "COMBO", {"multiselect": False, "options": []}]
+    comfy.state.workflows["empty-folder.json"] = {
+        **UPSCALE_API,
+        "2": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+    }
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "empty-folder.json", "inputs": [{"role": "reference_image",
+                                                                                  "path": str(_png(tmp_path))}]})
+    said = str(caught.value)
+    assert "4x-UltraSharp.pth" in said and "模型文件" in said and "not in" not in said
+    assert not comfy.posted("/prompt"), "缺模型文件的图不提交"
+
+
 def test_执行到一半才发现缺模型文件_也说人话(comfy, tmp_path: Path) -> None:
     """有的加载节点(带子目录的 checkpoint 名)校验时不拦,执行到它才说找不到文件 —— DaSiWa WAN 2.2 就是这样。"""
     comfy.state.outcome = "error"

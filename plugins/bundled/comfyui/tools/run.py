@@ -127,13 +127,15 @@ _MODEL_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sf
 _MAX_NAMED = 8
 
 
-def _options(definition: Any) -> list[str]:
+def _options(definition: Any) -> list[str] | None:
+    """一个下拉的可选值;**不是下拉**(STRING 这类)是 None。空的下拉是 `[]` —— 那个目录里一个文件都没有(刚装的 ComfyUI
+    的 upscale_models),选了什么都没有,不是「不判」。"""
     if not isinstance(definition, list) or not definition:
-        return []
+        return None
     if isinstance(definition[0], list):
         return [str(one) for one in definition[0]]
     extra = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
-    return [str(one) for one in extra.get("options") or []] if definition[0] == "COMBO" else []
+    return [str(one) for one in extra.get("options") or []] if definition[0] == "COMBO" else None
 
 
 def _same_file(name: str) -> str:
@@ -156,8 +158,8 @@ def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[s
         for name, value in (node.get("inputs") or {}).items():
             if not (isinstance(value, str) and name.endswith("_name") and value.lower().endswith(_MODEL_SUFFIXES)):
                 continue
-            options = {_same_file(one) for one in _options(defs.get(name))}
-            if options and _same_file(value) not in options:
+            choices = _options(defs.get(name))
+            if choices is not None and _same_file(value) not in {_same_file(one) for one in choices}:
                 files.append(f"「{value}」(#{node_id} {class_type} · {name})")
     return nodes, files
 
