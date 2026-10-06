@@ -7,6 +7,7 @@ import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-age
 import {
   createModels,
   createProvider,
+  InMemoryCredentialStore,
   type Api,
   type Credential,
   type CredentialStore,
@@ -450,14 +451,17 @@ export function buildModels(
   return { models, model };
 }
 
-/** 订阅计划:vendor id → pi 内置的 Provider 工厂。
+/** 由 pi 的原生 Provider 承载的那几家:vendor id → pi 内置的 Provider 工厂。
  *
  * **这里刻意只有一张映射表**。端点、模型目录(含真实 contextWindow)、设备码 / PKCE 授权流程
  * 全在 pi 自己的 Provider 定义里,我们一个字段都不重描:各家差异极大(Copilot 的 endpoint
  * 随凭据变,Codex 走自己的 responses API),照抄进来就等于把六家协议维护在这边,上游一改就
  * 悄悄失效。后端 VENDOR_PRESETS 里的 `pi_provider` 就是这张表的键。
+ *
+ * 大多是订阅计划(OAuth,见 buildSubscriptionModels);Google 是 API Key 连接(见 buildApiKeyModels)——
+ * Gemini 的原生协议要把每次函数调用带回来的思考签名原样发回去,OpenAI 兼容层做不到。
  */
-const SUBSCRIPTION_PROVIDERS: Record<string, () => Promise<Provider>> = {
+const PI_PROVIDERS: Record<string, () => Promise<Provider>> = {
   anthropic: async () => (await import("@earendil-works/pi-ai/providers/anthropic")).anthropicProvider(),
   "kimi-coding": async () => (await import("@earendil-works/pi-ai/providers/kimi-coding")).kimiCodingProvider(),
   "openai-codex": async () => (await import("@earendil-works/pi-ai/providers/openai-codex")).openaiCodexProvider(),
@@ -465,23 +469,24 @@ const SUBSCRIPTION_PROVIDERS: Record<string, () => Promise<Provider>> = {
     (await import("@earendil-works/pi-ai/providers/github-copilot")).githubCopilotProvider(),
   xai: async () => (await import("@earendil-works/pi-ai/providers/xai")).xaiProvider(),
   openrouter: async () => (await import("@earendil-works/pi-ai/providers/openrouter")).openrouterProvider(),
+  google: async () => (await import("@earendil-works/pi-ai/providers/google")).googleProvider(),
 };
 
-export function isSubscriptionProvider(piProvider: string): boolean {
-  return Boolean(SUBSCRIPTION_PROVIDERS[piProvider]);
+async function piProvider(id: string): Promise<Provider> {
+  const factory = PI_PROVIDERS[id];
+  if (!factory) throw new Error(`未知的供应商:${id}`);
+  return factory();
 }
 
 /** 订阅计划的 Models:用 pi 现成的 Provider + 后端托管的凭据存储。
  *
  * modelId 省略时不解析模型(登录流程只需要装好 provider 的 Models)。 */
 export async function buildSubscriptionModels(
-  piProvider: string,
+  piProviderId: string,
   modelId: string | undefined,
   credentials: CredentialStore,
 ): Promise<{ models: Models; model: Model<Api> | undefined; provider: Provider }> {
-  const factory = SUBSCRIPTION_PROVIDERS[piProvider];
-  if (!factory) throw new Error(`未知的订阅供应商:${piProvider}`);
-  const provider = await factory();
+  const provider = await piProvider(piProviderId);
   const models = createModels({ credentials });
   models.setProvider(provider);
   if (modelId === undefined) return { models, model: undefined, provider };
@@ -496,6 +501,141 @@ export async function buildSubscriptionModels(
     throw new Error(`供应商「${provider.name}」没有模型 ${modelId};可用的有:${known}…`);
   }
   return { models, model, provider };
+}
+
+type ProviderFrame = NonNullable<RunTurnRequest["provider"]>;
+
+const positive = (value: unknown): number | undefined =>
+  typeof value === "number" && value > 0 ? value : undefined;
+
+/**
+ * API Key 连接,由 pi 的原生 Provider 承载(Google Gemini)。
+ *
+ * 钥匙随回合帧发下来,只活在这个短命进程里:放进 pi 的内存凭据存储,pi 的 apiKey 鉴权从 `credential.key` 取。
+ * **钥匙空着就当场报错**,不交给 pi —— pi 找不到存下的凭据时会去读环境变量(GEMINI_API_KEY),那是这台机器上
+ * 别人的钥匙,花的是别人的钱。
+ *
+ * 模型:pi 目录里有的就用目录那一份(它知道各型号的思考档位、能不能看图);目录里还没有的新型号**不报错**,
+ * 照同一个 Provider 的协议造一份 —— Gemini 上新型号的速度比 pi 发版快,用户在 `GET /v1beta/models` 里看得见、
+ * 加得进来,就该调得通。两种都叠上后端定下的那几格(窗口、输出额度、思考档位表、服务地址、用户的覆盖),
+ * 界面上显示的数才是运行时真用的数。
+ */
+export async function buildApiKeyModels(
+  piProviderId: string,
+  modelId: string,
+  frame: ProviderFrame,
+): Promise<{ models: Models; model: Model<Api> }> {
+  const apiKey = (frame.apiKey ?? "").trim();
+  if (!apiKey) throw new Error("这条连接还没有填 API Key");
+  const provider = await piProvider(piProviderId);
+  const credentials = new InMemoryCredentialStore();
+  await credentials.modify(provider.id, async () => ({ type: "api_key", key: apiKey }));
+  const models = createModels({ credentials });
+  models.setProvider(provider);
+  return { models, model: nativeModel(provider, modelId, frame) };
+}
+
+function nativeModel(provider: Provider, modelId: string, frame: ProviderFrame): Model<Api> {
+  const catalog = provider.getModels();
+  const known = catalog.find((model) => model.id === modelId);
+  // 目录外的新型号:协议、看不看得了图照同门(Gemini 的对话模型都收图片);思考与否听后端 —— 后端给得出
+  // 思考档位表,说明查证过这一族会思考,否则一个思考配置都不发(发给不思考的模型是一个 400)。
+  const sibling = known ?? catalog[0];
+  if (!sibling) throw new Error(`供应商「${provider.name}」没有可用的模型目录`);
+  const thinkingLevelMap = frame.thinkingLevelMap
+    ? { ...(known?.thinkingLevelMap ?? {}), ...frame.thinkingLevelMap }
+    : known?.thinkingLevelMap;
+  const contextWindow =
+    positive(frame.contextWindow) ??
+    known?.contextWindow ??
+    fallbackContextWindow(frame.baseUrl || provider.baseUrl || "");
+  const base: Model<Api> = known ?? {
+    id: modelId,
+    name: modelId,
+    api: sibling.api,
+    provider: provider.id,
+    baseUrl: provider.baseUrl ?? sibling.baseUrl,
+    reasoning: Boolean(frame.thinkingLevelMap),
+    input: sibling.input,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow,
+    maxTokens: fallbackMaxTokens(contextWindow, frame.thinkingLevelMap),
+  };
+  return {
+    ...base,
+    // 连接上填的服务地址(默认就是官方地址;走自建中转时改这一格)。
+    ...(frame.baseUrl ? { baseUrl: frame.baseUrl } : {}),
+    ...(typeof frame.reasoning === "boolean" ? { reasoning: frame.reasoning } : {}),
+    ...(typeof frame.vision === "boolean" ? { input: frame.vision ? ["text", "image"] : ["text"] } : {}),
+    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+    contextWindow,
+    maxTokens: positive(frame.maxOutputTokens) ?? base.maxTokens,
+  } as Model<Api>;
+}
+
+/**
+ * 这一轮该用哪套 Models:pi 的原生 Provider(订阅授权 / API Key),或我们自己按 OpenAI 兼容协议造的那一个。
+ * 一轮对话、网关单次补全、手动压缩三处共用 —— 此前三处各写一遍同一个三元表达式。
+ */
+async function resolveModels(
+  frame: ProviderFrame,
+  modelId: string,
+  apiBase: string,
+  token: string,
+): Promise<{ models: Models; model: Model<Api> | undefined }> {
+  const id = frame.piProvider ?? "";
+  if (!id) return buildModels(frame.baseUrl, frame.apiKey, modelId, frame);
+  // 订阅授权:凭据由后端托管,刷新后经租约写回(BackendCredentialStore)。
+  if (frame.credential) {
+    return buildSubscriptionModels(
+      id,
+      modelId,
+      new BackendCredentialStore(apiBase, token, frame.profileId ?? "", frame.credential ?? undefined),
+    );
+  }
+  return buildApiKeyModels(id, modelId, frame);
+}
+
+type StreamOptions = Parameters<Models["streamSimple"]>[2];
+
+/**
+ * 这一轮**没要求思考**、而模型又关不掉思考时,一个思考配置都不发,由模型自己定。
+ *
+ * 关不掉的 Gemini(整个 Gemini 3、2.5 Pro)在思考档位表里 `off` 是 null,界面上那一档叫「模型默认」。pi 自己的
+ * 关思考分支在这种模型上发的是「最低能到的那档」,而 2.5 Pro 走预算制,发出去的是 `thinkingBudget: 0` —— 官方写明
+ * 「Cannot disable thinking」,整轮 400。说「模型默认」就得真的是模型默认,所以在请求体发出前把它摘掉。
+ * 只动 Gemini 的原生协议:别家关不掉的模型(Kimi k3 这类)走的是 OpenAI 兼容那条,「不发」本来就是 pi 的行为。
+ */
+export function leaveThinkingToModel(model: Model<Api>, options: StreamOptions): StreamOptions {
+  if (model.api !== "google-generative-ai" || options?.reasoning || model.thinkingLevelMap?.off !== null) {
+    return options;
+  }
+  const upstream = options?.onPayload;
+  return {
+    ...options,
+    onPayload: async (payload: unknown, target: Model<Api>) => {
+      const next = ((await upstream?.(payload, target)) ?? payload) as { config?: { thinkingConfig?: unknown } };
+      if (next.config) delete next.config.thinkingConfig;
+      return next;
+    },
+  };
+}
+
+/**
+ * pi 的 Agent、压缩、子智能体共用的流式入口。
+ *
+ * **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
+ * 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
+ * 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
+ * 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
+ * "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
+ */
+function streamFnFor(models: Models) {
+  return (
+    m: Parameters<typeof models.streamSimple>[0],
+    context: Parameters<typeof models.streamSimple>[1],
+    options: Parameters<typeof models.streamSimple>[2],
+  ) => models.streamSimple(m, context, leaveThinkingToModel(m as Model<Api>, options));
 }
 
 /**
@@ -533,26 +673,9 @@ export async function runCompaction(input: {
   apiBase: string;
   token: string;
 }): Promise<{ sessionState: unknown; context: { tokens: number; window: number }; compaction: CompactionResult["info"] }> {
-  const piProvider = input.provider.piProvider ?? "";
-  const { models, model } = piProvider
-    ? await buildSubscriptionModels(
-        piProvider,
-        input.model,
-        new BackendCredentialStore(input.apiBase, input.token, input.provider.profileId ?? "", input.provider.credential ?? undefined),
-      )
-    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
-  // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
-  // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
-  // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
-  // 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
-  // "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
-  const streamFn = (
-    m: Parameters<typeof models.streamSimple>[0],
-    context: Parameters<typeof models.streamSimple>[1],
-    options: Parameters<typeof models.streamSimple>[2],
-  ) => models.streamSimple(m, context, options);
-  const { messages, info } = await prepareContext(prior, model as Model<Api>, streamFn, true);
+  const { messages, info } = await prepareContext(prior, model as Model<Api>, streamFnFor(models), true);
   return {
     sessionState: messages,
     context: { tokens: contextTokens(messages as unknown as CompactionMessage[]), window: Number(model?.contextWindow) || 0 },
@@ -640,19 +763,7 @@ export interface GatewayCompletionInput {
 export async function runGatewayCompletion(
   input: GatewayCompletionInput,
 ): Promise<{ text: string; usage: Record<string, unknown> }> {
-  const piProvider = input.provider.piProvider ?? "";
-  const { models, model } = piProvider
-    ? await buildSubscriptionModels(
-        piProvider,
-        input.model,
-        new BackendCredentialStore(
-          input.apiBase,
-          input.token,
-          input.provider.profileId ?? "",
-          input.provider.credential ?? undefined,
-        ),
-      )
-    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
   if (!model) throw new Error(`模型 ${input.model} 不存在`);
   const requestedImages = input.images ?? [];
   if (requestedImages.length > 0 && !model.input?.includes("image")) {
@@ -670,14 +781,18 @@ export async function runGatewayCompletion(
       },
     ],
   };
-  const answer = await models.completeSimple(model, context, {
-    temperature: input.options?.temperature,
-    maxTokens: input.options?.maxTokens,
-    maxRetries: input.options?.maxRetries,
-    timeoutMs: input.options?.timeoutMs,
-    samplingParams: input.options?.samplingParams,
-    toolChoice: "none",
-  });
+  const answer = await models.completeSimple(
+    model,
+    context,
+    leaveThinkingToModel(model, {
+      temperature: input.options?.temperature,
+      maxTokens: input.options?.maxTokens,
+      maxRetries: input.options?.maxRetries,
+      timeoutMs: input.options?.timeoutMs,
+      samplingParams: input.options?.samplingParams,
+      toolChoice: "none",
+    }),
+  );
   if (answer.stopReason === "error") throw new Error(answer.errorMessage || "模型补全失败");
   const text = answer.content
     .filter((part): part is Extract<(typeof answer.content)[number], { type: "text" }> => part.type === "text")
@@ -688,32 +803,11 @@ export async function runGatewayCompletion(
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
 export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<PiTurnResult> {
-  const piProvider = input.provider.piProvider ?? "";
-  const { models, model } = piProvider
-    ? await buildSubscriptionModels(
-        piProvider,
-        input.model,
-        new BackendCredentialStore(
-          input.apiBase,
-          input.token,
-          input.provider.profileId ?? "",
-          input.provider.credential ?? undefined,
-        ),
-      )
-    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
   const images = model?.input?.includes("image") ? (input.images ?? []) : [];
   let contextFull = false;
-  // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
-  // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
-  // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
-  // 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
-  // "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
-  const streamFn = (
-    m: Parameters<typeof models.streamSimple>[0],
-    context: Parameters<typeof models.streamSimple>[1],
-    options: Parameters<typeof models.streamSimple>[2],
-  ) => models.streamSimple(m, context, options);
+  const streamFn = streamFnFor(models);
   // 轮前按 token 水位压缩(超过窗口 80% 触发,或调用方显式要求)。
   const { messages: priorMessages, info: compaction } = await prepareContext(
     prior,

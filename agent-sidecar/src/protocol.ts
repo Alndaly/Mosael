@@ -34,7 +34,8 @@ export interface RunTurnRequest {
     reasoningEffort?: boolean | null;
     thinkingLevelMap?: Record<string, string | null> | null;
     developerRole?: boolean | null;
-    /** 订阅计划:pi 内置 Provider 的 id(端点/模型目录/授权流程都在它里面)。 */
+    /** 由 pi 的原生 Provider 承载时它的 id(端点/协议/模型目录/授权流程都在它里面)。订阅计划带 `credential`;
+     *  不带的是 API Key 连接(Google Gemini),钥匙就是上面的 `apiKey`(见 pi.ts 的 buildApiKeyModels)。 */
     piProvider?: string;
     /** 订阅计划的当前 OAuth 凭据(pi 的 Credential 原样)。 */
     credential?: Credential | null;

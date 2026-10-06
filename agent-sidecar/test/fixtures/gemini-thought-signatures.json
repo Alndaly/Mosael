@@ -1,0 +1,148 @@
+{
+  "_about": [
+    "Gemini 原生 streamGenerateContent(alt=sse)的回包,一条对话两轮、五次请求。按官方文档的 REST 形状构造(没有真钥匙,录不了真回包):",
+    "https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures(2026-09-04 版)—— 函数调用的签名挂在 functionCall 那个 part 上,",
+    "顺序调用每一步各带一个,不带函数调用的回复把签名挂在最后一个 part 上。签名是随机的 base64(pi 只认合法 base64,长度为 4 的倍数),不是模型真产出的。",
+    "第一轮:想一下 → 调 lookup_asset(签名 A)→ 答一句(签名 T1)。第二轮:调 list_assets(签名 B)→ 再调 lookup_asset(签名 C)→ 答一句(签名 T2)。"
+  ],
+  "model": "gemini-3-flash-preview",
+  "signatures": {
+    "A": "YYwGCF6Kkef7ZuHPkjkRAWKpT/g2coDgc7jVFtVlLlF+8bLzyprxL1vxcJzWeWv0",
+    "T1": "wmePxzLit1NCXHwP4KMCR1zbAABb/fh/YXn2NrPCwP0ssox7cM/5mRw8hhUMzQ1w",
+    "B": "CY3zL5AKfq7UVEenSeN4890w6ZfJddX8xwVqOGcbJ27AlQW90O0I7ve2VpioeZBI",
+    "C": "y3UNfuemdHwOBxd9JtnFKJ9rEYHPF3IRHGkk+Z3x+A+K1OOaRaai7cMeSMg+BNAu",
+    "T2": "CZuXAwnP1JByQD47HMnB8FbnB1mHxyuMyftfvdDsjRgqyaVRLwLw+8MgzUsFXeEX"
+  },
+  "responses": [
+    [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [{ "text": "**Checking the asset**\n\nThe user wants details, so I should look it up first.", "thought": true }]
+            },
+            "index": 0
+          }
+        ],
+        "usageMetadata": { "promptTokenCount": 812, "totalTokenCount": 812 },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn1-step1"
+      },
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": { "id": "fc-lookup-1", "name": "lookup_asset", "args": { "asset_id": "asset-42" } },
+                  "thoughtSignature": "YYwGCF6Kkef7ZuHPkjkRAWKpT/g2coDgc7jVFtVlLlF+8bLzyprxL1vxcJzWeWv0"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": { "promptTokenCount": 812, "candidatesTokenCount": 18, "thoughtsTokenCount": 64, "totalTokenCount": 894 },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn1-step1"
+      }
+    ],
+    [
+      {
+        "candidates": [
+          {
+            "content": { "role": "model", "parts": [{ "text": "It is a 12-second" }] },
+            "index": 0
+          }
+        ],
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn1-step2"
+      },
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [{ "text": " clip of a beach.", "thoughtSignature": "wmePxzLit1NCXHwP4KMCR1zbAABb/fh/YXn2NrPCwP0ssox7cM/5mRw8hhUMzQ1w" }]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 930,
+          "cachedContentTokenCount": 512,
+          "candidatesTokenCount": 11,
+          "thoughtsTokenCount": 0,
+          "totalTokenCount": 941
+        },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn1-step2"
+      }
+    ],
+    [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": { "id": "fc-list-1", "name": "list_assets", "args": {} },
+                  "thoughtSignature": "CY3zL5AKfq7UVEenSeN4890w6ZfJddX8xwVqOGcbJ27AlQW90O0I7ve2VpioeZBI"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": { "promptTokenCount": 1010, "candidatesTokenCount": 9, "thoughtsTokenCount": 30, "totalTokenCount": 1049 },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn2-step1"
+      }
+    ],
+    [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": { "id": "fc-lookup-2", "name": "lookup_asset", "args": { "asset_id": "asset-7" } },
+                  "thoughtSignature": "y3UNfuemdHwOBxd9JtnFKJ9rEYHPF3IRHGkk+Z3x+A+K1OOaRaai7cMeSMg+BNAu"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": { "promptTokenCount": 1090, "candidatesTokenCount": 12, "thoughtsTokenCount": 25, "totalTokenCount": 1127 },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn2-step2"
+      }
+    ],
+    [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [{ "text": "asset-7 is the longer one.", "thoughtSignature": "CZuXAwnP1JByQD47HMnB8FbnB1mHxyuMyftfvdDsjRgqyaVRLwLw+8MgzUsFXeEX" }]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": { "promptTokenCount": 1180, "candidatesTokenCount": 8, "thoughtsTokenCount": 0, "totalTokenCount": 1188 },
+        "modelVersion": "gemini-3-flash-preview",
+        "responseId": "resp-turn2-step3"
+      }
+    ]
+  ]
+}
