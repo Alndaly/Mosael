@@ -651,31 +651,15 @@ export async function openPoolLogin(opts: {
   });
 }
 
-/**
- * 工作流库「在编辑器里打开」:亮出这个 ComfyUI 连接自己的内嵌视图(还开着就接着用,不重新载入 —— 那边可能有没存的
- * 改动),再在页面里打开 `workflows/<path>` 那一张(见 comfyEditor)。和池档案登录同一个前台单槽。
- */
-export async function openComfyWorkflow(opts: {
-  partition: string;
-  url: string;
-  name: string;
-  path: string;
-}): Promise<ComfyOpenOutcome> {
-  // 开成普通的编辑器:这个视图不再是工作台(渲染层换回浏览器的顶栏)
-  workbench?.stop(opts.partition);
-  const driver = await showComfyView(opts);
-  if (!driver) return "notReady";
-  return openWorkflowInPage(driver, opts);
-}
-
 const COMFY_PARTITION_PREFIX = "persist:pool-comfyui-";
 
-/** 开工作台的结果:打开了那一张 / 新建了一张 / 只是回到画布,或者没成的原因(和「在编辑器里打开」「新建」同一套)。 */
+/** 开工作台的结果:打开了那一张 / 新建了一张 / 只是回到画布,或者没成的原因(那台机器上没有这一张、这版前端没有「新建」命令……)。 */
 export type WorkbenchOpenOutcome = ComfyOpenOutcome | ComfyNewOutcome;
 
 /**
- * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图,开始一个工作台会话(注入桥、轮询),再打开 `path` 那一张、
- * 或者新建一张、或者什么都不开(回到画布上开着的那张)。
+ * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图(还开着就接着用,不重新载入 —— 那边可能有没存的改动),开始一个工作台
+ * 会话(注入桥、轮询),再打开 `workflows/<path>` 那一张、或者执行前端自己的「新建」命令新建一张、或者什么都不开(回到画布上
+ * 开着的那张),见 comfyEditor。工作流库里打开一张、「新建」都走这里;和池档案登录同一个前台单槽。
  */
 export async function openComfyWorkbench(opts: {
   partition: string;
@@ -710,17 +694,6 @@ async function showComfyView(opts: { partition: string; url: string; name: strin
 /** 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标,见 comfyNavigation):只在这个视图里生效,每次载入之后再设一次。 */
 export function setComfyViewNavigation(opts: { partition: string; mode: ComfyNavigation }): Promise<NavigationOutcome> {
   return setComfyNavigation(opts.partition, opts.mode);
-}
-
-/**
- * 工作流库「新建」(ADR 0038 §8):亮出这个 ComfyUI 连接自己的内嵌视图(还开着就接着用),执行前端自己的「新建」命令
- * (见 comfyEditor.comfyNewWorkflowScript)。存盘照旧是 ComfyUI 自己的,视图收起时工作流库重拉。
- */
-export async function newComfyWorkflow(opts: { partition: string; url: string; name: string }): Promise<ComfyNewOutcome> {
-  workbench?.stop(opts.partition);
-  const driver = await showComfyView(opts);
-  if (!driver) return "notReady";
-  return newWorkflowInPage(driver, opts);
 }
 
 /** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */

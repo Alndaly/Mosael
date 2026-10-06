@@ -172,11 +172,11 @@ function PublishViewBar() {
   React.useEffect(() => {
     if (!editing) setAddress(state.url ?? "");
   }, [state.url, editing]);
-  //: ComfyUI 的视图(工作台、内嵌编辑器)亮着:背后的本机服务正被人用着,告诉宿主别因为闲置把它停了(ADR 0041)
+  //: ComfyUI 的视图亮着:背后的本机服务正被人用着,告诉宿主别因为闲置把它停了(ADR 0041)
   useKeepServiceAwake(state.visible ? comfyConnectionOf(state.partition) : null);
   if (!state.visible) return null;
   if (isWorkbenchPartition(workbench.target, state.partition)) return <ComfyWorkbench barHeight={PUBLISH_BAR_HEIGHT} />;
-  //: 这是一个 ComfyUI 连接的视图(工作流库「在编辑器里打开」):顶栏多一个画布操控方式的开关
+  //: 这是一个 ComfyUI 连接的视图、却不在工作台里(渲染层重新加载过,工作台的会话没接上):顶栏照样给画布操控方式的开关
   const comfyConnection = comfyConnectionOf(state.partition);
 
   // 回车打开:和浏览器一样,键盘交给打开的那一页。

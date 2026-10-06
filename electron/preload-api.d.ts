@@ -153,25 +153,6 @@ export interface MosaelBrowserBridge {
   /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
   clearProfile(partition: string): Promise<void>;
   /**
-   * 工作流库「在编辑器里打开」:在这个 ComfyUI 连接自己的内嵌视图里打开它的界面,再打开 `workflows/<path>` 那一张。
-   * `outcome`:打开了 / 那台机器上没有这一张 / 视图不在这台 ComfyUI 上 / 前端一直没就绪(比如要先登录)。
-   */
-  openComfyWorkflow(opts: {
-    connectionId: string;
-    url: string;
-    name?: string;
-    path: string;
-  }): Promise<{ ok: boolean; outcome?: "opened" | "missing" | "elsewhere" | "notReady"; error?: string }>;
-  /**
-   * 工作流库「新建」:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(和它菜单里「工作流 → 新建」同一条)。
-   * `outcome`:开了一张新的 / 这版前端没有这条命令 / 视图不在这台 ComfyUI 上 / 前端一直没就绪。
-   */
-  newComfyWorkflow(opts: {
-    connectionId: string;
-    url: string;
-    name?: string;
-  }): Promise<{ ok: boolean; outcome?: "created" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
-  /**
    * 内嵌 ComfyUI 画布的操控方式:触控板(双指平移、捏合缩放)/ 鼠标(滚轮缩放、拖动平移)。只在这个连接的视图里生效 ——
    * 写回 ComfyUI 服务器的那一下被主进程拦下,那台机器前面的人不受影响;每次载入之后主进程再设一次。
    * `outcome`:设好了 / 这版前端没有这个设置 / 视图不在这台 ComfyUI 上 / 前端一直没就绪。
@@ -182,7 +163,8 @@ export interface MosaelBrowserBridge {
   }): Promise<{ ok: boolean; outcome?: "applied" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
   /**
    * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图,注入写死的桥、开始轮询;`path` 给了就打开那一张,`fresh` 是新建一张,
-   * 都不给就回到画布上开着的那张。`outcome` 和「在编辑器里打开」「新建」同一套。
+   * 都不给就回到画布上开着的那张。工作流库里打开一张、「新建」(桌面版)都走这里。
+   * `outcome`:打开了 / 新建了 / 那台机器上没有这一张 / 这版前端没有「新建」命令 / 视图不在这台 ComfyUI 上 / 前端一直没就绪(比如要先登录)。
    */
   openComfyWorkbench(opts: {
     connectionId: string;

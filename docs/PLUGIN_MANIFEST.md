@@ -1264,7 +1264,8 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   }
   ```
   `role` 是着色用的:`input` / `model` / `sampler` / `text` / `output` / `note` / `missing` / `other`。
-  `editor` 有了,详情上才有「在编辑器里打开」:桌面版在这个连接自己的内嵌浏览器里开这个地址,网页版开一个新标签页。宿主只认简单的
+  `editor` 有了,详情上才有打开它的那一个按钮:桌面版是「在工作台里打开」(这个连接自己的内嵌浏览器里开这个地址,旁边是 Mosael 的
+  面板),网页版是「在 ComfyUI 里打开」(开一个新标签页)。宿主只认简单的
   种类名(小写字母开头,`[a-z0-9-]`)和不带「用户名:密码@」的 http(s) 地址,不对就当没有编辑器。打开具体哪一张是宿主按种类做的
   (ComfyUI:页面就绪后经它前端自己的工作流列表打开那一张),插件只报地址。
 - `{"op": "workflow", "path": "…"}` → `{"content": {…}}`(原文);
@@ -1585,7 +1586,7 @@ Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为�
 | `GET /api/plugins/instances/{id}/local-service/plan` | 让 Mosael 装的安装计划(部署管理员) |
 | `POST /api/plugins/instances/{id}/local-service/install`、`…/install/cancel` | 装 / 接着装 / 重建运行环境(要带 `confirm_run_code` 和计划里的 `flavour`)、取消(部署管理员) |
 | `GET /api/plugins/instances/{id}/local-service/model-folders` | 共用的模型文件夹:每一处认成什么、加载了没有、几个模型,和卸载时保留下来、还没加进来的那几份(部署管理员) |
-| `POST /api/plugins/instances/{id}/local-service/touch` | 还在用它(工作台、内嵌编辑器开着):闲置的钟从现在算,不替它起(连接的主人) |
+| `POST /api/plugins/instances/{id}/local-service/touch` | 还在用它(工作台开着):闲置的钟从现在算,不替它起(连接的主人) |
 | `GET /api/plugins/instances/{id}/local-service/versions` | 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有没做完的(部署管理员) |
 | `POST /api/plugins/instances/{id}/local-service/{update,rollback}` | 更新(要带 `confirm_run_code`,`version` 空 = 最新)/ 回到上一版;进度看状态里的 `install`,取消也是 `…/install/cancel`(部署管理员) |
 | `GET /api/plugins/instances/{id}/local-service/footprint` | 删连接之前:它在数据目录里留着什么(一份让 Mosael 装的、多大、模型多大、保留的话挪到哪;部署管理员) |

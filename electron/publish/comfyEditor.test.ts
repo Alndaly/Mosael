@@ -42,7 +42,7 @@ function savedWorkflow(isLoaded = false): FakeWorkflow {
   return workflow;
 }
 
-describe("在编辑器里打开一张存着的工作流", () => {
+describe("打开一张存着的工作流", () => {
   it("先同步工作流列表,找到 workflows/<路径> 那一张,载入后在画布上打开", async () => {
     const workflow = savedWorkflow();
     const page = comfyPage(ORIGIN, { "workflows/人像/古风 女孩.json": workflow });

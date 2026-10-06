@@ -170,10 +170,6 @@ const browserBridge = {
   // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
   openLogin: (opts) => invoke(IPC.invoke.browserOpenLogin, opts),
   clearProfile: (partition) => invoke(IPC.invoke.browserClearProfile, { partition }),
-  // 工作流库「在编辑器里打开」(见 main.cjs comfyui:openWorkflow)。
-  openComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiOpenWorkflow, opts),
-  // 工作流库「新建」(见 main.cjs comfyui:newWorkflow)。
-  newComfyWorkflow: (opts) => invoke(IPC.invoke.comfyuiNewWorkflow, opts),
   // 内嵌 ComfyUI 画布的操控方式(见 main.cjs comfyui:navigation)。
   setComfyNavigation: (opts) => invoke(IPC.invoke.comfyuiNavigation, opts),
   // ComfyUI 工作台(见 main.cjs comfyui:openWorkbench / workbenchCall / closeWorkbench,事件 comfyui:workbench)。

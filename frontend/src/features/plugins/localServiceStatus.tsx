@@ -6,7 +6,7 @@
  *   插件那句「连不上这台 ComfyUI,确认它在运行、地址填对」只适合「连一台服务器」—— 本机服务的地址和进程都归宿主管,
  *   该说的是它此刻是什么状态、能点什么(启动、看日志、去装);
  * - `ServiceIssueNote`:那一句话和该给的那一下;
- * - `explainOpenFailure`:不在连接页上的地方(工作台、内嵌编辑器打开失败)临时问一次;
+ * - `explainOpenFailure`:不在连接页上的地方(工作台打开失败)临时问一次;
  * - `LocalServiceLogDialog`:日志窗口(连接页、出错时的「看日志」共用);
  * - `machineKey`:确认框里说「在哪台机器上运行」(装、更新都要说)。
  */
@@ -55,11 +55,11 @@ export function useLocalService(instanceId: string, enabled: boolean) {
   });
 }
 
-/** 工作台、内嵌编辑器开着时隔多久告诉宿主一声「还在用」(闲置自动停按分钟算,这里远小于一分钟的若干倍就够)。 */
+/** 工作台开着时隔多久告诉宿主一声「还在用」(闲置自动停按分钟算,这里远小于一分钟的若干倍就够)。 */
 export const KEEP_AWAKE_MS = 2 * 60_000;
 
 /**
- * ComfyUI 的视图(工作台、内嵌编辑器)亮着时:那边直接和它说话、不经插件调用,宿主看不见 —— 隔一会儿告诉宿主一声「还在用」,
+ * ComfyUI 的视图(工作台)亮着时:那边直接和它说话、不经插件调用,宿主看不见 —— 隔一会儿告诉宿主一声「还在用」,
  * 闲置自动停就不会在人用着画布的时候把它停掉。`instanceId` 为 null(没亮着、不是 ComfyUI 的视图)时什么都不做。不替它起。
  */
 export function useKeepServiceAwake(instanceId: string | null): void {
@@ -121,7 +121,7 @@ export function serviceIssue(service: LocalService | null | undefined, failing: 
 }
 
 /**
- * 不在连接页上的地方(打开工作台、内嵌编辑器没成)临时问一次:背后的本机服务此刻用不了,就说它那一句(停着、起不来、不应答……);
+ * 不在连接页上的地方(打开工作台没成)临时问一次:背后的本机服务此刻用不了,就说它那一句(停着、起不来、不应答……);
  * 没有本机服务、它好好的、问不到,照原来那句 `fallback` 说。
  */
 export async function explainOpenFailure(instanceId: string, fallback: string): Promise<string> {

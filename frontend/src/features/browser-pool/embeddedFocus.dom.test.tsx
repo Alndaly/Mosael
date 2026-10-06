@@ -20,7 +20,7 @@ beforeEach(() => {
   listeners = [];
   focusPage.mockClear();
   document.body.innerHTML = `
-    <div role="dialog"><button id="opener">在编辑器里打开</button><button id="other">别的</button></div>
+    <div role="dialog"><button id="opener">在工作台里打开</button><button id="other">别的</button></div>
     <div data-app-chrome=""><input id="address" aria-label="地址栏" /><button id="back">返回 Mosael</button></div>`;
   Object.defineProperty(window, "mosaelPublish", {
     configurable: true,
@@ -43,7 +43,7 @@ const show = () => emit({ visible: true, accountId: "persist:pool-comfyui-i1", a
 const hide = () => emit({ visible: false, accountId: null, accountName: null });
 
 describe("回到 Mosael 时焦点落回打开之前的那个按钮", () => {
-  it("点「在编辑器里打开」进去,在顶栏里点过东西,回来焦点还在「在编辑器里打开」上", async () => {
+  it("点「在工作台里打开」进去,在顶栏里点过东西,回来焦点还在「在工作台里打开」上", async () => {
     act(() => byId("opener").focus());
     show();
     act(() => byId("address").focus());

@@ -5,6 +5,7 @@ import {
   CircleAlert,
   ClipboardCopy,
   Copy,
+  ExternalLink,
   FileOutput,
   Import,
   Folder,
@@ -26,7 +27,6 @@ import {
   SearchX,
   SlidersHorizontal,
   Sparkles,
-  SquarePen,
   Trash2,
   TriangleAlert,
   Unplug,
@@ -107,8 +107,6 @@ import {
 import { WorkflowPathField, useWorkflowPath } from "@/features/plugins/WorkflowPathField";
 import {
   NEW_NOTE_PATH,
-  embeddedCreate,
-  embeddedEditor,
   embeddedWorkbench,
   useWorkflowEditor,
   type EditorNote,
@@ -151,16 +149,17 @@ import { cn } from "@/lib/utils";
  * 和模型库同一套骨架(LibraryBrowser):左边一列是那台机器上 `workflows/` 里的文件夹树(和 ComfyUI 自己的侧栏同一份,空的也列;
  * 选一个只看它和它下面的),「缺节点或模型」钉在这一列底部;右边顶上搜索、按种类筛、
  * 排序、三档显示方式;一张卡是节点图的缩略预览(照插件给的图摘要画)、名字、种类、节点数、缺什么。点开是详情:能填什么 /
- * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台;「在编辑器里
- * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。和模型库互相跳(见 ConnectionLibraries):用到的模型
- * 点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
+ * 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、Mosael 里谁在用它;「用它生成」交给 AI 工作台;桌面版「在工作台
+ * 里打开」、网页版「在 ComfyUI 里打开」(新标签页)开那台服务器自己的画布(见 workflowEditor),回来时刷新。和模型库互相跳
+ * (见 ConnectionLibraries):用到的模型点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
  *
- * 工具条上的「新建」在 ComfyUI 自己的画布上开一张新的(内嵌视图里执行它的「新建」命令,见 workflowEditor;存盘是 ComfyUI
+ * 工具条上的「新建」在 ComfyUI 自己的画布上开一张新的(桌面版在工作台里,网页版开新标签页,见 workflowEditor;存盘是 ComfyUI
  * 自己的,回来时刷新,新存的那张就出现在列表里);「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
  *
  * **文件夹**(见 WorkflowFolders):左栏顶上「新建文件夹」;文件夹上右键(或 ⋯、Shift+F10)新建子文件夹、改名、删除(只删空的);
  * 卡片拖到左边的文件夹上就是「移动到…」那个文件夹(先确认)。**右键菜单**:卡片和列表的一行上右键、悬停 / 聚焦时出现的 ⋯、
- * Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台 / 编辑器里打开、编辑应用表单、复制 / 改名 / 移动 / 导出、复制路径、
+ * Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台里打开(网页版是在 ComfyUI 里打开)、编辑应用表单、复制 / 改名 /
+ * 移动 / 导出、复制路径、
  * 去补缺的模型 / 节点、删除;点不了的写着为什么。
  *
  * 列表每次打开现问插件(不存库)。
@@ -295,7 +294,7 @@ export function WorkflowLibraryDialog({
   const shown = sortWorkflows(filterWorkflows(scope, { kind, query }), sort);
   const detail = detailKey ? workflows.find((flow) => keyOf(flow) === detailKey) ?? null : null;
 
-  //: 「在编辑器里打开」「在工作台里打开」「新建」开的是哪里(插件报了编辑器才有)
+  //: 「在工作台里打开」(网页版「在 ComfyUI 里打开」)、「新建」开的是哪里(插件报了编辑器才有)
   const editorTarget = library.data?.editor ?? null;
 
   const clearFilters = () => {
@@ -323,15 +322,14 @@ export function WorkflowLibraryDialog({
   );
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
   const newButton = editorTarget ? (
-    <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint"
-      : embeddedCreate(editorTarget) ? "workflowNewHint" : "workflowNewHintTab")}>
+    <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint" : "workflowNewHintTab")}>
       <Button disabled={editor.opening} onClick={() => void editor.create(editorTarget)}>
         <Plus size={13} />
         {t("workflowNew")}
       </Button>
     </Hint>
   ) : null;
-  //: 「新建」、卡片菜单里「在编辑器里打开」之后留下的那句话:在列表上就摆在列表上(详情里的那一张摆在详情里)
+  //: 「新建」、卡片菜单里打开一张之后留下的那句话:在列表上就摆在列表上(详情里的那一张摆在详情里)
   const listNote = editor.note && (editor.note.path === NEW_NOTE_PATH || !detailKey)
     ? <EditorNoteLine note={editor.note} onDismiss={editor.dismiss} />
     : null;
@@ -482,7 +480,6 @@ export function WorkflowLibraryDialog({
   ];
   const cardActions = (flow: WorkflowFile, openItem: (key: string) => void): MenuAction[] => {
     const workbench = editorTarget ? embeddedWorkbench(editorTarget) : false;
-    const noEditor = t("workflowMenuNoEditor");
     const models = flow.missing_models?.length ?? 0;
     const nodes = flow.missing_nodes?.length ?? 0;
     const lacking: MenuAction[] = [
@@ -498,14 +495,11 @@ export function WorkflowLibraryDialog({
     const file = fileActions(flow);
     return [
       { group: "open", label: t("workflowMenuOpen"), icon: <PanelRightOpen />, onSelect: () => openItem(keyOf(flow)) },
+      //: 只有一个:桌面版「在工作台里打开」,网页版「在 ComfyUI 里打开」(新标签页)
       {
-        group: "open", label: t("workflowOpenInWorkbench"), icon: <LayoutPanelLeft />, disabled: !workbench || editor.opening,
-        description: !editorTarget ? noEditor : !workbench ? t("workflowMenuNoWorkbench") : undefined,
-        onSelect: () => { if (editorTarget) void editor.workbench(editorTarget, flow); },
-      },
-      {
-        group: "open", label: t("workflowOpenInEditor"), icon: <SquarePen />, disabled: !editorTarget || editor.opening,
-        description: editorTarget ? undefined : noEditor,
+        group: "open", label: t(workbench ? "workflowOpenInWorkbench" : "workflowOpenInComfy"),
+        icon: workbench ? <LayoutPanelLeft /> : <ExternalLink />, disabled: !editorTarget || editor.opening,
+        description: editorTarget ? undefined : t("workflowMenuNoEditor"),
         onSelect: () => { if (editorTarget) void editor.open(editorTarget, flow); },
       },
       {
@@ -694,8 +688,7 @@ export function WorkflowLibraryDialog({
             editor={library.data?.editor ?? null}
             opening={editor.opening}
             note={editor.note?.path === detail.path ? editor.note : null}
-            onOpenEditor={(where) => void editor.open(where, detail)}
-            onOpenWorkbench={(where) => void editor.workbench(where, detail)}
+            onOpen={(where) => void editor.open(where, detail)}
             onShowModel={onShowModel}
             manager={library.data?.manager?.version ?? ""}
             installs={sessionInstalls.filter((job) => packsOf(job).some((id) =>
@@ -1121,7 +1114,7 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
   );
 }
 
-/** 「在编辑器里打开」/「新建」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、这版前端不能新建、或者出了错。 */
+/** 打开一张 /「新建」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、这版前端不能新建、或者出了错。 */
 function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () => void }) {
   const t = useI18n();
   const created = note.path === NEW_NOTE_PATH;
@@ -1135,7 +1128,7 @@ function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () =
   };
   const text =
     note.kind === "error"
-      ? note.message || t(created ? "workflowNewFailed" : "workflowEditorFailed")
+      ? note.message || t(created ? "workflowNewFailed" : "workflowWorkbenchFailed")
       : t(keys[note.kind]).replace("{name}", note.path);
   return (
     <div
@@ -1168,8 +1161,7 @@ function WorkflowDetail({
   editor,
   opening,
   note,
-  onOpenEditor,
-  onOpenWorkbench,
+  onOpen,
   onShowModel,
   manager,
   installs,
@@ -1189,9 +1181,8 @@ function WorkflowDetail({
   editor: WorkflowEditor | null;
   opening: boolean;
   note: EditorNote | null;
-  onOpenEditor: (editor: WorkflowEditor) => void;
-  /** 在工作台里打开(ADR 0038):桌面版、编辑器是 ComfyUI 时才有 */
-  onOpenWorkbench: (editor: WorkflowEditor) => void;
+  /** 桌面版在工作台里打开(ADR 0038),网页版在新标签页里打开那台 ComfyUI */
+  onOpen: (editor: WorkflowEditor) => void;
   onShowModel?: (focus: ModelFocus) => void;
   manager: string;
   installs: Job[];
@@ -1275,22 +1266,21 @@ function WorkflowDetail({
             {t("modelUseToGenerate")}
           </Button>
         </Hint>
-        {editor && embeddedWorkbench(editor) && (
+        {editor && (embeddedWorkbench(editor) ? (
           <Hint label={t("workflowOpenInWorkbenchHint")}>
-            <Button variant="outline" disabled={opening} onClick={() => onOpenWorkbench(editor)}>
+            <Button variant="outline" disabled={opening} onClick={() => onOpen(editor)}>
               <LayoutPanelLeft size={13} />
               {t("workflowOpenInWorkbench")}
             </Button>
           </Hint>
-        )}
-        {editor && (
-          <Hint label={t(embeddedEditor(editor) ? "workflowOpenInEditorHint" : "workflowOpenInEditorHintTab")}>
-            <Button variant="outline" disabled={opening} onClick={() => onOpenEditor(editor)}>
-              <SquarePen size={13} />
-              {t("workflowOpenInEditor")}
+        ) : (
+          <Hint label={t("workflowOpenInComfyHint")}>
+            <Button variant="outline" disabled={opening} onClick={() => onOpen(editor)}>
+              <ExternalLink size={13} />
+              {t("workflowOpenInComfy")}
             </Button>
           </Hint>
-        )}
+        ))}
         {/* 改那台机器上的文件:每一样都先弹确认(见 WorkflowPathDialog / MoveWorkflowDialog / ConfirmDialog);导出只是下载到本机 */}
         <ActionMenu
           label={t("workflowMore")}

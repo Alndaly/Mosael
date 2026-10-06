@@ -53,10 +53,6 @@ const IPC = Object.freeze({
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
-    // 工作流库「在编辑器里打开」:这个 ComfyUI 连接自己的内嵌视图里打开它的界面和指定的那张工作流。
-    comfyuiOpenWorkflow: "comfyui:openWorkflow",
-    // 工作流库「新建」:同一个内嵌视图里执行 ComfyUI 前端自己的「新建」命令(ADR 0038 §8)。
-    comfyuiNewWorkflow: "comfyui:newWorkflow",
     // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):只在这个视图里生效,写回服务器的那一下由主进程拦下。
     comfyuiNavigation: "comfyui:navigation",
     // ComfyUI 工作台(ADR 0038 §3):开(注入桥、轮询,视图收起就停)、面板要桥做的一件事。
@@ -218,26 +214,6 @@ function parseBrowserProfile(value) {
   return { partition };
 }
 
-/**
- * 工作流库「在编辑器里打开」。分区**由这里按连接 id 拼**(`persist:pool-comfyui-<id>`),渲染层点不了别的分区
- * (发布账号、别的档案);路径和宿主同一套规矩(workflows/ 里的相对路径、.json 结尾、不带 ..、隐藏段和 Windows
- * 不收的字符) —— 它只会作为字符串嵌进主进程写死的那段脚本(见 publish/comfyEditor.ts)。
- */
-function parseComfyWorkflow(value) {
-  const channel = IPC.invoke.comfyuiOpenWorkflow;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["connectionId", "url", "name", "path"], channel);
-  return { ...comfyConnection(payload, channel), path: comfyWorkflowPath(payload.path, channel) };
-}
-
-/** 工作流库「新建」(ADR 0038 §8):同一个视图、同一道闸,只是不带路径 —— 执行的是前端自己的「新建」命令。 */
-function parseComfyNewWorkflow(value) {
-  const channel = IPC.invoke.comfyuiNewWorkflow;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["connectionId", "url", "name"], channel);
-  return comfyConnection(payload, channel);
-}
-
 /** 内嵌 ComfyUI 画布的操控方式:连接 id(分区照样由这里拼)和两种方式之一。 */
 function parseComfyNavigation(value) {
   const channel = IPC.invoke.comfyuiNavigation;
@@ -247,8 +223,10 @@ function parseComfyNavigation(value) {
 }
 
 /**
- * 开 ComfyUI 工作台:同一个视图、同一道闸。`path` 给了就打开那一张(和「在编辑器里打开」同一套路径规矩),`fresh` 是新建一张;
- * 两样都不给就回到画布上开着的那张。
+ * 开 ComfyUI 工作台(工作流库里打开一张、「新建」都走这里)。分区**由这里按连接 id 拼**(`persist:pool-comfyui-<id>`),
+ * 渲染层点不了别的分区(发布账号、别的档案)。`path` 给了就打开那一张 —— 路径和宿主同一套规矩(workflows/ 里的相对路径、
+ * .json 结尾、不带 ..、隐藏段和 Windows 不收的字符),只会作为字符串嵌进主进程写死的那段脚本(见 publish/comfyEditor.ts);
+ * `fresh` 是新建一张;两样都不给就回到画布上开着的那张。
  */
 function parseComfyWorkbenchOpen(value) {
   const channel = IPC.invoke.comfyuiOpenWorkbench;
@@ -661,10 +639,8 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComfyNavigation,
-  parseComfyNewWorkflow,
   parseComfyWorkbenchCall,
   parseComfyWorkbenchOpen,
-  parseComfyWorkflow,
   parseImageUrls,
   parseLocale,
   parseNewPage,

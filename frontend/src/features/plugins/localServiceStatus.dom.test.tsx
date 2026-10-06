@@ -178,7 +178,7 @@ describe("模型库、工作流库读不出来时的那几下", () => {
   });
 });
 
-describe("打开工作台、内嵌编辑器没成", () => {
+describe("打开工作台没成", () => {
   it("背后的本机服务用不了:说它那一句;好好的、没有本机服务、问不到:照原来那句", async () => {
     api.getLocalService.mockResolvedValueOnce(service("unresponsive", { state: "running" }));
     expect(await explainOpenFailure("c1", "页面没就绪")).toBe("本机的 ComfyUI:unresponsive");

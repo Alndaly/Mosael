@@ -83,7 +83,7 @@ the code runs on.
   folder; the configuration lives in Mosael's data folder, not in your ComfyUI folder.
 - **Stop when idle**: unless it's set to keep running, it stops after 30 minutes without use (change it under Advanced; 0 = never)
   to free GPU memory, and starts again the next time it's used. It doesn't stop while jobs are running or queued; an open workbench
-  or embedded editor counts as use.
+  counts as use.
 - **Update and go back** (the copy Mosael installed): the Version row on the card says which version is installed and offers
   “Update to …” when a newer pinned version exists. An update stops it, switches to the new source and dependencies and starts it
   once — if any step fails or it won't start, it goes back to the earlier version automatically; after a successful update you can
@@ -391,15 +391,15 @@ appends them (skipping any already there).
 - **Latest output** and **Used in Mosael by**: the workflow nodes and board items in this workspace that pick it, linked.
 
 The header has **Generate with it** (jumps to AI Studio with this workflow selected; disabled with the reason when it isn't a
-generation model), **Open in editor** and **More actions**.
+generation model), **Open in workbench** (**Open in ComfyUI** in the web app) and **More actions**.
 
 ![A workflow missing a node and models: the node graph on the left; the right column scrolled down a little — what you can tune, what it produces, models it uses (missing ones flagged), missing nodes (from Frame Tools, not installed, Install), missing models (one with a huggingface.co address, one without), and what in Mosael uses it](/media/screens/en/workflow-library-detail.png)
 
 **The context menu**: right-click a card (or a row in the list), click the **⋯** that appears in its corner on hover, or select it
-and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench, Open in editor | Edit app form… |
+and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench (Open in ComfyUI in the web app) | Edit app form… |
 Copy…, Rename…, Move to…, Export JSON | Copy path | Download missing models, Install missing nodes (only when something is missing;
 they open the details at that section) | Delete…. Items that can't be used right now are greyed out with the reason underneath
-(the web app has no workbench, a workflow that can't be converted has no app form to edit yet…). **More actions** in the details
+(the connection didn't report ComfyUI's address, a workflow that can't be converted has no app form to edit yet…). **More actions** in the details
 header has Copy, Rename, Move, Export, Copy path and Delete as well.
 
 **Changing files on that machine** is always confirmed first, naming the server whose `workflows/` folder is being changed:
@@ -439,18 +439,20 @@ After any change the workflow library, the generation models and the tool list r
 machine again: a workflow that's no longer there, a taken target, a folder that's no longer empty — each is reported as it is,
 nothing is forced, and the list is read again.
 
-**Open in editor**: the desktop app opens this ComfyUI's interface in the connection's own built-in browser and opens this
-workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved changes already open there are kept); the web
-version opens ComfyUI in a new tab and tells you which workflow to click under Workflows. Save in ComfyUI, come back to Mosael, and
+**One button opens a workflow**: in the desktop app it's **Open in workbench**, which opens this ComfyUI's canvas in the
+connection's own built-in browser and opens this workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved
+changes already open there are kept), with Mosael's panels beside it (see Workbench below; collapse them and it's a plain ComfyUI
+canvas). The web app has no workbench, so it's **Open in ComfyUI**: ComfyUI opens in a new tab and you're told which workflow to
+click under Workflows. Save in ComfyUI, come back to Mosael, and
 the workflow library refreshes itself, still on the same workflow. If ComfyUI sits behind a reverse proxy with login, sign in once in that built-in browser.
 
-**New**: **New** in the toolbar starts a new workflow on this ComfyUI's own canvas. The desktop app runs the same command as
-“Workflow → New” in ComfyUI's menu, in the same built-in browser (it opens in a new tab; the workflows already open stay as they are);
+**New**: **New** in the toolbar starts a new workflow on this ComfyUI's own canvas. The desktop app opens the workbench and runs the same command as
+“Workflow → New” in ComfyUI's menu on its canvas (it opens in a new tab; the workflows already open stay as they are);
 the web version opens ComfyUI in a new tab, where you click “New”. Build it, save it with Ctrl+S in ComfyUI, come back to Mosael, and the
 workflow library refreshes itself with the new workflow in it. If this ComfyUI frontend has no such command, Mosael says so and leaves the
 canvas open, so you can click “New” in ComfyUI yourself.
 
-**Canvas navigation**: the built-in browser's top bar has a **Trackpad / Mouse** switch. Trackpad pans with two-finger scrolling
+**Canvas navigation**: the workbench's top bar has a **Trackpad / Mouse** switch. Trackpad pans with two-finger scrolling
 and zooms with a pinch (left-drag selects); Mouse zooms with the wheel and pans by dragging empty space (ComfyUI's own default). It
 defaults to Trackpad on a Mac and Mouse elsewhere, and each connection remembers its own choice on this computer. It **applies only to
 this connection in Mosael**: ComfyUI keeps this setting on the server, so Mosael sets it and then blocks the write back to the server.
@@ -579,7 +581,7 @@ beside it:
 The workbench talks to the canvas through a fixed script that Mosael's main process injects; only Mosael reads the canvas, and the page
 can't call into Mosael. If the ComfyUI frontend is too old and lacks something, that part says “This ComfyUI frontend doesn't
 support …” and the canvas keeps working as a normal ComfyUI. Click **Back to Mosael** and the workflow library refreshes itself. The
-web version has no workbench (the canvas still opens ComfyUI in a new tab).
+web version has no workbench (the workflow library offers **Open in ComfyUI**, which opens ComfyUI in a new tab).
 
 ## Progress, cancel and restarts
 

@@ -20,8 +20,6 @@ const contract = require("./ipc-contract.cjs") as {
     resume: boolean;
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
-  parseComfyWorkflow: (value: unknown) => { partition: string; url: string; name: string; path: string };
-  parseComfyNewWorkflow: (value: unknown) => { partition: string; url: string; name: string };
   parseComfyNavigation: (value: unknown) => { partition: string; mode: string };
   parseComfyWorkbenchOpen: (value: unknown) => { partition: string; url: string; name: string; path: string | null; fresh: boolean };
   parseComfyWorkbenchCall: (value: unknown) => { partition: string; call: Record<string, unknown> };
@@ -110,8 +108,17 @@ describe("Electron IPC contract", () => {
     expect(contract.parseBrowserProfile({ partition: "persist:pool-user" })).toEqual({ partition: "persist:pool-user" });
     expect(() => contract.parseBrowserProfile({ partition: "persist:mosael-account" })).toThrow(/partition/);
 
-    // 工作流库「在编辑器里打开」:分区由契约按连接 id 拼 —— 渲染层点不了别的分区(发布账号、别的档案)。
-    expect(contract.parseComfyWorkflow({
+    // 操控方式:分区照样由契约按连接 id 拼;只认两种方式,不收别的字段(比如一个设置键、一段脚本)。
+    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "trackpad" }))
+      .toEqual({ partition: "persist:pool-comfyui-c1", mode: "trackpad" });
+    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse" }).mode).toBe("mouse");
+    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "standard" })).toThrow(/mode/);
+    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse", key: "Comfy.X" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyNavigation({ connectionId: "../c1", mode: "mouse" })).toThrow(/connectionId/);
+
+    // 工作台:开(工作流库里打开一张、「新建」都走这里)。分区由契约按连接 id 拼 —— 渲染层点不了别的分区(发布账号、
+    // 别的档案);路径和宿主同一套规矩;新建和打开一张只能选一样;多一个字段(比如想塞一段脚本、点名一个分区)就拒。
+    expect(contract.parseComfyWorkbenchOpen({
       connectionId: "c0ffee-1",
       url: "http://192.168.3.15:8188",
       name: " 我的 ComfyUI ",
@@ -121,42 +128,25 @@ describe("Electron IPC contract", () => {
       url: "http://192.168.3.15:8188",
       name: "我的 ComfyUI",
       path: "人像/古风 女孩.json",
+      fresh: false,
     });
-    const comfy = { connectionId: "c1", url: "http://127.0.0.1:8188", path: "a.json" };
-    expect(() => contract.parseComfyWorkflow({ ...comfy, connectionId: "../x" })).toThrow(/connectionId/);
-    expect(() => contract.parseComfyWorkflow({ ...comfy, partition: "persist:mosael-x" })).toThrow(/unexpected/);
-    expect(() => contract.parseComfyWorkflow({ ...comfy, url: "file:\/\/\/tmp/x" })).toThrow(/http/);
-    for (const path of ["../a.json", "/a.json", "a\\b.json", "a", ".hidden/a.json", "a/.b.json", "a\nb.json", "a//b.json"]) {
-      expect(() => contract.parseComfyWorkflow({ ...comfy, path }), path).toThrow(/path/);
-    }
-    expect(() => contract.parseComfyWorkflow({ ...comfy, path: 42 })).toThrow(/path/);
-
-    // 「新建」:同一个视图、同一道闸,不带路径;多一个字段(比如想塞一段脚本、点名一个分区)就拒。
-    expect(contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://127.0.0.1:8188", name: "本机" }))
-      .toEqual({ partition: "persist:pool-comfyui-c1", url: "http://127.0.0.1:8188", name: "本机" });
-    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://x", path: "a.json" })).toThrow(/unexpected/);
-    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "http://x", script: "alert(1)" })).toThrow(/unexpected/);
-    expect(() => contract.parseComfyNewWorkflow({ connectionId: "a b", url: "http://x" })).toThrow(/connectionId/);
-    expect(() => contract.parseComfyNewWorkflow({ connectionId: "c1", url: "javascript:alert(1)" })).toThrow(/http/);
-
-    // 操控方式:分区照样由契约按连接 id 拼;只认两种方式,不收别的字段(比如一个设置键、一段脚本)。
-    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "trackpad" }))
-      .toEqual({ partition: "persist:pool-comfyui-c1", mode: "trackpad" });
-    expect(contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse" }).mode).toBe("mouse");
-    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "standard" })).toThrow(/mode/);
-    expect(() => contract.parseComfyNavigation({ connectionId: "c1", mode: "mouse", key: "Comfy.X" })).toThrow(/unexpected/);
-    expect(() => contract.parseComfyNavigation({ connectionId: "../c1", mode: "mouse" })).toThrow(/connectionId/);
-
-    // 工作台:开 —— 同一道闸,路径和「在编辑器里打开」同一套规矩;新建和打开一张只能选一样。
     const bench = { connectionId: "c1", url: "http://127.0.0.1:8188", name: "本机" };
     expect(contract.parseComfyWorkbenchOpen(bench)).toEqual({ partition: "persist:pool-comfyui-c1", url: bench.url, name: "本机",
                                                               path: null, fresh: false });
     expect(contract.parseComfyWorkbenchOpen({ ...bench, path: "人像/a.json" }).path).toBe("人像/a.json");
     expect(contract.parseComfyWorkbenchOpen({ ...bench, fresh: true }).fresh).toBe(true);
-    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path: "../a.json" })).toThrow(/path/);
+    for (const path of ["../a.json", "/a.json", "a\\b.json", "a", ".hidden/a.json", "a/.b.json", "a\nb.json", "a//b.json"]) {
+      expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path }), path).toThrow(/path/);
+    }
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path: 42 })).toThrow(/path/);
     expect(() => contract.parseComfyWorkbenchOpen({ ...bench, path: "a.json", fresh: true })).toThrow(/exclusive/);
     expect(() => contract.parseComfyWorkbenchOpen({ ...bench, fresh: "yes" })).toThrow(/fresh/);
     expect(() => contract.parseComfyWorkbenchOpen({ ...bench, partition: "persist:mosael-x" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, script: "alert(1)" })).toThrow(/unexpected/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, connectionId: "../x" })).toThrow(/connectionId/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, connectionId: "a b" })).toThrow(/connectionId/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, url: "file:\/\/\/tmp/x" })).toThrow(/http/);
+    expect(() => contract.parseComfyWorkbenchOpen({ ...bench, url: "javascript:alert(1)" })).toThrow(/http/);
 
     // 工作台:面板要桥做的事 —— 只认这几种,每种逐项校验;渲染层送不进代码、点不了别的分区。
     const callOf = (call: unknown) => contract.parseComfyWorkbenchCall({ connectionId: "c1", call });

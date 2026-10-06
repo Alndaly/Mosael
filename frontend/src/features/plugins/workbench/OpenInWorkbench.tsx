@@ -48,7 +48,7 @@ export function OpenInWorkbench({
       const result = await openWorkbench({ instanceId, instanceName, workspaceId, url: editor.url }, { path: model },
                                          () => setStarting(true));
       // 背后是本机服务、而它此刻用不了(停了、起不来、不应答):按它的状态说,不说「没就绪」「连不上」
-      if (!result.ok) setFailure(await explainOpenFailure(instanceId, result.error || t("workflowEditorFailed")));
+      if (!result.ok) setFailure(await explainOpenFailure(instanceId, result.error || t("workflowWorkbenchFailed")));
       else if (result.outcome === "missing") setFailure(t("workflowEditorMissing").replace("{name}", model));
       else if (result.outcome === "notReady") {
         setFailure(await explainOpenFailure(instanceId, t("workflowEditorNotReady").replace("{name}", model)));

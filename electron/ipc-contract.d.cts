@@ -35,8 +35,6 @@ export const IPC: {
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";
-    comfyuiOpenWorkflow: "comfyui:openWorkflow";
-    comfyuiNewWorkflow: "comfyui:newWorkflow";
     comfyuiNavigation: "comfyui:navigation";
     comfyuiOpenWorkbench: "comfyui:openWorkbench";
     comfyuiWorkbenchCall: "comfyui:workbenchCall";
@@ -94,8 +92,6 @@ export function parseBrowserLogin(value: unknown): {
   name: string;
   proxy: string | null;
 };
-export function parseComfyWorkflow(value: unknown): { partition: string; url: string; name: string; path: string };
-export function parseComfyNewWorkflow(value: unknown): { partition: string; url: string; name: string };
 export function parseComfyNavigation(value: unknown): { partition: string; mode: "trackpad" | "mouse" };
 export function parseComfyWorkbenchOpen(value: unknown): {
   partition: string;

@@ -5,8 +5,6 @@ export {
   stopPublishWorker,
   openLogin,
   openPoolLogin,
-  openComfyWorkflow,
-  newComfyWorkflow,
   setComfyViewNavigation,
   openComfyWorkbench,
   comfyWorkbenchCall,

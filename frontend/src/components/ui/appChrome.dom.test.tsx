@@ -41,7 +41,7 @@ function Harness({ kind }: { kind: "dialog" | "sheet" }) {
 }
 
 describe("点在窗口外壳(浏览器顶栏、页面列表)上不算点了弹窗外面", () => {
-  // 真机上:工作流库「在编辑器里打开」之后点「返回 Mosael」,底下开着的工作流库跟着关了 —— 顶栏在弹窗外面,
+  // 真机上:从工作流库打开内嵌的 ComfyUI 之后点「返回 Mosael」,底下开着的工作流库跟着关了 —— 顶栏在弹窗外面,
   // Radix 把这一下当成点了外面。
   for (const kind of ["dialog", "sheet"] as const) {
     it(`${kind}:点顶栏不关，点别处照样关`, async () => {

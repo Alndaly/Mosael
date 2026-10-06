@@ -68,7 +68,7 @@ export class WorkbenchSessions {
     void this.tick(partition, session);
   }
 
-  /** 停(视图收起、开成了普通的编辑器)。`announce`:告诉渲染层会话结束了。 */
+  /** 停(视图收起)。`announce`:告诉渲染层会话结束了。 */
   stop(partition: string, announce = true): void {
     const session = this.sessions.get(partition);
     if (!session) return;
@@ -82,7 +82,7 @@ export class WorkbenchSessions {
     return this.sessions.has(partition);
   }
 
-  /** 注入桥(页面就绪了才注入;就绪的判据和「在编辑器里打开」同一个)。回注入的结果。 */
+  /** 注入桥(页面就绪了才注入;就绪的判据和打开一张工作流同一个,见 comfyEditor.comfyReady)。回注入的结果。 */
   async install(partition: string): Promise<string> {
     const session = this.sessions.get(partition);
     const driver = this.deps.driver(partition);

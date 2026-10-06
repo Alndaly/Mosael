@@ -15,8 +15,8 @@
  *   最近的产出、Mosael 里谁在用它(点了跳过去);「用它生成」交给 AI 工作台,不是生成模型的点不了并说为什么;
  * - 改那台机器上的文件(复制、改名、删除、恢复)每次都先确认、写明改哪台服务器的哪个文件;撞名(409)不覆盖,给建议名;
  *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机;
- * - 在编辑器里打开:桌面版在这个连接自己的内嵌视图里开 ComfyUI 并打开这一张,网页版开新标签页并说清楚在哪点开;
- *   回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变);
+ * - 打开一张只有一个入口:桌面版「在工作台里打开」(工作台里开 ComfyUI 的画布并打开这一张),网页版「在 ComfyUI 里打开」
+ *   (新标签页,说清楚在哪点开);「新建」同样。回到 Mosael 时刷新(在 ComfyUI 里存了改动、换了模型,这边跟着变);
  * - 和模型库互相跳:用到的模型点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张;
  * - 补齐缺的节点:装了 ComfyUI-Manager 的,没装的节点包旁边能「装上」(先确认:改哪台机器、要重启);装好了、或者装了
  *   却没加载的,给「重启 ComfyUI」(也先确认),重启完重新列;没装 Manager 就说在那台机器上手动装。
@@ -63,6 +63,7 @@ vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 import type { PluginInstance, WorkflowFile, WorkflowLibrary } from "@/api/client";
 import { ConnectionLibraries } from "./ConnectionLibraries";
 import { WorkflowLibraryDialog } from "./WorkflowLibrary";
+import { resetWorkbench } from "./workbench/workbenchSession";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
 
@@ -171,6 +172,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetWorkbench();
   vi.unstubAllGlobals();
 });
 
@@ -178,12 +180,11 @@ const EDITOR = { kind: "comfyui", url: "http://192.168.3.15:8188" };
 
 type ViewState = { visible: boolean; accountId: string | null; accountName: string | null; partition?: string | null };
 
-/** 桌面版的两座桥:打开工作流的那一个,和内嵌视图亮出 / 收起的通知。 */
+/** 桌面版的两座桥:开工作台的那一个,和内嵌视图亮出 / 收起的通知。 */
 function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
   const listeners = new Set<(state: ViewState) => void>();
-  const openComfyWorkflow = vi.fn().mockResolvedValue(result);
-  const newComfyWorkflow = vi.fn().mockResolvedValue(result);
-  vi.stubGlobal("mosaelBrowser", { openComfyWorkflow, newComfyWorkflow });
+  const openComfyWorkbench = vi.fn().mockResolvedValue(result);
+  vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
   vi.stubGlobal("mosaelPublish", {
     onViewState: (callback: (state: ViewState) => void) => {
       listeners.add(callback);
@@ -191,7 +192,7 @@ function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
     },
   });
   const emit = (state: ViewState) => act(() => listeners.forEach((listener) => listener(state)));
-  return { openComfyWorkflow, newComfyWorkflow, emit };
+  return { openComfyWorkbench, emit };
 }
 
 describe("工作流库", () => {
@@ -364,12 +365,15 @@ describe("工作流库", () => {
       ".mosael-trash/workflows/20261005-101500/old/one.json", "old/one (1).json"));
   });
 
-  it("在编辑器里打开(桌面版):这个连接自己的内嵌视图里开 ComfyUI、打开这一张;回到 Mosael 时刷新", async () => {
+  it("桌面版只有「在工作台里打开」:开的是工作台、打开这一张;没有不带面板的另一个入口;回到 Mosael 时刷新", async () => {
+    //: 维护者:「应该仅仅一个工作台就够了吧」—— 此前桌面版详情头上并排两个,开的是同一个画布,一个带面板一个不带
     api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
     const bridge = desktop({ ok: true, outcome: "opened" });
     await openDetail("portrait");
-    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
-    await waitFor(() => expect(bridge.openComfyWorkflow).toHaveBeenCalledWith({
+    expect(screen.getAllByRole("button", { name: /^workflowOpenIn/ }).map((one) => one.textContent), "只有一个打开的入口")
+      .toEqual(["workflowOpenInWorkbench"]);
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
+    await waitFor(() => expect(bridge.openComfyWorkbench).toHaveBeenCalledWith({
       connectionId: "i1", url: EDITOR.url, name: instance.name, path: "portrait.json",
     }));
     const partition = "persist:pool-comfyui-i1";
@@ -383,19 +387,19 @@ describe("工作流库", () => {
     expect(api.refreshPluginInstance, "只在自己开的那个视图收起时刷新一次").toHaveBeenCalledTimes(1);
   });
 
-  it("在编辑器里点了浏览器顶栏、在地址栏按了 Esc,回到 Mosael 时工作流库还开着、还停在那一张,照样刷新", async () => {
+  it("在工作台里点了浏览器顶栏、在地址栏按了 Esc,回到 Mosael 时工作流库还开着、还停在那一张,照样刷新", async () => {
     const uninstall = installAppChromeGuards(document);
     try {
       api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
       const bridge = desktop({ ok: true, outcome: "opened" });
       await openDetail("portrait");
-      // 内嵌视图亮着时盖在最上层的浏览器顶栏(窗口外壳)。
+      // 内嵌视图亮着时盖在最上层的顶栏(窗口外壳)。
       const bar = document.createElement("div");
       bar.setAttribute("data-app-chrome", "");
       bar.innerHTML = '<button type="button">返回 Mosael</button><input aria-label="地址栏" />';
       document.body.appendChild(bar);
-      fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
-      await waitFor(() => expect(bridge.openComfyWorkflow).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
+      await waitFor(() => expect(bridge.openComfyWorkbench).toHaveBeenCalled());
       const partition = "persist:pool-comfyui-i1";
       bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
       const address = bar.querySelector("input")!;
@@ -409,41 +413,43 @@ describe("工作流库", () => {
       await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
       expect(screen.getByRole("dialog")).toBeTruthy();
       expect(screen.getByRole("button", { name: "workflowLibraryBack" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "workflowOpenInEditor" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "workflowOpenInWorkbench" })).toBeTruthy();
     } finally {
       uninstall();
     }
   });
 
-  it("在编辑器里打开:那台机器上没找到这一张、或者没打开成,回来时看得到怎么办", async () => {
+  it("在工作台里打开:那台机器上没找到这一张、或者没打开成,回来时看得到怎么办", async () => {
     api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
     const bridge = desktop({ ok: true, outcome: "missing" });
     await openDetail("portrait");
-    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
     expect((await screen.findByRole("status")).textContent).toContain("workflowEditorMissing");
-    bridge.openComfyWorkflow.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
-    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    bridge.openComfyWorkbench.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
     expect((await screen.findByRole("alert")).textContent).toContain("前台正被另一个页面占着");
   });
 
-  it("在编辑器里打开(网页版):新标签页开这台 ComfyUI,说清楚在左边「工作流」里点开哪一张;回到这个标签页时刷新", async () => {
+  it("网页版只有「在 ComfyUI 里打开」:新标签页开这台 ComfyUI,说清楚在左边「工作流」里点开哪一张;回到这个标签页时刷新", async () => {
     api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
     const opened = vi.fn(() => null);
     vi.stubGlobal("open", opened);
     await openDetail("portrait");
-    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInEditor" }));
+    expect(screen.getAllByRole("button", { name: /^workflowOpenIn/ }).map((one) => one.textContent), "网页版没有工作台,也只有一个")
+      .toEqual(["workflowOpenInComfy"]);
+    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInComfy" }));
     expect(opened).toHaveBeenCalledWith(EDITOR.url, "_blank", "noopener,noreferrer");
     expect((await screen.findByRole("status")).textContent).toContain("workflowEditorTab");
     fireEvent.focus(window);
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
   });
 
-  it("插件没给编辑器地址就没有这个按钮", async () => {
+  it("插件没给编辑器地址就没有打开的按钮", async () => {
     await openDetail("portrait");
-    expect(screen.queryByRole("button", { name: "workflowOpenInEditor" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^workflowOpenIn/ })).toBeNull();
   });
 
-  it("新建(桌面版):工具条上和「导入」并排;在这个连接自己的内嵌视图里执行 ComfyUI 的「新建」,回到 Mosael 时刷新", async () => {
+  it("新建(桌面版):工具条上和「导入」并排;在工作台里新建一张,回到 Mosael 时刷新", async () => {
     api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
     const bridge = desktop({ ok: true, outcome: "created" });
     await openLibrary();
@@ -451,8 +457,9 @@ describe("工作流库", () => {
     const imports = screen.getByRole("button", { name: "workflowImport" });
     expect(create.compareDocumentPosition(imports) & Node.DOCUMENT_POSITION_FOLLOWING, "新建排在导入前面").toBeTruthy();
     fireEvent.click(create);
-    await waitFor(() => expect(bridge.newComfyWorkflow).toHaveBeenCalledWith({ connectionId: "i1", url: EDITOR.url, name: instance.name }));
-    expect(bridge.openComfyWorkflow).not.toHaveBeenCalled();
+    await waitFor(() => expect(bridge.openComfyWorkbench).toHaveBeenCalledWith({
+      connectionId: "i1", url: EDITOR.url, name: instance.name, fresh: true,
+    }));
     const partition = "persist:pool-comfyui-i1";
     bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
     expect(api.refreshPluginInstance).not.toHaveBeenCalled();
@@ -474,7 +481,7 @@ describe("工作流库", () => {
     bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
     bridge.emit({ visible: false, accountId: null, accountName: null });
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
-    bridge.newComfyWorkflow.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
+    bridge.openComfyWorkbench.mockResolvedValueOnce({ ok: false, error: "前台正被另一个页面占着" });
     fireEvent.click(screen.getByRole("button", { name: "workflowNew" }));
     expect((await screen.findByRole("alert")).textContent).toContain("前台正被另一个页面占着");
   });
@@ -489,33 +496,6 @@ describe("工作流库", () => {
     expect((await screen.findByRole("status")).textContent).toContain("workflowNewTab");
     fireEvent.focus(window);
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
-  });
-
-  it("在工作台里打开(桌面版带工作台的那座桥):详情头上有,开的是工作台;「新建」也开工作台;回到 Mosael 时刷新", async () => {
-    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
-    const bridge = desktop({ ok: true, outcome: "opened" });
-    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
-    vi.stubGlobal("mosaelBrowser", { ...window.mosaelBrowser, openComfyWorkbench, onComfyWorkbench: () => () => undefined });
-    await openDetail("portrait");
-    expect(screen.getByRole("button", { name: "workflowOpenInEditor" }), "「在编辑器里打开」还在").toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "workflowOpenInWorkbench" }));
-    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
-      connectionId: "i1", url: EDITOR.url, name: instance.name, path: "portrait.json",
-    }));
-    expect(bridge.openComfyWorkflow).not.toHaveBeenCalled();
-    const partition = "persist:pool-comfyui-i1";
-    bridge.emit({ visible: true, accountId: partition, accountName: instance.name, partition });
-    bridge.emit({ visible: false, accountId: null, accountName: null });
-    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
-
-    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryBack" }));
-    openComfyWorkbench.mockResolvedValueOnce({ ok: true, outcome: "unsupported" });
-    fireEvent.click(await screen.findByRole("button", { name: "workflowNew" }));
-    await waitFor(() => expect(openComfyWorkbench).toHaveBeenLastCalledWith({
-      connectionId: "i1", url: EDITOR.url, name: instance.name, fresh: true,
-    }));
-    expect(bridge.newComfyWorkflow, "能开工作台就在工作台里新建").not.toHaveBeenCalled();
-    expect((await screen.findByRole("status")).textContent).toContain("workflowNewUnsupported");
   });
 
   it("插件没给编辑器地址就没有「新建」;一张都没有时空状态里也给「新建」", async () => {
@@ -810,7 +790,7 @@ describe("工作流库 · 文件夹", () => {
 
 describe("工作流库 · 卡片的菜单", () => {
   const CARD_MENU = [
-    "workflowMenuOpen", "workflowOpenInWorkbench(禁用)", "workflowOpenInEditor(禁用)", "|",
+    "workflowMenuOpen", "workflowOpenInComfy(禁用)", "|",
     "workflowMenuEditApp(禁用)", "|",
     "workflowCopy", "workflowRename", "workflowMove", "workflowExport", "|",
     "workflowCopyPath", "|",
@@ -852,8 +832,7 @@ describe("工作流库 · 卡片的菜单", () => {
     await openLibrary();
     fireEvent.contextMenu(cardOf("sketch"));
     const rows = menuRows(await screen.findByRole("menu"));
-    expect(rows.slice(0, 5)).toEqual(["workflowMenuOpen", "workflowOpenInWorkbench(禁用)", "workflowOpenInEditor", "|", "workflowMenuEditApp"]);
-    expect(within(screen.getByRole("menu")).getByText("workflowMenuNoWorkbench"), "网页版没有工作台:说为什么").toBeTruthy();
+    expect(rows.slice(0, 4), "网页版:只有「在 ComfyUI 里打开」").toEqual(["workflowMenuOpen", "workflowOpenInComfy", "|", "workflowMenuEditApp"]);
     expect(rows).toContain("workflowMenuMissingNodes");
     fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: /workflowMenuEditApp/ }));
     expect(await screen.findByRole("dialog", { name: /workflowApp/ })).toBeTruthy();

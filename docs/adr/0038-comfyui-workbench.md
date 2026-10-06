@@ -26,7 +26,7 @@ Accepted — 2026-10-05。1.10.0 的主功能,1.9.1 发版之后开工。维护�
 | 表单 | 插件目录 → `backend/app/domain/plugins/generation.py` 收形状 → `backend/app/domain/generation/plugin_connections.py` 的 `descriptor` 变成描述符 → 前端 `frontend/src/lib/generationCapabilities.ts` 的 `declaredParameters` / `frontend/src/components/generation/parameterPanel.tsx` 渲染 | AI 工作台、画板、工作流节点三处同一个描述符、同一套控件,参数键是 `<节点 id>.<输入名>` |
 | 工具 | `plugins/bundled/comfyui/tools/tooling.py` | 每张工作流一个工具,入参同一套推导;`mirrors` 让画板只留生成那一个入口 |
 | 跑 | `plugins/bundled/comfyui/tools/run.py` | 提交、WebSocket / 轮询进度、只停自己的任务(`stop`)、带回执重启后接着等、跑几遍(`run_repeated`) |
-| 内嵌编辑器 | `electron/publish/comfyEditor.ts`(写死的脚本)、`electron/publish/publishWorker.ts` 的 `openComfyWorkflow`、契约 `electron/ipc-contract.cjs` 的 `parseComfyWorkflow`、前端 `frontend/src/features/plugins/workflowEditor.ts` | 浏览器池那套内嵌视图(`electron/publish/accountViews.ts`,分区 `persist:pool-comfyui-<连接 id>`)打开这台 ComfyUI,主进程注入脚本:等 `window.app.extensionManager.workflow` 就绪,`getWorkflowByPath` 取那一张,`app.loadGraphData` 打开 |
+| 内嵌编辑器(2026-10-07 起并进工作台,见 §10) | `electron/publish/comfyEditor.ts`(写死的脚本)、`electron/publish/publishWorker.ts` 的 `openComfyWorkflow`、契约 `electron/ipc-contract.cjs` 的 `parseComfyWorkflow`、前端 `frontend/src/features/plugins/workflowEditor.ts` | 浏览器池那套内嵌视图(`electron/publish/accountViews.ts`,分区 `persist:pool-comfyui-<连接 id>`)打开这台 ComfyUI,主进程注入脚本:等 `window.app.extensionManager.workflow` 就绪,`getWorkflowByPath` 取那一张,`app.loadGraphData` 打开 |
 | 存回 ComfyUI | 同上 | **Mosael 自己不写这张图**:用户在内嵌的 ComfyUI 里 Ctrl+S,是 ComfyUI 前端自己覆盖写回 `workflows/`。视图收起时 Mosael 重拉一遍目录、工作流库、模型库(`workflowEditor.ts` 的 `onReturn`;ADR 0035 §4 写的「每 5 秒看一次改动时间」实际没做成这样)。Mosael 经插件写的(导入、复制)一律 `overwrite=false` |
 
 动手前在维护者那台 ComfyUI 上只读核对(0.38.0,前端 1.53.10,单用户模式 `GET /users` → `{"storage": "server"}`;
@@ -324,6 +324,20 @@ Accepted — 2026-10-05。1.10.0 的主功能,1.9.1 发版之后开工。维护�
 LoRA 读到了旁边的图。那台服务器上没有「缺预览图又能在 Civitai 对上」的文件了(维护者已经补过),Civitai 示例图的显示、存为预览图、
 视频示例在扩展过的演示 ComfyUI(`website/scripts/demo-comfyui.py`,两个模型的哈希是真的 Civitai 版本)上走通,真问 Civitai。
 本机识别经界面真下了权重(校验通过),对那台服务器上已经缩好的 23 张缩略图识别:12 张过 0.5,按哈希对上 Civitai 的那个两边都说是。
+
+### 10. 桌面版只剩工作台一个入口(2026-10-07)
+
+工作台上线后,桌面版工作流库的详情头上、卡片和列表的右键菜单 / ⋯ 里并排两个:「在工作台里打开」和 ADR 0035 §4 的「在编辑器里
+打开」。两个开的是**同一个**内嵌视图里的同一个 ComfyUI 画布,区别只是旁边有没有 Mosael 的面板(面板本来就能收起)。维护者:
+「应该仅仅一个工作台就够了吧」。所以:
+
+- **桌面版**:只有「在工作台里打开」;「新建」也开工作台(原来就是)。
+- **网页版**(没有内嵌视图、没有工作台):只有一个「在 ComfyUI 里打开」,新标签页开这台 ComfyUI,说清楚在左边「工作流」里点开哪一张。
+- 不带面板的那条路整条删掉:前端 `workflowEditor.ts` 只剩「开工作台」和「开新标签页」两种;主进程的 `comfyui:openWorkflow`、
+  `comfyui:newWorkflow` 两个通道(契约 `parseComfyWorkflow` / `parseComfyNewWorkflow`、preload 的 `openComfyWorkflow` /
+  `newComfyWorkflow`、`publishWorker` 里同名的两个函数)一并删除,不留兼容分支 —— 工作台走的是 `comfyui:openWorkbench`,
+  打开一张、新建一张用的还是 `comfyEditor.ts` 里那两段写死的脚本(`openWorkflowInPage` / `newWorkflowInPage`),路径的校验
+  挪到 `parseComfyWorkbenchOpen` 的测试里。
 
 ## 这一版不做
 
