@@ -772,4 +772,41 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "安装时出错了:{detail}",
         "en": "The install hit an error: {detail}",
     },
+    # 工作台里的智能体(ADR 0042):碰画布的工具经桌面版主进程交给那个连接开着的工作台
+    "workbenchErr_notOpen": {
+        "zh": "先在工作台里打开这台 ComfyUI(「{name}」):工作流库里点「在工作台里打开」,画布亮着时我才读得到、指得到",
+        "en": "Open this ComfyUI (“{name}”) in the workbench first (Workflow library → Open in workbench): I can only read and point at the canvas while it's showing",
+    },
+    "workbenchErr_noConnection": {
+        "zh": "没找到这个 ComfyUI 连接(或者它不是你接的)",
+        "en": "No such ComfyUI connection (or it isn't yours)",
+    },
+    "workbenchErr_whichConnection": {
+        "zh": "你接了好几台 ComfyUI:说一下是哪一个(instance_id,工作台助手的页面上下文里有):{names}",
+        "en": "You have several ComfyUI connections; say which one (instance_id, given in the workbench assistant's page context): {names}",
+    },
+    "workbenchErr_noComfy": {
+        "zh": "你还没有接 ComfyUI:先在插件页给 ComfyUI 建一个连接",
+        "en": "You haven't connected a ComfyUI yet: create a ComfyUI connection on the Plugins page first",
+    },
+    "workbenchErr_noNode": {
+        "zh": "画布上没有节点 {node}(可能刚被删掉,或者换了一张工作流):先 comfy_canvas_read 看看现在的图",
+        "en": "There is no node {node} on the canvas (it may have just been removed, or another workflow is open): read the canvas again first",
+    },
+    "workbenchErr_inSubgraph": {
+        "zh": "节点 {node} 在子图里,这版 ComfyUI 前端进不了子图,定位不了",
+        "en": "Node {node} is inside a subgraph, and this ComfyUI frontend can't open subgraphs, so it can't be located",
+    },
+    "workbenchErr_unsupported": {
+        "zh": "这版 ComfyUI 前端(或者桌面版)不支持读画布:{detail}",
+        "en": "This ComfyUI frontend (or desktop app) can't read the canvas: {detail}",
+    },
+    "workbenchErr_bridge": {
+        "zh": "工作台没做成:{detail}",
+        "en": "The workbench couldn't do it: {detail}",
+    },
+    "workbenchErr_badNode": {
+        "zh": "「{node}」不是画布上节点的写法:根图上的写编号(12),子图里的写从根图往里走的编号(12:5)",
+        "en": "“{node}” is not a canvas node reference: use the id for top-level nodes (12) and the path for nodes in subgraphs (12:5)",
+    },
 }

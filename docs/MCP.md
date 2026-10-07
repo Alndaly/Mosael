@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **112** 个工具,其中 **36** 个走确认卡、**1** 个停下来等用户作答。
+共 **121** 个工具,其中 **36** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -39,6 +39,15 @@
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
+| `comfy_canvas_read` | 直接执行 | Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each |
+| `comfy_check` | 直接执行 | Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) — |
+| `comfy_locate` | 直接执行 | Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12" |
+| `comfy_node_pack_info` | 直接执行 | Read-only: analyse a node pack before installing — registry status of the newest version |
+| `comfy_node_pack_search` | 直接执行 | Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the |
+| `comfy_node_packs` | 直接执行 | Read-only: installed custom node packs (id, version, enabled, source, node types); with the |
+| `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
+| `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
+| `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |

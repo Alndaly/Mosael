@@ -61,6 +61,16 @@ ARGS: dict[str, dict[str, Any]] = {
     "blender_import_to_scene": {"scene_id": "no-such-scene", "base_revision": 1, "objects": ["Roof"],
                                 "position": [0, 0, 0]},
     "blender_send_scene": {"scene_id": "no-such-scene", "shot_id": "shot-1"},
+    # ComfyUI 工作台的智能体(ADR 0042):没有 ComfyUI 连接,领域答「你还没有接 ComfyUI」,载荷形状照样要接得住。
+    "comfy_canvas_read": {},
+    "comfy_locate": {"node": "12:5"},
+    "comfy_check": {"job_id": "no-such-job", "last_error": "#3 Value not in list"},
+    "comfy_templates": {"query": "qwen image edit", "limit": 3},
+    "comfy_template": {"name": "image_qwen_image_2_1_image_edit"},
+    "comfy_node_types": {"classes": ["KSampler"]},
+    "comfy_node_packs": {},
+    "comfy_node_pack_search": {"node_types": ["WanVideoSampler"]},
+    "comfy_node_pack_info": {"pack_id": "rgthree-comfy"},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会

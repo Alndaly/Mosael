@@ -74,7 +74,25 @@ KNOWN_ACTIONS = (
     "capture",
     #: 在会话的几个页面之间切换、关掉当前页、看看开着哪些页(「切换页面」节点 / 智能体的 browser_page)。
     "page",
+    #: 交给一个 ComfyUI 连接开着的工作台做的一件事(ADR 0042,见 run_workbench)。
+    "workbench",
 )
+
+#: **工作台会话**(ADR 0042):智能体要碰一个 ComfyUI 连接开着的工作台(读画布、定位节点)。工作台的画布是那个连接的内嵌视图,
+#: 只在桌面版主进程里(electron 的 WorkbenchSessions),后端够不着 —— 和浏览器动作同一条路:这里排一条 `workbench` 动作,
+#: 执行器领走,交给那个连接开着的工作台(不开新视图、不挂面板),做完报回来。租约、心跳、放弃、排队 / 执行的两段超时、
+#: 执行器掉线、后端重启收尾,都是浏览器动作那一套。
+#:
+#: 会话只是这些动作排队的地方(同一个会话串行:画布一次只做一件事),分区就是那个连接的视图分区 —— 执行器据此认出是哪个
+#: 工作台。空着太久被收回(reclaim_idle_sessions)时排的那条 close,执行器那边什么都不拆(视图归工作台管)。
+WORKBENCH_KIND = "workbench"
+#: ComfyUI 连接的内嵌视图分区(和 electron/ipc-contract.cjs 的 comfyPartition 同一个写法)。
+COMFY_PARTITION_PREFIX = "persist:pool-comfyui-"
+_CONNECTION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+#: 工作台没开着时动作没人能做:执行器在就会马上领走、回「没开着」;执行器不在(网页版、桌面端没开)也别让人等一分钟。
+WORKBENCH_QUEUE_SECONDS = 15.0
+#: 读一整张图(`readGraph`)在大图上要几秒;桥自己的上限是 60 秒(见 electron 的 CALL_BUDGET_MS)。
+WORKBENCH_TIMEOUT_SECONDS = 75.0
 
 
 class BrowserDomainError(LocalizedError):
@@ -250,6 +268,38 @@ def open_session(
     db.commit()
     db.refresh(session)
     return session
+
+
+def workbench_session(*, workspace_id: str, connection_id: str) -> str:
+    """这个工作区对这个 ComfyUI 连接的工作台会话的 id:开着的接着用,没有就开一个。自己一个事务(和排动作的 `_enqueue`
+    一样):执行器在另一个进程里、动作在另一个事务里,都要先看得见它。"""
+    if not _CONNECTION_ID.match(connection_id or ""):
+        raise BrowserDomainError("browserErr_sessionClosed")
+    partition = f"{COMFY_PARTITION_PREFIX}{connection_id}"
+    with unit_of_work() as db:
+        existing = db.scalar(
+            select(BrowserSession).where(
+                BrowserSession.kind == WORKBENCH_KIND,
+                BrowserSession.partition == partition,
+                BrowserSession.workspace_id == workspace_id,
+                BrowserSession.status == "open",
+            ).order_by(BrowserSession.created_at).limit(1)
+        )
+        if existing is not None:
+            return existing.id
+        session = BrowserSession(
+            workspace_id=workspace_id, kind=WORKBENCH_KIND, name="", partition=partition, owner_kind="agent", status="open",
+        )
+        db.add(session)
+        db.flush()
+        return session.id
+
+
+def run_workbench(session_id: str, call: dict, *, timeout: float = WORKBENCH_TIMEOUT_SECONDS) -> dict:
+    """在工作台会话上做一件事(`call` 就是桥的那一种调用,执行器照 electron/ipc-contract 的规矩再查一遍):回执行器报回来的
+    结果(`{"value": 桥的回答}`)。排不上、执行器掉线、超时照浏览器动作的说法抛 BrowserDomainError。"""
+    return _enqueue(session_id, "workbench", {"call": call}, timeout=timeout, queue_timeout=WORKBENCH_QUEUE_SECONDS,
+                    should_stop=None)
 
 
 def _open_profile_session(

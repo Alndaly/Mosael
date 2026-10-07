@@ -149,18 +149,24 @@ def _looks_like_workflow_graph_ops(operations: list[dict[str, Any]] | None) -> b
 _EFFECTS = frozenset({"reads", "writes", "confirms"})
 _TOOL_EFFECTS: dict[str, str] = {}
 _AWAITS_ANSWER: set[str] = set()
+_TOOL_NEEDS: dict[str, str] = {}
 
 
-def tool(*, effect: str, awaits_answer: bool = False, description: str | None = None):
+def tool(*, effect: str, awaits_answer: bool = False, description: str | None = None, needs: str | None = None):
     """登记一个工具,连同它做了什么(见上)。`effect` 没有默认值 —— 漏写是 TypeError。
 
     `description` 给了就用它代替 docstring:说明要从别处**生成**的工具用(edit_timeline 的算子清单从入参模型生成)。
+
+    `needs`:这个工具只对接了某种插件能力的人有用(插件清单 `provides` 里的名字,如 ComfyUI 的 `workflow_library`)。
+    没接的人每一轮不发它的定义(见 tool_manifest.agent_tool_specs)—— 工具定义每轮重发,一个用不上的工具也是实打实的开销。
     """
     if effect not in _EFFECTS:
         raise ValueError(f"effect must be one of {sorted(_EFFECTS)}, got {effect!r}")
 
     def register(fn):
         _TOOL_EFFECTS[fn.__name__] = effect
+        if needs:
+            _TOOL_NEEDS[fn.__name__] = needs
         if awaits_answer:
             _AWAITS_ANSWER.add(fn.__name__)
         return mcp.tool(description=description)(fn)
@@ -1944,6 +1950,101 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
     )
 
 
+# ---------- ComfyUI 工作台里的智能体(ADR 0042 第一步:读和诊断) ----------
+#
+# 都只读。碰画布的(comfy_canvas_read / comfy_locate / comfy_check)经桌面版主进程交给那个连接开着的工作台;工作台没开着就说
+# 「先在工作台里打开这台 ComfyUI」。别的(模板、节点类型、节点包)只问那个连接的插件,工作台开没开都能用。`instance_id` 是
+# ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each
+    subgraph) the nodes with ref, type, widget values and inputs (`in`: "<ref>.<output>"), plus selection, modified flag
+    and missing node types. Refs: "12" at top level, "12:5" inside the subgraph of node 12; mention nodes as #12 / #12:5
+    (the user can click them). Needs the workbench open."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.canvas, workspace_id or _default_workspace_id(), instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_locate(node: str, subgraph: str = "", instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12"
+    or "12:5". Changes nothing."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.locate, workspace_id or _default_workspace_id(), node, subgraph, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) —
+    missing nodes / models, mistyped or unconnected inputs, values outside a dropdown or range, size multiples, base
+    model mismatches. Pass the last run's `job_id` (page context) or `last_error` to map that error onto nodes."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.check, workspace_id or _default_workspace_id(), instance_id, job_id, last_error)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_templates(query: str = "", task: str = "", model: str = "", limit: int = 6, instance_id: str = "") -> dict[str, Any]:
+    """Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building
+    from scratch. Each lists its models and whether this machine has them (or in another subfolder / precision), total
+    `size` in bytes and the minimum ComfyUI version. Tell the user sizes before any download."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.templates, query, task, model, limit, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_template(name: str, pack: str = "", instance_id: str = "") -> dict[str, Any]:
+    """Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder
+    / precision), what stays missing (URL, size), missing node types and a graph summary. Never invents files. `pack`:
+    for node-pack templates."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.template, name, pack, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_node_types(query: str = "", classes: list[str] | None = None, limit: int = 10, instance_id: str = "") -> dict[str, Any]:
+    """Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type,
+    required, options, default, range), outputs and pack."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.node_types, query, classes or [], limit, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_node_packs(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Read-only: installed custom node packs (id, version, enabled, source, node types); with the
+    workbench open, also which pack each canvas node comes from."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.node_packs, workspace_id or _default_workspace_id(), instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_node_pack_search(query: str = "", node_types: list[str] | None = None, instance_id: str = "") -> dict[str, Any]:
+    """Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the
+    Comfy Registry), ranked, installed ones marked. Check one with comfy_node_pack_info before recommending it."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.node_pack_search, query, node_types or [], instance_id)
+
+
+@tool(effect="reads", needs="workflow_library")
+def comfy_node_pack_info(pack_id: str, instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Read-only: analyse a node pack before installing — registry status of the newest version
+    (Flagged / Banned / deprecated: say so, don't recommend it; `install_version` is the latest normal one), publisher,
+    license, downloads, stars, dependency risk (high if it touches torch), fit with this machine, the installed version
+    and changelog, and which missing nodes it provides. Tell the user the `advice`."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.node_pack_info, workspace_id or _default_workspace_id(), pack_id, instance_id)
+
+
 @tool(effect="reads")
 def search_notes(query: str = "", workspace_id: str = "") -> list[dict[str, Any]]:
     """Search workspace notes by title, body and tags, including Chinese. Returns snippets,
@@ -3238,4 +3339,6 @@ CONFIRMATION_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if
 READ_ONLY_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if effect == "reads")
 MUTATING_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if effect == "writes")
 ANSWER_TOOLS = frozenset(_AWAITS_ANSWER)
+#: 工具 → 它要的插件能力(见 tool 的 `needs`)。
+TOOL_NEEDS: dict[str, str] = dict(_TOOL_NEEDS)
 

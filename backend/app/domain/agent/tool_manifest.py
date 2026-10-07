@@ -149,6 +149,7 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     """
     registry = tool_registry()
     tools = asyncio.run(registry.mcp.list_tools())
+    provided = _provided_capabilities(db, user_id)
     specs = [
         ToolSpec(
             name=tool.name,
@@ -166,5 +167,26 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
             read_only=tool.name in registry.READ_ONLY_TOOLS,
         )
         for tool in tools
+        if provided is None or registry.TOOL_NEEDS.get(tool.name, "") in provided
     ]
     return specs + _plugin_tool_specs(db, user_id)
+
+
+def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:
+    """这个人接的插件连接提供的能力(插件清单的 `provides`),加上空串(不要什么的工具)。不知道是谁(MCP 直连)回 None:
+    不裁。工具的 `needs` 见 mcp_server.tool —— 只对接了 ComfyUI 的人有用的 comfy_* 工具,没接的人每轮不发。"""
+    if db is None or not user_id:
+        return None
+    from sqlalchemy import select
+
+    from app.db.models import PluginInstance
+    from app.domain.plugins import instances as inst
+    from app.domain.plugins.errors import PluginDomainError
+
+    provided = {""}
+    for instance in db.scalars(select(PluginInstance).where(PluginInstance.owner_user_id == user_id)):
+        try:
+            provided.update(inst.manifest_for(db, instance).provides)
+        except PluginDomainError:  # 包卸掉了:它什么都不提供
+            continue
+    return provided

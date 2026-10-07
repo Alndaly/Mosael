@@ -39,7 +39,8 @@ def test_the_manifest_is_the_mcp_registry_exactly() -> None:
 
     client = fresh_client()
     served = {tool["name"] for tool in _builtin(client)}
-    registered = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    #: 声明了 `needs` 的只发给接了那种插件的人(这个新用户什么都没接;另一半见 test_workbench_agent)
+    registered = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools()) if not mcp_server.TOOL_NEEDS.get(tool.name)}
     assert served == registered
     assert len(served) > 20, "the registry looks truncated"
 
