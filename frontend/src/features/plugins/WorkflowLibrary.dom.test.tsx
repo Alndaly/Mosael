@@ -891,6 +891,8 @@ describe("工作流库 · 卡片的菜单", () => {
     fireEvent.click(within(await within(dialog).findByRole("alert")).getByRole("button"));
     fireEvent.click(confirm);
     await waitFor(() => expect(api.renameWorkflow).toHaveBeenLastCalledWith("i1", "video/wan.json", "空的/wan (1).json"));
+    //: 改了名,模型下拉里它也该换名:后端存着的这个连接的目录要重拉,不只是让界面重问
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
   });
 
   it("复制路径、导出 JSON、删除从菜单里也能做;在列表上改名不跳进详情", async () => {

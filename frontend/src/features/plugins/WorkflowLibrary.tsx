@@ -248,9 +248,13 @@ export function WorkflowLibraryDialog({
   });
   const qc = useQueryClient();
   //: 改完一张:工作流库重新问一遍;生成选项、工具清单里的那张也跟着变(宿主已经让这个连接的目录重拉过)
+  //: 这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、能填什么都跟着变。那份目录是后端按这个
+  //: 连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。所以和从编辑器回来一样,先让目录重拉。
   const changed = () => {
     void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
-    invalidatePluginDependents(qc);
+    void refreshPluginInstance(instance.id)
+      .catch(() => undefined)
+      .finally(() => invalidatePluginDependents(qc));
   };
   //: 从编辑器回来:那边可能存了改动、换了模型 —— 先让这个连接的目录重拉,再让工作流库、模型库和生成选项重新问
   const editorReturned = React.useCallback(() => {

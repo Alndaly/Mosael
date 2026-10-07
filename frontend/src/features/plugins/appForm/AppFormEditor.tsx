@@ -90,9 +90,10 @@ export function AppFormEditor({
     );
   }
   return (
-    <div ref={setRoot} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3" data-app-layout="wide">
+    <div ref={setRoot} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-app-layout="wide">
       {notices}
-      <div className="grid h-[clamp(320px,calc(90vh-330px),760px)] grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(280px,360px)] grid-rows-[minmax(0,1fr)]">
+      {/* 三栏撑满弹窗给的高度(弹窗本身定高),各自滚 */}
+      <div className="grid min-h-80 flex-1 grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(280px,360px)] grid-rows-[minmax(0,1fr)]">
         <Column className="border-r border-divider pr-4">{source}</Column>
         <Column className="px-5">{form}</Column>
         <Column className="border-l border-divider pl-4">{preview}</Column>

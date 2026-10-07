@@ -100,9 +100,10 @@ export function WorkflowAppEditor({
 
   let body: React.ReactNode;
   if (query.isPending) {
-    body = <LoadingState label={t("workflowAppLoading")} className="h-auto py-12" />;
+    body = <LoadingState label={t("workflowAppLoading")} />;
   } else if (query.isError || !data || !draft) {
     body = (
+      <div className="flex min-h-0 flex-1 items-center justify-center">
       <PageLoadError
         size="section"
         icon={<CircleAlert />}
@@ -111,6 +112,7 @@ export function WorkflowAppEditor({
         onRetry={() => void query.refetch()}
         retrying={query.isFetching}
       />
+      </div>
     );
   } else {
     body = <AppFormEditor instance={instance} data={data} draft={draft} onChange={change} />;
@@ -122,10 +124,11 @@ export function WorkflowAppEditor({
       onOpenChange={(next) => !next && !save.isPending && close()}
       title={t("workflowAppTitle").replace("{name}", flow.label)}
       header={draft ? <AppHead draft={draft} onChange={change} where={t("workflowAppWhere").replace("{server}", instance.name)} /> : undefined}
-      className="w-[min(1320px,calc(100vw-32px))]"
+      //: 高度定死:读着、读不到、编辑三种样子一样高,不随内容跳(此前读着的时候矮一截,读完猛地撑高)
+      className="h-[min(1060px,90vh)] w-[min(1320px,calc(100vw-32px))]"
       footer={footer}
     >
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+      <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
         {failure && (
           <div role="alert" className="flex min-w-0 items-start gap-2 rounded-lg border border-destructive/40 bg-panel p-3 text-ui-sm">
             <CircleAlert size={14} aria-hidden className="mt-0.5 shrink-0 text-destructive" />

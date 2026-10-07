@@ -112,6 +112,22 @@ beforeEach(() => {
   api.annotateWorkflow.mockReset();
 });
 
+describe("精简表单弹窗的高度", () => {
+  it("读着、读完一样高:弹窗定高,正文撑满,不随内容跳", async () => {
+    let resolve: (value: WorkflowApp) => void = () => {};
+    api.getWorkflowApp.mockReturnValue(new Promise<WorkflowApp>((done) => { resolve = done; }));
+    mount();
+    const dialog = await screen.findByRole("dialog");
+    const height = (dialog.className.match(/(?:^|\s)(h-\[[^\]]+\])/) ?? ["", ""])[1];
+    expect(height, "弹窗本身定高").toBe("h-[min(1060px,90vh)]");
+    expect(screen.getByRole("status").className, "读着的时候转圈撑满正文").toContain("h-full");
+    resolve(data());
+    await screen.findByRole("complementary", { name: t("workflowAppPreview") });
+    expect(dialog.className, "读完还是那个高度").toContain(height);
+    expect(document.querySelector("[data-app-layout]")?.className, "三栏撑满,不另定高度").toContain("flex-1");
+  });
+});
+
 describe("应用表单编辑器:三块", () => {
   it("工作流里能填的按节点分组、用人话名字、带着现在的值;类名只在悬停的技术名里;子图里的节点灰着", async () => {
     api.getWorkflowApp.mockResolvedValue(data());
