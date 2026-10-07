@@ -112,9 +112,14 @@ parameter (`steps_3`…, the same names as the generation parameters), and seed 
 generation: each run as the workflow is saved, with a new seed, 1.12.3). Outputs
 follow the output nodes (`image_9`, `text_40`…), plus `asset_id` / `asset_ids` / `texts` / `summary` / `prompt_id` for
 wiring workflows (declared as `wiring_outputs`: on a board only each output node's own result lands, `board_outputs`).
-The name comes from the id ComfyUI writes into the workflow file (stable across renames and moves between folders),
+**An output node's port carries everything that node produced** (1.17.0): one file is that asset id, a batch (`batch_size` 2,
+several runs) is the ordered list of ids, so a batch-of-2 workflow shows both images on that port, on the node and on a
+board; `asset_id` ("First output") stays the single first one for steps that take one asset.
+The tool's id comes from the id ComfyUI writes into the workflow file (stable across renames and moves between folders),
 falling back to a hash of the path; the template is `wf_api_template` and the built-in text-to-image is
-`wf_builtin_txt2img`.
+`wf_builtin_txt2img`. **Its label is the same name as in the model picker** (1.17.0): "Workflow · " plus the app form's title when
+the workflow has a simplified form with a title, otherwise plus the file name; with a title, the description names
+the file, so searching by either finds it. Renaming the title changes only the label, never the id.
 
 **A graph that is the same thing as a generation model declares `mirrors`**: the tool of every workflow in the model
 catalog (one that returns files, `graph.media_outputs`) carries `{"generation_model": <model id>, "kind": …}` and a
