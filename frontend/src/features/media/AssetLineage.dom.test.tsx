@@ -25,7 +25,7 @@ vi.mock("@/components/app/image-preview", () => ({
 }));
 
 import { AssetPreviewModal } from "./AssetPreviewModal";
-import { assetOriginKey, showsContainsAi } from "./assetOrigin";
+import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 
 const base = { workspace_id: "ws", project_id: null, original_filename: "", file_key: "", tags: [], media_info: {},
                proxy_expected: false, created_at: "2026-10-01T10:00:00" };

@@ -13,7 +13,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { AssetLineageList } from "@/features/media/AssetLineage";
-import { assetOriginKey, showsContainsAi } from "@/features/media/assetOrigin";
+import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { cn } from "@/lib/utils";
 import { assetKindKey } from "@/lib/assetKinds";
 import { DocumentReader } from "@/features/media/DocumentReader";

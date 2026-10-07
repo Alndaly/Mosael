@@ -32,7 +32,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { useAssetDetails, useAssetFacets, useAssetPages } from "@/lib/assetQueries";
-import { assetOriginKey, showsContainsAi } from "@/features/media/assetOrigin";
+import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { TagFilter } from "@/components/app/TagFilter";
 import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";

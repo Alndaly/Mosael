@@ -4,7 +4,7 @@ import type { MessageKey } from "@/app/messages";
 type Origin = Pick<Asset, "source" | "derived" | "ai_generated">;
 
 /**
- * 素材卡片和详情上那个「来源」标签。
+ * 素材卡片、详情和挑素材的网格(AssetGridPicker)上那个「来源」标签 —— 素材库和挑素材的地方都用,所以住在 lib。
  *
  * 此前 `source === "generated"` 一律写成「AI 生成」—— 而截一段、取一帧、切宫格登记的也是 generated,
  * 实拍视频截出来的一段被标成了 AI。现在 AI 看后端定下的 `ai_generated`(自己是,或出处里有),
