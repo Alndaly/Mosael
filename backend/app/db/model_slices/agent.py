@@ -151,7 +151,7 @@ class AgentSkill(Base):
     启用是一个**信任决定**,所以记在库里、不记在技能文件夹里:旁挂文件会跟着文件夹被拷走,别人发来的文件夹
     里写着「已启用」,扔进来就生效了。内置和插件的技能文件是各工作区共用的,启用却是每个工作区自己的。
 
-    没有行的技能按来源取默认(见 domain/agent/skills/catalog.default_enabled):内置开、扔进文件夹的和插件的关。
+    没有行的技能按来源取默认(见 domain/agent/skills/catalog.default_enabled):内置和随 Mosael 发的插件带的开、扔进文件夹的和别的插件的关。
     """
 
     __tablename__ = "agent_skills"

@@ -5,7 +5,8 @@
 - **内置**:仓库里的 `domain/agent/builtin_skills/<名字>/`,随应用发,只读;没有索引行就是开着的。
 - **工作区**:`<数据目录>/skills/<工作区 id>/<名字>/`,成员新建、导入、从对话存成的,也包括有人直接扔进那个文件夹的
   (那种没有索引行,默认关着,看过全文才开)。
-- **插件**:装好的插件包里的 `skills/<名字>/`,只读,跟着插件装卸;每个工作区自己开,默认关。
+- **插件**:装好的插件包里的 `skills/<名字>/`,只读,跟着插件装卸;每个工作区自己开,默认关 —— 随 Mosael 一起发的插件
+  (`plugins/bundled`)带的默认开,和内置的一样(见 default_enabled)。
 
 模型看到的名字(`ref`):内置和工作区的就是 `name`;插件的带上插件 id —— `dev.mosael.comfyui:workflow-tips`。内置的名字是
 保留的,工作区里起不了同名的;插件的带前缀,撞不上。**没有「同名谁盖谁」**:那会让一个插件悄悄换掉内置的做法。
@@ -122,9 +123,11 @@ def workspace_dir(workspace_id: str) -> Path:
     return skills_dir() / workspace_id
 
 
-def default_enabled(source: str) -> bool:
-    """没有索引行时开不开:只有内置的开着。扔进文件夹的、插件带的,都要人看过全文再开。"""
-    return source == BUILTIN
+def default_enabled(source: str, *, shipped: bool = False) -> bool:
+    """没有索引行时开不开:内置的开着;**随 Mosael 一起发的插件**(`plugins/bundled`,和后端、前端一起签名发版,见
+    domain/plugins/bundled)带的也开着 —— 它和内置技能一样是这一版应用的一部分,工作台的「助手」一打开就该照它做
+    (ADR 0042 §8)。扔进文件夹的、市场里装的插件带的,都要人看过全文再开。"""
+    return source == BUILTIN or (source == PLUGIN and shipped)
 
 
 def plugin_roots(db: Session) -> list[tuple[str, str, Path]]:
@@ -190,6 +193,9 @@ def list_skills(db: Session, workspace_id: str) -> list[Skill]:
         for row in db.scalars(select(AgentSkill).where(AgentSkill.workspace_id == workspace_id))
     }
     builtin_names = {name for name, _ in _folders(BUILTIN_ROOT)}
+    from app.domain.plugins import bundled  # 用到才引:插件域不该在技能目录载入时就整个拉进来
+
+    shipped = {one.id for one in bundled.plugins()}
 
     def make(source: str, name: str, root: Path, package_id: str = "", package_name: str = "") -> Skill:
         row = rows.get((source, package_id, name))
@@ -204,7 +210,7 @@ def list_skills(db: Session, workspace_id: str) -> list[Skill]:
             package_name=package_name,
             doc=doc,
             problem=problem,
-            enabled=row.enabled if row is not None else default_enabled(source),
+            enabled=row.enabled if row is not None else default_enabled(source, shipped=package_id in shipped),
             origin=row.origin if row is not None else (FOLDER if source == WORKSPACE else source),
             imported_from=row.imported_from if row is not None else "",
             agent_session_id=(row.agent_session_id or "") if row is not None else "",

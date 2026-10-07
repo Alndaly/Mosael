@@ -95,7 +95,8 @@ def test_系统提示里有技能目录_关掉的不列_都关了整段消失() 
 
     _enable(ws, "creative-board", False)
     assert "creative-board" not in _system_prompt(ws)
-    for name in BUILTINS:
+    #: 随 Mosael 发的 ComfyUI 插件带的那一个也默认开着(见 test_plugin_skills)
+    for name in [*BUILTINS, "dev.mosael.comfyui:comfyui-workflows"]:
         _enable(ws, name, False)
     assert _system_prompt(ws) == "", "没有启用的技能就不留空标题"
 

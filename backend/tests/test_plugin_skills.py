@@ -76,3 +76,22 @@ def test_技能不合格的插件包装不上(files: dict[str, str], tmp_path) -
         market.install_archive(data, tmp_path)
     assert caught.value.key == "pluginErr_skillsInvalid"
     assert not (tmp_path / "dev.test.skilled").exists(), "不合格的包不在磁盘上留下任何东西"
+
+
+def test_随_Mosael_发的插件带的技能默认开_像内置的一样_能关() -> None:
+    """ComfyUI 插件随应用发(plugins/bundled),它带的「ComfyUI 工作流」(ADR 0042 §8)是这一版应用的一部分:每个工作区默认开,
+    工作台的「助手」一打开就照它做;市场里装的插件带的照旧默认关(上一条)。关了就不进目录。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        packages.scan(db, settings.plugins_dir)
+        db.commit()
+        skill = catalog.find(db, ws, "dev.mosael.comfyui:comfyui-workflows")
+        assert skill is not None and skill.source == catalog.PLUGIN and skill.usable and skill.enabled, skill and skill.problem
+        assert skill.title == "ComfyUI 工作流"
+        assert "- dev.mosael.comfyui:comfyui-workflows(ComfyUI 工作流):" in runtime.skills_prompt(db, ws)
+        body = runtime.use_skill(db, ws, "dev.mosael.comfyui:comfyui-workflows")["instructions"]
+        assert "comfy_check" in body and "还不能改画布" in body, "这一版只读和诊断:技能不许说改画布的工具已经有了"
+        store.set_enabled(db, ws, skill, False, user_id=None)
+        db.commit()
+        assert "comfyui-workflows" not in runtime.skills_prompt(db, ws)
