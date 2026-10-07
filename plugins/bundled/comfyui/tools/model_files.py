@@ -10,7 +10,7 @@ import hashlib
 import json
 import os
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib import parse
@@ -86,11 +86,13 @@ HEADER_SUFFIXES = (".safetensors", ".sft", ".gguf")
 @dataclass(frozen=True)
 class Header:
     """一个文件的头。`meta` 是 safetensors 的 `__metadata__`(GGUF 没有,是空的;头读不了时是 None,元数据得另外问);
-    `tensors` 是张量名 → 形状;`architecture` 是 GGUF 的 `general.architecture`。"""
+    `tensors` 是张量名 → 形状;`architecture` 是 GGUF 的 `general.architecture`;`sizes` 是 GGUF 键值里写的那一架构的尺寸
+    (`embedding_length`、`feed_forward_length`、`block_count`)和词表大小(`vocab`,`tokenizer.ggml.tokens` 有几项)。"""
 
     meta: dict[str, Any] | None
     tensors: dict[str, list[int]]
     architecture: str = ""
+    sizes: dict[str, int] = field(default_factory=dict)
 
 
 #: 地址在、这个文件的头却读不了(太大、太短、不是它说的格式):元数据另外问,权重结构不认
@@ -108,8 +110,9 @@ class HeaderRoute:
         self.comfy = comfy
         self.usable = True
 
-    def read(self, folder: str, name: str) -> Header | None:
-        """None:这台没有能用的读头地址(`usable` 随之变 False);UNREADABLE:地址在、这个文件读不了。"""
+    def read(self, folder: str, name: str, *, tensors: bool = True) -> Header | None:
+        """None:这台没有能用的读头地址(`usable` 随之变 False);UNREADABLE:地址在、这个文件读不了。`tensors=False`:GGUF 只要
+        开头那一段的键值(架构名、尺寸、词表有几项),不往后读张量表 —— 文本编码器的张量表前面是整张词表,几 MB。"""
         if not self.usable:
             return None
         path = "/pysssss/view/" + parse.quote(f"{folder}/{name}", safe="")
@@ -122,7 +125,7 @@ class HeaderRoute:
             return None
         try:
             if name.lower().endswith(".gguf"):
-                return _gguf(self.comfy, path, first)
+                return _gguf(self.comfy, path, first, tensors=tensors)
             return _safetensors(self.comfy, path, first)
         except (ComfyError, ValueError, UnicodeDecodeError, struct.error):
             return UNREADABLE
@@ -194,19 +197,36 @@ class _Cursor:
             raise ValueError(f"GGUF value type {kind}")
 
 
-def _parse_gguf(data: bytes, found: dict[str, str]) -> dict[str, list[int]]:
+#: GGUF 键值里记下的尺寸(`{架构}.` 后面那一截):文本编码器靠它认是哪一种(encoders.kind_of_gguf)
+_GGUF_SIZES = ("embedding_length", "feed_forward_length", "block_count")
+#: 整数的键值类型(u8 … i64)
+_GGUF_INTEGERS = (0, 1, 2, 3, 4, 5, 10, 11)
+
+
+def _parse_gguf(data: bytes, found: dict[str, Any]) -> dict[str, list[int]]:
     """GGUF(v2 起):魔数、版本、张量数、键值数,然后是键值(架构名在 `general.architecture`),再是张量表(名字、维数、
-    各维长度 —— 最里面的一维在前,和 PyTorch 的形状倒着 —— 类型、偏移)。架构名一读到就记进 `found`。"""
+    各维长度 —— 最里面的一维在前,和 PyTorch 的形状倒着 —— 类型、偏移)。读到就记进 `found`(读到一半不够了,已经记下的
+    还在):架构名、那一架构的尺寸(`sizes`)、词表有几项(`tokenizer.ggml.tokens` 这个数组的长度,跳过它的内容之前就知道)。"""
     cursor = _Cursor(data)
     if cursor.take(4) != b"GGUF" or cursor.number("<I") < 2:
         raise ValueError("not GGUF v2+")
     count, pairs = cursor.number("<Q"), cursor.number("<Q")
     if count > 1_000_000 or pairs > 1_000_000:
         raise ValueError("GGUF counts out of range")
+    sizes: dict[str, int] = found.setdefault("sizes", {})
     for _ in range(pairs):
         key, kind = cursor.text(), cursor.number("<I")
+        prefix, _dot, tail = key.rpartition(".")
         if key == "general.architecture" and kind == 8:
             found["architecture"] = cursor.text()
+        elif kind in _GGUF_INTEGERS and tail in _GGUF_SIZES and prefix == found.get("architecture"):
+            sizes[tail] = int(cursor.number(_GGUF_SCALARS[kind]))
+        elif key == "tokenizer.ggml.tokens" and kind == 9:
+            start = cursor.at
+            cursor.number("<I")
+            sizes["vocab"] = int(cursor.number("<Q"))
+            cursor.at = start
+            cursor.skip(kind)
         else:
             cursor.skip(kind)
     tensors: dict[str, list[int]] = {}
@@ -220,16 +240,17 @@ def _parse_gguf(data: bytes, found: dict[str, str]) -> dict[str, list[int]]:
     return tensors
 
 
-def _gguf(comfy: Comfy, path: str, first: bytes) -> Header:
-    """不够就往后再读(每次四倍,到 HEADER_LIMIT 为止)。张量表读不全时只交出架构名 —— 半张表拿来认,可能认成别的。"""
-    data, found = first, {}
-    wanted = FIRST_READ
+def _gguf(comfy: Comfy, path: str, first: bytes, *, tensors: bool = True) -> Header:
+    """不够就往后再读(每次四倍,到 HEADER_LIMIT 为止)。张量表读不全时只交出架构名和尺寸 —— 半张表拿来认,可能认成别的。
+    `tensors=False` 时不往后读:开头那一段里的键值就够了。"""
+    data, wanted = first, FIRST_READ
     while True:
+        found: dict[str, Any] = {}
         try:
-            return Header({}, _parse_gguf(data, found), found.get("architecture", ""))
+            return Header({}, _parse_gguf(data, found), found.get("architecture", ""), found.get("sizes", {}))
         except _Short:
-            if len(data) < wanted or wanted >= HEADER_LIMIT:
-                return Header({}, {}, found.get("architecture", ""))  # 文件到头了,或到上限了
+            if not tensors or len(data) < wanted or wanted >= HEADER_LIMIT:
+                return Header({}, {}, found.get("architecture", ""), found.get("sizes", {}))  # 够用了、文件到头了,或到上限了
         wanted = min(wanted * 4, HEADER_LIMIT)
         data += comfy.get_range(path, len(data), wanted - 1) or b""
 

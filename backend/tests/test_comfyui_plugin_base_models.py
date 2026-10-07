@@ -7,7 +7,8 @@
 - 文件头怎么读:`/pysssss/view/` 按段读(Range),地址没有、或对方不认 Range(回 200 要整个发)时只试一次、立刻挂断、
   退回 `/view_metadata`;头太大不读;GGUF 读架构名和张量表;
 - 元数据、权重、文件名的先后,细分到 SDXL / Wan / Flux 的那一支;文件名的驼峰拆词和缩写(含不该认的);
-- 缓存记的是原料、家族每次现推;同一个文件挂在几个目录下只列一次;「底模」不适用的目录单独标出来。
+- 缓存记的是原料、家族每次现推;同一个文件挂在几个目录下只列一次;「底模」不适用的目录单独标出来(文本编码器是哪一种、
+  常配什么钉在 test_comfyui_plugin_text_encoders.py)。
 """
 
 from __future__ import annotations
@@ -429,11 +430,9 @@ def test_GGUF_读架构名和张量表(comfy, data_dir) -> None:
     assert _family(out[("unet_gguf", "zimage-Q8_0.gguf")]) == ("Z-Image", "weights"), "张量表比架构名(lumina2)说得细"
     assert _family(out[("unet_gguf", "mystery-Q4_K.gguf")]) == ("Flux", "weights"), "张量认不出时看架构名"
     assert _family(out[("unet_gguf", "unknown-Q4_K.gguf")]) == ("", ""), "架构名表里没有的不猜"
-    assert _family(out[("clip_gguf", "t5-Q8_0.gguf")]) == ("", "not_applicable")
-    assert not [key for key, _ in comfy.state.range_requests if key.startswith("clip_gguf/")], \
-        "文本编码器的 GGUF 不读(头里是整张词表)"
-    saved = json.loads(next(data_dir.glob("library-*.json")).read_text(encoding="utf-8"))
-    assert not [key for key in saved["files"] if key.startswith("clip_gguf\n")], "也没什么可记的"
+    assert _family(out[("clip_gguf", "t5-Q8_0.gguf")]) == ("", "not_applicable"), "文本编码器照旧不讲底模"
+    assert [wanted for key, wanted in comfy.state.range_requests if key.startswith("clip_gguf/")] == ["bytes=0-65535"], \
+        "文本编码器的 GGUF 只读开头那一段的键值(后面是整张词表),认是哪一种编码器(见 test_comfyui_plugin_text_encoders)"
 
 
 def test_GGUF_张量表比第一段长_往后读(plugin) -> None:
@@ -466,7 +465,7 @@ def test_缓存记的是原料_换了规矩不用重读(plugin, comfy, data_dir)
     _library(comfy, data_dir)
     saved = json.loads(next(data_dir.glob("library-*.json")).read_text(encoding="utf-8"))
     entry = next(iter(saved["files"].values()))
-    assert saved["version"].endswith(":" + plugin.weights.DIGEST), "权重那张表一改,版本就对不上"
+    assert f":{plugin.weights.DIGEST}:" in saved["version"], "权重那张表一改,版本就对不上"
     assert entry == {"meta": {"ss_sd_model_name": "somethingNew.safetensors", "ss_output_name": "merged"},
                      "tags": ["red", "blue"], "weights": "SDXL"}, "只留认底模、触发词、标题要用的几项"
     # 规矩变了(这里改的是缓存里的原料,效果一样):不重读,下次列出时现推

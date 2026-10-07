@@ -14,7 +14,8 @@ NAME_INFERRED_FOLDERS = frozenset({
     "hypernetworks", "vae", "model_patches", "style_models", "ipadapter",
 })
 #: 「底模」这件事不适用的目录:文本编码器、CLIP 视觉、放大、检测 / 分割、抠图、语音和大语言模型……它们不是为某一个底模
-#: 做的(一个叫 qwen3vl_4b 的文本编码器不是 Qwen-Image),界面上写「不适用」,不写「认不出」。按小写比。
+#: 做的(一个叫 qwen3vl_4b 的文本编码器不是 Qwen-Image),界面上不写「认不出」。按小写比。文本编码器另由 encoders.py 说
+#: 是哪一种、常配哪几种底模;别的写「不适用」。
 #: `vosr2` 是 VOSR 2.0 超分的一整套(LightningDiT + 它专配的 Qwen-Image 2D VAE + DINOv2-L,一起训练、不能拆换):不是哪个
 #: 底模的,里面那个 VAE 按权重认得出 Qwen-Image 的结构,却只能配它自己用。
 NOT_APPLICABLE_FOLDERS = frozenset({

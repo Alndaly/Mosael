@@ -11,7 +11,8 @@
 - `/experiment/models/preview/{目录}/{序号}/{名字}`:预览图(没有就 404)—— 地址交给宿主,宿主去取、去缓存;
 - 文件头:ComfyUI-Custom-Scripts 的 `/pysssss/view/{目录}/{名字}` 按段读(Range),只取开头 —— safetensors 的元数据和
   张量表、GGUF 的架构名和张量表,一个文件几十毫秒(见 model_files.HeaderRoute)。没装它的退回
-  `/view_metadata/{目录}?filename=`:只有 safetensors 的 `__metadata__`,认不了权重结构。
+  `/view_metadata/{目录}?filename=`:只有 safetensors 的 `__metadata__`,认不了权重结构。文本编码器目录里的文件同样读头,
+  认的不是底模、是哪一种编码器(见 encoders)。
 
 几百个文件第一次要读一阵:读到的东西按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在持久目录里,第二次只读目录。记的是
 **读到的原料**(认底模、触发词、标题要用的那几项元数据,权重认成的家族,GGUF 的架构名),家族每次列出时现推 —— 认的规矩
@@ -35,6 +36,7 @@ from urllib import parse
 
 import civitai as civitai_mod
 import convert
+import encoders
 import install
 import models
 import nsfw
@@ -108,7 +110,8 @@ def summarize(folder: str, name: str, inputs: dict[str, Any], origin: dict[str, 
     civitai = (origin or {}).get("civitai") if isinstance((origin or {}).get("civitai"), dict) else None
     if civitai:
         family, family_source = refined_by_civitai(family, family_source, str(civitai.get("base_model") or ""))
-    return {"family": family, "family_source": family_source, "triggers": triggers[:LIST_TRIGGERS],
+    return {"family": family, "family_source": family_source, "encoder": encoders.describe(folder, name, inputs.get("encoder")),
+            "triggers": triggers[:LIST_TRIGGERS],
             "triggers_source": triggers_source, "title": title,
             "nsfw_signals": nsfw.signals(name, title, dict(inputs.get("nsfw_tags") or {}), civitai),
             "source": source_of(origin, meta), "remote_previews": civitai_mod.remote_previews(civitai)}
@@ -139,19 +142,19 @@ _MODEL_PAGES = (
 )
 
 
-#: 缓存的版本:格式,加上权重那张表的指纹 —— 表一改,记着的「权重认成了什么」就作废,整份重读。对不上就扔掉(缓存,不是
-#: 用户的数据)。
-CACHE_VERSION = f"inputs-3:{weights.DIGEST}"
+#: 缓存的版本:格式,加上权重那张表、文本编码器那几张表的指纹 —— 表一改,记着的「认成了什么」就作废,整份重读。对不上就
+#: 扔掉(缓存,不是用户的数据)。4:文本编码器目录里的文件也读头,记 `encoder`。
+CACHE_VERSION = f"inputs-4:{weights.DIGEST}:{encoders.DIGEST}"
 #: 元数据里留下的几项:认底模(families._declared / _narrowed)、触发词、标题要用的。别的在详情里现读。
 _KEPT_META = ("ss_base_model_version", "modelspec.architecture", "ss_sd_model_name", "modelspec.title", "ss_v2",
               "ss_network_module", "ss_network_dim", "modelspec.trigger_phrase", "ss_trigger_words", "ss_output_name",
               *_SOURCE_KEYS)
 
 
-def _inputs(meta: dict[str, Any], header: Any) -> dict[str, Any]:
+def _inputs(meta: dict[str, Any], header: Any, folder: str = "") -> dict[str, Any]:
     """一个文件要记下的原料:`meta`(留下的那几项元数据)、`tags`(训练标签里最多的几个)、`nsfw_tags`(训练标签里的成人
     标签各占多少,见 nsfw.tag_shares)、`weights`(权重结构认成的家族,认不出是空串;**没有这一项**是还没读到文件头,下次
-    有能用的读头地址时再读)、`gguf`(GGUF 的架构名)。"""
+    有能用的读头地址时再读)、`gguf`(GGUF 的架构名)。文本编码器目录里的记 `encoder`(认成哪一种,规矩同 `weights`)。"""
     entry: dict[str, Any] = {"meta": {key: meta[key][:500] for key in _KEPT_META
                                       if isinstance(meta.get(key), str) and meta[key].strip()}}
     tags = _top_tags(meta)
@@ -161,7 +164,10 @@ def _inputs(meta: dict[str, Any], header: Any) -> dict[str, Any]:
     if explicit:
         entry["nsfw_tags"] = explicit
     if header is not None:
-        entry["weights"] = weights.family_of_weights(header.tensors)
+        if encoders.applies(folder):
+            entry["encoder"] = encoders.kind_of_header(header.tensors, header.architecture, header.sizes)
+        else:
+            entry["weights"] = weights.family_of_weights(header.tensors)
         if header.architecture:
             entry["gguf"] = header.architecture[:80]
     return entry
@@ -171,11 +177,21 @@ def _cache_key(folder: str, item: dict[str, Any]) -> str:
     return f"{folder}\n{item.get('name')}\n{item.get('size')}\n{item.get('modified')}"
 
 
+def _reads_header(folder: str) -> bool:
+    """这个目录的文件要不要读文件头认结构:讲底模的认家族,文本编码器认是哪一种;别的(放大、检测……)只要元数据。"""
+    return family_applies(folder) or encoders.applies(folder)
+
+
 def _readable(folder: str, name: str) -> bool:
-    """有文件头可读的:safetensors 都读(元数据里有标题、触发词);GGUF 只在讲底模的目录里读 —— 文本编码器的 GGUF 头里
-    带着整张词表,几 MB,读了也用不上。"""
+    """有文件头可读的:safetensors 都读(元数据里有标题、触发词);GGUF 只在要认结构的目录里读(文本编码器的只读开头那一段
+    键值,见 model_files.HeaderRoute)。"""
     lowered = name.lower()
-    return lowered.endswith(HEADER_SUFFIXES) and (family_applies(folder) or not lowered.endswith(".gguf"))
+    return lowered.endswith(HEADER_SUFFIXES) and (_reads_header(folder) or not lowered.endswith(".gguf"))
+
+
+def _header_known(entry: dict[str, Any]) -> bool:
+    """记着的原料里有没有文件头读出来的那一项(权重认成的家族 / 文本编码器的种类,认不出是空串也算读过)。"""
+    return "weights" in entry or "encoder" in entry
 
 
 # --- 同一个文件挂在几个目录下 ---------------------------------------------------
@@ -368,22 +384,22 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
     # 没读过的;读过、但当时没有能用的读头地址(没装 ComfyUI-Custom-Scripts)的再试一次 —— 这一趟还是没有,第一个文件
     # 试过就不再试
     wanted = [job for job in wanted
-              if job[2] is None or ("weights" not in job[2] and family_applies(job[0]))]
+              if job[2] is None or (not _header_known(job[2]) and _reads_header(job[0]))]
 
     def read(job: tuple[str, dict[str, Any], dict[str, Any] | None]) -> tuple[str, dict[str, Any]]:
         folder, item, old = job
         name = str(item["name"])
         key = _cache_key(folder, item)
-        header = route.read(folder, name) if family_applies(folder) else None
+        header = route.read(folder, name, tensors=not encoders.applies(folder)) if _reads_header(folder) else None
         if header is not None:
             meta = header.meta if header.meta is not None else metadata_of(comfy, folder, name)
-            return key, _inputs(meta or {}, header)
+            return key, _inputs(meta or {}, header, folder)
         if old is not None:
             return key, old  # 元数据上次读过了;权重等有了读头的地址再认
         return key, _inputs(metadata_of(comfy, folder, name) or {}, None)
 
     # 第一个要读头的先单独读:顺便看清这台有没有能用的读头地址 —— 没有的话,别让几个线程一起去撞
-    first = next((job for job in wanted if family_applies(job[0])), None)
+    first = next((job for job in wanted if _reads_header(job[0])), None)
     if first is not None:
         fresh.update([read(first)])
     rest = [job for job in wanted if job is not first]

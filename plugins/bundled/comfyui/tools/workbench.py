@@ -1,7 +1,9 @@
 """工作台(ADR 0038 §3、§6)要插件回答的两件事。画布是 ComfyUI 自己的,开在 Mosael 的内嵌视图里;这两个 op 不碰那台机器上的
 文件,只按插件对工作流的理解回答:
 
-    {"op": "node_folders", "nodes": [{"class_type", "input"}]} → 选中的加载节点那一格选的是哪个模型目录的文件(模型库面板据此筛)
+    {"op": "node_folders", "nodes": [{"class_type", "input", "values"}]}
+                                                        → 选中的加载节点那一格选的是哪个模型目录的文件(模型库面板据此筛);
+                                                          CLIP 加载节点再按它现在的 type 说哪几种编码器合用(据此排)
     {"op": "app_marks", "content", "app", "results"}           → 应用表单写进画布要改的那几处标记(节点上的
                                                                   `properties.mosael`、图上的 `extra.mosael`)
 
@@ -14,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 import app_form
+import encoders
 import labels
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -25,16 +28,23 @@ MAX_NODE_FOLDERS = 64
 
 def node_folders(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     """每一格(节点类型 + 输入名)选的是哪个模型目录的文件,和生成表单的 `x-model-folder` 同一张对照(labels.model_folder);
-    不是选模型文件的格子回空串。只查表,不问 ComfyUI。"""
+    不是选模型文件的格子回空串。选文本编码器的格子再按节点上下拉格子现在的值(`values`,CLIP 加载节点看 `type`)交回
+    `encoders` 那一项:哪几种编码器在这个 type 的配方里、哪几种 ComfyUI 不看 type(encoders.recipe_for);别的格子是 None。
+    只查表,不问 ComfyUI。"""
     nodes = payload.get("nodes")
     if not isinstance(nodes, list) or len(nodes) > MAX_NODE_FOLDERS:
         raise ComfyError(say(locale, "要查的格子形状不对", "The inputs to look up are malformed."))
     folders: list[str] = []
+    recipes: list[dict[str, Any] | None] = []
     for one in nodes:
         if not isinstance(one, dict):
             raise ComfyError(say(locale, "要查的格子形状不对", "The inputs to look up are malformed."))
-        folders.append(labels.model_folder(str(one.get("class_type") or ""), str(one.get("input") or "")))
-    return {"folders": folders}
+        class_type = str(one.get("class_type") or "")
+        folder = labels.model_folder(class_type, str(one.get("input") or ""))
+        values = one.get("values") if isinstance(one.get("values"), dict) else {}
+        folders.append(folder)
+        recipes.append(encoders.recipe_for(class_type, values) if encoders.applies(folder) else None)
+    return {"folders": folders, "encoders": recipes}
 
 
 def app_marks(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
