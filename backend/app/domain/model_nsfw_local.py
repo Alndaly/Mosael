@@ -186,14 +186,24 @@ def _probability(image: Image.Image) -> float:
 
 
 def _work() -> None:
-    """后台的那一个线程:一张一张地算,攒够几条写一次盘;队列空了写完就走(下次有新的再起一个)。"""
+    """后台的那一个线程:一张一张地算,攒够几条写一次盘;队列空了写完盘再走(下次有新的再起一个)。
+
+    **写完盘才算走。** 此前队列一空就先把 `_worker` 放掉、再去写盘:等它的人(`wait_idle`、`forget`)看到没有线程就当它
+    完事了,`forget` 接着把内存里的结果清掉 —— 还没写的那一次看到 `_scores` 是空的就不写了,算过的全丢。机器一忙
+    (CI 上测试并行跑)这个空当就撞上。现在写盘时它还挂在 `_worker` 上;写盘那会儿排进来的,写完接着算。
+    """
     global _dirty, _worker
     while True:
         with _lock:
-            if not _queue:
-                _worker = None  # 之后排进来的另起一个线程(这个只剩写盘)
-                break
-            digest, source = _queue.popleft()
+            item = _queue.popleft() if _queue else None
+        if item is None:
+            _flush()
+            with _lock:
+                if not _queue:
+                    _worker = None
+                    return
+            continue
+        digest, source = item
         try:
             with _image(source) as image:
                 score: float | None = _probability(image)
@@ -210,7 +220,6 @@ def _work() -> None:
             flush = _dirty >= _FLUSH_EVERY
         if flush:
             _flush()
-    _flush()
 
 
 def _flush() -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import shutil
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -152,6 +153,26 @@ def test_没算过的排进队_下次就有_按图的内容记_重启之后从�
     model_nsfw_local.forget()
     assert model_nsfw_local.signal(same)["nsfw"] is True, "结果记在盘上:重启之后不再算"
     assert len(classifier) == 2
+
+
+def test_等它的人等到的是写完盘之后_模拟重启不丢结果(classifier, tmp_path, monkeypatch) -> None:
+    """此前队列一空线程就先「下班」再写盘:wait_idle 当它完事了,forget 清掉内存,那次写盘看到空的就不写 —— CI 上撞到过。"""
+    slow = model_nsfw_local._flush  # noqa: SLF001
+    flushing = threading.Event()
+
+    def flush_after_a_while() -> None:
+        flushing.set()
+        time.sleep(0.3)
+        slow()
+
+    monkeypatch.setattr(model_nsfw_local, "_flush", flush_after_a_while)
+    red = _original(tmp_path / "a", (210, 30, 40))
+    model_nsfw_local.signal(red)
+    assert flushing.wait(5), "算完了,开始写盘"
+    assert model_nsfw_local.wait_idle()
+    assert model_nsfw_local.scores_path().is_file(), "等完了盘上就有"
+    model_nsfw_local.forget()
+    assert model_nsfw_local.signal(red) == {"source": "local", "nsfw": True, "score": 0.93}
 
 
 def test_权重没下就什么都不做_认不出的不说话(classifier, tmp_path, monkeypatch) -> None:
