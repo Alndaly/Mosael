@@ -478,7 +478,7 @@ queued or saved). If a frontend lacks something the bridge uses, that panel says
 
 ## Local ComfyUI: pick a folder, Mosael starts and stops it (1.14.0)
 
-If you already installed ComfyUI, you no longer need a terminal: on the connection, set "Where it runs" to "Use my own install"
+If you already installed ComfyUI, you no longer need a terminal: when you create the connection (or later on it), set "Where it runs" to "Use my own install"
 and enter its folder (ADR 0041).
 
 - **Confirm before anything runs**: "Check and use" asks once (it runs code from that folder on this machine); then the plugin
@@ -505,7 +505,7 @@ and enter its folder (ADR 0041).
 
 ## Local ComfyUI: let Mosael install it (1.15.0)
 
-If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install it" (ADR 0041 §4):
+If you have never installed ComfyUI, set "Where it runs" to "Let Mosael install it" when you create the connection (or later on it) (ADR 0041 §4):
 
 - **The install plan first**: whether this machine can install it — a Mac with Apple silicon (PyTorch from PyPI comes with MPS)
   or Windows + NVIDIA (it reads the driver version and the GPU's compute capability from `nvidia-smi`: 20 series and newer get the

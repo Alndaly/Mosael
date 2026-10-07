@@ -27,7 +27,8 @@ brings two things:
 ## Connecting a ComfyUI server
 
 1. Start ComfyUI (on this machine it listens on `http://127.0.0.1:8188` by default).
-2. Open Plugins → **ComfyUI** → “New connection” and fill in the **Server URL**. A LAN address
+2. Open Plugins → **ComfyUI** → “New connection”, keep **Connect to a server** under “Where it runs” (the default) and fill
+   in the **Server URL**. A LAN address
    (such as `http://192.168.1.20:8188`) uses another machine's GPU. If ComfyUI sits behind a reverse proxy with
    login or ComfyUI-Login, enter `user:password` or a token as the **Access credential** (the former is sent as Basic
    auth, the latter as a Bearer token); don't put a user name and password in the URL.
@@ -50,18 +51,24 @@ its URL on the Plugins page. Its models can be set as default models like any ot
 
 ## Running ComfyUI on this computer
 
-**Where it runs** on a connection card has three options: connect to a server that's already running (as above), **Use my
-own install**, or **Let Mosael install it**. With the last two Mosael starts and stops it for you: it starts when it's used (a
-generation, opening the model library or the workbench) and stops when you quit Mosael; Mosael picks a free port from 8189
-upwards and writes it into the server URL. Only a deployment admin can set this up, and the confirmation names the machine
-the code runs on.
+The “New connection” dialog starts with **Where it runs**, which has three options: connect to a server that's already running
+(as above), **Use my own install**, or **Let Mosael install it**; you can switch later on the connection card. With the last two
+Mosael starts and stops it for you: it starts when it's used (a generation, opening the model library or the workbench) and stops
+when you quit Mosael. There's no server URL to fill in: Mosael picks a free port from 8189 upwards and makes it the connection's
+server URL. Only a deployment admin can pick these two (others see them greyed out), and the confirmation names the machine the
+code runs on. The dialog lists the permissions the plugin asks for and grants them when the connection is created: right away
+Mosael asks the plugin to check the folder or plan the install, and without them it does nothing for this connection.
 
 - **Use my own install**: enter the folder of an installed ComfyUI (for the Windows portable build either the outer or the inner
-  folder works; in the desktop app, **Choose…** next to it opens the system dialog). Mosael runs a quick trial and shows the ComfyUI version, PyTorch, GPU and anything missing; it's saved only
-  if it can start. ComfyUI-Manager has to be the pip version (V4, built into recent ComfyUI): if it's installed, it's turned on
+  folder works; in the desktop app, **Choose…** next to it opens the system dialog) and leave the interpreter empty to let the
+  plugin find it. **Add** asks once to confirm that Mosael will run the code in this folder; right after the connection is created
+  Mosael runs a quick trial, and the new connection opens showing the ComfyUI version, PyTorch, GPU and anything missing. If the
+  folder isn't recognised the problems are marked in red; choose **Change** to pick another. Switching an existing connection to
+  this option on its card saves it only if it can start. ComfyUI-Manager has to be the pip version (V4, built into recent ComfyUI): if it's installed, it's turned on
   with ComfyUI. Mosael doesn't support the old Manager cloned into `custom_nodes`; the check warns about it and gives the
   command to switch to the pip version (`pip install -r manager_requirements.txt`).
-- **Let Mosael install it**: first the install plan — whether this machine can install it (Macs with Apple silicon; Windows or a
+- **Let Mosael install it**: no folder to choose (it installs into Mosael's data folder, one copy per connection). The new
+  connection opens on the install plan, and nothing is installed until you choose **Install** — the plan says whether this machine can install it (Macs with Apple silicon; Windows or a
   Linux server (x86_64) with an NVIDIA GPU; other systems aren't supported in this version, and it says why), which PyTorch, how
   much disk space at least (5 GB on a Mac, 8 GB on Windows and Linux), the steps, where it downloads from and through which proxy. After you confirm, Mosael downloads a pinned ComfyUI release,
   creates its own Python environment, installs PyTorch, the dependencies, ComfyUI-Manager and pysssss, and starts it once at the

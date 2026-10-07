@@ -1506,7 +1506,9 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 
 连接页上多一块「本机服务」:**在哪跑** —— 连一台服务器(和以前一样,只连)/ 用我自己装的(选一个目录,由 Mosael 起停)/
 让 Mosael 装(装在宿主分的 `<数据目录>/local-services/<连接>/`,不是插件的持久目录 —— 那个卸载插件时一起删)。后两种都由
-宿主从 8189 往上挑一个空端口,写进 `server_url`,以后一直用它。
+宿主从 8189 往上挑一个空端口,写进 `server_url`,以后一直用它。「新建连接」的弹窗一开头也是这三颗:本机的两种和连接一起建好
+(同一个事务;`server_url` 是宿主分的,不用填),插件声明的权限建好时一起授予 —— 宿主不替还没授予权限的连接问插件,而建好马上要认目录、
+看安装计划。
 
 宿主经 `tool` 按 `op` 问(**只描述、不起进程**;不需要服务器已经在跑,也不留调用记录):
 
@@ -1571,7 +1573,7 @@ Manager 重启,Windows 上是另起一个进程、旧的退出,宿主会以为�
 | `POST /api/plugins/scan` | 扫描;顺带迁移老清单、清掉目录已不在的包 |
 | `GET /api/plugins` | 包 + 它们的连接 + 每个连接的工具与开关;`provides`、`bundled`、`oauth`(声明了授权时是 `{fills: [授权会填的凭据键]}`),以及每个连接的 `capability_status`(几个生成模型、何时刷新、为什么没刷出来)和 `authorization`(见「连接的授权状态」) |
 | `DELETE /api/plugins/{包id}` | 卸载:删目录 + 删记录。它的连接在数据目录里留着本机服务的安装目录时要带 `local_services=keep\|remove`(和 `keep_models`),不带就 409 |
-| `POST /api/plugins/{包id}/instances` | 新建连接 |
+| `POST /api/plugins/{包id}/instances` | 新建连接。可带 `grant_permissions`(建好时一起授予的权限,必须是清单声明的);声明了本机服务的插件可带 `local_service: {mode: "directory"\|"managed", directory, python, confirm_run_code}`(部署管理员):连接、本机服务那一行、端口、`server_url` 同一个事务建好,哪一步不成连接不留下 |
 | `PATCH /api/plugins/instances/{id}` | 改名 / 改配置 / 启停 |
 | `GET`/`PATCH` `/api/plugins/instances/{id}/credentials` | 凭据(掩码回显) |
 | `GET`/`PATCH` `/api/plugins/instances/{id}/permissions` | 授权 |
