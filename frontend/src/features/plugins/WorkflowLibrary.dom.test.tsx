@@ -49,6 +49,18 @@ const api = vi.hoisted(() => ({
   assetPreviewUrl: (id: string) => `preview://${id}`,
   assetFileUrl: (id: string) => `file://${id}`,
   getAsset: vi.fn(async (id: string) => ({ id, kind: id.startsWith("v") ? "video" : "image", name: `产出 ${id}` })),
+  //: 「最近的产出」那一组:一批两张(a1、a2)、一段视频(v1),新的在前
+  getWorkflowOutputs: vi.fn(async () => ({
+    outputs: [
+      { asset_id: "v1", kind: "video", created_at: "2026-10-05T10:02:00", nsfw: { flagged: false, manual: null, reasons: [] } },
+      { asset_id: "a1", kind: "image", created_at: "2026-10-05T10:00:00", nsfw: { flagged: false, manual: null, reasons: [] } },
+      { asset_id: "a2", kind: "image", created_at: "2026-10-05T10:00:00", nsfw: { flagged: false, manual: null, reasons: [] } },
+    ],
+    more: false,
+  })),
+  markWorkflowOutputNsfw: vi.fn(),
+  getLocalNsfw: vi.fn(async () => ({ status: "missing", size_bytes: 0, pending: 0, scored: 0, message: "" })),
+  installLocalNsfw: vi.fn(),
 }));
 const saved = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/download", () => ({ saveJsonToDisk: saved }));
@@ -98,7 +110,7 @@ function library(overrides: Partial<WorkflowLibrary> = {}): WorkflowLibrary {
                  { folder: "loras", name: "gone.safetensors", present: false }],
         missing_models: [{ folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors" }],
         generation: { provider_profile_id: "p9", kind: "image", model: "portrait.json" },
-        last_output: { asset_id: "a1", created_at: "2026-10-05T10:00:00" },
+        last_output: { asset_id: "a1", kind: "image", created_at: "2026-10-05T10:00:00" },
         used_by: [{ kind: "workflow", id: "w1", name: "出图流程" }, { kind: "board", id: "b1", name: "分镜板" }],
       }),
       flow({ path: "video/wan.json", label: "wan", folder: "video", kind: "video", node_count: 7, modified: 1776098600,
@@ -289,11 +301,24 @@ describe("工作流库", () => {
     const usedModels = screen.getByRole("region", { name: "workflowModels" });
     expect(within(usedModels).getByText("sdxl.safetensors").closest("li")?.textContent).toContain("workflowModelPresent");
     expect(within(usedModels).getByText("gone.safetensors").closest("li")?.textContent).toContain("workflowModelMissing");
-    const last = screen.getByRole("region", { name: "workflowLastOutput" });
-    expect(within(last).getByRole("img").getAttribute("src")).toBe("thumb://a1");
-    //: 最近的产出点开看大图(问过素材才知道是图还是视频,视频在灯箱里换成播放器)。
-    fireEvent.click(await within(last).findByRole("button", { name: "viewFullSizeOf" }));
-    expect(openImagePreview).toHaveBeenCalledWith({ src: "preview://a1", title: "产出 a1" });
+    //: 最近的产出是一组:一批两张两张都在、视频也在,新的在前;点开的灯箱能左右翻这一组
+    const last = await screen.findByRole("region", { name: "workflowLastOutput" });
+    expect(api.getWorkflowOutputs).toHaveBeenCalledWith("i1", "w1", "portrait.json");
+    const tiles = last.querySelectorAll<HTMLElement>("[data-workflow-output]");
+    expect([...tiles].map((one) => one.dataset.workflowOutput)).toEqual(["v1", "a1", "a2"]);
+    expect([...last.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual(["thumb://v1", "thumb://a1", "thumb://a2"]);
+    await waitFor(() => expect(within(tiles[1]).getByRole("button", { name: "viewFullSizeOf" })).toBeTruthy());
+    await waitFor(() => {
+      fireEvent.click(within(tiles[1]).getByRole("button", { name: "viewFullSizeOf" }));
+      expect(openImagePreview).toHaveBeenCalledWith({
+        src: "preview://a1", title: "产出 a1",
+        gallery: [
+          { src: "file://v1", title: "产出 v1", video: true },
+          { src: "preview://a1", title: "产出 a1" },
+          { src: "preview://a2", title: "产出 a2" },
+        ],
+      });
+    });
     const media = document.querySelector("[data-library-detail-pane='media'] svg[data-workflow-graph]");
     expect(media).toBeTruthy();
     expect(media?.textContent).toContain("Load Checkpoint");

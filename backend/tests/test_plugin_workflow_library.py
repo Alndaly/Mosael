@@ -4,8 +4,8 @@
 
 - 目录类能力:认领它的工具不进工具表,能力词表里叫得出名字;
 - 列出来的是插件报的那一份,宿主规整字段(路径不对的、坏条目丢掉,图摘要的连线只留指着节点的);
-- 宿主补上它在 Mosael 里的样子:是不是这个连接下的生成模型(用它生成要它)、这个工作区里最近一次用它生成的产出、
-  这个工作区里哪些工作流节点 / 画板格子选的是它;
+- 宿主补上它在 Mosael 里的样子:是不是这个连接下的生成模型(用它生成要它)、这个工作区里它最近的产出(生成的、当工具
+  跑的,一批的每一张,带 NSFW 的判断,能手动标)、这个工作区里哪些工作流节点 / 画板格子选的是它;
 - 写操作(复制、改名、挪进 / 挪出回收目录):路径先在宿主这里过一遍(不合格的不交给插件);撞名回 409 带建议名、
   不覆盖;改成了让这个连接的目录马上重拉一遍;
 - 导入:要导入的东西(一段文字 / 一个文件 / 一个链接,只给一样,太大的不交)先让插件认一遍,宿主规整预览;存进去和别的
@@ -326,6 +326,74 @@ def test_最近一次的产出_只看这个工作区里用它生成的(library) 
     scoped = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
     assert scoped["workflows"][0]["last_output"]["asset_id"] == here
     assert body["workflows"][0]["last_output"] is None, "没说是哪个工作区就不去翻生成记录"
+
+
+def test_最近的产出_一批的每一张都在_新的在前_生成的和当工具跑的都算_带NSFW判断_能手动标(library) -> None:
+    """维护者:「工作流产出这里应该是个图片集 然后要支持nsfw过滤」。此前详情只摆最近一次生成的封面那一张。现在是这张工作流在
+    这个工作区里最近的产出:用它生成的(每一份 GeneratedAsset,一批两张两张都在)、和它是同一件事的工具在工作流 / 智能体里
+    跑出来的(调用交出的 asset_ids),新的在前;别的工作区的不算。每份带着 NSFW 的判断,和模型预览图同一套:手动标的压过一切。"""
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    other = client.post("/api/workspaces", json={"name": "别的"}).json()["id"]
+    profile_id = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()["workflows"][0]["generation"][
+        "provider_profile_id"]
+    from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, PluginInstance, PluginInvocation
+
+    def at(minute: int) -> datetime:
+        return datetime(2026, 10, 5, 10, minute)
+
+    ids: dict[str, str] = {}
+    with SessionLocal() as db:
+        instance = db.get(PluginInstance, instance_id)
+        #: 和生成模型 portrait.json 是同一件事的那个工具(插件报的 mirrors)
+        instance.discovered_tools = [{"name": "wf_portrait", "mirrors": {"generation_model": "portrait.json", "kind": "image"}}]
+
+        def asset(name: str, minute: int, ws: str = workspace, kind: str = "image") -> str:
+            row = Asset(workspace_id=ws, name=name, original_filename=name, kind=kind, created_at=at(minute))
+            db.add(row)
+            db.flush()
+            ids[name] = row.id
+            return row.id
+
+        def generated(minute: int, names: list[str], ws: str = workspace) -> None:
+            job = Job(workspace_id=ws, kind="generation", status="succeeded", created_at=at(minute))
+            db.add(job)
+            db.flush()
+            made = [asset(name, minute, ws) for name in names]
+            for one in made:
+                db.add(GeneratedAsset(asset_id=one, provider="plugin:test.workflows", model="portrait.json", job_id=job.id))
+            db.add(GenerationJob(workspace_id=ws, job_id=job.id, provider="plugin:test.workflows", provider_profile_id=profile_id,
+                                 model="portrait.json", kind="image", request={}, result_asset_id=made[0], created_at=at(minute)))
+
+        generated(1, ["一批-1.png", "一批-2.png"])
+        generated(3, ["别处.png"], other)
+        generated(5, ["单张.png"])
+        tool_out = [asset("工具-1.png", 7), asset("工具-2.png", 7)]
+        db.add(PluginInvocation(instance_id=instance_id, tool_name="wf_portrait", status="succeeded",
+                                output={"asset_ids": tool_out}, created_at=at(7)))
+        db.add(PluginInvocation(instance_id=instance_id, tool_name="wf_portrait", status="failed",
+                                output={"asset_ids": [asset("失败的.png", 9)]}, created_at=at(9)))
+        db.commit()
+
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/outputs"
+    body = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()
+    names = {value: key for key, value in ids.items()}
+    assert [names[one["asset_id"]] for one in body["outputs"]] == ["工具-1.png", "工具-2.png", "单张.png", "一批-1.png", "一批-2.png"], (
+        "新的运行在前,一批两张两张都在;别的工作区的、失败的调用不算")
+    assert body["more"] is False
+    assert all(one["kind"] == "image" and one["nsfw"] == {"flagged": False, "manual": None, "reasons": []} for one in body["outputs"])
+    listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    assert listed["workflows"][0]["last_output"]["asset_id"] == ids["工具-1.png"], "卡片上那一张是最新的那一份"
+
+    mark = f"{url}/nsfw"
+    marked = client.put(mark, json={"workspace_id": workspace, "asset_id": ids["单张.png"], "nsfw": True})
+    assert marked.status_code == 200 and marked.json() == {"flagged": True, "manual": True, "reasons": []}
+    again = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()["outputs"]
+    assert next(one for one in again if one["asset_id"] == ids["单张.png"])["nsfw"]["flagged"] is True
+    cleared = client.put(mark, json={"workspace_id": workspace, "asset_id": ids["单张.png"], "nsfw": None}).json()
+    assert cleared == {"flagged": False, "manual": None, "reasons": []}, "去掉标记:回到本机识别(这里没有依据)"
+    assert client.put(mark, json={"workspace_id": workspace, "asset_id": ids["别处.png"], "nsfw": True}).status_code == 422, (
+        "别的工作区的素材标不了")
 
 
 def test_谁在用它_这个工作区里选了它的工作流和画板(library) -> None:

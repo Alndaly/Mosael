@@ -6,6 +6,7 @@ import {
   ClipboardCopy,
   Copy,
   ExternalLink,
+  EyeOff,
   FileOutput,
   Import,
   Folder,
@@ -59,9 +60,7 @@ import {
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
-import { assetPreviewItem } from "@/components/app/asset-preview";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
-import { useImagePreview } from "@/components/app/image-preview";
 import {
   LIBRARY_DENSITIES,
   LIBRARY_TABLE_HEAD,
@@ -75,6 +74,8 @@ import {
   type LibraryNavItem,
 } from "@/components/app/LibraryBrowser";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { previewBlurClass } from "@/components/generation/ModelThumb";
+import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus"
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
+import { WorkflowOutputs } from "@/features/plugins/WorkflowOutputs";
 import {
   FolderDeleteDialog,
   FolderPathDialog,
@@ -137,7 +139,6 @@ import {
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
-import { useAssetDetails } from "@/lib/assetQueries";
 import { gotoRecord } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
@@ -707,6 +708,9 @@ export function WorkflowLibraryDialog({
             onRestart={() => setRestartAsk(true)}
             onDismissNote={editor.dismiss}
             app={<WorkflowAppSection instance={instance} flow={detail} onEdit={() => setEditingApp(detail)} onSaved={changed} />}
+            outputs={detail.last_output && workspaceId
+              ? <WorkflowOutputs instanceId={instance.id} workspaceId={workspaceId} path={detail.path} label={detail.label} />
+              : null}
             onBack={() => setDetailKey(null)}
             actions={fileActions(detail)}
             focusSection={detailFocus === "models" ? t("workflowMissingModels") : detailFocus === "nodes" ? t("workflowMissingNodes") : null}
@@ -911,6 +915,30 @@ function LackBadges({ flow }: { flow: WorkflowFile }) {
   );
 }
 
+/**
+ * 大卡片上「最近的那一份产出」那一枚小图:和详情里那一组同一套 NSFW 规矩(modelPreviewSettings)—— 判成 NSFW 的按设置模糊
+ * (悬停卡片看清)或只剩一枚「已隐藏」的眼睛。
+ */
+function CardOutputThumb({ output }: { output: NonNullable<WorkflowFile["last_output"]> }) {
+  const t = useI18n();
+  const [settings] = useModelPreviewSettings();
+  const treatment = previewTreatment(settings, Boolean(output.nsfw?.flagged));
+  if (treatment === "hidden") {
+    return (
+      <span data-hidden-preview="" aria-label={t("modelPreviewHidden")}
+            className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_8%,var(--panel))] text-muted-foreground">
+        <EyeOff size={12} aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span className="group/thumb size-8 shrink-0 overflow-hidden rounded-md bg-secondary" data-treatment={treatment}>
+      <img src={assetThumbnailUrl(output.asset_id)} alt="" loading="lazy" draggable={false}
+           className={cn("size-full object-cover", previewBlurClass(treatment))} />
+    </span>
+  );
+}
+
 /** 一张卡片 / 一行的菜单:右键、⋯、Shift+F10 打开的是同一份(见 WorkflowLibraryDialog 的 cardActions)。 */
 type CardMenu = { label: string; actions: MenuAction[] };
 
@@ -985,13 +1013,7 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
         {large && (flow.last_output || used > 0) && (
           <div className="flex min-w-0 items-center justify-between gap-2 text-ui-xs text-muted-foreground">
             {flow.last_output ? (
-              <img
-                src={assetThumbnailUrl(flow.last_output.asset_id)}
-                alt=""
-                loading="lazy"
-                draggable={false}
-                className="size-8 shrink-0 rounded-md bg-secondary object-cover"
-              />
+              <CardOutputThumb output={flow.last_output} />
             ) : (
               <span />
             )}
@@ -1214,6 +1236,7 @@ function WorkflowDetail({
   onRestart,
   onDismissNote,
   app,
+  outputs,
   onBack,
   actions,
   focusSection,
@@ -1237,6 +1260,8 @@ function WorkflowDetail({
   onDismissNote: () => void;
   /** 「应用」那一节(应用表单,ADR 0038),见 WorkflowAppSection */
   app: React.ReactNode;
+  /** 「最近的产出」那一组(见 WorkflowOutputs);没有产出时不给 */
+  outputs: React.ReactNode;
   onBack: () => void;
   /** 头上 ⋯ 里的几样:复制、改名、移动、导出、复制路径、删除(和卡片菜单里的同一份)。 */
   actions: MenuAction[];
@@ -1372,16 +1397,7 @@ function WorkflowDetail({
           />
         }
       />
-      {flow.last_output && (
-        <LibrarySection title={t("workflowLastOutput")}>
-          <div className="flex min-w-0 items-center gap-3">
-            <LastOutputThumb assetId={flow.last_output.asset_id} label={t("workflowLastOutputAlt").replace("{name}", flow.label)} />
-            <span className="text-ui-xs tabular-nums text-muted-foreground">
-              {new Date(flow.last_output.created_at).toLocaleString(locale)}
-            </span>
-          </div>
-        </LibrarySection>
-      )}
+      {outputs}
       <LibrarySection title={t("workflowUsedBy")} count={flow.used_by?.length ?? 0}>
         {(flow.used_by?.length ?? 0) > 0 ? (
           <ul className="m-0 grid list-none gap-1 p-0">
@@ -1418,30 +1434,6 @@ function WorkflowDetail({
  * 回收站:Mosael 删除的工作流(挪进那台机器的 `.mosael-trash/workflows/` 了)。能恢复;Mosael 不提供清空 ——
  * 真要删掉,在那台机器上删那个目录(ADR 0035 §3)。
  */
-/**
- * 详情里「最近一次产出」那张缩略图:点开看大图。是图还是视频要问一次素材(工作流库只记了 id 和时间)——
- * 视频在灯箱里换成播放器;还没问回来、或者素材已经删了,就只是一张不能点的缩略图。
- */
-function LastOutputThumb({ assetId, label }: { assetId: string; label: string }) {
-  const t = useI18n();
-  const { openImagePreview } = useImagePreview();
-  const asset = useAssetDetails([assetId]).byId.get(assetId);
-  const item = asset ? assetPreviewItem(asset) : null;
-  const thumb = <img src={assetThumbnailUrl(assetId)} alt={label} loading="lazy" className="size-24 rounded-lg bg-secondary object-cover" />;
-  if (!item) return <span className="shrink-0">{thumb}</span>;
-  return (
-    <IconButton
-      unstyled
-      type="button"
-      label={t("viewFullSizeOf").replace("{name}", item.title || label)}
-      className="shrink-0 cursor-zoom-in rounded-lg border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={() => openImagePreview(item)}
-    >
-      {thumb}
-    </IconButton>
-  );
-}
-
 function TrashList({ items, onRestore }: { items: WorkflowTrashed[]; onRestore: (one: WorkflowTrashed) => void }) {
   const t = useI18n();
   const { locale } = usePreferences();

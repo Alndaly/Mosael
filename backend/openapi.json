@@ -20225,6 +20225,120 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/outputs": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Workflow Outputs",
+        "description": "一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前;每份带着\nNSFW 的判断(和模型预览图同一套)。",
+        "operationId": "get_workflow_outputs_api_plugins_instances__instance_id__workflow_library_outputs_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRecentOutputsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/outputs/nsfw": {
+      "put": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Mark Workflow Output Nsfw",
+        "description": "手动标一份产出是不是 NSFW,`nsfw: null` 去掉标记。回新的判断(手动的压过本机识别)。",
+        "operationId": "mark_workflow_output_nsfw_api_plugins_instances__instance_id__workflow_library_outputs_nsfw_put",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowOutputNsfwRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelNsfwOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library/content": {
       "get": {
         "tags": [
@@ -46025,7 +46139,7 @@
           "last_output": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/WorkflowLastOutputOut"
+                "$ref": "#/components/schemas/WorkflowRecentOutputOut"
               },
               {
                 "type": "null"
@@ -46452,25 +46566,6 @@
           "packs"
         ],
         "title": "WorkflowInstallNodesRequest"
-      },
-      "WorkflowLastOutputOut": {
-        "properties": {
-          "asset_id": {
-            "type": "string",
-            "title": "Asset Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "asset_id",
-          "created_at"
-        ],
-        "title": "WorkflowLastOutputOut"
       },
       "WorkflowLibraryImportOut": {
         "properties": {
@@ -46956,6 +47051,39 @@
         ],
         "title": "WorkflowOut"
       },
+      "WorkflowOutputNsfwRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Workspace Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Asset Id"
+          },
+          "nsfw": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfw"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "asset_id"
+        ],
+        "title": "WorkflowOutputNsfwRequest"
+      },
       "WorkflowOutputOut": {
         "properties": {
           "node": {
@@ -47024,6 +47152,53 @@
           "back"
         ],
         "title": "WorkflowRebootOut"
+      },
+      "WorkflowRecentOutputOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "nsfw": {
+            "$ref": "#/components/schemas/ModelNsfwOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "created_at"
+        ],
+        "title": "WorkflowRecentOutputOut",
+        "description": "这张工作流在这个工作区里的一份产出(用它生成的、当工具跑的,一批出的每一张都算)。`nsfw` 和模型预览图同一套判断:\n手动标的压过本机识别;`flagged` 为真时界面按「NSFW 预览」那组设置处理。"
+      },
+      "WorkflowRecentOutputsOut": {
+        "properties": {
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRecentOutputOut"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "more": {
+            "type": "boolean",
+            "title": "More",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "WorkflowRecentOutputsOut",
+        "description": "详情里那一组:新的在前,最多 workflow_library.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。"
       },
       "WorkflowRenameRequest": {
         "properties": {

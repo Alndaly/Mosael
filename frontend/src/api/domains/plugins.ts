@@ -55,6 +55,8 @@ export type WorkflowLibrary = components["schemas"]["WorkflowLibraryOut"];
 export type WorkflowFile = components["schemas"]["WorkflowFileOut"];
 export type WorkflowFileGraph = components["schemas"]["WorkflowGraphOut"];
 export type WorkflowTrashed = components["schemas"]["WorkflowTrashedOut"];
+/** 一张工作流在这个工作区里的一份产出(一批的每一张都算),带着 NSFW 的判断(和模型预览图同一套)。 */
+export type WorkflowRecentOutput = components["schemas"]["WorkflowRecentOutputOut"];
 export type WorkflowNodePack = components["schemas"]["WorkflowNodePackOut"];
 export type WorkflowImport = components["schemas"]["WorkflowLibraryImportOut"];
 /** 应用表单(ADR 0038):一张工作流能填的项、文件里的标记、要写进去的样子。 */
@@ -227,9 +229,19 @@ export const getNodeFolders = (instanceId: string, nodes: components["schemas"][
 
 // --- 工作流库(ADR 0035) -------------------------------------------------------
 
-/** 现问插件:这个连接上存着的全部工作流;给了工作区就带上那个工作区里最近一次用它生成的产出、谁在用它。 */
+/** 现问插件:这个连接上存着的全部工作流;给了工作区就带上那个工作区里它最近的那一份产出、谁在用它。 */
 export const getWorkflowLibrary = (instanceId: string, workspaceId: string) =>
   api<WorkflowLibrary>(`/api/plugins/instances/${instanceId}/workflow-library?${new URLSearchParams({ workspace_id: workspaceId })}`);
+
+/** 一张工作流在这个工作区里最近的产出(详情里那一组):生成的、当工具跑的,一批的每一张,新的在前;`more` 是更早的还有。 */
+export const getWorkflowOutputs = (instanceId: string, workspaceId: string, path: string) =>
+  api<{ outputs: WorkflowRecentOutput[]; more: boolean }>(
+    `/api/plugins/instances/${instanceId}/workflow-library/outputs?${new URLSearchParams({ workspace_id: workspaceId, path })}`,
+  );
+
+/** 手动标一份产出是不是 NSFW(`nsfw: null` 去掉标记,回到本机识别)。回新的判断。 */
+export const markWorkflowOutputNsfw = (instanceId: string, body: { workspace_id: string; asset_id: string; nsfw: boolean | null }) =>
+  api<ModelNsfw>(`/api/plugins/instances/${instanceId}/workflow-library/outputs/nsfw`, { method: "PUT", body: JSON.stringify(body) });
 
 /** 一张工作流的原文(导出)。 */
 export const getWorkflowContent = (instanceId: string, path: string) =>

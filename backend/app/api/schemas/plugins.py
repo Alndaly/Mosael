@@ -812,9 +812,29 @@ class WorkflowGenerationRefOut(ApiModel):
     model: str
 
 
-class WorkflowLastOutputOut(ApiModel):
+class WorkflowRecentOutputOut(ApiModel):
+    """这张工作流在这个工作区里的一份产出(用它生成的、当工具跑的,一批出的每一张都算)。`nsfw` 和模型预览图同一套判断:
+    手动标的压过本机识别;`flagged` 为真时界面按「NSFW 预览」那组设置处理。"""
+
     asset_id: str
+    #: 素材种类:image / video / audio(别的照样交出,界面当文件)
+    kind: str = ""
     created_at: datetime
+    nsfw: ModelNsfwOut = Field(default_factory=ModelNsfwOut)
+
+
+class WorkflowRecentOutputsOut(ApiModel):
+    """详情里那一组:新的在前,最多 workflow_library.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。"""
+
+    outputs: list[WorkflowRecentOutputOut] = Field(default_factory=list)
+    more: bool = False
+
+
+class WorkflowOutputNsfwRequest(ApiModel):
+    workspace_id: str = Field(min_length=1, max_length=64)
+    asset_id: str = Field(min_length=1, max_length=64)
+    #: true / false:手动标成是 / 不是;null:去掉手动标记,回到本机识别
+    nsfw: bool | None = None
 
 
 class WorkflowUseOut(ApiModel):
@@ -889,7 +909,8 @@ class WorkflowFileOut(ApiModel):
     missing_models: list[WorkflowMissingModelOut] = Field(default_factory=list)
     generation: WorkflowGenerationRefOut | None = None
     #: 这个工作区里最近一次用它生成的产出
-    last_output: WorkflowLastOutputOut | None = None
+    #: 最近的那一份产出(大卡片上那一张)
+    last_output: WorkflowRecentOutputOut | None = None
     #: 这个工作区里选了它的工作流节点、画板格子
     used_by: list[WorkflowUseOut] = Field(default_factory=list)
     #: 它的应用表单(ADR 0038);插件没说(转不过来的那几张)是 None。有应用表单时上面的 inputs / parameters 只是表单那几项

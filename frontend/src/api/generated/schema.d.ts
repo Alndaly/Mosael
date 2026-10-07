@@ -6667,6 +6667,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workflow Outputs
+         * @description 一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前;每份带着
+         *     NSFW 的判断(和模型预览图同一套)。
+         */
+        get: operations["get_workflow_outputs_api_plugins_instances__instance_id__workflow_library_outputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/outputs/nsfw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark Workflow Output Nsfw
+         * @description 手动标一份产出是不是 NSFW,`nsfw: null` 去掉标记。回新的判断(手动的压过本机识别)。
+         */
+        put: operations["mark_workflow_output_nsfw_api_plugins_instances__instance_id__workflow_library_outputs_nsfw_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library/content": {
         parameters: {
             query?: never;
@@ -18091,7 +18132,7 @@ export interface components {
             /** Missing Models */
             missing_models?: components["schemas"]["WorkflowMissingModelOut"][];
             generation?: components["schemas"]["WorkflowGenerationRefOut"] | null;
-            last_output?: components["schemas"]["WorkflowLastOutputOut"] | null;
+            last_output?: components["schemas"]["WorkflowRecentOutputOut"] | null;
             /** Used By */
             used_by?: components["schemas"]["WorkflowUseOut"][];
             app?: components["schemas"]["WorkflowAppSummaryOut"] | null;
@@ -18321,16 +18362,6 @@ export interface components {
             workspace_id: string;
             /** Packs */
             packs: string[];
-        };
-        /** WorkflowLastOutputOut */
-        WorkflowLastOutputOut: {
-            /** Asset Id */
-            asset_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
         };
         /**
          * WorkflowLibraryImportOut
@@ -18599,6 +18630,15 @@ export interface components {
              */
             updated_at: string;
         };
+        /** WorkflowOutputNsfwRequest */
+        WorkflowOutputNsfwRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Asset Id */
+            asset_id: string;
+            /** Nsfw */
+            nsfw?: boolean | null;
+        };
         /** WorkflowOutputOut */
         WorkflowOutputOut: {
             /**
@@ -18647,6 +18687,39 @@ export interface components {
         WorkflowRebootOut: {
             /** Back */
             back: boolean;
+        };
+        /**
+         * WorkflowRecentOutputOut
+         * @description 这张工作流在这个工作区里的一份产出(用它生成的、当工具跑的,一批出的每一张都算)。`nsfw` 和模型预览图同一套判断:
+         *     手动标的压过本机识别;`flagged` 为真时界面按「NSFW 预览」那组设置处理。
+         */
+        WorkflowRecentOutputOut: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            nsfw?: components["schemas"]["ModelNsfwOut"];
+        };
+        /**
+         * WorkflowRecentOutputsOut
+         * @description 详情里那一组:新的在前,最多 workflow_library.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。
+         */
+        WorkflowRecentOutputsOut: {
+            /** Outputs */
+            outputs?: components["schemas"]["WorkflowRecentOutputOut"][];
+            /**
+             * More
+             * @default false
+             */
+            more: boolean;
         };
         /** WorkflowRenameRequest */
         WorkflowRenameRequest: {
@@ -32494,6 +32567,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowLibraryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_outputs_api_plugins_instances__instance_id__workflow_library_outputs_get: {
+        parameters: {
+            query: {
+                path: string;
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRecentOutputsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_workflow_output_nsfw_api_plugins_instances__instance_id__workflow_library_outputs_nsfw_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowOutputNsfwRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelNsfwOut"];
                 };
             };
             /** @description Validation Error */

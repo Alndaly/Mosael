@@ -54,6 +54,21 @@ class Asset(Base):
         return name
 
 
+class AssetNsfwMark(Base):
+    """有人把一份素材**手动**标成 NSFW / 不是 NSFW —— 和模型预览图的 ModelFileMark 同一种手动标记,压过本机识别
+    (见 model_library.nsfw_verdict)。今天标的是工作流库里一张工作流「最近的产出」那几张(workflow_library)。
+
+    素材删掉时跟着删(外键级联)。没有这一行 = 没标过,由本机识别判断。
+    """
+
+    __tablename__ = "asset_nsfw_marks"
+
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    nsfw: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    marked_by: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Lut(Base):
     """A 3D color lookup table (.cube), uploaded per workspace and burned in with
     ffmpeg lut3d at export. Referenced from clip.effects.color.lut by id."""

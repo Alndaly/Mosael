@@ -78,6 +78,14 @@ const BLUR_CLASS: Partial<Record<PreviewTreatment, string>> = {
 };
 
 /**
+ * 一张预览图按某一档怎么糊(清晰、不显示是空串):外层要有 `group/thumb` 和 `overflow-hidden`,悬停 / 键盘聚焦到外层时看清。
+ * 别处要按同一套规矩画一张图的(工作流库「最近的产出」)用它,不另写一份模糊。
+ */
+export function previewBlurClass(treatment: PreviewTreatment): string {
+  return BLUR_CLASS[treatment] ?? "";
+}
+
+/**
  * 图还没载完就被拿下来(滚出了按需画的那几行、换了目录、关了弹窗):把请求掐掉。浏览器不会因为 `<img>` 离开了页面就
  * 不取了 —— 一路滚过去的几百张会一直占着到宿主的那几条连接,宿主还要挨个去那台服务器取原图,眼前这几张排在它们后面
  * 干等。去掉 src(不是设成空串):请求掐掉,不发 error 事件。

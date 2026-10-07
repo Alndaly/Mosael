@@ -4,8 +4,9 @@
 回收目录)。宿主做的是插件做不了、也不该做的:
 
 - **规整**:插件报的每一条都过一遍(没有路径的丢掉、长文本截断、图摘要限量),界面拿到的形状只有一种;
-- **它在 Mosael 里的样子**:这张工作流是不是这个连接下的一个生成模型(用它生成要它)、这个工作区里最近一次用它生成的
-  产出、这个工作区里哪些工作流节点 / 画板格子选的是它(引用表,见 db/references 的 `generation_model`);
+- **它在 Mosael 里的样子**:这张工作流是不是这个连接下的一个生成模型(用它生成要它)、这个工作区里它最近的产出
+  (用它生成的、当工具跑的,一批出的每一张都算;每张带着 NSFW 的判断,见「最近的产出」)、这个工作区里哪些工作流节点 /
+  画板格子选的是它(引用表,见 db/references 的 `generation_model`);
 - **路径先查一遍**:只认 `workflows/` 里的相对路径(`.json`,不带 `..`、反斜杠、控制字符和 Windows 不收的字符),
   回收目录里的只认插件报过的那种形状 —— 不交给插件猜;
 - **改完马上刷新**:这个连接的生成目录和工具清单重拉一遍(`host_capabilities.notify(refresh=True)`),不等一分钟的指纹;
@@ -38,6 +39,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -46,7 +48,19 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment, pick_text
 from app.core.unit_of_work import unit_of_work
-from app.db.models import Board, GenerationJob, Job, PluginInstance, ProviderProfile, User, Workflow
+from app.db.models import (
+    Asset,
+    AssetNsfwMark,
+    Board,
+    GeneratedAsset,
+    GenerationJob,
+    Job,
+    PluginInstance,
+    PluginInvocation,
+    ProviderProfile,
+    User,
+    Workflow,
+)
 from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
 from app.domain.agent import places
@@ -62,6 +76,7 @@ from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
 from app.domain.references import referrers
+from app.media.paths import resolve_key
 
 #: 列一遍最多等多久:要取每张工作流、转一遍、再列一遍模型目录。
 LIBRARY_TIMEOUT_SECONDS = 600
@@ -80,6 +95,10 @@ _MAX_GRAPH_NODES = 400
 _MAX_GRAPH_LINKS = 1200
 _MAX_GRAPH_GROUPS = 60
 _MAX_USES = 50
+#: 详情里「最近的产出」最多交几份(新的在前,一批出的几张都算);更早的在素材库里。
+RECENT_OUTPUTS = 48
+#: 往回翻几次运行:生成任务、工具调用各自最多这么多次。
+_RECENT_RUNS = 40
 _ROLES = {"input", "model", "sampler", "text", "output", "note", "missing", "other"}
 #: Windows 上文件名里不能有的字符(那台 ComfyUI 可能在 Windows 上):路径段里一个都不收。
 _BAD_SEGMENT = re.compile(r'[\x00-\x1f<>:"|?*\\]')
@@ -362,9 +381,11 @@ def _profile(db: Session, instance: PluginInstance) -> ProviderProfile | None:
 
 
 def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflows: list[dict[str, Any]]) -> None:
-    """每张工作流在 Mosael 里的样子:是不是这个连接下的生成模型、这个工作区里最近一次用它生成的产出、谁在用它。"""
+    """每张工作流在 Mosael 里的样子:是不是这个连接下的生成模型、这个工作区里它最近的那一份产出(卡片上的那一张,
+    带着 NSFW 的判断)、谁在用它。"""
     profile = _profile(db, instance)
     rows = {row.model_id: row for row in provider_models.list_models(db, profile.id)} if profile is not None else {}
+    mirrored = _mirroring_tools(instance)
     for flow in workflows:
         flow["generation"] = None
         flow["last_output"] = None
@@ -377,15 +398,9 @@ def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflo
             flow["generation"] = {"provider_profile_id": profile.id, "kind": kinds[0], "model": row.model_id}
         if not workspace_id:
             continue
-        last = db.scalar(
-            select(GenerationJob)
-            .where(GenerationJob.workspace_id == workspace_id, GenerationJob.provider_profile_id == profile.id,
-                   GenerationJob.model == row.model_id, GenerationJob.result_asset_id.is_not(None))
-            .order_by(GenerationJob.created_at.desc())
-            .limit(1)
-        )
-        if last is not None:
-            flow["last_output"] = {"asset_id": last.result_asset_id, "created_at": last.created_at}
+        latest, _ = _produced(db, _runs(db, instance, profile, workspace_id, row.model_id,
+                                       mirrored.get(row.model_id, []), limit=1), workspace_id, limit=1)
+        flow["last_output"] = latest[0] if latest else None
         key = generation_model_key(profile.id, row.model_id)
         uses: list[dict[str, str]] = [
             {"kind": "workflow", "id": workflow.id, "name": workflow.name}
@@ -434,6 +449,131 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
         "editor": _editor(output.get("editor")),
         "installs": node_installs(db, instance),
     }
+
+
+# --- 最近的产出 ----------------------------------------------------------------
+
+def _mirroring_tools(instance: PluginInstance) -> dict[str, list[str]]:
+    """生成模型 id → 和它是同一件事的那几个工具(插件报的 `mirrors`)。工作流在工作流节点、智能体里是当工具跑的,产出记在
+    工具调用上 —— 只看生成任务的话,维护者在工作流里跑出来的那几张在这里看不见。"""
+    out: dict[str, list[str]] = {}
+    for tool in instance.discovered_tools or []:
+        mirror = tool.get("mirrors") if isinstance(tool, dict) else None
+        if isinstance(mirror, dict) and mirror.get("generation_model") and tool.get("name"):
+            out.setdefault(str(mirror["generation_model"]), []).append(str(tool["name"]))
+    return out
+
+
+def _runs(db: Session, instance: PluginInstance, profile: ProviderProfile, workspace_id: str, model_id: str,
+          tools: list[str], *, limit: int) -> list[tuple[datetime, list[str]]]:
+    """这张工作流最近的几次运行(新的在前):每次 `(什么时候, 交出的素材 id —— 一批几张都在)`。
+
+    两种运行:用它**生成**(这个工作区、这个连接、这个模型的生成任务;每一份产出各有一行 GeneratedAsset,任务被「清空已结束」
+    删掉的只剩封面那一张)和当**工具**跑(和它是同一件事的工具在这个连接上成功的调用,交出的 `asset_ids`;调用不记工作区,
+    素材按工作区筛,见 _produced)。"""
+    jobs = list(db.scalars(
+        select(GenerationJob)
+        .where(GenerationJob.workspace_id == workspace_id, GenerationJob.provider_profile_id == profile.id,
+               GenerationJob.model == model_id, GenerationJob.result_asset_id.is_not(None))
+        .order_by(GenerationJob.created_at.desc())
+        .limit(limit)
+    ))
+    made: dict[str, list[str]] = {}
+    job_ids = [job.job_id for job in jobs if job.job_id]
+    if job_ids:
+        for job_id, asset_id in db.execute(select(GeneratedAsset.job_id, GeneratedAsset.asset_id)
+                                           .where(GeneratedAsset.job_id.in_(job_ids))):
+            made.setdefault(str(job_id), []).append(str(asset_id))
+    runs = [(job.created_at, made.get(job.job_id or "") or [str(job.result_asset_id)]) for job in jobs]
+    if tools:
+        calls = db.scalars(
+            select(PluginInvocation)
+            .where(PluginInvocation.instance_id == instance.id, PluginInvocation.tool_name.in_(tools),
+                   PluginInvocation.status == "succeeded")
+            .order_by(PluginInvocation.created_at.desc())
+            .limit(limit)
+        )
+        for call in calls:
+            ids = [one for one in (call.output or {}).get("asset_ids") or [] if isinstance(one, str) and one]
+            if ids:
+                runs.append((call.created_at, ids))
+    runs.sort(key=lambda run: run[0], reverse=True)
+    return runs
+
+
+def _produced(db: Session, runs: list[tuple[datetime, list[str]]], workspace_id: str, *,
+             limit: int) -> tuple[list[dict[str, Any]], bool]:
+    """几次运行的产出摊成一串(新的运行在前,一次里按收进来的先后):这个工作区里还在的素材,每份带着种类和 NSFW 的判断。
+    交回前 `limit` 份,和后面还有没有。"""
+    wanted = list(dict.fromkeys(asset_id for _, ids in runs for asset_id in ids))
+    if not wanted:
+        return [], False
+    assets = {asset.id: asset for asset in db.scalars(
+        select(Asset).where(Asset.id.in_(wanted), Asset.workspace_id == workspace_id))}
+    ordered: list[Asset] = []
+    seen: set[str] = set()
+    for _, ids in runs:
+        for asset in sorted((assets[one] for one in ids if one in assets), key=lambda one: one.created_at):
+            if asset.id not in seen:
+                seen.add(asset.id)
+                ordered.append(asset)
+    shown = ordered[:limit]
+    marks = {row.asset_id: row.nsfw for row in db.scalars(
+        select(AssetNsfwMark).where(AssetNsfwMark.asset_id.in_([asset.id for asset in shown])))} if shown else {}
+    return [{"asset_id": asset.id, "kind": asset.kind, "created_at": asset.created_at,
+             "nsfw": _output_nsfw(asset, marks.get(asset.id))} for asset in shown], len(ordered) > limit
+
+
+def _output_nsfw(asset: Asset, manual: bool | None) -> dict[str, Any]:
+    """一份产出算不算 NSFW —— 和模型预览图同一套判断(model_library.nsfw_verdict):手动标的压过一切;没标时看本机识别
+    (这一张图的原文件,按内容记结果;权重没下、还没算过就没有这一条,下次列出就有)。视频、音频只认手动标记:为了识别去读
+    整段视频算哈希,不值。"""
+    from app.domain import model_library, model_nsfw_local
+
+    signals: list[dict[str, Any]] = []
+    if asset.kind == "image" and asset.file_key:
+        path = resolve_key(asset.file_key)
+        if path.is_file():
+            kind = f"image/{path.suffix.lstrip('.').lower() or 'png'}"
+            found = model_nsfw_local.signal(model_nsfw_local.Source(original=path, kind=kind))
+            if found is not None:
+                signals.append(found)
+    return model_library.nsfw_verdict(manual, signals)
+
+
+def outputs(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, path: str) -> dict[str, Any]:
+    """一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前,
+    最多 RECENT_OUTPUTS 份;每份带着 NSFW 的判断。不是这个连接下的生成模型的,没有。"""
+    ensure_workspace_access(db, user, workspace_id)
+    _require(db, instance)
+    path = workflow_path(path)
+    profile = _profile(db, instance)
+    if profile is None or provider_models.get_model(db, profile.id, path) is None:
+        return {"outputs": [], "more": False}
+    runs = _runs(db, instance, profile, workspace_id, path, _mirroring_tools(instance).get(path, []), limit=_RECENT_RUNS)
+    found, more = _produced(db, runs, workspace_id, limit=RECENT_OUTPUTS)
+    return {"outputs": found, "more": more}
+
+
+def mark_output_nsfw(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, asset_id: str,
+                     nsfw: bool | None) -> dict[str, Any]:
+    """手动标一份产出是不是 NSFW(`None` 是去掉标记,回到本机识别)。回新的判断。和模型库里标模型预览图同一件事,
+    标在素材上(AssetNsfwMark)。只认这个工作区里的素材。"""
+    ensure_workspace_access(db, user, workspace_id)
+    _require(db, instance)
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workspace_id:
+        raise WorkflowLibraryError("workflowLibErr_outputGone")
+    row = db.get(AssetNsfwMark, asset.id)
+    if nsfw is None:
+        if row is not None:
+            db.delete(row)
+    elif row is None:
+        db.add(AssetNsfwMark(asset_id=asset.id, nsfw=nsfw, marked_by=user.id))
+    else:
+        row.nsfw, row.marked_by = nsfw, user.id
+    db.flush()
+    return _output_nsfw(asset, nsfw)
 
 
 # --- 一张的原文 ----------------------------------------------------------------
@@ -996,6 +1136,8 @@ __all__ = [
     "folder_path",
     "inspect_import",
     "library",
+    "mark_output_nsfw",
+    "outputs",
     "make_folder",
     "node_installs",
     "reboot",

@@ -246,6 +246,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个插件连接已经删掉了,下载没开始",
         "en": "This plugin connection was deleted; the download did not start",
     },
+    "workflowLibErr_outputGone": {
+        "zh": "这份产出已经不在这个工作区里了(删掉了,或者是别的工作区的)",
+        "en": "This output is no longer in this workspace (it was deleted, or belongs to another workspace).",
+    },
     "workflowLibErr_notProvided": {
         "zh": "「{name}」不提供工作流库:它的插件没有认领 workflow_library",
         "en": "“{name}” has no workflow library: its plugin does not provide workflow_library",

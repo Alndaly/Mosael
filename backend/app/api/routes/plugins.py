@@ -68,7 +68,9 @@ from app.api.schemas import (
     WorkflowLibraryImportOut,
     WorkflowLibraryImportRequest,
     WorkflowLibraryOut,
+    WorkflowOutputNsfwRequest,
     WorkflowPathOut,
+    WorkflowRecentOutputsOut,
     WorkflowRenameRequest,
     WorkflowRebootOut,
     WorkflowRestoreRequest,
@@ -744,6 +746,28 @@ def get_workflow_library(instance_id: str, db: DbSession, user: CurrentUser, wor
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.library(db, user, instance, workspace_id=workspace_id)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/workflow-library/outputs", response_model=WorkflowRecentOutputsOut)
+def get_workflow_outputs(instance_id: str, path: str, workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前;每份带着
+    NSFW 的判断(和模型预览图同一套)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.outputs(db, user, instance, workspace_id=workspace_id, path=path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.put("/plugins/instances/{instance_id}/workflow-library/outputs/nsfw", response_model=ModelNsfwOut)
+def mark_workflow_output_nsfw(instance_id: str, body: WorkflowOutputNsfwRequest, db: Tx, user: CurrentUser) -> dict:
+    """手动标一份产出是不是 NSFW,`nsfw: null` 去掉标记。回新的判断(手动的压过本机识别)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.mark_output_nsfw(db, user, instance, workspace_id=body.workspace_id,
+                                                 asset_id=body.asset_id, nsfw=body.nsfw)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

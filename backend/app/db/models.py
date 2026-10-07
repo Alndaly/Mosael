@@ -34,7 +34,7 @@ from app.db.model_slices.scenes import Scene3D, Scene3DRevision, Scene3DModel  #
 from app.db.model_slices.identity import AuthSession, OAuthIdentity, RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember  # noqa: E402,F401
 from app.db.model_slices.sharing import ResourceShare  # noqa: E402,F401
 from app.db.model_slices.projects import Project  # noqa: E402,F401
-from app.db.model_slices.media import Asset, Font, Lut  # noqa: E402,F401
+from app.db.model_slices.media import Asset, AssetNsfwMark, Font, Lut  # noqa: E402,F401
 from app.db.model_slices.documents import AssetExtraction  # noqa: E402,F401
 from app.db.model_slices.entities import Entity, EntityReference  # noqa: E402,F401
 from app.db.model_slices.transcripts import ClipTranscriptRef, Transcript, TranscriptSegment, TranscriptToken  # noqa: E402,F401
