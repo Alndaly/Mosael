@@ -91,7 +91,8 @@ def test_随_Mosael_发的插件带的技能默认开_像内置的一样_能关(
         assert skill.title == "ComfyUI 工作流"
         assert "- dev.mosael.comfyui:comfyui-workflows(ComfyUI 工作流):" in runtime.skills_prompt(db, ws)
         body = runtime.use_skill(db, ws, "dev.mosael.comfyui:comfyui-workflows")["instructions"]
-        assert "comfy_check" in body and "还不能改画布" in body, "这一版只读和诊断:技能不许说改画布的工具已经有了"
+        assert "comfy_check" in body and "comfy_canvas_edit" in body and "点「应用」" in body, "改画布要用户点「应用」(ADR 0042 第二步)"
+        assert "还不能下载模型、装节点包、运行" in body, "下载、装、试跑在第三步:技能不许说那几样已经有了"
         store.set_enabled(db, ws, skill, False, user_id=None)
         db.commit()
         assert "comfyui-workflows" not in runtime.skills_prompt(db, ws)
