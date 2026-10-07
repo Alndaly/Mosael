@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import contextlib
 import time
@@ -73,11 +74,35 @@ def fresh_client(username: str = "tester") -> TestClient:
                 "rebuilding the schema under it would corrupt this test's database"
             )
     Base.metadata.drop_all(bind=engine)
+    _reset_plugins_dir()
     init_db()
     issue_worker_key()
     client = TestClient(app)
     login_as(client, username)
     return client
+
+
+def _reset_plugins_dir() -> None:
+    """库重建了,插件目录也回到刚装好的样子:只留随应用发的那几个(init_db 会按内容指纹对账,没变就不重拷)。
+
+    此前只重建库,前面的测试装进来、写坏的插件文件夹一直留在目录里,而扫描插件目录读的是整个文件夹:
+    test_object_storage_plugins_merged_migration 留下一份缺 version 的 text-toolkit 清单,同一个进程里后来跑的
+    `/api/plugins/scan` 一律 422。单进程按文件顺序跑时那条扫描测试碰巧排在前面;打乱顺序或者并行跑,就轮到它红。
+    """
+    from app.domain.plugins import bundled
+
+    shipped = {plugin.id for plugin in bundled.plugins()}
+    #: 数据目录里的那个,不是 `settings.plugins_dir`:有的测试把它指到自己的 tmp_path、先摆好插件再调这里。
+    root = settings.data_dir / "plugins"
+    if not root.is_dir():
+        return
+    for entry in root.iterdir():
+        if entry.name in shipped:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
 
 
 def worker_client() -> TestClient:
