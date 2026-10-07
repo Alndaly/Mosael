@@ -11,6 +11,7 @@
  */
 
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -175,25 +176,20 @@ describe("CodeConfigControl", () => {
 
 describe("NewConnectionDialog", () => {
   it("代码字段不包在 <label> 里:点字段标题不会点到工具栏上的「格式化」", async () => {
-    const setDraft = vi.fn();
     const pkg = { id: "comfyui", config_fields: [template], credential_fields: [] } as unknown as PluginPackage;
     render(
-      <NewConnectionDialog
-        pkg={pkg}
-        open
-        onOpenChange={vi.fn()}
-        draft={{ api_workflow: '{"a":1}' }}
-        setDraft={setDraft}
-        pending={false}
-        onCreate={vi.fn()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <NewConnectionDialog pkg={pkg} open onOpenChange={vi.fn()} onCreated={vi.fn()} />
+      </QueryClientProvider>,
     );
+    const editor = screen.getByTestId("code-editor") as HTMLTextAreaElement;
+    fireEvent.change(editor, { target: { value: '{"a":1}' } });
     const title = await screen.findByText(template.label);
     expect(title.closest("label")).toBeNull();
     fireEvent.click(title);
-    expect(setDraft).not.toHaveBeenCalled();
+    expect(editor.value, "点标题不格式化").toBe('{"a":1}');
     // 工具栏照样在:新建时也能格式化
     fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "pluginCodeFormat" }));
-    expect(setDraft).toHaveBeenCalledTimes(1);
+    expect(editor.value).toBe('{\n  "a": 1\n}');
   });
 });

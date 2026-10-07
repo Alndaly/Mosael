@@ -106,7 +106,19 @@ function settle(qc: QueryClient, instanceId: string, next: LocalService | null |
 }
 
 /** 「在哪跑」的三种。 */
-type Where = "server" | "directory" | "managed";
+export type Where = "server" | "directory" | "managed";
+
+/**
+ * 新建连接时选了「用我自己装的」(弹窗里确认过会运行这个目录里的代码):建好马上认一遍那个目录,结果放进「重新检查」用的那一份
+ * 缓存 —— 连接卡片上本机服务那一块照常摆出来(认不出就是标红的问题,旁边「换一个」)。不再问第二次:存下来的目录是确认过的。
+ */
+export function detectNewDirectory(qc: QueryClient, instanceId: string, directory: string, python: string) {
+  void qc.prefetchQuery({
+    queryKey: detectionKey(instanceId),
+    queryFn: () => detectLocalService(instanceId, directory, python),
+    retry: false,
+  });
+}
 
 /**
  * 连接页上的「本机服务」(ADR 0041):插件声明了一种本机服务(清单的 `services`)就有这一块,和是哪个插件无关。
@@ -257,14 +269,18 @@ function ServiceAddress({ service, portBelow }: { service: LocalService | null; 
   );
 }
 
-function WhereChoice({
+/** 「在哪跑」的三颗(连接页的本机服务卡、新建连接的弹窗共用)。 */
+export function WhereChoice({
   mode,
   disabledReason,
+  localDisabledReason,
   onChoose,
 }: {
   mode: Where;
   /** 换不了(不是部署管理员、正在装)时说为什么;给了就整组变灰。 */
   disabledReason?: string;
+  /** 只是本机的两种用不了(新建弹窗里:不是部署管理员)时说为什么;给了就那两颗变灰,「连一台服务器」照常能选。 */
+  localDisabledReason?: string;
   onChoose: (mode: Where) => void;
 }) {
   const t = useI18n();
@@ -276,19 +292,23 @@ function WhereChoice({
   return (
     <Hint disabledReason={disabledReason}>
       <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(SEGMENTED_LIST, "flex-wrap")}>
-        {options.map((one) => (
-          <button
-            key={one.value}
-            type="button"
-            role="radio"
-            aria-checked={mode === one.value}
-            disabled={Boolean(disabledReason)}
-            className={segmentedTriggerClass(mode === one.value)}
-            onClick={() => onChoose(one.value)}
-          >
-            {t(one.label)}
-          </button>
-        ))}
+        {options.map((one) => {
+          const locked = one.value === "server" ? undefined : localDisabledReason;
+          const button = (
+            <button
+              key={one.value}
+              type="button"
+              role="radio"
+              aria-checked={mode === one.value}
+              disabled={Boolean(disabledReason || locked)}
+              className={cn(segmentedTriggerClass(mode === one.value), "disabled:opacity-50")}
+              onClick={() => onChoose(one.value)}
+            >
+              {t(one.label)}
+            </button>
+          );
+          return locked ? <Hint key={one.value} disabledReason={locked}>{button}</Hint> : button;
+        })}
       </div>
     </Hint>
   );
@@ -981,6 +1001,7 @@ function ServiceRows({
       {detection.error && <p role="alert" className="m-0 py-3 text-ui-sm text-destructive">{(detection.error as Error).message}</p>}
       {detection.data && (
         <div className="grid gap-3 py-4">
+          {!detection.data.ok && <p role="alert" className="m-0 text-ui-sm text-destructive">{t("localServiceNotUsable")}</p>}
           <DetectionFacts detection={detection.data} />
         </div>
       )}

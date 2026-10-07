@@ -29,6 +29,7 @@ export function PathField({
   placeholder,
   autoFocus,
   filters,
+  className,
 }: {
   kind: PickPathRequest["kind"];
   /** 这一格的名字:输入框的无障碍名,也是对话框的标题。 */
@@ -38,6 +39,8 @@ export function PathField({
   placeholder?: string;
   autoFocus?: boolean;
   filters?: PickPathRequest["filters"];
+  /** 缺省是设置行右边那一栏的宽度;摆在弹窗里一行一格时给 `w-full`。 */
+  className?: string;
 }) {
   const t = useI18n();
   const pick = localPathPicker();
@@ -57,7 +60,7 @@ export function PathField({
   };
 
   return (
-    <div className={cn(SETTINGS_FIELD_WIDTH, "flex items-center gap-2")}>
+    <div className={cn(SETTINGS_FIELD_WIDTH, "flex items-center gap-2", className)}>
       <Input
         className="min-w-0 flex-1"
         aria-label={label}

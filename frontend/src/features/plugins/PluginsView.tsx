@@ -24,6 +24,7 @@ import {
   setPluginPermissions,
   updatePluginInstance,
   type PluginField,
+  type PluginInstanceCreate,
   type LocalService,
   type PluginInstance,
   type PluginInvocation,
@@ -34,7 +35,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OPEN_MARKET_FOR_CAPABILITY, OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
-import { ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconButton } from "@/components/ui/icon-button";
@@ -69,9 +70,15 @@ import {
   ConnectionLocalService,
   LocalServiceDiscovery,
   SERVICE_ADDRESS_FIELD,
+  WhereChoice,
+  detectNewDirectory,
   useRefreshWhenRunning,
+  type Where,
 } from "@/features/plugins/ConnectionLocalService";
-import { serviceIssue, useLocalService } from "@/features/plugins/localServiceStatus";
+import { machineKey, serviceIssue, useLocalService } from "@/features/plugins/localServiceStatus";
+import { describePermission } from "@/features/plugins/pluginPermissions";
+import { PathField } from "@/components/settings/PathField";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
@@ -273,25 +280,23 @@ export function PackageDetail({
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState<Record<string, string>>({});
   const [tab, setTab] = React.useState<"connections" | "about">("connections");
 
   const instances = pkg.instances ?? [];
   const instanceIds = React.useMemo(() => instances.map((one) => one.id), [instances]);
   //: 每个连接展开还是收起,按连接记在本机(见 connectionOpen):一个连接默认展开,几个默认收起,刚建的展开。
   const opened = useConnectionOpen(instanceIds);
-  const createInstance = useMutation({
-    mutationFn: () =>
-      createPluginInstance(pkg.id, { config: draft }),
-    onSuccess: (created) => {
-      // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
-      setAddOpen(false);
-      setDraft({});
-      setTab("connections");
-      if (created?.id) opened.setOpen(created.id, true);
-      invalidatePluginDependents(qc);
-    },
-  });
+  //: 刚建的那个:列表重读回来、它的卡片出现时滚到它 —— 几个连接时它排在最下面,不滚就看不到认目录的结果 / 安装计划。
+  const arriving = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const id = arriving.current;
+    if (!id || !instanceIds.includes(id)) return;
+    arriving.current = null;
+    const frame = window.requestAnimationFrame(() =>
+      document.querySelector(`[data-connection="${id}"]`)?.scrollIntoView({ block: "start" }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [instanceIds]);
 
   const canAdd = pkg.multiple || instances.length === 0;
 
@@ -379,6 +384,7 @@ export function PackageDetail({
               onConnected={(id) => {
                 setTab("connections");
                 opened.setOpen(id, true);
+                arriving.current = id;
               }}
             />
           )}
@@ -418,10 +424,12 @@ export function PackageDetail({
           pkg={pkg}
           open={addOpen}
           onOpenChange={setAddOpen}
-          draft={draft}
-          setDraft={setDraft}
-          pending={createInstance.isPending}
-          onCreate={() => createInstance.mutate()}
+          onCreated={(id) => {
+            // 新连接出现在「连接」页、展开着:本机的两种,卡片上就是认目录的结果 / 安装计划
+            setTab("connections");
+            opened.setOpen(id, true);
+            arriving.current = id;
+          }}
         />
       )}
     </div>
@@ -435,29 +443,92 @@ export function PackageDetail({
  * 每个字段自带标签与说明。此前三个控件并排、只显示值:`127.0.0.1` 和 `9876` 还能猜出是主机
  * 和端口,而 Blender 插件那个「已关闭」(其实是"关闭上游遥测")完全猜不出来 —— 标签一直在
  * 清单里,只是被塞进了 placeholder,而 placeholder 只在空着时显示。
+ *
+ * **声明了本机服务的插件**(清单的 `services`,ADR 0041)一开始就选「在哪跑」,和连接页上的本机服务卡同一套:
+ * - 连一台服务器:和没有本机服务的插件一样,只填配置;
+ * - 用我自己装的:选目录、可选的解释器;服务器地址那一格不摆(端口由宿主分、写进去)。新建之前确认一次「会在这台机器上运行
+ *   这个目录里的代码」,建好马上认一遍,结果摆在新连接的卡片上 —— 不再问第二次;
+ * - 让 Mosael 装:没有路径(装在宿主分的目录里)。建好的连接展开就是安装计划,看过再点「开始安装」—— 这里不替人开始装。
+ *
+ * 本机的两种:连接、本机服务那一行、端口、地址在后端一个事务里建好;插件声明的权限列在弹窗里、建好时一起授予(建好马上要
+ * 靠插件认目录、看安装计划,没授予它什么都不做);要部署管理员,别人那两颗是灰的、说为什么。别的配置项(API 模板这类)三种都有,
+ * 凭据照旧填在建好的连接上。
  */
 export function NewConnectionDialog({
-  pkg, open, onOpenChange, draft, setDraft, pending, onCreate,
+  pkg, open, onOpenChange, onCreated,
 }: {
   pkg: PluginPackage;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  draft: Record<string, string>;
-  setDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  pending: boolean;
-  onCreate: () => void;
+  /** 建好了(弹窗已经关上,下次打开是一张新的):页面去展开这个新连接。 */
+  onCreated: (instanceId: string) => void;
 }) {
   const t = useI18n();
-  const fields = pkg.config_fields ?? [];
+  const qc = useQueryClient();
+  const declared = (pkg.services ?? [])[0];
+  const [draft, setDraft] = React.useState<Record<string, string>>({});
+  const [where, setWhere] = React.useState<Where>("server");
+  const [directory, setDirectory] = React.useState("");
+  const [python, setPython] = React.useState("");
+  const [confirming, setConfirming] = React.useState(false);
+  //: 建好了:**下一次打开**是一张新的。不在建好的那一刻清 —— 关窗的淡出里表单会跳回缺省、确认框里的目录变成空的。
+  const [used, setUsed] = React.useState(false);
+  const [shownOpen, setShownOpen] = React.useState(open);
+  if (open !== shownOpen) {
+    setShownOpen(open);
+    if (open && used) {
+      setUsed(false);
+      setDraft({});
+      setWhere("server");
+      setDirectory("");
+      setPython("");
+    }
+  }
+  const local = Boolean(declared) && where !== "server";
+  //: 本机的两种,服务器地址那一格归宿主:不摆、不交
+  const fields = (pkg.config_fields ?? []).filter((field) => !local || field.key !== SERVICE_ADDRESS_FIELD);
+  const permissions = pkg.permissions ?? [];
+  const create = useMutation({
+    mutationFn: (body: Partial<PluginInstanceCreate>) => createPluginInstance(pkg.id, body),
+    onSuccess: (created, body) => {
+      const chosen = body.local_service;
+      if (chosen?.mode === "directory") detectNewDirectory(qc, created.id, chosen.directory, chosen.python);
+      invalidatePluginDependents(qc);
+      // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
+      onOpenChange(false);
+      setUsed(true);
+      onCreated(created.id);
+    },
+    //: 没建成:确认框收起,原因由全局的提示说(见 app/mutationErrors)
+    onSettled: () => setConfirming(false),
+  });
+  const body = (): Partial<PluginInstanceCreate> => {
+    if (!local) return { config: draft };
+    const config = Object.fromEntries(Object.entries(draft).filter(([key]) => fields.some((field) => field.key === key)));
+    const own = where === "directory";
+    return {
+      config,
+      grant_permissions: permissions,
+      local_service: {
+        mode: own ? "directory" : "managed",
+        directory: own ? directory.trim() : "",
+        python: own ? python.trim() : "",
+        confirm_run_code: own,
+      },
+    };
+  };
   //: 有一段 JSON 填错了就不让建 —— 后端也会拒,但那时用户已经点完了,只拿回一句报错。
   const broken = fields.some((field) => field.type === "json" && jsonProblem(draft[field.key] ?? field.default ?? "") !== null);
+  const ready = !broken && (!local || where !== "directory" || directory.trim().length > 0);
   // 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实要填,
   // 只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。
-  const hint = fields.length
+  const hint = fields.length || local
     ? t("pluginNewConnectionDesc")
     : (pkg.credential_fields ?? []).length
       ? t("pluginNewConnectionCreds")
       : t("pluginNewConnectionSimple");
+  const title = declared?.title ?? pkg.name;
+  const machine = t(machineKey());
   return (
     <ModalShell
       open={open}
@@ -467,13 +538,53 @@ export function NewConnectionDialog({
       className={cn(fields.some(isCodeField) ? "w-[640px]" : "w-[520px]", "max-w-[calc(100vw-32px)]")}
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-          <Button loading={pending} disabled={broken} onClick={onCreate}><Plus size={13} /> {t("pluginAddConnection")}</Button>
+          <Button variant="ghost" disabled={create.isPending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button
+            loading={create.isPending && !confirming}
+            disabled={!ready}
+            onClick={() => (local && where === "directory" ? setConfirming(true) : create.mutate(body()))}
+          >
+            <Plus size={13} /> {t("pluginAddConnection")}
+          </Button>
         </div>
       }
     >
       <div className="grid gap-4">
         <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
+        {declared && <NewConnectionWhere title={title} where={where} onChoose={setWhere} />}
+        {local && where === "directory" && (
+          <>
+            <div className="grid min-w-0 gap-1.5">
+              <span className="text-ui-sm font-medium text-foreground">{t("localServiceDirectory")}</span>
+              <PathField
+                kind="directory"
+                label={t("localServiceDirectory")}
+                placeholder={t("localServiceDirectoryPlaceholder")}
+                value={directory}
+                onChange={setDirectory}
+                className="w-full"
+              />
+              <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServiceDirectoryDesc").replace("{title}", title)}</small>
+            </div>
+            <div className="grid min-w-0 gap-1.5">
+              <span className="text-ui-sm font-medium text-foreground">{t("localServicePython")}</span>
+              <PathField kind="file" label={t("localServicePython")} value={python} onChange={setPython} className="w-full" />
+              <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServicePythonDesc")}</small>
+            </div>
+          </>
+        )}
+        {local && where === "managed" && (
+          <div className="grid min-w-0 gap-1.5">
+            <span className="text-ui-sm font-medium text-foreground">{t("localServicePlanWhere")}</span>
+            <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServiceNewManagedDesc")}</small>
+          </div>
+        )}
+        {local && (
+          <div className="grid min-w-0 gap-1.5" data-new-connection-address>
+            <span className="text-ui-sm font-medium text-foreground">{t("localServiceAddress")}</span>
+            <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServiceAddressOnCreate")}</small>
+          </div>
+        )}
         {fields.map((field) => {
           // 代码字段不能包在 <label> 里:编辑器不是可被 label 关联的控件,而它的工具栏里有按钮 ——
           // label 会把点击转给它里面**第一个按钮**,于是点一下字段标题就等于点了「格式化」。
@@ -506,8 +617,52 @@ export function NewConnectionDialog({
             </Row>
           );
         })}
+        {local && permissions.length > 0 && (
+          <div className="grid min-w-0 gap-1.5" data-new-connection-permissions>
+            <span className="text-ui-sm font-medium text-foreground">
+              {t("localServiceNewPermissions").replace("{n}", String(permissions.length))}
+            </span>
+            <ul className="m-0 grid list-none gap-1 p-0">
+              {permissions.map((permission) => (
+                <li key={permission} className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-ui-sm text-foreground">
+                  <span>{describePermission(t, permission) ?? permission}</span>
+                  <span className="timecode text-ui-xs text-muted-foreground">{permission}</span>
+                </li>
+              ))}
+            </ul>
+            <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServiceNewPermissionsDesc")}</small>
+          </div>
+        )}
       </div>
+      {/* 用我自己装的:新建之前确认一次(和连接页上「检查并使用」同一句);建好之后认目录、起它都不再问 */}
+      <ConfirmDialog
+        open={confirming}
+        title={t("localServiceConfirmTitle").replace("{where}", machine)}
+        body={t("localServiceConfirmBody").replace("{directory}", directory.trim()).replace("{title}", title)}
+        confirmLabel={t("localServiceConfirmRun")}
+        pending={create.isPending}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => create.mutate(body())}
+      />
     </ModalShell>
+  );
+}
+
+/**
+ * 新建弹窗里的「在哪跑」(插件声明了本机服务才有)。本机的两种要部署管理员(和连接页上的本机服务卡同一条规矩):别人那两颗是灰的,
+ * 下面那句换成为什么 —— 「连一台服务器」照常能选。
+ */
+function NewConnectionWhere({ title, where, onChoose }: { title: string; where: Where; onChoose: (where: Where) => void }) {
+  const t = useI18n();
+  const admin = useIsDeploymentAdmin();
+  return (
+    <div className="grid min-w-0 gap-1.5" data-new-connection-where>
+      <span className="text-ui-sm font-medium text-foreground">{t("localServiceWhere")}</span>
+      <WhereChoice mode={where} localDisabledReason={admin ? undefined : t("localServiceAdminOnly")} onChoose={onChoose} />
+      <small className="text-ui-xs leading-[1.5] text-muted-foreground">
+        {admin ? t("localServiceWhereDesc").replace("{title}", title) : t("localServiceNewAdminOnly").replace("{where}", t(machineKey()))}
+      </small>
+    </div>
   );
 }
 

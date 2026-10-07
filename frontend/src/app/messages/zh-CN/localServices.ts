@@ -71,6 +71,12 @@ export const localServices = {
   localServiceDiscoveredBody: "它已经在跑、由它自己管,Mosael 不去起停它。连上就是建一个「连一台服务器」的连接。",
   localServiceConnect: "连上",
   localServiceDismiss: "不用了",
+  // 新建连接的弹窗里一开始就选在哪跑
+  localServiceNewManagedDesc: "装在 Mosael 的数据目录里,一个连接一份。建好之后先看安装计划 —— 这台机器能不能装、装哪种 PyTorch、要多少空间、从哪儿下 —— 确认了才开始装。",
+  localServiceAddressOnCreate: "建好时由 Mosael 分配端口(从 8189 往上找空的),写进这个连接的服务器地址。",
+  localServiceNewPermissions: "建好时一起授予这 {n} 项权限",
+  localServiceNewPermissionsDesc: "建好马上要靠插件认目录、看这台机器能不能装:插件声明要做的事都在这里,没授予它就不替这个连接做任何事。建好之后能在连接上逐项撤回。",
+  localServiceNewAdminOnly: "本机的两种只有部署管理员能选:它们会在{where}运行代码。",
   // 让 Mosael 装(ADR 0041 §4)
   localServicePlanChecking: "正在看这台机器能不能装…",
   localServicePlanTorch: "PyTorch",

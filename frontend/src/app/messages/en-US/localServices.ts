@@ -72,6 +72,12 @@ export const localServices = {
   localServiceDiscoveredBody: "It's already running and manages itself; Mosael won't start or stop it. Connecting creates a regular “Connect to a server” connection.",
   localServiceConnect: "Connect",
   localServiceDismiss: "Dismiss",
+  // Picking where it runs right in the "New connection" dialog
+  localServiceNewManagedDesc: "Installs into Mosael's data folder, one copy per connection. Once the connection is created you see the install plan first — whether this machine can run it, which PyTorch, how much space, where it downloads from — and installing starts only after you confirm.",
+  localServiceAddressOnCreate: "Mosael picks the port when the connection is created (the first free one from 8189) and makes it this connection's server URL.",
+  localServiceNewPermissions: "Grants these {n} permissions when it's created",
+  localServiceNewPermissionsDesc: "Right after creating it, Mosael asks the plugin to check the folder or whether this machine can install it. These are what the plugin declares it does; without them it does nothing for this connection. You can revoke each one on the connection later.",
+  localServiceNewAdminOnly: "Only a deployment admin can pick the two local options: they run code {where}.",
   // Let Mosael install it (ADR 0041 §4)
   localServicePlanChecking: "Checking whether this machine can install it…",
   localServicePlanTorch: "PyTorch",
