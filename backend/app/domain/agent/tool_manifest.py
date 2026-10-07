@@ -195,6 +195,10 @@ def _plugin_tool_specs(
     specs = []
     instance_kits: dict[str, str | None] = {}
     for tool in exposed(db, user_id):
+        if not tool["agent"]:
+            # 插件说这个工具不进智能体的工具表(`agent: false`;ComfyUI 有表单的工作流,它的完整工作流 —— 给智能体的是
+            # 那张表单,ADR 0045 §5)。工作流节点、画板、插件页照常有它。
+            continue
         kit = _plugin_kit(db, tool["instance_id"], instance_kits)
         if kits is not None and kit is not None and kit not in kits:
             continue

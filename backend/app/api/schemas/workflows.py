@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.plugins import EntryGroupOut
 from app.domain.workflows.templates import TEMPLATE_CATALOG
 
 #: 官方模板的 id:由模板目录说了算,生成的前端类型因此是一个确切的联合。此前前端手抄了一份(3 个,实际 11 个),
@@ -117,6 +118,9 @@ class WorkflowNodeTypeOut(ApiModel):
     plugin_name: str = ""
     #: 插件工具的稳定调用名。只参与搜索/诊断，不拿它顶替给人看的 label。
     tool_name: str = ""
+    #: 插件工具是哪样东西的哪个入口(ADR 0045,ComfyUI 一张工作流的完整工作流和它的表单):添加节点、画布上的节点据此写
+    #: 第二行「来自 X」/「完整工作流」,同一组的挨着摆。内置节点和不分组的插件工具是 null。
+    group: EntryGroupOut | None = None
     #: 内嵌子图节点(循环 / 子图)体内看得见什么:作用域名 → 字段,`*字段名` 表示那个配置字段里的
     #: 每个键。如 {"loop": ["item", "index"], "input": ["*inputs"]};普通节点为空。
     body_scope: dict[str, list[str]] = Field(default_factory=dict)

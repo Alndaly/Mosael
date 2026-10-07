@@ -26,6 +26,7 @@ from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plu
 from app.domain.plugins import service_gate
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.groups import readable_group
 from app.domain.plugins.manifest import (
     CALL_CAPABILITIES,
     CATALOG_CAPABILITIES,
@@ -155,6 +156,10 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 # 这个工具跑的是连接上的哪张工作流(运行时报出的工具才说得出,见 dynamic_tools.clean_workflow)——
                 # 智能体那一轮只发用得上的那几张(agent.tool_manifest)。
                 "workflow": tool.get("workflow") if tool["name"] in reported else None,
+                # 哪样东西的哪个入口(ADR 0045;运行时报出的工具才说得出,见 plugins.groups),名字按此刻的语言挑好
+                "group": readable_group(tool.get("group")) if tool["name"] in reported else None,
+                # 不进智能体的工具表(`agent: false`,工作流节点、画板、插件页照常):ComfyUI 有表单的工作流,它的完整工作流
+                "agent": not (tool["name"] in reported and tool.get("agent") is False),
             }
         )
     return out

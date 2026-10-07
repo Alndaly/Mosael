@@ -362,6 +362,8 @@ class DeclaredModel:
     display_name: str
     capability_ids: list[str]
     capabilities: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
+    #: 这个模型是哪样东西的哪个入口(`{id, label, entry}`,ADR 0045,见 plugins.groups);存进 `declared_group`。
+    group: dict[str, Any] | None = None
 
 
 def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: list[DeclaredModel]) -> int:
@@ -387,6 +389,7 @@ def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: lis
         row.display_name = (entry.display_name or "")[:160]
         row.capability_ids = normalize_capability_ids(entry.capability_ids) or []
         row.declared_capabilities = dict(entry.capabilities)
+        row.declared_group = dict(entry.group) if entry.group else None
         kept.add(model_id)
     for model_id, row in existing.items():
         if model_id not in kept:

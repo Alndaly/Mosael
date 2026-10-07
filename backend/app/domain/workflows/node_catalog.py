@@ -59,6 +59,8 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
             "output_labels": distinct_labels({output: t(output_label(output, meta), locale) for output in meta["outputs"]}),
             "plugin_name": meta.get("plugin_name", ""),
             "tool_name": meta.get("tool_name", ""),
+            # 插件工具是哪样东西的哪个入口(ADR 0045:ComfyUI 一张工作流的完整工作流和表单),界面写成第二行
+            "group": meta.get("group"),
             # 内嵌子图节点体内看得见的作用域名 —— 画布就绪检查和后端校验读同一格(见 NESTED_BODY_TYPES)。
             "body_scope": {root: list(fields) for root, fields in (meta.get("body_scope") or {}).items()},
             # 哪个输出的结构写在哪一格配置里(那一格是 JSON Schema):引用它的地方据此列出能挑的字段。

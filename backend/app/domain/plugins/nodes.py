@@ -389,6 +389,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         # 节点按包聚合,连接名(「阿里云 OSS · 某个桶」)只是碰巧排在第一的那条连接。
         "plugin_name": tool.get("package_name", ""),
         "tool_name": tool.get("name", ""),
+        # 哪样东西的哪个入口(ADR 0045,ComfyUI 一张工作流的完整工作流和表单):添加节点、画布上的节点据此写第二行「来自 X」
+        **({"group": tool["group"]} if tool.get("group") else {}),
     }
 
 

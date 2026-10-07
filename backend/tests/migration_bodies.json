@@ -157,6 +157,7 @@
   "migrate-provider-default-model-fk": "6c69140410703512",
   "migrate-provider-defaults-per-person": "23f566dab1ec7f82",
   "migrate-provider-model-capability-ref": "4b298f6f0d22ca79",
+  "migrate-provider-models-remember-their-group": "14e3956d374b6516",
   "migrate-publish-task-claimed-by": "ccb9758be7bff45e",
   "migrate-publish-task-options": "fb2c2262ff9397da",
   "migrate-publish-task-post": "b45e4476e910158d",

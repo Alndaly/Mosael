@@ -13,6 +13,7 @@ from app.domain.providers import models as provider_models
 from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default
 
 from app.domain.permissions import require_own_profile
+from app.domain.plugins.groups import readable_group
 
 router = APIRouter(tags=["settings"])
 
@@ -60,6 +61,7 @@ def list_capability_models(
             provider_name=model.profile.name if model.profile is not None else "",
             model=model.model_id,
             display_name=model.display_name or "",
+            group=readable_group(model.declared_group),
             # 思考能力跟着模型走:有的完全不思考,有的只能开/关,有的才分档。
             # 界面据此决定给几个选项 —— 给一个点了没用的开关,比没有这个开关更坏。
             reasoning=model.reasoning,

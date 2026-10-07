@@ -31,6 +31,7 @@ from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.groups import clean_group
 #: 工具名的规矩和清单里声明的工具是同一条(见 manifest.TOOL_NAME_RE)。
 from app.domain.plugins.manifest import TOOL_NAME_RE, TOOLS
 from app.domain.plugins.runtime import PluginRuntimeError
@@ -46,7 +47,7 @@ MAX_REPLACES = 8
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
 _KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
-         "recommended", "replaces", "mirrors", "workflow")
+         "recommended", "replaces", "mirrors", "workflow", "group", "agent")
 #: `mirrors` 里的键名(生成参数键、入参名、素材角色)的样子。值是插件报的,进画板表单前先卡一道。
 _MIRROR_KEY = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
 #: 模型 id 可以是一条路径(ComfyUI 的工作流就是 `people/人像.json`),只卡长度和不是空的。
@@ -109,6 +110,15 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
         clean.pop("workflow", None)
     else:
         clean["workflow"] = workflow
+    # 哪样东西的哪个入口(ADR 0045,见 plugins.groups);形状不对当没说
+    group = clean_group(clean.get("group"))
+    if group is None:
+        clean.pop("group", None)
+    else:
+        clean["group"] = group
+    # 只认 `agent: false`(不进智能体的工具表,别处照常);别的写法当没写 —— 缺省是进
+    if clean.get("agent") is not False:
+        clean.pop("agent", None)
     return clean
 
 

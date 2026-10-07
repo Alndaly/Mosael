@@ -10234,6 +10234,7 @@ export interface components {
              * @default
              */
             tool_name: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
             /** Body Scope */
             body_scope?: {
                 [key: string]: string[];
@@ -10780,6 +10781,7 @@ export interface components {
              * @default
              */
             display_name: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
             /** Reasoning */
             reasoning?: boolean | null;
             /** Reasoning Effort */
@@ -11778,6 +11780,19 @@ export interface components {
             };
         };
         /**
+         * EntryGroupOut
+         * @description 一个模型、一个工具是哪样东西的哪个入口(ADR 0045,见 domain/plugins/groups):ComfyUI 一张工作流的完整工作流(`full`)和它上面的
+         *     表单(`form`)`id` 相同;`label` 是那样东西自己的名字(按看的人的语言挑好)。
+         */
+        EntryGroupOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Entry */
+            entry: string;
+        };
+        /**
          * ExportRequest
          * @description 导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。
          */
@@ -12119,6 +12134,7 @@ export interface components {
             model_label: string;
             /** Label */
             label: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
             /** Capabilities */
             capabilities?: {
                 [key: string]: unknown;
@@ -14831,6 +14847,7 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
             /** Kind */
             kind: string;
             /**
@@ -14926,6 +14943,12 @@ export interface components {
              * @default
              */
             description: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
+            /**
+             * Agent
+             * @default true
+             */
+            agent: boolean;
             /**
              * Read Only
              * @default false
@@ -18587,6 +18610,7 @@ export interface components {
              * @default
              */
             tool_name: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
             /** Body Scope */
             body_scope?: {
                 [key: string]: string[];

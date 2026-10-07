@@ -42,6 +42,10 @@ class PluginToolStateOut(ApiModel):
     name: str
     label: str = ""
     description: str = ""
+    #: 哪样东西的哪个入口;界面据此把同一组的几项排在一起、第二行写「来自 X」。不属于哪一组是 null。
+    group: EntryGroupOut | None = None
+    #: 进不进智能体的工具表(插件说 `agent: false` 的不进;工作流节点、画板照常)。
+    agent: bool = True
     read_only: bool = False
     #: 后果(none / paid / external / local-code,见 domain/effects)。不是 none 的,智能体调它之前先开确认卡 ——
     #: 插件页据此在工具旁标「需确认」。
@@ -83,11 +87,22 @@ class PluginProvidedParameterOut(ApiModel):
     advanced: bool = False
 
 
+class EntryGroupOut(ApiModel):
+    """一个模型、一个工具是哪样东西的哪个入口(ADR 0045,见 domain/plugins/groups):ComfyUI 一张工作流的完整工作流(`full`)和它上面的
+    表单(`form`)`id` 相同;`label` 是那样东西自己的名字(按看的人的语言挑好)。"""
+
+    id: str
+    label: str
+    entry: str
+
+
 class PluginProvidedModelOut(ApiModel):
     """一个替宿主做生成的实例**提供的一个模型**(模型行上缓存的那一份),给插件页列出来。"""
 
     id: str
     label: str
+    #: 哪样东西的哪个入口(ADR 0045);界面把同一组的排在一起、第二行写「来自 X」。不属于哪一组是 null。
+    group: EntryGroupOut | None = None
     kind: str
     enabled: bool = True
     modes: list[str] = Field(default_factory=list)

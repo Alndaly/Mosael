@@ -26,6 +26,7 @@ from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.groups import clean_group
 from app.domain.plugins.manifest import GENERATION
 from app.domain.plugins.runtime import StreamHooks
 
@@ -79,6 +80,9 @@ class PluginModel:
     #: 作者给这个模型挑的那张表(ComfyUI 的精简表单,ADR 0038 §2):`{title, description, items: [{key, label}]}`,
     #: `items` 按表上的顺序。没有就是 None —— 按参数各自的样子摆。名字按语言分的原样留着,给人看时再挑。
     form: dict[str, Any] | None = None
+    #: 这一项是哪样东西的哪个入口(ADR 0045,见 plugins.groups):ComfyUI 一张工作流的完整入口和它的表单入口这一格的 `id`
+    #: 相同。没说就是 None。
+    group: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +144,7 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
         prompt=str(entry.get("prompt") or "").strip().lower()[:16] if isinstance(entry.get("prompt"), str) else "",
         prompt_default=entry["prompt_default"].strip()[:_MAX_PROMPT_DEFAULT] if isinstance(entry.get("prompt_default"), str) else "",
         form=_form(entry.get("form"), text),
+        group=clean_group(entry.get("group")),
     )
 
 

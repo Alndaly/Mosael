@@ -27,6 +27,7 @@ from app.domain.generation.catalog import (
     resolve_capability_ref,
 )
 from app.domain.generation.custom_profiles import custom_capabilities_map
+from app.domain.plugins.groups import readable_group
 
 #: 生成种类的那一份在 catalog(叶模块);这里保留旧名,画板产出者等调用方从这里读。
 KINDS = GENERATION_KINDS
@@ -232,18 +233,28 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
                 "provider": resolved.provider,
                 "kind": kind,
                 "model": resolved.model,
-                # 给人看的模型名(目录里登记的显示名;插件连接上是插件报的名字,比如 ComfyUI 工作流的精简表单标题),
+                # 给人看的模型名(主名:目录里登记的显示名;插件连接上是插件报的名字,比如 ComfyUI 表单入口的表单标题),
                 # 没有就是模型 id。`model` 是 id,只用来选、存、比对 —— 各处下拉写名字要用这一格。
                 "model_label": row.display_name or resolved.model,
                 "label": f"{resolved.profile_name} · {row.display_name or resolved.model}",
+                # 它是哪样东西的哪个入口(ADR 0045:ComfyUI 一张工作流的完整工作流和表单是同一组)。副名「来自 X · 连接名」
+                # 由界面拿这一格和 `profile_name` 摆,这里不拼。
+                "group": readable_group(row.declared_group),
                 "capabilities": _for_reader(resolved.capabilities),
                 "capabilities_known": resolved.capabilities_known,
                 "adapter_available": get_generation_adapter(resolved.provider, kind) is not None,
                 "is_default": default is not None and default.id == row.id,
             }
         )
-    options.sort(key=lambda item: (item["profile_name"], item["model"]))
+    options.sort(key=_option_order)
     return options
+
+
+def _option_order(item: dict[str, Any]) -> tuple[str, str, int, str]:
+    """连接名,再按「组」(同一张工作流的几个入口挨在一起,完整工作流在前),再按名字。"""
+    group = item.get("group") or {}
+    return (item["profile_name"], str(group.get("id") or item["model"]), 0 if group.get("entry", "full") == "full" else 1,
+            item["model"])
 
 
 def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:

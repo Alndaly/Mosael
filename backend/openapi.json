@@ -29413,6 +29413,16 @@
             "title": "Tool Name",
             "default": ""
           },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "body_scope": {
             "additionalProperties": {
               "items": {
@@ -30641,6 +30651,16 @@
             "type": "string",
             "title": "Display Name",
             "default": ""
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reasoning": {
             "anyOf": [
@@ -32932,6 +32952,30 @@
         ],
         "title": "EntityVariantCreate"
       },
+      "EntryGroupOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "entry": {
+            "type": "string",
+            "title": "Entry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "entry"
+        ],
+        "title": "EntryGroupOut",
+        "description": "一个模型、一个工具是哪样东西的哪个入口(ADR 0045,见 domain/plugins/groups):ComfyUI 一张工作流的完整工作流(`full`)和它上面的\n表单(`form`)`id` 相同;`label` 是那样东西自己的名字(按看的人的语言挑好)。"
+      },
       "ExportRequest": {
         "properties": {
           "resolution": {
@@ -33484,7 +33528,7 @@
           },
           "model": {
             "type": "string",
-            "maxLength": 120,
+            "maxLength": 160,
             "minLength": 1,
             "title": "Model"
           },
@@ -33735,6 +33779,16 @@
             "type": "string",
             "title": "Label"
           },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "capabilities": {
             "additionalProperties": true,
             "type": "object",
@@ -33797,7 +33851,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120
+                "maxLength": 160
               },
               {
                 "type": "null"
@@ -33959,7 +34013,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120
+                "maxLength": 160
               },
               {
                 "type": "null"
@@ -39044,6 +39098,16 @@
             "type": "string",
             "title": "Label"
           },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "kind": {
             "type": "string",
             "title": "Kind"
@@ -39207,6 +39271,21 @@
             "type": "string",
             "title": "Description",
             "default": ""
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agent": {
+            "type": "boolean",
+            "title": "Agent",
+            "default": true
           },
           "read_only": {
             "type": "boolean",
@@ -39589,7 +39668,7 @@
           },
           "model": {
             "type": "string",
-            "maxLength": 120,
+            "maxLength": 160,
             "minLength": 1,
             "title": "Model"
           },
@@ -39750,7 +39829,7 @@
           },
           "model": {
             "type": "string",
-            "maxLength": 120,
+            "maxLength": 160,
             "title": "Model",
             "default": ""
           }
@@ -40194,7 +40273,7 @@
           },
           "model": {
             "type": "string",
-            "maxLength": 120,
+            "maxLength": 160,
             "title": "Model",
             "default": ""
           },
@@ -40462,7 +40541,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120
+                "maxLength": 160
               },
               {
                 "type": "null"
@@ -46954,6 +47033,16 @@
             "type": "string",
             "title": "Tool Name",
             "default": ""
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "body_scope": {
             "additionalProperties": {

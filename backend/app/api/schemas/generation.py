@@ -8,6 +8,7 @@ from pydantic import Field, ValidationInfo, computed_field, field_validator
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
 from app.api.schemas.jobs import JobOut, _rendered
+from app.api.schemas.plugins import EntryGroupOut
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.domain.jobs import CANCELLED_ERROR_KEY
 
@@ -46,6 +47,8 @@ class GenerationOptionOut(ApiModel):
     #: 给人看的模型名(显示名,没有就是 id)。下拉里写这个,`model` 只是 id。
     model_label: str
     label: str
+    #: 哪样东西的哪个入口;不属于哪一组是 null。副名(「来自 X · 连接名」)由界面拿它和 `profile_name` 摆。
+    group: EntryGroupOut | None = None
     capabilities: dict = Field(default_factory=dict)
     #: 这个 vendor+kind 有没有接入的生成 Adapter。不可用的照样列出但标出来 ——
     #: 藏起来的话用户配好了却找不到,只会以为是自己配错了。
@@ -75,7 +78,7 @@ class GenerationCreate(ApiModel):
     project_id: str | None = None
     provider_profile_id: str | None = None
     provider: str = Field(min_length=1, max_length=80)
-    model: str = Field(min_length=1, max_length=120)
+    model: str = Field(min_length=1, max_length=160)
     kind: str = Field(pattern="^(image|video|audio)$")
     #: 可以为空:音频只给歌词、给视频配声什么字都不给都是合法的。「图像 / 视频要提示词」这类按种类、
     #: 按模型的规矩在提交校验里判(operations.validate_text_inputs),同样回 422。
@@ -153,7 +156,7 @@ class PromptOptimizeRequest(ApiModel):
     workspace_id: str
     #: 目标图像平台(provider/model)——只用来选平台提示词习惯,不是重写用的 LLM。
     provider: str = Field(min_length=1, max_length=80)
-    model: str = Field(min_length=1, max_length=120)
+    model: str = Field(min_length=1, max_length=160)
     prompt: str = Field(min_length=1)
     #: 重写用的聊天 LLM 供应商配置;缺省用默认启用的那个(与助手/工作流同一个)。
     provider_profile_id: str | None = None
@@ -171,7 +174,7 @@ class GenerationSessionCreate(ApiModel):
     workspace_id: str
     title: str = Field(default="新生成", max_length=200)
     provider_profile_id: str | None = None
-    model: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=160)
     #: 会话一定有种类:AI 工作台按它分页(图像 / 视频在「生成」页,音频在「音频」页)。没说就是图像。
     kind: str = Field(default="image", pattern="^(image|video|audio)$")
 
@@ -181,7 +184,7 @@ class GenerationSessionUpdate(ApiModel):
     #: 收进哪个分组;空串或 null 表示退回未分组。
     group_id: str | None = None
     provider_profile_id: str | None = None
-    model: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=160)
     kind: str | None = Field(default=None, pattern="^(image|video|audio)$")
 
 

@@ -8331,6 +8331,18 @@ def _migrate_agent_sessions_know_who_named_them() -> None:
         conn.execute(text("UPDATE agent_sessions SET title_source = 'manual' WHERE title != '新对话'"))
 
 
+def _migrate_provider_models_remember_their_group() -> None:
+    """`provider_models.declared_group`:连接说这个模型是哪样东西的哪个入口(ADR 0045,ComfyUI 一张工作流的完整工作流和
+    它的表单是同一组)。只加列、不回填:它和 `declared_capabilities` 一样只由插件目录写,插件版本进了目录指纹,升级后第一次
+    刷新就写上。加列必须在 SCHEMA 之前:之后 ORM 上的 ProviderModel 已经指望它在了。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_models)"))}
+        if not columns or "declared_group" in columns:
+            return
+        conn.execute(text("ALTER TABLE provider_models ADD COLUMN declared_group JSON"))
+
+
 def _drop_empty_agent_sessions() -> None:
     """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
 
@@ -8643,6 +8655,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_agent_sessions_remember_where_they_were_opened,
                 # 同上:ORM 上的 AgentSession 指望「名字是谁起的」那一列在。
                 _migrate_agent_sessions_know_who_named_them,
+                # 同上:ORM 上的 ProviderModel 指望「是哪样东西的哪个入口」那一列在(ADR 0045)。
+                _migrate_provider_models_remember_their_group,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

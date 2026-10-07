@@ -6,6 +6,10 @@ confirmable/comfyui —— 批准之后走的是那个工具自己的那一套:�
 
 「哪张工作流」认三种写法:`list_workflows` 回的 `tool`、智能体看到的完整工具名、工作流的路径(带不带 `.json` 都认)。只在这个人
 自己接的连接里找(连接归人);只看插件报的 `workflow` 键,不看工具名长什么样。
+
+**只认进得了智能体工具表的那几个**(ADR 0045 §5):有表单的工作流,它的完整工作流工具插件标了 `agent: false` —— 给智能体的是
+表单那一项。一张工作流的几个入口 `workflow.path` 相同,按路径找到的就是表单入口;这条路不把 `agent: false` 的绕回来(要全部
+参数,智能体走生成那一路、带完整工作流的模型 id)。
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ def resolve(db: Session, user: User, workflow: str, instance_id: str = "") -> tu
         raise WorkflowToolError("workbenchErr_noWorkflowTool", workflow=wanted)
     found: list[tuple[dict[str, Any], str]] = []
     for tool in exposed(db, user.id):
-        if not tool.get("workflow") or (instance_id and tool["instance_id"] != instance_id):
+        if not tool.get("workflow") or not tool["agent"] or (instance_id and tool["instance_id"] != instance_id):
             continue
         name = agent_tool_name(tool["instance_id"], tool["name"])
         path = str(tool["workflow"].get("path") or "")

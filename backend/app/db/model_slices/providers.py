@@ -159,6 +159,9 @@ class ProviderModel(Base):
     #: 刷新目录时落到这里(见 domain/generation/plugin_connections)。解析顺序:用户声明 → 它 →
     #: 内置目录 → 兜底(见 domain/generation/resolution)。留空 = 连接什么都没说。
     declared_capabilities: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    #: 连接说这个模型是哪样东西的哪个入口(`{id, label, entry}`,ADR 0045,见 domain/plugins/groups):ComfyUI 一张工作流的
+    #: 完整工作流和它的表单是同一组。和上面那格一样只由插件目录写;留空 = 不属于哪一组。
+    declared_group: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

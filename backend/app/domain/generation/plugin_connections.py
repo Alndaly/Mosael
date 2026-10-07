@@ -46,6 +46,7 @@ from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.groups import readable_group
 from app.domain.plugins.manifest import GENERATION
 from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, StreamHooks
 from app.domain.providers.plugin_vendor import VENDOR_PREFIX, package_of, vendor_for
@@ -228,6 +229,7 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
             display_name=model.label,
             capability_ids=[model.kind],
             capabilities={model.kind: descriptor(model)},
+            group=model.group,
         )
         for model in found.models
         if model.kind in GENERATION_KINDS
@@ -280,6 +282,8 @@ def provided_models(db: Session, instance: PluginInstance) -> list[dict[str, Any
                 {
                     "id": row.model_id,
                     "label": row.display_name or row.model_id,
+                    #: 哪样东西的哪个入口(ADR 0045):界面据此把同一张工作流的几项排在一起、第二行写来自哪张
+                    "group": readable_group(row.declared_group, locale),
                     "kind": kind,
                     "enabled": row.enabled,
                     "modes": [str(one) for one in caps.get("modes") or []],

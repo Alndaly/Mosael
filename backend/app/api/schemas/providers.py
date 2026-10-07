@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pydantic import Field, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.plugins import EntryGroupOut
 
 class ProviderModelOut(ApiModel):
     """一条连接下的一个模型 —— **已配置的行与供应商目录合并后的样子**。
@@ -277,6 +278,9 @@ class CapabilityModelOut(ApiModel):
     provider_name: str
     model: str
     display_name: str = ""
+    #: 哪样东西的哪个入口(ADR 0045:ComfyUI 一张工作流的完整工作流和表单是同一组)。界面据此写第二行「来自 X · 连接名」、
+    #: 同一组的挨着摆;不属于哪一组是 null。
+    group: EntryGroupOut | None = None
     #: 这个模型会不会思考。False = 完全不支持,界面上就不该出现思考档位这个控件。
     #: None = 还没探明(端点没报、用户没细分过),按"可能会"处理 —— 少一个档位比多一个更坏。
     reasoning: bool | None = None
@@ -291,7 +295,7 @@ class CapabilityModelOut(ApiModel):
 
 class ProviderDefaultUpdate(ApiModel):
     provider_profile_id: str | None = None
-    model: str = Field(default="", max_length=120)
+    model: str = Field(default="", max_length=160)
 
 
 class PricingTimeWindow(ApiModel):
@@ -315,7 +319,7 @@ class ProviderPricingRuleCreate(ApiModel):
     provider_profile_id: str | None = None
     provider: str = Field(default="", max_length=80)
     capability: str = Field(min_length=1, max_length=40)
-    model: str = Field(default="", max_length=120)
+    model: str = Field(default="", max_length=160)
     #: 这条价只对哪个输出分辨率(720p、1080p、2k……)生效;空 = 不限分辨率。存成小写。
     resolution: str = Field(default="", max_length=16)
     billing_unit: str = Field(min_length=1, max_length=40)
@@ -334,7 +338,7 @@ class ProviderPricingRuleUpdate(ApiModel):
     provider_profile_id: str | None = None
     provider: str | None = Field(default=None, max_length=80)
     capability: str | None = Field(default=None, min_length=1, max_length=40)
-    model: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=160)
     resolution: str | None = Field(default=None, max_length=16)
     billing_unit: str | None = Field(default=None, min_length=1, max_length=40)
     unit_amount_micros: int | None = Field(default=None, ge=0)
