@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { Job, ModelFile } from "@/api/client";
 import {
+  byRecipe,
   comboInputs,
+  encoderFit,
   folderFamilies,
   folderModels,
   liveProgress,
@@ -39,13 +41,41 @@ const model = (folder: string, name: string, extra: Partial<ModelFile> = {}): Mo
 
 describe("工作台面板背后的纯函数", () => {
   it("选中节点上的下拉格子交给插件问目录;插件说了目录的那几格才是选模型文件的", () => {
+    //: 每一格都带上这个节点上下拉格子现在的值(只有字符串的那几格):插件据此判,界面不认识它们
+    const values = { lora_name: "style.safetensors", mode: "x" };
     expect(comboInputs(lora)).toEqual([
-      { class_type: "LoraLoader", input: "lora_name" },
-      { class_type: "LoraLoader", input: "mode" },
+      { class_type: "LoraLoader", input: "lora_name", values },
+      { class_type: "LoraLoader", input: "mode", values },
     ]);
     expect(comboInputs(null)).toEqual([]);
-    expect(modelSlots(lora, ["loras", ""])).toEqual([{ widget: "lora_name", folder: "loras", value: "style.safetensors" }]);
+    expect(modelSlots(lora, ["loras", ""])).toEqual([{ widget: "lora_name", folder: "loras", value: "style.safetensors", encoders: null }]);
     expect(modelSlots(loader, []), "插件还没回话就当没有").toEqual([]);
+  });
+
+  it("CLIP 加载节点:合它现在 type 的编码器排前面,ComfyUI 不看 type 的、认不出的居中,不在配方里的最后", () => {
+    const clip: WorkbenchNode = {
+      id: "3", type: "CLIPLoader", title: "Load CLIP",
+      widgets: [
+        { name: "clip_name", type: "combo", value: "umt5_xxl.safetensors", combo: true },
+        { name: "type", type: "combo", value: "wan", combo: true },
+      ],
+    };
+    const recipe = { type: "wan", fits: ["umt5_xxl"], any_type: ["qwen3_06b"] };
+    const [slot] = modelSlots(clip, ["text_encoders", ""], [recipe, null]);
+    expect(slot.encoders).toEqual(recipe);
+    const encoder = (name: string, kind: string) =>
+      model("text_encoders", name, { family_source: "not_applicable", encoder: { kind, label: kind, source: "weights", pairs: [] } });
+    const models = [
+      encoder("a_clip_l.safetensors", "clip_l"),
+      encoder("b_mystery.safetensors", ""),
+      encoder("c_qwen.safetensors", "qwen3_06b"),
+      encoder("d_umt5.safetensors", "umt5_xxl"),
+    ];
+    expect(byRecipe(models, recipe).map((one) => one.name))
+      .toEqual(["d_umt5.safetensors", "b_mystery.safetensors", "c_qwen.safetensors", "a_clip_l.safetensors"]);
+    expect(models.map((one) => encoderFit(one, recipe))).toEqual(["misfit", null, "any", "fits"]);
+    expect(byRecipe(models, null), "不是 CLIP 加载节点:照原来的先后").toEqual(models);
+    expect(encoderFit(model("loras", "x.safetensors"), recipe), "不是文本编码器的文件不标").toBeNull();
   });
 
   it("这个目录里有没有那个文件:Windows 的反斜杠和正斜杠当一样;空值不算缺", () => {

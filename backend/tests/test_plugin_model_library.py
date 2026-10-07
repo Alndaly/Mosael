@@ -79,6 +79,13 @@ elif op == "library":
             {"folder": "", "name": "no-folder.safetensors"},
             {"name": "no-folder-either"},
             "not a dict",
+            *([{"folder": "text_encoders", "name": "t5xxl.safetensors", "family_source": "not_applicable",
+                "encoder": {"kind": "t5_xxl", "label": "T5-XXL", "source": "weights", "pairs": ["Flux", "SD 3", 7, ""]}},
+               {"folder": "text_encoders", "name": "odd.safetensors", "family_source": "not_applicable",
+                "encoder": {"kind": "../T5", "label": "x", "source": "weights", "pairs": ["Flux"]}},
+               {"folder": "text_encoders", "name": "guess.safetensors", "family_source": "not_applicable",
+                "encoder": {"kind": "clip_l", "label": "CLIP-L", "source": "vibes"}}]
+              if (data / "encoders").exists() else []),
         ],
         "missing": [{"folder": "vae", "name": "ae.safetensors",
                      "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors",
@@ -104,8 +111,14 @@ elif op == "save_preview":
     (data / "saved-name").write_text(Path(payload["path"]).name)
     emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["name"], "saved": "loras/style.png"}})
 elif op == "node_folders":
-    emit({"ok": True, "output": {"folders": ["checkpoints" if one["input"] == "ckpt_name" else
-                                             "../etc" if one["input"] == "evil" else "" for one in payload["nodes"]]}})
+    nodes = payload["nodes"]
+    out = {"folders": ["checkpoints" if one["input"] == "ckpt_name" else "text_encoders" if one["input"] == "clip_name" else
+                       "../etc" if one["input"] == "evil" else "" for one in nodes]}
+    if any(one["input"] == "clip_name" for one in nodes):
+        out["encoders"] = [{"type": one["values"].get("type", ""), "fits": ["umt5_xxl", "Not A Kind"],
+                            "any_type": ["qwen3_06b"]} if one["input"] == "clip_name" else
+                           {"type": "../x", "fits": ["x"]} if one["input"] == "type" else None for one in nodes]
+    emit({"ok": True, "output": out})
 elif op == "detail":
     emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["name"],
                                  "metadata": {"ss_base_model_version": "sdxl_base_v1-0", "modelspec.title": "Style"},
@@ -718,12 +731,41 @@ def test_工作台_选中节点那一格是哪个模型目录_插件给的不像
         {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"}, {"class_type": "KSampler", "input": "steps"},
         {"class_type": "X", "input": "evil"}]})
     assert response.status_code == 200, response.text
-    assert response.json() == {"folders": ["checkpoints", "", ""]}
+    assert response.json() == {"folders": ["checkpoints", "", ""], "encoders": [None, None, None]}, "插件不说配方就是没有"
     sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
-    assert sent["nodes"][0] == {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"}
+    assert sent["nodes"][0] == {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name", "values": {}}
     too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders",
                            json={"nodes": [{"class_type": "X", "input": "y"}] * 65})
     assert too_many.status_code == 422
+
+
+def test_工作台_选文本编码器的那一格带着节点type的配方_节点上的值照传(library) -> None:
+    client, instance_id, _ = library
+    response = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
+        {"class_type": "CLIPLoader", "input": "clip_name", "values": {"type": "wan", "device": "default"}},
+        {"class_type": "CLIPLoader", "input": "type", "values": {"type": "wan", "device": "default"}}]})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"folders": ["text_encoders", ""], "encoders": [
+        {"type": "wan", "fits": ["umt5_xxl"], "any_type": ["qwen3_06b"]}, None]}, "不像种类名的丢掉;type 不像样的整格不要"
+    sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
+    assert sent["nodes"][0]["values"] == {"type": "wan", "device": "default"}
+    too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
+        {"class_type": "X", "input": "y", "values": {str(index): "v" for index in range(40)}}]})
+    assert too_many.status_code == 422
+
+
+def test_文本编码器那一格_宿主规整_别的文件没有这一格(library) -> None:
+    client, instance_id, _ = library
+    _flag("encoders")
+    body = client.get(f"/api/plugins/instances/{instance_id}/model-library").json()
+    by_name = {(one["folder"], one["name"]): one for one in body["models"]}
+    t5 = by_name[("text_encoders", "t5xxl.safetensors")]
+    assert t5["family"] == "" and t5["family_source"] == "not_applicable"
+    assert t5["encoder"] == {"kind": "t5_xxl", "label": "T5-XXL", "source": "weights", "pairs": ["Flux", "SD 3"]}
+    assert by_name[("text_encoders", "odd.safetensors")]["encoder"] == {"kind": "", "label": "", "source": "", "pairs": []}, \
+        "种类名不像样:仍是文本编码器,当认不出"
+    assert by_name[("text_encoders", "guess.safetensors")]["encoder"]["source"] == "", "凭的是什么只认 weights / filename"
+    assert by_name[("checkpoints", "sdxl_base.safetensors")]["encoder"] is None
 
 
 # --- NSFW:几种依据合成一个判断(ADR 0038 §9) -----------------------------------

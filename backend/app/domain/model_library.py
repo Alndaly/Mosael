@@ -166,12 +166,49 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
         "modified": _number(raw.get("modified")),
         "family": _text(raw.get("family"), 80),
         "family_source": _text(raw.get("family_source"), 40),
+        "encoder": _encoder(raw.get("encoder")),
         "triggers": triggers,
         "triggers_source": _text(raw.get("triggers_source"), 40) if triggers else "",
         "title": _text(raw.get("title"), 300),
         "has_preview": bool(preview),
         "used_by": _refs(raw.get("used_by")),
     }, preview
+
+
+#: 文本编码器的种类、工作台的 type 都是插件起的短名(`t5_xxl`、`qwen3vl_4b`、`stable_diffusion`)。
+_KIND = re.compile(r"[a-z0-9_]{1,40}")
+#: 一个文本编码器最多列几种常配的底模。
+_MAX_PAIRS = 24
+
+
+def _kinds(value: Any) -> list[str]:
+    return [one for one in value if isinstance(one, str) and _KIND.fullmatch(one)][:64] if isinstance(value, list) else []
+
+
+def _encoder(value: Any) -> dict[str, Any] | None:
+    """文本编码器那一格:`kind`(哪一种,认不出是空串 —— 仍是文本编码器)、`label`(给人看的名字)、`source`(`weights`
+    从权重认出 / `filename` 按文件名猜的)、`pairs`(常配哪几种底模,家族名)。不是文本编码器的文件没有这一格(None)。"""
+    if not isinstance(value, dict):
+        return None
+    kind = _text(value.get("kind"), 40)
+    if not _KIND.fullmatch(kind):
+        return {"kind": "", "label": "", "source": "", "pairs": []}
+    source = _text(value.get("source"), 20)
+    pairs = [_text(one, 80) for one in value.get("pairs") or [] if _text(one, 80)] if isinstance(value.get("pairs"), list) else []
+    return {"kind": kind, "label": _text(value.get("label"), 80) or kind,
+            "source": source if source in ("weights", "filename") else "", "pairs": pairs[:_MAX_PAIRS]}
+
+
+def _node_encoders(value: Any) -> dict[str, Any] | None:
+    """工作台里选文本编码器的那一格:节点现在的 `type`、在这个 type 配方里的几种(`fits`)、ComfyUI 不看 type 的几种
+    (`any_type`)。不是这种格子是 None。"""
+    if not isinstance(value, dict):
+        return None
+    kind = _text(value.get("type"), 40)
+    fits = _kinds(value.get("fits"))
+    if not _KIND.fullmatch(kind) or not fits:
+        return None
+    return {"type": kind, "fits": fits, "any_type": _kinds(value.get("any_type"))}
 
 
 def _source(value: Any) -> dict[str, str] | None:
@@ -498,19 +535,34 @@ def search_sources(db: Session, instance: PluginInstance, filename: str, folder:
 MAX_NODE_FOLDERS = 64
 
 
-def node_folders(db: Session, instance: PluginInstance, nodes: list[dict[str, str]]) -> dict[str, list[str]]:
+#: 一格带着的节点上下拉格子的值最多几个。
+_MAX_NODE_VALUES = 32
+
+
+def _node_values(value: Any) -> dict[str, str]:
+    """节点上下拉格子现在的值(名字 → 选的那一项):插件据此判,比如 CLIP 加载节点的 type。"""
+    items = list(value.items())[:_MAX_NODE_VALUES] if isinstance(value, dict) else []
+    return {_text(key, 200): _text(one, 200) for key, one in items if _text(key, 200) and isinstance(one, str)}
+
+
+def node_folders(db: Session, instance: PluginInstance, nodes: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件 ——
-    面板据此只列那个目录的模型,点一个填进那一格。不是选模型文件的格子是空串。插件只查表,不问 ComfyUI。"""
+    面板据此只列那个目录的模型,点一个填进那一格。不是选模型文件的格子是空串。选文本编码器的那一格另有 `encoders`:
+    节点现在的 type 配哪几种(面板据此把合用的排前面、标出不合的);插件不说就是 None。插件只查表,不问 ComfyUI。"""
     _require(db, instance)
     if len(nodes) > MAX_NODE_FOLDERS:
         raise ModelLibraryError("modelLibErr_tooManyNodes", n=str(MAX_NODE_FOLDERS))
-    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200)} for one in nodes]
+    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200),
+              "values": _node_values(one.get("values"))} for one in nodes]
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "node_folders", "nodes": asked},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     folders = output.get("folders")
     if not isinstance(folders, list) or len(folders) != len(asked):
         raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
-    return {"folders": [one if isinstance(one, str) and _MODEL_FOLDER.fullmatch(one) else "" for one in folders]}
+    recipes = output.get("encoders")
+    recipes = recipes if isinstance(recipes, list) and len(recipes) == len(asked) else [None] * len(asked)
+    return {"folders": [one if isinstance(one, str) and _MODEL_FOLDER.fullmatch(one) else "" for one in folders],
+            "encoders": [_node_encoders(one) for one in recipes]}
 
 
 #: 一个模型目录的名字(ComfyUI 的 folder_paths 名:loras、checkpoints、unet_gguf……)。

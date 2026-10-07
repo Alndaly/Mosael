@@ -28,6 +28,8 @@ export type PluginProvidedModel = components["schemas"]["PluginProvidedModelOut"
 /** 模型库(ADR 0034):认领 model_library 的连接上的模型文件、工作流缺的模型、下载走哪条路。 */
 export type ModelLibrary = components["schemas"]["ModelLibraryOut"];
 export type ModelFile = components["schemas"]["ModelFileOut"];
+/** 文本编码器是哪一种、常配哪几种底模(它给好几种底模用,所以不贴底模)。 */
+export type ModelEncoder = components["schemas"]["ModelEncoderOut"];
 export type MissingModel = components["schemas"]["MissingModelOut"];
 export type ModelDetail = components["schemas"]["ModelDetailOut"];
 export type ModelResolved = components["schemas"]["ModelResolveOut"];
@@ -205,9 +207,14 @@ export const getLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-
 /** 下载本机识别的权重(只给部署管理员;后台下,回当时的状态)。 */
 export const installLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-nsfw/install", { method: "POST" });
 
-/** 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件(不是的为空串)。 */
-export const getNodeFolders = (instanceId: string, nodes: { class_type: string; input: string }[]) =>
-  api<{ folders: string[] }>(`/api/plugins/instances/${instanceId}/model-library/node-folders`, {
+/** 选文本编码器的那一格:节点现在的 type 配哪几种编码器(`fits`)、哪几种 ComfyUI 不看 type(`any_type`)。 */
+export type NodeEncoders = components["schemas"]["ModelNodeEncodersOut"];
+/**
+ * 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名 + 这个节点上下拉格子现在的值)各选的是哪个模型目录的
+ * 文件(不是的为空串),选文本编码器的那一格再带上 `encoders`(其余为 null)。
+ */
+export const getNodeFolders = (instanceId: string, nodes: components["schemas"]["ModelNodeFolderIn"][]) =>
+  api<components["schemas"]["ModelNodeFoldersOut"]>(`/api/plugins/instances/${instanceId}/model-library/node-folders`, {
     method: "POST",
     body: JSON.stringify({ nodes }),
   });

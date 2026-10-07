@@ -227,7 +227,9 @@ describe("ComfyUI 工作台", () => {
 
   it("模型库:选中加载节点只列那个目录的模型,点一行经桥填进去;下拉里还没有就给「刷新下拉」", async () => {
     const bridge = await mount();
-    await waitFor(() => expect(api.getNodeFolders).toHaveBeenCalledWith("i1", [{ class_type: "CheckpointLoaderSimple", input: "ckpt_name" }]));
+    await waitFor(() => expect(api.getNodeFolders).toHaveBeenCalledWith("i1", [
+      { class_type: "CheckpointLoaderSimple", input: "ckpt_name", values: { ckpt_name: "sdxl.safetensors" } },
+    ]));
     const list = await screen.findByRole("list", { name: "workbenchModelsList" });
     expect(within(list).getAllByRole("listitem").map((one) => one.textContent)).toEqual([
       expect.stringContaining("film grain"), expect.stringContaining("Pony"), expect.stringContaining("SDXL Base"),
@@ -241,6 +243,47 @@ describe("ComfyUI 工作台", () => {
     fireEvent.click(within(list).getByRole("button", { name: /SDXL Base/ }));
     fireEvent.click(await screen.findByRole("button", { name: /workbenchCombosRefresh/ }));
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "refreshCombos" }));
+  });
+
+  it("模型库:选中 CLIP 加载节点时,合它现在 type 的文本编码器排前面,不在配方里的排最后、标出来;换了 type 重新问", async () => {
+    const encoder = (name: string, kind: string, label: string) => ({
+      folder: "text_encoders", name, family: "", family_source: "not_applicable", title: "", triggers: [], has_preview: false,
+      encoder: { kind, label, source: "weights", pairs: [] },
+    });
+    api.getModelLibrary.mockResolvedValue({
+      folders: [], missing: [], downloads: [],
+      models: [encoder("a_clip_l.safetensors", "clip_l", "CLIP-L"), encoder("b_qwen.safetensors", "qwen3_06b", "Qwen3 0.6B"),
+               encoder("c_umt5.safetensors", "umt5_xxl", "UMT5-XXL")],
+    });
+    api.getNodeFolders.mockImplementation(async (_: string, nodes: { input: string; values: Record<string, string> }[]) => ({
+      folders: nodes.map((one) => (one.input === "clip_name" ? "text_encoders" : "")),
+      encoders: nodes.map((one) => (one.input !== "clip_name" ? null : one.values.type === "wan"
+        ? { type: "wan", fits: ["umt5_xxl"], any_type: ["qwen3_06b"] }
+        : { type: "stable_diffusion", fits: ["clip_l", "clip_h", "clip_g"], any_type: ["qwen3_06b"] })),
+    }));
+    const clip = (type: string) => ({ id: "5", type: "CLIPLoader", title: "Load CLIP", widgets: [
+      { name: "clip_name", type: "combo", value: "c_umt5.safetensors", combo: true },
+      { name: "type", type: "combo", value: type, combo: true },
+    ] });
+    const bridge = await mount(state({ selection: { count: 1, node: clip("wan") } }));
+    const rows = async () => {
+      const list = await screen.findByRole("list", { name: "workbenchModelsList" });
+      return within(list).getAllByRole("listitem");
+    };
+    await waitFor(async () => expect((await rows()).map((one) => one.textContent?.includes("UMT5-XXL"))).toEqual([true, false, false]));
+    const [first, middle, last] = await rows();
+    expect(middle.textContent).toContain("Qwen3 0.6B");
+    expect(middle.querySelector("[data-recipe-misfit]"), "ComfyUI 不看 type 的不算不合").toBeNull();
+    expect(first.querySelector("[data-recipe-misfit]")).toBeNull();
+    expect(last.textContent).toContain("CLIP-L");
+    expect(last.querySelector("[data-recipe-misfit]")?.textContent).toBe("workbenchModelsNotInRecipe");
+
+    bridge.emit(state({ selection: { count: 1, node: clip("stable_diffusion") } }));
+    await waitFor(async () => expect((await rows())[0].textContent).toContain("CLIP-L"));
+    expect(api.getNodeFolders).toHaveBeenLastCalledWith("i1", expect.arrayContaining([
+      { class_type: "CLIPLoader", input: "clip_name", values: { clip_name: "c_umt5.safetensors", type: "stable_diffusion" } },
+    ]));
+    expect((await rows())[2].querySelector("[data-recipe-misfit]"), "UMT5-XXL 不在 stable_diffusion 的配方里").toBeTruthy();
   });
 
   it("模型库:缩略图照预览图那两组设置画(和模型库同一份,这里也能改),判成 NSFW 的带角标", async () => {

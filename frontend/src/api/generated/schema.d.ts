@@ -13081,6 +13081,30 @@ export interface components {
             note: string;
         };
         /**
+         * ModelEncoderOut
+         * @description 一个文本编码器是哪一种、常配哪几种底模(ADR 0034 §2 的 2026-10-07 补记)。一个编码器给好几种底模用,所以它不贴底模
+         *     (`family` 空着、`family_source` 是 `not_applicable`),而是说这些。
+         */
+        ModelEncoderOut: {
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /** Pairs */
+            pairs?: string[];
+        };
+        /**
          * ModelFileOut
          * @description 那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。
          */
@@ -13103,6 +13127,7 @@ export interface components {
              * @default
              */
             family_source: string;
+            encoder?: components["schemas"]["ModelEncoderOut"] | null;
             /** Triggers */
             triggers?: string[];
             /**
@@ -13279,19 +13304,37 @@ export interface components {
             found?: components["schemas"]["ModelLookupFoundOut"][];
         };
         /**
+         * ModelNodeEncodersOut
+         * @description 选文本编码器的那一格:节点现在的 type 配哪几种编码器。
+         */
+        ModelNodeEncodersOut: {
+            /** Type */
+            type: string;
+            /** Fits */
+            fits?: string[];
+            /** Any Type */
+            any_type?: string[];
+        };
+        /**
          * ModelNodeFolderIn
-         * @description 画布上选中的节点的一格:节点类型 + 输入名。
+         * @description 画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。
          */
         ModelNodeFolderIn: {
             /** Class Type */
             class_type: string;
             /** Input */
             input: string;
+            /** Values */
+            values?: {
+                [key: string]: string;
+            };
         };
         /** ModelNodeFoldersOut */
         ModelNodeFoldersOut: {
             /** Folders */
             folders?: string[];
+            /** Encoders */
+            encoders?: (components["schemas"]["ModelNodeEncodersOut"] | null)[];
         };
         /**
          * ModelNodeFoldersRequest

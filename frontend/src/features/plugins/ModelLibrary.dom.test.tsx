@@ -44,13 +44,23 @@ vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 //: 大图走应用共用的灯箱(App 根上的 Provider);这里只看有没有交给它
 const imagePreview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: imagePreview, isImagePreviewOpen: false }) }));
+//: 文本编码器那几句要拼进底模名才看得出写了什么:这几条给真文案,别的照旧回键名
+const ENCODER_TEXT = vi.hoisted((): Record<string, string> => ({
+  modelEncoderRole: "文本编码器",
+  modelEncoderUnknown: "认不出是哪一种",
+  modelEncoderPairs: "常配 {families}",
+  modelEncoderPairsMore: "常配 {families} 等 {n} 种",
+  modelEncoderListSep: "、",
+  modelLibraryFamilyCountPaired: "{n} · 常配 {m}",
+  modelLibraryFamilyOnlyPaired: "常配 {m}",
+}));
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => ENCODER_TEXT[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
 
 import type { Job, ModelLibrary, PluginInstance } from "@/api/client";
-import { readHint } from "@/test/hint";
+import { hoverHint, readHint } from "@/test/hint";
 import { ConnectionLibraries } from "./ConnectionLibraries";
 import { ModelLibraryDialog, freeName } from "./ModelLibrary";
 
@@ -585,15 +595,15 @@ describe("模型库", () => {
     expect(used.textContent).toContain("declaring");
   });
 
-  it("底模的三种判据各说各的:权重结构认出的实色、说凭的是权重;文本编码器这类写「不适用」,筛选里单列在最后", async () => {
+  it("底模的三种判据各说各的:权重结构认出的实色、说凭的是权重;放大模型这类写「不适用」,筛选里单列在最后", async () => {
     const base = library();
     api.getModelLibrary.mockResolvedValue(library({
-      folders: [...(base.folders ?? []), { name: "text_encoders", count: 1 }],
+      folders: [...(base.folders ?? []), { name: "upscale_models", count: 1 }],
       models: [
         ...(base.models ?? []),
         { folder: "checkpoints", name: "dessert.safetensors", size: 6938041004, modified: 1700000020, family: "SDXL",
           family_source: "weights", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
-        { folder: "text_encoders", name: "t5xxl.safetensors", size: 9000000000, modified: 1700000021, family: "",
+        { folder: "upscale_models", name: "4x-UltraSharp.pth", size: 67000000, modified: 1700000021, family: "",
           family_source: "not_applicable", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
       ],
     }));
@@ -613,14 +623,77 @@ describe("模型库", () => {
     expect(screen.getByRole("region", { name: "modelOverview" }).textContent).toContain("modelFamilySourceWeights");
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryBack" }));
 
-    api.getModelDetail.mockResolvedValue({ folder: "text_encoders", name: "t5xxl.safetensors", metadata: {}, tags: [] });
-    fireEvent.click(await screen.findByRole("tab", { name: "text_encoders 1" }));
-    fireEvent.click(within(cards()[0]).getByRole("button", { name: "t5xxl.safetensors" }));
+    api.getModelDetail.mockResolvedValue({ folder: "upscale_models", name: "4x-UltraSharp.pth", metadata: {}, tags: [] });
+    fireEvent.click(await screen.findByRole("tab", { name: "upscale_models 1" }));
+    fireEvent.click(within(cards()[0]).getByRole("button", { name: "4x-UltraSharp.pth" }));
     await screen.findByRole("button", { name: "modelLibraryBack" });
     const overview = screen.getByRole("region", { name: "modelOverview" }).textContent;
     expect(overview).toContain("modelLibraryFamilyNotApplicable");
     expect(overview).toContain("modelFamilyNotApplicableHint");
     expect(overview).not.toContain("modelLibraryFamilyUnknown");
+  });
+
+  it("文本编码器:不写「不适用」,写是哪一种和常配的底模;按底模筛时常配它的一起列出、标「常配」,不算那个底模的", async () => {
+    const base = library();
+    const encoder = (name: string, kind: string, label: string, pairs: string[], source = "weights") => ({
+      folder: "text_encoders", name, size: 9000000000, modified: 1700000030, family: "", family_source: "not_applicable",
+      triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [],
+      encoder: { kind, label, source, pairs },
+    });
+    api.getModelLibrary.mockResolvedValue(library({
+      folders: [...(base.folders ?? []), { name: "text_encoders", count: 3 }],
+      models: [
+        ...(base.models ?? []),
+        encoder("t5xxl_fp16.safetensors", "t5_xxl", "T5-XXL", ["Flux", "SD 3", "HiDream", "LTX-Video", "Flux Kontext", "Chroma"]),
+        encoder("qwen3vl_4b.safetensors", "qwen3vl_4b", "Qwen3-VL 4B", ["Krea 2", "Flux.2"], "filename"),
+        encoder("mystery.safetensors", "", "", [], ""),
+      ],
+    }));
+    await openLibrary();
+    fireEvent.click(folderTab("text_encoders 3"));
+    const card = (name: string) => cards().find((item) => item.textContent?.includes(name))!;
+    const pairs = (name: string) => card(name).querySelector("[data-encoder-pairs]")?.textContent;
+    expect(card("t5xxl_fp16").textContent).toContain("T5-XXL");
+    expect(pairs("t5xxl_fp16")).toBe("常配 Flux、SD 3、HiDream 等 6 种");
+    expect(pairs("qwen3vl_4b")).toBe("常配 Krea 2、Flux.2");
+    expect(card("mystery").textContent).toContain("文本编码器 · 认不出是哪一种");
+    expect(card("t5xxl_fp16").textContent).not.toContain("modelLibraryFamilyNotApplicable");
+    expect(await hoverHint(within(card("qwen3vl_4b")).getByText("Qwen3-VL 4B"))).toBe("modelEncoderSourceFilename");
+
+    // 在文本编码器目录里也能按底模挑:常配的底模列进筛选,数目写明几个是常配的
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryFamilyLabel/ }));
+    let menu = screen.getByRole("menu", { name: "modelLibraryFamilyLabel" });
+    const labels = within(menu).getAllByRole("menuitemcheckbox").map((item) => item.getAttribute("aria-label"));
+    expect(labels).toContain("Krea 2 常配 1");
+    expect(labels.at(-1)).toBe("modelLibraryFamilyNotApplicable 3");
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+
+    // 全部里按 SDXL 筛:SDXL 的照旧;没有常配 SDXL 的编码器,一个都不多
+    fireEvent.click(folderTab("modelLibraryAll 8"));
+    menu = pickFamilies("SDXL 1");
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(names()).toEqual(["sd_xl_base.safetensors"]);
+    // 换成 Flux:没有 Flux 的模型,常配 Flux 的 T5-XXL 列出来,勾着的那一种排在「常配」最前、写重一点
+    menu = pickFamilies("SDXL 1", "Flux 常配 1");
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(names()).toEqual(["t5xxl_fp16.safetensors"]);
+    const flux = within(card("t5xxl_fp16").querySelector("[data-encoder-pairs]") as HTMLElement).getByText("Flux");
+    expect(flux.className).toContain("text-foreground");
+    menu = pickFamilies("Flux 常配 1", "HiDream 常配 1");
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(pairs("t5xxl_fp16")).toBe("常配 HiDream、Flux、SD 3 等 6 种");
+
+    // 详情:「文本编码器 · T5-XXL」,下面一排常配的底模
+    api.getModelDetail.mockResolvedValue({ folder: "text_encoders", name: "t5xxl_fp16.safetensors", metadata: {}, tags: [] });
+    fireEvent.click(within(card("t5xxl_fp16")).getByRole("button", { name: "t5xxl_fp16.safetensors" }));
+    await screen.findByRole("button", { name: "modelLibraryBack" });
+    const overview = screen.getByRole("region", { name: "modelOverview" });
+    expect(overview.textContent).toContain("文本编码器 · T5-XXL");
+    expect(within(overview).getByLabelText("常配 HiDream、Flux、SD 3、LTX-Video、Flux Kontext、Chroma")).toBeTruthy();
+    expect(overview.textContent).toContain("modelEncoderSourceWeights");
+    expect(overview.textContent).toContain("modelEncoderPairsNote");
+    expect(overview.textContent).not.toContain("modelLibraryFamilyNotApplicable");
   });
 
   it("元数据:能搜;长值默认折叠、能展开、能复制;大段 JSON 格式化显示,不撑宽", async () => {

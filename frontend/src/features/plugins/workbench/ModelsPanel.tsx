@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
+import { EncoderRecipeMark } from "@/features/plugins/ModelEncoder";
 import { ModelDownload } from "@/features/plugins/workbench/ModelDownload";
 import {
+  byRecipe,
   comboInputs,
   folderFamilies,
   folderModels,
@@ -50,13 +52,13 @@ export function ModelsPanel({
   const t = useI18n();
   const inputs = React.useMemo(() => comboInputs(node), [node]);
   const folders = useQuery({
-    queryKey: ["comfy-node-folders", target.instanceId, inputs.map((one) => `${one.class_type}:${one.input}`).join("|")],
+    queryKey: ["comfy-node-folders", target.instanceId, JSON.stringify(inputs)],
     queryFn: () => getNodeFolders(target.instanceId, inputs),
     enabled: inputs.length > 0,
     staleTime: Infinity,
   });
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
-  const slots = modelSlots(node, folders.data?.folders ?? []);
+  const slots = modelSlots(node, folders.data?.folders ?? [], folders.data?.encoders ?? []);
 
   if (capabilities && (!capabilities.selection || !capabilities.setWidget)) {
     return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t("workbenchCapSelection"))}</PanelNote>;
@@ -118,7 +120,8 @@ function SlotPicker({
   const [previewSettings] = useModelPreviewSettings();
   const treatmentOf = (model: ModelFile) => previewTreatment(previewSettings, Boolean(model.nsfw?.flagged));
   const families = folderFamilies(models, slot.folder);
-  const listed = folderModels(models, slot.folder, { query, family });
+  //: 选文本编码器的格子:合节点现在 type 的排前面(不合的在最后、标出来)
+  const listed = byRecipe(folderModels(models, slot.folder, { query, family }), slot.encoders);
   const present = presentIn(models, slot.folder, slot.value);
 
   const pick = useMutation({
@@ -266,9 +269,10 @@ function SlotPicker({
                 >
                   <span className="grid min-w-0 flex-1 gap-0.5">
                     <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                    {(model.family || subtitle) && (
+                    {(model.encoder?.label || model.family || subtitle) && (
                       <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
-                        {model.family && <CatalogBadge tone="muted">{model.family}</CatalogBadge>}
+                        {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
+                        <EncoderRecipeMark model={model} recipe={slot.encoders} />
                         {subtitle && <Truncate>{subtitle}</Truncate>}
                       </span>
                     )}

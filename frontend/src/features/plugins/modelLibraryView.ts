@@ -55,27 +55,52 @@ export function familySource(model: FamilyFields): { hint: MessageKey; certain: 
 /** 两个特殊项排最后:先「认不出」,再「不适用」。 */
 const familyRank = (value: string) => (value === UNKNOWN_FAMILY ? 1 : value === NOT_APPLICABLE_FAMILY ? 2 : 0);
 
-/** 这一批文件里有哪几种底模、各几个:多的在前,认不出的、不适用的排最后。 */
-export function familyCounts(models: readonly ModelFile[]): [string, number][] {
+/** 筛选里的一种底模:是它的有几个,常配它的文本编码器有几个(按它筛时一起列出、标「常配」,不算它的)。 */
+export type FamilyCount = [family: string, count: number, paired: number];
+
+/**
+ * 这一批文件里有哪几种底模、各几个,外加常配它的文本编码器几个:多的在前,认不出的、不适用的排最后。只有文本编码器常配、
+ * 一个它自己的文件都没有的底模也列(在文本编码器目录里也能按底模挑编码器)。
+ */
+export function familyCounts(models: readonly ModelFile[]): FamilyCount[] {
   const counts = new Map<string, number>();
-  for (const model of models) counts.set(familyOf(model), (counts.get(familyOf(model)) ?? 0) + 1);
-  return [...counts.entries()].sort(
-    (a, b) => familyRank(a[0]) - familyRank(b[0]) || b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
+  const paired = new Map<string, number>();
+  for (const model of models) {
+    counts.set(familyOf(model), (counts.get(familyOf(model)) ?? 0) + 1);
+    for (const family of model.encoder?.pairs ?? []) paired.set(family, (paired.get(family) ?? 0) + 1);
+  }
+  return [...new Set([...counts.keys(), ...paired.keys()])]
+    .map((family): FamilyCount => [family, counts.get(family) ?? 0, paired.get(family) ?? 0])
+    .sort((a, b) => familyRank(a[0]) - familyRank(b[0]) || b[1] - a[1] || b[2] - a[2] || a[0].localeCompare(b[0]));
+}
+
+/** 文本编码器常配的底模里,勾着的那几种(按它们筛时它是因为这个才列出来的)。 */
+export function pairedWith(model: Pick<ModelFile, "encoder">, families: readonly string[]): string[] {
+  return (model.encoder?.pairs ?? []).filter((one) => families.includes(one));
+}
+
+/** 「常配」先写勾着的那几种,其余照插件给的先后。 */
+export function pairsFirst(pairs: readonly string[], active: readonly string[]): string[] {
+  return [...pairs.filter((one) => active.includes(one)), ...pairs.filter((one) => !active.includes(one))];
 }
 
 export function inFolder(models: readonly ModelFile[], folder: string): ModelFile[] {
   return folder === ALL_FOLDERS ? [...models] : models.filter((model) => model.folder === folder);
 }
 
-/** 按底模(勾了几种就是其中任一)和搜索词筛。搜索看文件名、标题、底模和触发词。 */
+/**
+ * 按底模(勾了几种就是其中任一)和搜索词筛:常配勾着的底模的文本编码器也留下(界面标「常配」)。搜索看文件名、标题、底模、
+ * 文本编码器是哪一种和触发词。
+ */
 export function filterModels(models: readonly ModelFile[], { families, query }: { families: readonly string[]; query: string }): ModelFile[] {
   const wanted = new Set(families);
   const needle = query.trim().toLowerCase();
   return models.filter((model) => {
-    if (wanted.size > 0 && !wanted.has(familyOf(model))) return false;
+    if (wanted.size > 0 && !wanted.has(familyOf(model)) && pairedWith(model, families).length === 0) return false;
     if (!needle) return true;
-    return `${model.name} ${model.title ?? ""} ${model.family ?? ""} ${(model.triggers ?? []).join(" ")}`.toLowerCase().includes(needle);
+    return `${model.name} ${model.title ?? ""} ${model.family ?? ""} ${model.encoder?.label ?? ""} ${(model.triggers ?? []).join(" ")}`
+      .toLowerCase()
+      .includes(needle);
   });
 }
 

@@ -35765,6 +35765,35 @@
         "title": "ModelDownloadRouteOut",
         "description": "这台服务器下载走哪条路:`manager` / `local` / `none`,外加一句给人看的说明。"
       },
+      "ModelEncoderOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": ""
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "pairs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pairs"
+          }
+        },
+        "type": "object",
+        "title": "ModelEncoderOut",
+        "description": "一个文本编码器是哪一种、常配哪几种底模(ADR 0034 §2 的 2026-10-07 补记)。一个编码器给好几种底模用,所以它不贴底模\n(`family` 空着、`family_source` 是 `not_applicable`),而是说这些。"
+      },
       "ModelFileOut": {
         "properties": {
           "folder": {
@@ -35806,6 +35835,16 @@
             "type": "string",
             "title": "Family Source",
             "default": ""
+          },
+          "encoder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelEncoderOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "triggers": {
             "items": {
@@ -36135,6 +36174,34 @@
         "title": "ModelLookupResultOut",
         "description": "找、补预览图任务做完交回的里面,模型库界面要的那一份:对上的那几条现在的样子(`found`)。找了几个、对上几个、存回\n几张由任务完成时的那句话说(任务中心显示),这里不重发。"
       },
+      "ModelNodeEncodersOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "fits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fits"
+          },
+          "any_type": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Any Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "ModelNodeEncodersOut",
+        "description": "选文本编码器的那一格:节点现在的 type 配哪几种编码器。"
+      },
       "ModelNodeFolderIn": {
         "properties": {
           "class_type": {
@@ -36146,6 +36213,14 @@
             "type": "string",
             "maxLength": 200,
             "title": "Input"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 32,
+            "title": "Values"
           }
         },
         "type": "object",
@@ -36154,7 +36229,7 @@
           "input"
         ],
         "title": "ModelNodeFolderIn",
-        "description": "画布上选中的节点的一格:节点类型 + 输入名。"
+        "description": "画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。"
       },
       "ModelNodeFoldersOut": {
         "properties": {
@@ -36164,6 +36239,20 @@
             },
             "type": "array",
             "title": "Folders"
+          },
+          "encoders": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelNodeEncodersOut"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Encoders"
           }
         },
         "type": "object",

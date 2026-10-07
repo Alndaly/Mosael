@@ -529,6 +529,20 @@ class ModelLocalNsfwOut(ApiModel):
     scored: int = 0
 
 
+class ModelEncoderOut(ApiModel):
+    """一个文本编码器是哪一种、常配哪几种底模(ADR 0034 §2 的 2026-10-07 补记)。一个编码器给好几种底模用,所以它不贴底模
+    (`family` 空着、`family_source` 是 `not_applicable`),而是说这些。"""
+
+    #: 哪一种(插件起的短名,`t5_xxl`、`qwen3vl_4b`……;工作台按它判合不合节点的 type)。认不出是空串,仍是文本编码器。
+    kind: str = ""
+    #: 给人看的名字(T5-XXL、Qwen3-VL 4B……)
+    label: str = ""
+    #: `weights`(从权重的结构认出)或 `filename`(按文件名猜的,不一定准)
+    source: str = ""
+    #: 常配哪几种底模(底模家族名,和 `family` 同一套;按底模筛时据此一起列出、标「常配」)
+    pairs: list[str] = Field(default_factory=list)
+
+
 class ModelFileOut(ApiModel):
     """那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。"""
 
@@ -542,6 +556,8 @@ class ModelFileOut(ApiModel):
     #: (文本编码器、放大模型、检测模型……),`family` 是空串,界面写「不适用」而不是「认不出」。
     family: str = ""
     family_source: str = ""
+    #: 文本编码器目录里的文件:是哪一种、常配哪几种底模(别的文件没有这一格)。
+    encoder: ModelEncoderOut | None = None
     triggers: list[str] = Field(default_factory=list)
     #: `metadata`(作者写的触发词)或 `tags`(训练标签里出现最多的几个,不一定是触发词)。
     triggers_source: str = ""
@@ -661,10 +677,11 @@ class ModelDownloadRequest(ApiModel):
 
 
 class ModelNodeFolderIn(ApiModel):
-    """画布上选中的节点的一格:节点类型 + 输入名。"""
+    """画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。"""
 
     class_type: str = Field(max_length=200)
     input: str = Field(max_length=200)
+    values: dict[str, str] = Field(default_factory=dict, max_length=32)
 
 
 class ModelNodeFoldersRequest(ApiModel):
@@ -673,9 +690,22 @@ class ModelNodeFoldersRequest(ApiModel):
     nodes: list[ModelNodeFolderIn] = Field(max_length=64)
 
 
+class ModelNodeEncodersOut(ApiModel):
+    """选文本编码器的那一格:节点现在的 type 配哪几种编码器。"""
+
+    #: 节点现在的 type(三个、四个文件的加载节点没有 type,是 ComfyUI 一律用的那一路:`sd3`、`hidream`)
+    type: str
+    #: 在这个 type 的配方里的几种(`ModelEncoderOut.kind`)
+    fits: list[str] = Field(default_factory=list)
+    #: ComfyUI 认出是这几种之后不看 type、建出来都一样:不算不合
+    any_type: list[str] = Field(default_factory=list)
+
+
 class ModelNodeFoldersOut(ApiModel):
     #: 和 `nodes` 一一对应;不是选模型文件的格子是空串
     folders: list[str] = Field(default_factory=list)
+    #: 和 `nodes` 一一对应;不是选文本编码器的格子(或插件不说)是 null
+    encoders: list[ModelNodeEncodersOut | None] = Field(default_factory=list)
 
 
 # --- 工作流库(ADR 0035) ---------------------------------------------------

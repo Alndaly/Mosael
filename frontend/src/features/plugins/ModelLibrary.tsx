@@ -92,6 +92,8 @@ import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { ModelActionsContext, type ModelActions } from "@/features/plugins/modelActions";
 import { ModelContextMenu, isMenuKey } from "@/features/plugins/ModelMenu";
+import { ActiveFamiliesContext } from "@/features/plugins/activeFamilies";
+import { EncoderBadge, EncoderOverview, EncoderPairs, useEncoderNote } from "@/features/plugins/ModelEncoder";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import {
   ALL_FOLDERS,
@@ -99,6 +101,7 @@ import {
   MISSING_VIEW,
   SORTS,
   familyCounts,
+  type FamilyCount,
   familyLabelKey,
   familySource,
   filterModels,
@@ -484,6 +487,7 @@ export function ModelLibraryDialog({
 
   return (
     <ModelActionsContext.Provider value={actions}>
+    <ActiveFamiliesContext.Provider value={activeFamilies}>
     <LibraryDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -573,6 +577,7 @@ export function ModelLibraryDialog({
     >
       {content}
     </LibraryDialog>
+    </ActiveFamiliesContext.Provider>
     </ModelActionsContext.Provider>
   );
 }
@@ -788,13 +793,18 @@ function FamilyFilter({
   onChange,
   nameOf,
 }: {
-  families: [string, number][];
+  families: FamilyCount[];
   value: string[];
   onChange: (value: string[]) => void;
   nameOf: (family: string) => string;
 }) {
   const t = useI18n();
   const chosen = new Set(value);
+  //: 常配它的文本编码器也会列出来:数目上写明几个是「常配」,勾了之后多出来的不让人意外
+  const tally = (count: number, paired: number) =>
+    !paired
+      ? String(count)
+      : t(count ? "modelLibraryFamilyCountPaired" : "modelLibraryFamilyOnlyPaired").replace("{n}", String(count)).replace("{m}", String(paired));
   //: 勾了几种就写几,不写名字:勾的是哪几种,工具条下面那行筛选里一个个写着;按钮上再写一遍名字,勾一个长名字
   //: (「Wan Video 14B t2v」)就把工具条挤成两行。
   const label = value.length === 0 ? t("modelLibraryFamilyButton") : `${t("modelLibraryFamilyButton")} · ${value.length}`;
@@ -835,15 +845,15 @@ function FamilyFilter({
         </IconButton>
       </PopoverTrigger>
       <MenuContent label={t("modelLibraryFamilyLabel")} align="end">
-        {families.map(([family, count]) => (
+        {families.map(([family, count, paired]) => (
           <MenuItem
             key={family}
             role="menuitemcheckbox"
-            aria-label={`${nameOf(family)} ${count}`}
+            aria-label={`${nameOf(family)} ${tally(count, paired)}`}
             checked={chosen.has(family)}
             label={nameOf(family)}
             truncate
-            hint={count}
+            hint={tally(count, paired)}
             onClick={() => onChange(chosen.has(family) ? value.filter((one) => one !== family) : [...value, family])}
           />
         ))}
@@ -989,9 +999,11 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
   );
 }
 
-function FamilyBadge({ model }: { model: ModelFile }) {
+function FamilyBadge({ model, pairs = false }: { model: ModelFile; pairs?: boolean }) {
   const t = useI18n();
   const source = familySource(model);
+  //: 文本编码器不贴底模:写它是哪一种(列表里那一格接着写常配哪几种)
+  if (model.encoder) return <EncoderBadge encoder={model.encoder} pairs={pairs} />;
   if (!model.family || !source) return null;
   return (
     <Hint label={t(source.hint)}>
@@ -1240,6 +1252,7 @@ const ModelCard = React.memo(function ModelCard({
             <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.size)}</span>
           )}
         </div>
+        {model.encoder && <EncoderPairs encoder={model.encoder} />}
         {large && (
           <div className="flex min-w-0 items-center justify-between gap-2 text-ui-xs text-muted-foreground">
             <Truncate>{placeOf(model)}</Truncate>
@@ -1440,7 +1453,7 @@ const ModelRow = React.memo(function ModelRow({
       </td>
       <td className={cell}>
         <span className="flex min-w-0">
-          <FamilyBadge model={model} />
+          <FamilyBadge model={model} pairs />
         </span>
       </td>
       <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground")}>
@@ -1851,7 +1864,8 @@ function ModelDetail({
   const triggers = model.triggers ?? [];
   const used = model.used_by ?? [];
   const source = familySource(model);
-  const familyNote = source ? t(source.hint) : undefined;
+  const encoderNote = useEncoderNote(model.encoder);
+  const familyNote = encoderNote ?? (source ? t(source.hint) : undefined);
   const jumpToUsed = () => {
     const found = usedRef.current;
     if (!found) return;
@@ -1977,7 +1991,9 @@ function ModelDetail({
       <LibrarySection title={t("modelOverview")}>
         <dl className="m-0 grid min-w-0 gap-3">
           <OverviewRow label={t("modelFamily")} note={familyNote}>
-            {model.family ? (
+            {model.encoder ? (
+              <EncoderOverview encoder={model.encoder} />
+            ) : model.family ? (
               <span className="flex">
                 <CatalogBadge tone={source?.certain ? "primary" : "muted"}>{model.family}</CatalogBadge>
               </span>
