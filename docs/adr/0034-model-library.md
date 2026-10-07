@@ -287,8 +287,10 @@ ADR 0038 §9 给每个模型文件加了几样(决策和实现记录在那里):N
   的实色,按文件名猜的淡色)和一行「常配 Flux、SD 3、HiDream 等 6 种」;详情「底模」那一行写「文本编码器 · T5-XXL」和一排常配的底模。
 - **按底模筛**:勾一种底模时,常配它的文本编码器一起列出,卡片上那一行「常配」把勾着的排前面、写重一点 —— 标的是「常配」,不算
   那个底模的。筛选菜单里数目写成「1 · 常配 1」;只有编码器常配的底模也列(在文本编码器目录里也能按底模挑)。
-- **工作台**:`node_folders` 每一格多带这个节点上下拉格子现在的值;选文本编码器的格子回 `encoders: {type, fits, any_type}` ——
-  在这个 type 配方里的几种,和 ComfyUI 不看 type 的几种。一个文件时 CLIP-H、Pile-T5-XL、Llama 3 8B、Mistral Small 3、Qwen3 0.6B、
+- **工作台**:选文本编码器的格子回 `encoders: {type_widget, by_type: {type: {fits, any_type}}}` —— 这种加载节点**每一种** type
+  配方里的几种,和 ComfyUI 不看 type 的几种;界面照节点上 `type_widget` 那一格现在的值自己挑。(第一版是每一格带着节点上下拉
+  格子现在的值、只回那一个 type 的配方 —— 在画布上填一个模型问题就变了,整列跟着回到「读取中」;2026-10-07 改成只问节点类型和
+  输入名,答案按这两样缓存,填模型、换 type、换一个同类的节点都不再问。)一个文件时 CLIP-H、Pile-T5-XL、Llama 3 8B、Mistral Small 3、Qwen3 0.6B、
   Qwen3-VL 32B 这些认出来就不看 type(Anima 的官方模板就是 stable_diffusion 配 Qwen3 0.6B),不能标成不合。面板把合用的排前面,
   不在配方里的排最后、标「不在 wan 的配方里」;界面不认识 type,只按插件给的种类名比。三个、四个文件的加载节点没有 type,按
   ComfyUI 一律用的 sd3 / hidream。不新加 `object_info` 调用。
