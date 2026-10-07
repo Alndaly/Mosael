@@ -29,12 +29,13 @@ function sourceHint(encoder: ModelEncoder): MessageKey {
 export function useEncoderNote(encoder: ModelEncoder | null | undefined): string | undefined {
   const t = useI18n();
   if (!encoder) return undefined;
-  return (encoder.pairs ?? []).length > 0 ? `${t(sourceHint(encoder))}。${t("modelEncoderPairsNote")}` : t(sourceHint(encoder));
+  if ((encoder.pairs ?? []).length === 0) return t(sourceHint(encoder));
+  return t("modelEncoderNote").replace("{source}", t(sourceHint(encoder))).replace("{pairs}", t("modelEncoderPairsNote"));
 }
 
 /**
  * 文本编码器的那一枚徽章:是哪一种(认不出就写「文本编码器」);从权重认出的实色,按文件名猜的、认不出的淡色,和底模徽章
- * 一样。`pairs`:同一行接着写「常配 ……」(列表里那一格)。
+ * 一样。`pairs`:徽章下面再写一行「常配 ……」(列表里那一格窄,并排放不下)。
  */
 export function EncoderBadge({ encoder, pairs = false }: { encoder: ModelEncoder; pairs?: boolean }) {
   const t = useI18n();
@@ -49,16 +50,16 @@ export function EncoderBadge({ encoder, pairs = false }: { encoder: ModelEncoder
   );
   if (!pairs || (encoder.pairs ?? []).length === 0) return badge;
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="grid min-w-0 flex-1 justify-items-start gap-0.5">
       {badge}
-      <EncoderPairs encoder={encoder} className="min-w-0" />
+      <EncoderPairs encoder={encoder} className="w-full min-w-0" />
     </span>
   );
 }
 
 /**
  * 「常配 Flux、SD 3、HiDream 等 6 种」:勾着的底模排前面、写成正文色;放不下时截断,悬停看全部。没有常配的:写它是文本编码器
- * (认不出是哪一种时写「文本编码器 · 认不出是哪一种」)。卡片上徽章下面那一行。
+ * (认不出是哪一种时徽章已经写着「文本编码器」,这一行写「认不出是哪一种」)。卡片上徽章下面那一行。
  */
 export function EncoderPairs({ encoder, className }: { encoder: ModelEncoder; className?: string }) {
   const t = useI18n();
@@ -67,7 +68,7 @@ export function EncoderPairs({ encoder, className }: { encoder: ModelEncoder; cl
   if (pairs.length === 0) {
     return (
       <span className={cn("text-ui-xs text-muted-foreground", className)}>
-        <Truncate>{encoder.kind ? t("modelEncoderRole") : `${t("modelEncoderRole")} · ${t("modelEncoderUnknown")}`}</Truncate>
+        <Truncate>{t(encoder.kind ? "modelEncoderRole" : "modelEncoderUnknown")}</Truncate>
       </span>
     );
   }

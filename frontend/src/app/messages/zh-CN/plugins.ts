@@ -797,6 +797,7 @@ export const plugins = {
   modelEncoderPairsMore: "常配 {families} 等 {n} 种",
   modelEncoderPairsLabel: "常配",
   modelEncoderPairsNote: "一个文本编码器常给好几种底模用,所以不说它属于哪个底模;「常配」是 ComfyUI 里拿它配的那几种",
+  modelEncoderNote: "{source}。{pairs}",
   modelEncoderListSep: "、",
   modelTriggers: "触发词",
   modelTriggersFromTags: "训练标签里出现最多的几个,不一定是作者指定的触发词",

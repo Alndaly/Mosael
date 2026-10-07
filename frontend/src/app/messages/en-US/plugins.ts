@@ -791,6 +791,7 @@ export const plugins = {
   modelEncoderPairsMore: "Often paired with {families} and {more} more",
   modelEncoderPairsLabel: "Often paired with",
   modelEncoderPairsNote: "One text encoder often serves several base models, so it isn't tied to one; “often paired with” lists the base models ComfyUI uses it with",
+  modelEncoderNote: "{source}. {pairs}",
   modelEncoderListSep: ", ",
   modelTriggers: "Trigger words",
   modelTriggersFromTags: "The most frequent training tags; not necessarily trigger words the author chose",

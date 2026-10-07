@@ -51,6 +51,7 @@ const ENCODER_TEXT = vi.hoisted((): Record<string, string> => ({
   modelEncoderPairs: "常配 {families}",
   modelEncoderPairsMore: "常配 {families} 等 {n} 种",
   modelEncoderListSep: "、",
+  modelEncoderNote: "{source}。{pairs}",
   modelLibraryFamilyCountPaired: "{n} · 常配 {m}",
   modelLibraryFamilyOnlyPaired: "常配 {m}",
 }));
@@ -656,7 +657,8 @@ describe("模型库", () => {
     expect(card("t5xxl_fp16").textContent).toContain("T5-XXL");
     expect(pairs("t5xxl_fp16")).toBe("常配 Flux、SD 3、HiDream 等 6 种");
     expect(pairs("qwen3vl_4b")).toBe("常配 Krea 2、Flux.2");
-    expect(card("mystery").textContent).toContain("文本编码器 · 认不出是哪一种");
+    expect(card("mystery").textContent).toContain("文本编码器");
+    expect(card("mystery").textContent).toContain("认不出是哪一种");
     expect(card("t5xxl_fp16").textContent).not.toContain("modelLibraryFamilyNotApplicable");
     expect(await hoverHint(within(card("qwen3vl_4b")).getByText("Qwen3-VL 4B"))).toBe("modelEncoderSourceFilename");
 
