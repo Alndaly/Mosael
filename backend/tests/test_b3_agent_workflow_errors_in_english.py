@@ -128,12 +128,12 @@ def test_没有沙箱时的报错_英文(monkeypatch) -> None:
     from app.domain import sandbox
 
     monkeypatch.setattr(sandbox, "_BACKENDS", ())
-    sandbox.active_backend.cache_clear()
+    sandbox.forget_backend()
     try:
         with pytest.raises(sandbox.SandboxUnavailable) as raised:
             sandbox.run_code("output = 1", {})
     finally:
-        sandbox.active_backend.cache_clear()
+        sandbox.forget_backend()
     with english():
         assert str(raised.value).startswith("No code sandbox is available on this machine")
 

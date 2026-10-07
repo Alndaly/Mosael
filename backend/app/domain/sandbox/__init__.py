@@ -94,13 +94,17 @@ class _DockerSandbox:
 
     name = "docker"
     image = "python:3.14-alpine"
+    #: `docker info` 平时零点几秒;守护进程正忙着建、删别的容器时(几个代码节点同时在跑)要好几秒,实测到过 5 秒。
+    #: 这一问超时就当没有隔离环境、这次不跑,所以给宽一点 —— 守护进程没起来时它是当场失败的,等不到超时。
+    PROBE_TIMEOUT_SECONDS = 20.0
 
     def available(self) -> bool:
         self.executable = shutil.which("docker")
         if not self.executable:
             return False
         try:
-            probe = _spawn([self.executable, "info", "--format", "{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}"], b"", 5)
+            probe = _spawn([self.executable, "info", "--format", "{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}"],
+                           b"", self.PROBE_TIMEOUT_SECONDS)
         except (OSError, SandboxError):
             return False
         return probe.returncode == 0 and probe.stdout.strip() == b"linux true true true"
@@ -143,16 +147,36 @@ class _DockerSandbox:
 _BACKENDS: tuple[Backend, ...] = (_DockerSandbox(),)
 
 
-@functools.lru_cache(maxsize=1)
-def active_backend() -> Backend | None:
-    """这台机器上能用的隔离后端;一个都没有就是 None。
+class _NoBackend(LookupError):
+    pass
 
-    结果缓存:`docker info` 要几百毫秒,而"装没装 docker"不会在一次进程生命周期里变。
-    """
+
+@functools.lru_cache(maxsize=1)
+def _first_available() -> Backend:
+    """`lru_cache` 只记返回值、不记异常 —— 「一个都没有」就这样不被记住。"""
     for backend in _BACKENDS:
         if backend.available():
             return backend
-    return None
+    raise _NoBackend
+
+
+def active_backend() -> Backend | None:
+    """这台机器上能用的隔离后端;一个都没有就是 None。
+
+    **找到了就记住,没找到不记。** 探一次要跑 `docker info`(几百毫秒),所以找到的那个留到进程结束。此前没找到
+    也记住:守护进程正忙、`docker info` 超时一次,这个进程此后每次跑代码都说「没有可用的隔离环境」,直到重启后端
+    —— Docker Desktop 比后端晚开也是这个结局。并行跑测试套时它在某个 worker 上超时过,那个 worker 后面所有跑
+    代码的用例一起红。现在没找到就下次再问。
+    """
+    try:
+        return _first_available()
+    except _NoBackend:
+        return None
+
+
+def forget_backend() -> None:
+    """忘掉已经找到的那个,下次重新探(测试换掉 `_BACKENDS` 时用)。"""
+    _first_available.cache_clear()
 
 
 def run_code(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECONDS) -> dict[str, Any]:

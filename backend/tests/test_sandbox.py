@@ -178,24 +178,51 @@ def test_without_an_isolating_backend_it_refuses(monkeypatch) -> None:
     这一条替换掉第 0 步那个 `server_side_code_execution` 开关 —— 那是止血,不是设计。
     """
     monkeypatch.setattr(sandbox, "_BACKENDS", ())
-    sandbox.active_backend.cache_clear()
+    sandbox.forget_backend()
     try:
         with pytest.raises(sandbox.SandboxUnavailable):
             sandbox.run_code("output = 1", {})
     finally:
-        sandbox.active_backend.cache_clear()
+        sandbox.forget_backend()
 
 
 def test_the_error_says_what_to_do_about_it(monkeypatch) -> None:
     """「跑不了」得能看懂:没有隔离后端时告诉部署方装什么,而不是一句 500。"""
     monkeypatch.setattr(sandbox, "_BACKENDS", ())
-    sandbox.active_backend.cache_clear()
+    sandbox.forget_backend()
     try:
         with pytest.raises(sandbox.SandboxUnavailable) as caught:
             sandbox.run_code("output = 1", {})
         assert "Docker" in str(caught.value)
     finally:
-        sandbox.active_backend.cache_clear()
+        sandbox.forget_backend()
+
+
+def test_a_probe_that_found_nothing_is_asked_again(monkeypatch) -> None:
+    """没探到不记住:`docker info` 在守护进程忙时会超时一次,Docker Desktop 也可能比后端晚开。
+
+    此前那一次 None 记到进程退出 —— 之后每次跑代码都说没有隔离环境,直到重启后端。找到的那个照旧记住。
+    """
+
+    class Flaky:
+        name = "flaky"
+
+        def __init__(self) -> None:
+            self.asked = 0
+
+        def available(self) -> bool:
+            self.asked += 1
+            return self.asked > 1
+
+    flaky = Flaky()
+    monkeypatch.setattr(sandbox, "_BACKENDS", (flaky,))
+    sandbox.forget_backend()
+    try:
+        assert sandbox.active_backend() is None
+        assert sandbox.active_backend() is flaky, "第一次没探到,第二次该重新问"
+        assert sandbox.active_backend() is flaky and flaky.asked == 2, "探到了就记住,不再问"
+    finally:
+        sandbox.forget_backend()
 
 
 # ---------------- 输入输出仍然照旧 ----------------

@@ -79,7 +79,7 @@ def test_without_isolation_execution_is_refused_but_saving_is_not(monkeypatch) -
     """
     editor, workspace_id = _editor_client()
     monkeypatch.setattr(sandbox, "_BACKENDS", ())
-    sandbox.active_backend.cache_clear()
+    sandbox.forget_backend()
     try:
         made = editor.post(
             "/api/workflows", json={"workspace_id": workspace_id, "name": "W2", "graph": CODE_GRAPH}
@@ -94,4 +94,4 @@ def test_without_isolation_execution_is_refused_but_saving_is_not(monkeypatch) -
             run_python("output = 1", {})
         assert "Docker" in str(caught.value)
     finally:
-        sandbox.active_backend.cache_clear()
+        sandbox.forget_backend()
