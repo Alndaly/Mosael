@@ -61,12 +61,11 @@ def list_agent_tools(db: DbSession, user: CurrentUser, token: PresentedToken) ->
     没有对话的调用方(登录令牌、MCP 直连)全给。
     """
     from app.db.models import AgentSession
-    from app.domain.agent import places
     from app.domain.agent.autopilot import session_for_token
 
     session_id = session_for_token(db, token)
     session = db.get(AgentSession, session_id) if session_id else None
-    return agent_tool_specs(db, user.id, places.turn_place(db, session) if session is not None else None)
+    return agent_tool_specs(db, user.id, session)
 
 
 def _accepted_names(fn: Any) -> list[str]:

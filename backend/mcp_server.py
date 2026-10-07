@@ -2043,6 +2043,33 @@ def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any
 
 
 @tool(effect="reads", needs="workflow_library", kit="comfyui")
+def comfy_workflow_inputs(workflow: str, input: str = "", query: str = "", instance_id: str = "") -> dict[str, Any]:  # noqa: A002
+    """Read-only: the inputs of a saved workflow's tool (all of them, long dropdowns as a count), or with `input` that
+    input's options (`query` filters; also filters inputs by name). `workflow`: its `tool` from list_workflows, the full tool
+    name, or its path."""
+    from app.domain.agent import workflow_tools
+
+    return _use_case(workflow_tools.inputs, workflow, input, query, instance_id)
+
+
+@tool(effect="confirms", needs="workflow_library", kit="comfyui")
+def comfy_run_workflow(workflow: str, arguments: dict[str, Any] | None = None, instance_id: str = "",
+                       workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: run a saved workflow whose own tool isn't in your list this turn (you get the one on the
+    canvas and those used or named in this conversation). `workflow` as in comfy_workflow_inputs; `arguments`: that tool's
+    inputs. Same card text and result as calling its tool."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "comfy_run_workflow",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"workflow": workflow, "arguments": dict(arguments or {}), "instance_id": instance_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_templates(query: str = "", task: str = "", model: str = "", limit: int = 6, instance_id: str = "") -> dict[str, Any]:
     """Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building
     from scratch. Each lists its models and whether this machine has them (or in another subfolder / precision), total

@@ -1139,13 +1139,12 @@ def tool_definition_tokens(db: Session, session: AgentSession) -> int:
     清单和 /api/agent/tools 同一个函数、同一个答案(按这段对话的主人、这一轮在哪说的裁,ADR 0044 §8)—— 面板上的水位就是
     这一处这一轮真发出去的那份。
     """
-    from app.domain.agent.places import turn_place
     from app.domain.agent.tool_manifest import agent_tool_specs
 
     payload = json.dumps(
         [
             {"name": spec.name, "description": spec.description, "parameters": spec.parameters}
-            for spec in agent_tool_specs(db, session.owner_user_id, turn_place(db, session))
+            for spec in agent_tool_specs(db, session.owner_user_id, session)
         ],
         ensure_ascii=False,
     )

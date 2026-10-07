@@ -32,6 +32,14 @@
 
 量的是界面那条水位用的同一个函数(session_context → tool_definition_tokens + 系统提示),不另估一遍;水位和
 /api/agent/tools 发出去的是同一份(下面也量)。
+
+## 接的 ComfyUI 得像真的(ADR 0044 修订 2026-10-08)
+
+此前这里接的假 ComfyUI 上一张能报成工具的工作流都没有 —— 每张存着的工作流是一个插件工具(`wf_*`),入参连同每个下拉的
+整张选项表,维护者那台(24 张、一个 LoRA 下拉 349 项)工作台那一轮实际约 18 万 token,这条却一直是绿的。现在接的是
+tests/comfyui_big_catalog 那台:十几张工作流、几百项的下拉、一张一百多个可调项的图,工作台那一处画布上开着最大那张。
+工作台那一轮只发用得上的工作流工具(画布上那张、对话里调过的、点过名的),发出去的插件工具入参收紧(agent/plugin_schema),
+单个插件工具的定义有上限(`PLUGIN_TOOL_CAP`)。
 """
 
 from __future__ import annotations
@@ -40,7 +48,6 @@ from __future__ import annotations
 RATCHET = True
 
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -48,17 +55,22 @@ import pytest
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
+from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX
 from app.domain.providers.model_limits import LOCAL_FALLBACK_CONTEXT_WINDOW
+from tests import comfyui_big_catalog
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import add_provider, fresh_client, second_client, user_id
 
 #: 固定开销(工具定义 + 系统提示)最多占本机回退窗口的这么多。理由见模块说明。
 FIXED_OVERHEAD_SHARE = 0.6
+#: 发给智能体的一个插件工具(名字 + 说明 + 入参的 JSON)最多这么多字符:入参收紧到 4,000(plugin_schema.SPEC_CAP),
+#: 加上说明和确认协议那一段。维护者那台上最大的一个此前 84,737。
+PLUGIN_TOOL_CAP = 6_000
 
 PACKAGE = "dev.mosael.comfyui"
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "comfyui" / "agent"
 COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
-               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new",
+               "comfy_workflow_inputs", "comfy_run_workflow"}
 #: 改 Mosael 自家画布的那一份里的几样(不必列全:在且只在工作台以外)。
 CANVAS_TOOLS = {"edit_board", "edit_timeline", "edit_scene", "edit_workflow", "blender_execute"}
 PLACES = ("studio", "project", "note", "board", "workflow", "scene", "comfyui")
@@ -67,7 +79,7 @@ PLACES = ("studio", "project", "note", "board", "workflow", "scene", "comfyui")
 @pytest.fixture(scope="module")
 def comfy():
     with FakeComfyUI() as fake:
-        fake.state.object_info = json.loads((FIXTURES / "object_info.json").read_text(encoding="utf-8"))
+        comfyui_big_catalog.install(fake.state)
         yield fake
 
 
@@ -87,6 +99,9 @@ def _connect(client, comfy: FakeComfyUI) -> str:
     instance_id = created.json()["id"]
     client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
     assert client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
+    assert client.post(f"/api/plugins/instances/{instance_id}/refresh").status_code == 200
+    reported = [one for one in client.get("/api/plugins/tools").json() if one["instance_id"] == instance_id]
+    assert len(reported) >= comfyui_big_catalog.PLAIN_WORKFLOWS + 1, "每张工作流一个工具都报上来了 —— 否则这条预算什么都没量"
     return instance_id
 
 
@@ -104,7 +119,7 @@ def _homes(client, workspace: str, connection: str) -> dict[str, dict[str, str]]
         "board": {"kind": "board", "id": board},
         "workflow": {"kind": "workflow", "id": workflow},
         "scene": {"kind": "scene", "id": scene},
-        "comfyui": {"kind": "comfyui", "id": f"{connection}/人像/qwen 编辑.json"},
+        "comfyui": {"kind": "comfyui", "id": f"{connection}/{comfyui_big_catalog.BIG_WORKFLOW}"},
     }
 
 
@@ -130,14 +145,24 @@ def _context(client, session_id: str) -> dict[str, int]:
     return {part["kind"]: part["tokens"] for part in context["parts"]}
 
 
-def _turn_tools(client, session_id: str) -> set[str]:
-    """sidecar 这一轮拿到的工具:用这一轮的令牌(铸的时候记着是哪段对话)取。"""
+def _turn_specs(client, session_id: str) -> list[dict[str, Any]]:
+    """sidecar 这一轮拿到的工具定义:用这一轮的令牌(铸的时候记着是哪段对话)取。"""
     with SessionLocal() as db:
         token = mint_service_session(db, user_id(), agent_session_id=session_id)
         db.commit()
     listed = client.get("/api/agent/tools", headers={"Authorization": f"Bearer {token}"})
     assert listed.status_code == 200, listed.text
-    return {one["name"] for one in listed.json()}
+    return listed.json()
+
+
+def _turn_tools(client, session_id: str) -> set[str]:
+    return {one["name"] for one in _turn_specs(client, session_id)}
+
+
+def _size(spec: dict[str, Any]) -> int:
+    """和水位同一种量法(host.tool_definition_tokens):名字 + 说明 + 入参的 JSON。"""
+    return len(json.dumps({"name": spec["name"], "description": spec["description"], "parameters": spec["parameters"]},
+                          ensure_ascii=False))
 
 
 def _said(session_id: str, place: dict[str, str] | None, queued: bool = False) -> None:
@@ -180,11 +205,42 @@ def test_comfy_工具在且只在工作台_画布那一份在且只在工作台�
     assert {"list_assets", "open_view", "remember"} <= tools, "通用的哪儿都发"
 
 
+def test_工作台那一轮_工作流工具只发画布上开着的那张(everywhere) -> None:
+    """十五张工作流的工具都报上来了;画布上开着的是最大那张(一百多个可调项、十几个 349 项的 LoRA 下拉),这一轮只发它一张。"""
+    specs = _turn_specs(everywhere["client"], everywhere["sessions"]["comfyui"])
+    workflow_tools = [one for one in specs if one["name"].startswith(PLUGIN_TOOL_PREFIX) and "__wf_" in one["name"]]
+    assert len(workflow_tools) == 1, [one["name"] for one in workflow_tools]
+    assert comfyui_big_catalog.BIG_WORKFLOW in workflow_tools[0]["description"] or "多段精修" in workflow_tools[0]["description"]
+    assert "list_workflows" in {one["name"].split("__")[-1] for one in specs}, "找别的那几张的路还在"
+
+
+@pytest.mark.parametrize("kind", ["comfyui", "no-conversation"])
+def test_单个插件工具的定义有上限(everywhere, kind: str) -> None:
+    """工作台那一轮发的、和没有对话的调用方(MCP 直连、界面拉清单 —— 全部工作流工具都给)拿到的,每一个插件工具的定义都在
+    `PLUGIN_TOOL_CAP` 以内;长下拉不在定义里。"""
+    client = everywhere["client"]
+    if kind == "comfyui":
+        specs = _turn_specs(client, everywhere["sessions"]["comfyui"])
+    else:
+        listed = client.get("/api/agent/tools")
+        assert listed.status_code == 200, listed.text
+        specs = listed.json()
+    plugin = [one for one in specs if one["name"].startswith(PLUGIN_TOOL_PREFIX)]
+    workflow_tools = [one for one in plugin if "__wf_" in one["name"]]
+    assert workflow_tools, "一个工作流工具都没量到"
+    if kind == "no-conversation":
+        assert len(workflow_tools) >= comfyui_big_catalog.PLAIN_WORKFLOWS + 1
+    too_big = {one["name"]: _size(one) for one in plugin if _size(one) > PLUGIN_TOOL_CAP}
+    assert not too_big, f"这几个插件工具的定义超过了 {PLUGIN_TOOL_CAP} 字符:{too_big}"
+    assert not any(comfyui_big_catalog.LORAS[100] in json.dumps(one["parameters"], ensure_ascii=False) for one in plugin), \
+        "几百项的下拉不进定义"
+
+
 def test_这一轮在哪说的说了算_不是家在哪(everywhere) -> None:
     """家在 AI Studio 的一段,在工作台里接着聊:那一轮有 comfy_*、没有画布那一份;回到 AI Studio 说一句,反过来。
     排在队里还没轮到的那条不算 —— 它说的是下一轮。"""
     client, session = everywhere["client"], everywhere["sessions"]["studio"]
-    workbench = {"kind": "comfyui", "id": f"{everywhere['connection']}/人像/qwen 编辑.json"}
+    workbench = {"kind": "comfyui", "id": f"{everywhere['connection']}/{comfyui_big_catalog.BIG_WORKFLOW}"}
     _said(session, workbench)
     tools = _turn_tools(client, session)
     assert COMFY_TOOLS <= tools and not tools & CANVAS_TOOLS

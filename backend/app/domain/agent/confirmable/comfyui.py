@@ -55,6 +55,65 @@ def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any
     return workbench_agent.apply_edit(db, _user(db, actor), confirmation.workspace_id, dict(confirmation.payload or {}))
 
 
+def _run_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """认出 `workflow` 是哪张工作流的工具、入参名都是它认得的,再走**那个工具自己的**开卡校验;卡上记着它的展开名(`tool`)。"""
+    from app.domain.agent.confirmable.plugin_tools import validate_call
+    from app.domain.agent.workflow_tools import WorkflowToolError, checked_call
+
+    arguments = payload.get("arguments")
+    arguments = {} if arguments is None else arguments
+    if not isinstance(arguments, dict):
+        raise ConfirmationError("confirmErr_pluginToolBadInput", name=str(payload.get("workflow") or ""), detail="arguments")
+    try:
+        name = checked_call(db, _user(db, actor), str(payload.get("workflow") or ""), arguments,
+                            str(payload.get("instance_id") or ""))
+    except WorkflowToolError as exc:
+        raise ConfirmationError("confirmErr_pluginToolBadInput", name=str(payload.get("workflow") or ""), detail=str(exc)) from exc
+    call = {"arguments": arguments}
+    validate_call(db, name, workspace_id, call, actor)
+    payload.clear()
+    payload.update({**call, "tool": name})
+
+
+def _run_summarize(db: Session, payload: dict[str, Any]) -> Summary:
+    from app.domain.agent.confirmable.plugin_tools import summarize_call
+
+    return summarize_call(db, payload)
+
+
+def _run_escalate(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
+    from app.domain.agent.confirmable.plugin_tools import escalate_call
+
+    return escalate_call(db, str(payload.get("tool") or tool), payload)
+
+
+def _run_needs_card(db: Session, payload: dict[str, Any]) -> bool:
+    from app.domain.agent.confirmable.plugin_tools import needs_card_call
+
+    return needs_card_call(db, payload)
+
+
+def _run_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    from app.domain.agent.confirmable.plugin_tools import run_call
+
+    payload = dict(confirmation.payload or {})
+    return run_call(db, str(payload.get("tool") or ""), payload, confirmation.workspace_id, actor)
+
+
+#: 按工作流跑一张这一轮工具表里没有的工作流(ADR 0044 修订 2026-10-08,见 agent.workflow_tools)。卡上的说明、问人的那一档、
+#: 批准之后的执行,和调那个工作流工具自己开的卡同一份;卡以这个名字开 —— 「本会话始终允许」按它记,允许的是经这条路跑的每一张。
+confirmable_tool(ConfirmableTool(
+    name="comfy_run_workflow",
+    permission="edit",
+    cost="none",
+    summarize=_run_summarize,
+    execute=_run_execute,
+    validate=_run_validate,
+    escalate=_run_escalate,
+    needs_card=_run_needs_card,
+))
+
+
 confirmable_tool(ConfirmableTool(
     name="comfy_canvas_edit",
     permission="edit",

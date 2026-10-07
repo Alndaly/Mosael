@@ -862,6 +862,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "新工作流",
         "en": "New workflow",
     },
+    "workbenchErr_noWorkflowTool": {
+        "zh": "找不到工作流「{workflow}」的工具:先用 list_workflows 看看有哪些(`tool` 那一栏),或者给工作流的路径",
+        "en": "No tool for workflow “{workflow}”: call list_workflows to see what exists (the `tool` field), or give the workflow's path",
+    },
+    "workbenchErr_noWorkflowInput": {
+        "zh": "{tool} 没有入参「{input}」:用 comfy_workflow_inputs 不带 input 看它收哪些",
+        "en": "{tool} has no input “{input}”: call comfy_workflow_inputs without `input` to see what it takes",
+    },
+    "workbenchErr_unknownWorkflowInputs": {
+        "zh": "{tool} 不认这几个入参:{keys}。它收的是:{accepted}",
+        "en": "{tool} doesn't take these inputs: {keys}. It takes: {accepted}",
+    },
     "workbenchErr_badNode": {
         "zh": "「{node}」不是画布上节点的写法:根图上的写编号(12),子图里的写从根图往里走的编号(12:5)",
         "en": "“{node}” is not a canvas node reference: use the id for top-level nodes (12) and the path for nodes in subgraphs (12:5)",

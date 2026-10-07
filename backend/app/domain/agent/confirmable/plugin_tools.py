@@ -137,6 +137,15 @@ def _summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    return run_call(db, confirmation.tool, confirmation.payload, confirmation.workspace_id, actor)
+
+
+def validate_call(db: Session, name: str, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """展开名 `name` 那个工具的开卡校验(和以它命名的卡同一份)。别的卡替它开时用(见 comfyui 的 comfy_run_workflow)。"""
+    _bind(name).validate(db, workspace_id, payload, actor)
+
+
+def run_call(db: Session, name: str, payload: dict[str, Any], workspace_id: str, actor: str | None) -> dict[str, Any]:
     """批准之后跑:**同一个** plugins.tools.invoke(智能体直接调、工作流节点、插件页试跑走的都是它)。
 
     只用**批准者自己**接的连接:连接归人,别人批准就是拿接入者的第三方密钥替他花钱 —— 那不是
@@ -146,14 +155,13 @@ def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.tools import invoke
 
-    payload = confirmation.payload
-    tool = exposed_tool(db, confirmation.tool, actor)
+    tool = exposed_tool(db, name, actor)
     if tool is None or tool["instance_id"] != payload.get("instance_id") or tool["name"] != payload.get("tool_name"):
-        raise ConfirmationError("confirmErr_pluginToolUnavailable", name=confirmation.tool)
+        raise ConfirmationError("confirmErr_pluginToolUnavailable", name=name)
     try:
         invocation = invoke(
             db, tool["instance_id"], tool["name"], dict(payload.get("arguments") or {}),
-            workspace_id=confirmation.workspace_id,
+            workspace_id=workspace_id,
         )
     except PluginDomainError as exc:
         raise ConfirmationError("confirmErr_pluginToolFailed", name=tool["label"], detail=str(exc)[:400]) from exc
@@ -162,5 +170,10 @@ def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any
     output = invocation.output
     return output if isinstance(output, dict) else {"output": output}
 
+
+#: 别的卡替一个插件工具开时,卡上怎么说、按哪一档问、要不要问人,和以那个工具命名的卡同一份。
+summarize_call = _summarize
+escalate_call = _escalate
+needs_card_call = _needs_card
 
 confirmable_family(PLUGIN_TOOL_PREFIX, _bind)
