@@ -523,7 +523,7 @@ export const plugins = {
   workbenchCapSave: "保存命令(在画布里按 Ctrl+S 存)",
   workbenchCallFailed: "画布那边没做成:{why}",
   workbenchSave: "保存",
-  workbenchSaveHint: "存进这台 ComfyUI 上的工作流文件,和在画布里按 Ctrl+S 一样(没存过的会让你起个名字)",
+  workbenchSaveHint: "存进这台 ComfyUI 上的工作流文件,和 ComfyUI 菜单里的「保存」一样(没存过的会让你起个名字)",
   workbenchRun: "运行",
   workbenchRunHintShort: "跑画布上现在这张(含没存的改动),结果收进素材库",
   workbenchRunNeedsSave: "先存一次这张工作流(新建的要起个名字),才能在这里运行",

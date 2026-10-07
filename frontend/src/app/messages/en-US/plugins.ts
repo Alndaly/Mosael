@@ -517,7 +517,7 @@ export const plugins = {
   workbenchCapSave: "the save command (press Ctrl+S on the canvas to save)",
   workbenchCallFailed: "The canvas didn't do it: {why}",
   workbenchSave: "Save",
-  workbenchSaveHint: "Saves into the workflow file on this ComfyUI, the same as Ctrl+S on the canvas (an unsaved one asks for a name)",
+  workbenchSaveHint: "Saves into the workflow file on this ComfyUI, the same as Save in ComfyUI's menu (an unsaved one asks for a name)",
   workbenchRun: "Run",
   workbenchRunHintShort: "Runs the graph on the canvas right now (including unsaved changes); results go into the asset library",
   workbenchRunNeedsSave: "Save this workflow once (a new one needs a name) before running it here",

@@ -80,6 +80,7 @@ vi.mock("@/features/agent/CanvasAgentChat", async () => {
 import type { WorkflowApp } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { installAppChromeGuards } from "@/components/ui/appChrome";
+import { comboFromEvent, listenKeys } from "@/lib/shortcuts";
 import { declaresDrag, noDragAfter } from "@/test/dragRegions";
 import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
 import { ComfyWorkbench } from "./ComfyWorkbench";
@@ -137,6 +138,7 @@ function desktop() {
     mosaelPublish: {
       hideView: vi.fn(async () => undefined),
       setOverlay: vi.fn(async (_up: boolean) => undefined),
+      focusPage: vi.fn(async () => undefined),
       onViewState: (callback: typeof viewListener) => {
         viewListener = callback;
         return () => (viewListener = null);
@@ -250,7 +252,40 @@ describe("ComfyUI 工作台", () => {
                                                    key: "workflows/Unsaved Workflow.json", revision: 1 } }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchSave/ }));
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "save" }));
+    //: 没存过的:ComfyUI 弹出起名字的框,键盘交给画布(不然打的字落在 Mosael 这边)
+    await waitFor(() => expect(bridge.mosaelPublish.focusPage).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: /workbenchRun/ }).hasAttribute("disabled")).toBe(true);
+    bridge.emit(state());
+    fireEvent.click(screen.getByRole("button", { name: /workbenchSave/ }));
+    await waitFor(() => expect(calls(bridge).filter((one) => one.op === "save")).toHaveLength(2));
+    expect(bridge.mosaelPublish.focusPage, "存过的那张直接存,焦点不动").toHaveBeenCalledTimes(1);
+  });
+
+  it("⌘S / Ctrl+S:焦点在顶栏、右边这一列(助手的输入框里打着字也算)时和「保存」一样,只存一次、不往下传;落在别处的不管", async () => {
+    //: 工作台底下那一页也认 ⌘S(比如工作流编辑器):它不该跟着存
+    const underneath = vi.fn();
+    const stop = listenKeys(window, (event) => {
+      if (comboFromEvent(event) === "Mod+S") underneath();
+    });
+    const bridge = await mount(state(), <input aria-label="underneath" />);
+    const saves = () => calls(bridge).filter((one) => one.op === "save").length;
+    const composer = document.createElement("textarea");
+    shownPanel().append(composer);
+    fireEvent.keyDown(composer, { key: "s", code: "KeyS", metaKey: true });
+    await waitFor(() => expect(saves()).toBe(1));
+    fireEvent.keyDown(document.querySelector("[data-comfy-workbench-bar]")!, { key: "s", code: "KeyS", ctrlKey: true });
+    await waitFor(() => expect(saves()).toBe(2));
+    expect(underneath, "工作台接住了就不往下传").not.toHaveBeenCalled();
+    fireEvent.keyDown(composer, { key: "s", code: "KeyS", metaKey: true, shiftKey: true });
+    fireEvent.keyDown(composer, { key: "s", code: "KeyS" });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "underneath" }), { key: "s", code: "KeyS", metaKey: true });
+    expect(saves(), "⇧⌘S、单按 S、落在工作台外面的都不算").toBe(2);
+    expect(underneath).toHaveBeenCalledTimes(1);
+    bridge.emit(state({ capabilities: { ...CAPS, save: false } }));
+    fireEvent.keyDown(composer, { key: "s", code: "KeyS", metaKey: true });
+    expect(saves(), "这版前端没有保存命令:接住,不存").toBe(2);
+    expect(underneath).toHaveBeenCalledTimes(1);
+    stop();
   });
 
   it("模型库:选中加载节点只列那个目录的模型,点一行经桥填进去;下拉里还没有就给「刷新下拉」", async () => {

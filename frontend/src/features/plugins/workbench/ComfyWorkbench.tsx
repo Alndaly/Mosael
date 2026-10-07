@@ -20,6 +20,7 @@ import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { useWorkbench, workbenchCall } from "@/features/plugins/workbench/workbenchSession";
+import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -31,6 +32,11 @@ const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
 const BRIDGE_PATIENCE_MS = 45_000;
 const COLUMN_REGION = { side: "left" as const };
+const SAVE_KEY = "Mod+S";
+
+/** 这一下按键落在工作台自己的顶栏或右边那一列里(助手的输入框也在这一列)。 */
+const inWorkbench = (target: EventTarget | null) =>
+  target instanceof Element && target.closest("[data-comfy-workbench-bar], [data-comfy-workbench-column]") !== null;
 
 /**
  * 每个页签自己滚动(竖排的 flex,面板的根占满剩下的高 —— 空的、在读的摆在正中,见 workbenchParts)。能拿焦点:在里面点了
@@ -87,6 +93,36 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   }, [tab]);
   //: 换了一张:上一张没存成的那句话不是这一张的
   React.useEffect(() => setSaveNote(""), [workflowKey]);
+  //: 「保存」是前端自己的保存命令(和 ComfyUI 菜单「工作流 → 保存」同一条):顶栏那一颗和 ⌘S / Ctrl+S 都走这里
+  const canSave = state?.capabilities?.save !== false;
+  const saveNow = Boolean(state) && canSave;
+  const unsaved = Boolean(workflow?.temporary);
+  const save = React.useCallback(async () => {
+    setSaveNote("");
+    const result = await workbenchCall({ op: "save" });
+    if (!result.ok) setSaveNote(t("workbenchCallFailed").replace("{why}", result.error));
+    //: 没存过的那张:ComfyUI 在画布上弹出起名字的框(框里的输入已经选中)—— 键盘交给画布,接着就能打名字、回车。不交的话
+    //: 按 ⌘S 时焦点还在这一列里,打的字落进助手的输入框(真机上看到的)
+    else if (unsaved) void window.mosaelPublish?.focusPage?.();
+  }, [t, unsaved]);
+  //: ⌘S / Ctrl+S(维护者:「可以通过快捷键快速保存」):焦点在工作台自己的顶栏、右边这一列时和顶栏的「保存」一样 —— 在助手的
+  //: 输入框里打着字也算,存盘不是改字。焦点在画布里时这一下根本到不了这一页(原生视图收走;应用菜单里也没有占 ⌘S 的项),
+  //: ComfyUI 自己存,不会存两次。在捕获阶段接住、不往下传:工作台底下那一页(比如工作流编辑器)也认 ⌘S,不能让它跟着存一次
+  //: 看不见的东西。存不了的时候(还没连上、这版前端没有保存命令)照样接住,什么都不做。
+  React.useEffect(
+    () =>
+      listenKeys(
+        window,
+        (event) => {
+          if (comboFromEvent(event) !== SAVE_KEY || !inWorkbench(event.target)) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (saveNow) void save();
+        },
+        true,
+      ),
+    [saveNow, save],
+  );
   //: 「助手」开好一张新的、还缺模型:「去下载」换到缺失项那一页
   const showMissing = React.useCallback(() => setTab("missing"), [setTab]);
 
@@ -95,7 +131,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const path = savedPath(state);
   const workflowName = workflow ? workflow.name || path || t("workbenchUnsaved") : "";
   const modified = Boolean(workflow?.modified);
-  const canSave = capabilities?.save !== false;
   const canRun = Boolean(capabilities?.export) && Boolean(path);
   const runBlocked = !state ? t("workbenchConnecting")
     : !capabilities?.export ? t("workbenchUnsupported").replace("{what}", t("workbenchCapExport"))
@@ -106,12 +141,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     if (!columnOpen) setOpen("open");
     run.mutate({ path, workflowKey, workflowName });
   };
-  const save = async () => {
-    setSaveNote("");
-    const result = await workbenchCall({ op: "save" });
-    if (!result.ok) setSaveNote(t("workbenchCallFailed").replace("{why}", result.error));
-  };
-
   const tabLabel: Record<Tab, string> = {
     models: t("workbenchTabModels"),
     missing: t("workbenchTabMissing"),
@@ -162,9 +191,10 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           {!state && <span className="shrink-0 text-muted-foreground">{t("workbenchConnecting")}</span>}
         </div>
         <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" />
-        <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}>
+        <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
+              shortcut={canSave ? formatCombo(SAVE_KEY) : null}>
           <Button variant="outline" size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0"
-                  disabled={!state || !canSave} onClick={() => void save()}>
+                  disabled={!saveNow} onClick={() => void save()}>
             <Save />
             {t("workbenchSave")}
           </Button>
