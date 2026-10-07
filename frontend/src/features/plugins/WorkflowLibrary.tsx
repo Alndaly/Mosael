@@ -64,6 +64,7 @@ import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import {
   LIBRARY_DENSITIES,
+  LIBRARY_TABLE_HEAD,
   LibraryDensitySwitch,
   LibraryDetail,
   LibraryDialog,
@@ -1016,6 +1017,14 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
 /**
  * 列表:一行一张,扫一大批工作流时比卡片快。名字是行里那颗按钮;整行也点得开。一行和一张卡片同一份菜单(右键、行尾悬停出现
  * 的 ⋯、Shift+F10),也能拖到左边的文件夹上。
+ *
+ * 维护者:「这个弹窗列表模式下似乎UI有点问题」——
+ * - 表头钉在顶上、**不透明**(LIBRARY_TABLE_HEAD):滚上去的那一行不再透过表头;
+ * - **每行一样高**(WORKFLOW_ROW_HEIGHT):缺东西的只摆一枚「缺 4 种节点 · 3 个模型」,缺的是哪几样在悬停里;此前两枚叠成两行,
+ *   那几行高出一截;
+ * - 种类一律灰字:此前转不过来的那几行是橙色,和「缺什么」那一列说的是同一件事。转不过来、又不是缺东西的(别的原因),
+ *   「缺什么」那一列摆一枚「转不过来」,原因在悬停里;
+ * - 全在根目录时不摆「目录」那一列(一整列空着);窄的时候先收掉「目录」「节点」「改动时间」,名字那一列留着。
  */
 function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
   label: string;
@@ -1026,34 +1035,27 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const head = "sticky top-0 z-[1] border-b border-divider bg-[var(--modal-surface)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
-  const cell = "border-b border-divider px-2 py-1.5 align-middle";
+  const head = LIBRARY_TABLE_HEAD;
+  const cell = cn("border-b border-divider px-2 py-1.5 align-middle", WORKFLOW_ROW_HEIGHT);
+  //: 全在根目录:没有可看的目录,这一列不摆
+  const folders = workflows.some((flow) => flow.folder);
+  //: 窄的时候先收掉的几列(名字、种类、缺什么、在用留着)
+  const wide = "max-lg:hidden";
   return (
-    <table aria-label={label} className="w-full min-w-[760px] table-fixed border-separate border-spacing-0 text-ui-sm">
-      <colgroup>
-        <col className="w-[76px]" />
-        <col />
-        <col className="w-[120px]" />
-        <col className="w-[80px]" />
-        <col className="w-[64px]" />
-        <col className="w-[108px]" />
-        <col className="w-[120px]" />
-        <col className="w-[56px]" />
-        <col className="w-[44px]" />
-      </colgroup>
+    <table aria-label={label} className="w-full min-w-[560px] table-fixed border-separate border-spacing-0 text-ui-sm">
       <thead>
         <tr>
-          <th scope="col" className={head}>
+          <th scope="col" className={cn(head, "w-[76px]")}>
             <span className="sr-only">{t("workflowLibraryColPreview")}</span>
           </th>
           <th scope="col" className={head}>{t("workflowLibraryColName")}</th>
-          <th scope="col" className={head}>{t("workflowLibraryColFolder")}</th>
-          <th scope="col" className={head}>{t("workflowLibraryKind")}</th>
-          <th scope="col" className={cn(head, "text-right")}>{t("workflowLibraryColNodes")}</th>
-          <th scope="col" className={head}>{t("modelModified")}</th>
-          <th scope="col" className={head}>{t("workflowLibraryColMissing")}</th>
-          <th scope="col" className={cn(head, "text-right")}>{t("modelLibraryColUsed")}</th>
-          <th scope="col" className={head}>
+          {folders && <th scope="col" data-col="folder" className={cn(head, "w-[120px]", wide)}>{t("workflowLibraryColFolder")}</th>}
+          <th scope="col" className={cn(head, "w-[80px]")}>{t("workflowLibraryKind")}</th>
+          <th scope="col" className={cn(head, "w-[64px] text-right", wide)}>{t("workflowLibraryColNodes")}</th>
+          <th scope="col" className={cn(head, "w-[108px]", wide)}>{t("modelModified")}</th>
+          <th scope="col" className={cn(head, "w-[176px]")}>{t("workflowLibraryColMissing")}</th>
+          <th scope="col" className={cn(head, "w-[56px] text-right")}>{t("modelLibraryColUsed")}</th>
+          <th scope="col" className={cn(head, "w-[44px]")}>
             <span className="sr-only">{t("workflowLibraryColActions")}</span>
           </th>
         </tr>
@@ -1087,19 +1089,21 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
                     onOpen(flow);
                   }}
                 >
-                  <Truncate>{flow.label}</Truncate>
+                  <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
                 </button>
               </td>
-              <td className={cn(cell, "text-ui-xs text-muted-foreground")}>
-                <Truncate>{flow.folder}</Truncate>
-              </td>
-              <td className={cn(cell, "text-ui-xs", flow.problem ? "text-warning" : "text-muted-foreground")}>{kindName(t, flow.kind)}</td>
-              <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground")}>{flow.node_count}</td>
-              <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground")}>
+              {folders && (
+                <td className={cn(cell, "text-ui-xs text-muted-foreground", wide)}>
+                  <Truncate>{flow.folder}</Truncate>
+                </td>
+              )}
+              <td data-col="kind" className={cn(cell, "text-ui-xs text-muted-foreground")}>{kindName(t, flow.kind)}</td>
+              <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground", wide)}>{flow.node_count}</td>
+              <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground", wide)}>
                 {flow.modified != null ? new Date(flow.modified * 1000).toLocaleDateString(locale) : ""}
               </td>
               <td className={cell}>
-                <LackBadges flow={flow} />
+                <LackChip flow={flow} />
               </td>
               <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
                 {used > 0 ? used : ""}
@@ -1117,6 +1121,38 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
         })}
       </tbody>
     </table>
+  );
+}
+
+/** 列表的一行多高:预览(40px)上下各留 6px。缺东西、名字长短都不改它。 */
+const WORKFLOW_ROW_HEIGHT = "h-[53px]";
+
+/**
+ * 列表「缺什么」那一格:**只摆一枚**(「缺 4 种节点 · 3 个模型」「缺 2 种节点」),缺的是哪几样在悬停里 —— 两枚叠成两行
+ * 会把那一行撑高。不缺东西、却转不过来的(别的原因)摆一枚「转不过来」,原因在悬停里。
+ */
+function LackChip({ flow }: { flow: WorkflowFile }) {
+  const t = useI18n();
+  const nodes = flow.missing_nodes ?? [];
+  const models = flow.missing_models ?? [];
+  const text =
+    nodes.length && models.length
+      ? t("workflowLibraryMissingBoth").replace("{nodes}", String(nodes.length)).replace("{models}", String(models.length))
+      : nodes.length
+        ? t("workflowLibraryMissingNodes").replace("{n}", String(nodes.length))
+        : models.length
+          ? t("workflowLibraryMissingModels").replace("{n}", String(models.length))
+          : "";
+  const detail = [...nodes.map((one) => one.type), ...models.map((one) => one.name)].join(" · ");
+  if (!text && !flow.problem) return null;
+  return (
+    <Hint label={text || t("workflowLibraryBroken")} hint={(text ? detail : flow.problem) || undefined}>
+      <span data-lack-chip="" tabIndex={-1} className="inline-flex max-w-full">
+        <CatalogBadge tone="warning" icon={text ? <CircleAlert /> : <TriangleAlert />}>
+          <Truncate>{text || t("workflowLibraryBroken")}</Truncate>
+        </CatalogBadge>
+      </span>
+    </Hint>
   );
 }
 

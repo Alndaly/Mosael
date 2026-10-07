@@ -368,6 +368,8 @@ export const plugins = {
   workflowLibraryNodes: "{n} nodes",
   workflowLibraryMissingNodes: "{n} node types missing",
   workflowLibraryMissingModels: "{n} models missing",
+  workflowLibraryMissingBoth: "{nodes} node types · {models} models missing",
+  workflowLibraryBroken: "Can't convert",
   workflowLibraryUsedCount: "Used in {n} places",
   workflowLibraryBack: "Back to the workflow library",
   workflowLibraryColPreview: "Preview",

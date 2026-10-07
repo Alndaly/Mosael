@@ -24,7 +24,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const openImagePreview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));
@@ -238,6 +238,45 @@ describe("工作流库", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual(["sketch", "wan", "portrait"]);
     expect(window.localStorage.getItem("mosael:tab:workflow-library.density")).toBe("list");
+  });
+
+  it("列表:表头不透明、压在行上面;每行一样高,缺东西的只摆一枚;种类一律灰字;全在根目录时不摆「目录」那一列", async () => {
+    const data = library();
+    data.workflows![0].missing_nodes = [{ type: "A", count: 1, packs: [] }, { type: "B", count: 1, packs: [] }];
+    data.workflows![0].missing_models = [{ folder: "loras", name: "m.safetensors", url: "" }];
+    api.getWorkflowLibrary.mockResolvedValue(data);
+    await openLibrary();
+    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
+    const table = screen.getByRole("table", { name: "workflowLibraryTitle" });
+    for (const th of within(table).getAllByRole("columnheader")) {
+      //: 弹窗表面是半透明的(磨砂):表头用它,滚上去的那一行会透过来。用实心那一档、层级压过行里的角标
+      expect(th.className).toContain("bg-[var(--modal-solid)]");
+      expect(th.className).not.toContain("--modal-surface");
+      expect(th.className).toContain("sticky");
+      expect(th.className).toContain("z-20");
+    }
+    const rows = within(table).getAllByRole("row").slice(1);
+    const heights = new Set(rows.flatMap((row) => within(row).getAllByRole("cell").map((td) => td.className.match(/\bh-\[\d+px\]/)?.[0])));
+    expect([...heights], "每一格同一个高度").toEqual(["h-[53px]"]);
+    const portrait = rows.find((row) => row.textContent?.includes("portrait"))!;
+    const chips = portrait.querySelectorAll("[data-lack-chip]");
+    expect(chips, "缺节点又缺模型:一枚,不叠两行").toHaveLength(1);
+    expect(chips[0].textContent).toBe("workflowLibraryMissingBoth");
+    for (const kind of table.querySelectorAll<HTMLElement>("td[data-col=kind]")) {
+      expect(kind.className, "种类不按「缺不缺」上色 —— 那是「缺什么」那一列的事").toContain("text-muted-foreground");
+      expect(kind.className).not.toContain("text-warning");
+    }
+    expect(table.querySelector("th[data-col=folder]"), "有子目录的才摆「目录」").toBeTruthy();
+
+    cleanup();
+    const flat = library();
+    for (const one of flat.workflows!) one.folder = "";
+    api.getWorkflowLibrary.mockResolvedValue(flat);
+    //: 显示方式记着是列表
+    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" workflows />);
+    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryOpen" }));
+    expect((await screen.findByRole("table", { name: "workflowLibraryTitle" })).querySelector("th[data-col=folder]"),
+           "全在根目录:一整列空着就不摆").toBeNull();
   });
 
   it("详情:能填什么、参数、交出什么、用到的模型在不在、缺的模型、最近的产出、谁在用它(点了跳过去)", async () => {

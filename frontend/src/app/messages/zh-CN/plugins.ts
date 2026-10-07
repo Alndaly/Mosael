@@ -373,6 +373,8 @@ export const plugins = {
   workflowLibraryNodes: "{n} 个节点",
   workflowLibraryMissingNodes: "缺 {n} 种节点",
   workflowLibraryMissingModels: "缺 {n} 个模型",
+  workflowLibraryMissingBoth: "缺 {nodes} 种节点 · {models} 个模型",
+  workflowLibraryBroken: "转不过来",
   workflowLibraryUsedCount: "{n} 处在用",
   workflowLibraryBack: "返回工作流库",
   workflowLibraryColPreview: "预览",

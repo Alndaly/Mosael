@@ -39,6 +39,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import {
   LIBRARY_DENSITIES,
+  LIBRARY_TABLE_HEAD,
   LibraryDensitySwitch,
   LibraryDialog,
   LibraryFilterChips,
@@ -1085,8 +1086,8 @@ function ModelTable({
   const pending = useClaimReturn(returnTo, scrollRef, models);
   const virtual = useVirtualRows({ keys, scrollRef, listRef: bodyRef, estimate: TABLE_ROW_PX, overscanPx: OVERSCAN_PX });
   useFocusReturned(pending, bodyRef, virtual, (key) => keys.indexOf(key), true);
-  //: 表头钉在顶上(滚到几百行时还看得出哪一列是什么),底色和弹窗一样。
-  const head = "sticky top-0 z-[1] border-b border-divider bg-[var(--modal-surface)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
+  //: 表头钉在顶上(滚到几百行时还看得出哪一列是什么),底色不透明(见 LIBRARY_TABLE_HEAD)。
+  const head = LIBRARY_TABLE_HEAD;
   return (
     // 不另包一层 overflow-x:那一层会成为表头吸顶的参照,表头就钉不住了。太窄时由内容区自己横向滚。
     <table aria-label={label} className="w-full min-w-[680px] table-fixed border-separate border-spacing-0 text-ui-sm">
