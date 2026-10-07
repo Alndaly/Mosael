@@ -148,7 +148,9 @@ function mount(ui: React.ReactElement) {
 const WORKSPACE = { id: "ws", name: "W" } as never;
 //: 素材库一页页给,种类在服务端筛(参考图只要图片和视频)。
 const servedAssets = (rows: { id: string; kind: string; name: string }[]) => async (query: { kind?: string[] }) => {
-  const items = rows.filter((one) => !query.kind || query.kind.includes(one.kind));
+  const items = rows
+    .filter((one) => !query.kind || query.kind.includes(one.kind))
+    .map((one) => ({ ...one, original_filename: one.name, source: "imported", derived: false, ai_generated: false, media_info: { width: 1024, height: 1024 } }));
   return { items, next_cursor: null, total: items.length };
 };
 
@@ -424,11 +426,13 @@ describe("参考图墙", () => {
     const wall = await openDetail();
     fireEvent.click(within(wall).getByRole("button", { name: "entityFromLibrary" }));
     const dialog = await screen.findByRole("dialog");
-    const library = await within(dialog).findByRole("listbox", { name: "entityLibraryTitle" });
+    const library = await within(dialog).findByRole("listbox", { name: "entityFromLibrary" });
     //: 已经挂着的那张照样列出来,但标着「已挂上」、选不了;音频不是参考图,不列。
-    const attached = within(library).getByRole("option", { name: "正面.png" }) as HTMLButtonElement;
-    expect(attached.disabled).toBe(true);
+    const attached = within(library).getByRole("option", { name: "正面.png" });
+    expect(attached).toHaveAttribute("aria-disabled", "true");
     expect(within(attached).getByText("entityLibraryAttached")).toBeTruthy();
+    fireEvent.click(attached);
+    expect(attached).toHaveAttribute("aria-selected", "false");
     expect(within(library).queryByRole("option", { name: "歌.mp3" })).toBeNull();
     const add = within(dialog).getByRole("button", { name: "entityLibraryAttach" }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
@@ -481,7 +485,7 @@ describe("参考图墙", () => {
     const wall = await openDetail();
     fireEvent.click(within(wall).getByRole("button", { name: "entityFromLibrary" }));
     const dialog = await screen.findByRole("dialog");
-    const library = await within(dialog).findByRole("listbox", { name: "entityLibraryTitle" });
+    const library = await within(dialog).findByRole("listbox", { name: "entityFromLibrary" });
     fireEvent.click(within(library).getByRole("option", { name: "背面.png" }));
     fireEvent.click(within(library).getByRole("option", { name: "侧脸.png" }));
     const fetched = api.getEntity.mock.calls.length;

@@ -135,7 +135,6 @@ export const assetLibrary = {
   entityMoveEarlier: "往前挪",
   entityMoveLater: "往后挪",
   entityRemoveReference: "移出参考图",
-  entityLibraryTitle: "素材库",
   entityLibrarySearch: "搜素材",
   entityLibraryEmpty: "素材库里还没有图片或视频。",
   entityLibraryAll: "全部",

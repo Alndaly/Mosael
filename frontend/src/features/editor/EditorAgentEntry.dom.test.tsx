@@ -26,6 +26,12 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
+//: 「替换媒体」的挑选弹窗(AssetGridPicker)一直挂着;看大图的灯箱在应用根上,这里不挂,给一个桩。
+vi.mock("@/components/app/image-preview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/app/image-preview")>()),
+  useImagePreview: () => ({ openImagePreview: () => {}, isImagePreviewOpen: false }),
+}));
+
 vi.mock("@/features/editor/useEditorPanels", () => ({
   useEditorPanels: () => ({
     tab: "media",

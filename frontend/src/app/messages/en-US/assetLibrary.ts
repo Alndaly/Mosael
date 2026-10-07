@@ -135,7 +135,6 @@ export const assetLibrary = {
   entityMoveEarlier: "Move earlier",
   entityMoveLater: "Move later",
   entityRemoveReference: "Remove from references",
-  entityLibraryTitle: "Media library",
   entityLibrarySearch: "Search media",
   entityLibraryEmpty: "No images or videos in the media library yet.",
   entityLibraryAll: "All",

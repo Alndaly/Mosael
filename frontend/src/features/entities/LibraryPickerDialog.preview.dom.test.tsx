@@ -15,6 +15,7 @@ import { LibraryPickerDialog } from "./LibraryPickerDialog";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => (key === "viewFullSizeOf" ? "看大图:{name}" : key),
+  usePreferences: () => ({ locale: "zh-CN" }),
 }));
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
@@ -62,7 +63,11 @@ it("「看大图」开灯箱、从这一张开始翻这一屏;不勾选这一格
 
 it("已经挂上的那张不能再选,但能看大图", async () => {
   mount();
-  expect(await screen.findByRole("option", { name: "side 图" })).toBeDisabled();
+  const attached = await screen.findByRole("option", { name: "side 图" });
+  //: 点不动,但键盘还走得到(网格里的格子不从 Tab 顺序里消失,读屏念得出它「不可用」)。
+  expect(attached).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(attached);
+  expect(attached).toHaveAttribute("aria-selected", "false");
   fireEvent.click(screen.getByRole("button", { name: "看大图:side 图" }));
   await waitFor(() => expect(lightbox()?.textContent).toContain("2 / 3"));
 });

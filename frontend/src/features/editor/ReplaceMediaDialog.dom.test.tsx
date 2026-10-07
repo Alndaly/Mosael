@@ -11,11 +11,11 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 //: 服务端按种类筛:只交回这几种里的那些。
-const library = [
-  { id: "old", name: "原片", kind: "video" },
-  { id: "new", name: "降噪版", kind: "video" },
-  { id: "music", name: "BGM", kind: "audio" },
-];
+const card = (id: string, name: string, kind: string) => ({
+  id, name, kind, original_filename: `${id}.mp4`, source: "imported", derived: false, ai_generated: false,
+  media_info: { width: 1280, height: 720, duration: 8 },
+});
+const library = [card("old", "原片", "video"), card("new", "降噪版", "video"), card("music", "BGM", "audio")];
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   listAssetPage: vi.fn(async (query: { kind?: string[] }) => ({
@@ -25,6 +25,7 @@ vi.mock("@/api/client", async (original) => ({
   })),
 }));
 
+import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { listAssetPage, type Sequence } from "@/api/client";
 import { ReplaceMediaDialog } from "@/features/editor/ReplaceMediaDialog";
 
@@ -42,15 +43,22 @@ describe("替换媒体", () => {
     const onReplace = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <ReplaceMediaDialog sequence={sequence} clipId="a" onCancel={vi.fn()} onReplace={onReplace} />
+        <ImagePreviewProvider>
+          <ReplaceMediaDialog sequence={sequence} clipId="a" onCancel={vi.fn()} onReplace={onReplace} />
+        </ImagePreviewProvider>
       </QueryClientProvider>,
     );
     await screen.findByRole("option", { name: "降噪版" });
-    const options = screen.getAllByRole("option").map((one) => one.textContent);
+    //: 换下来的那一份自己不列;音频轨的素材放不上视频轨,不列。
+    const options = screen.getAllByRole("option").map((one) => one.getAttribute("aria-label"));
     expect(options).toEqual(["降噪版"]);
     expect(vi.mocked(listAssetPage).mock.calls[0][0]).toMatchObject({ workspace_id: "ws", project_id: "p", kind: ["video", "image"] });
+    const apply = screen.getByRole("button", { name: "replaceMediaApply" });
+    expect(apply).toBeDisabled();
+    //: 点一格是选中(描主色、角上一个勾),换不换由「替换」定。
     await user.click(screen.getByRole("option", { name: "降噪版" }));
-    await user.click(screen.getByRole("button", { name: "replaceMediaApply" }));
+    expect(screen.getByRole("option", { name: "降噪版" })).toHaveAttribute("aria-selected", "true");
+    await user.click(apply);
     expect(onReplace).toHaveBeenLastCalledWith({ asset_id: "new", clip_ids: ["a"] });
     await user.click(screen.getByRole("switch"));
     await user.click(screen.getByRole("button", { name: "replaceMediaApply" }));
