@@ -57,6 +57,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { NativeViewStandIn } from "@/components/ui/nativeViewAside";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
@@ -132,6 +133,8 @@ export function App() {
                   <BrowserDownloads />
                   <BrowserPreview />
                   <LivePanels />
+                  {/* 整窗浮层让原生网页视图挪开时,铺在它原处的那张画面(见 nativeViewAside) */}
+                  <NativeViewStandIn />
                 </ImagePreviewProvider>
               </AuthProvider>
             </TooltipProvider>

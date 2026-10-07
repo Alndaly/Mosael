@@ -518,6 +518,24 @@ describe("the foreground view and the toolbar's page tools", () => {
     expect(page.bounds).toEqual({ ...placed, width: 1440 - 500 });
   });
 
+  it("for an overlay: the stand-in frame is captured from the page in place, and the page comes back exactly where it was laid", async () => {
+    // 渲染层的顺序(见 frontend 的 nativeViewAside):拍画面 → 铺在 bounds 那一块 → 挪开视图;收起时先放回视图、再拿掉画面。
+    // 这边要保证的是:拍的是此刻在原处的那张网页,说的位置就是它放回来的位置 —— 对不上的话放回那一下画面会跳一下。
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setShellInset(420); // 工作台那一列
+    const page = viewOf("pool-a");
+    const capture = vi.spyOn(page.webContents, "capturePage");
+    const shot = await manager.snapshotForeground();
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(page.bounds, "拍的时候网页还在原处").toEqual(shot?.bounds);
+    manager.setForegroundHidden("overlay", true);
+    expect(page.bounds.x + page.bounds.width, "拍完才挪开:挪到窗口外").toBeLessThanOrEqual(0);
+    expect((await manager.snapshotForeground())?.bounds, "挪开以后问位置:还是原处那一块").toEqual(shot?.bounds);
+    manager.setForegroundHidden("overlay", false);
+    expect(page.bounds, "放回来就在画面铺着的那一块").toEqual(shot?.bounds);
+  });
+
   it("hides the page while a region is picked, and never leaves the next foreground view hidden", () => {
     manager.registerSession("pool-a", "persist:pool-a");
     manager.registerSession("pool-b", "persist:pool-b");
