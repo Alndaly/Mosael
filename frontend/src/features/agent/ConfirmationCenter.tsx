@@ -8,6 +8,7 @@ import { approveConfirmation, listConfirmations, rejectConfirmation } from "@/ap
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { useCardChoices } from "@/features/agent/cardChoices";
 import { ConfirmationCard, useSettledCards } from "@/features/agent/ConfirmationCard";
 import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
 
@@ -32,8 +33,8 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
 
   const settled = useSettledCards(workspaceId);
   const settle = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
-      action === "approve" ? approveConfirmation(id) : rejectConfirmation(id),
+    mutationFn: ({ id, action, choices }: { id: string; action: "approve" | "reject"; choices?: Record<string, boolean> }) =>
+      action === "approve" ? approveConfirmation(id, choices) : rejectConfirmation(id),
     onSuccess: (card) => {
       // **拍板之后卡就走**,只有一种例外:外部智能体(没有对话)的卡执行失败了。
       //  - 对话里的卡:结果收在那次对话里那次工具调用的一行里(见 ToolCalls),这里再留一张是第二份;
@@ -76,27 +77,10 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           eyebrow={`${t("confirmTitle")} · ${item.requested_by}`}
           className={cn(FLOATING_SURFACE, "animate-confirm-in")}
           actions={
-            // 转的只有被点的那一个;同一张卡的另一个禁掉 —— 一张卡只能有一个结论。
-            <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
-              <Button
-                size="sm"
-                loading={busy?.id === item.id && busy.action === "approve"}
-                disabled={busy?.id === item.id}
-                onClick={() => settle.mutate({ id: item.id, action: "approve" })}
-              >
-                <Check /> {t("confirmApprove")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto text-muted-foreground hover:text-destructive"
-                loading={busy?.id === item.id && busy.action === "reject"}
-                disabled={busy?.id === item.id}
-                onClick={() => settle.mutate({ id: item.id, action: "reject" })}
-              >
-                <X /> {t("confirmReject")}
-              </Button>
-            </div>
+            <SettleButtons
+              busyAction={busy?.id === item.id ? busy.action : null}
+              onSettle={(action, choices) => settle.mutate({ id: item.id, action, choices })}
+            />
           }
         />
       ))}
@@ -109,6 +93,38 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           onDismiss={() => settled.dismiss(card.id)}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * 全局中心卡底的两个按钮。转的只有被点的那一个;同一张卡的另一个禁掉 —— 一张卡只能有一个结论。
+ * 卡上拨过的开关(「建好就启用」,useCardChoices)批准时一起带走。
+ */
+function SettleButtons({
+  busyAction,
+  onSettle,
+}: {
+  busyAction: "approve" | "reject" | null;
+  onSettle: (action: "approve" | "reject", choices: Record<string, boolean>) => void;
+}) {
+  const t = useI18n();
+  const { values } = useCardChoices();
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
+      <Button size="sm" loading={busyAction === "approve"} disabled={busyAction !== null} onClick={() => onSettle("approve", values)}>
+        <Check /> {t("confirmApprove")}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="ml-auto text-muted-foreground hover:text-destructive"
+        loading={busyAction === "reject"}
+        disabled={busyAction !== null}
+        onClick={() => onSettle("reject", values)}
+      >
+        <X /> {t("confirmReject")}
+      </Button>
     </div>
   );
 }

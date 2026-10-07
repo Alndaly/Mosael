@@ -74,6 +74,10 @@ export function stageSkillFolder(workspaceId: string, files: readonly File[]): P
   return api<AgentSkillImport>(`/api/workspaces/${encodeURIComponent(workspaceId)}/skill-imports`, { method: "POST", body: form });
 }
 
+/** 暂存着的一次导入的全文:智能体从链接导入(import_skill)的确认卡照它画审阅,和设置页导入同一份。 */
+export const getSkillImport = (workspaceId: string, importId: string) =>
+  api<AgentSkillImport>(`/api/workspaces/${encodeURIComponent(workspaceId)}/skill-imports/${encodeURIComponent(importId)}`);
+
 /** 导入第二步:照审阅时的选择落地。 */
 export const commitSkillImport = (workspaceId: string, importId: string, choices: AgentSkillImportChoice[]) =>
   api<AgentSkill[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/skill-imports/${encodeURIComponent(importId)}`, {

@@ -197,6 +197,7 @@ export const otherUi = {
   confirmAllowOnce: "允许一次",
   confirmAllowSession: "本会话始终允许",
   confirmAsksEveryTime: "撤不回的操作每次都要你确认",
+  confirmAlwaysAsks: "这类改动每次都要你确认",
   confirmReject: "拒绝",
   permEdit: "编辑",
   permDestroy: "永久删除",

@@ -68,6 +68,7 @@ export const workspaceKeys = {
 export const skillKeys = {
   all: (workspaceId: string) => ["agent-skills", workspaceId] as const,
   detail: (workspaceId: string, ref: string) => ["agent-skills", workspaceId, ref] as const,
+  staged: (workspaceId: string, importId: string) => ["agent-skills", workspaceId, "import", importId] as const,
 };
 
 /** 音色库(克隆出来的那些声音):按工作区,只有这一种形状。 */

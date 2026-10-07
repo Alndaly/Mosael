@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, FileOutput, Eye, FolderInput, Pencil, Plus, Sparkles, Trash2, Import } from "lucide-react";
+import { Copy, FileOutput, Eye, FolderInput, MessageSquare, Pencil, Plus, Sparkles, Trash2, Import } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +25,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Switch } from "@/components/ui/switch";
 import { Truncate } from "@/components/ui/truncate";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { openAgentSession } from "@/features/agent/currentAgentSession";
 import { SkillEditorDialog, type SkillEditorTarget } from "@/features/agent/skills/SkillEditorDialog";
 import { SkillImportDialog } from "@/features/agent/skills/SkillImportDialog";
 import { SkillReviewDialog } from "@/features/agent/skills/SkillReviewDialog";
@@ -185,6 +186,7 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
               <SkillRow
                 key={skill.ref}
                 skill={skill}
+                workspaceId={workspace.id}
                 pending={toggle.isPending && toggle.variables?.ref === skill.ref}
                 onToggle={(enabled) => {
                   if (enabled && needsReview(skill)) setReviewing(skill.ref);
@@ -226,6 +228,7 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
 
 function SkillRow({
   skill,
+  workspaceId,
   pending,
   onToggle,
   onOpen,
@@ -234,6 +237,7 @@ function SkillRow({
   onDelete,
 }: {
   skill: AgentSkill;
+  workspaceId: string;
   pending: boolean;
   onToggle: (enabled: boolean) => void;
   onOpen: () => void;
@@ -246,8 +250,17 @@ function SkillRow({
     <SettingsItemRow
       className="group/skill"
       label={<span data-skill-row={skill.ref}>{skill.title}</span>}
-      meta={[skill.title !== skill.ref ? <span key="ref" className="font-mono">{skill.ref}</span> : null, skill.source_label]}
-      tags={needsReview(skill) && !skill.enabled ? <SettingsTag tone="warning">{t("agentSkillsUnreviewed")}</SettingsTag> : undefined}
+      //: 智能体起草的,来源由后面那个标签说(它点得开那段对话),这里不再念一遍。
+      meta={[
+        skill.title !== skill.ref ? <span key="ref" className="font-mono">{skill.ref}</span> : null,
+        skill.origin === "agent" ? null : skill.source_label,
+      ]}
+      tags={
+        <>
+          {needsReview(skill) && !skill.enabled ? <SettingsTag tone="warning">{t("agentSkillsUnreviewed")}</SettingsTag> : null}
+          <AgentSourceTag skill={skill} workspaceId={workspaceId} />
+        </>
+      }
       description={
         <Truncate lines={2}>
           <InlineMarkdown text={skill.description} links={false} />
@@ -280,5 +293,31 @@ function SkillRow({
         onCheckedChange={onToggle}
       />
     </SettingsItemRow>
+  );
+}
+
+/**
+ * 「智能体起草」「智能体导入」:这份技能是智能体在对话里经确认卡建的(ADR 0043)。还找得到那段对话就点得开 ——
+ * 想知道它为什么这么写、当时在做什么,答案在那段对话里;那段对话删了就只是一个标签。
+ */
+function AgentSourceTag({ skill, workspaceId }: { skill: AgentSkill; workspaceId: string }) {
+  const t = useI18n();
+  if (skill.origin !== "agent" && !skill.agent_session_id) return null;
+  const label = skill.origin === "agent" ? t("agentSkillsTagAgent") : t("agentSkillsTagAgentImported");
+  const sessionId = skill.agent_session_id;
+  if (!sessionId) return <SettingsTag>{label}</SettingsTag>;
+  return (
+    <button
+      type="button"
+      aria-label={`${label} · ${t("agentSkillsTagOpenSession")}`}
+      data-slot="skill-agent-source"
+      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border-0 bg-transparent p-0 hover:underline"
+      onClick={() => openAgentSession(workspaceId, sessionId)}
+    >
+      <SettingsTag>
+        {label}
+        <MessageSquare size={10} className="ml-1" aria-hidden />
+      </SettingsTag>
+    </button>
   );
 }

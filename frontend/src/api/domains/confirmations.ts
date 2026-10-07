@@ -31,8 +31,13 @@ export function listConfirmations(query: {
   return api<Confirmation[]>(`/api/confirmations?${params}`);
 }
 
-export function approveConfirmation(confirmationId: string): Promise<Confirmation> {
-  return api<Confirmation>(`/api/confirmations/${confirmationId}/approve`, { method: "POST" });
+/**
+ * 批准一张卡。`choices`:卡上那几个开关拨成了什么(「建好就启用」,见后端 ConfirmableTool.choices);
+ * 卡上没有开关就不带,照开卡时的缺省。
+ */
+export function approveConfirmation(confirmationId: string, choices?: Record<string, boolean>): Promise<Confirmation> {
+  const body = choices && Object.keys(choices).length > 0 ? JSON.stringify({ choices }) : undefined;
+  return api<Confirmation>(`/api/confirmations/${confirmationId}/approve`, { method: "POST", body });
 }
 
 export function rejectConfirmation(confirmationId: string): Promise<Confirmation> {

@@ -7,10 +7,12 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
+import { CardChoicesContext, type CardChoices } from "@/features/agent/cardChoices";
 import { payloadFields, type PayloadField } from "@/features/agent/confirmationPayload";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { NoteEditPreview } from "@/features/agent/NoteEditPreview";
 import { PermissionBadge, permissionTone, type PermissionTone } from "@/features/agent/PermissionBadge";
+import { SKILL_CARD_PREVIEWS } from "@/features/agent/skills/SkillCardPreviews";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,7 +47,13 @@ export function ConfirmationCard({
 }) {
   const settled = item.status !== "pending";
   const tone = permissionTone(item.permission);
+  const [values, setValues] = React.useState<Record<string, boolean>>(() => ({ ...(item.choices ?? {}) }));
+  const choices = React.useMemo<CardChoices>(
+    () => ({ values, set: (name, value) => setValues((current) => ({ ...current, [name]: value })) }),
+    [values],
+  );
   return (
+    <CardChoicesContext.Provider value={choices}>
     <article
       data-status={item.status}
       className={cn(
@@ -62,9 +70,10 @@ export function ConfirmationCard({
         <InlineMarkdown text={item.headline || item.summary} />
       </p>
       {!settled && item.warning ? <RiskNotice tone={tone} text={item.warning} /> : null}
-      {!settled ? <PayloadSection tool={item.tool} payload={item.payload} /> : null}
+      {!settled ? <PayloadSection item={item} /> : null}
       {settled ? <SettledLine item={item} onDismiss={onDismiss} /> : actions}
     </article>
+    </CardChoicesContext.Provider>
   );
 }
 
@@ -147,8 +156,9 @@ const SETTLED = {
  * 有专门画法的工具:通用参数表说不清「批了之后会变成什么样」的那几种。没列的走通用参数表。
  * 原始数据那一折所有工具都留着。
  */
-const TOOL_PREVIEWS: Partial<Record<string, (payload: Record<string, unknown>) => React.ReactNode>> = {
+const TOOL_PREVIEWS: Partial<Record<string, (payload: Record<string, unknown>, item: Confirmation) => React.ReactNode>> = {
   edit_note: (payload) => <NoteEditPreview payload={payload} />,
+  ...SKILL_CARD_PREVIEWS,
 };
 
 /**
@@ -157,15 +167,16 @@ const TOOL_PREVIEWS: Partial<Record<string, (payload: Record<string, unknown>) =
  * 载荷不收起:这张卡是智能体写操作与执行之间唯一的闸,摘要不足以构成知情同意(一个 add_node 可能
  * 藏着一段任意本地 Python)。收起的只是**长文本的后半截**,而且写明还有多少行没显示。
  */
-function PayloadSection({ tool, payload }: { tool: string; payload: Confirmation["payload"] }) {
+function PayloadSection({ item }: { item: Confirmation }) {
   const t = useI18n();
+  const { tool, payload } = item;
   const preview = TOOL_PREVIEWS[tool];
   const fields = preview ? [] : payloadFields(payload);
   const raw = JSON.stringify(payload, null, 2);
   if (!preview && fields.length === 0 && raw === "{}") return null;
   return (
     <section className="grid min-w-0 gap-2" aria-label={t("confirmParams")}>
-      {preview ? preview((payload ?? {}) as Record<string, unknown>) : null}
+      {preview ? preview((payload ?? {}) as Record<string, unknown>, item) : null}
       {fields.length > 0 ? <FieldList fields={fields} /> : null}
       <details className="group min-w-0 text-ui-xs">
         <summary className="w-fit cursor-pointer select-none text-muted-foreground hover:text-foreground">{t("confirmPayload")}</summary>

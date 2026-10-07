@@ -203,6 +203,28 @@ describe("导入", () => {
     ]]);
   });
 
+  it("智能体建的技能:来源标签「智能体起草」点开就是建它的那段对话(ADR 0043)", async () => {
+    api.listSkills.mockResolvedValue([
+      ...LIST,
+      skill({ ref: "ad-cuts", name: "ad-cuts", title: "剪广告", origin: "agent", source_label: "智能体起草", agent_session_id: "sess-9" }),
+      skill({ ref: "pdf", name: "pdf", title: "pdf", origin: "imported", source_label: "从 github.com/acme/skills 导入",
+        agent_session_id: "sess-7" }),
+      skill({ ref: "old-agent", name: "old-agent", title: "旧的", origin: "agent", source_label: "智能体起草", agent_session_id: null }),
+    ]);
+    mount();
+    await waitFor(() => expect(document.querySelector('[data-skill-row="ad-cuts"]')).toBeTruthy());
+
+    const tag = within(row("ad-cuts")).getByRole("button", { name: /智能体起草/ });
+    expect(within(row("pdf")).getByRole("button", { name: /智能体导入/ })).toBeInTheDocument();
+    expect(within(row("old-agent")).queryByRole("button", { name: /智能体起草/ })).toBeNull();
+    expect(row("old-agent").textContent).toContain("智能体起草");
+    expect(row("brand-rules").querySelector("[data-slot='skill-agent-source']")).toBeNull();
+
+    fireEvent.click(tag);
+    expect(window.localStorage.getItem("mosael.agent.session.ws-1")).toBe("sess-9");
+    expect(window.location.hash).toBe("#/ai");
+  });
+
   it("选一个文件夹也能导", async () => {
     api.stageSkillFolder.mockResolvedValue({ ...STAGED, skills: [] });
     mount();

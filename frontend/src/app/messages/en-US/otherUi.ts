@@ -197,6 +197,7 @@ export const otherUi = {
   confirmAllowOnce: "Allow once",
   confirmAllowSession: "Always allow this session",
   confirmAsksEveryTime: "Irreversible actions ask every time",
+  confirmAlwaysAsks: "Changes like this ask every time",
   confirmReject: "Reject",
   permEdit: "Edit",
   permDestroy: "Permanent delete",

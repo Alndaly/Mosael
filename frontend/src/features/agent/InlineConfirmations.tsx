@@ -14,6 +14,7 @@ import {
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { useCardChoices } from "@/features/agent/cardChoices";
 import { ConfirmationCard } from "@/features/agent/ConfirmationCard";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 import { DecisionsContext, usePendingConfirmations, type Decisions } from "@/features/agent/decisionsContext";
@@ -63,8 +64,12 @@ const CHOICES = [
  */
 const SESSION_ALLOWABLE = new Set(["edit", "render-cost", "ai-cost"]);
 
-function offersSessionAllow(permission: string): boolean {
-  return SESSION_ALLOWABLE.has(permission);
+/**
+ * 这张卡给不给「本会话始终允许」。除了档位,工具自己还可以声明**每一次都要人点头**(后端 `always_asks`,
+ * 见 ConfirmableTool.always_asks):改技能会长期改变智能体以后的做法(ADR 0043),那几张卡不管哪一档都不给。
+ */
+function offersSessionAllow(item: Confirmation): boolean {
+  return !item.always_asks && SESSION_ALLOWABLE.has(item.permission);
 }
 
 /**
@@ -144,7 +149,20 @@ export function ConfirmationsProvider({
    * 就该从头到尾转同一个按钮 —— 拆成两个 mutation 时,第二步一起手,转的会变成隔壁那个。
    */
   const decide = useMutation({
-    mutationFn: async ({ id, tool, permission, choice }: { id: string; tool: string; permission: string; choice: Choice }) => {
+    mutationFn: async ({
+      id,
+      tool,
+      permission,
+      choice,
+      choices,
+    }: {
+      id: string;
+      tool: string;
+      permission: string;
+      choice: Choice;
+      /** 卡上拨的开关(「建好就启用」),批准时带上。 */
+      choices: Record<string, boolean>;
+    }) => {
       if (choice === "session") {
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
         // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。
@@ -153,7 +171,7 @@ export function ConfirmationsProvider({
         await updateAgentSession(sessionId, { auto_allow_tools: next });
         void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
       }
-      return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id);
+      return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id, choices);
     },
     onSuccess: (card) => {
       setDecided((prev) => ({
@@ -168,31 +186,14 @@ export function ConfirmationsProvider({
   const { mutate } = decide;
 
   const actionsFor = React.useCallback((item: Confirmation): React.ReactNode =>
-    // 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
-    // 别的卡完全不受影响 —— 它等的不是同一件事。
     readOnly ? (
       <p className="m-0 border-t border-divider pt-2.5 text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
     ) : (
-      <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
-        {CHOICES.filter(({ choice }) => choice !== "session" || offersSessionAllow(item.permission)).map(
-          ({ choice, icon: Icon, label, variant, className }) => (
-            <Button
-              key={choice}
-              size="sm"
-              variant={variant}
-              className={className}
-              loading={busy?.id === item.id && busy.choice === choice}
-              disabled={busy?.id === item.id}
-              onClick={() => mutate({ id: item.id, tool: item.tool, permission: item.permission, choice })}
-            >
-              <Icon /> {t(label)}
-            </Button>
-          ),
-        )}
-        {offersSessionAllow(item.permission) ? null : (
-          <span className="text-ui-2xs text-muted-foreground">{t("confirmAsksEveryTime")}</span>
-        )}
-      </div>
+      <DecisionButtons
+        item={item}
+        busyChoice={busy?.id === item.id ? busy.choice : null}
+        onDecide={(choice, choices) => mutate({ id: item.id, tool: item.tool, permission: item.permission, choice, choices })}
+      />
     ), [busy, mutate, readOnly, t]);
 
   // 对话里每一次工具调用的那一行都读这一份:面板每秒走一次的计时也会让这里重渲,值不变就别让它们跟着重渲。
@@ -218,6 +219,45 @@ export function ConfirmationsProvider({
   }, [sessionId, readOnly, pending.data, recent.data, mine, actionsFor]);
 
   return <DecisionsContext.Provider value={value}>{children}</DecisionsContext.Provider>;
+}
+
+/**
+ * 一张卡底部的三档动作。转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
+ * 别的卡完全不受影响 —— 它等的不是同一件事。卡上拨过的开关(useCardChoices)在点下去那一刻带走。
+ */
+function DecisionButtons({
+  item,
+  busyChoice,
+  onDecide,
+}: {
+  item: Confirmation;
+  /** 这张卡此刻在飞的是哪一档;没有就是 null。 */
+  busyChoice: Choice | null;
+  onDecide: (choice: Choice, choices: Record<string, boolean>) => void;
+}) {
+  const t = useI18n();
+  const { values } = useCardChoices();
+  const sessionAllow = offersSessionAllow(item);
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
+      {CHOICES.filter(({ choice }) => choice !== "session" || sessionAllow).map(({ choice, icon: Icon, label, variant, className }) => (
+        <Button
+          key={choice}
+          size="sm"
+          variant={variant}
+          className={className}
+          loading={busyChoice === choice}
+          disabled={busyChoice !== null}
+          onClick={() => onDecide(choice, values)}
+        >
+          <Icon /> {t(label)}
+        </Button>
+      ))}
+      {sessionAllow ? null : (
+        <span className="text-ui-2xs text-muted-foreground">{t(item.always_asks ? "confirmAlwaysAsks" : "confirmAsksEveryTime")}</span>
+      )}
+    </div>
+  );
 }
 
 /** 一张等人拍板的卡,底部是三档动作(只读时是一句话)。只在 ConfirmationsProvider 里面有动作可给。 */

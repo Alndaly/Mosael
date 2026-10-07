@@ -129,6 +129,16 @@ export function startNewAgentSession(qc: QueryClient, workspaceId: string): Prom
  * 「带着这段话去开一条新对话」的信箱事件(见 lib/deepLink 的 emitOpenEvent):发出的一方往里放草稿,
  * AI 工作台挂上以后取走、填进输入框。不替他发送 —— 他多半还要说想让智能体做什么。
  */
+/**
+ * 打开某一次对话:记成**明确选过**的当前会话,再跳到 AI Studio(它照「当前会话」显示)。设置 → 技能里
+ * 「智能体起草」那个来源标签用它跳回建技能的那段对话。那段对话不在清单里(删了、没共享给他)时,
+ * AI Studio 照常回落,和别处一样。
+ */
+export function openAgentSession(workspaceId: string, sessionId: string): void {
+  writeChoice(workspaceId, sessionId);
+  window.location.hash = "#/ai";
+}
+
 export const AGENT_DRAFT_EVENT = "mosael:agent-draft";
 
 const ensuring = new Map<string, Promise<AgentSession>>();

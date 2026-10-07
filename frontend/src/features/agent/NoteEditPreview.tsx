@@ -50,13 +50,16 @@ function OperationBlock({ operation }: { operation: Operation }) {
   return (
     <div className="grid min-w-0 gap-1" data-note-op={operation.kind === "replace" ? "replace" : "insert"}>
       <span className="text-ui-xs text-muted-foreground">{label}</span>
-      <Segments segments={segments} />
+      <TextDiff segments={segments} />
     </div>
   );
 }
 
-/** 差异正文。长的先露前 FOLD_CHARS 字(按段截,截到哪段就停在哪段),底下一条展开。 */
-function Segments({ segments }: { segments: DiffSegment[] }) {
+/**
+ * 差异正文。长的先露前 FOLD_CHARS 字(按段截,截到哪段就停在哪段),底下一条展开。
+ * 改技能的卡(update_skill)也用它画每个文件的「改之前 → 改之后」—— 两张卡问的是同一件事:这段字会变成什么样。
+ */
+export function TextDiff({ segments }: { segments: DiffSegment[] }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const total = segments.reduce((sum, one) => sum + one.text.length, 0);
