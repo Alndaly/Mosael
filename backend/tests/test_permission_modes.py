@@ -92,8 +92,10 @@ class Chat:
             }
 
     @staticmethod
-    def _settle(card_id: str, timeout: float = 10.0) -> None:
-        """等这张卡走到终态。`approved` 是中间态 —— 已放行、还没执行完。"""
+    def _settle(card_id: str, timeout: float = 60.0) -> None:
+        """等这张卡走到终态。`approved` 是中间态 —— 已放行、还没执行完。
+
+        run_code 的卡执行时要建、起、删一个 Docker 容器,并行跑测试套时十几秒也正常;到了终态当场返回,所以给宽。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             with SessionLocal() as db:

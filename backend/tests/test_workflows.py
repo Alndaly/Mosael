@@ -21,6 +21,11 @@ from app.domain.workflows import (
 )
 from tests.util import user_id, acting_as, add_provider, fresh_client, create_asset
 
+#: 跑到 code 节点的任务最多等多久。code 节点每跑一次要建、起、删一个 Docker 容器 —— 本机空闲时三四秒,并行跑测试套时
+#: 守护进程被十几个 worker 一起用,十几秒也正常(此前写死 10 秒,满载时任务还在 running 就判了失败)。
+#: 等的是「跑完」,跑完当场就不再等,所以给宽。
+CODE_RUN_WAIT_SECONDS = 60
+
 
 def _install_llm_transport(monkeypatch, module, handler) -> None:
     """LLM 节点的 HTTP 桩。打在 RetryingClient 的传输上 —— 重试统一在传输层做,
@@ -460,7 +465,7 @@ def test_branching_code_and_template_nodes() -> None:
 
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + CODE_RUN_WAIT_SECONDS
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -505,7 +510,7 @@ def test_loop_foreach_iterates_body_and_feeds_downstream() -> None:
 
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + CODE_RUN_WAIT_SECONDS
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -674,7 +679,7 @@ def test_asset_query_filters_and_feeds_loop() -> None:
     assert wf.status_code == 200, wf.text
     run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + CODE_RUN_WAIT_SECONDS
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -1735,7 +1740,7 @@ def test_parallel_branches_run_concurrently() -> None:
     assert wf.status_code == 200, wf.text
     run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + CODE_RUN_WAIT_SECONDS
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):

@@ -105,6 +105,29 @@ def _reset_plugins_dir() -> None:
             entry.unlink(missing_ok=True)
 
 
+def first_free_port_of_this_worker() -> int:
+    """本机服务测试从哪个端口往上找:本进程自己的一段里,第一个这时没人在听的。
+
+    每个 xdist worker 一段 200 个,落在 20000–32000 —— 不在系统发临时端口的范围里(macOS 49152 起、Linux 32768 起),
+    段内起点再随机挪一点,和同一台机器上别的测试套(别的检出)也尽量错开。
+
+    不用「绑 0 拿一个再放掉」:macOS 的临时端口是全系统**顺着往上发**的,放掉的这个 P 之后,别的进程紧接着拿到的
+    就是 P+1、P+2 —— 恰好是本机服务从 P 往上找时接着要用的那几个。并行跑时两个 worker 各自「从 P 往上」,
+    一个 worker 的假服务抢了另一个刚探过、以为空着的端口,后起的那个绑不上,以 1 退出。
+    """
+    import random
+
+    from app.domain.local_services.supervisor import port_in_use
+
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    index = int(worker[2:]) if worker.startswith("gw") and worker[2:].isdigit() else 0
+    start = 20000 + (index % 60) * 200 + random.randrange(100)
+    for port in range(start, start + 100):
+        if not port_in_use(port):
+            return port
+    raise RuntimeError(f"no free port in {start}..{start + 99}")
+
+
 def worker_client() -> TestClient:
     """A client authenticated as the local publish worker rather than as a user."""
     client = TestClient(app)

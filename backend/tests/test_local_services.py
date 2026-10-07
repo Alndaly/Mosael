@@ -31,7 +31,7 @@ from app.domain import local_services
 from app.domain.local_services import pidfiles, records, supervisor
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from tests.util import fresh_client, second_client
+from tests.util import first_free_port_of_this_worker, fresh_client, second_client
 
 FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
 PACKAGE_ID = "dev.test.localsvc"
@@ -159,8 +159,8 @@ def _fast(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(supervisor, "WATCH_SECONDS", 0.05)
     monkeypatch.setattr(supervisor, "RESTART_BASE_DELAY", 0.1)
     monkeypatch.setattr(supervisor, "STOP_GRACE_SECONDS", 3.0)
-    # 端口从一个随机的高位起找:不碰这台机器上真在用的 8189
-    monkeypatch.setattr(records, "FIRST_PORT", _free_port())
+    # 端口从本 worker 自己那一段里找:不碰这台机器上真在用的 8189,也不和并行的别的 worker 抢(见那个函数的说明)
+    monkeypatch.setattr(records, "FIRST_PORT", first_free_port_of_this_worker())
     shutil.rmtree(pidfiles.pid_dir(), ignore_errors=True)
     yield
     local_services.stop_all()

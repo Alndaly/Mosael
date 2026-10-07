@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import socket
 import threading
 import time
 from pathlib import Path
@@ -30,7 +29,7 @@ from app.db.models import LocalService, PluginInstance, PluginPackage
 from app.domain import local_services
 from app.domain.local_services import installer, pidfiles, records, supervisor
 from app.domain.plugins.runtime import StreamHooks, _dispatch
-from tests.util import fresh_client, second_client
+from tests.util import first_free_port_of_this_worker, fresh_client, second_client
 
 FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
 PACKAGE_ID = "dev.test.managedsvc"
@@ -203,18 +202,13 @@ def _manifest(path: Path) -> dict[str, Any]:
     }
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 @pytest.fixture(autouse=True)
 def _fast(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(supervisor, "HEALTH_POLL_SECONDS", 0.05)
     monkeypatch.setattr(supervisor, "WATCH_SECONDS", 0.05)
     monkeypatch.setattr(supervisor, "STOP_GRACE_SECONDS", 3.0)
-    monkeypatch.setattr(records, "FIRST_PORT", _free_port())
+    # 端口从本 worker 自己那一段里找,不和并行的别的 worker 抢(见那个函数的说明)
+    monkeypatch.setattr(records, "FIRST_PORT", first_free_port_of_this_worker())
     monkeypatch.setattr(local_services, "base_minor", lambda: "3.13")
     shutil.rmtree(pidfiles.pid_dir(), ignore_errors=True)
     shutil.rmtree(settings.data_dir / records.INSTALLS, ignore_errors=True)
