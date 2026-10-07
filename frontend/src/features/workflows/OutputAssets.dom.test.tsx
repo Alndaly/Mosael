@@ -117,16 +117,36 @@ describe("产出素材", () => {
     expect(screen.queryByText("第一份产出")).toBeNull();
   });
 
-  it("检查器里一个口一行:那个口的两张和「第一份产出」各报各的", async () => {
+  it("检查器里也只摆一遍:「第一份产出」就是那个口的第一张,不再把它的图摆第二遍(那一行在 RunOutputs 里说它是哪一份)", async () => {
     const items = [
       { key: "image_9", label: "图 · 预览图像", assetId: "img1" },
       { key: "image_9", label: "图 · 预览图像", assetId: "img2" },
       { key: "asset_id", label: "第一份产出", assetId: "img1" },
     ];
     const { container } = await mount(items, "panel");
-    expect(screen.getAllByTestId("preview").map((one) => one.getAttribute("data-asset"))).toEqual(["img1", "img2", "img1"]);
-    expect(screen.getByText("第一份产出")).toBeTruthy();
+    expect(screen.getAllByTestId("preview").map((one) => one.getAttribute("data-asset"))).toEqual(["img1", "img2"]);
+    expect(screen.queryByText("第一份产出")).toBeNull();
     expect([...container.querySelectorAll("[data-output-count]")].map((one) => one.textContent)).toEqual(["· 2 张"]);
+  });
+
+  it("「第一份产出」排在前面也一样:摆的是交得全的那个口,不是先出现的那个", async () => {
+    // 按先出现的去重的话,第一张归「第一份产出」,那个口只剩第二张 —— 报「1 张」,和它真交的对不上。
+    const items = [
+      { key: "asset_id", label: "第一份产出", assetId: "img1" },
+      { key: "image_9", label: "图 · 预览图像", assetId: "img1" },
+      { key: "image_9", label: "图 · 预览图像", assetId: "img2" },
+    ];
+    for (const density of ["node", "panel"] as const) {
+      const { container, unmount } = await mount(items, density);
+      expect(screen.getAllByTestId("preview").map((one) => one.getAttribute("data-asset"))).toEqual(["img1", "img2"]);
+      expect(container.querySelector("[data-output-count]")?.textContent).toBe("· 2 张");
+      unmount();
+    }
+  });
+
+  it("两个口各交各的(人声、背景音)照旧各摆各的", async () => {
+    await mount([VOICE, MUSIC], "panel");
+    expect(screen.getAllByTestId("preview").map((one) => one.getAttribute("data-asset"))).toEqual(["a1", "a2"]);
   });
 
   it("一个口好多份:卡片上摆四格,最后一格写还有几张", async () => {

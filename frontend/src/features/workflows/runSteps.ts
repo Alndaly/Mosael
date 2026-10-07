@@ -197,3 +197,77 @@ function assetIdsOf(value: unknown): string[] {
   const ids = Array.isArray(value) ? value : [value];
   return ids.filter((one): one is string => typeof one === "string" && Boolean(one.trim()));
 }
+
+/** 一个口交的几份素材(按先后),和它的名字。 */
+interface Port {
+  key: string;
+  label: string;
+  ids: string[];
+}
+
+function portsOf(items: AssetOutput[]): Port[] {
+  const ports = new Map<string, Port>();
+  for (const item of items) {
+    const port = ports.get(item.key) ?? { key: item.key, label: item.label, ids: [] };
+    port.ids.push(item.assetId);
+    ports.set(item.key, port);
+  }
+  return [...ports.values()];
+}
+
+/** 摆出图来的那几个口:份数多的先挑(一串比它的第一张全),一样多就先出现的;一个口的几份全在已挑的某个口里,它就不挑。 */
+function hostsOf(ports: Port[]): Port[] {
+  const hosts: Port[] = [];
+  const byCount = ports.map((port, order) => ({ port, order })).sort((a, b) => b.port.ids.length - a.port.ids.length || a.order - b.order);
+  for (const { port } of byCount) {
+    if (!hosts.some((host) => port.ids.every((id) => host.ids.includes(id)))) hosts.push(port);
+  }
+  return hosts;
+}
+
+/**
+ * **同一份素材只摆一次图。** ComfyUI 工作流的节点一次交三个口:那个保存节点的口(一串)、「第一份产出」(它的第一张)、
+ * 「全部产出」(同一串的 id)。照口一个一个摆,第一张就出现两遍。一个口的几份全在另一个口里,它就不再摆图 ——
+ * 检查器里它成一行「就是上面…的第几份」(见 repeatsOf)。
+ */
+export function withoutRepeats(items: AssetOutput[]): AssetOutput[] {
+  const hosts = new Set(hostsOf(portsOf(items)).map((host) => host.key));
+  return items.filter((item) => hosts.has(item.key));
+}
+
+/** 一个口交的就是上面摆出图的某个口里的那几份:指向哪个口、第几份(一份时)、是不是那个口的全部。 */
+export interface RepeatOf {
+  label: string;
+  index: number | null;
+  whole: boolean;
+  count: number;
+}
+
+/** 只由素材 id 组成的值(一个 id、或一串 id);夹着别的东西就不是。 */
+function onlyIds(value: unknown): string[] | null {
+  const ids = Array.isArray(value) ? value : [value];
+  return ids.length > 0 && ids.every((one) => typeof one === "string" && one.trim()) ? (ids as string[]) : null;
+}
+
+/**
+ * 检查器里**不再摆第二遍图、也不摆一段 id** 的那几行,按输出 key:素材口里重复的(「第一份产出」),
+ * 和值只是上面那几份 id 的(「全部产出」是 JSON,不是素材口)。名字和 key 照报 —— 那儿回答的仍是「这个口给了什么」,
+ * key 也是 `{{节点.key}}` 里要写的那个词。
+ */
+export function repeatsOf(rows: OutputRow[]): Map<string, RepeatOf> {
+  const hosts = hostsOf(portsOf(assetOutputs(rows)));
+  const repeats = new Map<string, RepeatOf>();
+  for (const row of rows) {
+    if (hosts.some((host) => host.key === row.key)) continue;
+    const ids = onlyIds(row.value);
+    const host = ids && hosts.find((one) => ids.every((id) => one.ids.includes(id)));
+    if (!ids || !host) continue;
+    repeats.set(row.key, {
+      label: host.label,
+      index: ids.length === 1 ? host.ids.indexOf(ids[0]) + 1 : null,
+      whole: ids.length === host.ids.length,
+      count: ids.length,
+    });
+  }
+  return repeats;
+}

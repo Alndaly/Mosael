@@ -24,9 +24,13 @@ import type { Step } from "@/features/workflows/runSteps";
 
 const registry: RegistryLike = {
   get(nodeType) {
-    const table: Record<string, { output_types: Record<string, string> }> = {
+    const table: Record<string, { output_types: Record<string, string>; output_labels?: Record<string, string> }> = {
       ai_generate: { output_types: { asset_id: "asset", generation_id: "text" } },
       llm: { output_types: { text: "text" } },
+      comfy: {
+        output_types: { image_9: "asset", asset_id: "asset", asset_ids: "json", texts: "json" },
+        output_labels: { image_9: "图 · 预览图像", asset_id: "第一份产出", asset_ids: "全部产出", texts: "文字产出" },
+      },
     };
     return table[nodeType];
   },
@@ -88,4 +92,25 @@ describe("这一步给了什么", () => {
     const { container } = mount({ ...base, outputs: { asset_id: "abc123" } }, "ai_generate");
     expect(container.textContent).not.toContain("abc123");
   });
+
+  it("交的就是上面那几份的口一行带过:不再摆一段 id 的 JSON,复制照旧给 id", () => {
+    const { container } = mount(
+      { ...base, outputs: { image_9: ["img1", "img2"], asset_id: "img1", asset_ids: ["img1", "img2"], texts: ["一句提示词"] } },
+      "comfy",
+    );
+    const repeats = [...container.querySelectorAll("[data-output-repeat]")];
+    expect(repeats.map((one) => one.getAttribute("data-output-repeat"))).toEqual(["asset_id", "asset_ids"]);
+    expect(repeats[0].textContent).toContain("第一份产出");
+    expect(repeats[0].textContent).toContain("wfOutputSameAsNth");
+    expect(repeats[1].textContent).toContain("wfOutputSameAsAll");
+    expect(container.textContent).not.toContain('"img1"');
+    expect(screen.getByText(/一句提示词/)).toBeTruthy();
+  });
+
+  it("这次是空的值说一句「这次没有」,不摆一个 [] 让人猜", () => {
+    const { container } = mount({ ...base, outputs: { image_9: ["img1"], texts: [] } }, "comfy");
+    expect(container.querySelector('[data-output-empty="texts"]')?.textContent).toContain("wfOutputEmpty");
+    expect(container.textContent).not.toContain("[]");
+  });
 });
+

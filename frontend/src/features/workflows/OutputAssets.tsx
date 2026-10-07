@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview, assetGallery } from "@/components/app/asset-preview";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 import { Truncate } from "@/components/ui/truncate";
-import type { AssetOutput } from "@/features/workflows/runSteps";
+import { withoutRepeats, type AssetOutput } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
 
 /**
@@ -77,9 +77,10 @@ export function OutputAssets({
   gallery?: ImagePreviewItem[];
 }) {
   const t = useI18n();
-  // 卡片上**同一份素材只摆一次**:「第一份产出」和那个保存节点的第一张是同一个文件,摆两遍就是一张重复的图。
-  // 检查器里一个口一行地报(那儿要回答的是「这个口给了什么」),照摆。
-  const entries = density === "node" ? items.filter((item, index) => items.findIndex((one) => one.assetId === item.assetId) === index) : items;
+  // **同一份素材只摆一次**:「第一份产出」和那个保存节点的第一张是同一个文件,摆两遍就是一张重复的图。一个口的几份
+  // 全在另一个口里,那个口不摆(检查器里它成一行「就是上面…」,见 RunOutputs);卡片上再按文件去一次重。
+  const folded = withoutRepeats(items);
+  const entries = density === "node" ? folded.filter((item, index) => folded.findIndex((one) => one.assetId === item.assetId) === index) : folded;
   const assets = useQueries({
     queries: entries.map((item) => ({
       queryKey: assetKeys.detail(item.assetId),

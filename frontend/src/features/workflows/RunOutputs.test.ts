@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { outputSummary, outputText } from "@/features/workflows/RunOutputs";
-import { assetOutputs, outputRows } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, repeatsOf } from "@/features/workflows/runSteps";
 import type { RegistryLike } from "@/features/workflows/analyze";
 
 const registry: RegistryLike = {
@@ -123,5 +123,38 @@ describe("产出摊开成行", () => {
   it("空的素材输出不占位置", () => {
     // 没产出的输出摆上去就是一个永远转圈的取素材请求。
     expect(assetOutputs(outputRows(registry, "separate_audio", { vocals_asset_id: "  " }))).toEqual([]);
+  });
+});
+
+describe("交的就是上面那几份的口", () => {
+  //: 维护者跑 batch 2 的 krea2 工作流,检查器里第一张图摆了两遍,底下再跟一段两个 id 的 JSON:「这个有啥用」。
+  const comfy = { image_9: ["img1", "img2"], asset_id: "img1", asset_ids: ["img1", "img2"], texts: ["一句提示词"] };
+
+  it("「第一份产出」是那个口的第 1 份,「全部产出」是它的全部 2 份;文字产出不算", () => {
+    const repeats = repeatsOf(outputRows(registry, "comfy", comfy));
+    expect(Object.fromEntries(repeats)).toEqual({
+      asset_id: { label: "图 · 预览图像", index: 1, whole: false, count: 1 },
+      asset_ids: { label: "图 · 预览图像", index: null, whole: true, count: 2 },
+    });
+  });
+
+  it("只出一张时「第一份产出」就是那一张", () => {
+    const repeats = repeatsOf(outputRows(registry, "comfy", { image_9: ["img1"], asset_id: "img1", asset_ids: ["img1"] }));
+    expect(repeats.get("asset_id")).toEqual({ label: "图 · 预览图像", index: 1, whole: true, count: 1 });
+  });
+
+  it("值里夹着别的东西、或者指向的不是上面的素材,就不算 —— 照原样摆值", () => {
+    const repeats = repeatsOf(outputRows(registry, "comfy", { image_9: ["img1"], asset_ids: ["img1", 3], asset_id: "img9" }));
+    expect(repeats.size).toBe(0);
+  });
+
+  it("节点卡片上的摘要也跳过那串 id,给真正的文字产出", () => {
+    //: 出图的工作流「文字产出」是个空列表 —— 卡片上摆一个「[]」和摆一串 id 一样没用。
+    const summary = outputSummary(registry, "comfy", { image_9: ["img1", "img2"], asset_id: "img1", asset_ids: ["img1", "img2"], texts: [] });
+    expect(summary).toBeNull();
+  });
+
+  it("两个口各交各的不算重复", () => {
+    expect(repeatsOf(outputRows(registry, "separate_audio", { vocals_asset_id: "a1", background_asset_id: "a2" })).size).toBe(0);
   });
 });

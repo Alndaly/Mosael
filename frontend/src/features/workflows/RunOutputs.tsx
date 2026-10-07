@@ -4,10 +4,20 @@ import { toast } from "sonner";
 
 import { getWorkflowRunOutput } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, STEP_STATUS_LABELS, truncatedInside, type OutputRow, type Step } from "@/features/workflows/runSteps";
+import {
+  assetOutputs,
+  outputRows,
+  repeatsOf,
+  STEP_STATUS_LABELS,
+  truncatedInside,
+  type OutputRow,
+  type RepeatOf,
+  type Step,
+} from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
@@ -66,6 +76,13 @@ export function outputText(value: unknown): string {
   return String(value);
 }
 
+/** 这次什么都没给的值:空串、空列表、空对象。 */
+function isEmptyValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return typeof value === "object" && Object.keys(value).length === 0;
+}
+
 /** 一行摘要:给节点卡片用 —— 一眼看见"这步给了什么",**以及那是哪一个产出**。
  *
  *  名字一起给:只有值的话,`demucs` 这种短值在卡片上就是一个无从判断的词。 */
@@ -74,9 +91,11 @@ export function outputSummary(
   nodeType: string,
   outputs: Record<string, unknown> | undefined,
 ): { label: string; text: string } | null {
-  for (const row of outputRows(registry, nodeType, outputs)) {
-    // 素材另有缩略图,不在这儿重复;裸 id 也不是给人看的东西。
-    if (row.type === "asset") continue;
+  const rows = outputRows(registry, nodeType, outputs);
+  const repeats = repeatsOf(rows);
+  for (const row of rows) {
+    // 素材另有缩略图,不在这儿重复;裸 id 也不是给人看的东西 —— 「全部产出」那串 id 也一样(它不是素材口,是 JSON)。
+    if (row.type === "asset" || repeats.has(row.key) || isEmptyValue(row.value)) continue;
     const text = outputText(row.value).replace(/\s+/g, " ").trim();
     if (text) return { label: row.label, text };
   }
@@ -121,6 +140,19 @@ interface InsideText {
 function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText; inside?: InsideText[] }) {
   const t = useI18n();
   const text = outputText(row.value);
+  if (!full && isEmptyValue(row.value)) {
+    //: 出图的工作流,「文字产出」这次就是空的 —— 说一句「这次没有」,不摆一个 `[]` 让人猜。
+    return (
+      <div
+        className="flex min-w-0 items-center gap-1 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] px-1.5 py-1"
+        data-output-empty={row.key}
+      >
+        <Truncate className="shrink-0 text-ui-2xs text-foreground">{row.label}</Truncate>
+        {row.label !== row.key && <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>}
+        <span className="text-ui-2xs text-muted-foreground">{t("wfOutputEmpty")}</span>
+      </div>
+    );
+  }
   const long = text.length > INLINE_LIMIT;
   return (
     <div className="grid min-w-0 gap-1 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] p-1.5">
@@ -178,11 +210,40 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
   );
 }
 
+/** 「就是上面「图 · 预览图像」的第 1 份」:这个口给的就是上面摆出图的那几份。 */
+function repeatText(t: (key: MessageKey) => string, repeat: RepeatOf): string {
+  const key: MessageKey =
+    repeat.whole ? (repeat.count === 1 ? "wfOutputSameAs" : "wfOutputSameAsAll") : repeat.index != null ? "wfOutputSameAsNth" : "wfOutputSameAsSome";
+  return t(key).replace("{label}", repeat.label).replace("{n}", String(repeat.count)).replace("{i}", String(repeat.index));
+}
+
+/**
+ * 交的就是上面那几份的口(「第一份产出」「全部产出」):一行,名字和 key 照报,后面说它是上面哪一份。
+ * 此前它们各摆一遍 —— 第一张图出现两次,底下再跟一段两个 32 位 id 的 JSON,维护者问「这个有啥用」。
+ * 复制照旧给 id:写脚本、查素材时要的就是它。
+ */
+function RepeatRow({ row, repeat }: { row: OutputRow; repeat: RepeatOf }) {
+  const t = useI18n();
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] py-0.5 pl-1.5 pr-0.5"
+      data-output-repeat={row.key}
+    >
+      <Truncate className="shrink-0 text-ui-2xs text-foreground">{row.label}</Truncate>
+      {row.label !== row.key && <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>}
+      <Truncate className="text-ui-2xs text-muted-foreground">{repeatText(t, repeat)}</Truncate>
+      <span className="ml-auto" />
+      <CopyButton value={outputText(row.value)} />
+    </div>
+  );
+}
+
 export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLike; nodeType: string; step: Step }) {
   const t = useI18n();
   const rows = outputRows(registry, nodeType, step.outputs);
-  const assets = assetOutputs(rows);
-  const scalars = rows.filter((row) => row.type !== "asset");
+  const repeats = repeatsOf(rows);
+  const assets = assetOutputs(rows.filter((row) => !repeats.has(row.key)));
+  const scalars = rows.filter((row) => row.type !== "asset" && !repeats.has(row.key));
 
   return (
     <div className="grid min-w-0 gap-1.5 pt-2.5">
@@ -200,6 +261,10 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
       )}
       <WorkflowFailureDetails details={step.details} />
       {assets.length > 0 && <OutputAssets items={assets} density="panel" className="gap-2" />}
+      {rows.flatMap((row) => {
+        const repeat = repeats.get(row.key);
+        return repeat ? [<RepeatRow key={row.key} row={row} repeat={repeat} />] : [];
+      })}
       {scalars.map((row) => {
         const chars = step.truncated?.[row.key];
         const jobId = step.jobId;
