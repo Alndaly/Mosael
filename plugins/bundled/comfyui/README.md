@@ -392,18 +392,18 @@ ComfyUI sits behind a reverse proxy that needs a login, sign in once in that emb
 - **Missing models**: those with a declared download URL download from the model library in one click (same dialog,
   same route).
 
-## App forms (1.13.0)
+## Simplified forms (1.13.0; formerly "app forms")
 
 The counterpart of RunningHub's "AI apps" (ADR 0038, first slice): the author picks the few items others should fill in
 from **everything a workflow can take**, names and orders them, narrows choices, marks which output node is the result,
-and keeps that as a short form for the workflow. The AI workbench, boards and workflow nodes all use this form when
-they pick the workflow; a workflow without an app form still lists everything automatically (the "default app").
+and keeps that as a simplified form for the workflow. AI Studio, boards and workflow nodes use this form when they pick
+the workflow, and so does the agent when it calls it; a workflow without one still lists everything automatically.
 
-- **Where to edit it**: Workflow library → a workflow's detail → "App" → "Edit app form". On the left, everything the
-  workflow can take, grouped by node with its current value and a "+" to add it; in the middle, the form as cards (drag or
+- **Where to edit it**: Workflow library → a workflow's detail → "Simplified form" → "Edit simplified form". On the left, everything the
+  workflow can take, grouped by node with its current value and a "+" to add it; in the middle, "Selected items" as cards (drag or
   ↑ ↓ to reorder, rename in place, settings for main prompt and narrowed choices, "Start with a suggested set" while
   empty) and "Results from"; on the right, a live preview drawn with the generation panel's own controls. It works in the
-  web build too, without the embedded canvas; the workbench's App panel shows the same editor as Pick / Form / Preview tabs.
+  web build too, without the embedded canvas; the workbench's Simplified form panel shows the same editor as Available / Selected / Preview tabs.
 - **What a node is called** (`labels.node_name`, 1.13.0): the title the user gave it in ComfyUI; otherwise ComfyUI's own
   name for that kind of node — the per-language translation from `/i18n` (the locales custom node packs ship), the Chinese
   name of common core nodes (`CORE_NODE_ZH`; ComfyUI's API doesn't serve core nodes' Chinese names), the object_info

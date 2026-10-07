@@ -478,7 +478,7 @@ and a **description** (one line for whoever fills it in), with a small line belo
   name and the value saved in the workflow; click **+** to add it to the form, and click the tick on an added row to take it
   off again. You can search names or nodes, and hovering shows ComfyUI's description of the input plus the node number and
   class (for troubleshooting). Nodes inside a subgraph can't be added yet.
-- **Form** (middle): each picked item is a card with an icon for its kind (text, image, model, number, choice…). **Drag** the
+- **Selected items** (middle): each picked item is a card with an icon for its kind (text, image, model, number, choice…). **Drag** the
   handle to reorder, or focus the handle and press ↑ ↓; **rename** an item in place ("Portrait photo", "Style"). A card's
   **Settings** let a text item be the **main prompt** (it goes into the prompt box of AI Studio and boards; off, it
   is a text field of its own on the form), **narrow** a dropdown or model picker to the choices you tick, move it up or down,
@@ -498,7 +498,7 @@ ComfyUI servers, and everyone using the same ComfyUI sees the same form. Only th
 workflow is touched. If the workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was
 just saved in ComfyUI, Mosael doesn't write and asks you to open it again. With nothing picked, the simplified form is removed.
 
-The workbench's **Form** panel uses the same editor; the column is narrow, so the three parts become the **Available / Selected /
+The workbench's **Simplified form** panel uses the same editor; the column is narrow, so the three parts become the **Available / Selected /
 Preview** tabs. The dialog does the same in a narrow window.
 
 Once a workflow has an simplified form:
@@ -572,7 +572,7 @@ beside it:
   (the full name first, then without the extension) and lists the site, repository, exact file name, size and base model, exact names
   first and never picking a similar one for you; click one to confirm in place and download it into that folder, or paste a link right
   there when nothing turns up. After a download or install finishes it checks again by itself.
-- **Form**: the simplified form editor from the workflow library, bound to the graph on the canvas. **Sync to canvas** only puts the form onto the
+- **Simplified form**: the editor from the workflow library, bound to the graph on the canvas. **Sync to canvas** only puts the form onto the
   nodes on the canvas — **nothing is saved yet**; **Save** in the top bar then stores it in the workflow file, together with any other
   change on the canvas.
 - **Run & results**: **Run** runs **the graph on the canvas right now (including unsaved changes)** as an ordinary generation task (it
