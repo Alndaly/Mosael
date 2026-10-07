@@ -520,8 +520,13 @@ input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchem
 `description` 也可以按语言分)、`read_only`、`effects`(见「确认」;写错的当没写,只读却声明了别的后果按后果算、只读作废)、
 `stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
 `output_types` / `output_labels` / `board_outputs` / `wiring_outputs` / `output_media`)、`recommended`(`true` = 第一次出现时默认开放)、
-`replaces`、`mirrors`(见下)。**别的键丢掉**,
+`replaces`、`mirrors`(见下)、`workflow`。**别的键丢掉**,
 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
+
+`workflow`:这个工具跑的是连接上的**哪张工作流**(替宿主提供工作流库的那种插件用),`{"path": "<工作流库里的路径>",
+"name": "<到处同一个名字,可以按语言分>"}`。智能体每一轮只拿得到用得上的那几张的工具 —— 画布上开着的、这段对话里调过的、
+用户点过名的(名字或文件名出现在他的话里),别的经 `list_workflows` 和 `comfy_workflow_inputs` / `comfy_run_workflow` 够得着
+(ADR 0044 修订 2026-10-08)。挑选只看这个键,不看工具名。路径不像样的整条不认,名字不像样的只丢名字。
 
 报出来的工具存进 `plugin_instances.discovered_tools`(MCP 连接从服务拉来的清单也存在这里),和清单里声明的走
 **同一条路**:插件页的工具表和开关、智能体工具表(`plugin__<连接>__<工具>`)、工作流节点(`plugin.<包>.<工具>`)、

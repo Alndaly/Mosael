@@ -52,6 +52,9 @@ def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
                           "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, (
         "通用的 run_workflow 能跑的每一种图都有工具;「API 模板」撤掉了,连接上就算还带着它也没有 wf_api_template")
     assert tools[PORTRAIT_TOOL]["label"] == {"zh": "工作流 · portrait", "en": "Workflow · portrait"}
+    assert tools[PORTRAIT_TOOL]["workflow"] == {"path": "portrait.json", "name": "portrait"}, (
+        "说清跑的是哪张:宿主据此只把画布上开着的、用过或点过名的那几张发给智能体")
+    assert tools["wf_builtin_txt2img"]["workflow"]["path"] == "builtin:txt2img"
     assert tools[PORTRAIT_TOOL]["stream"] is True and tools[PORTRAIT_TOOL]["recommended"] is True
     # 在 ComfyUI 里改了名、挪了目录:图里的 id 没变,工具名就不变 —— 工作流节点和智能体记着的名字不失效
     comfy.state.workflows["people/人像.json"] = comfy.state.workflows.pop("portrait.json")

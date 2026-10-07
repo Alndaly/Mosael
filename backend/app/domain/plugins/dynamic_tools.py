@@ -46,11 +46,14 @@ MAX_REPLACES = 8
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
 _KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
-         "recommended", "replaces", "mirrors")
+         "recommended", "replaces", "mirrors", "workflow")
 #: `mirrors` 里的键名(生成参数键、入参名、素材角色)的样子。值是插件报的,进画板表单前先卡一道。
 _MIRROR_KEY = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
 #: 模型 id 可以是一条路径(ComfyUI 的工作流就是 `people/人像.json`),只卡长度和不是空的。
 _MIRROR_MODEL_MAX = 512
+#: `workflow` 的路径、名字最长多少(路径和工作流库同一个上限)。
+_WORKFLOW_PATH_MAX = 600
+_WORKFLOW_NAME_MAX = 200
 
 #: 清单刷新之后要跟着动的那些(把存着的老节点改写成新工具,见 domain/workflows/plugin_references)。
 #: 插件域不认识工作流域 —— 由那边在组装根登记进来(和能力表的实例钩子同一个方向)。
@@ -101,7 +104,37 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
         clean.pop("mirrors", None)
     else:
         clean["mirrors"] = mirror
+    workflow = clean_workflow(clean.get("workflow"))
+    if workflow is None:
+        clean.pop("workflow", None)
+    else:
+        clean["workflow"] = workflow
     return clean
+
+
+def clean_workflow(raw: Any) -> dict[str, Any] | None:
+    """`workflow`:这个工具跑的是连接上的**哪张工作流**(见 docs/PLUGIN_MANIFEST「运行时报出的工具」)。
+
+        {"path": "<工作流库里的路径>", "name": "<到处同一个名字,可以按语言分>"}
+
+    宿主据此只把用得上的那几张发给智能体(画布上开着的、对话里用过或点过名的,见 agent.tool_manifest)。路径不对的整条不认 ——
+    认错了的结果是一张工作流的工具在它开着的时候不发;名字不像样的只丢名字(点名认不出,画布和用过照旧认)。
+    """
+    if not isinstance(raw, dict):
+        return None
+    path = raw.get("path")
+    if not isinstance(path, str) or not path.strip() or len(path) > _WORKFLOW_PATH_MAX or any(ord(char) < 32 for char in path):
+        return None
+    workflow: dict[str, Any] = {"path": path}
+    name = raw.get("name")
+    if isinstance(name, str) and 0 < len(name.strip()) <= _WORKFLOW_NAME_MAX:
+        workflow["name"] = name.strip()
+    elif isinstance(name, dict):
+        named = {lang: text.strip() for lang, text in name.items()
+                 if isinstance(lang, str) and isinstance(text, str) and 0 < len(text.strip()) <= _WORKFLOW_NAME_MAX}
+        if named:
+            workflow["name"] = named
+    return workflow
 
 
 def clean_mirror(raw: Any) -> dict[str, Any] | None:

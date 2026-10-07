@@ -119,6 +119,12 @@ The tool's id comes from the id ComfyUI writes into the workflow file (stable ac
 falling back to a hash of the path; the built-in text-to-image is `wf_builtin_txt2img`. **Its label is the same name as in the model picker** (1.17.0): "Workflow · " plus the app form's title when
 the workflow has a simplified form with a title, otherwise plus the file name; with a title, the description names
 the file, so searching by either finds it. Renaming the title changes only the label, never the id.
+**Each tool says which workflow it runs** (1.19.0): it also reports `workflow: {path, name}` (the path in the workflow
+library, `builtin:txt2img` for the built-in text-to-image; the same name as in the model picker). Mosael's workbench uses
+it to hand the agent only the workflows that matter this turn (the one on the canvas, those used or named in the
+conversation); the agent reaches the others by listing workflows and running one by path. Inputs are unchanged, and
+nothing changes on workflow nodes or boards. The version is part of the catalog fingerprint, so the tool list reloads
+itself after the upgrade.
 
 **A graph that is the same thing as a generation model declares `mirrors`**: the tool of every workflow in the model
 catalog (one that returns files, `graph.media_outputs`) carries `{"generation_model": <model id>, "kind": …}` and a

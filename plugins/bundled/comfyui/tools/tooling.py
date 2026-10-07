@@ -17,6 +17,8 @@
 - `mirrors`:这张图**就是**模型目录里的一个模型时(交得出文件的图都是,见 graph.media_outputs),说它和哪个
   模型是同一件事、入参怎么对到生成的表单上。宿主据此在画板上只留生成那一个入口(一个概念一个入口),工作流里
   两个都在(见 _mirror);
+- `workflow` 告诉宿主这个工具跑的是哪张工作流(`path` 是工作流库里的路径,内置文生图是它的模型 id;`name` 是到处同一个
+  名字):宿主据此只把画布上开着的、对话里用过或点过名的那几张发给智能体(ADR 0044 修订 2026-10-08)—— 不看工具名;
 - `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流;那个工具已经删了)、以及这张图以前按路径哈希起的
   名字,怎么改写成这个工具 —— 宿主据此把工作流和画板上的老节点迁过来(见 domain/workflows/plugin_references),
   ComfyUI 的知识仍只在这里。
@@ -406,6 +408,7 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
             "wiring_outputs": [key for key, *_ in WIRING_OUTPUTS],
         },
         "replaces": _replaces(entry, name, shape),
+        "workflow": {"path": entry.id, "name": shape.name},
         **({"mirrors": shape.mirror} if shape.mirror else {}),
     }
 
