@@ -267,6 +267,10 @@ describe("工作流库", () => {
       expect(th.className).toContain("sticky");
       expect(th.className).toContain("z-20");
     }
+    //: 钉在滚动区的上沿:内容区上面留的那条缝(pt-1)由表头往上挪同样多(-top-1)盖住,滚上去的那一行不从表头上面露出来
+    const scroller = table.closest<HTMLElement>("[data-library-content]")!;
+    expect(scroller.className).toContain("pt-1");
+    expect(within(table).getAllByRole("columnheader")[0].className).toMatch(/(^| )-top-1( |$)/);
     const rows = within(table).getAllByRole("row").slice(1);
     const heights = new Set(rows.flatMap((row) => within(row).getAllByRole("cell").map((td) => td.className.match(/\bh-\[\d+px\]/)?.[0])));
     expect([...heights], "每一格同一个高度").toEqual(["h-[53px]"]);

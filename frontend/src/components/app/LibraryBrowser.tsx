@@ -458,9 +458,12 @@ LibrarySection.displayName = "LibrarySection";
  * **底色要不透明**:弹窗表面(`--modal-surface`)在支持磨砂的环境里是 78% 的透明色,表头用它的话,滚上去的那一行
  * 字会透过表头、和列名叠在一起(维护者截图里的「girl … 图像」压在「名称 / 种类」上)。用弹窗同一种颜色的实心那一档。
  * 层级压过行里定位过的东西(角标、⋯);下边一道分隔线跟着表头走。
+ *
+ * **钉在滚动区的上沿,不是内容的上沿**:内容区上面留着 `pt-1`(卡片的聚焦框不被切),`top-0` 的话表头钉在这 4px 下面,
+ * 滚上去的那一行从表头上面这一条缝里露出来。`-top-1` 和内容区的 `pt-1` 是一对,改一个要改另一个。
  */
 export const LIBRARY_TABLE_HEAD =
-  "sticky top-0 z-20 border-b border-divider bg-[var(--modal-solid)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
+  "sticky -top-1 z-20 border-b border-divider bg-[var(--modal-solid)] px-2 pb-2 pt-1 text-left text-ui-xs font-medium text-muted-foreground";
 
 /** 显示方式:大卡片(看预览)、小卡片(一屏多看几张)、列表(扫名字、大小、时间)。 */
 export const LIBRARY_DENSITIES = ["large", "small", "list"] as const;
