@@ -1,0 +1,137 @@
+[
+ {
+  "category": "Image",
+  "description": "General-purpose workflow templates for native image generation, including text-to-image, image editing, inpainting, and other core image workflows supported out of the box.",
+  "templates": [
+   {
+    "name": "image_z_image_turbo",
+    "title": "Z-Image-Turbo: Text to Image",
+    "task": "Text to Image",
+    "model": "Z-Image-Turbo",
+    "freshness": "established",
+    "usage": 15428,
+    "recommend": "highly_recommended",
+    "description": "An Efficient Image Generation Foundation Model with Single-Stream Diffusion Transformer, supports English & Chinese.",
+    "io": {
+     "inputs": [
+      "text: Prompt"
+     ],
+     "outputs": [
+      "image: Generated output"
+     ]
+    },
+    "minComfyUIVersion": "0.11.0",
+    "capabilities": {
+     "workflow": [
+      "text-to-image"
+     ]
+    }
+   },
+   {
+    "name": "image_qwen_image_2_1_image_edit",
+    "title": "Qwen Image 2.1: Image Edit",
+    "task": "Image Edit",
+    "model": "Qwen Image 2.1",
+    "freshness": "new",
+    "usage": 13649,
+    "recommend": "highly_recommended",
+    "description": "Edit images with Qwen-Image-2.1 by feeding two reference images through a single checkpoint that handles both generation and editing, then comparing the result against the original. Ideal for character-consistent edits, product cutout compositing with real transparency, and style-transfer passes at native 2K.",
+    "io": {
+     "inputs": [
+      "image: Reference image",
+      "text: Edit prompt"
+     ],
+     "outputs": [
+      "image: Edited image"
+     ]
+    },
+    "minComfyUIVersion": "0.37.0",
+    "capabilities": {
+     "workflow": [
+      "image-edit",
+      "int8"
+     ]
+    }
+   },
+   {
+    "name": "image_qwen_image_2_1_t2i",
+    "title": "Qwen Image 2.1: Text to Image",
+    "task": "Text to Image",
+    "model": "Qwen Image 2.1",
+    "freshness": "new",
+    "usage": 8562,
+    "recommend": "highly_recommended",
+    "description": "Generate images from text prompts with Qwen Image 2.1, the latest open-weight Qwen-Image model, producing a single 1024×1024 image over 25 sampling steps. Generation and instruction-based editing share one model with native 2K output, professional typography, and alpha-channel support. Ideal for poster and layout design, transparent asset creation, and rapid concept visualization.",
+    "io": {
+     "inputs": [
+      "text: Prompt"
+     ],
+     "outputs": [
+      "image: Generated image"
+     ]
+    },
+    "minComfyUIVersion": "0.37.2",
+    "capabilities": {
+     "workflow": [
+      "text-to-image",
+      "int8"
+     ]
+    }
+   },
+   {
+    "name": "flux_dev_full_text_to_image",
+    "title": "Flux.1 Dev: Text to Image",
+    "task": "Text to Image",
+    "model": "Flux",
+    "freshness": "established",
+    "usage": 187,
+    "recommend": "low",
+    "description": "Generate high-quality images with Flux Dev full version. Requires larger VRAM and multiple model files, but provides the best prompt following capability and image quality.",
+    "io": {
+     "inputs": [
+      "text: Prompt"
+     ],
+     "outputs": [
+      "image: Generated image"
+     ]
+    },
+    "minComfyUIVersion": "0.3.42",
+    "capabilities": {
+     "workflow": [
+      "text-to-image"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "category": "Video",
+  "description": "General-purpose workflow templates for native video generation, including text-to-video, image-to-video, and other core video workflows supported out of the box.",
+  "templates": [
+   {
+    "name": "video_wan2_2_14B_t2v",
+    "title": "Wan 2.2 14B Text to Video",
+    "task": "Text to Video",
+    "model": "Wan2.2",
+    "freshness": "established",
+    "usage": 265,
+    "recommend": "medium",
+    "description": "Generate high-quality videos from text prompts with cinematic aesthetic control and dynamic motion generation using Wan 2.2.",
+    "io": {
+     "inputs": [
+      "text: Video prompt"
+     ],
+     "outputs": [
+      "video: Generated video"
+     ]
+    },
+    "minComfyUIVersion": "0.16.4",
+    "capabilities": {
+     "workflow": [
+      "text-to-video"
+     ]
+    }
+   }
+  ]
+ }
+]

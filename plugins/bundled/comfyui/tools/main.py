@@ -46,6 +46,19 @@
     {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
     {"op": "app_marks", "content", "app", "results"}    → 工作台:应用表单写进画布要改成的那几处标记(不写文件,见 workbench)
 
+**工作台里的智能体**(ADR 0042,只读;宿主经 `workflow_library` 问,见 canvas / diagnose / templates / node_types / node_packs):
+
+    {"op": "canvas_summary", "content"}                 → 一张图(画布上这张、一张模板)的摘要:每一层的节点、控件的值、连线
+    {"op": "check_graph", "content", "error"?}          → 问题单:按节点列,带严重程度、原因、改法;给了上次运行的报错就拆到节点
+    {"op": "templates", "query"?, "task"?, "model"?, "locale"?, "limit"?} → 官方模板和节点包自带的模板:要哪些模型、多大、
+                                                          要哪一版 ComfyUI,这台机器上有哪几个、缺哪几个
+    {"op": "template", "name", "pack"?}                 → 一张模板的整图,照这台机器改好能改的(说改了什么),缺什么、多大
+    {"op": "node_types", "query"?, "classes"?, "limit"?} → 节点类型:输入(类型、必填、可选值、缺省值)和输出
+    {"op": "node_packs", "content"?}                    → 装了哪些节点包(版本、开没开、提供哪些节点);给了图就说每个节点来自哪个包
+    {"op": "node_pack_search", "query"?, "node_types"?} → 找节点包:先查 Manager 的映射,再查 Comfy 官方注册表
+    {"op": "node_pack_info", "id", "content"?}          → 分析一个节点包:注册表里的状态(被标记 / 封禁 / 弃用)、谁发的、多少人用、
+                                                          依赖会不会动到 torch、和这台机器合不合、装了哪一版、能补上图里缺的哪几个
+
 **给智能体和工作流的工具**:
 
     wf_<id>                                                每张工作流自己的那个(运行时报出,流式)
@@ -64,12 +77,16 @@ import sys
 import traceback
 from typing import Any, Callable
 
+import canvas
+import diagnose
 import install
 import library
 import lookup
 import managed
 import model_search
 import models
+import node_packs
+import node_types
 import pinned
 import previews
 import run
@@ -77,6 +94,7 @@ import server
 import service
 import shared_models
 import sources
+import templates
 import tooling
 import versions
 import workflow_import
@@ -123,6 +141,8 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return workflow_import.install_nodes(payload, comfy, locale, emit)
     if op in _WORKFLOW_LIBRARY:
         return _WORKFLOW_LIBRARY[op](payload, comfy, locale)
+    if op in _AGENT:
+        return _AGENT[op](payload, comfy, locale)
     raise ComfyError(say(locale, f"不认识的操作:{op}", f"Unknown op: {op}"))
 
 
@@ -143,6 +163,18 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "inspect_import": workflow_import.inspect_import,
     "save_workflow": workflow_import.save_workflow,
     "reboot": workflow_import.reboot,
+}
+
+#: 工作台里的智能体要问的(ADR 0042),都只读。
+_AGENT: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
+    "canvas_summary": canvas.canvas_summary,
+    "check_graph": diagnose.check_graph,
+    "templates": templates.templates,
+    "template": templates.template,
+    "node_types": node_types.node_types,
+    "node_packs": node_packs.node_packs,
+    "node_pack_search": node_packs.node_pack_search,
+    "node_pack_info": node_packs.node_pack_info,
 }
 
 #: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划、卸载前问的在 managed,换版本在 versions。

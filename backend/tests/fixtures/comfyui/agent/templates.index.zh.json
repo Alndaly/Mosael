@@ -1,0 +1,190 @@
+[
+ {
+  "moduleName": "default",
+  "type": "image",
+  "category": "基础",
+  "icon": "icon-[lucide--image]",
+  "title": "图像",
+  "templates": [
+   {
+    "name": "image_z_image_turbo",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/image/z-image/z-image-turbo",
+    "title": "Z-Image-Turbo: 文生图",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "description": "高效的图像生成基础模型，采用单流扩散变换器，支持中英文。",
+    "tags": [
+     "图像",
+     "文生图"
+    ],
+    "models": [
+     "Z-Image-Turbo"
+    ],
+    "date": "2025-11-27",
+    "size": 20830591386,
+    "usage": 15428,
+    "searchRank": 0,
+    "openSource": true,
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 9,
+       "nodeType": "SaveImage",
+       "file": "image_z_image_turbo.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "username": "ComfyUI",
+    "thumbnail": [
+     "output/image_z_image_turbo.png"
+    ],
+    "minComfyUIVersion": "0.11.0"
+   },
+   {
+    "name": "image_qwen_image_2_1_image_edit",
+    "title": "Qwen Image 2.1：图像编辑",
+    "description": "使用 Qwen Image 2.1 编辑图像：向同一个同时负责生成和编辑的模型输入两张参考图，再将结果与原图对比。适合角色一致性编辑、带真实透明通道的产品抠图合成，以及原生 2K 风格迁移。",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "thumbnailVariant": "compareSlider",
+    "tags": [
+     "图片编辑",
+     "Int8"
+    ],
+    "models": [
+     "Qwen Image 2.1"
+    ],
+    "minComfyUIVersion": "0.37.0",
+    "date": "2026-09-20",
+    "openSource": true,
+    "size": 26736171418,
+    "usage": 13649,
+    "searchRank": 0,
+    "username": "ComfyUI",
+    "io": {
+     "inputs": [
+      {
+       "nodeId": 470,
+       "nodeType": "LoadImage",
+       "file": "portrait_model_denim.png",
+       "mediaType": "image",
+       "sourceRevision": "0e5c5efb32ba6f3365d6da07da64aaf668157042"
+      },
+      {
+       "nodeId": 475,
+       "nodeType": "LoadImage",
+       "file": "clothing_light_blue_denim_shirt.png",
+       "mediaType": "image",
+       "sourceRevision": "0e5c5efb32ba6f3365d6da07da64aaf668157042"
+      }
+     ]
+    },
+    "thumbnail": [
+     "input/portrait_model_denim.png",
+     "output/image_qwen_image_2_1_image_edit.png"
+    ]
+   },
+   {
+    "name": "image_qwen_image_2_1_t2i",
+    "title": "Qwen Image 2.1：文生图",
+    "description": "使用 Qwen Image 2.1（最新的开放权重 Qwen-Image 模型）从文本提示生成图像，经过 25 个采样步骤生成单张 1024×1024 图像。生成和基于指令的编辑共享同一模型，原生支持 2K 输出、专业排版和透明通道。非常适合海报和布局设计、透明素材创建以及快速概念可视化。",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "tags": [
+     "文生图",
+     "Int8"
+    ],
+    "models": [
+     "Qwen Image 2.1"
+    ],
+    "minComfyUIVersion": "0.37.2",
+    "date": "2026-09-20",
+    "openSource": true,
+    "size": 26736171418,
+    "usage": 8562,
+    "searchRank": 0,
+    "username": "ComfyUI",
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 461,
+       "nodeType": "SaveImageAdvanced",
+       "file": "image_qwen_image_2_1_t2i.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "thumbnail": [
+     "output/image_qwen_image_2_1_t2i.png"
+    ]
+   },
+   {
+    "name": "flux_dev_full_text_to_image",
+    "title": "Flux.1 开发专用：文生图",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "description": "使用Flux开发专用完整版生成高质量图像。需要更大的VRAM和多个模型文件，但提供最佳的提示词遵循能力和图像质量。",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/flux/flux-1-text-to-image",
+    "tags": [
+     "图像",
+     "文生图"
+    ],
+    "models": [
+     "Flux",
+     "Flux.1"
+    ],
+    "date": "2025-03-01",
+    "size": 34144990003,
+    "usage": 187,
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 9,
+       "nodeType": "SaveImage",
+       "file": "flux_dev_full_text_to_image.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "username": "ComfyUI",
+    "openSource": true,
+    "searchRank": 0,
+    "thumbnail": [
+     "output/flux_dev_full_text_to_image.png"
+    ],
+    "minComfyUIVersion": "0.3.42"
+   }
+  ]
+ },
+ {
+  "moduleName": "default",
+  "type": "video",
+  "category": "基础",
+  "icon": "icon-[lucide--film]",
+  "title": "视频",
+  "templates": [
+   {
+    "name": "video_wan2_2_14B_t2v",
+    "title": "Wan万相 2.2 14B 文生视频",
+    "description": "使用Wan 2.2通过电影美学控制和动态运动生成从文本提示生成高质量视频。",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/video/wan/wan2_2",
+    "tags": [
+     "文生视频",
+     "视频"
+    ],
+    "models": [
+     "Wan2.2",
+     "Wan"
+    ],
+    "date": "2025-07-29",
+    "size": 38031935406,
+    "usage": 265,
+    "username": "ComfyUI",
+    "minComfyUIVersion": "0.16.4"
+   }
+  ]
+ }
+]

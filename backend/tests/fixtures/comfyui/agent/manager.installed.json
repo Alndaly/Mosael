@@ -1,0 +1,32 @@
+{
+ "comfyui-kjnodes": {
+  "ver": "1.5.0",
+  "cnr_id": "comfyui-kjnodes",
+  "aux_id": null,
+  "enabled": true
+ },
+ "ComfyUI-Manager": {
+  "ver": "fa009e729ee4a09202ebf9c404c47812efcd29c6",
+  "cnr_id": "comfyui-manager",
+  "aux_id": "ltdrdata/ComfyUI-Manager",
+  "enabled": true
+ },
+ "ComfyUI-WanVideoWrapper": {
+  "ver": "1.4.7",
+  "cnr_id": "ComfyUI-WanVideoWrapper",
+  "aux_id": null,
+  "enabled": true
+ },
+ "rgthree-comfy": {
+  "ver": "1.0.2607232129",
+  "cnr_id": "rgthree-comfy",
+  "aux_id": null,
+  "enabled": true
+ },
+ "TE_MAN": {
+  "ver": "56e38fa2b80d028be0384444041d69260f770825",
+  "cnr_id": "",
+  "aux_id": "tl2012tl/TE_MAN",
+  "enabled": true
+ }
+}

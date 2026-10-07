@@ -696,6 +696,14 @@ class State:
     userdata_v2: bool = True
     #: 磁盘不分大小写(那台 ComfyUI 在 Windows 上;macOS 默认也是):`Video` 和 `video` 是同一个,「目标已存在」照这个判。
     case_insensitive: bool = False
+    #: 官方模板(`/templates/<文件>`:index.mcp.json、index.json、index.zh.json、每一张 <名字>.json)和节点包自带的模板
+    #: (`/workflow_templates` 列出包 → 模板名,`/api/workflow_templates/<包>/<名字>.json` 是那一张)。
+    templates: dict[str, Any] = field(default_factory=dict)
+    pack_templates: dict[str, list[str]] = field(default_factory=dict)
+    pack_template_files: dict[str, Any] = field(default_factory=dict)
+    #: 假的 Comfy 注册表(插件把注册表的地址换成 `<这台>/registry`):`search` 关键词 → 回答,`nodes` id → 那个包,
+    #: `versions` id → 版本列表。
+    registry: dict[str, dict[str, Any]] = field(default_factory=lambda: {"search": {}, "nodes": {}, "versions": {}})
 
     def userdata_get(self, path: str) -> Any:
         if path.startswith("workflows/"):
@@ -862,6 +870,46 @@ class _Handler(BaseHTTPRequestHandler):
             self._json({"error": "restarting"}, 503)
         elif path == "/object_info":
             self._json(state.object_info)
+        elif path.startswith("/object_info/"):
+            # 一类一类问(ComfyUI 0.3x 起有):没有这一类回 `{}`
+            name = unquote(path[len("/object_info/"):])
+            self._json({name: state.object_info[name]} if name in state.object_info else {})
+        elif path.startswith("/templates/"):
+            name = unquote(path[len("/templates/"):])
+            if name in state.templates:
+                self._json(state.templates[name])
+            else:
+                self._json({"error": "not found"}, 404)
+        elif path == "/workflow_templates":
+            self._json(state.pack_templates)
+        elif path.startswith("/api/workflow_templates/"):
+            key = unquote(path[len("/api/workflow_templates/"):])
+            if key in state.pack_template_files:
+                self._json(state.pack_template_files[key])
+            else:
+                self._json({"error": "not found"}, 404)
+        elif path == "/registry/nodes/search":
+            found = state.registry["search"].get((query.get("search") or [""])[0])
+            self._json(found or {"limit": 20, "nodes": [], "page": 1, "total": 0, "totalPages": 0})
+        elif path.startswith("/registry/nodes/") and path.endswith("/versions"):
+            ident = unquote(path[len("/registry/nodes/"):-len("/versions")])
+            if ident in state.registry["versions"]:
+                self._json(state.registry["versions"][ident])
+            else:
+                self._json({"message": "not found"}, 404)
+        elif path.startswith("/registry/nodes/"):
+            ident = unquote(path[len("/registry/nodes/"):])
+            lowered = {key.lower(): key for key in state.registry["nodes"]}
+            if ident in state.registry["nodes"]:
+                self._json(state.registry["nodes"][ident])
+            elif ident.lower() in lowered:
+                # 注册表对大小写不一样的 id 回 302,指到规范的那个
+                self.send_response(302)
+                self.send_header("Location", f"/registry/nodes/{lowered[ident.lower()]}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._json({"message": "not found"}, 404)
         elif path == "/api/v2/userdata" and state.userdata_v2:
             # 连目录一起列(os.walk,一层层走下去):`path` 相对用户目录;要列的目录不存在回 404
             base = (query.get("path") or [""])[0].strip("/")
@@ -1066,6 +1114,21 @@ class _Handler(BaseHTTPRequestHandler):
             state.raw_texts[name] = raw.decode("utf-8")
         stamp = state.modified(name[len("workflows/"):]) if name.startswith("workflows/") else 1791000000000
         self._json({"path": name, "size": len(raw), "modified": stamp})
+
+    def do_HEAD(self) -> None:  # noqa: N802 — aiohttp 对 GET 的路由照样答 HEAD:算出回答,只发头
+        state = self.server.state
+        path = urlsplit(self.path).path
+        state.calls.append(("HEAD", path, {}))
+        if path == "/object_info":
+            body = json.dumps(state.object_info).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_DELETE(self) -> None:  # noqa: N802
         state = self.server.state
@@ -1322,6 +1385,9 @@ def _multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:
 
 class FakeComfyUI(ThreadingHTTPServer):
     daemon_threads = True
+    #: 插件按节点类型并发取 /object_info/<类>(几路一起):缺省的 listen 队列只有 5,macOS 上排不下的连接直接被重置。
+    #: 真的 ComfyUI(aiohttp)是 128
+    request_queue_size = 128
 
     def __init__(self) -> None:
         super().__init__(("127.0.0.1", 0), _Handler)

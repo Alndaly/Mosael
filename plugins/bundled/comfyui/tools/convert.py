@@ -105,6 +105,21 @@ def to_api(ui_graph: dict[str, Any], object_info: dict[str, Any], locale: str = 
     return _Converter(ui_graph, object_info, locale).run()
 
 
+def widget_values(node: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
+    """一个界面格式节点上各个 widget 的值,按名字 —— 和转成 API 图时同一套认法(`widgets_values` 按定义里 widget 的先后,
+    「生成后怎样」那一格跳过,存的值缺了用定义里的缺省值)。这台 ComfyUI 上没有这类节点时只认存下来标着 widget 的那几格。
+    诊断(diagnose)、画布摘要(canvas)用它。"""
+    scope = _Scope({"nodes": [node]}, (), None)
+    values = _Converter({"nodes": [node]}, object_info, "zh")._widget_values(_Node(scope, node), {})
+    return {name: value["__value__"] if isinstance(value, dict) and set(value) == {"__value__"} else value
+            for name, value in values.items()}
+
+
+def connectable(output_type: Any, input_type: Any) -> bool:
+    """一个输出能不能连到一个输入(LiteGraph 的判法,见 _valid_connection)。"""
+    return _valid_connection(output_type, input_type)
+
+
 # ---------------------------------------------------------------------------
 # 一层图:根图,或展开到某个子图节点里的那一份
 # ---------------------------------------------------------------------------

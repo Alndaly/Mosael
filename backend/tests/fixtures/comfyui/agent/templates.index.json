@@ -1,0 +1,190 @@
+[
+ {
+  "moduleName": "default",
+  "category": "Foundation",
+  "title": "Image",
+  "icon": "icon-[lucide--image]",
+  "type": "image",
+  "templates": [
+   {
+    "name": "image_z_image_turbo",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/image/z-image/z-image-turbo",
+    "title": "Z-Image-Turbo: Text to Image",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "description": "An Efficient Image Generation Foundation Model with Single-Stream Diffusion Transformer, supports English & Chinese.",
+    "tags": [
+     "Image",
+     "Text to Image"
+    ],
+    "models": [
+     "Z-Image-Turbo"
+    ],
+    "date": "2025-11-27",
+    "size": 20830591386,
+    "usage": 15428,
+    "searchRank": 0,
+    "openSource": true,
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 9,
+       "nodeType": "SaveImage",
+       "file": "image_z_image_turbo.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "username": "ComfyUI",
+    "thumbnail": [
+     "output/image_z_image_turbo.png"
+    ],
+    "minComfyUIVersion": "0.11.0"
+   },
+   {
+    "name": "image_qwen_image_2_1_image_edit",
+    "title": "Qwen Image 2.1: Image Edit",
+    "description": "Edit images with Qwen-Image-2.1 by feeding two reference images through a single checkpoint that handles both generation and editing, then comparing the result against the original. Ideal for character-consistent edits, product cutout compositing with real transparency, and style-transfer passes at native 2K.",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "thumbnailVariant": "compareSlider",
+    "tags": [
+     "Image Edit",
+     "Int8"
+    ],
+    "models": [
+     "Qwen Image 2.1"
+    ],
+    "minComfyUIVersion": "0.37.0",
+    "date": "2026-09-20",
+    "openSource": true,
+    "size": 26736171418,
+    "usage": 13649,
+    "searchRank": 0,
+    "username": "ComfyUI",
+    "io": {
+     "inputs": [
+      {
+       "nodeId": 470,
+       "nodeType": "LoadImage",
+       "file": "portrait_model_denim.png",
+       "mediaType": "image",
+       "sourceRevision": "0e5c5efb32ba6f3365d6da07da64aaf668157042"
+      },
+      {
+       "nodeId": 475,
+       "nodeType": "LoadImage",
+       "file": "clothing_light_blue_denim_shirt.png",
+       "mediaType": "image",
+       "sourceRevision": "0e5c5efb32ba6f3365d6da07da64aaf668157042"
+      }
+     ]
+    },
+    "thumbnail": [
+     "input/portrait_model_denim.png",
+     "output/image_qwen_image_2_1_image_edit.png"
+    ]
+   },
+   {
+    "name": "image_qwen_image_2_1_t2i",
+    "title": "Qwen Image 2.1: Text to Image",
+    "description": "Generate images from text prompts with Qwen Image 2.1, the latest open-weight Qwen-Image model, producing a single 1024×1024 image over 25 sampling steps. Generation and instruction-based editing share one model with native 2K output, professional typography, and alpha-channel support. Ideal for poster and layout design, transparent asset creation, and rapid concept visualization.",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "tags": [
+     "Text to Image",
+     "Int8"
+    ],
+    "models": [
+     "Qwen Image 2.1"
+    ],
+    "minComfyUIVersion": "0.37.2",
+    "date": "2026-09-20",
+    "openSource": true,
+    "size": 26736171418,
+    "usage": 8562,
+    "searchRank": 0,
+    "username": "ComfyUI",
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 461,
+       "nodeType": "SaveImageAdvanced",
+       "file": "image_qwen_image_2_1_t2i.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "thumbnail": [
+     "output/image_qwen_image_2_1_t2i.png"
+    ]
+   },
+   {
+    "name": "flux_dev_full_text_to_image",
+    "title": "Flux.1 Dev: Text to Image",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "description": "Generate high-quality images with Flux Dev full version. Requires larger VRAM and multiple model files, but provides the best prompt following capability and image quality.",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/flux/flux-1-text-to-image",
+    "tags": [
+     "Image",
+     "Text to Image"
+    ],
+    "models": [
+     "Flux",
+     "Flux.1"
+    ],
+    "date": "2025-03-01",
+    "size": 34144990003,
+    "usage": 187,
+    "io": {
+     "outputs": [
+      {
+       "nodeId": 9,
+       "nodeType": "SaveImage",
+       "file": "flux_dev_full_text_to_image.png",
+       "mediaType": "image"
+      }
+     ]
+    },
+    "username": "ComfyUI",
+    "openSource": true,
+    "searchRank": 0,
+    "thumbnail": [
+     "output/flux_dev_full_text_to_image.png"
+    ],
+    "minComfyUIVersion": "0.3.42"
+   }
+  ]
+ },
+ {
+  "moduleName": "default",
+  "category": "Foundation",
+  "title": "Video",
+  "icon": "icon-[lucide--film]",
+  "type": "video",
+  "templates": [
+   {
+    "name": "video_wan2_2_14B_t2v",
+    "title": "Wan 2.2 14B Text to Video",
+    "description": "Generate high-quality videos from text prompts with cinematic aesthetic control and dynamic motion generation using Wan 2.2.",
+    "mediaType": "image",
+    "mediaSubtype": "webp",
+    "tutorialUrl": "https://docs.comfy.org/tutorials/video/wan/wan2_2",
+    "tags": [
+     "Text to Video",
+     "Video"
+    ],
+    "models": [
+     "Wan2.2",
+     "Wan"
+    ],
+    "date": "2025-07-29",
+    "size": 38031935406,
+    "usage": 265,
+    "username": "ComfyUI",
+    "minComfyUIVersion": "0.16.4"
+   }
+  ]
+ }
+]

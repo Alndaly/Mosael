@@ -324,10 +324,10 @@ def missing_types(source: dict[str, Any], object_info: dict[str, Any]) -> Counte
     return found
 
 
-def _packs(comfy: Comfy, types: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """节点类型 → 可能出自的节点包(ComfyUI-Manager 的映射),装没装。没有 Manager → 空。"""
-    if not types or not manager_version(comfy):
-        return {}
+def manager_mappings(comfy: Comfy) -> dict[str, Any] | None:
+    """ComfyUI-Manager 的「节点包 → 它提供的节点类型」映射(几 MB,一天取一次,记在持久目录里)。没有 Manager → None。"""
+    if not manager_version(comfy):
+        return None
     cache_path = data_file(comfy, "node-mappings")
     cached = load_json(cache_path)
     mappings = cached.get("mappings") if isinstance(cached.get("mappings"), dict) else None
@@ -339,33 +339,66 @@ def _packs(comfy: Comfy, types: list[str]) -> dict[str, list[dict[str, Any]]]:
         if isinstance(fetched, dict):
             mappings = fetched
             save_json(cache_path, {"at": time.time(), "mappings": mappings})
+    return mappings
+
+
+def installed_packs(comfy: Comfy) -> dict[str, dict[str, Any]] | None:
+    """Manager 说装了哪些节点包:目录名 → `{ver, cnr_id, aux_id, enabled}`。没有 Manager(或它答不上)→ None。"""
     try:
-        installed = comfy.get("/v2/customnode/installed")
+        found = comfy.get("/v2/customnode/installed")
     except ComfyError:
-        installed = {}
-    have = {str(key).lower() for key in (installed or {})} if isinstance(installed, dict) else set()
-    for value in (installed or {}).values() if isinstance(installed, dict) else []:
-        if isinstance(value, dict):
-            have |= {str(value.get(key)).lower() for key in ("cnr_id", "aux_id") if value.get(key)}
+        return None
+    return {str(key): value for key, value in found.items() if isinstance(value, dict)} if isinstance(found, dict) else None
+
+
+def pack_ids(installed: dict[str, dict[str, Any]]) -> set[str]:
+    """装着的包能叫的名字(小写):目录名、注册表 id、git 的仓库名。"""
+    have = {key.lower() for key in installed}
+    for value in installed.values():
+        have |= {str(value.get(key)).lower() for key in ("cnr_id",) if value.get(key)}
+        if value.get("aux_id"):
+            have.add(str(value["aux_id"]).rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower())
+    return have
+
+
+def mapping_short(pack: str) -> str:
+    """映射里一个包的键(注册表 id,或者仓库地址)→ 比较用的那个短名字(小写的仓库名)。"""
+    return str(pack).rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower()
+
+
+def provides(entry: Any, class_type: str) -> bool:
+    """映射里的这个包提供不提供这个节点类型(列着,或者对得上它的 `nodename_pattern`)。"""
+    names = entry[0] if isinstance(entry, list) and entry and isinstance(entry[0], list) else []
+    meta = entry[1] if isinstance(entry, list) and len(entry) > 1 and isinstance(entry[1], dict) else {}
+    if class_type in names:
+        return True
+    pattern = meta.get("nodename_pattern")
+    if not isinstance(pattern, str):
+        return False
+    # 照 Manager 自己的认法:不锚在开头(它找缺的节点包用 re.search,前端用 RegExp.test)。rgthree 的写法是
+    # 「 \(rgthree\)$」—— 用 re.match 的话,「Any Switch (rgthree)」这类节点永远认不出出自它
+    try:
+        return re.search(pattern, class_type) is not None
+    except re.error:
+        return False
+
+
+def _packs(comfy: Comfy, types: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """节点类型 → 可能出自的节点包(ComfyUI-Manager 的映射),装没装。没有 Manager → 空。"""
+    if not types:
+        return {}
+    mappings = manager_mappings(comfy)
+    if mappings is None:
+        return {}
+    have = pack_ids(installed_packs(comfy) or {})
     out: dict[str, list[dict[str, Any]]] = {}
     for class_type in types:
         found = []
-        for pack, entry in (mappings or {}).items():
-            names = entry[0] if isinstance(entry, list) and entry and isinstance(entry[0], list) else []
-            meta = entry[1] if isinstance(entry, list) and len(entry) > 1 and isinstance(entry[1], dict) else {}
-            pattern = meta.get("nodename_pattern")
-            matched = class_type in names
-            if not matched and isinstance(pattern, str):
-                # 照 Manager 自己的认法:不锚在开头(它找缺的节点包用 re.search,前端用 RegExp.test)。rgthree 的写法是
-                # 「 \(rgthree\)$」—— 用 re.match 的话,「Any Switch (rgthree)」这类节点永远认不出出自它
-                try:
-                    matched = re.search(pattern, class_type) is not None
-                except re.error:
-                    matched = False
-            if matched:
-                short = str(pack).rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower()
+        for pack, entry in mappings.items():
+            if provides(entry, class_type):
+                meta = entry[1] if isinstance(entry, list) and len(entry) > 1 and isinstance(entry[1], dict) else {}
                 found.append({"id": str(pack), "title": str(meta.get("title_aux") or pack),
-                              "installed": str(pack).lower() in have or short in have})
+                              "installed": str(pack).lower() in have or mapping_short(pack) in have})
         out[class_type] = found[:10]
     return out
 

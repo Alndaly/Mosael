@@ -497,6 +497,30 @@ def _within_budget(out: dict[str, Any], locale: str) -> dict[str, Any]:
     return out
 
 
+# --- 底模家族:只读记着的原料 -----------------------------------------------------
+
+def known_families(comfy: Comfy, files: list[tuple[str, str]]) -> dict[tuple[str, str], tuple[str, str]]:
+    """这几个文件的底模家族和凭的什么(和模型库列表同一套认法,见 summarize):模型库读过的文件用记着的原料(元数据、权重
+    结构),没读过的只按文件名认。**不读文件头** —— 诊断一张图(diagnose)不为几个 LoRA 去把整个模型库扫一遍;只列一下那几个
+    目录(大小、改动时间是记录的键)。"""
+    saved = load_json(data_file(comfy, "library"))
+    cache = saved.get("files") if saved.get("version") == CACHE_VERSION and isinstance(saved.get("files"), dict) else {}
+    listed: dict[str, dict[str, dict[str, Any]]] = {}
+    out: dict[tuple[str, str], tuple[str, str]] = {}
+    for folder, name in files:
+        if folder not in listed:
+            try:
+                listed[folder] = {_norm(str(item["name"])): item for item in files_in(comfy, folder)}
+            except ComfyError:
+                listed[folder] = {}
+        item = listed[folder].get(_norm(name))
+        inputs = cache.get(_cache_key(folder, item)) if item is not None else None
+        meta = (inputs or {}).get("meta") or {}
+        found = (inputs or {}).get("weights") or weights.family_of_gguf((inputs or {}).get("gguf") or "")
+        out[(folder, name)] = family_of(folder, name, meta, found)
+    return out
+
+
 # --- op: detail -------------------------------------------------------------
 
 def detail(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:

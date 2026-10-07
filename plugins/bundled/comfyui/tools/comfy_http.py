@@ -90,6 +90,19 @@ class Comfy:
         """`timeout`:少数要等那台机器算一阵的(按哈希找模型要它把整个文件读一遍)才放宽。"""
         return self.request_json("GET", path, params=params, timeout=timeout)
 
+    def head_length(self, path: str) -> int | None:
+        """一个接口的回答有多大(`HEAD`,只要 Content-Length,不收正文)。aiohttp 对 GET 的路由照样答 HEAD:那台机器把回答
+        算一遍,但一个字节都不发 —— 整份 `/object_info` 在慢的局域网上要传十几秒,问它多大不到一秒。没有这个接口、
+        没说多大 → None。"""
+        try:
+            with self._open("HEAD", path) as response:
+                raw = response.headers.get("Content-Length", "")
+        except error.HTTPError as exc:
+            if exc.code in (404, 405):
+                return None
+            raise self._http_error(exc) from exc
+        return int(raw) if raw.isdigit() else None
+
     def get_text(self, path: str) -> str | None:
         """回一段纯文字的接口(ComfyUI-Manager 的 `/v2/manager/version` 回 `V4.2.1`)。没有这个接口(404)→ None。"""
         try:
