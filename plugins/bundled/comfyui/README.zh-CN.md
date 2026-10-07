@@ -147,8 +147,26 @@ png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位
    `hunyuan_video` → HunyuanVideo、`ltx` → LTX-Video、`sdxl` / 单独的 `xl` → SDXL、`sd15` / `v1-5` → SD 1.5……只在放「给某个底模用的东西」
    的目录里按名字猜(checkpoints、loras、diffusion_models、controlnet、embeddings、vae……);
 5. 元数据里写了、表里没有、权重也认不出的值原样显示;什么都没有就空着(「认不出底模」)。
-6. 文本编码器、CLIP 视觉、放大和超分(包括 VOSR 2.0 的 `vosr2`)、检测 / 分割这类目录里的文件不是给某一个底模做的:不猜,标「不适用」(`family_source`
+6. CLIP 视觉、放大和超分(包括 VOSR 2.0 的 `vosr2`)、检测 / 分割这类目录里的文件不是给某一个底模做的:不猜,标「不适用」(`family_source`
    是 `not_applicable`),和「认不出」分开。
+7. **文本编码器**(`text_encoders`、`clip`、`clip_gguf`、`t5`)也不是给某一个底模做的 —— T5-XXL 给 Flux、SD 3、HiDream 都用,
+   叫 qwen3vl_4b 的配的是 Krea 2,不是 Qwen-Image —— 所以底模照旧不适用,但说**它是哪一种、常配哪几种底模**(1.17.0,规矩在
+   `tools/encoders.py`,每个文件多一格 `encoder: {kind, label, source, pairs}`):
+   - **是哪一种,从权重认**(和 ComfyUI 一样,CLIPLoader 读进来先认是哪一种编码器):CLIP 数文本塔的层数(L 12、H 24、G 32);
+     T5 一系看宽度、前馈宽度、前馈有没有门控、是不是每一块都带相对位置偏置 —— 分得开 T5-XXL 和 UMT5-XXL、Pile-T5-XL(AuraFlow)
+     和 mT5-XL;解码器式的语言模型看是哪一系(Gemma、Qwen2.5-VL、Qwen3、Qwen3-VL、Qwen3.5、Llama / Mistral)和宽度、层数,只看
+     量化改不了形状的那几样,fp8 / int8 / nvfp4 都认。GGUF 看 `general.architecture` 和键值里的宽度、词表大小,只读开头一段
+     (词表本身在后面,几 MB,不读)。这些文件不在元数据里写自己是哪一种,所以先后就是「权重 > 文件名」:读不到 / 认不出文件头
+     时才按文件名猜(`clip_l`、`t5xxl`、`umt5_xxl`、`qwen_3_4b`、`qwen3vl_8b`……,界面写「按文件名猜的,不一定准」);认不出就是
+     认不出;
+   - **常配**照 ComfyUI 自己的加载规矩(0.39.0 的 `load_text_encoder_state_dicts`,CLIPLoader / DualCLIPLoader /
+     TripleCLIPLoader / QuadrupleCLIPLoader 的 type),只列 Mosael 认作家族的底模,家族名和上面同一套:T5-XXL → Flux、SD 3、HiDream、
+     LTX-Video、Flux Kontext、Chroma;CLIP-L → SDXL、SD 1.5、Flux、SD 3、HiDream、HunyuanVideo……;CLIP-G → SDXL、SD 3、HiDream;
+     UMT5-XXL → Wan;Qwen2.5-VL 7B → Qwen-Image、HunyuanVideo;Qwen3-VL 4B → Krea 2、Flux.2;Qwen3-VL 8B → Qwen-Image 2、Flux.2;
+     Qwen3 4B → Z-Image、Flux.2;Qwen3 0.6B → Anima;Qwen3-VL 32B → MiniMax H3;Pile-T5-XL → AuraFlow、Pony V7……
+     按底模筛时常配它的编码器一起列出、标「常配」(不算那个底模的)。
+   VAE 不这样做:它的结构只说得出潜空间的形状,说不出是哪一个潜空间(SD 3 和 Flux 的 VAE 结构一样、潜空间不通),照旧按元数据和
+   文件名认底模。
 
 **读文件头**:走 ComfyUI-Custom-Scripts 的 `/pysssss/view/`,按 Range 只读开头(safetensors 的头一般几十到几百 KB,
 超过 8 MB 不读),一个文件几十毫秒、几个并发。没装它(404)或那台不认 Range(回 200 要整个发)时,第一个文件试过就不再试、
@@ -166,7 +184,7 @@ png / jpg / webp,或 safetensors 里的封面),没有的是按目录分的占位
 Civitai 的另外几个域名(`civitai.red`、`civitai.green`)是同一个站:贴进来的链接、工作流里写的地址都先换成 `civitai.com`
 再解析和下载,令牌也只交给 `civitai.com`(1.9.1);ModelScope 带 `www.` 的同样先去掉。
 
-逐个读到的原料(认底模、触发词、标题要用的那几项元数据,权重认成的家族,GGUF 的架构名)按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要十来秒,之后只读目录。家族每次列出时现推,认的规矩改了马上生效;权重那张表一改,记着的整份作废、重读。
+逐个读到的原料(认底模、触发词、标题要用的那几项元数据,权重认成的家族,文本编码器认成的种类,GGUF 的架构名)按「服务器 + 目录 + 名字 + 大小 + 改动时间」记在插件的持久目录里:第一次几百个文件要十来秒,之后只读目录。家族、常配每次列出时现推,认的规矩改了马上生效;权重那张表、文本编码器那几张表一改,记着的整份作废、重读。
 
 **下载**:贴一个链接 —— HuggingFace 的文件(`/blob/` 或 `/resolve/`)、Civitai 的模型页(带不带 `modelVersionId`)或
 下载链接、ModelScope(魔搭)的模型页或文件、别的直链 —— 先解析出文件名、大小、建议放进哪个目录(Civitai 按模型类型定;
@@ -341,7 +359,9 @@ ADR 0038 的第二刀:Mosael 桌面版在这个连接自己的内嵌浏览器里
 只多了几个不碰那台机器上文件的 op:
 
 - `node_folders`:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件 —— 和生成表单的 `x-model-folder`
-  同一张对照(`labels.model_folder`),只查表。
+  同一张对照(`labels.model_folder`),只查表。每一格带着这个节点上下拉格子现在的值;选文本编码器的那一格再回 `encoders`
+  (1.17.0):CLIP 加载节点现在的 type 配哪几种编码器(`fits`)、哪几种 ComfyUI 认出来就不看 type(`any_type`,比如 Anima 的官方
+  模板是 stable_diffusion 配 Qwen3 0.6B)—— 面板把合用的排前面、不在配方里的标出来。
 - `search_sources`:缺的模型工作流里没写下载地址时,按文件名(完整的名字 → 去掉扩展名 → 再去掉精度后缀)去 Civitai、HuggingFace、
   ModelScope 搜,交回候选(哪家、仓库、确切的文件名、大小、底模、能交给下载的链接);文件名一致的在前、标 `exact`,相近的从不标。
   一家没搜成放进 `failed`,别的照常;结果在插件数据目录里记 10 分钟。不碰那台 ComfyUI。

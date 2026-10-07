@@ -189,9 +189,32 @@ workflows that use it. See ADR 0034 in the Mosael repository for the decisions.
    made for a base model (checkpoints, loras, diffusion_models, controlnet, embeddings, vae…);
 5. values written in the metadata but in no table, with weights that say nothing either, are shown as they are; with
    nothing to go on it stays empty ("Unknown base model");
-6. files in text encoder, CLIP vision, upscaler and super-resolution (including VOSR 2.0's `vosr2`) and detection /
+6. files in CLIP vision, upscaler and super-resolution (including VOSR 2.0's `vosr2`) and detection /
    segmentation folders aren't made for one base model:
    they are not guessed and are marked "Not applicable" (`family_source` is `not_applicable`), apart from "unknown".
+7. **Text encoders** (`text_encoders`, `clip`, `clip_gguf`, `t5`) aren't made for one base model either — T5-XXL serves Flux,
+   SD 3 and HiDream; a file called qwen3vl_4b goes with Krea 2, not Qwen-Image — so the base model still doesn't apply, but the
+   library says **which encoder it is and which base models it's often paired with** (1.17.0, rules in `tools/encoders.py`;
+   each file gets `encoder: {kind, label, source, pairs}`):
+   - **Which encoder, from the weights** (like ComfyUI, whose CLIPLoader first works out which encoder a file holds): CLIP by the
+     number of text-tower layers (L 12, H 24, G 32); the T5 family by width, feed-forward width, whether the feed-forward is
+     gated and whether every block carries a relative-position bias — which tells T5-XXL from UMT5-XXL and Pile-T5-XL
+     (AuraFlow) from mT5-XL; decoder-only language models by family (Gemma, Qwen2.5-VL, Qwen3, Qwen3-VL, Qwen3.5,
+     Llama / Mistral), width and layer count, looking only at tensors quantisation can't reshape, so fp8 / int8 / nvfp4 files
+     work too. A GGUF by `general.architecture` and the width and vocabulary size in its key-values, reading only the first
+     segment (the vocabulary itself follows and runs to megabytes). These files don't name their type in their metadata, so the
+     order is weights, then file name: only when the header can't be read or recognised is the type guessed from the name
+     (`clip_l`, `t5xxl`, `umt5_xxl`, `qwen_3_4b`, `qwen3vl_8b`…, marked "guessed from the file name, may be wrong"); unknown
+     stays unknown;
+   - **Often paired with** follows ComfyUI's own loading rules (0.39.0's `load_text_encoder_state_dicts` and the `type`
+     options of CLIPLoader / DualCLIPLoader / TripleCLIPLoader / QuadrupleCLIPLoader), listing only base models Mosael knows as
+     families, with the same names as above: T5-XXL → Flux, SD 3, HiDream, LTX-Video, Flux Kontext, Chroma; CLIP-L → SDXL,
+     SD 1.5, Flux, SD 3, HiDream, HunyuanVideo…; CLIP-G → SDXL, SD 3, HiDream; UMT5-XXL → Wan; Qwen2.5-VL 7B → Qwen-Image,
+     HunyuanVideo; Qwen3-VL 4B → Krea 2, Flux.2; Qwen3-VL 8B → Qwen-Image 2, Flux.2; Qwen3 4B → Z-Image, Flux.2; Qwen3 0.6B →
+     Anima; Qwen3-VL 32B → MiniMax H3; Pile-T5-XL → AuraFlow, Pony V7… Filtering by a base model also lists the encoders often
+     paired with it, marked "often paired with" (they don't count as that base model's).
+   VAEs aren't treated this way: their structure tells the shape of the latent space, not which latent space it is (the SD 3
+   and Flux VAEs share a structure but not a latent space), so their base model is still read from metadata and the file name.
 
 **Reading file headers**: through ComfyUI-Custom-Scripts' `/pysssss/view/`, reading only the start with a Range request
 (a safetensors header is tens to hundreds of KB; anything over 8 MB is skipped), a few tens of milliseconds per file, a
@@ -215,10 +238,10 @@ domains (`civitai.red`, `civitai.green`) are the same site: pasted links and lin
 hosts are rewritten the same way.
 
 What is read file by file (the few metadata fields the base model, trigger words and title need, the family the weights
-were recognized as, a GGUF's architecture) is remembered in the plugin's data folder by server, folder, name, size and
-modification time: the first look at a few hundred files takes ten seconds or so, later ones only list the folders.
-Families are worked out again on every listing, so changed rules apply at once; when the weight table changes, the
-remembered results are dropped and read again.
+were recognized as, the type a text encoder was recognized as, a GGUF's architecture) is remembered in the plugin's data
+folder by server, folder, name, size and modification time: the first look at a few hundred files takes ten seconds or so,
+later ones only list the folders. Families and pairings are worked out again on every listing, so changed rules apply at
+once; when the weight table or the text-encoder tables change, the remembered results are dropped and read again.
 
 **Downloading**: paste a link (a HuggingFace file, `/blob/` or `/resolve/`; a Civitai model page, with or without
 `modelVersionId`, or download link; a ModelScope model page or file; any other direct link). It is looked up first (file
@@ -454,7 +477,10 @@ through a hard-coded script the Mosael main process injects (pull-only); on the 
 touches files on that machine:
 
 - `node_folders`: which model folder each input of the node selected on the canvas (node type + input name) picks from — the same
-  table as the generation form's `x-model-folder` (`labels.model_folder`), a lookup only.
+  table as the generation form's `x-model-folder` (`labels.model_folder`), a lookup only. Each input carries the current values of
+  the node's drop-downs; an input that picks a text encoder also gets `encoders` back (1.17.0): which encoders the CLIP loader's
+  current type uses (`fits`) and which ones ComfyUI loads the same whatever the type says (`any_type` — Anima's official template,
+  for one, pairs stable_diffusion with Qwen3 0.6B). The panel lists the fitting ones first and marks the ones outside the recipe.
 - `search_sources`: when the workflow gives no download address for a missing model, search Civitai, HuggingFace and ModelScope by
   its file name (the full name → without the extension → without a precision suffix) and return candidates (site, repository, exact
   file name, size, base model, a link the download accepts); exact names come first and are marked `exact`, similar ones never are.

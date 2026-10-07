@@ -50,7 +50,7 @@
 
 - **名字、目录、大小、改动时间**:目录给的原样;
 - **预览图**:有就用;没有就是按目录分的占位(大模型、LoRA、VAE、放大……各一个图标),不留白;
-- **底模家族**:按下面的顺序认,**认到为止**,每一条记下凭的是什么(`metadata` / `filename`),界面上看得到(2026-10-06 改:中间加了「权重结构」一档、不适用的目录单独标出,见文末「后续」):
+- **底模家族**:按下面的顺序认,**认到为止**,每一条记下凭的是什么(`metadata` / `filename`),界面上看得到(2026-10-06 改:中间加了「权重结构」一档、不适用的目录单独标出;2026-10-07 补:文本编码器说是哪一种、常配哪几种底模 —— 都见文末「后续」):
   1. 文件头里的 `ss_base_model_version`(kohya 训练脚本写的,`sdxl_base_v1-0`、`sd_v1`、`flux1`……)—— 它最具体:训练脚本
      不认识的底模(实测有 `anima`),`modelspec.architecture` 会照默认写成 `stable-diffusion-v1`,不能信后者;
   2. 没有它时看 `modelspec.architecture`(SAI 的模型规范,`stable-diffusion-xl-v1-base/lora`、`flux-1-dev/lora`……);
@@ -255,3 +255,54 @@ ADR 0038 §9 给每个模型文件加了几样(决策和实现记录在那里):N
 
 「Manager 被拒、同一台机器就改走本机」那一段随之去掉 —— 同一台机器根本不经 Manager。另一台机器上的照旧经 Manager,被安全策略
 拒绝时照旧说人话、记下来、下次提前提醒。ADR 0041 让 Mosael 在本机装、起 ComfyUI 之后,这一条是常走的那条路。
+
+## 后续(2026-10-07,插件 1.17.0):文本编码器说是哪一种、常配哪几种底模 —— 补 §2
+
+维护者:「text_encoder 似乎没有底模判断能力」。文本编码器目录照 2026-10-06 那一条一律写「不适用」。不贴底模的理由还在:
+一个编码器给好几种底模用 —— T5-XXL 给 Flux、SD 3、HiDream,叫 `qwen3vl_4b` 的配的是 Krea 2,不是 Qwen-Image;可「不适用」
+什么都没告诉人。维护者批了下面的方案。
+
+- **说它是哪一种,从权重认**,和 ComfyUI 一样:CLIPLoader 读进文件后先认里面装的是哪一种编码器(`comfy/sd.py` 的
+  `detect_te_model`),再按节点的 type 建那一路。插件新的 `tools/encoders.py` 看文件头里的张量名和形状:CLIP 数文本塔的层数
+  (L 12、H 24、G 32);T5 一系看宽度、前馈宽度、前馈有没有门控、是不是每一块都带相对位置偏置 —— 分得开 T5-XXL 和 UMT5-XXL
+  (ComfyUI 自己不分,靠 type 选 wan)、Pile-T5-XL(AuraFlow)和 mT5-XL(HunyuanDiT)、T5-Base 和 UMT5-Base;解码器式的语言模型
+  看是哪一系(Gemma / Qwen2.5-VL / Qwen3 / Qwen3-VL / Qwen3.5 / Llama 一类)和宽度、层数。只看量化改不了形状的那几样(归一化的
+  向量、输出那一维),fp8 / int8 / nvfp4 的文件一样认。一共 40 来种(`KINDS`,和 ComfyUI 0.39.0 的 `TEModel` 对得上,外加它
+  不分的 UMT5、Pile-T5 / mT5)。GGUF 看 `general.architecture` 和键值里的宽度、词表大小:只读开头 64 KB —— 词表本身跟在后面,
+  几 MB,不读(此前文本编码器的 GGUF 整个不读)。
+- **先后照旧「元数据 > 权重 > 文件名」**。这些文件不在元数据里写自己是哪一种(维护者那台的 11 个只有 Comfy-Org 新打包的两个写了
+  `comfy_model`,权重本来就认得),所以就是「权重 > 文件名」:读不到、认不出文件头时才按文件名猜(`source: "filename"`,界面写
+  「按文件名猜的,不一定准」);认不出就是认不出(`kind` 空着,界面写「文本编码器 · 认不出是哪一种」),不往认得的种类上靠。
+- **常配哪几种底模**:照 ComfyUI 0.39.0 的加载规矩抄成一张表(`RECIPES`)—— `load_text_encoder_state_dicts` 里一个文件按认出的
+  种类和 type 分支、两个文件按 type 分支、三个一律 SD 3、四个一律 HiDream;`nodes.py` 的 CLIPLoader / DualCLIPLoader 和
+  `comfy_extras` 的 TripleCLIPLoader / QuadrupleCLIPLoader 列的 type;对着它带的官方模板(`blueprints/` 里 CLIPLoader 选的文件和
+  type)核过。家族名就是 families.py 的(测试钉着,筛选对得上);只列 Mosael 认作家族的底模 —— Mochi、CogVideoX、PixArt、
+  OmniGen2、HunyuanImage、ACE-Step 这些配方只用来判工作台里合不合 type。例:T5-XXL → Flux、SD 3、HiDream、LTX-Video、Flux
+  Kontext、Chroma;CLIP-L → SDXL、SD 1.5、Flux、SD 3、HiDream、HunyuanVideo(和 SDXL、Flux 的几支);CLIP-G → SDXL、SD 3、HiDream;
+  UMT5-XXL → Wan;Qwen2.5-VL 7B → Qwen-Image、HunyuanVideo(1.5);Qwen3-VL 4B → Krea 2、Flux.2(klein);Qwen3-VL 8B →
+  Qwen-Image 2、Flux.2;Qwen3 4B → Z-Image、Flux.2;Qwen3 0.6B → Anima;Qwen3-VL 32B → MiniMax H3;Pile-T5-XL → AuraFlow、Pony V7。
+  细分的那一支(Illustrious、Wan 2.2、Flux Kontext……)排在后面;Kolors 的文本是 ChatGLM,不跟着 SDXL 配 CLIP。
+- **底模照旧不适用**:`family` 空着、`family_source` 仍是 `not_applicable`。模型库的每个文件多一格 `encoder: {kind, label,
+  source, pairs}`(只有文本编码器目录里的有,宿主规整后照传;家族、常配每次列出时现推)。界面:卡片、列表写「T5-XXL」(权重认出
+  的实色,按文件名猜的淡色)和一行「常配 Flux、SD 3、HiDream 等 6 种」;详情「底模」那一行写「文本编码器 · T5-XXL」和一排常配的底模。
+- **按底模筛**:勾一种底模时,常配它的文本编码器一起列出,卡片上那一行「常配」把勾着的排前面、写重一点 —— 标的是「常配」,不算
+  那个底模的。筛选菜单里数目写成「1 · 常配 1」;只有编码器常配的底模也列(在文本编码器目录里也能按底模挑)。
+- **工作台**:`node_folders` 每一格多带这个节点上下拉格子现在的值;选文本编码器的格子回 `encoders: {type, fits, any_type}` ——
+  在这个 type 配方里的几种,和 ComfyUI 不看 type 的几种。一个文件时 CLIP-H、Pile-T5-XL、Llama 3 8B、Mistral Small 3、Qwen3 0.6B、
+  Qwen3-VL 32B 这些认出来就不看 type(Anima 的官方模板就是 stable_diffusion 配 Qwen3 0.6B),不能标成不合。面板把合用的排前面,
+  不在配方里的排最后、标「不在 wan 的配方里」;界面不认识 type,只按插件给的种类名比。三个、四个文件的加载节点没有 type,按
+  ComfyUI 一律用的 sd3 / hidream。不新加 `object_info` 调用。
+- **缓存**:文本编码器目录里的文件也读头,记认成的种类(`encoder`);格式版本升到 `inputs-4`,并带上新表的指纹 —— 表一改整份
+  重读,不留兼容分支。
+- **VAE 不做「常配」**(看过,决定不做):VAE 今天的家族是按元数据和文件名认的,weights.py 没有 VAE 的特征;而 VAE 的结构只说得出
+  潜空间的形状,说不出是哪一个潜空间 —— SD 3 和 Flux 的 VAE 都是 16 通道的同一种结构,潜空间却不通;Qwen-Image 的 VAE 和 Wan 2.1
+  的结构一样、潜空间也一样(只微调了解码器),但常配的不是同一批底模。从结构推「常配」会说错,从文件名推又是猜上加猜。
+  `qwen_image_vae` 照旧按名字认成 Qwen-Image。
+- 表写的是事实(公开的模型结构、ComfyUI 的加载规矩:哪个 type 用哪种编码器),对着实际文件核过,不照搬 ComfyUI 的代码(GPL)。
+
+核对(维护者那台 ComfyUI,只读、按段取头,共约 1 MB):11 个文本编码器全部从权重认出,没有一个靠文件名 —— `t5xxl_fp16` →
+T5-XXL;`umt5_xxl_fp8_e4m3fn_scaled` → UMT5-XXL;`qwen3vl_4b_bf16` → Qwen3-VL 4B(常配 Krea 2、Flux.2);`qwen3vl_8b_int8_convrot`
+和名字里没有线索的 `qwenImage21_v21_txt_bf16` → Qwen3-VL 8B(常配 Qwen-Image 2、Flux.2);`qwen3vl_32b_minimax_h3_nvfp4_awq` →
+Qwen3-VL 32B(MiniMax H3);`gemma_3_4b_it_bf16` → Gemma 3 4B、`jina_clip_v2_bf16` → Jina CLIP v2(都常配 Lumina —— NewBie);
+`minimax_music3_text_encoder` 的 bf16 和削过的 int8 → MiniMax Music 3;`qwen3.5_9b_qwen_image_2.1_pe_i2i` → Qwen3.5 9B(ComfyUI
+不拿它配底模,不写常配)。

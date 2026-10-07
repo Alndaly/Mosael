@@ -256,8 +256,14 @@ column scrolling on its own.
 - **Base model**: SDXL, Illustrious, Pony, Flux, Wan, Qwen-Image, Anima, Krea 2… with a lighter line saying how it was
   recognized: written in the file's metadata, recognized from the structure of its weights (this covers merged checkpoints
   and LoRAs without metadata; it needs ComfyUI-Custom-Scripts on that ComfyUI), or guessed from its name (which may be
-  wrong). Text encoders, upscalers, detectors and the like aren't made for one base model, so they say "Not applicable"
-  rather than unknown. A file registered under several folders (ComfyUI-GGUF's `unet_gguf` points at the same folders
+  wrong). Upscalers, detectors and the like aren't made for one base model, so they say "Not applicable" rather than
+  unknown. **Text encoders** aren't tied to one base model either (one T5-XXL serves Flux, SD 3 and HiDream); instead they
+  say which encoder they are and which base models they're often paired with: "Text encoder · T5-XXL" and a row of "Often
+  paired with Flux, SD 3, HiDream…" in the details, "T5-XXL" and an "Often paired with …" line on the card. The type is
+  recognized from the weights (as ComfyUI does it; this also needs ComfyUI-Custom-Scripts on that ComfyUI) and only guessed
+  from the file name when the header can't be read, marked as possibly wrong; the pairings follow ComfyUI's own loading
+  rules. Filtering by a base model also lists the text encoders often paired with it, marked "often paired with" — they
+  don't count as that base model's. A file registered under several folders (ComfyUI-GGUF's `unet_gguf` points at the same folders
   as `diffusion_models`) is listed once.
 - **Trigger words**: the ones the author wrote into the file, copied with a click; without those, the most frequent training tags,
   marked as not necessarily the author's trigger words.
@@ -561,7 +567,9 @@ beside it:
   blurred or hidden one opens alone). Thumbnails follow How previews show, with the NSFW and From Civitai marks, and the panel has
   its own How previews show button. If the file the input points at isn't on this ComfyUI, **Find a download** or paste a
   link right there, check it and confirm to download it into that folder; once it's downloaded the canvas dropdowns refresh and the new
-  file is in them.
+  file is in them. When the selected node is a CLIP loader, the text encoders that fit its current type come first (type wan means
+  UMT5-XXL) and the ones outside that type's recipe come last, marked "Not in the wan recipe"; a few that ComfyUI loads the same
+  whatever the type says (such as Anima's Qwen3 0.6B) aren't marked.
 - **Missing**: the nodes and models the graph **on the canvas right now** (unsaved changes included) is missing, in one list that
   follows the canvas: switch workflows or edit the graph in ComfyUI and it checks again by itself (**Check again** is still there).
   Every item can be **located**: the node using it is selected and centered on the canvas (several places cycle on each click; a node
