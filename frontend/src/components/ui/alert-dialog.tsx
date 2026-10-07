@@ -9,6 +9,7 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { buttonVariants } from "@/components/ui/button"
+import { StepNativeViewAside, useOverChromeModal } from "@/components/ui/overChromeModal"
 
 const AlertDialog = AlertDialogPrimitive.Root
 
@@ -34,22 +35,28 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, onEscapeKeyDown, ...props }, ref) => {
+>(({ className, onEscapeKeyDown, children, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
+  //: 从工作台那一列里打开的(模型详情里的「存为预览图」):抬过外壳、请原生视图让开(见 overChromeModal)
+  const { layer, aside } = useOverChromeModal()
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={layer} />
       <AlertDialogPrimitive.Content
         ref={ref}
         className={cn(
           "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
           MODAL_SURFACE, FLOATING_MOTION,
+          layer,
           className
         )}
         {...props}
         onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
-      />
+      >
+        {aside && <StepNativeViewAside />}
+        {children}
+      </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
   )
 })

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, MousePointerClick, RefreshCcw, Search } from "lucide-react";
+import { Check, Info, Loader2, MousePointerClick, RefreshCcw, Search } from "lucide-react";
 
 import { getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -13,10 +13,15 @@ import { previewPick, previewTreatment, useModelPreviewSettings } from "@/compon
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { OverChromeModals } from "@/components/ui/overChromeModal";
 import { Truncate } from "@/components/ui/truncate";
 import { EncoderRecipeMark } from "@/features/plugins/ModelEncoder";
+import { ModelDetail, useModelActionsHost } from "@/features/plugins/ModelDetail";
+import { ModelActionsContext } from "@/features/plugins/modelActions";
+import { ModelContextMenu } from "@/features/plugins/ModelMenu";
 import { ModelDownload } from "@/features/plugins/workbench/ModelDownload";
 import {
   byRecipe,
@@ -35,10 +40,19 @@ import { cn } from "@/lib/utils";
 /** 一次最多摆多少个(一个目录里见过几百个 LoRA):多了先搜。 */
 const LISTED = 120;
 
+const keyOf = (model: { folder: string; name: string }) => `${model.folder}/${model.name}`;
+
+/** 开着的详情:哪个文件、直接跳到哪一节;`open` 落成 false 之后还留着这一项,收起的动画里内容不先变空。 */
+type DetailState = { key: string; section: "used" | null; open: boolean };
+
 /**
  * 工作台的「模型库」面板(ADR 0038 §6):在画布上选中一个加载节点 → 问插件它那几格选的是哪个模型目录的文件 → 用模型库的数据
  * 只列那个目录的(缩略图、底模家族、触发词),能搜、能按家族筛 → 点一行,经桥填进那一格(桥先查它在下拉里);点缩略图看大图。
  * 现在那一格选的文件这台 ComfyUI 上没有,就地找下载地址或贴链接下到那个目录;下完经桥刷新下拉,新文件出现在下拉里。
+ *
+ * **看详情**(和模型库点开一张卡是同一页,见 ModelDetail):每一行悬停 / 聚焦时露出「查看详情」,右键是模型库那一份菜单
+ * (第一项「查看详情」);详情开成一个大弹窗(这一列太窄),压在外壳之上、请画布让开(见 overChromeModal)。菜单和详情里的
+ * 本事(在 Civitai 上找、存为预览图、标 NSFW、看大图……)和模型库同一份(useModelActionsHost)。关上之后焦点回到那一行。
  */
 export function ModelsPanel({
   target,
@@ -59,31 +73,125 @@ export function ModelsPanel({
   });
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const slots = modelSlots(node, folders.data?.folders ?? [], folders.data?.encoders ?? []);
+  const models = React.useMemo(() => library.data?.models ?? [], [library.data]);
+  //: 「看大图」能跟着翻的:这几格的目录里的
+  const slotFolders = slots.map((slot) => slot.folder).join("|");
+  const shown = React.useMemo(() => {
+    const wanted = new Set(slotFolders.split("|"));
+    return models.filter((model) => wanted.has(model.folder));
+  }, [models, slotFolders]);
+  const [detail, setDetail] = React.useState<DetailState | null>(null);
+  const host = useModelActionsHost({
+    instanceId: target.instanceId,
+    instanceName: target.instanceName,
+    workspaceId: target.workspaceId,
+    queryKey: library.queryKey,
+    shown,
+    tools: library.data?.preview_tools,
+    onOpen: (model, section) => setDetail({ key: keyOf(model), section, open: true }),
+  });
+  const detailModel = detail ? models.find((model) => keyOf(model) === detail.key) ?? null : null;
 
+  let body: React.ReactNode;
   if (capabilities && (!capabilities.selection || !capabilities.setWidget)) {
-    return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t("workbenchCapSelection"))}</PanelNote>;
-  }
-  if (!node) return <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsPick")}</PanelEmpty>;
-  if (folders.isPending && inputs.length > 0) return <PanelLoading label={t("workbenchModelsLoading")} />;
-  if (folders.isError) return <PanelNote tone="error">{errorText(folders.error)}</PanelNote>;
-  if (slots.length === 0) {
-    return <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsNoSlot").replace("{node}", node.title || node.type)}</PanelEmpty>;
+    body = <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t("workbenchCapSelection"))}</PanelNote>;
+  } else if (!node) {
+    body = <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsPick")}</PanelEmpty>;
+  } else if (folders.isPending && inputs.length > 0) {
+    body = <PanelLoading label={t("workbenchModelsLoading")} />;
+  } else if (folders.isError) {
+    body = <PanelNote tone="error">{errorText(folders.error)}</PanelNote>;
+  } else if (slots.length === 0) {
+    body = <PanelEmpty icon={MousePointerClick}>{t("workbenchModelsNoSlot").replace("{node}", node.title || node.type)}</PanelEmpty>;
+  } else {
+    body = (
+      <div className={cn(PANEL_ROOT, "gap-4")}>
+        {slots.map((slot) => (
+          <SlotPicker
+            key={`${node.id}:${slot.widget}`}
+            target={target}
+            node={node}
+            slot={slot}
+            models={models}
+            loading={library.isPending}
+            error={library.isError ? errorText(library.error) : ""}
+            canRefresh={capabilities?.refreshCombos !== false}
+          />
+        ))}
+      </div>
+    );
   }
   return (
-    <div className={cn(PANEL_ROOT, "gap-4")}>
-      {slots.map((slot) => (
-        <SlotPicker
-          key={`${node.id}:${slot.widget}`}
-          target={target}
-          node={node}
-          slot={slot}
-          models={library.data?.models ?? []}
-          loading={library.isPending}
-          error={library.isError ? errorText(library.error) : ""}
-          canRefresh={capabilities?.refreshCombos !== false}
+    <ModelActionsContext.Provider value={host.actions}>
+      {body}
+      {/* 这里打开的弹窗(详情、「存为预览图」的确认)压在外壳之上、请画布让开 */}
+      <OverChromeModals.Provider value>
+        {host.dialogs}
+        {detail && detailModel && (
+          <ModelDetailDialog
+            target={target}
+            model={detailModel}
+            section={detail.section}
+            open={detail.open}
+            onClose={() => setDetail((current) => (current ? { ...current, open: false } : current))}
+            onClosed={() => {
+              const key = detail.key;
+              setDetail(null);
+              //: 焦点回到那一行(它的「查看详情」):从右键菜单打开的,菜单那一项已经没了
+              document.querySelector<HTMLElement>(`[data-model-detail="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+            }}
+          />
+        )}
+      </OverChromeModals.Provider>
+    </ModelActionsContext.Provider>
+  );
+}
+
+/**
+ * 工作台里一个模型的详情:模型库点开一张卡的那一页(ModelDetail),开成一个大弹窗 —— 这一列太窄,详情是两栏的。头上那颗
+ * 「返回」在这里是「关闭详情」。预览图照模型库那两组设置(模糊、NSFW)。
+ */
+function ModelDetailDialog({
+  target,
+  model,
+  section,
+  open,
+  onClose,
+  onClosed,
+}: {
+  target: WorkbenchTarget;
+  model: ModelFile;
+  section: "used" | null;
+  open: boolean;
+  onClose: () => void;
+  onClosed: () => void;
+}) {
+  const t = useI18n();
+  const [previewSettings] = useModelPreviewSettings();
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        showClose={false}
+        aria-describedby={undefined}
+        data-workbench-model-detail=""
+        className="flex h-[min(860px,calc(100dvh-3rem))] w-[min(1180px,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onClosed();
+        }}
+      >
+        <DialogTitle className="sr-only">{model.title || modelBaseName(model.name)}</DialogTitle>
+        <ModelDetail
+          key={keyOf(model)}
+          instanceId={target.instanceId}
+          model={model}
+          settings={previewSettings}
+          section={section}
+          onBack={onClose}
+          backLabel={t("workbenchModelDetailClose")}
         />
-      ))}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -141,6 +249,8 @@ function SlotPicker({
     },
   });
 
+  const actions = React.useContext(ModelActionsContext);
+  const openDetail = (model: ModelFile) => actions?.open(model);
   const previewable = (model: ModelFile) => model.has_preview && !failed.has(model.name);
   //: 看大图:这一页列着的、看得清的成组翻(按列表的顺序)。点的是模糊着、不显示的那一张时只开它 —— 点它是明确要看这一张,
   //: 翻到别的就等于没经同意替人把它们都看清了
@@ -237,60 +347,80 @@ function SlotPicker({
                           onFailed={() => setFailed((current) => new Set([...current, model.name]))} />
             );
             return (
-              <li
-                key={model.name}
-                data-model-row=""
-                className={cn(
-                  "group/thumb flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
-                  chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
-                )}
-              >
-                {previewable(model) ? (
-                  <IconButton
-                    unstyled
-                    type="button"
-                    data-model-preview=""
-                    label={t("workbenchModelsPreview").replace("{name}", name)}
-                    className="size-11 shrink-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>*]:size-full"
-                    onClick={() => preview(model)}
+              <ModelContextMenu key={model.name} model={model} openLabel={t("workbenchModelDetail")}>
+                {() => (
+                  <li
+                    data-model-row=""
+                    className={cn(
+                      "group/thumb flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
+                      chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
+                    )}
                   >
-                    {thumb}
-                  </IconButton>
-                ) : (
-                  <span className="size-11 shrink-0 overflow-hidden rounded-md [&>*]:size-full">{thumb}</span>
-                )}
-                <button
-                  type="button"
-                  aria-pressed={chosen}
-                  aria-busy={filling || undefined}
-                  disabled={pick.isPending}
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 self-stretch border-0 bg-transparent p-0 text-left disabled:cursor-default"
-                  onClick={() => pick.mutate(model)}
-                >
-                  <span className="grid min-w-0 flex-1 gap-0.5">
-                    <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                    {(model.encoder?.label || model.family || subtitle) && (
-                      <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
-                        {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
-                        <EncoderRecipeMark model={model} recipe={slot.encoders} />
-                        {subtitle && <Truncate>{subtitle}</Truncate>}
+                    {previewable(model) ? (
+                      <IconButton
+                        unstyled
+                        type="button"
+                        data-model-preview=""
+                        label={t("workbenchModelsPreview").replace("{name}", name)}
+                        className="size-11 shrink-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>*]:size-full"
+                        onClick={() => preview(model)}
+                      >
+                        {thumb}
+                      </IconButton>
+                    ) : (
+                      <span className="size-11 shrink-0 overflow-hidden rounded-md [&>*]:size-full">{thumb}</span>
+                    )}
+                    <button
+                      type="button"
+                      aria-pressed={chosen}
+                      aria-busy={filling || undefined}
+                      disabled={pick.isPending}
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 self-stretch border-0 bg-transparent p-0 text-left disabled:cursor-default"
+                      onClick={() => pick.mutate(model)}
+                    >
+                      <span className="grid min-w-0 flex-1 gap-0.5">
+                        <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
+                        {(model.encoder?.label || model.family || subtitle) && (
+                          <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
+                            {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
+                            <EncoderRecipeMark model={model} recipe={slot.encoders} />
+                            {subtitle && <Truncate>{subtitle}</Truncate>}
+                          </span>
+                        )}
+                      </span>
+                      {/* 同一格:填的过程中是转圈,填好了是对勾 —— 宽度不变,这一行不跳 */}
+                      <span className="grid size-4 shrink-0 place-items-center">
+                        {filling ? <Loader2 size={14} aria-hidden className="animate-mosael-spin text-muted-foreground" />
+                          : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
+                      </span>
+                    </button>
+                    {/* 判成 NSFW、预览图来自 Civitai 的角标:在填的那颗按钮外面(它们自己能聚焦、悬停说凭什么) */}
+                    {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server")) && (
+                      <span className="flex shrink-0 flex-col items-end gap-0.5">
+                        <NsfwMark nsfw={model.nsfw} className="h-4" />
+                        <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
                       </span>
                     )}
-                  </span>
-                  {/* 同一格:填的过程中是转圈,填好了是对勾 —— 宽度不变,这一行不跳 */}
-                  <span className="grid size-4 shrink-0 place-items-center">
-                    {filling ? <Loader2 size={14} aria-hidden className="animate-mosael-spin text-muted-foreground" />
-                      : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
-                  </span>
-                </button>
-                {/* 判成 NSFW、预览图来自 Civitai 的角标:在填的那颗按钮外面(它们自己能聚焦、悬停说凭什么) */}
-                {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server")) && (
-                  <span className="flex shrink-0 flex-col items-end gap-0.5">
-                    <NsfwMark nsfw={model.nsfw} className="h-4" />
-                    <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
-                  </span>
+                    {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。和这一行一样高的一条窄键
+                        (不另定一档高度:旁边是 44 的缩略图) */}
+                    <IconButton
+                      unstyled
+                      type="button"
+                      data-model-detail={keyOf(model)}
+                      label={t("workbenchModelDetailOpen").replace("{name}", name)}
+                      className={cn(
+                        "grid w-7 shrink-0 cursor-pointer place-items-center self-stretch rounded-md border-0 bg-transparent p-0",
+                        "text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "opacity-0 transition-opacity duration-100",
+                        "group-hover/thumb:opacity-100 group-focus-within/thumb:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
+                      )}
+                      onClick={() => openDetail(model)}
+                    >
+                      <Info size={14} />
+                    </IconButton>
+                  </li>
                 )}
-              </li>
+              </ModelContextMenu>
             );
           })}
           {listed.length > LISTED && (

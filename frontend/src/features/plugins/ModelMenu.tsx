@@ -49,8 +49,8 @@ type Entry =
 
 const copy = (text: string) => void navigator.clipboard?.writeText(text);
 
-/** 一个模型的菜单条目,按组。 */
-export function modelMenuGroups(model: ModelFile, actions: ModelActions, t: ReturnType<typeof useI18n>): Entry[][] {
+/** 一个模型的菜单条目,按组。`openLabel`:打开详情那一项叫什么(工作台里叫「查看详情」:那里点一行是填进画布)。 */
+export function modelMenuGroups(model: ModelFile, actions: ModelActions, t: ReturnType<typeof useI18n>, openLabel?: string): Entry[][] {
   const used = model.used_by ?? [];
   const targets = actions.targets(model);
   const generate: Entry =
@@ -85,7 +85,7 @@ export function modelMenuGroups(model: ModelFile, actions: ModelActions, t: Retu
   ];
   return [
     [
-      { kind: "item", key: "open", label: t("modelMenuOpen"), icon: <PanelRightOpen />, onSelect: () => actions.open(model) },
+      { kind: "item", key: "open", label: openLabel ?? t("modelMenuOpen"), icon: <PanelRightOpen />, onSelect: () => actions.open(model) },
       generate,
     ],
     [
@@ -167,9 +167,12 @@ export const isMenuKey = (event: React.KeyboardEvent) => event.key === "ContextM
  */
 export function ModelContextMenu({
   model,
+  openLabel,
   children,
 }: {
   model: ModelFile;
+  /** 打开详情那一项叫什么(见 modelMenuGroups) */
+  openLabel?: string;
   children: (openFrom: (anchor: HTMLElement) => void) => React.ReactElement;
 }) {
   const t = useI18n();
@@ -182,7 +185,7 @@ export function ModelContextMenu({
     openMenuAt(triggerRef.current, anchor);
   }, []);
   //: 菜单只在开着时算条目(生成选项、标记都是开的那一刻的)
-  const groups = open && actions ? modelMenuGroups(model, actions, t) : [];
+  const groups = open && actions ? modelMenuGroups(model, actions, t, openLabel) : [];
   return (
     <ContextMenu onOpenChange={setOpen}>
       <ContextMenuTrigger asChild ref={triggerRef as React.Ref<HTMLElement>}>

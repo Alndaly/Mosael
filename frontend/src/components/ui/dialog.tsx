@@ -10,6 +10,7 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
+import { StepNativeViewAside, useOverChromeModal } from "./overChromeModal"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
 const Dialog = DialogPrimitive.Root
@@ -44,10 +45,12 @@ const DialogContent = React.forwardRef<
 >(({ className, children, showClose = true, showOverlay = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
+  //: 从工作台那一列里打开的:抬过外壳、请原生视图让开(见 overChromeModal)
+  const { layer, aside } = useOverChromeModal()
   return (
   <DialogPortal>
     {/* 遮罩一直挂着:卸掉再挂回来会排到内容后面、盖住弹窗(见 appChrome) */}
-    {showOverlay && <DialogOverlay />}
+    {showOverlay && <DialogOverlay className={layer} />}
     <DialogPrimitive.Content
       ref={ref}
       // **宽度由 w 定,max-w 只管不出屏幕。** 此前默认宽写在 max-w 上(32rem),调用方给的 w-[…] 再宽也被它压回
@@ -56,12 +59,14 @@ const DialogContent = React.forwardRef<
         "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
           MODAL_SURFACE, FLOATING_MOTION,
           showClose && "[&_[data-slot=dialog-title]]:pr-8",
+        layer,
         className
       )}
       {...props}
       onEscapeKeyDown={escapeUnlessComposing(keepOpenOnAppChrome(onEscapeKeyDown))}
       onInteractOutside={keepOpenOnAppChrome(onInteractOutside)}
     >
+      {aside && <StepNativeViewAside />}
       <HintScopeReset>{children}</HintScopeReset>
       {showClose && (
         <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
