@@ -1,7 +1,7 @@
 import React from "react";
 import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
-import { assetFileUrl } from "@/api/client";
+import { assetFileUrl, fetchWaveform } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -28,10 +28,18 @@ export function mediaClock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-/** 播放状态。视频和音频都是 HTMLMediaElement —— 这一层不关心它有没有画面。 */
-export function usePlayback(ref: React.RefObject<HTMLMediaElement | null>) {
+/**
+ * 播放状态。视频和音频都是 HTMLMediaElement —— 这一层不关心它有没有画面。
+ *
+ * `muted`:一开始就静音(元素上挂着 `muted` 的,如模型库里循环的预览视频)—— 状态和元素一致,静音键的图标才对。
+ * `endAt`:只放到第几秒(笔记引用的那一段):走到那儿就停。
+ */
+export function usePlayback(
+  ref: React.RefObject<HTMLMediaElement | null>,
+  { muted: startMuted = false, endAt = null }: { muted?: boolean; endAt?: number | null } = {},
+) {
   const [playing, setPlaying] = React.useState(false);
-  const [muted, setMuted] = React.useState(false);
+  const [muted, setMuted] = React.useState(startMuted);
   const [at, setAt] = React.useState(0);
   const [total, setTotal] = React.useState(0);
   const [error, setError] = React.useState(false);
@@ -60,7 +68,11 @@ export function usePlayback(ref: React.RefObject<HTMLMediaElement | null>) {
     onEnded: () => setPlaying(false),
     onError: () => setError(true),
     onVolumeChange: () => setMuted(Boolean(ref.current?.muted)),
-    onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => setAt(event.currentTarget.currentTime),
+    onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => {
+      const media = event.currentTarget;
+      setAt(media.currentTime);
+      if (endAt !== null && media.currentTime >= endAt && !media.paused) media.pause();
+    },
   };
 
   return { playing, muted, at, total, error, setTotal, toggle, toggleMute, bind };
@@ -169,6 +181,117 @@ export function Scrubber({
 }
 
 /**
+ * 一段音频的波形:后端在登记素材时算好的峰值(`/assets/{id}/waveform`,见 media/waveform),抽成 `bars` 根、按最高那根归一。
+ * 取不到(没有音轨、还没算、404)就是空数组 —— 波形只是看的,取不到不该挡住播放。素材预览、AI 工作台的音频结果共用。
+ */
+export function useWaveformPeaks(assetId: string | undefined, bars: number): number[] {
+  const [peaks, setPeaks] = React.useState<number[]>([]);
+  React.useEffect(() => {
+    setPeaks([]);
+    if (!assetId) return;
+    let active = true;
+    void fetchWaveform(assetId).then((wave) => {
+      if (!active || !wave.peaks.length) return;
+      const step = Math.max(1, Math.ceil(wave.peaks.length / bars));
+      const sampled: number[] = [];
+      for (let i = 0; i < wave.peaks.length; i += step) {
+        sampled.push(Math.max(...wave.peaks.slice(i, i + step).map((value) => Math.abs(value))));
+      }
+      const max = Math.max(...sampled, .001);
+      setPeaks(sampled.map((value) => value / max));
+    }).catch(() => { /* A missing waveform must not prevent playback. */ });
+    return () => { active = false; };
+  }, [assetId, bars]);
+  return peaks;
+}
+
+/**
+ * 波形当进度条:一排竖条,放过的那一截着主色、没放到的淡着;按下就跳、拖着跟手(和 Scrubber 同一套跟手与键盘)。
+ * 还没有波形(`peaks` 空)时退回那条细进度条 —— 高度由调用方定,两种样子占同一块地方,波形到了版面不跳。
+ */
+export function WaveformScrubber({
+  media,
+  peaks,
+  at,
+  total,
+  className,
+}: {
+  media: React.RefObject<HTMLMediaElement | null>;
+  peaks: number[];
+  at: number;
+  total: number;
+  className?: string;
+}) {
+  const t = useI18n();
+  const { shown, scrub, release } = useScrub(media, at);
+  if (peaks.length === 0) {
+    return (
+      <div className={cn("flex items-center", className)}>
+        <Scrubber media={media} at={at} total={total} className="w-full text-primary" trackClassName="bg-border-strong" />
+      </div>
+    );
+  }
+  const played = total > 0 ? Math.min(1, shown / total) : 0;
+  const seek = (event: React.PointerEvent<HTMLDivElement>) => {
+    const element = media.current;
+    const box = event.currentTarget.getBoundingClientRect();
+    if (!element || box.width <= 0 || !Number.isFinite(element.duration)) return;
+    scrub(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * element.duration);
+  };
+  return (
+    <div
+      role="slider"
+      aria-label={t("mediaSeek")}
+      aria-valuemin={0}
+      aria-valuemax={Number.isFinite(total) ? total : 0}
+      aria-valuenow={shown}
+      tabIndex={0}
+      data-waveform=""
+      onKeyDown={(event) => {
+        const element = media.current;
+        if (!element || !Number.isFinite(element.duration)) return;
+        const value = event.key === "Home" ? 0 : event.key === "End" ? element.duration
+          : event.key === "ArrowRight" ? element.currentTime + 5 : event.key === "ArrowLeft" ? element.currentTime - 5 : null;
+        if (value === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        element.currentTime = Math.max(0, Math.min(element.duration, value));
+      }}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        seek(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) seek(event);
+      }}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        release();
+      }}
+      onPointerCancel={release}
+      className={cn("nodrag nopan cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring", className)}
+    >
+      <svg viewBox={`0 0 ${peaks.length * 4} 32`} preserveAspectRatio="none" className="block h-full w-full" aria-hidden>
+        {peaks.map((peak, index) => {
+          const height = Math.max(2, peak * 30);
+          return (
+            <rect
+              key={index}
+              x={index * 4}
+              y={16 - height / 2}
+              width={2.4}
+              height={height}
+              rx={1.2}
+              className={index / peaks.length < played ? "fill-primary" : "fill-muted-foreground opacity-35"}
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/**
  * 视频播放器:画面 + 悬停才出现的控件条 + 没在播时压一枚大播放键。
  *
  * 画板节点、大图灯箱、智能体工具结果共用这一副面孔 —— 原生 controls 各家各样、
@@ -188,6 +311,12 @@ export function VideoPlayer({
   onExpand,
   compact = false,
   startAt,
+  endAt,
+  poster,
+  loop,
+  muted: startMuted,
+  label,
+  onError,
   onPlaybackChange,
 }: {
   /** 按素材 id 取带令牌的地址。 */
@@ -202,12 +331,23 @@ export function VideoPlayer({
   onNaturalSize?: (width: number, height: number) => void;
   /** 挂上来就从第几秒开始。给「卸掉又挂回来」的调用方(画板离屏卸载)接上进度,不是跳回开头。 */
   startAt?: number;
+  /** 只放到第几秒(笔记引用的那一段)。 */
+  endAt?: number | null;
+  /** 还没放时的那一帧(模型库的预览视频用缩略图)。 */
+  poster?: string;
+  loop?: boolean;
+  /** 一开始就静音。 */
+  muted?: boolean;
+  /** 读屏念的名字(画面本身没有字)。 */
+  label?: string;
+  /** 放不出来(地址失效、格式不认):调用方换成别的样子。 */
+  onError?: () => void;
   /** 播放状态与进度变化时报一声。调用方据此决定卸不卸、以及下次从哪儿接着放。 */
   onPlaybackChange?: (state: { playing: boolean; at: number }) => void;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLVideoElement | null>(null);
-  const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
+  const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref, { muted: startMuted, endAt });
 
   //: 报给调用方,不自己存 —— 谁关心谁留着。effect 而不是在回调里直接叫,是因为 at/playing
   //: 是 usePlayback 的状态:在它更新之前叫,报出去的是上一拍的数。
@@ -222,6 +362,10 @@ export function VideoPlayer({
         src={assetSrc ?? assetFileUrl(assetId ?? "")}
         preload="metadata"
         autoPlay={autoPlay}
+        poster={poster}
+        loop={loop}
+        muted={startMuted}
+        aria-label={label}
         playsInline
         //: **这里不挂 nodrag** —— 视频铺满整个容器,挂上去就等于整块都拖不动。
         className="h-full w-full object-contain"
@@ -237,6 +381,10 @@ export function VideoPlayer({
           if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
         }}
         {...bind}
+        onError={() => {
+          bind.onError();
+          onError?.();
+        }}
       />
 
       {/* 没在播时压一个大的播放键 —— 一块静止的画面本身看不出它是段视频。 */}
@@ -287,15 +435,23 @@ export function AudioPlayerBar({
   className,
   showIcon = true,
   autoPlay = false,
+  preload = "metadata",
+  startAt,
+  endAt,
 }: {
   src: string;
   className?: string;
   showIcon?: boolean;
   autoPlay?: boolean;
+  /** 一列里摆了十几条的(最近生成的朗读、任务结果)用 `none`:点了才去取,不为了显示时长一次拉十几个文件。 */
+  preload?: "metadata" | "none";
+  /** 只放一段(笔记引用的那一段):从第几秒开始、到第几秒停。 */
+  startAt?: number;
+  endAt?: number | null;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLAudioElement | null>(null);
-  const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
+  const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref, { endAt });
 
   return (
     <div className={cn("flex h-full w-full items-center gap-2 px-3 text-muted-foreground", className)}>
@@ -303,9 +459,13 @@ export function AudioPlayerBar({
         ref={ref}
         src={src}
         autoPlay={autoPlay}
-        preload="metadata"
+        preload={preload}
         className="hidden"
-        onLoadedMetadata={(event) => setTotal(event.currentTarget.duration)}
+        onLoadedMetadata={(event) => {
+          const audio = event.currentTarget;
+          setTotal(audio.duration);
+          if (startAt && Number.isFinite(audio.duration) && startAt < audio.duration) audio.currentTime = startAt;
+        }}
         {...bind}
       />
       <IconButton

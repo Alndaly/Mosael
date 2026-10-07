@@ -2,10 +2,9 @@ import React from "react";
 import { Maximize2, Music2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { fetchWaveform } from "@/api/client";
 import { IconButton } from "@/components/ui/icon-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mediaClock, usePlayback, useScrub } from "./media-playback";
+import { mediaClock, usePlayback, useScrub, useWaveformPeaks } from "./media-playback";
 
 /** Full preview transport. The viewing area and controls never overlap. */
 export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
@@ -20,22 +19,7 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
   const { playing, muted, at, total, error, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
   const [volume, setVolume] = React.useState(1);
   const [speed, setSpeed] = React.useState("1");
-  const [peaks, setPeaks] = React.useState<number[]>([]);
-  React.useEffect(() => {
-    if (kind !== "audio" || !assetId) return;
-    let active = true;
-    void fetchWaveform(assetId).then((wave) => {
-      if (!active || !wave.peaks.length) return;
-      const step = Math.max(1, Math.ceil(wave.peaks.length / 96));
-      const sampled: number[] = [];
-      for (let i = 0; i < wave.peaks.length; i += step) {
-        sampled.push(Math.max(...wave.peaks.slice(i, i + step).map((value) => Math.abs(value))));
-      }
-      const max = Math.max(...sampled, .001);
-      setPeaks(sampled.map((value) => value / max));
-    }).catch(() => { /* A missing waveform must not prevent playback. */ });
-    return () => { active = false; };
-  }, [assetId, kind]);
+  const peaks = useWaveformPeaks(kind === "audio" ? assetId : undefined, 96);
   const duration = Number.isFinite(total) ? total : 0;
   const { shown, scrub, release } = useScrub(ref, at);
   const props = {

@@ -662,13 +662,15 @@ describe("预览视频", () => {
     expect(clip.querySelector("video"), "模糊着自己动起来等于没糊:不播").toBeNull();
   });
 
-  it("详情里能播(控件在、静音、循环);模糊着先是第一帧,点「看清」才是视频", async () => {
+  it("详情里能播(全站的播放器、静音、循环,不是浏览器自带的控件条);模糊着先是第一帧,点「看清」才是视频", async () => {
     await open();
     fireEvent.click(within(card("clip.safetensors")).getByRole("button", { name: "clip.safetensors" }));
     await screen.findByRole("button", { name: "modelLibraryBack" });
     const media = () => document.querySelector<HTMLElement>("[data-library-detail-pane='media']")!;
-    const player = media().querySelector<HTMLVideoElement>("[data-detail-video]")!;
-    expect(player.controls && player.muted && player.loop).toBe(true);
+    const player = media().querySelector<HTMLVideoElement>("[data-detail-video] video")!;
+    expect(player.muted && player.loop).toBe(true);
+    expect(player.controls).toBe(false);
+    expect(within(media()).getByRole("button", { name: "boardUnmute" })).toBeInTheDocument();
     expect(player.autoplay).toBe(false);
     expect(player.getAttribute("poster")).toBe("thumbnail://i1/loras/clip.safetensors");
     fireEvent.click(screen.getByRole("button", { name: "modelLibraryBack" }));

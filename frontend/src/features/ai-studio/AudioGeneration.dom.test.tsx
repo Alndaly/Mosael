@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -262,5 +262,29 @@ describe("音频生成的结果", () => {
     expect(within(items[1]).getByText(/genAudioTrack/)).toBeInTheDocument();
     // 不是缩略图
     expect(list.querySelector("img")).toBeNull();
+  });
+
+  //: 维护者:「音频生成的这里卡片 UI 太丑了 避免使用这种原生组件」—— 每一首是全站同一套播放机件拼的卡片
+  it("每一首是应用自己的播放卡:播放、进度、时长、静音、保存到本地、在素材库里打开 —— 不是浏览器自带的控件条", async () => {
+    renderStudio({
+      generations: [
+        {
+          id: "g1", workspace_id: "w1", session_id: "s1", job_id: null, provider_profile_id: "p1", provider: "evolink",
+          model: "suno-v5-beta", kind: "audio", request: { prompt: "夏夜城市流行", parameters: {} }, result_asset_id: "a1",
+          result_asset_ids: ["a1", "a2"], created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:01:00Z",
+          costs: [], cost_confidence: null,
+        },
+      ],
+    });
+    const list = await screen.findByRole("list", { name: "genAudioResults" });
+    expect(list.querySelector("audio[controls]"), "浏览器自带的那一条").toBeNull();
+    const [first] = within(list).getAllByRole("listitem");
+    for (const name of ["boardPlay", "boardMute", "assetSaveLocal", "documentOpenAsset"]) {
+      expect(within(first).getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(within(first).getByRole("slider", { name: "mediaSeek" })).toBeInTheDocument();
+    expect(first.textContent).toContain("0:00 / 0:00");
+    fireEvent.click(within(first).getByRole("button", { name: "documentOpenAsset" }));
+    expect(window.location.hash).toBe("#/media");
   });
 });

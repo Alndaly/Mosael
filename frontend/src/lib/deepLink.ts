@@ -54,6 +54,14 @@ export function gotoRecord(route: string, event?: string, id?: unknown): void {
   if (event && typeof id === "string" && id) emitOpenEvent(event, id);
 }
 
+/** 素材库那一侧收的「打开这一份」(见 MediaLibraryView)。 */
+export const OPEN_ASSET_EVENT = "mosael:open-asset";
+
+/** 去素材库,打开这一份的详情。 */
+export function gotoAsset(assetId: string): void {
+  gotoRecord("/media", OPEN_ASSET_EVENT, assetId);
+}
+
 /**
  * 「进入某个页面的**起点**」—— 列表页,而不是它上次停在的那条详情。
  *

@@ -38,6 +38,7 @@ import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { LibraryDetail, LibrarySection } from "@/components/app/LibraryBrowser";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ConfirmDialog } from "@/components/app/modals";
+import { VideoPlayer } from "@/components/app/media-playback";
 import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import {
   ModelThumb,
@@ -679,6 +680,17 @@ function UseToGenerate({
  */
 const DETAIL_PREVIEW_FRAME = "max-h-[640px] w-full [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
 
+/** 详情里的预览视频:框按片子自己的比例(元数据回来之前先按 16:9),静音、循环,第一帧是缩略图。 */
+function DetailVideo({ src, poster, label, onFailed }: { src: string; poster: string; label: string; onFailed: () => void }) {
+  const [ratio, setRatio] = React.useState(16 / 9);
+  return (
+    <div data-detail-video="" className={cn(DETAIL_PREVIEW_FRAME, "block")} style={{ aspectRatio: ratio }}>
+      <VideoPlayer assetSrc={src} poster={poster} loop muted label={label} onError={onFailed}
+                   onNaturalSize={(width, height) => setRatio(width / height)} className="bg-secondary" />
+    </div>
+  );
+}
+
 /**
  * 一个模型文件的详情(LibraryDetail 的骨架):头上是名字、目录 · 大小 · 底模和常用操作;左栏预览(照预览图那两组设置:
  * 模糊的悬停或点「看清」才清楚,不显示的点「显示这一张」才去取);右栏概要(底模和判据、NSFW 和凭什么、触发词点一下复制、
@@ -779,18 +791,12 @@ export function ModelDetail({
                             className={model.preview_kind === "video" && treatment === "clear" ? "bottom-14 right-3" : "bottom-3 right-3"} />
       )}
       {model.preview_kind === "video" && treatment === "clear" ? (
-        // 预览是一段视频:能播(静音、循环,控件在);模糊着时上面那一枚是它的第一帧,不自己播
-        <video
-          data-detail-video=""
+        // 预览是一段视频:能播(静音、循环,全站同一副播放器,不是浏览器自带的控件条);模糊着时上面那一枚是它的第一帧,不自己播
+        <DetailVideo
           src={modelPreviewUrl(instanceId, model.folder, model.name, previewPick(settings))}
           poster={modelThumbnailUrl(instanceId, model.folder, model.name, previewPick(settings))}
-          controls
-          muted
-          loop
-          playsInline
-          aria-label={t("modelPreviewVideo").replace("{name}", baseName(model.name))}
-          className={cn(DETAIL_PREVIEW_FRAME, "block object-contain")}
-          onError={() => setPreviewFailed(true)}
+          label={t("modelPreviewVideo").replace("{name}", baseName(model.name))}
+          onFailed={() => setPreviewFailed(true)}
         />
       ) : (
         <ModelThumb

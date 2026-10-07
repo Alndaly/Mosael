@@ -27,7 +27,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useAssetPages } from "@/lib/assetQueries";
-import { emitOpenEvent } from "@/lib/deepLink";
+import { emitOpenEvent, OPEN_ASSET_EVENT } from "@/lib/deepLink";
 import { listenKeys } from "@/lib/shortcuts";
 
 
@@ -279,7 +279,7 @@ export function CommandPalette({
         onSelect: () => {
           onNavigate("media");
           // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
-          emitOpenEvent("mosael:open-asset", asset.id);
+          emitOpenEvent(OPEN_ASSET_EVENT, asset.id);
         },
         content: (
           <>

@@ -7,7 +7,7 @@ import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import React from "react";
-import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
+import { OPEN_ASSET_EVENT, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
@@ -205,7 +205,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const refresh = () => qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
 
   // Cmd+K 面板选中素材后跳转到本页并直接打开详情(统一先进详情卡,图片也一样,要看大图再从卡里点开)。
-  useOpenRequest("mosael:open-asset", (assetId) => {
+  useOpenRequest(OPEN_ASSET_EVENT, (assetId) => {
     setPreviewingId(assetId);
   });
 

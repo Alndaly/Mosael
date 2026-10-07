@@ -2,6 +2,7 @@ import React from "react";
 import { FileText, Film, Music } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, type Job } from "@/api/client";
+import { AudioPlayerBar } from "@/components/app/media-playback";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { noteHref } from "@/lib/deepLink";
@@ -93,7 +94,7 @@ export function JobResult({ job }: { job: Job }) {
           <div key={id} className="flex min-w-0 items-center gap-2 rounded-md bg-secondary/40 px-2 py-1.5">
             <Music size={14} className="shrink-0 text-muted-foreground" />
             <Truncate className="max-w-[40%] text-ui-xs">{byId.get(id)?.name}</Truncate>
-            <audio controls preload="none" src={assetFileUrl(id)} className="h-7 min-w-0 flex-1" />
+            <AudioPlayerBar src={assetFileUrl(id)} preload="none" showIcon={false} className="h-7 min-w-0 flex-1 px-0" />
           </div>
         ))}
       {outputs.map((one, index) =>

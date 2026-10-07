@@ -14,6 +14,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { AudioPlayerBar } from "@/components/app/media-playback";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
@@ -292,7 +293,11 @@ function RecentAudio({ workspace, source }: { workspace: Workspace; source: stri
                 </span>
               )}
             </div>
-            <audio className="h-8 w-full" controls preload="none" src={assetFileUrl(asset.id)} />
+            <AudioPlayerBar
+              src={assetFileUrl(asset.id)}
+              preload="none"
+              className="h-9 rounded-lg border border-border bg-panel"
+            />
           </li>
         ))}
       </ul>
