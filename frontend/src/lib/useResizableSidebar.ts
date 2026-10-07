@@ -45,6 +45,13 @@ export const HANDLE_COLUMN = `w-2 cursor-col-resize touch-none before:h-9 before
 /** 横着拖(拉高时间线):同一根条子转九十度。 */
 export const HANDLE_ROW = `h-2 cursor-row-resize touch-none before:h-0.5 before:w-9 ${HANDLE_PILL}`;
 
+/**
+ * 分割线左边是**原生视图**(盖在一切 DOM 上,ComfyUI 工作台右边那一列就是)时的竖拖柄:热区不能骑在线的正中 —— 左边那一半
+ * 在原生视图底下,看不见、也点不到。所以热区整个放在列里、从线上起(`-left-px`:列自己的 1px 左边线算在里面),竖条靠左
+ * 贴着线(`before:ml-0`)—— 看上去和别处一样压在分割线上,只是不往线左边伸。和 HANDLE_COLUMN 一起用。
+ */
+export const HANDLE_ON_LEFT_EDGE = "-left-px before:ml-0";
+
 /** 贴满整条边的竖拖柄 —— 侧栏用这个(剪辑页的三条各自内缩,自己拼 HANDLE_COLUMN)。 */
 export const SIDEBAR_HANDLE_CLASS = `absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`;
 

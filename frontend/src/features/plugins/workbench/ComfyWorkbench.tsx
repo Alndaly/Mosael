@@ -21,7 +21,7 @@ import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { useWorkbench, workbenchCall } from "@/features/plugins/workbench/workbenchSession";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
-import { HANDLE_COLUMN } from "@/lib/useResizableSidebar";
+import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
@@ -234,8 +234,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           {...column.handleProps}
           aria-label={t("workbenchColumnResize")}
           data-workbench-resize=""
-          className={cn("absolute inset-y-0 left-0 z-10 focus-visible:outline-none focus-visible:before:bg-primary", HANDLE_COLUMN,
-                        column.dragging && "before:bg-primary")}
+          //: 竖条压在列左边那条分割线上(和别处的拖柄一样);线左边是原生的画布,热区不往那边伸(见 HANDLE_ON_LEFT_EDGE)
+          className={cn("absolute inset-y-0 z-10 focus-visible:outline-none focus-visible:before:bg-primary", HANDLE_COLUMN,
+                        HANDLE_ON_LEFT_EDGE, column.dragging && "before:bg-primary")}
         />
         <div role="tablist" aria-label={t("workbenchColumn")} className="flex h-11 flex-none items-stretch gap-1 border-b border-border px-2">
           {TABS.map((one) => (

@@ -81,6 +81,7 @@ import type { WorkflowApp } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { installAppChromeGuards } from "@/components/ui/appChrome";
 import { comboFromEvent, listenKeys } from "@/lib/shortcuts";
+import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { declaresDrag, noDragAfter } from "@/test/dragRegions";
 import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
 import { ComfyWorkbench } from "./ComfyWorkbench";
@@ -622,6 +623,16 @@ describe("右边那一列拉宽拉窄", () => {
     fireEvent.pointerUp(window, { pointerId: 1 });
     expect(document.querySelector("[data-workbench-drag-guard]")).toBeNull();
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_MIN));
+  });
+
+  it("拖柄的竖条压在列左边那条分割线上、和别处一样;热区不往线左边(原生的画布底下)伸", async () => {
+    //: 维护者:「这个拖动边界手柄为何有间距了,和其他的手柄设计语言不一致」—— 热区从列的边线之后起、竖条居中,离线 4px
+    await mount();
+    const classes = handle().className.split(/\s+/);
+    expect(classes, "外观是全应用那一份").toEqual(expect.arrayContaining(HANDLE_COLUMN.split(" ")));
+    expect(classes, "从列自己那条 1px 边线上起、竖条靠左贴着线").toEqual(expect.arrayContaining(HANDLE_ON_LEFT_EDGE.split(" ")));
+    expect(classes, "不再从边线之后起").not.toContain("left-0");
+    expect(column().className).toMatch(/\bborder-l\b/);
   });
 
   it("松手落在原生视图上(渲染层没收到 pointerup):回来第一下没按着键就当松手;窗口失焦也收住", async () => {

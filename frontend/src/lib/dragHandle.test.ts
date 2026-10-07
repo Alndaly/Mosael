@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { HANDLE_COLUMN, HANDLE_PILL, HANDLE_ROW, HANDLE_SIZE, handleOffset } from "./useResizableSidebar";
+import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE, HANDLE_PILL, HANDLE_ROW, HANDLE_SIZE, handleOffset } from "./useResizableSidebar";
 
 const SRC = join(import.meta.dirname, "..");
 const DEFINITION = join(SRC, "lib", "useResizableSidebar.ts");
@@ -61,6 +61,14 @@ describe("拖柄只有一份定义", () => {
       .map((path) => path.slice(SRC.length + 1));
     expect(offenders).toEqual([]);
     expect(handleOffset(300)).toBe(300 - HANDLE_SIZE / 2);
+  });
+
+  it("分割线左边是原生视图时:热区从线上起(不往原生视图底下伸)、竖条靠左贴着线 —— 看上去仍压在线上", () => {
+    //: 工作台右边那一列:热区从列的边线之后起、竖条居中时,离线 4px(维护者:「为何有间距了,和其他的手柄设计语言不一致」)
+    const classes = HANDLE_ON_LEFT_EDGE.split(" ");
+    expect(classes, "从列自己那条 1px 边线上起").toContain("-left-px");
+    expect(classes, "竖条贴着左边,不居中").toContain("before:ml-0");
+    expect(HANDLE_PILL, "别处照旧居中").toContain("before:m-auto");
   });
 
   it("这道棘轮扫得到东西 —— 别变成空转", () => {
