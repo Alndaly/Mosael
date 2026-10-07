@@ -11,16 +11,22 @@
 要变时插件随新版本带一个改写那台机器上工作流文件的 op,宿主确认一次改写。没有 `extra.mosael` 的图,节点上的标记不算
 (从别的工作流拷过来的节点带着的)。
 
+**表单是工作流的入口**(ADR 0045):一张工作流有一个**完整工作流**入口(全部能填的项,永远在)和它上面每张表单各一个
+入口。这一版的文件里至多一张表单,它的表单 id 固定是 `app`(取它在 `extra.mosael` 里的键名)—— 第二步一张图能有几张表单,
+文件改写成新格式时这一张就写成 `{"id": "app", …}`,存着的引用不用再改。
+
 - `read(ui_graph)` → Marks:文件里写着什么;
-- `resolve(marks, api, …)` → (graph.Form, 失效的项):每一项核对一遍 —— 节点还在会跑的那部分图里(graph.live)、那一格还是
-  一个能填的字面量(没被拉成连线)、`choices` 还在下拉里;对不上的不进表单,列出来(工作流库里「一键去掉」);
+- `resolve(marks, api, …)` → Resolved:完整工作流的表单、每张表单、失效的项。每一项核对一遍 —— 节点还在会跑的那部分图里
+  (graph.live)、那一格还是一个能填的字面量(没被拉成连线)、`choices` 还在下拉里;对不上的不进表单,列出来(工作流库里
+  「一键去掉」);
 - `apply(ui_graph, app, results)` → 只改 `mosael` 那几处标记的新图(`annotate`,见 workflow_library)。
 """
 
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, replace
+import re
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import graph
@@ -38,6 +44,10 @@ MAX_CHOICES = 1000
 MAX_RESULTS = 64
 #: 没写 `order` 的项排在最后。
 _LAST = 1 << 20
+#: 这一版文件里那唯一一张表单的 id(ADR 0045 §1):它在 `extra.mosael` 里的键名。
+FORM_ID = "app"
+#: 表单 id 的样子:小写字母和数字,1–8 位,只在一张工作流里唯一。
+FORM_ID_PATTERN = re.compile(r"^[a-z0-9]{1,8}$")
 
 
 @dataclass(frozen=True)
@@ -173,17 +183,32 @@ def _problem(mark: Mark, item: dict[str, Any] | None, api: dict[str, Any]) -> di
     return {"zh": f"「{mark.input}」不是一个能放进应用表单的项", "en": f"“{mark.input}” can't be part of an app form."}
 
 
-def resolve(marks: Marks, api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, str] | None = None,
-            found: list[dict[str, Any]] | None = None) -> tuple[graph.Form, list[dict[str, Any]]]:
-    """文件里的标记 → 这张图的表单,和对不上的那几项(`{key, node, input, label, result?, problem}`)。
+@dataclass(frozen=True)
+class Resolved:
+    """一张图的几个入口用的表单(ADR 0045):`full` 是完整工作流(全部能填的项 + 标了的结果),`forms` 是表单 id → 那张表单
+    (按文件里的顺序;这一版至多一张 `app`),`invalid` 是对不上的那几项(`{key, node, input, label, result?, problem}`)。"""
 
-    没有标记、或者版本不认识:缺省的应用(全部能填的项)。只有结果标记:缺省的应用 + 标了的结果。有应用表单:作者挑的那几项,
-    按作者排的顺序;`main` 只对文字项有意义,`choices` 只对下拉和选模型文件的项有意义(别的项上写了也不理)。
+    full: graph.Form
+    forms: dict[str, graph.Form] = field(default_factory=dict)
+    invalid: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def shown(self) -> graph.Form:
+        """工作流库、工作台的编辑器摆的那一张:有表单是表单,没有是完整工作流。"""
+        return self.forms.get(FORM_ID, self.full)
+
+
+def resolve(marks: Marks, api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, str] | None = None,
+            found: list[dict[str, Any]] | None = None) -> Resolved:
+    """文件里的标记 → 这张图的几个入口的表单,和对不上的那几项。
+
+    完整工作流永远在:全部能填的项,加上标了的结果。有表单时多一张(作者挑的那几项,按作者排的顺序;`main` 只对文字项有意义,
+    `choices` 只对下拉和选模型文件的项有意义,别的项上写了也不理)。没有标记、或者版本不认识:只有完整工作流。
     """
     titles = titles or {}
     found = found if found is not None else graph.items(api, object_info, titles)
     if marks.status != "ok":
-        return graph.default_form(found), []
+        return Resolved(graph.default_form(found))
     outputs = {node["node"] for node in graph.output_nodes(api, object_info, titles)}
     invalid: list[dict[str, Any]] = [
         {"key": node, "node": node, "input": "", "label": "", "result": True,
@@ -193,8 +218,9 @@ def resolve(marks: Marks, api: dict[str, Any], object_info: dict[str, Any], titl
         for node in marks.results if node not in outputs
     ]
     results = frozenset(node for node in marks.results if node in outputs)
+    full = replace(graph.default_form(found), results=results)
     if not marks.app:
-        return replace(graph.default_form(found), results=results), invalid
+        return Resolved(full, invalid=invalid)
     by_key = {item["key"]: item for item in found}
     fields: list[graph.Field] = []
     for mark in marks.exposed:
@@ -210,12 +236,13 @@ def resolve(marks: Marks, api: dict[str, Any], object_info: dict[str, Any], titl
             main=mark.main and item["kind"] == "text",
             choices=mark.choices if item["kind"] in ("choice", "model") else None,
         ))
-    return graph.Form(tuple(fields), app=True, title=marks.title, description=marks.description,
-                      results=results), invalid
+    form = graph.Form(tuple(fields), app=True, title=marks.title, description=marks.description, results=results)
+    return Resolved(full, {FORM_ID: form}, invalid)
 
 
-def summary(marks: Marks, form: graph.Form, invalid: list[dict[str, Any]], locale: str = "zh") -> dict[str, Any]:
-    """给人看的样子:有没有应用表单、版本、标题、说明、文件里的每一项(对不上的带着原因,按读的人的语言)、标成结果的节点。"""
+def summary(marks: Marks, resolved: Resolved, locale: str = "zh") -> dict[str, Any]:
+    """给人看的样子:有没有表单、版本、标题、说明、文件里的每一项(对不上的带着原因,按读的人的语言)、标成结果的节点。"""
+    form, invalid = resolved.shown, resolved.invalid
     bad = {one["key"]: say(locale, one["problem"]["zh"], one["problem"]["en"])
            for one in invalid if not one.get("result") and one.get("problem")}
     zh = (locale or "zh").lower().startswith("zh")
@@ -320,4 +347,5 @@ def apply(ui_graph: dict[str, Any], app: dict[str, Any] | None, results: list[st
     return out
 
 
-__all__ = ["KEY", "Mark", "Marks", "NONE", "VERSION", "apply", "read", "resolve", "summary"]
+__all__ = ["FORM_ID", "FORM_ID_PATTERN", "KEY", "Mark", "Marks", "NONE", "Resolved", "VERSION", "apply", "read", "resolve",
+           "summary"]

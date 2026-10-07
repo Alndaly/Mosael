@@ -46,25 +46,36 @@ def _text(value: Any, locale: str) -> str:
 
 
 def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """保存的每张工作流(加内置文生图):能喂什么、能调什么、会交出什么,跑它用哪个工具。"""
+    """保存的每张工作流(加内置文生图):能喂什么、能调什么、会交出什么,跑它用哪个工具 —— 说的是**完整工作流**;它上面的
+    表单(ADR 0045:表单是工作流的入口)列在 `forms` 里,各带自己的模型 id 和工具。按工作流名、文件路径、表单标题都搜得到。"""
     query = str(payload.get("query") or "").strip().lower()
     object_info = comfy.object_info()
     found: list[dict[str, Any]] = []
-    entries = list(models.each(comfy, object_info, locale))
-    names = tooling.tool_names(entries)
-    for entry in entries:
-        form = models.form_of(entry, object_info) if not entry.problem else None
-        #: 和这张图的工具、模型下拉里那一项同一个名字(graph.Form.named);按文件路径(`id`)也搜得到
-        name = _text(form.named(entry.label) if form else entry.label, locale)
-        if query and query not in entry.id.lower() and query not in name.lower():
+    workflows = list(models.each(comfy, object_info, locale))
+    by_workflow = {workflow.id: models.entries(workflow, object_info) for workflow in workflows}
+    names = tooling.tool_names([entry for entries in by_workflow.values() for entry in entries])
+    for workflow in workflows:
+        entries = by_workflow[workflow.id]
+        name = _text(workflow.label, locale)
+        forms = [entry for entry in entries if entry.form_id]
+        said = [workflow.id, name, *(_text(entry.name, locale) for entry in forms)]
+        if query and not any(query in one.lower() for one in said):
             continue
-        if form is None:
-            found.append({"id": entry.id, "label": name, "error": entry.problem})
+        if not entries:
+            found.append({"id": workflow.id, "label": name, "error": workflow.problem})
             continue
-        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale, form)
-        if entry.id in names and tooling.runnable(entry, object_info):
+        full = entries[0]
+        described = inspect(workflow.id, name, workflow.api, object_info, workflow.titles, locale, full.form)
+        runnable = tooling.runnable(workflow, object_info)
+        if workflow.id in names and runnable:
             # 跑它用的工具(输入就是它自己的节点);一个输出节点都没有的图没有工具
-            described["tool"] = names[entry.id]
+            described["tool"] = names[workflow.id]
+        if forms:
+            described["forms"] = [
+                {"id": entry.form_id, "title": _text(entry.name, locale), "description": entry.form.description,
+                 "model": entry.id, **({"tool": names[entry.id]} if entry.id in names and runnable else {})}
+                for entry in forms
+            ]
         found.append(described)
     return {
         "workflows": found,
@@ -75,8 +86,8 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
 
 def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[str, Any],
             titles: dict[str, str], locale: str, form: graph.Form | None = None) -> dict[str, Any]:
-    """一张图能喂什么、能调什么、会交出什么 —— 说的是它的表单(`form`,见 graph.Form):有应用表单就是作者挑的那几项、
-    作者起的名字,和这张图的工具、生成表单同一张表;没给就是全部能填的项。"""
+    """一张图能喂什么、能调什么、会交出什么 —— 说的是一个入口的表单(`form`,见 graph.Form):表单入口是作者挑的那几项、
+    作者起的名字,和那个入口的工具、生成表单同一张表;没给就是全部能填的项(完整工作流)。"""
     kind = graph.kind_of(api)
     form = form or graph.default_form(graph.items(api, object_info, titles))
     found_slots = form.slots()
@@ -104,7 +115,6 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
     return {
         "id": model_id,
         "label": label,
-        **({"app": {"title": form.title, "description": form.description}} if form.app else {}),
         "kind": kind,
         # 图在做什么看整张图(放大、局部重绘…),不看表单挑了哪几项
         "features": graph.features(api, object_info=object_info),

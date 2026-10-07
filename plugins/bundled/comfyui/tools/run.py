@@ -24,7 +24,6 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
-import app_form
 import graph
 import models
 from comfy_http import Comfy
@@ -612,8 +611,9 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     else:
         object_info = comfy.object_info()
         model_id = str(request.get("model") or "")
-        api, defaults, titles, marks = models.load(comfy, model_id, object_info, locale)
-        form = app_form.resolve(marks, api, object_info, titles)[0]
+        # 模型 id 是一个入口(ADR 0045):完整工作流是全部能填的项,表单入口是那张表
+        loaded, entry = models.pick(comfy, model_id, object_info, locale)
+        api, defaults, titles, form = loaded.api, loaded.defaults, loaded.titles, entry.form
         parameters = request.get("parameters") or {}
         if form.app:
             # 有应用表单时只认表单里的键(ADR 0038 §4):画板格子、工作流节点里存着的旧键不再写进图 —— 没挑的项照工作流原样跑

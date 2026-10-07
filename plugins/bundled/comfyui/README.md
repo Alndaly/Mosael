@@ -105,7 +105,8 @@ an ordinary saved workflow. On upgrade the host's migration drops that field fro
 
 ## Tools
 
-**One tool per workflow** (`wf_<id>`, "Workflow · name", see `tools/tooling.py`): the plugin reports them to the host in
+**One tool per entry** (`wf_<id>`, a form's entry `wf_<id>_<form id>`, "Workflow · name", see `tools/tooling.py`; entries are
+explained under "Forms are entries of a workflow" below): the plugin reports them to the host in
 `op: tools` (host capability `tools`, claimed by the same `comfyui_generation` as `generation`), and derives inputs and
 outputs from that graph: the prompts, every node that loads an asset (`image_10`, `mask_11`, `video_1`…), every tunable
 parameter (`steps_3`…, the same names as the generation parameters), and seed / size / runs (advanced; the input key is still `num_images`, one run by default, meaning the same as in
@@ -116,15 +117,18 @@ wiring workflows (declared as `wiring_outputs`: on a board only each output node
 several runs) is the ordered list of ids, so a batch-of-2 workflow shows both images on that port, on the node and on a
 board; `asset_id` ("First output") stays the single first one for steps that take one asset.
 The tool's id comes from the id ComfyUI writes into the workflow file (stable across renames and moves between folders),
-falling back to a hash of the path; the built-in text-to-image is `wf_builtin_txt2img`. **Its label is the same name as in the model picker** (1.17.0): "Workflow · " plus the app form's title when
-the workflow has a simplified form with a title, otherwise plus the file name; with a title, the description names
-the file, so searching by either finds it. Renaming the title changes only the label, never the id.
+falling back to a hash of the path; the built-in text-to-image is `wf_builtin_txt2img`. A form's entry is the full
+workflow's tool name plus `_<form id>` (1.20.0). **Its label is the same name as in the model picker**: "Workflow · " plus
+the form's title for a form's entry, plus the file name for the full workflow; which workflow it comes from is in `group`,
+which the host shows as a second line (1.20.0). Renaming the title changes only the label, never the id. For a workflow
+with a form, the full workflow's tool carries `agent: false`: it stays out of the agent's tool list (the form is the
+version made for others), while workflow nodes, boards and the Plugins page still have it (1.20.0).
 **Each tool says which workflow it runs** (1.19.0): it also reports `workflow: {path, name}` (the path in the workflow
-library, `builtin:txt2img` for the built-in text-to-image; the same name as in the model picker). Mosael's workbench uses
-it to hand the agent only the workflows that matter this turn (the one on the canvas, those used or named in the
-conversation); the agent reaches the others by listing workflows and running one by path. Inputs are unchanged, and
-nothing changes on workflow nodes or boards. The version is part of the catalog fingerprint, so the tool list reloads
-itself after the upgrade.
+library, `builtin:txt2img` for the built-in text-to-image; the same name as in the model picker — a workflow's entries
+share the `path` and each has its own `name`). Mosael's workbench uses it to hand the agent only the workflows that
+matter this turn (the one on the canvas, those used or named in the conversation); the agent reaches the others by
+listing workflows and running one by path. Inputs are unchanged, and nothing changes on workflow nodes or boards. The
+version is part of the catalog fingerprint, so the tool list reloads itself after the upgrade.
 
 **A graph that is the same thing as a generation model declares `mirrors`**: the tool of every workflow in the model
 catalog (one that returns files, `graph.media_outputs`) carries `{"generation_model": <model id>, "kind": …}` and a
@@ -427,6 +431,32 @@ ComfyUI sits behind a reverse proxy that needs a login, sign in once in that emb
   than normal. When refused, you're told what to change or how to install by hand.
 - **Missing models**: those with a declared download URL download from the model library in one click (same dialog,
   same route).
+
+## Forms are entries of a workflow (1.20.0, ADR 0045)
+
+A workflow with a form used to be replaced by that form: the model picker, the tool and boards showed only the form's
+items under the form's name, so you could not tell which workflow it was, and the full set of parameters was out of
+reach. Now a workflow has a **full workflow** entry (everything it can take, always there) and one **form** entry per form:
+
+| | Full workflow | Form |
+| --- | --- | --- |
+| Model id | the path (`krea2-text-2-image.json`, as before) | `<path>#<form id>` (`krea2-text-2-image.json#app`) |
+| Tool name | `wf_<id>` (as before) | `wf_<id>_<form id>` (`wf_0ef16828a002_app`) |
+| Main name | the file name without `.json` | the form's title ("Form" when it has none) |
+| `group` | `{"id": path, "label": file name, "entry": "full"}` | `{…, "entry": "form"}` |
+
+- The name has two layers that are never joined into one string: the main name belongs to the entry, the workflow it
+  comes from is in `group` (the host shows "From krea2-text-2-image · connection name" as a second line, and "Full
+  workflow · connection name" for the full workflow when it has forms).
+- A file holds at most one form in this version, and its form id is always `app` (its key in `extra.mosael`); when a
+  workflow can hold several forms, the file is rewritten with this one as `{"id": "app"}`, so stored references stay.
+- **A one-off rename** (`moved`): before 1.20 a workflow's path and tool name meant its form when it had one; from this
+  version they mean the full workflow. The answers to `op: models` and `op: tools` carry
+  `moved: [{"key": "form-entries", "from": old name, "to": the form entry's name}]`, and the host does it once per
+  connection, pointing stored references (board cells, workflow nodes, AI Studio sessions, default models, generation
+  records…) at the form's entry, so what runs and what you see after the upgrade is what you had.
+- `list_workflows` lists one item per workflow describing the full workflow, with its forms under `forms` (form id,
+  title, model id, tool). The workflow library's "inputs / parameters" describe the full workflow too; forms are under "Form".
 
 ## Simplified forms (1.13.0; formerly "app forms")
 

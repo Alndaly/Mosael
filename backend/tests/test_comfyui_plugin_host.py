@@ -177,12 +177,14 @@ def test_精简表单到了选择器_标题说明和表上的每一项_按看的
             node["properties"] = {"mosael": {"expose": {"steps": {"order": 1, "label": "快慢"}}}}
     comfy.state.workflows["portrait.json"] = ui
     assert client.post(f"/api/plugins/instances/{instance_id}/refresh").status_code == 200
-    caps = _options(client, "image")["portrait.json"]["capabilities"]
+    options = _options(client, "image")
+    assert "form" not in options["portrait.json"]["capabilities"], "完整工作流入口没有表(ADR 0045):参数照旧全列"
+    caps = options["portrait.json#app"]["capabilities"]
     assert caps["form"] == {"title": "快速出图", "description": "只填一句话",
                             "items": [{"key": "prompt", "label": "提示词"}, {"key": "3.steps", "label": "快慢"}]}
     assert caps["prompt"] == "optional" and caps["prompt_default"] == "a cat"
     english = client.get("/api/generation/options?kind=image", headers={"Accept-Language": "en-US"}).json()
-    portrait = next(one for one in english if one["provider"] == VENDOR and one["model"] == "portrait.json")
+    portrait = next(one for one in english if one["provider"] == VENDOR and one["model"] == "portrait.json#app")
     assert portrait["capabilities"]["form"]["items"][0] == {"key": "prompt", "label": "Prompt"}
     assert "form" not in _options(client, "image")["builtin:txt2img"]["capabilities"], "没有表的照旧按参数分栏"
 

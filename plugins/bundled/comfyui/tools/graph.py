@@ -1041,10 +1041,11 @@ class Field:
 
 @dataclass(frozen=True)
 class Form:
-    """一张图的表单:生成目录、工具入参、跑的时候写哪几格,说的都是它。
+    """一个入口的表单:生成目录、工具入参、跑的时候写哪几格,说的都是它(ADR 0045:表单是工作流的入口)。
 
-    没有应用表单时是**缺省的应用**(`default_form`:全部能填的项,认出来的提示词格写提示词);有的话是作者挑的那几项,
-    按作者排的顺序(见 app_form.resolve)。没挑的项照工作流原样跑:不进表单,也不被写。
+    完整工作流入口是**缺省的表单**(`default_form`:全部能填的项,认出来的提示词格写提示词);表单入口是作者挑的那几项,
+    按作者排的顺序(见 app_form.resolve)。没挑的项照工作流原样跑:不进表单,也不被写。这张图叫什么不归它管 —— 一张图有
+    几个入口,各有各的名字(见 models.entries)。
     """
 
     fields: tuple[Field, ...]
@@ -1059,12 +1060,6 @@ class Form:
         """写提示词的那几格(主提示词):`(节点, 输入名)` → prompt / negative。"""
         return {(one.item["node"], one.item["input"]): "negative" if one.item.get("role") == "negative" else "prompt"
                 for one in self.fields if one.kind == "text" and one.main}
-
-    def named(self, label: Any) -> Any:
-        """这张图在 Mosael 里**叫什么** —— 到处同一个名字:作者在应用表单上起了标题就是标题,否则是它自己的名字(`label`:
-        保存的工作流是文件路径去掉 `.json`,内置文生图是写死的那一对)。生成的模型下拉(describe)、每张图的工具
-        (添加节点、画布上的节点、画板的能力、智能体的工具,见 tooling)、`list_workflows` 读的都是这一条。"""
-        return self.title if self.app and self.title else label
 
     def graph_item(self, kind: str) -> Field | None:
         return next((one for one in self.fields if one.kind == kind), None)
@@ -1407,8 +1402,8 @@ def describe(
 
     model: dict[str, Any] = {
         "id": model_id,
-        # 应用的标题换掉模型下拉里那一项的名字(Form.named,和这张图的工具同一个名字);模型 id 仍是文件路径
-        "label": form.named(label),
+        # 这个入口叫什么(主名,见 models.entries):表单入口是表单标题,完整工作流是文件名
+        "label": label,
         "kind": kind,
         "modes": modes,
         "parameters": parameters,

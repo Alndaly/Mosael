@@ -71,35 +71,84 @@ def _titled(title: str) -> dict[str, Any]:
     return stored
 
 
-def test_起了精简表单标题的工作流_工具和模型下拉同一个名字_工具名不变(comfy, tmp_path: Path) -> None:
-    """维护者:同一张 krea2-text-2-image.json,模型下拉里叫「快速用krea2生图」,添加节点、画布上的节点、画板的能力、智能体
-    的工具清单里却叫「工作流 · krea2-text-2-image」。现在一条规矩:有精简表单标题就是标题,没有才是文件名。
-    改了标题只换名字:工具名按图里的 id 起,存着的节点、智能体记着的名字不变;说明里带着文件路径,按文件名也搜得到。"""
+def _catalog(url: str, op: str) -> dict[str, Any]:
+    return runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": op}, {"SERVER_URL": url}, timeout=60).output
+
+
+def test_有表单的工作流是两个入口_完整工作流和表单_名字分两层_工具名稳(comfy, tmp_path: Path) -> None:
+    """维护者(ADR 0045):krea2-text-2-image.json 上做了表单「快速用krea2生图」,Mosael 里到处只叫表单名 —— 认不出是哪张图,
+    也拿不到全部参数。现在表单是这张工作流的一个入口:完整工作流(id 和工具名都是这张图原来的)永远在,表单入口的 id 是
+    `<路径>#app`、工具名是完整工作流的名字接 `_app`。主名是各自的(表单标题 / 文件名),「来自哪张工作流」在 `group` 里,
+    不拼成一句;说明是给模型读的,两层都写。改表单标题只换名字,工具名不变。"""
+    form_tool = PORTRAIT_TOOL + "_app"
     comfy.state.workflows["portrait.json"] = _titled("快速出图")
     tools = _tools(comfy.url, tmp_path)
-    tool = tools[PORTRAIT_TOOL]
-    assert tool["label"] == {"zh": "工作流 · 快速出图", "en": "Workflow · 快速出图"}
-    assert "「快速出图」" in tool["description"]["zh"] and "portrait.json" in tool["description"]["zh"]
-    assert "“快速出图”" in tool["description"]["en"] and "portrait.json" in tool["description"]["en"]
-    models = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "models"}, {"SERVER_URL": comfy.url},
-                                  timeout=60).output["models"]
-    assert next(one for one in models if one["id"] == "portrait.json")["label"] == "快速出图", "模型下拉同一个名字"
+    full, form = tools[PORTRAIT_TOOL], tools[form_tool]
+    assert form["label"] == {"zh": "工作流 · 快速出图", "en": "Workflow · 快速出图"}
+    assert form["group"] == {"id": "portrait.json", "label": "portrait", "entry": "form"}
+    assert "「快速出图」" in form["description"]["zh"] and "portrait.json" in form["description"]["zh"]
+    assert "“快速出图”" in form["description"]["en"] and "portrait.json" in form["description"]["en"]
+    assert list(form["input_schema"]["properties"]) == ["prompt", "include_previews"], "表单只挑了提示词那一格"
+    assert full["label"] == {"zh": "工作流 · portrait", "en": "Workflow · portrait"}
+    assert full["group"] == {"id": "portrait.json", "label": "portrait", "entry": "full"}
+    assert full["agent"] is False and "agent" not in form, \
+        "有表单的图:完整工作流不进智能体的工具表(表单就是给别人用的那张),工作流节点、画板照常有它"
+    assert {"seed", "width"} <= set(full["input_schema"]["properties"]), "完整工作流:全部能填的项"
+    assert full["mirrors"]["generation_model"] == "portrait.json"
+    assert form["mirrors"]["generation_model"] == "portrait.json#app"
+    assert [one["tool"] for one in form["replaces"]] == ["wf_" + hashlib.sha1(b"portrait.json").hexdigest()[:12] + "_app"], \
+        "表单入口只取代它自己以前按路径哈希起的名字;选了这张图的 run_workflow 归完整工作流"
+    assert _catalog(comfy.url, "tools")["moved"] == [{"key": "form-entries", "from": PORTRAIT_TOOL, "to": form_tool}], \
+        "以前这个工具名指的是表单:宿主据此把存着的老节点改到表单入口(每个连接只做一次)"
+
+    models = _catalog(comfy.url, "models")
+    entries = {one["id"]: one for one in models["models"] if one["id"].startswith("portrait.json")}
+    assert list(entries) == ["portrait.json", "portrait.json#app"]
+    assert (entries["portrait.json#app"]["label"], entries["portrait.json"]["label"]) == ("快速出图", "portrait")
+    assert models["moved"] == [{"key": "form-entries", "from": "portrait.json", "to": "portrait.json#app"}]
+
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {"query": "快速"}, {"SERVER_URL": comfy.url},
                                   timeout=60).output["workflows"]
-    assert [(one["id"], one["label"], one["tool"]) for one in listed] == [("portrait.json", "快速出图", PORTRAIT_TOOL)]
-    by_file = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {"query": "portrait"}, {"SERVER_URL": comfy.url},
-                                   timeout=60).output["workflows"]
-    assert [one["id"] for one in by_file] == ["portrait.json"], "按文件名也找得到"
+    assert [(one["id"], one["label"], one["tool"]) for one in listed] == [("portrait.json", "portrait", PORTRAIT_TOOL)]
+    assert [(one["id"], one["title"], one["model"], one["tool"]) for one in listed[0]["forms"]] == [
+        ("app", "快速出图", "portrait.json#app", form_tool)], "按表单标题找得到它在哪张工作流上"
 
     comfy.state.workflows["portrait.json"] = _titled("换了个标题")
     renamed = _tools(comfy.url, tmp_path)
-    assert renamed[PORTRAIT_TOOL]["label"]["zh"] == "工作流 · 换了个标题", "改了标题:工具名不变,只换名字"
-    assert renamed[PORTRAIT_TOOL]["replaces"] == tool["replaces"]
+    assert renamed[form_tool]["label"]["zh"] == "工作流 · 换了个标题", "改了标题:工具名不变,只换名字"
+    assert renamed[form_tool]["replaces"] == form["replaces"]
 
     comfy.state.workflows["portrait.json"] = PORTRAIT_UI
-    plain = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL]
-    assert plain["label"]["zh"] == "工作流 · portrait", "没有精简表单:还是文件名"
-    assert "portrait.json" not in plain["description"]["zh"], "名字就是文件名时说明里不再重复"
+    plain = _tools(comfy.url, tmp_path)
+    assert form_tool not in plain and plain[PORTRAIT_TOOL]["label"]["zh"] == "工作流 · portrait"
+    assert "agent" not in plain[PORTRAIT_TOOL], "没有表单:完整工作流就是这张图唯一的工具,照常进智能体的工具表"
+    assert "portrait.json" not in plain[PORTRAIT_TOOL]["description"]["zh"], "名字就是文件名时说明里不再重复"
+    assert _catalog(comfy.url, "tools")["moved"] == []
+
+
+def test_没起标题的表单_主名叫表单(comfy, tmp_path: Path) -> None:
+    comfy.state.workflows["portrait.json"] = _titled("")
+    tool = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL + "_app"]
+    assert tool["label"] == {"zh": "工作流 · 表单", "en": "Workflow · Form"}
+    model = next(one for one in _catalog(comfy.url, "models")["models"] if one["id"] == "portrait.json#app")
+    assert model["label"] == {"zh": "表单", "en": "Form"} and model["group"]["label"] == "portrait"
+
+
+def test_跑表单入口的工具_只填表单那几格_对照表记的是入口(comfy, tmp_path: Path) -> None:
+    comfy.state.workflows["portrait.json"] = _titled("快速出图")
+    _tools(comfy.url, tmp_path)
+    cached = json.loads(next(tmp_path.glob("tools-*.json")).read_text(encoding="utf-8"))
+    assert cached[PORTRAIT_TOOL] == "portrait.json" and cached[PORTRAIT_TOOL + "_app"] == "portrait.json#app"
+    comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}}
+    hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    runtime.stream_tool(PLUGIN, ENTRY, PORTRAIT_TOOL + "_app", {"prompt": "a dog", "negative_prompt": "ugly", "steps_3": 9},
+                        {"SERVER_URL": comfy.url}, hooks=hooks, scratch_dir=scratch, data_dir=tmp_path, timeout=60)
+    submitted = next(call[2]["prompt"] for call in comfy.state.calls if call[1] == "/prompt")
+    assert submitted["6"]["inputs"]["text"] == "a dog"
+    assert (submitted["7"]["inputs"]["text"], submitted["3"]["inputs"]["steps"]) == ("blurry", 20), \
+        "表单入口只认表单上的格子:反向提示词、步数照工作流原样"
 
 
 def test_几张图撞了同一个id_都退到路径哈希_不抢名字(comfy, tmp_path: Path) -> None:

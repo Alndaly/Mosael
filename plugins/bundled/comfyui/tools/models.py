@@ -6,6 +6,10 @@
   下好一个模型,什么工作流都没存也能用;
 - 其余 —— 用户在 ComfyUI 里**保存的每一个工作流**,id 就是它在 workflows/ 下的路径(以 `.json` 结尾)。
 
+**表单是工作流的入口**(ADR 0045):一张保存的工作流有一个**完整工作流**入口(id 就是路径,全部能填的项)和它上面每张表单
+各一个**表单**入口(id 是 `<路径>#<表单 id>`,如 `krea2-text-2-image.json#app`)。目录里每个入口一项;名字分两层,主名是
+入口自己的(表单标题 / 文件名),「来自哪张工作流」放在 `group` 里,不拼成一句。
+
 (此前还有一种:连接配置里粘贴的「API 模板」`api-workflow`,给转换认不出的工作流留条退路。1.17.0 删了 —— 导出的
 API 格式 JSON 直接导进工作流库就会转成界面格式(workflow_import),它就是一张普通的保存的工作流。)
 """
@@ -24,6 +28,8 @@ from comfy_http import Comfy, is_workflow_path
 from lines import ComfyError, say
 
 BUILTIN = "builtin:txt2img"
+#: 内置文生图叫什么。
+BUILTIN_LABEL = {"zh": "内置文生图", "en": "Built-in text-to-image"}
 
 #: 最小文生图,API 格式。checkpoint 用服务器上的第一个 —— 写死一个文件名的话,除了作者那台,
 #: 每一台都跑不起来。
@@ -61,10 +67,12 @@ class Loaded(NamedTuple):
     titles: dict[str, str]
     #: 工作流里 Mosael 的标记(应用表单、标成结果的节点,见 app_form);内置文生图没有
     marks: app_form.Marks = app_form.NONE
+    #: ComfyUI 保存时写进图里的 id(见 Workflow.ident);内置文生图没有
+    ident: str = ""
 
 
 def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) -> Loaded:
-    """模型 id → 那张图(API 图、占位符的默认值、节点名字、应用表单的标记)。
+    """一张图(工作流的路径,或内置文生图)→ API 图、占位符的默认值、节点名字、表单的标记。表单入口的 id 先经 `pick` 拆开。
 
     图只留 ComfyUI 真会跑的那部分(graph.live):目录说的、填进去的、提交的是同一张图 —— 悬空的画布节点不再冒充
     「尺寸」「张数」,下游被旁路的读图节点不再冒充一格输入。"""
@@ -82,15 +90,15 @@ def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) 
                                  f"ComfyUI no longer has the workflow “{model_id}”. Click Refresh models on the Plugins page, or call list_workflows to see what exists.")) from exc
         raise
     api = graph.live(convert.to_api(ui_graph, object_info, locale), object_info)
-    return Loaded(api, {}, convert.titles_of(api), app_form.read(ui_graph))
+    return Loaded(api, {}, convert.titles_of(api), app_form.read(ui_graph), _ident(ui_graph))
 
 
 def label_of(path: str) -> str:
     return path[:-5] if path.endswith(".json") else path
 
 
-class Entry(NamedTuple):
-    """这台服务器上的一个模型(= 一张图)。"""
+class Workflow(NamedTuple):
+    """这台服务器上的一张图(保存的工作流,或内置文生图)。它有几个入口,见 `entries`。"""
 
     id: str
     label: Any
@@ -105,9 +113,93 @@ class Entry(NamedTuple):
     marks: app_form.Marks = app_form.NONE
 
 
-def form_of(entry: Entry, object_info: dict[str, Any]) -> graph.Form:
-    """这张图的表单:有应用表单就是作者挑的那几项(对不上的不进),没有就是全部能填的项(见 app_form.resolve)。"""
-    return app_form.resolve(entry.marks, entry.api, object_info, entry.titles)[0]
+#: 没起标题的表单叫什么(主名;副名里写着来自哪张工作流)。
+FORM_NAME = {"zh": "表单", "en": "Form"}
+
+
+class Entry(NamedTuple):
+    """一张图的一个入口(ADR 0045):完整工作流,或它上面的一张表单。目录里的一个模型、一个工具说的都是一个入口。"""
+
+    #: 模型 id:完整入口是那张图的 id(路径 / `builtin:txt2img`),表单入口是 `<路径>#<表单 id>`
+    id: str
+    workflow: Workflow
+    #: 空串 = 完整工作流
+    form_id: str
+    form: graph.Form
+    #: 主名:表单入口是表单标题(没起就是 FORM_NAME),完整入口是这张图自己的名字(文件名去掉 `.json`)
+    name: Any
+    #: 这张图上有没有表单(完整入口用得上:有表单时它不进智能体的工具表,见 tooling.tool_for)
+    formed: bool = False
+
+
+def entry_id(path: str, form_id: str) -> str:
+    return f"{path}#{form_id}" if form_id else path
+
+
+def split_id(model_id: str) -> tuple[str, str]:
+    """模型 id → (那张图的 id, 表单 id)。以 `.json` 结尾的是完整入口(路径里本身带 `#` 的也是);否则在最后一个 `#` 切开,
+    前一半以 `.json` 结尾、后一半是合法的表单 id 才是表单入口。别的原样交回(不是这台 ComfyUI 的模型,读的时候说找不到)。"""
+    if model_id == BUILTIN or model_id.endswith(".json"):
+        return model_id, ""
+    path, sep, form_id = model_id.rpartition("#")
+    if sep and path.endswith(".json") and app_form.FORM_ID_PATTERN.match(form_id):
+        return path, form_id
+    return model_id, ""
+
+
+def entries(workflow: Workflow, object_info: dict[str, Any]) -> list[Entry]:
+    """这张图的入口:完整工作流在前,表单按文件里的顺序。转不过来的图没有入口。"""
+    if workflow.problem:
+        return []
+    resolved = app_form.resolve(workflow.marks, workflow.api, object_info, workflow.titles)
+    formed = bool(resolved.forms)
+    found = [Entry(workflow.id, workflow, "", resolved.full, workflow.label, formed)]
+    for form_id, form in resolved.forms.items():
+        found.append(Entry(entry_id(workflow.id, form_id), workflow, form_id, form, form.title or FORM_NAME, formed))
+    return found
+
+
+def group_of(entry: Entry) -> dict[str, Any] | None:
+    """这个入口是哪张工作流的哪个入口(宿主据此把同一张的几个入口排在一起、副名写「来自 …」,见 docs/PLUGIN_MANIFEST)。
+    内置文生图不是存着的工作流,没有。"""
+    if entry.workflow.id == BUILTIN:
+        return None
+    return {"id": entry.workflow.id, "label": entry.workflow.label, "entry": "form" if entry.form_id else "full"}
+
+
+#: 一次性的改名(ADR 0045 §6):1.20 之前,一张有表单的图,它的路径 / 工具名指的是那张表单;从这一版起它们指完整工作流,
+#: 表单搬到表单入口。宿主每个连接只做一次(按 `key` 记账),把存着的老引用改到表单入口 —— 跑起来和以前一样。
+MOVED_KEY = "form-entries"
+
+
+def moved(found: list[Entry], name_of: Any = None) -> list[dict[str, str]]:
+    """`found` 里每个表单入口一条 `{key, from, to}`:`from` 是这张图完整入口的名字,`to` 是表单入口的。`name_of` 把入口
+    换成要报的名字(工具名);不给就是模型 id。"""
+    name_of = name_of or (lambda entry: entry.id)
+    by_workflow = {one.workflow.id: one for one in found if not one.form_id}
+    out: list[dict[str, str]] = []
+    for one in found:
+        full = by_workflow.get(one.workflow.id)
+        if not one.form_id or full is None:
+            continue
+        source, target = name_of(full), name_of(one)
+        if source and target and source != target:
+            out.append({"key": MOVED_KEY, "from": source, "to": target})
+    return out
+
+
+def pick(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) -> tuple[Loaded, Entry]:
+    """模型 id → 那张图和它的那个入口。图不在了照 `load` 说;图还在、表单没了另说一句。"""
+    path, form_id = split_id(model_id)
+    loaded = load(comfy, path, object_info, locale)
+    label = BUILTIN_LABEL if path == BUILTIN else label_of(path)
+    workflow = Workflow(path, label, loaded.api, loaded.titles, "", loaded.ident, loaded.marks)
+    for one in entries(workflow, object_info):
+        if one.id == entry_id(path, form_id):
+            return loaded, one
+    raise ComfyError(say(locale, f"工作流「{label_of(path)}」上已经没有这张表单了 —— 在工作流库或工作台里看看它现在有哪些表单",
+                         f"The workflow “{label_of(path)}” no longer has this form. Check its forms in the workflow library "
+                         "or the workbench."))
 
 
 def _ident(ui_graph: Any) -> str:
@@ -115,30 +207,30 @@ def _ident(ui_graph: Any) -> str:
     return raw.strip() if isinstance(raw, str) and len(raw.strip()) >= 8 else ""
 
 
-def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Entry]:
-    """这台服务器上的每个模型。
+def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Workflow]:
+    """这台服务器上的每张图(它们的入口见 `entries`)。
 
     一张图拉不下来 / 转不过来,照样交出来(带着原因)—— 目录里跳过它,`list_workflows` 把原因说出来:
     智能体问「有哪些工作流」时,一张静默消失的图比一张标着「转换失败」的图更让人摸不着头脑。工作流目录里
     不是 .json 的文件(拷进去的压缩包)也一样带着原因交出来。
     """
     if checkpoints(object_info):
-        api, _, titles, _ = load(comfy, BUILTIN, object_info, locale)
-        yield Entry(BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, titles, "")
+        loaded = load(comfy, BUILTIN, object_info, locale)
+        yield Workflow(BUILTIN, BUILTIN_LABEL, loaded.api, loaded.titles, "")
     workflows, others = comfy.saved_files()
     for path in workflows:
         try:
             ui_graph = comfy.fetch_workflow(path)
             api = graph.live(convert.to_api(ui_graph, object_info, locale), object_info)
         except Exception as exc:  # noqa: BLE001 — 一张图拉不下来 / 转不过来,别的照常列
-            yield Entry(path, label_of(path), {}, {}, str(exc) or type(exc).__name__)
+            yield Workflow(path, label_of(path), {}, {}, str(exc) or type(exc).__name__)
             continue
         if not api:
-            yield Entry(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
+            yield Workflow(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
             continue
-        yield Entry(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph), app_form.read(ui_graph))
+        yield Workflow(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph), app_form.read(ui_graph))
     for path in others:
-        yield Entry(path, path, {}, {}, _not_a_workflow(path, locale))
+        yield Workflow(path, path, {}, {}, _not_a_workflow(path, locale))
 
 
 def _not_a_workflow(path: str, locale: str) -> str:
@@ -153,25 +245,30 @@ def _not_a_workflow(path: str, locale: str) -> str:
                "This is not a workflow saved by ComfyUI (.json), so Mosael doesn't read it.")
 
 
-def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
-    """这台服务器现在有哪些模型。一张图转不过来就跳过它,不让它拖垮整份清单。
+def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
+    """这台服务器现在有哪些模型:每张图的每个入口一项(`models`),加上一次性的改名(`moved`,见 MOVED_KEY)。一张图转不过来
+    就跳过它,不让它拖垮整份清单。
 
     **不交出文件的图不是模型**(反推提示词、打标签这类只交出一段字的,见 graph.media_outputs):生成是
-    「一段提示词 → 一份成片」,它们交不出成片。它们照样是工具(每张图一个,见 tooling),在工作流里、画板上用。
+    「一段提示词 → 一份成片」,它们交不出成片。它们照样是工具(每个入口一个,见 tooling),在工作流里、画板上用。
     """
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
-    for entry in each(comfy, object_info, locale):
-        if entry.problem:
+    listed: list[Entry] = []
+    for workflow in each(comfy, object_info, locale):
+        if workflow.problem or not graph.media_outputs(workflow.api, object_info, workflow.titles):
             continue
-        if not graph.media_outputs(entry.api, object_info, entry.titles):
-            continue
-        model = graph.describe(entry.id, entry.label, entry.api, object_info, entry.titles, form_of(entry, object_info))
-        if entry.id == BUILTIN:
-            model["parameters"]["size"]["default"] = "1024x1024"
-            model["prompt_dialect"] = "sd-tags"
-        models.append(model)
-    return models
+        for entry in entries(workflow, object_info):
+            model = graph.describe(entry.id, entry.name, workflow.api, object_info, workflow.titles, entry.form)
+            if entry.id == BUILTIN:
+                model["parameters"]["size"]["default"] = "1024x1024"
+                model["prompt_dialect"] = "sd-tags"
+            group = group_of(entry)
+            if group is not None:
+                model["group"] = group
+            models.append(model)
+            listed.append(entry)
+    return {"models": models, "moved": moved(listed)}
 
 
 #: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。

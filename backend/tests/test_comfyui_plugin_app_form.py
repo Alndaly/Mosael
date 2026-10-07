@@ -80,11 +80,12 @@ def _api(plugin, ui: dict[str, Any], object_info: dict[str, Any] = OBJECT_INFO) 
 
 
 def _form(plugin, ui: dict[str, Any], object_info: dict[str, Any] = OBJECT_INFO):
+    """这张图的表单入口那一张(没有表单就是完整工作流),和对不上的那几项。"""
     _, _, app_form = plugin
     api, titles = _api(plugin, ui, object_info)
     marks = app_form.read(ui)
-    form, invalid = app_form.resolve(marks, api, object_info, titles)
-    return api, titles, marks, form, invalid
+    resolved = app_form.resolve(marks, api, object_info, titles)
+    return api, titles, marks, resolved.shown, resolved.invalid
 
 
 def _strip(ui: dict[str, Any]) -> dict[str, Any]:
@@ -278,8 +279,7 @@ def test_应用表单_目录里只有作者挑的那几项_按作者排的顺序
     api, titles, marks, form, invalid = _form(plugin, ui)
     assert marks.status == "ok" and marks.app and invalid == []
     assert [field.key for field in form.fields] == ["10.image", "14.image", "6.text", "20.lora_name", "3.steps", "seed"]
-    model = graph.describe("multi.json", "multi", api, OBJECT_INFO, titles, form)
-    assert model["label"] == "换装", "应用的标题换掉模型下拉里那一项的名字"
+    model = graph.describe("multi.json#app", "换装", api, OBJECT_INFO, titles, form)
     assert list(model["parameters"]) == ["seed", "output_node", "20.lora_name", "3.steps"], \
         "没挑的项不出现:反向提示词、尺寸、跑几遍、checkpoint、CFG……照工作流原样跑"
     lora = model["parameters"]["20.lora_name"]
@@ -371,7 +371,7 @@ def test_对不上的项不进表单_说出原因(plugin) -> None:
     for node in ui["nodes"]:
         if node["id"] == 13:
             node["mode"] = 2  # 静音:不在会跑的那部分图里
-    _, _, marks, form, invalid = _form(plugin, ui)
+    api, titles, marks, form, invalid = _form(plugin, ui)
     problems = {one["key"]: one["problem"]["zh"] for one in invalid}
     assert set(problems) == {"13.image", "3.gone", "9.filename_prefix", "3.sampler_name"}
     assert "不在会跑的那部分图里" in problems["13.image"]
@@ -379,7 +379,7 @@ def test_对不上的项不进表单_说出原因(plugin) -> None:
     assert "不是一个能放进应用表单的项" in problems["9.filename_prefix"]
     assert "removed_sampler" in problems["3.sampler_name"], "收窄的可选值不在下拉里了"
     assert "13.image" not in [field.key for field in form.fields]
-    summary = app_form.summary(marks, form, invalid, "zh")
+    summary = app_form.summary(marks, app_form.resolve(marks, api, OBJECT_INFO, titles), "zh")
     assert summary["invalid"] == 4 and summary["fields"] == len(form.fields)
     assert {one["key"]: bool(one.get("problem")) for one in summary["items"]}["3.gone"] is True
     titles = {one["key"]: one.get("title") for one in summary["items"]}
@@ -412,7 +412,7 @@ def test_版本不认识_按没有应用表单处理(plugin) -> None:
     assert not form.app and not form.results and invalid == [], "读的一侧不留认别的版本的分支:当作没有应用表单"
     default = graph.describe("m.json", "m", api, OBJECT_INFO, titles)
     assert graph.describe("m.json", "m", api, OBJECT_INFO, titles, form) == default
-    assert app_form.summary(marks, form, invalid)["status"] == "unsupported"
+    assert app_form.summary(marks, app_form.resolve(marks, api, OBJECT_INFO, titles))["status"] == "unsupported"
 
 
 def test_没有图上的那一份_节点上的标记不算(plugin) -> None:
@@ -533,21 +533,32 @@ def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: P
                                                             "seed"]
     assert again["app"]["results"] == ["17"] and again["app"]["fields"] == 6
 
-    model = next(one for one in _host("models", comfy.url)["models"] if one["id"] == "multi.json")
+    # 表单是这张工作流的一个入口(ADR 0045):表单入口只剩表单那几项,完整工作流照旧全部能填的项
+    models = {one["id"]: one for one in _host("models", comfy.url)["models"] if one["id"].startswith("multi.json")}
+    assert list(models) == ["multi.json", "multi.json#app"], "完整工作流在前,表单入口挨着它"
+    model = models["multi.json#app"]
     assert model["label"] == "换装" and list(model["parameters"]) == ["seed", "output_node", "20.lora_name", "3.steps"]
     assert model["inputs"] == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}]
+    assert model["group"] == {"id": "multi.json", "label": "multi", "entry": "form"}
+    full = models["multi.json"]
+    assert full["label"] == "multi" and "form" not in full and full["group"]["entry"] == "full"
+    assert {"negative_prompt", "size", "3.cfg", "4.ckpt_name"} <= set(full["parameters"]), "完整工作流:全部能填的项"
 
-    tool = next(one for one in _host("tools", comfy.url)["tools"] if one["mirrors"]["generation_model"] == "multi.json")
-    properties = tool["input_schema"]["properties"]
+    tools = {one["mirrors"]["generation_model"]: one for one in _host("tools", comfy.url)["tools"]
+             if one.get("mirrors", {}).get("generation_model", "").startswith("multi.json")}
+    properties = tools["multi.json#app"]["input_schema"]["properties"]
     assert list(properties) == ["prompt", "image_10", "image_14", "lora_name_20", "steps_3", "seed", "include_previews"], \
-        "一张工作流的工具和生成说的是同一张表"
+        "一个入口的工具和生成说的是同一张表"
     assert properties["image_10"]["title"] == "人物照片" and properties["lora_name_20"]["enum"] == ["detail.safetensors"]
+    assert tools["multi.json#app"]["name"] == tools["multi.json"]["name"] + "_app"
+    assert "cfg_3" in tools["multi.json"]["input_schema"]["properties"]
 
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
     flow = next(one for one in listed["workflows"] if one["id"] == "multi.json")
-    assert flow["app"] == {"title": "换装", "description": "上传人物和背景"}
-    assert [one["key"] for one in flow["parameters"]] == ["20.lora_name", "3.steps"]
-    assert [one["title"] for one in flow["inputs"]] == ["人物照片", "背景"]
+    assert flow["label"] == "multi" and flow["tool"] == tools["multi.json"]["name"]
+    assert flow["forms"] == [{"id": "app", "title": "换装", "description": "上传人物和背景", "model": "multi.json#app",
+                              "tool": tools["multi.json#app"]["name"]}]
+    assert "3.cfg" in [one["key"] for one in flow["parameters"]], "说的是完整工作流"
 
 
 def _integral_floats_as_ints(value: Any) -> Any:
@@ -613,7 +624,7 @@ def test_annotate_没有这张了说清楚(comfy) -> None:
         _host("annotate", comfy.url, path="gone.json", modified=1, app=None, results=[])
 
 
-def test_生成_有应用表单时只认表单里的键_没挑的照工作流原样跑_产出标来源节点(comfy, tmp_path: Path) -> None:
+def test_生成_表单入口只认表单里的键_没挑的照工作流原样跑_产出标来源节点(comfy, tmp_path: Path) -> None:
     seen = _host("app", comfy.url, path="multi.json")
     _host("annotate", comfy.url, path="multi.json", modified=seen["modified"],
           app={**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}, results=["17"])
@@ -621,7 +632,7 @@ def test_生成_有应用表单时只认表单里的键_没挑的照工作流原
                            "17": {"images": [{"filename": "b.png", "subfolder": "", "type": "output"}]}}
     scratch = tmp_path / "out"
     scratch.mkdir()
-    request = {"op": "generate", "kind": "image", "model": "multi.json", "prompt": "a cat", "negative_prompt": "ugly",
+    request = {"op": "generate", "kind": "image", "model": "multi.json#app", "prompt": "a cat", "negative_prompt": "ugly",
                "parameters": {"3.steps": 30, "3.cfg": 9.5, "size": "512x512"}, "inputs": [], "resume": None}
     hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
     result = runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
@@ -635,3 +646,40 @@ def test_生成_有应用表单时只认表单里的键_没挑的照工作流原
     assert submitted["3"]["inputs"]["seed"] == 42, "种子没挑、工作流里是固定的:留着"
     assert "9" not in submitted, "标了 #17 是结果:另一个保存节点不跑"
     assert [one["parameters"] for one in result["outputs"]] == [{"source_node": "17"}]
+
+
+def test_生成_同一张图的完整工作流入口_全部能填的项都认_和没有表单时一样(comfy, tmp_path: Path) -> None:
+    """有表单也拿得到全部参数(ADR 0045):模型 id 是那张图自己的路径,跑的是完整工作流 —— 反向提示词、CFG、尺寸都写进图,
+    种子没给就换一个;「结果取自」照样听工作流上标的结果。这也是老引用要迁到表单入口的原因:同一个 id 换了意思。"""
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"],
+          app={**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}, results=["17"])
+    comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]},
+                           "17": {"images": [{"filename": "b.png", "subfolder": "", "type": "output"}]}}
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    request = {"op": "generate", "kind": "image", "model": "multi.json", "prompt": "a cat", "negative_prompt": "ugly",
+               "parameters": {"3.steps": 30, "3.cfg": 9.5, "size": "512x512"}, "inputs": [], "resume": None}
+    hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
+    runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
+                        hooks=hooks, scratch_dir=scratch, timeout=60)
+    submitted = next(call[2]["prompt"] for call in comfy.state.calls if call[1] == "/prompt")
+    assert (submitted["6"]["inputs"]["text"], submitted["7"]["inputs"]["text"]) == ("a cat", "ugly")
+    assert (submitted["3"]["inputs"]["steps"], submitted["3"]["inputs"]["cfg"]) == (30, 9.5)
+    assert (submitted["5"]["inputs"]["width"], submitted["5"]["inputs"]["height"]) == (512, 512)
+    assert submitted["3"]["inputs"]["seed"] != 42, "完整工作流:种子没给就每次换一个(和没有表单的图一样)"
+    assert "9" not in submitted, "标了 #17 是结果:两个入口都听它"
+
+
+def test_生成_表单没了说清楚_和工作流不在了分开(comfy, tmp_path: Path) -> None:
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
+    request = {"op": "generate", "kind": "image", "model": "multi.json#app", "prompt": "a cat", "parameters": {},
+               "inputs": [], "resume": None}
+    with pytest.raises(runtime.PluginRuntimeError, match="已经没有这张表单了"):
+        runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
+                            hooks=hooks, scratch_dir=scratch, timeout=60)
+    with pytest.raises(runtime.PluginRuntimeError, match="已经没有工作流"):
+        runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", {**request, "model": "gone.json#app"},
+                            {"SERVER_URL": comfy.url}, hooks=hooks, scratch_dir=scratch, timeout=60)

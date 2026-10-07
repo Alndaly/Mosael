@@ -498,11 +498,11 @@ def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str,
     if api:
         titles = convert.titles_of(api)
         marks = app_form.read(source)
-        form, invalid = app_form.resolve(marks, api, object_info, titles)
-        # 识别出的输入 / 参数说的是这张图的表单:有应用表单就是作者挑的那几项(和生成、工具同一张表)
-        info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info, titles, locale, form)
+        resolved = app_form.resolve(marks, api, object_info, titles)
+        # 识别出的输入 / 参数说的是**完整工作流**(文件本身的事实,ADR 0045);它上面的表单在 `app` 里说
+        info = described.inspect(row["path"], models.label_of(row["path"]), api, object_info, titles, locale, resolved.full)
         row.update({"kind": info["kind"], "inputs": info["inputs"], "parameters": info["parameters"],
-                    "outputs": info["outputs"], "app": app_form.summary(marks, form, invalid, locale)})
+                    "outputs": info["outputs"], "app": app_form.summary(marks, resolved, locale)})
     elif not row.get("problem"):
         row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
     if missing and not row.get("problem"):
@@ -713,7 +713,7 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     titles = convert.titles_of(api)
     found = graph.items(api, object_info, titles)
     marks = app_form.read(source)
-    form, invalid = app_form.resolve(marks, api, object_info, titles, found)
+    resolved = app_form.resolve(marks, api, object_info, titles, found)
     kind = graph.kind_of(api)
     return {
         "path": path,
@@ -724,7 +724,7 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
         "outputs": graph.generation_nodes(api, kind, object_info, titles),
         "names": {node_id: labels.node_name(str(node.get("class_type", "")), titles.get(node_id, ""), object_info)
                   for node_id, node in api.items()},
-        "app": app_form.summary(marks, form, invalid, locale),
+        "app": app_form.summary(marks, resolved, locale),
     }
 
 
