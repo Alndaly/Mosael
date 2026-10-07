@@ -485,7 +485,7 @@ Mosael 的东西都画在它旁边 ——
 **这一版升级上来时连接会先停用一次**：插件如实申报了它真会做的几件事，比以前多四项权限 —— `network:huggingface`、`network:civitai`、
 `network:modelscope`(模型库解析链接、下载模型时连这几个站)和 `filesystem:write`(ComfyUI 在这台电脑上时写它的 models 目录)。
 连接卡片最上面写着多要了哪几项，点「授予这 4 项」马上恢复，之前授予的不受影响；插件列表上它标着「待授权」。这一版的插件又多申报三项
-(`network:github`、`network:pypi`、`network:pytorch`,让 Mosael 装 ComfyUI 时要连这几处),升上来时同样先停用一次、等你授予；1.17.0 再多
+(`network:github`、`network:pypi`、`network:pytorch`,让 Mosael 装 ComfyUI 时要连这几处),升上来时同样先停用一次、等你授予；之后的版本再多
 一项 `network:comfy-registry`(工作台的「助手」查 Comfy 官方注册表),同样授予一次就恢复。插件升级之后，
 Mosael 一分钟内会重新读一遍每个连接的模型和工具清单，表单上的默认值(比如跑几遍默认 1 遍)跟着更新，不用手动刷新。
 
