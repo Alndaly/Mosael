@@ -1,4 +1,5 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -8,6 +9,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
+import { refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
@@ -19,7 +21,7 @@ import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
-import { useWorkbench, workbenchCall } from "@/features/plugins/workbench/workbenchSession";
+import { useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -48,6 +50,37 @@ const TAB_PANEL =
   "focus-visible:ring-inset focus-visible:ring-ring";
 /** 「助手」页签:对话面板自己滚、自己留边,这一层只占满剩下的高。 */
 const ASSISTANT_PANEL = "grid min-h-0 flex-1";
+
+/**
+ * 在工作台里**存了**一张工作流(这一张从「有没存的改动」变成存好了,或者第一次存出一个路径),或者工作台关上了:这个连接的
+ * 目录重拉,依赖它的查询重问。精简表单、工作流的名字都住在那张图里;AI 工作台的「引擎参数」、画板、工作流节点读的是后端按
+ * 连接存着的那份目录。
+ *
+ * 此前只有「从工作流库打开、再回到工作流库」这一条路会重拉(工作流库的 editorReturned):从 AI 工作台的「在工作台里打开」进来、
+ * 在应用表单里加了一项、存好就回去,右栏还是那张旧表,要等一分钟的指纹巡检加上页面重挂才对得上。存的那一刻(ComfyUI 自己的
+ * Ctrl+S 也算 —— 桥报的 `modified` 跟着变)和关上的那一刻都拉,几处同时要的并成一次(refreshConnectionCatalog)。
+ */
+function useCatalogFollowsWorkbench(target: WorkbenchTarget | null, workflow: ComfyWorkbenchState["workflow"] | null) {
+  const qc = useQueryClient();
+  const instanceId = target?.instanceId ?? "";
+  const seen = React.useRef<{ instanceId: string; key: string; modified: boolean; temporary: boolean } | null>(null);
+  React.useEffect(() => {
+    const before = seen.current;
+    const now = instanceId && workflow
+      ? { instanceId, key: workflow.key, modified: workflow.modified, temporary: workflow.temporary }
+      : null;
+    seen.current = now;
+    if (!before || !now || before.instanceId !== now.instanceId || before.key !== now.key) return;
+    const saved = (before.modified && !now.modified) || (before.temporary && !now.temporary);
+    if (saved) void refreshConnectionCatalog(qc, now.instanceId);
+  }, [instanceId, workflow, qc]);
+  const open = React.useRef("");
+  React.useEffect(() => {
+    const was = open.current;
+    open.current = instanceId;
+    if (was && was !== instanceId) void refreshConnectionCatalog(qc, was);
+  }, [instanceId, qc]);
+}
 
 /**
  * ComfyUI 工作台(ADR 0038 §3):全屏,左边整块是那台 ComfyUI 自己的画布(内嵌视图,每个自定义节点照常能用),Mosael 的东西
@@ -79,6 +112,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const agentPlace = useAgentPlace(target ? comfyPlace(target.instanceId, workflow) : null);
   //: 同一张存盘、改名后对话跟着它走;智能体开的新标签页接住开它的那段对话(ADR 0044 §6、§9)
   useFollowWorkbenchPlaces();
+  //: 存好一张、关上工作台:这个连接的目录重拉(精简表单住在那张图里)
+  useCatalogFollowsWorkbench(target, workflow);
   //: 一直没收到桥那边的回话(这版前端太旧、页面要先登录、桥注入不上):说一句,画布照常能用
   const [stuck, setStuck] = React.useState(false);
   React.useEffect(() => {

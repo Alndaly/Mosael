@@ -44,7 +44,6 @@ import {
   getWorkflowContent,
   getWorkflowLibrary,
   rebootWorkflowServer,
-  refreshPluginInstance,
   renameWorkflow,
   renameWorkflowFolder,
   restoreWorkflow,
@@ -87,7 +86,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
-import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
 import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowOutputs } from "@/features/plugins/WorkflowOutputs";
@@ -255,19 +254,15 @@ export function WorkflowLibraryDialog({
   //: 连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。所以和从编辑器回来一样,先让目录重拉。
   const changed = () => {
     void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
-    void refreshPluginInstance(instance.id)
-      .catch(() => undefined)
-      .finally(() => invalidatePluginDependents(qc));
+    void refreshConnectionCatalog(qc, instance.id);
   };
   //: 从编辑器回来:那边可能存了改动、换了模型 —— 先让这个连接的目录重拉,再让工作流库、模型库和生成选项重新问
+  //: (工作台关上时它自己也会让目录重拉,见 ComfyWorkbench 的 useCatalogFollowsWorkbench —— 同一时刻的两次并成一次)
   const editorReturned = React.useCallback(() => {
-    void refreshPluginInstance(instance.id)
-      .catch(() => undefined)
-      .finally(() => {
-        void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
-        void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
-        invalidatePluginDependents(qc);
-      });
+    void refreshConnectionCatalog(qc, instance.id).finally(() => {
+      void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+      void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
+    });
   }, [instance.id, qc]);
   const editor = useWorkflowEditor(instance, editorReturned, workspaceId);
 

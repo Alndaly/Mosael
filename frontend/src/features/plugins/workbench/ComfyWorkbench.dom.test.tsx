@@ -248,6 +248,22 @@ describe("ComfyUI 工作台", () => {
     expect(document.querySelector("[data-comfy-workbench-bar]")).toBeNull();
   });
 
+  it("在工作台里存好一张、或者工作台关上:这个连接的目录重拉 —— AI 工作台的右栏不再是存之前那张表", async () => {
+    //: 维护者的路径:从 AI 工作台的「在工作台里打开」进来,在精简表单里加一项、存好、直接回去 —— 此前只有工作流库回来时才重拉。
+    api.refreshPluginInstance.mockResolvedValue({});
+    const bridge = await mount(state());
+    expect(api.refreshPluginInstance, "还有没存的改动:不拉").not.toHaveBeenCalled();
+    bridge.emit(state({ workflow: { ...GUFENG, revision: 2 } }));
+    expect(api.refreshPluginInstance, "改着,还没存:不拉").not.toHaveBeenCalled();
+    bridge.emit(state({ workflow: { ...GUFENG, modified: false, revision: 2 } }));
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
+    expect(api.refreshPluginInstance).toHaveBeenCalledTimes(1);
+    bridge.emit(state({ workflow: { ...GUFENG, key: "workflows/别的.json", modified: false } }));
+    expect(api.refreshPluginInstance, "换了一张、它本来就存好的:不是存了一张").toHaveBeenCalledTimes(1);
+    bridge.emit(null);
+    await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledTimes(2));
+  });
+
   it("保存是前端自己的保存命令;没存过的工作流不能在这里跑,说为什么", async () => {
     const bridge = await mount(state({ workflow: { path: "", name: "Unsaved Workflow", temporary: true, modified: true,
                                                    key: "workflows/Unsaved Workflow.json", revision: 1 } }));
