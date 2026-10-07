@@ -69,8 +69,10 @@ def test_排在同一会话前一条后面_不算排队_前一条做完就轮到
     worker.patch("/api/browser/worker/report", json={
         "action_id": claimed["id"], "status": "done", "lease_token": claimed["lease_token"],
     })
-    first.join(timeout=5)
+    # 前一条一做完,后一条的排队就开始计时(上面把上限压成了 1 秒)—— 当场就领,不先等前一条的线程收尾:
+    # 机器一忙,那一下 join 就能超过 1 秒,后一条已经按排队超时放弃,这里领到的是 None。
     next_one = worker.post("/api/browser/worker/claim", json={"worker": "w"}).json()["action"]
+    first.join(timeout=5)
     assert next_one["action"] == "extract"
     worker.patch("/api/browser/worker/report", json={
         "action_id": next_one["id"], "status": "done", "result": {"value": "标题"}, "lease_token": next_one["lease_token"],

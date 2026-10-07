@@ -273,13 +273,15 @@ def test_host_file_outside_home_is_not_readable(tmp_path, relative_alias):
 
 @pytest.mark.parametrize("fd", [1, 2])
 def test_output_limit_interrupts_continuous_writes(fd):
+    """一直写、不换行(按行数的上限挡不住这条路),而且永远不自己停 —— 能结束它的只有输出上限,超时给得远比写满
+    上限要的时间长,先到的若是超时,报的就是「超时」而不是「输出超过上限」。
+
+    此前用「写 2 秒、超时 0.7 秒、总耗时 < 1.5 秒」来证明是上限先到;可这 0.7 秒里还包着建容器、起 Python,
+    机器一忙(并行跑测试套时)容器还没起来就先超时了。
+    """
     _skip_without_backend()
-    import time
-    started = time.monotonic()
     with pytest.raises(sandbox.SandboxError, match="输出.*上限"):
-        # Writes without newlines: line-based caps do not protect this path.
-        sandbox.run_code(f"import os, time\nfor _ in range(100):\n    os.write({fd}, b'x' * 65536)\n    time.sleep(0.02)", {}, timeout=0.7)
-    assert time.monotonic() - started < 1.5
+        sandbox.run_code(f"import os, time\nwhile True:\n    os.write({fd}, b'x' * 65536)\n    time.sleep(0.02)", {}, timeout=30)
 
 
 def test_scratch_files_work_and_kernel_enforces_resource_budgets():
