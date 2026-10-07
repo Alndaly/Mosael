@@ -28,6 +28,7 @@ const canvasHarness = vi.hoisted(() => ({
   api: {
     add: vi.fn(),
     patch: vi.fn(),
+    absorb: vi.fn(),
     adopt: vi.fn(),
     flush: vi.fn(),
     fitView: vi.fn(),
@@ -219,7 +220,7 @@ describe("画板详情页与服务端的同步", () => {
     });
 
     expect(apiMocks.updateBoard).toHaveBeenCalledTimes(1);
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ run: { status: "running", job_id: "job-1" } }));
+    expect(canvasHarness.api.absorb, "服务端纠正回来的,不是人的一步").toHaveBeenCalledWith("img", expect.objectContaining({ run: { status: "running", job_id: "job-1" } }));
   });
 
   it("一直在拖的时候,在跑的那一格照样按时轮询到产出 —— 不等人停手", async () => {
@@ -242,7 +243,7 @@ describe("画板详情页与服务端的同步", () => {
     }
 
     expect(apiMocks.getBoard).toHaveBeenCalled();
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+    expect(canvasHarness.api.absorb).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
   });
 
   it("拖完最后一下就离开画板(画布还攒着没汇上来):那一下照样存上", async () => {
@@ -281,7 +282,7 @@ describe("画板详情页与服务端的同步", () => {
     }
 
     expect(apiMocks.getBoard.mock.calls.length, "4 秒里至少轮询过一次").toBeGreaterThan(1);
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+    expect(canvasHarness.api.absorb).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
   });
 
   it("重进一张关着时被改过的画板:缓存里那份落后于清单上的版本号 —— 重取,不先挂一份旧画布", async () => {
@@ -390,7 +391,7 @@ describe("画板详情页与服务端的同步", () => {
       await vi.advanceTimersByTimeAsync(700);
     });
 
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("V", { form: { prompt: "动起来", source_assets: [manual] } });
+    expect(canvasHarness.api.absorb).toHaveBeenCalledWith("V", { form: { prompt: "动起来", source_assets: [manual] } });
   });
 
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {
@@ -550,7 +551,7 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     });
 
     expect(adoptedItem("n1")?.text, "合并留着人刚改的").toBe("一只橘猫");
-    const patches = canvasHarness.api.patch.mock.calls.filter(([id]) => id === "n1").map(([, patch]) => patch as Record<string, unknown>);
+    const patches = canvasHarness.api.absorb.mock.calls.filter(([id]) => id === "n1").map(([, patch]) => patch as Record<string, unknown>);
     expect(patches.some((one) => "run" in one), "运行态收了尾").toBe(true);
     expect(patches.filter((one) => "text" in one || "form" in one), "收尾补丁不写正文、表单").toEqual([]);
   });

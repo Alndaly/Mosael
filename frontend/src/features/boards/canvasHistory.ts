@@ -21,6 +21,11 @@
  * 时间线的一步记着**做完之后时间线停在第几版**(`revision`)。同一条时间线可能在剪辑页、智能体那里又被改过 ——
  * 那时服务端的「撤最新一步」撤的是别人的那一步;带着版本号去撤,不对就 409,这一步从摞里拿掉(`dropSequenceStep`)。
  * 撤 / 重做成功后,这一步的版本号换成服务端回来的那一版(`retagSequenceStep`),下一次重做 / 撤销照它比。
+ *
+ * 在画布上点的**一次运行**(生成、写字、念、截、一项能力 —— 宫格切分、放大……)也是一步(`RunStep`):点下去那一刻记下
+ * 画布,这一轮由服务端摆下的占位、交回的产出,不管什么时候落下,都算在这一步里(落下的东西记在 useBoardHistory 的
+ * `runs`,见 boardRuns)。撤它就把这一轮放上画布的东西整份拿下来,重做再放回去。此前运行不进这摞,落下的格子在每次
+ * 撤 / 重做时被一律补回 —— 宫格切分之后按一下撤销,撤掉的是上一步(刚放的原图),九格成了没有来处的孤格(用户截图)。
  */
 
 /**
@@ -38,11 +43,35 @@ export type SequenceStep = {
   /** 是哪一次批量连线(见 joinSequenceToCanvas):同一批接上的几段并进同一步。 */
   batch?: string;
 };
-/** 一步:画布的一份快照(字符串),或者时间线的一步。 */
-export type Step = string | SequenceStep;
+/**
+ * 在画布上点的一次运行(`run` 是这一轮在 useBoardHistory 里的记号)。`canvas` 同 SequenceStep:在 past 里是点下去之前那一份,
+ * 撤销之后挪进 future 时换成撤销那一刻的那一份。
+ */
+export type RunStep = { run: string; canvas: string };
+/** 一步:画布的一份快照(字符串)、时间线的一步,或者一次运行。 */
+export type Step = string | SequenceStep | RunStep;
 
 export function sequenceOf(step: Step | undefined): string | null {
-  return typeof step === "object" ? step.sequence : null;
+  return typeof step === "object" && "sequence" in step ? step.sequence : null;
+}
+
+export function runOf(step: Step | undefined): string | null {
+  return typeof step === "object" && "run" in step ? step.run : null;
+}
+
+/** 这几步里的那几次运行。 */
+export function runsIn(steps: readonly Step[]): Set<string> {
+  const keys = new Set<string>();
+  for (const step of steps) {
+    const key = runOf(step);
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
+/** 一步撤 / 重做时要装回去的画布:快照本身,或者带着画布的那几种步里的 `canvas`;只动时间线的一步没有。 */
+export function canvasOf(step: Step): string | undefined {
+  return typeof step === "string" ? step : step.canvas;
 }
 
 export interface History {
@@ -72,6 +101,19 @@ export function record(history: History, next: string, limit = 100): History {
 export function recordSequence(history: History, sequenceId: string, revision: number, limit = 100): History {
   const past = [...history.past, { sequence: sequenceId, revision }];
   return { past: past.length > limit ? past.slice(past.length - limit) : past, future: [], present: history.present };
+}
+
+/** 记下点了一次运行(`key`):这一步的画布是点下去之前那一份。present 不动 —— 占位、产出由服务端落下来,落进这一步。 */
+export function recordRun(history: History, key: string, limit = 100): History {
+  const past = [...history.past, { run: key, canvas: history.present }];
+  return { past: past.length > limit ? past.slice(past.length - limit) : past, future: [], present: history.present };
+}
+
+/** 那次运行没跑起来(请求被拒、没摆下占位):这一步什么都没做,从摞里拿掉。后面又记了几步也照拿 —— 它前后两份画布一样。 */
+export function dropRun(history: History, key: string): History {
+  const keep = (step: Step) => runOf(step) !== key;
+  if (history.past.every(keep) && history.future.every(keep)) return history;
+  return { ...history, past: history.past.filter(keep), future: history.future.filter(keep) };
 }
 
 export function canUndo(history: History): boolean {
@@ -110,7 +152,7 @@ export function retagSequenceStep(history: History, where: "past" | "future", re
   const index = where === "past" ? history.past.length - 1 : 0;
   const list = where === "past" ? history.past : history.future;
   const step = list[index];
-  if (typeof step !== "object") return history;
+  if (typeof step !== "object" || !("sequence" in step)) return history;
   const next = [...list];
   next[index] = { ...step, revision };
   return where === "past" ? { ...history, past: next } : { ...history, future: next };
@@ -122,7 +164,7 @@ export function dropSequenceStep(history: History, where: "past" | "future"): Hi
   const list = where === "past" ? history.past : history.future;
   const index = where === "past" ? list.length - 1 : 0;
   const step = list[index];
-  if (typeof step !== "object") return history;
+  if (typeof step !== "object" || !("sequence" in step)) return history;
   const next = step.canvas === undefined ? list.filter((_, at) => at !== index) : list.map((one, at) => (at === index ? (step.canvas as string) : one));
   return where === "past" ? { ...history, past: next } : { ...history, future: next };
 }
@@ -141,7 +183,7 @@ export function joinSequenceToCanvas(
   link: { source: string; target: string; batch?: string },
 ): History | null {
   const last = history.past.at(-1);
-  if (typeof last === "object" && link.batch && last.batch === link.batch && last.sequence === sequenceId) {
+  if (typeof last === "object" && "sequence" in last && link.batch && last.batch === link.batch && last.sequence === sequenceId) {
     return { ...history, past: [...history.past.slice(0, -1), { ...last, revision, count: (last.count ?? 1) + 1 }] };
   }
   if (typeof last !== "string") return null;

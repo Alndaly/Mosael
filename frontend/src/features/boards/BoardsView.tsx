@@ -756,7 +756,7 @@ function BoardDetail({
       for (const sequenceId of sequencesFilledFrom(base, fresh.canvas)) {
         void queryClient.invalidateQueries({ queryKey: boardSequenceKey(sequenceId) });
       }
-      api?.adopt(merged);
+      api?.adopt(merged, { base, fresh: fresh.canvas });
       announceOffscreen(base, merged, fresh.canvas);
       localCanvas.current = merged;
       setCanvas(merged);
@@ -838,7 +838,8 @@ function BoardDetail({
         if (sameContent(next, confirmedCanvas.current)) return;
         const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
         //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch);服务端摘掉的、线已经
-        //: 断了的槽位素材,本地也跟着摘(见 prunedLinksPatch)。
+        //: 断了的槽位素材,本地也跟着摘(见 prunedLinksPatch)。这是服务端纠正回来的,不是人的一步:并进撤销历史的
+        //: 当前这一份(absorb)—— 记成一步的话,撤一下「什么都没变」,再撤才撤到人做的那一下。
         const sent = new Map(next.items.map((item) => [item.id, item]));
         const local = new Map((localCanvas.current?.items ?? []).map((item) => [item.id, item]));
         for (const stored of fresh.canvas.items) {
@@ -848,7 +849,7 @@ function BoardDetail({
             ...serverOwnedPatch(mine, stored),
             ...prunedLinksPatch(mine, stored, local.get(stored.id) ?? mine),
           };
-          if (Object.keys(patch).length) api?.patch(stored.id, patch);
+          if (Object.keys(patch).length) api?.absorb(stored.id, patch);
         }
       })
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
@@ -895,13 +896,15 @@ function BoardDetail({
    *
    * 全是异步的(写字也是):服务端摆好占位、起好任务就回,产出由回执填回画布,这里只负责发起 + 轮询到结果为止。
    * 占位带着任务号,格子上转圈、能停。
+   *
+   * 回服务端摆好之后的那一版,没跑起来回 null:画布据此把撤销里的这一步留下或拿掉(见 useBoardHistory.beginRun)。
    */
   const run = React.useCallback(
-    async (request: BoardRunRequest) => {
+    async (request: BoardRunRequest): Promise<Board | null> => {
       //: 画布的变化攒到停手才汇上来(见 useBoardHistory):先把现在这一份拿出来存上,再等在路上的保存都落地。
       const latest = api?.flush();
-      if (latest && !(await save(latest).then(() => true, () => false))) return;
-      if (!(await flushSaves())) return;
+      if (latest && !(await save(latest).then(() => true, () => false))) return null;
+      if (!(await flushSaves())) return null;
       //: 版本号**轮到它时再读** —— 排在它前面的写请求可能刚把画布推进到下一版。
       const send = () =>
         serially(() => runOnBoard(board.id, { ...request, workspace_id: workspaceId, base_revision: revision.current }));
@@ -921,11 +924,11 @@ function BoardDetail({
         //: 念出来那一格点了配音库里的嗓子、交给 CosyVoice 念,而这个账号还没同意上传:问一次,同意了再跑(ADR 0037)。
         placed = await withRemoteVoiceConsent(() => attempt(false));
       } catch (error) {
-        if (isConsentDeclined(error)) return;
+        if (isConsentDeclined(error)) return null;
         toast.error(t(isNodeProducer(request.producer) ? "boardToolFailed" : RUN_FAILED[request.producer]), {
           description: (error as Error).message,
         });
-        return;
+        return null;
       }
       //: **走画布的把手落到本地**(回写这里的 canvas 状态没用 —— 画布的节点只在挂载时从 canvas 建一次)。
       //: 已经在画布上的那一格(在空槽里生成、截挂了就地重截)换上服务端的表单、运行态和产出 —— 马上标成「在跑」,
@@ -945,6 +948,7 @@ function BoardDetail({
               localCanvas.current?.items.some((one) => one.id === edge.source && one.kind === "entity"),
           ));
       if (named && made?.run?.job_id) void announceEntityReceipt(made.run.job_id, t);
+      return placed;
     },
     [api, board.id, workspaceId, t, adoptServer, recoverConflict, save, serially, flushSaves],
   );
@@ -1019,10 +1023,10 @@ function BoardDetail({
         }
         //: 服务端那一格不在跑了(产出到了、跑挂了、被取消):整组写回本地。**跑挂了也要落到画布
         //: 上** —— 画布的节点只在挂载时从 canvas 建一次,不告诉它的话那一格一直保留 running:
-        //: 框里持续转圈,底下那个提交按钮也一直按不动。
+        //: 框里持续转圈,底下那个提交按钮也一直按不动。服务端的终态不是人的一步:并进撤销历史的当前这一份。
         const patch = boardSettlementPatch(item);
         if (!patch) continue;
-        apiRef.current?.patch(id, patch);
+        apiRef.current?.absorb(id, patch);
         settled.push(id);
       }
       if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));

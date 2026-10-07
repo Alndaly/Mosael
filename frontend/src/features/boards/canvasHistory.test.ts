@@ -4,7 +4,24 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { canRedo, canUndo, dropSequenceStep, emptyHistory, joinSequenceToCanvas, record, recordSequence, redo, retagSequenceStep, sequenceOf, undo } from "./canvasHistory";
+import {
+  canRedo,
+  canUndo,
+  canvasOf,
+  dropRun,
+  dropSequenceStep,
+  emptyHistory,
+  joinSequenceToCanvas,
+  record,
+  recordRun,
+  recordSequence,
+  redo,
+  retagSequenceStep,
+  runOf,
+  runsIn,
+  sequenceOf,
+  undo,
+} from "./canvasHistory";
 import { sequencesFilledFrom } from "./useBoardSequenceLinks";
 
 describe("画布历史", () => {
@@ -126,6 +143,56 @@ describe("连一格进时间线格:画布上的线和时间线上的那一段是
     h = dropSequenceStep(h, "future");
     expect(h.future).toEqual([linked]);
     expect(redo(h)!.present).toBe(linked);
+  });
+});
+
+describe("在画布上点的一次运行是一步", () => {
+  it("点下去记下那一份,present 不动;撤它画布回到点之前,重做回到撤销那一刻 —— 占位和产出由服务端落进来,不另记一步", () => {
+    let h = recordRun(record(emptyHistory("A"), "B"), "run-1");
+    expect(h.past).toEqual(["A", { run: "run-1", canvas: "B" }]);
+    expect(h.present, "点下去那一刻画布还没变").toBe("B");
+    //: 服务端摆下占位、交回产出:采用那一版只换 present(useBoardHistory.adopt),不记一步。
+    h = { ...h, present: "B+九格" };
+    h = undo(h)!;
+    expect(h.present, "撤到点之前").toBe("B");
+    expect(h.future).toEqual([{ run: "run-1", canvas: "B+九格" }]);
+    expect(runOf(h.future[0])).toBe("run-1");
+    h = redo(h)!;
+    expect(h.present).toBe("B+九格");
+    expect(h.past.at(-1)).toEqual({ run: "run-1", canvas: "B" });
+  });
+
+  it("和时间线的步、画布的步交错着退;时间线的那两个函数不碰运行的那一步", () => {
+    let h = recordSequence(recordRun(record(emptyHistory("A"), "B"), "run-1"), "seq", 3);
+    expect(sequenceOf(h.past.at(-1))).toBe("seq");
+    expect(retagSequenceStep(undo(undo(h)!)!, "future", 9).future[0], "运行的一步不是时间线的,换不了版本号").toEqual({ run: "run-1", canvas: "B" });
+    expect(dropSequenceStep({ ...h, past: h.past.slice(0, -1) }, "past").past.at(-1)).toEqual({ run: "run-1", canvas: "B" });
+    expect(runsIn(h.past)).toEqual(new Set(["run-1"]));
+    expect(canvasOf(h.past[1]), "运行的一步带着画布").toBe("B");
+    expect(canvasOf(h.past[2]), "只动时间线的一步不带").toBeUndefined();
+  });
+
+  it("没跑起来:那一步从摞里拿掉 —— 后面又记了几步也照拿,前后两份画布一样", () => {
+    let h = recordRun(record(emptyHistory("A"), "B"), "run-1");
+    h = record(h, "C");
+    h = dropRun(h, "run-1");
+    expect(h.past).toEqual(["A", "B"]);
+    expect(h.present).toBe("C");
+    expect(dropRun(h, "run-1"), "没有那一步就原样").toBe(h);
+  });
+
+  it("运行之后又做了新的一步,撤回去的那一轮从重做里清掉", () => {
+    let h = recordRun(record(emptyHistory("A"), "B"), "run-1");
+    h = undo({ ...h, present: "B+产出" })!;
+    h = record(h, "D");
+    expect(runsIn(h.future).size).toBe(0);
+    expect(canRedo(h)).toBe(false);
+  });
+
+  it("连进时间线格的并步不会并到运行的那一步上", () => {
+    const plain = JSON.stringify({ items: [], edges: [] });
+    const h = recordRun(emptyHistory(plain), "run-1");
+    expect(joinSequenceToCanvas(h, "seq", 3, { source: "v", target: "t", batch: "b" })).toBeNull();
   });
 });
 

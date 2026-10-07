@@ -41,7 +41,7 @@ import {
 } from "@/components/app/canvasPendingLink";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
-import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
+import { type Board, type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
@@ -51,7 +51,7 @@ import { QuietPortsContext } from "@/features/boards/boardPorts";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, kindIcon, kindText, SPAWNABLE_KINDS } from "@/features/boards/boardNodes";
-import { composerView, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
+import { composerView, itemFormResetKey, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
 import { ConfirmDialog } from "@/components/app/modals";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { type PlacedAsset } from "@/features/boards/boardPlacement";
@@ -77,7 +77,7 @@ import { ItemToolbar, TRIM_PANEL, WRITER_PANEL } from "@/features/boards/BoardIt
 import { BoardCommentLayer, useBoardCommentDraft } from "@/features/boards/BoardCommentLayer";
 import { useBoardDocuments } from "@/features/boards/useBoardDocuments";
 import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
-import { useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
+import { aspectHeight, useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
 import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
 import { batchLinks, linkRefusal, selectionSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
@@ -124,10 +124,13 @@ export interface BoardCanvasApi {
    *  从 canvas 建一次,回写上层的 canvas 状态它看不见,用户会以为「点了没反应」。
    *  值给 undefined 表示删掉那个字段。 */
   patch: (itemId: string, next: Partial<BoardItem>) => void;
+  /** 同 patch,但这一下**不是人的一步**(服务端存回来时纠正的运行态和产出、摘掉的断线绑定):并进撤销历史的当前这一份,
+   *  不记成一步 —— 记成一步的话,撤一下「什么都没变」,再撤才撤到人做的那一下。 */
+  absorb: (itemId: string, next: Partial<BoardItem>) => void;
   /** 采用服务端更新的一版(本地没存的改动已经合在上面,见 boardRebase)。显式调用 —— 平常的 prop 变化不能打断
    *  正在拖、正在敲的那一下。节点按 id 就地换,撤销历史不清空也不改写:撤到更早的一份时服务端落下的东西在那一刻补回去
-   *  (见 useBoardHistory.adopt / boardServerOwned)。 */
-  adopt: (canvas: Canvas) => void;
+   *  (见 useBoardHistory.adopt / boardServerOwned)。`sync` 是合出它的那两版服务端画布(人做到一半时撤销历史照它们合)。 */
+  adopt: (canvas: Canvas, sync?: { base: Canvas; fresh: Canvas }) => void;
   /** 画布的变化攒到停手才汇给 `onChange`(见 useBoardHistory);要服务端照着画布去做的动作等不了,先调它拿现在这一份
    *  (同时也汇出去)。 */
   flush: () => Canvas;
@@ -167,8 +170,9 @@ interface Props {
   /**
    * 在某一格上跑一个产出者(生成、写字、念出来、截一段)。上层拿得到 workspaceId 和接口,画布只
    * 提供「落在哪一格」和「表单是什么」。都是摆好占位就回、产出由回执填回来(写字也是)。
+   * 回服务端摆好之后的那一版;没跑起来(被拒、出错、没同意)回 null —— 撤销里这一步就拿掉(见 useBoardHistory.beginRun)。
    */
-  onRun?: (request: BoardRunRequest) => Promise<unknown>;
+  onRun?: (request: BoardRunRequest) => Promise<Board | null | undefined>;
   /** 取某一帧,存成一份新素材、落到一个新节点上 —— 原素材不动。 */
   onGrabFrame?: (input: { assetId: string; at: number; x: number; y: number }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
@@ -237,6 +241,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
     canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
   );
+  //: 画布此刻的节点和线,给回调读(不进依赖)。
+  const latestGraph = React.useRef({ nodes, edges });
+  latestGraph.current = { nodes, edges };
+  const { history, adopt, flush, absorb, beginRun, placed, restores, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange, surface });
 
   React.useEffect(() => {
     if (!commentMode) setDraftAnchor(null);
@@ -252,7 +260,35 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const [renaming, setRenaming] = React.useState<string | null>(null);
   /** 拖着选区框的统一出口、悬在哪一格上(那一格外面画一圈:连得上 / 一根都连不上)。一时的界面状态,不进画布。 */
   const [linkHover, setLinkHover] = React.useState<{ id: string; verdict: "link" | "refused" } | null>(null);
-  const { setText, setTitle, setAspect, patch } = useBoardItemEdits(setNodes);
+  const { setText, setTitle, patch } = useBoardItemEdits(setNodes);
+  /** 同 patch,并进撤销历史的当前这一份、不记成一步(见 BoardCanvasApi.absorb)。 */
+  const absorbPatch = React.useCallback(
+    (itemId: string, next: Partial<BoardItem>) => {
+      patch(itemId, next);
+      absorb(itemId, Object.keys(next));
+    },
+    [patch, absorb],
+  );
+  /**
+   * 媒体量出了自然宽高比:还是默认大小的那一格把高度校正过去(见 aspectHeight)。**不是人的一步**,并进撤销历史的当前这一份
+   * —— 此前它记成一步,图片落下之后按一下撤销,撤掉的是这一下校正(格子缩回去、上下两道黑边),再按才撤到人做的事。
+   * 量出来的比例按格子记着:撤 / 重做装回一份校正之前的快照时照它再校正一次 —— 图片不会再加载一遍。
+   */
+  const ratios = React.useRef(new Map<string, number>());
+  const fitAspect = React.useCallback(
+    (id: string, ratio: number) => {
+      if (Number.isFinite(ratio) && ratio > 0) ratios.current.set(id, ratio);
+      const node = latestGraph.current.nodes.find((one) => one.id === id);
+      const height = node ? aspectHeight(node, ratio) : null;
+      if (height === null) return;
+      setNodes((current) => current.map((one) => (one.id === id ? { ...one, height } : one)));
+      absorb(id, ["height"]);
+    },
+    [setNodes, absorb],
+  );
+  React.useEffect(() => {
+    for (const [id, ratio] of ratios.current) fitAspect(id, ratio);
+  }, [restores, fitAspect]);
 
   const { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument } = useBoardDocuments({ nodes, setNodes, workspaceId });
   //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
@@ -390,8 +426,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 时间线格背后是一条服务端的时间线:**副本各自复制一条**(和整板复制同一条规矩),先建好再放格子 ——
    * 共用一条的话在副本里剪一刀,原件那一格跟着变。等建的那一会儿选中可能变了,所以先记下复制的是哪几格。
    */
-  const latestGraph = React.useRef({ nodes, edges });
-  latestGraph.current = { nodes, edges };
   /** 这几格里的时间线格各自复制一条时间线,回「原件的 → 副本的」;建不成(别的工作区的、已经不在了)说一声、回 null。 */
   const copyTimelines = React.useCallback(
     async (items: BoardItem[]): Promise<Map<string, string> | null> => {
@@ -509,7 +543,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       ...node,
       className,
       draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
-      data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document, onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
+      data: { ...node.data, onText: setText, onAspect: fitAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document, onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
         //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
         onStop,
         abilityLabel: abilityLabel(item) },
@@ -569,8 +603,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     }
     if (refused) toast.error(t("boardLinksRefused").replace("{n}", String(refused)));
   };
-
-  const { history, adopt, flush, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
 
   /**
    * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
@@ -652,7 +684,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       //: 把建好的那一项交回去 —— 从连线末端长出节点时,调用方还要拿它的 id 接上那条线。
       return item;
     },
-    [setNodes, setText, setAspect],
+    [setNodes],
   );
 
   /**
@@ -663,6 +695,41 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    */
   //: 此刻画布上挂着一块面板(产出者的、一项能力的,或剪一段的)—— 缩略图要让开,见 MiniMap。
   const composerShown = Boolean(trimming) || Boolean(!feeding.blocked && composerItem && (producer || ability) && onRun);
+
+  /**
+   * 在一格上跑一次产出者。撤销里这是一步(useBoardHistory.beginRun):点下去先记下,这一轮落下的占位和产出都算在这一步
+   * 里;请求回来交上服务端回的那一版,没跑起来就拿掉这一步。
+   */
+  const runHere = React.useCallback(
+    async (request: BoardRunRequest): Promise<Board | null | undefined> => {
+      if (!onRun) return null;
+      const key = beginRun(request.item_id);
+      try {
+        const board = await onRun(request);
+        placed(key, board?.canvas ?? null);
+        return board;
+      } catch (error) {
+        placed(key, null);
+        throw error;
+      }
+    },
+    [onRun, beginRun, placed],
+  );
+
+  /**
+   * 面板挂上之后、人还没碰它之前写回来的表单(补齐默认值、照上游自动挂上 / 填进来的)**不是人的一步**,并进撤销历史的
+   * 当前这一份:不然选中一格就多一步「什么都没变」;撤一步之后面板照装回去的表单重挂(`restores`),又补一遍,把重做冲掉。
+   * 碰过之后(按下、敲键、拖进文件、粘贴)写回来的都是人的一步。
+   */
+  const panelKey = composerItem ? `${composerItem.id}|${opened ?? ""}|${itemFormResetKey(composerItem)}|${restores}` : "";
+  const touchedPanel = React.useRef("");
+  const touchPanel = () => {
+    touchedPanel.current = panelKey;
+  };
+  const writeForm = (itemId: string, form: BoardItem["form"]) => {
+    if (touchedPanel.current === panelKey) patch(itemId, { form });
+    else absorbPatch(itemId, { form });
+  };
 
   /**
    * 从某一项长出下一项,并连上。
@@ -758,6 +825,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     onReady?.({
       add,
       patch,
+      absorb: absorbPatch,
       adopt,
       flush,
       fitView: () => {
@@ -780,7 +848,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, adopt, flush, onReady, insetsOf, centerOn, focusItem, isInView, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
+  }, [add, patch, absorbPatch, adopt, flush, onReady, insetsOf, centerOn, focusItem, isInView, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
@@ -1047,7 +1115,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
               y: node.position.y + (node.height ?? 200) + 60,
             }) : undefined}
             onTrim={({ start, end, mute }) =>
-              onRun({
+              runHere({
                 producer: "trim",
                 //: 产出落到**新的一格**,摆在原件下面 —— 覆盖原件的话,上一版就没了。
                 item_id: `${item.kind}-${Date.now().toString(36)}`,
@@ -1061,6 +1129,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         );
       })()}
 
+      {/* 面板外面这一层只接「人碰没碰过它」(见 writeForm);撤 / 重做之后整块照装回去的表单重挂(`restores`)——
+          不重挂的话面板里还是撤之前的字,下一次改动又把撤掉的写回去。面板本身经 NodeToolbar 挂到格子下面。 */}
+      <div key={restores} className="contents" onPointerDownCapture={touchPanel} onKeyDownCapture={touchPanel} onDropCapture={touchPanel} onPasteCapture={touchPanel}>
       {/* 选中的那一格还等着产出:挂它的产出者的面板(一张表,见 boardComposers)。 */}
       {!feeding.blocked && composerItem && producer && onRun && renderComposer(producer, {
         item: composerView(composerItem),
@@ -1069,9 +1140,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         feeding,
         documents,
         models: models ?? [],
-        onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer, composerItem.form) }),
+        onFormChange: (form) => writeForm(composerItem.id, withProducer(form, producer, composerItem.form)),
         onPickAsset,
-        run: onRun,
+        run: runHere,
         producers,
       })}
       {/* 操作条上点开的一项能力:它的面板换下这一格自己的那块。宿主就是这一格,设置存在它的 `form.abilities` 上。 */}
@@ -1082,11 +1153,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         feeding,
         documents,
         models: models ?? [],
-        onSave: (setting) => patch(composerItem.id, { form: withAbility(composerItem.form, ability, setting) }),
+        onSave: (setting) => writeForm(composerItem.id, withAbility(composerItem.form, ability, setting)),
         onPickAsset,
-        run: onRun,
+        run: runHere,
         producers,
       })}
+      </div>
     </div>
   );
 }

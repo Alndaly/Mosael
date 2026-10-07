@@ -5,6 +5,8 @@ import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Edge, Node } from "@xyflow/react";
 
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+
 import type { BoardCanvas as Canvas, BoardItem } from "@/api/client";
 import { toCanvas, toNodes } from "@/features/boards/boardCanvasModel";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
@@ -41,7 +43,8 @@ it("撤销栈里 100 份、每份 1000 格:采用服务端的新一版不改写�
     () => {
       const [nodes, setNodes] = React.useState<Node[]>(() => toNodes(start.items));
       const [edges, setEdges] = React.useState<Edge[]>(() => start.edges.map((edge) => ({ ...edge })));
-      return { nodes, setNodes, ...useBoardHistory({ nodes, edges, setNodes, setEdges, onChange: () => undefined }) };
+      const surface = React.useRef<HTMLElement | null>(null);
+      return { nodes, setNodes, ...useBoardHistory({ nodes, edges, setNodes, setEdges, onChange: () => undefined, surface }) };
     },
     { wrapper },
   );

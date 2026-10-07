@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Connection, FinalConnectionState, ReactFlowInstance, ReactFlowProps } from "@xyflow/react";
@@ -265,6 +265,39 @@ function unpick(...ids: string[]) {
     flow.props!.onNodesChange!(ids.map((id) => ({ id, type: "select", selected: false })));
   });
 }
+
+describe("多选之后的一下是撤销里的一步", () => {
+  const roundTrip = async (view: Awaited<ReturnType<typeof mount>>, before: string) => {
+    const after = JSON.stringify(view.api().flush());
+    expect(after).not.toBe(before);
+    act(() => view.api().undo());
+    await settle();
+    expect(JSON.stringify(view.api().flush()), "一下撤回原样").toBe(before);
+    expect(view.api().canUndo).toBe(false);
+    act(() => view.api().redo());
+    await settle();
+    expect(JSON.stringify(view.api().flush()), "重做回来").toBe(after);
+  };
+
+  it("⌘G 把选中的几格圈成一组", async () => {
+    const view = await mount({ items: [image("i1", 0), image("i2", 300)], edges: [], markers: [] });
+    const before = JSON.stringify(view.api().flush());
+    pick("i1", "i2");
+    act(() => void fireEvent.keyDown(document.body, { key: "g", metaKey: true }));
+    await settle();
+    expect(view.latest().items.map((one) => one.kind)).toEqual(["frame", "image", "image"]);
+    await roundTrip(view, before);
+  });
+
+  it("连一根线", async () => {
+    const view = await mount({ items: [image("i1", 0), slot], edges: [], markers: [] });
+    const before = JSON.stringify(view.api().flush());
+    connect("i1", "slot");
+    await settle();
+    expect(links(view.latest())).toEqual(["i1->slot"]);
+    await roundTrip(view, before);
+  });
+});
 
 describe("多选时格子自己的 `+` 只在悬停时露出", () => {
   it("只选一格:它的出入口一直露着(和原来一样)", async () => {
