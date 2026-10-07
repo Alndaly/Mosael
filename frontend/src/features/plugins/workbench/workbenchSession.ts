@@ -4,7 +4,9 @@
  *
  * - 开:先记下要开的是谁(视图一亮出来,App 就把浏览器的顶栏换成工作台的),再让主进程亮出视图、注入桥、打开那一张 / 新建一张;
  * - 关:主进程发来 `state: null`(视图收起)就结束;
- * - 面板要桥做的事(填值、导出、保存、写标记)经 `workbenchCall` 交给主进程,数据逐项校验,送不进代码。
+ * - 面板要桥做的事(填值、导出、保存、写标记)经 `workbenchCall` 交给主进程,数据逐项校验,送不进代码;
+ * - 画布上的地方变了的消息(同一张换了地方、智能体开了一张新的,只报一次)不进快照,交给 `onWorkbenchPlaces` 的听众
+ *   (工作台据此挪家、接住对话,见 followPlaces)。
  */
 import React from "react";
 
@@ -57,15 +59,51 @@ function set(next: WorkbenchSnapshot) {
   for (const listener of listeners) listener();
 }
 
-/** 主进程发来的:同一个连接的才收;`state: null` 是会话结束了。 */
+/** 画布上的地方变了(ADR 0044 §6、§9):哪个连接、哪个工作区的工作台上,同一张换了地方(按先后)、智能体开了一张新的。 */
+export interface WorkbenchPlaceNews {
+  target: WorkbenchTarget;
+  renames: ComfyWorkbenchState["renames"];
+  openedBy: ComfyWorkbenchState["openedBy"];
+}
+
+const placeListeners = new Set<(news: WorkbenchPlaceNews) => void>();
+//: 还没人听时先攒着(视图亮出来到工作台挂上之间那几拍):一条都不能丢,丢了对话就留在旧地方
+const unheard: WorkbenchPlaceNews[] = [];
+
+function tellPlaces(news: WorkbenchPlaceNews) {
+  if (placeListeners.size === 0) {
+    unheard.push(news);
+    unheard.splice(0, Math.max(0, unheard.length - 20));
+    return;
+  }
+  for (const listener of placeListeners) listener(news);
+}
+
+/** 听画布上的地方变了的消息。挂上时先收攒着的那几条。 */
+export function onWorkbenchPlaces(listener: (news: WorkbenchPlaceNews) => void): () => void {
+  placeListeners.add(listener);
+  for (const news of unheard.splice(0)) listener(news);
+  return () => placeListeners.delete(listener);
+}
+
+/**
+ * 主进程发来的:同一个连接的才收;`state: null` 是会话结束了。地方变了的消息和新快照在同一拍里交出去(听众同步挪好选择):
+ * 面板换到新地方重画的时候,新地方的选择已经在了,不闪回草稿。
+ */
 function receive(update: { connectionId: string; state: ComfyWorkbenchState | null }) {
-  if (!snapshot.target || snapshot.target.instanceId !== update.connectionId) return;
+  const target = snapshot.target;
+  if (!target || target.instanceId !== update.connectionId) return;
   if (!update.state) {
     set(EMPTY);
     return;
   }
-  const { events, ...rest } = update.state;
-  set({ ...snapshot, state: { ...rest, events: [] }, events: [...snapshot.events, ...events].slice(-MAX_EVENTS) });
+  const { events, renames, openedBy, ...rest } = update.state;
+  if (renames.length > 0 || openedBy) tellPlaces({ target, renames, openedBy });
+  set({
+    ...snapshot,
+    state: { ...rest, events: [], renames: [], openedBy: null },
+    events: [...snapshot.events, ...events].slice(-MAX_EVENTS),
+  });
 }
 
 function listen() {
@@ -164,5 +202,7 @@ export function nameRun(jobId: string, labels: [string, string][]): void {
 export function resetWorkbench(): void {
   unsubscribe?.();
   unsubscribe = null;
+  placeListeners.clear();
+  unheard.splice(0);
   set(EMPTY);
 }

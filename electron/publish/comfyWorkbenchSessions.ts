@@ -5,7 +5,9 @@
  *   (见 comfyWorkbench.parseWorkbenchPoll)才交给渲染层,内容没变、也没有新事件就不发;
  * - 桥不在(页面刚载入、刷新过)就重新注入;前端还没就绪就等下一拍;
  * - 视图收起(用户回到 Mosael、换去别的视图)就停,告诉渲染层会话结束了;
- * - 渲染层要做的事(填值、导出、保存、写标记)经这里交给桥:会话不在就不做。
+ * - 渲染层要做的事(填值、导出、保存、写标记)经这里交给桥:会话不在就不做;
+ * - 智能体在新标签页开一张(后端排的 openWorkflow)带着是哪段对话开的:那个 id 留在这里、不进页面,开好之后随下一次状态报给
+ *   工作台一次(`openedBy`,ADR 0044 §6),新标签页那一处据此接住这段对话 —— 不靠轮询赛跑。
  *
  * 不碰 Electron:驱动、「视图还亮着吗」、发给渲染层的口子都由调用方给(publishWorker),测试里换成假的。
  */
@@ -14,11 +16,13 @@ import { comfyReady } from "./comfyEditor";
 import {
   parseWorkbenchPoll,
   parseWorkbenchResult,
+  placeOfOpened,
   workbenchCallScript,
   workbenchInstallScript,
   workbenchPollScript,
   type WorkbenchCall,
   type WorkbenchCallResult,
+  type WorkbenchOpenedBy,
   type WorkbenchState,
 } from "./comfyWorkbench";
 
@@ -52,6 +56,15 @@ interface Session {
   timer: ReturnType<typeof setTimeout> | null;
   last: string;
   stopped: boolean;
+  /** 智能体刚开的那一张,等下一次轮询报出去 */
+  openedBy: WorkbenchOpenedBy | null;
+}
+
+/** 「是哪段对话开的」只给工作台(渲染层)看,不进页面:页面里的脚本拿不到 Mosael 的会话 id。 */
+function withoutOpener(call: WorkbenchCall): { call: WorkbenchCall; openedBy: string } {
+  if (call.op !== "openWorkflow" || !call.openedBy) return { call, openedBy: "" };
+  const { openedBy, ...pageCall } = call;
+  return { call: pageCall, openedBy };
 }
 
 export class WorkbenchSessions {
@@ -69,7 +82,7 @@ export class WorkbenchSessions {
   /** 开一个(已经开着就换成新的来源、接着轮询)。先注入桥,再开始轮询。 */
   start(partition: string, origin: string): void {
     this.stop(partition, false);
-    const session: Session = { origin, timer: null, last: "", stopped: false };
+    const session: Session = { origin, timer: null, last: "", stopped: false, openedBy: null };
     this.sessions.set(partition, session);
     void this.tick(partition, session);
   }
@@ -103,9 +116,15 @@ export class WorkbenchSessions {
     const session = this.sessions.get(partition);
     const driver = this.deps.driver(partition);
     if (!session || !driver) return { ok: false, error: "closed" };
+    const { call: pageCall, openedBy } = withoutOpener(call);
     try {
-      const raw = await driver.evaluate<unknown>(workbenchCallScript(session.origin, call), CALL_BUDGET_MS[call.op]);
-      return parseWorkbenchResult(call, raw);
+      const raw = await driver.evaluate<unknown>(workbenchCallScript(session.origin, pageCall), CALL_BUDGET_MS[call.op]);
+      const result = parseWorkbenchResult(pageCall, raw);
+      // 开出来了就算(上面那一批没改上,标签页也在,那段对话照样该在那里接着说)
+      if (openedBy && result.workflow && !session.stopped) {
+        session.openedBy = { sessionId: openedBy, workflow: placeOfOpened(result.workflow) };
+      }
+      return result;
     } catch (error) {
       return { ok: false, error: "failed", message: String((error as Error)?.message ?? error).slice(0, 500) };
     }
@@ -125,11 +144,13 @@ export class WorkbenchSessions {
       if (missing) await this.install(partition);
       const state = missing ? null : parseWorkbenchPoll(raw);
       if (state && !session.stopped) {
-        const { events, ...rest } = state;
+        const { events, renames, ...rest } = state;
         const key = JSON.stringify(rest);
-        if (key !== session.last || events.length > 0) {
+        const openedBy = session.openedBy;
+        if (key !== session.last || events.length > 0 || renames.length > 0 || openedBy) {
           session.last = key;
-          this.deps.emit(partition, state);
+          session.openedBy = null;
+          this.deps.emit(partition, { ...state, openedBy });
         }
       }
     }

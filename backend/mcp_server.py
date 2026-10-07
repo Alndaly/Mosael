@@ -2039,7 +2039,7 @@ def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any
     from app.domain import workbench_agent
 
     return _use_case(workbench_agent.open_new, workspace_id or _default_workspace_id(), template, pack, path, name, ops or [],
-                     instance_id)
+                     instance_id, opened_by=_SESSION_ID.get())
 
 
 @tool(effect="reads", needs="workflow_library", kit="comfyui")

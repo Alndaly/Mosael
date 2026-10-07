@@ -255,9 +255,12 @@ def apply_edit(db: Session, user: User, workspace_id: str, payload: dict[str, An
 
 
 def open_new(db: Session, user: User, workspace_id: str, template: str = "", pack: str = "", path: str = "", name: str = "",
-             ops: list[Any] | None = None, instance_id: str = "") -> dict[str, Any]:
+             ops: list[Any] | None = None, instance_id: str = "", opened_by: str = "") -> dict[str, Any]:
     """`comfy_canvas_new`:在新标签页开一张整图 —— 一张官方模板(照这台机器改好的)、模板上再改一批、从空白搭一批;或者打开存着的
-    那一张(`path`)。不动开着的那几张,**不存盘**(存不存、存在哪是用户的事)。开好之后读一遍、诊断一遍。"""
+    那一张(`path`)。不动开着的那几张,**不存盘**(存不存、存在哪是用户的事)。开好之后读一遍、诊断一遍。
+
+    `opened_by`:是哪段对话开的(工具调用的凭据认出来的会话)。随动作交给主进程,开好之后它随状态报给工作台,让新标签页
+    那一处接住这段对话(ADR 0044 §6)—— 不进页面。"""
     ensure_workspace_access(db, user, workspace_id)
     template, pack, path, name = (str(one or "").strip() for one in (template, pack, path, name))
     ops = list(ops or [])
@@ -269,8 +272,9 @@ def open_new(db: Session, user: User, workspace_id: str, template: str = "", pac
         raise WorkbenchAgentError("workbenchErr_newNothing")
     instance = connection(db, user, instance_id)
     out: dict[str, Any] = {"saved": False}
+    opener = {"openedBy": opened_by} if opened_by else {}
     if path:
-        answer = _workbench(db, user, workspace_id, instance, {"op": "openWorkflow", "path": path})
+        answer = _workbench(db, user, workspace_id, instance, {"op": "openWorkflow", "path": path, **opener})
     else:
         graph: dict[str, Any] = EMPTY_GRAPH
         if template:
@@ -281,7 +285,7 @@ def open_new(db: Session, user: User, workspace_id: str, template: str = "", pac
                                                              "min_comfyui", "version_ok") if key in adapted}
             name = name or str(adapted.get("title") or template)
         call: dict[str, Any] = {"op": "openWorkflow", "graph": graph, "name": name or render_message(
-            "workbenchNewWorkflowName", get_current_locale(), {})}
+            "workbenchNewWorkflowName", get_current_locale(), {}), **opener}
         if ops:
             plan = _ask(db, instance, {"op": "edit_plan", "content": graph, "ops": ops})
             call["ops"] = plan["ops"]

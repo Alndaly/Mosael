@@ -70,6 +70,9 @@ export const listAgentSessions = (workspaceId: string, home?: { kind: string; id
   }
   return api<AgentSession[]>(`/api/agent/sessions?${params.toString()}`);
 };
+/** ComfyUI 那张存盘、改名、挪文件夹时,家跟着挪(ADR 0044 §9)。只收 `comfyui`,只挪自己的;回挪了几段。 */
+export const moveAgentHomes = (body: components["schemas"]["AgentHomesMove"]) =>
+  api<components["schemas"]["AgentHomesMoved"]>("/api/agent/homes/move", { method: "POST", body: JSON.stringify(body) });
 /** 建会话的请求体。标题不给:后端先记一个占位,第一句话进来时起名(见 host.post_user_message)。 */
 export type AgentSessionCreateBody = Omit<components["schemas"]["AgentSessionCreate"], "title">;
 export const createAgentSession = (body: AgentSessionCreateBody) =>

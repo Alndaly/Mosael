@@ -35,6 +35,10 @@
  * **画布上开着的是哪一张**:用户可能在 ComfyUI 自己的标签栏 / 侧栏里换一张。轮询里的 `workflow.key` 是那一张在前端工作流仓库里的
  * 路径(没存过的也有,形如 `workflows/Unsaved Workflow (2).json`),面板按它认「换了一张」;`revision` 是这一张的图**改过几回**
  * —— 前端自己的改动跟踪(`changeTracker`)每认一次改动就换一份 `activeState`,桥看到换了就加一(选中节点不算改动)。
+ *
+ * **同一张换了地方**(ADR 0044 §9):前端仓库里的每一张(`workflows`,没开着的也算)桥都记着上次看到的「路径 + 存没存过」;
+ * 同一个对象变了 —— 存一张没存过的(前端先给它改名、再存)、改名、挪文件夹 —— 就记一条 `renames`,随下一次轮询报一次,
+ * 工作台据此把对话的家和这一处的选择挪过去。「另存为」是前端新建的一个对象、一个新地方,不算(对话留在原来那张)。
  */
 
 /**
@@ -42,15 +46,18 @@
  * 3:「运行」前后照前端自己的「生成后怎样」换种子(runControls)。4:读整张图给智能体(readGraph);定位认从根图往里走的
  * 节点路径(`12:5`),一层层打开子图;轮询报那台 ComfyUI 和它前端的版本(ADR 0042)。5:智能体改图(applyOps:一批改动
  * 先全查一遍再改、只占一步撤销,根图和子图的定义、边界口、提升控件、打包 / 拆开)、在新标签页开一张整图(openWorkflow,
- * 不存盘)(ADR 0042 第二步)。
+ * 不存盘)(ADR 0042 第二步)。6:报同一张换了地方(renames:存没存过的那张、改名、挪文件夹,ADR 0044 第四步)。
  */
-export const WORKBENCH_VERSION = 5;
+export const WORKBENCH_VERSION = 6;
 
 /** 一批改动最多几条(和 ipc-contract、插件的 canvas_edit 同一个数)。 */
 export const MAX_EDIT_OPS = 200;
 
 /** 队列里最多留几条事件(没人取的时候丢最老的)。 */
 export const MAX_EVENTS = 200;
+
+/** 两次轮询之间最多记几条「换了地方」(没人取的时候丢最老的)。 */
+export const MAX_RENAMES = 50;
 
 /** 保存用的前端命令(和 ComfyUI 菜单「工作流 → 保存」、Ctrl+S 同一条)。 */
 export const SAVE_COMMAND = "Comfy.SaveWorkflow";
@@ -84,9 +91,11 @@ export type WorkbenchCall =
   | { op: "applyOps"; ops: WorkbenchEditOp[] }
   /**
    * 在新标签页开一张(ADR 0042 第二步):给 `graph` 就是一张没存过的新工作流(名字是 `name`,和开着的不重名;`ops` 再在上面
-   * 改一批),给 `path` 就是打开存着的那一张。都不存盘 —— 存不存是用户的事。
+   * 改一批),给 `path` 就是打开存着的那一张。都不存盘 —— 存不存是用户的事。`openedBy` 是哪段智能体对话开的:主进程留着
+   * (开好之后随状态报给工作台,ADR 0044 §6),**不进页面**。
    */
-  | { op: "openWorkflow"; graph: Record<string, unknown> | null; name: string; path: string | null; ops: WorkbenchEditOp[] };
+  | { op: "openWorkflow"; graph: Record<string, unknown> | null; name: string; path: string | null; ops: WorkbenchEditOp[];
+      openedBy?: string };
 
 /** 改动里指一个节点:那一层里的编号,或者这一批里新加的临时名字(`$a`)。 */
 type EditNode = string;
@@ -581,13 +590,33 @@ export function workbenchInstallScript(origin: string): string {
     for (let n = 2; store.getWorkflowByPath("workflows/" + name + ".json") && n < 1000; n += 1) name = clean + " (" + n + ")";
     return name;
   };
+  const placeOf = (one) => ({ path: text(one.path, 600), name: text(one.filename, 300), temporary: Boolean(one.isTemporary) });
   const openedInfo = () => {
     const active = workflows().activeWorkflow;
-    return active ? { path: text(active.path, 600), name: text(active.filename, 300), temporary: Boolean(active.isTemporary) } : null;
+    return active ? placeOf(active) : null;
+  };
+  //: 同一个工作流对象上次看到的「路径 + 存没存过」:变了就记一条(存没存过的那张是先改名、再存 —— 两拍之间被看见一次
+  //: 「改了名、还没存」,就是先后两条,工作台按先后挪)。对象没了(关了没存的那张)WeakMap 自己放掉
+  const seenPlaces = new WeakMap();
+  const renames = [];
+  const watchRenames = () => {
+    const store = workflows();
+    const all = store && store.workflows;
+    for (const one of Array.isArray(all) ? all : []) {
+      if (!one || typeof one !== "object") continue;
+      const now = placeOf(one);
+      const before = seenPlaces.get(one);
+      if (before && (before.path !== now.path || before.temporary !== now.temporary)) {
+        renames.push({ from: before, to: now });
+        if (renames.length > ${MAX_RENAMES}) renames.splice(0, renames.length - ${MAX_RENAMES});
+      }
+      seenPlaces.set(one, now);
+    }
   };
   const bridge = {
     version: VERSION,
     poll() {
+      watchRenames();
       const store = workflows();
       const active = store && store.activeWorkflow;
       const nodes = selected();
@@ -600,6 +629,7 @@ export function workbenchInstallScript(origin: string): string {
         clientId: text(api && (api.clientId || api.initialClientId), 100),
         server: { comfyui: server.comfyui, frontend: server.frontend },
         events: queue.splice(0, queue.length),
+        renames: renames.splice(0, renames.length),
       };
     },
     setWidget(id, name, value) {
@@ -882,18 +912,45 @@ export interface WorkbenchEvent {
   message?: string;
 }
 
+/**
+ * 画布上的一张在哪:`path` 是 `workflows/` 下的相对路径(没存过的是空串);`key` 认的是**哪一张**(前端工作流仓库里的路径,
+ * 没存过的也有)。工作台的那一处由它算(features/agent/places 的 comfyPlace)。
+ */
+export interface WorkbenchPlace {
+  path: string;
+  name: string;
+  temporary: boolean;
+  key: string;
+}
+
+/** 同一张换了地方(存没存过的那张、改名、挪文件夹,ADR 0044 §9)。 */
+export interface WorkbenchRename {
+  from: WorkbenchPlace;
+  to: WorkbenchPlace;
+}
+
+/** 智能体刚在新标签页开了一张:是哪段对话开的、开的是哪一张(ADR 0044 §6)。 */
+export interface WorkbenchOpenedBy {
+  sessionId: string;
+  workflow: WorkbenchPlace;
+}
+
 export interface WorkbenchState {
   capabilities: WorkbenchCapabilities;
   /**
    * 画布上开着的那一张:`path` 是 `workflows/` 下的相对路径(没存过的是空串);`key` 认的是**哪一张**(前端工作流仓库里的路径,
    * 没存过的也有);`revision` 是这一张的图改过几回(只增,换一张也加一)。
    */
-  workflow: { path: string; name: string; temporary: boolean; modified: boolean; key: string; revision: number } | null;
+  workflow: (WorkbenchPlace & { modified: boolean; revision: number }) | null;
   selection: { count: number; node: WorkbenchNode | null };
   clientId: string;
   /** 那台 ComfyUI 和它前端的版本(如 `0.39.0`、`1.53.10`);还没问到是空串 */
   server: { comfyui: string; frontend: string };
   events: WorkbenchEvent[];
+  /** 上一次轮询以来同一张换了地方的,按先后。只报一次 —— 工作台据此把对话的家和这一处的选择挪过去。 */
+  renames: WorkbenchRename[];
+  /** 智能体刚开的那一张,只报一次。桥不知道这个(会话 id 不进页面),主进程在开好之后填上(见 comfyWorkbenchSessions)。 */
+  openedBy: WorkbenchOpenedBy | null;
 }
 
 const CAPABILITIES: (keyof WorkbenchCapabilities)[] = ["selection", "setWidget", "refreshCombos", "export", "dirty", "save",
@@ -933,6 +990,12 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
     if (event.type === "execution_error") Object.assign(event, { nodeType: str(one.nodeType, 200), message: str(one.message, 1000) });
     return [event];
   });
+  const renames = (Array.isArray(raw.renames) ? raw.renames : []).slice(-MAX_RENAMES).flatMap((one): WorkbenchRename[] => {
+    if (!isRecord(one) || !isRecord(one.from) || !isRecord(one.to)) return [];
+    const from = parseOpenWorkflow(one.from);
+    const to = parseOpenWorkflow(one.to);
+    return from.key && to.key && (from.key !== to.key || from.path !== to.path) ? [{ from, to }] : [];
+  });
   return {
     capabilities,
     workflow,
@@ -940,6 +1003,8 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
     clientId: /^[A-Za-z0-9_-]{1,100}$/.test(str(raw.clientId, 100)) ? str(raw.clientId, 100) : "",
     server: { comfyui: version(server.comfyui), frontend: version(server.frontend) },
     events,
+    renames,
+    openedBy: null,
   };
 }
 
@@ -947,7 +1012,7 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
 const version = (value: unknown) => (/^[0-9A-Za-z.+_-]{1,40}$/.test(str(value, 40)) ? str(value, 40) : "");
 
 /** 开着的是哪一张:`path` 去掉前端的 `workflows/` 前缀,不在 `workflows/` 下的(前端自己的临时路径)当没存过;`key` 认哪一张。 */
-function parseOpenWorkflow(raw: Record<string, unknown>): { path: string; name: string; temporary: boolean; key: string } {
+function parseOpenWorkflow(raw: Record<string, unknown>): WorkbenchPlace {
   const path = str(raw.path, 600);
   const saved = path.startsWith("workflows/") && path.toLowerCase().endsWith(".json") && raw.temporary !== true;
   const name = str(raw.name, 300);
@@ -999,7 +1064,7 @@ export interface WorkbenchGraph {
   selection: string[];
   modified: boolean;
   layer: string | null;
-  info: { path: string; name: string; temporary: boolean; key: string } | null;
+  info: WorkbenchPlace | null;
 }
 
 export function parseWorkbenchGraph(raw: unknown): WorkbenchGraph | null {
@@ -1022,6 +1087,11 @@ export interface WorkbenchOpened {
   path: string;
   name: string;
   temporary: boolean;
+}
+
+/** 开好的那一张在哪(和轮询报的 `workflow` 同一种写法)。 */
+export function placeOfOpened(opened: WorkbenchOpened): WorkbenchPlace {
+  return parseOpenWorkflow({ ...opened });
 }
 
 /**

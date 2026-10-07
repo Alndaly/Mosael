@@ -108,6 +108,8 @@ function state(overrides: Partial<ComfyWorkbenchState> = {}): ComfyWorkbenchStat
     clientId: EXPORTED.clientId,
     server: { comfyui: "0.39.0", frontend: "1.53.10" },
     events: [],
+    renames: [],
+    openedBy: null,
     ...overrides,
   };
 }

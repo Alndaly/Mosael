@@ -237,6 +237,12 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "openWorkflow", path: "../x.json" })).toThrow(/path/);
     expect(() => callOf({ op: "openWorkflow", path: "a.json", ops: [ops[4]] }), "存着的那一张不在这里改").toThrow(/ops/);
     expect(() => callOf({ op: "openWorkflow", graph, save: true })).toThrow(/unexpected/);
+    expect(callOf({ op: "openWorkflow", path: "a.json", openedBy: "0f3c9a2b7d4e4c51a3e8b6d2c1f0e9a7" }).call.openedBy,
+           "是哪段对话开的(ADR 0044 §6)").toBe("0f3c9a2b7d4e4c51a3e8b6d2c1f0e9a7");
+    expect(callOf({ op: "openWorkflow", path: "a.json" }).call, "不是智能体开的就没有这一项").not.toHaveProperty("openedBy");
+    for (const openedBy of ["", "a b", 'x"; alert(1)', "x".repeat(65), 7]) {
+      expect(() => callOf({ op: "openWorkflow", path: "a.json", openedBy }), String(openedBy)).toThrow(/openedBy/);
+    }
 
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });

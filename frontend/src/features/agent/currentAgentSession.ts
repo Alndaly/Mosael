@@ -28,15 +28,17 @@ import {
   getAgentSession,
   isNotFound,
   listAgentSessions,
+  moveAgentHomes,
   updateAgentSession,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { STUDIO_PLACE, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
+import { STUDIO_PLACE, placeKey, placePayload, samePlace, type AgentPlace } from "@/features/agent/places";
 import {
   type AgentDraftSettings,
   adoptAgentSession,
   clearDraftSettings,
   forgetChoices,
+  moveChoices,
   readChoice,
   readDraftSettings,
   startAgentDraft,
@@ -149,6 +151,24 @@ export function ensureAgentSession(qc: QueryClient, workspaceId: string, place: 
   })().finally(() => ensuring.delete(slot));
   ensuring.set(slot, job);
   return job;
+}
+
+let moving: Promise<unknown> = Promise.resolve();
+
+/**
+ * 一处地方换了 id —— ComfyUI 那张第一次存盘、改名、挪文件夹(工作台的桥报来的,ADR 0044 §9)。这个窗口里那一处的选择和
+ * 草稿设置**当场**挪过去(面板换到新地方时还是那段,不闪回草稿),再请后端把家在旧地方的对话挪过去,挪完重读清单。
+ *
+ * 一个接一个地挪:存一张没存过的,桥可能先后报两条(改了名、存上了),后一条要等前一条在后端挪完,不然它挪的时候家还在原处。
+ */
+export function moveAgentPlace(qc: QueryClient, workspaceId: string, from: AgentPlace, to: AgentPlace): Promise<void> {
+  if (samePlace(from, to)) return Promise.resolve();
+  moveChoices(workspaceId, from, to);
+  const moved = moving
+    .then(() => moveAgentHomes({ workspace_id: workspaceId, kind: from.kind, from_id: from.id, to_id: to.id }))
+    .then(() => qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) }));
+  moving = moved.catch(() => undefined);
+  return moved;
 }
 
 /** 这些对话删掉了:指着它们的选择全清掉(那几处回到草稿),缓存里也拿掉。 */

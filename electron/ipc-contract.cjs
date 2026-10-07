@@ -255,6 +255,8 @@ const MAX_EDIT_VALUE = 20000;
 const MAX_OPEN_GRAPH_CHARS = 16 * 1024 * 1024;
 //: 这一批里新加的节点的临时名字
 const TEMP_NODE = /^\$[A-Za-z0-9_]{1,32}$/;
+//: 智能体对话的 id(后端的会话 id 是 32 位十六进制;留宽一点,只挡形状)
+const AGENT_SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 //: 一批改动每一种带哪些字段(插件 canvas_edit 规整过的那一份;字段的形状下面逐项查)
 const EDIT_OPS = {
   add_node: ["op", "layer", "id", "type", "widgets", "title", "near"],
@@ -360,10 +362,11 @@ function parseEditOps(value, channel) {
 
 /**
  * 在新标签页开一张(ADR 0042 第二步):`graph`(界面格式,有 `nodes`)加 `name`(标签的名字,不带路径分隔),再改一批 `ops`;
- * 或者只给 `path`,打开存着的那一张(和工作台「打开」同一套路径规矩)。两样不能都给。
+ * 或者只给 `path`,打开存着的那一张(和工作台「打开」同一套路径规矩)。两样不能都给。`openedBy`:是哪段智能体对话开的
+ * (后端按凭据认出来的会话 id),主进程留着、不进页面,开好之后随状态报给工作台(ADR 0044 §6)。
  */
 function parseOpenWorkflow(call, channel) {
-  onlyKeys(call, ["op", "graph", "name", "path", "ops"], channel);
+  onlyKeys(call, ["op", "graph", "name", "path", "ops", "openedBy"], channel);
   const path = call.path === undefined || call.path === null ? null : comfyWorkflowPath(call.path, channel);
   const graph = call.graph === undefined || call.graph === null ? null : record(call.graph, channel);
   if (Boolean(path) === Boolean(graph)) throw new TypeError(`${channel}: give either graph or path`);
@@ -374,7 +377,12 @@ function parseOpenWorkflow(call, channel) {
   if (/[\\/]/.test(name)) throw new TypeError(`${channel}: name must not contain a path separator`);
   const ops = call.ops === undefined ? [] : parseEditOps(call.ops, channel);
   if (path && ops.length) throw new TypeError(`${channel}: ops only go with a new graph`);
-  return { op: "openWorkflow", graph: graph ? JSON.parse(JSON.stringify(graph)) : null, name, path, ops };
+  const opened = { op: "openWorkflow", graph: graph ? JSON.parse(JSON.stringify(graph)) : null, name, path, ops };
+  if (call.openedBy === undefined) return opened;
+  if (typeof call.openedBy !== "string" || !AGENT_SESSION_ID.test(call.openedBy)) {
+    throw new TypeError(`${channel}: openedBy must be an agent session id`);
+  }
+  return { ...opened, openedBy: call.openedBy };
 }
 
 /**

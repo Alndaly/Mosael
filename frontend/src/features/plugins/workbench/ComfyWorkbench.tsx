@@ -13,6 +13,7 @@ import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
 import { AssistantPanel } from "@/features/plugins/workbench/AssistantPanel";
 import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
+import { useFollowWorkbenchPlaces } from "@/features/plugins/workbench/followPlaces";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
@@ -70,6 +71,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   //: 工作台盖在页面上时,「眼下这一处」是这台 ComfyUI 上开着的那张(ADR 0044 §3、§11):助手接那一张的对话,换标签页
   //: 就换成那一张的;每条消息带着它,这一轮就有 ComfyUI 那份工具。关了工作台退回下面那一页。
   const agentPlace = useAgentPlace(target ? comfyPlace(target.instanceId, workflow) : null);
+  //: 同一张存盘、改名后对话跟着它走;智能体开的新标签页接住开它的那段对话(ADR 0044 §6、§9)
+  useFollowWorkbenchPlaces();
   //: 一直没收到桥那边的回话(这版前端太旧、页面要先登录、桥注入不上):说一句,画布照常能用
   const [stuck, setStuck] = React.useState(false);
   React.useEffect(() => {

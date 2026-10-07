@@ -417,3 +417,25 @@ def test_新标签页_打开存着的那一张_或者从空白搭(connected) -> 
     assert blank["graph"]["nodes"] == [] and [one["op"] for one in blank["ops"]] == ["add_node", "add_node", "connect"]
     assert built["created"] == {"$k": "30", "$e": "30"} and saved["saved"] is False
     assert "只能给一样" in both["error"] and "要给点东西" in nothing["error"]
+
+
+def test_新标签页_带上是哪段对话开的_按凭据认_不按参数(connected) -> None:
+    """ADR 0044 §6:主进程开好新标签页后随状态报回 `openedBy`,工作台让那一处接住这段对话。会话是凭据认出来的。"""
+    from app.core.security import mint_service_session
+    from tests.util import user_id
+
+    client, _, instance_id, workspace = connected
+    session = client.post("/api/agent/sessions", json={"workspace_id": workspace, "home": {"kind": "comfyui", "id": instance_id}})
+    session_id = session.json()["id"]
+    with SessionLocal() as db:
+        token = mint_service_session(db, user_id(), agent_session_id=session_id)
+        db.commit()
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        for arguments in ({"path": "人像/古风.json"}, {"name": "从空白搭", "ops": [{"op": "add_node", "id": "$k", "type": "KSampler"}]}):
+            answer = client.post(f"/api/agent/tools/comfy_canvas_new?workspace_id={workspace}",
+                                 json={"arguments": {"instance_id": instance_id, **arguments}},
+                                 headers={"Authorization": f"Bearer {token}"})
+            assert answer.status_code == 200 and "result" in answer.json(), answer.text
+    opened = [call for call in canvas.calls if call["op"] == "openWorkflow"]
+    assert [call.get("openedBy") for call in opened] == [session_id, session_id]

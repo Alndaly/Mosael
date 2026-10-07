@@ -107,6 +107,25 @@ export function startAgentDraft(workspaceId: string, place: AgentPlace): void {
   writeChoice(workspaceId, place, "");
 }
 
+/**
+ * 一处地方换了 id(ComfyUI 那张第一次存盘、改名、挪文件夹,ADR 0044 §9):这个窗口里它的选择和草稿设置原样挪到新 id 上
+ * —— 旧地方是草稿,新地方也是草稿(新地方原先记着的不留:那个文件刚被这一张顶替了)。旧 id 上什么都不剩。
+ */
+export function moveChoices(workspaceId: string, from: AgentPlace, to: AgentPlace): void {
+  const storage = store();
+  try {
+    for (const key of [agentSessionSelectionKey, draftSettingsKey]) {
+      const value = storage.getItem(key(workspaceId, from));
+      if (value) storage.setItem(key(workspaceId, to), value);
+      else storage.removeItem(key(workspaceId, to));
+      storage.removeItem(key(workspaceId, from));
+    }
+  } catch {
+    // 配额满了:新地方这次没接上,面板是草稿,「这里的对话」里照样有它(家在后端挪)。
+  }
+  changed();
+}
+
 /** 这些对话删掉了:指着它们的选择全清掉(扫这个工作区下所有地方的键),那几处回到草稿。 */
 export function forgetChoices(workspaceId: string, sessionIds: readonly string[]): void {
   if (sessionIds.length === 0) return;

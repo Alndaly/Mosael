@@ -95,4 +95,47 @@ describe("工作台会话(主进程这一侧)", () => {
     h.driver.evaluate.mockRejectedValueOnce(new Error("page went away"));
     await expect(h.sessions.call(PARTITION, { op: "export" })).resolves.toEqual({ ok: false, error: "failed", message: "page went away" });
   });
+
+  it("同一张换了地方:内容一样也发,只发一次(ADR 0044 §9)", async () => {
+    const moved = { from: { path: "workflows/Unsaved Workflow.json", name: "Unsaved Workflow", temporary: true },
+                    to: { path: "workflows/a.json", name: "a", temporary: false } };
+    let state = answer();
+    const h = harness((script) => (script === workbenchPollScript(ORIGIN) ? state : true));
+    h.sessions.start(PARTITION, ORIGIN);
+    await vi.waitFor(() => expect(h.emit).toHaveBeenCalledTimes(1));
+    expect(h.emit.mock.calls[0][1]).toMatchObject({ renames: [], openedBy: null });
+    state = answer({ renames: [moved] });
+    await h.tick();
+    expect(h.emit).toHaveBeenCalledTimes(2);
+    expect(h.emit.mock.calls[1][1].renames).toEqual([{
+      from: { path: "", name: "Unsaved Workflow", temporary: true, key: "workflows/Unsaved Workflow.json" },
+      to: { path: "a.json", name: "a", temporary: false, key: "workflows/a.json" },
+    }]);
+    state = answer();
+    await h.tick();
+    expect(h.emit, "桥那边已经取走了,下一拍没有就不再发").toHaveBeenCalledTimes(2);
+  });
+
+  it("智能体开的新标签页:是哪段对话开的不进页面,开好之后随下一次状态报一次(ADR 0044 §6)", async () => {
+    const opened = { path: "workflows/Qwen 编辑.json", name: "Qwen 编辑", temporary: true };
+    const h = harness((script) => (script === workbenchPollScript(ORIGIN) ? answer() : { ok: true, workflow: opened, created: {} }));
+    h.sessions.start(PARTITION, ORIGIN);
+    await vi.waitFor(() => expect(h.emit).toHaveBeenCalledTimes(1));
+    const call = { op: "openWorkflow", graph: { nodes: [] }, name: "Qwen 编辑", path: null, ops: [], openedBy: "s1" } as const;
+    await expect(h.sessions.call(PARTITION, call)).resolves.toMatchObject({ ok: true, workflow: opened });
+    const scripts = h.driver.evaluate.mock.calls.map(([script]) => script as string);
+    const { openedBy: _, ...pageCall } = call;
+    expect(scripts).toContain(workbenchCallScript(ORIGIN, pageCall));
+    expect(scripts.some((script) => script.includes("openedBy") || script.includes('"s1"')), "会话 id 不进页面").toBe(false);
+    await h.tick();
+    expect(h.emit, "内容一样也发").toHaveBeenCalledTimes(2);
+    expect(h.emit.mock.calls[1][1].openedBy).toEqual({
+      sessionId: "s1", workflow: { path: "", name: "Qwen 编辑", temporary: true, key: "workflows/Qwen 编辑.json" },
+    });
+    await h.tick();
+    expect(h.emit, "只报一次").toHaveBeenCalledTimes(2);
+    await h.sessions.call(PARTITION, { ...call, openedBy: undefined });
+    await h.tick();
+    expect(h.emit, "不是智能体开的:没什么要报").toHaveBeenCalledTimes(2);
+  });
 });

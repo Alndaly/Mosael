@@ -142,6 +142,7 @@ describe("工作台的桥(注入的脚本)", () => {
       clientId: "4f1c0e2a9b7d4c51a3e8",
       server: { comfyui: "0.39.0", frontend: "1.53.11" },
       events: [],
+      renames: [],
     });
     page.app.canvas.selected_nodes = { 4: page.loader, 3: page.sampler };
     expect(((await page.run(workbenchPollScript(ORIGIN))) as { selection: unknown }).selection,
@@ -163,6 +164,37 @@ describe("工作台的桥(注入的脚本)", () => {
     page.app.extensionManager.workflow.activeWorkflow = { ...page.active, path: "workflows/Unsaved Workflow (2).json",
       filename: "Unsaved Workflow (2)", isTemporary: true, changeTracker: { ...page.tracker, activeState: {} } };
     expect(await workflow()).toMatchObject({ path: "workflows/Unsaved Workflow (2).json", revision: 3 });
+  });
+
+  it("同一张换了地方(ADR 0044 §9):存没存过的那张、改名、侧栏里改一张没开着的,各记一条、取一次清一次;另存为是新的一张,不算", async () => {
+    const page = await installed();
+    //: 前端仓库里认得的每一张(没开着的也在):开着的这张、一张没存过的、一张存着没开的
+    const unsaved = { path: "workflows/Unsaved Workflow.json", filename: "Unsaved Workflow", isTemporary: true };
+    const closed = { path: "workflows/旧/草图.json", filename: "草图", isTemporary: false };
+    const store = page.app.extensionManager.workflow as Record<string, unknown>;
+    store.workflows = [page.active, unsaved, closed];
+    const renames = async () => ((await page.run(workbenchPollScript(ORIGIN))) as { renames: unknown[] }).renames;
+    expect(await renames(), "头一回看见的不算换了地方").toEqual([]);
+    // 存那张没存过的:前端先给它改名,这一拍被看见,再存上
+    unsaved.path = "workflows/人像/qwen.json";
+    unsaved.filename = "qwen";
+    expect(await renames()).toEqual([{
+      from: { path: "workflows/Unsaved Workflow.json", name: "Unsaved Workflow", temporary: true },
+      to: { path: "workflows/人像/qwen.json", name: "qwen", temporary: true },
+    }]);
+    unsaved.isTemporary = false;
+    expect(await renames(), "存上了是第二条").toEqual([{
+      from: { path: "workflows/人像/qwen.json", name: "qwen", temporary: true },
+      to: { path: "workflows/人像/qwen.json", name: "qwen", temporary: false },
+    }]);
+    expect(await renames(), "取一次清一次").toEqual([]);
+    closed.path = "workflows/新/草图.json";
+    page.active.path = "workflows/人像/古风 v2.json";
+    expect((await renames()).map((one) => (one as { to: { path: string } }).to.path))
+      .toEqual(["workflows/人像/古风 v2.json", "workflows/新/草图.json"]);
+    // 另存为:前端新建一个对象,原来那张不动
+    store.workflows = [page.active, unsaved, closed, { path: "workflows/人像/古风 v3.json", filename: "古风 v3", isTemporary: false }];
+    expect(await renames()).toEqual([]);
   });
 
   it("定位节点:选中、移到画面中间;在子图里的先进那张子图;这版前端进不了子图就说在子图里", async () => {
@@ -417,6 +449,21 @@ describe("页面交回来的一律当提示:规整", () => {
     expect(parseWorkbenchPoll(poll({ workflow: { path: "../../etc/x.json" } }))!.workflow!.path).toBe("");
     expect(parseWorkbenchPoll(poll({ clientId: "a b;c" }))!.clientId).toBe("");
     expect(parseWorkbenchPoll(poll({ selection: { count: 1, node: { id: "x;y", widgets: [] } } }))!.selection.node).toBeNull();
+  });
+
+  it("换了地方的那几条:和开着的那张同一套规整;形状不对的、其实没换的丢掉;会话 id 不是页面能报的", () => {
+    const unsaved = { path: "workflows/Unsaved Workflow.json", name: "Unsaved Workflow", temporary: true };
+    const saved = { path: "workflows/a.json", name: "a", temporary: false };
+    const state = parseWorkbenchPoll(poll({
+      renames: [{ from: unsaved, to: saved }, { from: saved, to: saved }, { from: unsaved }, "x", { from: { path: "" }, to: saved }],
+      openedBy: { sessionId: "s1", workflow: saved },
+    }))!;
+    expect(state.renames).toEqual([{
+      from: { path: "", name: "Unsaved Workflow", temporary: true, key: "workflows/Unsaved Workflow.json" },
+      to: { path: "a.json", name: "a", temporary: false, key: "workflows/a.json" },
+    }]);
+    expect(state.openedBy, "是哪段对话开的由主进程填,页面说了不算").toBeNull();
+    expect(parseWorkbenchPoll(poll({ renames: "all" }))!.renames).toEqual([]);
   });
 
   it("整张图:界面格式要有 nodes、不超过上限;选中的只留节点号,层只认子图 id 的写法,开着的那张和轮询同一套规整", () => {
