@@ -1,32 +1,29 @@
 import React from "react";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
-import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Truncate } from "@/components/ui/truncate";
-import { useReachEnd } from "@/lib/useReachEnd";
 import { cn } from "@/lib/utils";
 
-/** 一行里放什么:行首认脸用的一小块(缩略图或图标)、名字、一行说明、行尾一小段附注(版本、时长、日期)。 */
+/** 一行里放什么:行首认脸用的一小块(图标)、名字、一行说明、行尾一小段附注(版本、日期)。 */
 export type PickRow = {
   lead: React.ReactNode;
   title: string;
   /** 一行纯文字 —— 调用方负责去掉 Markdown 这类记号,这里只管截断。 */
   subtitle?: string;
   meta?: string;
-  /** 行首那一小块能放大看(挑素材时的图和视频):给了就在它上面压一颗「看大图」。点这一行仍然是挑。 */
-  preview?: () => void;
 };
 
 /**
- * 「从一份清单里挑一个」的弹窗:挑笔记、挑 3D 场景、挑素材都是这一个。
+ * 「按名字从一份清单里挑一个」的弹窗:挑笔记、挑 3D 场景、挑资产都是这一个。挑**媒体**(图片、视频、音频、文档素材)
+ * 是看着挑的,走网格(AssetGridPicker)。
  *
- * 三处此前两个样子:笔记和场景是一张大卡一条(大图标、名字、两行原文、再一行日期),挑到第四条就得滚;
- * 素材是紧凑的一行一个。它们做的是同一件事,版式只有一份:
+ * 笔记和场景此前是一张大卡一条(大图标、名字、两行原文、再一行日期),挑到第四条就得滚。它们做的是同一件事,
+ * 版式只有一份:
  *
  * - **搜索钉在头里**(ModalShell 的 header):它作用于下面整份清单,翻到第三十条时它还在原地。
  * - **一行一个**:行首一小块认脸,名字一行,说明一行(截断,不折成两三行把清单撑稀),附注靠右。
@@ -52,11 +49,6 @@ export function PickListDialog<T>({
   empty,
   notice,
   className,
-  filters,
-  actions,
-  dropzone,
-  onReachEnd,
-  loadingMore = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,19 +70,6 @@ export function PickListDialog<T>({
   /** 清单下面一句(「只列了前 200 条,再搜细一点」)。 */
   notice?: string;
   className?: string;
-  /** 搜索框下面、同样钉在头里的一排筛选(挑素材时按图片 / 视频 / 音频筛)。它也作用于整份清单。 */
-  filters?: React.ReactNode;
-  /** 筛选下面、钉在头里的一行动作(挑素材时「上传本地文件」和传的进度)—— 清单里没有的,从这里来。 */
-  actions?: React.ReactNode;
-  /** 整个弹窗收拖进来的文件(见 ModalShell 的 dropzone)。 */
-  dropzone?: React.ComponentProps<typeof ModalShell>["dropzone"];
-  /**
-   * 清单是一页页从服务端取的(素材库):滚到最后一行附近时叫一声,调用方接着取下一页。
-   * 没有下一页了就别给。
-   */
-  onReachEnd?: () => void;
-  /** 下一页还在路上:清单底下转一个圈。 */
-  loadingMore?: boolean;
 }) {
   const t = useI18n();
   const [active, setActive] = React.useState(0);
@@ -100,9 +79,6 @@ export function PickListDialog<T>({
   React.useEffect(() => {
     list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [active]);
-  //: 最后一行快进视野就要下一页(见 useReachEnd)。
-  const wantsMore = Boolean(onReachEnd);
-  const end = useReachEnd<HTMLDivElement>(onReachEnd, items.length);
 
   const keys = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!items.length) return;
@@ -122,7 +98,6 @@ export function PickListDialog<T>({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      dropzone={dropzone}
       className={cn("w-[min(560px,calc(100vw-32px))] h-[min(560px,calc(100dvh-32px))]", className)}
       header={
         <>
@@ -142,8 +117,6 @@ export function PickListDialog<T>({
               aria-controls="pick-list"
             />
           </div>
-          {filters}
-          {actions}
         </>
       }
     >
@@ -171,7 +144,7 @@ export function PickListDialog<T>({
         <div ref={list} id="pick-list" role="listbox" aria-label={title} className="grid content-start gap-0.5">
           {items.map((item, index) => {
             const one = row(item);
-            const option = (
+            return (
               <button
                 key={itemKey(item)}
                 type="button"
@@ -194,20 +167,7 @@ export function PickListDialog<T>({
                 ) : null}
               </button>
             );
-            if (!one.preview) return option;
-            //: 按钮不能套按钮:「看大图」和这一行并排放在一个容器里,盖在行首那块缩略图上。
-            return (
-              <div key={itemKey(item)} className="group/preview relative grid">
-                {option}
-                <ViewFullSizeButton name={one.title} onOpen={one.preview} className="left-2.5 top-1/2 -translate-y-1/2" />
-              </div>
-            );
           })}
-          {wantsMore || loadingMore ? (
-            <div ref={end} data-pick-more="" className="grid h-8 place-items-center text-muted-foreground">
-              {loadingMore ? <Loader2 size={14} className="animate-mosael-spin" aria-label={t("pageLoading")} /> : null}
-            </div>
-          ) : null}
           {notice ? <p className="m-0 px-1.5 pt-2 text-ui-xs text-muted-foreground">{notice}</p> : null}
         </div>
       )}
