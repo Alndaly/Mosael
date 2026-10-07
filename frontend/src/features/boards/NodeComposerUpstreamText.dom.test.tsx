@@ -20,7 +20,7 @@ afterEach(cleanup);
 
 const model = {
   id: "m", provider_profile_id: "p", profile_name: "T", label: "L", adapter_available: true, is_default: true, capabilities_known: true,
-  provider: "test", model: "img", kind: "image", capabilities: {},
+  provider: "test", model: "img", model_label: "img", kind: "image", capabilities: {},
 } as GenerationOption;
 
 it("框里删空过(留着一份空文档)再连上便签:框里显示便签的字,提交的也是它", async () => {

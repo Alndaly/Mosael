@@ -1101,7 +1101,8 @@ export function NodeComposer({
               onChange={pickModel}
               options={options.map((one) => ({
                 value: `${one.provider_profile_id}:${one.model}`,
-                label: `${one.model} · ${one.profile_name}`,
+                //: 写名字不写 id:ComfyUI 工作流的 id 是文件名,起了精简表单标题的该叫标题(搜也按名字搜)
+                label: `${one.model_label} · ${one.profile_name}`,
               }))}
             />
             {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」

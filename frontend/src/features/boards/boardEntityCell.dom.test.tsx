@@ -135,7 +135,7 @@ describe("资产格", () => {
 describe("生成格上的 @资产", () => {
   const model = {
     id: "m", provider_profile_id: "p", profile_name: "T", label: "L", adapter_available: true, is_default: true,
-    capabilities_known: true, provider: "test", model: "img", kind: "image", capabilities: {},
+    capabilities_known: true, provider: "test", model: "img", model_label: "img", kind: "image", capabilities: {},
   } as GenerationOption;
 
   it("连进来的资产格排进 @ 菜单的「连进来的」一组;正文里 @ 的资产随提交交出去", async () => {

@@ -824,6 +824,10 @@ export function GenerateWorkspace({
             <GenerationTurn
               key={generation.id}
               generation={generation}
+              engineLabel={
+                findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model)?.label
+                ?? `${generation.provider} · ${generation.model}`
+              }
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
               gallery={sessionGallery}
             />
@@ -968,7 +972,7 @@ export function GenerateWorkspace({
           {selectedModel && !selectedAdapterAvailable && (
             <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
               <CircleAlert size={13} />
-              {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
+              {t("generationAdapterUnavailable").replace("{engine}", selectedModel.label)}
             </div>
           )}
           {/* 模型选择器**有模型就摆出来**,哪怕还没选中任何一个:没设默认时它显示「选择模型」等人选,
@@ -1454,10 +1458,13 @@ function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src
 
 function GenerationTurn({
   generation,
+  engineLabel,
   job,
   gallery,
 }: {
   generation: GenerationJob;
+  /** 用的哪条连接上的哪个模型,写给人看的名字(「ComfyUI · … · 快速用krea2生图」)。连接或模型已经不在了才落回 id。 */
+  engineLabel: string;
   job: Job | null;
   gallery?: ImagePreviewItem[];
 }) {
@@ -1585,7 +1592,7 @@ function GenerationTurn({
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
           <span>
-            {generation.provider} · {generation.model}
+            {engineLabel}
           </span>
           {durationLabel ? <span>{durationLabel}</span> : null}
           {costLabel ? <span>{costLabel}</span> : null}

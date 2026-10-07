@@ -232,6 +232,9 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
                 "provider": resolved.provider,
                 "kind": kind,
                 "model": resolved.model,
+                # 给人看的模型名(目录里登记的显示名;插件连接上是插件报的名字,比如 ComfyUI 工作流的精简表单标题),
+                # 没有就是模型 id。`model` 是 id,只用来选、存、比对 —— 各处下拉写名字要用这一格。
+                "model_label": row.display_name or resolved.model,
                 "label": f"{resolved.profile_name} · {row.display_name or resolved.model}",
                 "capabilities": _for_reader(resolved.capabilities),
                 "capabilities_known": resolved.capabilities_known,

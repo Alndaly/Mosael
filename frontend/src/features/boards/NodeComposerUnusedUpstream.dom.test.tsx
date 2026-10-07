@@ -26,7 +26,7 @@ function video(capabilities: Record<string, unknown>): GenerationOption {
   return {
     id: "wf", provider_profile_id: "comfy", plugin_instance_id: "", profile_name: "ComfyUI",
     label: "minimax-text-image-2-video.json · ComfyUI", adapter_available: true, is_default: true, capabilities_known: true,
-    provider: "plugin:dev.mosael.comfyui", model: "minimax-text-image-2-video.json", kind: "video",
+    provider: "plugin:dev.mosael.comfyui", model: "minimax-text-image-2-video.json", model_label: "minimax-text-image-2-video.json", kind: "video",
     capabilities: { prompt: "optional", ...capabilities },
   } as GenerationOption;
 }

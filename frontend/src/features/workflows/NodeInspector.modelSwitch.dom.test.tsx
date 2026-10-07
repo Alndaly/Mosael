@@ -67,7 +67,7 @@ const PROFILE = {
 
 function option(model: string, capabilities: Record<string, unknown>) {
   return {
-    id: `p1:video:${model}`, provider_profile_id: "p1", profile_name: "P", label: model, provider: "bytedance", model,
+    id: `p1:video:${model}`, provider_profile_id: "p1", profile_name: "P", label: model, provider: "bytedance", model, model_label: model,
     kind: "video", capabilities, capabilities_known: true, adapter_available: true, is_default: false,
   };
 }

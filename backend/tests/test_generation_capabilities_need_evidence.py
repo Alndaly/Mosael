@@ -167,3 +167,16 @@ def test_存着的选择指着一个不再能出图的模型_漏斗说清是能�
                 provider_profile_id=row.provider_profile_id,
             )
         assert missing.value.key == "genErr_modelNotEnabled"
+
+
+def test_生成选项带着给人看的模型名_没有显示名就是_id() -> None:
+    # 维护者:ComfyUI 工作流起了精简表单「快速用krea2生图」,画板的模型下拉、AI Studio 的生成记录写的却是文件名 ——
+    # 它们读的是 `model`(id)。给人看的名字单独一格,下拉和记录都用它。
+    fresh_client()
+    me = user_id()
+    with SessionLocal() as db:
+        _row(db, "openai-compatible", "krea2-text-2-image.json", capability_ids=["image"], display_name="快速用krea2生图")
+        _row(db, "openai-compatible", "plain-image", capability_ids=["image"])
+        db.commit()
+        names = {o["model"]: o["model_label"] for o in generation_options(db, "image", user_id=me)}
+        assert names == {"krea2-text-2-image.json": "快速用krea2生图", "plain-image": "plain-image"}

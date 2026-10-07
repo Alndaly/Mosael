@@ -64,6 +64,7 @@ const IMAGE_OPTION = {
   provider: "openai",
   kind: "image",
   model: "gpt-image-1",
+  model_label: "gpt-image-1",
   label: "OpenAI · gpt-image-1",
   capabilities: { modes: ["text-to-image"], parameter_keys: [] },
   capabilities_known: true,
@@ -86,7 +87,7 @@ function session(isMine: boolean) {
   };
 }
 
-function renderStudio({ isMine = true, generations = [] as unknown[] } = {}) {
+function renderStudio({ isMine = true, generations = [] as unknown[], options = [IMAGE_OPTION] as unknown[] } = {}) {
   const writes: Array<{ url: string; method: string }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -95,7 +96,7 @@ function renderStudio({ isMine = true, generations = [] as unknown[] } = {}) {
       writes.push({ url, method: init.method });
       return json({});
     }
-    if (url.includes("/api/generation/options?kind=image")) return json([IMAGE_OPTION]);
+    if (url.includes("/api/generation/options?kind=image")) return json(options);
     if (url.includes("/api/generation/options")) return json([]);
     if (url.includes("/api/generation/sessions")) return json([session(isMine)]);
     if (url.includes("/api/generation/jobs")) return json(generations);
@@ -228,6 +229,28 @@ describe("花费那一句照实说:花了多少 / 未定价 / 未扣费", () => 
     expect(failed.textContent).not.toMatch(/usageCost[^NU]|\$0/);
     expect((await footer("成功有价")).textContent).toContain("usageCost");
     expect((await footer("成功有价")).textContent).not.toContain("usageCostNotBilled");
+  });
+});
+
+describe("每一条生成下面写的是给人看的名字", () => {
+  //: 维护者:用精简表单「快速用krea2生图」生成,下面却写着「plugin:dev.mosael.comfyui · krea2-text-2-image.json」
+  it("写连接名和模型名(精简表单的标题),不写供应商 id 和文件名;连接没了才落回 id", async () => {
+    const comfy = { ...IMAGE_OPTION, id: "p9:image:krea2-text-2-image.json", provider_profile_id: "p9",
+                    profile_name: "ComfyUI · http://192.168.3.15:8188", provider: "plugin:dev.mosael.comfyui",
+                    model: "krea2-text-2-image.json", model_label: "快速用krea2生图",
+                    label: "ComfyUI · http://192.168.3.15:8188 · 快速用krea2生图", is_default: false };
+    const record = (id: string, prompt: string, profile: string) => ({
+      id, workspace_id: "w1", session_id: "s1", job_id: null, provider_profile_id: profile, provider: "plugin:dev.mosael.comfyui",
+      model: "krea2-text-2-image.json", kind: "image", request: { prompt }, result_asset_id: "a1", result_asset_ids: ["a1"], error: null,
+      created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z",
+    });
+    renderStudio({ options: [IMAGE_OPTION, comfy], generations: [record("g1", "连接还在", "p9"), record("g2", "连接删了", "gone")] });
+    const footer = async (prompt: string) =>
+      (await screen.findAllByText(prompt)).map((one) => one.closest("article")!).find(Boolean)!;
+    const named = await footer("连接还在");
+    await waitFor(() => expect(named.textContent).toContain("ComfyUI · http://192.168.3.15:8188 · 快速用krea2生图"));
+    expect(named.textContent).not.toContain("plugin:dev.mosael.comfyui");
+    expect((await footer("连接删了")).textContent).toContain("plugin:dev.mosael.comfyui · krea2-text-2-image.json");
   });
 });
 

@@ -358,7 +358,7 @@ export function generateNodeSection({
           value={genModel?.id ?? ""}
           options={(generationModels.options).map((model) => ({
             value: model.id,
-            label: `${model.model} · ${t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage")}`,
+            label: `${model.model_label} · ${t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage")}`,
           }))}
           placeholder={t("wfGenModelHint")}
           emptyText={t("cmdkEmpty")}

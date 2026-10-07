@@ -42,6 +42,8 @@ class GenerationOptionOut(ApiModel):
     provider: str
     kind: str
     model: str
+    #: 给人看的模型名(显示名,没有就是 id)。下拉里写这个,`model` 只是 id。
+    model_label: str
     label: str
     capabilities: dict = Field(default_factory=dict)
     #: 这个 vendor+kind 有没有接入的生成 Adapter。不可用的照样列出但标出来 ——

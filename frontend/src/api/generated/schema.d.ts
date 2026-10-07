@@ -12066,6 +12066,8 @@ export interface components {
             kind: string;
             /** Model */
             model: string;
+            /** Model Label */
+            model_label: string;
             /** Label */
             label: string;
             /** Capabilities */

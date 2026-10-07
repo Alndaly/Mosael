@@ -33606,6 +33606,10 @@
             "type": "string",
             "title": "Model"
           },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label"
+          },
           "label": {
             "type": "string",
             "title": "Label"
@@ -33639,6 +33643,7 @@
           "provider",
           "kind",
           "model",
+          "model_label",
           "label"
         ],
         "title": "GenerationOptionOut",
