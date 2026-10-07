@@ -25,6 +25,8 @@ interface Props {
   /** 变化时自动复位。传当前页面即可。 */
   resetKey?: string;
   onRetry?: () => void;
+  /** 接住错误的那一刻(整个窗口那一层用它收起原生网页视图)。 */
+  onCatch?: () => void;
   /** 那一块代码没取到时说什么。 */
   chunkLabel: string;
   /** 这一页自己出错时说什么。 */
@@ -53,6 +55,10 @@ class Boundary extends React.Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
+  }
+
+  componentDidCatch(): void {
+    this.props.onCatch?.();
   }
 
   componentDidUpdate(previous: Props): void {
@@ -123,10 +129,14 @@ export function PageBoundary({
  *
  * 这时候 Provider 可能已经跟着卸掉了,文案用不带 hook 的 translateNow 取;外壳出的错重新渲染多半照样出,
  * 所以「重试」就是重新加载整页。
+ *
+ * 内嵌浏览器、工作台的顶栏也跟着卸掉了:亮着的原生网页视图没了它那一圈、还盖在这一页上(盖在一切 DOM 上),报错和「重新加载」
+ * 都看不见 —— 接住错误时请主进程把它收起来(和「返回 Mosael」一样,视图本身还在)。
  */
 export function AppBoundary({ children }: { children: React.ReactNode }) {
   return (
     <Boundary
+      onCatch={() => void window.mosaelPublish?.hideView().catch(() => undefined)}
       onRetry={() => window.location.reload()}
       chunkLabel={translateNow("appCrashed")}
       crashLabel={translateNow("appCrashed")}

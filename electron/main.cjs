@@ -653,6 +653,12 @@ function createWindow() {
   win.webContents.on("did-finish-load", () => {
     if (!win.isDestroyed()) publish?.republishViewState?.();
   });
+  // 工作台那一页(顶栏、右边那一列)是渲染层自己的状态,换一份文档就没了、认领不了它的 ComfyUI 视图:换文档的那一刻
+  // 收起它(普通网页留着,上面那一帧补播把顶栏画回来)。见 publishWorker.releaseWorkbenchView。
+  win.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) publish?.releaseWorkbenchView?.();
+  });
+  win.webContents.on("render-process-gone", () => publish?.releaseWorkbenchView?.());
   // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);

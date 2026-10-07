@@ -701,6 +701,22 @@ export function republishViewState(): void {
   views?.republish();
 }
 
+/**
+ * 主窗口换了一份文档(重新加载、HMR 整页刷新、出错后点「重新加载」、渲染进程崩了):前台要是**工作台**的 ComfyUI 视图,就收起来、
+ * 停掉工作台会话。
+ *
+ * 原生视图亮着时,渲染层必须画着和它配套的那一圈:工作台是顶栏加右边那一列,普通网页是内嵌浏览器的顶栏。普通网页的那一圈
+ * 只看视图状态就画得回来(主进程补播、preload 记着最新的一帧);工作台那一页却是渲染层自己的状态 —— 开的是哪个连接、在哪个
+ * 工作区、哪个页签、这次跑过的几次 —— 新的那一份文档里都没有,认领不了那个视图。留着它,就是一块没有顶栏、没有那一列的
+ * 光秃秃的画布盖在应用上(维护者截图)。收起的视图本身还活着:「在工作台里打开」回到同一张,没存的改动还在。
+ */
+export function releaseWorkbenchView(): void {
+  const partition = views?.visibleAccountId;
+  if (!partition || !workbench?.active(partition)) return;
+  workbench.stop(partition, false);
+  views?.hide();
+}
+
 /** 内嵌视图此刻是否占着前台 —— 主进程据此决定 ⌘R 刷的是内嵌页面还是应用本身。 */
 export function embeddedViewVisible(): boolean {
   return Boolean(views?.visibleAccountId);

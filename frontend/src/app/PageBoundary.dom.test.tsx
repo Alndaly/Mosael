@@ -119,4 +119,23 @@ describe("整个窗口的错误边界", () => {
       spy.mockRestore();
     }
   });
+
+  it("亮着的原生网页视图(内嵌浏览器、工作台)跟着收起:它的顶栏没了,不能让一块光秃秃的网页盖在报错上", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const hideView = vi.fn(async () => undefined);
+    vi.stubGlobal("mosaelPublish", { hideView });
+    try {
+      render(<AppBoundary><p>好好的</p></AppBoundary>);
+      expect(hideView, "没出错不动它").not.toHaveBeenCalled();
+      render(
+        <AppBoundary>
+          <Boom message="usePreferences must be used inside PreferencesProvider" />
+        </AppBoundary>,
+      );
+      expect(hideView).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      spy.mockRestore();
+    }
+  });
 });

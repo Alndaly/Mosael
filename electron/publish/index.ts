@@ -28,6 +28,7 @@ export {
   focusViewPage,
   hideFloat,
   republishViewState,
+  releaseWorkbenchView,
   embeddedViewVisible,
   hidePublishView,
   setPanelLayout,

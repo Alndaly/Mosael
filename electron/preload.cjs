@@ -41,6 +41,15 @@ ipcRenderer.on(IPC.event.fullscreen, (_event, value) => {
   lastFullscreen = Boolean(value);
 });
 
+// 内嵌视图的状态同理:主进程在 did-finish-load 补播一帧(见 main.cjs),而应用是动态 import 进来的,React 订阅得更晚 ——
+// 漏了那一帧,渲染层以为没有视图、不画顶栏,原生视图却还盖在窗口上(维护者截图:插件页上压着一块光秃秃的 ComfyUI 画布)。
+// 一加载就订阅、记住最新的一帧,onViewState 订阅时先补发它。
+/** @type {import("./preload-api").PublishViewState | null} */
+let lastViewState = null;
+ipcRenderer.on(IPC.event.publishView, (_event, state) => {
+  lastViewState = state;
+});
+
 // 通知点击 → 主进程要求打开任务中心。TaskCenter 监听的是 window 事件,这里做转发。
 ipcRenderer.on(IPC.event.openTasks, () => {
   window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
@@ -137,7 +146,10 @@ const publishBridge = {
   forward: () => invoke(IPC.invoke.publishForward),
   reload: () => invoke(IPC.invoke.publishReload),
   hideView: () => invoke(IPC.invoke.publishHideView),
-  onViewState: (callback) => onEvent(IPC.event.publishView, callback),
+  onViewState: (callback) => {
+    if (lastViewState) callback(lastViewState);
+    return onEvent(IPC.event.publishView, callback);
+  },
   /** 悬浮卡片几何(见 main.cjs onPanels):渲染层照它画圆角/阴影/标题条。 */
   /** 拖动/缩放悬浮面板(几何由主进程持有并落盘)。 */
   setPanelLayout: (patch) => invoke(IPC.invoke.publishPanelLayout, patch),
