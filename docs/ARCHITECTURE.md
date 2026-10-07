@@ -689,8 +689,9 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 - **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
   `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
   `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。
-- **工作区智能体只有一套壳**:`features/agent/CanvasAgentChat.tsx` 被剪辑、工作流和画板复用。
-  会话池、流、确认卡、附件和会话切换不能在各业务页复制；停靠态是布局列，悬浮态才是 overlay。
+- **工作区智能体只有一套壳**:`features/agent/CanvasAgentChat.tsx` 被剪辑、笔记、工作流、画板、3D 场景和工作台的「助手」复用。
+  每一处各接各的对话(页面那一层 `useAgentPlace` 说自己在哪,`currentAgentSession` 按「工作区 + 地方」各记一个,ADR 0044);
+  流、确认卡、附件和会话切换不能在各业务页复制；停靠态是布局列，悬浮态才是 overlay。
   左上角标题由 `AgentSessionSwitcher` 直接渲染当前会话并提供搜索，不能再包一层有边框的 selector。
 
 ### 桌面适配

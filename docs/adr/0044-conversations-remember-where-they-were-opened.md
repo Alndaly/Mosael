@@ -3,8 +3,9 @@
 ## Status
 
 Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推荐拍板(「按推荐来」)。第 8 条(工具跟着地方走)是 ADR 0042
-第一步收尾时冒出来的预算问题,和第 1 条同一个根(后端分不出一段对话是在哪说的),照本 ADR 的规矩给了推荐、按定了写;各处边角的
-「推荐」也一样。维护者要改哪条再改。分四步做,第 3 步要排在 ADR 0042 第二步之前(§11)。
+第一步收尾时冒出来的预算问题,和第 1 条同一个根(后端分不出一段对话是在哪说的),**维护者 2026-10-07 批准**;各处边角的
+「推荐」照定了写。同日维护者又**修订了第 3 条**(打开时是一段还没建的新对话)、**加了第 9 条**(名字照聊的内容起),见「修订」一节。
+分四步做,第 3 步要排在 ADR 0042 第二步之前(§11);第 1–3 步和修订已实现,见文末「实现记录」。
 
 ## Context
 
@@ -74,12 +75,13 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 | --- | --- | --- |
 | 1 | 对话记不记在哪开的 | **记**。「家」= 一种地方 + 那样东西的 id:剪辑项目、笔记、画板、工作流、3D 场景、ComfyUI 连接 + 工作流(路径;没存过的用画布标签页的 key)、AI Studio。会话表加列,带自动迁移;老对话的家全是 AI Studio;不写兼容代码。飞书 / MCP 来的照常能用(家见 §9) |
 | 2 | 多细 | **每样东西各一份**:每篇笔记、每块画板、每个剪辑项目、每个工作流、每张 ComfyUI 工作流都有自己的对话 |
-| 3 | 面板显示哪段 | **这一处的**:接着这一处明确选过的那段,没选过就是家在这里的最近一段;选择按东西记。一段都没有就空着,第一句话建一段、家在这里。「新对话」只换这一处 |
+| 3 | 面板显示哪段 | **这一处的**:接着这一处明确选过的那段,没选过就是家在这里的最近一段;选择按东西记。一段都没有就空着,第一句话建一段、家在这里。「新对话」只换这一处。**(维护者 2026-10-07 修订:没选过时是一段还没建的新对话,不接最近一段,见「修订」)** |
 | 4 | 面板里的历史 | 两组:「这里的对话」在前,「其他对话」收着。从「其他对话」里挑一段,就**在这里接着聊**(成了这一处的选择),它的家不变 |
 | 5 | AI Studio | **列全部**,每行写着在哪开的(「在剪辑《A》里开的」),能跳回那一页 |
 | 6 | 跳页 | **智能体带着走**:对话中途它 `open_view` 带你去哪,那一处就接上这段对话,多页面的活不断;**你自己点过去的**,面板显示那一页自己的对话 |
 | 7 | 免提浮标 | 在有面板的页面,对那一页的当前对话说;别处对 AI Studio 的当前对话说 |
-| 8 | 工具跟着地方走(推荐,§8) | `comfy_*` 只在**这一轮是在 ComfyUI 工作台里说的**时候发;改 Mosael 自家画布的那一份在工作台里不发。预算按每一处量 |
+| 8 | 工具跟着地方走(§8,维护者 2026-10-07 批准) | `comfy_*` 只在**这一轮是在 ComfyUI 工作台里说的**时候发;改 Mosael 自家画布的那一份在工作台里不发。预算按每一处量 |
+| 9 | 对话的名字(维护者 2026-10-07 加) | 第一轮问答之后用这段对话自己的模型照实际聊的内容起名;人起的名字永远不碰;只起这一次。见「修订」 |
 
 ### 1. 地方和家
 
@@ -362,6 +364,37 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 - 不看 `pending_view_at` →「过期不跳」红;
 - 列表忽略 `home_*` 参数 → 接口测试红。
 
+## 修订(维护者,2026-10-07)
+
+维护者原话:「每次初次打开智能体的时候应该是一个未创建的新会话,如果确实有了对话再保存这个对话,根据实际对话来智能设计对话名称」。
+两件事,都已实现。
+
+### 拍板 3 修订:打开时是草稿
+
+- 一处地方**这一次运行里第一次**打开智能体(AI Studio、页面上的面板、工作台的「助手」),看到的是一段**还没建出来的新对话**:库里没有这一行,
+  历史里也没有。不接「家在这里的最近一段」—— 以前的都在「这里的对话」「其他对话」、AI Studio 的列表里,挑一段就接着。
+- 这一次运行里,每一处记得你在哪段(或者还在那段草稿上):收起再打开面板、换个页面再回来,还是那段。重启应用、开新窗口,每一处又从草稿开始。
+  所以「每一处选过哪段」只记在**这个窗口这一次运行里**:sessionStorage(同一窗口里重新加载页面不丢,窗口关了就没;不跨窗口,两个窗口各接各的,
+  不再用 storage 事件互相拽 —— §9「两个窗口开着同一处」那一行随之改成各显示各的)。老的 `mosael.agent.session.<工作区>` localStorage 键不再用。
+- **第一句话真发出去才建**,家是这一处(面板发、浮标说都是)。「新对话」只把这一处换成草稿,什么都不建;「交给智能体」把 AI Studio 换成带着
+  内容的草稿,不建。草稿上选的模型、思考档位、权限模式、分析方式记在草稿上,建会话时一起带上(建会话接口收这几项、和改设置同一套校验,
+  哪一项不合规整个不建)—— 不为了记一个选择先建一段空对话。智能体带着走(拍板 6)不变。
+- **老库里的空对话删掉**(维护者确认):迁移 `_drop_empty_agent_sessions` 删掉界面建的(`origin = 'ui'`)、从没说过话的那些 —— 没有一条消息
+  (排着的话、任务回执也是消息)、没有确认卡、没有选择卡、没有技能记着它、没有记在它名下的用量(`source_type = 'agent_session'`);它们的共享记录一起删。
+  说过话的、挂着上面任何一样的、飞书的,一段都不删(迁移测试钉着)。
+
+### 拍板 9(新):名字照聊的内容起
+
+- 第一句话发出去时,名字先是那一句(和以前一样,`prompt.session_title`)。第一轮**成功的**回答落库之后,另起一个线程,用**这段对话自己的那条连接
+  和模型**(一次性补全 `ai_chat.chat`,订阅授权走网关,照常记账,`operation = agent_title`)看这一问一答,起一个用户那种语言的短名字(要求
+  16 个汉字 / 6 个英文词左右,不带引号和句末标点),写回去。面板、历史、AI Studio 都在轮询,名字自己换过来。
+- 名字是谁起的记在新列 `title_source`:`auto`(还由我们起:占位名或第一句话那个临时的)、`generated`(模型起的)、`manual`(人起的:改过名,
+  或者建的时候入口就给了名字,如「飞书 · 机器人」)。**人起的永远不碰**:改过名的不起;起名回来时人刚好改了名,写回是带条件的,改名赢。
+  老对话分不清哪些是人改过的,一律记成 `manual`(还叫「新对话」的留 `auto`)。
+- 起不出来(失败、没有模型、回来的是空的):停在第一句话那个名字上,**不重试** —— 一个名字不值得为它反复花钱、反复报错。
+- **之后话题变了也不再改名(推荐,维护者同意)**:名字是人在历史里找回这段对话的把手 —— 聊着聊着自己变了,上一次记住的那个名字就找不到了;
+  每过几轮再问一次模型也是每段对话都要付的一笔钱。想换,人自己改(改了就是 `manual`)。
+
 ## 这一版不做
 
 - 在服务端记「每一处接着哪段」(跨设备、网页版和桌面版之间同步):今天的选择就是这台机器上的界面状态,这一版不变。
@@ -387,3 +420,123 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
   `agent_sessions.project_id` 列;只按工作区的 `useCurrentAgentSession` / `ensureAgentSession` 签名(调用方全部改成带地方);笔记页「换一篇笔记
   不换会话」、`AssistantPanel`「和 AI 工作台同一个池子」的说法。没有任何「没带家就当 AI Studio」的分支。
 - 库里第一次重建一张被别的表引用着的表;留下的 `_rebuild_dropping` 以后删外键列照用。
+
+## 实现记录(2026-10-07)
+
+第 1–3 步和维护者的修订已实现;第 4 步(ComfyUI 改名 / 存盘时家跟着挪、`openedBy`)按计划并进 ADR 0042 第二步,这一版只有它要用的
+接口(`POST /agent/homes/move`)和 `places.move_comfy_homes`。
+
+**提交**:第一步「对话记住在哪开的」(后端 + 迁移);第二步「每一处各接各的对话」(前端 + 草稿优先,含建会话带设置那一处后端);第三步「工具跟着
+这一句是在哪说的走」;修订「名字照聊的内容起、删掉空对话」;文档。
+
+### 迁移(五步,都在 `migration_plan()` 里)
+
+| 步骤 | 阶段 | 做什么 |
+| --- | --- | --- |
+| `migrate-agent-sessions-remember-where-they-were-opened` | SCHEMA 之前 | 加 `home_kind`(默认 `studio`)、`home_id`、`pending_view_at` 和索引 `idx_agent_sessions_ws_home`;`project_id` 不空的家记成那个项目;`origin='workflow'` 那批改成 `ui`、家是 `external_key` 里那个工作流、`external_key` 清空、没主人的记成工作流最早一版有记录的作者(没有就是工作区 owner;很老的库还没有主人列的,由之后的 `_migrate_resource_ownership` 补成工作区 owner) |
+| `migrate-agent-sessions-know-who-named-them` | SCHEMA 之前 | 加 `title_source`(默认 `auto`);已有的名字不是「新对话」的一律记 `manual` |
+| `drop-dead-agent-session-columns` | SCHEMA 之后,重建之前 | 老库里还留着、模型上早就没有的死列先点名 `DROP COLUMN`:`adapter_session_id`(Alembic 0008 建的,claude 适配器的 `--resume` 用,`4a2e51e4b` 删了读写)、`sort_order`(`_migrate_agent_session_order` 遇到老 SQLite 会跳过并记账)。翻过这张表的全部历史(Alembic 版本、ORM、本文件的加列),模型上没有的只有这两列和 `project_id`。没加这一步时,维护者库的副本在重建那一步启动失败(守卫拒绝丢掉 `adapter_session_id`) |
+| `drop-agent-sessions-project-id` | SCHEMA 之后 | `_rebuild_dropping("agent_sessions", ("project_id",))`:原始连接上 `PRAGMA foreign_keys=OFF` 并读回确认(没关上就不动手)→ 一个事务里照 ORM 建 `agent_sessions__rebuilt`、原样搬、核对行数、删旧表、改名、按 ORM 补索引 → 比对重建前后**指着这张表的那些表**上的悬空外键,多一条就整个回滚 → 开回外键。旧表上有、ORM 上没有、又不在删除名单里的列,当场拒绝 |
+| `drop-empty-agent-sessions` | SCHEMA 之后,排在上一步之后 | 删界面建的(`origin='ui'`)空对话:没有消息、没有确认卡、没有选择卡、没有技能记着它、没有 `source_type='agent_session'` 的用量;连同它们的共享记录 |
+
+**维护者库的副本上试跑**(`backups/before-adr0044-drop-empty-sessions-2026-10-07.db` 拷到临时目录,`init_db()`):会话 63 → 59(ui 61 + workflow 1 + 飞书 1
+→ ui 58 + 飞书 1,删掉的正是预览的 4 段空对话),消息 415 → 415,确认卡 76 → 76(挂在会话上的 68 → 68),选择卡 18 → 18,用量 1493 → 1493(挂在消息上的
+187 → 187),共享 22 → 21(那段被删的空对话的);家:studio 58、workflow 1;`title_source` 全部 `manual`(59);`PRAGMA foreign_key_check` 前后一样,只有原本
+就有的 `notifications → users`、`workspace_invitations → users` 两条。
+
+**会删掉的行只有这一种:从没说过话的空对话**(和它们的 `resource_shares`)。消息(含排着的)、任务回执、用量、确认卡、选择卡、技能、登录会话、
+共享 —— 迁移测试 `tests/test_agent_sessions_remember_where_they_were_opened.py` 逐样数过一条不少;故意不关外键重建时,全部消息被级联删掉、测试变红
+(11 → 0)。在维护者的库上预览会删几段(迁移之前跑;死路由那批这时 `origin` 还是 `workflow`):
+
+```sql
+SELECT count(*) FROM agent_sessions s
+WHERE s.origin IN ('ui', 'workflow')
+  AND NOT EXISTS (SELECT 1 FROM agent_messages m WHERE m.session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM tool_confirmations c WHERE c.session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM agent_questions q WHERE q.session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM agent_skills k WHERE k.agent_session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM provider_usage_events u WHERE u.source_type = 'agent_session' AND u.source_id = s.id);
+```
+
+### 接口
+
+- `POST /agent/sessions`:`home: {kind, id}` 必填(不给 422;形状不对 422;那样东西不在这个工作区 / 不存在 404;ComfyUI 的连接不是他的 422);`project_id`
+  删了;多收 `thinking_level` / `permission_mode` / `analysis_video_mode`(草稿上选好的,和 PATCH 同一套校验 `_apply_settings`,不合规整个不建 ——
+  `host.create_session` 改成只 flush、跟随调用方的事务)。
+- `GET /agent/sessions?home_kind=&home_id=`:只列家在那里的(读闸、`origin='ui'`、50 条照旧)。
+- `AgentSessionOut`:多 `home_kind`、`home_id`、`home_name`、`home_state`(`ok` / `deleted` / `hidden`,按看的人查,一页每种地方一次查询)、
+  `pending_view_at`;**家删了或看不见时 `home_name` 和 `home_id` 都是空串** —— ComfyUI 的 id 里就是那台机器上的文件路径(实现时发现的,ADR
+  原文只说了名字)。不给 `title_source`(界面用不着)。
+- `AgentMessageCreate.place` 落进 `payload["place"]`,只校验形状。`POST /agent/homes/move` 只收 `comfyui`、只挪自己的、不碰 `updated_at`。
+- 删掉 `/workflows/{id}/agent-session(s)` 三条和限流里的那两个词;`open_view` 认工作流 id(前端打开那一条工作流);`set_pending_view` 记时间;
+  `list_agent_sessions` 每条多 `where`。`GET /agent/tools` 按令牌认出的对话、这一轮在哪裁。
+
+### 前端的选择模型
+
+- `places.ts`(形状、键、`comfyPlace`)、`activePlace.ts`(登记栈 `useAgentPlace` / `useActivePlace`、接力棒 `passConversation`)、
+  `sessionSelection.ts`(sessionStorage:`mosael.agent.session.<工作区>.<地方键>` 和草稿设置 `mosael.agent.draft.…`)、`currentAgentSession.ts`
+  (`useCurrentAgentSession(工作区, 地方)`、`ensureAgentSession`、`adoptAgentSession`、`startAgentDraft`、`useSessionSettings`)。
+- 现算:选着一段 → 读它的 `["agent-session", id]`(家在哪都行),404 就放下回到草稿;没选 → 草稿。没有任何回落。「这里的对话」是
+  `["agent-sessions", 工作区, 地方键]`,「其他对话」用全工作区那份(下拉开着、或草稿空态要说「接着别处的」时才取)。
+- 笔记页不能 import 助手(功能边界),由 `agent/NotesWithAgent` 装配:笔记页报开着哪篇(`onNoteChange`),它登记地方、把 `noteId` 交给面板。
+- 接力棒:跳之前递,登记处一变就看 —— 落在具体的东西上当场接;落在 AI Studio(空栈)等 1.2 秒再接(换页时中间那一下是空的,要加载的页面还得等
+  代码);1.5 秒一动没动、或绕一圈回到原处,作废;10 秒过期。`pending_view_at` 超过 30 秒不跳、清掉。
+- 右上角全局确认卡也写「在…里开的」和「回到那里」(`goHome` 由 App 交进去:回到 ComfyUI 那一张要打开工作台,那是插件那一侧的事)。
+
+### 工具跟着地方走:量到的数
+
+接了 ComfyUI + 本机模型(64K 回退,上限 38,400),在 ADR 0042 第二步(加了 `comfy_canvas_edit`、`comfy_canvas_new`,都进 `kit="comfyui"`)之上量,
+系统提示 1,549:
+
+| 这一轮在哪 | 工具定义 | 合计 |
+| --- | --- | --- |
+| AI Studio / 剪辑 / 笔记 / 画板 / 工作流 / 3D 场景 | 36,294 | 37,843 |
+| ComfyUI 工作台 | 31,897 | 33,446 |
+| (此前不裁:全部,第二步之前) | 40,662 | 42,200 |
+
+和 §8 的估算不一样的两处,都按实测改了做法:`comfy_*` 第一步的九个实际只有约 1.6K(估的是 7K;第二步的两个再加约 0.8K),`canvas` 那一份约 9.5K;而 ComfyUI 连接**自己暴露的插件工具**
+(列工作流、查服务、停任务,外加每张存着的工作流一个 `wf_*`,每个 0.6–0.7K)这里没算到,光它们就让工作台以外超了 2.1K。所以插件工具跟着连接替宿主做的
+事走:提供工作流库的那种连接,它的插件工具也归 `comfyui` 那一份(`tool_manifest._PROVIDES_KIT`)—— 在工作台以外跑 ComfyUI 工作流走 `generate_image`。
+工作台以外只剩约 0.6K 余量,之后再加通用工具要先写紧说明。
+
+### 名字
+
+`domain/agent/titles.py`。实测(Kimi Code k3)发现,把一问一答当成两条普通消息交给模型,它会接着回答那一问(第一版起出来的名字是「我这边当前没有可用的
+open_view 工具,所以没法真正跳转到那条 note」);改成把那一段包在 `<conversation>` 里当材料、要求写在最后之后,起出来的是「打开指定笔记并确认到达」。
+测试套默认不出网起名(`conftest._conversations_are_not_named_over_the_network`),起名的那几条自己换掉 `titles._ask`。
+
+### 变异检查(每条都有测试变红)
+
+| 改坏的地方 | 变红的测试 |
+| --- | --- |
+| 选择不分地方 | `currentAgentSession.dom` 各记各的、草稿建会话、删掉;`activePlace.dom` |
+| 没选过时回落到这里最近一段(不是草稿) | `currentAgentSession.dom` 草稿、404 回草稿 |
+| 「新对话」清掉整个工作区 | `currentAgentSession.dom`、`CanvasAgentChat.places.dom`「新对话」只换这一处 |
+| 在这里接着时 PATCH 了家 | `currentAgentSession.dom`、`CanvasAgentChat.places.dom`「其他对话」 |
+| 跳转不递棒子 / 棒子接到上一处 | `CanvasAgentChat.places.dom` 智能体带着走、带到素材页;`activePlace.dom` |
+| 跳到原地的棒子不作废 | `activePlace.dom` 之后自己点开别处不被接走 |
+| 草稿建会话不带这一处的家 | `currentAgentSession.dom`、`VoiceDock.dom` |
+| 不看 `pending_view_at` | `useAgentNavigation.dom`、`CanvasAgentChat.places.dom` |
+| 草稿上改设置先建空对话 | `currentAgentSession.dom`、`ModelPicker.dom` |
+| 浮标只对 AI Studio 说 | `VoiceDock.dom` |
+| 工具清单不看这一轮在哪 | `test_tool_definitions_budget` 六处超预算、在且只在 |
+| 这一轮在哪只看家 | `test_tool_definitions_budget` 说了算、没接 ComfyUI 的人 |
+| 列表忽略 `home_*` | `test_agent_session_homes` 按家列 |
+| 看不见的家照样写名字 / 照样给 id | `test_agent_session_homes` 标题不出现在响应里 |
+| 重建不关外键 | 迁移测试(消息 11 → 0) |
+| 不删死列 `adapter_session_id` | 迁移测试(重建被守卫拒绝) |
+| 去掉重建的守卫 | 迁移测试「认不出的列就不动手」 |
+| 删空对话不看确认卡 / 不看消息 | 迁移测试 |
+| 不起名 / 起名盖掉人改的名 / 改名不记成人起的 / 失败了下一轮再试 | `test_agent_session_titles_follow_the_conversation` |
+| 不带家也让建 | `test_agent_session_homes` |
+| 项目级记忆不跟家走 | `test_agent_session_homes` |
+
+### 隔离环境里的真机检查
+
+后端 127.0.0.1:8873(临时数据目录)、Vite 127.0.0.1:5281,无头 Chromium 点:AI Studio 打开是草稿、库里 0 段;剪辑里打开面板仍是 0 段,发第一句才建出
+一段(家是剪辑《宣传片》);同一时刻笔记的面板是自己的草稿,下拉「其他对话」里有那段、写着「在剪辑《宣传片》里开的」,挑它就在笔记里接着、标题下写
+「这段对话是在剪辑《宣传片》里开的」、家不变;AI Studio 列着它、点「回到那里」到了剪辑页、面板就是那段。接上 Kimi Code(维护者批的设备登录,测完
+登出、删凭据和数据目录)后:在剪辑里让智能体 `open_view` 去那篇笔记 → 页面跳过去,笔记的面板接着这段对话;自己点开另一篇笔记 → 是它自己的草稿;
+第一轮答完名字换成「打开指定笔记并确认到达」,AI Studio 里也跟着换。ComfyUI 工作台没有在真机上点(要开发版 Electron 和一台 ComfyUI),由
+`CanvasAgentChat.places.dom` 的「工作台换标签页」那条和按每一处量的预算测试守着。
+

@@ -467,8 +467,9 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 
 ## 20. 工作区智能体入口必须共享会话壳与布局语义
 
-剪辑、工作流和创意画板都渲染 `components/agent/CanvasAgentChat.tsx`。这不是三个相似聊天框，而是
-同一会话池在三个工作上下文里的入口：只有 `contextLine`、空态文案与输入示例不同。消息流、附件、
+剪辑、笔记、工作流、创意画板、3D 场景和 ComfyUI 工作台的「助手」都渲染 `features/agent/CanvasAgentChat.tsx`。
+这不是几个相似聊天框，而是同一个壳在各处的入口：只有 `place`(页面那一层 `useAgentPlace` 登记的地方,每一处各接各的对话,
+见 ADR 0044 与 `features/agent/currentAgentSession.ts`)、`contextLine`、空态文案与输入示例不同。消息流、附件、
 队列、确认卡、上下文水位、会话创建/删除/切换只能在共享壳里维护。
 
 - 停靠态必须参与业务页 grid/flex 布局，是一列真实宽度；只有悬浮态可以 fixed overlay。否则剪辑页

@@ -27,7 +27,16 @@ The agent uses Mosael's MCP tools to **see your project and propose changes**: s
   (ten minutes), it continues on its own judgement or wraps up; answer later and your answer still
   reaches the conversation.
 - **Skills**: written methods for a kind of task that the agent reads only when needed; type `/` in the message box to name one. See [Agent skills](/docs/guides/agent-skills).
-- The left column lists **conversations**; each is independent and can be renamed / deleted. Someone else's conversation shared into the workspace is read-only.
+- The left column lists **conversations** — every conversation you have had anywhere; each is independent and can be renamed / deleted. Someone else's
+  conversation shared into the workspace is read-only. Those that were not opened in AI Studio say where they were opened under the title
+  ("Opened in Edit "Promo"", "Opened in the note "Weekly"") and have a **Go back there** button that takes you to that page to continue it there.
+- **You start on a new conversation**: opening AI Studio (or the assistant anywhere) shows a conversation that has not started yet — it is only
+  created, and only appears in the history, once you send the first message. While the app stays open, each place remembers which conversation you
+  were in, so switching pages and coming back brings you back to it; after a restart every place starts on a new conversation again, and the old ones
+  are in the history.
+- **Names come from what you talked about**: the first message is the name at first; after the first reply, the agent uses the conversation's own
+  model to give it a short, specific name (say, "Trim the promo script's second part"). A name you changed by hand is never overwritten; if naming
+  fails, the first message stays.
 
 Its tools reach across media, documents, assets, notes, boards, 3D scenes, editing, workflows and publishing: creating projects and
 timelines, duplicating clips, replacing media, adding a track at a given row, listing boards, checking which voice engines exist
@@ -78,15 +87,33 @@ still under Raw data.
 - **Messages with a note excerpt**: a message sent from [Notes](/docs/guides/notes) with a selection shows an excerpt line in its bubble
   (the note title and the start of the passage), so you can tell later which passage it was about; click it to go back to that note with
   the passage selected.
-- **Handing a web page to the agent**: **Start from this page → Ask the agent** in a browser session's top bar starts a new conversation
+- **Handing a web page to the agent**: **Start from this page → Ask the agent** in a browser session's top bar starts a new conversation in AI Studio
   with "Take a look at this page for me:", the page title and the link in the input, waiting for you to add a line and send.
 - **It doesn't stop at a colon**: when the model stops on a half sentence like "Let me check…:", it is prompted to continue once; likewise
   when the output was cut off, when it said it would call a tool but sent none, or when the provider paused the turn. If that still fails,
   the reason is written into the chat (for example, raise **Max output tokens** in the model settings).
 
-The editor, workflow canvas and boards reuse this same session pool in a compact assistant panel.
-Its top-left heading is the current conversation title; click the title or arrow to search or switch sessions. Drag empty header space to move a floating panel.
-Long titles ellipsize, and the control stays visually flat rather than adding a framed selector.
+### Every place has its own conversations
+
+Edit, Notes, Boards, Workflows, 3D scenes and the **Assistant** tab of the [ComfyUI workbench](/docs/guides/comfyui) all have the same compact assistant
+panel. **Each thing has its own conversations**: every Edit project, note, board, workflow, 3D scene, and every workflow open in the workbench. What you
+talked about in Edit does not carry on when you open a note, and **New chat** in one place changes only that place.
+
+- The panel's top-left heading is the current conversation's title. Click it: **Here** lists the conversations opened in this place (newest first), and
+  the collapsed **Elsewhere** lists the rest, each saying where it was opened; search covers both. Pick one from Elsewhere to continue it here — where it
+  was opened does not change, and a line under the title says "This conversation was opened in …".
+- **New chat** (the + next to the title) switches to a conversation that has not started yet; it is created, as opened in this place, when you send
+  the first message.
+- **When the agent takes you somewhere, the conversation comes along**: if it says "let me take you to that note", the note continues the same
+  conversation, so multi-page work is not cut off. Pages you open yourself show their own conversations. A jump the agent asked for while you were away
+  (more than 30 seconds ago) does not pull you along.
+- The **hands-free voice bubble** talks to the conversation of the page you are on (collapsed panel or not); on pages without a panel — media,
+  publishing, settings — it talks to AI Studio's.
+- **Tools follow where you speak**: in the ComfyUI workbench the agent gets the tools for ComfyUI workflows; elsewhere it gets the ones for boards,
+  timelines, 3D scenes and workflows. So to change a ComfyUI graph, ask in the workbench's Assistant tab.
+- A conversation opened in Edit includes that project's memory (the conventions the agent saved for that project, such as "the intro is always brand-intro.mp4").
+
+Drag empty header space to move a floating panel. Long titles ellipsize, and the control stays visually flat rather than adding a framed selector.
 
 The embedded Node.js agent runtime uses pi-agent-core / pi-ai. Requires [model providers](/docs/guides/providers) to be configured.
 

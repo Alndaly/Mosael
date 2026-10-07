@@ -593,8 +593,9 @@ beside it:
   effect once saved). The marked group says **Results come from this node** and can be undone; marks on other nodes are named too.
   Switch workflows in ComfyUI and this workflow's runs come first, with the earlier ones under **Runs of other workflows**. A new
   workflow has to be saved once before it can run here.
-- **Assistant**: the same agent panel as on workflows, boards and the editor, docked in this column (its conversations are the same
-  ones as in AI Studio). It knows which ComfyUI is open, its version, which workflow is on the canvas, whether it has unsaved changes,
+- **Assistant**: the same agent panel as on workflows, boards and the editor, docked in this column. Each workflow on the canvas has its own conversations,
+  and switching tabs switches to that workflow's (they are all in AI Studio's history, marked with the ComfyUI workflow they were opened in); what you
+  say here gets the agent the tools for ComfyUI workflows. It knows which ComfyUI is open, its version, which workflow is on the canvas, whether it has unsaved changes,
   what is selected and whether the last run failed; the graph itself isn't stuffed into its context, it reads it when it needs to.
   Ask **what's wrong with this workflow** and it reads the canvas, runs a diagnosis and says per node what's wrong, why and how to fix
   it: missing nodes and models, mistyped links, unconnected required inputs, values outside a dropdown or range, widths and heights that

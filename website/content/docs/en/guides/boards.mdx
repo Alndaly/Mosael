@@ -166,7 +166,7 @@ A board holds **only content-to-content tools**. Flow control and data steps —
 
 ## The AI assistant
 
-The robot icon in the top-right opens it. It is **not a second AI**: sessions, messages and confirmation cards are the same ones the global assistant uses; each message just carries one extra line saying which board you are looking at. The top-left title is the current conversation; click it to search or switch sessions.
+The robot icon in the top-right opens it. It is **not a second AI**: messages and confirmation cards are the same ones the global assistant uses; each message just carries one extra line saying which board you are looking at. Each board has its own conversations (you start on a new one that is created with your first message). The top-left title is the current conversation; click it to search, switch, or pick one from **Elsewhere** to continue here. See [AI Studio · Every place has its own conversations](/docs/guides/ai-studio).
 
 It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text, name items, connect, delete, move things, place a new timeline item and wire items into it, write export settings. **Every change goes through a confirmation card** — nothing lands until you approve it, and an open board follows along. It submits granular operations rather than a whole canvas, because a model handed the whole thing gets it wrong on any non-trivial board.
 
