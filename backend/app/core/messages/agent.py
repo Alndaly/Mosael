@@ -26,6 +26,27 @@ MESSAGES: dict[str, dict[str, str]] = {
             "(including the port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable."
         ),
     },
+    # 地方(ADR 0044):对话的家、每条消息在哪说的
+    "agentErr_placeUnknownKind": {
+        "zh": "不认识的地方「{kind}」。",
+        "en": "Unknown place \"{kind}\".",
+    },
+    "agentErr_placeBadId": {
+        "zh": "地方「{kind}」的 id 写法不对。",
+        "en": "The id of the \"{kind}\" place is not well formed.",
+    },
+    "agentErr_placeNotYourComfy": {
+        "zh": "这台 ComfyUI 不是你接的连接,不能在它那里开对话。",
+        "en": "That ComfyUI is not one of your connections, so a conversation cannot be opened there.",
+    },
+    "agentErr_placeMoveAcrossConnections": {
+        "zh": "对话的家只能在同一台 ComfyUI 里挪。",
+        "en": "A conversation's home can only move within the same ComfyUI.",
+    },
+    "agentErr_placeOnlyComfyMoves": {
+        "zh": "只有 ComfyUI 里开的对话会跟着工作流挪地方;Mosael 自己的东西按 id 认,不用挪。",
+        "en": "Only conversations opened in ComfyUI follow their workflow when it moves; Mosael's own things are found by id and never move.",
+    },
     "agentErr_turnFailed": {"zh": "智能体执行失败，请稍后重试。", "en": "The agent run failed. Try again later."},
     "agentErr_turnCrashed": {"zh": "智能体执行异常。", "en": "The agent run hit an unexpected error."},
     "agentErr_messageAlreadyRunning": {

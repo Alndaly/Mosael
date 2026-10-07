@@ -40,7 +40,6 @@ def test_policy_limits_auth_oauth_and_billable_mutations_only():
     assert classify("POST", "/api/agent/sessions/s1/messages", settings).name == "billable"
     assert classify("POST", "/api/boards/b1/run", settings).name == "billable"
     assert classify("POST", "/api/workflows/w1/run", settings).name == "billable"
-    assert classify("POST", "/api/workflows/w1/agent-session", settings).name == "billable"
     assert classify("POST", "/api/assets/a1/transcribe", settings).name == "billable"
     assert classify("POST", "/api/scheduled-tasks/t1/run", settings).name == "billable"
     assert classify("POST", "/api/plugins/instances/p1/tools/tool/invoke", settings).name == "billable"

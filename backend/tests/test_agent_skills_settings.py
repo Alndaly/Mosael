@@ -283,7 +283,7 @@ def test_存成技能_用会话的模型起草_不保存() -> None:
     client = fresh_client()
     _configured()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     from app.db.models import AgentMessage
 
     with SessionLocal() as db:
@@ -320,7 +320,7 @@ def test_存成技能_空对话说清楚_别人的对话看不见() -> None:
     client = fresh_client()
     _configured()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     with mock_patch("app.domain.ai_chat.chat") as chat:
         assert client.post(f"/api/agent/sessions/{session['id']}/skill-draft").status_code == 409
         assert not chat.called, "没东西可起草就不花这一次模型调用"

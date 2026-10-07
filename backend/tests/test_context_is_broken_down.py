@@ -32,7 +32,7 @@ def _configured(client) -> None:
 def _session(client) -> str:
     _configured(client)
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    created = client.post("/api/agent/sessions", json={"workspace_id": workspace, "title": "T"})
+    created = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "T"})
     assert created.status_code == 200, created.text
     return created.json()["id"]
 

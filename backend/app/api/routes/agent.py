@@ -31,6 +31,8 @@ from app.api.schemas import (
     AgentMessageCreate,
     AgentCompactOut,
     AgentContextOut,
+    AgentHomesMove,
+    AgentHomesMoved,
     AgentMessageOut,
     AgentSessionCreate,
     AgentSessionOut,
@@ -43,10 +45,19 @@ from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_toolsets
 from app.domain import session_groups
+from app.domain.agent import places
 from app.domain.agent import questions as agent_questions
-from app.domain.agent.sessions import SHARE_KIND, readable_session, writable_session
+from app.domain.agent.sessions import readable_session, writable_session
 
 router = APIRouter(tags=["agent"])
+
+
+def _place(kind: str, place_id: str) -> places.Place:
+    """形状不对的地方是 422 —— 说清哪里不对,不当成「没有这个东西」。"""
+    try:
+        return places.checked(kind, place_id)
+    except places.PlaceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/agent/sessions", response_model=AgentSessionOut)
@@ -56,24 +67,38 @@ def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) ->
             db,
             user,
             body.workspace_id,
+            home=_place(body.home.kind, body.home.id),
             title=body.title,
-            project_id=body.project_id,
             adapter=body.adapter,
             provider_profile_id=body.provider_profile_id,
             model=body.model,
         )
-    except agent_use_cases.UnknownConnection as exc:
+    except (agent_use_cases.UnknownConnection, places.PlaceError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
-def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> list[AgentSession]:
-    return agent_use_cases.list_sessions(db, user, workspace_id)
+def list_agent_sessions(
+    workspace_id: str, db: DbSession, user: CurrentUser, home_kind: str = "", home_id: str = ""
+) -> list[AgentSession]:
+    """不带 `home_kind` 列全部(AI Studio);带了只列家在那里的(各处面板的「这里的对话」,ADR 0044 §2)。"""
+    home = _place(home_kind, home_id) if home_kind else None
+    return agent_use_cases.list_sessions(db, user, workspace_id, home)
+
+
+@router.post("/agent/homes/move", response_model=AgentHomesMoved)
+def move_agent_homes(body: AgentHomesMove, db: Tx, user: CurrentUser) -> AgentHomesMoved:
+    """ComfyUI 那张工作流存盘、改名、挪文件夹时,家跟着挪(ADR 0044 §9)。只收 `comfyui`,只挪他自己的对话。"""
+    try:
+        moved = agent_use_cases.move_homes(db, user, body.workspace_id, body.kind, body.from_id, body.to_id)
+    except places.PlaceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AgentHomesMoved(moved=moved)
 
 
 def _out(db: DbSession, user: CurrentUser, session: AgentSession) -> AgentSession:
-    """回出去的那一份标上 `is_mine` / `shared` —— 界面据 `is_mine` 决定这条对话给不给写(共享来的只能看)。"""
-    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
+    """回出去的那一份标上 `is_mine` / `shared`(界面据 `is_mine` 决定这条对话给不给写)和家的名字、状况。"""
+    return agent_use_cases.annotate(db, user, session)
 
 
 @router.get("/agent/sessions/{session_id}/messages", response_model=list[AgentMessageOut])
@@ -121,6 +146,7 @@ def post_agent_message(
             origin_session_id=body.origin_session_id,
             quote=body.quote.model_dump() if body.quote else None,
             skills=body.skills,
+            place=_place(body.place.kind, body.place.id) if body.place else None,
         )
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import AgentMessage, AgentSession, Asset
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import origins
+from app.domain.agent import places
 from app.domain.agent.skills import runtime as skills_runtime
 
 SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户本机的 Mosael 工作台里。
@@ -353,7 +354,8 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
     prompt = SYSTEM_PROMPT_TEMPLATE.format(workspace_id=session.workspace_id)
     # 跨会话记忆:每轮都注入 —— 不用检索也生效,这正是它的意义,也是它必须短的原因。
     # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
-    prompt += agent_memory.memory_prompt(db, session.workspace_id, session.project_id)
+    # 项目级的那一份跟着家走:剪辑里开的对话带上那个项目的(ADR 0044 §1)。
+    prompt += agent_memory.memory_prompt(db, session.workspace_id, places.memory_project(session))
     # 技能目录(ADR 0040):启用的技能只列名字和一句说明,用到时 use_skill 读全文。和记忆一样封顶、顺序固定。
     prompt += skills_runtime.skills_prompt(db, session.workspace_id)
     # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。

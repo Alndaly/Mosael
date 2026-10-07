@@ -41,7 +41,7 @@ def _session(client):
         )
         db.commit()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    return client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+    return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
 
 def _wait_until(predicate, seconds: float = 8) -> None:

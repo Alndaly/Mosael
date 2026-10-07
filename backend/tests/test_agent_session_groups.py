@@ -14,7 +14,7 @@ from tests.util import fresh_client
 
 
 def _session(client, workspace_id: str) -> str:
-    return client.post("/api/agent/sessions", json={"workspace_id": workspace_id}).json()["id"]
+    return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace_id}).json()["id"]
 
 
 def test_删分组不删对话_成员退回未分组() -> None:

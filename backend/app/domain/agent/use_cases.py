@@ -26,6 +26,7 @@ from app.db.models import (
 from app.domain import sharing
 from app.domain.agent import host
 from app.domain.agent import memory as agent_memory
+from app.domain.agent import places
 from app.domain.agent import plan as agent_plan
 from app.domain.agent import questions as agent_questions
 from app.domain.agent.confirmations import decidable_filter
@@ -55,8 +56,13 @@ class SpeechFailed(LocalizedError, RuntimeError):
 
 
 def annotate(db: Session, user: User, session: AgentSession) -> AgentSession:
-    """标上 `is_mine` / `shared` —— 界面据 `is_mine` 决定这条对话给不给写(共享来的只能看)。"""
-    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
+    """标上 `is_mine` / `shared`(界面据 `is_mine` 决定这条对话给不给写,共享来的只能看)和家的名字、状况(按看的人查)。"""
+    return annotate_many(db, user, [session], session.workspace_id)[0]
+
+
+def annotate_many(db: Session, user: User, sessions: list[AgentSession], workspace_id: str) -> list[AgentSession]:
+    """一页对话一起标:共享一次查询,家每种地方一次查询。"""
+    return places.describe_homes(db, user, sharing.annotate(db, SHARE_KIND, sessions, user, workspace_id))
 
 
 def checked_profile_id(db: Session, user: User, profile_id: str | None) -> str | None:
@@ -84,18 +90,21 @@ def start_session(
     user: User,
     workspace_id: str,
     *,
+    home: places.Place,
     title: str,
-    project_id: str | None = None,
     adapter: str | None = None,
     provider_profile_id: str | None = None,
     model: str | None = None,
 ) -> AgentSession:
-    """开一次对话要 `ai` 权限。对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。"""
+    """开一次对话要 `ai` 权限。对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
+
+    `home`:在哪开的(ADR 0044)。那样东西得在这个工作区里、他看得见(否则 404);ComfyUI 的连接得是他的(否则 422)。
+    """
     ensure_workspace_perm(db, user, workspace_id, "ai")
     session = host.create_session(
         db,
         workspace_id=workspace_id,
-        project_id=project_id,
+        home=places.ensure_home(db, user, workspace_id, home),
         title=title,
         adapter=adapter,
         provider_profile_id=checked_profile_id(db, user, provider_profile_id),
@@ -106,19 +115,26 @@ def start_session(
     return annotate(db, user, session)
 
 
-def list_sessions(db: Session, user: User, workspace_id: str) -> list[AgentSession]:
+def list_sessions(db: Session, user: User, workspace_id: str, home: places.Place | None = None) -> list[AgentSession]:
+    """最近活跃在前,最多 SESSION_LIST_LIMIT 条。给了 `home` 就只列家在那里的(各处面板的「这里的对话」)。"""
     ensure_workspace_access(db, user, workspace_id)
-    stmt = (
-        select(AgentSession)
-        .where(
-            AgentSession.workspace_id == workspace_id,
-            AgentSession.origin == "ui",
-            sharing.visible_filter(SHARE_KIND, user, workspace_id),
-        )
-        .order_by(AgentSession.updated_at.desc())
-        .limit(SESSION_LIST_LIMIT)
+    stmt = select(AgentSession).where(
+        AgentSession.workspace_id == workspace_id,
+        AgentSession.origin == "ui",
+        sharing.visible_filter(SHARE_KIND, user, workspace_id),
     )
-    return sharing.annotate(db, SHARE_KIND, list(db.scalars(stmt)), user, workspace_id)
+    if home is not None:
+        stmt = stmt.where(AgentSession.home_kind == home.kind, AgentSession.home_id == home.id)
+    stmt = stmt.order_by(AgentSession.updated_at.desc()).limit(SESSION_LIST_LIMIT)
+    return annotate_many(db, user, list(db.scalars(stmt)), workspace_id)
+
+
+def move_homes(db: Session, user: User, workspace_id: str, kind: str, from_id: str, to_id: str) -> int:
+    """家跟着挪(ADR 0044 §9):只有 ComfyUI 的 —— Mosael 自家的东西按 id 认,永远不用挪。只挪他自己的对话。"""
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    if kind != places.COMFYUI:
+        raise places.PlaceError("agentErr_placeOnlyComfyMoves")
+    return places.move_comfy_homes(db, user, workspace_id, from_id, to_id)
 
 
 def set_plan(db: Session, user: User, session_id: str, steps: list[Any]) -> AgentSession:
@@ -136,12 +152,16 @@ def set_pending_view(db: Session, user: User, session_id: str, view: str, record
     """智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清(见 clear_pending_view)。"""
     session = writable_session(db, user, session_id)
     session.pending_view = f"{view}:{record_id}" if record_id else view
+    #: 什么时候要求的:过了 30 秒前端不跟(ADR 0044 §6)。
+    session.pending_view_at = now()
     return session.pending_view
 
 
 def clear_pending_view(db: Session, user: User, session_id: str) -> None:
     """跳完了。清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉。"""
-    writable_session(db, user, session_id).pending_view = ""
+    session = writable_session(db, user, session_id)
+    session.pending_view = ""
+    session.pending_view_at = None
 
 
 def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -> tuple[AgentMessage, str]:

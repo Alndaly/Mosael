@@ -35,7 +35,7 @@ class Chat:
         self.login_token = self.client.headers["Authorization"]
         self.workspace_id = self.client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         self.session_id = self.client.post(
-            "/api/agent/sessions", json={"workspace_id": self.workspace_id, "title": "T"}
+            "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.workspace_id, "title": "T"}
         ).json()["id"]
 
     def user_id(self, username: str = "tester") -> str:
@@ -224,7 +224,7 @@ def test_bypass_does_not_bypass_authorisation() -> None:
     mate.post(f"/api/invitations/{invitation['id']}/accept")
 
     session_id = mate.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()["id"]
     # viewer 开不了 bypass(要 admin),所以直接写库模拟"他有办法开到" —— 测的是闸,不是入口。
     with SessionLocal() as db:
@@ -335,7 +335,7 @@ def test_switching_to_bypass_requires_admin() -> None:
     invitation = mate.get("/api/invitations").json()["invitations"][0]
     mate.post(f"/api/invitations/{invitation['id']}/accept")
     session_id = mate.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()["id"]
 
     assert mate.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "auto"}).status_code == 200
@@ -347,7 +347,7 @@ def test_a_shared_session_never_gets_bypass() -> None:
     """飞书会话是一个群共用的对话 —— bypass 不该由一个人替一群人开,管理员也不行。"""
     owner = fresh_client()
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
-    session_id = owner.post("/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "群"}).json()["id"]
+    session_id = owner.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "群"}).json()["id"]
     with SessionLocal() as db:
         db.get(AgentSession, session_id).origin = "feishu"
         db.commit()

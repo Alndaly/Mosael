@@ -4655,53 +4655,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/workflows/{workflow_id}/agent-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Workflow Agent Session
-         * @description 工作流的默认智能体会话:按 external_key 找回,记忆随会话长期保留。
-         *
-         *     一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回
-         *     「默认会话」(get-or-create),保持老调用方语义不变。
-         */
-        post: operations["workflow_agent_session_api_workflows__workflow_id__agent_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/workflows/{workflow_id}/agent-sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Workflow Agent Sessions
-         * @description 该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。
-         */
-        get: operations["list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get"];
-        put?: never;
-        /**
-         * Create Workflow Agent Session
-         * @description 给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。
-         */
-        post: operations["create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/boards": {
         parameters: {
             query?: never;
@@ -7252,11 +7205,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Agent Sessions */
+        /**
+         * List Agent Sessions
+         * @description 不带 `home_kind` 列全部(AI Studio);带了只列家在那里的(各处面板的「这里的对话」,ADR 0044 §2)。
+         */
         get: operations["list_agent_sessions_api_agent_sessions_get"];
         put?: never;
         /** Create Agent Session */
         post: operations["create_agent_session_api_agent_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/homes/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Agent Homes
+         * @description ComfyUI 那张工作流存盘、改名、挪文件夹时,家跟着挪(ADR 0044 §9)。只收 `comfyui`,只挪他自己的对话。
+         */
+        post: operations["move_agent_homes_api_agent_homes_move_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8784,6 +8760,28 @@ export interface components {
             /** Tokens */
             tokens: number;
         };
+        /**
+         * AgentHomesMove
+         * @description 家跟着挪(ADR 0044 §9):ComfyUI 那张工作流第一次存盘、改名、挪文件夹。只收 `comfyui`。
+         */
+        AgentHomesMove: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "studio" | "project" | "note" | "board" | "workflow" | "scene" | "comfyui";
+            /** From Id */
+            from_id: string;
+            /** To Id */
+            to_id: string;
+        };
+        /** AgentHomesMoved */
+        AgentHomesMoved: {
+            /** Moved */
+            moved: number;
+        };
         /** AgentManifestOut */
         AgentManifestOut: {
             /** App */
@@ -8857,6 +8855,7 @@ export interface components {
             quote?: components["schemas"]["AgentMessageQuoteIn"] | null;
             /** Skills */
             skills?: string[];
+            place?: components["schemas"]["PlaceIn"] | null;
         };
         /** AgentMessageOut */
         AgentMessageOut: {
@@ -9018,8 +9017,7 @@ export interface components {
         AgentSessionCreate: {
             /** Workspace Id */
             workspace_id: string;
-            /** Project Id */
-            project_id?: string | null;
+            home: components["schemas"]["PlaceIn"];
             /**
              * Title
              * @default 新对话
@@ -9050,8 +9048,20 @@ export interface components {
              * @default false
              */
             shared: boolean;
-            /** Project Id */
-            project_id: string | null;
+            /**
+             * Home Kind
+             * @enum {string}
+             */
+            home_kind: "studio" | "project" | "note" | "board" | "workflow" | "scene" | "comfyui";
+            /** Home Id */
+            home_id: string;
+            /** Home Name */
+            home_name: string;
+            /**
+             * Home State
+             * @enum {string}
+             */
+            home_state: "ok" | "deleted" | "hidden";
             /** Group Id */
             group_id?: string | null;
             /** Title */
@@ -9093,6 +9103,8 @@ export interface components {
              * @default
              */
             pending_view: string;
+            /** Pending View At */
+            pending_view_at?: string | null;
             context?: components["schemas"]["AgentContextOut"] | null;
             /** Plan */
             plan?: {
@@ -14056,6 +14068,25 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * PlaceIn
+         * @description 一处地方:一个种类加那样东西的 id。会话的家、每条消息在哪说的,都是这个形状。
+         *
+         *     `studio` 的 id 是空串;ComfyUI 的是 `<连接 id>/<路径>`(存过的)、`<连接 id>#<标签页 key>`(没存过的)、`<连接 id>`。
+         *     这里只管长度,写法由 domain/agent/places.checked 校。
+         */
+        PlaceIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "studio" | "project" | "note" | "board" | "workflow" | "scene" | "comfyui";
+            /**
+             * Id
+             * @default
+             */
+            id: string;
         };
         /**
          * PluginCapabilityStatusOut
@@ -28304,99 +28335,6 @@ export interface operations {
             };
         };
     };
-    workflow_agent_session_api_workflows__workflow_id__agent_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workflow_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workflow_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workflow_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_all_api_boards_get: {
         parameters: {
             query: {
@@ -33557,6 +33495,8 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
+                home_kind?: string;
+                home_id?: string;
             };
             header?: never;
             path?: never;
@@ -33604,6 +33544,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_agent_homes_api_agent_homes_move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentHomesMove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHomesMoved"];
                 };
             };
             /** @description Validation Error */

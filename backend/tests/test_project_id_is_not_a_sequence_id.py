@@ -20,7 +20,7 @@ OPS = [{"op": "add_track", "kind": "video"}]
 def _turn():
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    sid = client.post("/api/agent/sessions", json={"workspace_id": ws, "title": "T"}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws, "title": "T"}).json()["id"]
     with SessionLocal() as db:
         me = db.query(User).filter(User.username == "tester").one()
         token = mint_service_session(db, me.id, agent_session_id=sid)

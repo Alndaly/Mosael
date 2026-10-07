@@ -30,7 +30,7 @@ QUESTIONS = [
 
 def _ask(client, workspace_id: str) -> tuple[str, str]:
     """建一个(他自己的)会话和一张待答的选择卡,返回 (session_id, question_id)。"""
-    session_id = client.post("/api/agent/sessions", json={"workspace_id": workspace_id, "title": "会话"}).json()["id"]
+    session_id = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace_id, "title": "会话"}).json()["id"]
     created = client.post("/api/agent/questions", json={"session_id": session_id, "questions": QUESTIONS})
     assert created.status_code in (200, 201), created.text
     return session_id, created.json()["id"]

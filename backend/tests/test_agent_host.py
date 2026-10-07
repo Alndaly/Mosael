@@ -101,7 +101,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     assert session["status"] == "idle"
 
     message = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "帮我看看时间线"})
@@ -161,7 +161,7 @@ def test_image_attachment_pixels_reach_the_selected_agent_model(monkeypatch) -> 
             "name": "一像素.png",
             "file_key": "media/test-agent-vision.png",
         })
-    session = client.post("/api/agent/sessions", json={"workspace_id": workspace["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"]}).json()
 
     response = client.post(
         f"/api/agent/sessions/{session['id']}/messages",
@@ -187,7 +187,7 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     res = client.post(
         f"/api/agent/sessions/{session['id']}/messages",
         json={"content": "删掉这个节点", "context": "当前工作流 workflow_id=w1"},
@@ -217,7 +217,7 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
     deadline = time.time() + 10
@@ -253,7 +253,7 @@ def test_failed_turn_keeps_real_usage_and_context(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
     assert host.wait_for_idle_turns()
 
@@ -281,7 +281,7 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
     deadline = time.time() + 10
@@ -305,7 +305,7 @@ def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
     deadline = time.time() + 10
@@ -330,7 +330,7 @@ def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
     deadline = time.time() + 10
@@ -368,7 +368,7 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
             db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1", api_key="k", enabled=True
         )
         db.commit()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
     deadline = time.time() + 10
@@ -404,7 +404,7 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     assert client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "one"}).status_code == 200
 
     second = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "two"})
@@ -420,7 +420,7 @@ def test_stop_is_not_an_error_when_nothing_is_running() -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
 
     res = client.post(f"/api/agent/sessions/{session['id']}/stop")
 
@@ -463,7 +463,7 @@ def test_session_analysis_video_mode_patch() -> None:
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     assert session["analysis_video_mode"] == "auto"  # 默认
 
     patched = client.patch(f"/api/agent/sessions/{session['id']}", json={"analysis_video_mode": "native"}).json()
@@ -632,7 +632,7 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
         )
         db.commit()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"], "title": "t"}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"], "title": "t"}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
     assert host.wait_for_idle_turns()
 
@@ -688,7 +688,7 @@ def test_失败的一轮把已经做过的事留在记录里(monkeypatch) -> Non
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "分析一下建模情况"})
     assert host.wait_for_idle_turns()
 
@@ -710,7 +710,7 @@ def test_没有过程的失败不会凭空多出一条空记录(monkeypatch) -> 
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
     assert host.wait_for_idle_turns()
 

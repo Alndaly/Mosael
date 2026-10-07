@@ -129,7 +129,7 @@ def test_系统提示瘦身_搬走的做法在内置技能里() -> None:
 def test_每轮的系统提示带上目录() -> None:
     client = fresh_client()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     from app.db.models import AgentSession
 
     with SessionLocal() as db:
@@ -324,7 +324,7 @@ def test_斜杠点名的技能全文挂到这一轮_落库带着名字(monkeypat
     _configured()
     ws = _workspace(client)
     _create(ws, "ads", "带货", "## 三段卖点\n先看商品图\n", title="做带货短视频")
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     sent = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "做一条", "skills": ["ads", "nope"]})
     assert sent.status_code == 200, sent.text
     assert sent.json()["payload"]["skills"] == ["ads", "nope"]

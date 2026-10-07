@@ -32,7 +32,7 @@ class Chat:
     def __init__(self) -> None:
         self.client = fresh_client()
         self.ws = self.client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        self.sid = self.client.post("/api/agent/sessions", json={"workspace_id": self.ws, "title": "T"}).json()["id"]
+        self.sid = self.client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.ws, "title": "T"}).json()["id"]
         with SessionLocal() as db:
             user = db.query(User).filter(User.username == "tester").one()
             self.token = mint_service_session(db, user.id, agent_session_id=self.sid)

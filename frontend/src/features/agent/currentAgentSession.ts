@@ -105,7 +105,8 @@ function subscribe(listener: () => void) {
 // —— 改变「当前会话」的三种动作 ——
 
 async function createAndSelect(qc: QueryClient, workspaceId: string): Promise<AgentSession> {
-  const created = await createAgentSession({ workspace_id: workspaceId });
+  //: 家先一律是 AI Studio(ADR 0044 第一步:后端记住在哪开的;各处说自己在哪是第二步)。
+  const created = await createAgentSession({ workspace_id: workspaceId, home: { kind: "studio", id: "" } });
   // 先把新会话放进清单再选中:等重拉的那一下里新 id 在清单里找不到,「当前会话」会瞬间回落到
   // 第一条 —— 看起来就像点了没反应。
   qc.setQueryData<AgentSession[]>(agentSessionsQueryKey(workspaceId), (old) => [

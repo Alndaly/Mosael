@@ -107,7 +107,7 @@ def test_智能体在自己的对话里把消息存成笔记_操作人是这一�
     owner, workspace, mate = _team()
     mine = _session(owner, workspace, shared=False)
     said = _message(mine, "把这段存下来")
-    mates_own = mate.post("/api/agent/sessions", json={"workspace_id": workspace}).json()["id"]
+    mates_own = mate.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace}).json()["id"]
 
     def agent_of(username: str, session_id: str) -> list[tuple[str, str, int, str]]:
         client = TestClient(app)

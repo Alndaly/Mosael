@@ -9,10 +9,9 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale, render_message, tr
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from app.api.schemas import (
-    AgentSessionOut,
     JobOut,
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
@@ -59,9 +58,6 @@ from app.domain.workflows.revisions import (
     revision_vouchers,
 )
 from app.domain.workflows.templates import built_in_template_graph
-
-if TYPE_CHECKING:
-    from app.db.models import AgentSession
 
 router = APIRouter(tags=["workflows"])
 
@@ -479,57 +475,3 @@ def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: 
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
     return {"graph": graph, "summary": summary}
-
-
-@router.post("/workflows/{workflow_id}/agent-session", response_model=AgentSessionOut)
-def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -> "AgentSession":
-    """工作流的默认智能体会话:按 external_key 找回,记忆随会话长期保留。
-
-    一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回
-    「默认会话」(get-or-create),保持老调用方语义不变。
-    """
-    workflow = workflow_uc.editable(db, user, workflow_id)
-    from app.domain.agent import host
-
-    return host.get_or_create_external_session(
-        db,
-        workspace_id=workflow.workspace_id,
-        origin="workflow",
-        external_key=f"workflow:{workflow_id}",
-        title=f"工作流 · {workflow.name}",
-    )
-
-
-@router.get("/workflows/{workflow_id}/agent-sessions", response_model=list[AgentSessionOut])
-def list_workflow_agent_sessions(workflow_id: str, db: DbSession, user: CurrentUser) -> list["AgentSession"]:
-    """该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。"""
-    workflow_uc.readable(db, user, workflow_id)
-    from sqlalchemy import or_, select
-
-    from app.db.models import AgentSession
-
-    key = f"workflow:{workflow_id}"
-    return list(
-        db.scalars(
-            select(AgentSession)
-            .where(or_(AgentSession.external_key == key, AgentSession.external_key.like(f"{key}:%")))
-            .order_by(AgentSession.updated_at.desc())
-        )
-    )
-
-
-@router.post("/workflows/{workflow_id}/agent-sessions", response_model=AgentSessionOut)
-def create_workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -> "AgentSession":
-    """给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。"""
-    import uuid
-
-    from app.domain.agent import host
-
-    workflow = workflow_uc.editable(db, user, workflow_id)
-    return host.create_session(
-        db,
-        workspace_id=workflow.workspace_id,
-        origin="workflow",
-        external_key=f"workflow:{workflow_id}:{uuid.uuid4().hex[:8]}",
-        title="新对话",
-    )

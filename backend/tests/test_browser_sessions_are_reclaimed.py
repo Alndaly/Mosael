@@ -31,7 +31,7 @@ def _card(client, ws: str, agent_session_id: str | None, payload: dict) -> dict:
 
 
 def _conversation(client, ws: str) -> str:
-    return client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+    return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
 
 
 def _age(session_id: str, minutes: int) -> None:

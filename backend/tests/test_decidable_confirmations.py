@@ -34,7 +34,7 @@ def _join(owner: TestClient, workspace: str, username: str, role: str) -> TestCl
 
 
 def _session(client: TestClient, workspace: str, *, shared: bool) -> str:
-    sid = client.post("/api/agent/sessions", json={"workspace_id": workspace, "title": "脚本讨论"}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "脚本讨论"}).json()["id"]
     if shared:
         client.post(f"/api/shares/agent_session/{sid}", json={"workspace_id": workspace})
     return sid

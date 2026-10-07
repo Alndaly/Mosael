@@ -85,7 +85,7 @@ def test_a_publish_account_is_private_by_default() -> None:
 def test_an_agent_session_is_private_by_default() -> None:
     owner, workspace, mate = _team()
     session = owner.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "私人对话"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "私人对话"}
     ).json()
 
     listed = mate.get(f"/api/agent/sessions?workspace_id={workspace['id']}").json()
@@ -337,7 +337,7 @@ def test_a_session_can_be_shared_and_withdrawn() -> None:
     """私人对话默认只有自己看得见,但主人可以把某一次对话拿出来给同事看。"""
     owner, workspace, mate = _team()
     session = owner.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "查一下这个报错"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "查一下这个报错"}
     ).json()
     assert session["is_mine"] is True and session["shared"] is False
 

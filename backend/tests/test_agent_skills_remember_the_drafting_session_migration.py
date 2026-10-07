@@ -54,7 +54,7 @@ def test_迁移加的列也跟着对话删除回到_NULL() -> None:
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    session = client.post("/api/agent/sessions", json={"workspace_id": workspace, "title": "T"}).json()["id"]
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "T"}).json()["id"]
     _old_table(workspace)
     _migrate_agent_skills_remember_the_drafting_session()
     with engine.begin() as conn:

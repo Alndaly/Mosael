@@ -89,7 +89,7 @@
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `import_skill` | 确认卡 | Confirmation required, every time: import skills from an https link to a .zip or a GitHub skill folder |
 | `inspect_sequence` | 直接执行 | Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs. |
-| `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
+| `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status, where it was opened). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace, newest first, one page at a time. |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |

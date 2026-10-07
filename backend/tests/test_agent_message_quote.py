@@ -21,7 +21,7 @@ QUOTE = {"kind": "note", "note_id": "n1", "title": "宣传片周报", "text": "�
 def _session(client) -> str:
     _configured(client)
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    return client.post("/api/agent/sessions", json={"workspace_id": workspace}).json()["id"]
+    return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace}).json()["id"]
 
 
 def test_带着摘录发出去_落进消息_回看时还在(monkeypatch) -> None:

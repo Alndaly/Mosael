@@ -47,7 +47,7 @@ def test_a_turn_token_carries_its_session() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()
 
     with SessionLocal() as db:
@@ -60,7 +60,7 @@ def test_the_card_belongs_to_the_session_the_token_names() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()
     sequence_id = _sequence(client, workspace["id"])
 
@@ -79,7 +79,7 @@ def test_a_claimed_session_id_in_the_body_is_ignored() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     victim = client.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "受害会话"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "受害会话"}
     ).json()
     sequence_id = _sequence(client, workspace["id"])
 

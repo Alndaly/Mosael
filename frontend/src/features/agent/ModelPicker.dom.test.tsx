@@ -173,7 +173,7 @@ describe("还没有会话时", () => {
     await waitFor(() =>
       expect(sessions.updateAgentSession).toHaveBeenCalledWith("s-new", { provider_profile_id: "p1", model: "m-deep" }),
     );
-    expect(sessions.createAgentSession).toHaveBeenCalledWith({ workspace_id: "ws" });
+    expect(sessions.createAgentSession).toHaveBeenCalledWith({ workspace_id: "ws", home: { kind: "studio", id: "" } });
     //: 建出来的就是「当前会话」—— 面板、浮标接下来看到的都是它。
     expect(window.localStorage.getItem("mosael.agent.session.ws")).toBe("s-new");
   });

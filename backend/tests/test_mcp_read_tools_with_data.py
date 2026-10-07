@@ -49,7 +49,7 @@ def _seed(client, monkeypatch) -> dict[str, str]:
     ids["note"] = mcp_server.create_note(title="脚本", markdown="第一场:清晨")["id"]
     ids["scene"] = mcp_server.create_scene(name="客厅")["id"]
     ids["entity"] = mcp_server.create_entity(kind="character", name="小林", prompt="黑色短发")["id"]
-    ids["session"] = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+    ids["session"] = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
     with SessionLocal() as db:
         db.add(Scene3DModel(workspace_id=ws, name="沙发", format="glb", file_key="", size=10))
         account = PublishAccount(workspace_id=ws, owner_user_id=me, platform="bilibili", name="主号")

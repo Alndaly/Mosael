@@ -62,7 +62,7 @@ class Setup:
         self.instance_id = packages(self.client)["dev.effects"]["instances"][0]["id"] if "dev.effects" in packages(
             self.client) else ""
         self.session_id = self.client.post(
-            "/api/agent/sessions", json={"workspace_id": self.workspace_id, "title": "T"}
+            "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.workspace_id, "title": "T"}
         ).json()["id"]
 
     def name(self, tool: str) -> str:

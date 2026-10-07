@@ -650,8 +650,8 @@ def open_view(view: str, id: str = "") -> dict[str, Any]:
 
     `view` is one of: home, statistics, media, entities, notes, scenes, editor, ai, publish, settings,
     workflows, boards, scheduler, plugins, browser-pool, admin. `id` selects a project in
-    editor, a note in notes, a 3D scene in scenes, an asset-library entry in entities, or a board in
-    boards. Other pages ignore id.
+    editor, a note in notes, a 3D scene in scenes, an asset-library entry in entities, a board in
+    boards, or a workflow in workflows. Other pages ignore id.
 
     Do NOT use it to shuffle the user around while you work — a page that changes under
     someone reading it is worse than no navigation at all. One destination, once you have one.
@@ -2890,29 +2890,33 @@ def notify_workspace(title: str, body: str = "", workspace_id: str = "") -> dict
 
 @tool(effect="reads")
 def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
-    """Runs directly: list the agent sessions in this workspace (id, title, status).
+    """Runs directly: list the agent sessions in this workspace (id, title, status, where it was opened).
 
     Use before notify_agent_session to find who to notify. status "running" means that
     agent is mid-turn right now; your notice would be queued behind its current work.
-    Only the user's own conversations are listed: one a teammate shared is view-only, so
-    it cannot be notified.
+    `where` says which page the conversation was opened on (a note, an edit project, a
+    ComfyUI workflow …). Only the user's own conversations are listed: one a teammate
+    shared is view-only, so it cannot be notified.
     """
-    from app.api.schemas import AgentSessionOut
-    from app.domain.agent import use_cases
+    from app.domain.agent import places, use_cases
 
-    sessions = _use_case(use_cases.list_sessions, workspace_id or _default_workspace_id(), out=AgentSessionOut)
     me = _SESSION_ID.get()
-    # 共享来的对话只能看(domain/agent/sessions 的写闸):列出来只会让模型往里发一条必然被拒的通知。
-    return [
-        {
-            "session_id": item.get("id"),
-            "title": item.get("title"),
-            "status": item.get("status"),
-            "is_self": item.get("id") == me,
-        }
-        for item in sessions
-        if item.get("is_mine")
-    ]
+
+    def listed(db, user, workspace):
+        # 共享来的对话只能看(domain/agent/sessions 的写闸):列出来只会让模型往里发一条必然被拒的通知。
+        return [
+            {
+                "session_id": session.id,
+                "title": session.title,
+                "status": session.status,
+                "where": places.where(session),
+                "is_self": session.id == me,
+            }
+            for session in use_cases.list_sessions(db, user, workspace)
+            if session.is_mine
+        ]
+
+    return _use_case(listed, workspace_id or _default_workspace_id())
 
 
 @tool(effect="reads", awaits_answer=True)

@@ -133,7 +133,7 @@ describe("当前智能体会话", () => {
     const update = renderHook(() => useUpdateAgentSession("w1", null), { wrapper });
 
     await act(() => update.result.current.mutateAsync({ thinking_level: "high" }));
-    expect(mocks.createAgentSession).toHaveBeenCalledWith({ workspace_id: "w1" });
+    expect(mocks.createAgentSession).toHaveBeenCalledWith({ workspace_id: "w1", home: { kind: "studio", id: "" } });
     expect(mocks.updateAgentSession).toHaveBeenCalledWith("s-created", { thinking_level: "high" });
     expect(both.result.current.panel.session?.id).toBe("s-created");
   });

@@ -44,7 +44,7 @@ def probe(monkeypatch):
 
 def _chat(client) -> tuple[str, str]:
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    session = client.post("/api/agent/sessions", json={"workspace_id": workspace, "title": "T"}).json()["id"]
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "T"}).json()["id"]
     return workspace, session
 
 

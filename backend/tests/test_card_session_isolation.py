@@ -21,8 +21,8 @@ QUESTION = [{"question": "选哪个?", "options": [{"label": "甲"}, {"label": "
 
 def _setup(client) -> tuple[str, str, str]:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    a = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
-    b = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+    a = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
+    b = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
     return ws, a, b
 
 

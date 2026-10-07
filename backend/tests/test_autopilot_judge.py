@@ -35,7 +35,7 @@ class Chat:
         self.login_token = self.client.headers["Authorization"]
         self.workspace_id = self.client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         self.session_id = self.client.post(
-            "/api/agent/sessions", json={"workspace_id": self.workspace_id, "title": "T"}
+            "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.workspace_id, "title": "T"}
         ).json()["id"]
         self.client.patch(f"/api/agent/sessions/{self.session_id}", json={"permission_mode": "auto"})
 

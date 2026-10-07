@@ -86,7 +86,7 @@ def test_bypass_cannot_grant_what_the_person_does_not_have() -> None:
     mate.post(f"/api/invitations/{invitation['id']}/accept")
 
     session_id = mate.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()["id"]
     with SessionLocal() as db:
         person = db.query(User).filter(User.username == "mate").one()
@@ -158,7 +158,7 @@ def test_the_decision_is_recorded_against_a_person() -> None:
     owner = fresh_client()
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
     session_id = owner.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).json()["id"]
     with SessionLocal() as db:
         me = db.query(User).order_by(User.created_at).first()

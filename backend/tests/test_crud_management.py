@@ -106,7 +106,7 @@ def test_asset_tags_update_dedupes_and_trims() -> None:
 def test_agent_session_rename_and_delete() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
 
     renamed = client.patch(f"/api/agent/sessions/{session['id']}", json={"title": "剪辑讨论"}).json()
     assert renamed["title"] == "剪辑讨论"

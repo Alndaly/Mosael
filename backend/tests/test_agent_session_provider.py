@@ -21,7 +21,7 @@ def test_不存在的连接_id_当场说不存在() -> None:
     ws = _workspace(client)
     created = client.post(
         "/api/agent/sessions",
-        json={"workspace_id": ws, "title": "T", "provider_profile_id": "03100a39"},
+        json={"home": {"kind": "studio"}, "workspace_id": ws, "title": "T", "provider_profile_id": "03100a39"},
     )
     assert created.status_code == 422, created.text
     assert "连接" in created.json()["detail"]
@@ -31,7 +31,7 @@ def test_改会话时也验() -> None:
     """PATCH 是直接赋值的第二条路 —— 只挡住新建,换连接时照样写得进一个不存在的 id。"""
     client = fresh_client()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws, "title": "T"}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws, "title": "T"}).json()
     changed = client.patch(
         f"/api/agent/sessions/{session['id']}",
         json={"provider_profile_id": "nope-not-a-profile"},
@@ -43,7 +43,7 @@ def test_留空仍然是跟随默认() -> None:
     """不指定连接是正常用法(跟随「对话」能力的默认模型),不能被这道闸误伤。"""
     client = fresh_client()
     ws = _workspace(client)
-    created = client.post("/api/agent/sessions", json={"workspace_id": ws, "title": "T"})
+    created = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws, "title": "T"})
     assert created.status_code == 200, created.text
     assert created.json()["provider_profile_id"] is None
 
@@ -64,7 +64,7 @@ def test_真实存在的连接能钉上去() -> None:
     profile_id = profile.json()["id"]
     created = client.post(
         "/api/agent/sessions",
-        json={"workspace_id": ws, "title": "T", "provider_profile_id": profile_id},
+        json={"home": {"kind": "studio"}, "workspace_id": ws, "title": "T", "provider_profile_id": profile_id},
     )
     assert created.status_code == 200, created.text
     assert created.json()["provider_profile_id"] == profile_id

@@ -19,7 +19,7 @@ def _setup():
         client.post("/api/workspaces", json={"name": name})
     ordered = [one["id"] for one in client.post("/api/agent/tools/list_workspaces", json={"arguments": {}}).json()["result"]]
     first, other = ordered[0], ordered[1]
-    session_id = client.post("/api/agent/sessions", json={"workspace_id": other, "title": "T"}).json()["id"]
+    session_id = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": other, "title": "T"}).json()["id"]
     assets = {ws: insert_asset(ws, kind="video", name=f"clip-{ws[:4]}", file_key="media/x.mp4") for ws in (first, other)}
     with SessionLocal() as db:
         user = db.query(User).filter(User.username == "tester").one()

@@ -32,7 +32,7 @@ def _team() -> tuple[TestClient, str, TestClient]:
 
 
 def _session(owner: TestClient, workspace: str, *, shared: bool) -> str:
-    sid = owner.post("/api/agent/sessions", json={"workspace_id": workspace, "title": "脚本讨论"}).json()["id"]
+    sid = owner.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "脚本讨论"}).json()["id"]
     if shared:
         owner.post(f"/api/shares/agent_session/{sid}", json={"workspace_id": workspace})
     return sid

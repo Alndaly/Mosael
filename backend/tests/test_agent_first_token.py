@@ -74,7 +74,7 @@ def test_prompt_snapshot_only_records_changes() -> None:
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": workspace["id"]}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"]}).json()
 
     with SessionLocal() as db:
         # 第一轮:一次都没记过 —— 这就是基线,必须留下,否则轨迹上永远看不到系统提示。

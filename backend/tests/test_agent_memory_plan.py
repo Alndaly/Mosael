@@ -130,7 +130,7 @@ def test_计划非法输入被拒() -> None:
 def test_计划落到会话并随详情返回() -> None:
     client = fresh_client()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     assert session["plan"] is None
     updated = client.put(
         f"/api/agent/sessions/{session['id']}/plan",
@@ -148,7 +148,7 @@ def test_空数组清空计划() -> None:
     而"还剩几步"是它唯一要回答的问题。"""
     client = fresh_client()
     ws = _workspace(client)
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
     client.put(f"/api/agent/sessions/{session['id']}/plan", json={"steps": ["一步"]})
     cleared = client.put(f"/api/agent/sessions/{session['id']}/plan", json={"steps": []}).json()
     assert cleared["plan"] is None

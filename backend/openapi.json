@@ -14214,137 +14214,6 @@
         }
       }
     },
-    "/api/workflows/{workflow_id}/agent-session": {
-      "post": {
-        "tags": [
-          "workflows"
-        ],
-        "summary": "Workflow Agent Session",
-        "description": "工作流的默认智能体会话:按 external_key 找回,记忆随会话长期保留。\n\n一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回\n「默认会话」(get-or-create),保持老调用方语义不变。",
-        "operationId": "workflow_agent_session_api_workflows__workflow_id__agent_session_post",
-        "parameters": [
-          {
-            "name": "workflow_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workflow Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/workflows/{workflow_id}/agent-sessions": {
-      "get": {
-        "tags": [
-          "workflows"
-        ],
-        "summary": "List Workflow Agent Sessions",
-        "description": "该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。",
-        "operationId": "list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get",
-        "parameters": [
-          {
-            "name": "workflow_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workflow Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AgentSessionOut"
-                  },
-                  "title": "Response List Workflow Agent Sessions Api Workflows  Workflow Id  Agent Sessions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "workflows"
-        ],
-        "summary": "Create Workflow Agent Session",
-        "description": "给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。",
-        "operationId": "create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post",
-        "parameters": [
-          {
-            "name": "workflow_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workflow Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/boards": {
       "get": {
         "tags": [
@@ -21937,6 +21806,7 @@
           "agent"
         ],
         "summary": "List Agent Sessions",
+        "description": "不带 `home_kind` 列全部(AI Studio);带了只列家在那里的(各处面板的「这里的对话」,ADR 0044 §2)。",
         "operationId": "list_agent_sessions_api_agent_sessions_get",
         "parameters": [
           {
@@ -21946,6 +21816,26 @@
             "schema": {
               "type": "string",
               "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "home_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Home Kind"
+            }
+          },
+          {
+            "name": "home_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Home Id"
             }
           }
         ],
@@ -21960,6 +21850,48 @@
                     "$ref": "#/components/schemas/AgentSessionOut"
                   },
                   "title": "Response List Agent Sessions Api Agent Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/homes/move": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Move Agent Homes",
+        "description": "ComfyUI 那张工作流存盘、改名、挪文件夹时,家跟着挪(ADR 0044 §9)。只收 `comfyui`,只挪他自己的对话。",
+        "operationId": "move_agent_homes_api_agent_homes_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHomesMove"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHomesMoved"
                 }
               }
             }
@@ -26281,6 +26213,61 @@
         "title": "AgentContextPart",
         "description": "堆叠条里的一段。kind ∈ messages|tools|system|free。"
       },
+      "AgentHomesMove": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "studio",
+              "project",
+              "note",
+              "board",
+              "workflow",
+              "scene",
+              "comfyui"
+            ],
+            "title": "Kind"
+          },
+          "from_id": {
+            "type": "string",
+            "maxLength": 700,
+            "minLength": 1,
+            "title": "From Id"
+          },
+          "to_id": {
+            "type": "string",
+            "maxLength": 700,
+            "minLength": 1,
+            "title": "To Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "kind",
+          "from_id",
+          "to_id"
+        ],
+        "title": "AgentHomesMove",
+        "description": "家跟着挪(ADR 0044 §9):ComfyUI 那张工作流第一次存盘、改名、挪文件夹。只收 `comfyui`。"
+      },
+      "AgentHomesMoved": {
+        "properties": {
+          "moved": {
+            "type": "integer",
+            "title": "Moved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "moved"
+        ],
+        "title": "AgentHomesMoved"
+      },
       "AgentManifestOut": {
         "properties": {
           "app": {
@@ -26483,6 +26470,16 @@
             "type": "array",
             "maxItems": 3,
             "title": "Skills"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -26804,16 +26801,8 @@
             "type": "string",
             "title": "Workspace Id"
           },
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Project Id"
+          "home": {
+            "$ref": "#/components/schemas/PlaceIn"
           },
           "title": {
             "type": "string",
@@ -26859,7 +26848,8 @@
         },
         "type": "object",
         "required": [
-          "workspace_id"
+          "workspace_id",
+          "home"
         ],
         "title": "AgentSessionCreate"
       },
@@ -26894,16 +26884,35 @@
             "title": "Shared",
             "default": false
           },
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "home_kind": {
+            "type": "string",
+            "enum": [
+              "studio",
+              "project",
+              "note",
+              "board",
+              "workflow",
+              "scene",
+              "comfyui"
             ],
-            "title": "Project Id"
+            "title": "Home Kind"
+          },
+          "home_id": {
+            "type": "string",
+            "title": "Home Id"
+          },
+          "home_name": {
+            "type": "string",
+            "title": "Home Name"
+          },
+          "home_state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "deleted",
+              "hidden"
+            ],
+            "title": "Home State"
           },
           "group_id": {
             "anyOf": [
@@ -26993,6 +27002,18 @@
             "title": "Pending View",
             "default": ""
           },
+          "pending_view_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending View At"
+          },
           "context": {
             "anyOf": [
               {
@@ -27033,7 +27054,10 @@
         "required": [
           "id",
           "workspace_id",
-          "project_id",
+          "home_kind",
+          "home_id",
+          "home_name",
+          "home_state",
           "title",
           "origin",
           "adapter",
@@ -37715,6 +37739,35 @@
           "new_password"
         ],
         "title": "PasswordUpdate"
+      },
+      "PlaceIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "studio",
+              "project",
+              "note",
+              "board",
+              "workflow",
+              "scene",
+              "comfyui"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 700,
+            "title": "Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "PlaceIn",
+        "description": "一处地方:一个种类加那样东西的 id。会话的家、每条消息在哪说的,都是这个形状。\n\n`studio` 的 id 是空串;ComfyUI 的是 `<连接 id>/<路径>`(存过的)、`<连接 id>#<标签页 key>`(没存过的)、`<连接 id>`。\n这里只管长度,写法由 domain/agent/places.checked 校。"
       },
       "PluginCapabilityStatusOut": {
         "properties": {

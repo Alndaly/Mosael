@@ -47,7 +47,7 @@ class Test删了就清:
     def test_对话(self) -> None:
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         client.post(f"/api/shares/agent_session/{sid}", json={"workspace_id": ws})
         with SessionLocal() as db:
             assert len(_share_rows(db, "agent_session")) == 1

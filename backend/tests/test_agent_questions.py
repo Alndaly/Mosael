@@ -79,7 +79,7 @@ class Test校验:
 class Test回答:
     def _row(self, client) -> tuple[str, AgentQuestion]:
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             db.commit()  # 测试是入口:领域函数不提交
@@ -190,7 +190,7 @@ class Test接口:
         """这是模型给错了形状,消息里要说清怎么改 —— 它下一步就是改了重发。"""
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         res = client.post(
             "/api/agent/questions",
             json={"workspace_id": ws, "session_id": sid, "questions": _ok(options=[{"label": "就一个"}])},
@@ -202,8 +202,8 @@ class Test接口:
         """一个问题脱离它的上下文没有意义 —— 别的对话不该看到它。"""
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        mine = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
-        other = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        mine = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
+        other = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         client.post("/api/agent/questions", json={"workspace_id": ws, "session_id": mine, "questions": _ok()})
 
         assert len(client.get(f"/api/agent/questions?session_id={mine}").json()) == 1
@@ -212,7 +212,7 @@ class Test接口:
     def test_答完就不在待答里了(self) -> None:
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         qid = client.post(
             "/api/agent/questions", json={"workspace_id": ws, "session_id": sid, "questions": _ok()}
         ).json()["id"]
@@ -233,7 +233,7 @@ class Test答完的那条记录:
     def _answered(self, picked: dict) -> AgentQuestion:
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             q.answer(db, row, picked)
@@ -257,7 +257,7 @@ class Test答完的那条记录:
     def test_跳过也留得下来(self) -> None:
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             q.dismiss(db, row)
@@ -267,7 +267,7 @@ class Test答完的那条记录:
         """没有内容的结构会让界面画出一张空卡 —— 那比退回正文更糟。"""
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             assert q._answer_record(row) is None

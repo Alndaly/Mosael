@@ -39,7 +39,7 @@ class Agent:
             json={"track_id": self.video_track, "asset_id": self.asset_id, "timeline_start": 0, "src_in": 0, "src_out": 10},
         ).json()
         self.clip_id = self.clips(state)[0]["id"]
-        session = self.client.post("/api/agent/sessions", json={"workspace_id": self.workspace_id, "title": "T"}).json()["id"]
+        session = self.client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.workspace_id, "title": "T"}).json()["id"]
         with SessionLocal() as db:
             user = db.query(User).filter(User.username == username).one()
             self.turn_token = mint_service_session(db, user.id, agent_session_id=session)

@@ -17,6 +17,7 @@ import logging
 import re
 import shutil
 import uuid
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -8157,6 +8158,168 @@ def _migrate_agent_skills_remember_the_drafting_session() -> None:
             ))
 
 
+def _migrate_agent_sessions_remember_where_they_were_opened() -> None:
+    """对话记住在哪开的(ADR 0044 §1):`agent_sessions` 加「家」两列(`home_kind`、`home_id`)、`pending_view_at` 和按家取清单的索引。
+
+    老对话的家全是 AI Studio(列的默认值)—— 维护者定的。同一步里两种例外,都是**记着的事实**,不是猜:
+
+    - `project_id` 不空的(只能是经接口建的):家记成那个项目 —— 它当初就是冲着这个项目开的,项目级记忆也照旧注入
+      (`project_id` 这一列由 SCHEMA 之后的 `_drop_agent_sessions_project_id` 删掉);
+    - `origin = 'workflow'` 的(`/workflows/{id}/agent-session(s)` 那三条死路由建的):`origin` 改成 `ui`,家记成
+      `external_key` 里那个工作流,`external_key` 清空;那几天建的没走认领、主人是空的,主人记成那个工作流的创建者(最早一版
+      里有记录的作者,和 `_backfill_workflow_revision_authors` 同一个判据),找不到就是工作区的 owner。它们从此在 AI Studio 和
+      那个工作流的面板里看得见。很老的库这时还没有 `owner_user_id` 列:由之后的 `_migrate_resource_ownership` 补成工作区 owner。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 AgentSession 已经指望它们在了。表还没有就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
+        if not columns:
+            return
+        if "home_kind" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN home_kind VARCHAR(16) NOT NULL DEFAULT 'studio'"))
+        if "home_id" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN home_id VARCHAR(700) NOT NULL DEFAULT ''"))
+        if "pending_view_at" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN pending_view_at DATETIME"))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_agent_sessions_ws_home "
+            "ON agent_sessions (workspace_id, home_kind, home_id, updated_at)"
+        ))
+        if "project_id" in columns:
+            conn.execute(text(
+                "UPDATE agent_sessions SET home_kind = 'project', home_id = project_id "
+                "WHERE project_id IS NOT NULL AND project_id != '' AND home_kind = 'studio'"
+            ))
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
+        revisions = (
+            {row[1] for row in conn.execute(text("PRAGMA table_info(workflow_revisions)"))}
+            if "workflow_revisions" in tables else set()
+        )
+        for session_id, workspace_id, external_key in conn.execute(text(
+            "SELECT id, workspace_id, external_key FROM agent_sessions WHERE origin = 'workflow'"
+        )).all():
+            key = external_key or ""
+            workflow_id = key[len("workflow:"):].split(":", 1)[0] if key.startswith("workflow:") else ""
+            conn.execute(
+                text(
+                    "UPDATE agent_sessions SET origin = 'ui', home_kind = :kind, home_id = :home, external_key = NULL "
+                    "WHERE id = :id"
+                ),
+                {"kind": "workflow" if workflow_id else "studio", "home": workflow_id, "id": session_id},
+            )
+            if "owner_user_id" not in columns:
+                continue
+            creator = None
+            if workflow_id and {"workflow_id", "created_by", "revision"} <= revisions and "users" in tables:
+                creator = conn.execute(
+                    text(
+                        "SELECT r.created_by FROM workflow_revisions r JOIN users u ON u.id = r.created_by "
+                        "WHERE r.workflow_id = :id ORDER BY r.revision LIMIT 1"
+                    ),
+                    {"id": workflow_id},
+                ).scalar()
+            if creator is None and "workspace_members" in tables:
+                creator = conn.execute(
+                    text(
+                        "SELECT user_id FROM workspace_members WHERE workspace_id = :ws AND role = 'owner' "
+                        "ORDER BY created_at LIMIT 1"
+                    ),
+                    {"ws": workspace_id},
+                ).scalar()
+            conn.execute(
+                text("UPDATE agent_sessions SET owner_user_id = :owner WHERE id = :id AND owner_user_id IS NULL"),
+                {"owner": creator, "id": session_id},
+            )
+
+
+def _drop_agent_sessions_project_id() -> None:
+    """删掉 `agent_sessions.project_id`:它由家代替了(ADR 0044 §1,上一步已经把不空的那些转成家)。
+
+    这一列带外键(`REFERENCES projects(id)`),SQLite 的 `DROP COLUMN` 对外键列直接报错 —— `provider_profiles` 那种「删不掉
+    就跳过」在这里是**永远**跳过。所以重建这张表,见 `_rebuild_dropping`。排在 SCHEMA 之后:新表照现在的 ORM 建,那时 ORM
+    要的列都已经在老表上了。
+    """
+    with engine.connect() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
+    if "project_id" in columns:
+        _rebuild_dropping("agent_sessions", ("project_id",))
+
+
+def _foreign_key_violations(sqlite: Any, tables: list[str]) -> Counter[tuple[str, str]]:
+    """这几张表上「指向不存在的行」的外键,按 (子表, 父表) 计数。按计数比,不按 rowid:重建的那张表 rowid 会变。"""
+    found: Counter[tuple[str, str]] = Counter()
+    for table in tables:
+        for row in sqlite.execute(f'PRAGMA foreign_key_check("{table}")'):
+            found[(row[0], row[2])] += 1
+    return found
+
+
+def _rebuild_dropping(table: str, columns: tuple[str, ...]) -> None:
+    """重建 `table`、去掉 `columns` —— 删带外键的列只能这样(SQLite 的 `DROP COLUMN` 对外键列报错)。按 SQLite 文档的十二步:
+
+    **先关外键**(在事务外,事务里设它不生效)→ 照现在的 ORM 建 `<表>__rebuilt` → 原样搬数据 → 删旧表 → 改名 → 补索引 →
+    外键检查 → 提交 → 开外键。
+
+    **不关外键就删旧表,别的表指着它的 `ON DELETE CASCADE` 会一起删**:`agent_messages` 的全部消息、跟着消息走的用量记录
+    (`SET NULL`)、技能上记着的「在哪次对话里建的」……所以关没关上要读回来确认,没关上就不动手。外键检查查的是**指着这张表**
+    的那些表、比的是重建前后的**差**:重建能弄坏的只有「它们指着的行不见了」;库里本来就有的悬空引用(老版本留下的)不该让
+    升级起不来,重建本身多出来的一条都不许。这张表自己的外键列是原样搬过来的,搬不出新的悬空。
+
+    搬数据只搬新旧两边都有的列;旧表上有、ORM 上没有、又不在 `columns` 里的列 —— 重建会把它丢掉 —— 当场拒绝。整个过程一个
+    事务:任何一步失败,库原样不动。
+    """
+    from sqlalchemy.schema import CreateIndex, CreateTable
+
+    model = Base.metadata.tables[table]
+    rebuilt = f"{table}__rebuilt"
+    raw = engine.raw_connection()
+    try:
+        sqlite = raw.driver_connection
+        sqlite.execute("PRAGMA foreign_keys=OFF")
+        try:
+            if sqlite.execute("PRAGMA foreign_keys").fetchone()[0] != 0:
+                raise RuntimeError(f"refusing to rebuild {table}: foreign keys are still on, dropping it would cascade")
+            sqlite.execute("BEGIN")
+            try:
+                old = [row[1] for row in sqlite.execute(f'PRAGMA table_info("{table}")')]
+                lost = sorted(set(old) - set(columns) - set(model.columns.keys()))
+                if lost:
+                    raise RuntimeError(f"refusing to rebuild {table}: these columns are not on the model and would be lost: {lost}")
+                children = [
+                    name for (name,) in sqlite.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+                    if any(row[2] == table for row in sqlite.execute(f'PRAGMA foreign_key_list("{name}")'))
+                ]
+                before = _foreign_key_violations(sqlite, children)
+                create = str(CreateTable(model).compile(dialect=engine.dialect)).strip()
+                head = f"CREATE TABLE {table} ("
+                if not create.startswith(head):
+                    raise RuntimeError(f"unexpected CREATE TABLE for {table}: {create[:80]}")
+                sqlite.execute(f'DROP TABLE IF EXISTS "{rebuilt}"')
+                sqlite.execute(f'CREATE TABLE "{rebuilt}" (' + create[len(head):])
+                kept = ", ".join(f'"{column.name}"' for column in model.columns if column.name in old)
+                sqlite.execute(f'INSERT INTO "{rebuilt}" ({kept}) SELECT {kept} FROM "{table}"')
+                copied = sqlite.execute(f'SELECT count(*) FROM "{rebuilt}"').fetchone()[0]
+                original = sqlite.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
+                if copied != original:
+                    raise RuntimeError(f"rebuilding {table} copied {copied} of {original} rows")
+                sqlite.execute(f'DROP TABLE "{table}"')
+                sqlite.execute(f'ALTER TABLE "{rebuilt}" RENAME TO "{table}"')
+                for index in model.indexes:
+                    sqlite.execute(str(CreateIndex(index).compile(dialect=engine.dialect)))
+                grown = _foreign_key_violations(sqlite, children) - before
+                if grown:
+                    raise RuntimeError(f"rebuilding {table} left new dangling foreign keys: {dict(grown)}")
+                sqlite.commit()
+            except BaseException:
+                sqlite.rollback()
+                raise
+        finally:
+            sqlite.execute("PRAGMA foreign_keys=ON")
+    finally:
+        raw.close()
+
+
 def _migrate_install_sources_get_pytorch_and_github() -> None:
     """「管理 → 下载源」多两行:PyTorch 源(`tts_config.pytorch_index`)、GitHub 镜像前缀(`tts_config.github_mirror`),
     给「让 Mosael 装」用(ADR 0041 §4)。空 = 官方 / 直连,和老库的行为一样。
@@ -8321,6 +8484,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_local_services_stop_when_idle,
                 # 同上:ORM 上的 AgentSkill 指望「智能体在哪次对话里建的」那一列在(ADR 0043)。
                 _migrate_agent_skills_remember_the_drafting_session,
+                # 同上:ORM 上的 AgentSession 指望「家」两列和 pending_view_at 在(ADR 0044)。读 project_id 和 origin='workflow'
+                # 那批转成家,所以排在 SCHEMA 之后删 project_id 的那一步之前。
+                _migrate_agent_sessions_remember_where_they_were_opened,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -8505,6 +8671,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_s2v_detect_price),
             #: Google 连接能对话了:已有 Gemini 对话模型行的补上 Gemini 的参考价。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_gemini_chat_prices),
+            #: `agent_sessions.project_id` 由家代替(ADR 0044):带外键的列删不掉,重建这张表。要在 SCHEMA 之后 —— 新表照现在的
+            #: ORM 建,那时 ORM 要的列都已经在老表上;要在上面 BEFORE_SCHEMA 那一步把 project_id 转成家之后。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_agent_sessions_project_id),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

@@ -54,7 +54,7 @@ def test_对话不能塞进生成的分组() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     gen_group = _group(client, ws["id"], "generation", "生成的组")
-    sid = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     assert client.patch(f"/api/agent/sessions/{sid}", json={"group_id": gen_group["id"]}).status_code == 404
 

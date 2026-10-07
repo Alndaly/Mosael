@@ -41,6 +41,20 @@ class AgentCompactOut(ApiModel):
     compaction: dict | None = None
 
 
+class AgentHomesMove(ApiModel):
+    """家跟着挪(ADR 0044 §9):ComfyUI 那张工作流第一次存盘、改名、挪文件夹。只收 `comfyui`。"""
+
+    workspace_id: str
+    kind: PlaceKind
+    from_id: str = Field(min_length=1, max_length=700)
+    to_id: str = Field(min_length=1, max_length=700)
+
+
+class AgentHomesMoved(ApiModel):
+    #: 挪了几段(只挪他自己的)。
+    moved: int
+
+
 class AgentPendingView(ApiModel):
     """智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。"""
 
@@ -84,9 +98,25 @@ class AgentQuestionOut(OrmModel):
     answered_at: datetime | None = None
 
 
+#: 地方的种类(ADR 0044,见 domain/agent/places)。
+PlaceKind = Literal["studio", "project", "note", "board", "workflow", "scene", "comfyui"]
+
+
+class PlaceIn(ApiModel):
+    """一处地方:一个种类加那样东西的 id。会话的家、每条消息在哪说的,都是这个形状。
+
+    `studio` 的 id 是空串;ComfyUI 的是 `<连接 id>/<路径>`(存过的)、`<连接 id>#<标签页 key>`(没存过的)、`<连接 id>`。
+    这里只管长度,写法由 domain/agent/places.checked 校。
+    """
+
+    kind: PlaceKind
+    id: str = Field(default="", max_length=700)
+
+
 class AgentSessionCreate(ApiModel):
     workspace_id: str
-    project_id: str | None = None
+    #: 在哪开的(ADR 0044)。**必填**:没有「缺省当 AI Studio」这条路 —— 界面上每一处都说得出自己在哪。
+    home: PlaceIn
     title: str = Field(default="新对话", max_length=200)
     adapter: str | None = Field(default=None, pattern="^pi$")
     provider_profile_id: str | None = None
@@ -146,7 +176,12 @@ class AgentSessionOut(OrmModel):
     owner_user_id: str | None = None
     is_mine: bool = True
     shared: bool = False
-    project_id: str | None
+    #: 在哪开的(ADR 0044)。`home_name` 现查、**按看的人**查:那样东西删了是 `deleted`、他看不见是 `hidden`,
+    #: 这两种 `home_name` 和 `home_id` 都是空串 —— 响应里不出现看的人看不见的标题(ComfyUI 的 id 里就是文件路径)。
+    home_kind: PlaceKind
+    home_id: str = Field(validation_alias="home_id_shown")
+    home_name: str
+    home_state: Literal["ok", "deleted", "hidden"]
     group_id: str | None = None
     title: str
     origin: str
@@ -161,6 +196,8 @@ class AgentSessionOut(OrmModel):
     status: str
     #: 智能体要求界面跳到哪儿(`view` 或 `view:id`)。跳完由前端 DELETE 掉。
     pending_view: str = ""
+    #: 那是什么时候要求的。过了 30 秒前端不跟、直接清掉(ADR 0044 §6)。
+    pending_view_at: datetime | None = None
     #: 当前上下文水位。**每次请求现算**,而不是等某一轮回报 —— 打开旧会话、刚换过模型、
     #: 上一轮失败了,这些时候都没有新的一轮可以带回这个数,而"还能聊多久"这个问题恰恰在
     #: 开口之前就要有答案。窗口取当前模型的,换模型即变。
@@ -239,6 +276,9 @@ class AgentMessageCreate(ApiModel):
     #: 输入框里用「/」点名的技能(ADR 0040 §4),写模型看到的名字(插件的带 `插件 id:`)。全文挂到这一轮;
     #: 落库进 payload["skills"],气泡照它画胶囊。最多 3 个 —— 每个都是整份正文。
     skills: list[str] = Field(default_factory=list, max_length=3)
+    #: 这一句是在界面上哪一处说的(ADR 0044)。落进 payload["place"],只决定这一轮发哪些工具 —— 不替任何东西开权限,
+    #: 所以只校验形状。飞书、另一段对话的通知没有。
+    place: PlaceIn | None = None
 
     @field_validator("skills")
     @classmethod

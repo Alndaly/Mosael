@@ -389,7 +389,7 @@ def test_agent_video_analysis_uses_current_oauth_model_and_gateway(monkeypatch) 
 
     session = client.post(
         "/api/agent/sessions",
-        json={
+        json={"home": {"kind": "studio"}, 
             "workspace_id": workspace_id,
             "provider_profile_id": profile.id,
             "model": "k3",
@@ -460,7 +460,7 @@ def test_agent_oauth_native_video_requires_frames(monkeypatch) -> None:
         db.commit()
     session = client.post(
         "/api/agent/sessions",
-        json={"workspace_id": workspace_id, "provider_profile_id": profile.id, "model": "k3"},
+        json={"home": {"kind": "studio"}, "workspace_id": workspace_id, "provider_profile_id": profile.id, "model": "k3"},
     ).json()
     client.patch(f"/api/agent/sessions/{session['id']}", json={"analysis_video_mode": "native"})
 

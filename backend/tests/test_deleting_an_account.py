@@ -40,7 +40,7 @@ def test_an_admin_can_delete_an_account() -> None:
     admin = fresh_client()
     mate = second_client("mate")
     workspace = mate.post("/api/workspaces", json={"name": "他自己的"}).json()
-    mate.post("/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "他的对话"})
+    mate.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "他的对话"})
     mate_id = _user_id("mate")
     assert _counts(mate_id)["agent_sessions"] == 1
 
@@ -103,7 +103,7 @@ def test_nothing_of_anyone_elses_is_touched() -> None:
     second_client("mate")  # 被删的那位:这里只要他存在
     keeper = second_client("keeper")
     keeper_ws = keeper.post("/api/workspaces", json={"name": "留着的"}).json()["id"]
-    keeper.post("/api/agent/sessions", json={"workspace_id": keeper_ws, "title": "留着的对话"})
+    keeper.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": keeper_ws, "title": "留着的对话"})
     before = _counts(_user_id("keeper"))
 
     admin.delete(f"/api/admin/users/{_user_id('mate')}")

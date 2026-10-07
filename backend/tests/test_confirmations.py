@@ -365,7 +365,7 @@ def test_confirmations_scoped_by_session() -> None:
         return client.post("/api/confirmations", json=base).json()
 
     def session() -> str:
-        return client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+        return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     sess_a, sess_b = session(), session()
     a = card_as(sess_a)

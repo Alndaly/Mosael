@@ -41,14 +41,22 @@ class SessionGroup(Base):
 
 class AgentSession(Base):
     __tablename__ = "agent_sessions"
-    __table_args__ = (Index("idx_agent_sessions_ws_updated", "workspace_id", "updated_at"),)
+    __table_args__ = (
+        Index("idx_agent_sessions_ws_updated", "workspace_id", "updated_at"),
+        #: 面板按「家在这里」取清单(ADR 0044 §1):一篇三周前聊过的笔记,它的对话早掉出全工作区前 50 了。
+        Index("idx_agent_sessions_ws_home", "workspace_id", "home_kind", "home_id", "updated_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
     #: (归属与共享见 domain/sharing)。
     owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    #: 这段对话是在哪开的 —— 一种地方加那样东西的 id(见 domain/agent/places,ADR 0044)。建的那一刻定,之后不变
+    #: (ComfyUI 那张工作流第一次存盘、改名时跟着挪,见 places.move_comfy_homes)。**不设外键**:一列指六种表,而且要的
+    #: 正是「东西删了,对话照旧」—— 名字现查,查不到就写「已删除的…」。项目级记忆也读它(家是剪辑项目时)。
+    home_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="studio", server_default="studio")
+    home_id: Mapped[str] = mapped_column(String(700), nullable=False, default="", server_default="")
     #: 收在哪个分组里。空 = 未分组(列表里单独一段)。删分组时由路由显式清空 —— 老库那一列
     #: 是迁移加的、没有外键约束,不能指望数据库替我们 SET NULL。
     group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
@@ -62,6 +70,9 @@ class AgentSession(Base):
     #:
     #: 前端跳完就清空。不清的话,重开应用会再跳一次 —— 一个几天前说过的"打开工作流"。
     pending_view: Mapped[str] = mapped_column(String(96), nullable=False, default="")
+    #: `pending_view` 是什么时候要求的。一段对话可能在你离开的那一处接着跑、要求跳转时没人盯着 —— 过了 30 秒的
+    #: 前端不跟(ADR 0044 §6):你一分钟后回去看结果,不该被拽走。
+    pending_view_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
     #: 跑这次会话的运行时。目前只有 "pi";留列是为了旧会话仍能被正确解读。
     adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="pi")

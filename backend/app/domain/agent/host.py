@@ -31,6 +31,7 @@ from app.domain.agent.stream import (
     _timeline_for_payload,
 )
 from app.domain.agent import origins
+from app.domain.agent.places import STUDIO_PLACE, Place
 from app.domain.agent.textclean import decode_byte_fallback
 from app.domain.providers import models as provider_models
 from app.domain.providers.runtime import sidecar_provider
@@ -191,7 +192,7 @@ def create_session(
     db: Session,
     *,
     workspace_id: str,
-    project_id: str | None = None,
+    home: Place,
     origin: str = "ui",
     external_key: str | None = None,
     title: str = "新对话",
@@ -199,9 +200,11 @@ def create_session(
     provider_profile_id: str | None = None,
     model: str | None = None,
 ) -> AgentSession:
+    """`home`:在哪开的(见 domain/agent/places)。校验由调用方做 —— 界面来的经 use_cases.start_session。"""
     session = AgentSession(
         workspace_id=workspace_id,
-        project_id=project_id,
+        home_kind=home.kind,
+        home_id=home.id,
         origin=origin,
         external_key=external_key,
         title=title,
@@ -230,12 +233,15 @@ def append_message(
 def get_or_create_external_session(
     db: Session, *, workspace_id: str, origin: str, external_key: str, title: str
 ) -> AgentSession:
-    """外部入口(飞书的一个会话、一个工作流)各自那条长期会话:按 external_key 找回,没有就建。
+    """外部入口(飞书的一个会话)各自那条长期会话:按 external_key 找回,没有就建。家是 AI Studio(ADR 0044 §9):
+    它们不进界面清单,消息也不带 `place`,这一轮的工具按家发。
     `origin` 说是从哪来的 —— 飞书会话不给 bypass 之类的规则按它判(见 autopilot.set_permission_mode)。"""
     existing = db.scalar(select(AgentSession).where(AgentSession.external_key == external_key))
     if existing is not None:
         return existing
-    return create_session(db, workspace_id=workspace_id, origin=origin, external_key=external_key, title=title)
+    return create_session(
+        db, workspace_id=workspace_id, home=STUDIO_PLACE, origin=origin, external_key=external_key, title=title,
+    )
 
 
 class HostError(LocalizedError, RuntimeError):
@@ -461,9 +467,13 @@ def post_user_message(
     answers: dict | None = None,
     quote: dict | None = None,
     skills: list[str] | None = None,
+    place: Place | None = None,
     steer_if_running: bool = False,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread.
+
+    `place`:这一句是在哪说的(界面上的哪一处,ADR 0044)。落进 payload,只决定这一轮发哪些工具(见 tool_manifest),
+    不替任何东西开权限。飞书、另一段对话的通知没有。
 
     `answers` 也是给回答用的:{问题: 选中项}。正文照旧要像用户自己说的话(模型读的是它),
     但**一次选择不该在对话里退化成一段自述** —— 结构留在这里,界面据此画回「问的是什么、
@@ -499,6 +509,7 @@ def post_user_message(
         **({"quote": quote} if quote else {}),
         #: 「/」点名的技能(ADR 0040 §4):排队那条路照它把全文挂上,气泡照它画胶囊。
         **({"skills": list(skills)} if skills else {}),
+        **({"place": place.as_payload()} if place else {}),
         **origin_marker,
     }
     if not _claim_idle_session(db, session.id):

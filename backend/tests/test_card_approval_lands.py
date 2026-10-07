@@ -40,7 +40,7 @@ class Chat:
         self.client = fresh_client()
         self.workspace_id = self.client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         self.session_id = self.client.post(
-            "/api/agent/sessions", json={"workspace_id": self.workspace_id, "title": "T"}
+            "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": self.workspace_id, "title": "T"}
         ).json()["id"]
         self.asset_ids = [
             insert_asset(self.workspace_id, kind="video", name=f"clip-{i}", file_key=f"media/clip-{i}.mp4")

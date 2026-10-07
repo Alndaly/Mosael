@@ -50,7 +50,7 @@ def test_viewer_can_read() -> None:
     "call",
     [
         lambda c, w: c.post("/api/projects", json={"workspace_id": w, "name": "P"}),
-        lambda c, w: c.post("/api/agent/sessions", json={"workspace_id": w, "title": "T"}),
+        lambda c, w: c.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": w, "title": "T"}),
         lambda c, w: c.post("/api/workflows", json={"workspace_id": w, "name": "WF", "graph": {"nodes": [], "edges": []}}),
     ],
     ids=["建项目", "开对话", "建工作流"],
@@ -72,7 +72,7 @@ def test_editor_can_use_the_agent() -> None:
     """「能改内容」与「能用智能体」不再分开配 —— 智能体就是改内容的另一只手。"""
     _owner, workspace, editor = _member("editor")
     assert editor.post(
-        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
+        "/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"}
     ).status_code == 200
 
 

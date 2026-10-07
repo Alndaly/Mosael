@@ -27,7 +27,7 @@ def _pending(db, **extra) -> ToolConfirmation:
 def test_重启把中断那轮的确认卡一并作废() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    sid = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     with SessionLocal() as db:
         db.get(AgentSession, sid).status = "running"          # 重启前正跑着
@@ -53,7 +53,7 @@ def test_外部智能体的卡不受牵连() -> None:
     """session_id 为空 = MCP / 飞书那条路,对方进程可能还活着。"""
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    sid = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     with SessionLocal() as db:
         db.get(AgentSession, sid).status = "running"
@@ -73,7 +73,7 @@ def test_外部智能体的卡不受牵连() -> None:
 def test_没有卡在跑的时候什么都不动() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    sid = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+    sid = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     with SessionLocal() as db:
         _pending(db, workspace_id=ws["id"], session_id=sid)   # 会话是 idle,这张卡是本轮的
