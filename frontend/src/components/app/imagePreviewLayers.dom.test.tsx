@@ -86,7 +86,7 @@ describe("灯箱压在弹窗上面", () => {
     fireEvent.mouseDown(original, { button: 1 });
     expect(onOpenChange).not.toHaveBeenCalled();
 
-    const close = portal()!.querySelector(".PhotoView-Slider__toolbarIcon")!;
+    const close = document.querySelector("[data-image-preview-close]")!;
     fireEvent.pointerDown(close, { button: 0 });
     fireEvent.mouseDown(close);
     fireEvent.pointerUp(close);

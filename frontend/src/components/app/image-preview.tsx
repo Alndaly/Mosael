@@ -1,12 +1,14 @@
 import * as React from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { PhotoSlider } from "react-photo-view";
 
 import { useI18n } from "@/app/preferences";
 import { IMAGE_PREVIEW_EVENT, type ImagePreviewRequest } from "@/components/app/image-preview-request";
 import { VideoPlayer } from "@/components/app/media-playback";
 import { APP_CHROME } from "@/components/ui/appChrome";
+import { IconButton } from "@/components/ui/icon-button";
 import { useNativeViewAside } from "@/components/ui/nativeViewAside";
+import { HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,21 @@ type ImagePreviewContextValue = {
 
 const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>(null);
 
+/** 关闭键的悬停说明往下出,画在大图那一层之上(见 tooltip 的 HintRegion `layer`)。 */
+const LIGHTBOX_REGION = { side: "bottom" as const, layer: "lightbox" as const };
+/** 视频四周留出的边:上面是计数和「打开原图」那一条,下面是标题。留出来的这一圈就是点了关掉的背景。 */
+const VIDEO_MARGIN = { x: 32, y: 64 };
+/** 视频的自然尺寸还没读到时先按 16:9 摆。 */
+const VIDEO_FALLBACK = { width: 16, height: 9 };
+
+/** 视频按自己的宽高比收进视口(留出 VIDEO_MARGIN),放大缩小都按比例。 */
+export function fitVideo(natural: { width: number; height: number } | undefined, viewport: { width: number; height: number }) {
+  const { width, height } = natural && natural.width > 0 && natural.height > 0 ? natural : VIDEO_FALLBACK;
+  const room = { width: Math.max(1, viewport.width - VIDEO_MARGIN.x * 2), height: Math.max(1, viewport.height - VIDEO_MARGIN.y * 2) };
+  const scale = Math.min(room.width / width, room.height / height);
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const t = useI18n();
   const portalHostRef = React.useRef<HTMLDivElement>(null);
@@ -42,6 +59,9 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   const [visible, setVisible] = React.useState(false);
   //: 打开那一刻的视口大小 —— 视频那一项按它出盒子(见下面 width/height 那段)。
   const [viewport, setViewport] = React.useState({ width: 1280, height: 720 });
+  //: 视频读到的自然尺寸(按地址记):播放器照它的宽高比收进视口,四周露出来的才是背景
+  const [videoSizes, setVideoSizes] = React.useState<Record<string, { width: number; height: number }>>({});
+  const closeButton = React.useRef<HTMLButtonElement | null>(null);
   //: 是从哪儿点开的。关掉之后焦点回到那里 —— 用鼠标点遮罩关掉时,焦点已经掉到 body 上,
   //: 键盘用户得从页面开头重新 Tab 一遍才回得到刚才那张图。
   const opener = React.useRef<HTMLElement | null>(null);
@@ -76,6 +96,10 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   //: 内嵌浏览器、ComfyUI 工作台亮着时,原生网页视图盖在一切 DOM 上:大图开着的这段时间请它挪到窗口外(见 nativeViewAside)
   useNativeViewAside(visible);
   const reset = React.useCallback(() => setImages([]), []);
+  //: 一打开焦点就在关闭键上:键盘用户回车 / 空格就能关(Esc 照旧),关掉后焦点回到点开它的地方(见 close)
+  React.useEffect(() => {
+    if (visible) closeButton.current?.focus({ preventScroll: true });
+  }, [visible]);
 
   //: 手写 DOM 的界面(笔记编辑器里的图片、Markdown 正文里的图)从这里进来,见 image-preview-request。
   React.useEffect(() => {
@@ -116,12 +140,31 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
        * 恢复顶层交互；关闭动画开始时立即禁用，避免透明 Portal 短暂挡住应用。 */}
       {/* 宿主也是「窗口外壳」(APP_CHROME):在大图上点的每一下(翻页、关闭、点遮罩)都发生在底下那个弹窗**外面**,
           没有它,Radix 会把这一下当成「点了弹窗外面」把弹窗一起关掉;焦点落进来(「打开原图」)也不被弹窗拽回去。 */}
+      {/* 关闭键:**每一张都有、一直看得见**,在右上角,能用键盘按。不用库自带的那个 ✕ —— 它在顶上那一条里,点一下画面
+          (视频的播放 / 暂停也算)那一条就淡出去,而视频铺满时又没有背景可点:只剩 Esc 关得掉(维护者报的)。 */}
       <div
         ref={portalHostRef}
         data-image-preview-portal-host
         {...APP_CHROME}
         style={{ pointerEvents: visible ? "auto" : "none" }}
-      />
+      >
+        {visible && (
+          <HintRegion.Provider value={LIGHTBOX_REGION}>
+            <IconButton
+              unstyled
+              ref={closeButton}
+              type="button"
+              label={t("imagePreviewClose")}
+              shortcut="Esc"
+              data-image-preview-close=""
+              onClick={close}
+              className="fixed right-2 top-1.5 z-[221] grid size-9 cursor-pointer place-items-center rounded-full border-0 bg-[rgb(0_0_0/0.38)] text-[rgb(255_255_255/0.88)] transition-colors hover:bg-[rgb(255_255_255/0.2)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(255_255_255/0.8)] [.is-desktop_&]:[-webkit-app-region:no-drag]"
+            >
+              <X size={18} />
+            </IconButton>
+          </HintRegion.Provider>
+        )}
+      </div>
       <PhotoSlider
         portalContainer={portalHostRef.current ?? undefined}
         images={images.map((item) => ({
@@ -132,7 +175,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
           overlay: item.title ?? t("imagePreviewTitle"),
           //: 自定义渲染要**显式给尺寸**:那一层按图片的自然宽高摆位,视频这边它测不到,
           //: 不给就是 0×0(一片空白),给死一个 1920×1080 又会顶出视口。给**视口大小** ——
-          //: 于是它摆出来的盒子正好铺满屏幕,播放器再按 object-contain 收进去。
+          //: 于是它摆出来的盒子正好铺满屏幕,播放器在里面按视频自己的宽高比收在正中(fitVideo)。
           //:
           //: 不能用 position: fixed 自己铺满:这块内容住在一个带 transform 的容器里,而祖先
           //: 一旦有 transform,它就成了后代 fixed 的包含块 —— 视频会跑到屏幕角上去(实测)。
@@ -140,17 +183,32 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
           height: item.video ? viewport.height : undefined,
           //: 视频交给**自己写的**播放器,不是原生 controls —— 浏览器自带那条控件各家各的
           //: 样子、不吃主题,而画板节点上早就换掉了它,大图里又冒出来就是两套东西。
-          //: 缩放/拖拽那套对视频没意义:它要的是能播、能拖进度。
-          //: **不套 attrs。** 那套属性是给图片的缩放/拖拽用的(transform + 按自然宽高摆位),
-          //: 对视频既没意义又会把它顶出视口。这里自己铺满视口,播放器按 object-contain 收进去;
-          //: 关闭仍然走灯箱自己的 ✕ 和 Esc。
+          //: 盒子用库给的属性(尺寸、淡入淡出、按下算「点了画面」),但不要它给图片的那身样子(圆角、描边):盒子铺满视口。
+          //: 播放器四周露出来的是背景,点那里关掉(和图片点背景一样);点在播放器里(画面、控件条)只管播放,不关。
           render: item.video
-            ? ({ attrs }) => (
-                <div {...attrs}>
-                  {/* 播放器铺满这个盒子;画面按 object-contain 收进去,不会被拉变形。 */}
+            ? ({ attrs: { className: _photoLook, ...attrs } }) => (
+                <div
+                  {...attrs}
+                  data-video-backdrop=""
+                  className="grid place-items-center"
+                  onClick={(event) => {
+                    if (event.target === event.currentTarget) close();
+                  }}
+                >
                   {/* 直接用共用播放器,不借画板那个包装:画板那层管的是「离屏就卸掉」,
                       而这里是屏幕正中唯一的那个播放器,没有"离屏"可言。 */}
-                  <VideoPlayer assetSrc={item.src} autoPlay className="!bg-transparent" />
+                  <div data-video-frame="" style={fitVideo(videoSizes[item.src], viewport)}>
+                    <VideoPlayer
+                      assetSrc={item.src}
+                      autoPlay
+                      className="rounded-lg"
+                      onNaturalSize={(width, height) =>
+                        setVideoSizes((current) =>
+                          current[item.src]?.width === width && current[item.src]?.height === height
+                            ? current
+                            : { ...current, [item.src]: { width, height } })}
+                    />
+                  </div>
                 </div>
               )
             : undefined,
@@ -170,6 +228,8 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         className={cn(
           !visible && "pointer-events-none",
           visible && "[.is-desktop_&]:[-webkit-app-region:no-drag]",
+          //: 库自带的 ✕ 藏起来(换成上面那颗一直在的关闭键),右边让出它的位置
+          String.raw`[&_.PhotoView-Slider\_\_BannerRight>.PhotoView-Slider\_\_toolbarIcon]:hidden [&_.PhotoView-Slider\_\_BannerRight]:pr-12`,
           String.raw`z-[220] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
         maskClassName="will-change-[opacity]"

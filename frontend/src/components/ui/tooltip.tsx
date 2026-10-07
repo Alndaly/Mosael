@@ -53,7 +53,7 @@ const TooltipContent = React.forwardRef<
 >(({ className, sideOffset = 4, ...props }, ref) => {
   //: 浮层内容只在打开时才挂上(Radix 的 Presence),所以用 state 记住它 —— 挂上那一刻才开始交给浮层视图。
   const [node, setNode] = React.useState<HTMLDivElement | null>(null)
-  useFloatMirror(node, React.useContext(HintRegion) !== null)
+  useFloatMirror(node, mirrorsToFloat(React.useContext(HintRegion)))
   const setRef = React.useCallback(
     (element: HTMLDivElement | null) => {
       setNode(element)
@@ -159,14 +159,25 @@ function scopedLines(texts: Iterable<ScopedText>, own: (string | null | undefine
  * 没有浮层视图(网页版,没有原生视图)时照旧画在 DOM 里;外壳的 z 比所有浮层(styles.css 统一定成 120)都高,
  * 所以标上 `data-over-chrome`,styles.css 据此把它那层抬到外壳之上。
  */
-type HintRegionValue = { side?: Side }
+type HintRegionValue = {
+  side?: Side
+  /**
+   * `lightbox`:全屏看大图那一层(z-220,压在外壳上面)里的说明。那时原生网页视图已经让开了(见 nativeViewAside),
+   * 说明照常画在 DOM 里,只是层要抬到大图之上(标 `data-over-lightbox`,styles.css 据此抬层),不交给浮层视图。
+   */
+  layer?: "lightbox"
+}
 const HintRegion = React.createContext<HintRegionValue | null>(null)
 
 /** 区域里的说明怎么摆:默认方向听区域的(放不下 Radix 会翻到对面)。 */
 function regionPlacement(region: HintRegionValue | null, side: Side | undefined) {
   if (!region) return { side: side ?? "top" }
-  return { side: side ?? region.side ?? "top", "data-over-chrome": "" }
+  const placed = side ?? region.side ?? "top"
+  return region.layer === "lightbox" ? { side: placed, "data-over-lightbox": "" } : { side: placed, "data-over-chrome": "" }
 }
+
+/** 这块里的说明要交给浮层视图画到原生网页视图上面吗(外壳里要;大图那一层不用 —— 视图已经让开了)。 */
+const mirrorsToFloat = (region: HintRegionValue | null) => region !== null && region.layer !== "lightbox"
 
 const CHROME_LAYER = { ...APP_CHROME, "data-over-chrome": "" } as const
 

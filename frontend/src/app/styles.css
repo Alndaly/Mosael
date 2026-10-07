@@ -17,6 +17,10 @@
 [data-radix-popper-content-wrapper]:has(> [data-over-chrome]) {
   z-index: 210 !important;
 }
+/* 全屏看大图那一层(z-220)里的说明(关闭键的悬停说明):抬到大图之上(见 tooltip 的 HintRegion `layer`)。 */
+[data-radix-popper-content-wrapper]:has(> [data-over-lightbox]) {
+  z-index: 230 !important;
+}
 /* Custom-background menus and canvas panels. Modal surfaces own their independent glass. */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] [data-radix-popper-content-wrapper] > *:not([data-tooltip]),

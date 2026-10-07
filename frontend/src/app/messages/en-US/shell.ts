@@ -298,6 +298,7 @@ export const shell = {
   livePanelOpenRun: "Open this run",
   imagePreviewTitle: "Image preview",
   openOriginal: "Open original",
+  imagePreviewClose: "Close",
   viewFullSizeOf: "View full size: {name}",
   rename: "Rename",
   delete: "Delete",
