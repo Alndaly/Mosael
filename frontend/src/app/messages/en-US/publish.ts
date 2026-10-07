@@ -42,6 +42,8 @@ export const publish = {
   boardsNoMedia: "No images, videos or audio in the library yet",
   boardsUploadLocal: "Upload a file",
   boardsUploadDropHint: "Drop to upload",
+  boardsUploadDropKinds: "Takes {kind}",
+  boardsPickEmptyHint: "Upload a file from this computer, or drop one here.",
   assetUploading: "Uploading “{name}”",
   assetUploadFailed: "“{name}” didn't upload: {reason}",
   assetUploadCancel: "Cancel upload",

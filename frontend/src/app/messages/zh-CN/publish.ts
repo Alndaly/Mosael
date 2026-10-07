@@ -43,6 +43,8 @@ export const publish = {
   boardsNoMedia: "素材库里还没有图片、视频或音频",
   boardsUploadLocal: "上传本地文件",
   boardsUploadDropHint: "松手上传",
+  boardsUploadDropKinds: "这里收{kind}",
+  boardsPickEmptyHint: "可以上传本地文件,或者直接把文件拖进来。",
   assetUploading: "正在上传「{name}」",
   assetUploadFailed: "「{name}」没传上:{reason}",
   assetUploadCancel: "取消上传",
