@@ -604,8 +604,15 @@ beside it:
   that adds up to. Ask whether a **custom node pack** is safe to install and it checks the official Comfy registry: whether the newest
   version is Flagged or Banned, the latest normal version, the publisher, how many people use it, whether its dependencies touch PyTorch,
   and whether it fits this machine's OS, GPU and ComfyUI version. Click a **#12** (#12:5 inside a subgraph) in a reply to locate that
-  node on the canvas. **In this version it only reads**: changing the canvas, opening a new tab, downloading models, installing node
-  packs and test runs come later; for now it tells you which node, which field and what to change.
+  node on the canvas; every diagnosis item has **Locate** and **Fix this** — Fix this asks it to propose a change for that item alone.
+  Ask it to **change** the workflow ("wire #8's vae correctly", "add a LoRA", "set steps to 30") and it first lays out a **change list**:
+  which nodes are added, which links are made (and which they replace), which fields go from what to what, with a check before and after;
+  **nothing touches the canvas until you click Apply**, and the whole batch is a single undo step, so one Ctrl+Z takes it back. Changes
+  inside a subgraph change that subgraph's definition — the list says how many places it is used in the workflow and that every one of
+  them changes. A batch that would add errors is fixed by the agent before it reaches you. Ask it to **create** one and it opens the
+  official template in a **new tab** (your open workflows stay as they are), says how many models are missing and how big they are in
+  total, and the card's **Download** takes you to Missing. **It never saves for you**: changed and new workflows stay unsaved until you
+  save them in ComfyUI, wherever you like. Downloading models, installing node packs and test runs come in a later version.
 
 The workbench talks to the canvas through a fixed script that Mosael's main process injects; only Mosael reads the canvas, and the page
 can't call into Mosael. If the ComfyUI frontend is too old and lacks something, that part says “This ComfyUI frontend doesn't

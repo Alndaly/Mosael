@@ -591,9 +591,9 @@ ADR 0041, step 3:
 ## The agent in the workbench: reading and diagnosing (1.17.0)
 
 Step one of ADR 0042. The workbench's right column gains a fifth tab, "Assistant" (on Mosael's side): the agent can read the
-workflow on the canvas, find what's wrong with it, find official templates, and look up node types and node packs. **This version
-only reads**: it doesn't change the canvas, open a new tab, download, install or run. On the plugin side there are a few read-only
-ops (all on the "workflow library" tool, which the host asks through):
+workflow on the canvas, find what's wrong with it, find official templates, and look up node types and node packs (changing and
+creating are step two, see the next section). On the plugin side there are a few read-only ops (all on the "workflow library" tool,
+which the host asks through):
 
 - `canvas_summary`: the UI-format graph (including `definitions.subgraphs`) squeezed into a summary for the agent: every layer (the
   root graph and every subgraph definition) with its nodes, widget values, what is wired to what (`"in": {"model": "4.MODEL"}`)
@@ -635,6 +635,44 @@ nodes as `#12` (the interface turns that into a clickable "locate"). Skills of p
 Tested against: a sandbox ComfyUI 0.39.0 / frontend 1.53.10, the maintainer's 0.39.0 + Manager V4.2.1 (read-only GETs), and the
 Comfy registry (the newest rgthree-comfy version is `Flagged` right now).
 
+## The agent in the workbench: changing and creating (1.17.0)
+
+Step two of ADR 0042. The Assistant can change the workflow open on the canvas and open one in a new tab. **Changing the open workflow
+always lists the changes first: nothing touches the canvas until you click Apply on the confirmation card, and a single Ctrl+Z undoes
+the whole batch; a new tab leaves the open ones alone. Neither is saved** — whether and where to save is up to you, in ComfyUI. On the
+plugin side:
+
+- `edit_plan`: the agent's batch of changes is checked op by op against the workflow on the canvas and this ComfyUI's node
+  definitions, and applied to a copy. The ops: `add_node` (a temporary name like `$a`, widget values, which node to sit next to),
+  `remove_node`, `connect` / `disconnect` (by input and output **names**, not slot numbers; connecting into an input that is already
+  wired replaces that link), `set_widget`, `set_title`, `bypass` / `mute`; nodes inside a subgraph are written `12:5` — that changes the
+  subgraph's **definition**, so every place it is used in the workflow changes; subgraph boundary slots with `add_subgraph_input` /
+  `add_subgraph_output` / `remove_subgraph_io`, wired inside as `@in.<name>` / `@out.<name>`; `promote_widget` / `unpromote_widget` (the
+  way frontend 1.53 does it: a same-named input on the boundary wired to that widget); `to_subgraph` / `unpack_subgraph` (structure
+  only, and only as the last op of a batch). It checks that nodes exist, slot names are right, types match, dropdown values exist,
+  numbers are in range, and that a wired input isn't given a value. **If any op fails, the whole batch is refused**, with every reason
+  listed (in both languages). Otherwise it returns: the normalised batch (for the canvas bridge), a structured change list (which link
+  was replaced, values before and after, how many places a changed subgraph is used), a `check_graph` before and after, and what the
+  batch fixes and adds.
+- `check_graph` also takes a `baseline` (the findings from before): after a change it says which were fixed and which are new
+  (problems of the same kind are counted, not matched by node id — packing and unpacking renumber nodes).
+
+On the host side: a batch that would add **errors** doesn't get a card (the agent is told what to fix); after approval the plan is
+recomputed against the canvas as it is now, and if another workflow is open or the change list no longer matches (the canvas changed
+before Apply), nothing is changed; only then does the workbench bridge get the batch — it checks every op again in the page, changes
+nothing unless all pass, and records a single undo step. A new tab is a temporary workflow the frontend opens by name (the way it opens
+templates); the bridge never runs Save.
+
+The `comfyui-workflows` skill follows: read before changing, one batch per change, the user clicks Apply, a batch refused before the
+card is fixed according to the reasons and proposed again, subgraph edits change the definition, new workflows start from official
+templates (opened in a new tab, saying what is missing and how big first). Downloading models, installing node packs and test runs
+come in the next step.
+
+Tested against a sandbox ComfyUI 0.39.0 / frontend 1.53.10: one Ctrl+Z undid a seven-op batch; a batch with one bad op left the canvas
+untouched; a template opened in a new tab stayed temporary and no file appeared in the workflows folder; adding a node inside a
+subgraph, adding an output and wiring it, promoting and unpromoting a widget, removing an input, packing and unpacking all changed the
+definition.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -664,6 +702,8 @@ Comfy registry (the newest rgthree-comfy version is `Flagged` right now).
   (1.17.0): the graph summary and how nodes are written, the findings list, official templates (search, adapt to this machine),
   node types, node packs (installed, search, analysis before installing), node definitions (per class; the whole catalog fetched
   in one place and cached by fingerprint);
+- `canvas_edit.py`: the plan for changing the canvas (1.17.0): checks a batch op by op, applies it to a copy, the batch for the bridge,
+  the change list, the check before and after;
 - `labels.py`: plain names for tunable inputs, their order, whether they are common, and the few that aren't tuned in
   Mosael;
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;
