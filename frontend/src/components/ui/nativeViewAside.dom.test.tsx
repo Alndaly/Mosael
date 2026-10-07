@@ -102,6 +102,61 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
+  it("加载好了还要解码好:整窗那么大的图 load 之后还在异步解码,解码好之前视图不挪(真机上闪的就是这一截)", async () => {
+    let decodedNow: () => void = () => {};
+    const decode = vi.fn(function (this: HTMLImageElement) {
+      return new Promise<void>((resolve) => {
+        decodedNow = () => {
+          loadedFrames.add(this);
+          resolve();
+        };
+      });
+    });
+    HTMLImageElement.prototype.decode = decode;
+    try {
+      render(<NativeViewStandIn />);
+      act(() => void stepNativeViewAside());
+      await waitFor(() => expect(standIn()).not.toBeNull());
+      fireEvent.load(standIn()!);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(decode).toHaveBeenCalledTimes(1);
+      expect(setOverlay, "加载好了、还没解码好:视图还在原处").not.toHaveBeenCalled();
+      decodedNow();
+      await waitFor(() => expect(log).toEqual(["snapshot", "aside:frame=on"]));
+    } finally {
+      delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+    }
+  });
+
+  it("有 Element Timing(Chromium):等它报这一张画上屏了才挪 —— 加载、解码好了不算,报的是别的图也不算", async () => {
+    const observers: ((list: { getEntries: () => { identifier: string }[] }) => void)[] = [];
+    class FakeObserver {
+      static supportedEntryTypes = ["element", "paint"];
+      constructor(private readonly callback: (list: { getEntries: () => { identifier: string }[] }) => void) {}
+      observe() {
+        observers.push(this.callback);
+      }
+      disconnect() {
+        observers.splice(observers.indexOf(this.callback), 1);
+      }
+    }
+    vi.stubGlobal("PerformanceObserver", FakeObserver);
+    const report = (identifier: string) => act(() => observers.forEach((callback) => callback({ getEntries: () => [{ identifier }] })));
+    render(<NativeViewStandIn />);
+    act(() => void stepNativeViewAside());
+    await waitFor(() => expect(standIn()).not.toBeNull());
+    const id = standIn()!.getAttribute("elementtiming")!;
+    expect(id).toMatch(/^native-view-stand-in-\d+$/);
+    loadedFrames.add(standIn()!);
+    fireEvent.load(standIn()!);
+    report("something-else");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(setOverlay, "加载好了、报的是别的图:视图还在原处").not.toHaveBeenCalled();
+    report(id);
+    await waitFor(() => expect(log).toEqual(["snapshot", "aside:frame=on"]));
+    expect(observers, "收到了就不再听").toHaveLength(0);
+  });
+
   it("画面迟迟加载不好也不让浮层一直被视图盖着:等够一阵照样挪开", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "requestAnimationFrame"] });
     try {

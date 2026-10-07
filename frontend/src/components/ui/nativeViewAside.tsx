@@ -11,8 +11,13 @@ import * as React from "react";
  * **挪开之前先铺一张冻结的画面**(`NativeViewStandIn`):视图一挪走,它原来那块露出来的是底下的 DOM —— 浮层刚开始
  * 淡入、还是透明的,那一下看到的是空着的应用背景,画布像被抹掉了一样闪一下(维护者在工作台里点模型缩略图时看到的)。
  * 所以和页面列表变形同一个做法(见 browser-pool/usePageListMotion):先请主进程拍下网页此刻的画面(`snapshotPage`,
- * `webContents.capturePage`)和它在窗口里的位置,铺在原处、加载好了再挪开视图 —— 浮层在那张画面上面淡入。收起时
- * 反过来:**先放回视图**(它盖住那张画面),过两帧再拿掉画面;反过来会闪一下底色。
+ * `webContents.capturePage`)和它在窗口里的位置,铺在原处、**真画上屏了**再挪开视图 —— 浮层在那张画面上面淡入。
+ * 收起时反过来:**先放回视图**(它盖住那张画面),过两帧再拿掉画面;反过来会闪一下底色。
+ *
+ * 「画上屏了」按 Element Timing 报的那一刻(图上挂 `elementtiming`,`PerformanceObserver` 收 `element` 条目)。真机实测
+ * (工作台里点模型的详情,逐帧录渲染层):只等 `load` 再等一帧,视图第 92 毫秒挪走、画面第 274 毫秒才上屏 —— 整窗那么大的
+ * 一张 PNG,`load` 之后还要异步解码、上传;等到 `decode()` 再等一帧,仍差一两帧(第 101 毫秒挪走、第 122 毫秒上屏)。
+ * 没有 Element Timing 的环境(测试)退回「加载、解码好,再等一帧」。
  *
  * 引用计数:几处浮层同时亮着,最后一处收起才放回。没有前台网页时拍不到画面,只请主进程记一笔(它那边什么都不挪);
  * 网页版没有这座桥,什么都不做。
@@ -27,7 +32,7 @@ export interface StandInFrame {
   take: number;
 }
 
-/** 等那张画面加载好最多等多久:拍得到就几十毫秒;卡住了也不能让浮层一直被视图盖着。 */
+/** 等那张画面画上屏最多等多久:拍得到就几十毫秒;卡住了也不能让浮层一直被视图盖着。 */
 const FRAME_LOAD_WAIT_MS = 1_000;
 
 let holders = 0;
@@ -41,6 +46,31 @@ let takes = 0;
 let painters = 0;
 let frameLoaded: (() => void) | null = null;
 const listeners = new Set<() => void>();
+
+/** 第几张画面在 Element Timing 里叫什么。 */
+const paintId = (take: number) => `native-view-stand-in-${take}`;
+
+/**
+ * 第 `take` 张画面真画上屏了:Element Timing 报到它就算(Chromium);没有这个 API 时等 `load`(NativeViewStandIn 解码好才报)
+ * 再等一帧。`stop` 收掉监听(等够了没等到也要收)。
+ */
+function framePainted(take: number): { done: Promise<void>; stop: () => void } {
+  const timing = typeof PerformanceObserver === "function" && PerformanceObserver.supportedEntryTypes?.includes("element");
+  if (!timing) {
+    const loaded = new Promise<void>((resolve) => {
+      frameLoaded = resolve;
+    });
+    return { done: loaded.then(nextFrame), stop: () => (frameLoaded = null) };
+  }
+  let observer: PerformanceObserver | null = null;
+  const done = new Promise<void>((resolve) => {
+    observer = new PerformanceObserver((list) => {
+      if (list.getEntries().some((entry) => (entry as PerformanceEntry & { identifier?: string }).identifier === paintId(take))) resolve();
+    });
+    observer.observe({ type: "element", buffered: true });
+  });
+  return { done, stop: () => observer?.disconnect() };
+}
 
 function setStandIn(next: StandInFrame | null): void {
   standIn = next;
@@ -67,14 +97,13 @@ async function stepAside(bridge: Bridge): Promise<boolean> {
   const shot = typeof bridge.snapshotPage === "function" ? await bridge.snapshotPage().catch(() => null) : null;
   if (holders === 0) return false;
   if (shot) {
-    const loaded = new Promise<void>((resolve) => {
-      frameLoaded = resolve;
-    });
-    setStandIn({ ...shot, take: ++takes });
-    if (painters > 0) await Promise.race([loaded, wait(FRAME_LOAD_WAIT_MS)]);
-    frameLoaded = null;
-    //: 解码好了还要真画上屏:等一帧
-    await nextFrame();
+    const take = ++takes;
+    const painted = painters > 0 ? framePainted(take) : null;
+    setStandIn({ ...shot, take });
+    if (painted) {
+      await Promise.race([painted.done, wait(FRAME_LOAD_WAIT_MS)]);
+      painted.stop();
+    }
   }
   await bridge.setOverlay(true).catch(() => undefined);
   return true;
@@ -164,14 +193,20 @@ export function NativeViewStandIn() {
       alt=""
       aria-hidden
       data-native-view-stand-in=""
+      {...{ elementtiming: paintId(shown.take) } /* React 的类型里还没有这个属性,原样落到 DOM 上 */}
       src={shown.frame}
       draggable={false}
-      onLoad={() => frameLoaded?.()}
+      onLoad={(event) => void decoded(event.currentTarget).then(() => frameLoaded?.())}
       onError={() => frameLoaded?.()}
       className="pointer-events-none fixed z-[188] block max-w-none select-none"
       style={{ left: shown.bounds.x, top: shown.bounds.y, width: shown.bounds.width, height: shown.bounds.height }}
     />
   );
+}
+
+/** 这张图解码好、下一帧画得出来了(没有 `decode` 的环境:加载好就算)。解不了也不拦着。 */
+function decoded(image: HTMLImageElement): Promise<void> {
+  return typeof image.decode === "function" ? image.decode().catch(() => undefined) : Promise.resolve();
 }
 
 /** 测试用:回到什么都没让开的样子。 */
