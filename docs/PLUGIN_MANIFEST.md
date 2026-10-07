@@ -520,13 +520,22 @@ input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchem
 `description` 也可以按语言分)、`read_only`、`effects`(见「确认」;写错的当没写,只读却声明了别的后果按后果算、只读作废)、
 `stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
 `output_types` / `output_labels` / `board_outputs` / `wiring_outputs` / `output_media`)、`recommended`(`true` = 第一次出现时默认开放)、
-`replaces`、`mirrors`(见下)、`workflow`。**别的键丢掉**,
+`replaces`、`mirrors`(见下)、`workflow`、`group`、`agent`。**别的键丢掉**,
 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
 
 `workflow`:这个工具跑的是连接上的**哪张工作流**(替宿主提供工作流库的那种插件用),`{"path": "<工作流库里的路径>",
 "name": "<到处同一个名字,可以按语言分>"}`。智能体每一轮只拿得到用得上的那几张的工具 —— 画布上开着的、这段对话里调过的、
 用户点过名的(名字或文件名出现在他的话里),别的经 `list_workflows` 和 `comfy_workflow_inputs` / `comfy_run_workflow` 够得着
 (ADR 0044 修订 2026-10-08)。挑选只看这个键,不看工具名。路径不像样的整条不认,名字不像样的只丢名字。
+
+`group`:这个工具是**哪样东西的哪个入口**(ADR 0045),和模型目录里的同一个形状(见下面 `op: "models"`):ComfyUI 一张工作流的
+「完整工作流」和它上面的每张表单各是一个工具,`group.id` 相同。宿主据此把同一组的几个排在一起、第二行写「来自 X」/「完整工作流」,
+按 `group.label` 也搜得到;名字(`label`)只写这个入口自己的,不要把两层拼进去。
+
+`agent: false`:这个工具**不进智能体的工具表**(只认 `false`,别的写法当没写)—— 工作流节点、画板、插件页照常有它,开关照常管。
+ComfyUI 有表单的工作流,它的完整工作流工具这样标:给智能体的是表单那一项(作者给别人准备的那张表),要全部参数智能体走生成那一路、
+带完整工作流的模型 id。`comfy_workflow_inputs` / `comfy_run_workflow` 按路径找工具时也不把它绕回来。它不是 `internal`:不藏、
+不只给宿主,只是少出现在智能体那一处。
 
 报出来的工具存进 `plugin_instances.discovered_tools`(MCP 连接从服务拉来的清单也存在这里),和清单里声明的走
 **同一条路**:插件页的工具表和开关、智能体工具表(`plugin__<连接>__<工具>`)、工作流节点(`plugin.<包>.<工具>`)、
@@ -535,6 +544,23 @@ input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchem
 
 **名字要稳。** 工作流节点和智能体记的是工具名;一个工具换了名字,存着的节点就找不到它了。ComfyUI 插件用的是 ComfyUI
 写进工作流文件里的 id(改名、挪目录都不变),没有 id 的老文件才退到路径的哈希。
+
+#### 一次性的改名:`moved`
+
+`op: "tools"`(和 `op: "models"`)的回答里可以带一串 `moved`:「从这一版起,`from` 说的那件事改叫 `to`,`from` 这个名字以后另有
+所指」(ADR 0045)。
+
+```jsonc
+{"tools": [...], "fingerprint": "…",
+ "moved": [{"key": "form-entries", "from": "wf_0ef16828a002", "to": "wf_0ef16828a002_app"}]}
+```
+
+宿主收到后,**这个连接上没做过这个 `key` 就做一次**,做完记账(`plugin_instances.applied_moves`),以后再报也不做:存着的工作流节点、
+画板格子的能力和生成器从 `from` 改到 `to`(配置照新工具的入参同名接,对不上的丢掉、记进修订说明;没选连接的节点只在别的连接
+没有 `from` 这个工具名时才改),工具开关照 `from` 的开 / 关给 `to` 补一份。`to` 必须是这份清单里真有的工具。和 `replaces` 的区别:
+`replaces` 说的是老工具不在了 / 换了写法,每次刷新都对一遍账;`moved` 的 `from` **还在**、只是意思变了,所以只能做一次 —— 做两次
+会把升级之后特意选了 `from` 的那些也改走。插件不用知道宿主做没做过,每次照报就行。ComfyUI 插件:1.20 之前一张有表单的工作流,
+它的工具名指的是那张表单;从 1.20 起它指完整工作流,表单搬到 `wf_<id>_<表单 id>`。
 
 #### 取代老工具:`replaces`
 
@@ -1391,13 +1417,15 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
     "prompt_dialect": "sd-tags",           // 可选:提示词优化按哪种写法改
     "prompt": "optional",                  // 可选:required(默认)/ optional / none,见下
     "prompt_default": "a girl in a garden", // 可选:prompt 是 optional 时,不写就用的那一句,见下
-    "form": {                              // 可选:作者给这个模型挑的那张表(ComfyUI 的精简表单),见下
+    "form": {                              // 可选:作者给这个模型挑的那张表(ComfyUI 的表单),见下
       "title": "换装", "description": "上传人物和背景",
       "items": [{"key": "reference_image", "label": "人物照片"}, {"key": "prompt", "label": {"zh": "提示词", "en": "Prompt"}},
                 {"key": "3.steps", "label": "步数"}]
-    }
+    },
+    "group": {"id": "portrait.json", "label": "portrait", "entry": "form"}  // 可选:是哪样东西的哪个入口,见下
   }
 ],
+ "moved": [{"key": "form-entries", "from": "portrait.json", "to": "portrait.json#app"}],  // 可选:一次性的改名,见下
  "fingerprint": "9f2c…"                   // 可选:这份清单的指纹,见下面「目录变了就刷新」
 }
 ```
@@ -1439,6 +1467,17 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   角色几格只列一次,每格叫什么照旧写在 `inputs[].labels`),其余是 `parameters` 里的键。有它,AI 工作台的「引擎参数」
   就照这张表摆 —— 表上的项、表上的顺序、表上的名字,主提示词那一项说明它就是下面的输入框;`parameters` 里不在表上的
   (ComfyUI 的「结果取自」)另起一栏放在表后面。对不上的项(描述符里没有那个键)宿主丢掉。没有就按参数各自的样子分栏摆。
+- `group`(可选):这个模型是**哪样东西的哪个入口**(ADR 0045)—— `id`(那样东西的编号,同一组的几个模型这一格相同)、`label`
+  (它自己的名字,可以按语言分)、`entry`(`full` 是这样东西本身、全部参数;`form` 是它上面的一张表单)。ComfyUI:一张工作流有一个
+  完整工作流入口(模型 id 是路径)和它上面每张表单各一个入口(`<路径>#<表单 id>`),`group.id` 都是路径。宿主不拼字符串:模型行
+  存着它(`declared_group`),生成选项原样带出去(`group`,名字按看的人的语言挑好),界面主名写 `label`、第二行写「来自
+  {group.label} · 连接名」(表单入口)或「完整工作流 · 连接名」(有表单的完整入口),同一组的排在一起、按 `group.label` 也搜得到。
+  形状不对的整条当没说。
+- `moved`(可选,在 `models` 旁边):一次性的改名,和工具清单的 `moved` 同一个意思(见「运行时报出的工具」)。宿主每个连接每个
+  `key` 做一次,在对齐目录**之前**:模型行**原地**改名(行 id 不变,默认模型、停用跟着新名字走),再改存着的 (连接, 模型) 引用 ——
+  生成会话、生成记录和产出的素材、任务回执、用量和定价规则、定时任务、画板格子、工作流的生成节点和按生成选项 id 选的那几格
+  (工作流落一版 `migration` 修订);旧名字那一行由这次的目录重新建出来。`to` 必须是这份清单里的模型。改不成整个回滚、这次不对齐
+  目录,下次刷新再来。
 - 一次能出几张:声明 `num_images`(`maximum` 是上限,宿主一次最多 4 张)并把 `max_outputs` 设成同一个数;
   `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。**没给 `num_images` 就是 1** —— 宿主的
   张数控件缺省就是 1,`default` 写别的数也只是占位提示。

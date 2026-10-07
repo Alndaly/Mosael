@@ -166,9 +166,10 @@ prompt; Flux-style workflows keep natural language.
 ## Tools: ComfyUI for the agent and for workflows
 
 **One tool per workflow.** Every workflow saved in ComfyUI (plus the built-in text-to-image) shows up as “Workflow · name” in
-the tool list, the workflow node panel and the agent's tools, with a form made from that graph. The name is the same as in the
-model picker: the simplified form's title when it has one, otherwise the file name; searching by either finds it, and renaming
-the title changes only the name, not the nodes that use it:
+the tool list, the workflow node panel and the agent's tools, with a form made from that graph. A workflow with a simplified
+form has two: the full workflow (named after the file) and the form (named after its title), with a second line saying
+“From <workflow>” or “Full workflow”; searching by either name finds them, and renaming the title changes only the name, not
+the nodes that use it:
 
 - prompt and negative prompt (empty keeps the workflow's own);
 - one field per loader node — “Image”, “Mask”, “Video”, “Audio” — listing only that kind of asset, with the node's
@@ -512,6 +513,12 @@ Preview** tabs. The dialog does the same in a narrow window.
 
 Once a workflow has an simplified form:
 
+- **The form is one more entry of the workflow; the full workflow stays.** In AI Studio, boards, workflow nodes and the
+  default-model picker, the workflow shows up twice, side by side: the form, named after its title, with a faint second line
+  “From krea2-text-2-image · connection name”, and the full workflow, named after the file, with “Full workflow · connection
+  name” — pick it for every fillable item (no need to edit the form to tweak steps or the seed once). Searching by the form
+  title, the workflow name or the file name finds them. In the workflow library the workflow gets one more line, “Form: …”.
+  The agent in the workbench gets the form's entry; on the Plugins page the full workflow's tool is marked “Not for the agent”.
 - The form shows only the items you picked, in your order, with your names; the tool "Workflow · name" takes only those
   items too.
 - **Items you didn't pick run as authored**: a prompt field that isn't the main prompt keeps the text saved in the
