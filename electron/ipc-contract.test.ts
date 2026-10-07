@@ -175,6 +175,16 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "locate", node: "12; alert(1)" })).toThrow(/node/);
     expect(() => callOf({ op: "locate", node: "12", subgraph: 'x"); alert(1)' })).toThrow(/subgraph/);
     expect(() => callOf({ op: "locate", node: "12", zoom: 3 })).toThrow(/unexpected/);
+    // 智能体指节点的写法(ADR 0042):从根图往里走的路径,桥一层层打开子图;和子图 id 一起给就只认那一层里的编号
+    expect(callOf({ op: "locate", node: "12:5" }).call).toEqual({ op: "locate", node: "12:5", subgraph: null });
+    expect(callOf({ op: "locate", node: "459:12:5", subgraph: null }).call.node).toBe("459:12:5");
+    expect(() => callOf({ op: "locate", node: "12:5", subgraph: "8f1c0e2a" }), "路径和子图 id 不能一起给").toThrow(/node/);
+    expect(() => callOf({ op: "locate", node: "12:" })).toThrow(/node/);
+    expect(() => callOf({ op: "locate", node: "12:-5" }), "子图里没有负的编号").toThrow(/node/);
+    expect(() => callOf({ op: "locate", node: Array.from({ length: 18 }, () => "1").join(":") }), "最多 16 层").toThrow(/node/);
+    expect(() => callOf({ op: "locate", node: 12 })).toThrow(/node/);
+    expect(callOf({ op: "readGraph" })).toEqual({ partition: "persist:pool-comfyui-c1", call: { op: "readGraph" } });
+    expect(() => callOf({ op: "readGraph", depth: 2 })).toThrow(/unexpected/);
     expect(callOf({ op: "runControls", phase: "before" }).call).toEqual({ op: "runControls", phase: "before" });
     expect(callOf({ op: "runControls", phase: "after" }).call).toEqual({ op: "runControls", phase: "after" });
     expect(() => callOf({ op: "runControls", phase: "during" })).toThrow(/phase/);

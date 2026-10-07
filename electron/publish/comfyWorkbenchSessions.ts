@@ -34,6 +34,8 @@ const CALL_BUDGET_MS: Record<WorkbenchCall["op"], number> = {
   setMarks: 10_000,
   locate: 5_000,
   runControls: 5_000,
+  //: 智能体读整张图:和导出一样走 graphToPrompt
+  readGraph: 60_000,
 };
 
 type Driver = Pick<PageDriver, "evaluate">;

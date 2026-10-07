@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const drivers = new Map<string, { setAbortSignal: ReturnType<typeof vi.fn>; signal: AbortSignal | null }>();
@@ -52,7 +52,9 @@ const mocks = vi.hoisted(() => {
   const paths = { userData: "" };
   const capture = vi.fn();
   const page = vi.fn();
-  return { drivers, views, backend, pending, execute, paths, capture, page };
+  //: 那个连接开着的工作台(publishWorker 的工作台会话)
+  const workbench = vi.fn(async (_opts: { partition: string; call: unknown }): Promise<unknown> => ({ ok: true }));
+  return { drivers, views, backend, pending, execute, paths, capture, page, workbench };
 });
 
 vi.mock("electron", () => ({ app: { getPath: () => mocks.paths.userData } }));
@@ -62,6 +64,7 @@ vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
 vi.mock("./actionCapture", () => ({ captureForAction: mocks.capture }));
 vi.mock("./actionPage", () => ({ pageForAction: mocks.page }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
+vi.mock("./publishWorker", () => ({ comfyWorkbenchCall: mocks.workbench }));
 
 import { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
 import { DownloadCollector, type CollectedDownload } from "./downloads";
@@ -332,5 +335,57 @@ it("「切换页面」动作交给页面列表那一份(不走驱动),结果里�
     status: "done",
     result: { value: { index: 2, title: "第二页", url: "https://x.test/2", count: 2 } },
     last_url: "https://x.test/2",
+  });
+});
+
+describe("工作台动作(ADR 0042:智能体读画布、指节点)", () => {
+  const bench = (id: string, act: string, args: Record<string, unknown>, partition = "persist:pool-comfyui-c1") => ({
+    id, session_id: "wb1", partition, kind: "workbench", action: act, args, lease_token: `t-${id}`, lease_expires_at: "",
+  });
+  const graph = { workflow: { nodes: [] }, selection: [], modified: false, layer: null, info: null };
+
+  it("交给那个连接开着的工作台,桥的回答放进结果的 value;不开视图、不挂面板", async () => {
+    mocks.workbench.mockResolvedValueOnce({ ok: true, graph });
+    mocks.backend.claim.mockResolvedValueOnce(bench("w1", "workbench", { call: { op: "readGraph" } }));
+    startBrowserWorker();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(mocks.workbench).toHaveBeenCalledWith({ partition: "persist:pool-comfyui-c1", call: { op: "readGraph" } });
+    expect(mocks.backend.report).toHaveBeenCalledWith("w1", { status: "done", result: { value: { ok: true, graph } } });
+    expect(mocks.views.registerSession).not.toHaveBeenCalled();
+    expect(mocks.views.panelAttach).not.toHaveBeenCalled();
+  });
+
+  it("工作台没开着:桥的「closed」照样报回去(后端据此说先在工作台里打开)", async () => {
+    mocks.workbench.mockResolvedValueOnce({ ok: false, error: "closed" });
+    mocks.backend.claim.mockResolvedValueOnce(bench("w1", "workbench", { call: { op: "locate", node: "12:5", subgraph: null } }));
+    startBrowserWorker();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(mocks.workbench).toHaveBeenCalledWith({ partition: "persist:pool-comfyui-c1",
+                                                   call: { op: "locate", node: "12:5", subgraph: null } });
+    expect(mocks.backend.report).toHaveBeenCalledWith("w1", { status: "done", result: { value: { ok: false, error: "closed" } } });
+  });
+
+  it("调用和渲染层那个口子同一个解析器查:认不出的、像脚本的不进桥,这一步失败", async () => {
+    mocks.backend.claim
+      .mockResolvedValueOnce(bench("w1", "workbench", { call: { op: "eval", code: "alert(1)" } }))
+      .mockResolvedValueOnce(bench("w2", "workbench", { call: { op: "locate", node: "1); alert(1", subgraph: null } }))
+      .mockResolvedValueOnce(bench("w3", "workbench", { call: { op: "readGraph" } }, "persist:mosael-acc1"))
+      .mockResolvedValueOnce(bench("w4", "click", { selector: "#x" }));
+    startBrowserWorker();
+    await vi.advanceTimersByTimeAsync(6_000);
+    for (const id of ["w1", "w2", "w3", "w4"]) {
+      expect(mocks.backend.report).toHaveBeenCalledWith(id, expect.objectContaining({ status: "failed" }));
+    }
+    expect(mocks.workbench).not.toHaveBeenCalled();
+    expect(mocks.execute, "工作台会话上的别的动作也不交给驱动").not.toHaveBeenCalled();
+  });
+
+  it("后端收回空闲的工作台会话(close):什么都不拆 —— 工作台的视图是用户开的", async () => {
+    mocks.backend.claim.mockResolvedValueOnce(bench("w1", "close", {}));
+    startBrowserWorker();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(mocks.backend.report).toHaveBeenCalledWith("w1", { status: "done", result: {} });
+    expect(mocks.views.destroy).not.toHaveBeenCalled();
+    expect(mocks.views.panelDetach).not.toHaveBeenCalled();
   });
 });

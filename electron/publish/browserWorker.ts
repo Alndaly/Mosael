@@ -11,6 +11,10 @@
 // **不同会话并发,同一会话串行。** 此前一次只跑一个动作:一个会话上「等 60 秒出现登录框」,别的会话
 // 上的点击全部干等,而且等的时间都算进了它们自己的超时。现在一次最多领 MAX_INFLIGHT 条、各跑各的;
 // 同一会话的串行由后端认领时保证(它不发一个还有动作在跑的会话上的下一条),这里再按会话排一次队兜底。
+//
+// **工作台动作**(会话类型 `workbench`,ADR 0042):智能体读 ComfyUI 画布、在画布上指一个节点,也走这条队列 —— 后端排、
+// 这里领。它不开视图、不挂面板:交给那个连接**开着的工作台**(publishWorker 的工作台会话,桥在那里),工作台没开着桥就说 closed。
+// 调用照渲染层那个口子同一个解析器(ipc-contract 的 parseComfyWorkbenchCall)查过才进桥,后端送不进代码。
 import { app } from "electron";
 
 import { sharedViews } from "./accountViews";
@@ -21,7 +25,9 @@ import { executeBrowserAction, type ActionOutcome } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
 import { t } from "../i18n.cjs";
+import { parseComfyWorkbenchCall } from "../ipc-contract.cjs";
 import { applyPartitionMove } from "./partitionMoves";
+import { comfyWorkbenchCall } from "./publishWorker";
 
 const IDLE_MS = 1200;
 /**
@@ -149,7 +155,39 @@ async function movePartitions(): Promise<boolean> {
   return true;
 }
 
+/** 工作台会话的分区前缀(和 ipc-contract 拼的同一个):分区后面就是连接 id。 */
+const COMFY_PARTITION_PREFIX = "persist:pool-comfyui-";
+
+/**
+ * 一条工作台动作:交给这个连接开着的工作台,把桥的回答原样(规整过的)放进结果的 `value`。`close`(后端收回空闲的会话)
+ * 什么都不拆 —— 工作台的视图是用户开的,不归这个会话。
+ */
+async function handleWorkbenchAction(action: ClaimedAction, signal: AbortSignal): Promise<void> {
+  try {
+    if (action.action === "close") {
+      await browserBackend.report(action.id, { status: "done", result: {} });
+      return;
+    }
+    if (action.action !== "workbench" || !action.partition.startsWith(COMFY_PARTITION_PREFIX)) {
+      throw new Error(`not a workbench action: ${action.action}`);
+    }
+    const { partition, call } = parseComfyWorkbenchCall({
+      connectionId: action.partition.slice(COMFY_PARTITION_PREFIX.length),
+      call: action.args.call,
+    });
+    const result = await comfyWorkbenchCall({ partition, call });
+    if (signal.aborted) return;
+    await browserBackend.report(action.id, { status: "done", result: { value: result } });
+    plog("workbench action done:", call.op, result.ok ? "ok" : result.error);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    plog("workbench action failed:", message);
+    await browserBackend.report(action.id, { status: "failed", error: message }).catch(() => undefined);
+  }
+}
+
 async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise<void> {
+  if (action.kind === "workbench") return handleWorkbenchAction(action, signal);
   const views = sharedViews();
   if (!views) {
     // 共享视图管理器由发布执行器创建(startPublishWorker)。它没起来说明宿主窗口还没就绪,

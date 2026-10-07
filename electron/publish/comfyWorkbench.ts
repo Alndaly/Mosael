@@ -11,11 +11,15 @@
  * - 页面和自定义节点的脚本在同一个世界里,所以从页面拿到的一律当**提示**:形状不对的丢掉、字符串截断、数组有上限
  *   (`parseWorkbenchPoll` / `parseWorkbenchExport`);定论(这次跑出了什么、哪张来自哪个节点)以插件读的历史为准。
  *
+ * 智能体(ADR 0042)经同一座桥读画布(`readGraph`)、在画布上指出一个节点(`locate`):调用不是渲染层发的,是后端排、主进程的
+ * 浏览器执行器领走的工作台动作(见 browserWorker),照同一套解析器(ipc-contract 的 parseComfyWorkbenchCall)查过才进来。
+ *
  * 用到的前端名字(1.53.10 里查过):`window.app`、`app.canvas.selected_nodes`、`node.widgets[].value / options.values / setValue`、
  * `app.refreshComboInNodes`、`app.graphToPrompt`、`app.rootGraph`、`app.api`(EventTarget,`clientId`)、
  * `app.extensionManager.workflow.activeWorkflow`(`path` / `isModified` / `isTemporary` / `changeTracker.activeState`)、
  * `app.extensionManager.command`(`Comfy.SaveWorkflow`)、定位节点用的 `app.canvas.selectItems / selectNode`、
- * `centerOnNode / animateToBounds`、子图的 `rootGraph.subgraphs` 和 `canvas.openSubgraph / setGraph`、「运行」前后的
+ * `centerOnNode / animateToBounds`、子图的 `rootGraph.subgraphs` 和 `canvas.openSubgraph / setGraph`、那台机器的版本用的
+ * `api.getSystemStats`(注入时问一次)、「运行」前后的
  * `widget.beforeQueued / afterQueued` 和 `window.comfyAPI.promotedWidgetControl.applyPromotedWidgetControl`。每个调用先探测,缺了
  * 只关掉那一样(能力表里是 false)。
  *
@@ -26,9 +30,10 @@
 
 /**
  * 桥的版本:页面里已经有同一版的就不再注入;形状变了加一。2:轮询报开着的是哪一张、改过几回;能定位节点。
- * 3:「运行」前后照前端自己的「生成后怎样」换种子(runControls)。
+ * 3:「运行」前后照前端自己的「生成后怎样」换种子(runControls)。4:读整张图给智能体(readGraph);定位认从根图往里走的
+ * 节点路径(`12:5`),一层层打开子图;轮询报那台 ComfyUI 和它前端的版本(ADR 0042)。
  */
-export const WORKBENCH_VERSION = 3;
+export const WORKBENCH_VERSION = 4;
 
 /** 队列里最多留几条事件(没人取的时候丢最老的)。 */
 export const MAX_EVENTS = 200;
@@ -43,8 +48,16 @@ export type WorkbenchCall =
   | { op: "export" }
   | { op: "save" }
   | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null } }
-  /** 在画布上找到这个节点:选中、移到画面中间;在子图里的先进那张子图(`subgraph` 是子图的 id,根图上的是 null)。 */
+  /**
+   * 在画布上找到这个节点:选中、移到画面中间;在子图里的先进那张子图。`subgraph` 是子图定义的 id(`node` 是那一层里的编号);
+   * 或者 `subgraph` 为 null、`node` 写成从根图往里走的路径(`12:5`:根图 12 号节点那个子图里面的 5 号),一层层打开。
+   */
   | { op: "locate"; node: string; subgraph: string | null }
+  /**
+   * 智能体读画布(ADR 0042):当前这张的界面格式整图(`graphToPrompt().workflow`,子图的定义在 `definitions.subgraphs` 里)、
+   * 选中的节点(画布这一层里的编号)、改没改、画布停在哪一层(子图的 id,根图是 null)、开着的是哪一张。
+   */
+  | { op: "readGraph" }
   /**
    * 「运行」画布上这张的前后各一次(`before` 导出之前、`after` 任务建好之后):和在 ComfyUI 里点「运行」一样,让每个 widget
    * 走前端自己的 beforeQueued / afterQueued —— 「生成后怎样」是 randomize / increment 的种子在这里换,不然连点两次运行是同一张图。
@@ -95,6 +108,17 @@ export function workbenchInstallScript(origin: string): string {
       nodeType: text(d.node_type, 200), message: text(d.exception_message, 1000) })),
     listen("execution_interrupted", (d) => ({ promptId: text(d && d.prompt_id, 100) })),
   ].every(Boolean);
+  //: 那台 ComfyUI 和它前端的版本(助手的页面上下文里写着):注入时问一次 /system_stats,问不到就是空的
+  const server = { comfyui: "", frontend: "" };
+  if (api && typeof api.getSystemStats === "function") {
+    Promise.resolve(api.getSystemStats()).then((stats) => {
+      const system = (stats && stats.system) || {};
+      const packages = Array.isArray(system.comfy_package_versions) ? system.comfy_package_versions : [];
+      const front = packages.find((one) => one && one.name === "comfyui-frontend-package");
+      server.comfyui = text(system.comfyui_version, 40);
+      server.frontend = text((front && front.installed) || system.required_frontend_version, 40);
+    }).catch(() => undefined);
+  }
   const workflows = () => app.extensionManager.workflow;
   const commands = () => app.extensionManager.command;
   const hasCommand = (id) => {
@@ -180,6 +204,7 @@ export function workbenchInstallScript(origin: string): string {
       changes: Boolean(changes && "activeState" in changes),
       locate: Boolean(canvas && (typeof canvas.centerOnNode === "function" || typeof canvas.animateToBounds === "function")),
       subgraphs: Boolean(canvas && typeof canvas.openSubgraph === "function" && rootGraph() && rootGraph().subgraphs),
+      readGraph: typeof app.graphToPrompt === "function",
     };
   };
   const norm = (value) => String(value).replace(/\\\\/g, "/");
@@ -196,6 +221,7 @@ export function workbenchInstallScript(origin: string): string {
           temporary: Boolean(active.isTemporary), modified: Boolean(active.isModified), revision: revisionOf(active) } : null,
         selection: { count: nodes.length, node: nodes.length === 1 ? describe(nodes[0]) : null },
         clientId: text(api && (api.clientId || api.initialClientId), 100),
+        server: { comfyui: server.comfyui, frontend: server.frontend },
         events: queue.splice(0, queue.length),
       };
     },
@@ -282,11 +308,46 @@ export function workbenchInstallScript(origin: string): string {
       touched(rootGraph());
       return { ok: true };
     },
+    async readGraph() {
+      if (typeof app.graphToPrompt !== "function") return { error: "unsupported", message: "graphToPrompt" };
+      const result = await app.graphToPrompt();
+      const workflow = result && result.workflow;
+      if (!workflow || !Array.isArray(workflow.nodes)) return { error: "failed", message: "graphToPrompt gave no workflow" };
+      const canvas = app.canvas;
+      const root = rootGraph();
+      const store = workflows();
+      const active = store && store.activeWorkflow;
+      const layer = canvas && canvas.graph && canvas.graph !== root ? text(canvas.graph.id, 64) : "";
+      return JSON.parse(JSON.stringify({ ok: true, graph: {
+        workflow,
+        selection: selected().slice(0, 1000).map((node) => text(String(node.id), 40)),
+        modified: Boolean(active && active.isModified),
+        layer: layer || null,
+        info: active ? { name: text(active.filename, 300), path: text(active.path, 600) } : null,
+      } }));
+    },
     locate(id, subgraphId) {
       const canvas = app.canvas;
       const root = rootGraph();
       let graph = root;
-      if (subgraphId) {
+      const path = String(id).split(":");
+      if (!subgraphId && path.length > 1) {
+        // 从根图往里走:每一段是这一层里用着子图的那个节点,最后一段是要找的节点(ADR 0042)
+        const layers = [];
+        for (const part of path.slice(0, -1)) {
+          const holder = findNode(graph, part);
+          const inner = holder && (holder.subgraph || subgraphOf(root, holder.type));
+          if (!inner) return { error: "noNode" };
+          layers.push(inner);
+          graph = inner;
+        }
+        const target = findNode(graph, path[path.length - 1]);
+        if (!target) return { error: "noNode" };
+        if (typeof canvas.openSubgraph !== "function") return { error: "inSubgraph" };
+        if (canvas.graph !== root && typeof canvas.setGraph === "function") canvas.setGraph(root);
+        for (const inner of layers) if (canvas.graph !== inner) canvas.openSubgraph(inner);
+        id = path[path.length - 1];
+      } else if (subgraphId) {
         const sub = subgraphOf(root, subgraphId);
         if (!sub || !findNode(sub, id)) return { error: "noNode" };
         if (typeof canvas.openSubgraph !== "function") return { error: "inSubgraph" };
@@ -327,6 +388,7 @@ export function workbenchCallScript(origin: string, call: WorkbenchCall): string
     save: "return bridge.save();",
     setMarks: "return bridge.setMarks(call.marks);",
     locate: "return bridge.locate(call.node, call.subgraph);",
+    readGraph: "return await bridge.readGraph();",
     runControls: "return bridge.runControls(call.phase);",
   }[call.op];
   return callShell(origin, `const call = ${data};\n    ${body}`);
@@ -362,6 +424,8 @@ export interface WorkbenchCapabilities {
   locate: boolean;
   /** 能进子图(定位子图里的节点);没有时只能说「在子图 X 里」 */
   subgraphs: boolean;
+  /** 能把整张图交给智能体读(ADR 0042) */
+  readGraph: boolean;
 }
 
 export interface WorkbenchWidget {
@@ -398,11 +462,13 @@ export interface WorkbenchState {
   workflow: { path: string; name: string; temporary: boolean; modified: boolean; key: string; revision: number } | null;
   selection: { count: number; node: WorkbenchNode | null };
   clientId: string;
+  /** 那台 ComfyUI 和它前端的版本(如 `0.39.0`、`1.53.10`);还没问到是空串 */
+  server: { comfyui: string; frontend: string };
   events: WorkbenchEvent[];
 }
 
 const CAPABILITIES: (keyof WorkbenchCapabilities)[] = ["selection", "setWidget", "refreshCombos", "export", "dirty", "save",
-  "events", "marks", "changes", "locate", "subgraphs"];
+  "events", "marks", "changes", "locate", "subgraphs", "readGraph"];
 const EVENT_TYPES = new Set(["execution_start", "executing", "progress", "executed", "execution_cached", "execution_success",
   "execution_error", "execution_interrupted"]);
 
@@ -421,22 +487,16 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
   const capabilities = Object.fromEntries(
     CAPABILITIES.map((key) => [key, reported[key] === true]),
   ) as unknown as WorkbenchCapabilities;
-  let workflow: WorkbenchState["workflow"] = null;
-  if (isRecord(raw.workflow)) {
-    const path = str(raw.workflow.path, 600);
-    const saved = path.startsWith("workflows/") && path.toLowerCase().endsWith(".json") && raw.workflow.temporary !== true;
-    const name = str(raw.workflow.name, 300);
-    workflow = {
-      path: saved ? path.slice("workflows/".length) : "",
-      name,
-      temporary: !saved,
-      modified: raw.workflow.modified === true,
-      key: path || name,
-      revision: Math.max(0, Math.floor(num(raw.workflow.revision))),
-    };
-  }
+  const workflow: WorkbenchState["workflow"] = isRecord(raw.workflow)
+    ? {
+        ...parseOpenWorkflow(raw.workflow),
+        modified: raw.workflow.modified === true,
+        revision: Math.max(0, Math.floor(num(raw.workflow.revision))),
+      }
+    : null;
   const selection = isRecord(raw.selection) ? raw.selection : {};
   const node = isRecord(selection.node) ? parseNode(selection.node) : null;
+  const server = isRecord(raw.server) ? raw.server : {};
   const events = (Array.isArray(raw.events) ? raw.events : []).slice(-MAX_EVENTS).flatMap((one): WorkbenchEvent[] => {
     if (!isRecord(one) || !EVENT_TYPES.has(str(one.type, 40))) return [];
     const event: WorkbenchEvent = { type: str(one.type, 40), at: num(one.at), promptId: str(one.promptId, 100), node: str(one.node, 40) };
@@ -449,8 +509,20 @@ export function parseWorkbenchPoll(raw: unknown): WorkbenchState | null {
     workflow,
     selection: { count: Math.max(0, Math.min(10_000, Math.floor(num(selection.count)))), node },
     clientId: /^[A-Za-z0-9_-]{1,100}$/.test(str(raw.clientId, 100)) ? str(raw.clientId, 100) : "",
+    server: { comfyui: version(server.comfyui), frontend: version(server.frontend) },
     events,
   };
+}
+
+/** 版本号只收像版本号的(`0.39.0`、`1.53.10-rc1`):它要写进给智能体的上下文里。 */
+const version = (value: unknown) => (/^[0-9A-Za-z.+_-]{1,40}$/.test(str(value, 40)) ? str(value, 40) : "");
+
+/** 开着的是哪一张:`path` 去掉前端的 `workflows/` 前缀,不在 `workflows/` 下的(前端自己的临时路径)当没存过;`key` 认哪一张。 */
+function parseOpenWorkflow(raw: Record<string, unknown>): { path: string; name: string; temporary: boolean; key: string } {
+  const path = str(raw.path, 600);
+  const saved = path.startsWith("workflows/") && path.toLowerCase().endsWith(".json") && raw.temporary !== true;
+  const name = str(raw.name, 300);
+  return { path: saved ? path.slice("workflows/".length) : "", name, temporary: !saved, key: path || name };
 }
 
 function parseNode(raw: Record<string, unknown>): WorkbenchNode | null {
@@ -489,12 +561,40 @@ export function parseWorkbenchExport(raw: unknown): WorkbenchExport | null {
   return { workflow: raw.workflow, prompt: raw.prompt, clientId: /^[A-Za-z0-9_-]{1,100}$/.test(clientId) ? clientId : "" };
 }
 
-/** 别的调用的回答:成了 / 一个原因码(noNode、noWidget、notInList、missing、elsewhere、failed)。 */
+/**
+ * 交给智能体读的整张图(ADR 0042):界面格式的整图(和导出同一个上限)、选中的节点(画布这一层里的编号)、改没改、画布停在
+ * 哪一层(子图的 id,根图是 null)、开着的是哪一张。整图本身不在这里拆 —— 摘要、诊断由插件做,这里只核对形状和大小。
+ */
+export interface WorkbenchGraph {
+  workflow: Record<string, unknown>;
+  selection: string[];
+  modified: boolean;
+  layer: string | null;
+  info: { path: string; name: string; temporary: boolean; key: string } | null;
+}
+
+export function parseWorkbenchGraph(raw: unknown): WorkbenchGraph | null {
+  if (!isRecord(raw) || !isRecord(raw.workflow) || !Array.isArray(raw.workflow.nodes)) return null;
+  if (JSON.stringify(raw.workflow).length > MAX_EXPORT_CHARS) return null;
+  const selection = (Array.isArray(raw.selection) ? raw.selection : []).slice(0, 1000)
+    .map((one) => str(one, 40)).filter((one) => /^-?\d{1,10}$/.test(one));
+  const layer = str(raw.layer, 64);
+  return {
+    workflow: raw.workflow,
+    selection,
+    modified: raw.modified === true,
+    layer: /^[A-Za-z0-9_-]{1,64}$/.test(layer) ? layer : null,
+    info: isRecord(raw.info) ? parseOpenWorkflow(raw.info) : null,
+  };
+}
+
+/** 别的调用的回答:成了 / 一个原因码(noNode、noWidget、notInList、missing、elsewhere、failed、unsupported……)。 */
 export type WorkbenchCallResult =
-  | { ok: true; value?: string | number | boolean | null; export?: WorkbenchExport }
+  | { ok: true; value?: string | number | boolean | null; export?: WorkbenchExport; graph?: WorkbenchGraph }
   | { ok: false; error: string; message?: string; nodes?: string[] };
 
-const ERRORS = new Set(["noNode", "noWidget", "notInList", "missing", "elsewhere", "failed", "notReady", "closed", "inSubgraph"]);
+const ERRORS = new Set(["noNode", "noWidget", "notInList", "missing", "elsewhere", "failed", "notReady", "closed", "inSubgraph",
+  "unsupported"]);
 
 export function parseWorkbenchResult(call: WorkbenchCall, raw: unknown): WorkbenchCallResult {
   if (isRecord(raw) && typeof raw.error === "string") {
@@ -507,6 +607,10 @@ export function parseWorkbenchResult(call: WorkbenchCall, raw: unknown): Workben
     return exported ? { ok: true, export: exported } : { ok: false, error: "failed", message: "malformed export" };
   }
   if (!isRecord(raw) || raw.ok !== true) return { ok: false, error: "failed" };
+  if (call.op === "readGraph") {
+    const graph = parseWorkbenchGraph(raw.graph);
+    return graph ? { ok: true, graph } : { ok: false, error: "failed", message: "malformed graph" };
+  }
   if (call.op === "setWidget") {
     const value = raw.value;
     return { ok: true, value: typeof value === "string" ? value.slice(0, 4000)

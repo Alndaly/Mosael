@@ -242,6 +242,8 @@ function parseComfyWorkbenchOpen(value) {
 //: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)、根图上的节点号(应用表单的标记只认根图)
 const CANVAS_NODE = /^-?\d{1,10}$/;
 const ROOT_NODE = /^\d{1,9}$/;
+//: 从根图往里走的节点路径(`12:5`:根图 12 号节点那个子图里面的 5 号;ADR 0042 智能体指节点的写法),最多 16 层
+const NODE_PATH = /^-?\d{1,10}(?::\d{1,10}){1,16}$/;
 //: 子图的 id(前端给的是 UUID 那样的串)
 const SUBGRAPH_ID = /^[A-Za-z0-9_-]{1,64}$/;
 //: 写进画布的标记最大多大(整份;和宿主那一侧一个节点 2 MB 的上限同一个量级)
@@ -254,6 +256,8 @@ const MAX_MARKS_CHARS = 8 * 1024 * 1024;
  * - setWidget:节点号、widget 名字(不带控制字符)、值(字符串 / 有限的数 / 布尔);下拉里有没有它由桥查;
  * - refreshCombos / export / save:不带别的;
  * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null);
+ * - locate:节点号加子图的 id(那一层里的编号),或者不给子图、节点写成从根图往里走的路径(`12:5`);
+ * - readGraph:不带别的(整张图交给智能体读,ADR 0042;后端排的工作台动作也经这里查过才进桥,见 browserWorker);
  * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子)。
  */
 function parseComfyWorkbenchCall(value) {
@@ -262,7 +266,7 @@ function parseComfyWorkbenchCall(value) {
   onlyKeys(payload, ["connectionId", "call"], channel);
   const partition = comfyPartition(payload, channel);
   const call = record(payload.call, channel);
-  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "runControls"], channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "readGraph", "runControls"], channel);
   if (op === "setWidget") {
     onlyKeys(call, ["op", "node", "widget", "value"], channel);
     if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
@@ -291,10 +295,13 @@ function parseComfyWorkbenchCall(value) {
   }
   if (op === "locate") {
     onlyKeys(call, ["op", "node", "subgraph"], channel);
-    if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);
     const subgraph = call.subgraph === undefined || call.subgraph === null ? null : call.subgraph;
     if (subgraph !== null && (typeof subgraph !== "string" || !SUBGRAPH_ID.test(subgraph))) {
       throw new TypeError(`${channel}: subgraph must be a subgraph id`);
+    }
+    const node = typeof call.node === "string" ? call.node : "";
+    if (!CANVAS_NODE.test(node) && !(subgraph === null && NODE_PATH.test(node))) {
+      throw new TypeError(`${channel}: node must be a node id`);
     }
     return { partition, call: { op, node: call.node, subgraph } };
   }

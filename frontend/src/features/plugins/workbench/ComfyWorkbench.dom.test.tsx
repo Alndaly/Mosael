@@ -64,7 +64,7 @@ import { openWorkbench, resetWorkbench } from "./workbenchSession";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 192.168.3.15", workspaceId: "w1", url: "http://192.168.3.15:8188" };
 const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true, marks: true,
-               changes: true, locate: true, subgraphs: true };
+               changes: true, locate: true, subgraphs: true, readGraph: true };
 const LOADER = { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
                  widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true }] };
 const EXPORTED = {
@@ -81,6 +81,7 @@ function state(overrides: Partial<ComfyWorkbenchState> = {}): ComfyWorkbenchStat
     workflow: { ...GUFENG },
     selection: { count: 1, node: LOADER },
     clientId: EXPORTED.clientId,
+    server: { comfyui: "0.39.0", frontend: "1.53.10" },
     events: [],
     ...overrides,
   };

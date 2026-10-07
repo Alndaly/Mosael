@@ -47,7 +47,7 @@ export interface ClaimedAction {
   id: string;
   session_id: string;
   partition: string;
-  kind: string; // 会话类型 ephemeral | named | profile
+  kind: string; // 会话类型 ephemeral | named | profile | workbench(ComfyUI 工作台,见 browserWorker)
   action: string;
   args: Record<string, unknown>;
   /** 这一次认领的凭据(ADR-0002)。回报和心跳都要原样带回。 */
