@@ -80,6 +80,7 @@ def _upsert_row(
     origin: str,
     imported_from: str = "",
     user_id: str | None = None,
+    agent_session_id: str | None = None,
 ) -> AgentSkill:
     row = db.scalars(
         select(AgentSkill).where(
@@ -95,6 +96,7 @@ def _upsert_row(
     row.enabled = enabled
     row.origin = origin
     row.imported_from = imported_from[:255]
+    row.agent_session_id = agent_session_id or None
     db.flush()
     return row
 
@@ -194,8 +196,10 @@ def create(
     imported_from: str = "",
     replace_existing: bool = False,
     skill_md: bytes | None = None,
+    agent_session_id: str | None = None,
 ) -> Skill:
     """新建一个工作区技能(新建、存成技能、导入、复制都走这里)。`files` 是 SKILL.md 以外的文件。
+    `agent_session_id`:智能体在哪次对话里经确认卡建的(ADR 0043);人建的不给。
 
     `skill_md`:原样落地的那份 SKILL.md(导入且没改名时)。**一个字节都不动** —— 别处导出的技能导进来再导出去,
     拿回的是同一份文件;重新渲染会把作者的注释、引号、换行全换成 Mosael 的写法。它读出来必须就是 `doc`。
@@ -208,7 +212,7 @@ def create(
     payload[SKILL_FILENAME] = skill_md if skill_md is not None else render_skill_md(doc).encode("utf-8")
     _place(workspace_id, doc.name, payload, replace_existing=replace_existing)
     _upsert_row(db, workspace_id, source=WORKSPACE, name=doc.name, enabled=enabled, origin=origin,
-                imported_from=imported_from, user_id=user_id)
+                imported_from=imported_from, user_id=user_id, agent_session_id=agent_session_id)
     found = catalog.find(db, workspace_id, doc.name)
     assert found is not None
     return found
@@ -412,8 +416,10 @@ def commit_import(
     choices: list[dict],
     *,
     user_id: str | None,
+    agent_session_id: str | None = None,
 ) -> list[Skill]:
-    """照审阅时的选择落地:每个技能要不要、改不改名、开不开、撞名时替不替换。没提到的技能不装。"""
+    """照审阅时的选择落地:每个技能要不要、改不改名、开不开、撞名时替不替换。没提到的技能不装。
+    `agent_session_id`:智能体经确认卡导入的,记下是哪次对话(ADR 0043)。"""
     folder, info = _staged(workspace_id, import_id)
     staged = {str(entry.get("name") or "") for entry in info.get("skills", [])}
     source_name = str(info.get("source_name") or "")
@@ -447,6 +453,7 @@ def commit_import(
                 replace_existing=replacing,
                 #: 没改名就原样落地;改了名,头里的 name 得跟着改,只能重新写一份。
                 skill_md=original if target == name else None,
+                agent_session_id=agent_session_id,
             )
         )
     after_commit(db, lambda: shutil.rmtree(folder, ignore_errors=True))

@@ -8142,6 +8142,21 @@ def _migrate_local_services_stop_when_idle() -> None:
             conn.execute(text("ALTER TABLE local_services ADD COLUMN idle_stop_minutes INTEGER NOT NULL DEFAULT 30"))
 
 
+def _migrate_agent_skills_remember_the_drafting_session() -> None:
+    """技能的索引行补一列 `agent_session_id`:智能体在哪次对话里建的(ADR 0043),设置页的来源标签点开就是那段对话。
+
+    老行都是人在设置里建、导入、从对话「存成技能」的 —— 不是智能体经确认卡建的,落成 NULL 就是它们的真实情况。
+    加列必须在 SCHEMA 之前:之后 ORM 上的 AgentSkill 已经指望它在了。表还没有就什么都不做(SCHEMA 会照模型建全)。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_skills)"))}
+        if columns and "agent_session_id" not in columns:
+            conn.execute(text(
+                "ALTER TABLE agent_skills ADD COLUMN agent_session_id VARCHAR(64) "
+                "REFERENCES agent_sessions(id) ON DELETE SET NULL"
+            ))
+
+
 def _migrate_install_sources_get_pytorch_and_github() -> None:
     """「管理 → 下载源」多两行:PyTorch 源(`tts_config.pytorch_index`)、GitHub 镜像前缀(`tts_config.github_mirror`),
     给「让 Mosael 装」用(ADR 0041 §4)。空 = 官方 / 直连,和老库的行为一样。
@@ -8304,6 +8319,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_local_services_share_model_folders,
                 # 同上:「闲置多久自动停」那一列。
                 _migrate_local_services_stop_when_idle,
+                # 同上:ORM 上的 AgentSkill 指望「智能体在哪次对话里建的」那一列在(ADR 0043)。
+                _migrate_agent_skills_remember_the_drafting_session,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

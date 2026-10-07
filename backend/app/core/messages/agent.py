@@ -95,6 +95,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "skillSource_conversation": {"zh": "从对话存成的", "en": "saved from a conversation"},
     "skillSource_copied": {"zh": "复制来改的", "en": "a copy made to edit"},
     "skillSource_folder": {"zh": "直接放进数据目录的文件夹", "en": "a folder placed directly in the data directory"},
+    "skillSource_agent": {"zh": "智能体起草", "en": "drafted by the agent"},
 
     "agentErr_planEmpty": {"zh": "计划至少要有一步", "en": "A plan needs at least one step."},
     # 智能体问用户的选择题(报错面向模型:要说清怎么改)

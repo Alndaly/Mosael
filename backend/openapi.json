@@ -27127,6 +27127,17 @@
             "type": "string",
             "title": "Origin"
           },
+          "agent_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Session Id"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
@@ -27485,6 +27496,17 @@
           "origin": {
             "type": "string",
             "title": "Origin"
+          },
+          "agent_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Session Id"
           },
           "enabled": {
             "type": "boolean",

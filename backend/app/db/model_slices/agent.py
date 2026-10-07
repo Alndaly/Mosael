@@ -165,11 +165,16 @@ class AgentSkill(Base):
     package_id: Mapped[str] = mapped_column(String(160), nullable=False, default="")
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    #: 工作区技能怎么来的:created(在设置里新建)| imported(导入)| conversation(从对话存成)| copied(复制内置 / 插件的)。
-    #: 扔进文件夹、从没在 Mosael 里登记过的没有行。
+    #: 工作区技能怎么来的:created(在设置里新建)| imported(导入)| conversation(从对话存成)| copied(复制内置 / 插件的)
+    #: | agent(智能体在对话里起草、人在确认卡上批的,ADR 0043)。扔进文件夹、从没在 Mosael 里登记过的没有行。
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="created")
-    #: 导入自哪个文件(`brand.zip`、文件夹名),给人看来源用。
+    #: 导入自哪个文件(`brand.zip`、文件夹名、链接),给人看来源用;智能体复制来的是原来那份的名字。
     imported_from: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    #: 智能体在**哪次对话**里建的(新建、复制、导入都记,ADR 0043):设置页的来源标签点开就是那段对话。
+    #: 人在设置里建的是 NULL;那次对话删了也回到 NULL —— 链接指不到东西,不如没有。
+    agent_session_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("agent_sessions.id", ondelete="SET NULL"), nullable=True
+    )
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

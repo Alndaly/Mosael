@@ -20,9 +20,11 @@ class AgentSkillOut(ApiModel):
     source: Literal["builtin", "workspace", "plugin"]
     #: 来源,说给人听的那一句(「Mosael 内置」「从 brand.zip 导入」「插件「ComfyUI」」)—— 插件名、导入自哪个文件都在这句里。
     source_label: str
-    #: 工作区技能怎么来的:created / imported / conversation / copied / folder(扔进文件夹、没登记过的)。
-    #: 界面据此判断「开之前要不要先看全文」。
+    #: 工作区技能怎么来的:created / imported / conversation / copied / agent(智能体起草,ADR 0043)
+    #: / folder(扔进文件夹、没登记过的)。界面据此判断「开之前要不要先看全文」。
     origin: str
+    #: 智能体在哪次对话里建的(新建、复制、导入经确认卡落地的);设置页的来源标签点开就是那段对话。别的是 null。
+    agent_session_id: str | None = None
     enabled: bool
     #: 只有工作区技能能改;内置和插件的只读(能复制成我的)。
     editable: bool

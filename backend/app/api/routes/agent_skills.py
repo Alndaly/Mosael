@@ -45,6 +45,7 @@ def _out(skill: Skill) -> dict:
         "source": skill.source,
         "source_label": catalog.source_label(skill),
         "origin": skill.origin,
+        "agent_session_id": skill.agent_session_id or None,
         "enabled": skill.enabled,
         "editable": skill.editable,
         "problem": skill.problem,

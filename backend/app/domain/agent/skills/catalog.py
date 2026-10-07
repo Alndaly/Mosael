@@ -49,7 +49,9 @@ PLUGIN = "plugin"
 SOURCE_ORDER = {BUILTIN: 0, WORKSPACE: 1, PLUGIN: 2}
 
 #: 工作区技能的来历(索引行上的 `origin`)。没有索引行的工作区技能是「扔进文件夹的」:FOLDER。
+#: AGENT:智能体在对话里起草(新建、复制成我的)、人在确认卡上批的(ADR 0043)。
 CREATED, IMPORTED, CONVERSATION, COPIED, FOLDER = "created", "imported", "conversation", "copied", "folder"
+AGENT = "agent"
 
 #: 看起来像脚本的文件:读的时候标明「Mosael 不执行它」(ADR 0040 §6)。
 SCRIPT_SUFFIXES = frozenset({".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".ps1", ".bat", ".cmd"})
@@ -80,6 +82,8 @@ class Skill:
     enabled: bool = False
     origin: str = ""
     imported_from: str = ""
+    #: 智能体在哪次对话里建的(新建、复制、导入经确认卡落地的);别的是空串。
+    agent_session_id: str = ""
 
     @property
     def ref(self) -> str:
@@ -203,6 +207,7 @@ def list_skills(db: Session, workspace_id: str) -> list[Skill]:
             enabled=row.enabled if row is not None else default_enabled(source),
             origin=row.origin if row is not None else (FOLDER if source == WORKSPACE else source),
             imported_from=row.imported_from if row is not None else "",
+            agent_session_id=(row.agent_session_id or "") if row is not None else "",
         )
 
     out = [make(BUILTIN, name, root) for name, root in _folders(BUILTIN_ROOT)]
@@ -245,7 +250,7 @@ def source_label(skill: Skill) -> str:
         return tr("skillSource_plugin", name=skill.package_name or skill.package_id)
     if skill.origin == IMPORTED:
         return tr("skillSource_imported", name=skill.imported_from or "?")
-    return tr(f"skillSource_{skill.origin}") if skill.origin in (CREATED, CONVERSATION, COPIED, FOLDER) else tr("skillSource_created")
+    return tr(f"skillSource_{skill.origin}") if skill.origin in (CREATED, CONVERSATION, COPIED, FOLDER, AGENT) else tr("skillSource_created")
 
 
 # ---------------------------------------------------------------- 文件
@@ -330,6 +335,7 @@ def read_file(skill: Skill, path: str, *, offset: int = 0, length: int = READ_CH
 
 
 __all__ = [
+    "AGENT",
     "BUILTIN",
     "BUILTIN_ROOT",
     "PLUGIN",

@@ -9145,6 +9145,8 @@ export interface components {
             source_label: string;
             /** Origin */
             origin: string;
+            /** Agent Session Id */
+            agent_session_id?: string | null;
             /** Enabled */
             enabled: boolean;
             /** Editable */
@@ -9346,6 +9348,8 @@ export interface components {
             source_label: string;
             /** Origin */
             origin: string;
+            /** Agent Session Id */
+            agent_session_id?: string | null;
             /** Enabled */
             enabled: boolean;
             /** Editable */
