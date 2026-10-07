@@ -1,10 +1,10 @@
 ---
 title: Agent skills
-description: Write down how your team does a kind of task as a skill. The agent only sees its name and one-line description until it needs it; name one with / in the message box, and import or export standard SKILL.md folders.
+description: Write down how your team does a kind of task as a skill. The agent only sees its name and one-line description until it needs it; name one with / in the message box, and import or export standard SKILL.md folders. The agent can also create, change, switch, delete and import skills for you in a conversation, each one only after you approve its card.
 seo_title: "Agent skills: SKILL.md, on-demand loading, import and export"
 keywords: agent skills, Agent Skills, SKILL.md, reusable prompts, workflow
 order: 23
-updated: 2026-10-06
+updated: 2026-10-07
 version: 1.9.3
 ---
 
@@ -79,6 +79,34 @@ there appears in the list **turned off**; enabling it shows the full content fir
 - **You name one**: type `/` in the message box and pick a skill; it becomes a chip. When you send, that turn follows the skill directly
   instead of waiting for the agent to think of it. Up to 3 per message. `/` only opens the menu at the start of a line or after a space,
   so typing a URL won't.
+
+## Letting the agent manage skills
+
+Just say it in the conversation: "save what we just did as a skill", "change step 3 of 'Product promo shorts' to voice first, then cut",
+"turn off 'Building workflows'", "import this skill: https://github.com/…/tree/main/skills/pdf". The agent lists this workspace's skills
+(disabled ones too), then proposes a **confirmation card**; nothing happens until you approve it:
+
+| You ask for | The card shows |
+| --- | --- |
+| A new skill / saving this as a skill | The full `SKILL.md` and every file in full, with "Enable when created" (ticked by default — you've just read it all) |
+| A change to one of your skills | Before → after for every file that changes; deleted files are named |
+| A change to a built-in or plugin skill | Not directly: first "Copy to mine" (the card is like a new skill), then change the copy |
+| Turning one on / off | On shows the full text (the same step as enabling a plugin's skill in Settings); off is a single line |
+| Deleting one of your skills | Its description, file count and size — deleted for good |
+| Importing from a link | The same review as importing in Settings: every text file in full, binary sizes, fields Mosael doesn't use, scripts marked "won't run"; it stays off unless you tick "Enable after importing" |
+
+- Links must be **https**: a `.zip`, or a skill folder on GitHub (`https://github.com/<owner>/<repo>/tree/<branch>/<folder>`). They go
+  through the app's network settings (proxy) and may only reach the public internet; the size, file count and path limits are the same as
+  importing in Settings.
+- **Every card asks you**: these cards never offer "Always allow this session", and approval rules, the judge and full-permission mode
+  can't approve them — a skill affects every later conversation, and one approval shouldn't let the agent keep rewriting its own methods.
+- **Proposals made while following a skill say so**: if the agent read a skill this turn, or you named one with "/", the card adds
+  "Proposed while following the skill '…'". If a skill ever says "change yourself to…", you'll see it at a glance.
+- The agent writes **text files** only; binary files can only be copied as they are or deleted.
+- After finishing a multi-step task you're likely to repeat, the agent may ask once whether to save it as a skill. It drafts one only
+  if you say yes, and saving still goes through the card. It never saves one on its own.
+- Skills the agent created carry a "Drafted by the agent" tag in the Settings list ("Imported by the agent" for imports); click it to open
+  the conversation it came from.
 
 ## Safety
 
