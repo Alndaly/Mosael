@@ -15,7 +15,7 @@ import {
  * 工作流里**一个引用指的是什么**:这一层图的节点、节点注册表的声明、容器给体播的作用域变量、上次运行交回的输出 →
  * 表单那一层的引用目录(见 nodeForms/refCatalog)。
  *
- * - 显示:`{{report.json.verdict}}` → 节点的名字(没起名的用 id)· 输出口的名字(portNames.outputPortName,和画布上
+ * - 显示:`{{report.json.verdict}}` → 节点的名字(没起名的用 id;插件节点用插件报的名字)· 输出口的名字(portNames.outputPortName,和画布上
  *   那个口同一个名字)· 子路径;
  * - 指不到:根不是这一层的节点、也不是作用域名 → 没有这个节点;节点在,而输出不在它声明的输出里(通配按配置展开,
  *   开始节点的输出就是它的参数)→ 没有这个输出。节点类型不在注册表里(插件没装)的不判输出 —— 说不清它有什么;
@@ -27,6 +27,7 @@ import {
 interface Registry {
   get(type: string):
     | {
+        label?: string;
         outputs?: readonly string[];
         output_labels?: Record<string, string>;
         output_schema_from?: Record<string, string>;
@@ -64,7 +65,9 @@ export function workflowRefCatalog({
     const node = nodes.get(root);
     if (node) {
       const meta = registry.get(node.type);
-      const name = node.name?.trim() || node.id;
+      //: 没起名的节点用 id —— 只有插件节点例外:它的名字加的时候就不写死(跟着插件报的走,见 useWorkflowCanvasEdits.newNode),
+      //: 没起名就叫插件此刻报的名字,不是一串 `plugin-dev-…-1`。内置节点加的时候都写了名字,没名字的(智能体建的)照旧用 id。
+      const name = node.name?.trim() || (node.type.startsWith("plugin.") ? meta?.label?.trim() : "") || node.id;
       if (output === undefined) return { parts: [name], problem: null };
       const outputs = meta ? declaredFieldNames(meta.outputs ?? [], node.config as Record<string, unknown> | undefined) : null;
       return {

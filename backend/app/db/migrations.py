@@ -6594,6 +6594,57 @@ def _migrate_start_required_params_are_a_list() -> None:
     )
 
 
+def _migrate_plugin_node_names_follow_the_plugin() -> None:
+    """插件节点上写死的、就是那个工具名字的节点名清掉:名字空着,画布、检查器、引用、执行历史跟着插件**此刻**报的名字走。
+
+    「添加节点」此前把插件工具当时的名字写进了节点(`name`)。插件报的名字会变 —— ComfyUI 工作流起了精简表单标题,
+    「工作流 · krea2-text-2-image」就成了「工作流 · 快速用krea2生图」(模型下拉里早就叫这个),画布上的节点却还是文件名。
+    现在加节点不写死(前端 useWorkflowCanvasEdits.newNode);存着的节点在这里跟上:名字等于这个工具在**升级前缓存的**
+    清单里的名字(按语言分的每一种都算 —— 加节点时按界面语言取的)就清掉;用户自己改过的名字留着,认不出工具的节点不动。
+    启动时先跑迁移、再刷新清单,所以比对的是加节点那时插件报的名字。经 `_rewrite_workflow_graphs` 落一版修订。
+    """
+    if not {"workflows", "workflow_revisions", "plugin_instances"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import PluginInstance
+    from app.domain.plugins.tools import all_tools
+
+    def variants(value: Any) -> set[str]:
+        if isinstance(value, dict):
+            return {one.strip() for one in value.values() if isinstance(one, str) and one.strip()}
+        return {value.strip()} if isinstance(value, str) and value.strip() else set()
+
+    defaults: dict[str, set[str]] = {}
+    with Session(engine) as db:
+        for instance in db.scalars(select(PluginInstance)).all():
+            try:
+                tools = all_tools(db, instance)
+            except ValueError:  # 包记录没了、清单坏了(PluginDomainError / ManifestError 都是 ValueError)
+                continue
+            #: 运行时报出的工具原样存着(名字按语言分),all_tools 只给此刻这一种语言
+            raw = {str(tool.get("name")): tool for tool in instance.discovered_tools or [] if isinstance(tool, dict)}
+            for tool in tools:
+                names = variants(tool.get("label")) | variants((raw.get(tool["name"]) or {}).get("label"))
+                defaults.setdefault(f"plugin.{instance.package_id}.{tool['name']}", set()).update(names)
+    if not defaults:
+        return
+
+    def visit(node: dict[str, Any]) -> dict[str, Any]:
+        name = node.get("name")
+        if not isinstance(name, str) or name.strip() not in defaults.get(str(node.get("type")), ()):
+            return node
+        return {key: value for key, value in node.items() if key != "name"}
+
+    changed = _rewrite_workflow_graphs(
+        lambda graph: _walk_graph_nodes(graph, visit),
+        "插件节点的名字不再写死:就是插件给这个工具起的名字的,清掉,跟着插件此刻报的名字走(用户改过的名字留着)",
+    )
+    if changed:
+        logger.info("%d 个工作流里写死的插件节点名清掉了,跟着插件报的名字走", changed)
+
+
 def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
     """一张图(连同循环体 / 子图体)里的每个节点交给 `visit(node) -> node`,返回新图。不改原图。"""
     if not isinstance(graph, dict):
@@ -8699,6 +8750,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_plugin_array_inputs_are_lists,
                 _migrate_plugin_union_array_inputs_are_lists,
                 _migrate_start_required_params_are_a_list,
+                # 要读**升级前缓存的**工具清单(加节点那时插件报的名字):排在装随包插件、改写被取代的工具之后;
+                # 清单要等启动之后才刷新,所以这里比对的还是旧名字。
+                _migrate_plugin_node_names_follow_the_plugin,
             ),
             #: 对账:上面那条只改得了它那一刻认得出的;工具清单后来才报上来的,每次启动按当时的声明补改。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _plugin_array_inputs_follow_their_declarations),

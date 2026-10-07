@@ -348,21 +348,9 @@ export function useWorkflowCanvasEdits({
     const meta = registry.get(type);
     if (!meta) return;
     if (type === "start" && !canAddStart) return;
-    const base = type.replace(/[_.]/g, "-");
-    let index = 1;
-    while (graph.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
-    const id = type === "start" && !graph.nodes.some((node) => node.id === "start") ? "start" : `${base}-${index}`;
-    const maxX = Math.max(0, ...graph.nodes.map((node) => node.position?.x ?? 0));
-    const config: Record<string, unknown> = {};
-    for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
-      // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
-      config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
-    }
-    const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
-    const next: WorkflowGraph = {
-      ...graph,
-      nodes: [...graph.nodes, { id, type, name: meta.label, position, config }],
-    };
+    const node = newNode(graph, type, meta);
+    const { id, position } = node;
+    const next: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
     applyGraph(next);
     selectInspectorNode(id);
     // 新节点排在最右、又会被右侧检查器盖住 → 加完把视口聚焦过去,别让人找不到。
@@ -441,4 +429,30 @@ export function useWorkflowCanvasEdits({
     pendingDropAt,
     canvasDrop,
   };
+}
+
+type GraphNode = WorkflowGraph["nodes"][number];
+
+/**
+ * 「添加节点」放下的那一个节点:id 按类型编号、排在最右、每一格配置种成空值。
+ *
+ * **插件节点不把名字写死。** 它的名字是插件报出来的、会变(ComfyUI 工作流起了精简表单标题,「工作流 · 文件名」就成了
+ * 「工作流 · 标题」):名字空着,画布、检查器、引用、执行历史就跟着节点目录的名字走;用户自己改了名才是用户的。
+ * 内置节点照旧写上它的名字。
+ */
+export function newNode(graph: WorkflowGraph, type: string, meta: Pick<WorkflowNodeType, "label" | "config">): GraphNode & {
+  position: { x: number; y: number };
+} {
+  const base = type.replace(/[_.]/g, "-");
+  let index = 1;
+  while (graph.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
+  const id = type === "start" && !graph.nodes.some((node) => node.id === "start") ? "start" : `${base}-${index}`;
+  const maxX = Math.max(0, ...graph.nodes.map((node) => node.position?.x ?? 0));
+  const config: Record<string, unknown> = {};
+  for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
+    // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
+    config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
+  }
+  const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
+  return { id, type, ...(type.startsWith("plugin.") ? {} : { name: meta.label }), position, config };
 }
