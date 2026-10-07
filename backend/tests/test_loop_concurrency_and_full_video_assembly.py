@@ -123,10 +123,15 @@ class Test循环并发:
         assert "3 次因此停下" in message
 
     def test_几项同时失败_没有被叫停的就不说另有0次(self, fake_node) -> None:
-        """实测:三项同时跑、第 1、3 项失败、第 2 项跑完了 —— 报错说「另有 0 次因此停下」。没有被叫停的就不提这半句。"""
+        """实测:三项同时跑、第 1、3 项失败、第 2 项跑完了 —— 报错说「另有 0 次因此停下」。没有被叫停的就不提这半句。
+
+        三项先在门口会齐再出结果:不会齐的话,机器一忙(CI 上测试并行跑)第 3 项还没开始、第 1 项就失败把它叫停了 ——
+        那是对的行为,只是测的不是这一条。"""
         ws = _workspace()
+        all_started = threading.Barrier(3, timeout=10)
 
         def call(db, workflow, config):
+            all_started.wait()
             if config["item"] in {"1", "3"}:
                 raise WorkflowDomainError("素材不在这个工作区里")
             return {"text": config["item"]}
