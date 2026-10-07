@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import shutil
 import socket
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -424,6 +425,40 @@ def test_取消_停在那一步_接着装从没做完的开始(plugged) -> None:
     assert done["install"]["state"] == "succeeded" and done["installed"] is True
     log = (settings.data_dir / "logs" / f"service-install-{instance_id}.log").read_text(encoding="utf-8")
     assert "== fetch" not in log and "== build" in log, "接着装:做完的不再做(上一次的日志滚成了 .1)"
+
+
+def test_装完正好挤在看状态的两下之间_也读不到成了却还没装好(plugged, monkeypatch: pytest.MonkeyPatch) -> None:
+    """安装线程先把「装好了」(python_minor)提交进库、再报 succeeded。看状态的要是先读库里那一行、再看这一次安装,装完正好挤在
+    两下之间就读到「成了」而 installed 还是 false —— 界面上装好了还摆着安装计划。不赌时机:试起通过后让安装线程停住,看状态的
+    一读完那一行就放它走、等它收完尾,再接着往下读。"""
+    instance_id = _connection(plugged)
+    tried, go_on = threading.Event(), threading.Event()
+    real_trial, real_row_of = local_services._trial, records.row_of
+
+    def trial_then_hold(instance_id: str, run: installer.InstallRun) -> None:
+        real_trial(instance_id, run)
+        tried.set()
+        assert go_on.wait(30)
+
+    with SessionLocal() as db:
+        def row_then_finish(session, wanted: str):
+            row = real_row_of(session, wanted)
+            if session is db and not go_on.is_set():
+                go_on.set()
+                installer.current(wanted).thread.join(30)
+            return row
+
+        monkeypatch.setattr(local_services, "_trial", trial_then_hold)
+        monkeypatch.setattr(records, "row_of", row_then_finish)
+        _install(plugged, instance_id)
+        assert tried.wait(30)
+        torn = local_services.status(db, db.get(PluginInstance, instance_id))
+    assert go_on.is_set() and installer.current(instance_id).state == "succeeded", "装完确实挤在了这一次读的中间"
+    install = torn["install"]["state"]
+    assert install != "succeeded" or torn["installed"] is True, f"读到成了却还没装好:{torn}"
+    assert install != "installing" or torn["issue"]["kind"] == "installing", f"同一次读里两处说的不是一件事:{torn}"
+    done = _status(plugged, instance_id)
+    assert done["install"]["state"] == "succeeded" and done["installed"] is True
 
 
 def test_试起没通过_不算装好(plugged) -> None:

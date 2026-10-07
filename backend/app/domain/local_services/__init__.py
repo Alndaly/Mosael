@@ -174,7 +174,14 @@ def issue_of(db: Session, instance: PluginInstance) -> tuple[str, LocalServiceEr
 
     按状态说,不认识是哪个插件:正在装 / 还没装好 / 要重建(让 Mosael 装的那一份)、停着(用到时会起)、正在起、起不来
     (带它停下时的原因)、**进程在却没有应答**(健康检查不过 —— 只在它说自己在跑时问一次,本机回环,几毫秒)。"""
-    row = records.row_of(db, instance.id)
+    # 先看这一次安装、再读那一行(为什么见 status)
+    run = installer.current(instance.id)
+    busy = run.kind if run is not None and run.state == installer.INSTALLING else ""
+    return _issue(db, instance, busy, records.row_of(db, instance.id))
+
+
+def _issue(db: Session, instance: PluginInstance, busy: str, row: LocalService | None) -> tuple[str, LocalServiceError] | None:
+    """`issue_of` 的判断。`busy` 是**读这一行之前**看到的正在做的那一次:装、更新还是回退,没在做是空串。"""
     if row is None:
         return None
     name = _title(db, instance, row)
@@ -185,9 +192,8 @@ def issue_of(db: Session, instance: PluginInstance) -> tuple[str, LocalServiceEr
         return kind, LocalServiceError(ISSUE_KEYS[kind], name=name, **params)
 
     if row.mode == records.MANAGED:
-        run = installer.current(instance.id)
-        if run is not None and run.state == installer.INSTALLING:
-            return said("installing" if run.kind == installer.INSTALL else "updating")
+        if busy:
+            return said("installing" if busy == installer.INSTALL else "updating")
         if not row.python_minor:
             return said("not_installed")
         if needs_rebuild(row):
@@ -220,14 +226,20 @@ def _explain(db: Session, instance: PluginInstance) -> LocalServiceError | None:
 
 
 def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
-    """这个连接的本机服务:人定下的配置 + 进程此刻的状态。没用本机服务是 None。"""
+    """这个连接的本机服务:人定下的配置 + 进程此刻的状态。没用本机服务是 None。
+
+    **先看这一次安装、再读库里那一行。** 安装线程先把「装好了」(`python_minor`)提交进库、再报「成了」(见 `_install`);反过来读,
+    装完正好挤在两下之间就读到「成了」而 `installed` 还是 false —— 界面上装好了还摆着安装计划。这样读,最多读到「正在装」而
+    `installed` 已经是 true,下一次轮询就是「成了」。为什么用不了(`issue`)照同一份说,不再自己另看一次。"""
+    run = installer.current(instance.id)
+    install = run.snapshot() if run is not None else None
     row = records.row_of(db, instance.id)
     if row is None:
         return None
     process = supervisor.get(instance.id)
     state = process.state if process is not None else STOPPED
-    run = installer.current(instance.id)
-    found = issue_of(db, instance)
+    busy = install["kind"] if install is not None and install["state"] == installer.INSTALLING else ""
+    found = _issue(db, instance, busy, row)
     return {
         "instance_id": instance.id,
         "service": row.service,
@@ -258,7 +270,7 @@ def status(db: Session, instance: PluginInstance) -> dict[str, Any] | None:
         "python_minor": row.python_minor or "",
         "base_python_minor": base_minor() if row.mode == records.MANAGED else "",
         "needs_rebuild": needs_rebuild(row),
-        "install": run.snapshot() if run is not None and row.mode == records.MANAGED else None,
+        "install": install if row.mode == records.MANAGED else None,
         # 此刻用不了的话为什么(连接页的「出错了」、生成模型那一行、模型库、工作流库照它说,不说「检查地址」)
         "issue": {"kind": found[0], "text": str(found[1])} if found is not None else None,
     }
@@ -830,6 +842,7 @@ def _install(instance_id: str, service: str, base: str, flavour: str, run: insta
         payload = {**_plugin_payload(instance_id, row), "python": base, "flavour": flavour}
         plugin_ops.install(db, instance, service, payload, _hooks(run))
     _trial(instance_id, run)
+    # 记成装好要在这里提交完:这个函数返回了才报「成了」,看状态的照「先看这一次、再读这一行」的顺序读(见 status)
     with unit_of_work() as db:
         row = _require_row(db, inst.get(db, instance_id))
         row.python_minor = base_minor()
