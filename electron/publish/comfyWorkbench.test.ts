@@ -133,7 +133,9 @@ describe("工作台的桥(注入的脚本)", () => {
     expect(raw).toEqual({
       version: WORKBENCH_VERSION,
       capabilities: { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true,
-                      marks: true, changes: true, locate: true, subgraphs: true, readGraph: true },
+                      marks: true, changes: true, locate: true, subgraphs: true, readGraph: true,
+                      //: 这一页假前端没有 LiteGraph、loadGraphData、打包 / 拆开:改图那几样是 false(见 comfyWorkbenchEdits.test)
+                      applyOps: false, openWorkflow: false, toSubgraph: false, unpackSubgraph: false },
       workflow: { path: "workflows/人像/古风.json", name: "古风", temporary: false, modified: true, revision: 1 },
       selection: { count: 1, node: { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint", widgets: [
         { name: "ckpt_name", type: "combo", value: "a.safetensors", combo: true }] } },
@@ -236,7 +238,7 @@ describe("工作台的桥(注入的脚本)", () => {
     const raw = await call(page, { op: "readGraph" });
     expect(raw).toEqual({ ok: true, graph: {
       workflow, selection: ["3", "4"], modified: true, layer: null,
-      info: { name: "古风", path: "workflows/人像/古风.json" },
+      info: { name: "古风", path: "workflows/人像/古风.json", temporary: false },
     } });
     expect(parseWorkbenchResult({ op: "readGraph" }, raw)).toEqual({ ok: true, graph: {
       workflow, selection: ["3", "4"], modified: true, layer: null,

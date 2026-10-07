@@ -248,6 +248,134 @@ const NODE_PATH = /^-?\d{1,10}(?::\d{1,10}){1,16}$/;
 const SUBGRAPH_ID = /^[A-Za-z0-9_-]{1,64}$/;
 //: 写进画布的标记最大多大(整份;和宿主那一侧一个节点 2 MB 的上限同一个量级)
 const MAX_MARKS_CHARS = 8 * 1024 * 1024;
+//: 智能体改图(ADR 0042 第二步):一批最多几条、整批多大、一格值多长;新标签页里载入的一整张图多大(模板几百 KB)
+const MAX_EDIT_OPS = 200;
+const MAX_EDIT_CHARS = 2 * 1024 * 1024;
+const MAX_EDIT_VALUE = 20000;
+const MAX_OPEN_GRAPH_CHARS = 16 * 1024 * 1024;
+//: 这一批里新加的节点的临时名字
+const TEMP_NODE = /^\$[A-Za-z0-9_]{1,32}$/;
+//: 一批改动每一种带哪些字段(插件 canvas_edit 规整过的那一份;字段的形状下面逐项查)
+const EDIT_OPS = {
+  add_node: ["op", "layer", "id", "type", "widgets", "title", "near"],
+  remove_node: ["op", "layer", "node"],
+  connect: ["op", "layer", "from", "to"],
+  disconnect: ["op", "layer", "to"],
+  set_widget: ["op", "layer", "node", "widget", "value"],
+  set_title: ["op", "layer", "node", "title"],
+  mode: ["op", "layer", "node", "mode"],
+  add_io: ["op", "layer", "side", "name", "type"],
+  remove_io: ["op", "layer", "side", "name"],
+  promote: ["op", "layer", "node", "widget", "name"],
+  unpromote: ["op", "layer", "node", "widget"],
+  to_subgraph: ["op", "layer", "nodes", "name"],
+  unpack: ["op", "layer", "node"],
+};
+
+/** 一段名字(控件、口、类型、标题):非空、不带控制字符、有上限。 */
+function editName(value, key, channel, limit = 200) {
+  if (typeof value !== "string" || !value || value.length > limit || /[\x00-\x1f]/.test(value)) {
+    throw new TypeError(`${channel}: ${key} must be a name`);
+  }
+  return value;
+}
+
+/** 指一个节点:那一层里的编号,或者这一批里新加的临时名字。 */
+function editNode(value, key, channel) {
+  if (typeof value !== "string" || !(CANVAS_NODE.test(value) || TEMP_NODE.test(value))) {
+    throw new TypeError(`${channel}: ${key} must be a node id or a temporary name`);
+  }
+  return value;
+}
+
+/** 一格控件的值:文字(有上限)、有限的数、布尔。 */
+function editValue(value, key, channel) {
+  const ok = (typeof value === "string" && value.length <= MAX_EDIT_VALUE) || (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "boolean";
+  if (!ok) throw new TypeError(`${channel}: ${key} must be a string, a finite number or a boolean`);
+  return value;
+}
+
+/** 连线的一头:`{node, name}`,node 是节点、临时名字,或子图边界的 `@in` / `@out`。 */
+function editEnd(value, key, channel) {
+  const end = record(value, channel);
+  onlyKeys(end, ["node", "name"], channel);
+  if (end.node !== "@in" && end.node !== "@out") editNode(end.node, `${key}.node`, channel);
+  return { node: end.node, name: editName(end.name, `${key}.name`, channel) };
+}
+
+/**
+ * 智能体改图的一批(ADR 0042 第二步,插件 canvas_edit 规整过的)。每一条只认 EDIT_OPS 里那几个字段,逐项查形状;
+ * 节点在不在、口对不对、类型配不配由桥在页面里再查一遍(一条不对整批不改)。
+ */
+function parseEditOps(value, channel) {
+  if (!Array.isArray(value) || value.length > MAX_EDIT_OPS) throw new TypeError(`${channel}: ops must be a list of at most ${MAX_EDIT_OPS}`);
+  if (JSON.stringify(value).length > MAX_EDIT_CHARS) throw new TypeError(`${channel}: ops are too big`);
+  return value.map((raw) => {
+    const op = record(raw, channel);
+    const kind = oneOf(op, "op", Object.keys(EDIT_OPS), channel);
+    onlyKeys(op, EDIT_OPS[kind], channel);
+    const layer = op.layer === undefined || op.layer === null ? null : op.layer;
+    if (layer !== null && (typeof layer !== "string" || !SUBGRAPH_ID.test(layer))) throw new TypeError(`${channel}: layer must be a subgraph id`);
+    const out = { op: kind, layer };
+    if (kind === "add_node") {
+      if (typeof op.id !== "string" || !TEMP_NODE.test(op.id)) throw new TypeError(`${channel}: id must be a temporary name like $a`);
+      out.id = op.id;
+      out.type = editName(op.type, "type", channel);
+      const widgets = op.widgets === undefined ? {} : record(op.widgets, channel);
+      if (Object.keys(widgets).length > 64) throw new TypeError(`${channel}: too many widgets`);
+      out.widgets = Object.fromEntries(Object.entries(widgets).map(([name, one]) => [editName(name, "widget", channel), editValue(one, name, channel)]));
+      if (op.title !== undefined) out.title = editName(op.title, "title", channel);
+      if (op.near !== undefined) out.near = editNode(op.near, "near", channel);
+    } else if (kind === "connect") {
+      out.from = editEnd(op.from, "from", channel);
+      out.to = editEnd(op.to, "to", channel);
+    } else if (kind === "disconnect") {
+      out.to = editEnd(op.to, "to", channel);
+    } else if (kind === "add_io" || kind === "remove_io") {
+      out.side = oneOf(op, "side", ["input", "output"], channel);
+      out.name = editName(op.name, "name", channel, 100);
+      if (kind === "add_io") out.type = editName(op.type, "type", channel, 100);
+    } else if (kind === "to_subgraph") {
+      if (!Array.isArray(op.nodes) || !op.nodes.length || op.nodes.length > 500) throw new TypeError(`${channel}: nodes must be a list`);
+      out.nodes = op.nodes.map((one) => editNode(one, "nodes", channel));
+      if (op.name !== undefined) out.name = editName(op.name, "name", channel, 100);
+    } else {
+      out.node = editNode(op.node, "node", channel);
+      if (kind === "set_widget") {
+        out.widget = editName(op.widget, "widget", channel);
+        out.value = editValue(op.value, "value", channel);
+      } else if (kind === "set_title") {
+        out.title = editName(op.title, "title", channel);
+      } else if (kind === "mode") {
+        out.mode = oneOf(op, "mode", [0, 2, 4], channel);
+      } else if (kind === "promote" || kind === "unpromote") {
+        out.widget = editName(op.widget, "widget", channel);
+        if (kind === "promote") out.name = editName(op.name, "name", channel, 100);
+      }
+    }
+    return out;
+  });
+}
+
+/**
+ * 在新标签页开一张(ADR 0042 第二步):`graph`(界面格式,有 `nodes`)加 `name`(标签的名字,不带路径分隔),再改一批 `ops`;
+ * 或者只给 `path`,打开存着的那一张(和工作台「打开」同一套路径规矩)。两样不能都给。
+ */
+function parseOpenWorkflow(call, channel) {
+  onlyKeys(call, ["op", "graph", "name", "path", "ops"], channel);
+  const path = call.path === undefined || call.path === null ? null : comfyWorkflowPath(call.path, channel);
+  const graph = call.graph === undefined || call.graph === null ? null : record(call.graph, channel);
+  if (Boolean(path) === Boolean(graph)) throw new TypeError(`${channel}: give either graph or path`);
+  if (graph && (!Array.isArray(graph.nodes) || JSON.stringify(graph).length > MAX_OPEN_GRAPH_CHARS)) {
+    throw new TypeError(`${channel}: graph must be a UI workflow`);
+  }
+  const name = call.name === undefined || call.name === "" ? "" : editName(call.name, "name", channel, 120);
+  if (/[\\/]/.test(name)) throw new TypeError(`${channel}: name must not contain a path separator`);
+  const ops = call.ops === undefined ? [] : parseEditOps(call.ops, channel);
+  if (path && ops.length) throw new TypeError(`${channel}: ops only go with a new graph`);
+  return { op: "openWorkflow", graph: graph ? JSON.parse(JSON.stringify(graph)) : null, name, path, ops };
+}
 
 /**
  * 工作台面板要桥做的一件事。**只认这几种,每一种的字段逐项校验**;数据随后由主进程以 JSON 编码嵌进写死的调用脚本,
@@ -258,7 +386,9 @@ const MAX_MARKS_CHARS = 8 * 1024 * 1024;
  * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null);
  * - locate:节点号加子图的 id(那一层里的编号),或者不给子图、节点写成从根图往里走的路径(`12:5`);
  * - readGraph:不带别的(整张图交给智能体读,ADR 0042;后端排的工作台动作也经这里查过才进桥,见 browserWorker);
- * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子)。
+ * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子);
+ * - applyOps:智能体改图的一批(见 parseEditOps);openWorkflow:在新标签页开一张(见 parseOpenWorkflow)。两样都是后端排的
+ *   工作台动作经执行器送进来的(ADR 0042 第二步),照样逐项查过。
  */
 function parseComfyWorkbenchCall(value) {
   const channel = IPC.invoke.comfyuiWorkbenchCall;
@@ -266,7 +396,15 @@ function parseComfyWorkbenchCall(value) {
   onlyKeys(payload, ["connectionId", "call"], channel);
   const partition = comfyPartition(payload, channel);
   const call = record(payload.call, channel);
-  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "readGraph", "runControls"], channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "readGraph", "runControls",
+    "applyOps", "openWorkflow"], channel);
+  if (op === "applyOps") {
+    onlyKeys(call, ["op", "ops"], channel);
+    const ops = parseEditOps(call.ops, channel);
+    if (!ops.length) throw new TypeError(`${channel}: ops must not be empty`);
+    return { partition, call: { op, ops } };
+  }
+  if (op === "openWorkflow") return { partition, call: parseOpenWorkflow(call, channel) };
   if (op === "setWidget") {
     onlyKeys(call, ["op", "node", "widget", "value"], channel);
     if (typeof call.node !== "string" || !CANVAS_NODE.test(call.node)) throw new TypeError(`${channel}: node must be a node id`);

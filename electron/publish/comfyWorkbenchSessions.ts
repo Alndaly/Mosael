@@ -36,6 +36,10 @@ const CALL_BUDGET_MS: Record<WorkbenchCall["op"], number> = {
   runControls: 5_000,
   //: 智能体读整张图:和导出一样走 graphToPrompt
   readGraph: 60_000,
+  //: 智能体改图:一批几十条、打包子图要重排连线,几秒内做完;卡住了不能让后端一直等
+  applyOps: 30_000,
+  //: 开一张新的:载入一整张模板,前端还要扫一遍缺的模型
+  openWorkflow: 60_000,
 };
 
 type Driver = Pick<PageDriver, "evaluate">;

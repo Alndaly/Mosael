@@ -192,6 +192,52 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "runControls", phase: "after", hook: "alert(1)" })).toThrow(/unexpected/);
     expect(() => contract.parseComfyWorkbenchCall({ connectionId: "../x", call: { op: "save" } })).toThrow(/connectionId/);
 
+    // 智能体改图(ADR 0042 第二步):插件规整过的一批,每一种只认那几个字段;节点是编号或临时名字,值只收标量
+    const sub = "8f1c0e2a-9b7d-4c51";
+    const ops = [
+      { op: "add_node", layer: null, id: "$l", type: "LoraLoader", widgets: { strength_model: 0.6 }, near: "4" },
+      { op: "connect", layer: null, from: { node: "4", name: "MODEL" }, to: { node: "$l", name: "model" } },
+      { op: "connect", layer: sub, from: { node: "@in", name: "seed" }, to: { node: "5", name: "seed" } },
+      { op: "disconnect", layer: sub, to: { node: "@out", name: "IMAGE" } },
+      { op: "set_widget", layer: null, node: "3", widget: "steps", value: 30 },
+      { op: "set_title", layer: null, node: "3", title: "采样" },
+      { op: "mode", layer: null, node: "8", mode: 4 },
+      { op: "add_io", layer: sub, side: "output", name: "LATENT", type: "LATENT" },
+      { op: "remove_io", layer: sub, side: "input", name: "negative" },
+      { op: "promote", layer: sub, node: "5", widget: "cfg", name: "cfg" },
+      { op: "unpromote", layer: sub, node: "5", widget: "steps" },
+      { op: "to_subgraph", layer: null, nodes: ["3", "8"], name: "采样" },
+      { op: "unpack", layer: null, node: "12" },
+    ];
+    expect(callOf({ op: "applyOps", ops }).call).toEqual({ op: "applyOps", ops });
+    expect(callOf({ op: "applyOps", ops: [{ op: "remove_node", node: "7" }] }).call.ops, "不给 layer 就是根图")
+      .toEqual([{ op: "remove_node", layer: null, node: "7" }]);
+    expect(() => callOf({ op: "applyOps", ops: [] })).toThrow(/empty/);
+    expect(() => callOf({ op: "applyOps", ops: Array.from({ length: 201 }, () => ops[4]) })).toThrow(/at most/);
+    expect(() => callOf({ op: "applyOps", ops: [{ op: "eval", layer: null }] })).toThrow(/op/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[4], script: "alert(1)" }] })).toThrow(/unexpected/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[4], node: "3; alert(1)" }] })).toThrow(/node/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[4], value: { evil: true } }] })).toThrow(/value/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[4], layer: 'x"); alert(1)' }] })).toThrow(/layer/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[0], id: "l" }] }), "临时名字以 $ 开头").toThrow(/temporary/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[1], to: { node: "$l", name: "model", slot: 0 } }] })).toThrow(/unexpected/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[6], mode: 1 }] })).toThrow(/mode/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[7], side: "both" }] })).toThrow(/side/);
+    // 在新标签页开一张:整图 + 名字(+ 一批改动),或者存着的那一张的路径
+    const graph = { nodes: [{ id: 3, type: "KSampler" }], links: [] };
+    expect(callOf({ op: "openWorkflow", graph, name: "Qwen 编辑" }).call)
+      .toEqual({ op: "openWorkflow", graph, name: "Qwen 编辑", path: null, ops: [] });
+    expect(callOf({ op: "openWorkflow", graph, name: "搭的", ops: [ops[4]] }).call.ops).toEqual([ops[4]]);
+    expect(callOf({ op: "openWorkflow", path: "人像/古风.json" }).call)
+      .toEqual({ op: "openWorkflow", graph: null, name: "", path: "人像/古风.json", ops: [] });
+    expect(() => callOf({ op: "openWorkflow", graph, path: "a.json" }), "两样只能给一样").toThrow(/either/);
+    expect(() => callOf({ op: "openWorkflow", name: "x" })).toThrow(/either/);
+    expect(() => callOf({ op: "openWorkflow", graph: { links: [] } })).toThrow(/UI workflow/);
+    expect(() => callOf({ op: "openWorkflow", graph, name: "../escape" })).toThrow(/separator/);
+    expect(() => callOf({ op: "openWorkflow", path: "../x.json" })).toThrow(/path/);
+    expect(() => callOf({ op: "openWorkflow", path: "a.json", ops: [ops[4]] }), "存着的那一张不在这里改").toThrow(/ops/);
+    expect(() => callOf({ op: "openWorkflow", graph, save: true })).toThrow(/unexpected/);
+
     // 挪位置:只有 x/y。
     expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
     // 认不出的字段一律拒收,不能「半懂地执行」:开发时渲染层热更新、主进程不重启,两边常常不是同一版。
