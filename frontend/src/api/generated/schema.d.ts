@@ -12132,8 +12132,6 @@ export interface components {
             model: string;
             /** Model Label */
             model_label: string;
-            /** Label */
-            label: string;
             group?: components["schemas"]["EntryGroupOut"] | null;
             /** Capabilities */
             capabilities?: {

@@ -7,6 +7,7 @@ import { drawEntity, fetchWorkflowFieldOptions, type Entity, type EntityDrawRequ
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { entryNamedOptions } from "@/lib/entryNames";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,7 +185,7 @@ function DrawDialog({
               ariaLabel={t("entityDrawModel")}
               value={model}
               onChange={setModel}
-              options={[{ value: DEFAULT_MODEL, label: t("entityDrawDefaultModel") }, ...(models.data ?? [])]}
+              options={[{ value: DEFAULT_MODEL, label: t("entityDrawDefaultModel") }, ...entryNamedOptions(models.data ?? [], t)]}
             />
           )}
           <span className="text-ui-xs text-muted-foreground">{t("entityDrawModelHint")}</span>

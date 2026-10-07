@@ -178,7 +178,7 @@ async function openDetail(name = "detail.safetensors", metadata: Record<string, 
 function workflow(model: string, slots: Record<string, { folder: string; options: string[] }>) {
   return {
     id: `p9:image:${model}`, provider_profile_id: "p9", profile_name: "ComfyUI · 192.168.3.15", provider: "plugin:dev.mosael.comfyui",
-    kind: "image", model, label: `ComfyUI · 192.168.3.15 · ${model.replace(/\.json$/, "")}`, plugin_instance_id: "i1",
+    kind: "image", model, model_label: model.replace(/\.json$/, ""), plugin_instance_id: "i1",
     capabilities: {
       modes: ["text-to-image"],
       parameter_keys: Object.keys(slots),

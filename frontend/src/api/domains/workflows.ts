@@ -107,12 +107,23 @@ export function runWorkflow(workflowId: string, params: Record<string, unknown> 
  * 所有这种字段走这一个接口 —— 前端不按节点类型写特例。
  */
 /** 一个字段的动态选项。`parent` 是它依赖的那个字段的值;后两样是上下文(见后端 OptionContext)。 */
+/** 工作流字段的一项现查选项。按生成选项列的那几种(资产「补全多角度」、说话、对口型)多带两层名字的另外几格(ADR 0045,
+ *  界面怎么摆见 lib/entryNames 的 entryNamedOptions)。 */
+export type FieldOption = {
+  value: string;
+  label: string;
+  model?: string;
+  profile_name?: string;
+  /** 是哪张工作流的哪个入口(不叫 `group`:下拉选项的 `group` 是分组标题)。 */
+  entry_group?: components["schemas"]["EntryGroupOut"] | null;
+};
+
 export function fetchWorkflowFieldOptions(
   source: string,
   workspaceId: string,
   parent = "",
   context: { nodeType?: string; workflowId?: string } = {},
-): Promise<Array<{ value: string; label: string }>> {
+): Promise<FieldOption[]> {
   const params = new URLSearchParams({
     source,
     workspace_id: workspaceId,

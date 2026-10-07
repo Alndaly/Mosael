@@ -29,6 +29,8 @@ type Option = {
   style?: React.CSSProperties;
   /** 行首的一张小图(模型文件的缩略图),比 `icon` 大一号。 */
   media?: React.ReactNode;
+  /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。顺序仍由提供选项的一方定。 */
+  indent?: boolean;
 };
 
 /**
@@ -249,6 +251,8 @@ export function SearchableSelect({
                     onValueChange(item.value);
                     setOpen(false);
                   }}
+                  className={item.indent ? "pl-6" : undefined}
+                  data-indent={item.indent ? "" : undefined}
                 >
                   {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
                       而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}

@@ -334,7 +334,6 @@ export function previewOption(data: WorkflowApp, draft: AppDraft, instanceId: st
     kind: data.kind || "image",
     model: data.path,
     model_label: draft.title.trim() || data.path,
-    label: draft.title.trim() || data.path,
     capabilities,
     adapter_available: true,
     capabilities_known: true,

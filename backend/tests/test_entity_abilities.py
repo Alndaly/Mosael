@@ -20,11 +20,14 @@ from tests.util import fresh_client, seed_assets
 
 REFERENCE_CAPS = {"parameter_keys": ["prompt", "reference_image"], "source_limits": {"reference_image": 4}}
 OPTIONS = [
-    {"id": "p1:image:edit", "provider": "vendor", "provider_profile_id": "p1", "model": "edit", "label": "连接 · 能改图",
+    {"id": "p1:image:edit", "provider": "vendor", "provider_profile_id": "p1", "model": "edit", "model_label": "能改图",
+     "profile_name": "连接", "group": None,
      "is_default": True, "adapter_available": True, "capabilities": REFERENCE_CAPS},
-    {"id": "p1:image:t2i", "provider": "vendor", "provider_profile_id": "p1", "model": "t2i", "label": "连接 · 只看字",
+    {"id": "p1:image:t2i", "provider": "vendor", "provider_profile_id": "p1", "model": "t2i", "model_label": "只看字",
+     "profile_name": "连接", "group": None,
      "is_default": False, "adapter_available": True, "capabilities": {"parameter_keys": ["prompt"]}},
-    {"id": "p2:image:edit", "provider": "other", "provider_profile_id": "p2", "model": "edit", "label": "另一家 · 能改图",
+    {"id": "p2:image:edit", "provider": "other", "provider_profile_id": "p2", "model": "edit", "model_label": "能改图",
+     "profile_name": "另一家", "group": None,
      "is_default": False, "adapter_available": True, "capabilities": REFERENCE_CAPS},
 ]
 
@@ -172,9 +175,9 @@ def test_模型下拉只列收参考图的_默认那个标出来(setup) -> None:
     with unit_of_work() as db:
         options = field_options(db, "reference_image_models", ctx)
     assert options == [
-        {"value": "p1:image:edit", "label": "连接 · 能改图 · 默认"},
-        {"value": "p2:image:edit", "label": "另一家 · 能改图"},
-    ]
+        {"value": "p1:image:edit", "label": "能改图 · 默认", "model": "edit", "profile_name": "连接", "entry_group": None},
+        {"value": "p2:image:edit", "label": "能改图", "model": "edit", "profile_name": "另一家", "entry_group": None},
+    ], "主名和「默认」;连接名、是哪张工作流的哪个入口原样带上,界面摆成第二行(ADR 0045),不拼成一句"
 
 
 def test_画板上是资产格的能力_宿主给的是它引用的资产_要花钱() -> None:
@@ -251,7 +254,7 @@ def test_默认图片模型不收参考图_留空时用第一个收参考图的_
     assert {call["provider_profile_id"] for call in fake.calls} == {"p1"} and fake.calls[0]["model"] == "edit"
     with unit_of_work() as db:
         listed = field_options(db, "reference_image_models", OptionContext(workspace_id=ws, user_id=None, parent="", locale="zh"))
-    assert [one["label"] for one in listed] == ["连接 · 能改图 · 默认", "另一家 · 能改图"]
+    assert [(one["label"], one["profile_name"]) for one in listed] == [("能改图 · 默认", "连接"), ("能改图", "另一家")]
 
     monkeypatch.setattr(resolution, "generation_options",
                         lambda db, kind, user_id=None: [one for one in options if one["id"] == "p1:image:t2i"])

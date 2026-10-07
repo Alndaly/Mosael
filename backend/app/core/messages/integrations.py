@@ -518,6 +518,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "运行插件工具「{tool}」(连接「{connection}」){args}{warning}",
         "en": "Run the plugin tool “{tool}” (connection “{connection}”){args}{warning}",
     },
+    #: 表单入口的工具:来自哪张工作流也说出来(ADR 0045:名字分两层,这句话里两层都说)
+    "confirm_runPluginToolFrom": {
+        "zh": "运行插件工具「{tool}」(来自 {origin},连接「{connection}」){args}{warning}",
+        "en": "Run the plugin tool “{tool}” (from {origin}, connection “{connection}”){args}{warning}",
+    },
     "confirm_pluginToolArgs": {"zh": ",参数:{args}", "en": ", with {args}"},
     "confirm_externalNodes": {
         "zh": "  ⚠️ 含{labels}节点(后果在本应用之外,撤不回)",

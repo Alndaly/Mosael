@@ -952,6 +952,23 @@ function CardMenuButton({ menu, className }: { menu: CardMenu; className?: strin
   );
 }
 
+/** 这张工作流上那张表单的标题(ADR 0045:表单是它的一个入口)。没有表单、表单没起标题是空串。 */
+function formTitle(flow: WorkflowFile): string {
+  return flow.app?.status === "ok" && flow.app.app ? (flow.app.title ?? "").trim() : "";
+}
+
+/** 名字下面一行淡色小字「表单:快速用krea2生图」—— AI Studio、画板里看到的表单名,在库里找得到是哪张工作流。 */
+function FormTitleLine({ flow }: { flow: WorkflowFile }) {
+  const t = useI18n();
+  const title = formTitle(flow);
+  if (!title) return null;
+  return (
+    <span data-workflow-form-title="" className="block min-w-0 text-ui-2xs text-muted-foreground">
+      <Truncate>{t("workflowFormTitleLine").replace("{title}", title)}</Truncate>
+    </span>
+  );
+}
+
 /**
  * 一张卡:节点图缩略预览(4:3,整张图塞进去不裁)、名字(一行截断,悬停看全路径)、种类在左、节点数在右;缺东西的再一行。
  * 大卡片多一行:最近一次的产出、Mosael 里几处在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
@@ -993,6 +1010,7 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
             <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
           </button>
         </h3>
+        <FormTitleLine flow={flow} />
         <div className="flex h-6 min-w-0 items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1">
             <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
@@ -1108,6 +1126,7 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
                 >
                   <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
                 </button>
+                <FormTitleLine flow={flow} />
               </td>
               {folders && (
                 <td className={cn(cell, "text-ui-xs text-muted-foreground", wide)}>
@@ -1304,6 +1323,7 @@ function WorkflowDetail({
           {flow.folder && <span>{flow.folder}</span>}
           {flow.folder && <span aria-hidden>·</span>}
           <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
+          {formTitle(flow) && <span data-workflow-form-title="">{t("workflowFormTitleLine").replace("{title}", formTitle(flow))}</span>}
           <span className="tabular-nums">{t("workflowLibraryNodes").replace("{n}", String(flow.node_count))}</span>
           {flow.modified != null && <span aria-hidden>·</span>}
           {flow.modified != null && <span className="tabular-nums">{new Date(flow.modified * 1000).toLocaleString(locale)}</span>}

@@ -65,7 +65,7 @@ function imageOption(model: string, capabilities: Record<string, unknown>, kind 
     provider: "plugin:dev.mosael.comfyui",
     kind,
     model,
-    label: `ComfyUI · ${model}`,
+    model_label: model,
     capabilities,
     capabilities_known: true,
     adapter_available: adapterAvailable,
@@ -149,7 +149,7 @@ describe("提示词要不要写,照模型说的摆", () => {
     const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
     expect(box).toHaveAttribute("placeholder", "promptPlaceholder");
     await waitFor(() => expect(screen.getByText("promptPlaceholder")).toBeInTheDocument());
-    await waitFor(() => expect(screen.getAllByText("ComfyUI · upscale.json").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("upscale.json").length).toBeGreaterThan(0));
     const submit = screen.getByRole("button", { name: "generate" });
     expect(submit).toBeDisabled();
     await user.type(box, "一只猫");

@@ -328,7 +328,7 @@ def test_接上之后_插件的模型出现在选择器里(plugged) -> None:
     images = _options(client, "image")
     assert [one["model"] for one in images] == ["flows/portrait.json"]
     portrait = images[0]
-    assert portrait["label"] == "测试生成 · alpha · 人像"
+    assert (portrait["profile_name"], portrait["model_label"]) == ("测试生成 · alpha", "人像")
     assert portrait["adapter_available"] is True and portrait["capabilities_known"] is True
     caps = portrait["capabilities"]
     assert caps["parameter_keys"] == [

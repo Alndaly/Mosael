@@ -384,7 +384,8 @@ def _create_generation_job(
         kind="ai_generation",
         created_by=created_by,
         payload={
-            "subject": (prompt or prompt_for_provider(request_text))[:80] or model[:80],
+            #: 没写提示词时写模型叫什么(主名:表单入口是表单标题,ADR 0045),不写模型 id —— 表单入口的 id 是 `路径#app`
+            "subject": (prompt or prompt_for_provider(request_text))[:80] or (resolved.row.display_name or model)[:80],
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,

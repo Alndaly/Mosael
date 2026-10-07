@@ -249,7 +249,7 @@ def _reference_model(db: Session, choice: str, actor_id: str | None) -> dict[str
     if picked is None:
         raise WorkflowDomainError("wfErr_entityModelMissing")
     if not takes_reference_images(picked):
-        raise WorkflowDomainError("wfErr_entityModelNoReferences", params={"model": picked["label"]})
+        raise WorkflowDomainError("wfErr_entityModelNoReferences", params={"model": picked["model_label"]})
     return picked
 
 

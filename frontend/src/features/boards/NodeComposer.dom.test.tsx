@@ -21,7 +21,7 @@ it("edits parameters in the settings popup, persists them after closing, and sub
   const onFormChange = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", plugin_instance_id: "", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {
+    models={[{ id: "model", provider_profile_id: "profile", plugin_instance_id: "", profile_name: "Test", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {
       parameter_keys: ["aspect_ratio", "generate_audio"], aspect_ratios: ["16:9", "9:16"], default_aspect_ratio: "16:9",
     } } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
@@ -46,7 +46,7 @@ it("把模型旁那枚图标画在触发器里面 —— 装饰和控件必须�
   // 正是那两个高亮框合成一个的充分条件 —— 内边距、hover、焦点环都由触发器这一个盒子出。
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={vi.fn()}
   />);
   const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("a-long-video-model-name"));
@@ -87,7 +87,7 @@ it("存着的模型已经不在可选清单里时,选择器显示的就是实际
   const onSubmit = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise", form: { prompt: "A sunrise", provider_profile_id: "gone", model: "retired-model" } } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
   />);
 
@@ -102,7 +102,7 @@ it("没设默认模型时不拿清单第一项顶上:显示「选择模型」,�
   // claude-opus-4-6,而用户在设置里设过的默认生图模型被晾在一边。
   const onSubmit = vi.fn();
   const option = (model: string) => ({
-    id: model, provider_profile_id: "relay", profile_name: "147ai", label: model,
+    id: model, provider_profile_id: "relay", profile_name: "147ai",
     adapter_available: true, is_default: false, capabilities_known: true,
     provider: "openai-compatible", model, model_label: model, kind: "image", capabilities: {},
   } as GenerationOption);
@@ -175,29 +175,43 @@ it("尺寸只是推荐值时可以手填 —— 768x1024 照写的发出去", as
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ size: "768x1024" }) }));
 });
 
-it("模型下拉写给人看的名字:ComfyUI 工作流起了精简表单就叫表单标题,按标题搜得到,不写文件名", async () => {
-  // 维护者:起了「快速用krea2生图」,画板里搜「快速」无匹配项,下拉写的还是 krea2-text-2-image.json
+it("模型下拉两层名字:主名是表单标题 / 工作流名,第二行说来自哪张工作流、哪台服务器;按表单标题、工作流名都搜得到", async () => {
+  // 维护者(ADR 0045):起了「快速用krea2生图」,到处只叫表单名 —— 认不出是哪张图,也拿不到全部参数。现在同一张工作流两项:
+  // 完整工作流(主名是工作流名,第二行「完整工作流 · 连接名」)和表单(主名是表单标题,第二行「来自 krea2-text-2-image · 连接名」)
   HTMLElement.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
+  const option = (model: string, name: string, extra: Partial<GenerationOption>) => ({
+    id: `p:image:${model}`, provider_profile_id: "p", plugin_instance_id: "", profile_name: "ComfyUI · http://192.168.3.15:8188",
+    adapter_available: true, is_default: false, capabilities_known: true, provider: "plugin:dev.mosael.comfyui", model,
+    model_label: name, kind: "image", capabilities: { prompt: "optional", parameter_keys: [] }, ...extra,
+  } as GenerationOption);
   render(<NodeComposer
     item={{ id: "image", kind: "image", text: "" } as BoardItem}
-    models={["快速用krea2生图", ...Array.from({ length: 12 }, (_, index) => `工作流 ${index}`)].map((name, index) => ({
-      id: `m${index}`, provider_profile_id: "p", plugin_instance_id: "", profile_name: "ComfyUI · http://192.168.3.15:8188",
-      label: `ComfyUI · http://192.168.3.15:8188 · ${name}`, adapter_available: true, is_default: index === 0, capabilities_known: true,
-      provider: "plugin:dev.mosael.comfyui", model: index === 0 ? "krea2-text-2-image.json" : `flow-${index}.json`, model_label: name,
-      kind: "image", capabilities: { prompt: "optional", parameter_keys: [] },
-    } as GenerationOption))}
+    models={[
+      option("krea2-text-2-image.json", "krea2-text-2-image", { group: { ...group, entry: "full" } }),
+      option("krea2-text-2-image.json#app", "快速用krea2生图", { group: { ...group, entry: "form" }, is_default: true }),
+      ...Array.from({ length: 11 }, (_, index) => option(`flow-${index}.json`, `工作流 ${index}`, {})),
+    ]}
     busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={vi.fn()}
   />);
   const picker = screen.getAllByRole("combobox").find((one) => one.querySelector("svg.lucide-sparkles"))!;
-  expect(picker.textContent).toContain("快速用krea2生图 · ComfyUI");
+  expect(picker.textContent).toContain("快速用krea2生图");
   expect(picker.textContent).not.toContain(".json");
+  //: 触发器只写主名,第二行只在清单里
+  expect(picker.textContent).not.toContain("ComfyUI ·");
   fireEvent.click(picker);
   const search = await waitFor(() => {
     const input = document.querySelector<HTMLInputElement>("[role=dialog] input, [role=listbox] input, input[cmdk-input]");
     expect(input).not.toBeNull();
     return input!;
   });
+  const form = await screen.findByRole("option", { name: /快速用krea2生图/ });
+  expect(form.textContent).toContain("entryFromGroup");
+  expect(form).toHaveAttribute("data-indent");
+  expect((await screen.findByRole("option", { name: /^krea2-text-2-image/ })).textContent).toContain("entryFullWorkflow");
   fireEvent.change(search, { target: { value: "快速" } });
-  expect(await screen.findByRole("option", { name: /快速用krea2生图/ })).toBeTruthy();
+  await waitFor(() => expect(screen.getAllByRole("option").map((one) => one.textContent?.split("entry")[0])).toEqual(["快速用krea2生图"]));
+  fireEvent.change(search, { target: { value: "krea2-text" } });
+  await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
 });

@@ -19,7 +19,7 @@ vi.mock("@tanstack/react-query", () => ({
 afterEach(cleanup);
 
 const model = {
-  id: "m", provider_profile_id: "p", profile_name: "T", label: "L", adapter_available: true, is_default: true, capabilities_known: true,
+  id: "m", provider_profile_id: "p", profile_name: "T", adapter_available: true, is_default: true, capabilities_known: true,
   provider: "test", model: "img", model_label: "img", kind: "image", capabilities: {},
 } as GenerationOption;
 

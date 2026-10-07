@@ -13,14 +13,18 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
  *   原因还在。
  */
 
-vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
-  usePreferences: () => ({ locale: "zh-CN" }),
-}));
+//: 文案键原样回;两层名字的副名(ADR 0045)那两句给真话,断言才读得出「来自 X」
+vi.mock("@/app/preferences", () => {
+  const said: Record<string, string> = { entryFromGroup: "来自 {name}", entryFullWorkflow: "完整工作流" };
+  return {
+    useI18n: () => (key: string) => said[key] ?? key,
+    usePreferences: () => ({ locale: "zh-CN" }),
+  };
+});
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
-import { readHint } from "@/test/hint";
+import { hoverHint, readHint } from "@/test/hint";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -234,23 +238,30 @@ describe("花费那一句照实说:花了多少 / 未定价 / 未扣费", () => 
 
 describe("每一条生成下面写的是给人看的名字", () => {
   //: 维护者:用精简表单「快速用krea2生图」生成,下面却写着「plugin:dev.mosael.comfyui · krea2-text-2-image.json」
-  it("写连接名和模型名(精简表单的标题),不写供应商 id 和文件名;连接没了才落回 id", async () => {
-    const comfy = { ...IMAGE_OPTION, id: "p9:image:krea2-text-2-image.json", provider_profile_id: "p9",
+  it("脚注写主名(表单标题),悬停写副名(来自哪张工作流、哪台服务器);不写供应商 id 和文件名;连接没了才落回 id", async () => {
+    //: ADR 0045:名字分两层,一行的地方写主名,副名进悬停说明 —— 不拼成「连接名 · 工作流名 · 表单名」
+    const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
+    const comfy = { ...IMAGE_OPTION, id: "p9:image:krea2-text-2-image.json#app", provider_profile_id: "p9",
                     profile_name: "ComfyUI · http://192.168.3.15:8188", provider: "plugin:dev.mosael.comfyui",
-                    model: "krea2-text-2-image.json", model_label: "快速用krea2生图",
-                    label: "ComfyUI · http://192.168.3.15:8188 · 快速用krea2生图", is_default: false };
+                    model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", group: { ...group, entry: "form" },
+                    is_default: false };
+    const full = { ...comfy, id: "p9:image:krea2-text-2-image.json", model: "krea2-text-2-image.json",
+                   model_label: "krea2-text-2-image", group: { ...group, entry: "full" } };
     const record = (id: string, prompt: string, profile: string) => ({
       id, workspace_id: "w1", session_id: "s1", job_id: null, provider_profile_id: profile, provider: "plugin:dev.mosael.comfyui",
-      model: "krea2-text-2-image.json", kind: "image", request: { prompt }, result_asset_id: "a1", result_asset_ids: ["a1"], error: null,
-      created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z",
+      model: "krea2-text-2-image.json#app", kind: "image", request: { prompt }, result_asset_id: "a1", result_asset_ids: ["a1"],
+      error: null, created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z",
     });
-    renderStudio({ options: [IMAGE_OPTION, comfy], generations: [record("g1", "连接还在", "p9"), record("g2", "连接删了", "gone")] });
+    renderStudio({ options: [IMAGE_OPTION, full, comfy], generations: [record("g1", "连接还在", "p9"), record("g2", "连接删了", "gone")] });
     const footer = async (prompt: string) =>
       (await screen.findAllByText(prompt)).map((one) => one.closest("article")!).find(Boolean)!;
     const named = await footer("连接还在");
-    await waitFor(() => expect(named.textContent).toContain("ComfyUI · http://192.168.3.15:8188 · 快速用krea2生图"));
+    await waitFor(() => expect(named.querySelector("[data-engine-name]")?.textContent).toBe("快速用krea2生图"));
     expect(named.textContent).not.toContain("plugin:dev.mosael.comfyui");
-    expect((await footer("连接删了")).textContent).toContain("plugin:dev.mosael.comfyui · krea2-text-2-image.json");
+    expect(named.textContent).not.toContain("ComfyUI · http://192.168.3.15:8188");
+    expect(await hoverHint(named.querySelector("[data-engine-name]") as HTMLElement))
+      .toContain("来自 krea2-text-2-image · ComfyUI · http://192.168.3.15:8188");
+    expect((await footer("连接删了")).textContent).toContain("plugin:dev.mosael.comfyui · krea2-text-2-image.json#app");
   });
 });
 

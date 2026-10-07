@@ -88,7 +88,7 @@ function library(models: ModelFile[] = [
 function workflow(id: string, options: string[]) {
   return {
     id: `p9:image:${id}`, provider_profile_id: "p9", profile_name: "ComfyUI", provider: "plugin:dev.mosael.comfyui",
-    kind: "image", model: id, label: `ComfyUI · ${id.replace(/\.json$/, "")}`, plugin_instance_id: "i1",
+    kind: "image", model: id, model_label: id.replace(/\.json$/, ""), plugin_instance_id: "i1",
     capabilities: {
       modes: ["text-to-image"], parameter_keys: ["9.lora_name"],
       parameter_schema: { "9.lora_name": { type: "string", title: "lora", enum: options, "x-model-folder": "loras" } },

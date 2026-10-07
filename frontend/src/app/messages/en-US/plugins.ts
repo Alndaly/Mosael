@@ -250,6 +250,8 @@ export const plugins = {
   pluginCodeFormat: "Format",
   pluginCodeClear: "Clear",
   pluginJsonError: "Line {line}, column {column}: {detail}",
+  pluginToolNotForAgent: "Not for the agent",
+  pluginToolNotForAgentHint: "This workflow has a form, so the agent gets the form's entry; workflow nodes and boards can still use the full workflow",
   pluginToolReadOnly: "read-only",
   pluginToolNeedsConfirm: "Asks first",
   pluginToolEffectPaid: "The agent asks you before calling it: it costs money or paid compute",
@@ -679,6 +681,7 @@ export const plugins = {
   workflowWorkbenchFailed: "Couldn't open the workbench",
   // App form (ADR 0038): the author picks the items others fill in, kept in the workflow's own JSON
   workflowApp: "Simplified form",
+  workflowFormTitleLine: "Form: {title}",
   workflowAppBadge: "Simplified form",
   workflowAppEdit: "Edit simplified form",
   workflowAppEditHint: "Pick the few items people fill in, name and order them. When this workflow is used in AI Studio, boards or workflow nodes, or the agent calls it, only these are shown",

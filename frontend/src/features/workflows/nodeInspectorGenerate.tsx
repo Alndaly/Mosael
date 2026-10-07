@@ -2,7 +2,6 @@ import React from "react";
 
 import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Combobox } from "@/components/app/combobox";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { declaredChoices } from "@/components/generation/parameterPanel";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
@@ -52,6 +51,7 @@ import {
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { formedGroups, generationOptionKeywords, generationOptionNames } from "@/lib/entryNames";
 import { GENERATION_KIND_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 
 //: 节点检查器里「AI 生成素材」的专区:选模型、按模型能力铺参数、按角色挂输入素材。
@@ -347,6 +347,7 @@ export function generateNodeSection({
     genSourceRoles,
     genExtraSourceLines,
   } = gen;
+  const formed = formedGroups(generationModels.options);
   return (
     <div className="grid min-w-0 gap-2">
       <div className={FIELD_BOX}>
@@ -354,16 +355,26 @@ export function generateNodeSection({
           {t("wfGenModel")}
           <em className="font-bold not-italic text-destructive">*</em>
         </span>
-        <Combobox
+        {/* 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪张工作流、哪台服务器;按种类分组,
+            同一张工作流的表单入口挂在完整工作流下面。和 AI Studio、画板同一种样子、同样的搜索。 */}
+        <OptionPicker
           value={genModel?.id ?? ""}
-          options={(generationModels.options).map((model) => ({
-            value: model.id,
-            label: `${model.model_label} · ${t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage")}`,
-          }))}
+          options={(generationModels.options).map((model) => {
+            const names = generationOptionNames(model, formed, t);
+            return {
+              value: model.id,
+              label: names.primary,
+              description: names.secondary,
+              keywords: generationOptionKeywords(model),
+              indent: model.group?.entry === "form",
+              group: t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage"),
+            };
+          })}
           placeholder={t("wfGenModelHint")}
           emptyText={t("cmdkEmpty")}
+          ariaLabel={t("wfGenModel")}
           className="w-full"
-          onValueChange={(id) => {
+          onChange={(id) => {
             const model = (generationModels.options).find((item) => item.id === id);
             if (!model) return;
             // 三者一起写:分开填就会出现「图像模型 + 类型 video」这种自相矛盾的组合。

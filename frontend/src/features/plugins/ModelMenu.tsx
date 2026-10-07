@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/context-menu";
 import { MenuItemBody } from "@/components/ui/menu";
 import { ModelActionsContext, type ModelActions } from "@/features/plugins/modelActions";
+import { targetNote } from "@/features/plugins/modelLibraryView";
+import { formedGroups } from "@/lib/entryNames";
 
 /**
  * 模型库里一个模型的菜单(右键、卡片上的 ⋯、Shift+F10 / 菜单键):**同一份菜单**,用的是应用的右键菜单组件。
@@ -53,13 +55,14 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text);
 export function modelMenuGroups(model: ModelFile, actions: ModelActions, t: ReturnType<typeof useI18n>, openLabel?: string): Entry[][] {
   const used = model.used_by ?? [];
   const targets = actions.targets(model);
+  const formed = formedGroups(targets.map((target) => target.option));
   const generate: Entry =
     targets.length > 1
       ? {
           kind: "sub", key: "generate", label: t("modelUseToGenerate"), icon: <Sparkles />,
           items: targets.map((target) => ({
             kind: "item" as const, key: `generate:${target.option.id}`, label: target.name, icon: <Workflow />,
-            description: target.uses ? t("modelUseToGenerateInUse") : undefined,
+            description: targetNote(target, formed, t) || undefined,
             onSelect: () => actions.generate(model, target),
           })),
         }

@@ -25,6 +25,7 @@ import { hasReference } from "@/features/nodeForms/refDoc";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
 import { StartParamsField } from "@/features/nodeForms/StartParamsField";
 import { useAllAssetCards } from "@/lib/assetQueries";
+import { entryNamedOptions } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 
 /**
@@ -225,7 +226,11 @@ export function useNodeFieldOptions({
       };
     }),
   });
-  const fetchedOptions = new Map(optionSpecs.map(([key], index) => [key, dynamicOptionResults[index]?.data ?? []]));
+  //: 按生成选项列的那几项(资产「补全多角度」、说话、对口型)摆成两层名字(ADR 0045);别的选项原样
+  const t = useI18n();
+  const fetchedOptions = new Map(
+    optionSpecs.map(([key], index) => [key, entryNamedOptions(dynamicOptionResults[index]?.data ?? [], t)]),
+  );
   const pendingOptions = new Set(
     optionSpecs.filter((_, index) => dynamicOptionResults[index]?.isLoading).map(([key]) => key),
   );

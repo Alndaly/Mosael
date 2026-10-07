@@ -236,6 +236,9 @@ export const aiStudio = {
   promptTplTurnaround: "A turnaround sheet of 【character / object】, 3×3 layout: front, side, back, three-quarter and a few close-ups, plain light grey background, consistent design",
   promptPlaceholderOptional: "Optional: describe what you want — it runs without one too…",
   promptPlaceholderStored: "Optional: leave it empty to use the prompt saved in this workflow…",
+  //: 两层名字的副名(ADR 0045:表单是工作流的入口)
+  entryFromGroup: "From {name}",
+  entryFullWorkflow: "Full workflow",
   genAppFormSection: "Simplified form",
   genAppFormMore: "Other options",
   genFormPromptInComposer: "Write it in the box below",

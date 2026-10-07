@@ -7,9 +7,11 @@ import {
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
   withSingleNodeSelected,
+  workflowNodeSubtitle,
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
+import type { GenerationOption } from "@/api/client";
 import type { NodeIssue } from "@/features/workflows/analyze";
 import { workflowPortNamer } from "@/features/workflows/portNames";
 
@@ -248,5 +250,33 @@ describe("标记", () => {
   it("没有标记的图照旧只有节点", () => {
     const graph = { nodes: [{ id: "start", type: "start" }], edges: [] } as unknown as WorkflowGraph;
     expect(toWorkflowFlowNodes(graph, new Map()).every((node) => node.type === "wf")).toBe(true);
+  });
+});
+
+describe("卡片标题下那一行(ADR 0045:两层名字)", () => {
+  const said: Record<string, string> = { entryFromGroup: "来自 {name}", entryFullWorkflow: "完整工作流" };
+  const t = ((key: string) => said[key] ?? key) as (key: MessageKey) => string;
+  const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
+  const option = (model: string, label: string, entry: string) => ({
+    id: `p9:image:${model}`, provider_profile_id: "p9", model, model_label: label, profile_name: "ComfyUI", group: { ...group, entry },
+  }) as GenerationOption;
+  const options = [option("krea2-text-2-image.json", "krea2-text-2-image", "full"), option("krea2-text-2-image.json#app", "快速用krea2生图", "form")];
+
+  it("选了生成模型的节点写模型的主名,不写 `路径#app` 这种 id;查不到才写 id", () => {
+    const node = (config: Record<string, unknown>) => ({ id: "n", type: "ai_generate", config });
+    expect(workflowNodeSubtitle(node({ provider_profile_id: "p9", model: "krea2-text-2-image.json#app" }), new Map(), options, t))
+      .toBe("快速用krea2生图");
+    expect(workflowNodeSubtitle(node({ model: "p9:image:krea2-text-2-image.json" }), new Map(), options, t), "按生成选项 id 选的那几格")
+      .toBe("krea2-text-2-image");
+    expect(workflowNodeSubtitle(node({ provider_profile_id: "gone", model: "x.json#app" }), new Map(), options, t)).toBe("x.json#app");
+  });
+
+  it("插件节点写它是哪张工作流的哪个入口", () => {
+    const registry = new Map([
+      ["plugin.c.wf_a", { ...meta("plugin.c.wf_a"), group: { ...group, entry: "full" } }],
+      ["plugin.c.wf_a_app", { ...meta("plugin.c.wf_a_app"), group: { ...group, entry: "form" } }],
+    ]) as Map<string, WorkflowNodeType>;
+    expect(workflowNodeSubtitle({ id: "a", type: "plugin.c.wf_a_app", config: {} }, registry, [], t)).toBe("来自 krea2-text-2-image");
+    expect(workflowNodeSubtitle({ id: "b", type: "plugin.c.wf_a", config: {} }, registry, [], t)).toBe("完整工作流");
   });
 });

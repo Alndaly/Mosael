@@ -27,7 +27,7 @@ import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { Input } from "@/components/ui/input";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
-import { OptionPicker } from "@/components/ui/option-picker";
+import { OptionPicker, type PickerOption } from "@/components/ui/option-picker";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -59,6 +59,7 @@ import {
   withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
+import { formedGroups, generationOptionKeywords, generationOptionNames } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -100,7 +101,7 @@ function Pick({
 }: {
   value: string;
   onChange: (next: string) => void;
-  options: { value: string; label: string; description?: string }[];
+  options: PickerOption[];
   label?: string;
   /** 不摆标签(工具行里)时读屏念的名字。 */
   ariaLabel?: string;
@@ -525,6 +526,8 @@ export function NodeComposer({
   });
   //: 显示的就是**实际要用的**那一个。存着的模型不在清单里(被删了、那条通道停了、不再被认成这种生成)
   //: 时 current 已经落到默认或空,选择器不能还挂着那个不存在的值 —— 显示的和发出去的不是同一个模型。
+  //: 有表单的那几张工作流:完整工作流的副名写「完整工作流」(ADR 0045)
+  const formed = React.useMemo(() => formedGroups(options), [options]);
   const modelValue = current ? `${current.provider_profile_id}:${current.model}` : "";
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
@@ -1099,11 +1102,18 @@ export function NodeComposer({
               value={modelValue}
               placeholder={t("genPickModel")}
               onChange={pickModel}
-              options={options.map((one) => ({
-                value: `${one.provider_profile_id}:${one.model}`,
-                //: 写名字不写 id:ComfyUI 工作流的 id 是文件名,起了精简表单标题的该叫标题(搜也按名字搜)
-                label: `${one.model_label} · ${one.profile_name}`,
-              }))}
+              options={options.map((one) => {
+                //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪张工作流、哪台服务器;
+                //: 同一张工作流的表单入口挂在完整工作流下面。按主名、工作流名、文件名、连接名都搜得到。
+                const names = generationOptionNames(one, formed, t);
+                return {
+                  value: `${one.provider_profile_id}:${one.model}`,
+                  label: names.primary,
+                  description: names.secondary,
+                  keywords: generationOptionKeywords(one),
+                  indent: one.group?.entry === "form",
+                };
+              })}
             />
             {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」
                 (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,

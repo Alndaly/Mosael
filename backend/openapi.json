@@ -33775,10 +33775,6 @@
             "type": "string",
             "title": "Model Label"
           },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
           "group": {
             "anyOf": [
               {
@@ -33818,8 +33814,7 @@
           "provider",
           "kind",
           "model",
-          "model_label",
-          "label"
+          "model_label"
         ],
         "title": "GenerationOptionOut",
         "description": "一个「用哪条连接的哪个模型来生成」的选项。\n\n**后端做联接**:以前这份列表由前端拿三张表(生成目录 / 启用的档案 / 能力默认)现拼,\n任何一份口径变一点就和设置页对不上。现在只有一条线 —— 有哪些模型看 provider_models。"

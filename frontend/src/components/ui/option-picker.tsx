@@ -28,6 +28,8 @@ export type PickerOption = {
    * 同一个约定,两个分支都分组;没有标题的那几项不分组。
    */
   group?: string;
+  /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。两个分支都缩。 */
+  indent?: boolean;
 };
 
 /** 相邻的同名 `group` 归成一组(不重排)。 */
@@ -152,6 +154,8 @@ export function OptionPicker({
               style={one.style}
               description={one.description}
               media={one.media}
+              className={one.indent ? "pl-6" : undefined}
+              data-indent={one.indent ? "" : undefined}
             >
               {one.label}
             </SelectItem>

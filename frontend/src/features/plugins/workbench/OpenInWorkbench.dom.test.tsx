@@ -21,7 +21,7 @@ function mount(model = "人像/古风.json") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <OpenInWorkbench instanceId="i1" instanceName="ComfyUI · 本机" model={model} workspaceId="w1" />
+      <OpenInWorkbench instanceId="i1" instanceName="ComfyUI · 本机" path={model} workspaceId="w1" />
     </QueryClientProvider>,
   );
 }

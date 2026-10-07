@@ -44,9 +44,9 @@ class GenerationOptionOut(ApiModel):
     provider: str
     kind: str
     model: str
-    #: 给人看的模型名(显示名,没有就是 id)。下拉里写这个,`model` 只是 id。
+    #: 给人看的模型名(主名:显示名,没有就是 id)。下拉里写这个,`model` 只是 id。**没有拼好的「连接名 · 模型名」**
+    #: (ADR 0045):两层名字由界面拿 `model_label`、`group`、`profile_name` 摆,拼进一个字符串之后只能拆。
     model_label: str
-    label: str
     #: 哪样东西的哪个入口;不属于哪一组是 null。副名(「来自 X · 连接名」)由界面拿它和 `profile_name` 摆。
     group: EntryGroupOut | None = None
     capabilities: dict = Field(default_factory=dict)

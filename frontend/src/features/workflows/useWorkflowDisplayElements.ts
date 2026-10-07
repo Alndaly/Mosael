@@ -13,11 +13,15 @@ import { outputSummary } from "@/features/workflows/RunOutputs";
 import { assetOutputs, outputRows } from "@/features/workflows/runSteps";
 import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
-import { configAssetId, workflowIssueText, workflowPortPresentation } from "@/features/workflows/workflowCanvasModel";
+import { configAssetId, workflowIssueText, workflowNodeSubtitle, workflowPortPresentation } from "@/features/workflows/workflowCanvasModel";
 import type { ScopePath } from "@/features/workflows/scope";
 import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
+import { useGenerationOptions } from "@/lib/generationOptions";
 import { cn } from "@/lib/utils";
+
+//: 生成选项按种类各取一份(和检查器同一份缓存)。
+const GENERATION_KINDS = ["image", "video", "audio"] as const;
 
 //: 交给 React Flow 画的那一份节点和边:在画布状态(nodes / edges)上叠运行状态、角标、层级、查找高亮。
 //: 只是派生,不改画布状态本身(改了会打断拖拽)。
@@ -91,6 +95,8 @@ export function useWorkflowDisplayNodes({
     [layerIssues],
   );
   const unusableReasons = useUnusableNodeReasons(unknownTypes);
+  //: 卡片上那一行写选中的模型叫什么(两层名字的主名,见 workflowNodeSubtitle):和检查器、AI Studio 读同一份缓存
+  const generationModels = useGenerationOptions(GENERATION_KINDS);
   return React.useMemo(
     () => {
       //: 画布节点(react-flow 的)身上没有 config,配置在图里。按 id 取回来。
@@ -124,12 +130,13 @@ export function useWorkflowDisplayNodes({
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
             configAssetId: configAssetId(graphNode(node.id), registry),
+            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t),
             ...workflowPortPresentation(graphNode(node.id), node.data as WorkflowNodeData, registry, portNamer),
           },
         };
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options],
   );
 }

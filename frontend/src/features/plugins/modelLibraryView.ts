@@ -2,6 +2,7 @@ import type { ModelFile, ModelLibrary, ModelLookupFound } from "@/api/client";
 import type { GenerationOption } from "@/api/domains/generation";
 import type { MessageKey } from "@/app/messages";
 import { modelBaseName, normModelName } from "@/components/generation/ModelThumb";
+import { entryOrigin } from "@/lib/entryNames";
 import { declaredParameters } from "@/lib/generationCapabilities";
 
 /**
@@ -115,7 +116,8 @@ export function sortModels(models: readonly ModelFile[], sort: LibrarySort): Mod
   return out.sort(byName);
 }
 
-/** 一张能选这个文件的工作流:哪一格(参数键)、那一格里它的原值、是不是已经在用它。 */
+/** 一张能选这个文件的工作流(的一个入口):哪一格(参数键)、那一格里它的原值、是不是已经在用它。`name` 是主名,
+ *  副名(「来自 X」/「完整工作流」)由界面拿 `option.group` 摆(见 lib/entryNames)。 */
 export type GenerationTarget = {
   option: GenerationOption;
   name: string;
@@ -124,16 +126,15 @@ export type GenerationTarget = {
   uses: boolean;
 };
 
-/** 生成选项给人看的名字里,连接名那一截去掉(「ComfyUI · 192.168.3.15 · portrait」→「portrait」)。 */
-function workflowName(option: GenerationOption): string {
-  const prefix = option.profile_name ? `${option.profile_name} · ` : "";
-  return prefix && option.label.startsWith(prefix) ? option.label.slice(prefix.length) : option.label;
-}
-
 /**
  * 「用它生成」能交给哪几张工作流:**这个连接**上、有一格选的是这个文件所在目录(`x-model-folder`)、并且可选值里有它
  * 的生成选项。已经在用它的(模型库报的 used_by)排前面,其余按名字。路径分隔符不同(Windows 上的反斜杠)也认。
  */
+/** 菜单上一项的那句小字:「已经在用它」,再接它是哪张工作流的哪个入口(「来自 X」/「完整工作流」,ADR 0045)。 */
+export function targetNote(target: GenerationTarget, formed: ReadonlySet<string>, t: (key: MessageKey) => string): string {
+  return [target.uses ? t("modelUseToGenerateInUse") : "", entryOrigin(target.option.group, formed, t)].filter(Boolean).join(" · ");
+}
+
 export function generationTargets(options: readonly GenerationOption[], instanceId: string, model: ModelFile): GenerationTarget[] {
   const wanted = normModelName(model.name);
   const usedBy = new Set((model.used_by ?? []).map((flow) => flow.id));
@@ -144,7 +145,8 @@ export function generationTargets(options: readonly GenerationOption[], instance
       if (parameter.modelFolder !== model.folder) continue;
       const value = parameter.options.find((one) => normModelName(one) === wanted);
       if (value === undefined) continue;
-      out.push({ option, name: workflowName(option), key: parameter.key, value, uses: usedBy.has(option.model) });
+      //: 名字是这一项自己的主名(表单入口是表单标题,ADR 0045);「在用」按它所在的那张工作流算(表单入口的 id 带 `#表单`)
+      out.push({ option, name: option.model_label, key: parameter.key, value, uses: usedBy.has(option.group?.id ?? option.model) });
       break;
     }
   }

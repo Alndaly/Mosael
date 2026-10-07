@@ -73,6 +73,7 @@ import {
   ParameterSection,
 } from "@/components/generation/parameterPanel";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
+import { formedGroups, generationOptionKeywords, generationOptionNames, twoLayerTitle, type TwoLayerName } from "@/lib/entryNames";
 import { useGenerationOptions } from "@/lib/generationOptions";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
@@ -417,6 +418,10 @@ export function GenerateWorkspace({
     () => new Map(modelOptions.map((option) => [option.value, option])),
     [modelOptions],
   );
+  //: 两层名字(ADR 0045):主名是这一项自己的,副名说它来自哪张工作流、哪台服务器。有表单的那几张工作流,完整工作流的副名写
+  //: 「完整工作流」,和它的表单分得开。
+  const formed = React.useMemo(() => formedGroups(modelOptions), [modelOptions]);
+  const namesOf = (option: GenerationOption) => generationOptionNames(option, formed, t);
   const sessionOption =
     activeSession?.provider_profile_id && activeSession.model && activeSession.kind
       ? findGenerationOption(modelOptions, activeSession.provider_profile_id, activeSession.kind, activeSession.model)
@@ -1049,9 +1054,14 @@ export function GenerateWorkspace({
     return (
       <>
         <ParameterSection icon={ClipboardList} title={t("genAppFormSection")}>
-          <div key="head" className="grid gap-0.5" data-app-form-head="">
+          {/* 列宽 minmax(0,1fr):长的副名截断,不把整栏撑出右边 */}
+          <div key="head" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5" data-app-form-head="">
             <span className="text-ui-md font-semibold text-foreground">
               <Truncate>{form.title || model.model_label}</Truncate>
+            </span>
+            {/* 副名:这张表来自哪张工作流、哪台服务器(ADR 0045)—— 出了问题知道该去改哪张 */}
+            <span className="text-ui-xs text-muted-foreground" data-entry-origin="">
+              <Truncate>{namesOf(model).secondary}</Truncate>
             </span>
             {form.description.trim() ? (
               <span className="text-ui-xs leading-relaxed text-muted-foreground">
@@ -1149,21 +1159,21 @@ export function GenerateWorkspace({
               <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={selectedPromptMode === "none" ? undefined : t(promptHintKey)} />
             </div>
           )}
-          {ordered.map((generation) => (
+          {ordered.map((generation) => {
+            const used = findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model);
+            return (
             <GenerationTurn
               key={generation.id}
               generation={generation}
-              engineLabel={
-                findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model)?.label
-                ?? `${generation.provider} · ${generation.model}`
-              }
-              option={findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model)}
+              engineName={used ? namesOf(used) : { primary: `${generation.provider} · ${generation.model}`, secondary: "" }}
+              option={used}
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
               gallery={sessionGallery}
               onStop={readOnly ? undefined : (jobId) => stopGeneration.mutate(jobId)}
               stopping={stopGeneration.isPending && stopGeneration.variables === generation.job_id}
             />
-          ))}
+            );
+          })}
         </div>
         <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
         </div>
@@ -1239,7 +1249,7 @@ export function GenerateWorkspace({
                     栏开着时这枚按钮是「按下」的样子(和顶上那颗「引擎参数」一样),点它把模型那一块亮一下。 */}
                 {selectedModel && (
                   //: 悬停说全名(按钮上的可能被截断)和点下去会去哪儿。
-                  <Hint label={selectedModel.label} hint={t("generationEngineChipHint")}>
+                  <Hint label={twoLayerTitle(namesOf(selectedModel))} hint={t("generationEngineChipHint")}>
                     <button
                       type="button"
                       onClick={showEngineSettings}
@@ -1249,7 +1259,7 @@ export function GenerateWorkspace({
                       data-active={panelOpen ? "" : undefined}
                       className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none data-[active]:border-primary/40 data-[active]:bg-accent data-[active]:text-foreground"
                     >
-                      <Truncate>{selectedModel.label}</Truncate>
+                      <Truncate>{namesOf(selectedModel).primary}</Truncate>
                       <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
                     </button>
                   </Hint>
@@ -1310,7 +1320,7 @@ export function GenerateWorkspace({
           {selectedModel && !selectedAdapterAvailable && (
             <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
               <CircleAlert size={13} />
-              {t("generationAdapterUnavailable").replace("{engine}", selectedModel.label)}
+              {t("generationAdapterUnavailable").replace("{engine}", namesOf(selectedModel).primary)}
             </div>
           )}
           {/* 模型选择器**有模型就摆出来**,哪怕还没选中任何一个:没设默认时它显示「选择模型」等人选,
@@ -1331,11 +1341,18 @@ export function GenerateWorkspace({
                   value={selectedModel?.value ?? ""}
                   onValueChange={selectEngine}
                   options={modelGroups.flatMap((group) =>
-                    group.models.map((model) => ({
-                      value: model.value,
-                      label: model.label,
-                      group: capabilityLabel(group.kind),
-                    })),
+                    group.models.map((model) => {
+                      const names = namesOf(model);
+                      return {
+                        value: model.value,
+                        label: names.primary,
+                        description: names.secondary,
+                        keywords: generationOptionKeywords(model),
+                        //: 同一张工作流的表单入口挂在它的完整工作流下面(后端已经把它们排在一起)
+                        indent: model.group?.entry === "form",
+                        group: capabilityLabel(group.kind),
+                      };
+                    }),
                   )}
                   placeholder={t("genPickModel")}
                   emptyText={t("cmdkEmpty")}
@@ -1349,7 +1366,7 @@ export function GenerateWorkspace({
                   key={`${selectedModel.plugin_instance_id}:${selectedModel.model}`}
                   instanceId={selectedModel.plugin_instance_id}
                   instanceName={selectedModel.profile_name || selectedModel.provider}
-                  model={selectedModel.model}
+                  path={selectedModel.group?.id ?? selectedModel.model}
                   workspaceId={workspace.id}
                 />
               )}
@@ -1637,7 +1654,7 @@ function turnStatus(generation: GenerationJob, job: Job | null): TurnStatus {
 
 function GenerationTurn({
   generation,
-  engineLabel,
+  engineName,
   option,
   job,
   gallery,
@@ -1645,8 +1662,9 @@ function GenerationTurn({
   stopping,
 }: {
   generation: GenerationJob;
-  /** 用的哪条连接上的哪个模型,写给人看的名字(「ComfyUI · … · 快速用krea2生图」)。连接或模型已经不在了才落回 id。 */
-  engineLabel: string;
+  /** 用的哪条连接上的哪个模型,两层名字(ADR 0045):脚注写主名,副名(来自哪张工作流、哪台服务器)在悬停里。连接或模型
+   *  已经不在了才落回 id。 */
+  engineName: TwoLayerName;
   /** 这条用的那个模型(还在选项里的话):占位按它说的「一遍交回几份」摆。 */
   option: GenerationOption | null;
   job: Job | null;
@@ -1777,9 +1795,9 @@ function GenerationTurn({
           />
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
-          <span>
-            {engineLabel}
-          </span>
+          <Hint label={engineName.primary} hint={engineName.secondary || null}>
+            <span data-engine-name="">{engineName.primary}</span>
+          </Hint>
           {durationLabel ? <span>{durationLabel}</span> : null}
           {costLabel ? <span>{costLabel}</span> : null}
         </small>

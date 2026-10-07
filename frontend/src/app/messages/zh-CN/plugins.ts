@@ -253,6 +253,8 @@ export const plugins = {
   pluginCodeFormat: "格式化",
   pluginCodeClear: "清空",
   pluginJsonError: "第 {line} 行第 {column} 列:{detail}",
+  pluginToolNotForAgent: "不给智能体",
+  pluginToolNotForAgentHint: "这张工作流有表单,给智能体的是表单那一项;工作流节点、画板里照常能用完整工作流",
   pluginToolReadOnly: "只读",
   pluginToolNeedsConfirm: "需确认",
   pluginToolEffectPaid: "智能体调用它之前会先问你:会产生费用或占用付费算力",
@@ -685,6 +687,7 @@ export const plugins = {
   workflowWorkbenchFailed: "没能打开工作台",
   // 精简表单(ADR 0038 里叫「应用表单」):作者挑出要给别人填的几项,存进那张工作流自己的 JSON
   workflowApp: "精简表单",
+  workflowFormTitleLine: "表单:{title}",
   workflowAppBadge: "有精简表单",
   workflowAppEdit: "编辑精简表单",
   workflowAppEditHint: "挑出用的人要填的几项,起名、排序。在 AI Studio、画板、工作流节点里用这张工作流,或者智能体调用它时,只显示这几项",

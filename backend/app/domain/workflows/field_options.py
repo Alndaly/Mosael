@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -37,7 +38,8 @@ class OptionContext:
     workflow_id: str = ""
 
 
-Option = dict[str, str]
+#: 下拉的一项:`value`、`label`,生成选项那几种多带两层名字的另外几格(见 generation_option_names)。
+Option = dict[str, Any]
 Source = Callable[[Session, OptionContext], list[Option]]
 
 
@@ -350,10 +352,19 @@ def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
     options = generation_options(db, "image", user_id=ctx.user_id)
     automatic = automatic_reference_model(options)
     return [
-        {"value": one["id"], "label": f"{one['label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one is automatic else one["label"]}
+        {**generation_option_names(one),
+         "label": f"{one['model_label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one is automatic else one["model_label"]}
         for one in options
         if takes_reference_images(one)
     ]
+
+
+def generation_option_names(option: dict[str, Any]) -> dict[str, Any]:
+    """一个生成选项做成下拉的一项:值是选项 id,`label` 是主名;两层名字的另外几格(连接名、是哪张工作流的哪个入口,ADR 0045)
+    原样带上,界面摆成第二行(frontend lib/entryNames 的 entryNamedOptions)—— 不在这里拼成一句。入口那一格叫 `entry_group`:
+    下拉选项上的 `group` 是分组标题,不能撞名。"""
+    return {"value": option["id"], "label": option["model_label"], "model": option["model"],
+            "profile_name": option["profile_name"], "entry_group": option.get("group")}
 
 
 def _talking_models(mode: str) -> Source:
@@ -362,7 +373,7 @@ def _talking_models(mode: str) -> Source:
     def list_them(db: Session, ctx: OptionContext) -> list[Option]:
         from app.domain.workflows.executors.talking import talking_models
 
-        return [{"value": one["id"], "label": one["label"]} for one in talking_models(db, mode, ctx.user_id)]
+        return [generation_option_names(one) for one in talking_models(db, mode, ctx.user_id)]
 
     return list_them
 

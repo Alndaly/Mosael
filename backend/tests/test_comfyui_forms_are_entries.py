@@ -116,3 +116,26 @@ def test_工作台按路径找工作流工具_有表单的找到的是表单入�
         assert workflow_tools.resolve(db, me, "portrait")[0]["name"] == PORTRAIT_TOOL + "_app"
         with pytest.raises(workflow_tools.WorkflowToolError):
             workflow_tools.resolve(db, me, PORTRAIT_TOOL, instance_id)
+
+
+def test_智能体调表单入口的工具_确认卡上说出来自哪张工作流(connected) -> None:
+    """确认卡是给人读的一句话:表单入口的工具,卡上写「来自 portrait」—— 名字分两层,这句话里两层都说(ADR 0045)。"""
+    from app.core.security import mint_service_session
+    from app.domain.agent.tool_manifest import agent_tool_name
+
+    client, _, instance_id = connected
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws, "home": {"kind": "studio"}}).json()["id"]
+    login = client.headers.get("Authorization")
+    with SessionLocal() as db:
+        token = mint_service_session(db, user_id(), agent_session_id=session)
+        db.commit()
+    client.headers["Authorization"] = f"Bearer {token}"
+    reply = client.post(f"/api/agent/tools/{agent_tool_name(instance_id, PORTRAIT_TOOL + '_app')}",
+                        json={"arguments": {"prompt": "柴犬"}})
+    assert reply.status_code == 200, reply.text
+    card_id = reply.json()["result"]["confirmation_id"]
+    client.headers["Authorization"] = login
+    cards = client.get("/api/confirmations", params={"workspace_id": ws, "status": "pending"}).json()
+    headline = next(card["headline"] for card in cards if card["id"] == card_id)
+    assert headline.startswith("运行插件工具「工作流 · 快速出图」(来自 portrait,连接「"), headline

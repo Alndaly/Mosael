@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ServiceIssueNote, focusConnectionSection, serviceIssue } from "@/features/plugins/localServiceStatus";
+import { entryOrigin, formedGroups } from "@/lib/entryNames";
 import { ROLE_COPY, type SourceRole } from "@/lib/sourceFrames";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -157,9 +158,11 @@ export function ProvidedModelsDialog({
   });
   const all = models.data ?? [];
   const needle = query.trim().toLowerCase();
+  //: 按名字、模型 id、它来自的那张工作流的名字都搜得到(ADR 0045)
   const shown = needle
-    ? all.filter((model) => `${model.label} ${model.id}`.toLowerCase().includes(needle))
+    ? all.filter((model) => `${model.label} ${model.id} ${model.group?.label ?? ""}`.toLowerCase().includes(needle))
     : all;
+  const formed = formedGroups(all);
   return (
     <ModalShell
       open={open}
@@ -202,7 +205,7 @@ export function ProvidedModelsDialog({
       ) : (
         <ul className="m-0 grid list-none gap-1.5 p-0">
           {shown.map((model) => (
-            <ProvidedModelItem key={`${model.kind}:${model.id}`} model={model} />
+            <ProvidedModelItem key={`${model.kind}:${model.id}`} model={model} origin={entryOrigin(model.group, formed, t)} />
           ))}
         </ul>
       )}
@@ -210,7 +213,9 @@ export function ProvidedModelsDialog({
   );
 }
 
-function ProvidedModelItem({ model }: { model: PluginProvidedModel }) {
+/** `origin`:两层名字的副名里「这是哪个入口」那一截(「来自 X」/「完整工作流」,ADR 0045);空串就不写。整张弹窗说的是
+ *  一个连接,连接名不再写。 */
+function ProvidedModelItem({ model, origin }: { model: PluginProvidedModel; origin: string }) {
   const t = useI18n();
   const [expanded, setExpanded] = React.useState(false);
   const kind = KIND_LABELS[model.kind];
@@ -231,7 +236,7 @@ function ProvidedModelItem({ model }: { model: PluginProvidedModel }) {
     inputs.length ? t("pluginModelTakes").replace("{roles}", inputs.join("、")) : t("pluginModelPromptOnly"),
   ].filter(Boolean);
   return (
-    <li className="rounded-lg border border-border bg-card">
+    <li className={cn("rounded-lg border border-border bg-card", model.group?.entry === "form" && "ml-6")} data-entry={model.group?.entry}>
       <button
         type="button"
         className="flex w-full min-w-0 cursor-pointer items-start gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-secondary"
@@ -255,6 +260,7 @@ function ProvidedModelItem({ model }: { model: PluginProvidedModel }) {
               <span className="shrink-0 text-ui-2xs text-muted-foreground">{t("pluginModelDisabled")}</span>
             )}
           </span>
+          {origin && <span className="text-ui-xs text-muted-foreground" data-entry-origin="">{origin}</span>}
           <span className="text-ui-xs leading-[1.5] text-muted-foreground">{facts.join(" · ")}</span>
         </span>
         <span className="shrink-0 text-ui-xs text-muted-foreground">

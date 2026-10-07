@@ -94,6 +94,8 @@ def _bind(name: str) -> ConfirmableTool:
             "instance_id": tool["instance_id"],
             "tool_name": tool["name"],
             "tool_label": tool["label"],
+            #: 表单入口的工具:它来自的那张工作流叫什么(ADR 0045)。完整工作流和不分组的工具不记
+            "tool_from": (tool.get("group") or {}).get("label", "") if (tool.get("group") or {}).get("entry") == "form" else "",
             "connection": tool["instance_name"],
             "effects": tool["effects"],
         })
@@ -128,8 +130,10 @@ def _summarize(db: Session, payload: dict[str, Any]) -> Summary:
     arguments = payload.get("arguments") or {}
     brief = brief_arguments(arguments) if isinstance(arguments, dict) and arguments else ""
     warning = warning_key(payload.get("effects"))
-    return "confirm_runPluginTool", {
+    origin = str(payload.get("tool_from") or "")
+    return "confirm_runPluginToolFrom" if origin else "confirm_runPluginTool", {
         "tool": str(payload.get("tool_label") or payload.get("tool_name") or ""),
+        **({"origin": origin} if origin else {}),
         "connection": str(payload.get("connection") or ""),
         "args": fragment("confirm_pluginToolArgs", args=f"`{brief}`") if brief else "",
         "warning": fragment(warning) if warning else "",

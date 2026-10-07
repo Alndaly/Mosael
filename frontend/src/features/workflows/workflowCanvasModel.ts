@@ -2,7 +2,7 @@ import type { Edge, Node } from "@xyflow/react";
 
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { toMarkerNodes } from "@/features/markers/markers";
-import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
+import type { GenerationOption, WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import {
   inputType,
@@ -16,6 +16,7 @@ import { plainRefName } from "@/features/workflows/workflowRefCatalog";
 import { nodePorts } from "@/features/workflows/workflowPorts";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
+import { entryOrigin, formedGroups, generationOptionNames } from "@/lib/entryNames";
 
 type NodeRegistry = Map<string, WorkflowNodeType>;
 type Translate = (key: MessageKey) => string;
@@ -51,6 +52,31 @@ export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): str
     if (text && !text.includes("{{")) return text;
   }
   return "";
+}
+
+/**
+ * 卡片标题下那一行,按两层名字说(ADR 0045:表单是工作流的入口)。
+ *
+ * - 选了生成模型的节点(`ai_generate` 的连接 + 模型;资产、说话这类按生成选项 id 选的):写那个模型的**主名**,现查生成选项
+ *   —— 此前写的是原始模型 id,表单入口就是 `krea2-text-2-image.json#app` 这种字直接露在画布上。查不到(模型不在了)才写 id;
+ * - 插件节点:写它是哪张工作流的哪个入口(「来自 krea2-text-2-image」/「完整工作流」),节点按插件聚合、不分连接,不写连接名;
+ * - 别的照旧按配置挑一格(workflowConfigSummary)。
+ */
+export function workflowNodeSubtitle(
+  node: WorkflowGraph["nodes"][number],
+  registry: NodeRegistry,
+  options: readonly GenerationOption[],
+  t: (key: MessageKey) => string,
+): string {
+  const config = node.config ?? {};
+  const model = String(config.model ?? "").trim();
+  if (model && !model.includes("{{")) {
+    const profile = String(config.provider_profile_id ?? "");
+    const chosen = options.find((one) => (profile ? one.provider_profile_id === profile && one.model === model : one.id === model));
+    if (chosen) return generationOptionNames(chosen, formedGroups(options), t).primary;
+  }
+  const origin = entryOrigin(registry.get(node.type)?.group, formedGroups(registry.values()), t);
+  return origin || workflowConfigSummary(node);
 }
 
 /**

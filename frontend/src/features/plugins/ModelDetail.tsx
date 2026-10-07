@@ -66,11 +66,13 @@ import { EncoderBadge, EncoderOverview, useEncoderNote } from "@/features/plugin
 import {
   familySource,
   generationTargets,
+  targetNote,
   withLookupFound,
   withPreviewSaved,
   type GenerationTarget,
 } from "@/features/plugins/modelLibraryView";
 import { formatBytes } from "@/lib/bytes";
+import { formedGroups } from "@/lib/entryNames";
 import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 import { handOffToGeneration } from "@/lib/generationHandoff";
 import { useGenerationOptions } from "@/lib/generationOptions";
@@ -630,6 +632,7 @@ function UseToGenerate({
   onPick: (target: GenerationTarget) => void;
 }) {
   const t = useI18n();
+  const formed = formedGroups(targets.map((target) => target.option));
   if (targets.length === 0) {
     return (
       <Hint label={t("modelUseToGenerateDesc")} disabledReason={loading ? t("modelUseToGenerateLoading") : t("modelUseToGenerateNone")}>
@@ -665,7 +668,7 @@ function UseToGenerate({
             key={target.option.id}
             label={target.name}
             truncate
-            description={target.uses ? t("modelUseToGenerateInUse") : undefined}
+            description={targetNote(target, formed, t) || undefined}
             onClick={() => onPick(target)}
           />
         ))}

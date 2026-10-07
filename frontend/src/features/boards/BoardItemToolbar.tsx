@@ -30,6 +30,7 @@ import { boardPreviewGallery } from "@/features/boards/boardPreview";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import type { BoardPickAsset } from "@/features/boards/boardCanvasModel";
+import { entryOrigin, formedGroups } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 
 /** 操作条上点开的那两块不是能力的面板。 */
@@ -152,6 +153,10 @@ export function ItemToolbar({
   //: 直接摆几项;点开的那一项哪怕排在后面也摆出来(不然按下态藏在「⋯」里,看不出下面那块是谁的)。
   const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
   const overflow = abilities.filter((one) => !direct.includes(one));
+  //: 两层名字的副名(ADR 0045):这项能力是哪张工作流的哪个入口(「来自 X」/「完整工作流」),再接是哪个插件
+  const formed = formedGroups(abilities);
+  const sourceOf = (ability: BoardProducerInfo) =>
+    [entryOrigin(ability.group, formed, t), ability.plugin_name].filter(Boolean).join(" · ");
   const slots = single && item && !itemIsRunning(item) ? slotProducers(item, producers) : [];
   //: 看大图看的是**选中的这几格**:框选了一排图,灯箱里就左右翻这一排(按画板上的位置排);只选一格就是那一张。
   const previews = boardPreviewGallery(selected.flatMap((node) => (node.data as { item?: BoardItem }).item ?? []));
@@ -308,7 +313,7 @@ export function ItemToolbar({
                 ability
                 icon={boardToolIcon(ability)}
                 label={ability.label}
-                hint={firstSentence(ability.board_description ?? "")}
+                hint={[entryOrigin(ability.group, formed, t), firstSentence(ability.board_description ?? "")].filter(Boolean).join(" · ")}
                 pressed={open(ability.id)}
                 onClick={() => onPanel(item.id, ability.id)}
               />
@@ -322,7 +327,7 @@ export function ItemToolbar({
                 return {
                   label: ability.label,
                   icon: <Icon size={14} />,
-                  hint: ability.plugin_name || undefined,
+                  hint: sourceOf(ability) || undefined,
                   onSelect: () => onPanel(item.id, ability.id),
                 };
               })}
@@ -568,6 +573,8 @@ function SlotSwitch({
   const current = item.form?.producer;
   const inline = slots.filter((one, index) => index < SLOT_INLINE || one.id === current);
   const more = slots.filter((one) => !inline.includes(one));
+  const formed = formedGroups(slots);
+  const sourceOf = (one: BoardProducerInfo) => [entryOrigin(one.group, formed, t), one.plugin_name].filter(Boolean).join(" · ");
   return (
     <>
       <div role="radiogroup" aria-label={t("boardProducerSwitch")} className="flex items-center gap-0.5 rounded-full bg-secondary/60 p-0.5">
@@ -575,7 +582,9 @@ function SlotSwitch({
           const on = current === one.id;
           const Icon = one.id.startsWith("node:") ? boardToolIcon(one) : null;
           return (
-            <Hint key={one.id} label={one.label} hint={firstSentence(toPlainText(one.board_description || one.description || ""))}>
+            <Hint key={one.id} label={one.label}
+                  hint={[entryOrigin(one.group, formed, t), firstSentence(toPlainText(one.board_description || one.description || ""))]
+                    .filter(Boolean).join(" · ")}>
             <button
               type="button"
               role="radio"
@@ -599,7 +608,7 @@ function SlotSwitch({
           trigger={<MoreButton label={t("boardMoreGenerators")} />}
           actions={more.map((one) => {
             const Icon = boardToolIcon(one);
-            return { label: one.label, icon: <Icon size={14} />, hint: one.plugin_name || undefined, onSelect: () => onSwitch(one.id as BoardProducer) };
+            return { label: one.label, icon: <Icon size={14} />, hint: sourceOf(one) || undefined, onSelect: () => onSwitch(one.id as BoardProducer) };
           })}
         />
       )}

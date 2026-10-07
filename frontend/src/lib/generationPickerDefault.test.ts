@@ -64,7 +64,7 @@ describe("生成模型选择器的默认", () => {
 
   it("pickGenerationOption:存着的 → 默认 → 没有", () => {
     const option = (model: string, kind: string, isDefault = false) =>
-      ({ id: model, provider_profile_id: "p", profile_name: "P", provider: "x", kind, model, label: model,
+      ({ id: model, provider_profile_id: "p", profile_name: "P", provider: "x", kind, model,
          adapter_available: true, capabilities_known: true, is_default: isDefault }) as GenerationOption;
     const first = option("aaa", "image");
     const chosen = option("flux", "image", true);

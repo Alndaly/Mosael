@@ -28,7 +28,7 @@ vi.mock("./PromptEditor", () => ({
 
 function model(capabilities: Record<string, unknown>): GenerationOption {
   return {
-    id: "m", provider_profile_id: "p", profile_name: "ComfyUI", label: "放大", adapter_available: true, is_default: true,
+    id: "m", provider_profile_id: "p", profile_name: "ComfyUI", adapter_available: true, is_default: true,
     capabilities_known: true, provider: "plugin:dev.mosael.comfyui", model: "upscale.json", model_label: "upscale.json", kind: "image", capabilities,
   } as GenerationOption;
 }

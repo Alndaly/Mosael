@@ -236,6 +236,9 @@ export const aiStudio = {
   promptTplTurnaround: "【角色 / 物品】的多角度设定图,3×3 排列:正面、侧面、背面、四分之三侧面和几张特写,统一浅灰背景,形象前后一致",
   promptPlaceholderOptional: "可选:描述想要的效果,不写也能生成…",
   promptPlaceholderStored: "可选:不写就用这张工作流里存着的提示词…",
+  //: 两层名字的副名(ADR 0045:表单是工作流的入口)
+  entryFromGroup: "来自 {name}",
+  entryFullWorkflow: "完整工作流",
   genAppFormSection: "精简表单",
   genAppFormMore: "其他选项",
   genFormPromptInComposer: "写在下面的输入框里",

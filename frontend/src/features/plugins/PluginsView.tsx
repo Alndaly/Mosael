@@ -85,6 +85,7 @@ import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { ToolRowFrame } from "@/features/plugins/ToolRowFrame";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
 import { CapabilityUseList, type CapabilityUse } from "@/components/settings/CapabilityUseList";
+import { entryOrigin, formedGroups, type EntryGroup } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -1216,10 +1217,14 @@ function CapabilityPicker({
     return tools.filter((tool) => {
       if (onlyExposed && !tool.exposed) return false;
       if (!needle) return true;
-      // 说明也参与匹配:工具名是 bilibili_web_fetch_* 这种机器名,而用户记得的是"字幕"。
-      return `${tool.name} ${tool.label} ${toPlainText(tool.description)}`.toLowerCase().includes(needle);
+      // 说明也参与匹配:工具名是 bilibili_web_fetch_* 这种机器名,而用户记得的是"字幕"。它来自的那张工作流的名字、路径也算
+      // (ADR 0045:表单和完整工作流各是一个工具,按工作流名搜两个都在)。
+      return `${tool.name} ${tool.label} ${toPlainText(tool.description)} ${tool.group?.label ?? ""} ${tool.group?.id ?? ""}`
+        .toLowerCase().includes(needle);
     });
   }, [tools, query, onlyExposed]);
+  //: 有表单的那几张工作流:完整工作流那一行的副名写「完整工作流」
+  const formed = React.useMemo(() => formedGroups(tools), [tools]);
 
   const exposedCount = tools.filter((tool) => tool.exposed).length;
   // 批量操作只作用于**当前筛出来的**那些 —— 搜了"字幕"再点全选,意思就是"这些字幕相关的全开"。
@@ -1278,6 +1283,7 @@ function CapabilityPicker({
                 instanceId={instanceId}
                 workspaceId={workspaceId}
                 tool={tool}
+                origin={entryOrigin(tool.group, formed, t)}
                 // 传**理由**而不是布尔:一个灰着的按钮不说明自己为什么灰,等于没有反馈。
                 blockedReason={blockedReason || (tool.exposed ? "" : t("pluginToolNotExposed"))}
                 onToggle={(exposed) => {
@@ -1383,6 +1389,10 @@ interface ToolState {
   provides?: string[];
   /** 这些能力在 Mosael 里还用在哪(能力表现算的)—— 那些入口调的也是这个工具。 */
   used_by?: CapabilityUse[];
+  /** 是哪张工作流的哪个入口(ADR 0045;ComfyUI 的完整工作流和它的表单)。 */
+  group?: EntryGroup | null;
+  /** 进不进智能体的工具表;插件说 `agent: false` 的不进(工作流节点、画板照常)。 */
+  agent?: boolean;
 }
 
 /** 表单里的一格有没有填。素材列表空着、字符串空着都算没填(不发出去)。 */
@@ -1401,12 +1411,15 @@ export const ToolRow = React.memo(function ToolRow({
   instanceId,
   workspaceId,
   tool,
+  origin = "",
   blockedReason,
   onToggle,
 }: {
   instanceId: string;
   workspaceId: string;
   tool: ToolState;
+  /** 两层名字的副名里「这是哪个入口」那一截(「来自 X」/「完整工作流」,ADR 0045);不给 / 空串不写。 */
+  origin?: string;
   /** 为什么这个工具现在跑不了。空串 = 跑得了。 */
   blockedReason: string;
   onToggle: (exposed: boolean) => void;
@@ -1438,6 +1451,7 @@ export const ToolRow = React.memo(function ToolRow({
       // 勾 = 暴不暴露给智能体和工作流。默认关 —— 一个 MCP 端点可能报几十个工具。
       lead={<Checkbox checked={tool.exposed} onCheckedChange={(next) => onToggle(next === true)} aria-label={tool.name} />}
       label={tool.label || tool.name}
+      origin={origin}
       description={tool.description}
       badges={<>
         {/* 认领了宿主能力的,标一枚能力徽标:MinerU 的解析同时是文档「重新解析」背后那一家。 */}
@@ -1451,6 +1465,14 @@ export const ToolRow = React.memo(function ToolRow({
           <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
             {t("pluginToolReadOnly")}
           </small>
+        )}
+        {/* 插件说它不进智能体的工具表(有表单的工作流,给智能体的是表单那一项,ADR 0045 §5):开着也只在工作流、画板里用 */}
+        {tool.agent === false && (
+          <Hint label={t("pluginToolNotForAgentHint")}>
+            <small data-tool-not-for-agent="" className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
+              {t("pluginToolNotForAgent")}
+            </small>
+          </Hint>
         )}
         <ToolEffectBadge effects={tool.effects} />
       </>}

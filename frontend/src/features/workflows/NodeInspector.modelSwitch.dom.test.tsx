@@ -124,7 +124,8 @@ async function pickModel(name: string) {
     return found;
   });
   fireEvent.click(trigger);
-  fireEvent.click(await screen.findByText((text) => text.startsWith(`${name} ·`)));
+  //: 清单一行两层:主名(模型名)在前,第二行是连接名(ADR 0045)
+  fireEvent.click(await screen.findByRole("option", { name: new RegExp(`^${name}`) }));
 }
 
 describe("AI 生成节点换模型", () => {

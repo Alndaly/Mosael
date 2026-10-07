@@ -4,6 +4,7 @@ import type { WorkflowFile } from "@/api/client";
 import {
   ALL_WORKFLOWS,
   conflictOf,
+  filterWorkflows,
   filesIn,
   folderOfView,
   folderPathFrom,
@@ -65,5 +66,14 @@ describe("文件夹名", () => {
     expect(notEmptyOf(failure({ code: "not_empty", count: 2 }))).toEqual({ count: 2 });
     expect(notEmptyOf(failure({ code: "exists", suggestion: "" }))).toBeNull();
     expect(notEmptyOf(new Error("x"))).toBeNull();
+  });
+});
+
+describe("搜索", () => {
+  it("表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流", () => {
+    const formed = { ...flow("krea2-text-2-image.json"), app: { status: "ok", app: true, title: "快速用krea2生图" } } as WorkflowFile;
+    const other = flow("girl.json");
+    expect(filterWorkflows([formed, other], { kind: "all", query: "快速" })).toEqual([formed]);
+    expect(filterWorkflows([formed, other], { kind: "all", query: "krea2" })).toEqual([formed]);
   });
 });

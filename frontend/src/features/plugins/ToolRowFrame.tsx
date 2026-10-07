@@ -15,6 +15,7 @@ import { Truncate } from "@/components/ui/truncate";
 export function ToolRowFrame({
   lead,
   label,
+  origin = "",
   description,
   badges,
   open,
@@ -24,6 +25,8 @@ export function ToolRowFrame({
 }: {
   lead: React.ReactNode;
   label: string;
+  /** 说明前面那一截:它是哪张工作流的哪个入口(「来自 X」/「完整工作流」,ADR 0045 的副名)。纯文字;空串不写。 */
+  origin?: string;
   description: string;
   badges?: React.ReactNode;
   open: boolean;
@@ -45,6 +48,7 @@ export function ToolRowFrame({
             <Truncate as="strong" className="text-ui-sm font-semibold">{label}</Truncate>
             {/* 在展开按钮里:链接只留文字。 */}
             <Truncate as="small" className="text-ui-xs text-muted-foreground">
+              {origin && <span data-entry-origin="">{origin} · </span>}
               <InlineMarkdown text={description} links={false} />
             </Truncate>
           </div>

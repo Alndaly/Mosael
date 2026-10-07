@@ -13,6 +13,7 @@ import { providerKeys, generationKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
+import { formedGroups, generationOptionNames } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 
 
@@ -55,6 +56,7 @@ function DefaultRow({
     staleTime: 30_000,
   });
   const options = candidates.data ?? [];
+  const formed = formedGroups(options);
   // 值必须同时含连接与模型:同一个模型 id 可能出现在两条连接下(同一端点配了两把 key)。
   const valueOf = (item: CapabilityModel) => `${item.provider_profile_id}::${item.model}`;
   const currentValue = providerId && model ? `${providerId}::${model}` : NONE;
@@ -103,12 +105,23 @@ function DefaultRow({
             label: options.length === 0 ? t("providerDefaultsEmpty") : t("providerDefaultsUnset"),
             description: options.length === 0 ? undefined : t("providerDefaultsUnsetHint"),
           },
-          ...options.map((item) => ({
-            value: valueOf(item),
-            label: `${item.provider_name} · ${item.display_name || item.model}`,
-            // 展示名换成人话之后,记得住原始 model id 的人仍然搜得到。
-            keywords: [item.model],
-          })),
+          ...options.map((item) => {
+            //: 两层名字(ADR 0045):主名是这个模型自己的,第二行说它来自哪张工作流、哪条连接;同一张工作流的表单入口
+            //: 挂在完整工作流下面。和 AI Studio、画板同一种样子。
+            const names = generationOptionNames(
+              { model: item.model, model_label: item.display_name || item.model, profile_name: item.provider_name, group: item.group },
+              formed,
+              t,
+            );
+            return {
+              value: valueOf(item),
+              label: names.primary,
+              description: names.secondary,
+              // 展示名换成人话之后,记得住原始 model id 的人仍然搜得到;工作流名也算。
+              keywords: [item.model, item.group?.label ?? "", item.provider_name].filter(Boolean),
+              indent: item.group?.entry === "form",
+            };
+          }),
         ]}
         className="w-full min-w-0"
       />

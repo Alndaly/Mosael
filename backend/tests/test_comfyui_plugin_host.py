@@ -62,7 +62,8 @@ def test_每张保存的工作流都是选择器里的一个模型(connected) ->
     images = _options(client, "image")
     assert set(images) == {"builtin:txt2img", "portrait.json"}
     portrait = images["portrait.json"]
-    assert portrait["label"].endswith("· portrait")
+    assert (portrait["model_label"], portrait["group"]) == ("portrait", {"id": "portrait.json", "label": "portrait", "entry": "full"})
+    assert "label" not in portrait, "没有拼好的「连接名 · 模型名」(ADR 0045):两层名字由界面拿结构化的几格摆"
     caps = portrait["capabilities"]
     assert caps["sizes"][0] == "832x1216" and caps["default_size"] == "832x1216"
     assert caps["source_limits"] == {"reference_image": 1}

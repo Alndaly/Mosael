@@ -66,7 +66,7 @@ export function inView(workflows: readonly WorkflowFile[], view: string): Workfl
   return folder === null ? [] : workflows.filter((flow) => inFolder(flow.path, folder));
 }
 
-/** 按种类(转不过来的单算一类)和搜索词筛。搜索看名字、路径、出了什么问题、用到的模型、缺的节点类型、输入输出的名字。 */
+/** 按种类(转不过来的单算一类)和搜索词筛。搜索看名字、路径、表单标题、出了什么问题、用到的模型、缺的节点类型、输入输出的名字。 */
 export function filterWorkflows(
   workflows: readonly WorkflowFile[],
   { kind, query }: { kind: WorkflowKindFilter; query: string },
@@ -76,7 +76,8 @@ export function filterWorkflows(
     if (kind === "broken" ? !flow.problem : kind !== "all" && flow.kind !== kind) return false;
     if (!needle) return true;
     const haystack = [
-      flow.label, flow.path, flow.problem,
+      //: 表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流
+      flow.label, flow.path, flow.problem, flow.app?.title ?? "",
       ...(flow.models ?? []).map((one) => one.name),
       ...(flow.missing_nodes ?? []).map((one) => one.type),
       ...(flow.inputs ?? []).map((one) => one.title),
