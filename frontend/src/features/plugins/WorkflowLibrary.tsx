@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   LayoutPanelLeft,
   MoreHorizontal,
+  PackagePlus,
   PanelRightOpen,
   PencilLine,
   Plus,
@@ -1315,8 +1316,10 @@ function WorkflowDetail({
         packAction={(pack) =>
           manager && !pack.installed && !installs.some((job) =>
             (installActive(job) || awaitingRestart(job, restartedAt)) && packsOf(job).includes(pack.id)) ? (
-            <Button variant="outline" size="xs" className="ml-auto shrink-0"
+            //: 和「缺的模型」的「下载」同一个尺寸(xs、带图标),放在行尾那一格里(见 WorkflowFacts 的 FactLine)
+            <Button variant="outline" size="xs"
                     aria-label={t("workflowInstallPackLabel").replace("{name}", pack.title)} onClick={() => onInstall(pack)}>
+              <PackagePlus size={12} />
               {t("workflowInstallPack")}
             </Button>
           ) : null

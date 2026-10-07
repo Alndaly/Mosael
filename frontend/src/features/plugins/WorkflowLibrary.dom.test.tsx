@@ -549,10 +549,12 @@ describe("工作流库", () => {
     expect(showModel).toHaveBeenLastCalledWith({ model: { folder: "checkpoints", name: "sdxl.safetensors" } });
     const absent = within(usedModels).getByText("gone.safetensors").closest("li") as HTMLElement;
     expect(within(absent).queryByRole("button"), "缺的在「缺的模型」那一节里下载").toBeNull();
-    //: 两行一样高、徽章对成一列:按钮是 32px 的方按钮,缺的那行在同一位置留一格一样大的空位
-    expect(within(present).getByRole("button", { name: "workflowShowInModelLibrary" }).className).toContain("size-8");
-    expect(absent.querySelector("[data-model-row-slot]")?.className).toContain("size-8");
-    for (const row of [present, absent]) expect(row.className).toContain("min-h-8");
+    //: 两行一样高、徽章对成一列:按钮放在行尾同样宽的那一格里,缺的那行留着这一格(空的)
+    const slot = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-fact-slot]");
+    expect(slot(present)?.contains(within(present).getByRole("button", { name: "workflowShowInModelLibrary" }))).toBe(true);
+    expect(slot(absent)?.className).toBe(slot(present)?.className);
+    expect(slot(absent)?.childElementCount).toBe(0);
+    for (const row of [present, absent]) expect(row.firstElementChild?.className).toContain("min-h-10");
     const missing = screen.getByRole("region", { name: "workflowMissingModels" });
     fireEvent.click(within(missing).getByRole("button", { name: "workflowDownloadInModelLibrary" }));
     expect(showModel).toHaveBeenLastCalledWith({
@@ -619,6 +621,49 @@ describe("工作流库", () => {
     fireEvent.click(within(missing).getByRole("button", { name: "workflowInstallPackLabel" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "workflowInstallConfirm" }));
     await waitFor(() => expect(missing.textContent).toContain("personal_cloud"), { timeout: 4000 });
+  });
+
+  it("三节的行一个样:缺的节点下面的节点包缩进一级;「装上」「下载」同一个尺寸,都在行尾同样宽的那一格里;每行同一个最小高度", async () => {
+    const data = library();
+    data.workflows![2].missing_nodes = [
+      { type: "ConditioningKrea2Rebalance", count: 1, packs: [
+        { id: "krea2-conditioning", title: "Krea 2 Conditioning Control", installed: false },
+        { id: "krea2-tools", title: "Krea 2 Tools", installed: false },
+        { id: "rgthree-comfy", title: "rgthree", installed: true },
+      ] },
+      { type: "MysteryNode", count: 2, packs: [] },
+    ];
+    data.workflows![2].missing_models = [
+      { folder: "loras", name: "with-url.safetensors", url: "https://huggingface.co/x/y/resolve/main/with-url.safetensors" },
+      { folder: "checkpoints", name: "no-url.safetensors", url: "" },
+    ];
+    api.getWorkflowLibrary.mockResolvedValue(data);
+    wrap(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1" onShowModel={vi.fn()} />);
+    const card = (await screen.findAllByRole("listitem")).find((item) => item.textContent?.includes("sketch"))!;
+    fireEvent.click(within(card).getByRole("button", { name: "sketch" }));
+    const nodes = await screen.findByRole("region", { name: "workflowMissingNodes" });
+    expect(nodes.querySelectorAll("[data-missing-node]")).toHaveLength(2);
+    const node = nodes.querySelector<HTMLElement>("[data-missing-node]")!;
+    const packs = node.querySelector<HTMLElement>("[data-node-packs]")!;
+    //: 节点包是那个节点底下的一层:缩进、左边一道线;不和节点名排在同一个缩进上
+    expect(packs.className).toMatch(/\bml-/);
+    expect(packs.className).toContain("border-l");
+    expect(packs.querySelectorAll("[data-node-pack]").length).toBeGreaterThan(0);
+    const [install] = within(nodes).getAllByRole("button", { name: "workflowInstallPackLabel" });
+    expect(within(nodes).getAllByRole("button", { name: "workflowInstallPackLabel" }), "装了却没加载的那个不给「装上」").toHaveLength(2);
+    expect(nodes.textContent).toContain("workflowPackUnknown");
+    const models = screen.getByRole("region", { name: "workflowMissingModels" });
+    const [download] = within(models).getAllByRole("button", { name: "workflowDownloadInModelLibrary" });
+    expect(models.textContent).toContain("huggingface.co");
+    expect(models.textContent).toContain("workflowMissingModelNoUrl");
+    expect(install.className, "同一个尺寸").toContain("h-7");
+    expect(download.className).toContain("h-7");
+    const slots = [install, download].map((button) => button.closest<HTMLElement>("[data-fact-slot]")!);
+    expect(slots[0].className).toBe(slots[1].className);
+    //: 有按钮的行和没按钮的行(装了却没加载的那个包、不知道是哪个包)同一个最小高度
+    for (const row of [...nodes.querySelectorAll<HTMLElement>("[data-fact-row]"), ...models.querySelectorAll<HTMLElement>("[data-fact-row]")]) {
+      expect(row.firstElementChild?.className).toContain("min-h-10");
+    }
   });
 
   it("装了却没加载的节点包:给「重启 ComfyUI」", async () => {

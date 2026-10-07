@@ -98,29 +98,34 @@ export function WorkflowFacts({
       )}
       <LibrarySection title={t("workflowModels")} count={facts.models?.length ?? 0}>
         {(facts.models?.length ?? 0) > 0 ? (
-          <ul className="m-0 grid list-none gap-1 p-0">
+          <ul className={FACT_LIST}>
             {(facts.models ?? []).map((one) => (
-              //: 每行一样高(32px,和那颗方按钮一样);缺的那行也留出按钮那一格 —— 「在 / 缺」对成一列,行距不跟着有没有按钮变
-              <li key={`${one.folder}/${one.name}`} data-model-row="" className="flex min-h-8 min-w-0 items-center gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
-                <CatalogBadge tone={one.present ? "success" : "warning"}>
-                  {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
-                </CatalogBadge>
-                {/* 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库 */}
-                {onShowModel &&
-                  (one.present ? (
-                    <IconButton
-                      className="shrink-0 text-muted-foreground"
-                      label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
-                      onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
-                    >
-                      <Library size={13} />
-                    </IconButton>
-                  ) : (
-                    <span aria-hidden data-model-row-slot="" className="size-8 shrink-0" />
-                  ))}
-              </li>
+              <FactRow
+                key={`${one.folder}/${one.name}`}
+                data-model-row=""
+                primary={one.name}
+                meta={one.folder}
+                status={
+                  <CatalogBadge tone={one.present ? "success" : "warning"}>
+                    {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
+                  </CatalogBadge>
+                }
+                //: 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库。缺的那行照样留着那一格,「在 / 缺」对成一列
+                action={
+                  onShowModel ? (
+                    one.present ? (
+                      <IconButton
+                        size="icon-xs"
+                        className="text-muted-foreground"
+                        label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
+                        onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
+                      >
+                        <Library size={13} />
+                      </IconButton>
+                    ) : null
+                  ) : undefined
+                }
+              />
             ))}
           </ul>
         ) : (
@@ -129,26 +134,28 @@ export function WorkflowFacts({
       </LibrarySection>
       {(facts.missing_nodes?.length ?? 0) > 0 && (
         <LibrarySection title={t("workflowMissingNodes")} count={facts.missing_nodes?.length}>
-          <ul className="m-0 grid list-none gap-2 p-0">
+          <ul className={FACT_LIST}>
             {(facts.missing_nodes ?? []).map((one) => (
-              <li key={one.type} className="grid min-w-0 gap-0.5">
-                <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                  <Truncate className="min-w-0">{one.type}</Truncate>
-                  <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">×{one.count}</span>
-                </span>
-                {(one.packs?.length ?? 0) > 0 ? (
-                  (one.packs ?? []).map((pack) => (
-                    <span key={pack.id} className="flex min-w-0 items-center gap-2 text-ui-xs text-muted-foreground">
-                      <Truncate hint={pack.id !== pack.title ? pack.id : undefined}>{pack.title}</Truncate>
-                      <span className={cn("shrink-0", pack.installed && "text-warning")}>
-                        {pack.installed ? t("workflowPackInstalledNotLoaded") : t("workflowPackNotInstalled")}
-                      </span>
-                      {packAction?.(pack)}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-ui-xs text-muted-foreground">{t("workflowPackUnknown")}</span>
-                )}
+              <li key={one.type} data-missing-node="" className="grid min-w-0 pb-1">
+                <FactLine primary={one.type} meta={`×${one.count}`} />
+                {/* 节点 → 出自哪几个节点包:缩进一级、左边一道细线,一眼看出这几行属于上面那个节点 */}
+                <ul data-node-packs="" className="m-0 ml-1.5 grid list-none border-l border-divider p-0 pl-3">
+                  {(one.packs?.length ?? 0) > 0 ? (
+                    (one.packs ?? []).map((pack) => (
+                      <FactRow
+                        key={pack.id}
+                        data-node-pack=""
+                        primary={pack.title}
+                        hint={pack.id !== pack.title ? pack.id : undefined}
+                        secondary={pack.installed ? t("workflowPackInstalledNotLoaded") : t("workflowPackNotInstalled")}
+                        warn={pack.installed}
+                        action={packAction ? packAction(pack) : undefined}
+                      />
+                    ))
+                  ) : (
+                    <FactRow data-node-pack="" primary={t("workflowPackUnknown")} muted action={packAction ? null : undefined} />
+                  )}
+                </ul>
               </li>
             ))}
           </ul>
@@ -157,30 +164,88 @@ export function WorkflowFacts({
       )}
       {(facts.missing_models?.length ?? 0) > 0 && (
         <LibrarySection title={t("workflowMissingModels")} count={facts.missing_models?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
+          <ul className={FACT_LIST}>
             {(facts.missing_models ?? []).map((one) => (
-              <li key={`${one.folder}/${one.name}`} className="flex min-w-0 items-center gap-3">
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                    <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
-                    <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
-                  </span>
-                  <Truncate className="text-ui-xs text-muted-foreground">
-                    {one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
-                  </Truncate>
-                </span>
-                {onShowModel && (
-                  <Button variant="outline" size="sm" aria-label={t("workflowDownloadInModelLibrary").replace("{name}", one.name)}
-                          onClick={() => onShowModel({ download: { folder: one.folder, name: one.name, ...(one.url ? { url: one.url } : {}) } })}>
-                    <Download size={13} />
-                    {t("modelMissingDownload")}
-                  </Button>
-                )}
-              </li>
+              <FactRow
+                key={`${one.folder}/${one.name}`}
+                data-missing-model=""
+                primary={one.name}
+                meta={one.folder}
+                secondary={one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
+                action={
+                  onShowModel ? (
+                    <Button variant="outline" size="xs" aria-label={t("workflowDownloadInModelLibrary").replace("{name}", one.name)}
+                            onClick={() => onShowModel({ download: { folder: one.folder, name: one.name, ...(one.url ? { url: one.url } : {}) } })}>
+                      <Download size={12} />
+                      {t("modelMissingDownload")}
+                    </Button>
+                  ) : undefined
+                }
+              />
             ))}
           </ul>
         </LibrarySection>
       )}
     </>
+  );
+}
+
+/** 三节(用到的模型、缺的节点、缺的模型)的列表:行与行之间一道细线,行距由行自己的高度定。 */
+const FACT_LIST = "m-0 grid list-none divide-y divide-divider p-0";
+/** 最右那一格动作的宽度:「装上」「下载」(xs 按钮带图标)放得下,跳到模型库的方按钮靠右 —— 三节的动作对成一列。 */
+const FACT_SLOT = "flex w-[4.5rem] shrink-0 items-center justify-end";
+
+type FactLineProps = {
+  /** 主行:名字(放不下截断,悬停看全文) */
+  primary: string;
+  /** 和名字同一条基线、靠右的一点说明:目录、个数 */
+  meta?: string;
+  /** 主行下面一行灰字:从哪下、装没装 */
+  secondary?: string;
+  /** 名字之外要补一句的(节点包的 id) */
+  hint?: string;
+  /** 主行本身就是一句说明(「不知道是哪个节点包」):灰字 */
+  muted?: boolean;
+  /** 灰字那一行要提醒(装了却没加载) */
+  warn?: boolean;
+  status?: React.ReactNode;
+  /**
+   * 最右那一格:给了东西就放它;`null` 是这一行没有动作,但同一节的别的行有 —— 照样留出那一格,对成一列;
+   * 不给(`undefined`)是这一节都没有动作(导入前的预览),不留。
+   */
+  action?: React.ReactNode;
+};
+
+/**
+ * 一行的样子 —— 三节一个样:主行(名字 + 同一条基线上的目录 / 个数)、需要时一行灰字、状态、最右一格同样宽的动作。
+ * 至少 40px 高(28px 的按钮上下各留 6px),一行字和两行字的行都在这个高度里垂直居中:有按钮的行不再比没按钮的高一截。
+ */
+function FactLine({ primary, meta, secondary, hint, muted, warn, status, action }: FactLineProps) {
+  const reserved = action !== undefined;
+  return (
+    <div className="flex min-h-10 min-w-0 items-center gap-2 py-1">
+      <span className="grid min-w-0 flex-1 gap-0.5">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <Truncate hint={hint} className={cn("min-w-0 flex-1 text-ui-sm", muted ? "text-muted-foreground" : "text-foreground")}>
+            {primary}
+          </Truncate>
+          {meta && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{meta}</span>}
+        </span>
+        {secondary && (
+          <Truncate className={cn("text-ui-xs", warn ? "text-warning" : "text-muted-foreground")}>{secondary}</Truncate>
+        )}
+      </span>
+      {status}
+      {reserved && <span data-fact-slot="" className={FACT_SLOT}>{action}</span>}
+    </div>
+  );
+}
+
+function FactRow({ "data-model-row": modelRow, "data-node-pack": nodePack, "data-missing-model": missingModel, ...line }:
+  FactLineProps & { "data-model-row"?: string; "data-node-pack"?: string; "data-missing-model"?: string }) {
+  return (
+    <li data-fact-row="" data-model-row={modelRow} data-node-pack={nodePack} data-missing-model={missingModel} className="min-w-0">
+      <FactLine {...line} />
+    </li>
   );
 }
