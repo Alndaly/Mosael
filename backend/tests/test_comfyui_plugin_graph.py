@@ -625,11 +625,12 @@ def test_提示词节点存的是空串_或者模板里是占位符_要写(graph
         "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry"}},
     }
     assert graph.prompt_requirement(empty) == "required", "反向提示词存着话不算:它有自己的控件"
-    template = {
+    placeholders = {
         "3": {"class_type": "KSampler", "inputs": {"seed": "{{seed}}", "positive": ["6", 0]}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
     }
-    assert graph.describe("api-workflow", "t", template, OBJECT_INFO)["prompt"] == "required"
+    assert graph.describe("builtin:txt2img", "t", placeholders, OBJECT_INFO)["prompt"] == "required", (
+        "内置文生图的 `{{prompt}}` 没有默认值:要写")
 
 
 def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> None:

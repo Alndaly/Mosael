@@ -46,7 +46,7 @@ def _text(value: Any, locale: str) -> str:
 
 
 def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """保存的每张工作流(加内置文生图、粘贴的模板):能喂什么、能调什么、会交出什么,跑它用哪个工具。"""
+    """保存的每张工作流(加内置文生图):能喂什么、能调什么、会交出什么,跑它用哪个工具。"""
     query = str(payload.get("query") or "").strip().lower()
     object_info = comfy.object_info()
     found: list[dict[str, Any]] = []

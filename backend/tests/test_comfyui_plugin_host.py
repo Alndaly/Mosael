@@ -50,8 +50,8 @@ def test_随应用装好_卸不掉() -> None:
                                       "filesystem:write"]
     assert package["summary_field"] == "server_url", "收起的连接那一行摆服务器地址"
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
-    template = package["config_fields"][1]
-    assert (template["type"], template["language"]) == ("json", "json"), "API 模板是一段 JSON:代码编辑器 + 保存前校验"
+    assert [one["key"] for one in package["config_fields"]] == ["server_url"], (
+        "「API 模板」撤掉了(插件 1.17.0):导出的 API 格式 JSON 直接导进工作流库就转成界面格式")
     assert client.delete(f"/api/plugins/{PACKAGE}").status_code == 404
 
 

@@ -3,12 +3,11 @@
 最早只有一个通用的 `run_workflow`,入参是写死的一张表(workflow / prompt / image / images / mask / values…):
 它连要跑哪张工作流都不知道,表单却要人填参数 —— 放大工作流也问你要提示词。而每张工作流该收什么,图里写得
 清清楚楚。所以插件在运行时把工具清单交给宿主(见 docs/PLUGIN_MANIFEST 的「运行时报出的工具」),`run_workflow`
-删掉了:它能跑的每一种图(保存的工作流、粘贴的 API 模板、内置文生图)在这里都有自己的工具。
+删掉了:它能跑的每一种图(保存的工作流、内置文生图)在这里都有自己的工具。
 
 - 工具名 `wf_<12 位>`:取 ComfyUI 保存工作流时写进图里的 id(新版前端的 UUID)—— **改名、挪目录都不变**,
   工作流节点和智能体记着的名字不会因此失效;老版本存的图没有 id(或是全零的占位),退到路径的哈希(改名就是
-  另一个工具);几张图撞了同一个 id(拷出来的副本),它们都退到路径的哈希;粘贴的 API 模板是 `wf_api_template`,
-  内置文生图是 `wf_builtin_txt2img`;
+  另一个工具);几张图撞了同一个 id(拷出来的副本),它们都退到路径的哈希;内置文生图是 `wf_builtin_txt2img`;
 - 入参从图里读:提示词 / 反向提示词、每个读素材的节点一格(`image_10`、`mask_11`、`video_1`…,
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
   和生成参数同一套,见 labels);种子、尺寸、跑几遍(`num_images`)收进「高级」;
@@ -40,7 +39,6 @@ import run
 from comfy_http import Comfy
 from lines import ComfyError, say
 
-TEMPLATE_TOOL = "wf_api_template"
 BUILTIN_TOOL = "wf_builtin_txt2img"
 #: 工具一次最多跑多久(宿主的上限就是 1800 秒)。更长的走生成(6 小时、有回执、能续等)。
 TIMEOUT_SECONDS = 1800
@@ -93,8 +91,8 @@ def _ident_key(entry: models.Entry) -> str:
     return ident[:12] if len(ident) >= 12 and ident.strip("0") else ""
 
 
-#: 不在 ComfyUI 里存着的那两张图:名字写死(它们没有路径,也没有 ComfyUI 给的 id)。
-_FIXED_NAMES = {models.TEMPLATE: TEMPLATE_TOOL, models.BUILTIN: BUILTIN_TOOL}
+#: 不在 ComfyUI 里存着的那张图(内置文生图):名字写死(它没有路径,也没有 ComfyUI 给的 id)。
+_FIXED_NAMES = {models.BUILTIN: BUILTIN_TOOL}
 
 
 def tool_names(entries: list[models.Entry]) -> dict[str, str]:
@@ -163,7 +161,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     form = models.form_of(entry, object_info)
     shape.name = form.named(entry.label)
     placeholders = graph._placeholders_in(api)  # noqa: SLF001 — 同一个插件里的模块
-    #: 占位符只在内置图和粘贴的模板里有,它们没有应用表单
+    #: 占位符只在内置文生图里有,它没有应用表单
     auto = set() if form.app else placeholders
     shape.prompts = form.prompts()
     roles = set(shape.prompts.values())
@@ -250,7 +248,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         alias(node, name, key)
 
     if "steps" in auto:
-        # 内置文生图和粘贴的模板里的 `{{steps}}`:保存的工作流的步数是上面那样的一格参数
+        # 内置文生图里的 `{{steps}}`:保存的工作流的步数是上面那样的一格参数
         shape.properties["steps"] = {
             "type": "integer", "minimum": 1, "default": models.PLACEHOLDER_DEFAULTS["steps"], "title": _pair("步数", "Steps"),
         }
@@ -454,7 +452,7 @@ def runnable(entry: models.Entry, object_info: dict[str, Any]) -> bool:
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
-    """`op: tools`:每张跑得起来的工作流(和粘贴的模板)一个工具。"""
+    """`op: tools`:每张跑得起来的工作流(和内置文生图)一个工具。"""
     object_info = comfy.object_info()
     entries = list(models.each(comfy, object_info, locale))
     names = tool_names(entries)
@@ -550,7 +548,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
             title = title.get("zh" if locale.startswith("zh") else "en") if isinstance(title, dict) else title
             raise ComfyError(say(locale, f"「{title}」的值不对:{value}", f"“{title}” has an invalid value: {value}")) from exc
 
-    # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
+    # 跑一张存好的工作流:种子没给就用它存着的;内置文生图的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
     uploads: dict[str, list[str]] | None = None
 

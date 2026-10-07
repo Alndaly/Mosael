@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 /**
- * 插件清单里 `type: "json"` / `type: "code"` 的配置项(ComfyUI 的「API 模板」就是一段 JSON)。
+ * 插件清单里 `type: "json"` / `type: "code"` 的配置项(一段 JSON / 一段代码)。
  *
  * 钉住三件事:用的是**全应用那一个代码编辑器**(不是一个多行文本框);JSON 错在哪一行哪一列当场说,
  * 错着的时候存不了;卡片上只放摘要和「编辑」,编辑在弹窗里,保存才发出去。
@@ -43,8 +43,8 @@ import { CodeConfigControl, codeSummary, jsonProblem } from "./CodeConfigField";
 import { NewConnectionDialog } from "./PluginsView";
 
 const template: PluginField = {
-  key: "api_workflow",
-  label: "API 模板(可选)",
+  key: "extra_options",
+  label: "额外参数(可选)",
   type: "json",
   language: "json",
   help: "可用占位符 `{{prompt}}`",
@@ -105,7 +105,7 @@ describe("CodeConfigControl", () => {
   });
 
   it("后端拒了:原因留在弹窗里,弹窗不关", async () => {
-    const onSave = vi.fn().mockRejectedValue(new Error("「API 模板」不是合法的 JSON:第 1 行第 2 列"));
+    const onSave = vi.fn().mockRejectedValue(new Error("「额外参数」不是合法的 JSON:第 1 行第 2 列"));
     render(<CodeConfigControl field={template} value='{"a": 1}' onSave={onSave} />);
     expect(screen.getByText("pluginCodeFilled")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "pluginCodeEditTitle" }));

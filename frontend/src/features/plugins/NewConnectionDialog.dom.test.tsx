@@ -38,7 +38,7 @@ vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => admin.value }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 vi.mock("@/features/plugins/ModelLibrary", () => ({ ModelLibraryDialog: () => null }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-//: CodeMirror 在 jsdom 里量不了排版:「API 模板」那一格换成一个文本框(和 CodeConfigField 的测试一样)。
+//: CodeMirror 在 jsdom 里量不了排版:JSON 那一格换成一个文本框(和 CodeConfigField 的测试一样)。
 vi.mock("@/components/app/code-editor", () => ({
   CodeEditor: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
     <textarea data-testid="code-editor" value={value} onChange={(event) => onChange(event.target.value)} />
@@ -60,7 +60,8 @@ const COMFY = {
   permissions: ["network:comfyui", "filesystem:write"],
   config_fields: [
     field("server_url", "服务器地址", { required: true, default: "http://127.0.0.1:8188" }),
-    field("api_workflow", "API 模板(可选)", { type: "json", language: "json" }),
+    //: 一项别的配置(一段 JSON):本机的两种模式里也照样列出来、建连接时一起交上去
+    field("extra_options", "额外参数(可选)", { type: "json", language: "json" }),
   ],
   credential_fields: [field("access_token", "访问凭据(可选)", { secret: true })],
   instances: [],
@@ -68,7 +69,7 @@ const COMFY = {
 
 const CREATED = {
   id: "new1", package_id: COMFY.id, name: "ComfyUI · http://127.0.0.1:8189", enabled: false,
-  config: { server_url: "http://127.0.0.1:8189", api_workflow: "" }, blocked_reason: "", pending_permissions: [],
+  config: { server_url: "http://127.0.0.1:8189", extra_options: "" }, blocked_reason: "", pending_permissions: [],
   permissions_added: false, authorization: "", tools: [], capability_status: {}, network: { mode: "follow", proxy_url: "" },
 } as unknown as PluginInstance;
 
@@ -166,7 +167,7 @@ describe("用我自己装的", () => {
     expect(screen.getByLabelText("localServicePython")).toBeTruthy();
     expect(screen.queryByText("服务器地址"), "地址由 Mosael 分端口").toBeNull();
     expect(screen.getByText("localServiceAddressOnCreate")).toBeTruthy();
-    expect(screen.getByText("API 模板(可选)"), "别的配置项三种都有").toBeTruthy();
+    expect(screen.getByText("额外参数(可选)"), "别的配置项三种都有").toBeTruthy();
     const permissions = document.querySelector<HTMLElement>("[data-new-connection-permissions]")!;
     expect(permissions.textContent).toContain("network:comfyui");
     expect(permissions.textContent).toContain("filesystem:write");
@@ -185,7 +186,7 @@ describe("用我自己装的", () => {
     expect(within(confirm).getByText("localServiceConfirmBody")).toBeTruthy();
     fireEvent.click(within(confirm).getByRole("button", { name: "localServiceConfirmRun" }));
     await waitFor(() => expect(api.createPluginInstance).toHaveBeenCalledWith(COMFY.id, {
-      config: { api_workflow: '{"1": {}}' },
+      config: { extra_options: '{"1": {}}' },
       grant_permissions: ["network:comfyui", "filesystem:write"],
       local_service: { mode: "directory", directory: "/Users/me/ComfyUI", python: "", confirm_run_code: true },
     }));

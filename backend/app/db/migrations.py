@@ -4660,6 +4660,36 @@ def _migrate_comfyui_connections_become_plugin_instances() -> None:
         logger.info("把 %d 条 ComfyUI 连接搬成了 ComfyUI 插件的连接", len(profiles))
 
 
+def _migrate_comfyui_connections_drop_the_api_template() -> None:
+    """ComfyUI 连接的配置里删掉「API 模板」`api_workflow`(插件 1.17.0 撤掉了这一项)。
+
+    它是转换认不出的工作流的退路:在 ComfyUI 里「导出 (API)」,把 JSON 粘进连接,模型列表里多一项「API 模板」。现在
+    导出的 API 格式 JSON 直接导进工作流库就会转成界面格式(插件 workflow_import),是一张普通的保存的工作流 —— 这一项
+    没用了,清单里删了。存着的连接上这个键再留着就是一个没人读、也没人能改的变量,照旧被注入插件进程,所以这里摘掉。
+    粘过内容的(删掉就丢了)记一句日志,说是哪几条连接。**写死包 id 与配置键**:迁移是历史的快照。幂等。
+    """
+    if "plugin_instances" not in set(inspect(engine).get_table_names()):
+        return
+    dropped: list[str] = []
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, name, config FROM plugin_instances WHERE package_id = 'dev.mosael.comfyui'")
+        ).fetchall()
+        for instance_id, name, raw in rows:
+            try:
+                config = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(config, dict) or "api_workflow" not in config:
+                continue
+            if str(config.pop("api_workflow") or "").strip():
+                dropped.append(str(name or instance_id))
+            conn.execute(text("UPDATE plugin_instances SET config = :c WHERE id = :i"),
+                         {"c": json.dumps(config, ensure_ascii=False), "i": instance_id})
+    if dropped:
+        logger.warning("ComfyUI 连接的「API 模板」撤掉了,这几条连接上粘过的模板随之删掉:%s", "、".join(dropped))
+
+
 def _migrate_blender_host_is_ipv4() -> None:
     """Blender 连接的主机 `::1` 改成 `127.0.0.1`。
 
@@ -8691,6 +8721,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_comfyui_connections_become_plugin_instances,
+                # 插件 1.17.0 撤掉了「API 模板」:存着的连接配置里摘掉这一格。排在上一步之后 —— 它可能刚把老连接的模板
+                # 搬进这一格。
+                _migrate_comfyui_connections_drop_the_api_template,
                 # MiniMax 音乐撤掉(ADR 0022 补充):清掉存着的指向。
                 _remove_minimax_music_models,
                 # Blender 连接的 `::1` 从来连不上(上游两头都是 IPv4 套接字),改成 127.0.0.1。

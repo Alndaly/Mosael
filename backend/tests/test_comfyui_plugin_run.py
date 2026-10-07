@@ -2,7 +2,7 @@
 
 钉住的是插件那一侧的协议与行为(见 docs/PLUGIN_MANIFEST「替宿主做生成」):
 
-- `op: models` 列出内置文生图、粘贴的 API 模板、保存的每张工作流,坏模板也列(选中时说清哪里坏);
+- `op: models` 列出内置文生图和保存的每张工作流(「API 模板」插件 1.17.0 撤掉了:连接上就算还带着这一格也不列);
 - `op: generate`:参考图先 `/upload/image` 再接到 LoadImage 上;参数表里动过的值写回对应节点;
   提交后立刻交回回执;进度来自 WebSocket(连不上就轮询);产出取回到 MOSAEL_PLUGIN_OUTPUT_DIR;
 - 取消只停**这一个**任务(在跑的 interrupt,不碰队列里别人的);重启后带着回执接着等,不再提交;
@@ -84,24 +84,19 @@ def _png(tmp_path: Path) -> Path:
 # --- 目录 ---------------------------------------------------------------------
 
 
-def test_目录列出内置文生图_API模板和每张保存的工作流(comfy) -> None:
+def test_目录列出内置文生图和每张保存的工作流_不再有API模板(comfy) -> None:
+    """「API 模板」(连接上粘一份「导出 (API)」的 JSON)撤掉了:导出的 API 格式直接导进工作流库就会转成界面格式。
+    插件不再读这一格 —— 就算还被注入了,也不多出一项模型。"""
     template = json.dumps({"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
                            "2": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["1", 0]}}})
     models = {one["id"]: one for one in _models(comfy.url, API_WORKFLOW=template)}
-    assert list(models) == ["builtin:txt2img", "api-workflow", "portrait.json", "video/wan.json"]
+    assert list(models) == ["builtin:txt2img", "portrait.json", "video/wan.json"]
     assert models["builtin:txt2img"]["label"] == {"zh": "内置文生图", "en": "Built-in text-to-image"}
     assert models["builtin:txt2img"]["parameters"]["size"]["default"] == "1024x1024"
     assert models["builtin:txt2img"]["parameters"]["4.ckpt_name"]["default"] == "sd_xl_base.safetensors"
     assert models["portrait.json"]["label"] == "portrait" and models["portrait.json"]["kind"] == "image"
     assert models["portrait.json"]["inputs"] == [{"role": "reference_image", "max": 1}]
     assert models["video/wan.json"]["kind"] == "video"
-
-
-def test_坏模板也列出来_选中时再说清楚哪里坏(comfy, tmp_path: Path) -> None:
-    models = {one["id"]: one for one in _models(comfy.url, API_WORKFLOW="not json")}
-    assert models["api-workflow"]["kind"] == "image"
-    with pytest.raises(runtime.PluginRuntimeError, match="导出"):
-        _generate(comfy.url, tmp_path, {"model": "api-workflow"}, API_WORKFLOW="not json")
 
 
 def test_刚装好还没存过工作流_照样列出内置文生图(comfy) -> None:
@@ -163,9 +158,7 @@ def test_文件名里有引号也传得上去(comfy, tmp_path: Path) -> None:
 
 
 def test_目录里说清每张图要不要写提示词(comfy) -> None:
-    template = json.dumps({"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
-                           "2": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["1", 0]}}})
-    models = {one["id"]: one for one in _models(comfy.url, API_WORKFLOW=template)}
+    models = {one["id"]: one for one in _models(comfy.url)}
     assert models["builtin:txt2img"]["prompt"] == "required", "内置文生图的提示词是占位符,没有默认"
     assert models["portrait.json"]["prompt"] == "optional", "存着「a cat」:不写就用它"
 

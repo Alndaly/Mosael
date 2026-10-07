@@ -98,10 +98,10 @@ back. **Save nodes are never narrowed down** (the workflow author asked to keep 
 files still win over previews; a graph with no decoder at all (upscaling, preprocessing tools, partner API nodes) is
 left alone. The workflow tool ("Workflow · name") still returns every output node as-is.
 
-There are two more models: **Built-in text-to-image** (when the server has at least one checkpoint) and **API template**
-(when the connection config has the JSON from "Export (API)" pasted in; the `{{prompt}}` `{{negative}}` `{{seed}}`
-`{{width}}` `{{height}}` `{{steps}}` placeholders work as before; this config field is `type: "json"`, so the Plugins
-page gives it a code editor and validates it before saving).
+There is one more model: **Built-in text-to-image** (when the server has at least one checkpoint). The "API template"
+(an "Export (API)" JSON pasted into the connection as a model) was removed in 1.17.0: for a workflow the converter can't
+read, import the exported API-format JSON into the workflow library — it is converted to UI format on import and becomes
+an ordinary saved workflow. On upgrade the host's migration drops that field from stored connection configs.
 
 ## Tools
 
@@ -116,8 +116,7 @@ wiring workflows (declared as `wiring_outputs`: on a board only each output node
 several runs) is the ordered list of ids, so a batch-of-2 workflow shows both images on that port, on the node and on a
 board; `asset_id` ("First output") stays the single first one for steps that take one asset.
 The tool's id comes from the id ComfyUI writes into the workflow file (stable across renames and moves between folders),
-falling back to a hash of the path; the template is `wf_api_template` and the built-in text-to-image is
-`wf_builtin_txt2img`. **Its label is the same name as in the model picker** (1.17.0): "Workflow · " plus the app form's title when
+falling back to a hash of the path; the built-in text-to-image is `wf_builtin_txt2img`. **Its label is the same name as in the model picker** (1.17.0): "Workflow · " plus the app form's title when
 the workflow has a simplified form with a title, otherwise plus the file name; with a title, the description names
 the file, so searching by either finds it. Renaming the title changes only the label, never the id.
 

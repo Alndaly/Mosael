@@ -1019,7 +1019,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
 「替宿主做生成」的完整范例:动态模型目录与指纹、按语言分的参数名、参考图 / 蒙版 / 视频槽位、NDJSON 进度、取消文件、
 回执与接着取;也是**运行时报出的工具**(每张工作流一个,带 `replaces`、`wiring_outputs`,能表达成生成模型的带 `mirrors`)、**流式工具**和**一次交出几份文件**的范例
-(工作流的工具、`import_outputs`),以及 `json` 配置项(API 模板)。
+(工作流的工具、`import_outputs`)。
 
 **object-storage**(「对象存储」)是 `public_url` 的第一方实现:阿里云 OSS / 腾讯云 COS / 火山引擎 TOS /
 Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STORAGE_PROVIDER`,和 TikHub 的平台同一种写法),

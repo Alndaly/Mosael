@@ -71,19 +71,6 @@
           "zh": "本机默认是 http://127.0.0.1:8188;填局域网地址就能用另一台机器的显卡。多台服务器就建多个连接。",
           "en": "http://127.0.0.1:8188 on this machine; a LAN address uses another machine's GPU. One connection per server."
         }
-      },
-      {
-        "key": "api_workflow",
-        "label": {
-          "zh": "API 模板(可选)",
-          "en": "API template (optional)"
-        },
-        "type": "json",
-        "required": false,
-        "help": {
-          "zh": "转换认不出的工作流的退路:在 ComfyUI 里「导出 (API)」,把得到的 JSON 贴在这里,它在模型列表里叫「API 模板」。可用占位符 `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}`。",
-          "en": "A fallback for workflows the converter can't read: use “Export (API)” in ComfyUI and paste the JSON here; it appears as “API template” in the model list. Placeholders: `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}`."
-        }
       }
     ],
     "credentials": [
@@ -176,8 +163,8 @@
           "en": "List workflows"
         },
         "description": {
-          "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图和粘贴的 API 模板):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点)。",
-          "en": "Every workflow on this ComfyUI (plus the built-in text-to-image and a pasted API template): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes)."
+          "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点)。",
+          "en": "Every workflow on this ComfyUI (plus the built-in text-to-image): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes)."
         },
         "input_schema": {
           "type": "object",

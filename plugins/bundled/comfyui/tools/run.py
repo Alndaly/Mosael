@@ -66,7 +66,7 @@ def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults
                 keep_seed: bool = False) -> dict[str, Any]:
     """宿主主控件的那几样。**只放给了的**(和占位符的默认值)—— 没选尺寸就不改这张图的尺寸。
 
-    提示词、反向提示词空着是「没写」:用这张图自己存着的那句(内置图和粘贴的模板由占位符的默认值兜底),
+    提示词、反向提示词空着是「没写」:用这张图自己存着的那句(内置文生图由占位符的默认值兜底),
     不是把它清成空串 —— 宿主对没填的反向提示词发的就是空串。
     """
     values: dict[str, Any] = dict(defaults)
@@ -86,9 +86,8 @@ def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults
     for key in ("width", "height"):
         if _number(parameters.get(key)):
             values[key] = graph.snap_side(parameters[key])
-    for key in ("steps", "duration_seconds"):
-        if _number(parameters.get(key)):
-            values[key] = parameters[key]
+    if _number(parameters.get("steps")):
+        values["steps"] = parameters["steps"]
     return values
 
 

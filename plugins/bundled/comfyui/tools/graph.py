@@ -729,8 +729,8 @@ def output_media(class_type: str) -> str:
 # 描述:一张图 → 插件目录里的一个模型
 # ---------------------------------------------------------------------------
 
-#: 占位符(粘贴的 API 模板里用的写法)→ 它在请求里是什么。
-PLACEHOLDERS = ("prompt", "negative", "seed", "width", "height", "steps", "duration_seconds")
+#: 占位符(内置文生图里用的写法)→ 它在请求里是什么。
+PLACEHOLDERS = ("prompt", "negative", "seed", "width", "height", "steps")
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 #: 尺寸下拉里**推荐**的几档(不是限制:任意宽高都收,每边取整到 SIZE_STEP 的倍数、至少 SIZE_MINIMUM)。
@@ -1062,7 +1062,7 @@ class Form:
 
     def named(self, label: Any) -> Any:
         """这张图在 Mosael 里**叫什么** —— 到处同一个名字:作者在应用表单上起了标题就是标题,否则是它自己的名字(`label`:
-        保存的工作流是文件路径去掉 `.json`,内置图和模板是写死的那一对)。生成的模型下拉(describe)、每张图的工具
+        保存的工作流是文件路径去掉 `.json`,内置文生图是写死的那一对)。生成的模型下拉(describe)、每张图的工具
         (添加节点、画布上的节点、画板的能力、智能体的工具,见 tooling)、`list_workflows` 读的都是这一条。"""
         return self.title if self.app and self.title else label
 
@@ -1263,7 +1263,7 @@ def describe(
       `num_images`,它在这里是跑几遍 —— `x-count-unit: runs`,见 counts_runs);
     - 其余的项按 `<节点 id>.<输入名>` 列成参数,按表单的顺序、用表单上的名字(缺省按常用程度,见 `tunable`);
     - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频),每个槽位按顺序带名字(`labels`,见 Form.slot_labels);
-    - 粘贴的模板里的 `{{占位符}}` 一样认(模板没有应用表单);
+    - 内置文生图里的 `{{占位符}}` 一样认(它没有应用表单);
     - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);应用表单里
       没有主提示词的也是 `none` —— 那几格照工作流里存的那句跑;
     - 跑一遍交回几张(`outputs_per_run`,「结果取自」按缺省时)照实说:这一种里交回的节点(见 generation_nodes)各按
@@ -1275,7 +1275,7 @@ def describe(
     sized = size_node(api)
     placeholders = _placeholders_in(api)
     form = form or default_form(items(api, object_info, titles))
-    #: 占位符只在内置图和粘贴的模板里有,它们没有应用表单
+    #: 占位符只在内置文生图里有,它没有应用表单
     auto = set() if form.app else placeholders
     prompts = form.prompts()
     found_slots = form.slots()
@@ -1300,8 +1300,6 @@ def describe(
     if "steps" in auto:
         parameters["steps"] = {"type": "integer", "minimum": 1, "maximum": 200, "default": 20,
                                "title": {"zh": "步数", "en": "Steps"}}
-    if "duration_seconds" in auto:
-        parameters["duration_seconds"] = {"type": "integer", "minimum": 1}
     if len(delivering) > 1:
         parameters[OUTPUT_CHOICE] = _output_choice(delivering, api, object_info, form.results)
     for field in form.parameters():

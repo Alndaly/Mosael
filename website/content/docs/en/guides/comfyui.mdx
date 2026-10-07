@@ -110,11 +110,8 @@ image model. **A workflow that only outputs text is not a model** (taggers, prom
 node is a Show Text kind): it can't hand back an image, so picking it would never produce one. It is still a tool
 (see below), usable in workflows and on boards.
 
-Two more models may appear:
-
-- **Built-in text-to-image**, when at least one checkpoint model is installed in ComfyUI — it works even with no
-  saved workflows;
-- **API template**, when an “Export (API)” JSON is pasted into the connection (see the last section).
+One more model may appear: **Built-in text-to-image**, when at least one checkpoint model is installed in ComfyUI —
+it works even with no saved workflows.
 
 A workflow deleted in ComfyUI disappears from the pickers too.
 
@@ -168,7 +165,7 @@ prompt; Flux-style workflows keep natural language.
 
 ## Tools: ComfyUI for the agent and for workflows
 
-**One tool per workflow.** Every workflow saved in ComfyUI (plus a pasted API template and the built-in text-to-image) shows up as “Workflow · name” in
+**One tool per workflow.** Every workflow saved in ComfyUI (plus the built-in text-to-image) shows up as “Workflow · name” in
 the tool list, the workflow node panel and the agent's tools, with a form made from that graph. The name is the same as in the
 model picker: the simplified form's title when it has one, otherwise the file name; searching by either finds it, and renaming
 the title changes only the name, not the nodes that use it:
@@ -660,14 +657,13 @@ ComfyUI on this computer needs), so an upgraded connection is switched off once 
 `network:comfy-registry` (the workbench Assistant checks the official Comfy registry), granted the same way. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
 forms (such as one image per run) follow without a manual refresh.
 
-## Workflows it can't read: the API template
+## Workflows it can't read: export the API format and import it
 
 Mosael reads workflows in the UI format ComfyUI saves, following the same rules ComfyUI uses when it queues them:
 bypassed nodes pass their inputs straight through, muted nodes don't run, helper nodes such as Reroute, Primitive and
 Get / Set are resolved, subgraphs are expanded into their nodes, and workflows saved by older ComfyUI versions are read
 too. Convert legacy group nodes to subgraphs in ComfyUI and save again. A few unusual ones (custom nodes whose inputs
 are added on the fly by a UI extension) may not convert (“List workflows” lists them with the reason). For those,
-use **Export (API)** in ComfyUI, click **Edit** on the connection's “API template” row and paste the JSON into the
-code editor — it tells you the line and column of any mistake and won't save broken JSON. It shows up as the
-“API template” model. The template may contain placeholders — `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}`
-`{{height}}` `{{steps}}` — which Mosael fills in when it generates.
+use **Export (API)** in ComfyUI and import that JSON into the workflow library (**Open workflow library** on the
+connection card → Import): it is converted to UI format and saved as an ordinary workflow, so it shows up in the model
+pickers and as a tool. The connection's former “API template” field is gone; upgrading drops it from stored connections.

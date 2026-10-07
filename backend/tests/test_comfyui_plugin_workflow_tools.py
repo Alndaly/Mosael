@@ -5,8 +5,7 @@
 输出节点。后来又问:「它连要跑哪张工作流都不知道,却要人填参数」—— 通用的 `run_workflow` 于是删了,它能跑的
 每一种图(内置文生图也算)都有自己的工具。这里对着假的 ComfyUI 钉住:
 
-- 工具名稳:有 UUID 的图用 UUID(改名、挪目录都不变),没有的退到路径哈希,模板是 `wf_api_template`,
-  内置文生图是 `wf_builtin_txt2img`;
+- 工具名稳:有 UUID 的图用 UUID(改名、挪目录都不变),没有的退到路径哈希,内置文生图是 `wf_builtin_txt2img`;
 - 入参:提示词 / 素材(带种类)/ 参数(人话名字、范围、可选值、高级)/ 种子尺寸张数(高级),必填的是真必须的;
 - 输出按输出节点声明;`replaces` 说清楚老的 `run_workflow` 怎么改写过来(`values` 按节点 id 和按节点标题的都认);
 - 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点交出的每一份都记在它的具名输出上;
@@ -49,8 +48,9 @@ def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
     template = ('{"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}}, '
                 '"9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}}}')
     tools = _tools(comfy.url, tmp_path, API_WORKFLOW=template)
-    assert set(tools) == {PORTRAIT_TOOL, UPSCALE_TOOL, "wf_api_template", "wf_builtin_txt2img",
-                          "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, "通用的 run_workflow 能跑的每一种图都有工具"
+    assert set(tools) == {PORTRAIT_TOOL, UPSCALE_TOOL, "wf_builtin_txt2img",
+                          "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, (
+        "通用的 run_workflow 能跑的每一种图都有工具;「API 模板」撤掉了,连接上就算还带着它也没有 wf_api_template")
     assert tools[PORTRAIT_TOOL]["label"] == {"zh": "工作流 · portrait", "en": "Workflow · portrait"}
     assert tools[PORTRAIT_TOOL]["stream"] is True and tools[PORTRAIT_TOOL]["recommended"] is True
     # 在 ComfyUI 里改了名、挪了目录:图里的 id 没变,工具名就不变 —— 工作流节点和智能体记着的名字不失效
