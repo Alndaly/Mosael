@@ -36,6 +36,12 @@
  * 路径(没存过的也有,形如 `workflows/Unsaved Workflow (2).json`),面板按它认「换了一张」;`revision` 是这一张的图**改过几回**
  * —— 前端自己的改动跟踪(`changeTracker`)每认一次改动就换一份 `activeState`,桥看到换了就加一(选中节点不算改动)。
  *
+ * **画布丢了上下文**:GPU 进程重启、睡眠唤醒、换显示器之后,浏览器会把画布的 2D 上下文丢掉再还回来 —— 还回来的上下文
+ * 状态是默认的,ComfyUI 当初给它的设备像素比缩放没了,后备缓冲却还是原来那么大:LiteGraph 按 1× 往 2× 的缓冲里画,
+ * 网格只占左上角一块、连线缩一半漂在左上,Vue 画的节点照常在原处,对不上,直到下一次改大小(维护者:「左侧这个 ComfyUI
+ * 崩溃了」)。ComfyUI 只在画布大小变了时重设(ResizeObserver),这时大小没变;桥接住 `contextrestored` 和设备像素比的
+ * 变化,替它走一遍它自己的 `app.resizeCanvas`(重设缓冲、补上缩放、重画)。
+ *
  * **同一张换了地方**(ADR 0044 §9):前端仓库里的每一张(`workflows`,没开着的也算)桥都记着上次看到的「路径 + 存没存过」;
  * 同一个对象变了 —— 存一张没存过的(前端先给它改名、再存)、改名、挪文件夹 —— 就记一条 `renames`,随下一次轮询报一次,
  * 工作台据此把对话的家和这一处的选择挪过去。「另存为」是前端新建的一个对象、一个新地方,不算(对话留在原来那张)。
@@ -47,8 +53,9 @@
  * 节点路径(`12:5`),一层层打开子图;轮询报那台 ComfyUI 和它前端的版本(ADR 0042)。5:智能体改图(applyOps:一批改动
  * 先全查一遍再改、只占一步撤销,根图和子图的定义、边界口、提升控件、打包 / 拆开)、在新标签页开一张整图(openWorkflow,
  * 不存盘)(ADR 0042 第二步)。6:报同一张换了地方(renames:存没存过的那张、改名、挪文件夹,ADR 0044 第四步)。
+ * 7:画布的 2D 上下文丢了又回来、设备像素比变了,替 ComfyUI 把画布重设一次大小(见 healCanvas)。
  */
-export const WORKBENCH_VERSION = 6;
+export const WORKBENCH_VERSION = 7;
 
 /** 一批改动最多几条(和 ipc-contract、插件的 canvas_edit 同一个数)。 */
 export const MAX_EDIT_OPS = 200;
@@ -228,6 +235,33 @@ export function workbenchInstallScript(origin: string): string {
       // 画布照样改了;脏标记由前端下次自己核对
     }
   };
+  //: 画布的 2D 上下文丢了又回来、设备像素比变了(拖到另一块屏):替 ComfyUI 重设一次大小,走它自己的 resizeCanvas(见文件头)。
+  //: contextrestored 不冒泡,在 window 上按捕获接;认的是此刻那块画布(前端可能换过元素)。这版前端没有这个方法就什么都不做
+  const graphCanvasEl = () => (app.canvas && app.canvas.canvas) || null;
+  const healCanvas = () => {
+    const el = graphCanvasEl();
+    if (!el || typeof app.resizeCanvas !== "function") return;
+    try {
+      app.resizeCanvas(el);
+    } catch (error) {
+      // 补不上:下一次画布改大小时 ComfyUI 自己会重设
+    }
+  };
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("contextrestored", (event) => {
+      if (event && event.target && event.target === graphCanvasEl()) healCanvas();
+    }, true);
+  }
+  const watchRatio = () => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(resolution: " + window.devicePixelRatio + "dppx)");
+    if (!query || typeof query.addEventListener !== "function") return;
+    query.addEventListener("change", () => {
+      healCanvas();
+      watchRatio();
+    }, { once: true });
+  };
+  watchRatio();
   //: 改动跟踪每认一次改动换一份 activeState:换了(或换了一张工作流)就加一
   let seenWorkflow = null;
   let seenState = null;

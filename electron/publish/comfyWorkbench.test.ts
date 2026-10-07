@@ -166,6 +166,45 @@ describe("工作台的桥(注入的脚本)", () => {
     expect(await workflow()).toMatchObject({ path: "workflows/Unsaved Workflow (2).json", revision: 3 });
   });
 
+  it("画布的 2D 上下文丢了又回来、设备像素比变了:替 ComfyUI 走一遍它自己的 resizeCanvas;别的元素的事不管,这版前端没有就不做", async () => {
+    //: 维护者那台:GPU 进程重来之后上下文的缩放回到 1×、缓冲还是 2×,网格缩在左上、连线和节点对不上。ComfyUI 只在大小变了时重设
+    const page = comfyPage();
+    const captured = new Map<string, (event: { target: unknown }) => void>();
+    const ratios: { query: string; change: () => void }[] = [];
+    Object.assign(page.window, {
+      devicePixelRatio: 2,
+      addEventListener: (type: string, listener: (event: { target: unknown }) => void, capture: boolean) => {
+        expect(capture, "contextrestored 不冒泡:在 window 上按捕获接").toBe(true);
+        captured.set(type, listener);
+      },
+      matchMedia: (query: string) => {
+        const entry = { query, change: () => undefined };
+        ratios.push(entry);
+        return { addEventListener: (_type: string, listener: () => void) => (entry.change = listener) };
+      },
+    });
+    const canvasEl = { id: "graph-canvas" };
+    const resizeCanvas = vi.fn();
+    Object.assign(page.app.canvas, { canvas: canvasEl });
+    Object.assign(page.app, { resizeCanvas });
+    await installed(page);
+    const restored = captured.get("contextrestored")!;
+    restored({ target: { id: "some-other-canvas" } });
+    expect(resizeCanvas, "别的画布(预览图、遮罩编辑器)的事不管").not.toHaveBeenCalled();
+    restored({ target: canvasEl });
+    expect(resizeCanvas).toHaveBeenCalledTimes(1);
+    expect(resizeCanvas).toHaveBeenLastCalledWith(canvasEl);
+    //: 拖到另一块屏:设备像素比 2 → 1,大小没变,ResizeObserver 不回调
+    expect(ratios.map((one) => one.query)).toEqual(["(resolution: 2dppx)"]);
+    page.window.devicePixelRatio = 1;
+    ratios[0].change();
+    expect(resizeCanvas).toHaveBeenCalledTimes(2);
+    expect(ratios.map((one) => one.query), "接着盯新的那个比例").toEqual(["(resolution: 2dppx)", "(resolution: 1dppx)"]);
+    //: 这版前端没有 resizeCanvas:什么都不做,不抛
+    delete (page.app as { resizeCanvas?: unknown }).resizeCanvas;
+    expect(() => restored({ target: canvasEl })).not.toThrow();
+  });
+
   it("同一张换了地方(ADR 0044 §9):存没存过的那张、改名、侧栏里改一张没开着的,各记一条、取一次清一次;另存为是新的一张,不算", async () => {
     const page = await installed();
     //: 前端仓库里认得的每一张(没开着的也在):开着的这张、一张没存过的、一张存着没开的
