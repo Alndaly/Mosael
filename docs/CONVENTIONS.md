@@ -100,6 +100,9 @@
 - 所有用户可见文案走 i18n(`src/app/messages.ts`),中英两份都要有。
 - 时间线的几何计算住在 `domain/timeline/geometry.ts`,是有测试的纯函数;组件里不内联几何。
 - 动态长列表的下拉用共享的可搜索 Combobox;拖拽交互用 dnd-kit。
+- **从素材库挑媒体(图片、视频、音频、文档素材)的弹窗只有一种:`components/app/AssetGridPicker`** —— 缩略图网格,格子下面写名字、
+  种类和尺寸、来源和多久以前;键盘、看大图、加载 / 空态都在里面。点了即挑中的直接用,多选或先选再确认的给 `selection` 和 `footer`,
+  头里的筛选和动作给 `toolbar`。按名字挑的清单(笔记、3D 场景、资产)用 `components/app/PickListDialog`;表单里就地挑一份的用 Combobox。
 - **悬停说明只有三种写法,不用原生 `title`。** 原生 `title` 停一秒多才出、样式是系统的、深色下不跟主题,
   还不管字放不放得下都出。只有图标的按钮用 `IconButton`(名字只写一次:既是 `aria-label` 也是说明的第一行;
   快捷键给 `shortcut`,点不了给 `disabledReason` —— 禁用的按钮自己收不到悬停,它会在外面套一层壳);文字按钮、
