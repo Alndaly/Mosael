@@ -5,29 +5,9 @@ import { INTERFACE_FONTS, loadInterfaceFont, normalizeInterfaceFont, type Interf
 import { useQueryClient } from "@tanstack/react-query";
 
 import { configureApiLocale, type ApiLocale } from "@/api/client";
-
-export type Theme = "light" | "dark" | "system";
-type Locale = "zh-CN" | "en-US";
+import { PreferencesContext, type Locale, type PreferencesContextValue, type Theme } from "@/app/preferencesContext";
 
 const STORAGE_KEY = "mosael.preferences";
-
-
-
-
-type PreferencesContextValue = {
-  font: InterfaceFont;
-  setFont: (font: InterfaceFont) => void;
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  /** 免提浮标浮不浮着。本地偏好 —— 见 provider 里那段说明。 */
-  voiceDock: boolean;
-  setVoiceDock: (on: boolean) => void;
-  locale: Locale;
-  setLocale: (locale: Locale) => void;
-  t: (key: MessageKey) => string;
-};
-
-const PreferencesContext = React.createContext<PreferencesContextValue | null>(null);
 
 /**
  * 交给 api 层的那份语言配置:请求头,和连不上时那句话(文案在这一层,api 层不认识文案表)。

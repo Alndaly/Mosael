@@ -47,3 +47,22 @@ it("创建 context 的模块只依赖 React、类型和纯逻辑", () => {
   expect(offenders.filter((path) => !KNOWN.has(path)), "把 context 和取它的 hook 拆进一个不引 UI 的模块").toEqual([]);
   expect([...KNOWN].filter((path) => !offenders.includes(path)), "已经拆好了 —— 从 KNOWN 里删掉").toEqual([]);
 });
+
+/**
+ * 文案表几乎每次改动都会变(加一条、改一句)。context 模块要是在运行时引它 —— 直接引 `@/app/messages`,或者引
+ * 从它取文案的 `@/app/preferences` —— 改一句文案就会把 context 模块整个重跑、换出一个新的 context。偏好的 context
+ * 就这样整窗挂过(「usePreferences must be used inside PreferencesProvider」)。只引类型不算:类型在运行时不存在。
+ */
+const TEXT_IMPORT = /^import\s+(?!type\b)[^;]*?from\s+"@\/app\/(messages|preferences)(\/[^"]*)?";?$/gm;
+
+/** 已知的、还没拆的:context 模块在运行时取文案。只许减少。 */
+const KNOWN_TEXT = new Set(["components/app/image-preview.tsx"]);
+
+it("创建 context 的模块不在运行时引文案表", () => {
+  const offenders = sources(SRC)
+    .filter((path) => /\bcreateContext\s*[<(]/.test(readFileSync(path, "utf8")))
+    .filter((path) => [...readFileSync(path, "utf8").matchAll(TEXT_IMPORT)].length > 0)
+    .map((path) => relative(SRC, path));
+  expect(offenders.filter((path) => !KNOWN_TEXT.has(path)), "context 和取它的 hook 拆进一个只依赖 React 和类型的模块").toEqual([]);
+  expect([...KNOWN_TEXT].filter((path) => !offenders.includes(path)), "已经拆好了 —— 从 KNOWN_TEXT 里删掉").toEqual([]);
+});

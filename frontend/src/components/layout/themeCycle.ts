@@ -1,7 +1,7 @@
 import { MonitorCog, Moon, Sun, type LucideIcon } from "lucide-react";
 
 import type { MessageKey } from "@/app/messages";
-import type { Theme } from "@/app/preferences";
+import type { Theme } from "@/app/preferencesContext";
 
 /**
  * 三档主题的顺序、名字和图标。顶栏按钮、⌘K 里那一项、设置 → 外观的分段按钮都读这里,
