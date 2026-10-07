@@ -433,6 +433,16 @@ def _wire_seams() -> None:
     capabilities.register_use_finder(confirmable_registry.capability_uses)
     agent_receipts.install()
     plugin_connections.install()
+    # 连接上的模型改了名(插件的一次性改名,ADR 0045):生成的会话和记录、用量、定时任务跟着改(画板、工作流在下面两个
+    # install 里登记)。provider 域不认识它们。
+    from app.domain.billing import usage as billing_usage
+    from app.domain.generation import moved_models as generation_moved_models
+    from app.domain.providers import moved_models
+    from app.domain.scheduler import operations as scheduler_operations
+
+    moved_models.on_moved(generation_moved_models.follow)
+    moved_models.on_moved(billing_usage.follow_moved_models)
+    moved_models.on_moved(scheduler_operations.follow_moved_models)
     plugin_references.install()
     board_plugin_references.install()
     asset_plugin_bridge.install()

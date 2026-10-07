@@ -56,7 +56,7 @@ MISSING = object()
 
 class Replacement:
     def __init__(self, package_id: str, instance_id: str, new_tool: str, spec: dict[str, Any], properties: set[str],
-                 *, retired: bool = False, outputs: list[str] | None = None):
+                 *, retired: bool = False, outputs: list[str] | None = None, only_chosen: bool = False):
         self.package_id = package_id
         self.instance_id = instance_id
         self.new_tool = new_tool
@@ -71,6 +71,8 @@ class Replacement:
         self.outputs = set(outputs or ["output"])
         #: 老工具在这个连接上**已经不在了**:对不上的格子丢掉,而不是留下一个跑不起来的节点。
         self.retired = retired
+        #: 只改**选了这个连接**的节点:没选连接的节点跑的时候可能落到另一条也有这个工具名的连接上,在那里它不是这件事。
+        self.only_chosen = only_chosen
 
     def target(self, path: str) -> Any:
         if path in self.rename:
@@ -182,7 +184,7 @@ def rewrite_node(
     for replacement in found:
         if replacement.package_id != package_id or replacement.old_tool != tool_name:
             continue
-        if chosen and replacement.instance_id != chosen:
+        if (chosen or replacement.only_chosen) and replacement.instance_id != chosen:
             continue
         unplaced: list[str] = []
         converted = convert(config, replacement, unplaced)
@@ -390,8 +392,6 @@ def _rewrite_scope(
 
 def rewrite_replaced_tools(db: Session) -> int:
     """把库里所有工作流里能改的老插件节点改掉。返回改了几个工作流。"""
-    from app.domain.workflows.revisions import commit_graph_revision, current_workflow_revision, revision_vouchers
-
     found = replacements(db)
     if not found:
         return 0
@@ -405,8 +405,6 @@ def rewrite_replaced_tools(db: Session) -> int:
         rewritten = rewrite_graph(deepcopy(workflow.graph), found, dropped, unchecked)
         if rewritten == workflow.graph:
             continue
-        previous = current_workflow_revision(db, workflow)
-        vouchers = revision_vouchers(db, previous)
         note = "插件工具换了新写法:改用取代它的那个工具"
         if dropped:
             # 丢了什么要说出来:老工具已经不在了,这几格在新工具上没有位置(上一版修订里还看得到原值)
@@ -415,18 +413,84 @@ def rewrite_replaced_tools(db: Session) -> int:
         if unchecked:
             # 口改了名,引用带着子路径:新口的值形状可能不一样,取到空也不会报错 —— 说出来让人核对
             note += "。这些下游引用跟着输出口改了名,但带着子路径(新口的值未必是同一个形状,对不上会取到空),请核对:" + "、".join(unchecked)
-        revision = commit_graph_revision(
-            db, workflow, lambda graph: rewrite_graph(graph, found), source="migration", created_by=previous.created_by,
-            note=note[:2000],
-        )
-        if revision is not None:
-            # 认可过上一版的人照样为这一版担保:机械改写不该让一条跑得好好的流程停下来等人认可
-            for user in vouchers - {revision.created_by}:
-                db.add(WorkflowRevisionAttestation(revision_id=revision.id, user_id=user))
+        if _commit_mechanical_revision(db, workflow, lambda graph: rewrite_graph(graph, found), note):
             changed += 1
     db.commit()
     if changed:
         logger.info("把 %d 个工作流里的老插件节点改写成了取代它的工具", changed)
+    return changed
+
+
+def _commit_mechanical_revision(db: Session, workflow: Workflow, rewrite: Any, note: str) -> bool:
+    """机械改写落一版修订(`source = "migration"`):作者沿用上一版,认可过上一版的人照样为这一版担保 —— 机械改写不该
+    让一条跑得好好的流程停下来等人认可。不提交。"""
+    from app.domain.workflows.revisions import commit_graph_revision, current_workflow_revision, revision_vouchers
+
+    previous = current_workflow_revision(db, workflow)
+    vouchers = revision_vouchers(db, previous)
+    revision = commit_graph_revision(db, workflow, rewrite, source="migration", created_by=previous.created_by,
+                                     note=note[:2000])
+    if revision is None:
+        return False
+    for user in vouchers - {revision.created_by}:
+        db.add(WorkflowRevisionAttestation(revision_id=revision.id, user_id=user))
+    return True
+
+
+# ── 一次性的改名(ADR 0045,见 domain/plugins/moves) ──────────────────────────────────
+
+
+def moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str]) -> list[Replacement]:
+    """这个连接的工具改了名(旧工具名 → 新工具名),写成「取代」:节点类型换成新名字,配置照新工具的入参同名接 ——
+    旧名字从这一版起另有所指,对不上的格子丢掉、记进修订说明(当作老用法已经不在了)。没选连接的节点,只有别的连接
+    都没有这个旧工具名时才改(`only_chosen`)。"""
+    tools = {str(tool.get("name")): tool for tool in instance.discovered_tools or [] if isinstance(tool, dict)}
+    others = [one for one in db.scalars(select(PluginInstance).where(PluginInstance.package_id == instance.package_id,
+                                                                     PluginInstance.id != instance.id))]
+    found: list[Replacement] = []
+    for source, target in renames.items():
+        tool = tools.get(target)
+        if tool is None:
+            continue
+        schema = tool.get("input_schema") if isinstance(tool.get("input_schema"), dict) else {}
+        shared = any(source == str(one.get("name")) for other in others for one in other.discovered_tools or []
+                     if isinstance(one, dict))
+        found.append(Replacement(instance.package_id, instance.id, target, {"tool": source},
+                                 set((schema.get("properties") or {}).keys()), retired=True,
+                                 outputs=declared_outputs(tool), only_chosen=shared))
+    return found
+
+
+def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str]) -> int:
+    """工作流里选着这个连接旧工具名的节点改到新名字(`moved_tools`)。不提交。返回改了几个工作流。"""
+    found = moved_tools(db, instance, renames)
+    old_types = {f"{PLUGIN_NODE_PREFIX}{one.package_id}.{one.old_tool}" for one in found}
+    changed = 0
+    for workflow in db.scalars(select(Workflow)):
+        if not any(old in str(workflow.graph) for old in old_types):
+            continue
+        dropped: list[str] = []
+        if rewrite_graph(deepcopy(workflow.graph), found, dropped) == workflow.graph:
+            continue
+        note = "插件的工具改了名:这个节点以前选的那件事现在叫新名字(ComfyUI 有表单的工作流,表单成了它的一个入口)"
+        if dropped:
+            note += "。新名字的入参里没有这几格,没带过去(以前跑的时候也不认):" + "、".join(dropped)
+        if _commit_mechanical_revision(db, workflow, lambda graph: rewrite_graph(graph, found), note):
+            changed += 1
+    return changed
+
+
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> int:
+    """工作流里选着这条连接旧模型名的(生成节点、按生成选项选模型的那几格)改到新名字。不提交。返回改了几个工作流。"""
+    from app.domain.providers.moved_models import renamed
+
+    changed = 0
+    for workflow in db.scalars(select(Workflow)):
+        if profile_id not in str(workflow.graph) or renamed(workflow.graph, profile_id, renames) == workflow.graph:
+            continue
+        note = "连接上的模型改了名:这里选的那一个现在叫新名字(ComfyUI 有表单的工作流,表单成了它的一个入口)"
+        if _commit_mechanical_revision(db, workflow, lambda graph: renamed(graph, profile_id, renames), note):
+            changed += 1
     return changed
 
 
@@ -435,9 +499,13 @@ def _after_refresh(db: Session, instance: PluginInstance) -> None:
 
 
 def install() -> None:
-    from app.domain.plugins import dynamic_tools
+    from app.domain.plugins import dynamic_tools, moves
+    from app.domain.providers import moved_models
 
     dynamic_tools.on_refreshed(_after_refresh)
+    moves.on_tools_moved(follow_moved_tools)
+    moved_models.on_moved(follow_moved_models)
 
 
-__all__ = ["MISSING", "Replacement", "convert", "install", "replacements", "rewrite_graph", "rewrite_node", "rewrite_replaced_tools"]
+__all__ = ["MISSING", "Replacement", "convert", "follow_moved_models", "follow_moved_tools", "install", "moved_tools",
+           "replacements", "rewrite_graph", "rewrite_node", "rewrite_replaced_tools"]

@@ -28,6 +28,7 @@ from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
 from app.domain.plugins.manifest import GENERATION
+from app.domain.plugins.moves import Moves, clean_moves
 from app.domain.plugins.runtime import StreamHooks
 
 #: 问一次模型清单最多等多久。一台 ComfyUI 上百张工作流,每张拉一次图 —— 本机/局域网上几秒的事。
@@ -87,10 +88,12 @@ class PluginModel:
 
 @dataclass(frozen=True)
 class Catalog:
-    """一次 `op: models` 的结果。`fingerprint` 是插件给的「这份清单的指纹」(可以没有,见 `fingerprint`)。"""
+    """一次 `op: models` 的结果。`fingerprint` 是插件给的「这份清单的指纹」(可以没有,见 `fingerprint`);`moved` 是插件报的
+    一次性改名(key → {旧模型 id: 新模型 id},见 plugins.moves),新名字都在这份清单里。"""
 
     models: list[PluginModel]
     fingerprint: str = ""
+    moved: Moves = field(default_factory=dict)
 
 
 #: 指纹最长多少。它只拿来比「变没变」,不是存档。
@@ -111,7 +114,7 @@ def catalog(db: Session, instance: PluginInstance) -> Catalog:
         if model is not None and model.id not in seen:
             seen.add(model.id)
             models.append(model)
-    return Catalog(models=models, fingerprint=_fingerprint(output))
+    return Catalog(models=models, fingerprint=_fingerprint(output), moved=clean_moves(output.get("moved"), seen))
 
 
 def _fingerprint(output: dict[str, Any]) -> str:

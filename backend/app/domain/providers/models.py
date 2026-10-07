@@ -398,6 +398,23 @@ def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: lis
     return len(kept)
 
 
+def rename_declared_models(db: Session, profile: ProviderProfile, renames: dict[str, str]) -> list[str]:
+    """连接说它的模型改了名(插件的一次性改名,见 domain/plugins/moves):模型行**原地**改名 —— 行 id 不变,挂在它上面的默认
+    模型、停用、用户改过的设置跟着新名字走。新名字已经有一行的不动(那一行是目录刷新出来的,它才是新名字现在的样子)。
+    返回改了的旧名字。不提交。"""
+    rows = {row.model_id: row for row in list_models(db, profile.id)}
+    changed: list[str] = []
+    for source, target in renames.items():
+        row = rows.get(source)
+        if row is None or target in rows:
+            continue
+        row.model_id = target
+        rows[target] = rows.pop(source)
+        changed.append(source)
+    db.flush()
+    return changed
+
+
 def model_id_for(
     db: Session, profile: ProviderProfile | None, capability: str, user_id: str | None = None
 ) -> str:

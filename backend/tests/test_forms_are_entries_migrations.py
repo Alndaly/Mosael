@@ -1,6 +1,7 @@
 """表单是工作流的入口(ADR 0045)带的加列迁移:老库上加得上、原有的行一条不少,再跑一次什么都不变。
 
-- `provider_models.declared_group`:连接说这个模型是哪样东西的哪个入口。只加列、不回填(插件目录刷新时写)。
+- `provider_models.declared_group`:连接说这个模型是哪样东西的哪个入口。只加列、不回填(插件目录刷新时写);
+- `plugin_instances.applied_moves`:插件报的一次性改名在这个连接上做过哪几批。老连接一批都没做过(空表)。
 """
 
 from __future__ import annotations
@@ -8,8 +9,9 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 
 from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_provider_models_remember_their_group
-from app.db.models import ProviderModel
+from app.db.migrations import _migrate_plugin_instances_remember_applied_moves, _migrate_provider_models_remember_their_group
+from app.db.models import PluginInstance, ProviderModel
+from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import add_provider, fresh_client
 
 
@@ -38,3 +40,24 @@ def test_模型行加上组那一列_原有的行原样_再跑一次不变() -> 
 
     _migrate_provider_models_remember_their_group()
     assert "declared_group" in _columns("provider_models")
+
+
+def test_连接加上改名账那一列_老连接一批都没做过_再跑一次不变() -> None:
+    with FakeComfyUI() as comfy:
+        client = fresh_client()
+        created = client.post("/api/plugins/dev.mosael.comfyui/instances", json={"config": {"server_url": comfy.url}})
+        instance_id = created.json()["id"]
+        client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE plugin_instances DROP COLUMN applied_moves"))
+    engine.dispose()
+    assert "applied_moves" not in _columns("plugin_instances")
+
+    _migrate_plugin_instances_remember_applied_moves()
+    engine.dispose()
+    assert "applied_moves" in _columns("plugin_instances")
+    with SessionLocal() as db:
+        assert db.get(PluginInstance, instance_id).applied_moves == {}, "升级上来的连接:第一次刷新目录时做"
+
+    _migrate_plugin_instances_remember_applied_moves()
+    assert "applied_moves" in _columns("plugin_instances")

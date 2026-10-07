@@ -42,9 +42,11 @@ from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
 from app.domain import capabilities
 from app.domain.providers import models as provider_models
+from app.domain.providers import moved_models
 from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
+from app.domain.plugins import moves as plugin_moves
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import readable_group
 from app.domain.plugins.manifest import GENERATION
@@ -223,6 +225,20 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
         inst.set_capability_status(db, instance, GENERATION, {**previous, **blame(exc), "attempted_at": _now()})
         logger.info("插件实例 %s 的生成模型清单没刷出来:%s", instance.id, exc)
         return
+    moves = plugin_moves.pending(instance, GENERATION, found.moved)
+    if moves:
+        # 插件说有几个模型 id 改了意思(一次性的改名,ADR 0045):先把存着的引用改到新名字 —— 模型行原地改名,默认模型、
+        # 停用跟着走 —— 再对齐目录(旧名字那一行由目录重新建出来,是它现在指的那件事)。和目录在同一个事务里提交。
+        try:
+            moved_models.apply(db, profile, plugin_moves.merged(moves))
+            plugin_moves.record(db, instance, GENERATION, list(moves))
+        except Exception as exc:  # noqa: BLE001 — 改不成就整个不动,下次刷新再来:目录和引用不能一半新一半旧
+            db.rollback()
+            from app.domain.jobs import blame
+
+            logger.exception("插件实例 %s 的模型改名没做成,这次不对齐目录", instance.id)
+            inst.set_capability_status(db, instance, GENERATION, {**previous, **blame(exc), "attempted_at": _now()})
+            return
     entries = [
         provider_models.DeclaredModel(
             model_id=model.id,

@@ -153,6 +153,9 @@
 - `app/domain/plugins/service_gate.py:_gate` —— 插件调用之前问一声本机服务(ADR 0041):停着就起、后台刷新目录跳过停着的。
   组装根把 `local_services.GATE` 交给它;插件域不 import 本机服务(那边要反过来调插件)。
 - `app/domain/plugins/dynamic_tools.py:_listeners` —— 插件报出的工具清单刷新之后跟着动的那一侧(工作流域:把存着的老节点改写成取代它的工具)。
+- `app/domain/plugins/moves.py:_tool_listeners`、`app/domain/providers/moved_models.py:_listeners` —— 插件报的一次性改名
+  (`moved`,ADR 0045)落到各领域:工具改了名,工作流节点、画板格子跟着改;模型改了名,生成会话、记录、用量、定时任务、
+  画板、工作流里存着的引用跟着改。组装根在导入期登记,运行时只读;做过哪几批记在库里(`plugin_instances.applied_moves`)。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
 

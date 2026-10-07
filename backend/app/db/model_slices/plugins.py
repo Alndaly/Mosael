@@ -88,6 +88,9 @@ class PluginInstance(Base):
     #: 这个连接装包从哪个镜像拉,按生态(`pypi`、`npm`)记**覆盖**:预设 key 或自定义地址;没记的那一项跟随
     #: 「管理 → 下载源」。只对清单里声明了 `package_sources` 的生态有意义;怎么注入见 domain/plugins/package_sources。
     package_sources: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    #: 插件报过的**一次性改名**,这个连接上已经做过的那几批:按清单分,`{"generation": ["form-entries"], "tools": [...]}`
+    #: (见 domain/plugins/moves,ADR 0045)。改名只能做一次 —— 旧名字还在、只是意思变了,做第二次会把之后特意选的改走。
+    applied_moves: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

@@ -145,6 +145,7 @@
   "migrate-plugin-generation-columns": "2f050e11c98100aa",
   "migrate-plugin-instances": "b334be866194ded2",
   "migrate-plugin-instances-get-an-owner": "7ea9716a35ff0dbf",
+  "migrate-plugin-instances-remember-applied-moves": "18b5b51c432695cb",
   "migrate-plugin-node-names-follow-the-plugin": "c5738adaf74c69d7",
   "migrate-plugin-registry-url": "ea65d9e176535f45",
   "migrate-plugin-union-array-inputs-are-lists": "f4e2736b44927206",

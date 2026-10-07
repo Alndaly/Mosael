@@ -119,7 +119,14 @@ def rewrite_replaced_tools(db: Session) -> int:
     """把库里所有画板上能改的老插件节点(生成器、能力)改掉。返回改了几块画板。"""
     from app.domain.workflows.plugin_references import replacements
 
-    found = replacements(db)
+    changed = _rewrite_tool_cells(db, replacements(db))
+    if changed:
+        logger.info("把 %d 块画板上的老插件节点改写成了取代它的工具", changed)
+    return changed
+
+
+def _rewrite_tool_cells(db: Session, found: list[Any]) -> int:
+    """画板上每一格的插件节点产出者按 `found`(一组「取代」)改掉。不提交。返回改了几块画板。"""
     if not found:
         return 0
     changed = 0
@@ -137,8 +144,33 @@ def rewrite_replaced_tools(db: Session) -> int:
         board.canvas = {**deepcopy(canvas), "items": rewritten_items}
         board.revision = (board.revision or 0) + 1
         changed += 1
-    if changed:
-        logger.info("把 %d 块画板上的老插件节点改写成了取代它的工具", changed)
+    return changed
+
+
+# ── 一次性的改名(ADR 0045,见 domain/plugins/moves) ─────────────────────────────────
+
+
+def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str]) -> int:
+    """画板上选着这个连接旧工具名的能力、生成器改到新名字(和工作流那边同一张「取代」表,见
+    workflows.plugin_references.moved_tools)。不提交。返回改了几块画板。"""
+    from app.domain.workflows.plugin_references import moved_tools
+
+    return _rewrite_tool_cells(db, moved_tools(db, instance, renames))
+
+
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> int:
+    """画板上选着这条连接旧模型名的格子(生成格、能力里按生成选项选的模型)改到新名字。不提交。返回改了几块画板。"""
+    from app.domain.providers.moved_models import renamed
+
+    changed = 0
+    for board in db.scalars(select(Board)):
+        canvas = board.canvas if isinstance(board.canvas, dict) else {}
+        rewritten = renamed(canvas, profile_id, renames)
+        if rewritten == canvas:
+            continue
+        board.canvas = rewritten
+        board.revision = (board.revision or 0) + 1
+        changed += 1
     return changed
 
 
@@ -338,14 +370,19 @@ def _after_refresh(db: Session, instance: PluginInstance) -> None:
 
 
 def install() -> None:
-    from app.domain.plugins import dynamic_tools
+    from app.domain.plugins import dynamic_tools, moves
+    from app.domain.providers import moved_models
 
     dynamic_tools.on_refreshed(_after_refresh)
+    moves.on_tools_moved(follow_moved_tools)
+    moved_models.on_moved(follow_moved_models)
 
 
 __all__ = [
     "Mirror",
     "as_generation_slot",
+    "follow_moved_models",
+    "follow_moved_tools",
     "generation_index",
     "install",
     "mirrored_model",

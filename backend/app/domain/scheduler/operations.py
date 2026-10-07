@@ -6,12 +6,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.db import references
 from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
+from app.domain.providers.moved_models import renamed
 from app.domain.references import referrers
 
 logger = logging.getLogger(__name__)
@@ -150,6 +152,17 @@ def ensure_runnable(
     problem = check(db, workspace_id, payload or {}, owner) if check else None
     if problem is not None:
         raise SchedulerDomainError.relay(problem)
+
+
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> None:
+    """连接上的模型改了名(ADR 0045,见 providers.moved_models):定时任务里选着这条连接旧模型名的,改到新名字。不提交。
+    `updated_at` 不动(不是谁改了这个任务);这样写不经过 flush,引用表就地对一遍。"""
+    for task in db.scalars(select(ScheduledTask)):
+        changed = renamed(task.payload, profile_id, renames)
+        if changed != task.payload:
+            db.execute(update(ScheduledTask).where(ScheduledTask.id == task.id)
+                       .values(payload=changed, updated_at=ScheduledTask.updated_at))
+            references.resync(db, "scheduled_task", task.id)
 
 
 def stop_tasks_bound_to_workflow(db: Session, workflow: Workflow) -> list[ScheduledTask]:

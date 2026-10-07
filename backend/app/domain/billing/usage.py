@@ -11,7 +11,7 @@ from uuid import uuid4
 import time
 from typing import Any
 
-from sqlalchemy import event as orm_event, func, inspect, or_, select
+from sqlalchemy import event as orm_event, func, inspect, or_, select, update
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.usage_scope import current_workspace
@@ -1139,3 +1139,19 @@ def billable(
                 )
             except Exception:  # noqa: BLE001 — 记账是旁路,不该把主流程带下水
                 logger.warning("用量入账失败(%s),已忽略", operation, exc_info=True)
+
+
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> None:
+    """连接上的模型改了名(ADR 0045,见 providers.moved_models):这条连接上记的用量、按这条连接定的价跟着改到新名字 ——
+    它们说的就是改名之后叫新名字的那一个(ComfyUI 有表单的工作流,以前路径指那张表单)。用量是事实记录,只改名、不动别的。"""
+    for source, target in renames.items():
+        db.execute(
+            update(ProviderUsageEvent)
+            .where(ProviderUsageEvent.provider_profile_id == profile_id, ProviderUsageEvent.model == source)
+            .values(model=target)
+        )
+        db.execute(
+            update(ProviderPricingRule)
+            .where(ProviderPricingRule.provider_profile_id == profile_id, ProviderPricingRule.model == source)
+            .values(model=target)
+        )

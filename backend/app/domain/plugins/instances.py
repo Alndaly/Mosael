@@ -510,6 +510,19 @@ def set_exposed(db: Session, instance: PluginInstance, choices: dict[str, bool])
     db.flush()
 
 
+def carry_capabilities(db: Session, instance: PluginInstance, renames: dict[str, str]) -> None:
+    """工具改了名(一次性的改名,见 plugins.moves):新名字照旧名字的开关开 / 关 —— 那个开关是用户对「旧名字以前指的那件事」
+    的选择,它现在叫新名字。旧名字的开关原样留着(旧名字另有所指,用户以前也开着它)。新名字已经有开关的不动。不提交。"""
+    rows = {
+        row.tool_name: row
+        for row in db.scalars(select(PluginCapability).where(PluginCapability.instance_id == instance.id))
+    }
+    for source, target in renames.items():
+        if source in rows and target not in rows:
+            db.add(PluginCapability(instance_id=instance.id, tool_name=target, exposed=rows[source].exposed))
+    db.flush()
+
+
 def seed_capabilities(
     db: Session,
     instance: PluginInstance,

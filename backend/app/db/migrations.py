@@ -8343,6 +8343,17 @@ def _migrate_provider_models_remember_their_group() -> None:
         conn.execute(text("ALTER TABLE provider_models ADD COLUMN declared_group JSON"))
 
 
+def _migrate_plugin_instances_remember_applied_moves() -> None:
+    """`plugin_instances.applied_moves`:插件报过的一次性改名,这个连接上做过哪几批(ADR 0045,见 domain/plugins/moves)。
+    老连接一批都没做过(空表),升级后第一次刷新目录时做。加列必须在 SCHEMA 之前:之后 ORM 上的 PluginInstance 已经指望它在了。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if not columns or "applied_moves" in columns:
+            return
+        conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN applied_moves JSON NOT NULL DEFAULT '{}'"))
+
+
 def _drop_empty_agent_sessions() -> None:
     """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
 
@@ -8657,6 +8668,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_agent_sessions_know_who_named_them,
                 # 同上:ORM 上的 ProviderModel 指望「是哪样东西的哪个入口」那一列在(ADR 0045)。
                 _migrate_provider_models_remember_their_group,
+                # 同上:ORM 上的 PluginInstance 指望「做过哪几批改名」那一列在(ADR 0045)。
+                _migrate_plugin_instances_remember_applied_moves,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
