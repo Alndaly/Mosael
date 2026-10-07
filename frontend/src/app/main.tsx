@@ -9,6 +9,7 @@ import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 // 我们所有的工具类。它们在 tokens.css 里以 `layer(vendor)` 引入 —— 那里有完整的说明。
 import "@/design/tokens.css";
 import "./styles.css";
+import { AppBoundary } from "@/app/PageBoundary";
 import { runLocalMigrations } from "@/lib/localMigrations";
 import { installWindowChrome } from "@/lib/windowChrome";
 
@@ -16,5 +17,9 @@ import { installWindowChrome } from "@/lib/windowChrome";
 runLocalMigrations();
 installWindowChrome();
 void import("@/app/App").then(({ App }) => {
-  createRoot(document.getElementById("root")!).render(<App />);
+  createRoot(document.getElementById("root")!).render(
+    <AppBoundary>
+      <App />
+    </AppBoundary>,
+  );
 });

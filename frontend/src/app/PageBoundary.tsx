@@ -17,7 +17,7 @@
 import React from "react";
 import { RefreshCcw } from "lucide-react";
 
-import { useI18n } from "@/app/preferences";
+import { translateNow, useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -111,6 +111,26 @@ export function PageBoundary({
       chunkLabel={t("pageLoadFailed")}
       crashLabel={t("pageCrashed")}
       retryLabel={t("retry")}
+    >
+      {children}
+    </Boundary>
+  );
+}
+
+/**
+ * 整个窗口的错误边界 —— 页面那层(PageBoundary)外面:侧栏、顶栏、各个 Provider 出错时,整棵树卸掉,窗口只剩一片白,
+ * 连报错都看不到。这一层兜住它:写明出错了、留着原始报错、给一个「重新加载」。
+ *
+ * 这时候 Provider 可能已经跟着卸掉了,文案用不带 hook 的 translateNow 取;外壳出的错重新渲染多半照样出,
+ * 所以「重试」就是重新加载整页。
+ */
+export function AppBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <Boundary
+      onRetry={() => window.location.reload()}
+      chunkLabel={translateNow("appCrashed")}
+      crashLabel={translateNow("appCrashed")}
+      retryLabel={translateNow("appReload")}
     >
       {children}
     </Boundary>

@@ -342,6 +342,8 @@ export const aiStudio = {
   chatLoadingSession: "正在读取这条会话…",
   pageLoadFailed: "这一页没能加载出来。多半是刚才取那一块代码时断了一下,重试通常就好。",
   pageCrashed: "这一页出错了。可以重试一次;还是这样的话,把下面这行报错告诉我们。",
+  appCrashed: "Mosael 出错了,这个窗口没能画出来。重新加载一次试试;还是这样的话,把下面这行报错告诉我们。",
+  appReload: "重新加载",
   boardKindDocument: "文档",
   boardDocumentHint: "引用一篇笔记,或让 AI 写一篇",
   documentPick: "选择笔记",

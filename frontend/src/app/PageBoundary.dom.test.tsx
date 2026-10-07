@@ -14,12 +14,18 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) =>
-    ({ pageLoadFailed: "这一页没能加载出来。", pageCrashed: "这一页出错了。", retry: "重试" })[key] ?? key,
-}));
+vi.mock("@/app/preferences", () => {
+  const text: Record<string, string> = {
+    pageLoadFailed: "这一页没能加载出来。",
+    pageCrashed: "这一页出错了。",
+    retry: "重试",
+    appCrashed: "Mosael 出错了。",
+    appReload: "重新加载",
+  };
+  return { useI18n: () => (key: string) => text[key] ?? key, translateNow: (key: string) => text[key] ?? key };
+});
 
-import { PageBoundary } from "./PageBoundary";
+import { AppBoundary, PageBoundary } from "./PageBoundary";
 
 function Boom({ message }: { message: string }): React.ReactElement {
   throw new Error(message);
@@ -88,5 +94,29 @@ describe("页面错误边界", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByText("素材库")).toBeTruthy();
     spy.mockRestore();
+  });
+});
+
+describe("整个窗口的错误边界", () => {
+  it("外壳出错时不白屏:写明出错了、留着原始报错,「重新加载」整页", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    try {
+      render(
+        <AppBoundary>
+          <Boom message="useWorkspace must be used within WorkspaceProvider" />
+        </AppBoundary>,
+      );
+      expect(screen.getByRole("alert")).toBeTruthy();
+      expect(screen.getByText("Mosael 出错了。")).toBeTruthy();
+      expect(screen.getByText("useWorkspace must be used within WorkspaceProvider")).toBeTruthy();
+      screen.getByRole("button", { name: /重新加载/ }).click();
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+      spy.mockRestore();
+    }
   });
 });

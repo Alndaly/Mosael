@@ -340,6 +340,8 @@ export const aiStudio = {
   chatLoadingSession: "Loading this conversation…",
   pageLoadFailed: "This page could not be loaded. That usually means fetching its code hit a hiccup — retrying normally fixes it.",
   pageCrashed: "Something went wrong on this page. Try again; if it keeps happening, send us the error below.",
+  appCrashed: "Mosael ran into an error and could not draw this window. Reload to try again; if it keeps happening, send us the error below.",
+  appReload: "Reload",
   boardKindDocument: "Document",
   boardDocumentHint: "Reference a note, or let AI write one",
   documentPick: "Choose a note",
