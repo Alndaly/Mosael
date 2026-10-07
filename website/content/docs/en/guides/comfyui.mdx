@@ -35,7 +35,8 @@ brings two things:
 3. Grant the permissions it asks for and switch the connection on: `network:comfyui` (talk to this ComfyUI),
    `network:huggingface`, `network:civitai` and `network:modelscope` (the model library looks up links and downloads
    models from these sites), `network:github`, `network:pypi` and `network:pytorch` (when Mosael installs ComfyUI on this
-   computer it downloads the source, dependencies and PyTorch; see the next section), and `filesystem:write` (when ComfyUI
+   computer it downloads the source, dependencies and PyTorch; see the next section), `network:comfy-registry` (the workbench
+   Assistant looks up node packs on the official Comfy registry, read only), and `filesystem:write` (when ComfyUI
    runs on this computer, downloaded models are written into its models folder). These are exactly the things the plugin does; connections carried over from an earlier version
    are switched off until you grant the new ones (see the upgrade section at the end).
 
@@ -592,6 +593,19 @@ beside it:
   effect once saved). The marked group says **Results come from this node** and can be undone; marks on other nodes are named too.
   Switch workflows in ComfyUI and this workflow's runs come first, with the earlier ones under **Runs of other workflows**. A new
   workflow has to be saved once before it can run here.
+- **Assistant**: the same agent panel as on workflows, boards and the editor, docked in this column (its conversations are the same
+  ones as in AI Studio). It knows which ComfyUI is open, its version, which workflow is on the canvas, whether it has unsaved changes,
+  what is selected and whether the last run failed; the graph itself isn't stuffed into its context, it reads it when it needs to.
+  Ask **what's wrong with this workflow** and it reads the canvas, runs a diagnosis and says per node what's wrong, why and how to fix
+  it: missing nodes and models, mistyped links, unconnected required inputs, values outside a dropdown or range, widths and heights that
+  aren't a multiple of 8, base models that don't match a LoRA, and the last run's error split onto the nodes (subgraphs included). Say
+  **I want a workflow that does X with Y** and it starts from the official ComfyUI **templates**, adapts what it can to the models on this
+  machine (the same file in another subfolder, another precision of the same model) and says how big each missing model is and how much
+  that adds up to. Ask whether a **custom node pack** is safe to install and it checks the official Comfy registry: whether the newest
+  version is Flagged or Banned, the latest normal version, the publisher, how many people use it, whether its dependencies touch PyTorch,
+  and whether it fits this machine's OS, GPU and ComfyUI version. Click a **#12** (#12:5 inside a subgraph) in a reply to locate that
+  node on the canvas. **In this version it only reads**: changing the canvas, opening a new tab, downloading models, installing node
+  packs and test runs come later; for now it tells you which node, which field and what to change.
 
 The workbench talks to the canvas through a fixed script that Mosael's main process injects; only Mosael reads the canvas, and the page
 can't call into Mosael. If the ComfyUI frontend is too old and lacks something, that part says “This ComfyUI frontend doesn't
@@ -627,7 +641,8 @@ permissions — `network:huggingface`, `network:civitai`, `network:modelscope` (
 from these sites) and `filesystem:write` (writing into ComfyUI's models folder when it runs on this computer). The top of the
 connection card lists them and **Grant these 4** resumes it right away; earlier grants are kept. The plugin list marks it
 **Needs permission**. This plugin version declares three more (`network:github`, `network:pypi`, `network:pytorch`, which installing
-ComfyUI on this computer needs), so an upgraded connection is switched off once more until you grant them. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
+ComfyUI on this computer needs), so an upgraded connection is switched off once more until you grant them; 1.17.0 adds
+`network:comfy-registry` (the workbench Assistant checks the official Comfy registry), granted the same way. After a plugin update Mosael rereads every connection's models and tools within a minute, so defaults on the
 forms (such as one image per run) follow without a manual refresh.
 
 ## Workflows it can't read: the API template

@@ -7,14 +7,16 @@
 
 1. 插件页 → ComfyUI → 「新建连接」,填服务器地址(本机默认 `http://127.0.0.1:8188`)。放在要登录的反向代理或
    ComfyUI-Login 后面的,把 `用户名:密码`(Basic)或令牌(Bearer)填进凭据「访问凭据」,HTTP 和 WebSocket 都带上。
-2. 授予它要的权限,打开连接(如实申报八项):
+2. 授予它要的权限,打开连接(如实申报九项):
    - `network:comfyui`:连这台 ComfyUI;
    - `network:huggingface`、`network:civitai`、`network:modelscope`:模型库解析链接、下载模型时连这几个站;
    - `network:github`、`network:pypi`、`network:pytorch`(1.15.0):让 Mosael 装本机 ComfyUI 时下 ComfyUI 源码和 pysssss(GitHub)、
      装依赖(PyPI)和 CUDA 版 PyTorch(PyTorch 源);选目录那一种的「补装 pysssss」也要连 GitHub;
+   - `network:comfy-registry`(1.17.0):工作台的「助手」找节点包、装之前分析一个节点包时问 Comfy 官方注册表(`api.comfy.org`,只读);
    - `filesystem:write`:ComfyUI 和 Mosael 在同一台电脑上时,把下载的模型写进它的 models 目录。
 
-   **从旧版本升级**:升上来的连接会**先停用**,等你授予新增的那几项 —— 从 1.14 升上来的多三项(`network:github`、`network:pypi`、
+   **从旧版本升级**:升上来的连接会**先停用**,等你授予新增的那几项 —— 从 1.16 升上来的多一项 `network:comfy-registry`(1.17.0),
+   从 1.14 升上来的再多三项(`network:github`、`network:pypi`、
    `network:pytorch`,1.15.0),从 1.9 升上来的再多一项 `network:modelscope`(1.10.0),从 1.8 及更早升上来的再多四项。连接卡片最上面写着多要了哪几项,点「授予这 N 项」马上恢复,之前授予的
    不受影响;插件列表上它标着「待授权」。
 3. 它在 ComfyUI 里**保存的每张工作流**会作为一个模型出现在 AI 工作台、画板、工作流「AI 生成素材」节点的
@@ -435,6 +437,39 @@ ADR 0041 第三步:
 - **Linux 服务器**(x86_64 + NVIDIA):和 Windows 同一张对照表挑 CUDA 版 PyTorch,驱动要 Linux 那一列(CUDA 13.0 版 580.65.06 以上、
   12.6 版 560.28.03 以上),系统的 glibc 要 2.28 以上;ARM 的 Linux、没有 NVIDIA 显卡(容器里没把显卡带进来)都说清楚。
 
+## 工作台里的智能体:读和诊断(1.17.0)
+
+ADR 0042 第一步。工作台右边那一列多了第五个页签「助手」(Mosael 那一侧):智能体能读画布上这张、找出问题、找官方模板、查节点和节点包。
+**这一版只读**:不改画布、不新开一张、不下载、不装、不跑。插件这一侧多了几个只读的 op(都在「工作流库」那个工具里,宿主经它问):
+
+- `canvas_summary`:界面格式的整图(含 `definitions.subgraphs`)压成给智能体看的摘要 —— 每一层(根图、每份子图定义)的节点、
+  控件的值、谁连着谁(`"in": {"model": "4.MODEL"}`)、子图用在哪几处;节点按从根图往里走的写法(`12`、子图里的 `12:5`)。不交原文。
+- `check_graph`:按节点列的问题单(严重程度、原因、改法)—— 缺的节点类型(连同出自哪个节点包)、缺的模型(在别的子目录、工作流写了
+  下载地址)、连线类型对不上、必填的输入没连(上游被静音 / 旁路的说出来)、值不在下拉里、缺输入文件、数超出范围、宽高不是倍数、底模
+  和 LoRA / ControlNet 不配(用模型库认出的家族)、上一次运行的报错拆到节点(`#3 Value 0 smaller than min of 1: steps`、
+  `Model in folder … not found` 这些)。V3 的输入类型(`COMFY_MATCHTYPE_V3`、`COMFY_AUTOGROW_V3`、`COMFY_DYNAMICCOMBO_V3`)也认。
+  只按图里用到的节点类型逐个问 `/object_info/<类>`,不拉整份。
+- `templates`:读官方模板包的 `index.mcp.json`(和界面语言那份 `index.<语言>.json` 合起来)、节点包自带的模板(`/workflow_templates`),
+  按任务、模型、关键词找;每条带它要的模型这台机器上有没有(同一个文件在别的子目录、同一个模型的另一种精度都算找到)、合计大小、
+  最低 ComfyUI 版本。目录按 `installed_templates_version` 和语言记在插件数据目录里。
+- `template`:取一张模板,先照这台机器改好能改的(同名文件在别的子目录、同一个模型的另一种精度换上,改了什么照实交代),还缺的问清
+  多大(HEAD,不下载);回改好的整图和它的摘要(宿主只把摘要交给智能体)。
+- `node_types`:节点类型的输入(类型、必填、下拉选项、缺省值、范围)和输出。点名问的逐个取;按名字、说明找要整份 `/object_info`
+  —— 只在 `node_catalog.catalog` 这一处取,按 `HEAD /object_info` 的长度认变没变(装了节点包、重启了就重取),记在插件数据目录里。
+- `node_packs`:这台装了哪些节点包(ComfyUI-Manager V4 的 `/v2/customnode/installed`)、各提供哪些节点(`getmappings?mode=cache`),
+  给了图就说图里的节点各来自哪个包、缺的谁能补。
+- `node_pack_search`:按关键词或「缺的这几个节点类型」找 —— 先查 Manager 的映射,再查 Comfy 官方注册表(`/nodes/search`)。
+- `node_pack_info`:装之前看清楚 —— 注册表里最新一版的状态(被标记 `Flagged`、封禁 `Banned`、弃用)和最近一个正常的版本、发布者、
+  许可证、下载量、星数、最近一次发版;依赖会不会动到 torch(直接要 torch / torchvision / torchaudio / xformers / triton 是高风险);
+  系统、加速(CUDA / MPS)、ComfyUI 版本和这台合不合;装了的话装的是哪一版、之后的版本改了什么;能补上图里缺的哪几个。连注册表走
+  宿主给的出网代理。
+
+插件还带一份技能 `skills/comfyui-workflows/SKILL.md`(「ComfyUI 工作流」):先找官方模板、照这台机器的模型改、改之前先读图、缺东西先说
+多大、不替你存盘、提到节点写 `#12`(界面把它变成能点的「定位」)。随 Mosael 一起发的插件带的技能默认开着。
+
+实测:沙盒 ComfyUI 0.39.0 / 前端 1.53.10、维护者那台 0.39.0 + Manager V4.2.1(只读 GET)、Comfy 注册表(rgthree-comfy 最新一版此刻
+是 `Flagged`)。
+
 ## 进度、取消、重启
 
 - 进度来自 ComfyUI 的 WebSocket:哪个节点在跑(用界面上的节点名)、采样器第几步、第几个节点;连不上就退回轮询。
@@ -455,6 +490,9 @@ ADR 0041 第三步:
 - `graph.py` —— 看出提示词 / 种子 / 尺寸 / 槽位 / 输出节点,收成一份能填的项(`items`)和表单(`Form`)、描述成模型、填图、收产出;
 - `app_form.py` —— 应用表单:读、核对、写工作流里 `mosael` 那几处标记;
 - `workbench.py` —— 工作台要插件回答的:选中节点那一格是哪个模型目录、应用表单写进画布要改的那几处标记;
+- `canvas.py` / `diagnose.py` / `templates.py` / `node_types.py` / `node_packs.py` / `node_catalog.py` —— 工作台里的智能体(1.17.0):
+  整图的摘要和节点的写法、问题单、官方模板(找、照这台机器改)、节点类型、节点包(装了哪些、找、装之前分析)、节点定义(按类取,
+  整份只在一处取、按指纹缓存);
 - `labels.py` —— 可调输入的人话名字、顺序、常用与否、不在 Mosael 里调的那几个;
 - `models.py` —— 有哪些模型、一个模型 id 背后是哪张图、清单的指纹;
 - `run.py` —— 传素材、提交、跟进度、取消、取回(生成与工作流的工具共用);

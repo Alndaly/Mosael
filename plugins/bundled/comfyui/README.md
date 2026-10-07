@@ -10,18 +10,21 @@ One connection brings two things: **models** (every saved workflow is an image /
 1. Plugins page → ComfyUI → "New connection", and fill in the server URL (`http://127.0.0.1:8188` by default on this
    machine). If it sits behind a reverse proxy with login or behind ComfyUI-Login, put `user:password` (Basic) or a
    token (Bearer) into the "Access credential" credential; it is sent on both HTTP and WebSocket requests.
-2. Grant the permissions it asks for and turn the connection on (it declares eight):
+2. Grant the permissions it asks for and turn the connection on (it declares nine):
    - `network:comfyui`: talk to this ComfyUI;
    - `network:huggingface`, `network:civitai`, `network:modelscope`: the model library looks up links and downloads
      models from these sites;
    - `network:github`, `network:pypi`, `network:pytorch` (1.15.0): when Mosael installs a local ComfyUI it downloads the
      ComfyUI source and pysssss (GitHub), the dependencies (PyPI) and the CUDA build of PyTorch (the PyTorch source); "Add
      pysssss" for your own install also downloads from GitHub;
+   - `network:comfy-registry` (1.17.0): the workbench Assistant searches for node packs and analyses one before you
+     install it on the official Comfy registry (`api.comfy.org`, read only);
    - `filesystem:write`: when ComfyUI runs on the same computer as Mosael, downloaded models are written into its
      models folder.
 
-   **Upgrading from an older version**: an upgraded connection is **paused** until you grant the new ones: three more
-   (`network:github`, `network:pypi`, `network:pytorch`, 1.15.0) when coming from 1.14, plus `network:modelscope`
+   **Upgrading from an older version**: an upgraded connection is **paused** until you grant the new ones:
+   `network:comfy-registry` (1.17.0) when coming from 1.16, plus three more (`network:github`, `network:pypi`,
+   `network:pytorch`, 1.15.0) when coming from 1.14, plus `network:modelscope`
    (1.10.0) when coming from 1.9, plus four more when coming from 1.8 or earlier. The top of the
    connection card lists them, and "Grant these N" resumes it right away; earlier grants are kept. The plugin list marks
    it "Needs permission".
@@ -585,6 +588,53 @@ ADR 0041, step 3:
   (580.65.06 for CUDA 13.0, 560.28.03 for CUDA 12.6), and the system needs glibc 2.28 or newer; ARM Linux and machines without an
   NVIDIA GPU (or a container without the GPU passed in) are told why.
 
+## The agent in the workbench: reading and diagnosing (1.17.0)
+
+Step one of ADR 0042. The workbench's right column gains a fifth tab, "Assistant" (on Mosael's side): the agent can read the
+workflow on the canvas, find what's wrong with it, find official templates, and look up node types and node packs. **This version
+only reads**: it doesn't change the canvas, open a new tab, download, install or run. On the plugin side there are a few read-only
+ops (all on the "workflow library" tool, which the host asks through):
+
+- `canvas_summary`: the UI-format graph (including `definitions.subgraphs`) squeezed into a summary for the agent: every layer (the
+  root graph and every subgraph definition) with its nodes, widget values, what is wired to what (`"in": {"model": "4.MODEL"}`)
+  and where each subgraph is used; nodes are written as paths from the root (`12`, `12:5` inside a subgraph). The raw graph is not
+  handed over.
+- `check_graph`: a findings list per node (severity, cause, fix): missing node types (and which pack provides them), missing models
+  (found in another subfolder, or the workflow names a download URL), link type mismatches, unconnected required inputs (saying when
+  the upstream node is muted / bypassed), values not in a dropdown, missing input files, numbers out of range, width / height not a
+  multiple, base model families that don't match a LoRA / ControlNet (as recognised by the model library), and the last run's error
+  split onto nodes (`#3 Value 0 smaller than min of 1: steps`, `Model in folder … not found`). V3 input types
+  (`COMFY_MATCHTYPE_V3`, `COMFY_AUTOGROW_V3`, `COMFY_DYNAMICCOMBO_V3`) are understood. Only the node types the graph uses are
+  fetched, one `/object_info/<class>` each, not the whole catalog.
+- `templates`: reads the official template package's `index.mcp.json` (merged with `index.<language>.json` for the interface
+  language) and templates shipped by node packs (`/workflow_templates`), searching by task, model and keywords; every result says
+  whether this machine has the models it needs (the same file in another subfolder, or another precision of the same model, counts
+  as found), the total size and the minimum ComfyUI version. The index is kept in the plugin's data folder per
+  `installed_templates_version` and language.
+- `template`: fetches one template and adapts what it can to this machine first (the same file in another subfolder, another
+  precision of the same model; every change is reported), and asks how big the still-missing files are (HEAD, no download); returns
+  the adapted graph and its summary (the host only hands the summary to the agent).
+- `node_types`: a node type's inputs (type, required, dropdown options, default, range) and outputs. Named classes are fetched one by
+  one; searching by name or description needs the whole `/object_info`, fetched in one place only (`node_catalog.catalog`) and kept
+  in the plugin's data folder, refetched when the length reported by `HEAD /object_info` changes (a pack was installed, ComfyUI
+  restarted).
+- `node_packs`: the node packs installed on this machine (ComfyUI-Manager V4's `/v2/customnode/installed`) and the nodes each provides
+  (`getmappings?mode=cache`); given a graph, which pack each of its nodes comes from and who can supply the missing ones.
+- `node_pack_search`: by keywords or "these node types are missing": Manager's mappings first, then the official Comfy registry
+  (`/nodes/search`).
+- `node_pack_info`: a look before installing: the registry status of the newest version (`Flagged`, `Banned`, deprecated) and the
+  latest normal version, publisher, license, downloads, stars, last release; whether the dependencies touch torch (depending on
+  torch / torchvision / torchaudio / xformers / triton directly is high risk); whether the OS, accelerator (CUDA / MPS) and ComfyUI
+  version fit this machine; if installed, which version and what changed after it; which of the graph's missing nodes it provides.
+  The registry is reached through the egress proxy the host provides.
+
+The plugin also ships a skill, `skills/comfyui-workflows/SKILL.md` ("ComfyUI workflows"): start from official templates, adapt them to
+this machine's models, read the graph before changing it, say how big missing downloads are first, never save for you, and write
+nodes as `#12` (the interface turns that into a clickable "locate"). Skills of plugins that ship with Mosael are on by default.
+
+Tested against: a sandbox ComfyUI 0.39.0 / frontend 1.53.10, the maintainer's 0.39.0 + Manager V4.2.1 (read-only GETs), and the
+Comfy registry (the newest rgthree-comfy version is `Flagged` right now).
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and
@@ -610,6 +660,10 @@ ADR 0041, step 3:
 - `app_form.py`: app forms: reads, checks and writes the `mosael` marks in a workflow;
 - `workbench.py`: what the workbench asks the plugin: which model folder a selected node's input picks from, and the marks an app
   form changes on the canvas;
+- `canvas.py` / `diagnose.py` / `templates.py` / `node_types.py` / `node_packs.py` / `node_catalog.py`: the agent in the workbench
+  (1.17.0): the graph summary and how nodes are written, the findings list, official templates (search, adapt to this machine),
+  node types, node packs (installed, search, analysis before installing), node definitions (per class; the whole catalog fetched
+  in one place and cached by fingerprint);
 - `labels.py`: plain names for tunable inputs, their order, whether they are common, and the few that aren't tuned in
   Mosael;
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;
