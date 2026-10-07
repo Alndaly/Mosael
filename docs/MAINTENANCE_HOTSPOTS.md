@@ -488,7 +488,13 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 - `pnpm build:publisher` when touching `electron/publish/**`
 - `cd frontend && pnpm exec tsc -b --noEmit && pnpm vitest run` when touching frontend
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
-  测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么
+  测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么。
+  它默认按核数并行(pyproject 的 addopts 带 `-n auto --dist worksteal`,pytest-xdist;16 核的 Mac 上两分多钟,串行二十分钟以上),
+  每个 worker 一个自己的数据目录(`backend/tests/conftest.py`)。点名文件或某一条用例
+  (`python -m pytest tests/test_x.py::test_y`)时不分发、在本进程里串行跑,`print` / `-s` / `--pdb` 照常;
+  整套串行写 `-n 0`。**新写的测试不许依赖别的测试先跑过**:并行时同一个文件的用例会分到不同进程,
+  进程级的「当前值」(语言、环境变量、模块里的缓存)由 conftest 每条还原,新加的那种要登记进
+  `docs/PROCESS_STATE.md` 并加进还原名单
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
 - `pnpm --dir website build` when touching 官网或文档;release CI 会重跑这道门禁,
   但本地先跑可以在提交前发现 TypeScript、路由、MDX 与服务端渲染问题

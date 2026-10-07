@@ -93,8 +93,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # 并行跑(pytest-xdist):`-n auto` 按核数开 worker,ubuntu-latest(公开仓库)是 4 核,就是 4 个。
+      # pyproject 的 addopts 里本来就带着它,这里写出来是让读这一步的人知道日志里那几个 [gwN] 是怎么来的。
+      # 每个 worker 有自己的数据目录和库(tests/conftest.py)。单进程时这一步要二十五分钟左右。
       - name: Backend tests
-        run: cd backend && uv run pytest -q
+        run: cd backend && uv run python -m pytest -q -n auto
 
       # frontend 的 build 脚本本身带 `tsc --noEmit`(见 package.json),所以类型检查
       # 由 build 阶段覆盖,这里只跑单测。

@@ -1,16 +1,28 @@
-"""Isolate every test run in a throwaway data dir BEFORE app modules import.
+"""Isolate every test process in a throwaway data dir BEFORE app modules import.
 
 Without this, reset_db() would drop tables in the developer's live
 ~/.mosael/mosael.db. Environment variables outrank .env in pydantic-settings,
 so setting MOSAEL_DATA_DIR here is sufficient.
+
+**One data dir per process, and under pytest-xdist that means one per worker.** Everything the app keeps on disk
+hangs off `settings.data_dir` — the SQLite DB, media, plugin installs and their data, local-service pid files,
+skills, run logs — and `settings` is built once, at import, from this variable. Each xdist worker is its own
+interpreter that imports this file before any app module, so it gets its own directory (named after the worker,
+`mosael-test-gw3-…`, so a leftover one says whose it was) and the workers never share a database or a file.
+The directory is removed when the process finishes (see `pytest_unconfigure`); before that every run left one
+behind in the system temp dir — a few dozen MB each, gigabytes after a week.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 
-os.environ["MOSAEL_DATA_DIR"] = tempfile.mkdtemp(prefix="mosael-test-")
+#: "gw0", "gw1", … under `pytest -n`; unset in a plain serial run.
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
+_DATA_DIR = tempfile.mkdtemp(prefix=f"mosael-test-{_WORKER}-" if _WORKER else "mosael-test-")
+os.environ["MOSAEL_DATA_DIR"] = _DATA_DIR
 # Tests drive the scheduler tick() directly; the background loop stays off.
 os.environ["MOSAEL_SCHEDULER_ENABLED"] = "0"
 # 两个部署级开关在**测试里**打开:整套用例早于它们存在,而且要覆盖的正是它们背后的行为
@@ -36,7 +48,37 @@ for _proxy_variable in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
     os.environ.pop(_proxy_variable, None)
     os.environ.pop(_proxy_variable.lower(), None)
 
+import time
+
 import pytest
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_auto_num_workers(config) -> int | None:
+    """`-n auto` 写在 pyproject 的 addopts 里:跑全套(或整个目录)时按核数开 worker,点名了文件或某一条用例时
+    不分发,就在本进程里跑 —— print、`--pdb`、断点和以前一样,也不用为一条用例起十几个进程。
+
+    返回 None 交给 xdist 自己按核数定(它也认 `PYTEST_XDIST_AUTO_NUM_WORKERS`);给了具体数字(`-n 4`)的
+    命令行不经过这里。只想跑一部分但要并行,就写数字。
+    """
+    root = config.invocation_params.dir
+    targets = [arg for arg in config.args if not arg.startswith("-")]
+    if targets and all("::" in arg or (root / arg).is_file() for arg in targets):
+        return 0
+    return None
+
+
+def pytest_unconfigure(config) -> None:
+    """进程结束时删掉这个进程的数据目录。
+
+    后台还可能有没收尾的守护线程往里写(SQLite 的日志文件一建一删),删到一半目录又不空了 —— 所以再试两次;
+    还删不掉的忽略,剩下的那点由系统清临时目录时带走,不该让一次清理失败把已经跑完的测试结果变红。
+    """
+    for _ in range(3):
+        shutil.rmtree(_DATA_DIR, ignore_errors=True)
+        if not os.path.exists(_DATA_DIR):
+            return
+        time.sleep(0.2)
 
 
 @pytest.fixture(autouse=True)

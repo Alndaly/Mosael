@@ -263,6 +263,14 @@ pnpm --dir website build           # 修改官网或文档后运行
 
 以上命令从仓库根目录运行。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。
 
+后端测试默认并行跑（[pytest-xdist](https://pytest-xdist.readthedocs.io/)，每个 CPU 核一个 worker，各有一个用完即删的
+数据目录）。点名某个文件或某一条用例时在本进程里串行跑，`print`、`-s`、`--pdb` 照常可用：
+
+```bash
+(cd backend && uv run --frozen python -m pytest tests/test_feishu.py::test_follow_parent_读完就退)
+(cd backend && uv run --frozen python -m pytest -q -n 0)   # 整套串行跑
+```
+
 ### 开发中的常见问题
 
 Electron 安装脚本未执行：

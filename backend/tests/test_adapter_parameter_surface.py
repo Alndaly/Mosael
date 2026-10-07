@@ -25,6 +25,12 @@ def _independent() -> list[tuple[tuple[str, str], Any]]:
     return [(key, a) for key, a in sorted(_GENERATION_ADAPTERS.items()) if not a.surface_depends_on_model]
 
 
+def _case_id(value: Any) -> str:
+    """用例名只用通道键和类名。`str(adapter)` 带着内存地址,每个进程都不一样 —— 并行跑时各 worker 收集到的用例名
+    对不上,pytest-xdist 直接拒跑。"""
+    return "/".join(value) if isinstance(value, tuple) else type(value).__name__
+
+
 #: 已经核过"不按模型名分支"且"没设就不发"的通道。**只能有意增减** —— 退回保守会让那条通道上
 #: 目录认不出的模型静默回到零参数,而用户看到的是"这个模型就是没参数"。真发现某个网关开始按
 #: 模型分支了,改这里,并在提交信息里说清是哪一处分支。
@@ -47,7 +53,7 @@ def test_声明独立的通道清单只能有意增减() -> None:
     )
 
 
-@pytest.mark.parametrize("key, adapter", _independent(), ids=lambda v: str(v))
+@pytest.mark.parametrize("key, adapter", _independent(), ids=_case_id)
 def test_声明与模型无关的面里不含素材角色(key, adapter) -> None:
     """素材角色是"这个模型做哪种任务",按模型变得厉害,不该混进标量面。"""
     roles = set(SOURCE_ROLES)
@@ -56,7 +62,7 @@ def test_声明与模型无关的面里不含素材角色(key, adapter) -> None:
     )
 
 
-@pytest.mark.parametrize("key, adapter", _independent(), ids=lambda v: str(v))
+@pytest.mark.parametrize("key, adapter", _independent(), ids=_case_id)
 def test_声明与模型无关的Adapter源码里没有按模型名的分支(key, adapter) -> None:
     """语法这一层先拦一道 —— 行为那条更强,但它只覆盖得到有请求构造函数的 Adapter。"""
     import ast

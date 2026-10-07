@@ -295,6 +295,15 @@ pnpm --dir website test && pnpm --dir website build
 
 Run checks from the repository root. Current results are recorded in [GitHub Actions](https://github.com/Alndaly/Mosael/actions); test counts change as the project grows.
 
+The backend suite runs in parallel by default ([pytest-xdist](https://pytest-xdist.readthedocs.io/), one worker per
+CPU core, each with its own throwaway data directory). Naming a file or a single test runs it serially in one process,
+so `print`, `-s` and `--pdb` behave as usual:
+
+```bash
+(cd backend && uv run --frozen python -m pytest tests/test_feishu.py::test_follow_parent_读完就退)
+(cd backend && uv run --frozen python -m pytest -q -n 0)   # the whole suite, serially
+```
+
 ### Common issues
 
 Electron install script did not run:

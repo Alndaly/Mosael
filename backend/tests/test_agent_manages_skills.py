@@ -355,6 +355,8 @@ def test_import_skill_zip_链接_勾上启用就装好开着(web) -> None:
         ("https://example.com/missing.zip", "404", "404"),
         ("https://github.com/acme/skills/tree/main/nope", "404", "404"),
     ],
+    # 写明用例名:压缩包的字节里带着打包那一刻的时间,拿它当名字的话每次收集都不一样,并行跑时各 worker 对不上。
+    ids=["not-https", "page", "github-root", "not-a-zip", "zip-without-skill", "missing-zip", "missing-folder"],
 )
 def test_import_skill_链接不对或者拿到的不是技能_不开卡(web, url: str, body, expected: str) -> None:
     routes, _ = web

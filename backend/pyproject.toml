@@ -52,6 +52,8 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  # 全套按核数并行跑(见下面 addopts 与 tests/conftest.py)。九千多条单进程要二十分钟,门禁没人等得起。
+  "pytest-xdist>=3.8",
   # TestClient 的传输。Starlette 1.x 起认 httpx2(还拿 httpx 跑会报弃用告警);此前它是 mcp 顺带装上的,
   # 测试能跑全靠这层传递依赖 —— 显式写上。httpx 本身是运行时依赖,不必在这里再列一次。
   "httpx2>=2.13",
@@ -68,6 +70,12 @@ mosael-formats = { path = "../packages/mosael-formats", editable = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# 默认并行:跑全套(或整个目录)时每个核一个 worker,每个 worker 有自己的数据目录(tests/conftest.py)。
+# 点名了文件或某一条用例时 conftest 把 worker 数压成 0,就在本进程里跑,print / --pdb 照旧。
+# 要强制串行写 `-n 0`;只跑一部分又要并行,写个数字(`-n 8`)。
+# worksteal:谁先空下来就去别人手上还没开始的那一截里拿 —— 用例长短差得多(零点几秒到十几秒),
+# 本机同样负载下比默认的 load 快一成左右。
+addopts = "-n auto --dist worksteal"
 filterwarnings = [
   "error::pytest.PytestUnhandledThreadExceptionWarning",
 ]
