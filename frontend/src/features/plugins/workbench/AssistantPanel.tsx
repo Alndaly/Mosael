@@ -4,7 +4,10 @@ import type { Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { MarkdownRefsContext, type MarkdownRefs } from "@/components/markdown/markdownRefs";
 import { Hint } from "@/components/ui/tooltip";
-import { CanvasAgentChat } from "@/features/agent/CanvasAgentChat";
+import { CanvasAgentChat, type PageOutbox } from "@/features/agent/CanvasAgentChat";
+import { AgentPageViewsContext, type AgentPageViews } from "@/features/agent/pageViews";
+import { WorkbenchAssistantContext, type AssistantFinding, type WorkbenchAssistantActions } from "@/features/plugins/workbench/assistantActions";
+import { assistantToolResult } from "@/features/plugins/workbench/assistantViews";
 import { linkNodeRefs } from "@/features/plugins/workbench/nodeRefs";
 import { useJobWatch } from "@/features/plugins/workbench/workbenchParts";
 import {
@@ -91,11 +94,7 @@ function NodeRef({ node, children }: { node: string; children: React.ReactNode }
   const [note, setNote] = React.useState("");
   const locate = async () => {
     setNote("");
-    const result = await workbenchCall({ op: "locate", node, subgraph: null });
-    if (result.ok) return;
-    setNote(result.error === "noNode" ? t("workbenchAssistantNoNode").replace("{node}", node)
-      : result.error === "inSubgraph" ? t("workbenchAssistantInSubgraph")
-      : t("workbenchCallFailed").replace("{why}", "message" in result && result.message ? result.message : result.error));
+    setNote(await locateNode(t, node));
   };
   return (
     <>
@@ -114,6 +113,18 @@ function NodeRef({ node, children }: { node: string; children: React.ReactNode }
   );
 }
 
+/** 在画布上定位一个节点(`12`、子图里的 `12:5`,桥先一层层打开)。成了回空串,没成回一句给人看的原因。 */
+async function locateNode(t: Translate, node: string): Promise<string> {
+  const result = await workbenchCall({ op: "locate", node, subgraph: null });
+  if (result.ok) return "";
+  return result.error === "noNode" ? t("workbenchAssistantNoNode").replace("{node}", node)
+    : result.error === "inSubgraph" ? t("workbenchAssistantInSubgraph")
+    : t("workbenchCallFailed").replace("{why}", "message" in result && result.message ? result.message : result.error);
+}
+
+/** 工具行里这一页认得的结果:诊断、改完的、新标签页(见 assistantViews)。 */
+const PAGE_VIEWS: AgentPageViews = { toolResult: assistantToolResult };
+
 const NODE_REFS: MarkdownRefs = {
   rewrite: linkNodeRefs,
   render: (node, children) => <NodeRef node={node}>{children}</NodeRef>,
@@ -122,9 +133,32 @@ const NODE_REFS: MarkdownRefs = {
 /**
  * 工作台的「助手」页签(ADR 0042 拍板 1):就是工作流、画板、剪辑页共用的那个智能体面板,停靠在这一列里(不浮、不关 ——
  * 换个页签就收起来了)。会话和 AI 工作台是同一个池子。页面上下文**发送那一刻**才取(画布一直在变)。
+ *
+ * 诊断画成一条条带「定位」「照这个改」的问题,开好的新标签页带「去下载」(见 assistantViews);「照这个改」替用户发一句,
+ * 智能体据此提一次 comfy_canvas_edit —— 改不改仍是用户在确认卡上点「应用」。
  */
-export function AssistantPanel({ target, runs, workflowKey }: { target: WorkbenchTarget; runs: WorkbenchRun[]; workflowKey: string }) {
+export function AssistantPanel({ target, runs, workflowKey, onShowMissing }: {
+  target: WorkbenchTarget;
+  runs: WorkbenchRun[];
+  workflowKey: string;
+  /** 「去下载」:换到「缺失项」那一页 */
+  onShowMissing: () => void;
+}) {
   const t = useI18n();
+  //: 「照这个改」替用户发的那一句(面板接到就发,见 CanvasAgentChat 的 outbox)
+  const [outbox, setOutbox] = React.useState<PageOutbox | null>(null);
+  const actions = React.useMemo<WorkbenchAssistantActions>(() => ({
+    locate: (node) => locateNode(t, node),
+    fix: (finding: AssistantFinding) => {
+      const where = [finding.ref ? `#${finding.ref}` : "", finding.title || finding.type || ""].filter(Boolean).join(" ");
+      setOutbox({
+        id: Date.now(),
+        text: t("workbenchFixThisMessage").replace("{what}", `${where ? `${where}:` : ""}${finding.cause}`),
+        context: t("workbenchFixThisContext").replace("{finding}", JSON.stringify(finding)),
+      });
+    },
+    showMissing: onShowMissing,
+  }), [t, onShowMissing]);
   const latest = runs.find((run) => run.workflowKey === workflowKey) ?? null;
   const job = useJobWatch(latest?.jobId ?? null).data as Job | undefined;
   const lastRun = React.useRef<AssistantLastRun | null>(null);
@@ -135,8 +169,12 @@ export function AssistantPanel({ target, runs, workflowKey }: { target: Workbenc
   }, [t, target]);
   return (
     <MarkdownRefsContext.Provider value={NODE_REFS}>
+    <WorkbenchAssistantContext.Provider value={actions}>
+    <AgentPageViewsContext.Provider value={PAGE_VIEWS}>
       <CanvasAgentChat
         contextLine={contextLine}
+        outbox={outbox}
+        onOutboxTaken={() => setOutbox(null)}
         emptyHint={t("workbenchAssistantEmpty")}
         placeholder={t("workbenchAssistantPlaceholder")}
         rectKey="mosael.comfy-workbench.agent.rect.v1"
@@ -144,6 +182,8 @@ export function AssistantPanel({ target, runs, workflowKey }: { target: Workbenc
         mode="docked"
         dockedLayout="inline"
       />
+    </AgentPageViewsContext.Provider>
+    </WorkbenchAssistantContext.Provider>
     </MarkdownRefsContext.Provider>
   );
 }

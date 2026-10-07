@@ -49,7 +49,8 @@ import { openWorkbench, resetWorkbench } from "./workbenchSession";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 192.168.3.15", workspaceId: "w1", url: "http://192.168.3.15:8188" };
 const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true, marks: true,
-               changes: true, locate: true, subgraphs: true, readGraph: true };
+               changes: true, locate: true, subgraphs: true, readGraph: true, applyOps: true, openWorkflow: true, toSubgraph: true,
+               unpackSubgraph: true };
 const LOADER = { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
                  widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true }] };
 const SAFE: ModelNsfw = { flagged: false, manual: null, reasons: [] };

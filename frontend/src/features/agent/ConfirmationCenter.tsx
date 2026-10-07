@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 
 import { approveConfirmation, listConfirmations, rejectConfirmation } from "@/api/client";
+import { approveLabel } from "@/features/agent/approveLabels";
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           className={cn(FLOATING_SURFACE, "animate-confirm-in")}
           actions={
             <SettleButtons
+              tool={item.tool}
               busyAction={busy?.id === item.id ? busy.action : null}
               onSettle={(action, choices) => settle.mutate({ id: item.id, action, choices })}
             />
@@ -102,9 +104,12 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
  * 卡上拨过的开关(「建好就启用」,useCardChoices)批准时一起带走。
  */
 function SettleButtons({
+  tool,
   busyAction,
   onSettle,
 }: {
+  /** 卡的工具:有的卡上「批准」有更贴切的说法(见 approveLabels) */
+  tool: string;
   busyAction: "approve" | "reject" | null;
   onSettle: (action: "approve" | "reject", choices: Record<string, boolean>) => void;
 }) {
@@ -113,7 +118,7 @@ function SettleButtons({
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
       <Button size="sm" loading={busyAction === "approve"} disabled={busyAction !== null} onClick={() => onSettle("approve", values)}>
-        <Check /> {t("confirmApprove")}
+        <Check /> {t(approveLabel(tool, "confirmApprove"))}
       </Button>
       <Button
         size="sm"

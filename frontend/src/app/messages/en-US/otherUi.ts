@@ -195,6 +195,7 @@ export const otherUi = {
   askOtherPlaceholder: "Write your own…",
   askMultiHint: "Pick any",
   confirmAllowOnce: "Allow once",
+  confirmApplyChanges: "Apply",
   confirmAllowSession: "Always allow this session",
   confirmAsksEveryTime: "Irreversible actions ask every time",
   confirmAlwaysAsks: "Changes like this ask every time",

@@ -13,6 +13,7 @@ import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { NoteEditPreview } from "@/features/agent/NoteEditPreview";
 import { PermissionBadge, permissionTone, type PermissionTone } from "@/features/agent/PermissionBadge";
 import { SKILL_CARD_PREVIEWS } from "@/features/agent/skills/SkillCardPreviews";
+import { CanvasEditPreview } from "@/features/agent/CanvasEditPreview";
 import { cn } from "@/lib/utils";
 
 /**
@@ -158,6 +159,8 @@ const SETTLED = {
  */
 const TOOL_PREVIEWS: Partial<Record<string, (payload: Record<string, unknown>, item: Confirmation) => React.ReactNode>> = {
   edit_note: (payload) => <NoteEditPreview payload={payload} />,
+  //: 改 ComfyUI 画布上那张:改动清单(ADR 0042 拍板 3),清单里的节点在工作台的「助手」里能点了定位
+  comfy_canvas_edit: (payload) => <CanvasEditPreview payload={payload} />,
   ...SKILL_CARD_PREVIEWS,
 };
 

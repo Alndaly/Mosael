@@ -54,17 +54,25 @@ vi.mock("@/app/preferences", async () => {
   const zh = messages["zh-CN"] as Record<string, string>;
   //: 「结果取自 {nodes}」留着占位:看得出填进去的节点名
   const t = (key: string) => (key === "workbenchRunResultsFrom" ? "workbenchRunResultsFrom {nodes}"
-    : key.startsWith("workbenchAssistant") ? zh[key] : key);
+    : key.startsWith("workbenchAssistant") || key.startsWith("workbenchFixThis") ? zh[key] : key);
   return { useI18n: () => t, usePreferences: () => ({ locale: "zh" }) };
 });
-//: 智能体面板本身另有测试(features/agent):这里换成一个记下参数、把「回复」交给真的 Markdown 渲染的替身
-const agent = vi.hoisted(() => ({ props: null as null | Record<string, unknown>, reply: "" }));
+//: 智能体面板本身另有测试(features/agent):这里换成一个记下参数、把「回复」交给真的 Markdown 渲染的替身;一次工具调用的
+//: 结果交给这一页认得的画法(工具行怎么摆它见 features/agent 的 toolCallPageViews 测试)
+const agent = vi.hoisted(() => ({ props: null as null | Record<string, unknown>, reply: "", tool: "", data: null as unknown }));
 vi.mock("@/features/agent/CanvasAgentChat", async () => {
   const { AgentMarkdown } = await import("@/components/markdown/Markdown");
+  const { AgentPageViewsContext } = await import("@/features/agent/pageViews");
   return {
     CanvasAgentChat: (props: Record<string, unknown>) => {
       agent.props = props;
-      return <div data-agent-chat="">{agent.reply && <AgentMarkdown>{agent.reply}</AgentMarkdown>}</div>;
+      const views = React.useContext(AgentPageViewsContext);
+      return (
+        <div data-agent-chat="">
+          {agent.reply && <AgentMarkdown>{agent.reply}</AgentMarkdown>}
+          {agent.tool && views ? <div data-tool-result="">{views.toolResult(agent.tool, agent.data)}</div> : null}
+        </div>
+      );
     },
   };
 });
@@ -80,7 +88,8 @@ import { openWorkbench, resetWorkbench } from "./workbenchSession";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 192.168.3.15", workspaceId: "w1", url: "http://192.168.3.15:8188" };
 const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true, marks: true,
-               changes: true, locate: true, subgraphs: true, readGraph: true };
+               changes: true, locate: true, subgraphs: true, readGraph: true, applyOps: true, openWorkflow: true, toSubgraph: true,
+               unpackSubgraph: true };
 const LOADER = { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
                  widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true }] };
 const EXPORTED = {
@@ -1019,6 +1028,8 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
   beforeEach(() => {
     agent.props = null;
     agent.reply = "";
+    agent.tool = "";
+    agent.data = null;
   });
 
   it("第五个页签;面板停靠在列里、不浮也不关,会话在开工作台的那个工作区", async () => {
@@ -1092,5 +1103,88 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
     expect(await within(shownPanel()).findByRole("status")).toHaveProperty("textContent", "画布上没有节点 #4");
     expect(screen.queryByRole("button", { name: "#9" }), "代码里的不变成定位").toBeNull();
     expect(screen.getByText("#9").tagName).toBe("CODE");
+  });
+});
+
+describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、改完的、新标签页的「去下载」", () => {
+  const MISSING = { ref: "459:451", type: "UNETLoader", severity: "error", kind: "missing_model", input: "unet_name",
+                    cause: "这台机器上没有模型文件「qwen.safetensors」", fix: "下载它到 diffusion_models" };
+  const OOM = { ref: "", type: "", severity: "error", kind: "last_run_error", cause: "out of memory", fix: "调小宽高" };
+  beforeEach(() => {
+    agent.props = null;
+    agent.reply = "";
+    agent.tool = "";
+    agent.data = null;
+  });
+  const result = () => shownPanel().querySelector<HTMLElement>("[data-tool-result]")!;
+
+  it("诊断一条一条画出来:「定位」经桥选中那个节点(子图里的一层层打开);指不到节点的那条没有「定位」", async () => {
+    agent.tool = "comfy_check";
+    agent.data = { findings: [MISSING, OOM], counts: { error: 2, warning: 0 } };
+    const bridge = await mount();
+    bridge.comfyWorkbench.mockImplementation(async () => ({ ok: true }));
+    tab("workbenchTabAssistant");
+    const rows = within(result()).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("#459:451");
+    expect(rows[0].textContent).toContain("这台机器上没有模型文件「qwen.safetensors」");
+    expect(within(rows[1]).queryByRole("button", { name: /workbenchLocateLabel/ }), "整张图的报错指不到节点").toBeNull();
+    fireEvent.click(within(rows[0]).getByRole("button", { name: /workbenchLocateLabel/ }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "locate", node: "459:451", subgraph: null }));
+  });
+
+  it("「照这个改」替用户发一句(带着这一条),智能体据此提一次 comfy_canvas_edit;面板接走就清掉", async () => {
+    agent.tool = "comfy_check";
+    agent.data = { findings: [MISSING], counts: { error: 1, warning: 0 } };
+    const bridge = await mount();
+    tab("workbenchTabAssistant");
+    expect(agent.props!.outbox).toBeNull();
+    fireEvent.click(within(result()).getByRole("button", { name: /让助手照这一条改/ }));
+    await waitFor(() => expect(agent.props!.outbox).toBeTruthy());
+    const outbox = agent.props!.outbox as { text: string; context: string };
+    expect(outbox.text).toBe("照这个改:#459:451 UNETLoader:这台机器上没有模型文件「qwen.safetensors」");
+    expect(outbox.context).toContain("comfy_canvas_edit");
+    expect(outbox.context).toContain(JSON.stringify(MISSING));
+    expect(calls(bridge).filter((one) => one.op !== "export"), "点「照这个改」不碰画布").toEqual([]);
+    act(() => (agent.props!.onOutboxTaken as () => void)());
+    await waitFor(() => expect(agent.props!.outbox).toBeNull());
+  });
+
+  it("改完的:改了几处、修好了几个、多出来的提醒也能定位", async () => {
+    agent.tool = "comfy_canvas_edit";
+    agent.data = { applied: 3, fixed: [MISSING], introduced: [{ ...MISSING, ref: "5", severity: "warning", kind: "size_not_multiple",
+                                                                cause: "「width」= 1001 不是 8 的倍数" }] };
+    await mount();
+    tab("workbenchTabAssistant");
+    expect(result().querySelector("[data-comfy-applied]")!.textContent).toContain("workbenchAppliedSummary");
+    expect(within(result()).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(result()).getByRole("listitem").textContent).toContain("「width」= 1001 不是 8 的倍数");
+  });
+
+  it("新标签页:开了哪一张、没存盘、还缺几个模型合计多大;「去下载」换到缺失项那一页", async () => {
+    api.getWorkflowLibrary.mockResolvedValue({ workflows: [], manager: { version: "V4.2.1" } });
+    api.inspectWorkflowImport.mockResolvedValue({ missing_nodes: [], packs: [], missing_models: [] });
+    agent.tool = "comfy_canvas_new";
+    agent.data = { saved: false, opened: { name: "Qwen 编辑", temporary: true, path: "" },
+                   template: { name: "image_qwen_image_2_1_image_edit", missing_size: 26_754_163_364, models: [
+                     { name: "qwen_image_2.1_int8_convrot.safetensors", folder: "diffusion_models", status: "missing", size: 20_000_000_000 },
+                     { name: "vae.safetensors", folder: "vae", status: "present" }] },
+                   check: { counts: { error: 4, warning: 0 }, findings: [] } };
+    await mount();
+    tab("workbenchTabAssistant");
+    const card = result().querySelector<HTMLElement>("[data-comfy-new-tab]")!;
+    expect(card.textContent).toContain("workbenchNewTabOpened");
+    expect(card.textContent).toContain("qwen_image_2.1_int8_convrot.safetensors");
+    expect(card.textContent).not.toContain("vae.safetensors");
+    fireEvent.click(within(card).getByRole("button", { name: /workbenchGoDownload/ }));
+    expect(screen.getByRole("tab", { name: "workbenchTabMissing" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("不认得的工具结果:这一页不画(工具行照通用的画)", async () => {
+    agent.tool = "comfy_templates";
+    agent.data = { templates: [] };
+    await mount();
+    tab("workbenchTabAssistant");
+    expect(result().textContent).toBe("");
   });
 });

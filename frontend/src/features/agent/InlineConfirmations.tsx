@@ -11,6 +11,7 @@ import {
   updateAgentSession,
   type Confirmation,
 } from "@/api/client";
+import { approveLabel } from "@/features/agent/approveLabels";
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -250,7 +251,7 @@ function DecisionButtons({
           disabled={busyChoice !== null}
           onClick={() => onDecide(choice, values)}
         >
-          <Icon /> {t(label)}
+          <Icon /> {t(choice === "once" ? approveLabel(item.tool, label) : label)}
         </Button>
       ))}
       {sessionAllow ? null : (

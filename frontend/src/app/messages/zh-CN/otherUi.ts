@@ -195,6 +195,7 @@ export const otherUi = {
   askOtherPlaceholder: "自己写一个…",
   askMultiHint: "可多选",
   confirmAllowOnce: "允许一次",
+  confirmApplyChanges: "应用",
   confirmAllowSession: "本会话始终允许",
   confirmAsksEveryTime: "撤不回的操作每次都要你确认",
   confirmAlwaysAsks: "这类改动每次都要你确认",

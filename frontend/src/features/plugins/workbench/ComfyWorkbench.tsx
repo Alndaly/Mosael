@@ -79,6 +79,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   }, [tab]);
   //: 换了一张:上一张没存成的那句话不是这一张的
   React.useEffect(() => setSaveNote(""), [workflowKey]);
+  //: 「助手」开好一张新的、还缺模型:「去下载」换到缺失项那一页
+  const showMissing = React.useCallback(() => setTab("missing"), [setTab]);
 
   if (!target) return null;
   const capabilities = state?.capabilities ?? null;
@@ -245,7 +247,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               <RunPanel target={target} runs={runs} events={events} workflowKey={workflowKey} active={tab === "run"}
                         canMark={Boolean(capabilities?.marks && capabilities?.export)} runError={run.error} />
             )}
-            {one === "assistant" && <AssistantPanel target={target} runs={runs} workflowKey={workflowKey} />}
+            {one === "assistant" && (
+              <AssistantPanel target={target} runs={runs} workflowKey={workflowKey} onShowMissing={showMissing} />
+            )}
           </div>
         ))}
       </aside>

@@ -21,6 +21,7 @@ import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes"
 import { CitationContext } from "@/components/markdown/CitationLink";
 import { collectCitations } from "@/features/agent/citations";
 import { FailureReason } from "@/features/agent/ConfirmationCard";
+import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { useToolCallConfirmation } from "@/features/agent/decisionsContext";
 
@@ -301,6 +302,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
   // there is nothing to render but the string.
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
+  //: 这一页认得这次的结果(工作台「助手」的诊断、新标签页):画这一页给的,摆在行下面、不跟着折叠(见 pageViews)
+  const pageViews = React.useContext(AgentPageViewsContext);
+  const pageCard = tool.status === "error" || !pageViews ? null : pageViews.toolResult(tool.name, data);
   const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
   // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
   // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
@@ -442,7 +446,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         </div>
       )}
-      {/* 媒体产出**不跟着折叠** —— 生成出来的那张图是这一步的成果,不是它的明细。 */}
+      {/* 媒体产出**不跟着折叠** —— 生成出来的那张图是这一步的成果,不是它的明细。这一页认得的结果也一样。 */}
+      {pageCard ? <div className="mt-1.5 min-w-0">{pageCard}</div> : null}
       {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} />}
     </div>
   );
