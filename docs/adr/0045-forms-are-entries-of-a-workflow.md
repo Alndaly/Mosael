@@ -212,11 +212,11 @@ ComfyUI 插件把 ComfyUI 上每张保存的工作流报成两样东西:一个**
 | 工作流画布上的节点卡 | `workflows/WorkflowNode.tsx`、`workflowCanvasModel.ts`:标题 `node.name \|\| 注册表 label`,副行 `configSummary \|\| typeLabel` | 插件节点的副行和标题是同一句;`ai_generate` 的副行是**原始模型 id**(`SUMMARY_KEYS` 第一个是 `model`) | 插件节点副行写副名;`ai_generate` 副行写模型主名(现查生成选项,查不到才写 id),悬停两层 —— 否则 `#app` 这种 id 直接露在画布上 |
 | 工作流检查器:生成节点的模型切换 | `workflows/nodeInspectorGenerate.tsx` 的 `Combobox`(只有一行、不分组) | 一行 `${model_label} · 种类` | 换成 `SearchableSelect`,和 AI Studio 同一种两行、挨着、同样的搜索 |
 | 工作流检查器:按生成选项选模型的那几格(资产「补全多角度」、说话、对口型;资产详情的 `DrawDialog` 同一份) | 后端 `workflows/field_options.py` 给 `{value, label}`,`label` 是生成选项的「连接名 · 显示名」 | 一行 | 这几种选项多带结构化的几格(`model_label`、`profile_name`、`group`),前端用同一种两行的选项;后端不拼 |
-| **插件页**「这个连接提供了哪些模型」 | `plugins/ProvidedModels.tsx`,后端 `plugin_connections.provided_models`;一行 `label`,悬停 id,超过 6 项有搜索 | 一行 + facts | 主名下面加副名,入口挨着;搜索加组名;后端带 `group` |
-| 插件页工具开关 | `plugins/PluginsView.tsx` 的 `CapabilityPicker` / `ToolRow`(`label` + 说明两行,有搜索) | 两行 | 第二行前面加副名;搜索加组名 |
-| **工作流库**(卡片、表格、详情) | `plugins/WorkflowLibrary.tsx`,名字是文件名(插件 `library.label_of`) | 文件名 | 名字不变(这里说的就是文件);有表单的多一行淡色「表单:快速用krea2生图」,搜表单标题也搜得到(`workflowLibraryView.ts`)—— AI Studio 里看到的表单名,在库里找得到是哪张 |
-| 模型库「用它生成」 | `plugins/ModelDetail.tsx` 的 `UseToGenerate`、`ModelMenu.tsx`,名字来自 `workflowName()` | 剥字符串 | 读 `model_label` + 副名;删掉 `workflowName()` |
-| 工作台顶栏、「表单」页签 | `plugins/workbench/ComfyWorkbench.tsx`、`AppPanel.tsx` | 文件名 | 不变(工作台开的就是文件);第二步表单页签管多张表单,见 §7 |
+| **插件页**「这个连接提供了哪些模型」 | `frontend/src/features/plugins/ProvidedModels.tsx`,后端 `plugin_connections.provided_models`;一行 `label`,悬停 id,超过 6 项有搜索 | 一行 + facts | 主名下面加副名,入口挨着;搜索加组名;后端带 `group` |
+| 插件页工具开关 | `frontend/src/features/plugins/PluginsView.tsx` 的 `CapabilityPicker` / `ToolRow`(`label` + 说明两行,有搜索) | 两行 | 第二行前面加副名;搜索加组名 |
+| **工作流库**(卡片、表格、详情) | `frontend/src/features/plugins/WorkflowLibrary.tsx`,名字是文件名(插件 `library.label_of`) | 文件名 | 名字不变(这里说的就是文件);有表单的多一行淡色「表单:快速用krea2生图」,搜表单标题也搜得到(`workflowLibraryView.ts`)—— AI Studio 里看到的表单名,在库里找得到是哪张 |
+| 模型库「用它生成」 | `frontend/src/features/plugins/ModelDetail.tsx` 的 `UseToGenerate`、`ModelMenu.tsx`,名字来自 `workflowName()` | 剥字符串 | 读 `model_label` + 副名;删掉 `workflowName()` |
+| 工作台顶栏、「表单」页签 | `frontend/src/features/plugins/workbench/ComfyWorkbench.tsx`、`AppPanel.tsx` | 文件名 | 不变(工作台开的就是文件);第二步表单页签管多张表单,见 §7 |
 | **设置**默认模型 | `settings/ProviderDefaultsSection.tsx`,一行 `${provider_name} · ${display_name}`,搜索带模型 id;后端 `routes/settings/provider_defaults.py` | 一行 | **两行**;搜索加组名;后端带 `group` |
 | **智能体**确认卡(插件工具) | 后端 `confirmable/plugin_tools.py` 的一句「运行插件工具「{tool_label}」(连接「…」)」 | 一句话 | 表单入口在这句里带上「来自 krea2-text-2-image」(给人读的一句话,用消息模板的参数;名字字段照旧分开) |
 | 智能体的工具说明 | 插件 `tooling.tool_for` | 一句 | 见 §2 |
