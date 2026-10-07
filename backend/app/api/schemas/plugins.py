@@ -291,9 +291,24 @@ class PluginInstallPreview(ApiModel):
     update_unreleased: bool = False
 
 
+class PluginInstanceLocalServiceCreate(ApiModel):
+    """新建连接时一起定下它在本机哪种方式跑(插件声明了本机服务,ADR 0041)。地址由宿主选端口、写进 `server_url`,不用客户端给。"""
+
+    #: 用我自己装的(选一个目录)/ 让 Mosael 装(装在宿主分的目录里;这里只建,装之前人要先看安装计划)。
+    mode: Literal["directory", "managed"]
+    directory: str = Field(default="", max_length=2000)
+    python: str = Field(default="", max_length=2000)
+    #: 「用我自己装的」要带 true:界面问过人(会在这台机器上运行这个目录里的代码)。
+    confirm_run_code: bool = False
+
+
 class PluginInstanceCreate(ApiModel):
     name: str = ""
     config: dict = Field(default_factory=dict)
+    #: 建好时一起授予的权限(界面列给人看过的那几项;必须是清单里声明的)。没给的照旧等人在连接上授予。
+    grant_permissions: list[str] = Field(default_factory=list, max_length=100)
+    #: 给了就一开始用本机服务(要部署管理员);连接、本机服务那一行、端口、地址同一个事务里建好。
+    local_service: PluginInstanceLocalServiceCreate | None = None
 
 
 class PluginNetworkUpdate(ApiModel):

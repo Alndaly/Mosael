@@ -19300,7 +19300,7 @@
           "plugins"
         ],
         "summary": "Create Instance",
-        "description": "接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。\n\n没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。",
+        "description": "接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。\n\n没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。\n\n带 `local_service`(插件声明了本机服务,ADR 0041):一开始就定下它在本机哪种方式跑 —— 那是在这台机器上运行代码,要部署\n管理员(和连接页上的「本机服务」同一条规矩)。连接、本机服务那一行、端口、写进 `server_url` 的地址同一个事务里建好,\n哪一步不成,连接也不留下。",
         "operationId": "create_instance_api_plugins__package_id__instances_post",
         "parameters": [
           {
@@ -37836,10 +37836,63 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Config"
+          },
+          "grant_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Grant Permissions"
+          },
+          "local_service": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PluginInstanceLocalServiceCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "PluginInstanceCreate"
+      },
+      "PluginInstanceLocalServiceCreate": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "managed"
+            ],
+            "title": "Mode"
+          },
+          "directory": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Directory",
+            "default": ""
+          },
+          "python": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Python",
+            "default": ""
+          },
+          "confirm_run_code": {
+            "type": "boolean",
+            "title": "Confirm Run Code",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "PluginInstanceLocalServiceCreate",
+        "description": "新建连接时一起定下它在本机哪种方式跑(插件声明了本机服务,ADR 0041)。地址由宿主选端口、写进 `server_url`,不用客户端给。"
       },
       "PluginInstanceOut": {
         "properties": {

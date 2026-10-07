@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 from datetime import UTC, datetime
 from typing import Any
 
@@ -49,7 +50,26 @@ def create(
     name: str = "",
     *,
     owner_user_id: str = "",
+    grant: Collection[str] = (),
 ) -> PluginInstance:
+    """新建一个连接:`add` 再 `commit_created`。"""
+    return commit_created(db, add(db, package_id, config, name, owner_user_id=owner_user_id, grant=grant))
+
+
+def add(
+    db: Session,
+    package_id: str,
+    config: dict[str, Any] | None = None,
+    name: str = "",
+    *,
+    owner_user_id: str = "",
+    grant: Collection[str] = (),
+) -> PluginInstance:
+    """建一个连接和它的授权记录,**只 flush、不提交、不通知**。同一次新建里还有别的要一起建时用它(本机服务的连接:那一行、
+    端口、写进 `server_url` 的地址,见 local_services.create_connection),全做完再 `commit_created`;中途哪一步不成,调用方
+    回滚,连接也不留下。
+
+    `grant`:人在新建弹窗里看过、同意建好时一起授予的那几项权限,必须是清单里声明的。"""
     package = db.get(PluginPackage, package_id)
     if package is None:
         raise PluginDomainError("pluginErr_notFound")
@@ -63,6 +83,9 @@ def create(
     ).all()
     if existing and not manifest.multiple:
         raise PluginDomainError("pluginErr_singleConnection", name=manifest.name)
+    unknown = sorted(set(grant) - set(manifest.permissions))
+    if unknown:
+        raise PluginDomainError("pluginErr_unknownPermissions", keys=", ".join(unknown))
     _check_json(manifest, config or {})
     merged = _fit_config(manifest, config or {})
     instance = PluginInstance(
@@ -74,9 +97,16 @@ def create(
         discovered_tools=[],
     )
     db.add(instance)
+    db.flush()
+    _seed_permissions(db, instance, manifest, granted=grant)
+    return instance
+
+
+def commit_created(db: Session, instance: PluginInstance) -> PluginInstance:
+    """新建的连接落库,再通知替宿主做事的那一侧。**一定在提交之后通知**:那一侧要读到这一行,它对齐失败时还会回滚会话 ——
+    没提交的话,回滚掉的是这个连接本身。"""
     db.commit()
     db.refresh(instance)
-    _sync_permissions(db, instance, manifest)
     host_capabilities.notify(db, instance, refresh=True)
     return instance
 
@@ -176,9 +206,9 @@ def _check_json(manifest: Manifest, values: dict[str, Any]) -> None:
             ) from exc
 
 
-def set_config(
-    db: Session, instance: PluginInstance, values: dict[str, Any], *, notify: bool = True
-) -> PluginInstance:
+def write_config(db: Session, instance: PluginInstance, values: dict[str, Any]) -> Manifest:
+    """改这个连接的配置,**只 flush**:清单声明过的键才收、JSON 那几格要能解析、名字跟着配置走。提交、重拉工具、通知归调用方
+    (`set_config` 就是它加上这三样;本机服务写宿主分的地址时只要它,见 local_services.records)。交回清单。"""
     manifest = manifest_for(db, instance)
     allowed = {spec.key for spec in manifest.config}
     unknown = sorted(set(values) - allowed)
@@ -190,6 +220,14 @@ def set_config(
     # 名字跟着配置走 —— 除非用户改过它。判据是"当前名字正是上一份配置生成的那个"。
     if manifest.name_template and instance.name in (previous_name, "", manifest.name):
         instance.name = render_name(manifest, instance.config)
+    db.flush()
+    return manifest
+
+
+def set_config(
+    db: Session, instance: PluginInstance, values: dict[str, Any], *, notify: bool = True
+) -> PluginInstance:
+    manifest = write_config(db, instance, values)
     db.commit()
     db.refresh(instance)
     if instance.enabled and manifest.is_mcp:
@@ -325,10 +363,16 @@ def process_env(db: Session, instance: PluginInstance) -> dict[str, str]:
 
 # --- 权限 ---------------------------------------------------------------
 
-def _sync_permissions(db: Session, instance: PluginInstance, manifest: Manifest) -> None:
+def _seed_permissions(db: Session, instance: PluginInstance, manifest: Manifest, *, granted: Collection[str] = ()) -> None:
+    """清单声明的每一项权限都有一行:缺的补上,缺省没授予(`granted` 里的那几项建成授予)。只 flush。"""
     for permission in manifest.permissions:
         if db.get(PluginPermissionGrant, {"instance_id": instance.id, "permission": permission}) is None:
-            db.add(PluginPermissionGrant(instance_id=instance.id, permission=permission, granted=False))
+            db.add(PluginPermissionGrant(instance_id=instance.id, permission=permission, granted=permission in granted))
+    db.flush()
+
+
+def _sync_permissions(db: Session, instance: PluginInstance, manifest: Manifest) -> None:
+    _seed_permissions(db, instance, manifest)
     db.commit()
 
 
@@ -531,8 +575,10 @@ def _stamp() -> str:
 
 __all__ = [
     "MASK",
+    "add",
     "authorization_state",
     "blocked_reason",
+    "commit_created",
     "create",
     "credential_values",
     "describe_credentials",
@@ -555,4 +601,5 @@ __all__ = [
     "set_exposed",
     "set_network",
     "set_permissions",
+    "write_config",
 ]

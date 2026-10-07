@@ -36,7 +36,7 @@ import os
 import shutil
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -357,6 +357,37 @@ def configure(
             raise LocalServiceError("localServiceErr_badIdleMinutes", status=422, low=low, high=high)
         row.idle_stop_minutes = idle_stop_minutes
     db.flush()
+
+
+def create_connection(
+    db: Session,
+    package_id: str,
+    *,
+    mode: str,
+    config: dict[str, Any] | None = None,
+    name: str = "",
+    owner_user_id: str = "",
+    directory: str = "",
+    python: str = "",
+    confirm_run_code: bool = False,
+    grant: Collection[str] = (),
+) -> PluginInstance:
+    """新建一个连接,一开始就定下它在本机哪种方式跑(插件页「新建连接」弹窗)。建连接、建这一行、选端口、把地址写进
+    `server_url`,**同一个事务里做完、不提交**:哪一步不成(没确认过、目录空着、插件没声明服务、找不到空端口),调用方回滚,
+    连接也不留下;成了由调用方 `inst.commit_created`。
+
+    **地址归宿主分**:`server_url`(SERVICE_ADDRESS_FIELD)客户端给了也不用 —— 清单里它是必填的,本机的两种填的是宿主选的
+    那个端口,不是让客户端先编一个。用我自己装的走 `configure`(要 `confirm_run_code`);让 Mosael 装的只建这一行(目录是宿主分的
+    安装目录、还没装好),不开始装:装之前人要先看安装计划。"""
+    if mode not in records.MODES:
+        raise LocalServiceError("localServiceErr_unknownMode", status=422, mode=mode)
+    fields = {key: value for key, value in (config or {}).items() if key != SERVICE_ADDRESS_FIELD}
+    instance = inst.add(db, package_id, fields, name, owner_user_id=owner_user_id, grant=grant)
+    if mode == records.DIRECTORY:
+        configure(db, instance, directory=directory, python=python, confirm_run_code=confirm_run_code)
+    else:
+        records.make_managed(db, instance)
+    return instance
 
 
 def _checked_shared(db: Session, instance: PluginInstance, row: LocalService, folders: list[str]) -> list[str]:
@@ -1052,7 +1083,8 @@ __all__ = [
     "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
     "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_rollback",
     "begin_update", "begin_using", "check_idle",
-    "cancel_install", "configure", "detect", "discover", "ensure_running", "footprint", "forget_instance", "forget_package",
+    "cancel_install", "configure", "create_connection", "detect", "discover", "ensure_running", "footprint", "forget_instance",
+    "forget_package",
     "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "package_installs", "package_roots", "plan", "prepare_install",
     "recent_install_logs", "recent_logs", "remove", "remove_install", "restart", "start", "start_idle_watch", "start_kept_running", "status",
     "stop", "stop_all", "touch", "versions",

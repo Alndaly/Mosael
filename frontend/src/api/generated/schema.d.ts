@@ -6328,6 +6328,10 @@ export interface paths {
          * @description 接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。
          *
          *     没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。
+         *
+         *     带 `local_service`(插件声明了本机服务,ADR 0041):一开始就定下它在本机哪种方式跑 —— 那是在这台机器上运行代码,要部署
+         *     管理员(和连接页上的「本机服务」同一条规矩)。连接、本机服务那一行、端口、写进 `server_url` 的地址同一个事务里建好,
+         *     哪一步不成,连接也不留下。
          */
         post: operations["create_instance_api_plugins__package_id__instances_post"];
         delete?: never;
@@ -14199,6 +14203,35 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             };
+            /** Grant Permissions */
+            grant_permissions?: string[];
+            local_service?: components["schemas"]["PluginInstanceLocalServiceCreate"] | null;
+        };
+        /**
+         * PluginInstanceLocalServiceCreate
+         * @description 新建连接时一起定下它在本机哪种方式跑(插件声明了本机服务,ADR 0041)。地址由宿主选端口、写进 `server_url`,不用客户端给。
+         */
+        PluginInstanceLocalServiceCreate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "directory" | "managed";
+            /**
+             * Directory
+             * @default
+             */
+            directory: string;
+            /**
+             * Python
+             * @default
+             */
+            python: string;
+            /**
+             * Confirm Run Code
+             * @default false
+             */
+            confirm_run_code: boolean;
         };
         /** PluginInstanceOut */
         PluginInstanceOut: {

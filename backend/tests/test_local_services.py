@@ -261,6 +261,127 @@ def test_建要确认_端口往上找第一个空的_写进连接地址(
     assert moved.status_code == 422, "换目录就是换一份要运行的代码,要再确认一次"
 
 
+# ---- 新建连接时就定下在哪跑(插件页「新建连接」弹窗) ------------------------------------------
+
+
+def _create(client, local_service: dict[str, Any] | None, **body: Any):
+    return client.post(f"/api/plugins/{PACKAGE_ID}/instances", json={**body, "local_service": local_service})
+
+
+def _left_behind() -> tuple[int, int]:
+    """库里这个插件的连接、本机服务各有几行。"""
+    with SessionLocal() as db:
+        instances = db.query(PluginInstance).filter(PluginInstance.package_id == PACKAGE_ID).count()
+        return instances, db.query(LocalService).count()
+
+
+def _declare_permissions(*permissions: str) -> None:
+    with SessionLocal() as db:
+        package = db.get(PluginPackage, PACKAGE_ID)
+        package.manifest = {**package.manifest, "permissions": list(permissions)}
+        db.commit()
+
+
+def test_新建时用我自己装的_一个请求建好_端口和地址宿主给_客户端给的地址不用(
+    plugged, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = records.FIRST_PORT
+    monkeypatch.setattr(records, "port_in_use", lambda port: port == base)
+    directory = _folder(tmp_path)
+    created = _create(plugged, {"mode": "directory", "directory": f" {directory} ", "confirm_run_code": True},
+                      config={"server_url": "http://192.168.3.99:9999"})
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["config"]["server_url"] == f"http://127.0.0.1:{base + 1}", "地址是宿主选的端口,不是客户端编的那个"
+    status = _status(plugged, body["id"])
+    assert (status["mode"], status["directory"], status["port"], status["state"]) == ("directory", directory, base + 1, "stopped")
+    assert status["url"] == body["config"]["server_url"]
+    # 建好马上就能认目录(界面在建好之后接着认一遍、摆在卡片上;确认在弹窗里问过一次)
+    found = plugged.post(f"/api/plugins/instances/{body['id']}/local-service/detect",
+                         json={"directory": directory, "confirm_run_code": True})
+    assert found.status_code == 200 and found.json()["ok"] is True, found.text
+
+
+def test_新建时让Mosael装_只建那一行不开始装_目录是宿主分的(plugged) -> None:
+    created = _create(plugged, {"mode": "managed"})
+    assert created.status_code == 200, created.text
+    instance_id = created.json()["id"]
+    status = _status(plugged, instance_id)
+    assert (status["mode"], status["installed"], status["install"]) == ("managed", False, None), "装之前人要先看安装计划"
+    assert status["directory"] == str(records.install_root(instance_id))
+    assert status["port"] == records.FIRST_PORT
+    assert created.json()["config"]["server_url"] == f"http://127.0.0.1:{records.FIRST_PORT}"
+    assert status["issue"]["kind"] == "not_installed"
+
+
+@pytest.mark.parametrize(
+    ("local_service", "status", "said"),
+    [
+        ({"mode": "directory", "directory": "/somewhere"}, 422, "确认"),
+        ({"mode": "directory", "directory": "  ", "confirm_run_code": True}, 422, "目录"),
+    ],
+)
+def test_新建时没确认_目录空着_连接也不留下(plugged, local_service: dict, status: int, said: str) -> None:
+    response = _create(plugged, local_service)
+    assert response.status_code == status and said in response.json()["detail"], response.text
+    assert _left_behind() == (0, 0)
+
+
+def test_新建时找不到空端口_插件没声明服务_连接也不留下(
+    plugged, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(records, "PORT_SCAN", 3)
+    monkeypatch.setattr(records, "port_in_use", lambda port: True)
+    for mode in ("directory", "managed"):
+        response = _create(plugged, {"mode": mode, "directory": _folder(tmp_path), "confirm_run_code": True})
+        assert response.status_code == 409 and "端口" in response.json()["detail"], response.text
+        assert _left_behind() == (0, 0), "连接建了一半(地址还是缺省的那台)不能留下"
+
+    monkeypatch.setattr(records, "port_in_use", lambda port: False)
+    with SessionLocal() as db:
+        package = db.get(PluginPackage, PACKAGE_ID)
+        package.manifest = {**package.manifest, "services": []}
+        db.commit()
+    response = _create(plugged, {"mode": "managed"})
+    assert response.status_code == 422 and "本机服务" in response.json()["detail"]
+    assert _left_behind() == (0, 0)
+
+
+def test_新建时用本机服务要部署管理员_连一台服务器不用(plugged, tmp_path: Path) -> None:
+    member = second_client("member")
+    refused = _create(member, {"mode": "directory", "directory": _folder(tmp_path), "confirm_run_code": True})
+    assert refused.status_code == 403
+    assert _create(member, {"mode": "managed"}).status_code == 403
+    assert _left_behind() == (0, 0)
+    plain = _create(member, None, config={"server_url": "http://127.0.0.1:8188"})
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["config"]["server_url"] == "http://127.0.0.1:8188"
+    assert member.get(f"/api/plugins/instances/{plain.json()['id']}/local-service").json() is None
+
+
+def test_新建时一起授予看过的权限_没授予的插件不替它认目录(plugged, tmp_path: Path) -> None:
+    _declare_permissions("network:fake", "filesystem:write")
+    directory = _folder(tmp_path)
+    bare = _create(plugged, {"mode": "directory", "directory": directory, "confirm_run_code": True}).json()
+    assert bare["pending_permissions"] == ["network:fake", "filesystem:write"]
+    refused = plugged.post(f"/api/plugins/instances/{bare['id']}/local-service/detect",
+                           json={"directory": directory, "confirm_run_code": True})
+    assert refused.status_code == 422, "插件要的权限没授予,它不替这个连接做任何事"
+
+    granted = _create(plugged, {"mode": "directory", "directory": directory, "confirm_run_code": True},
+                      grant_permissions=["network:fake", "filesystem:write"])
+    assert granted.status_code == 200, granted.text
+    assert granted.json()["pending_permissions"] == []
+    found = plugged.post(f"/api/plugins/instances/{granted.json()['id']}/local-service/detect",
+                         json={"directory": directory, "confirm_run_code": True})
+    assert found.status_code == 200 and found.json()["ok"] is True, found.text
+
+    before = _left_behind()
+    unknown = _create(plugged, {"mode": "managed"}, grant_permissions=["network:fake", "shell:anything"])
+    assert unknown.status_code == 422 and "shell:anything" in unknown.json()["detail"]
+    assert _left_behind() == before, "清单没声明的权限授予不了,连接也不留下"
+
+
 def test_没声明服务的插件建不了(plugged, tmp_path: Path) -> None:
     with SessionLocal() as db:
         package = db.get(PluginPackage, PACKAGE_ID)

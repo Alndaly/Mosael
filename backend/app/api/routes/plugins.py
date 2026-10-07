@@ -438,11 +438,27 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
     """接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。
 
     没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。
+
+    带 `local_service`(插件声明了本机服务,ADR 0041):一开始就定下它在本机哪种方式跑 —— 那是在这台机器上运行代码,要部署
+    管理员(和连接页上的「本机服务」同一条规矩)。连接、本机服务那一行、端口、写进 `server_url` 的地址同一个事务里建好,
+    哪一步不成,连接也不留下。
     """
     try:
-        instance = inst.create(db, package_id, body.config, body.name, owner_user_id=user.id)
-    except PluginDomainError as exc:
-        raise _fail(exc) from exc
+        if body.local_service is None:
+            instance = inst.create(
+                db, package_id, body.config, body.name, owner_user_id=user.id, grant=body.grant_permissions,
+            )
+        else:
+            ensure_deployment_admin(db, user)
+            wanted = body.local_service
+            instance = inst.commit_created(db, local_services.create_connection(
+                db, package_id, mode=wanted.mode, config=body.config, name=body.name, owner_user_id=user.id,
+                directory=wanted.directory, python=wanted.python, confirm_run_code=wanted.confirm_run_code,
+                grant=body.grant_permissions,
+            ))
+    except PluginDomainError as exc:  # 本机服务的错(LocalServiceError)也是一种,按它自己的状态码
+        db.rollback()
+        raise _fail(exc, exc.status if isinstance(exc, LocalServiceError) else 422) from exc
     return _instance(db, instance)
 
 

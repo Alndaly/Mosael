@@ -142,7 +142,8 @@ def create(
     db: Session, instance: PluginInstance, *, directory: str, python: str, listen_lan: bool, keep_running: bool,
     extra_args: list[str],
 ) -> LocalService:
-    """建这一行:选端口,把地址写进连接的 `server_url`(不通知宿主侧刷新目录 —— 它还没起,起来之后会自己通知)。"""
+    """建这一行:选端口,把地址写进连接的 `server_url`。只 flush、不提交(和新建连接同一个事务时,哪一步不成都一起回滚);
+    不通知宿主侧刷新目录 —— 它还没起,起来之后会自己通知。"""
     service = service_of(db, instance)
     row = LocalService(
         instance_id=instance.id, service=service.key, mode=DIRECTORY, directory=directory, python=python,
@@ -150,13 +151,14 @@ def create(
     )
     db.add(row)
     db.flush()
-    inst.set_config(db, instance, {SERVICE_ADDRESS_FIELD: address(row.port)}, notify=False)
+    inst.write_config(db, instance, {SERVICE_ADDRESS_FIELD: address(row.port)})
     return row
 
 
 def make_managed(db: Session, instance: PluginInstance) -> LocalService:
     """改成(或建成)「让 Mosael 装」:目录是宿主分的安装目录,解释器留空(插件在安装目录里认 `.venv`),还没装好
-    (`python_minor` 空)。已经是这一种的不动 —— 接着装、重建运行环境都是同一个目录。端口、局域网、保持运行、附加参数照旧。"""
+    (`python_minor` 空)。已经是这一种的不动 —— 接着装、重建运行环境都是同一个目录。端口、局域网、保持运行、附加参数照旧。
+    新建这一行时和 `create` 一样选端口、写地址,只 flush、不提交。"""
     root = str(install_root(instance.id))
     row = row_of(db, instance.id)
     if row is None:
@@ -165,7 +167,7 @@ def make_managed(db: Session, instance: PluginInstance) -> LocalService:
                            port=free_port(db), listen_lan=False, keep_running=False, extra_args=[], python_minor="")
         db.add(row)
         db.flush()
-        inst.set_config(db, instance, {SERVICE_ADDRESS_FIELD: address(row.port)}, notify=False)
+        inst.write_config(db, instance, {SERVICE_ADDRESS_FIELD: address(row.port)})
         return row
     if row.mode != MANAGED:
         row.mode, row.directory, row.python, row.python_minor = MANAGED, root, "", ""

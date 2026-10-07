@@ -9,6 +9,9 @@ import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
+/** 新建一个连接要交的:名字、配置、建好时一起授予的权限;插件声明了本机服务时可以一开始就定下在本机哪种方式跑(ADR 0041)。 */
+export type PluginInstanceCreate = components["schemas"]["PluginInstanceCreate"];
+export type PluginInstanceLocalServiceCreate = components["schemas"]["PluginInstanceLocalServiceCreate"];
 /** 连接往外连走哪条路:跟随 Mosael / 直连 / 走它自己的代理(见 backend domain/plugins/egress)。 */
 export type PluginNetwork = components["schemas"]["PluginNetworkOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];
@@ -74,7 +77,11 @@ export const removePluginPackage = (packageId: string, localServices?: { choice:
     method: "DELETE",
   });
 
-export const createPluginInstance = (packageId: string, body: Record<string, unknown>) =>
+/**
+ * 新建连接。带 `local_service` 就一开始用本机服务(要部署管理员):连接、本机服务那一行、端口、写进 `server_url` 的地址在后端
+ * 同一个事务里建好,哪一步不成连接也不留下;地址由宿主分,不用交。顶层几项都有缺省(名字空着按清单的模板起)。
+ */
+export const createPluginInstance = (packageId: string, body: Partial<PluginInstanceCreate>) =>
   api<PluginInstance>(`/api/plugins/${packageId}/instances`, { method: "POST", body: JSON.stringify(body) });
 export const updatePluginInstance = (instanceId: string, body: Record<string, unknown>) =>
   api<PluginInstance>(`/api/plugins/instances/${instanceId}`, { method: "PATCH", body: JSON.stringify(body) });
