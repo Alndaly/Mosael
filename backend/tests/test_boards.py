@@ -692,7 +692,8 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
 
 def test_空槽手动换上素材之后撤销_撤得回空槽() -> None:
     """「替换素材」是用户的编辑(运行态写回 idle),不是一次运行交回的产出 —— 撤销它,服务端不能再把素材补回来。
-    一次运行成功落下的产出照旧补回:撤销到生成之前那一步,撤不掉花了钱的结果。"""
+    画板上撤销一次运行(撤到点生成之前)同理:产出从画布上拿下来,服务端不补回(素材还在素材库里,重做放得回来)。
+    只有还在等的占位挡得住已经落下的产出(见 test_客户端不会覆盖它还不知道的产出)。"""
     from tests.util import seed_assets
 
     client = fresh_client()
@@ -715,7 +716,8 @@ def test_空槽手动换上素材之后撤销_撤得回空槽() -> None:
 
     generated = {**slot, "asset_id": "made", "run": {"status": "succeeded"}}
     save(generated)
-    assert save(slot)["i"]["asset_id"] == "made", "撤销不撤回一次运行交回的产出"
+    assert "asset_id" not in save(slot)["i"], "撤销一次运行:它交回的产出从画布上拿下来"
+    assert save(generated)["i"]["asset_id"] == "made", "重做:放回去"
 
 
 def test_删掉在跑的格子后撤销_任务已经结束的话当场补上那封回执_不永远转圈() -> None:

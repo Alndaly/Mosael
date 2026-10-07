@@ -33,8 +33,9 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
     任务,传来的那份不是这一轮,保留这一轮。别的字段(位置、表单、文字)照客户端的来。
     客户端下一次拉到的就是服务端这份。
 
-    **只有「一次运行交回的产出」归服务端**(见 _run_output_kept):用户手动放进去的素材、文档格引用的
-    那份原件,是用户自己的编辑 —— 撤销「替换素材」、把文档格「转为笔记」都得撤得掉、换得掉。
+    **只有「还在等的占位」挡得住产出**(见 _run_output_kept):传来的那份已经不在等这一轮了(撤到点生成之前、手动换了
+    素材、把文档格「转为笔记」),就是人自己的编辑,照它的来 —— 画板上撤销一次运行,就是把它交回的产出从画布上拿下来,
+    素材还在素材库里(ADR 0025「撤销 / 重做与 CAS」修订)。
     """
     by_id = {str(item.get("id")): item for item in ((stored or {}).get("items") or [])}
     if not by_id:
@@ -96,15 +97,15 @@ def _keep_running_cells(stored: Any, incoming: dict[str, Any], active_jobs: set[
 def _run_output_kept(settled: dict[str, Any], incoming: dict[str, Any]) -> bool:
     """库里这一格的 asset_id 是不是**一次运行交回、客户端还不知道**的产出 —— 是才替客户端补回来。
 
-    两种:传来的那份还是占位(等着这一轮的产出,而库里已经收到了),或库里的产出就是一次运行成功落下的
-    (`run.succeeded`,回执写的;撤销到生成之前那一步,撤不掉花了钱的结果)。
+    只有一种:传来的那份还是占位(等着这一轮的产出,而库里已经收到了)—— 客户端拿着落后的快照自动保存。
 
-    别的 asset_id 归客户端:
+    传来的那份已经不在等了,没有 asset_id 就是人拿掉的,照客户端的来:
+    · 画板上撤销了那一次运行(撤到点生成之前):产出从画布上拿下来,素材还在素材库里,重做放得回来。
+      此前这里把「一次运行成功落下的」也一律补回,撤销一次生成在画布上撤不掉;
     · 手动换上的素材(操作条「替换素材」把运行态写回 idle)—— 撤销它就是要回到空槽;
     · 文档格引用的文档原件 —— 它不是产出,「转为笔记」正是把它换成笔记(note_id 和 asset_id 二选一,
       补回来的话这一格从此每次保存都被 normalize 拒掉)。只有图片 / 视频 / 音频格的 asset_id 是产出。
     """
     if settled.get("kind") not in _MEDIA_KINDS or not settled.get("asset_id"):
         return False
-    waiting = ((incoming.get("run") or {}).get("status")) in ("queued", "running")
-    return waiting or ((settled.get("run") or {}).get("status")) == "succeeded"
+    return ((incoming.get("run") or {}).get("status")) in ("queued", "running")
