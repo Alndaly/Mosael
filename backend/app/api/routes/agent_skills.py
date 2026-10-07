@@ -19,7 +19,7 @@ from app.api.schemas.skills import (
     AgentSkillOut,
     AgentSkillWrite,
 )
-from app.domain.agent.skills import catalog, use_cases
+from app.domain.agent.skills import catalog, managing, use_cases
 from app.domain.agent.skills.catalog import Skill, SkillDomainError
 from mosael_formats.agent_skill import (
     MAX_ARCHIVE_UNPACKED_BYTES,
@@ -73,17 +73,9 @@ def _detail(skill: Skill) -> dict:
 
 
 def _doc(body: AgentSkillWrite, base: SkillDoc | None = None) -> SkillDoc:
-    """表单 → SkillDoc。改的时候 metadata 里显示名以外的键原样留着(表单上没有它们)。"""
-    metadata = {key: value for key, value in (base.metadata if base else {}).items() if key != TITLE_KEY}
-    doc = SkillDoc(
-        name=body.name.strip(),
-        description=" ".join(body.description.split()),
-        body=body.body.strip("\n") + "\n" if body.body.strip() else "",
-        license=body.license.strip(),
-        compatibility=body.compatibility.strip(),
-        metadata=metadata,
-    )
-    return doc.with_title(body.title)
+    """表单 → SkillDoc(和智能体的工具同一处规整,见 managing.compose_doc)。改的时候 metadata 里显示名以外的键原样留着。"""
+    return managing.compose_doc(name=body.name, title=body.title, description=body.description, body=body.body,
+                                license=body.license, compatibility=body.compatibility, base=base)
 
 
 @router.get("/workspaces/{workspace_id}/skills", response_model=list[AgentSkillOut])
@@ -192,6 +184,12 @@ async def stage_skill_import(
         collected[relative] = data
     folder = source_name or (paths[0].split("/", 1)[0] if paths else "")
     return use_cases.stage_import(db, user, workspace_id, files=collected, source_name=folder)
+
+
+@router.get("/workspaces/{workspace_id}/skill-imports/{import_id}", response_model=AgentSkillImportOut)
+def get_skill_import(workspace_id: str, import_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """暂存着的一次导入的全文。智能体导入(import_skill)的确认卡照它画审阅 —— 和设置页导入同一份暂存、同一个审阅。"""
+    return use_cases.import_preview(db, user, workspace_id, import_id)
 
 
 @router.post("/workspaces/{workspace_id}/skill-imports/{import_id}", response_model=list[AgentSkillOut])

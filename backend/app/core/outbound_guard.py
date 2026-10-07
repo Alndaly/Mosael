@@ -66,6 +66,10 @@ class OutboundBlocked(LocalizedError, ValueError):
     """这个地址不许去。带文案 key(`outboundErr_*`),参数里说清是哪个地址、为什么、怎么放行。"""
 
 
+class ResponseTooLarge(LocalizedError, ValueError):
+    """回来的东西比调用方说的上限大:读到上限就停,不把整个塞进内存。带文案 key(`outboundErr_tooLarge`)。"""
+
+
 class AllowlistError(LocalizedError, ValueError):
     """允许名单里有一项写不对。带文案 key(`outboundErr_badEntry`)。"""
 
@@ -261,8 +265,17 @@ def client(*, timeout: float, proxy: str | None) -> httpx.Client:
     return RetryingClient(max_retries=0, timeout=timeout, proxy=proxy, trust_env=False, follow_redirects=False)
 
 
+#: 截下来的正文已经解过压缩、长度也变了:重新包成响应时这几个头不能照抄,否则读的人会再解一遍。
+_BODY_FRAMING = frozenset({"content-encoding", "content-length", "transfer-encoding"})
+
+
 def _send_once(
-    destination: Destination, method: str, headers: dict[str, str], content: bytes | None, timeout: float
+    destination: Destination,
+    method: str,
+    headers: dict[str, str],
+    content: bytes | None,
+    timeout: float,
+    max_bytes: int | None = None,
 ) -> httpx.Response:
     url = destination.url
     extensions: dict[str, str] = {}
@@ -276,7 +289,21 @@ def _send_once(
             extensions["sni_hostname"] = url.raw_host.decode("ascii")
         url = url.copy_with(host=destination.address)
     with client(timeout=timeout, proxy=destination.proxy) as one:
-        return one.request(method, url, headers=sent_headers, content=content, extensions=extensions)
+        if max_bytes is None:
+            return one.request(method, url, headers=sent_headers, content=content, extensions=extensions)
+        #: 有上限就边收边数:对面说的 Content-Length 可能是假的,也可能根本不说(分块传)。
+        request = one.build_request(method, url, headers=sent_headers, content=content, extensions=extensions)
+        response = one.send(request, stream=True)
+        try:
+            body = bytearray()
+            for chunk in response.iter_bytes():
+                body.extend(chunk)
+                if len(body) > max_bytes:
+                    raise ResponseTooLarge("outboundErr_tooLarge", host=destination.host, limit_mb=max(1, max_bytes // (1024 * 1024)))
+        finally:
+            response.close()
+        kept = [(key, value) for key, value in response.headers.multi_items() if key.lower() not in _BODY_FRAMING]
+        return httpx.Response(response.status_code, headers=kept, content=bytes(body), request=request)
 
 
 def _same_origin(a: httpx.URL, b: httpx.URL) -> bool:
@@ -292,8 +319,12 @@ def send(
     timeout: float,
     follow_redirects: bool = False,
     max_redirects: int = MAX_REDIRECTS,
+    max_bytes: int | None = None,
 ) -> Exchange:
     """发一次经过守卫的请求。`follow_redirects` 时每一跳都重新 check、重新解析。
+
+    `max_bytes`:正文最多收多少字节,超了抛 ResponseTooLarge(边收边数,不先整个读进内存)。不给就不限 ——
+    读网页、调接口的那些地方回来的东西本来就小。
 
     跟随时的改写和浏览器一致:303,以及 301/302 上的非 GET/HEAD,改成不带请求体的 GET;跨站的那一跳不带
     Authorization / Cookie。
@@ -304,7 +335,7 @@ def send(
     body = content
     for _hop in range(max_redirects + 1):
         destination = check(current)
-        response = _send_once(destination, verb, sent, body, timeout)
+        response = _send_once(destination, verb, sent, body, timeout, max_bytes)
         location = response.headers.get("location") if response.is_redirect else None
         if not follow_redirects or not location:
             return Exchange(response, str(destination.url))
@@ -325,6 +356,7 @@ __all__ = [
     "Exchange",
     "MAX_REDIRECTS",
     "OutboundBlocked",
+    "ResponseTooLarge",
     "blocked_reason",
     "check",
     "client",

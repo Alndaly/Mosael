@@ -702,6 +702,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "不是可以访问的网址:{url}(只支持 http:// 或 https:// 开头的地址)",
         "en": "Not a reachable web address: {url} (only http:// and https:// addresses are supported).",
     },
+    "outboundErr_tooLarge": {
+        "zh": "{host} 回来的东西超过 {limit_mb} MB,没有收完就停了",
+        "en": "What {host} sent back is over {limit_mb} MB, so it was not read to the end.",
+    },
     "outboundErr_badEntry": {
         "zh": "允许名单里这一项写不对:{entry}。每一项写一个主机名、IP 或 CIDR 网段,主机名和 IP 可以带端口,"
               "例如 127.0.0.1:11434、nas.local、10.0.0.0/8",

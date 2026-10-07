@@ -248,6 +248,27 @@ def update(db: Session, workspace_id: str, skill: Skill, fields: SkillDoc, *, us
     return found
 
 
+def rewrite(db: Session, workspace_id: str, skill: Skill, files: dict[str, bytes]) -> Skill:
+    """整份换掉一个工作区技能的内容(智能体改技能,ADR 0043):`files` 是改之后的**全部**文件(含 SKILL.md)。
+
+    和新建一样先在暂存里写完整、再一次换过去 —— 改到一半的技能不会出现在列表里、更不会进系统提示。名字不变,
+    开关和来历(索引行)不动。SKILL.md 必须读得出、名字还是它自己。
+    """
+    _editable(skill)
+    try:
+        doc = parse_skill_md(files[SKILL_FILENAME].decode("utf-8"))
+    except (KeyError, UnicodeDecodeError) as exc:
+        raise SkillDomainError("skillErr_unreadable") from exc
+    except SkillError as exc:
+        raise _relay(exc) from exc
+    if doc.name != skill.name:
+        raise SkillDomainError("skillErr_folderMismatch", folder=skill.name, name=doc.name)
+    _place(workspace_id, skill.name, files, replace_existing=True)
+    found = catalog.find(db, workspace_id, skill.name)
+    assert found is not None
+    return found
+
+
 def delete(db: Session, workspace_id: str, skill: Skill) -> None:
     """删一个工作区技能:行当场删,文件夹在事务提交之后删(回滚了的话技能还在,文件不能先没了)。"""
     _editable(skill)
@@ -473,6 +494,7 @@ __all__ = [
     "preview_import",
     "put_file",
     "read_all",
+    "rewrite",
     "set_enabled",
     "stage_import",
     "update",

@@ -23926,6 +23926,56 @@
       }
     },
     "/api/workspaces/{workspace_id}/skill-imports/{import_id}": {
+      "get": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Get Skill Import",
+        "description": "暂存着的一次导入的全文。智能体导入(import_skill)的确认卡照它画审阅 —— 和设置页导入同一份暂存、同一个审阅。",
+        "operationId": "get_skill_import_api_workspaces__workspace_id__skill_imports__import_id__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "agent-skills"

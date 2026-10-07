@@ -7,6 +7,35 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # ---- B1 · 03_confirmable ----
+    "confirmErr_noActor": {"zh": "这张卡没有能替谁做的人(账号已经不在了)", "en": "There's no one to act for on this card (the account is gone)."},
+    # ---- 智能体改技能(ADR 0043) ----
+    "confirm_createSkill": {"zh": "新建技能「{title}」({name}){warning}", "en": "Create the skill “{title}” ({name}){warning}"},
+    "confirm_updateSkill": {
+        "zh": "修改技能「{title}」:{count} 个文件有改动({paths}){warning}",
+        "en": "Change the skill “{title}”: {count} file(s) change ({paths}){warning}",
+    },
+    "confirm_copySkill": {
+        "zh": "把「{source}」复制成这个工作区的技能「{name}」{warning}",
+        "en": "Copy “{source}” into this workspace's skills as “{name}”{warning}",
+    },
+    "confirm_enableSkill": {
+        "zh": "启用技能「{title}」—— 以后这个工作区里的智能体会照它做事{warning}",
+        "en": "Turn on the skill “{title}” — the agent in this workspace will follow it from now on{warning}",
+    },
+    "confirm_disableSkill": {"zh": "关掉技能「{title}」{warning}", "en": "Turn off the skill “{title}”{warning}"},
+    "confirm_deleteSkill": {
+        "zh": "永久删除技能「{title}」({files} 个文件,{size})—— 删了就没了{warning}",
+        "en": "Permanently delete the skill “{title}” ({files} files, {size}) — it can't be recovered{warning}",
+    },
+    "confirm_importSkill": {
+        "zh": "从 {source} 导入 {count} 个技能:{names}{warning}",
+        "en": "Import {count} skill(s) from {source}: {names}{warning}",
+    },
+    #: 卡上单独成行的那句(见 confirmations.card_parts):一份技能里写着「把你自己改成……」时,人一眼看得出来。
+    "confirm_skillInUse": {
+        "zh": "  ⚠️ 这是在用技能{skills}时提出的",
+        "en": "  ⚠️ Proposed while following the skill {skills}",
+    },
     "confirmErr_unknownChoice": {
         "zh": "这张卡上没有这几个开关:{keys}",
         "en": "This card has no such switches: {keys}",

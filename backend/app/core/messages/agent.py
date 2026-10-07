@@ -88,6 +88,67 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The model didn't reply with a skill draft as asked; try again or use another model.",
     },
     "skillErr_draftEmpty": {"zh": "模型起草的技能是空的,请再试一次", "en": "The model drafted an empty skill; try again."},
+    # 智能体自己管技能(ADR 0043)。报错面向模型:说清怎么改。
+    "skillErr_copyFirst": {
+        "zh": "「{name}」是内置或插件带的技能,不能直接改 —— 先用 copy_skill 复制成这个工作区的,再改那一份",
+        "en": "“{name}” is a built-in or plugin skill and can't be changed directly; copy it with copy_skill first, then change the copy.",
+    },
+    "skillErr_alreadyMine": {
+        "zh": "「{name}」已经是这个工作区的技能,直接用 update_skill 改它",
+        "en": "“{name}” is already one of this workspace's skills; change it with update_skill.",
+    },
+    "skillErr_agentFilesShape": {
+        "zh": "files 要写成「相对路径 → 全文」的对象(改的时候值写 null 表示删掉这个文件)",
+        "en": "files must be an object of relative path → full text (when updating, null deletes that file).",
+    },
+    "skillErr_agentSkillMdIsGenerated": {
+        "zh": "SKILL.md 由 name、title、description、body 生成,不放进 files",
+        "en": "SKILL.md is generated from name, title, description and body; don't put it in files.",
+    },
+    "skillErr_agentTextOnly": {
+        "zh": "{path}:智能体只能写文本文件(UTF-8 文字);二进制文件只能照原样复制或删掉",
+        "en": "{path}: the agent can only write text files (UTF-8); binary files can only be copied as they are or deleted.",
+    },
+    "skillErr_changedSinceCard": {
+        "zh": "开卡之后技能「{name}」被改过,这张卡批的不是现在这一版,什么都没写 —— 请重新发起",
+        "en": "The skill “{name}” changed after this card was opened, so the card doesn't cover what's there now and nothing was written. Please ask again.",
+    },
+    "skillErr_agentNothingChanged": {
+        "zh": "技能「{name}」没有要改的地方:给出新的 title / description / body,或者 files 里要加、改、删的文件",
+        "en": "Nothing to change in the skill “{name}”: give a new title / description / body, or files to add, change or delete.",
+    },
+    "skillErr_agentEnabledShape": {"zh": "enabled 要写 true 或 false", "en": "enabled must be true or false."},
+    "skillErr_agentAlreadyOn": {"zh": "技能「{name}」已经开着了", "en": "The skill “{name}” is already on."},
+    "skillErr_agentAlreadyOff": {"zh": "技能「{name}」已经关着了", "en": "The skill “{name}” is already off."},
+    "skillErr_agentCantDeleteShipped": {
+        "zh": "「{name}」是内置或插件带的技能,删不了;不想用就用 set_skill_enabled 关掉",
+        "en": "“{name}” is a built-in or plugin skill and can't be deleted; turn it off with set_skill_enabled instead.",
+    },
+    "skillErr_agentImportUnknown": {
+        "zh": "链接里没有这几个技能:{names}。里面有的是:{staged}",
+        "en": "The link has no skills named {names}. It has: {staged}",
+    },
+    "skillErr_agentImportClash": {
+        "zh": "已经有一个叫「{name}」的技能了;要用导入的这份替换它,传 replace=true(卡上会写明)",
+        "en": "There is already a skill named “{name}”; to replace it with the imported one, pass replace=true (the card says so).",
+    },
+    "skillErr_importUrl": {
+        "zh": "认不出这个链接:{url}。只认 https 的 .zip 链接,或 GitHub 上的技能文件夹(https://github.com/<作者>/<仓库>/tree/<分支>/<文件夹>)",
+        "en": "Can't use this link: {url}. Only https links to a .zip, or a skill folder on GitHub (https://github.com/<owner>/<repo>/tree/<branch>/<folder>), work.",
+    },
+    "skillErr_importTooBig": {
+        "zh": "这个 GitHub 文件夹里的子文件夹超过 {limit} 个;指向具体的技能文件夹,或者给一个 .zip 链接",
+        "en": "This GitHub folder has more than {limit} subfolders; point at a specific skill folder, or give a .zip link.",
+    },
+    "skillErr_importFetchFailed": {"zh": "没能取回技能:{detail}", "en": "Couldn't fetch the skill: {detail}"},
+    "skillErr_importNotFound": {
+        "zh": "找不到 {url}(404):链接写错了,或者是私有仓库",
+        "en": "{url} wasn't found (404): the link is wrong, or the repository is private.",
+    },
+    "skillErr_importRateLimited": {
+        "zh": "GitHub 暂时不让取了(没登录时一小时只给 60 次),过一会儿再试,或者给一个 .zip 链接",
+        "en": "GitHub is refusing requests for now (60 an hour without signing in); try again later, or give a .zip link.",
+    },
     "skillSource_builtin": {"zh": "Mosael 内置", "en": "built into Mosael"},
     "skillSource_plugin": {"zh": "插件「{name}」", "en": "plugin “{name}”"},
     "skillSource_imported": {"zh": "从 {name} 导入", "en": "imported from {name}"},

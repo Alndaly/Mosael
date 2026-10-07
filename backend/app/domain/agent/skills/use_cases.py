@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentSession, User
-from app.domain.agent.skills import catalog, drafting, runtime, store
+from app.domain.agent.skills import catalog, drafting, managing, remote, runtime, store
 from app.domain.agent.skills.catalog import CONVERSATION, CREATED, Skill, SkillDomainError
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from mosael_formats.agent_skill import SkillDoc, SkillError, bundles_from_files, read_skill_archive
@@ -129,7 +129,81 @@ def read_skill_file(db: Session, user: User, workspace_id: str, ref: str, path: 
     return runtime.read_skill_file(db, workspace_id, ref, path, offset)
 
 
+# ---------------------------------------------------------------- 智能体自己管技能(ADR 0043)
+#
+# 看:成员都能看(和设置页一样)。写:编辑以上(`"ai"`),开卡时按开卡的人查一次、批准时按批的人再查一次 ——
+# 写的那几件都经确认卡(confirmable/skills.py),这里是卡的两头:`review_*` 算卡上的事实,`apply_*` 批了之后落地。
+
+
+def agent_listing(db: Session, user: User, workspace_id: str) -> list[dict]:
+    ensure_workspace_access(db, user, workspace_id)
+    return managing.listing(db, workspace_id)
+
+
+def inspect(db: Session, user: User, workspace_id: str, ref: str) -> dict:
+    ensure_workspace_access(db, user, workspace_id)
+    return managing.inspect(db, workspace_id, ref)
+
+
+def stage_from_url(db: Session, user: User, workspace_id: str, url: str) -> dict:
+    """import_skill 的第一步:从链接取回来、读好、放进暂存,回审阅要的全文 —— 和设置页上传同一份暂存与审阅。什么都还没装。"""
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    fetched = remote.fetch(url)
+    try:
+        bundles = read_skill_archive(fetched.archive) if fetched.archive is not None else bundles_from_files(fetched.files or {})
+    except SkillError as exc:
+        raise SkillDomainError.relay(exc) from exc
+    import_id = store.stage_import(workspace_id, bundles, fetched.source_name)
+    return store.preview_import(db, workspace_id, import_id)
+
+
+def import_preview(db: Session, user: User, workspace_id: str, import_id: str) -> dict:
+    """暂存着的一次导入的全文(智能体导入的确认卡照它画审阅)。"""
+    ensure_workspace_access(db, user, workspace_id)
+    return store.preview_import(db, workspace_id, import_id)
+
+
+def review(db: Session, user: User, workspace_id: str, action: str, payload: dict) -> dict:
+    """开卡之前:这个人能不能在这里改技能,和卡上要摆的事实(全文、对比、指纹)。`action` 是 managing 里的那一件。"""
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    return _REVIEWS[action](db, workspace_id, payload)
+
+
+def apply(db: Session, user: User, workspace_id: str, action: str, payload: dict, *, session_id: str | None) -> dict:
+    """批准之后:批的人能不能改技能,再照开卡时的 payload 落地。回写进卡里的结果。"""
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    if action == "create":
+        made = managing.apply_create(db, workspace_id, payload, user_id=user.id, session_id=session_id)
+        return {"name": made.ref, "enabled": made.enabled}
+    if action == "copy":
+        made = managing.apply_copy(db, workspace_id, payload, user_id=user.id, session_id=session_id)
+        return {"name": made.ref, "enabled": made.enabled}
+    if action == "update":
+        return {"name": managing.apply_update(db, workspace_id, payload).ref}
+    if action == "enable":
+        changed = managing.apply_enable(db, workspace_id, payload, user_id=user.id)
+        return {"name": changed.ref, "enabled": changed.enabled}
+    if action == "delete":
+        return {"name": managing.apply_delete(db, workspace_id, payload), "deleted": True}
+    if action == "import":
+        made = managing.apply_import(db, workspace_id, payload, user_id=user.id, session_id=session_id)
+        return {"imported": [{"name": one.ref, "enabled": one.enabled} for one in made]}
+    raise ValueError(action)
+
+
+_REVIEWS = {
+    "create": managing.review_create,
+    "copy": managing.review_copy,
+    "update": managing.review_update,
+    "enable": managing.review_enable,
+    "delete": managing.review_delete,
+    "import": managing.review_import,
+}
+
+
 __all__ = [
+    "agent_listing",
+    "apply",
     "commit_import",
     "copy",
     "create",
@@ -138,11 +212,15 @@ __all__ = [
     "draft_from_session",
     "export",
     "get_skill",
+    "import_preview",
+    "inspect",
     "list_skills",
     "put_file",
     "read_file",
     "read_skill_file",
+    "review",
     "set_enabled",
+    "stage_from_url",
     "stage_import",
     "update",
     "use_skill",

@@ -7875,7 +7875,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Skill Import
+         * @description 暂存着的一次导入的全文。智能体导入(import_skill)的确认卡照它画审阅 —— 和设置页导入同一份暂存、同一个审阅。
+         */
+        get: operations["get_skill_import_api_workspaces__workspace_id__skill_imports__import_id__get"];
         put?: never;
         /**
          * Commit Skill Import
@@ -34889,6 +34893,38 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkillImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_skill_import_api_workspaces__workspace_id__skill_imports__import_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

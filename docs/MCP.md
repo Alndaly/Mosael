@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **105** 个工具,其中 **30** 个走确认卡、**1** 个停下来等用户作答。
+共 **112** 个工具,其中 **36** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -40,13 +40,16 @@
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
+| `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project; returns its id. timeline=true also gives it an empty VIDEO TIMELINE. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
+| `create_skill` | 确认卡 | Confirmation required, every time: save a new skill (a reusable procedure) in this workspace. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `delete_assets` | 确认卡 | Confirmation required: PERMANENTLY delete media assets. This cannot be undone. |
 | `delete_projects` | 确认卡 | Confirmation required: PERMANENTLY delete projects and their timelines. |
+| `delete_skill` | 确认卡 | Confirmation required, every time: permanently delete one of this workspace's own skills. |
 | `denoise_audio` | 确认卡 | Confirmation required: reduce background noise in an audio or video asset, producing a |
 | `dub_subtitles` | 确认卡 | Confirmation required: speak subtitle cues aloud onto a new dub track. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
@@ -73,6 +76,7 @@
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
+| `import_skill` | 确认卡 | Confirmation required, every time: import skills from an https link to a .zip or a GitHub skill folder |
 | `inspect_sequence` | 直接执行 | Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace, newest first, one page at a time. |
@@ -88,6 +92,7 @@
 | `list_publish_tasks` | 直接执行 | Read-only: recent publish tasks, newest first, with what was published where. |
 | `list_scene_models` | 直接执行 | Read-only: the imported 3D models available in this workspace, with id, name, format and size. |
 | `list_scenes` | 直接执行 | List persistent 3D scenes in the workspace, with object and shot counts. |
+| `list_skills` | 直接执行 | Read-only: every skill in this workspace, disabled ones too — name, title, description, source, enabled, editable. |
 | `list_speech_engines` | 直接执行 | Read-only: the speech engines generate_audio / dub_subtitles can speak with, and their voices. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
@@ -109,6 +114,7 @@
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
+| `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `split_image_grid` | 确认卡 | Confirmation required: split an EXISTING grid image (a 3x3 sticker sheet, a 2x2 storyboard) into NEW images. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |
@@ -116,6 +122,7 @@
 | `update_asset` | 直接执行 | Runs directly: rename an asset and/or move it into a project. |
 | `update_asset_tags` | 直接执行 | Runs directly: replace an EXISTING media asset's tag list. |
 | `update_plan` | 直接执行 | Runs directly: publish/refresh your task plan for the current conversation. |
+| `update_skill` | 确认卡 | Confirmation required, every time: change one of this workspace's own skills; the card shows before → after. |
 | `update_workflow` | 确认卡 | Confirmation required: rename a workflow or replace its ENTIRE graph. |
 | `use_skill` | 直接执行 | Read-only: load a skill — a written procedure for one kind of task — before doing that task. |
 | `view_scene` | 直接执行 | Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view. |

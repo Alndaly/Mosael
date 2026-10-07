@@ -72,6 +72,8 @@ READS: dict[str, tuple[Callable[[dict[str, str]], dict[str, Any]], int]] = {
     "list_board_producers": (lambda ids: {}, 1),
     "list_workflow_node_types": (lambda ids: {}, 1),
     "list_memories": (lambda ids: {}, 1),
+    #: 内置的三份技能每个工作区都有;给名字就是那一份的原文(ADR 0043)。
+    "list_skills": (lambda ids: {}, 3),
     "search_notes": (lambda ids: {"query": "脚本"}, 1),
     "list_scenes": (lambda ids: {}, 1),
     "list_entities": (lambda ids: {}, 1),

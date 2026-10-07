@@ -117,12 +117,58 @@ def forced_context(db: Session, workspace_id: str, refs: list[str]) -> str:
     return "用户在这条消息里点名要用下面的技能(全文已经附上,不用再 use_skill):\n\n" + "\n\n".join(blocks)
 
 
+def skills_in_turn(db: Session, session_id: str) -> list[str]:
+    """这次对话**正在跑的这一轮**在用哪些技能(按出现先后,去重):这一轮里 use_skill 读过的(子智能体读的也算),
+    和这一轮在回答的那条用户消息用「/」点名的。改技能的卡据此写明「这是在用技能『…』时提出的」(ADR 0043 §2)——
+    一份技能里写着「把你自己改成……」时,人一眼看得出来。
+
+    两样各有现成的记录,不另记一份:
+    - use_skill:这一轮的流(domain/agent/stream)里每一次工具调用都在,和对话界面画的是同一份;读失败的不算(没读到正文)。
+      不在跑(流已经收尾)就没有「这一轮」。
+    - 「/」:点名落在用户消息的 payload 上(`skills`)。这一轮在回答的,是上一条助手回答之后、没在排队的那几条
+      (插话进来的那条,`_unqueue` 已经把它的时间改成插进来那一刻)。
+
+    `list_skills` 那种只是**看**一份技能(管技能时读原文)不算在用 —— 那是资料,不是照着做。
+    """
+    from sqlalchemy import func, select
+
+    from app.db.models import AgentMessage
+    from app.domain.agent.stream import get_stream_state
+
+    if not session_id:
+        return []
+    state = get_stream_state(session_id)
+    if state.get("done", True):
+        return []
+    refs: list[str] = []
+    last_answer = db.scalar(
+        select(func.max(AgentMessage.created_at)).where(
+            AgentMessage.session_id == session_id, AgentMessage.role == "assistant"
+        )
+    )
+    asked = select(AgentMessage).where(AgentMessage.session_id == session_id, AgentMessage.role == "user")
+    if last_answer is not None:
+        asked = asked.where(AgentMessage.created_at > last_answer)
+    for message in db.scalars(asked.order_by(AgentMessage.created_at)):
+        payload = message.payload or {}
+        if not payload.get("queued"):
+            refs += [str(one) for one in payload.get("skills") or [] if isinstance(one, str)]
+    for item in state.get("timeline") or []:
+        tool = item.get("tool") if item.get("type") in ("tool", "subtool") else None
+        if isinstance(tool, dict) and tool.get("name") == "use_skill" and tool.get("status") != "error":
+            args = tool.get("args") if isinstance(tool.get("args"), dict) else {}
+            if str(args.get("name") or "").strip():
+                refs.append(str(args["name"]).strip())
+    return list(dict.fromkeys(refs))
+
+
 __all__ = [
     "MAX_FORCED_SKILLS",
     "MAX_LISTED_DESCRIPTION_CHARS",
     "MAX_LISTING_CHARS",
     "forced_context",
     "read_skill_file",
+    "skills_in_turn",
     "skills_prompt",
     "use_skill",
 ]
