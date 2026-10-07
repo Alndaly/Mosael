@@ -594,7 +594,8 @@ beside it:
   Switch workflows in ComfyUI and this workflow's runs come first, with the earlier ones under **Runs of other workflows**. A new
   workflow has to be saved once before it can run here.
 - **Assistant**: the same agent panel as on workflows, boards and the editor, docked in this column. Each workflow on the canvas has its own conversations,
-  and switching tabs switches to that workflow's (they are all in AI Studio's history, marked with the ComfyUI workflow they were opened in); what you
+  and switching tabs switches to that workflow's (they are all in AI Studio's history, marked with the ComfyUI workflow they were opened in). Saving, renaming or moving a workflow (in ComfyUI or in Mosael's
+  workflow library) takes its conversations along, and a tab the agent opens for you carries on the conversation that opened it; what you
   say here gets the agent the tools for ComfyUI workflows. It knows which ComfyUI is open, its version, which workflow is on the canvas, whether it has unsaved changes,
   what is selected and whether the last run failed; the graph itself isn't stuffed into its context, it reads it when it needs to.
   Ask **what's wrong with this workflow** and it reads the canvas, runs a diagnosis and says per node what's wrong, why and how to fix
