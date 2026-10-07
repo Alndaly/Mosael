@@ -9,6 +9,7 @@
  */
 
 import React from "react";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -19,14 +20,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
   agentManifest: vi.fn(async () => ({ version: "1" })),
   listAgentTools: vi.fn(async () => []),
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "父会话" }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "父会话" }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", title: "父会话", status: mocks.status })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "父会话", status: mocks.status })),
   listAgentMessages: vi.fn(async () => []),
   listAgentQueue: vi.fn(async () => []),
   listAgentUsageEvents: vi.fn(async () => []),
@@ -100,6 +102,8 @@ class NoopResizeObserver {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   mocks.stopAgentSession.mockReset().mockResolvedValue({});
   vi.stubGlobal("ResizeObserver", NoopResizeObserver);
   // 在跑的会话会去接流;这里不关心流,给一个立刻失败的响应。

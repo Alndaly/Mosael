@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -32,7 +32,9 @@ const cards = [
   },
 ];
 
-const api = vi.fn(async (_path: string) => cards);
+//: 卡挂着的那段对话(卡上那一行「在…里开的」读它)。
+const session = { id: "s-mine", workspace_id: "w1", title: "我的对话", is_mine: true, home_kind: "note", home_id: "n1", home_name: "周报", home_state: "ok" };
+const api = vi.fn(async (path: string) => (path.startsWith("/api/agent/sessions/") ? session : cards));
 
 vi.mock("@/api/transport", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/transport")>()),
@@ -70,7 +72,7 @@ it("摘要里的 **强调** 渲染成粗体", async () => {
 it("只拉我能拍板的卡", async () => {
   renderCenter();
   await screen.findByText("不隔离");
-  const paths = api.mock.calls.map(([path]) => path);
+  const paths = api.mock.calls.map(([path]) => path).filter((path) => path.startsWith("/api/confirmations"));
   expect(paths.length).toBeGreaterThan(0);
   for (const path of paths) {
     const query = new URL(path, "http://x").searchParams;
@@ -93,4 +95,20 @@ it("聊天面板开着的那次对话,它的卡由面板管,中心让位", async
 
   act(() => unregister());
   expect(await screen.findByText("改我自己那次对话里的时间线")).toBeTruthy();
+});
+
+/**
+ * 好几段对话同时在跑时,落到这里的卡要看得出是谁在问(ADR 0044 §9):卡上一行「在笔记《周报》里开的」和「回到那里」。
+ */
+it("挂在对话上的卡写着那段对话是在哪开的,点「回到那里」就去那一处接着它", async () => {
+  const goHome = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <ConfirmationCenter workspaceId="w1" goHome={goHome} />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("agentOpenedIn")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /agentGoHome/ }));
+  expect(goHome).toHaveBeenCalledWith(session);
 });

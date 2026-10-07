@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 const mocks = vi.hoisted(() => ({
   cards: [] as { id: string; tool_call_id: string; status: string }[],
@@ -23,6 +23,7 @@ const tool = (id: string, status = "done") => ({
 });
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
   api: vi.fn(async () => ({})),
@@ -32,10 +33,10 @@ vi.mock("@/api/client", () => ({
   getAsset: vi.fn(async () => null),
   agentManifest: vi.fn(async () => ({ version: "1" })),
   listAgentTools: vi.fn(async () => []),
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "配音", is_mine: true }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", title: "配音", status: "idle", is_mine: true })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", status: "idle", is_mine: true })),
   listAgentMessages: vi.fn(async () => [
     { id: "u1", session_id: "s1", role: "user", content: "配三段", payload: {}, error: null, created_at: "2026-10-02T10:00:00" },
     { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:01:00",
@@ -99,7 +100,8 @@ class NoopResizeObserver {
 
 beforeEach(() => {
   window.localStorage.clear();
-  window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
+  window.sessionStorage.clear();
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   vi.stubGlobal("ResizeObserver", NoopResizeObserver);
 });
 

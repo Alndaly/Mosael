@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 const mocks = vi.hoisted(() => ({
   sendAgentMessage: vi.fn(async () => ({ id: "m1" })),
@@ -19,13 +19,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "对话", is_mine: true }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "对话", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
   deleteAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", title: "对话", status: "idle", is_mine: true })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "对话", status: "idle", is_mine: true })),
   listAgentMessages: vi.fn(async () => []),
   listAgentQueue: vi.fn(async () => []),
   listAgentUsageEvents: vi.fn(async () => []),
@@ -78,7 +79,8 @@ import { CanvasAgentChat } from "./CanvasAgentChat";
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   window.localStorage.clear();
-  window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
+  window.sessionStorage.clear();
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   mocks.sendAgentMessage.mockClear();
   mocks.clearNotes.mockClear();
 });
@@ -97,6 +99,7 @@ it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,�
         placeholder="placeholder"
         rectKey="test.canvas.agent"
         workspaceId="w1"
+        place={{ kind: "studio", id: "" }}
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}
@@ -135,6 +138,7 @@ it("页面投递的一条(选区工具条上的 AI 动作):当场发出去,带�
         placeholder="placeholder"
         rectKey="test.canvas.agent"
         workspaceId="w1"
+        place={{ kind: "studio", id: "" }}
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}

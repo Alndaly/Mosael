@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
 /**
- * 免提浮标对着**面板正显示的那条**会话说话。
+ * 免提浮标对着**眼下这一处的当前对话**说话(ADR 0044 拍板 7)。
  *
- * 此前面板在没有存储时回落到清单第一条,而浮标只读 localStorage —— 读到空就新建一条,于是
- * 你对着浮标说的话进了一条面板上看不见的新会话。
+ * 在有助手面板的页面(面板收着也算)是那一页的当前对话;别处(素材、发布、设置……)是 AI Studio 的当前对话。那一处还是
+ * 草稿就在那一处建一段 —— 和面板发第一句话一样,建出来的就是面板接下来显示的那段。每句带着在哪说的。
  */
 
 import React from "react";
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getAgentSession: vi.fn(),
   listAgentMessages: vi.fn(),
   sendAgentMessage: vi.fn(),
+  isNotFound: () => false,
   onUtterance: null as null | ((text: string) => Promise<void>),
 }));
 vi.mock("@/api/client", () => mocks);
@@ -35,66 +36,97 @@ vi.mock("@/features/agent/useVoiceLoop", () => ({
 }));
 
 import { VoiceDock } from "./VoiceDock";
+import { resetActivePlaces, useAgentPlace } from "./activePlace";
 import { useCurrentAgentSession } from "./currentAgentSession";
-import { agentSessionSelectionKey } from "./sessionSelection";
+import type { AgentPlace } from "./places";
+import { adoptAgentSession, readChoice } from "./sessionSelection";
 
-const session = (id: string) => ({ id, workspace_id: "w1", title: id }) as never;
+const NOTE: AgentPlace = { kind: "note", id: "n1" };
+const STUDIO: AgentPlace = { kind: "studio", id: "" };
+const session = (id: string, place: AgentPlace, isMine = true) =>
+  ({ id, workspace_id: "w1", title: id, status: "idle", is_mine: isMine, home_kind: place.kind, home_id: place.id, home_name: "", home_state: "ok" }) as never;
+const sessions: Record<string, unknown> = {};
 
-/** 面板那一侧:它显示的是哪一条。 */
-function PanelProbe({ onSession }: { onSession: (id: string | undefined) => void }) {
-  const current = useCurrentAgentSession("w1");
-  onSession(current.session?.id);
+/** 一个有助手面板的页面:登记它在哪,面板收着(只读它的当前对话,看面板会显示哪段)。 */
+function NotePage({ onPanel }: { onPanel: (id: string | undefined) => void }) {
+  const place = useAgentPlace(NOTE);
+  onPanel(useCurrentAgentSession("w1", place).session?.id);
   return null;
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
-  for (const fn of [
-    mocks.listAgentSessions,
-    mocks.createAgentSession,
-    mocks.getAgentSession,
-    mocks.listAgentMessages,
-    mocks.sendAgentMessage,
-  ]) fn.mockReset();
-  mocks.getAgentSession.mockResolvedValue({ status: "idle" });
+  window.sessionStorage.clear();
+  resetActivePlaces();
+  for (const key of Object.keys(sessions)) delete sessions[key];
+  sessions["s-note"] = session("s-note", NOTE);
+  sessions["s-studio"] = session("s-studio", STUDIO);
+  for (const fn of [mocks.listAgentSessions, mocks.createAgentSession, mocks.getAgentSession, mocks.listAgentMessages, mocks.sendAgentMessage]) {
+    fn.mockReset();
+  }
+  mocks.listAgentSessions.mockResolvedValue([]);
+  mocks.getAgentSession.mockImplementation(async (id: string) => sessions[id]);
   mocks.listAgentMessages.mockResolvedValue([]);
   mocks.sendAgentMessage.mockResolvedValue({});
   mocks.onUtterance = null;
 });
 
-function mount(onPanel: (id: string | undefined) => void) {
+function mount(page: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <PanelProbe onSession={onPanel} />
+      {page}
       <VoiceDock workspaceId="w1" onClose={() => {}} />
     </QueryClientProvider>,
   );
 }
 
-it("面板回落到第一条、从没选过:对浮标说话进的就是那一条,不新建", async () => {
-  mocks.listAgentSessions.mockResolvedValue([session("s-shown"), session("s-older")]);
+it("在有面板的页面(面板收着):说话进那一页的当前对话,带着在哪说的;AI Studio 那段不碰", async () => {
+  adoptAgentSession("w1", NOTE, "s-note");
+  adoptAgentSession("w1", STUDIO, "s-studio");
   let panel: string | undefined;
-  mount((id) => (panel = id));
-  await waitFor(() => expect(panel).toBe("s-shown"));
+  mount(<NotePage onPanel={(id) => (panel = id)} />);
+  await waitFor(() => expect(panel).toBe("s-note"));
 
-  await act(() => mocks.onUtterance!("去发布页"));
+  await act(() => mocks.onUtterance!("把这段改短"));
+  expect(mocks.sendAgentMessage).toHaveBeenCalledWith("s-note", { content: "把这段改短", place: NOTE });
   expect(mocks.createAgentSession).not.toHaveBeenCalled();
-  expect(mocks.sendAgentMessage).toHaveBeenCalledWith("s-shown", { content: "去发布页" });
-  // 说了话就算选过了:之后别的会话更活跃也不会把它顶掉。
-  expect(window.localStorage.getItem(agentSessionSelectionKey("w1"))).toBe("s-shown");
 });
 
-it("一条都没有时浮标建的会话,已经打开的面板当场切过去", async () => {
-  mocks.listAgentSessions.mockResolvedValue([]);
-  mocks.createAgentSession.mockResolvedValue(session("s-voice"));
+it("在没有面板的页面(素材页):说话进 AI Studio 的当前对话", async () => {
+  adoptAgentSession("w1", NOTE, "s-note");
+  adoptAgentSession("w1", STUDIO, "s-studio");
+  mount(null);
+  await waitFor(() => expect(mocks.getAgentSession).toHaveBeenCalledWith("s-studio"));
+
+  await act(() => mocks.onUtterance!("去发布页"));
+  expect(mocks.sendAgentMessage).toHaveBeenCalledWith("s-studio", { content: "去发布页", place: STUDIO });
+});
+
+it("那一处还是草稿:在那一处建一段(家在那里),面板当场显示它", async () => {
+  mocks.createAgentSession.mockImplementation(async () => {
+    sessions["s-voice"] = session("s-voice", NOTE);
+    return sessions["s-voice"];
+  });
   let panel: string | undefined = "unset";
-  mount((id) => (panel = id));
-  await waitFor(() => expect(mocks.listAgentSessions).toHaveBeenCalled());
+  mount(<NotePage onPanel={(id) => (panel = id)} />);
   await waitFor(() => expect(panel).toBeUndefined());
 
   await act(() => mocks.onUtterance!("你好"));
   expect(mocks.createAgentSession).toHaveBeenCalledOnce();
-  expect(mocks.sendAgentMessage).toHaveBeenCalledWith("s-voice", { content: "你好" });
-  expect(panel).toBe("s-voice");
+  expect(mocks.createAgentSession).toHaveBeenCalledWith({ workspace_id: "w1", home: NOTE });
+  expect(mocks.sendAgentMessage).toHaveBeenCalledWith("s-voice", { content: "你好", place: NOTE });
+  await waitFor(() => expect(panel).toBe("s-voice"));
+  expect(readChoice("w1", STUDIO)).toBe("");
+});
+
+it("那一处是同事共享来只能看的那段:说清楚,不另建一段", async () => {
+  sessions["s-shared"] = session("s-shared", NOTE, false);
+  adoptAgentSession("w1", NOTE, "s-shared");
+  let panel: string | undefined;
+  mount(<NotePage onPanel={(id) => (panel = id)} />);
+  await waitFor(() => expect(panel).toBe("s-shared"));
+
+  await act(() => mocks.onUtterance!("你好"));
+  expect(mocks.createAgentSession).not.toHaveBeenCalled();
+  expect(mocks.sendAgentMessage).not.toHaveBeenCalled();
 });

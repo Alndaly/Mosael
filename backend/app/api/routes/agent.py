@@ -60,10 +60,37 @@ def _place(kind: str, place_id: str) -> places.Place:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+def _apply_settings(
+    db: DbSession,
+    user: CurrentUser,
+    session: AgentSession,
+    *,
+    analysis_video_mode: str | None,
+    thinking_level: str | None,
+    permission_mode: str | None,
+) -> None:
+    """建会话(草稿上选好的)和改会话设置同一套校验:分析方式、思考档位、权限模式。给 None 的不动。"""
+    if analysis_video_mode is not None:
+        if analysis_video_mode not in ("auto", "native", "frames"):
+            raise HTTPException(status_code=422, detail=tr("routeErr_badAnalysisVideoMode"))
+        session.analysis_video_mode = analysis_video_mode
+    if thinking_level is not None:
+        if thinking_level not in ("off", "low", "medium", "high"):
+            raise HTTPException(status_code=422, detail=tr("routeErr_badThinkingLevel"))
+        session.thinking_level = thinking_level
+    if permission_mode is not None:
+        try:
+            autopilot.set_permission_mode(db, user, session, permission_mode)
+        except autopilot.PermissionModeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/agent/sessions", response_model=AgentSessionOut)
 def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) -> AgentSession:
+    """建一段对话 —— 界面上是第一句话发出去的那一刻(草稿在那之前不建)。草稿上选好的设置一起带上;哪一项不合规整个
+    不建(同一个事务),不留下一段空对话。"""
     try:
-        return agent_use_cases.start_session(
+        session = agent_use_cases.start_session(
             db,
             user,
             body.workspace_id,
@@ -75,6 +102,13 @@ def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) ->
         )
     except (agent_use_cases.UnknownConnection, places.PlaceError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _apply_settings(
+        db, user, session,
+        analysis_video_mode=body.analysis_video_mode,
+        thinking_level=body.thinking_level,
+        permission_mode=body.permission_mode,
+    )
+    return session
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
@@ -222,19 +256,12 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.model is not None:
         session.model = body.model or None
-    if body.analysis_video_mode is not None:
-        if body.analysis_video_mode not in ("auto", "native", "frames"):
-            raise HTTPException(status_code=422, detail=tr("routeErr_badAnalysisVideoMode"))
-        session.analysis_video_mode = body.analysis_video_mode
-    if body.thinking_level is not None:
-        if body.thinking_level not in ("off", "low", "medium", "high"):
-            raise HTTPException(status_code=422, detail=tr("routeErr_badThinkingLevel"))
-        session.thinking_level = body.thinking_level
-    if body.permission_mode is not None:
-        try:
-            autopilot.set_permission_mode(db, user, session, body.permission_mode)
-        except autopilot.PermissionModeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _apply_settings(
+        db, user, session,
+        analysis_video_mode=body.analysis_video_mode,
+        thinking_level=body.thinking_level,
+        permission_mode=body.permission_mode,
+    )
     if body.group_id is not None:
         session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:

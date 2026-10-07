@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { ChevronRight, Eye, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
+import { ChevronRight, CornerUpLeft, Eye, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -36,6 +36,15 @@ import { Truncate } from "@/components/ui/truncate";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
+
+/**
+ * 行上多说的一句和多出的一颗按钮(对话列表:「在剪辑《A》里开的」和「回到那里」,ADR 0044 §5)。生成会话没有,不给。
+ * 由调用方说 —— 列表本身不认识「家」这回事,和它不认识两种会话的差异是同一个道理(见 SESSION_KINDS)。
+ */
+export interface SessionRowExtras {
+  subtitle?: string;
+  goBack?: { label: string; hint: string; onClick: () => void };
+}
 
 /** 这个列表认得的会话:两种会话都有这三样,别的它不碰。 */
 export interface ListedSession {
@@ -130,7 +139,7 @@ function moveSessionToGroup(kind: SessionGroupKind, sessionId: string, groupId: 
  * 多选走 lib/useMultiSelect(素材、发布、工作流三处同一份),批量删除也照它们的做法逐条删、
  * 失败的报出来 —— 后端没有批量接口,而逐条删至少让"删了 8 个失败 2 个"说得出口。
  */
-export function SessionList({
+export function SessionList<S extends ListedSession>({
   kind,
   workspaceId,
   sessions,
@@ -140,11 +149,12 @@ export function SessionList({
   onCreate,
   creating,
   onDeleted,
+  extras,
 }: {
   /** 对话还是生成 —— 两边各自一套分组,差异全在 SESSION_KINDS 那张表里。 */
   kind: SessionGroupKind;
   workspaceId: string;
-  sessions: ListedSession[];
+  sessions: S[];
   loaded: boolean;
   activeSessionId: string | null;
   onSelect: (id: string) => void;
@@ -152,6 +162,8 @@ export function SessionList({
   creating: boolean;
   /** 删掉了这些会话 —— 当前打开的那个若在其中,调用方要把它从视图里放下。 */
   onDeleted: (ids: string[]) => void;
+  /** 行上多说的一句、多出的一颗按钮(见 SessionRowExtras)。 */
+  extras?: (session: S) => SessionRowExtras | null;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -258,8 +270,8 @@ export function SessionList({
   const visibleManageable = React.useMemo(() => visible.filter(manageable), [visible]);
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
-    const map = new Map<string, ListedSession[]>();
-    const loose: ListedSession[] = [];
+    const map = new Map<string, S[]>();
+    const loose: S[] = [];
     for (const session of visible) {
       const groupId = session.group_id;
       if (groupId && groupList.some((group) => group.id === groupId)) {
@@ -306,11 +318,12 @@ export function SessionList({
     moveSession.mutate({ id: activeId, groupId });
   };
 
-  const renderSession = (session: ListedSession) => (
+  const renderSession = (session: S) => (
     <SessionRow
       key={session.id}
       kind={kind}
       session={session}
+      extras={extras?.(session) ?? null}
       viewOnly={manageable(session) ? undefined : spec.sharedIsViewOnly}
       groups={groupList}
       active={!selectMode && activeSessionId === session.id}
@@ -573,6 +586,7 @@ function GroupSection({ groupId, children }: { groupId: string; children: React.
 /** 会话行。可拖(排序 / 换组),可右键,选择模式下点它是勾选而不是打开。只能看的那种三样都没有,只能打开。 */
 function SessionRow({
   session,
+  extras,
   viewOnly,
   groups,
   active,
@@ -588,6 +602,7 @@ function SessionRow({
   kind,
 }: {
   session: ListedSession;
+  extras: SessionRowExtras | null;
   /** 同事共享来、只能看的会话:这一行怎么说它。 */
   viewOnly?: MessageKey;
   groups: SessionGroup[];
@@ -630,16 +645,45 @@ function SessionRow({
       {selectMode && (
         <Checkbox checked={checked} disabled={Boolean(viewOnly)} className="pointer-events-none" tabIndex={-1} />
       )}
-      <span className="flex min-w-0 items-center gap-1.5">
-        <Truncate className="text-ui-sm">{session.title}</Truncate>
-        {viewOnly && <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
+      <span className="grid min-w-0 gap-0.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Truncate className="text-ui-sm">{session.title}</Truncate>
+          {viewOnly && <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
+        </span>
+        {extras?.subtitle && <Truncate className="text-ui-xs text-muted-foreground">{extras.subtitle}</Truncate>}
       </span>
     </button>
   );
+  //: 「回到那里」和这一行并排,不塞进行按钮里(按钮里套按钮,读屏念成一个、点它连带打开这一行)。
+  const goBack = extras?.goBack && !selectMode ? (
+    <IconButton
+      variant="ghost"
+      size="icon-xs"
+      className="mr-1 text-muted-foreground"
+      label={extras.goBack.label}
+      hint={extras.goBack.hint}
+      onClick={extras.goBack.onClick}
+    >
+      <CornerUpLeft size={13} />
+    </IconButton>
+  ) : null;
+  const line = goBack ? (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5">
+      {row}
+      {goBack}
+    </div>
+  ) : row;
   //: 只能看的没有右键菜单:改名、收纳、删除都是主人的事,共享与否也是(SessionShareMenuItem 本来就藏)。
   //: 悬停说全名和「为什么只能看」。
   if (viewOnly) {
-    return (
+    return goBack ? (
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5">
+        <Hint label={session.title} hint={t(viewOnly)}>
+          {row}
+        </Hint>
+        {goBack}
+      </div>
+    ) : (
       <Hint label={session.title} hint={t(viewOnly)}>
         {row}
       </Hint>
@@ -647,7 +691,7 @@ function SessionRow({
   }
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{line}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={onRename}>
           <MenuItemBody icon={<Pencil />} label={t("rename")} />

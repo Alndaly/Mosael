@@ -200,7 +200,10 @@ def create_session(
     provider_profile_id: str | None = None,
     model: str | None = None,
 ) -> AgentSession:
-    """`home`:在哪开的(见 domain/agent/places)。校验由调用方做 —— 界面来的经 use_cases.start_session。"""
+    """`home`:在哪开的(见 domain/agent/places)。校验由调用方做 —— 界面来的经 use_cases.start_session。
+
+    不提交,跟随调用方的事务:界面建会话时草稿上选好的设置在同一个事务里写进去,哪一项不合规整个不建(见 routes/agent)。
+    """
     session = AgentSession(
         workspace_id=workspace_id,
         home_kind=home.kind,
@@ -213,8 +216,7 @@ def create_session(
         model=model or None,
     )
     db.add(session)
-    db.commit()
-    db.refresh(session)
+    db.flush()
     return session
 
 

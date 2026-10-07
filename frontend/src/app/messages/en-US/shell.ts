@@ -321,7 +321,6 @@ export const shell = {
   homeGreetingNoon: "Good noon",
   homeGreetingAfternoon: "Good afternoon",
   homeGreetingEvening: "Good evening",
-  wfAgentNewSession: "New chat",
   wfAgentSessions: "Chats",
   wfAgentFloat: "Float assistant",
   wfAgentDock: "Dock to the right",

@@ -323,7 +323,6 @@ export const shell = {
   homeGreetingNoon: "中午好",
   homeGreetingAfternoon: "下午好",
   homeGreetingEvening: "晚上好",
-  wfAgentNewSession: "新开会话",
   wfAgentSessions: "会话",
   wfAgentFloat: "悬浮显示",
   wfAgentDock: "停靠到右侧",

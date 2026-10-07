@@ -8,6 +8,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
+import { useAgentPlace } from "@/features/agent/activePlace";
+import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
 import { AssistantPanel } from "@/features/plugins/workbench/AssistantPanel";
 import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
@@ -65,6 +67,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const column = useColumnWidth(columnOpen && Boolean(target));
   const workflow = state?.workflow ?? null;
   const workflowKey = workflow?.key ?? "";
+  //: 工作台盖在页面上时,「眼下这一处」是这台 ComfyUI 上开着的那张(ADR 0044 §3、§11):助手接那一张的对话,换标签页
+  //: 就换成那一张的;每条消息带着它,这一轮就有 ComfyUI 那份工具。关了工作台退回下面那一页。
+  const agentPlace = useAgentPlace(target ? comfyPlace(target.instanceId, workflow) : null);
   //: 一直没收到桥那边的回话(这版前端太旧、页面要先登录、桥注入不上):说一句,画布照常能用
   const [stuck, setStuck] = React.useState(false);
   React.useEffect(() => {
@@ -247,8 +252,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               <RunPanel target={target} runs={runs} events={events} workflowKey={workflowKey} active={tab === "run"}
                         canMark={Boolean(capabilities?.marks && capabilities?.export)} runError={run.error} />
             )}
-            {one === "assistant" && (
-              <AssistantPanel target={target} runs={runs} workflowKey={workflowKey} onShowMissing={showMissing} />
+            {one === "assistant" && agentPlace && (
+              <AssistantPanel target={target} place={agentPlace} runs={runs} workflowKey={workflowKey} onShowMissing={showMissing} />
             )}
           </div>
         ))}

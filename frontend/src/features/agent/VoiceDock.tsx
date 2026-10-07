@@ -5,8 +5,9 @@
  * 而输入框可能根本不在屏幕上(助手面板是可以收起来的)。一个跟着面板走的按钮,恰好在最需要
  * 它的时候不见了。浮标一直在,而且拖得走 —— 挡住东西时不必去设置里关掉它。
  *
- * **对哪个会话说话。** 面板正显示的那一条(useCurrentAgentSession)—— AI 工作台、编辑器、
- * 工作流、画板共用一个对话池,浮标不该是第五个入口、开出第五条对话。
+ * **对哪段对话说话。** 眼下这一处的当前对话(ADR 0044 拍板 7):在有助手面板的页面(面板收没收起来都算),是那一页的
+ * 当前对话;别处(素材、发布、设置……)是 AI Studio 的当前对话。那一处还是草稿就在那一处建一段 —— 和面板发第一句话一样。
+ * 浮标不是另一个入口,不另开一段对话。
  *
  * **图标不是话筒。** 话筒说的是"录音",而这里表达的是"它在听 / 它在说" —— 是一段对话,
  * 不是一次录制。所以是声波条:四种状态共用同一组条,靠颜色和动效区分 —— 换四个不同图标的话,
@@ -25,7 +26,9 @@ import { toast } from "sonner";
 import { getAgentSession, listAgentMessages, sendAgentMessage } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useVoiceLoop } from "@/features/agent/useVoiceLoop";
+import { useActivePlace } from "@/features/agent/activePlace";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { placePayload } from "@/features/agent/places";
 import { VoiceOrb } from "@/features/agent/VoiceOrb";
 import { useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { IconButton } from "@/components/ui/icon-button";
@@ -38,7 +41,9 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   const t = useI18n();
   const qc = useQueryClient();
 
-  const current = useCurrentAgentSession(workspaceId);
+  //: 眼下这一处(页面登记的,见 activePlace):浮标跟着你走,不再对你离开的那一处说话。
+  const place = useActivePlace();
+  const current = useCurrentAgentSession(workspaceId, place);
   const sessionId = current.session?.id ?? "";
 
   const live = useQuery({
@@ -70,15 +75,15 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     reply,
     failure,
     onUtterance: async (text) => {
-      // 对着面板正显示的那条说;一条都没有才建 —— 建出来的就是面板接下来显示的那条,
-      // 而不是"我刚才对着浮标说的话去哪儿了"。面板上是同事共享来只能看的那条,就说清楚
-      // (ensure 会拒,不替他另建一条 —— 那句话该发在哪儿由他定)。
+      // 对着这一处的当前对话说;还是草稿就在这一处建一段 —— 建出来的就是面板接下来显示的那段,
+      // 而不是"我刚才对着浮标说的话去哪儿了"。这一处是同事共享来只能看的那段,就说清楚
+      // (ensure 会拒,不替他另建一段 —— 那句话该发在哪儿由他定)。
       if (current.readOnly) {
         toast.error(t("chatSessionReadOnly"));
         return;
       }
       const target = (await current.ensure()).id;
-      await sendAgentMessage(target, { content: text });
+      await sendAgentMessage(target, { content: text, place: placePayload(place) });
       void qc.invalidateQueries({ queryKey: ["agent-messages", target] });
     },
   });

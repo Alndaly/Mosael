@@ -319,7 +319,6 @@ export const publish = {
   chatNoSessions: "还没有对话,点右上角「新对话」开始。",
   chatSearchSessions: "搜索对话…",
   chatSearchNoMatch: "没有匹配的对话",
-  chatSessionsNone: "还没有对话",
   chatNewGroup: "新建分组",
   chatRenameGroup: "重命名分组",
   chatMoveToGroup: "移到分组",

@@ -121,6 +121,12 @@ class AgentSessionCreate(ApiModel):
     adapter: str | None = Field(default=None, pattern="^pi$")
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
+    #: 草稿上先选好的会话设置(维护者 2026-10-07:打开智能体时是一段还没建出来的新对话,第一句话发出去才建 ——
+    #: 草稿上选的思考档位、权限模式、分析方式跟着这一次一起带上,不为了记一个选择先建一段空对话)。
+    #: 校验和 PATCH 同一套(见 routes/agent._apply_settings)。
+    thinking_level: str | None = None
+    permission_mode: str | None = None
+    analysis_video_mode: str | None = None
 
 
 class SessionGroupCreate(ApiModel):

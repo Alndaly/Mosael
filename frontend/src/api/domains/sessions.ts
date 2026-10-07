@@ -58,9 +58,21 @@ export type AgentMessage = components["schemas"]["AgentMessageOut"];
 /** 消息带着的一段笔记摘录(笔记页的选区),落进 payload.quote,气泡里画成可点的一行。 */
 export type AgentMessageQuote = components["schemas"]["AgentMessageQuoteIn"];
 
-export const listAgentSessions = (workspaceId: string) =>
-  api<AgentSession[]>(`/api/agent/sessions?workspace_id=${encodeURIComponent(workspaceId)}`);
-export const createAgentSession = (body: Record<string, unknown>) =>
+/** 一处地方(ADR 0044):种类加那样东西的 id。会话的家、每条消息在哪说的都是它。 */
+export type AgentPlaceIn = components["schemas"]["PlaceIn"];
+
+/** 不给 `home` 列整个工作区的(AI Studio);给了只列家在那里的(各处面板的「这里的对话」)。 */
+export const listAgentSessions = (workspaceId: string, home?: { kind: string; id: string }) => {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (home) {
+    params.set("home_kind", home.kind);
+    params.set("home_id", home.id);
+  }
+  return api<AgentSession[]>(`/api/agent/sessions?${params.toString()}`);
+};
+/** 建会话的请求体。标题不给:后端先记一个占位,第一句话进来时起名(见 host.post_user_message)。 */
+export type AgentSessionCreateBody = Omit<components["schemas"]["AgentSessionCreate"], "title">;
+export const createAgentSession = (body: AgentSessionCreateBody) =>
   api<AgentSession>("/api/agent/sessions", { method: "POST", body: JSON.stringify(body) });
 export const getAgentSession = (sessionId: string) => api<AgentSession>(`/api/agent/sessions/${sessionId}`);
 export const updateAgentSession = (sessionId: string, body: Record<string, unknown>) =>

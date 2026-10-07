@@ -2,9 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listProviderDefaults } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
-import type { components } from "@/api/generated/schema";
 
-type AgentSession = components["schemas"]["AgentSessionOut"];
 
 /**
  * 这次对话**实际用的是哪个模型**。
@@ -35,7 +33,10 @@ export interface EffectiveChatModel {
   pending: boolean;
 }
 
-export function useEffectiveChatModel(session: AgentSession | null | undefined): EffectiveChatModel {
+export function useEffectiveChatModel(
+  /** 会话(或草稿)上选着的那一对;空着就跟默认走。 */
+  session: { provider_profile_id?: string | null; model?: string | null } | null | undefined,
+): EffectiveChatModel {
   // 与 ModelPicker / ChatWorkspace 同一个 queryKey —— 同一份缓存,不会多打一次请求。
   const defaults = useQuery({
     queryKey: providerKeys.defaults(),
@@ -44,8 +45,8 @@ export function useEffectiveChatModel(session: AgentSession | null | undefined):
   });
   const fallback = (defaults.data ?? []).find((item) => item.capability === "chat");
   return {
-    providerProfileId: session?.provider_profile_id ?? fallback?.provider_profile_id ?? "",
-    model: session?.model ?? fallback?.model ?? "",
+    providerProfileId: session?.provider_profile_id || fallback?.provider_profile_id || "",
+    model: session?.model || fallback?.model || "",
     pending: defaults.isPending,
   };
 }

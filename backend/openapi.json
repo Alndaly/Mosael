@@ -21767,6 +21767,7 @@
           "agent"
         ],
         "summary": "Create Agent Session",
+        "description": "建一段对话 —— 界面上是第一句话发出去的那一刻(草稿在那之前不建)。草稿上选好的设置一起带上;哪一项不合规整个\n不建(同一个事务),不留下一段空对话。",
         "operationId": "create_agent_session_api_agent_sessions_post",
         "requestBody": {
           "required": true,
@@ -26844,6 +26845,39 @@
               }
             ],
             "title": "Model"
+          },
+          "thinking_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Level"
+          },
+          "permission_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permission Mode"
+          },
+          "analysis_video_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Video Mode"
           }
         },
         "type": "object",

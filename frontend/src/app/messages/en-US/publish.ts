@@ -317,7 +317,6 @@ export const publish = {
   chatNoSessions: "No conversations yet — hit New chat to start.",
   chatSearchSessions: "Search conversations…",
   chatSearchNoMatch: "No matching conversation",
-  chatSessionsNone: "No conversations yet",
   chatNewGroup: "New group",
   chatRenameGroup: "Rename group",
   chatMoveToGroup: "Move to group",

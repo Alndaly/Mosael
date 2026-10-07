@@ -17,7 +17,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 const message = (id: string, role: string, content: string, payload: Record<string, unknown> = {}) => ({
   id, session_id: "s1", role, content, payload, error: null, created_at: "2026-10-02T10:00:00",
@@ -26,17 +26,18 @@ const message = (id: string, role: string, content: string, payload: Record<stri
 const queued = message("q1", "user", "顺便把音量调大一点", { queued: true, queued_by: "me" });
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
   assetFileUrl: (id: string) => `/files/${id}`,
   assetPreviewUrl: (id: string) => `/previews/${id}`,
   assetThumbnailUrl: (id: string) => `/thumbs/${id}`,
   getAsset: vi.fn(async () => null),
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "配音", is_mine: true }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
   deleteAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", title: "配音", status: "running", is_mine: true })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", status: "running", is_mine: true })),
   listAgentMessages: vi.fn(async () => [
     message("u1", "user", "把五段旁白都配上音"),
     message("m1", "assistant", "先配第一段", { timeline: [{ type: "text", text: "先配第一段" }] }),
@@ -99,7 +100,8 @@ class NoopResizeObserver {
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", NoopResizeObserver);
   window.localStorage.clear();
-  window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
+  window.sessionStorage.clear();
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
 });
 
 async function mount() {
@@ -112,6 +114,7 @@ async function mount() {
         placeholder="placeholder"
         rectKey="test.canvas.agent"
         workspaceId="w1"
+        place={{ kind: "studio", id: "" }}
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}

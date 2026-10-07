@@ -54,7 +54,7 @@ function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <SessionSettingsMenu workspaceId="ws-1" session={SESSION} />
+      <SessionSettingsMenu workspaceId="ws-1" place={{ kind: "studio", id: "" }} session={SESSION} />
     </QueryClientProvider>,
   );
 }
@@ -84,7 +84,7 @@ describe("存成技能", () => {
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
-        <SessionSettingsMenu workspaceId="ws-1" session={null} />
+        <SessionSettingsMenu workspaceId="ws-1" place={{ kind: "studio", id: "" }} session={null} />
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "会话设置" }));

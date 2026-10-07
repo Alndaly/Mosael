@@ -8,6 +8,7 @@ import { CanvasAgentChat, type PageOutbox } from "@/features/agent/CanvasAgentCh
 import { AgentPageViewsContext, type AgentPageViews } from "@/features/agent/pageViews";
 import { WorkbenchAssistantContext, type AssistantFinding, type WorkbenchAssistantActions } from "@/features/plugins/workbench/assistantActions";
 import { assistantToolResult } from "@/features/plugins/workbench/assistantViews";
+import type { AgentPlace } from "@/features/agent/places";
 import { linkNodeRefs } from "@/features/plugins/workbench/nodeRefs";
 import { useJobWatch } from "@/features/plugins/workbench/workbenchParts";
 import {
@@ -132,13 +133,15 @@ const NODE_REFS: MarkdownRefs = {
 
 /**
  * 工作台的「助手」页签(ADR 0042 拍板 1):就是工作流、画板、剪辑页共用的那个智能体面板,停靠在这一列里(不浮、不关 ——
- * 换个页签就收起来了)。会话和 AI 工作台是同一个池子。页面上下文**发送那一刻**才取(画布一直在变)。
+ * 换个页签就收起来了)。它在的那一处是这台 ComfyUI 上开着的那张(`place`,由 ComfyWorkbench 登记,ADR 0044):每一张有自己的
+ * 对话,换标签页就换成那一张的。页面上下文**发送那一刻**才取(画布一直在变)。
  *
  * 诊断画成一条条带「定位」「照这个改」的问题,开好的新标签页带「去下载」(见 assistantViews);「照这个改」替用户发一句,
  * 智能体据此提一次 comfy_canvas_edit —— 改不改仍是用户在确认卡上点「应用」。
  */
-export function AssistantPanel({ target, runs, workflowKey, onShowMissing }: {
+export function AssistantPanel({ target, place, runs, workflowKey, onShowMissing }: {
   target: WorkbenchTarget;
+  place: AgentPlace;
   runs: WorkbenchRun[];
   workflowKey: string;
   /** 「去下载」:换到「缺失项」那一页 */
@@ -179,6 +182,7 @@ export function AssistantPanel({ target, runs, workflowKey, onShowMissing }: {
         placeholder={t("workbenchAssistantPlaceholder")}
         rectKey="mosael.comfy-workbench.agent.rect.v1"
         workspaceId={target.workspaceId}
+        place={place}
         mode="docked"
         dockedLayout="inline"
       />

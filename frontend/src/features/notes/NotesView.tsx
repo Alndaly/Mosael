@@ -76,6 +76,8 @@ const REPLACE_ACTIONS: readonly NoteAiAction[] = ["polish", "rewrite", "expand",
  * (见 features/featureBoundaries.test)。这里只写笔记页要给它的那几样。
  */
 export interface NotesAgentPanelProps {
+  /** 开着哪一篇(没开是 null):每一篇有自己的对话(ADR 0044),面板据此接那一篇的。 */
+  noteId: string | null;
   contextLine: () => string;
   contextChips: ComposerChip[];
   /** 这条消息带着的选区摘录:落进消息,对话气泡里画成可点的一行(点了回到这篇、定位到这段)。 */
@@ -105,7 +107,12 @@ export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources"
   saveBlobToDisk(blob, `${(note.title || "note").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100)}.md`);
 }
 
-export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; AgentPanel?: React.ComponentType<NotesAgentPanelProps> }) {
+export function NotesView({ workspace, AgentPanel, onNoteChange }: {
+  workspace: Workspace;
+  AgentPanel?: React.ComponentType<NotesAgentPanelProps>;
+  /** 开着哪一篇(打不开的那篇不算):装配层据此告诉助手「这一处是这篇笔记」(见 app/pages)。 */
+  onNoteChange?: (noteId: string | null) => void;
+}) {
   const s = useNoteStrings(); const qc = useQueryClient(); const t = useI18n();
   const [id, setId] = React.useState(() => locationNote() ?? rememberedNote(workspace.id));
   // 从记住的那篇打开时把地址补上,和点开一篇的状态一样(刷新、返回都认它)。
@@ -129,8 +136,8 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
   const topics = useQuery({ queryKey: noteKeys.topics(workspace.id, filter === "trash"), queryFn: () => listNoteTopics(workspace.id, filter === "trash") }).data ?? [];
   // 打开一篇就重新取一次(staleTime 0):缓存里的那份可能是移进回收站、收藏之前的,打开后看到的
   // 就是错的状态 —— 回收站里的笔记没有提示条、还能编辑。
-  //: 笔记页的助手:和剪辑页、画板**同一个面板**(CanvasAgentChat)、同一个工作区会话(见 currentAgentSession)——
-  //: 换一篇笔记不换会话,每条消息带上发出那一刻在看的是哪一篇(contextLine)。开合、停靠方式、宽度各记各的。
+  //: 笔记页的助手:和剪辑页、画板**同一个面板**(CanvasAgentChat)。每一篇笔记有自己的对话(ADR 0044):换一篇就换成那一篇的,
+  //: 没开哪篇时算 AI Studio —— 地方由装配层按 onNoteChange 登记。开合、停靠方式、宽度各记各的。
   const [agentOpen, setAgentOpen] = usePersistentTab<"on" | "off">("notes-agent", "off", ["on", "off"]);
   const [agentMode, setAgentMode] = usePersistentTab<AgentMode>("notes-agent-mode", "docked", ["docked", "floating"]);
   const agentPanel = useResizableSidebar("notes-agent", { min: 320, max: 640, fallback: 400 });
@@ -183,6 +190,8 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
   };
   const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0,
     refetchInterval: showAgent ? NOTE_FOLLOW_MS : false });
+  const openNoteId = id && !selected.isError ? id : null;
+  React.useEffect(() => { onNoteChange?.(openNoteId); }, [openNoteId, onNoteChange]);
   //: 摘录最多存这么多字(后端上限 2000);定位靠它找回那一段,长了也只多占库。
   const messageQuote: AgentMessageQuote | null = quoted?.text && selected.data ? {
     kind: "note", note_id: selected.data.id, title: selected.data.title || s.untitled, text: quoted.text.slice(0, 2000), start: quoted.start,
@@ -257,6 +266,7 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
         className={dockedAgent ? "grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] border-l border-divider" : agentMode === "docked" ? "absolute bottom-2 right-2 top-2 z-40 grid w-[min(400px,90%)] grid-cols-[minmax(0,1fr)]" : "contents"}
         style={dockedAgent ? { flex: `0 0 ${agentPanel.width}px` } : undefined}>
         <React.Suspense fallback={null}><AgentPanel
+          noteId={openNoteId}
           contextLine={agentContext}
           contextChips={selectionChips}
           messageQuote={messageQuote}

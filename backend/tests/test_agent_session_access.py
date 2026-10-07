@@ -248,6 +248,7 @@ def test_工作区的卡_全局确认中心照旧兜底() -> None:
         group_chat = host.get_or_create_external_session(
             db, workspace_id=workspace, origin="feishu", external_key="feishu:chat-1", title="飞书群"
         ).id
+        db.commit()  # 测试是入口:领域函数不提交
     no_session = _card(workspace, None)
     in_group_chat = _card(workspace, group_chat)
 

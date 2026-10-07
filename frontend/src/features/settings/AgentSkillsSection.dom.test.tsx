@@ -221,7 +221,8 @@ describe("导入", () => {
     expect(row("brand-rules").querySelector("[data-slot='skill-agent-source']")).toBeNull();
 
     fireEvent.click(tag);
-    expect(window.localStorage.getItem("mosael.agent.session.ws-1")).toBe("sess-9");
+    //: 在 AI Studio 那一处接着它(ADR 0044:每一处各记各的,只记在这个窗口)。
+    expect(window.sessionStorage.getItem("mosael.agent.session.ws-1.studio")).toBe("sess-9");
     expect(window.location.hash).toBe("#/ai");
   });
 

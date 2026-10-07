@@ -61,6 +61,7 @@ import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab
 import { cn } from "@/lib/utils";
 import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { useAgentPlace } from "@/features/agent/activePlace";
 import {
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
@@ -549,6 +550,8 @@ function BoardDetail({
   const t = useI18n();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  //: 这一处是这块画板(ADR 0044):助手面板接这块板的对话;画板清单那一页没登记,算 AI Studio。
+  const agentPlace = useAgentPlace({ kind: "board", id: board.id });
   const [renaming, setRenaming] = React.useState(false);
   //: 顶栏的路径:创意画板 / 这张板(点名字改名,点「创意画板」回清单)。
   usePageTrail({ onRoot: onBack, segments: [{ label: board.name, onRename: () => setRenaming(true), renameLabel: t("rename") }] });
@@ -1271,6 +1274,7 @@ function BoardDetail({
             placeholder={t("boardAgentPlaceholder")}
             rectKey="mosael.board.agent.rect.v1"
             workspaceId={workspaceId}
+            place={agentPlace}
             mode={agentMode}
             onModeChange={setAgentMode}
             onClose={() => setAgentOpen("off")}

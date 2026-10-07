@@ -35,6 +35,7 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { useAgentPlace } from "@/features/agent/activePlace";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
@@ -96,6 +97,8 @@ export function WorkflowEditor({
   openRunId?: string | null;
   onRunOpened?: () => void;
 }) {
+  //: 这一处是这个工作流(ADR 0044):助手面板接这个工作流的对话。
+  const agentPlace = useAgentPlace({ kind: "workflow", id: workflow.id });
   const [markerMode, setMarkerMode] = React.useState(false);
   const [markersVisible, setMarkersVisible] = React.useState(true);
   const workflowComments = useWorkflowComments(workspaceId, workflow.id);
@@ -409,6 +412,7 @@ export function WorkflowEditor({
       placeholder={t("wfAgentPlaceholder")}
       rectKey="mosael.wf.agent.rect.v2"
       workspaceId={workflow.workspace_id}
+      place={agentPlace}
       mode={agentMode}
       onModeChange={setAgentMode}
       onClose={() => setAgentOpen(false)}

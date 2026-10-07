@@ -1,51 +1,63 @@
 /**
- * 「当前是哪个智能体会话」—— 整个应用只有这一个答案。
+ * 「这一处接着哪段对话」—— 每一处地方各有一个答案(ADR 0044 §3,地方见 places)。
  *
- * **为什么要有唯一来源。** AI 工作台、画布助手(工作流 / 画板 / 剪辑 / 3D 共用)、免提浮标、
- * 智能体发起的页面跳转(open_view)都对着「当前会话」干活。此前四处各读各的:两个面板在没有
- * 存储时回落到清单第一条,却不告诉别人;浮标和跳转只读 localStorage —— 于是面板正显示着一条
- * 会话,对浮标说话却新建了第二条,智能体要求的跳转也没人执行。反过来浮标建了新会话,已经打开
- * 的面板只在挂载时读过一次,不跟着切。
+ * **为什么要有唯一来源。** AI Studio、各页面的助手面板(剪辑 / 笔记 / 画板 / 工作流 / 3D 场景 / 工作台的「助手」)、免提浮标、
+ * 智能体发起的页面跳转(open_view)都对着「当前对话」干活。此前它们各读各的:面板回落到清单第一条却不告诉别人,对浮标说话
+ * 新建了第二条,智能体要求的跳转没人执行。所以同一处的这几样读的是同一个答案 —— 只是答案不再是「整个工作区一个」:剪辑
+ * 里聊的不接着笔记里那段,在一处点「新对话」别处不跟着换(那是 0044 之前的毛病)。
  *
- * **形状。** 存储的只有一样东西:用户**明确选过**的会话 id(localStorage,按工作区分键)。
- * 「当前会话」由它和会话清单**现算**:选过的那条在清单里就是它,否则是清单第一条(最近活跃)。
- * 清单是同一个 React Query 键,所以四处算出来的是同一条;选择的变化同一窗口靠这里的广播、
- * 跨窗口靠 storage 事件,不再轮询。
+ * **形状。** 存的只有一样:这一处**明确选过 / 用上了**的那段的 id(sessionStorage,按「工作区 + 地方」分键,见
+ * sessionSelection —— 只记这一次运行)。没有就是**草稿**:一段还没建出来的新对话,库里没有、历史里也没有。第一句话发出去
+ * (`ensureAgentSession`)才建,家就是这一处;草稿上先选好的模型、思考档位……一起带上。所以打开智能体、点「新对话」、对浮标
+ * 说话之前,都不会留下空对话(维护者 2026-10-07 的修订:每次初次打开智能体是一段未创建的新对话)。
  *
- * **回落不写回,用上才写回。** 只是**看着**第一条时不把它记成选择:
- * - 写回的是一个**推导值**,而推导依据的清单可能是旧的 —— 别的窗口刚建了一条、这边清单还没
- *   刷新,这边就会把「第一条」写回去,storage 事件再把那个窗口也拽走,两边来回抢;
- * - 四处用同一个清单、同一条规则现算,不写也看到同一条,写回换不来一致性。
- * 代价是「从没选过」时当前会话跟着最近活跃走。一旦**用上**它 —— 发消息、对浮标说话、改会话
- * 设置(都经过 `ensureAgentSession`)—— 这条就被记成选择,之后不会再被别的会话顶掉。
+ * 选过的那段家在别处也照样是它(在这里接着聊,拍板 4):读它自己的 `["agent-session", id]`(面板本来就在轮询它),不依赖
+ * 「家在这里的」那份清单。它被删了(404)就放下选择,回到草稿。
  *
- * **同事共享来的对话只能看**(后端 domain/agent/sessions 的写闸,`is_mine` 是它给的答案)。「能不能往里写」
- * 只在这里判一次(`isViewOnly`),三处用它:
- * - 回落只落在**自己的**对话上:没选过时的「当前会话」是一个猜测 —— 猜他要接着聊哪一条,而别人的那条他
- *   接不下去。明确点开一条共享来的,它才是当前会话(看它);
- * - `ensureAgentSession` 遇到只读的当前会话就拒(`ViewOnlySessionError`),**不悄悄新建一条** —— 新建会把
- *   这句话发进一条他没看着的对话里,而屏幕上还停在别人那条;
- * - 会话设置的写入(`useUpdateAgentSession`)同一条规矩。界面据 `readOnly` 把输入区换成只读说明。
+ * **同事共享来的对话只能看**(后端 domain/agent/sessions 的写闸,`is_mine` 是它给的答案)。「能不能往里写」只在这里判一次
+ * (`isViewOnly`):明确点开一段共享来的,它就是这一处的当前对话(看它);`ensureAgentSession` 遇到只读的就拒
+ * (`ViewOnlySessionError`),**不悄悄新建一段** —— 新建会把这句话发进一段他没看着的对话里,而屏幕上还停在别人那段。
  */
 
 import React from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import {
   type AgentSession,
   createAgentSession,
+  getAgentSession,
+  isNotFound,
   listAgentSessions,
   updateAgentSession,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { STUDIO_PLACE, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
+import {
+  type AgentDraftSettings,
+  adoptAgentSession,
+  clearDraftSettings,
+  forgetChoices,
+  readChoice,
+  readDraftSettings,
+  startAgentDraft,
+  subscribeSelections,
+  updateDraftSettings,
+} from "@/features/agent/sessionSelection";
+
+export { adoptAgentSession, startAgentDraft } from "@/features/agent/sessionSelection";
 
 type AgentSessionUpdate = components["schemas"]["AgentSessionUpdate"];
 
 const EMPTY: AgentSession[] = [];
 
+/** 整个工作区的对话(AI Studio 的列表、面板下拉里的「其他对话」)。各处的清单都以它为前缀 —— 失效它就一起失效。 */
 export function agentSessionsQueryKey(workspaceId: string) {
   return ["agent-sessions", workspaceId] as const;
+}
+
+/** 家在这一处的对话(面板下拉里的「这里的对话」)。 */
+export function agentSessionsHereKey(workspaceId: string, place: AgentPlace) {
+  return ["agent-sessions", workspaceId, placeKey(place)] as const;
 }
 
 /** 同事共享来、只能看的对话。只认后端明说「不是你的」—— 没说的(刚建、还没回来)当作自己的。 */
@@ -53,7 +65,7 @@ export function isViewOnly(session: { is_mine?: boolean } | null | undefined): b
   return session?.is_mine === false;
 }
 
-/** 要往一条只读的对话里写。带着给人看的那句话的 key,由界面翻。 */
+/** 要往一段只读的对话里写。带着给人看的那句话的 key,由界面翻。 */
 export class ViewOnlySessionError extends Error {
   readonly messageKey = "chatSessionReadOnly" as const;
 
@@ -63,127 +75,90 @@ export class ViewOnlySessionError extends Error {
   }
 }
 
-/** 选过的那条优先;没选过、或选的那条已经不在清单里,就是**自己的**第一条(清单按最近活跃排)。 */
-export function resolveCurrentSession(sessions: readonly AgentSession[], choice: string): AgentSession | null {
-  return sessions.find((item) => item.id === choice) ?? sessions.find((item) => !isViewOnly(item)) ?? null;
+/**
+ * 在 AI Studio 打开某一段对话:AI Studio 那一处接着它(不改它的家),再跳过去。设置 → 技能里「智能体起草」那个来源标签
+ * 用它跳回建技能的那段对话。
+ */
+export function openAgentSession(workspaceId: string, sessionId: string): void {
+  adoptAgentSession(workspaceId, STUDIO_PLACE, sessionId);
+  window.location.hash = "#/ai";
 }
 
-// —— 选择本身:localStorage + 同窗口广播 ——
+/**
+ * 「带着这段话去开一段新对话」的信箱事件(见 lib/deepLink 的 emitOpenEvent):发出的一方往里放草稿,AI Studio 挂上以后取走、
+ * 填进输入框。不替他发送 —— 他多半还要说想让智能体做什么。发的一方先 `startAgentDraft(工作区, STUDIO_PLACE)`:
+ * AI Studio 换成一段草稿,第一句话发出去才建。
+ */
+export const AGENT_DRAFT_EVENT = "mosael:agent-draft";
 
-const listeners = new Set<() => void>();
-
-function readChoice(workspaceId: string): string {
-  try {
-    return window.localStorage.getItem(agentSessionSelectionKey(workspaceId)) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeChoice(workspaceId: string, sessionId: string) {
-  if (readChoice(workspaceId) === sessionId) return;
-  const key = agentSessionSelectionKey(workspaceId);
-  try {
-    if (sessionId) window.localStorage.setItem(key, sessionId);
-    else window.localStorage.removeItem(key);
-  } catch {
-    // 存不进去(隐私模式、配额)时,本窗口的广播照发 —— 至少这一个窗口里四处仍然一致。
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  // 同一个文档里的写入不触发 storage 事件(上面那份广播管);它只报别的窗口写的。
-  window.addEventListener("storage", listener);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
-
-// —— 改变「当前会话」的三种动作 ——
-
-async function createAndSelect(qc: QueryClient, workspaceId: string): Promise<AgentSession> {
-  //: 家先一律是 AI Studio(ADR 0044 第一步:后端记住在哪开的;各处说自己在哪是第二步)。
-  const created = await createAgentSession({ workspace_id: workspaceId, home: { kind: "studio", id: "" } });
-  // 先把新会话放进清单再选中:等重拉的那一下里新 id 在清单里找不到,「当前会话」会瞬间回落到
-  // 第一条 —— 看起来就像点了没反应。
-  qc.setQueryData<AgentSession[]>(agentSessionsQueryKey(workspaceId), (old) => [
+/** 草稿建成会话:家是这一处,草稿上选好的设置一起带上;建好就是这一处的当前对话。 */
+async function createHere(qc: QueryClient, workspaceId: string, place: AgentPlace): Promise<AgentSession> {
+  const created = await createAgentSession({
+    workspace_id: workspaceId,
+    home: placePayload(place),
+    ...readDraftSettings(workspaceId, place),
+  });
+  clearDraftSettings(workspaceId, place);
+  // 先把它放进清单和详情的缓存再选中:等重拉的那一下里新 id 找不到,这一处会闪回草稿 —— 看起来就像那句话没发出去。
+  qc.setQueryData(["agent-session", created.id], created);
+  qc.setQueryData<AgentSession[]>(agentSessionsHereKey(workspaceId, place), (old) => [
     created,
     ...(old ?? []).filter((item) => item.id !== created.id),
   ]);
-  writeChoice(workspaceId, created.id);
+  adoptAgentSession(workspaceId, place, created.id);
   void qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) });
   return created;
 }
 
-/**
- * 新开一条对话并设为当前 —— 给「从别处带着东西来问智能体」用(内嵌浏览器顶栏「交给智能体」)。
- * 和会话列表上的「新建」是同一个动作,只是不在 hook 里。
- */
-export function startNewAgentSession(qc: QueryClient, workspaceId: string): Promise<AgentSession> {
-  return createAndSelect(qc, workspaceId);
-}
-
-/**
- * 「带着这段话去开一条新对话」的信箱事件(见 lib/deepLink 的 emitOpenEvent):发出的一方往里放草稿,
- * AI 工作台挂上以后取走、填进输入框。不替他发送 —— 他多半还要说想让智能体做什么。
- */
-/**
- * 打开某一次对话:记成**明确选过**的当前会话,再跳到 AI Studio(它照「当前会话」显示)。设置 → 技能里
- * 「智能体起草」那个来源标签用它跳回建技能的那段对话。那段对话不在清单里(删了、没共享给他)时,
- * AI Studio 照常回落,和别处一样。
- */
-export function openAgentSession(workspaceId: string, sessionId: string): void {
-  writeChoice(workspaceId, sessionId);
-  window.location.hash = "#/ai";
-}
-
-export const AGENT_DRAFT_EVENT = "mosael:agent-draft";
-
 const ensuring = new Map<string, Promise<AgentSession>>();
 
 /**
- * 要**用**当前会话了:有就是它(并把它记成选择),没有就建一条;它是同事共享来只能看的,就拒
- * (`ViewOnlySessionError`)—— 不替他另建一条,那句话该发在哪儿由他自己定。
+ * 要**用**这一处的当前对话了(发消息、对浮标说话):有就是它,是草稿就在这一处建一段;它是同事共享来只能看的,就拒
+ * (`ViewOnlySessionError`)—— 不替他另建一段,那句话该发在哪儿由他自己定。
  *
- * 同一工作区同时只跑一个:面板发送和浮标说话撞在同一刻时,不该各建一条。
+ * 同一处同时只跑一个:面板发送和浮标说话撞在同一刻时,不该各建一段。不同的地方各建各的。
  */
-export function ensureAgentSession(qc: QueryClient, workspaceId: string): Promise<AgentSession> {
-  const inflight = ensuring.get(workspaceId);
+export function ensureAgentSession(qc: QueryClient, workspaceId: string, place: AgentPlace): Promise<AgentSession> {
+  const slot = `${workspaceId}|${placeKey(place)}`;
+  const inflight = ensuring.get(slot);
   if (inflight) return inflight;
   const job = (async () => {
-    const choice = readChoice(workspaceId);
-    const cached = qc.getQueryData<AgentSession[]>(agentSessionsQueryKey(workspaceId));
-    // 清单没读过,或者选中的那条不在里面(多半是别的窗口刚建的):先和服务端对一遍再定 ——
-    // 否则消息会发进第一条,或者白白再建一条。
-    const sessions =
-      cached && (!choice || cached.some((item) => item.id === choice))
-        ? cached
-        : await qc.fetchQuery({
-        queryKey: agentSessionsQueryKey(workspaceId),
-            queryFn: () => listAgentSessions(workspaceId),
+    const choice = readChoice(workspaceId, place);
+    if (choice) {
+      let session = qc.getQueryData<AgentSession>(["agent-session", choice]) ?? null;
+      if (!session) {
+        try {
+          session = await qc.fetchQuery({
+            queryKey: ["agent-session", choice],
+            queryFn: () => getAgentSession(choice),
             staleTime: 0,
           });
-    const current = resolveCurrentSession(sessions, choice);
-    if (!current) return createAndSelect(qc, workspaceId);
-    if (isViewOnly(current)) throw new ViewOnlySessionError();
-    writeChoice(workspaceId, current.id);
-    return current;
-  })().finally(() => ensuring.delete(workspaceId));
-  ensuring.set(workspaceId, job);
+        } catch (error) {
+          // 选着的那段被删了:放下选择,这一句开一段新的。别的失败(断网)照原样报 —— 不能因为一次没连上就另开一段。
+          if (!isNotFound(error)) throw error;
+          forgetChoices(workspaceId, [choice]);
+          session = null;
+        }
+      }
+      if (session) {
+        if (isViewOnly(session)) throw new ViewOnlySessionError();
+        return session;
+      }
+    }
+    return createHere(qc, workspaceId, place);
+  })().finally(() => ensuring.delete(slot));
+  ensuring.set(slot, job);
   return job;
 }
 
-/** 这些会话被删掉了。当前那条在其中就放下选择 —— 由同一条规则回落到剩下的第一条。 */
+/** 这些对话删掉了:指着它们的选择全清掉(那几处回到草稿),缓存里也拿掉。 */
 function forgetSessions(qc: QueryClient, workspaceId: string, ids: readonly string[]) {
   if (ids.length === 0) return;
-  // 先从清单里拿掉:服务端清单重拉回来之前,回落不能落到一条刚删掉的会话上。
-  qc.setQueryData<AgentSession[]>(agentSessionsQueryKey(workspaceId), (old) =>
+  // 先从清单里拿掉:服务端清单重拉回来之前,不能还列着一段刚删掉的对话。
+  qc.setQueriesData<AgentSession[]>({ queryKey: agentSessionsQueryKey(workspaceId) }, (old) =>
     old?.filter((item) => !ids.includes(item.id)),
   );
-  if (ids.includes(readChoice(workspaceId))) writeChoice(workspaceId, "");
+  forgetChoices(workspaceId, ids);
   for (const id of ids) {
     for (const family of ["agent-messages", "agent-session", "agent-queue"]) {
       qc.removeQueries({ queryKey: [family, id] });
@@ -191,85 +166,129 @@ function forgetSessions(qc: QueryClient, workspaceId: string, ids: readonly stri
   }
 }
 
+/** 整个工作区的对话(最近活跃在前)。AI Studio 的列表一直要;面板只在下拉展开(或空态要说「接着别处的」)时才要。 */
+export function useAgentSessions(workspaceId: string, { enabled = true, pollList }: { enabled?: boolean; pollList?: number } = {}) {
+  return useQuery({
+    queryKey: agentSessionsQueryKey(workspaceId),
+    queryFn: () => listAgentSessions(workspaceId),
+    enabled,
+    refetchInterval: pollList,
+  });
+}
+
 export interface CurrentAgentSession {
-  /** 会话清单(最近活跃在前)。 */
-  sessions: AgentSession[];
-  /** 清单还没读到 —— 这时 `session` 为空不代表"没有会话"。 */
+  /** 这一处。 */
+  place: AgentPlace;
+  /** 家在这一处的对话(最近活跃在前)。 */
+  here: AgentSession[];
+  /** 「这里的对话」还没读到 —— 这时 `here` 为空不代表这里一段都没有。 */
   listPending: boolean;
   listLoaded: boolean;
-  /** 当前会话;清单为空时为 null。 */
+  /** 这一处的当前对话;`null` 是草稿(还没建出来),或者选着的那段还在读(见 `resolving`)。 */
   session: AgentSession | null;
-  /** 当前会话是同事共享来只能看的:输入区、会话设置、拍板的按钮都不给(见 `isViewOnly`)。 */
+  /** 选着一段、还没读到它 —— 这时 `session` 为空不代表是草稿。 */
+  resolving: boolean;
+  /** 当前对话是同事共享来只能看的:输入区、会话设置、拍板的按钮都不给(见 `isViewOnly`)。 */
   readOnly: boolean;
+  /** 在这里接着这段(家不变)。 */
   select: (sessionId: string) => void;
-  /** 删掉了这些会话之后调:当前那条在其中就回落。 */
+  /** 「新对话」:这一处换成草稿,什么都不建。 */
+  startDraft: () => void;
+  /** 删掉了这些对话之后调:指着它们的选择回到草稿。 */
   forget: (ids: readonly string[]) => void;
-  /** 新建一条并设为当前。按钮接它的 isPending。 */
-  create: UseMutationResult<AgentSession, Error, void>;
-  /** 要用当前会话了:有就是它,没有就建。见 `ensureAgentSession`。 */
+  /** 要用当前对话了:有就是它,草稿就在这一处建一段。见 `ensureAgentSession`。 */
   ensure: () => Promise<AgentSession>;
 }
 
 export function useCurrentAgentSession(
   workspaceId: string,
-  { pollList }: { /** 清单轮询间隔:首条消息会自动改题,常驻的标题要跟上。 */ pollList?: number } = {},
+  place: AgentPlace,
+  { pollList }: { /** 清单轮询间隔:标题在第一轮对话之后才起好,常驻的那一行要跟上。 */ pollList?: number } = {},
 ): CurrentAgentSession {
   const qc = useQueryClient();
-  const choice = React.useSyncExternalStore(subscribe, () => readChoice(workspaceId));
-  const list = useQuery({
-    queryKey: agentSessionsQueryKey(workspaceId),
-    queryFn: () => listAgentSessions(workspaceId),
+  const choice = React.useSyncExternalStore(subscribeSelections, () => readChoice(workspaceId, place));
+  const here = useQuery({
+    queryKey: agentSessionsHereKey(workspaceId, place),
+    queryFn: () => listAgentSessions(workspaceId, place),
     refetchInterval: pollList,
   });
-  const sessions = list.data ?? EMPTY;
-  const session = resolveCurrentSession(sessions, choice);
-
-  //: 选中的那条不在清单里:可能是别的窗口刚建的、这边清单还旧 —— 重拉一次再说。
-  //: 每个 id 只拉一次:真被删掉的话不能一直拉下去。
-  const refetchedFor = React.useRef("");
-  const found = sessions.some((item) => item.id === choice);
+  //: 选着的那段读它自己的详情 —— 家在别处的(在这里接着聊的)不在「这里的对话」里。和面板的 `live` 同一个键,不多打请求。
+  const chosen = useQuery({
+    queryKey: ["agent-session", choice],
+    queryFn: () => getAgentSession(choice),
+    enabled: Boolean(choice),
+    retry: (count, error) => !isNotFound(error) && count < 2,
+  });
+  const listed = here.data?.find((item) => item.id === choice) ?? null;
+  const session = choice ? chosen.data ?? listed : null;
+  const gone = Boolean(choice) && chosen.isError && isNotFound(chosen.error);
   React.useEffect(() => {
-    if (!choice || found || !list.isSuccess || refetchedFor.current === choice) return;
-    refetchedFor.current = choice;
-    void qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) });
-  }, [choice, found, list.isSuccess, qc, workspaceId]);
+    if (gone) forgetChoices(workspaceId, [choice]);
+  }, [gone, choice, workspaceId]);
 
-  const create = useMutation<AgentSession, Error, void>({ mutationFn: () => createAndSelect(qc, workspaceId) });
-  const select = React.useCallback((sessionId: string) => writeChoice(workspaceId, sessionId), [workspaceId]);
+  const select = React.useCallback((sessionId: string) => adoptAgentSession(workspaceId, place, sessionId), [workspaceId, place]);
+  const startDraft = React.useCallback(() => startAgentDraft(workspaceId, place), [workspaceId, place]);
   const forget = React.useCallback((ids: readonly string[]) => forgetSessions(qc, workspaceId, ids), [qc, workspaceId]);
-  const ensure = React.useCallback(() => ensureAgentSession(qc, workspaceId), [qc, workspaceId]);
+  const ensure = React.useCallback(() => ensureAgentSession(qc, workspaceId, place), [qc, workspaceId, place]);
 
   return {
-    sessions,
-    listPending: list.isPending,
-    listLoaded: list.isSuccess,
+    place,
+    here: here.data ?? EMPTY,
+    listPending: here.isPending,
+    listLoaded: here.isSuccess,
     session,
+    resolving: Boolean(choice) && !session && !chosen.isError,
     readOnly: isViewOnly(session),
     select,
+    startDraft,
     forget,
-    create,
     ensure,
   };
+}
+
+/** 选择器读的那几样设置:有会话读会话上的,草稿读草稿上已经选好的。 */
+export interface AgentSettingsView {
+  provider_profile_id?: string | null;
+  model?: string | null;
+  thinking_level?: string | null;
+  permission_mode?: string | null;
+  analysis_video_mode?: string | null;
+  /** 档位是谁开的(只有会话上有)。 */
+  mode_set_by?: string | null;
+}
+
+/**
+ * 四个设置选择器共用:读(会话上的,或者草稿上的)和写(`useUpdateAgentSession`)。草稿上的设置只记在这个窗口里,
+ * 第一句话发出去建会话时一起带上。
+ */
+export function useSessionSettings(workspaceId: string, place: AgentPlace, session: AgentSession | null) {
+  const draft = React.useSyncExternalStore(subscribeSelections, () => readDraftSettings(workspaceId, place));
+  const settings: AgentSettingsView = session ?? draft;
+  const update = useUpdateAgentSession(workspaceId, place, session);
+  return { settings, update };
 }
 
 /**
  * 改会话设置(模型、权限模式、思考档位、分析方式)。四个选择器共用这一个。
  *
- * **还没有会话时也能选**:先按「当前会话」的规则取一条(一条都没有就建),再写进去 —— 此前
- * 没有会话时这几样整块不见,第一条消息只能用默认值发。建会话接口只收模型两栏,其余三项只能
- * PATCH,所以统一走「取/建 → PATCH」一条路,而不是模型走 create、其余走 PATCH 两条。
- * 只读的对话不写(和 `ensureAgentSession` 同一条):选择器在只读会话里本就不出现,这里是最后一道。
+ * **草稿上也能选**,而且**不为此建一段对话**:选择记在草稿上,第一句话发出去建会话时一起带上(见 `createHere`)—— 此前
+ * 没有会话时选一下就先建一段空的,历史里于是攒下一排「新对话」。只读的对话不写(和 `ensureAgentSession` 同一条):选择器在
+ * 只读会话里本就不出现,这里是最后一道。
  */
-export function useUpdateAgentSession(workspaceId: string, session: AgentSession | null) {
+export function useUpdateAgentSession(workspaceId: string, place: AgentPlace, session: AgentSession | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: AgentSessionUpdate) => {
+      if (!session) {
+        updateDraftSettings(workspaceId, place, patch as AgentDraftSettings);
+        return "";
+      }
       if (isViewOnly(session)) throw new ViewOnlySessionError();
-      const target = session ?? (await ensureAgentSession(qc, workspaceId));
-      await updateAgentSession(target.id, patch);
-      return target.id;
+      await updateAgentSession(session.id, patch);
+      return session.id;
     },
     onSuccess: (sessionId) => {
+      if (!sessionId) return;
       void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
       void qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) });
     },

@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
-import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
+import { useSessionSettings } from "@/features/agent/currentAgentSession";
+import type { AgentPlace } from "@/features/agent/places";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -46,10 +47,10 @@ function levelsFor(model: CapabilityModel | undefined): readonly string[] {
  * off 时 pi 根本不向供应商要思考(reasoning 传 undefined)。这与模型设置里的「推理模型」
  * 是两件事:后者只决定拿到思考内容后**怎么解析**,不决定要不要。
  */
-export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
+export function ThinkingLevelPicker({ workspaceId, place, session }: { workspaceId: string; place: AgentPlace; session: AgentSession | null }) {
   const t = useI18n();
-  // 没有会话时照样能选:先建出当前会话再写进去(见 useUpdateAgentSession)。
-  const setLevel = useUpdateAgentSession(workspaceId, session);
+  // 草稿上照样能选:记在草稿上,建会话时一起带上(见 useSessionSettings)。
+  const { settings, update: setLevel } = useSessionSettings(workspaceId, place, session);
   // 与模型选择器读同一份清单(同一个 queryKey → 同一份缓存,不多打一次请求)。
   const models = useQuery({
     queryKey: providerKeys.capabilityModels("chat"),
@@ -58,7 +59,7 @@ export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: str
   });
   // **不能直接拿 session.model 去匹配**:它平时是空的(会话跟默认走),空值匹配不上目录里
   // 任何一行,于是每个没手动指定模型的会话都被判成"发不出档位"。见 effectiveModel 的说明。
-  const effective = useEffectiveChatModel(session);
+  const effective = useEffectiveChatModel(settings);
   const current = (models.data ?? []).find(
     (item) => item.model === effective.model && item.provider_profile_id === effective.providerProfileId,
   );
@@ -114,8 +115,8 @@ export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: str
    * 「关闭」而实际什么都没发生;现在说的就是实际发生的事。
    */
   const offered = levels.includes("off") ? levels : ["off", ...levels];
-  //: 还没有会话时按新会话的默认值(建表默认 off)显示。
-  const value = session && offered.includes(session.thinking_level) ? session.thinking_level : "off";
+  //: 草稿上没选过时按新会话的默认值(建表默认 off)显示。
+  const value = settings.thinking_level && offered.includes(settings.thinking_level) ? settings.thinking_level : "off";
   // 只有开/关两档时,「低」这个名字没有意义 —— 它不是三档里的低,它就是"开"。
   // 判据看**这个清单**有几档:k3 补上「模型默认」之后是三档,那时「低」就是低。
   const binary = offered.length === 2;

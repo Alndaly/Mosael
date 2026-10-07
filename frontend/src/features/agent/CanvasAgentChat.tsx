@@ -59,7 +59,8 @@ import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
-import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { homeOf, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -78,11 +79,14 @@ export type PageOutbox = { id: number; text: string; context: string };
 
 
 /**
- * 工作区里的常驻智能体面板 —— 工作流、创意画板和剪辑页**共用这一个**。
+ * 工作区里的常驻智能体面板 —— 剪辑、笔记、创意画板、工作流、3D 场景和 ComfyUI 工作台的「助手」**共用这一个**。
  *
- * 它不是第二套 AI:会话池、消息、队列、确认卡走的都是同一套 agent session。各入口的差别
- * 只有三样东西 —— 给每条消息附加的隐藏上下文、空态那句话、输入框的例子。所以这里收参数,
+ * 它不是第二套 AI:消息、队列、确认卡走的都是同一套 agent session。各入口的差别只有四样东西 —— **在哪**(`place`,
+ * 页面说了算,见 activePlace.useAgentPlace)、给每条消息附加的隐藏上下文、空态那句话、输入框的例子。所以这里收参数,
  * 而不是各存一份六百行的副本:副本改一处只会改好其中一个,而两边看起来一模一样。
+ *
+ * **每一处各接各的对话**(ADR 0044):面板显示的是这一处的当前对话(见 currentAgentSession)—— 剪辑里聊的不接着笔记里那段,
+ * 「新对话」只换这一处。下拉里「这里的对话」在前,「其他对话」收着;从别处挑一段就是在这里接着聊,它的家不变。
  */
 /* 输入卡那一列的留边 —— 队列条共用这一个。侧栏很窄,差这 8px 一眼就看得出来。 */
 const COMPOSER_COLUMN = "mx-2";
@@ -109,6 +113,7 @@ export function CanvasAgentChat({
   /** 悬浮窗几何记忆的键。**各入口各记各的**:工作流、画板、剪辑页的大小位置互不干扰。 */
   rectKey,
   workspaceId,
+  place,
   mode,
   dockedLayout = "overlay",
   onModeChange,
@@ -125,6 +130,8 @@ export function CanvasAgentChat({
   placeholder: string;
   rectKey: string;
   workspaceId: string;
+  /** 这个面板在哪(页面那一层 `useAgentPlace` 返回的那个)。每条消息带着它,建出来的对话家在这里。 */
+  place: AgentPlace;
   mode: CanvasAgentMode;
   /** Canvas docks cover content; the editor reserves a separate grid column. */
   dockedLayout?: "overlay" | "inline";
@@ -141,11 +148,14 @@ export function CanvasAgentChat({
   const draftText = React.useMemo(() => documentText(draft), [draft]);
   const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
-  // 多会话:和 AI 工作台、免提浮标、页面跳转共用同一个「当前会话」(见 currentAgentSession)——
-  // 选择、新建、删后回落都在那里,这里不再各写一份。
-  const current = useCurrentAgentSession(workspaceId, { pollList: 4000 });
-  const sessionList = current.sessions;
+  // 这一处的当前对话:和免提浮标、页面跳转在同一处时读的是同一个答案(见 currentAgentSession)——
+  // 选择、草稿、删后回到草稿都在那里,这里不再各写一份。
+  const current = useCurrentAgentSession(workspaceId, place, { pollList: 4000 });
   const activeSession = current.session;
+  const here = placeKey(place);
+  //: 下拉里「其他对话」那一份:整个工作区的,只在浮层开着时取(空态要说「接着别处的对话」时也取,见下)。
+  const [switcherOpen, setSwitcherOpen] = React.useState(false);
+  const [switcherRequest, setSwitcherRequest] = React.useState<{ nonce: number; elsewhere: boolean } | null>(null);
   //: 同事共享来的对话**只能看**(判据在 currentAgentSession.isViewOnly):输入卡整张换成只读说明,
   //: 排队条和拍板的按钮也不给 —— 和 AI 工作台同一条。
   const readOnly = current.readOnly;
@@ -170,7 +180,6 @@ export function CanvasAgentChat({
   //: 贴底跟随(见 features/agent/stickToBottom)。此前这里是无条件 scrollTop = scrollHeight
   //: —— 用户往上翻历史会被每一次内容更新硬拽回底部。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
-  const newSession = current.create;
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const deleteSession = useMutation({
     mutationFn: (id: string) => deleteAgentSession(id),
@@ -188,7 +197,13 @@ export function CanvasAgentChat({
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
-  const sessionLoading = current.listPending || (Boolean(sessionId) && messages.isPending);
+  //: 「还没读到」不能说成「是空的」:选着一段、它还在路上,或者它的消息还在路上。草稿不用等任何东西。
+  const sessionLoading = current.resolving || (Boolean(sessionId) && messages.isPending);
+  const isDraft = !activeSession && !current.resolving;
+  //: 草稿、这里一段都没有时,空态要知道工作区里别处有没有对话(有才给「接着别处的对话」)。
+  const draftAlone = isDraft && current.listLoaded && current.here.length === 0;
+  const everywhere = useAgentSessions(workspaceId, { enabled: switcherOpen || draftAlone });
+  const elsewhere = everywhere.data ? everywhere.data.filter((item) => placeKey(homeOf(item)) !== here) : null;
   /** 会话详情:运行状态、水位(列表接口不带 —— 那要为每个会话各算一次,而界面只看当前这个)。 */
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
@@ -355,6 +370,8 @@ export function CanvasAgentChat({
       const message = await sendAgentMessage(targetId, {
         content: visibleContent, context, references, ...(document ? { body_document: document } : {}), ...(quote ? { quote } : {}),
         ...(skills.length ? { skills } : {}),
+        //: 这一句是在哪说的:决定这一轮发哪些工具(ADR 0044 §8)。
+        place: placePayload(place),
       });
       return { message, targetId, fromPage };
     },
@@ -440,20 +457,25 @@ export function CanvasAgentChat({
             data-no-drag 挂在整个 h2 上，等于把标题栏唯一的大块空白也一起禁用了。 */}
         <h2 className="min-w-0 overflow-hidden pr-6">
           <AgentSessionSwitcher
-            sessions={sessionList}
+            here={current.here}
+            elsewhere={elsewhere}
             activeSession={activeSession}
+            homedHere={!activeSession || placeKey(homeOf(activeSession)) === here}
             deleting={deleteSession.isPending}
             onSelect={current.select}
             onDelete={setDeletingSession}
+            onOpenChange={setSwitcherOpen}
+            openRequest={switcherRequest}
           />
         </h2>
+        {/* 「新对话」只换这一处:换成一段草稿,什么都不建 —— 第一句话发出去才建,家在这里。 */}
         <IconButton
           unstyled
           type="button"
           className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-          label={t("wfAgentNewSession")}
-          loading={newSession.isPending}
-          onClick={() => newSession.mutate()}
+          label={t("chatNewSession")}
+          hint={t("agentNewSessionHint")}
+          onClick={() => current.startDraft()}
         >
           <Plus size={13} />
         </IconButton>
@@ -492,6 +514,21 @@ export function CanvasAgentChat({
           <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground [&_svg]:text-primary [&_svg]:opacity-70">
             <Bot size={16} />
             <span>{emptyHint}</span>
+            {isDraft && (
+              <>
+                <span>{t(current.here.length > 0 ? "agentDraftStartsNew" : "agentDraftNothingHere")}</span>
+                {/* 想接着以前的:这里有就打开下拉;这里一段都没有、别处有,就连「其他对话」一起展开。 */}
+                {(current.here.length > 0 || (elsewhere?.length ?? 0) > 0) && (
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent p-0 text-xs text-primary underline-offset-2 hover:underline"
+                    onClick={() => setSwitcherRequest((last) => ({ nonce: (last?.nonce ?? 0) + 1, elsewhere: current.here.length === 0 }))}
+                  >
+                    {t(current.here.length > 0 ? "agentContinueHere" : "agentContinueElsewhere")}
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
         {transcript.map((message) => {
@@ -658,11 +695,12 @@ export function CanvasAgentChat({
                     恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
                     由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
                 {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
-                <ModelPicker workspaceId={workspaceId} session={live.data ?? activeSession} />
+                <ModelPicker workspaceId={workspaceId} place={place} session={live.data ?? activeSession} />
                 {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
                     有无都不一致。 */}
                 <SessionSettingsMenu
                   workspaceId={workspaceId}
+                  place={place}
                   session={live.data ?? activeSession}
                   context={context}
                   compacting={compact.isPending}

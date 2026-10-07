@@ -288,3 +288,18 @@ def test_list_agent_sessions_工具说得出每段是在哪开的() -> None:
     _session(client, workspace, STUDIO)
     listed = client.post("/api/agent/tools/list_agent_sessions", json={"arguments": {"workspace_id": workspace}}).json()["result"]
     assert sorted(one["where"] for one in listed) == ["在 AI Studio 里开的", "在笔记《宣传片周报》里开的"]
+
+
+# ---------- 草稿上选好的设置(维护者 2026-10-07:第一句话发出去才建会话) ----------
+
+
+def test_草稿上选好的设置建会话时一起带上_哪一项不合规整个不建() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    created = _session(client, workspace, STUDIO, thinking_level="high", analysis_video_mode="frames", permission_mode="auto")
+    assert (created["thinking_level"], created["analysis_video_mode"], created["permission_mode"]) == ("high", "frames", "auto")
+
+    refused = client.post("/api/agent/sessions", json={"workspace_id": workspace, "home": STUDIO, "thinking_level": "max"})
+    assert refused.status_code == 422
+    listed = client.get(f"/api/agent/sessions?workspace_id={workspace}").json()
+    assert [one["id"] for one in listed] == [created["id"]], "不合规的那一次一行都没留下"

@@ -49,6 +49,7 @@ import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 import { VoiceDock } from "@/features/agent/VoiceDock";
 import { RemoteVoiceConsentHost } from "@/features/voice/remoteVoiceConsent";
 import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
+import { goHome } from "@/features/ai-studio/goToPlace";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
@@ -77,7 +78,7 @@ import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
-import { listenDesktopDeepLinks } from "@/lib/deepLink";
+import { VIEW_RECORD_EVENTS, gotoRecord, listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { Hint, HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
@@ -570,6 +571,8 @@ function Studio({
       if (!VALID_VIEWS.includes(next)) return;
       if (next === "editor" && id) openProject(id);
       else if (id && ["scenes", "notes", "boards", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : next === "entities" ? "entity" : "board"}=${encodeURIComponent(id)}`;
+      //: 工作流的 id:和 mosael:// 深链、任务中心「前往」同一条路(打开那一条工作流)。
+      else if (next === "workflows" && id) gotoRecord("/workflows", VIEW_RECORD_EVENTS.workflows, id);
       else navigate(next as StudioView);
     },
   });
@@ -638,7 +641,7 @@ function Studio({
           onCreateProject={() => createProject.mutate()}
           creatingProject={createProject.isPending}
         />
-        <ConfirmationCenter workspaceId={workspace.id} />
+        <ConfirmationCenter workspaceId={workspace.id} goHome={(session) => goHome(workspace.id, session)} />
         {/* 把配音库的嗓子交给远端引擎念、这个账号第一次用它时那一问(ADR 0037)。挂在应用级:配音、字幕配音、
             画板、对话音色几处都会撞上同一个 409,确认框只有一个。 */}
         <RemoteVoiceConsentHost />

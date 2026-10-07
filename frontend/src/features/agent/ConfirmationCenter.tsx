@@ -2,9 +2,10 @@ import { FLOATING_SURFACE } from "@/components/ui/floating";
 import { confirmationKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, CornerUpLeft, X } from "lucide-react";
+import { toast } from "sonner";
 
-import { approveConfirmation, listConfirmations, rejectConfirmation } from "@/api/client";
+import { type AgentSession, approveConfirmation, getAgentSession, listConfirmations, rejectConfirmation } from "@/api/client";
 import { approveLabel } from "@/features/agent/approveLabels";
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
@@ -12,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { useCardChoices } from "@/features/agent/cardChoices";
 import { ConfirmationCard, useSettledCards } from "@/features/agent/ConfirmationCard";
 import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
+import { canGoHome, openedIn } from "@/features/agent/homeLabel";
+import { Truncate } from "@/components/ui/truncate";
 
 
 /**
@@ -22,7 +25,17 @@ import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
  * 点了回 403、又永远消不掉的卡:同事共享给我的对话里的卡正是这样 —— 我看得见,拍板只有主人。那种卡留在它自己的
  * 对话里就地摆着(InlineConfirmations 的只读样子,写着「等对话的主人拍板」),这里不再冒出来。
  */
-export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
+export function ConfirmationCenter({
+  workspaceId,
+  goHome,
+}: {
+  workspaceId: string;
+  /**
+   * 「回到那里」:在那段对话的家那一处接着它,再跳过去(装配层给 —— 回到 ComfyUI 那一张要打开工作台,那是插件那一侧的事)。
+   * 不给就只说在哪开的。
+   */
+  goHome?: (session: AgentSession) => void | Promise<void>;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const pending = useQuery({
@@ -78,11 +91,15 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           eyebrow={`${t("confirmTitle")} · ${item.requested_by}`}
           className={cn(FLOATING_SURFACE, "animate-confirm-in")}
           actions={
-            <SettleButtons
-              tool={item.tool}
-              busyAction={busy?.id === item.id ? busy.action : null}
-              onSettle={(action, choices) => settle.mutate({ id: item.id, action, choices })}
-            />
+            <>
+              {/* 好几段对话同时在跑时,看得出是谁在问(ADR 0044 §9):那段对话没开着,卡才落到这里。 */}
+              {item.session_id && <CardHome sessionId={item.session_id} goHome={goHome} />}
+              <SettleButtons
+                tool={item.tool}
+                busyAction={busy?.id === item.id ? busy.action : null}
+                onSettle={(action, choices) => settle.mutate({ id: item.id, action, choices })}
+              />
+            </>
           }
         />
       ))}
@@ -95,6 +112,30 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           onDismiss={() => settled.dismiss(card.id)}
         />
       ))}
+    </div>
+  );
+}
+
+/** 卡挂着的那段对话是在哪开的,回得去就给一颗「回到那里」。 */
+function CardHome({ sessionId, goHome }: { sessionId: string; goHome?: (session: AgentSession) => void | Promise<void> }) {
+  const t = useI18n();
+  //: 和面板同一个键:那段对话开着时这份早就在缓存里。
+  const session = useQuery({ queryKey: ["agent-session", sessionId], queryFn: () => getAgentSession(sessionId) });
+  if (!session.data) return null;
+  const home = session.data;
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-ui-xs text-muted-foreground">
+      <Truncate className="min-w-0 flex-1">{openedIn(t, home)}</Truncate>
+      {goHome && canGoHome(home) && (
+        <Button
+          size="xs"
+          variant="ghost"
+          className="shrink-0"
+          onClick={() => void Promise.resolve(goHome(home)).catch((error: Error) => toast.error(error.message))}
+        >
+          <CornerUpLeft /> {t("agentGoHome")}
+        </Button>
+      )}
     </div>
   );
 }

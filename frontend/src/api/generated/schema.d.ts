@@ -7211,7 +7211,11 @@ export interface paths {
          */
         get: operations["list_agent_sessions_api_agent_sessions_get"];
         put?: never;
-        /** Create Agent Session */
+        /**
+         * Create Agent Session
+         * @description 建一段对话 —— 界面上是第一句话发出去的那一刻(草稿在那之前不建)。草稿上选好的设置一起带上;哪一项不合规整个
+         *     不建(同一个事务),不留下一段空对话。
+         */
         post: operations["create_agent_session_api_agent_sessions_post"];
         delete?: never;
         options?: never;
@@ -9029,6 +9033,12 @@ export interface components {
             provider_profile_id?: string | null;
             /** Model */
             model?: string | null;
+            /** Thinking Level */
+            thinking_level?: string | null;
+            /** Permission Mode */
+            permission_mode?: string | null;
+            /** Analysis Video Mode */
+            analysis_video_mode?: string | null;
         };
         /** AgentSessionOut */
         AgentSessionOut: {

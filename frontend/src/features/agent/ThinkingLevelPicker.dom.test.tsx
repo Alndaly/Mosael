@@ -48,7 +48,7 @@ function mount(which: unknown = session) {
   return render(
     <QueryClientProvider client={client}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <ThinkingLevelPicker workspaceId="ws" session={which as any} />
+      <ThinkingLevelPicker workspaceId="ws" place={{ kind: "studio", id: "" }} session={which as any} />
     </QueryClientProvider>,
   );
 }

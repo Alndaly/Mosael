@@ -3,7 +3,8 @@ import { toast } from "sonner";
 
 import { startWorkflowFromPage, type WorkflowTemplateId } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AGENT_DRAFT_EVENT, startNewAgentSession } from "@/features/agent/currentAgentSession";
+import { AGENT_DRAFT_EVENT, startAgentDraft } from "@/features/agent/currentAgentSession";
+import { STUDIO_PLACE } from "@/features/agent/places";
 import { emitOpenEvent, gotoRecord } from "@/lib/deepLink";
 
 import type { PageInfo } from "./pageActions";
@@ -15,7 +16,8 @@ export const PAGE_TEMPLATES = ["viral_video_breakdown", "account_analysis", "com
 /**
  * 用当前页开工:
  * - 模板:后端建好(或打开已建的)那张图、填上当前页链接、读页面用当前档案;收起浏览器跳过去,由他检查后运行。
- * - 交给智能体:新开一条对话,把链接和标题放进输入框(不替他发送 —— 他多半还要说想做什么)。
+ * - 交给智能体:AI Studio 换成一段新对话的草稿,把链接和标题放进输入框(不替他发送 —— 他多半还要说想做什么)。
+ *   草稿不建会话:他真发出第一句才建,不然点一下就在历史里留一段空对话。
  */
 export function useStartTools(workspaceId: string, page: PageInfo, profileId: () => Promise<string | null>, notice: ToolNotice) {
   const t = useI18n();
@@ -38,7 +40,7 @@ export function useStartTools(workspaceId: string, page: PageInfo, profileId: ()
   });
 
   const agent = useMutation({
-    mutationFn: () => startNewAgentSession(qc, workspaceId),
+    mutationFn: async () => startAgentDraft(workspaceId, STUDIO_PLACE),
     onSuccess: () => {
       emitOpenEvent(AGENT_DRAFT_EVENT, `${t("browserToolsAgentDraft")}\n${page.title || page.url}\n${page.url}\n`);
       void window.mosaelPublish?.hideView();

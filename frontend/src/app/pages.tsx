@@ -18,7 +18,8 @@ const BrowserPoolView = React.lazy(() => import("@/features/browser-pool/Browser
 const EntitiesView = React.lazy(() => import("@/features/entities/EntitiesView").then((m) => ({ default: m.EntitiesView })));
 const EditorView = React.lazy(() => import("@/features/editor/EditorView").then((m) => ({ default: m.EditorView })));
 const MediaLibraryView = React.lazy(() => import("@/features/media/MediaLibraryView").then((m) => ({ default: m.MediaLibraryView })));
-const NotesView = React.lazy(() => import("@/features/notes/NotesView").then((m) => ({ default: m.NotesView })));
+//: 笔记页连同它的助手面板:笔记不认识助手(见 NotesView 的 NotesAgentPanelProps),装配放在认识两边的那一侧。
+const NotesWithAgent = React.lazy(() => import("@/features/agent/NotesWithAgent").then((m) => ({ default: m.NotesWithAgent })));
 const PluginsView = React.lazy(() => import("@/features/plugins/PluginsView").then((m) => ({ default: m.PluginsView })));
 const PublishView = React.lazy(() => import("@/features/publish/PublishView").then((m) => ({ default: m.PublishView })));
 const SchedulerView = React.lazy(() => import("@/features/scheduler/SchedulerView").then((m) => ({ default: m.SchedulerView })));
@@ -26,8 +27,6 @@ const SettingsView = React.lazy(() => import("@/features/settings/SettingsView")
 const StatisticsView = React.lazy(() => import("@/features/statistics/StatisticsView").then((m) => ({ default: m.StatisticsView })));
 const WorkflowsView = React.lazy(() => import("@/features/workflows/WorkflowsView").then((m) => ({ default: m.WorkflowsView })));
 const SceneStudio = React.lazy(() => import("@/features/scenes/SceneStudio").then((m) => ({ default: m.SceneStudio })));
-//: 笔记页的助手面板:剪辑页、画板用的同一个。交给笔记页而不是让它自己 import(见 NotesView 的 NotesAgentPanelProps)。
-const CanvasAgentChat = React.lazy(() => import("@/features/agent/CanvasAgentChat").then((m) => ({ default: m.CanvasAgentChat })));
 
 /** 每个页面渲染时能拿到的东西。页面自己挑要用的那几样。 */
 export type PageContext = {
@@ -58,7 +57,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
   statistics: (ctx) => <StatisticsView workspace={ctx.workspace} />,
   media: (ctx) => <MediaLibraryView workspace={ctx.workspace} />,
   entities: (ctx) => <EntitiesView key={ctx.workspace.id} workspace={ctx.workspace} />,
-  notes: (ctx) => <NotesView key={ctx.workspace.id} workspace={ctx.workspace} AgentPanel={CanvasAgentChat} />,
+  notes: (ctx) => <NotesWithAgent key={ctx.workspace.id} workspace={ctx.workspace} />,
   scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
   boards: (ctx) => <BoardsView workspace={ctx.workspace} />,
   editor: (ctx) => (

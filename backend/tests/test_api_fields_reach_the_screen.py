@@ -42,13 +42,6 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "BoardProducerOut.output_kinds": "智能体的 list_board_producers 读它(跑一次会在右边长出哪几种格子)",
     # —— 归属与留痕:后端授权按它判,界面拿到的列表已经按人筛过了
     "AgentSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
-    # —— 对话的家(ADR 0044 第一步只做后端):界面这一半在第二步 —— 各处面板的「这里的对话 / 其他对话」、AI Studio 行上的
-    #    「在…里开的」、智能体跳转的 30 秒作废。第二步接上读者时删掉这几行。
-    "AgentSessionOut.home_kind": "ADR 0044 第二步的界面",
-    "AgentSessionOut.home_id": "ADR 0044 第二步的界面",
-    "AgentSessionOut.home_name": "ADR 0044 第二步的界面",
-    "AgentSessionOut.home_state": "ADR 0044 第二步的界面",
-    "AgentSessionOut.pending_view_at": "ADR 0044 第二步的界面",
 
     "GenerationSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "ScheduledTaskOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",

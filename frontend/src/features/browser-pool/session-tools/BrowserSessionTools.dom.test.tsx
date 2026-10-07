@@ -34,7 +34,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/api/client", () => api);
 
-const agent = vi.hoisted(() => ({ startNewAgentSession: vi.fn(), AGENT_DRAFT_EVENT: "mosael:agent-draft" }));
+const agent = vi.hoisted(() => ({ startAgentDraft: vi.fn(), AGENT_DRAFT_EVENT: "mosael:agent-draft" }));
 vi.mock("@/features/agent/currentAgentSession", () => agent);
 
 const links = vi.hoisted(() => ({ gotoRecord: vi.fn(), emitOpenEvent: vi.fn(), openNote: vi.fn() }));
@@ -63,7 +63,7 @@ const hideView = vi.fn();
 const setOverlay = vi.fn(async (_up: boolean) => undefined);
 
 beforeEach(() => {
-  for (const fn of [...Object.values(api), ...Object.values(links), agent.startNewAgentSession, hideView, setOverlay]) fn.mockReset();
+  for (const fn of [...Object.values(api), ...Object.values(links), agent.startAgentDraft, hideView, setOverlay]) fn.mockReset();
   api.listBrowserProfiles.mockResolvedValue([{ id: "p1", partition: "persist:pool-p1", name: "我的档案" }]);
   api.importWebCapture.mockImplementation(async () => ({ id: "asset-1" }));
   api.urlSupport.mockResolvedValue({ supported: false, extractor: "" });
@@ -388,12 +388,11 @@ describe("用当前页开工", () => {
   });
 
   it("交给智能体:新开一条对话,带上链接和标题,不替他发送", async () => {
-    agent.startNewAgentSession.mockResolvedValue({ id: "s-1" });
     show();
     fireEvent.click(toolButton("start"));
     fireEvent.click(choiceButton("agent"));
     await waitFor(() => expect(links.gotoRecord).toHaveBeenCalledWith("/ai"));
-    expect(agent.startNewAgentSession).toHaveBeenCalledWith(expect.anything(), "ws");
+    expect(agent.startAgentDraft).toHaveBeenCalledWith("ws", { kind: "studio", id: "" });
     const [event, text] = links.emitOpenEvent.mock.calls[0];
     expect(event).toBe("mosael:agent-draft");
     expect(text).toContain(PAGE.url);

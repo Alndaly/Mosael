@@ -103,6 +103,7 @@ import {
   CanvasAgentChat,
   type CanvasAgentMode,
 } from "@/features/agent/CanvasAgentChat";
+import { useAgentPlace } from "@/features/agent/activePlace";
 import { useAutosave } from "@/lib/useAutosave";
 import {
   MAX_KEYS,
@@ -330,6 +331,8 @@ function SceneEditor({
   onBack: () => void;
 }) {
   const t = useI18n();
+  //: 这一处是这个 3D 场景(ADR 0044):助手面板接这个场景的对话。
+  const agentPlace = useAgentPlace({ kind: "scene", id: initial.id });
   const [navigation] = useCanvasInputMode();
   const [renaming, setRenaming] = React.useState(false);
   /** 收起来的那些组。**不持久化** —— 它是"我这会儿在看哪一块",不是设置。 */
@@ -1674,6 +1677,7 @@ function SceneEditor({
             <CanvasAgentChat
               dockedLayout="inline"
               workspaceId={initial.workspace_id}
+              place={agentPlace}
               mode={agent}
               onModeChange={setAgent}
               onClose={() => setAgent(null)}

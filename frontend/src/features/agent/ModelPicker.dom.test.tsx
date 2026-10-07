@@ -79,6 +79,7 @@ vi.mock("@/features/agent/effectiveModel", () => ({
 vi.mock("@/lib/gotoSettings", () => ({ gotoSettings: vi.fn() }));
 
 import { ModelPicker } from "@/features/agent/ModelPicker";
+import { readDraftSettings } from "@/features/agent/sessionSelection";
 import { readHint } from "@/test/hint";
 
 const SESSION = { id: "s1", provider_profile_id: "p1", model: "deepseek-v4-flash" } as never;
@@ -87,7 +88,7 @@ function mount(session: unknown = SESSION) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ModelPicker workspaceId="ws" session={session as never} />
+      <ModelPicker workspaceId="ws" place={{ kind: "studio", id: "" }} session={session as never} />
     </QueryClientProvider>,
   );
 }
@@ -152,8 +153,9 @@ describe("模型选择器", () => {
   });
 });
 
-describe("还没有会话时", () => {
-  it("照样能选模型:先建出当前会话,再把模型写进去", async () => {
+describe("还没有会话时(草稿)", () => {
+  it("照样能选模型:记在草稿上,不为它建一段空对话;第一句话发出去建会话时一起带上", async () => {
+    window.sessionStorage.clear();
     api.mockImplementation((path: string) =>
       path.includes("provider-defaults")
         ? Promise.resolve([])
@@ -164,17 +166,14 @@ describe("还没有会话时", () => {
       { provider_profile_id: "p1", provider_name: "连接", model: "m-deep" },
     ]);
     sessions.listAgentSessions.mockResolvedValue([]);
-    sessions.createAgentSession.mockResolvedValue({ id: "s-new", workspace_id: "ws", title: "新对话" });
-    sessions.updateAgentSession.mockResolvedValue({});
     mount(null);
 
     //: 此前这里是一个点不动的占位 —— 空工作区里第一条消息只能用默认模型发。
     fireEvent.click(await screen.findByRole("button", { name: "m-deep" }));
     await waitFor(() =>
-      expect(sessions.updateAgentSession).toHaveBeenCalledWith("s-new", { provider_profile_id: "p1", model: "m-deep" }),
+      expect(readDraftSettings("ws", { kind: "studio", id: "" })).toEqual({ provider_profile_id: "p1", model: "m-deep" }),
     );
-    expect(sessions.createAgentSession).toHaveBeenCalledWith({ workspace_id: "ws", home: { kind: "studio", id: "" } });
-    //: 建出来的就是「当前会话」—— 面板、浮标接下来看到的都是它。
-    expect(window.localStorage.getItem("mosael.agent.session.ws")).toBe("s-new");
+    expect(sessions.createAgentSession).not.toHaveBeenCalled();
+    expect(sessions.updateAgentSession).not.toHaveBeenCalled();
   });
 });

@@ -21,7 +21,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 type Card = {
   id: string;
@@ -63,18 +63,19 @@ function confirmation(card: Card) {
 }
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
   assetFileUrl: (id: string) => `/files/${id}`,
   assetPreviewUrl: (id: string) => `/previews/${id}`,
   assetThumbnailUrl: (id: string) => `/thumbs/${id}`,
   getAsset: vi.fn(async () => null),
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "配音", is_mine: true }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(async () => ({})),
   deleteAgentSession: vi.fn(),
   getAgentSession: vi.fn(async () => ({
-    id: "s1", workspace_id: "w1", title: "配音", status: mocks.running ? "running" : "idle", is_mine: true, auto_allow_tools: [],
+    id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", status: mocks.running ? "running" : "idle", is_mine: true, auto_allow_tools: [],
   })),
   listAgentMessages: vi.fn(async () => mocks.messages),
   listAgentQueue: vi.fn(async () => []),
@@ -149,7 +150,8 @@ const tool = (id: string, name: string, status = "done") => ({
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", NoopResizeObserver);
   window.localStorage.clear();
-  window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
+  window.sessionStorage.clear();
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   mocks.running = true;
   mocks.messages = [{ id: "u1", session_id: "s1", role: "user", content: "给每段旁白配音", payload: {}, error: null, created_at: "2026-10-02T09:59:00" }];
   mocks.streamTimeline = [];
@@ -167,6 +169,7 @@ async function mount() {
         placeholder="placeholder"
         rectKey="test.canvas.agent"
         workspaceId="w1"
+        place={{ kind: "studio", id: "" }}
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}

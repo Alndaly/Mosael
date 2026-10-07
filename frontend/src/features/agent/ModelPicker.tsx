@@ -5,7 +5,8 @@ import { ChevronDown, Loader2, Settings2 } from "lucide-react";
 import { listCapabilityModels, listProviderDefaults, listProviderProfiles } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
-import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
+import { useSessionSettings } from "@/features/agent/currentAgentSession";
+import type { AgentPlace } from "@/features/agent/places";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -25,9 +26,9 @@ const SEP = "::";
  * 不分配没配:付费实测里百炼一条连接就摊出 277 行,生视频的 wan2.2-s2v、改口型的 videoretalk、作曲的 fun-music
  * 都在对话模型的下拉里,没配置的目录模型(百炼上的 kimi-k3)也在 —— 选中前者这一轮必然失败,选中后者是悄悄走另一份账单。
  *
- * 还没有会话时显示默认模型、照样能选:选了就先建出当前会话再写进去(见 useUpdateAgentSession)。
+ * 草稿(还没有会话)上照样能选:记在草稿上,第一句话发出去建会话时一起带上(见 useSessionSettings)。
  */
-export function ModelPicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
+export function ModelPicker({ workspaceId, place, session }: { workspaceId: string; place: AgentPlace; session: AgentSession | null }) {
   const t = useI18n();
 
   const providers = useQuery({
@@ -47,14 +48,15 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const defaultChat = (defaults.data ?? []).find((item) => item.capability === "chat");
   // 「这轮实际用哪个模型」只有一处算法(effectiveModel),思考档位那边用的是同一个。
-  const effective = useEffectiveChatModel(session);
+  const { settings, update } = useSessionSettings(workspaceId, place, session);
+  const effective = useEffectiveChatModel(settings);
 
   //: 按连接分组,连接的顺序照设置页。会话上选过的、能力默认指着的那个总在里面 —— 列表没读出来(或者那一行后来停用了)
   //: 也认得出「现在用的是哪个」,不显示成「选择模型」。
   const byProfile = new Map<string, Set<string>>(enabled.map((profile) => [profile.id, new Set<string>()]));
   for (const model of chatModels.data ?? []) byProfile.get(model.provider_profile_id)?.add(model.model);
   if (defaultChat?.provider_profile_id && defaultChat.model) byProfile.get(defaultChat.provider_profile_id)?.add(defaultChat.model);
-  if (session?.provider_profile_id && session.model) byProfile.get(session.provider_profile_id)?.add(session.model);
+  if (settings.provider_profile_id && settings.model) byProfile.get(settings.provider_profile_id)?.add(settings.model);
   const offering = enabled.filter((profile) => (byProfile.get(profile.id)?.size ?? 0) > 0);
   const options = offering.flatMap((profile) =>
     [...(byProfile.get(profile.id) ?? [])].map((model) => ({
@@ -63,7 +65,6 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     })),
   );
 
-  const update = useUpdateAgentSession(workspaceId, session);
   const setModel = (value: string) => {
     const [providerProfileId, ...rest] = value.split(SEP);
     update.mutate({ provider_profile_id: providerProfileId, model: rest.join(SEP) });
@@ -91,7 +92,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
         role="status"
         className="inline-flex h-7 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground opacity-70"
       >
-        <Truncate>{session?.model || t("agentModelPlaceholder")}</Truncate>
+        <Truncate>{settings.model || t("agentModelPlaceholder")}</Truncate>
         <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
       </span>
     );

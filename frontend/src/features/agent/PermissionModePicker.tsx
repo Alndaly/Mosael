@@ -8,7 +8,8 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Truncate } from "@/components/ui/truncate";
-import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
+import { useSessionSettings } from "@/features/agent/currentAgentSession";
+import type { AgentPlace } from "@/features/agent/places";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -17,8 +18,8 @@ export const PERMISSION_MODES = ["manual", "auto", "bypass"] as const;
 export type PermissionMode = (typeof PERMISSION_MODES)[number];
 
 /** 当前档位;认不出来的值一律按最保守的那档显示。 */
-export function permissionModeOf(session: AgentSession | null | undefined): PermissionMode {
-  const value = session?.permission_mode ?? "manual";
+export function permissionModeOf(settings: { permission_mode?: string | null } | null | undefined): PermissionMode {
+  const value = settings?.permission_mode ?? "manual";
   return (PERMISSION_MODES as readonly string[]).includes(value) ? (value as PermissionMode) : "manual";
 }
 
@@ -41,15 +42,15 @@ export const PERMISSION_MODE_ICON = {
  * 放行本身在**服务端**判定(domain/agent/autopilot):此前「本会话始终允许」是浏览器 localStorage
  * 里的一段自动批准,聊天面板一关组件就卸载,而 turn 还在跑。
  */
-export function PermissionModePicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
+export function PermissionModePicker({ workspaceId, place, session }: { workspaceId: string; place: AgentPlace; session: AgentSession | null }) {
   const t = useI18n();
   const { user } = useAuth();
   const [pendingBypass, setPendingBypass] = React.useState(false);
 
-  // 没有会话时照样能选:先建出当前会话再写进去(见 useUpdateAgentSession)。
-  const setMode = useUpdateAgentSession(workspaceId, session);
+  // 草稿上照样能选:记在草稿上,建会话时一起带上(见 useSessionSettings)。
+  const { settings, update: setMode } = useSessionSettings(workspaceId, place, session);
 
-  const mode = permissionModeOf(session);
+  const mode = permissionModeOf(settings);
   const Icon = PERMISSION_MODE_ICON[mode];
   /**
    * **这一档是别人开的,对你不生效。**
@@ -59,7 +60,7 @@ export function PermissionModePicker({ workspaceId, session }: { workspaceId: st
    * 而他的每一次调用照样弹卡,界面此前没有任何地方能告诉他为什么。
    * 一个看着是开的、却不生效的开关,用户多半会归结为"这功能不稳定"。
    */
-  const setByOther = Boolean(session?.mode_set_by && user && session.mode_set_by !== user.id);
+  const setByOther = Boolean(settings.mode_set_by && user && settings.mode_set_by !== user.id);
 
   return (
     <>

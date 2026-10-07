@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AutoApprovalTrace } from "@/features/agent/AutoApprovalTrace";
+import { useSessionSettings } from "@/features/agent/currentAgentSession";
+import type { AgentPlace } from "@/features/agent/places";
 import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/features/agent/PermissionModePicker";
 import { AnalysisModePicker } from "@/features/agent/AnalysisModePicker";
 import { ThinkingLevelPicker } from "@/features/agent/ThinkingLevelPicker";
@@ -30,18 +32,20 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
  * **两个页面共用**:AI Studio 和工作流助手此前各写各的工具行,同一个功能在两边的位置、
  * 顺序、有无都不一致。抽成一个组件,改一次两边同时生效。
  *
- * **还没有会话时也在**:空工作区里第一条消息发出之前,正是定权限、思考档位的时候。此前这里
- * 没有会话就整块不渲染,于是第一轮只能按默认值跑。现在照默认值显示,选任何一项时先把当前会话
- * 建出来再写进去(见 useUpdateAgentSession)。
+ * **草稿上也在**:第一条消息发出之前,正是定权限、思考档位的时候。此前这里没有会话就整块不渲染,于是第一轮只能
+ * 按默认值跑。现在照默认值显示,选了记在草稿上,第一句话发出去建会话时一起带上(见 useSessionSettings)—— 不为了
+ * 记一个选择先建一段空对话。
  */
 export function SessionSettingsMenu({
   workspaceId,
+  place,
   session,
   context,
   onCompact,
   compacting,
 }: {
   workspaceId: string;
+  place: AgentPlace;
   session: AgentSession | null;
   context?: ContextInfo | null;
   onCompact?: () => void;
@@ -51,7 +55,7 @@ export function SessionSettingsMenu({
   const [open, setOpen] = React.useState(false);
   // 收起状态下也要看得见现在是哪一档:用户不知道自己此刻授权了什么,就等于没有授权。
   // 默认档不显示 —— 一个"一切正常"的常驻标记只会变成背景噪音。
-  const mode = permissionModeOf(session);
+  const mode = permissionModeOf(useSessionSettings(workspaceId, place, session).settings);
   const ModeIcon = PERMISSION_MODE_ICON[mode];
   //: 「存成技能」(ADR 0040 §7):用这次对话的模型起草一份 SKILL.md,填进编辑表单,人改完才保存。
   const [skillDraft, setSkillDraft] = React.useState<SkillEditorTarget | null>(null);
@@ -92,21 +96,21 @@ export function SessionSettingsMenu({
           <span className="flex items-center gap-1.5 text-ui-xs font-medium text-muted-foreground">
             <ModeIcon size={12} className={ACCENT[mode]} /> {t("permModeLabel")}
           </span>
-          <PermissionModePicker workspaceId={workspaceId} session={session} />
+          <PermissionModePicker workspaceId={workspaceId} place={place} session={session} />
         </div>
         {/* 自动放行留了痕,而此前人看不到 —— 前端对 /api/confirmations 的两个调用点都写死
             status=pending,于是"决策之后"的那一半在界面上不存在(见 AutoApprovalTrace)。 */}
         {session && <AutoApprovalTrace workspaceId={workspaceId} sessionId={session.id} />}
         <div className="grid gap-1.5">
           <span className="text-ui-xs font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
-          <ThinkingLevelPicker workspaceId={workspaceId} session={session} />
+          <ThinkingLevelPicker workspaceId={workspaceId} place={place} session={session} />
         </div>
         {/* 分析方式是**会话**的属性,后端对每个入口都照它注入(domain/agent/prompt.py)。
             此前画布助手这里把它藏了(「工作流助手不做素材分析」),可同一个面板也挂在剪辑、画板、
             3D 场景上,同一个会话在工作台设了「逐帧」,到这里看不见却照样生效。 */}
         <div className="grid gap-1.5">
           <span className="text-ui-xs font-medium text-muted-foreground">{t("analysisModeLabel")}</span>
-          <AnalysisModePicker workspaceId={workspaceId} session={session} />
+          <AnalysisModePicker workspaceId={workspaceId} place={place} session={session} />
         </div>
         {/* 水位与「立即整理」放在一起:它们是同一件事的两半 —— 看还剩多少、据此决定要不要整理。
             拆开放会让读数变成一个没有下文的数字,而按钮变成一个不知道该不该按的操作。

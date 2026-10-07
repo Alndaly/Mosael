@@ -49,7 +49,11 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { DictateButton } from "@/features/agent/DictateButton";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
-import { AGENT_DRAFT_EVENT, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { AGENT_DRAFT_EVENT, useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { canGoHome, openedIn } from "@/features/agent/homeLabel";
+import { STUDIO_PLACE, placePayload } from "@/features/agent/places";
+import { goHome } from "@/features/ai-studio/goToPlace";
+import { workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 import { useOpenRequest } from "@/lib/deepLink";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
@@ -96,8 +100,10 @@ export function ChatWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  // 当前会话、选择、新建、删后回落:和画布助手、免提浮标、页面跳转共用一份(见 currentAgentSession)。
-  const current = useCurrentAgentSession(workspace.id);
+  // AI Studio 这一处的当前对话、选择、草稿、删后回到草稿:和免提浮标、页面跳转在这一处时读的是同一份(见 currentAgentSession)。
+  // 列表列全部(每行写着在哪开的);点开哪段,就是在 AI Studio 接着它,它的家不变(ADR 0044 §5)。
+  const current = useCurrentAgentSession(workspace.id, STUDIO_PLACE);
+  const everything = useAgentSessions(workspace.id, { pollList: 4000 });
   const activeSession = current.session;
   //: 同事共享来的对话**只能看**(判据在 currentAgentSession.isViewOnly):输入区换成一句只读说明 —— 模型、
   //: 会话设置、附件都在输入区里,一起不给;排队条、停止、拍板的按钮也是主人的。消息、轨迹、花费照看。
@@ -151,7 +157,7 @@ export function ChatWorkspace({
   const running = session.data?.status === "running";
   //: 会话清单还在路上,或者选中的这条会话的消息还在路上。两者都不算"这条会话是空的"。
   //: `enabled` 为假时 React Query 的 status 也是 pending,所以要先确认真的有一条会话在读。
-  const sessionLoading = current.listPending || (Boolean(activeSession) && messages.isPending);
+  const sessionLoading = current.resolving || (Boolean(activeSession) && messages.isPending);
   //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
   
@@ -222,6 +228,7 @@ export function ChatWorkspace({
       const skills = collectSkills(document);
       const message = await sendAgentMessage(targetId, {
         content, context: noteAttach.context, references, body_document: document, ...(skills.length ? { skills } : {}),
+        place: placePayload(STUDIO_PLACE),
       });
       return { message, targetId };
     },
@@ -425,13 +432,28 @@ export function ChatWorkspace({
         <SessionList
           kind="agent"
           workspaceId={workspace.id}
-          sessions={current.sessions}
-          loaded={current.listLoaded}
+          sessions={everything.data ?? []}
+          loaded={everything.isSuccess}
           activeSessionId={activeSession?.id ?? null}
           onSelect={current.select}
-          onCreate={() => current.create.mutate()}
-          creating={current.create.isPending}
+          onCreate={current.startDraft}
+          creating={false}
           onDeleted={current.forget}
+          //: 家在 AI Studio 的不写(每行都说「在 AI Studio 里开的」只是噪音);回得去的给一颗「回到那里」。
+          extras={(item) =>
+            item.home_kind === "studio"
+              ? null
+              : {
+                  subtitle: openedIn(t, item),
+                  goBack: canGoHome(item) && (item.home_kind !== "comfyui" || workbenchAvailable())
+                    ? {
+                        label: t("agentGoHome"),
+                        hint: t("agentGoHomeHint"),
+                        onClick: () => void Promise.resolve(goHome(workspace.id, item)).catch((error: Error) => toast.error(error.message)),
+                      }
+                    : undefined,
+                }
+          }
         />
       </StudioIndex>
 
@@ -664,11 +686,12 @@ export function ChatWorkspace({
                           恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
                           由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
                       {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
-                      <ModelPicker workspaceId={workspace.id} session={session.data ?? activeSession} />
+                      <ModelPicker workspaceId={workspace.id} place={STUDIO_PLACE} session={session.data ?? activeSession} />
                       {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                           和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
                       <SessionSettingsMenu
                         workspaceId={workspace.id}
+                        place={STUDIO_PLACE}
                         session={session.data ?? activeSession}
                         context={context}
                         compacting={compactContext.isPending}

@@ -24,7 +24,7 @@ function FloatingSessionHeader() {
     <aside data-testid="panel" style={style}>
       <header onPointerDown={startDrag}>
         <h2 data-testid="header-space">
-          <AgentSessionSwitcher sessions={sessions} activeSession={sessions[1]} deleting={false} onSelect={() => {}} onDelete={() => {}} />
+          <AgentSessionSwitcher here={sessions} elsewhere={[]} homedHere activeSession={sessions[1]} deleting={false} onSelect={() => {}} onDelete={() => {}} />
         </h2>
       </header>
     </aside>
@@ -32,9 +32,9 @@ function FloatingSessionHeader() {
 }
 
 const sessions = [
-  { id: "one", title: "一个非常非常长的会话标题，需要在窗口标题处省略", is_mine: true },
-  { id: "two", title: "浏览器清理", is_mine: true },
-  { id: "three", title: "时间线粗剪", is_mine: true },
+  { id: "one", title: "一个非常非常长的会话标题，需要在窗口标题处省略", is_mine: true, home_kind: "note" as const, home_id: "n1", home_name: "周报", home_state: "ok" as const },
+  { id: "two", title: "浏览器清理", is_mine: true, home_kind: "note" as const, home_id: "n1", home_name: "周报", home_state: "ok" as const },
+  { id: "three", title: "时间线粗剪", is_mine: true, home_kind: "note" as const, home_id: "n1", home_name: "周报", home_state: "ok" as const },
 ];
 
 describe("AgentSessionSwitcher", () => {
@@ -61,7 +61,7 @@ describe("AgentSessionSwitcher", () => {
   it("左上角直接显示当前会话名且标题入口没有外框", () => {
     render(
       <AgentSessionSwitcher
-        sessions={sessions}
+        here={sessions} elsewhere={[]} homedHere
         activeSession={sessions[0]}
         deleting={false}
         onSelect={vi.fn()}
@@ -80,7 +80,7 @@ describe("AgentSessionSwitcher", () => {
     const onSelect = vi.fn();
     render(
       <AgentSessionSwitcher
-        sessions={sessions}
+        here={sessions} elsewhere={[]} homedHere
         activeSession={sessions[0]}
         deleting={false}
         onSelect={onSelect}
@@ -102,7 +102,7 @@ describe("AgentSessionSwitcher", () => {
   it("搜索无结果时给出明确空状态", async () => {
     render(
       <AgentSessionSwitcher
-        sessions={sessions}
+        here={sessions} elsewhere={[]} homedHere
         activeSession={sessions[0]}
         deleting={false}
         onSelect={vi.fn()}
@@ -116,11 +116,11 @@ describe("AgentSessionSwitcher", () => {
   });
 
   it("同事共享来的那条能切过去看,但不给删", async () => {
-    const shared = { id: "shared", title: "同事的脚本讨论", is_mine: false };
+    const shared = { id: "shared", title: "同事的脚本讨论", is_mine: false, home_kind: "note" as const, home_id: "n1", home_name: "周报", home_state: "ok" as const };
     const onSelect = vi.fn();
     render(
       <AgentSessionSwitcher
-        sessions={[sessions[0], shared]}
+        here={[sessions[0], shared]} elsewhere={[]} homedHere
         activeSession={sessions[0]}
         deleting={false}
         onSelect={onSelect}

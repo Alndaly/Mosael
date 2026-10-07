@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 const mocks = vi.hoisted(() => ({
   isMine: false,
@@ -18,13 +18,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/client", () => ({
+  isNotFound: () => false,
   API_BASE: "http://backend.test",
   getAuthToken: () => null,
-  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", title: "同事的脚本讨论", is_mine: mocks.isMine }]),
+  listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "同事的脚本讨论", is_mine: mocks.isMine }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
   deleteAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", title: "同事的脚本讨论", status: "idle", is_mine: mocks.isMine })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "同事的脚本讨论", status: "idle", is_mine: mocks.isMine })),
   listAgentMessages: vi.fn(async () => []),
   listAgentQueue: vi.fn(async () => []),
   listAgentUsageEvents: vi.fn(async () => []),
@@ -85,8 +86,9 @@ class NoopResizeObserver {
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", NoopResizeObserver);
   window.localStorage.clear();
+  window.sessionStorage.clear();
   // 共享来的那条只在**点开过**时才是当前会话(没选过时回落只落在自己的对话上)。
-  window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
+  adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   mocks.pendingDecisions.mockClear();
 });
 
@@ -100,6 +102,7 @@ async function mount() {
         placeholder="placeholder"
         rectKey="test.canvas.agent"
         workspaceId="w1"
+        place={{ kind: "studio", id: "" }}
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}

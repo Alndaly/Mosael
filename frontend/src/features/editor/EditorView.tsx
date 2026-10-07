@@ -66,6 +66,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { useAgentPlace } from "@/features/agent/activePlace";
 import { clipEnd, frameAt, frameTime, snapToFrame } from "@/domain/timeline/geometry";
 import { clipContains, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "@/domain/timeline/editTargets";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
@@ -129,6 +130,8 @@ export function EditorView({
 
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
   const t = useI18n();
+  //: 剪辑这一处是这个项目(ADR 0044):助手面板接这个项目的对话,面板收起来时浮标和跳转也认得出你在这里。
+  const agentPlace = useAgentPlace({ kind: "project", id: project.id });
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
   const selectedClipId = useEditorStore(selectedClipIdOf);
@@ -1239,6 +1242,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             rectKey="mosael.editor.agent.rect.v1"
             dockedLayout={dockedAgent ? "inline" : "overlay"}
             workspaceId={workspace.id}
+            place={agentPlace}
             mode={agentMode}
             onModeChange={setAgentMode}
             onClose={() => setAgentOpen("off")}
