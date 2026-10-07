@@ -103,6 +103,12 @@
     "unit",
     "workspace_id"
   ],
+  "asset_nsfw_marks": [
+    "asset_id",
+    "nsfw",
+    "marked_by",
+    "updated_at"
+  ],
   "assets": [
     "created_at",
     "file_key",
