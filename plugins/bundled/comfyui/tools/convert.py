@@ -120,6 +120,18 @@ def connectable(output_type: Any, input_type: Any) -> bool:
     return _valid_connection(output_type, input_type)
 
 
+def widget_layout(node: dict[str, Any], object_info: dict[str, Any]) -> list[tuple[str, Any, int]]:
+    """一个界面格式节点的 widget 在 `widgets_values` 里怎么排:(名字, 定义, 后面多占几格)—— 和转换时同一套(改画布时
+    往 `widgets_values` 里写一格、给新节点排一份,见 canvas_edit)。只在前端的那几格(上传按钮、播放器)也在里面。"""
+    scope = _Scope({"nodes": [node]}, (), None)
+    return _Converter({"nodes": [node]}, object_info, "zh")._widget_specs(_Node(scope, node))
+
+
+def widget_default(definition: Any) -> tuple[bool, Any]:
+    """一格 widget 的缺省值(前端建节点时给的):(有没有, 值)。"""
+    return _Converter._default(definition)
+
+
 # ---------------------------------------------------------------------------
 # 一层图:根图,或展开到某个子图节点里的那一份
 # ---------------------------------------------------------------------------

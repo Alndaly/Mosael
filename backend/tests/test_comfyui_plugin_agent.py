@@ -1,4 +1,4 @@
-"""工作台里的智能体(ADR 0042 第一步:读和诊断)插件这一侧的几个只读操作。
+"""工作台里的智能体(ADR 0042 第一步:读和诊断;第二步:改图的计划)插件这一侧的几个只读操作。
 
 夹具是录下来的真回答(tests/fixtures/comfyui/agent/):沙盒里 ComfyUI 0.39(模板包 0.11.76)的节点定义和模板索引、那张
 Qwen-Image 2.1 编辑模板、维护者那台的 Manager(V4.2.1)装了哪些包和节点映射、Comfy 注册表对 rgthree-comfy(最新几版被标记)、
@@ -27,7 +27,7 @@ _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy
             "shared_models", "workflows", "tooling", "library", "sources", "install", "model_files", "families",
             "workflow_library", "workflow_import", "canvas", "diagnose", "templates", "node_types", "node_packs",
             "node_catalog", "app_form", "json_style", "weights", "nsfw", "previews", "provenance", "civitai", "lookup",
-            "pinned", "managed", "versions", "model_search", "workbench")
+            "pinned", "managed", "versions", "model_search", "workbench", "canvas_edit")
 
 
 def fixture(name: str) -> Any:
@@ -521,3 +521,171 @@ def test_去注册表走这个连接的出站代理(plugin, comfy, monkeypatch) 
     importlib.reload(sources)  # 插件进程起来时就拿到了宿主注入的环境;这里补一次
     out = plugin("node_pack_info", id="comfyui-sharpfin")
     assert out["id"] == "comfyui-sharpfin"
+
+
+
+# --- 改画布的计划(ADR 0042 第二步:edit_plan) ------------------------------------------------------
+
+def _plan(plugin, content: dict[str, Any], ops: list[dict[str, Any]], locale: str = "zh") -> dict[str, Any]:
+    return plugin("edit_plan", locale, content=content, ops=ops)
+
+
+def test_改图的计划_交给桥的一批_改动清单_改前改后各诊断一次(plugin) -> None:
+    graph = _txt2img()
+    before = json.dumps(graph, sort_keys=True)
+    out = _plan(plugin, graph, [
+        {"op": "add_node", "id": "$l", "type": "LoraLoader", "near": "4", "widgets": {"lora_name": "pony\\ponyStyle_pdxl.safetensors"}},
+        {"op": "connect", "from": "4.MODEL", "to": "$l.model"},
+        {"op": "connect", "from": "#4.CLIP", "to": "$l.clip"},
+        {"op": "connect", "from": "$l.MODEL", "to": "3.model"},
+        {"op": "set_widget", "node": "#3", "widget": "steps", "value": 28.0},
+        {"op": "set_title", "node": "3", "title": "采样"},
+        {"op": "bypass", "node": "9", "on": False},
+        {"op": "mute", "node": "9"},
+    ])
+    assert json.dumps(graph, sort_keys=True) == before, "只在拷贝上改"
+    assert out["ops"][0] == {"op": "add_node", "id": "$l", "type": "LoraLoader", "near": "4", "layer": None,
+                             "widgets": {"lora_name": "pony/ponyStyle_pdxl.safetensors"}}, "下拉的值换成列表里的写法"
+    assert out["ops"][3] == {"op": "connect", "from": {"node": "$l", "name": "MODEL"}, "to": {"node": "3", "name": "model"}, "layer": None}
+    assert out["ops"][4]["value"] == 28 and isinstance(out["ops"][4]["value"], int), "INT 的那一格给整数"
+    assert [one["op"] for one in out["ops"][6:]] == ["mode", "mode"] and [one["mode"] for one in out["ops"][6:]] == [0, 2]
+    changes = out["changes"]
+    assert changes[3]["replaces"] == {"node": "4", "output": "MODEL"}
+    assert changes[4] == {"op": "set_widget", "node": "3", "type": "KSampler", "widget": "steps", "before": 20, "after": 28}
+    assert changes[5] == {"op": "set_title", "node": "3", "type": "KSampler", "before": "", "after": "采样"}
+    assert changes[7] == {"op": "mute", "node": "9", "type": "SaveImage", "on": True, "before": "normal"}
+    assert out["subgraphs"] == [] and out["structural"] is False
+    check = out["check"]
+    assert check["before"]["error"] == 0 and check["after"]["error"] == 0 and check["introduced"] == []
+    assert check["baseline"] == [], "改之前没有问题:应用之后没有「修好了的」"
+
+
+def test_说不通的一条不落_每一条的原因都列出来(plugin) -> None:
+    with pytest.raises(Exception) as caught:
+        _plan(plugin, _txt2img(), [
+            {"op": "set_widget", "node": "3", "widget": "steps", "value": 0},
+            {"op": "set_widget", "node": "3", "widget": "sampler_name", "value": "dpm_9000"},
+            {"op": "set_widget", "node": "3", "widget": "model", "value": 1},
+            {"op": "connect", "from": "4.VAE", "to": "3.model"},
+            {"op": "connect", "from": "4.MODEL", "to": "3.nope"},
+            {"op": "add_node", "id": "$x", "type": "NoSuchNode"},
+            {"op": "add_node", "id": "x", "type": "KSampler"},
+            {"op": "remove_node", "node": "77"},
+            {"op": "connect", "from": "$gone.LATENT", "to": "8.samples"},
+            {"op": "eval", "code": "1"},
+            {"op": "disconnect", "to": "5.width"},
+        ])
+    text = str(caught.value)
+    assert text.startswith("这一批改动一条都没改")
+    for index, words in [(1, "超出了 1 ~ 10000"), (2, "不在这台机器的下拉里"), (3, "没有叫「model」的控件"),
+                         (4, "出来的是 VAE"), (5, "没有叫「nope」的输入"), (6, "没有节点类型「NoSuchNode」"), (7, "临时名字"),
+                         (8, "#77 不在画布上"), (9, "「$gone」不在这一批里"), (10, "不认识的改动「eval」"), (11, "本来就没连")]:
+        assert f"第 {index} 条" in text and words in text, (index, words)
+    with pytest.raises(Exception) as english:
+        _plan(plugin, _txt2img(), [{"op": "connect", "from": "4.VAE", "to": "3.model"}], "en-US")
+    assert "Nothing was changed" in str(english.value) and "4.VAE gives VAE but 3.model takes MODEL" in str(english.value)
+
+
+def test_连了线的那一格不能直接改值_改完多出来的问题说得出来(plugin) -> None:
+    graph = _txt2img()
+    with pytest.raises(Exception, match="连着线,值由上游给"):
+        _plan(plugin, QWEN, [{"op": "set_widget", "node": "459:458", "widget": "cfg", "value": 3}])
+    with pytest.raises(Exception, match="没有叫「clip」的控件"):
+        _plan(plugin, graph, [{"op": "set_widget", "node": "6", "widget": "clip", "value": "x"}])
+    out = _plan(plugin, graph, [{"op": "disconnect", "to": "3.positive"}, {"op": "set_widget", "node": "5", "widget": "width", "value": 1001}])
+    introduced = {(one["ref"], one["kind"]) for one in out["check"]["introduced"]}
+    assert introduced == {("3", "unconnected_required"), ("5", "size_not_multiple")}
+    assert out["changes"][0]["from"] == {"node": "6", "output": "CONDITIONING"}, "断开的那根原来接着谁"
+
+
+def test_子图改的是定义_写明用了几处_边界口_提升控件_收回(plugin) -> None:
+    sub = SUB
+    out = _plan(plugin, QWEN, [
+        {"op": "set_widget", "node": "459:458", "widget": "denoise", "value": 0.9},
+        {"op": "promote_widget", "node": "459:458", "widget": "denoise"},
+        {"op": "add_subgraph_output", "graph": "459", "name": "LATENT", "type": "LATENT"},
+        {"op": "connect", "from": "459:458.LATENT", "to": "@out.LATENT"},
+        {"op": "add_node", "id": "$p", "type": "PreviewImage", "graph": ["459"]},
+        {"op": "connect", "from": "459:457.IMAGE", "to": "$p.images"},
+        {"op": "set_widget", "node": "459", "widget": "steps", "value": 30},
+        {"op": "unpromote_widget", "node": "459:458", "widget": "cfg"},
+        {"op": "remove_subgraph_io", "graph": sub, "name": "negative_prompt"},
+        {"op": "connect", "from": "@in.seed", "to": "459:458.seed"},
+    ])
+    layer = {"id": sub, "name": "Image Edit (Qwen Image 2.1)", "uses": 1}
+    assert out["subgraphs"] == [layer]
+    assert [one.get("layer") for one in out["changes"]] == [layer] * 6 + [None] + [layer] * 3, "提升出来的值改在外面那个节点上,不改定义"
+    assert out["changes"][1] == {"op": "promote_widget", "node": "459:458", "type": "KSampler", "widget": "denoise", "name": "denoise",
+                                 "value": 0.9, "layer": layer}
+    assert out["changes"][6] == {"op": "set_widget", "node": "459", "type": "Image Edit (Qwen Image 2.1)", "widget": "steps",
+                                 "before": 25, "after": 30}
+    assert out["changes"][8]["links"] == 1, "删口时断掉的线数"
+    assert out["changes"][3]["to"] == {"node": "@out", "input": "LATENT"}, "子图边界的口在清单上就是 @in / @out 加名字"
+    assert out["changes"][9]["from"] == {"node": "@in", "output": "seed", "type": "INT"}
+    bridge = out["ops"]
+    assert bridge[1] == {"op": "promote", "node": "458", "widget": "denoise", "name": "denoise", "layer": sub}
+    assert bridge[2] == {"op": "add_io", "side": "output", "name": "LATENT", "type": "LATENT", "layer": sub}
+    assert bridge[3]["to"] == {"node": "@out", "name": "LATENT"} and bridge[9]["from"] == {"node": "@in", "name": "seed"}
+    assert bridge[4]["layer"] == sub and bridge[6] == {"op": "set_widget", "node": "459", "widget": "steps", "value": 30, "layer": None}
+    assert bridge[7] == {"op": "unpromote", "node": "458", "widget": "cfg", "layer": sub}
+    assert bridge[8] == {"op": "remove_io", "side": "input", "name": "negative_prompt", "layer": sub}
+    # 同一份定义被两个节点用着:每一条都写「用了 2 处」
+    twin = copy.deepcopy(next(one for one in QWEN["nodes"] if one["id"] == 459))
+    twin.update(id=900, inputs=[one for one in twin["inputs"] if one.get("widget")], outputs=[{**twin["outputs"][0], "links": []}])
+    doubled = {**copy.deepcopy(QWEN), "nodes": [*copy.deepcopy(QWEN["nodes"]), twin]}
+    out = _plan(plugin, doubled, [{"op": "add_subgraph_input", "graph": "900", "name": "strength", "type": "FLOAT"}])
+    assert out["subgraphs"][0]["uses"] == 2 and out["changes"][0]["layer"]["uses"] == 2
+
+
+def test_子图的写法不对_跨层连线_重名的口_说不通(plugin) -> None:
+    with pytest.raises(Exception) as caught:
+        _plan(plugin, QWEN, [
+            {"op": "connect", "from": "470.IMAGE", "to": "459:485.image1"},
+            {"op": "add_subgraph_input", "graph": "470", "name": "x", "type": "INT"},
+            {"op": "add_subgraph_input", "graph": "459", "name": "seed", "type": "INT"},
+            {"op": "connect", "from": "@in.seed", "to": "461.images"},
+            {"op": "promote_widget", "node": "459:458", "widget": "steps"},
+            {"op": "remove_subgraph_io", "graph": "459", "name": "nope"},
+        ])
+    text = str(caught.value)
+    for index, words in [(1, "不能跨层"), (2, "#470 不是子图节点"), (3, "已经有叫「seed」"), (4, "@in 只在子图里有"),
+                         (5, "已经连着线"), (6, "没有叫「nope」的口")]:
+        assert f"第 {index} 条" in text and words in text, (index, words)
+
+
+def test_打包和拆开_只查节点在不在_同一层_只能放在最后(plugin) -> None:
+    out = _plan(plugin, QWEN, [{"op": "set_title", "node": "470", "title": "原图"},
+                               {"op": "to_subgraph", "nodes": ["470", "475"], "name": "输入"}])
+    assert out["structural"] is True
+    assert out["ops"][1] == {"op": "to_subgraph", "nodes": ["470", "475"], "name": "输入", "layer": None}
+    assert out["changes"][1] == {"op": "to_subgraph", "nodes": [{"node": "470", "type": "LoadImage"}, {"node": "475", "type": "LoadImage"}],
+                                 "name": "输入"}
+    out = _plan(plugin, QWEN, [{"op": "unpack_subgraph", "node": "459"}])
+    assert out["changes"] == [{"op": "unpack_subgraph", "node": "459", "name": "Image Edit (Qwen Image 2.1)", "uses": 1}]
+    with pytest.raises(Exception) as caught:
+        _plan(plugin, QWEN, [{"op": "to_subgraph", "nodes": ["470", "459:451"]}, {"op": "unpack_subgraph", "node": "461"},
+                             {"op": "set_title", "node": "470", "title": "x"}])
+    text = str(caught.value)
+    assert "第 1 条" in text and "同一层" in text
+    assert "第 2 条" in text and "不是子图节点" in text
+
+
+def test_打包以后的改动指不到_要分两批(plugin) -> None:
+    with pytest.raises(Exception, match="放在这一批的最后"):
+        _plan(plugin, QWEN, [{"op": "unpack_subgraph", "node": "459"}, {"op": "set_title", "node": "470", "title": "x"}])
+
+
+def test_改完诊断一遍_对着改之前的那一份说修好了几个_多出来几个(plugin) -> None:
+    broken = _txt2img(sampler="dpm_9000", width=1001)
+    baseline = plugin("check_graph", content=broken)["findings"]
+    out = plugin("check_graph", content=_txt2img(width=1001), baseline=baseline)
+    assert [(one["ref"], one["kind"]) for one in out["fixed"]] == [("3", "combo_not_in_list")], "修好了的是原来那一条(带节点和原因)"
+    assert out["fixed"][0]["cause"] and out["introduced"] == []
+    out = plugin("check_graph", content=_txt2img(sampler="dpm_9000", width=1001), baseline=baseline[:1])
+    assert [one["kind"] for one in out["introduced"]] == ["size_not_multiple"]
+    # 同一种问题按个数比:改之前两个采样器都选错(另一个在 #30),改完只剩一个 —— 修好了一个
+    twice = [*baseline, {**next(one for one in baseline if one["kind"] == "combo_not_in_list"), "ref": "30"}]
+    out = plugin("check_graph", content=_txt2img(sampler="dpm_9000", width=1001), baseline=twice)
+    assert [(one["ref"], one["kind"]) for one in out["fixed"]] == [("30", "combo_not_in_list")] and out["introduced"] == []
+    with pytest.raises(Exception, match="形状不对"):
+        plugin("check_graph", content=_txt2img(), baseline=[["combo_not_in_list", "KSampler", "sampler_name"]])

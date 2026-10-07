@@ -46,10 +46,14 @@
     {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
     {"op": "app_marks", "content", "app", "results"}    → 工作台:应用表单写进画布要改成的那几处标记(不写文件,见 workbench)
 
-**工作台里的智能体**(ADR 0042,只读;宿主经 `workflow_library` 问,见 canvas / diagnose / templates / node_types / node_packs):
+**工作台里的智能体**(ADR 0042,都只读 —— 改画布的是桥,这里只算;宿主经 `workflow_library` 问,见 canvas / canvas_edit / diagnose /
+templates / node_types / node_packs):
 
     {"op": "canvas_summary", "content"}                 → 一张图(画布上这张、一张模板)的摘要:每一层的节点、控件的值、连线
-    {"op": "check_graph", "content", "error"?}          → 问题单:按节点列,带严重程度、原因、改法;给了上次运行的报错就拆到节点
+    {"op": "check_graph", "content", "error"?, "baseline"?} → 问题单:按节点列,带严重程度、原因、改法;给了上次运行的报错就拆到节点;
+                                                          给了改之前的那一份就说修好了几个、多出来几个
+    {"op": "edit_plan", "content", "ops"}               → 一批改动:校验(一条说不通整批不交)、交给桥的那一批、改动清单、子图用了几处、
+                                                          改前改后各一次诊断
     {"op": "templates", "query"?, "task"?, "model"?, "locale"?, "limit"?} → 官方模板和节点包自带的模板:要哪些模型、多大、
                                                           要哪一版 ComfyUI,这台机器上有哪几个、缺哪几个
     {"op": "template", "name", "pack"?}                 → 一张模板的整图,照这台机器改好能改的(说改了什么),缺什么、多大
@@ -78,6 +82,7 @@ import traceback
 from typing import Any, Callable
 
 import canvas
+import canvas_edit
 import diagnose
 import install
 import library
@@ -165,10 +170,11 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "reboot": workflow_import.reboot,
 }
 
-#: 工作台里的智能体要问的(ADR 0042),都只读。
+#: 工作台里的智能体要问的(ADR 0042),都只读(改画布的计划也只是算出来,改由画布的桥做)。
 _AGENT: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
     "canvas_summary": canvas.canvas_summary,
     "check_graph": diagnose.check_graph,
+    "edit_plan": canvas_edit.edit_plan,
     "templates": templates.templates,
     "template": templates.template,
     "node_types": node_types.node_types,

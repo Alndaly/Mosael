@@ -441,14 +441,44 @@ def check(content: dict[str, Any], object_info: dict[str, Any], comfy: Comfy, lo
     return {"findings": findings, "counts": counts, "checked_nodes": len(api), "notes": notes}
 
 
+#: 改前改后比的时候列多少条「修好了的」「多出来的」。
+MAX_COMPARED = 50
+
+
+def signature_of(finding: dict[str, Any]) -> list[str]:
+    """改前改后认「同一个问题」:哪一种、哪类节点、哪一格 —— 不按节点号认(打包、拆开子图以后节点号会变)。"""
+    return [str(finding.get("kind") or ""), str(finding.get("type") or ""), str(finding.get("input") or "")]
+
+
+def compare(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """改前和改后的问题单:(修好了的, 多出来的),各是原来那几条。同一种问题(`signature_of`)按个数比 —— 两个 KSampler 各有
+    一处,修了一个就是修好了一个。"""
+    left: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    right: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for one in before:
+        left.setdefault(tuple(signature_of(one)), []).append(one)
+    for one in after:
+        right.setdefault(tuple(signature_of(one)), []).append(one)
+    fixed = [item for sign, items in left.items() for item in items[len(right.get(sign, [])):]]
+    introduced = [item for sign, items in right.items() for item in items[len(left.get(sign, [])):]]
+    return fixed[:MAX_COMPARED], introduced[:MAX_COMPARED]
+
+
 def check_graph(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """`{"op": "check_graph", "content", "error"?}`。只问图里那几类节点的定义。"""
+    """`{"op": "check_graph", "content", "error"?, "baseline"?}`。只问图里那几类节点的定义。给了改之前的那一份问题单(edit_plan
+    交出来的 `baseline`)就说改完修好了哪几个、多出来哪几个(改画布之后,见 canvas_edit)。"""
     content = live_graph(payload, locale)
     error = payload.get("error")
     if error is not None and not isinstance(error, str):
         raise ComfyError(say(locale, "上一次运行的报错得是一段文字", "The last-run error must be text."))
+    baseline = payload.get("baseline")
+    if baseline is not None and not (isinstance(baseline, list) and all(isinstance(one, dict) for one in baseline)):
+        raise ComfyError(say(locale, "改之前的那一份问题单形状不对", "The baseline findings are malformed."))
     object_info = node_catalog.classes(comfy, canvas.class_types(content))
-    return check(content, object_info, comfy, locale, error or "")
+    out = check(content, object_info, comfy, locale, error or "")
+    if baseline is not None:
+        out["fixed"], out["introduced"] = compare(baseline, out["findings"])
+    return out
 
 
-__all__ = ["check", "check_graph"]
+__all__ = ["check", "check_graph", "compare", "signature_of"]
