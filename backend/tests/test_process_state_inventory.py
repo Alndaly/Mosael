@@ -147,8 +147,14 @@ def test_会串台的进程状态都有重置钩子() -> None:
     全量里 49.5 秒。测试全绿,而"慢"在三千多个点里是看不见的。
     """
     import inspect
+    import sys
 
-    from tests import conftest
+    #: 拿 pytest 已经载入的那一份,不再 `from tests import conftest` —— tests/ 不是包,那样会以另一个模块名把
+    #: conftest 从头再执行一遍:新建一个数据目录(没人删)、把本进程的 MOSAEL_DATA_DIR 指过去(之后起的子进程
+    #: 和后端用的不是同一个目录)。
+    here = pathlib.Path(__file__).resolve().with_name("conftest.py")
+    conftest = next(module for module in list(sys.modules.values())
+                    if getattr(module, "__file__", None) and pathlib.Path(module.__file__).resolve() == here)
 
     source = inspect.getsource(conftest)
     registered = {f"{module.replace('.', '/')}.py:{attribute}"

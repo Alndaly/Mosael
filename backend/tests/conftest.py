@@ -29,8 +29,38 @@ os.environ["MOSAEL_HW_ENCODE"] = "0"
 # Don't launch a headless Chromium to rasterize subtitles/花字 in the suite; the ASS
 # fallback path stays exercised and tests don't depend on Playwright/dist being present.
 os.environ["MOSAEL_TEXT_RASTERIZE"] = "0"
+# 开发机 shell 里的代理变量不带进测试套(CI 上本来就没有)。后端会按库里的网络设置改写本进程的这几个变量
+# (domain/network.apply_to_process),于是此前一条测试看不看得见代理,取决于同一个进程里**之前**有没有哪条
+# 测试走过那段 —— 换个跑法(并行、换顺序)就换一批测试经代理出网。
+for _proxy_variable in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
+    os.environ.pop(_proxy_variable, None)
+    os.environ.pop(_proxy_variable.lower(), None)
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _every_test_starts_from_the_same_process_state():
+    """每条测试从同样的语言、同样的环境变量起步,跑完还原。
+
+    这两样都是本进程里的「当前值」,测试之间没人还原:
+      - 语言是 ContextVar,而测试都在主线程里跑 —— 一条测试 `set_current_locale("en")` 之后没改回来,后面这个
+        进程里的每一条都在说英文;
+      - 环境变量有被后端自己改写的(上面说的代理那几个),也有测试顺手改了没还的。
+    单进程按文件顺序跑时,总有后面某条测试碰巧把它们改回去,于是一直看不出来;并行之后每个 worker 分到的用例
+    不一样,中招的就变成了随机的一批「中文报错断言拿到英文」。在这里统一还原,而不是去改每一条忘了还原的测试。
+    """
+    from app.core.i18n import DEFAULT_LOCALE, set_current_locale
+
+    environ = os.environ.copy()
+    set_current_locale(DEFAULT_LOCALE)
+    yield
+    set_current_locale(DEFAULT_LOCALE)
+    for key in os.environ.keys() - environ.keys():
+        del os.environ[key]
+    for key, value in environ.items():
+        if os.environ.get(key) != value:
+            os.environ[key] = value
 
 
 @pytest.fixture(autouse=True)

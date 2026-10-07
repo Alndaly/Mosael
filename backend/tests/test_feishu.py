@@ -453,13 +453,16 @@ def test_主进程没了_worker_跟着退出_不留孤儿占着连接() -> None:
     CI 上时红时绿;而且测试套不该出网。"""
     import subprocess
     import sys
+    import threading
 
     offline_worker = (
         "import sys, threading\n"
         "import lark_oapi\n"
         "class _Offline:\n"
         "    def __init__(self, *args, **kwargs): pass\n"
-        "    def start(self): threading.Event().wait()\n"
+        "    def start(self):\n"
+        "        print('connected', file=sys.stderr, flush=True)\n"
+        "        threading.Event().wait()\n"
         "lark_oapi.ws.Client = _Offline\n"
         "from app.integrations.feishu import worker\n"
         "worker.main(sys.argv[1])\n"
@@ -468,13 +471,24 @@ def test_主进程没了_worker_跟着退出_不留孤儿占着连接() -> None:
         [sys.executable, "-c", offline_worker, "bot-orphan"],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
     )
     try:
         process.stdin.write(json.dumps({"app_id": "cli_x", "app_secret": "s"}) + "\n")
         process.stdin.flush()
-        time.sleep(1.0)
+        # 等它真的连上(长连接那一步)再关管道。光 `import lark_oapi` 就要几秒,整套并行跑、机器满载时十几二十秒
+        # —— 此前固定睡 1 秒,于是关管道时它多半还在 import,下面那 20 秒等的其实是 import,满载时就超时。
+        connected = threading.Event()
+
+        def _watch() -> None:
+            for line in process.stderr:
+                if line.strip() == "connected":
+                    connected.set()
+                    return
+
+        threading.Thread(target=_watch, daemon=True).start()
+        assert connected.wait(120), "worker 没走到连接那一步"
         assert process.poll() is None, "还没关管道就退出了 —— 这条测试没测到东西"
         process.stdin.close()
         assert process.wait(timeout=20) == 0

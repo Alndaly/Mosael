@@ -74,6 +74,12 @@
 `tests/conftest.py::_restore_process_snapshots` 每条测试后把它们还原,
 `test_process_state_inventory` 断言会串台的那几处都在还原名单里。全量套件因此快了约 9%。
 
+还有两样不在这份清单里、在测试套里同样串台:请求语言(i18n 那个 ContextVar —— 测试都在主线程里跑,一条测试
+设成 en 没改回去,这个进程后面的用例全说英文)和进程环境变量(`domain/network` 会按网络设置改写本进程的代理变量)。
+`tests/conftest.py::_every_test_starts_from_the_same_process_state` 每条测试前后把它们按回去。后端测试并行跑
+(pytest-xdist)之后每个 worker 是一个独立进程、各有一个数据目录,同一个文件的用例会分到不同进程:漏还原的
+状态不再是「碰巧被后面某条改回去」,而是随机一批用例中招 —— 所以还原要放在 conftest 里统一做,不靠每条测试自觉。
+
 - `app/core/http_retry.py:_max_retries` — 出站重试次数。调用点散在十几个适配器里,不少拿不到 db 会话。
 - `app/core/outbound_guard.py:_allowlist` — 内网访问的允许名单(部署设置里那份,见 domain/outbound_allowlist)。
   用它的地方(fetch_url、HTTP 请求节点)不少拿不到 db 会话。
