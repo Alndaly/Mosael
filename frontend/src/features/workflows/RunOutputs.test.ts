@@ -21,6 +21,11 @@ const registry: RegistryLike = {
         output_types: { vocals_asset_id: "asset", background_asset_id: "asset", engine: "text" },
         output_labels: { vocals_asset_id: "人声", background_asset_id: "背景音", engine: "引擎" },
       },
+      //: 一张 ComfyUI 工作流的工具:那个保存节点的口、第一份产出、全部产出(一串 id,是 JSON)。
+      comfy: {
+        output_types: { image_9: "asset", asset_id: "asset", asset_ids: "json" },
+        output_labels: { image_9: "图 · 预览图像", asset_id: "第一份产出", asset_ids: "全部产出" },
+      },
     };
     return table[nodeType];
   },
@@ -103,6 +108,15 @@ describe("产出摊开成行", () => {
     expect(assetOutputs(rows)).toEqual([
       { key: "vocals_asset_id", label: "人声", assetId: "a1" },
       { key: "background_asset_id", label: "背景音", assetId: "a2" },
+    ]);
+  });
+
+  it("一个素材口交了一串(batch 2):每一份各是一项,带着那个口的名字 —— 此前一串的整行丢掉,口上只看得到一张", () => {
+    const rows = outputRows(registry, "comfy", { image_9: ["a1", "a2", ""], asset_id: "a1", asset_ids: ["a1", "a2"] });
+    expect(assetOutputs(rows)).toEqual([
+      { key: "image_9", label: "图 · 预览图像", assetId: "a1" },
+      { key: "image_9", label: "图 · 预览图像", assetId: "a2" },
+      { key: "asset_id", label: "第一份产出", assetId: "a1" },
     ]);
   });
 

@@ -85,8 +85,10 @@ def test_跑报出的工具_素材进去_具名输出出来(connected) -> None:
     }).json()
     assert invoked["status"] == "succeeded", invoked
     output = invoked["output"]
-    assert output["image_9"] == output["asset_ids"][0] == output["asset_id"], "那个保存节点的图就是具名输出 image_9"
     assert len(output["asset_ids"]) == 2
+    assert output["image_9"] == output["asset_ids"], (
+        "那个保存节点一次交出两张:具名输出 image_9 是这两张,不是只有第一张(维护者:batch 2 节点上只看得到一张)")
+    assert output["asset_id"] == output["asset_ids"][0], "「第一份产出」照旧是第一张"
     prompt = comfy.posted("/prompt")[0]["prompt"]
     assert prompt["3"]["inputs"]["steps"] == 12
 

@@ -4,6 +4,8 @@ export const nodeToolbar = {
   wfRefNoUpstream: "Nothing upstream yet — connect a node into this one first, then its outputs can be referenced here.",
   wfaEnterSubgraph: "Open subgraph",
   wfRunNoOutputs: "This step produced nothing",
+  wfOutputImageCount: "{n} images",
+  wfOutputFileCount: "{n} files",
   wfOutputTruncated: "Only the beginning is shown here — {n} characters in full; copy and download get the full text",
   wfOutputNestedTruncated: "Some long text inside was cut to its beginning — copy or download each one in full below:",
   wfOutputNestedChars: "{n} characters in full",

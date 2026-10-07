@@ -303,6 +303,35 @@ class Test收口在唯一那条执行路径:
         assert out["asset_id"] and out["asset_name"] == "a.txt"
         assert out["note"] == "留着", "顺带把别的输出弄丢了"
 
+    def test_具名输出口收下点了它的每一份_一份是id_好几份是一串(self, tmp_path) -> None:
+        """维护者跑一张 batch 2 的 ComfyUI 工作流:「全部产出」里两个 id,那个保存节点的口上却只有一张 —— 此前同名的只认
+        第一份。现在一个口交了几份就是几份:一份还是那一个 id(分离出的「人声」照旧),好几份是按顺序的一串;插件自己在
+        输出里写了同名的一格照旧不覆盖。"""
+        from app.domain.plugins.tools import _collect_artifact
+
+        from app.core.db import SessionLocal
+
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        scratch = tmp_path / "out"
+        scratch.mkdir()
+        for name in ("a.txt", "b.txt", "c.txt", "d.txt"):
+            (scratch / name).write_text(name, encoding="utf-8")
+        with SessionLocal() as db:
+            out = _collect_artifact(
+                db,
+                {"artifacts": [{"path": "a.txt", "output": "image_9"}, {"path": "b.txt", "output": "vocals"},
+                               {"path": "c.txt", "output": "image_9"}, {"path": "d.txt", "output": "mine"}],
+                 "mine": "插件自己写的"},
+                scratch, workspace_id=ws, project_id=None, fallback_name="t", egress=Egress(),
+            )
+            db.commit()
+        a, b, c, _d = out["asset_ids"]
+        assert out["image_9"] == [a, c], "那个口的两份都在,按交出的顺序"
+        assert out["vocals"] == b, "只交了一份的口还是那一个 id"
+        assert out["mine"] == "插件自己写的"
+        assert out["asset_id"] == a
+
     def test_没有产出的工具原样返回(self, tmp_path) -> None:
         from app.domain.plugins.tools import _collect_artifact
 

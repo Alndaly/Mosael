@@ -142,6 +142,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_aiEditInvalidGraph": {"zh": "AI 没能产出一张合法的工作流:{reason}", "en": "The model did not produce a valid workflow: {reason}"},
     "wfErr_noExecutor": {"zh": "节点类型 {type} 没有执行器", "en": "No executor for node type {type}"},
     "wfErr_mustBeNumber": {"zh": "{field} 必须是数字", "en": "{field} must be a number"},
+    #: 只收一份素材的字段收到一串(见 workflows.binding.one_asset_fields;插件那一侧是 pluginErr_oneAssetGotMany)。
+    "wfErr_oneAssetGotMany": {
+        "zh": "{field} 只收一份素材,上游交来了 {count} 份:只要一份,就改接上游只交一份的那个口(比如「第一份产出」);"
+              "每一份都要,就把这一步放进「循环·遍历」里,一份跑一次",
+        "en": "{field} takes one asset, but the upstream gave {count}: to use one, connect an upstream output that gives "
+              "a single asset instead (such as “First output”); to use every one, put this step in a “Loop · for each” "
+              "and run it once per asset",
+    },
     "wfErr_belowMin": {"zh": "{field} 不能小于 {min}", "en": "{field} cannot be below {min}"},
     "wfErr_aboveMax": {"zh": "{field} 不能大于 {max}", "en": "{field} cannot be above {max}"},
     "wfErr_mustBeInteger": {"zh": "{field} 必须是整数", "en": "{field} must be a whole number"},

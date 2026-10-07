@@ -181,9 +181,19 @@ export interface AssetOutput {
   assetId: string;
 }
 
-/** 这些行里指向素材的那些。空值不算 —— 没产出的输出不该在界面上占一个位置。 */
+/**
+ * 这些行里指向素材的那些。空值不算 —— 没产出的输出不该在界面上占一个位置。
+ *
+ * **一个素材口可以是一串**(一次出两张的 ComfyUI 工作流那个保存节点的口、宫格切分的 `asset_ids`):每一份各是一项,
+ * 带着同一个口的名字。此前只认一个 id,一串的整行丢掉 —— 维护者跑 batch 2 的工作流,那个口上只看得到一张。
+ */
 export function assetOutputs(rows: OutputRow[]): AssetOutput[] {
-  return rows
-    .filter((row) => row.type === "asset" && typeof row.value === "string" && row.value.trim())
-    .map((row) => ({ key: row.key, label: row.label, assetId: String(row.value) }));
+  return rows.flatMap((row) =>
+    row.type === "asset" ? assetIdsOf(row.value).map((assetId) => ({ key: row.key, label: row.label, assetId })) : [],
+  );
+}
+
+function assetIdsOf(value: unknown): string[] {
+  const ids = Array.isArray(value) ? value : [value];
+  return ids.filter((one): one is string => typeof one === "string" && Boolean(one.trim()));
 }

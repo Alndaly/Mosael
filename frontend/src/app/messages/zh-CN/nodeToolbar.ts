@@ -4,6 +4,8 @@ export const nodeToolbar = {
   wfRefNoUpstream: "这个节点还没有上游 —— 先从别的节点连一条边过来,它的输出才能在这里引用。",
   wfaEnterSubgraph: "进入子图",
   wfRunNoOutputs: "这一步没有产出",
+  wfOutputImageCount: "{n} 张",
+  wfOutputFileCount: "{n} 份",
   wfOutputTruncated: "这里只显示了开头,全文共 {n} 字;复制和下载拿到的是全文",
   wfOutputNestedTruncated: "里面有几段长文字只留了开头;每一处的全文在下面单独复制 / 下载:",
   wfOutputNestedChars: "全文 {n} 字",

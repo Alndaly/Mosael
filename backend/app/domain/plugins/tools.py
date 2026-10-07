@@ -757,6 +757,8 @@ def _collect_artifact(
         collected.update({"asset_id": ref, "asset_name": name})
     if isinstance(many, list):
         assets: list[dict[str, Any]] = []
+        #: 具名输出口 → 交给它的那几份(按顺序)。插件自己在输出里写了同名的一格就不动它。
+        named: dict[str, list[str]] = {}
         for spec in specs:
             ref, name = artifacts.register(
                 db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name,
@@ -769,10 +771,14 @@ def _collect_artifact(
             }
             assets.append({**extras, "asset_id": ref, "asset_name": name})
             # 具名输出:这一份就是工具声明里的某个输出口(`image_9` —— 那个保存节点的图)。
-            # 同名的只认第一份;插件自己在输出里写了同名的一格就不覆盖。
-            named = spec.get("output")
-            if isinstance(named, str) and _OUTPUT_KEY.match(named) and named not in collected:
-                collected[named] = ref
+            port = spec.get("output")
+            if isinstance(port, str) and _OUTPUT_KEY.match(port) and port not in collected:
+                named.setdefault(port, []).append(ref)
+        # 一个口只交了一份就是那一个 id(分离出的「人声」);交了好几份就是按顺序的一串 —— 一次出两张的 ComfyUI 工作流,
+        # 那个保存节点的口上是两张,不是第一张(此前同名的只认第一份,第二张只剩在 asset_ids 里)。素材口装一串 id 和
+        # 宫格切分的 asset_ids 同一个约定:画板一份落一格,工作流里收一串的格子照收,只收一份的格子见 inputs.materialize
+        # 和 workflows.binding.one_asset_fields。
+        collected.update({port: refs[0] if len(refs) == 1 else refs for port, refs in named.items()})
         collected["assets"] = assets
         collected["asset_ids"] = [one["asset_id"] for one in assets]
         if assets and "asset_id" not in collected:

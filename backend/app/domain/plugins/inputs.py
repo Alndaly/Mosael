@@ -268,6 +268,23 @@ def _prepared(spec: dict[str, Any], path: Path) -> Path:
     return (extract_speech if prepare == "speech" else extract_audio)(path, target)
 
 
+def _property(tool: dict[str, Any], key: str) -> Any:
+    schema = tool.get("input_schema")
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    return properties.get(key) if isinstance(properties, dict) else None
+
+
+def _takes_many(tool: dict[str, Any], key: str) -> bool:
+    """这一格收一串素材(`type: array`,`items` 是素材),还是只收一份。"""
+    return schema_type(_property(tool, key)) == "array"
+
+
+def _field_title(tool: dict[str, Any], key: str) -> str:
+    """报错里这一格叫什么:声明的标题(按读的人的语言),没写就是键名。"""
+    spec = _property(tool, key)
+    return (text_of(spec.get("title")) if isinstance(spec, dict) else "") or key
+
+
 def _spec_of(tool: dict[str, Any], key: str) -> dict[str, Any]:
     schema = tool.get("input_schema")
     properties = schema.get("properties") if isinstance(schema, dict) else None
@@ -313,6 +330,15 @@ def materialize(
         value = payload[key]
         spec = _spec_of(tool, key)
         refs = [str(one) for one in value if one] if isinstance(value, list) else [str(value)]
+        if isinstance(value, list) and not _takes_many(tool, key):
+            # **只收一份的格子收到一串**(上游一次出了好几张、接的是那一串):一份就是它;好几份不替人挑,说清怎么接 ——
+            # 此前把一串路径原样交给插件,插件按一个字符串读,拿到的是 "['…', '…']"。
+            if len(refs) > 1:
+                raise PluginDomainError("pluginErr_oneAssetGotMany", field=_field_title(tool, key), count=len(refs))
+            value = refs[0] if refs else ""
+            if not value:
+                resolved.pop(key, None)
+                continue
         paths = []
         for ref in refs:
             # 每一份落进自己的子目录:两份素材同名(都叫 image.png)时不互相覆盖

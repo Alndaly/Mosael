@@ -109,6 +109,9 @@ def test_只给连线用的输出从不落板() -> None:
     assert landing_outputs(both) == ["image_9"]
     collected = {"image_9": "a1", "asset_id": "a1", "asset_ids": ["a1"], "summary": "1 张图", "prompt_id": "p1"}
     assert board_outputs(meta, collected) == [{"type": "asset", "asset_id": "a1"}], "一次运行只落一张图"
+    #: 那个保存节点一次交了两张(batch 2):口上是一串,两张都落,「第一份产出」照旧不落
+    batch = {"image_9": ["a1", "a2"], "asset_id": "a1", "asset_ids": ["a1", "a2"], "summary": "2 张图", "prompt_id": "p1"}
+    assert board_outputs(meta, batch) == [{"type": "asset", "asset_id": "a1"}, {"type": "asset", "asset_id": "a2"}]
 
 
 def test_没声明类型的输出_值是这一轮收进来的文件就是素材() -> None:
@@ -120,6 +123,9 @@ def test_没声明类型的输出_值是这一轮收进来的文件就是素材(
             "wiring_outputs": ["asset_ids"]}
     assert board_outputs(meta, {"image_9": "a1", "output_12": "a2", "asset_ids": ["a1", "a2"]}) == [
         {"type": "asset", "asset_id": "a1"}, {"type": "asset", "asset_id": "a2"}]
+    #: 自定义输出节点一次交了两份:口上是一串这一轮的文件,两份都是素材格,不是两张写着 id 的便签
+    assert board_outputs(meta, {"image_9": "a1", "output_12": ["a2", "a3"], "asset_ids": ["a1", "a2", "a3"]}) == [
+        {"type": "asset", "asset_id": "a1"}, {"type": "asset", "asset_id": "a2"}, {"type": "asset", "asset_id": "a3"}]
     assert board_outputs(meta, {"output_12": "一段字", "asset_ids": []}) == [{"type": "text", "text": "一段字"}]
 
 

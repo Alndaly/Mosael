@@ -166,7 +166,7 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
              workflow: str = "", one_workflow: bool = False) -> dict[str, Any]:
     """一条或几条历史 → 取回**全部**文件交给宿主(`artifacts`),外加一份按节点分的摘要和所有文字产出。
 
-    `one_workflow`:这几条是同一张图循环提交出来的(没有画布的图出 N 张),每个输出节点的具名输出照样记第一张;
+    `one_workflow`:这几条是同一张图循环提交出来的(跑几遍),每个输出节点的具名输出照样记上它每一遍的产出;
     `import_outputs` 取回的几条历史各是各的图,不记。"""
     files: list[dict[str, Any]] = []
     texts: list[dict[str, Any]] = []
@@ -187,14 +187,13 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
             "ComfyUI finished but produced nothing. The workflow needs a save / preview node (SaveImage, PreviewImage, a video combine…)",
         ))
     artifacts = run.download(comfy, files, Path(stem).stem or "comfyui") if files else []
-    # 每个输出节点的第一份记成一个具名输出(`image_9` / `video_30` …):声明了按节点输出的工具(每张工作流
-    # 自己的那个)下游可以直接接「那个保存节点的图」。宿主按 artifact 上的 `output` 把素材 id 填进去。
-    named: set[str] = set()
-    for one, artifact in zip(files, artifacts):
-        key = _named_output(one, one["media"])
-        if key not in named and (len(entries) == 1 or one_workflow):
-            artifact["output"] = key
-            named.add(key)
+    # 每个输出节点交出的**每一份**都记在它的具名输出上(`image_9` / `video_30` …):声明了按节点输出的工具(每张
+    # 工作流自己的那个)下游可以直接接「那个保存节点的图」。宿主按 artifact 上的 `output` 把素材 id 填进去 —— 一份
+    # 就是那一个 id,一批(batch_size 2、跑几遍)就是按顺序的一串(见宿主 plugins.tools._collect_artifact)。此前只记
+    # 第一份:一次出两张的图,那个口上、节点上只看得到一张,第二张只在「全部产出」那串 id 里。
+    if len(entries) == 1 or one_workflow:
+        for one, artifact in zip(files, artifacts):
+            artifact["output"] = _named_output(one, one["media"])
     summary: dict[str, dict[str, Any]] = {}
     for one, artifact in zip(files, artifacts):
         node = summary.setdefault(f"{one['prompt_id']}:{one['node']}", _node_summary(one, titles))

@@ -58,6 +58,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{field}” takes a list of values but got a name → value mapping (the old form's format, or an upstream "
               "output of the wrong shape): refill it on the node, one item per row",
     },
+    #: 只收一份素材的入参收到一串(上游一次出了好几张,见 plugins.inputs.materialize):不替人挑,说清两种接法。
+    "pluginErr_oneAssetGotMany": {
+        "zh": "「{field}」只收一份素材,上游交来了 {count} 份:只要一份,就改接上游只交一份的那个口(比如「第一份产出」);"
+              "每一份都要,就把这一步放进「循环·遍历」里,一份跑一次",
+        "en": "“{field}” takes one asset, but the upstream gave {count}: to use one, connect an upstream output that "
+              "gives a single asset instead (such as “First output”); to use every one, put this step in a "
+              "“Loop · for each” and run it once per asset",
+    },
     "pluginErr_assetNeedsWorkspace": {
         "zh": "这个工具要收一份素材,但这次调用没有归属工作区",
         "en": "This tool takes an asset, but this call doesn't belong to a workspace.",

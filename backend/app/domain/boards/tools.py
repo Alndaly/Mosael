@@ -252,6 +252,13 @@ def _sniff(value: Any) -> list[dict[str, Any]]:
     return [{"type": "json", "value": value}]
 
 
+def _all_collected(value: Any, collected: set[str]) -> bool:
+    """这个值是不是这一轮收进素材库的文件:一个 id,或者一串 id(一个输出节点一次交了好几份,见
+    plugins.tools._collect_artifact)—— 每一个都是才算。"""
+    ids = value if isinstance(value, list) else [value]
+    return bool(ids) and all(isinstance(one, str) and one in collected for one in ids)
+
+
 def landing_outputs(meta: dict[str, Any]) -> list[str]:
     """一次运行落成画板格子的是哪几个输出。**画板上只有这一条**(transforms 判「交不交出内容」也用它):
 
@@ -291,7 +298,7 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
         if data_type == "scene":
             #: 一个 3D 场景落成一格 3D 场景格;名字跟着(节点交出了 `name` 就用它)。
             produced.append({"type": "scene", "scene_id": str(value), "name": str(output.get("name") or "")})
-        elif data_type == "asset" or (data_type == "any" and isinstance(value, str) and value in collected):
+        elif data_type == "asset" or (data_type == "any" and _all_collected(value, collected)):
             ids = value if isinstance(value, list) else [value]
             produced.extend({"type": "asset", "asset_id": str(one)} for one in ids if isinstance(one, str) and one)
         elif data_type in ("text", "number", "sequence"):

@@ -116,6 +116,31 @@ def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any
     return config
 
 
+def one_asset_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any]:
+    """只收**一份**素材的字段(`asset_id`、`audio_asset_id`…),插值、绑定之后收到的是一串时:一份就是它;好几份不替人挑,
+    报出来说清两种接法(只要一份就改接上游只交一份的口;每一份都要就放进循环)。
+
+    一串从哪来:上游一次交好几份素材的口 —— 宫格切分的 `asset_ids`、一次出两张的 ComfyUI 工作流那个保存节点的口
+    (见 plugins.tools._collect_artifact)。此前一串原样交给执行器,`str()` 成 "['…', '…']",报的是「素材不在这个工作区」,
+    看不出是接错了口。收一串的字段(`asset_ids`,按名字认,和 config_data_type 同一套命名)照收。插件节点的入参在
+    plugins.inputs.materialize 按同一条规矩查(那边按 input_schema 认一份还是一串)。
+    """
+    from app.domain.workflows import NODE_TYPES, WorkflowDomainError, config_data_type, field_name
+
+    fields = (NODE_TYPES.get(node_type) or {}).get("config") or {}
+    for key, spec in fields.items():
+        value = config.get(key)
+        if not isinstance(value, list) or config_data_type(key, spec) != "asset":
+            continue
+        if key == "asset_ids" or key.endswith("_asset_ids"):
+            continue
+        refs = [str(one) for one in value if one not in (None, "")]
+        if len(refs) > 1:
+            raise WorkflowDomainError("wfErr_oneAssetGotMany", params={"field": field_name(key, spec), "count": len(refs)})
+        config[key] = refs[0] if refs else ""
+    return config
+
+
 def interpolate_node_config(
     node_type: str, config: dict[str, Any], context: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:

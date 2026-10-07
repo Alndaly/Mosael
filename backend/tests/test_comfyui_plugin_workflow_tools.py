@@ -9,7 +9,7 @@
   内置文生图是 `wf_builtin_txt2img`;
 - 入参:提示词 / 素材(带种类)/ 参数(人话名字、范围、可选值、高级)/ 种子尺寸张数(高级),必填的是真必须的;
 - 输出按输出节点声明;`replaces` 说清楚老的 `run_workflow` 怎么改写过来(`values` 按节点 id 和按节点标题的都认);
-- 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点的第一份记成具名输出;
+- 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点交出的每一份都记在它的具名输出上;
 - 名字:起了精简表单标题的叫「工作流 · 标题」(和模型下拉同一个名字),工具名不跟着变。
 """
 
@@ -201,7 +201,8 @@ def test_跑一张工作流的工具_字符串转回类型_素材接上_具名�
     assert prompt["5"]["inputs"]["width"] == 832, "空着的格子不接"
     assert prompt["10"]["inputs"]["image"].startswith("mosael/") and prompt["10"]["inputs"]["image"].endswith("参考.png")
     first, second = result["artifacts"]
-    assert first["output"] == "image_9" and "output" not in second, "每个输出节点的第一份是那个具名输出"
+    assert first["output"] == second["output"] == "image_9", (
+        "那个保存节点交出的两张都记在它的口上(宿主收成一串),不是只记第一张 —— 一次出两张的图,节点上只看得到一张")
     assert result["text_40"] == "一只猫"
 
 
@@ -227,7 +228,7 @@ def test_工具的张数是跑几遍_缺省一遍_画布上存着的batch_size�
 
 def test_没有画布的图的工具也能出N张_循环提交_每张的种子交回(comfy, tmp_path: Path) -> None:
     """和生成那一路同一件事(run.run_repeated):局部重绘的工具给了张数就循环提交,给了种子依次 +1;交回全部产出、
-    每次的任务号和种子,每个输出节点的那个具名输出是第一张。"""
+    每次的任务号和种子,每一遍的产出都记在那个输出节点的具名输出上。"""
     from tests.fake_comfyui import INPAINT_MUTED_FIRST_PASS_API, INPAINT_NODE_INFO
 
     comfy.state.object_info.update(json.loads(json.dumps(INPAINT_NODE_INFO)))
@@ -247,7 +248,7 @@ def test_没有画布的图的工具也能出N张_循环提交_每张的种子�
     assert [one["prompt"]["13"]["inputs"]["seed"] for one in comfy.posted("/prompt")] == [5, 6]
     assert result["seeds"] == [5, 6] and result["prompt_ids"] == ["p1", "p2"]
     first, second = result["artifacts"]
-    assert first["output"] == "image_16" and "output" not in second
+    assert first["output"] == second["output"] == "image_16", "跑两遍:两遍的产出都在那个口上"
 
 
 def test_工具的宽高也按8的倍数取整(comfy, tmp_path: Path) -> None:

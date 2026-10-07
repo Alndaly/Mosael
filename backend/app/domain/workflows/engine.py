@@ -51,7 +51,7 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.graph_rules import run_params
 from app.domain.workflows.node_types import node_title
-from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
+from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config, one_asset_fields
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.graph_run import GraphRun
@@ -618,7 +618,7 @@ def run_graph(
             snapshot = dict(context)
         # **先插值字面量,再覆盖数据边的值** —— 顺序就是这条规矩的全部(见 binding.apply_data_edges)。
         config = interpolate_node_config(ntype, dict(node.get("config") or {}), snapshot)
-        config = check_number_fields(ntype, apply_data_edges(nid, config, edges, snapshot))
+        config = one_asset_fields(ntype, check_number_fields(ntype, apply_data_edges(nid, config, edges, snapshot)))
         if ntype == "start":
             return run_params(config.get("params"), params)
         handler = get_executor(ntype)
