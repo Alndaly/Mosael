@@ -61,6 +61,9 @@ class AgentSession(Base):
     #: 是迁移加的、没有外键约束,不能指望数据库替我们 SET NULL。
     group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
+    #: 这个名字是谁起的(见 domain/agent/titles):`auto` 还由我们起(占位名,或第一句话那个临时的)、`generated` 第一轮问答
+    #: 之后模型照实际内容起的、`manual` 人起的(改过名,或建的时候就给了名字)—— 人起的永远不碰。
+    title_source: Mapped[str] = mapped_column(String(16), nullable=False, default="auto", server_default="auto")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
     #: 智能体要求界面跳到哪儿(`view` 或 `view:id`),**待消费一次**。
     #:

@@ -8233,6 +8233,79 @@ def _migrate_agent_sessions_remember_where_they_were_opened() -> None:
             )
 
 
+def _migrate_agent_sessions_know_who_named_them() -> None:
+    """`agent_sessions.title_source`:这个名字是谁起的(维护者 2026-10-07 对 ADR 0044 的修订,见 domain/agent/titles)。
+
+    `auto` 还由我们起、`generated` 第一轮问答之后模型起的、`manual` 人起的 —— 人起的永远不碰。老对话分不清哪些是人改过的,
+    一律按人起的算(`manual`):名字已经在历史里认了好久,宁可不替它起,也不能盖掉一个人改的名字。还叫「新对话」的(说过话、
+    却从没起过名的,比如只收到过别的对话的通知)留 `auto`,它下一次有人说话时照常起名。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 AgentSession 已经指望它在了。只在这一轮真加了列时回填。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
+        if not columns or "title_source" in columns:
+            return
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN title_source VARCHAR(16) NOT NULL DEFAULT 'auto'"))
+        conn.execute(text("UPDATE agent_sessions SET title_source = 'manual' WHERE title != '新对话'"))
+
+
+def _drop_empty_agent_sessions() -> None:
+    """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
+
+    此前「新对话」一点就建一行、改一下模型也先建一行,历史里攒下一排「新对话」。现在打开智能体是一段还没建出来的草稿,
+    第一句话发出去才建(见 frontend features/agent/currentAgentSession),这些空行没有任何东西指着,删掉。判据在下面:
+    **有一条消息、一张卡、一笔用量的都不删**。它们的共享记录一起删(否则留下指向空的共享行)。
+
+    排在 SCHEMA 之后、重建删列之后:那时死路由建的那批已经是 `ui` 了,空的一起删。
+    """
+    tables = set(inspect(engine).get_table_names())
+    needed = {"agent_sessions", "agent_messages", "tool_confirmations", "agent_questions", "agent_skills", "provider_usage_events"}
+    if not needed <= tables:
+        return
+    #: 「空的」:界面上从没说过话的那种 —— 没有一条消息(排着的话、任务回执也是消息)、没有确认卡、没有选择卡、没有技能记着它、
+    #: 没有记在它名下的用量。只删界面建的(飞书那种不进界面清单)。
+    empty_sql = (
+        "SELECT s.id FROM agent_sessions s WHERE s.origin = 'ui'"
+        " AND NOT EXISTS (SELECT 1 FROM agent_messages m WHERE m.session_id = s.id)"
+        " AND NOT EXISTS (SELECT 1 FROM tool_confirmations c WHERE c.session_id = s.id)"
+        " AND NOT EXISTS (SELECT 1 FROM agent_questions q WHERE q.session_id = s.id)"
+        " AND NOT EXISTS (SELECT 1 FROM agent_skills k WHERE k.agent_session_id = s.id)"
+        " AND NOT EXISTS (SELECT 1 FROM provider_usage_events u WHERE u.source_type = 'agent_session' AND u.source_id = s.id)"
+    )
+    with engine.begin() as conn:
+        empty = [row[0] for row in conn.execute(text(empty_sql))]
+        for session_id in empty:
+            if "resource_shares" in tables:
+                conn.execute(
+                    text("DELETE FROM resource_shares WHERE kind = 'agent_session' AND resource_id = :id"), {"id": session_id}
+                )
+            conn.execute(text("DELETE FROM agent_sessions WHERE id = :id"), {"id": session_id})
+    if empty:
+        logger.info("deleted %d empty agent conversations (never had a message)", len(empty))
+
+
+def _drop_dead_agent_session_columns() -> None:
+    """删掉 `agent_sessions` 上早就没人读、模型上也没有了的列 —— 下一步重建这张表之前。
+
+    重建(`_rebuild_dropping`)遇到模型上没有、又不在删除名单里的列会拒绝动手(那可能是谁的数据),所以老库里还留着的死列
+    得先在这里点名删掉。翻遍这张表的历史(Alembic 0008 建表、之后的 ORM 和本文件的加列),模型上已经没有的只有这两列:
+
+    - `adapter_session_id`:给 Claude Code CLI 那条适配器的 `--resume` 用的。`4a2e51e4b`「删掉 claude 适配器」之后再没人写、
+      没人读,但从 Alembic 0008 那一代升上来的库里一直留着(维护者的库里 63 行全是 NULL;更老的装机可能还存着值,同样没有读者);
+    - `sort_order`:`_migrate_agent_session_order` 删过一次,可那一步遇到不支持 DROP COLUMN 的老 SQLite 会跳过、并且照样记账,
+      之后不会再试 —— 那种库里它还在。
+
+    两列都没有索引、外键和约束,`DROP COLUMN` 直接删。删不掉就让启动报错(说清是哪一步),不悄悄跳过:跳过的话下一步重建照样拒绝。
+    表还没有就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
+        for dead in ("adapter_session_id", "sort_order"):
+            if dead in columns:
+                conn.execute(text(f"ALTER TABLE agent_sessions DROP COLUMN {dead}"))
+
+
 def _drop_agent_sessions_project_id() -> None:
     """删掉 `agent_sessions.project_id`:它由家代替了(ADR 0044 §1,上一步已经把不空的那些转成家)。
 
@@ -8487,6 +8560,8 @@ def migration_plan() -> MigrationPlan:
                 # 同上:ORM 上的 AgentSession 指望「家」两列和 pending_view_at 在(ADR 0044)。读 project_id 和 origin='workflow'
                 # 那批转成家,所以排在 SCHEMA 之后删 project_id 的那一步之前。
                 _migrate_agent_sessions_remember_where_they_were_opened,
+                # 同上:ORM 上的 AgentSession 指望「名字是谁起的」那一列在。
+                _migrate_agent_sessions_know_who_named_them,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -8673,7 +8748,10 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_gemini_chat_prices),
             #: `agent_sessions.project_id` 由家代替(ADR 0044):带外键的列删不掉,重建这张表。要在 SCHEMA 之后 —— 新表照现在的
             #: ORM 建,那时 ORM 要的列都已经在老表上;要在上面 BEFORE_SCHEMA 那一步把 project_id 转成家之后。
-            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_agent_sessions_project_id),
+            #: 重建之前先删老库里还留着的死列(`adapter_session_id`、没删掉的 `sort_order`),否则重建的守卫会拒绝动手。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_dead_agent_session_columns, _drop_agent_sessions_project_id),
+            #: 从没说过话的空对话删掉(打开智能体是草稿之后,它们没有任何东西指着)。排在上一步之后:死路由那批这时已是 ui。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_empty_agent_sessions),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

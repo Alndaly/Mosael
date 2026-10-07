@@ -11,6 +11,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "AI 调用",
         "en": "AI call",
     },
+    "aiChat_labelAgentTitle": {
+        "zh": "给对话起名",
+        "en": "Naming the conversation",
+    },
     "aiChatErr_http": {
         "zh": "{label}失败:{status} {detail}（模型 {model}）",
         "en": "{label} failed: {status} {detail} (model {model})",

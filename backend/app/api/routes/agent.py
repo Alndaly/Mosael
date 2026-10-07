@@ -45,7 +45,7 @@ from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_toolsets
 from app.domain import session_groups
-from app.domain.agent import places
+from app.domain.agent import places, titles
 from app.domain.agent import questions as agent_questions
 from app.domain.agent.sessions import readable_session, writable_session
 
@@ -249,6 +249,8 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     kept_updated_at = session.updated_at
     if body.title is not None:
         session.title = body.title
+        #: 人起的名字:之后不再替它起(见 domain/agent/titles)。
+        session.title_source = titles.MANUAL
     if body.provider_profile_id is not None:
         try:
             session.provider_profile_id = agent_use_cases.checked_profile_id(db, user, body.provider_profile_id)

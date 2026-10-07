@@ -122,6 +122,22 @@ def _catalog_returns_nothing(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _conversations_are_not_named_over_the_network(monkeypatch):
+    """**测试套不替对话起名。**
+
+    第一轮答完会另起一个线程,用这段对话的模型照聊的内容起名(domain/agent/titles)。测试里配的都是假地址,真去连
+    就是出网、重试、退避,线程还活过测试本身 —— 和模型目录那条同一个道理(见 _no_model_catalog_network)。起不出名字
+    本来就停在第一句话那个名字上,这里的默认就是那样。要测起名的用例自己 monkeypatch `titles._ask`。
+    """
+    from app.domain.agent import titles
+
+    def unreachable(*_args, **_kwargs):
+        raise RuntimeError("the test suite does not name conversations over the network")
+
+    monkeypatch.setattr(titles, "_ask", unreachable)
+
+
+@pytest.fixture(autouse=True)
 def _no_remote_size_network():
     """**测试套不许去问下载源的文件大小。**
 

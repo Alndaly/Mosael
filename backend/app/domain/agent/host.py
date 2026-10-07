@@ -31,6 +31,7 @@ from app.domain.agent.stream import (
     _timeline_for_payload,
 )
 from app.domain.agent import origins
+from app.domain.agent import titles
 from app.domain.agent.places import STUDIO_PLACE, Place
 from app.domain.agent.textclean import decode_byte_fallback
 from app.domain.providers import models as provider_models
@@ -211,6 +212,7 @@ def create_session(
         origin=origin,
         external_key=external_key,
         title=title,
+        title_source=titles.initial_source(title),
         adapter=adapter or default_adapter(),
         provider_profile_id=provider_profile_id,
         model=model or None,
@@ -558,7 +560,8 @@ def post_user_message(
         content=content,
         payload=dict(stored),
     )
-    if session.title == "新对话" and content.strip() and not origin_session_id:
+    #: 先用第一句话当名字;第一轮答完再照实际聊的内容起一个(见 titles)。人起过名的不碰。
+    if session.title_source == titles.AUTO and session.title == titles.PLACEHOLDER and content.strip() and not origin_session_id:
         session.title = session_title(content)
     # 还没交给智能体的回执(只会是上一轮收尾和这条消息之间到的)搭这一轮的车,排在这条消息之前。
     # 先交再落这条:交出去的回执时间戳改成现在,这条消息落库在它们之后。
@@ -629,6 +632,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
     result: TurnResult | None = None
     #: 准备或运行时的失败,留到落库那一段里按原样抛出 —— 和那里自己抛的错走同一组 except。
     failure: BaseException | None = None
+    #: 这是这段对话第一轮成功的回答:收尾之后照实际聊的内容给它起个名字(见 titles)。
+    name_it = False
 
     # ---- 1. 准备:短会话,读完就还连接 ----
     # **跑模型的那几分钟不占数据库连接。** 此前整轮包在一个会话里:一轮对话几分钟,连接就被钉几分钟,
@@ -732,6 +737,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             )
             db.add(assistant_message)
             db.flush()
+            name_it = titles.wants_a_name(db, session)
             if provider_vendor or provider_model:
                 # 记账的形状交给 billable(归属、耗时、幂等、落库);这里只报计量。
                 # 成本要写进消息 payload,而它是落库时才算出来的 —— 所以在 with 块之后读回。
@@ -855,6 +861,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             _stream_finish(session_id, final_text)
     # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
     origins.turn_finished(origin, session_id)
+    if name_it:
+        # 另起一个线程:会话已经空闲了,排着的下一轮不等它。线程名和这一轮一样 —— 测试收尾时等的是同一类线程。
+        titles.start(session_id, actor_id, thread_name=TURN_THREAD_NAME, resolve_chat_provider=resolve_chat_provider)
     # Outside the session block on purpose: the drain opens its own session and starts the
     # next turn, and doing that while this one still held the connection would nest them.
     _drain_queue(session_id)

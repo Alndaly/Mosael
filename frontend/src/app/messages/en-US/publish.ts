@@ -314,7 +314,7 @@ export const publish = {
   poolNameLabel: "Profile name",
   poolNamePlaceholder: "e.g. Douyin alt / scraping account",
   poolProxyHint: "Empty = direct. Format http(s)://[user:pass@]host:port or socks5://host:port.",
-  chatNoSessions: "No conversations yet — hit New chat to start.",
+  chatNoSessions: "No conversations yet — your first message on the right starts one.",
   chatSearchSessions: "Search conversations…",
   chatSearchNoMatch: "No matching conversation",
   chatNewGroup: "New group",
