@@ -3,9 +3,15 @@ import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowDownLeft,
   Check,
+  CircleStop,
+  ClipboardList,
+  Clock3,
   Cpu,
   Eye,
+  Film,
+  Image as ImageIcon,
   Images,
   Music,
   Ratio,
@@ -15,6 +21,7 @@ import {
   Loader2,
   Send,
   Sparkles,
+  Square,
   Wand2,
   X,
 } from "lucide-react";
@@ -25,6 +32,7 @@ import {
   assetFileUrl,
   assetPreviewUrl,
   assetThumbnailUrl,
+  cancelJob,
   entityReceipt,
   optimizeImagePrompt,
   type EntitySummary,
@@ -66,10 +74,11 @@ import {
 } from "@/components/generation/parameterPanel";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { useGenerationOptions } from "@/lib/generationOptions";
-import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
+import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
 import {
+  appForm,
   aspectRatioOptions,
   booleanParameterKeys,
   capabilityBoolean,
@@ -85,6 +94,7 @@ import {
   customSizeRule,
   countsRuns,
   maxImages,
+  outputsPerRun,
   parameterChoiceEntries,
   pickGenerationOption,
   runsHint,
@@ -93,10 +103,14 @@ import {
   sourceLimit,
   exclusiveSourceGroups,
   hasEnoughText,
+  promptDefault,
   promptMode,
   promptToSend,
   videoResolutionOptions,
   withTriggerWords,
+  type AppForm,
+  type AppFormItem,
+  type DeclaredParameter,
 } from "@/lib/generationCapabilities";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
@@ -107,6 +121,7 @@ import {
   AUDIO_SOURCE_HINTS,
   GeneratedAudioList,
   LyricsField,
+  PendingAudioList,
   audioSourceRoles,
   lyricsLimit,
 } from "@/features/ai-studio/audioGeneration";
@@ -129,6 +144,7 @@ import {
 } from "@/lib/sourceFrames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
@@ -323,6 +339,10 @@ export function GenerateWorkspace({
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
   const [parametersOpen, setParametersOpen] = React.useState(() => !narrowLayout);
+  //: 右栏「引擎参数」(焦点要落进去)。底下那枚模型按钮点了:开着的就把模型那一块亮一下(engineFlash 是这一次的时刻)。
+  const enginePanel = React.useRef<HTMLElement>(null);
+  const enginePanelId = React.useId();
+  const [engineFlash, setEngineFlash] = React.useState(0);
   const kinds = GENERATION_MEDIA[medium];
   //: 两页各记各的「上次开着哪条」—— 同一个键的话,切到另一页会先落在一条不属于它的会话上。
   const sessionKey = `${generationSessionSelectionKey(workspace.id)}.${medium}`;
@@ -376,7 +396,10 @@ export function GenerateWorkspace({
       const activeJobIds = new Set(
         (jobs.data ?? []).filter((job) => job.status === "queued" || job.status === "running").map((job) => job.id),
       );
-      return query.state.data?.some((generation) => generation.job_id && activeJobIds.has(generation.job_id)) ? 1000 : false;
+      if (query.state.data?.some((generation) => generation.job_id && activeJobIds.has(generation.job_id))) return 1000;
+      //: 刚停下的那一条,账是执行体收完尾才记的(先让服务商 / 插件把远端那一次停掉,见后端 runner._settle_after_cancel),
+      //: 比任务落「已停止」晚几秒:再看几眼,脚注里「未扣费」或金额才出得来。
+      return query.state.data?.some(settlingAfterStop) ? 2000 : false;
     },
     refetchOnWindowFocus: true,
   });
@@ -413,8 +436,6 @@ export function GenerateWorkspace({
   //: 去配置时落到哪一页:选中的模型是哪种能力就去哪种;一个都没选时看会话记着的能力,再没有才去图像。
   const settingsSection = `providers:${selectedModel?.kind ?? activeSession?.kind ?? kinds[0]}`;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
-  const selectedSizes = sizeOptions(selectedModel);
-  const selectedCustomSize = customSizeRule(selectedModel);
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
@@ -437,23 +458,26 @@ export function GenerateWorkspace({
   const selectedPromptMode = promptMode(selectedModel);
   //: 输入框占位和空态正文说的是同一句话,按所选模型来:可选的说可选,音频说声音,其余说画面。
   //: 不收提示词的那一句由输入框那一格说,空态不再重复一遍。
+  //: 可以不写、而且说得出不写用哪一句的(ComfyUI 工作流里存着一句):占位就说「不写就用工作流里存的那句」,不再是笼统的
+  //: 「不写也能生成」—— 那句话没说生成的是什么。
   const promptHintKey =
     selectedPromptMode === "none"
       ? "genPromptNotUsed"
       : selectedPromptMode === "optional"
-        ? "promptPlaceholderOptional"
+        ? promptDefault(selectedModel) ? "promptPlaceholderStored" : "promptPlaceholderOptional"
         : isAudioModel
           ? "audioPromptPlaceholder"
           : "promptPlaceholder";
+  //: 作者给这张工作流挑的那张表(精简表单):有就照它摆右栏(见 appFormPanel)
+  const selectedForm = appForm(selectedModel);
+  //: 输入框:表单里「提示词」那一项的「去写」把焦点送过来
+  const composer = React.useRef<HTMLTextAreaElement>(null);
   const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
   const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
   const selectedAudioRoles = audioSourceRoles(selectedModel);
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
-  // 尾帧:首尾帧一起给 = 让模型从一张图动到另一张图。只有描述符声明了的模型才出这个控件 ——
-  // 控件跟着描述符走,不按 kind 写死(见 docs/CONVENTIONS 那条棘轮)。
-  const supportsLastFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "last_frame");
   // 视频的参考素材:参考图/参考视频/参考音频。它们和首尾帧**不是一回事** —— 首尾帧决定
   // 成片的第一格和最后一格,参考素材一帧都不出现在成片里,只影响风格与主体。
   const videoReferenceRoles = (["reference_image", "reference_video", "reference_audio"] as const).filter(
@@ -722,6 +746,17 @@ export function GenerateWorkspace({
     },
   });
 
+  //: 停下一条:取消它的任务(和任务中心的「取消」、画板的「停止」同一条路,见后端 jobs.cancel_job)。任务落成「已停止」,
+  //: 跑在插件上的(ComfyUI)由插件把**这一次**的任务从那台机器上停掉 —— 在跑的中断、在排的撤掉,别人的不碰。
+  const stopGeneration = useMutation({
+    mutationFn: (jobId: string) => cancelJob(jobId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+    },
+    onError: (error) => toast.error(t("genStopFailed"), { description: errorText(error) }),
+  });
+
   //: 一条任务落了终态就重拉这条会话的记录:成功的带回产出,失败的带回**记录自己存的**失败原因
   //: (生成记录在任务失败那一刻抄下它,任务之后会被清掉,见后端 generation.runner.record_failure)。
   const settledCount = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").length;
@@ -733,6 +768,26 @@ export function GenerateWorkspace({
     }
   }, [settledCount, qc, workspace.id, activeSession?.id]);
 
+  //: 输入框底下那枚模型按钮:打开右边的「引擎参数」,焦点落到模型选择上。**已经开着也要有反应** —— 此前它只会
+  //: setParametersOpen(true),栏开着时点了什么都不发生(维护者:「点击底部这个 ComfyUI 开头的这一串没有任何反应」)。
+  //: 现在开着就把模型那一块亮一下,焦点照样过去;收起栏用栏头的 ×、或顶上那颗「引擎参数」。
+  const showEngineSettings = () => {
+    setParametersOpen(true);
+    setEngineFlash(Date.now());
+  };
+  React.useEffect(() => {
+    if (!engineFlash) return;
+    //: 等栏挂出来(收着的时候它是 hidden,里面的东西接不住焦点)
+    const frame = window.requestAnimationFrame(() => {
+      enginePanel.current?.querySelector<HTMLElement>("[data-engine-picker] button")?.focus();
+    });
+    const timer = window.setTimeout(() => setEngineFlash(0), 1200);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [engineFlash]);
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (readOnly || !canSubmitText || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
@@ -742,6 +797,280 @@ export function GenerateWorkspace({
     }
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     createGeneration.mutate();
+  };
+
+  //: ---- 右栏的一格一格 ----
+  //: 通用的那几栏(出片规格、素材、调参)和「精简表单」(作者挑的那张表)摆的是**同一些控件**:表单只是换了顺序和名字。
+  //: 所以每一格只写一处,两边都叫它 —— 不为表单另抄一份尺寸、种子、参考图。
+  const sizeField = (model: GenerationEngineOption, label = t("genSize")) => {
+    const sizes = sizeOptions(model);
+    if (!supportsParameter(model, "size") || sizes.length === 0) return null;
+    const custom = customSizeRule(model);
+    return (
+      <ParameterField key="size" label={label}>
+        {custom ? (
+          /* 推荐的几档、手填的也收(ComfyUI 的工作流) */
+          <CustomSizePicker
+            value={generationConfig.size}
+            onChange={(value) => setConfigValue("size", value)}
+            options={sizes}
+            minimum={custom.minimum}
+            ariaLabel={label}
+            className={PARAMETER_CONTROL_CLASS}
+          />
+        ) : (
+          <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+            <SelectTrigger className={PARAMETER_CONTROL_CLASS} aria-label={label}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sizes.map((size) => (
+                <SelectItem key={size} value={size}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </ParameterField>
+    );
+  };
+  const numImagesField = (model: GenerationEngineOption, label = generationParameterLabel("num_images", model, t)) =>
+    supportsParameter(model, "num_images") ? (
+      // ComfyUI 的工作流「张数」是跑几遍:标签换成「跑几遍」,下面说清一遍出几张、一共几张(见 runsHint)。
+      <ParameterField
+        key="num_images"
+        label={label}
+        hint={countsRuns(model)
+          ? runsHint(t, model, generationParameters(model, generationConfig),
+            Math.max(1, Math.min(maxImages(model), Number(generationConfig.numImages) || 1)))
+          : undefined}
+      >
+        <Input
+          className={PARAMETER_CONTROL_CLASS}
+          type="number"
+          aria-label={label}
+          min={1}
+          max={maxImages(model)}
+          value={generationConfig.numImages}
+          onChange={(event) => setConfigValue("numImages", event.target.value)}
+        />
+      </ParameterField>
+    ) : null;
+  const seedField = (label = t("genSeed")) => (
+    <ParameterField key="seed" label={label}>
+      <Input
+        className={PARAMETER_CONTROL_CLASS}
+        type="number"
+        aria-label={label}
+        placeholder="auto"
+        value={generationConfig.seed}
+        onChange={(event) => setConfigValue("seed", event.target.value)}
+      />
+    </ParameterField>
+  );
+  const negativePromptField = (label = t("genNegativePrompt")) => (
+    <ParameterField key="negative_prompt" label={label}>
+      <Input
+        className={PARAMETER_CONTROL_CLASS}
+        aria-label={label}
+        value={generationConfig.negativePrompt}
+        onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
+      />
+    </ParameterField>
+  );
+  const setDeclared = (key: string, value: string) =>
+    setGenerationConfig((current) => ({ ...current, declared: { ...current.declared, [key]: value } }));
+  const declaredField = (model: GenerationEngineOption, parameter: DeclaredParameter, label?: string) => (
+    <ParameterField
+      key={parameter.key}
+      // 宿主认得的参数名(人声、曲名……)按界面语言说;插件自己的参数用插件给的名字(表单里用表单上的名字)。
+      label={label ?? (GENERATION_PARAMETER_LABELS[parameter.key] ? t(GENERATION_PARAMETER_LABELS[parameter.key]) : parameter.label)}
+      title={toPlainText(parameter.description) || undefined}
+    >
+      {parameter.modelFolder && model.plugin_instance_id && parameter.options.length > 0 ? (
+        /* 选模型文件的那一格:缩略图、底模、触发词来自这个连接的模型库,选中 LoRA 能一键加触发词 */
+        <ModelFilePicker
+          parameter={parameter}
+          instanceId={model.plugin_instance_id}
+          value={generationConfig.declared[parameter.key] ?? ""}
+          onChange={(value) => setDeclared(parameter.key, value)}
+          onUseTriggers={(words) => setPrompt((current) => withTriggerWords(current, words))}
+          className={PARAMETER_CONTROL_CLASS}
+        />
+      ) : (
+        <DeclaredParameterControl
+          parameter={parameter}
+          value={generationConfig.declared[parameter.key] ?? ""}
+          onChange={(value) => setDeclared(parameter.key, value)}
+        />
+      )}
+    </ParameterField>
+  );
+  //: 图像的参考图和视频那边**是同一件事**,所以用同一个控件:一行缩略图、一次能选多张、上限读描述符(seedream 4 十四张、
+  //: qwen 三张、gpt-image 十六张)。手挑了图就不再"用上一张结果" —— 两个都开着的话,发出去的是哪张全看代码顺序。
+  const referenceImageField = (model: GenerationEngineOption) => (
+    <div key="reference_image" className="grid gap-1.5">
+      <FrameSlotField
+        role="reference_image"
+        slots={generationConfig.frames.reference_image}
+        limit={sourceLimit(model, "reference_image")}
+        names={sourceLabels(model, "reference_image")}
+        onChange={(slots) =>
+          setGenerationConfig((current) => ({
+            ...current,
+            frames: { ...current.frames, reference_image: slots },
+            usePreviousImage: slots.some((one) => one.assetId || one.url.trim()) ? false : current.usePreviousImage,
+          }))
+        }
+        workspaceId={workspace.id}
+      />
+      {latestImageResult?.result_asset_id && !generationConfig.frames.reference_image[0]?.assetId && (
+        <Button
+          type="button"
+          variant={generationConfig.usePreviousImage ? "outline" : "ghost"}
+          size="sm"
+          onClick={generationConfig.usePreviousImage ? clearReferenceImage : usePreviousImageAsReference}
+        >
+          {t("genUsePreviousImage")}
+        </Button>
+      )}
+    </div>
+  );
+  const keyframesField = (model: GenerationEngineOption) => {
+    // 尾帧:首尾帧一起给 = 让模型从一张图动到另一张图。只有描述符声明了的模型才出这个控件 ——
+    // 控件跟着描述符走,不按 kind 写死(见 docs/CONVENTIONS 那条棘轮)。
+    const withLast = model.kind === "video" && supportsParameter(model, "last_frame");
+    return (
+      <KeyframePairField
+        key="keyframes"
+        first={generationConfig.frames.first_frame}
+        last={generationConfig.frames.last_frame}
+        showLast={withLast}
+        onChange={({ first, last }) =>
+          setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, first_frame: first, last_frame: last } }))
+        }
+        workspaceId={workspace.id}
+        hint={withLast ? t("genLastFrameHint") : t("genKeyframeHint")}
+        names={{ first: sourceLabels(model, "first_frame")[0], last: sourceLabels(model, "last_frame")[0] }}
+        disabled={lockedRoles.has("first_frame")}
+        disabledReason={t("genSourceGroupsExclusive")}
+      />
+    );
+  };
+  const slotsField = (model: GenerationEngineOption, role: SourceRole, hint?: string) => (
+    <FrameSlotField
+      key={role}
+      role={role}
+      slots={generationConfig.frames[role]}
+      limit={sourceLimit(model, role)}
+      names={sourceLabels(model, role)}
+      onChange={(slots) => setFrames(role, slots)}
+      workspaceId={workspace.id}
+      hint={hint}
+      disabled={lockedRoles.has(role)}
+      disabledReason={t("genSourceGroupsExclusive")}
+    />
+  );
+  /** 表单上的一个素材角色:和通用那一栏同一个控件、同一句提示(图像的参考图带「用上一张结果」,首尾帧成一对)。 */
+  const sourceField = (model: GenerationEngineOption, role: SourceRole) => {
+    if (role === "reference_image" && model.kind === "image") return referenceImageField(model);
+    if ((role === "first_frame" || role === "last_frame") && model.kind === "video") return keyframesField(model);
+    const hint =
+      model.kind === "audio" && role in AUDIO_SOURCE_HINTS ? t(AUDIO_SOURCE_HINTS[role as keyof typeof AUDIO_SOURCE_HINTS])
+        : role in VIDEO_INPUT_HINTS ? t(VIDEO_INPUT_HINTS[role as keyof typeof VIDEO_INPUT_HINTS])
+          : role.startsWith("reference_") ? t("genReferenceHint")
+            : undefined;
+    return slotsField(model, role, hint);
+  };
+  /**
+   * 表单上的主提示词:它就是下面那个输入框,这里说清楚 —— 去那儿写;可以不写的,说清不写用哪一句(工作流里存着的那句),
+   * 一键填进输入框改。此前右栏对这一项一个字都没有,看着和工作流库里那张表(标题、说明、「提示词」)对不上。
+   */
+  const formPromptField = (model: GenerationEngineOption, label: string) => {
+    const stored = promptDefault(model);
+    const optional = promptMode(model) === "optional";
+    return (
+      <div key="prompt" className="grid gap-1.5 text-ui-sm text-muted-foreground" data-form-prompt="">
+        <span>{label}</span>
+        <div className="grid gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2">
+          <span className="flex items-center gap-1.5 text-ui-xs font-medium text-foreground">
+            <ArrowDownLeft size={13} className="shrink-0 text-muted-foreground" aria-hidden />
+            {t(optional ? "genFormPromptOptional" : "genFormPromptInComposer")}
+          </span>
+          {optional && stored ? (
+            <Truncate lines={3} className="text-ui-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+              {t("genFormPromptStored").replace("{prompt}", stored)}
+            </Truncate>
+          ) : null}
+          <div className="flex flex-wrap gap-1">
+            <Button type="button" variant="ghost" size="xs" onClick={() => composer.current?.focus()}>
+              {t("genFormPromptWrite")}
+            </Button>
+            {optional && stored ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  setPrompt(stored);
+                  composer.current?.focus();
+                }}
+              >
+                {t("genFormPromptUseStored")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  /**
+   * 「精简表单」那一栏:表的标题、说明,然后**表上的每一项,按表上的顺序、用表上的名字**(后端描述符的 `form`,来自插件说的
+   * 那张表)。表之外、每张工作流都有的那一两个选项(「结果取自」)另起一栏放在后面,不混进表里。
+   */
+  const appFormPanel = (model: GenerationEngineOption, form: AppForm) => {
+    const parameters = new Map(declaredParameters(model).map((parameter) => [parameter.key, parameter]));
+    const inForm = new Set(form.items.map((item) => item.key));
+    const rest = [...parameters.values()].filter((parameter) => !inForm.has(parameter.key));
+    const field = (item: AppFormItem) => {
+      if (item.key === "prompt") return selectedPromptMode === "none" ? null : formPromptField(model, item.label || t("genPromptLabel"));
+      if (item.key === "negative_prompt") return negativePromptField(item.label || undefined);
+      if (item.key === "seed") return seedField(item.label || undefined);
+      if (item.key === "size") return sizeField(model, item.label || undefined);
+      if (item.key === "num_images") return numImagesField(model, item.label || undefined);
+      if ((SOURCE_ROLES as readonly string[]).includes(item.key)) return sourceField(model, item.key as SourceRole);
+      const parameter = parameters.get(item.key);
+      return parameter ? declaredField(model, parameter, item.label || undefined) : null;
+    };
+    //: 首帧和尾帧是一对、一个控件:表上两项都在时只摆一次
+    const shown = form.items.filter((item, index, all) =>
+      !(item.key === "last_frame" && model.kind === "video" && all.slice(0, index).some((one) => one.key === "first_frame")));
+    return (
+      <>
+        <ParameterSection icon={ClipboardList} title={t("genAppFormSection")}>
+          <div key="head" className="grid gap-0.5" data-app-form-head="">
+            <span className="text-ui-md font-semibold text-foreground">
+              <Truncate>{form.title || model.model_label}</Truncate>
+            </span>
+            {form.description.trim() ? (
+              <span className="text-ui-xs leading-relaxed text-muted-foreground">
+                <InlineMarkdown text={form.description} />
+              </span>
+            ) : null}
+          </div>
+          {shown.map(field)}
+          {needsDigitalHumanConsent && (
+            <DigitalHumanConsent key="consent" checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
+          )}
+        </ParameterSection>
+        {rest.length > 0 && (
+          <ParameterSection icon={SlidersHorizontal} title={t("genAppFormMore")}>
+            {rest.map((parameter) => declaredField(model, parameter))}
+          </ParameterSection>
+        )}
+      </>
+    );
   };
 
   return (
@@ -828,8 +1157,11 @@ export function GenerateWorkspace({
                 findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model)?.label
                 ?? `${generation.provider} · ${generation.model}`
               }
+              option={findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model)}
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
               gallery={sessionGallery}
+              onStop={readOnly ? undefined : (jobId) => stopGeneration.mutate(jobId)}
+              stopping={stopGeneration.isPending && stopGeneration.variables === generation.job_id}
             />
           ))}
         </div>
@@ -860,6 +1192,7 @@ export function GenerateWorkspace({
               </p>
             ) : (
               <Textarea
+                ref={composer}
                 rows={3}
                 className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
                 value={prompt}
@@ -902,16 +1235,19 @@ export function GenerateWorkspace({
                     <Wand2 size={14} />
                   </IconButton>
                 )}
-                {/* 模型是一个能点的东西(和对话页的模型选择器同一种样子):点开右边的「模型与参数」。
-                    此前它是一枚点不动的标签,要换模型得去找右上角那个按钮。 */}
+                {/* 模型是一个能点的东西(和对话页的模型选择器同一种样子):点开右边的「引擎参数」,焦点落到模型选择上;
+                    栏开着时这枚按钮是「按下」的样子(和顶上那颗「引擎参数」一样),点它把模型那一块亮一下。 */}
                 {selectedModel && (
                   //: 悬停说全名(按钮上的可能被截断)和点下去会去哪儿。
-                  <Hint label={selectedModel.label} hint={t("generationEngineSettings")}>
+                  <Hint label={selectedModel.label} hint={t("generationEngineChipHint")}>
                     <button
                       type="button"
-                      onClick={() => setParametersOpen(true)}
+                      onClick={showEngineSettings}
                       aria-label={t("generationEngineSettings")}
-                      className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+                      aria-controls={enginePanelId}
+                      data-engine-chip=""
+                      data-active={panelOpen ? "" : undefined}
+                      className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none data-[active]:border-primary/40 data-[active]:bg-accent data-[active]:text-foreground"
                     >
                       <Truncate>{selectedModel.label}</Truncate>
                       <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
@@ -942,6 +1278,8 @@ export function GenerateWorkspace({
           所以壳子也用同一个(InspectorCard)—— 标题行的字号字重、块与块之间的 gap-6、
           正文的 p-4,都跟着那边走,不再自成一套。 */}
       <aside
+        ref={enginePanel}
+        id={enginePanelId}
         className={cn(
           "flex min-h-0 min-w-0 flex-col border-l border-divider bg-workspace-panel",
           !panelOpen && "hidden",
@@ -978,8 +1316,14 @@ export function GenerateWorkspace({
           {/* 模型选择器**有模型就摆出来**,哪怕还没选中任何一个:没设默认时它显示「选择模型」等人选,
               而不是拿清单第一项顶上 —— 那样选中的就不是谁的选择(见 pickGenerationOption)。 */}
           {modelOptions.length > 0 && (
+            <div
+              data-engine-section=""
+              data-flash={engineFlash ? "" : undefined}
+              className="-m-2 rounded-lg p-2 transition-colors duration-500 data-[flash]:bg-accent data-[flash]:duration-150"
+            >
             <ParameterSection icon={Cpu} title={t("genSectionEngine")}>
               <ParameterField label={t("wfModelPreset")}>
+                <div data-engine-picker="" className="contents">
                 {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
                     每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
                     搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
@@ -997,6 +1341,7 @@ export function GenerateWorkspace({
                   emptyText={t("cmdkEmpty")}
                   className={PARAMETER_CONTROL_CLASS}
                 />
+                </div>
               </ParameterField>
               {/* 选中的是某台 ComfyUI 上的一张工作流:在工作台里打开它(画布 + 模型库、缺失项、应用、运行,ADR 0038) */}
               {selectedModel?.plugin_instance_id && (
@@ -1009,8 +1354,12 @@ export function GenerateWorkspace({
                 />
               )}
             </ParameterSection>
+            </div>
           )}
-          {selectedModel && (
+          {/* 作者给这张工作流挑了一张表(精简表单):右栏就是那张表 —— 表上的项、表上的顺序、表上的名字,
+              主提示词指向下面的输入框。和工作流库里那张表的「预览」说的是同一件事。 */}
+          {selectedModel && selectedForm && appFormPanel(selectedModel, selectedForm)}
+          {selectedModel && !selectedForm && (
             <>
 
               {/* 出片规格 = "出多大、出几张、出多久、带不带声" —— 看一眼就知道成片长什么样的那几栏。
@@ -1019,54 +1368,8 @@ export function GenerateWorkspace({
                 {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。
                     此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
                     参数描述符说了话而界面没听。 */}
-                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && selectedCustomSize && (
-                  /* 推荐的几档、手填的也收(ComfyUI 的工作流) */
-                  <ParameterField label={t("genSize")}>
-                    <CustomSizePicker
-                      value={generationConfig.size}
-                      onChange={(value) => setConfigValue("size", value)}
-                      options={selectedSizes}
-                      minimum={selectedCustomSize.minimum}
-                      ariaLabel={t("genSize")}
-                      className={PARAMETER_CONTROL_CLASS}
-                    />
-                  </ParameterField>
-                )}
-                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && !selectedCustomSize && (
-                  <ParameterField label={t("genSize")}>
-                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedSizes.map((size) => (
-                          <SelectItem key={size} value={size}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </ParameterField>
-                )}
-                {isImageModel && supportsParameter(selectedModel, "num_images") && (
-                  // ComfyUI 的工作流「张数」是跑几遍:标签换成「跑几遍」,下面说清一遍出几张、一共几张(见 runsHint)。
-                  <ParameterField
-                    label={generationParameterLabel("num_images", selectedModel, t)}
-                    hint={countsRuns(selectedModel)
-                      ? runsHint(t, selectedModel, generationParameters(selectedModel, generationConfig),
-                        Math.max(1, Math.min(maxImages(selectedModel), Number(generationConfig.numImages) || 1)))
-                      : undefined}
-                  >
-                    <Input
-                      className={PARAMETER_CONTROL_CLASS}
-                      type="number"
-                      min={1}
-                      max={maxImages(selectedModel)}
-                      value={generationConfig.numImages}
-                      onChange={(event) => setConfigValue("numImages", event.target.value)}
-                    />
-                  </ParameterField>
-                )}
+                {sizeField(selectedModel)}
+                {isImageModel && numImagesField(selectedModel)}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
                   <ParameterField label={t("genResolution")}>
                     <Select
@@ -1213,109 +1516,17 @@ export function GenerateWorkspace({
               {/* 挂进去的素材:首尾帧、参考图/视频/音频、要编辑或续写的那段片子。
                   它们都是"你给模型什么",和上面那块"模型给你什么"正好是两头。 */}
               <ParameterSection icon={Images} title={t("genSectionSources")}>
-                {isImageModel && supportsReferenceImage && (
-                  // 图像的参考图和视频那边**是同一件事**,所以用同一个控件:一行缩略图、一次能选
-                  // 多张、上限读描述符(seedream 4 十四张、qwen 三张、gpt-image 十六张)。
-                  // 此前这里自成一套 —— 单张、老样式,于是同一个"参考图"在两个 tab 里长得不一样,
-                  // 能挂的份数也不一样,而那个差别纯粹是没人来改。
-                  <div className="grid gap-1.5">
-                    <FrameSlotField
-                      role="reference_image"
-                      slots={generationConfig.frames.reference_image}
-                      limit={sourceLimit(selectedModel, "reference_image")}
-                      names={sourceLabels(selectedModel, "reference_image")}
-                      onChange={(slots) =>
-                        setGenerationConfig((current) => ({
-                          ...current,
-                          frames: { ...current.frames, reference_image: slots },
-                          // 手挑了图就不再"用上一张结果" —— 两个都开着的话,发出去的是哪张
-                          // 全看代码顺序,而界面上两处都亮着。
-                          usePreviousImage: slots.some((one) => one.assetId || one.url.trim())
-                            ? false
-                            : current.usePreviousImage,
-                        }))
-                      }
-                      workspaceId={workspace.id}
-                    />
-                    {latestImageResult?.result_asset_id && !generationConfig.frames.reference_image[0]?.assetId && (
-                      <Button
-                        type="button"
-                        variant={generationConfig.usePreviousImage ? "outline" : "ghost"}
-                        size="sm"
-                        onClick={generationConfig.usePreviousImage ? clearReferenceImage : usePreviousImageAsReference}
-                      >
-                        {t("genUsePreviousImage")}
-                      </Button>
-                    )}
-                  </div>
-                )}
-                {supportsFirstFrame && (
-                  <KeyframePairField
-                    first={generationConfig.frames.first_frame}
-                    last={generationConfig.frames.last_frame}
-                    showLast={supportsLastFrame}
-                    onChange={({ first, last }) =>
-                      setGenerationConfig((current) => ({
-                        ...current,
-                        frames: { ...current.frames, first_frame: first, last_frame: last },
-                      }))
-                    }
-                    workspaceId={workspace.id}
-                    hint={supportsLastFrame ? t("genLastFrameHint") : t("genKeyframeHint")}
-                    names={{
-                      first: sourceLabels(selectedModel, "first_frame")[0],
-                      last: sourceLabels(selectedModel, "last_frame")[0],
-                    }}
-                    disabled={lockedRoles.has("first_frame")}
-                    disabledReason={t("genSourceGroupsExclusive")}
-                  />
-                )}
-                {videoInputRoles.map((role) => (
-                  <FrameSlotField
-                    key={role}
-                    role={role}
-                    slots={generationConfig.frames[role]}
-                    limit={sourceLimit(selectedModel, role)}
-                    names={sourceLabels(selectedModel, role)}
-                    onChange={(slots) => setFrames(role, slots)}
-                    workspaceId={workspace.id}
-                    hint={t(VIDEO_INPUT_HINTS[role])}
-                    disabled={lockedRoles.has(role)}
-                    disabledReason={t("genSourceGroupsExclusive")}
-                  />
-                ))}
+                {isImageModel && supportsReferenceImage && referenceImageField(selectedModel)}
+                {supportsFirstFrame && keyframesField(selectedModel)}
+                {videoInputRoles.map((role) => slotsField(selectedModel, role, t(VIDEO_INPUT_HINTS[role])))}
                 {needsDigitalHumanConsent && (
                   <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
                 )}
-                {videoReferenceRoles.map((role, index) => (
-                  <FrameSlotField
-                    key={role}
-                    role={role}
-                    slots={generationConfig.frames[role]}
-                    limit={sourceLimit(selectedModel, role)}
-                    names={sourceLabels(selectedModel, role)}
-                    onChange={(slots) => setFrames(role, slots)}
-                    workspaceId={workspace.id}
-                    // 这一句只说一遍:三个参考控件挨在一起,每个都重复一次就成了噪音。
-                    hint={index === 0 ? t("genReferenceHint") : undefined}
-                    disabled={lockedRoles.has(role)}
-                    disabledReason={t("genSourceGroupsExclusive")}
-                  />
-                ))}
+                {/* 「参考」那一句只说一遍:三个参考控件挨在一起,每个都重复一次就成了噪音。 */}
+                {videoReferenceRoles.map((role, index) => slotsField(selectedModel, role, index === 0 ? t("genReferenceHint") : undefined))}
                 {/* 音频模型的输入:要配声的视频、参考 / 被翻唱的音频、图生音乐的图。同一个控件,
                     提示语换成音频上的意思。 */}
-                {selectedAudioRoles.map((role) => (
-                  <FrameSlotField
-                    key={role}
-                    role={role}
-                    slots={generationConfig.frames[role]}
-                    limit={sourceLimit(selectedModel, role)}
-                    names={sourceLabels(selectedModel, role)}
-                    onChange={(slots) => setFrames(role, slots)}
-                    workspaceId={workspace.id}
-                    hint={t(AUDIO_SOURCE_HINTS[role])}
-                  />
-                ))}
+                {selectedAudioRoles.map((role) => slotsField(selectedModel, role, t(AUDIO_SOURCE_HINTS[role])))}
               </ParameterSection>
 
               {/* 调参:seed、反向提示词,以及各家自己加的开关和枚举。它们决定"怎么出",
@@ -1323,26 +1534,8 @@ export function GenerateWorkspace({
               <ParameterSection icon={SlidersHorizontal} title={t("genSectionAdvanced")}>
                 {/* 种子与反向提示词**不分种类**:描述符声明了就给控件(generationParameters 的 shared
                     那一段本来就不分种类地发它们)。 */}
-                {supportsParameter(selectedModel, "seed") && (
-                  <ParameterField label={t("genSeed")}>
-                    <Input
-                      className={PARAMETER_CONTROL_CLASS}
-                      type="number"
-                      placeholder="auto"
-                      value={generationConfig.seed}
-                      onChange={(event) => setConfigValue("seed", event.target.value)}
-                    />
-                  </ParameterField>
-                )}
-                {supportsNegativePrompt && (
-                  <ParameterField label={t("genNegativePrompt")}>
-                    <Input
-                      className={PARAMETER_CONTROL_CLASS}
-                      value={generationConfig.negativePrompt}
-                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
-                    />
-                  </ParameterField>
-                )}
+                {supportsParameter(selectedModel, "seed") && seedField()}
+                {supportsNegativePrompt && negativePromptField()}
                 {booleanParameterKeys(selectedModel).filter((key) => !DEDICATED_BOOLEANS.has(key)).map((key) => {
                   const labelKey = GENERATION_BOOLEAN_LABELS[key];
                   return (
@@ -1365,42 +1558,7 @@ export function GenerateWorkspace({
                     </ParameterField>
                   );
                 })}
-                {declaredParameters(selectedModel).map((parameter) => (
-                  <ParameterField
-                    key={parameter.key}
-                    // 宿主认得的参数名(人声、曲名……)按界面语言说;插件自己的参数用插件给的名字。
-                    label={GENERATION_PARAMETER_LABELS[parameter.key] ? t(GENERATION_PARAMETER_LABELS[parameter.key]) : parameter.label}
-                    title={toPlainText(parameter.description) || undefined}
-                  >
-                    {parameter.modelFolder && selectedModel?.plugin_instance_id && parameter.options.length > 0 ? (
-                      /* 选模型文件的那一格:缩略图、底模、触发词来自这个连接的模型库,选中 LoRA 能一键加触发词 */
-                      <ModelFilePicker
-                        parameter={parameter}
-                        instanceId={selectedModel.plugin_instance_id}
-                        value={generationConfig.declared[parameter.key] ?? ""}
-                        onChange={(value) =>
-                          setGenerationConfig((current) => ({
-                            ...current,
-                            declared: { ...current.declared, [parameter.key]: value },
-                          }))
-                        }
-                        onUseTriggers={(words) => setPrompt((current) => withTriggerWords(current, words))}
-                        className={PARAMETER_CONTROL_CLASS}
-                      />
-                    ) : (
-                      <DeclaredParameterControl
-                        parameter={parameter}
-                        value={generationConfig.declared[parameter.key] ?? ""}
-                        onChange={(value) =>
-                          setGenerationConfig((current) => ({
-                            ...current,
-                            declared: { ...current.declared, [parameter.key]: value },
-                          }))
-                        }
-                      />
-                    )}
-                  </ParameterField>
-                ))}
+                {declaredParameters(selectedModel).map((parameter) => declaredField(selectedModel, parameter))}
                 {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
                   const labelKey = GENERATION_PARAMETER_LABELS[key];
                   const hintKey = GENERATION_PARAMETER_HINTS[key];
@@ -1456,26 +1614,51 @@ function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src
   );
 }
 
+/** 一条生成走到哪儿了。`stopped`:有人把它停下了(不是跑挂了,见后端 GenerationJobOut.stopped)。 */
+type TurnStatus = "queued" | "running" | "succeeded" | "failed" | "stopped";
+
+/** 停下之后多久之内还等它的账(插件停远端那一次 + 宽限,见后端 plugins.runtime.CANCEL_GRACE_SECONDS)。 */
+const STOP_SETTLE_MS = 90_000;
+
+/** 刚停下、账还没记上的那一条。 */
+function settlingAfterStop(generation: GenerationJob): boolean {
+  if (!generation.stopped || generation.cost_confidence || (generation.costs ?? []).length > 0) return false;
+  return Date.now() - parseServerTime(generation.updated_at).getTime() < STOP_SETTLE_MS;
+}
+
+function turnStatus(generation: GenerationJob, job: Job | null): TurnStatus {
+  if (generation.stopped) return "stopped";
+  // job 行可能已被任务中心「清空已结束」删掉(记录长存、job_id 置空):有产物即成功;记录上记着失败原因、
+  // 或者任务已经不在了,即失败;只有任务还在而列表没拉到时才视作排队中。
+  const status =
+    job?.status ?? (generation.result_asset_id ? "succeeded" : generation.job_id && !generation.error ? "queued" : "failed");
+  return status === "queued" || status === "running" || status === "succeeded" ? status : "failed";
+}
+
 function GenerationTurn({
   generation,
   engineLabel,
+  option,
   job,
   gallery,
+  onStop,
+  stopping,
 }: {
   generation: GenerationJob;
   /** 用的哪条连接上的哪个模型,写给人看的名字(「ComfyUI · … · 快速用krea2生图」)。连接或模型已经不在了才落回 id。 */
   engineLabel: string;
+  /** 这条用的那个模型(还在选项里的话):占位按它说的「一遍交回几份」摆。 */
+  option: GenerationOption | null;
   job: Job | null;
   gallery?: ImagePreviewItem[];
+  /** 停下这一条(取消它的任务);只读的会话不给。 */
+  onStop?: (jobId: string) => void;
+  stopping?: boolean;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
-  // job 行可能已被任务中心「清空已结束」删掉(记录长存、job_id 置空):有产物即成功;记录上记着失败原因、
-  // 或者任务已经不在了,即失败;只有任务还在而列表没拉到时才视作排队中。
-  const status =
-    job?.status ??
-    (generation.result_asset_id ? "succeeded" : generation.job_id && !generation.error ? "queued" : "failed");
+  const status = turnStatus(generation, job);
   //: 这一条生成的**全部**产出。后端给 result_asset_ids(封面排第一);一次只出一份时它就是
   //: 那一份 —— 不为「一份」和「多份」各写一套渲染。
   const outputs = generation.result_asset_ids?.length
@@ -1484,28 +1667,24 @@ function GenerationTurn({
       ? [generation.result_asset_id]
       : [];
   const timestamp = generation.created_at ?? job?.created_at ?? null;
-  const isRunning = status === "running";
-  const isFinished = status === "succeeded" || status === "failed";
-  // 节拍时钟:运行中每秒刷计时;空闲 30s 一拍让「x 分钟前」不冻住。
+  const pending = status === "queued" || status === "running";
+  // 节拍时钟:在跑、在排时每秒刷计时;空闲 30s 一拍让「x 分钟前」不冻住。
   // (轮询回包无变化时 react-query 不触发重渲,光靠轮询计时会停走。)
-  const now = useNow(isRunning ? 1000 : 30_000);
+  const now = useNow(pending ? 1000 : 30_000);
   //: 音频可以只给歌词(或者给视频配声什么字都不给):气泡里就显示歌词,都没有时说「按素材生成」。
   const requestParameters = (generation.request.parameters ?? {}) as Record<string, unknown>;
   const prompt =
     String(generation.request.prompt ?? "").trim() ||
     String(requestParameters.lyrics ?? "").trim() ||
     (generation.kind === "audio" ? t("genAudioFromSources") : "");
-  const durationSeconds = isRunning
-    ? elapsedSecondsBetween(timestamp, now)
-    : isFinished
-      ? elapsedSecondsBetween(timestamp, job?.updated_at ?? generation.updated_at)
-      : null;
+  //: 还没结束的那一条,已用多久写在进度那一行里;结束了才进脚注(用了多久)。
+  const elapsed = pending ? elapsedSecondsBetween(timestamp, now) : null;
+  const finishedSeconds = pending ? null : elapsedSecondsBetween(timestamp, job?.updated_at ?? generation.updated_at);
   const durationLabel =
-    typeof durationSeconds === "number"
-      ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
-      : "";
+    typeof finishedSeconds === "number" ? t("usageDuration").replace("{t}", formatElapsedSeconds(finishedSeconds)) : "";
   // 计费:与对话页同一套格式化(lib/money)。有已知费用显示金额 —— 每个币种一笔,不相加;
   // 有事件但无定价显示「未定价」;失败了没扣钱说「未扣费」(不是「费用 US$0.00」:没价的模型那笔 0 的币种是猜的)。
+  // 停下的那一条同一句:服务商那边还没扣钱是「未扣费」,停晚了照样扣的照实写金额(见后端 runner._settle_after_cancel)。
   const costLabel =
     (generation.costs ?? []).length > 0
       ? t("usageCost").replace("{cost}", formatCosts(generation.costs, locale))
@@ -1515,7 +1694,7 @@ function GenerationTurn({
           ? t("usageCostNotBilled")
           : "";
   return (
-    <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
+    <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center" data-generation-status={status}>
       <div className="grid justify-items-end gap-1">
         <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground">
           {prompt}
@@ -1533,7 +1712,7 @@ function GenerationTurn({
       </div>
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
         {outputs.length > 0 && generation.kind === "audio" ? (
-          //: 一次可能交回几首(Suno 一次两首):每一首一个播放器,而不是只放封面那一首。
+          //: 一次可能交回几首(Suno 一次两首):每一首一张卡,而不是只放封面那一首。
           <GeneratedAudioList assetIds={outputs} title={prompt.split("\n")[0]?.slice(0, 60) || generation.model} />
         ) : generation.result_asset_id && generation.kind === "video" ? (
           //: 全站共用的播放器(不是原生 controls):右下角那颗「全屏」开的是同一个灯箱,和本会话的其他产出一起左右翻。
@@ -1580,15 +1759,22 @@ function GenerationTurn({
               </IconButton>
             ))}
           </div>
+        ) : status === "stopped" ? (
+          <GenerationStoppedCard />
         ) : status === "failed" ? (
           //: 原因读**生成记录自己**存的那份 —— 任务会被清掉,记录不会(见后端 generation.runner.record_failure)。
           <GenerationFailureCard error={generation.error ?? ""} />
-        ) : status === "running" ? (
-          <GeneratingTile kind={generation.kind} progress={job?.progress} />
         ) : (
-          <span className="inline-flex items-center gap-1.5 py-2 text-ui-sm text-muted-foreground">
-            <Loader2 size={13} className="animate-mosael-spin" /> {t("genQueued")}
-          </span>
+          <GenerationProgress
+            kind={generation.kind}
+            expected={expectedOutputs(generation, option)}
+            running={status === "running"}
+            progress={job?.progress}
+            message={job?.message ?? ""}
+            elapsed={elapsed}
+            onStop={onStop && generation.job_id ? () => onStop(generation.job_id!) : undefined}
+            stopping={stopping}
+          />
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
           <span>
@@ -1602,34 +1788,175 @@ function GenerationTurn({
   );
 }
 
+/** 一次生成要交回的样子:几份、每份什么比例(宽 / 高)。占位按它摆,产出到了原地换掉,版面不跳。 */
+type ExpectedOutputs = { count: number; ratio: number };
+
+/** 占位最多摆几格:跑 4 遍 × 一遍 2 张就是 8 格,再多就只是一片灰。 */
+const MAX_PLACEHOLDERS = 8;
+
+/** 「宽x高」(`1024x1536`、`832*480`、`768×1024`)或画幅(`16:9`、`9:16 (Portrait)`)→ 宽 / 高;认不出就是 null。 */
+function ratioOf(value: unknown): number | null {
+  const found = /^\s*(\d+(?:\.\d+)?)\s*[x×*:]\s*(\d+(?:\.\d+)?)/i.exec(String(value ?? ""));
+  if (!found) return null;
+  const width = Number(found[1]);
+  const height = Number(found[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
+
 /**
- * 正在生成的那一条:在产出将要出现的位置先铺一块扫光占位,左下角写「生成中」和进度。
- *
- * 此前这里只有一行「转圈 + 生成中」—— 产出出来时版面从一行字跳成一张大图。占位先占住
- * 产出的位置(视频按 16:9,其余按首屏加载时那块方形),出图时原地换掉。
- * 进度只在任务真的报了(`job.progress` > 0)时才写;没报就不写,不去猜一个数。
+ * 这一次会交回几份、长什么样:图像按请求的尺寸 / 画幅定比例(没给就是方的),份数 = 张数(或跑几遍)× 一遍交回几份
+ * (模型说的,见 outputsPerRun);视频按画幅(没给 16:9);音频按一遍交回几首。
  */
-function GeneratingTile({ kind, progress }: { kind: string; progress?: number }) {
+function expectedOutputs(generation: GenerationJob, option: GenerationOption | null): ExpectedOutputs {
+  const parameters = (generation.request.parameters ?? {}) as Record<string, unknown>;
+  const ratio = ratioOf(parameters.size) ?? ratioOf(parameters.aspect_ratio) ?? (generation.kind === "video" ? 16 / 9 : 1);
+  const perRun = outputsPerRun(option, parameters);
+  const runs = generation.kind === "image" && typeof parameters.num_images === "number" ? Math.max(1, parameters.num_images) : 1;
+  return { count: Math.min(MAX_PLACEHOLDERS, Math.max(1, runs * perRun)), ratio };
+}
+
+/**
+ * 还没交回的那一条:在产出将要出现的位置**按它的样子**先占好(图按比例、几张摆几格,视频一格,音频和成品卡同一个壳),
+ * 下面一行写清走到哪儿了 —— 排队中 / 生成中、进度、插件报的那一句(ComfyUI 的「KSampler 12/20 · 第 3/9 个节点」)、
+ * 已用多久,和「停止」。
+ *
+ * 此前这里是一块平平的灰块,角上一句「生成中 35%」(维护者:「loading 的这个卡片 UI 也很丑」),而且停不下来。
+ * 和画板上在跑的那一格同一套说法:在跑的扫光(<Skeleton surface>,铺满一整块表面的那一档)、顶上一条细进度;
+ * 排队的不扫光(还没开始做),只摆淡淡的壳子和一枚钟。进度只写任务真报了的,不去猜一个数。
+ */
+function GenerationProgress({
+  kind,
+  expected,
+  running,
+  progress,
+  message,
+  elapsed,
+  onStop,
+  stopping,
+}: {
+  kind: string;
+  expected: ExpectedOutputs;
+  running: boolean;
+  progress?: number;
+  message: string;
+  elapsed: number | null;
+  onStop?: () => void;
+  stopping?: boolean;
+}) {
   const t = useI18n();
-  const percent = typeof progress === "number" && progress > 0 ? Math.round(progress * 100) : null;
+  const fraction = running && typeof progress === "number" && progress > 0 && progress < 1 ? progress : 0;
+  const percent = fraction > 0 ? Math.round(fraction * 100) : null;
+  const label = t(running ? "generating" : "genQueued");
+  //: 插件报的那一句。和标题说的是同一句(「生成中」)就不重复
+  const detail = message.trim() && message.trim() !== label ? message.trim() : "";
   return (
     <div
       role="status"
       aria-busy="true"
-      className={cn(
-        "relative w-full overflow-hidden rounded-lg",
-        kind === "video"
-          ? "aspect-video max-w-[min(560px,100%)]"
-          : kind === "audio"
-            ? "h-16 max-w-[min(560px,100%)]"
-            : "aspect-square max-w-[240px]",
-      )}
+      aria-label={label}
+      className="grid w-full max-w-[min(560px,100%)] gap-2"
+      data-generation-pending={running ? "running" : "queued"}
     >
-      <Skeleton className="absolute inset-0 rounded-lg" />
-      <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 px-3 pb-2.5 pt-1.5 text-ui-xs">
-        <span className="font-semibold text-primary">{t("generating")}</span>
-        {percent !== null ? <span className="tabular-nums text-muted-foreground">{percent}%</span> : null}
-      </span>
+      {kind === "audio" ? (
+        <PendingAudioList count={expected.count} running={running} />
+      ) : (
+        <PendingFrames kind={kind} expected={expected} running={running} fraction={fraction} />
+      )}
+      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-control py-1 pl-3 pr-1">
+        {running ? (
+          <Loader2 size={13} className="shrink-0 animate-mosael-spin text-primary" aria-hidden />
+        ) : (
+          <Clock3 size={13} className="shrink-0 text-muted-foreground" aria-hidden />
+        )}
+        <span className={cn("shrink-0 text-ui-sm font-medium", running ? "text-primary" : "text-foreground")}>{label}</span>
+        {percent !== null ? <span className="shrink-0 text-ui-sm tabular-nums text-primary">{percent}%</span> : null}
+        <Truncate className="min-w-0 flex-1 text-ui-xs text-muted-foreground">{detail}</Truncate>
+        {elapsed !== null ? (
+          <span className="timecode shrink-0 text-ui-xs tabular-nums text-muted-foreground">
+            {t(running ? "usageRunning" : "genQueuedFor").replace("{t}", formatElapsedSeconds(elapsed))}
+          </span>
+        ) : null}
+        {onStop ? (
+          <Hint label={t("genStopHint")}>
+            <Button type="button" variant="outline" size="xs" className="shrink-0" loading={stopping} onClick={onStop}>
+              <Square size={10} fill="currentColor" />
+              {t("genStop")}
+            </Button>
+          </Hint>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 图和视频的占位:按比例,图几张摆几格(和出图同一个尺寸规则:一张最高 360px,多张每张 220px 高),视频一格
+ * (和成片同一个框:最宽 560px、最高 420px)。宽度按「高 × 比例」算、不超过这一栏,高跟着比例走。
+ */
+function PendingFrames({
+  kind,
+  expected,
+  running,
+  fraction,
+}: {
+  kind: string;
+  expected: ExpectedOutputs;
+  running: boolean;
+  fraction: number;
+}) {
+  const many = kind !== "video" && expected.count > 1;
+  const height = kind === "video" ? 420 : many ? 220 : 360;
+  return (
+    <div className="flex w-full flex-wrap gap-1.5" aria-hidden>
+      {Array.from({ length: kind === "video" ? 1 : expected.count }, (_, index) => (
+        <div
+          key={index}
+          className={cn(
+            "relative grid shrink-0 place-items-center overflow-hidden rounded-lg border border-border",
+            !running && "bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]",
+          )}
+          style={{ aspectRatio: expected.ratio, width: `min(${Math.round(height * expected.ratio)}px, 100%)` }}
+        >
+          {running ? (
+            <>
+              <Skeleton surface className="absolute inset-0 h-full w-full rounded-none" />
+              {fraction > 0 && (
+                <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
+                  <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(fraction * 100)}%` }} />
+                </div>
+              )}
+              {/* 一枚淡淡的图 / 片子:一眼看出这一格将来是什么,而不是一块没来由的灰板 */}
+              {kind === "video" ? (
+                <Film size={24} strokeWidth={1.5} className="relative text-muted-foreground/40" />
+              ) : (
+                <ImageIcon size={24} strokeWidth={1.5} className="relative text-muted-foreground/40" />
+              )}
+            </>
+          ) : (
+            <Clock3 size={18} className="text-primary/70" />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 有人把它停下了(这里的「停止」、任务中心的取消、画板的停止):不是跑挂了,不摆红色的失败卡。
+ * 花没花钱写在下面的脚注里,和别的记录同一句(「未扣费」或金额)。
+ */
+function GenerationStoppedCard() {
+  const t = useI18n();
+  return (
+    <div
+      className="flex w-[min(560px,100%)] items-start gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2.5"
+      data-generation-stopped=""
+    >
+      <CircleStop size={14} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="grid min-w-0 gap-0.5">
+        <strong className="text-ui-sm leading-[1.35] text-foreground">{t("genStopped")}</strong>
+        <span className="text-ui-sm leading-[1.55] text-muted-foreground">{t("genStoppedBody")}</span>
+      </div>
     </div>
   );
 }

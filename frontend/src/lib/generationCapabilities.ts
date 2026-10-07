@@ -164,6 +164,41 @@ export function promptMode(model: GenerationOption | null): PromptMode {
   return value === "optional" || value === "none" ? value : "required";
 }
 
+/**
+ * 提示词可以不写(`optional`)时,**不写就用的那一句**(描述符的 `prompt_default`:ComfyUI 工作流里存着的那句)。
+ * 输入框的占位、精简表单里那一项据此说清楚「不写用什么」。没说就是空串。
+ */
+export function promptDefault(model: GenerationOption | null): string {
+  const value = model?.capabilities?.prompt_default;
+  return promptMode(model) === "optional" && typeof value === "string" ? value.trim() : "";
+}
+
+/** 精简表单上的一项:宿主的键(`prompt` / 参数键 / 素材角色 / `seed` / `size` / `num_images`)和表上给它起的名字。 */
+export type AppFormItem = { key: string; label: string };
+/** 作者给这个模型挑的那张表(ComfyUI 的精简表单,ADR 0038 §2):标题、说明、按表上顺序的每一项。 */
+export type AppForm = { title: string; description: string; items: AppFormItem[] };
+
+/**
+ * 这个模型**有没有一张作者挑的表**(描述符的 `form`,后端按看的人的语言挑好了名字)。有的话,AI 工作台的「引擎参数」
+ * 照这张表摆:表上的项、表上的顺序、表上的名字;没有就是 null,按参数各自的样子分栏摆。
+ */
+export function appForm(model: GenerationOption | null): AppForm | null {
+  const raw = model?.capabilities?.form;
+  if (!raw || typeof raw !== "object") return null;
+  const form = raw as Record<string, unknown>;
+  const items = Array.isArray(form.items)
+    ? form.items
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+        .filter((item) => typeof item.key === "string" && item.key !== "")
+        .map((item) => ({ key: String(item.key), label: typeof item.label === "string" ? item.label : "" }))
+    : [];
+  return {
+    title: typeof form.title === "string" ? form.title : "",
+    description: typeof form.description === "string" ? form.description : "",
+    items,
+  };
+}
+
 /** 真正发出去的提示词:不收提示词的模型发空串 —— 框藏起来之前写过的字不该悄悄跟着发出去。 */
 export function promptToSend(model: GenerationOption | null, prompt: string): string {
   return promptMode(model) === "none" ? "" : prompt;
