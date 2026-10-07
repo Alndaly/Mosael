@@ -84,14 +84,19 @@ def wait_for_idle_autopilot(timeout: float = 5.0) -> bool:
 def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     """这张卡该不该自动放行。**纯读**,不改任何东西。
 
-    顺序即优先级:这一次不用问人 → 没有会话 → 不是开模式的那个人 → 工具白名单 → bypass → auto 分档。
+    顺序即优先级:每次都问 → 这一次不用问人 → 没有会话 → 不是开模式的那个人 → 工具白名单 → bypass → auto 分档。
 
-    第一条排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
+    「每次都问」排在最前、在 bypass 之前(工具自己声明,见 ConfirmableTool.always_asks):这类操作会长期改变
+    智能体以后的做法(改技能,ADR 0043),任何一种口子 —— 会话白名单、模式、放行准则、判断者 —— 都不该替人点头。
+
+    「这一次不用问人」排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
     见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一格的一项只读能力也一样直接跑。
     """
     from app.domain.agent.confirmable import tool_spec
 
     spec = tool_spec(confirmation.tool)
+    if spec is not None and spec.always_asks:
+        return Decision(approve=False, detail={"reason": "always-asks"})
     if spec is not None and spec.needs_card is not None and not spec.needs_card(db, confirmation.payload or {}):
         return Decision(approve=True, mode="no-card", detail={"permission": confirmation.permission})
     if not confirmation.session_id:
@@ -165,6 +170,8 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
     - 每一条是 (工具, 档位)。档位只能是 SESSION_ALLOWABLE 里的:撤不回的两档不给这个口子(理由见那里)。
     - 同一个工具出现多次取**最高**那一档:用户先在一张 edit 卡、后在一张 ai-cost 卡上点过,后者已经覆盖前者。
     - 工具得是认得的确认卡工具(插件工具按族认),否则这一条放不行任何东西,只是一条脏数据。
+    - 声明了「每次都问」的工具(ConfirmableTool.always_asks)不收:界面上本来就没有这个按钮,收下的话清单里
+      多一条永远不生效的承诺(decide 头一条就不放它)。
     - 记下**是谁定的**:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 decide)。
     """
     from app.domain.agent.confirmable import tool_spec
@@ -175,8 +182,11 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
             raise PermissionModeError(
                 "agentErr_sessionAllowTier", tool=tool, permission=permission, allowed="/".join(SESSION_ALLOWABLE)
             )
-        if tool_spec(tool) is None:
+        spec = tool_spec(tool)
+        if spec is None:
             raise PermissionModeError("agentErr_sessionAllowUnknownTool", tool=tool)
+        if spec.always_asks:
+            raise PermissionModeError("agentErr_sessionAllowAlwaysAsks", tool=tool)
         if tool not in merged or _within(merged[tool], permission):
             merged[tool] = permission
     session.auto_allow_tools = [{"tool": tool, "permission": permission} for tool, permission in merged.items()][:40]

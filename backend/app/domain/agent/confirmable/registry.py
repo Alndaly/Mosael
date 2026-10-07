@@ -67,12 +67,21 @@ class ConfirmableTool:
     escalate: Callable[[Session, str, dict[str, Any]], str | None] | None = None
     #: 这个工具点名用哪项宿主能力(ADR 0032 §4):插件页、设置页据此列出「智能体的 ×× 工具用它」。
     capability: str = ""
+    #: **每一张都要人点头**,没有任何自动放行:不进「本会话始终允许」、放行准则和判断者不管它、bypass 也不放
+    #: (判定见 autopilot.decide 的第一条)。为会长期改变智能体以后行为的那类操作而设 —— 改技能(ADR 0043):
+    #: 一次放行不该让它以后随便改自己的做法。所以它和 `gate`、`needs_card` 互斥(那两样都是「可以不问」的口子)。
+    always_asks: bool = False
+    #: 批的人在卡上能改的几个**开关**(布尔),名字就是 payload 里的键,缺省值是开卡时 payload 里的那个。
+    #: 「建好就启用」就是一个:看过全文的人可以当场决定。批准时只认这里声明过的键(见 confirmations.approve_confirmation)。
+    choices: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
             raise ValueError(f"{self.name}: unknown permission/cost tier")
         if bool(self.gate) != bool(self.gate_label):
             raise ValueError(f"{self.name}: a gate needs a gate_label (and vice versa)")
+        if self.always_asks and (self.gate or self.needs_card is not None):
+            raise ValueError(f"{self.name}: a tool that always asks can't declare a gate or needs_card")
 
 
 _TOOLS: dict[str, ConfirmableTool] = {}

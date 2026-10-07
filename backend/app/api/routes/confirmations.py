@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
-from app.api.schemas import ConfirmationCreate, ConfirmationOut
+from app.api.schemas import ConfirmationApproval, ConfirmationCreate, ConfirmationOut
 from app.db.models import ToolConfirmation
 from app.domain.agent import autopilot
 from app.domain.agent import use_cases as agent_use_cases
@@ -72,10 +72,11 @@ def get_confirmation(confirmation_id: str, db: DbSession, user: CurrentUser) -> 
 # 「能不能批、批了会发生什么」在 domain/agent/confirmations.authorize_and_* 里,
 # 和飞书卡片那条入口共用同一份 —— 校验规则不该按入口各写一遍。
 @router.post("/confirmations/{confirmation_id}/approve", response_model=ConfirmationOut)
-def approve(confirmation_id: str, db: Tx, user: CurrentUser) -> ToolConfirmation:
+def approve(confirmation_id: str, db: Tx, user: CurrentUser, body: ConfirmationApproval | None = None) -> ToolConfirmation:
+    """批准。请求体可选:卡上有开关(「建好就启用」)时带上拨好的值,没带就照开卡时的缺省。"""
     confirmation = _get_or_404(db, confirmation_id)
     try:
-        return authorize_and_approve(db, user, confirmation)
+        return authorize_and_approve(db, user, confirmation, choices=body.choices if body is not None else None)
     except ConfirmationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

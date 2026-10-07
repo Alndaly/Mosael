@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import Field, StrictBool, ValidationInfo, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AgentContextPart(ApiModel):
@@ -265,6 +265,13 @@ class ConfirmationCreate(ApiModel):
     requested_by: str = Field(default="external-agent", max_length=120)
 
 
+class ConfirmationApproval(ApiModel):
+    """批准时带上的东西:卡上那几个开关拨成了什么(只认工具声明过的,见 ConfirmableTool.choices)。"""
+
+    #: 严格的布尔:"yes"、1 之类不悄悄当成「是」—— 这是授权界面上的开关。
+    choices: dict[str, StrictBool] = Field(default_factory=dict)
+
+
 class ConfirmationOut(OrmModel):
     id: str
     workspace_id: str
@@ -307,15 +314,23 @@ class ConfirmationOut(OrmModel):
     headline: str = ""
     #: 卡上单独成行的后果提示(「会在你的电脑上运行代码」);没有就是空串。
     warning: str = ""
+    #: 这种卡**每一次都要人点头**(见 ConfirmableTool.always_asks):界面上不给「本会话始终允许」。
+    always_asks: bool = False
+    #: 卡上批的人能拨的开关,和它们现在的值(「建好就启用」);没有就是空的。批准时把拨好的带回来。
+    choices: dict[str, bool] = {}
 
     @model_validator(mode="after")
     def _split_for_the_card(self) -> ConfirmationOut:
         from app.core.i18n import get_current_locale
+        from app.domain.agent.confirmable import tool_spec
         from app.domain.agent.confirmations import card_parts
 
         headline, warning = card_parts(self.summary_key, self.summary_params, get_current_locale())
         self.headline = headline or self.summary
         self.warning = warning
+        spec = tool_spec(self.tool)
+        self.always_asks = bool(spec is not None and spec.always_asks)
+        self.choices = {name: bool((self.payload or {}).get(name)) for name in (spec.choices if spec is not None else ())}
         return self
 
 

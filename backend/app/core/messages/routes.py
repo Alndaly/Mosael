@@ -39,6 +39,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没有需要确认的工具叫「{tool}」,不能加进本会话始终允许",
         "en": "There is no confirmation tool called “{tool}” to always allow.",
     },
+    "agentErr_sessionAllowAlwaysAsks": {
+        "zh": "「{tool}」每一次都要人确认,不能加进本会话始终允许",
+        "en": "“{tool}” asks every time; it can't be always-allowed for this session.",
+    },
     "agentErr_badPermissionMode": {
         "zh": "permission_mode 只能是 {modes}",
         "en": "permission_mode must be one of {modes}.",

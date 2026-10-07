@@ -129,8 +129,13 @@ def request_confirmation(
     return confirmation
 
 
-def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmation) -> ToolConfirmation:
+def authorize_and_approve(
+    db: Session, user: User, confirmation: ToolConfirmation, choices: dict[str, bool] | None = None
+) -> ToolConfirmation:
     """批准一张确认卡 —— **所有入口的唯一实现**。
+
+    `choices`:批的人在卡上拨过的开关(只认工具声明过的那几个,见 ConfirmableTool.choices)。没给的照开卡时的缺省 ——
+    飞书那条入口和自动放行都不给。
 
     入口不止一个:桌面端走 HTTP 路由(bearer token 认身份),飞书走卡片回调(open_id 经账号
     绑定认身份)。身份怎么认由入口负责,认出来之后「这个人能不能批、批了会发生什么」必须只有
@@ -156,7 +161,7 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     # 记在谁头上。自动放行也有人 —— 这次 turn 是以他的身份跑的,上面三道闸也是按他校验的。
     # `decision_mode` 不在这里定:默认就是 manual(人点的),自动放行会在派活之前先改掉它。
     confirmation.decided_by = user.id
-    return approve_confirmation(db, confirmation)
+    return approve_confirmation(db, confirmation, choices)
 
 
 def effective_permission(db: Session, tool: str, payload: dict[str, Any]) -> str:
@@ -221,8 +226,15 @@ def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConf
     return confirmation
 
 
-def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
+def approve_confirmation(
+    db: Session, confirmation: ToolConfirmation, choices: dict[str, bool] | None = None
+) -> ToolConfirmation:
+    # 开关先查(认不出的键不认领这张卡,人改了再点),认领之后再写进 payload:认领那一笔会提交,
+    # 写在它前面的话,一张已经被别人批掉的卡的 payload 也会跟着被改掉。
+    picked = _checked_choices(confirmation, choices)
     _claim(db, confirmation, "approved")
+    if picked:
+        confirmation.payload = {**(confirmation.payload or {}), **picked}
     try:
         result = _execute(db, confirmation)
         confirmation.status = "executed"
@@ -246,6 +258,18 @@ def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolCon
     db.flush()
     db.refresh(confirmation)
     return confirmation
+
+
+def _checked_choices(confirmation: ToolConfirmation, choices: dict[str, bool] | None) -> dict[str, bool]:
+    """卡上的开关:只认这个工具声明过的、只认布尔。别的键一律拒 —— 批准这一下不是改 payload 的通道。"""
+    if not choices:
+        return {}
+    spec = tool_spec(confirmation.tool)
+    allowed = spec.choices if spec is not None else ()
+    unknown = sorted(key for key in choices if key not in allowed)
+    if unknown or not all(isinstance(value, bool) for value in choices.values()):
+        raise ConfirmationError("confirmErr_unknownChoice", keys=", ".join(unknown) or ", ".join(choices))
+    return dict(choices)
 
 
 def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:

@@ -229,9 +229,9 @@ def test_both_entries_share_one_authorization(ctx, monkeypatch) -> None:
     calls: list[str] = []
     real = domain.authorize_and_approve
 
-    def spy(db, user, confirmation):
+    def spy(db, user, confirmation, choices=None):
         calls.append(confirmation.id)
-        return real(db, user, confirmation)
+        return real(db, user, confirmation, choices)
 
     monkeypatch.setattr(domain, "authorize_and_approve", spy)
     # 路由与飞书模块都是在函数内延迟导入的,所以打桩模块属性就够,不必逐个改引用。

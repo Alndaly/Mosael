@@ -25,6 +25,8 @@ function card(overrides: Partial<Confirmation> = {}): Confirmation {
     summary: "运行插件工具「Manim 自定义动画」(连接「Manim 教学动画」),参数:`code=import numpy as np…`  ⚠️ 会在你的电脑上运行代码",
     headline: "运行插件工具「Manim 自定义动画」(连接「Manim 教学动画」)",
     warning: "会在你的电脑上运行代码",
+    always_asks: false,
+    choices: {},
     summary_key: "confirm_runPluginTool",
     summary_params: {},
     payload: {

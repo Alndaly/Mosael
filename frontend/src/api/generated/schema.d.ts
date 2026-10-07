@@ -6016,7 +6016,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve */
+        /**
+         * Approve
+         * @description 批准。请求体可选:卡上有开关(「建好就启用」)时带上拨好的值,没带就照开卡时的缺省。
+         */
         post: operations["approve_api_confirmations__confirmation_id__approve_post"];
         delete?: never;
         options?: never;
@@ -10990,6 +10993,16 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * ConfirmationApproval
+         * @description 批准时带上的东西:卡上那几个开关拨成了什么(只认工具声明过的,见 ConfirmableTool.choices)。
+         */
+        ConfirmationApproval: {
+            /** Choices */
+            choices?: {
+                [key: string]: boolean;
+            };
+        };
         /** ConfirmationCreate */
         ConfirmationCreate: {
             /** Workspace Id */
@@ -11072,6 +11085,18 @@ export interface components {
              * @default
              */
             warning: string;
+            /**
+             * Always Asks
+             * @default false
+             */
+            always_asks: boolean;
+            /**
+             * Choices
+             * @default {}
+             */
+            choices: {
+                [key: string]: boolean;
+            };
         };
         /**
          * CostAmountOut
@@ -31221,7 +31246,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationApproval"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -27,6 +27,8 @@ function card(operations: unknown[]): Confirmation {
     summary: "修改笔记「周报」:替换 1 处、插入 1 处",
     headline: "修改笔记「周报」:替换 1 处、插入 1 处",
     warning: "",
+    always_asks: false,
+    choices: {},
     summary_key: "confirm_editNote",
     summary_params: {},
     payload: { note_id: "n1", operations, _title: "周报" },

@@ -18527,6 +18527,7 @@
           "confirmations"
         ],
         "summary": "Approve",
+        "description": "批准。请求体可选:卡上有开关(「建好就启用」)时带上拨好的值,没带就照开卡时的缺省。",
         "operationId": "approve_api_confirmations__confirmation_id__approve_post",
         "parameters": [
           {
@@ -18539,6 +18540,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConfirmationApproval"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31139,6 +31157,20 @@
         ],
         "title": "CommitOut"
       },
+      "ConfirmationApproval": {
+        "properties": {
+          "choices": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Choices"
+          }
+        },
+        "type": "object",
+        "title": "ConfirmationApproval",
+        "description": "批准时带上的东西:卡上那几个开关拨成了什么(只认工具声明过的,见 ConfirmableTool.choices)。"
+      },
       "ConfirmationCreate": {
         "properties": {
           "workspace_id": {
@@ -31296,6 +31328,19 @@
             "type": "string",
             "title": "Warning",
             "default": ""
+          },
+          "always_asks": {
+            "type": "boolean",
+            "title": "Always Asks",
+            "default": false
+          },
+          "choices": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Choices",
+            "default": {}
           }
         },
         "type": "object",
