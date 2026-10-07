@@ -26,6 +26,8 @@ from app.db.models import now as models_now
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("succeeded", "failed")
+#: 「被人取消」在库里的记法:failed + 这个 key(见 _cancel_job_row)。判它的地方都认这一个常量。
+CANCELLED_ERROR_KEY = "jobErr_cancelled"
 
 
 def was_cancelled(job: Any) -> bool:
@@ -35,7 +37,7 @@ def was_cancelled(job: Any) -> bool:
     对外要分开说的地方(外部钩子、画板上那一格)都问这一处 —— 各自判一遍的话,哪天取消换了
     记法,漏改的那一处就把「我自己停掉的」说成「跑挂了」。
     """
-    return getattr(job, "status", None) == "failed" and getattr(job, "error_key", None) == "jobErr_cancelled"
+    return getattr(job, "status", None) == "failed" and getattr(job, "error_key", None) == CANCELLED_ERROR_KEY
 
 # 「当前正在执行的父任务」:之后 create_job 建出来的任务,都挂在它下面(ADR-0018)。
 #
@@ -862,8 +864,8 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
     if job.status not in ("queued", "running") or not lock_active_job(db, job):
         return False
     job.status = "failed"
-    job.error_key = "jobErr_cancelled"
-    job.error = t("jobErr_cancelled", DEFAULT_LOCALE)
+    job.error_key = CANCELLED_ERROR_KEY
+    job.error = t(CANCELLED_ERROR_KEY, DEFAULT_LOCALE)
     say(job, "jobMsg_cancelled")
     db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
     # Stop the actual work, not just the row describing it.

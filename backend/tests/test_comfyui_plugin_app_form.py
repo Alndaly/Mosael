@@ -292,6 +292,29 @@ def test_应用表单_目录里只有作者挑的那几项_按作者排的顺序
     choice = model["parameters"]["output_node"]
     assert choice["default"] == "final" and choice["x-enum-labels"]["final"]["zh"] == "你选的结果(保存图像 #17)"
     assert model["outputs_per_run"] == 1 and model["max_outputs"] == 2, "标了一个结果:缺省只交回它;没挑跑几遍就是一遍"
+    # 宿主照这张表摆 AI 工作台的「引擎参数」(维护者:「右侧引擎参数配置明显和实际的精简表单不符」):表的标题、说明,
+    # 每一项按表上的顺序、写成宿主认得的键 —— 主提示词是宿主的提示词框,两格参考图是一个角色(在第一格的位置列一次)
+    assert model["form"] == {"title": "换装", "description": "上传人物和背景", "items": [
+        {"key": "reference_image", "label": "人物照片"},
+        {"key": "prompt", "label": {"zh": "提示词", "en": "Prompt"}},
+        {"key": "20.lora_name", "label": "风格"},
+        {"key": "3.steps", "label": {"zh": "步数", "en": "Steps"}},
+        {"key": "seed", "label": {"zh": "种子", "en": "Seed"}},
+    ]}
+    assert model["prompt_default"] == "a girl in a garden", "提示词可以不写:不写就跑工作流里存着的那句,宿主说清楚是哪句"
+
+
+def test_没有应用表单_目录里没有表_提示词存的是空的就没有不写时用的那句(plugin) -> None:
+    graph, _, _ = plugin
+    api, titles = _api(plugin, multi_reference_ui())
+    model = graph.describe("multi.json", "multi", api, OBJECT_INFO, titles)
+    assert "form" not in model, "缺省的应用不是作者挑的表:宿主按参数各自的样子分栏摆"
+    assert model["prompt"] == "optional" and model["prompt_default"] == "a girl in a garden"
+    ui = multi_reference_ui()
+    next(node for node in ui["nodes"] if node["id"] == 6)["widgets_values"] = [""]
+    api, titles = _api(plugin, ui)
+    model = graph.describe("multi.json", "multi", api, OBJECT_INFO, titles)
+    assert model["prompt"] == "required" and "prompt_default" not in model, "存的是空的:要写,没有「不写用哪句」"
 
 
 def test_应用表单_填图只写表单那几格_素材按表单的顺序接(plugin) -> None:

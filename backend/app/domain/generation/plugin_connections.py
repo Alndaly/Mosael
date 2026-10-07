@@ -166,6 +166,14 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
     # 提示词要不要写:插件说了、而且是宿主认得的那三个值才写进去;没说就不出现(= required)。
     if model.prompt in PROMPT_MODES:
         caps["prompt"] = model.prompt
+    # 可以不写时「不写就用哪一句」:输入框的占位和表单里说清楚(只在 optional 时有意义)。
+    if model.prompt_default and caps.get("prompt") == "optional":
+        caps["prompt_default"] = model.prompt_default
+    # 作者挑的那张表(ADR 0038 §2):AI 工作台的「引擎参数」按它的顺序、用它的名字摆,主提示词指向输入框。
+    # 表上的项只留描述符里真有的(提示词框、参数、素材角色),对不上的不摆一个没有控件的空名字。
+    if model.form is not None:
+        known = {"prompt", *keys}
+        caps["form"] = {**model.form, "items": [item for item in model.form["items"] if item["key"] in known]}
     return caps
 
 

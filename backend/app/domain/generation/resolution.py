@@ -248,12 +248,21 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
 
 def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
     """描述符里**给人看的字**按看的人的语言挑好:`parameter_schema` 里的 title / description、可选值的名字
-    (`x-enum-labels`)可以是 `{"zh": …, "en": …}`(插件声明的模型参数,见 ADR 0020)。
+    (`x-enum-labels`)、作者那张表(`form`)的标题、说明和每项的名字可以是 `{"zh": …, "en": …}`
+    (插件声明的模型参数,见 ADR 0020)。
 
     在这里挑而不是存的时候挑:目录是在后台刷新的,刷新那一刻的语言不是看的人的语言。素材槽位的名字(`source_labels`,
     ADR 0038 §4)同理。
     """
     locale = get_current_locale()
+    form = capabilities.get("form")
+    if isinstance(form, dict):
+        capabilities = {**capabilities, "form": {
+            "title": pick_text(form.get("title"), locale),
+            "description": pick_text(form.get("description"), locale),
+            "items": [{"key": item.get("key"), "label": pick_text(item.get("label"), locale)}
+                      for item in form.get("items") or [] if isinstance(item, dict)],
+        }}
     slot_names = capabilities.get("source_labels")
     if isinstance(slot_names, dict):
         capabilities = {**capabilities, "source_labels": {

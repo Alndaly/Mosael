@@ -1246,6 +1246,52 @@ def keep_outputs(api: dict[str, Any], kind: str, wanted: set[str], object_info: 
     return graph
 
 
+#: 「存着的那句提示词」最长交多少字给宿主(它要显示、能一键填进输入框;再长就是一篇文章了)。
+MAX_STORED_PROMPT = 4000
+
+
+def stored_prompt(api: dict[str, Any], prompts: dict[tuple[str, str], str]) -> str:
+    """主提示词那几格里**第一格存着的那句**(按节点顺序):提示词可以不写(`optional`)时,不写就跑它。"""
+    for node_id, field in sorted((key for key, role in prompts.items() if role == "prompt"), key=lambda key: _node_order(key[0])):
+        value = ((api.get(node_id) or {}).get("inputs") or {}).get(field)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:MAX_STORED_PROMPT]
+    return ""
+
+
+def form_items(form: Form) -> list[dict[str, Any]]:
+    """应用表单上的每一项,**按表上的顺序**,写成宿主认得的键(见 docs/PLUGIN_MANIFEST 的 `form`):
+
+    - 主提示词 → `prompt`(宿主的提示词框)、标成主提示词的反向提示词 → `negative_prompt`;
+    - 种子 / 尺寸 / 跑几遍 → `seed` / `size` / `num_images`;
+    - 读素材的槽位 → 它的角色(同一角色的几格只列一次,在第一格的位置;每格叫什么在 `inputs[].labels` 里);
+    - 其余 → 参数键 `<节点 id>.<输入名>`。
+
+    `label` 是作者起的名字,没起就是这一项自己的名字(按语言分)。同一个键只列一次(几格提示词写的是同一句)。
+    """
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for field in form.fields:
+        kind = field.kind
+        if kind == "text" and field.main:
+            key = "negative_prompt" if field.item.get("role") == "negative" else "prompt"
+        elif kind == "media":
+            key = str(field.item.get("role") or "")
+        elif kind in ("seed", "size"):
+            key = kind
+        elif kind == "runs":
+            key = "num_images"
+        elif kind in VALUE_KINDS:
+            key = field.key
+        else:
+            continue
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        items.append({"key": key, "label": field.title})
+    return items
+
+
 def describe(
     model_id: str,
     label: Any,
@@ -1317,6 +1363,7 @@ def describe(
         # 局部重绘拿 alpha 当蒙版:收一份蒙版(白色是要改的地方),替掉 alpha 那一路。不给就用图自己的 alpha。
         counts["mask"] = 1
     named = form.slot_labels()
+    requirement = prompt_requirement(api, prompts, auto)
     #: 图有没有提示词(判「处理一张图」的工作流)看整张图;表单收不收提示词看主提示词
     prompted = bool(text_slots(api, object_info)) or "prompt" in placeholders
     asks_prompt = bool(prompts) or "prompt" in auto
@@ -1369,8 +1416,15 @@ def describe(
         "max_outputs": max_outputs,
         "outputs_per_run": per_run,
         # 提示词要不要写:从图里读(见 prompt_requirement)。放大这类图是 none —— 宿主不再逼人敲一句没用的话。
-        "prompt": prompt_requirement(api, prompts, auto),
+        "prompt": requirement,
     }
+    stored = stored_prompt(api, prompts) if requirement == "optional" else ""
+    if stored:
+        # 可以不写的那句提示词「不写用什么」:宿主在输入框和表单里说清楚,用户点一下能填进来改
+        model["prompt_default"] = stored
+    if form.app:
+        # 作者挑的那张表:标题、说明、每一项按表上的顺序叫什么(宿主据此按这张表摆,见 form_items)
+        model["form"] = {"title": form.title, "description": form.description, "items": form_items(form)}
     types = {str(node.get("class_type", "")) for node in api.values()}
     # 提示词写法:SD 1.5 / SDXL 那一路(CheckpointLoaderSimple)吃逗号分隔的标签;Flux 这类走 UNETLoader
     # 的吃自然语言,不标。

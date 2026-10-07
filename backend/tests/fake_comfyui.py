@@ -1305,6 +1305,22 @@ class _Handler(BaseHTTPRequestHandler):
         elif path in ("/interrupt", "/queue", "/free"):
             if path == "/queue" and body.get("clear"):
                 state.pending.clear()
+            if path == "/queue" and isinstance(body.get("delete"), list):
+                # 从队列里撤掉(还没开始跑的那几个):和 ComfyUI 一样,撤掉的不进历史
+                state.pending[:] = [one for one in state.pending if one not in body["delete"]]
+            if path == "/interrupt":
+                # 照 ComfyUI 0.39 的 post_interrupt:给了任务号只在它**正在跑**时中断它(别人的不碰);没给就中断在跑的那个。
+                # 被中断的那个离开队列、进历史(记成 error,消息里是 execution_interrupted —— 和界面上点「中断」一样)
+                target = body.get("prompt_id")
+                stopped = [one for one in state.running if not target or one == target]
+                state.running[:] = [one for one in state.running if one not in stopped]
+                for prompt_id in stopped:
+                    state.history[prompt_id] = {"status": {
+                        "status_str": "error", "completed": False,
+                        "messages": [["execution_start", {"prompt_id": prompt_id}],
+                                     ["execution_interrupted", {"prompt_id": prompt_id, "node_id": "3",
+                                                                "node_type": "KSampler", "executed": []}]],
+                    }, "outputs": {}}
             self._json({})
         else:
             self._json({"error": "unknown"}, 404)

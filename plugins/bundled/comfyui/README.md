@@ -454,6 +454,11 @@ the workflow, and so does the agent when it calls it; a workflow without one sti
   the main prompt keeps the text saved in the workflow, an unpicked seed follows the workflow's own setting (fixed stays,
   randomize changes), and stale keys saved on a board cell are no longer written into the graph. The tool
   ("Workflow · name") takes only the form's items as well.
+- **The form itself in the catalog** (1.18.0): a workflow with a simplified form also hands Mosael the form —
+  its name, description and every item in the form's order with the form's names (`form`, see the plugin manifest docs),
+  and a main prompt that may be left empty brings the sentence saved in the workflow (`prompt_default`). AI Studio's
+  Engine settings is then that form: its items, in its order, with its names; the main prompt says it is the box below and
+  shows the saved sentence that runs when the box is left empty, with one click to put it into the box.
 - **Results**: output nodes marked as the result are the default of "Results from" ("Your result (node name)") instead of
   a guess; save nodes can be marked too (two save nodes, keep only the high-resolution one). "Results from" can still be
   changed every time. Every output a generation returns carries the node it came from (`source_node` in the output's

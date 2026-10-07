@@ -12081,6 +12081,14 @@ export interface components {
             costs: components["schemas"]["CostAmountOut"][];
             /** Cost Confidence */
             cost_confidence?: string | null;
+            /**
+             * Stopped
+             * @description 有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
+             *     界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY
+             *     (见 jobs.was_cancelled),生成记录在任务落终态那一刻抄下了同一个 key(generation.runner.record_failure),
+             *     任务被清掉之后也还在。
+             */
+            readonly stopped: boolean;
         };
         /**
          * GenerationOptionOut

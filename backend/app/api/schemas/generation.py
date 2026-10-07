@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, computed_field, field_validator
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
 from app.api.schemas.jobs import JobOut, _rendered
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
+from app.domain.jobs import CANCELLED_ERROR_KEY
 
 
 """生成:输入素材的引用、模型与参数选项、发起生成、会话与提示词优化。"""
@@ -132,6 +133,15 @@ class GenerationJobOut(OrmModel):
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
         return _rendered(value, info, "error_key", "error_params")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def stopped(self) -> bool:
+        """有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
+        界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY
+        (见 jobs.was_cancelled),生成记录在任务落终态那一刻抄下了同一个 key(generation.runner.record_failure),
+        任务被清掉之后也还在。"""
+        return self.error_key == CANCELLED_ERROR_KEY
 
 
 class GenerationCreateResponse(ApiModel):

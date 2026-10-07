@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import time
 
 import pytest
 from sqlalchemy import select
@@ -103,6 +105,86 @@ def test_带参考图的一次生成从头到尾(connected) -> None:
         assert json.loads(job.payload["remote_task"]["poll_path"])["prompt_id"] == "p1"
         [asset_id] = job.result["asset_ids"]
         assert db.get(GeneratedAsset, asset_id).provider == VENDOR
+
+
+def test_停下一次生成_ComfyUI上只停这一次的任务_记录说已停止(connected) -> None:
+    """AI 工作台的「停止」走任务总线的取消(jobs.cancel_job)。维护者:「发起了怎么就没办法取消/停止了」。
+
+    插件那一侧收到取消文件,把**这一次的** `prompt_id` 从那台 ComfyUI 上停掉:在跑的 `/interrupt` 带着它的任务号,
+    排在后面的别人的任务不碰(同一台 ComfyUI 可能好几个人在用)。生成记录说「已停止」(`stopped`),不是一张失败卡。
+    """
+    client, comfy, instance_id = connected
+    comfy.state.outcome = "never"
+    comfy.state.pending = ["someone-else"]
+    workspace = client.post("/api/workspaces", json={"name": "ComfyUI"}).json()["id"]
+    with SessionLocal() as db:
+        profile_id = db.scalar(select(ProviderProfile.id).where(ProviderProfile.plugin_instance_id == instance_id))
+    submitted = client.post("/api/generation/jobs", json={
+        "workspace_id": workspace, "session_id": None, "project_id": None, "provider_profile_id": profile_id,
+        "provider": VENDOR, "model": "portrait.json", "kind": "image", "prompt": "海边的柴犬", "parameters": {},
+    })
+    assert submitted.status_code == 200, submitted.text
+    job_id = submitted.json()["job"]["id"]
+    session_id = submitted.json()["generation"]["session_id"]
+    assert comfy.state.submitted.wait(30), "插件没把图提交上去"
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        with SessionLocal() as db:
+            if (db.get(Job, job_id).payload or {}).get("remote_task"):
+                break
+        time.sleep(0.05)
+
+    stopped = client.post(f"/api/jobs/{job_id}/cancel")
+    assert stopped.status_code == 200, stopped.text
+    from app.domain.jobs import wait_for_idle_jobs
+
+    assert wait_for_idle_jobs(timeout=60)
+    assert comfy.posted("/interrupt") == [{"prompt_id": "p1"}], "在跑的是这一次的:按它的任务号中断"
+    assert comfy.posted("/queue") == [] and comfy.state.pending == ["someone-else"], "排着的是别人的任务,不碰"
+    [record] = client.get(f"/api/generation/jobs?workspace_id={workspace}&session_id={session_id}").json()
+    assert record["stopped"] is True and not record["result_asset_ids"]
+    assert record["cost_confidence"] in ("not_billed", "free"), record
+    with SessionLocal() as db:
+        assert not db.scalars(select(GeneratedAsset).where(GeneratedAsset.job_id == job_id)).all()
+
+
+def test_跑挂了的不是停下的(connected) -> None:
+    client, comfy, instance_id = connected
+    comfy.state.outcome = "error"
+    workspace = client.post("/api/workspaces", json={"name": "ComfyUI"}).json()["id"]
+    with SessionLocal() as db:
+        profile_id = db.scalar(select(ProviderProfile.id).where(ProviderProfile.plugin_instance_id == instance_id))
+    submitted = client.post("/api/generation/jobs", json={
+        "workspace_id": workspace, "session_id": None, "project_id": None, "provider_profile_id": profile_id,
+        "provider": VENDOR, "model": "portrait.json", "kind": "image", "prompt": "海边的柴犬", "parameters": {},
+    }).json()
+    assert wait_status(client, submitted["job"]["id"], timeout=60) == "failed"
+    [record] = client.get(
+        f"/api/generation/jobs?workspace_id={workspace}&session_id={submitted['generation']['session_id']}").json()
+    assert record["stopped"] is False and "CUDA out of memory" in record["error"]
+
+
+def test_精简表单到了选择器_标题说明和表上的每一项_按看的人的语言(connected) -> None:
+    """AI 工作台的「引擎参数」照作者那张表摆(维护者:「右侧引擎参数配置明显和实际的精简表单不符」):描述符里带着表的
+    标题、说明、按表上顺序的每一项(主提示词是 `prompt`),名字按看的人的语言挑好;提示词可以不写时带着不写用的那一句。"""
+    client, comfy, instance_id = connected
+    ui = copy.deepcopy(comfy.state.workflows["portrait.json"])
+    ui["extra"] = {"mosael": {"version": 1, "app": {"title": "快速出图", "description": "只填一句话", "graph_items": {}}}}
+    for node in ui["nodes"]:
+        if node["id"] == 6:
+            node["properties"] = {"mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+        if node["id"] == 3:
+            node["properties"] = {"mosael": {"expose": {"steps": {"order": 1, "label": "快慢"}}}}
+    comfy.state.workflows["portrait.json"] = ui
+    assert client.post(f"/api/plugins/instances/{instance_id}/refresh").status_code == 200
+    caps = _options(client, "image")["portrait.json"]["capabilities"]
+    assert caps["form"] == {"title": "快速出图", "description": "只填一句话",
+                            "items": [{"key": "prompt", "label": "提示词"}, {"key": "3.steps", "label": "快慢"}]}
+    assert caps["prompt"] == "optional" and caps["prompt_default"] == "a cat"
+    english = client.get("/api/generation/options?kind=image", headers={"Accept-Language": "en-US"}).json()
+    portrait = next(one for one in english if one["provider"] == VENDOR and one["model"] == "portrait.json")
+    assert portrait["capabilities"]["form"]["items"][0] == {"key": "prompt", "label": "Prompt"}
+    assert "form" not in _options(client, "image")["builtin:txt2img"]["capabilities"], "没有表的照旧按参数分栏"
 
 
 def test_换一台服务器_模型跟着换(connected) -> None:

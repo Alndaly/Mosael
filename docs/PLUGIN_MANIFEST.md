@@ -1384,7 +1384,13 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
     "max_outputs": 1,
     "outputs_per_run": 1,                  // 可选:一次运行交回几份(张数为 1、参数按缺省时),见下
     "prompt_dialect": "sd-tags",           // 可选:提示词优化按哪种写法改
-    "prompt": "optional"                   // 可选:required(默认)/ optional / none,见下
+    "prompt": "optional",                  // 可选:required(默认)/ optional / none,见下
+    "prompt_default": "a girl in a garden", // 可选:prompt 是 optional 时,不写就用的那一句,见下
+    "form": {                              // 可选:作者给这个模型挑的那张表(ComfyUI 的精简表单),见下
+      "title": "换装", "description": "上传人物和背景",
+      "items": [{"key": "reference_image", "label": "人物照片"}, {"key": "prompt", "label": {"zh": "提示词", "en": "Prompt"}},
+                {"key": "3.steps", "label": "步数"}]
+    }
   }
 ],
  "fingerprint": "9f2c…"                   // 可选:这份清单的指纹,见下面「目录变了就刷新」
@@ -1419,6 +1425,15 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   智能体不写,带着提示词提交会被当场拒。认不出的值当没写。ComfyUI 插件从图里读:没有文字喂进采样器是 `none`,
   提示词节点里存着话是 `optional`,存的是空的或模板里是 `{{prompt}}` 是 `required`。`optional` 的模型,
   `generate` 请求里的 `prompt` 可能是空串 —— 空串的意思是「没写」,用你自己的默认,不是「清成空」。
+- `prompt_default`(字符串,≤ 4000 字):`prompt` 是 `optional` 时,**不写就用的那一句**(ComfyUI:工作流里存着的那句)。
+  宿主据此说清楚「不写用什么」:AI 工作台的输入框占位写「不写就用这张工作流里存着的提示词」,精简表单里那一项摆出这一句、
+  能一键填进输入框改。别的 `prompt` 取值时宿主不读它。
+- `form`(可选):作者给这个模型**挑的那张表**(ComfyUI 的精简表单,ADR 0038 §2)—— `title`、`description`(可以按语言分)
+  和按表上顺序的 `items`(`{key, label}`,`label` 可以按语言分)。`key` 写宿主认得的那一种:宿主的提示词框是 `prompt`、
+  反向提示词 `negative_prompt`,宿主自己有控件的 `seed` / `size` / `num_images`,素材角色(`reference_image` …,一个
+  角色几格只列一次,每格叫什么照旧写在 `inputs[].labels`),其余是 `parameters` 里的键。有它,AI 工作台的「引擎参数」
+  就照这张表摆 —— 表上的项、表上的顺序、表上的名字,主提示词那一项说明它就是下面的输入框;`parameters` 里不在表上的
+  (ComfyUI 的「结果取自」)另起一栏放在表后面。对不上的项(描述符里没有那个键)宿主丢掉。没有就按参数各自的样子分栏摆。
 - 一次能出几张:声明 `num_images`(`maximum` 是上限,宿主一次最多 4 张)并把 `max_outputs` 设成同一个数;
   `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。**没给 `num_images` 就是 1** —— 宿主的
   张数控件缺省就是 1,`default` 写别的数也只是占位提示。

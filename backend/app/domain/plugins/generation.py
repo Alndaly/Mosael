@@ -74,6 +74,11 @@ class PluginModel:
     #: 提示词要不要写:`required` / `optional` / `none`(空串 = 没说,按 required)。认不认这个值由宿主侧判
     #: (生成域的 PROMPT_MODES)—— 和 `inputs` 的角色同一条:插件域只收形状,不认识生成的词汇。
     prompt: str = ""
+    #: 提示词可以不写时,**不写就用的那一句**(ComfyUI:工作流里存着的那句)。没给是空串。
+    prompt_default: str = ""
+    #: 作者给这个模型挑的那张表(ComfyUI 的精简表单,ADR 0038 §2):`{title, description, items: [{key, label}]}`,
+    #: `items` 按表上的顺序。没有就是 None —— 按参数各自的样子摆。名字按语言分的原样留着,给人看时再挑。
+    form: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -133,7 +138,38 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
         outputs_per_run=min(max(outputs_per_run, 1), _MAX_OUTPUTS_PER_RUN),
         prompt_dialect=str(entry.get("prompt_dialect") or "").strip()[:40],
         prompt=str(entry.get("prompt") or "").strip().lower()[:16] if isinstance(entry.get("prompt"), str) else "",
+        prompt_default=entry["prompt_default"].strip()[:_MAX_PROMPT_DEFAULT] if isinstance(entry.get("prompt_default"), str) else "",
+        form=_form(entry.get("form"), text),
     )
+
+
+#: 「不写就用的那句提示词」最长收多少字;表单最多几项、标题和说明最长多少字(和插件那边 app_form 的上限一样)。
+_MAX_PROMPT_DEFAULT = 4000
+_MAX_FORM_ITEMS = 200
+_MAX_FORM_TITLE = 120
+_MAX_FORM_DESCRIPTION = 1000
+#: 表单一项的键:宿主的提示词框(`prompt`),或者参数键 / 素材角色(和参数键同一种写法)。
+_FORM_KEY = re.compile(r"^(prompt|[A-Za-z0-9_][A-Za-z0-9_.:\-]{0,79})$")
+
+
+def _form(raw: Any, text: Any) -> dict[str, Any] | None:
+    """插件说的那张表收成规整的形状:认不出的项丢掉,同一个键只留第一次。一项都没有、也没有标题的不算一张表。"""
+    if not isinstance(raw, dict):
+        return None
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in raw.get("items") or []:
+        if not isinstance(entry, dict) or len(items) >= _MAX_FORM_ITEMS:
+            continue
+        key = entry.get("key")
+        if not isinstance(key, str) or not _FORM_KEY.match(key) or key in seen:
+            continue
+        seen.add(key)
+        items.append({"key": key, "label": _localizable(entry.get("label"), text, 120)})
+    title = _localizable(raw.get("title"), text, _MAX_FORM_TITLE)
+    if not items and not title:
+        return None
+    return {"title": title, "description": _localizable(raw.get("description"), text, _MAX_FORM_DESCRIPTION), "items": items}
 
 
 def _scalar(value: Any) -> bool:
