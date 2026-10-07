@@ -71,6 +71,8 @@ ARGS: dict[str, dict[str, Any]] = {
     "comfy_node_packs": {},
     "comfy_node_pack_search": {"node_types": ["WanVideoSampler"]},
     "comfy_node_pack_info": {"pack_id": "rgthree-comfy"},
+    "comfy_canvas_new": {"template": "image_qwen_image_2_1_image_edit", "name": "Qwen 编辑",
+                         "ops": [{"op": "set_widget", "node": "459", "widget": "steps", "value": 30}]},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会

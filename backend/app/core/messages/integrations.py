@@ -585,6 +585,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "⚠️ Run modelling code in your Blender ({lines} lines){purpose} — Blender's Python is not a sandbox and can read and write local files; an undo point was pushed first, so ⌘Z works in Blender",
     },
     "confirm_blenderPurpose": {"zh": ":{purpose}", "en": ": {purpose}"},
+    "confirm_comfyCanvasEdit": {
+        "zh": "改 ComfyUI 画布上开着的「{name}」:{count} 处改动,一次 Ctrl+Z 就退回去{warning}",
+        "en": "Change “{name}” on the ComfyUI canvas: {count} edits, undone with a single Ctrl+Z{warning}",
+    },
+    "confirm_comfySubgraphUses": {
+        "zh": "  ⚠️ 子图「{name}」在这张图里用了 {uses} 处:改的是它的定义,每一处都会变",
+        "en": " (⚠️ the subgraph “{name}” is used in {uses} places here: its definition changes, so every one of them changes)",
+    },
     "confirm_deleteAssets": {
         "zh": "永久删除 {count} 个素材({names}){tail} —— 文件会从磁盘上清掉,撤不回来",
         "en": "Permanently delete {count} assets ({names}){tail} — the files are removed from disk and cannot be recovered",

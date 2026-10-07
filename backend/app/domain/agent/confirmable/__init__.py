@@ -14,7 +14,7 @@ from app.domain.agent.confirmable.registry import (
 
 #: 登记的副作用发生在 import 时,所以这些模块必须被引到(和 workflows 的执行器同一个做法)。
 from app.domain.agent.confirmable import (  # noqa: F401,E402  (registration)
-    automation, blender, deletion, external, generation, media, notes, plugin_tools, skills,
+    automation, blender, comfyui, deletion, external, generation, media, notes, plugin_tools, skills,
 )
 
 __all__ = [

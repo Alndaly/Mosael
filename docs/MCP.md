@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **121** 个工具,其中 **36** 个走确认卡、**1** 个停下来等用户作答。
+共 **123** 个工具,其中 **37** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -39,6 +39,8 @@
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
+| `comfy_canvas_edit` | 确认卡 | Confirmation required: change the workflow open on the workbench canvas. One batch, all or nothing, one Ctrl+Z; |
+| `comfy_canvas_new` | 直接执行 | Open a workflow in a NEW workbench tab; the open ones stay untouched, nothing is saved (the user saves). |
 | `comfy_canvas_read` | 直接执行 | Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each |
 | `comfy_check` | 直接执行 | Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) — |
 | `comfy_locate` | 直接执行 | Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12" |

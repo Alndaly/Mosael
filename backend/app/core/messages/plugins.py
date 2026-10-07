@@ -774,8 +774,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     # 工作台里的智能体(ADR 0042):碰画布的工具经桌面版主进程交给那个连接开着的工作台
     "workbenchErr_notOpen": {
-        "zh": "先在工作台里打开这台 ComfyUI(「{name}」):工作流库里点「在工作台里打开」,画布亮着时我才读得到、指得到",
-        "en": "Open this ComfyUI (“{name}”) in the workbench first (Workflow library → Open in workbench): I can only read and point at the canvas while it's showing",
+        "zh": "先在工作台里打开这台 ComfyUI(「{name}」):工作流库里点「在工作台里打开」,画布亮着时我才读得到、改得到",
+        "en": "Open this ComfyUI (“{name}”) in the workbench first (Workflow library → Open in workbench): I can only read and change the canvas while it's showing",
     },
     "workbenchErr_noConnection": {
         "zh": "没找到这个 ComfyUI 连接(或者它不是你接的)",
@@ -798,12 +798,57 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Node {node} is inside a subgraph, and this ComfyUI frontend can't open subgraphs, so it can't be located",
     },
     "workbenchErr_unsupported": {
-        "zh": "这版 ComfyUI 前端(或者桌面版)不支持读画布:{detail}",
-        "en": "This ComfyUI frontend (or desktop app) can't read the canvas: {detail}",
+        "zh": "这版 ComfyUI 前端(或者桌面版)做不了这件事:{detail}",
+        "en": "This ComfyUI frontend (or desktop app) can't do that: {detail}",
     },
     "workbenchErr_bridge": {
         "zh": "工作台没做成:{detail}",
         "en": "The workbench couldn't do it: {detail}",
+    },
+    # 改画布、开新标签(ADR 0042 第二步)
+    "workbenchErr_noOps": {
+        "zh": "要给一批改动(ops):每一条一个 op,写法见 comfyui-workflows 技能",
+        "en": "Give a batch of changes (ops), one op each; the comfyui-workflows skill shows how",
+    },
+    "workbenchErr_editIntroduces": {
+        "zh": "这一批改完会多出 {count} 个错误,没交给用户批:{findings}。先把这些也改对(或者换个改法)再提",
+        "en": "This batch would add {count} error(s), so it wasn't put to the user: {findings}. Fix those too (or change approach) and propose again",
+    },
+    "workbenchErr_editOtherTab": {
+        "zh": "画布上开着的已经不是「{name}」了:切回那一张再点「应用」,或者让我对着现在这张重新提",
+        "en": "The canvas no longer shows “{name}”: switch back to it and apply again, or let me propose against the one that's open now",
+    },
+    "workbenchErr_editStale": {
+        "zh": "「{name}」在点「应用」之前又改过了,卡上的改动清单对不上现在的图,一样都没改:让我对着现在的图重新提一次",
+        "en": "“{name}” changed before Apply was clicked, so the change list no longer matches the canvas and nothing was changed: let me propose again against the current graph",
+    },
+    "workbenchErr_editRefused": {
+        "zh": "画布没接受这一批,一样都没改:{detail}",
+        "en": "The canvas refused this batch, nothing was changed: {detail}",
+    },
+    "workbenchErr_noWorkflow": {
+        "zh": "那台 ComfyUI 上没有工作流「{path}」",
+        "en": "That ComfyUI has no workflow “{path}”",
+    },
+    "workbenchErr_newNothing": {
+        "zh": "新开一张要给点东西:一张模板(template)、一批改动(ops,从空白搭),或者存着的那一张的路径(path)",
+        "en": "Opening a new tab needs something: a template, a batch of ops to build from blank, or the path of a saved workflow",
+    },
+    "workbenchErr_newTemplateOrPath": {
+        "zh": "模板(template)和存着的路径(path)只能给一样",
+        "en": "Give either a template or a saved path, not both",
+    },
+    "workbenchErr_newOpsOnSaved": {
+        "zh": "存着的那一张不在打开时改:先打开它,再用 comfy_canvas_edit 提改动(要用户点「应用」)",
+        "en": "A saved workflow isn't changed while opening it: open it first, then propose changes with comfy_canvas_edit (the user clicks Apply)",
+    },
+    "workbenchErr_newPartly": {
+        "zh": "新标签页「{name}」开了(只有起始的那张图),上面那一批改动没改上:{detail}",
+        "en": "The new tab “{name}” is open (with only the starting graph), but the batch on top didn't apply: {detail}",
+    },
+    "workbenchNewWorkflowName": {
+        "zh": "新工作流",
+        "en": "New workflow",
     },
     "workbenchErr_badNode": {
         "zh": "「{node}」不是画布上节点的写法:根图上的写编号(12),子图里的写从根图往里走的编号(12:5)",

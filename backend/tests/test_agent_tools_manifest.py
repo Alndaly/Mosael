@@ -233,7 +233,8 @@ def test_confirmation_gated_tools_are_marked_in_the_manifest() -> None:
     多标 = 对着普通结果空等确认卡——两个方向都必须钉死。"""
     client = fresh_client()
     marked = {tool["name"] for tool in _builtin(client) if tool.get("confirmation")}
-    assert marked == set(mcp_server.CONFIRMATION_TOOLS)
+    #: 声明了 `needs` 的(comfy_canvas_edit)只发给接了那种插件的人;这个新用户什么都没接(那一半见 test_workbench_agent)
+    assert marked == {name for name in mcp_server.CONFIRMATION_TOOLS if not mcp_server.TOOL_NEEDS.get(name)}
     # 会真实创建确认卡的核心变更工具必须在列
     for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video", "generate_audio", "generate_podcast"):
         assert name in marked

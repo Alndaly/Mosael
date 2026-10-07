@@ -1,4 +1,5 @@
-"""工作台里的智能体(ADR 0042 第一步)宿主这一侧:`comfy_*` 工具 —— 碰画布的经「后端 → 主进程 → 页面」那条路,别的问插件。
+"""工作台里的智能体(ADR 0042 第一、二步)宿主这一侧:`comfy_*` 工具 —— 碰画布的经「后端 → 主进程 → 页面」那条路,别的问插件。
+改当前这张先开确认卡(开卡时画布不动,点「应用」才交给桥),新标签页不开卡;都不存盘。
 
 画布那条路和浏览器动作是同一套(见 domain/browser 的 workbench_session / run_workbench):工具排一条 `workbench` 动作在这个
 工作区对这个连接的工作台会话上,执行器(这里是一个线程,经 /api/browser/worker/* 那几个口,和 electron 的 browserWorker 一样)
@@ -20,6 +21,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import BrowserAction, BrowserSession, Job
 from app.domain import browser
+from app.domain.agent import autopilot
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import fresh_client, second_client, worker_client
 
@@ -193,14 +195,225 @@ def test_空着太久的工作台会话收回时_排的那条关闭不拆视图(
 
 
 COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
-               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info"}
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
 
 
 def test_没接_ComfyUI_的人_每一轮不发_comfy_工具的定义(connected) -> None:
-    """工具定义每轮重发(本机模型的回退窗口里有预算,见 test_tool_definitions_budget):用不上的九个工具不占那一块。"""
+    """工具定义每轮重发(本机模型的回退窗口里有预算,见 test_tool_definitions_budget):用不上的这几个工具不占那一块。"""
     client, _, _, _ = connected
     names = {one["name"] for one in client.get("/api/agent/tools").json()}
     assert COMFY_TOOLS <= names
     other = {one["name"] for one in second_client().get("/api/agent/tools").json()}
     assert not other & COMFY_TOOLS
     assert "list_assets" in other, "别的工具照发"
+
+
+# --- 改画布、开新标签(ADR 0042 第二步) ----------------------------------------------------------
+
+def _simple() -> dict[str, Any]:
+    """画布上开着的一张最普通的文生图(界面格式,和前端 graphToPrompt 交出来的一样)。"""
+    def out(name: str, kind: str, links: list[int]) -> dict[str, Any]:
+        return {"name": name, "type": kind, "links": links}
+
+    def inp(name: str, kind: str, link: int | None) -> dict[str, Any]:
+        return {"name": name, "type": kind, "link": link}
+
+    nodes = [
+        {"id": 4, "type": "CheckpointLoaderSimple", "inputs": [], "outputs": [out("MODEL", "MODEL", [1]), out("CLIP", "CLIP", [2, 3]),
+         out("VAE", "VAE", [4])], "widgets_values": ["sd_xl_base_1.0.safetensors"], "mode": 0},
+        {"id": 6, "type": "CLIPTextEncode", "inputs": [inp("clip", "CLIP", 2)], "outputs": [out("CONDITIONING", "CONDITIONING", [5])],
+         "widgets_values": ["a cat"], "mode": 0},
+        {"id": 7, "type": "CLIPTextEncode", "inputs": [inp("clip", "CLIP", 3)], "outputs": [out("CONDITIONING", "CONDITIONING", [6])],
+         "widgets_values": ["blurry"], "mode": 0},
+        {"id": 5, "type": "EmptyLatentImage", "inputs": [], "outputs": [out("LATENT", "LATENT", [7])], "widgets_values": [1024, 1024, 1],
+         "mode": 0},
+        {"id": 3, "type": "KSampler", "inputs": [inp("model", "MODEL", 1), inp("positive", "CONDITIONING", 5),
+         inp("negative", "CONDITIONING", 6), inp("latent_image", "LATENT", 7)], "outputs": [out("LATENT", "LATENT", [8])],
+         "widgets_values": [42, "fixed", 20, 7, "euler", "simple", 1], "mode": 0},
+        {"id": 8, "type": "VAEDecode", "inputs": [inp("samples", "LATENT", 8), inp("vae", "VAE", 4)], "outputs": [out("IMAGE", "IMAGE", [9])],
+         "widgets_values": [], "mode": 0},
+        {"id": 9, "type": "SaveImage", "inputs": [inp("images", "IMAGE", 9)], "outputs": [], "widgets_values": ["ComfyUI"], "mode": 0},
+    ]
+    links = [[1, 4, 0, 3, 0, "MODEL"], [2, 4, 1, 6, 0, "CLIP"], [3, 4, 1, 7, 0, "CLIP"], [4, 4, 2, 8, 1, "VAE"],
+             [5, 6, 0, 3, 1, "CONDITIONING"], [6, 7, 0, 3, 2, "CONDITIONING"], [7, 5, 0, 3, 3, "LATENT"], [8, 3, 0, 8, 0, "LATENT"],
+             [9, 8, 0, 9, 0, "IMAGE"]]
+    return {"last_node_id": 9, "last_link_id": 9, "nodes": nodes, "links": links, "version": 0.4}
+
+
+class Canvas:
+    """画布上开着的那一张:读到的是它现在的样子;桥接了一批就换成改后的样子(这里由测试给)。记下每一次调用。"""
+
+    def __init__(self, graph: dict[str, Any], key: str = "workflows/人像.json", name: str = "人像",
+                 after: dict[str, Any] | None = None) -> None:
+        self.graph, self.key, self.name, self.after = graph, key, name, after
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, call: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append(call)
+        if call["op"] == "readGraph":
+            return {"ok": True, "graph": {"workflow": self.graph, "selection": [], "modified": False, "layer": None,
+                                          "info": {"name": self.name, "path": self.key.removeprefix("workflows/"), "key": self.key,
+                                                   "temporary": False}}}
+        if call["op"] == "applyOps":
+            if self.after is not None:
+                self.graph = self.after
+            return {"ok": True, "created": {one["id"]: "21" for one in call["ops"] if one["op"] == "add_node"}}
+        if call["op"] == "openWorkflow":
+            self.key = f"workflows/{call.get('name')}.json"
+            self.name = call.get("name") or ""
+            self.graph = call.get("graph") or self.graph
+            return {"ok": True, "workflow": {"path": self.key, "name": self.name, "temporary": "graph" in call},
+                    "created": {one["id"]: "30" for one in call.get("ops") or [] if one["op"] == "add_node"}}
+        return {"ok": False, "error": "unsupported"}
+
+    def ops(self) -> list[str]:
+        return [call["op"] for call in self.calls]
+
+
+LORA = [
+    {"op": "add_node", "id": "$l", "type": "LoraLoader", "widgets": {"lora_name": "add_detail.safetensors", "strength_model": 0.6}},
+    {"op": "connect", "from": "4.MODEL", "to": "$l.model"},
+    {"op": "connect", "from": "4.CLIP", "to": "$l.clip"},
+    {"op": "connect", "from": "$l.MODEL", "to": "3.model"},
+    {"op": "set_widget", "node": "3", "widget": "steps", "value": 30},
+]
+
+
+def _card(client, confirmation_id: str) -> dict[str, Any]:
+    return client.get(f"/api/confirmations/{confirmation_id}").json()
+
+
+def _cards(client, workspace: str) -> list[dict[str, Any]]:
+    return client.get(f"/api/confirmations?workspace_id={workspace}").json()
+
+
+def test_改画布_先开确认卡_开卡时画布一点没动_卡上是改动清单(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_edit", workspace, ops=LORA, instance_id=instance_id)["result"]
+        assert autopilot.wait_for_idle_autopilot(), "没有自动放行的线程在跑"
+        assert _card(client, out["confirmation_id"])["status"] == "pending", "手动模式下等人点「应用」,不自己放行"
+    assert out["status"] == "pending"
+    assert canvas.ops() == ["readGraph"], "开卡只读了一次画布,什么都没改"
+    card = _card(client, out["confirmation_id"])
+    assert card["tool"] == "comfy_canvas_edit" and card["permission"] == "edit"
+    assert "「人像」" in card["summary"] and "5 处改动" in card["summary"] and "Ctrl+Z" in card["summary"]
+    payload = card["payload"]
+    assert payload["instance_id"] == instance_id and payload["workflow"]["key"] == "workflows/人像.json"
+    assert [one["op"] for one in payload["changes"]] == ["add_node", "connect", "connect", "connect", "set_widget"]
+    assert payload["changes"][3]["replaces"] == {"node": "4", "output": "MODEL"}, "接进 3.model 的那根原来来自 #4,清单上写明换掉了谁"
+    assert payload["changes"][4] == {"op": "set_widget", "node": "3", "type": "KSampler", "widget": "steps", "before": 20, "after": 30}
+    assert payload["check"]["before"]["error"] == payload["check"]["after"]["error"], "改前改后各诊断一次"
+
+
+def test_点应用之后_对着现在的画布再算一遍_对得上才交给桥_改完再诊断_说修好了几个(connected) -> None:
+    client, _, instance_id, workspace = connected
+    broken = _simple()
+    broken["nodes"][4]["widgets_values"][4] = "no_such_sampler"
+    canvas = Canvas(broken, after=_simple())
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id,
+                    ops=[{"op": "set_widget", "node": "3", "widget": "sampler_name", "value": "euler"}])["result"]
+        card = _card(client, out["confirmation_id"])
+        assert card["payload"]["check"]["fixed"][0]["kind"] == "combo_not_in_list", "卡上就说这一批会修好哪几个"
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    assert canvas.ops() == ["readGraph", "readGraph", "applyOps", "readGraph"], "批之后再读一遍、交给桥一批、改完再读一遍"
+    [applied] = [call for call in canvas.calls if call["op"] == "applyOps"]
+    assert applied["ops"] == [{"op": "set_widget", "node": "3", "widget": "sampler_name", "value": "euler", "layer": None}]
+    result = approved["result"]
+    assert result["applied"] == 1 and result["workflow"]["name"] == "人像"
+    assert [one["kind"] for one in result["fixed"]] == ["combo_not_in_list"] and result["introduced"] == []
+
+
+def test_一条说不通_整批不开卡_每一条的原因交回智能体(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=[
+            {"op": "set_widget", "node": "3", "widget": "steps", "value": 30},
+            {"op": "set_widget", "node": "3", "widget": "sampler_name", "value": "dpm_9000"},
+            {"op": "connect", "from": "4.VAE", "to": "3.model"},
+            {"op": "remove_node", "node": "77"},
+        ])
+    assert "一条都没改" in out["error"] and "第 2 条" in out["error"] and "第 3 条" in out["error"]
+    assert canvas.ops() == ["readGraph"]
+    assert _cards(client, workspace) == [], "没开卡"
+
+
+def test_改完会多出错误的_不交给用户批_说给智能体让它重改(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=[{"op": "disconnect", "to": "3.positive"}])
+    assert "多出 1 个错误" in out["error"] and "positive" in out["error"]
+    assert canvas.ops() == ["readGraph"]
+    assert _cards(client, workspace) == []
+
+
+def test_批之前换了一张_或者又改过_清单对不上_一样不改(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        first = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=LORA)["result"]
+        second = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=LORA)["result"]
+        canvas.key, canvas.name = "workflows/别的.json", "别的"
+        other_tab = client.post(f"/api/confirmations/{first['confirmation_id']}/approve").json()
+        canvas.key, canvas.name = "workflows/人像.json", "人像"
+        canvas.graph["nodes"][4]["widgets_values"][2] = 25  # 用户在 ComfyUI 里把 steps 改成了 25
+        stale = client.post(f"/api/confirmations/{second['confirmation_id']}/approve").json()
+    assert other_tab["status"] == "failed" and "已经不是「人像」" in other_tab["error"]
+    assert stale["status"] == "failed" and "对不上" in stale["error"]
+    assert "applyOps" not in canvas.ops()
+
+
+def test_改子图的定义_卡上写明这张图里用了几处_都会变(connected) -> None:
+    client, _, instance_id, workspace = connected
+    graph = json.loads(json.dumps(QWEN))
+    twin = json.loads(json.dumps(next(one for one in graph["nodes"] if one["id"] == 459)))
+    twin.update(id=900, inputs=[one for one in twin["inputs"] if one.get("widget")], outputs=[{**twin["outputs"][0], "links": []}])
+    graph["nodes"].append(twin)
+    canvas = Canvas(graph, key="workflows/Qwen.json", name="Qwen")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id,
+                    ops=[{"op": "set_widget", "node": "459:458", "widget": "denoise", "value": 0.8}])["result"]
+    card = _card(client, out["confirmation_id"])
+    sub = QWEN["definitions"]["subgraphs"][0]["id"]
+    assert card["payload"]["subgraphs"] == [{"id": sub, "name": "Image Edit (Qwen Image 2.1)", "uses": 2}]
+    assert card["payload"]["changes"][0]["layer"]["uses"] == 2
+    assert "用了 2 处" in card["warning"] and "每一处都会变" in card["warning"], "卡上单独一条提示"
+
+
+def test_新标签页_模板照这台机器改好_在新标签页打开_从不存盘_不开卡(connected) -> None:
+    client, comfy, instance_id, workspace = connected
+    comfy.state.templates = {"image_qwen_image_2_1_image_edit.json": QWEN}
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_new", workspace, instance_id=instance_id, template="image_qwen_image_2_1_image_edit",
+                    name="Qwen 编辑", ops=[{"op": "set_widget", "node": "459", "widget": "steps", "value": 30}])["result"]
+    assert canvas.ops() == ["openWorkflow", "readGraph"], "开一个新标签、读一遍诊断;没有 save"
+    opened = canvas.calls[0]
+    assert opened["name"] == "Qwen 编辑" and opened["graph"]["definitions"]["subgraphs"][0]["name"] == "Image Edit (Qwen Image 2.1)"
+    assert opened["ops"] == [{"op": "set_widget", "node": "459", "widget": "steps", "value": 30, "layer": None}]
+    assert out["saved"] is False and out["opened"] == {"name": "Qwen 编辑", "temporary": True, "path": ""}
+    assert "missing" in {one["status"] for one in out["template"]["models"]}, "缺的模型(连同大小)交给智能体说"
+    assert out["check"]["counts"]["error"] >= 1 and out["changes"] == 1
+    assert _cards(client, workspace) == [], "新标签页不动开着的,不开卡"
+
+
+def test_新标签页_打开存着的那一张_或者从空白搭(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        saved = _tool(client, "comfy_canvas_new", workspace, instance_id=instance_id, path="人像/古风.json")["result"]
+        built = _tool(client, "comfy_canvas_new", workspace, instance_id=instance_id, name="从空白搭",
+                      ops=[{"op": "add_node", "id": "$k", "type": "KSampler"}, {"op": "add_node", "id": "$e", "type": "EmptyLatentImage"},
+                           {"op": "connect", "from": "$e.LATENT", "to": "$k.latent_image"}])["result"]
+        both = _tool(client, "comfy_canvas_new", workspace, instance_id=instance_id, template="x", path="a.json")
+        nothing = _tool(client, "comfy_canvas_new", workspace, instance_id=instance_id)
+    assert canvas.calls[0] == {"op": "openWorkflow", "path": "人像/古风.json"}
+    [blank] = [call for call in canvas.calls if call["op"] == "openWorkflow" and "graph" in call]
+    assert blank["graph"]["nodes"] == [] and [one["op"] for one in blank["ops"]] == ["add_node", "add_node", "connect"]
+    assert built["created"] == {"$k": "30", "$e": "30"} and saved["saved"] is False
+    assert "只能给一样" in both["error"] and "要给点东西" in nothing["error"]

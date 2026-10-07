@@ -1950,11 +1950,12 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
     )
 
 
-# ---------- ComfyUI 工作台里的智能体(ADR 0042 第一步:读和诊断) ----------
+# ---------- ComfyUI 工作台里的智能体(ADR 0042:读和诊断、改和新建) ----------
 #
-# 都只读。碰画布的(comfy_canvas_read / comfy_locate / comfy_check)经桌面版主进程交给那个连接开着的工作台;工作台没开着就说
-# 「先在工作台里打开这台 ComfyUI」。别的(模板、节点类型、节点包)只问那个连接的插件,工作台开没开都能用。`instance_id` 是
-# ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
+# 碰画布的(comfy_canvas_read / comfy_locate / comfy_check / comfy_canvas_edit / comfy_canvas_new)经桌面版主进程交给那个连接开着的
+# 工作台;工作台没开着就说「先在工作台里打开这台 ComfyUI」。别的(模板、节点类型、节点包)只问那个连接的插件,工作台开没开都能用。
+# 改当前这张(comfy_canvas_edit)开确认卡、点「应用」才改;新标签页(comfy_canvas_new)不动开着的、不开卡;都不存盘。
+# `instance_id` 是 ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
 
 
 @tool(effect="reads", needs="workflow_library")
@@ -1985,6 +1986,42 @@ def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", w
     from app.domain import workbench_agent
 
     return _use_case(workbench_agent.check, workspace_id or _default_workspace_id(), instance_id, job_id, last_error)
+
+
+@tool(effect="confirms", needs="workflow_library")
+def comfy_canvas_edit(ops: list[dict[str, Any]], instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: change the workflow open on the workbench canvas. One batch, all or nothing, one Ctrl+Z;
+    the user sees the change list and clicks Apply. Refused up front if any op fails validation or the batch adds errors
+    (comfy_check runs before and after; the result says what got fixed). Never saves. Ops — nodes as in comfy_canvas_read
+    ("12"; "12:5" edits the subgraph definition, i.e. every use), new nodes by temporary id:
+    add_node {id:"$a",type,widgets?,title?,near?,graph?} | remove_node {node} |
+    connect {from:"<node>.<output>"|"@in.<name>", to:"<node>.<input>"|"@out.<name>"} | disconnect {to} |
+    set_widget {node,widget,value} | set_title {node,title} | bypass|mute {node,on?} |
+    add_subgraph_input|add_subgraph_output {graph,name,type} | remove_subgraph_io {graph,name,side?} |
+    promote_widget|unpromote_widget {node,widget} | to_subgraph {nodes,name?} | unpack_subgraph {node} (these two last).
+    graph = a subgraph node path ("12") or subgraph id."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "comfy_canvas_edit",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"ops": ops, "instance_id": instance_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="writes", needs="workflow_library")
+def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any]] | None = None, name: str = "", path: str = "",
+                     instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Open a workflow in a NEW workbench tab; the open ones stay untouched, nothing is saved (the user saves).
+    `template` (+`pack`): an official template adapted to this machine (prefer this); `ops` (comfy_canvas_edit ops, root
+    graph): tweak the template or build from blank; `path`: a saved workflow instead. `name`: the tab name. Returns the tab,
+    the template's missing models with sizes, and a check."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.open_new, workspace_id or _default_workspace_id(), template, pack, path, name, ops or [],
+                     instance_id)
 
 
 @tool(effect="reads", needs="workflow_library")

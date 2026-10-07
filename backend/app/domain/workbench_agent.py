@@ -1,4 +1,4 @@
-"""工作台里的智能体(ADR 0042 第一步:读和诊断)—— 宿主这一侧。工具在 mcp_server 的 `comfy_*`。
+"""工作台里的智能体(ADR 0042:读和诊断、改和新建)—— 宿主这一侧。工具在 mcp_server 的 `comfy_*`。
 
 两条路:
 
@@ -9,8 +9,11 @@
 - **问插件的**(摘要、诊断、模板、节点类型、节点包):ComfyUI 的知识在插件里(ADR 0042 §3),这里经 `workflow_library` 那个
   工具问,规整出口。
 
-连接归人(和插件页同一条):只认**调用的人自己接的**那个连接;没说是哪一个、他又只接了一台,就是那一台。都只读:不改画布、
-不写那台机器上的文件、不排任务。
+连接归人(和插件页同一条):只认**调用的人自己接的**那个连接;没说是哪一个、他又只接了一台,就是那一台。
+
+**改画布**(第二步):一批改动先由插件对着画布上这张算一遍(edit_plan:每一条都查、在拷贝上改一遍、改前改后各诊断一次),
+说不通或者改完多出错误的不开卡;开卡时画布一点不动,卡上是改动清单。批准之后对着**现在**的画布再算一遍,对得上才交给桥
+(一批只占一步撤销)。**新标签页**(`comfy_canvas_new`)不动开着的那几张、不开卡;两样都不存盘、不写那台机器上的文件、不排任务。
 """
 
 from __future__ import annotations
@@ -96,6 +99,16 @@ def _workbench(db: Session, user: User, workspace_id: str, instance: PluginInsta
         raise WorkbenchAgentError("workbenchErr_inSubgraph", node=str(call.get("node") or ""))
     if error == "unsupported":
         raise WorkbenchAgentError("workbenchErr_unsupported", detail=str(answer.get("message") or call.get("op")))
+    if error == "noWorkflow":
+        raise WorkbenchAgentError("workbenchErr_noWorkflow", path=str(call.get("path") or ""))
+    problems = "; ".join(str(one) for one in answer.get("problems") or [])[:1500]
+    opened = answer.get("workflow") if isinstance(answer.get("workflow"), dict) else None
+    if opened is not None and call.get("op") == "openWorkflow":
+        # 新标签页开了、上面那一批没改上:标签页留着(只有起始的那张图),说清楚
+        raise WorkbenchAgentError("workbenchErr_newPartly", name=str(opened.get("name") or ""),
+                                  detail=problems or str(answer.get("message") or error)[:500])
+    if error == "invalid":
+        raise WorkbenchAgentError("workbenchErr_editRefused", detail=problems)
     raise WorkbenchAgentError("workbenchErr_bridge", detail=str(answer.get("message") or error)[:500])
 
 
@@ -166,6 +179,125 @@ def check(db: Session, user: User, workspace_id: str, instance_id: str = "", job
     return {"instance_id": instance.id, "workflow": graph.get("info") or {}, **out}
 
 
+# --- 改画布、开新标签(ADR 0042 第二步) -------------------------------------------------------------
+
+#: 问题单里交给智能体 / 写上确认卡的,每条只留这几样(原因和改法是插件按语言写好的)。
+_FINDING_KEYS = ("ref", "type", "severity", "kind", "input", "cause", "fix")
+#: 新建时从空白搭:一张空的界面格式图。
+EMPTY_GRAPH: dict[str, Any] = {"last_node_id": 0, "last_link_id": 0, "nodes": [], "links": [], "groups": [], "config": {},
+                               "extra": {}, "version": 0.4}
+
+
+def _compact(findings: list[dict[str, Any]], limit: int = 20) -> list[dict[str, Any]]:
+    return [{key: one[key] for key in _FINDING_KEYS if key in one} for one in findings[:limit]]
+
+
+def _opened(info: dict[str, Any] | None) -> dict[str, Any]:
+    """画布上开着的那一张(桥的 readGraph 规整过的 `info`):名字、存过的相对路径(没存过是空串)、认哪一张的 key。"""
+    info = info or {}
+    return {"name": str(info.get("name") or ""), "path": str(info.get("path") or ""), "key": str(info.get("key") or ""),
+            "temporary": bool(info.get("temporary"))}
+
+
+def plan_edit(db: Session, user: User, workspace_id: str, instance: PluginInstance, ops: list[Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """读画布上这张,插件对着它算这一批:(画布上这张, 计划)。一条说不通整批不交(插件把每一条的原因列出来)。"""
+    if not isinstance(ops, list) or not ops:
+        raise WorkbenchAgentError("workbenchErr_noOps")
+    graph = read_graph(db, user, workspace_id, instance)
+    return graph, _ask(db, instance, {"op": "edit_plan", "content": graph["workflow"], "ops": ops})
+
+
+def propose_edit(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> None:
+    """`comfy_canvas_edit` 开卡之前(确认卡的 validate):对着画布上这张算一遍,说不通、改完多出错误的不开卡;能开就把卡上要写的
+    事实写回 `payload` —— 改的是哪一张、改动清单、子图用了几处、改前改后的诊断。画布这时一点没动。"""
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    graph, plan = plan_edit(db, user, workspace_id, instance, payload.get("ops"))
+    check = plan.get("check") or {}
+    worse = [one for one in check.get("introduced") or [] if one.get("severity") == "error"]
+    if worse:
+        lines = "; ".join(f"#{one.get('ref') or '?'} {one.get('cause') or one.get('kind')}" for one in worse[:8])
+        raise WorkbenchAgentError("workbenchErr_editIntroduces", count=len(worse), findings=lines[:1500])
+    payload.update({
+        "instance_id": instance.id,
+        "workflow": _opened(graph.get("info")),
+        "changes": plan.get("changes") or [],
+        "subgraphs": plan.get("subgraphs") or [],
+        "structural": bool(plan.get("structural")),
+        "check": {"before": check.get("before") or {}, "after": check.get("after") or {},
+                  "fixed": _compact(check.get("fixed") or []), "introduced": _compact(check.get("introduced") or [])},
+    })
+
+
+def apply_edit(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """批准之后:对着**现在**的画布再算一遍 —— 换了一张、或者清单对不上了(批之前画布又改过)就不改;对得上才交给桥(一批一步
+    撤销)。改完再读一遍、诊断一遍,说修好了几个、多出来几个。"""
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    proposed = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
+    graph, plan = plan_edit(db, user, workspace_id, instance, payload.get("ops"))
+    now = _opened(graph.get("info"))
+    if now["key"] != str(proposed.get("key") or ""):
+        raise WorkbenchAgentError("workbenchErr_editOtherTab", name=str(proposed.get("name") or proposed.get("key") or ""))
+    if (plan.get("changes") or []) != (payload.get("changes") or []):
+        raise WorkbenchAgentError("workbenchErr_editStale", name=now["name"])
+    answer = _workbench(db, user, workspace_id, instance, {"op": "applyOps", "ops": plan["ops"]})
+    after = read_graph(db, user, workspace_id, instance)
+    checked = _ask(db, instance, {"op": "check_graph", "content": after["workflow"],
+                                  "baseline": (plan.get("check") or {}).get("baseline") or []})
+    return {
+        "applied": len(plan.get("changes") or []),
+        "workflow": now,
+        "created": answer.get("created") or {},
+        "counts": checked.get("counts") or {},
+        "fixed": _compact(checked.get("fixed") or []),
+        "introduced": _compact(checked.get("introduced") or []),
+        "undo": "Ctrl+Z",
+    }
+
+
+def open_new(db: Session, user: User, workspace_id: str, template: str = "", pack: str = "", path: str = "", name: str = "",
+             ops: list[Any] | None = None, instance_id: str = "") -> dict[str, Any]:
+    """`comfy_canvas_new`:在新标签页开一张整图 —— 一张官方模板(照这台机器改好的)、模板上再改一批、从空白搭一批;或者打开存着的
+    那一张(`path`)。不动开着的那几张,**不存盘**(存不存、存在哪是用户的事)。开好之后读一遍、诊断一遍。"""
+    ensure_workspace_access(db, user, workspace_id)
+    template, pack, path, name = (str(one or "").strip() for one in (template, pack, path, name))
+    ops = list(ops or [])
+    if template and path:
+        raise WorkbenchAgentError("workbenchErr_newTemplateOrPath")
+    if path and ops:
+        raise WorkbenchAgentError("workbenchErr_newOpsOnSaved")
+    if not (template or path or ops):
+        raise WorkbenchAgentError("workbenchErr_newNothing")
+    instance = connection(db, user, instance_id)
+    out: dict[str, Any] = {"saved": False}
+    if path:
+        answer = _workbench(db, user, workspace_id, instance, {"op": "openWorkflow", "path": path})
+    else:
+        graph: dict[str, Any] = EMPTY_GRAPH
+        if template:
+            adapted = _ask(db, instance, {"op": "template", "name": template, **({"pack": pack} if pack else {})})
+            graph = adapted.pop("workflow")
+            adapted.pop("summary", None)
+            out["template"] = {key: adapted[key] for key in ("name", "title", "models", "changes", "missing_size", "missing_types",
+                                                             "min_comfyui", "version_ok") if key in adapted}
+            name = name or str(adapted.get("title") or template)
+        call: dict[str, Any] = {"op": "openWorkflow", "graph": graph, "name": name or render_message(
+            "workbenchNewWorkflowName", get_current_locale(), {})}
+        if ops:
+            plan = _ask(db, instance, {"op": "edit_plan", "content": graph, "ops": ops})
+            call["ops"] = plan["ops"]
+            out["changes"] = len(plan.get("changes") or [])
+        answer = _workbench(db, user, workspace_id, instance, call)
+    opened = answer.get("workflow") if isinstance(answer.get("workflow"), dict) else {}
+    out["opened"] = {"name": str(opened.get("name") or ""), "temporary": bool(opened.get("temporary")),
+                     "path": str(opened.get("path") or "").removeprefix("workflows/") if not opened.get("temporary") else ""}
+    if answer.get("created"):
+        out["created"] = answer["created"]
+    after = read_graph(db, user, workspace_id, instance)
+    checked = _ask(db, instance, {"op": "check_graph", "content": after["workflow"]})
+    out["check"] = {"counts": checked.get("counts") or {}, "findings": _compact(checked.get("findings") or [])}
+    return out
+
+
 # --- 只问插件的 --------------------------------------------------------------------------------
 
 def templates(db: Session, user: User, query: str = "", task: str = "", model: str = "", limit: int = 6,
@@ -225,6 +357,7 @@ def node_pack_info(db: Session, user: User, workspace_id: str, pack_id: str, ins
 
 __all__ = [
     "WorkbenchAgentError",
+    "apply_edit",
     "canvas",
     "check",
     "connection",
@@ -233,6 +366,9 @@ __all__ = [
     "node_pack_search",
     "node_packs",
     "node_types",
+    "open_new",
+    "plan_edit",
+    "propose_edit",
     "read_graph",
     "template",
     "templates",
