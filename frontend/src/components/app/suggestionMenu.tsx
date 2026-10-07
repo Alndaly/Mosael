@@ -3,6 +3,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 
+import { useChromeLayer } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -198,6 +199,8 @@ function SuggestionPortal<T>({ menu, clientRectRef, className, header, footer, c
   children: (item: T, index: number) => React.ReactNode;
 }) {
   const menuEl = React.useRef<HTMLDivElement>(null);
+  //: 外壳里(ComfyUI 工作台那一列,z 200)的输入框弹出来的:和外壳里的 Popover 一样是外壳、层抬到它上面(见 tooltip 的 useChromeLayer)
+  const chromeLayer = useChromeLayer();
   const open = Boolean(menu);
   React.useLayoutEffect(() => {
     const floating = menuEl.current;
@@ -232,8 +235,9 @@ function SuggestionPortal<T>({ menu, clientRectRef, className, header, footer, c
   if (!menu) return null;
   const banded = Boolean(header || footer);
   return createPortal(
-    <div ref={menuEl} data-suggestion-menu="" style={{ visibility: "hidden" }}
-      className={cn(MODAL_SURFACE, className ?? "fixed left-0 top-0 z-50 max-h-48 min-w-48 p-1.5", banded ? "flex flex-col overflow-hidden" : "overflow-auto")}>
+    <div ref={menuEl} data-suggestion-menu="" style={{ visibility: "hidden" }} {...chromeLayer}
+      className={cn(MODAL_SURFACE, className ?? "fixed left-0 top-0 z-50 max-h-48 min-w-48 p-1.5", chromeLayer && "z-[210]",
+                    banded ? "flex flex-col overflow-hidden" : "overflow-auto")}>
       {header}
       <div className={banded ? "min-h-0 flex-1 overflow-auto" : undefined}>
         {menu.hint && <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>}

@@ -68,3 +68,19 @@ it("stays hidden until a real caret rectangle exists instead of flashing at the 
   await waitFor(() => expect(element.style.visibility).toBe("visible"));
   expect(element.style.left).toBe("240px");
 });
+
+it("opened from the window chrome (the ComfyUI workbench column, z 200): lifted over it and marked as chrome, like a Popover there", async () => {
+  const { HintRegion } = await import("@/components/ui/tooltip");
+  render(<HintRegion.Provider value={{ side: "left" }}><Harness /></HintRegion.Provider>);
+  act(() => menu.render().onStart({ items: ["one"], command: vi.fn(), clientRect: () => new DOMRect(10, 10, 1, 20) }));
+  const element = document.querySelector<HTMLElement>("[data-suggestion-menu]")!;
+  expect(element.className).toContain("z-[210]");
+  expect(element.className).not.toContain("z-50");
+  expect(element.hasAttribute("data-app-chrome")).toBe(true);
+  cleanup();
+  render(<Harness />);
+  act(() => menu.render().onStart({ items: ["one"], command: vi.fn(), clientRect: () => new DOMRect(10, 10, 1, 20) }));
+  const plain = document.querySelector<HTMLElement>("[data-suggestion-menu]")!;
+  expect(plain.className, "elsewhere it stays in the normal floating layer").toContain("z-50");
+  expect(plain.hasAttribute("data-app-chrome")).toBe(false);
+});

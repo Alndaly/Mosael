@@ -12,7 +12,8 @@
  * - 缺失项:导出画布(含没存的)交给插件认一遍,缺的节点包「装上」先就地确认;
  * - 应用:读画布上这张的应用表单,改了「写进画布」—— 插件算出标记、经桥改节点,不写文件;
  * - 运行与结果:跑画布上这张(导出的 API 图、界面格式、前端的 clientId),产出按来自的节点分组、标节点名,「只要这个节点的图」;
- * - 这版前端缺了哪一样,那一处说「不支持」,别的照常。
+ * - 这版前端缺了哪一样,那一处说「不支持」,别的照常;
+ * - 助手(ADR 0042):共用的智能体面板停靠在这一列里,页面上下文发送那一刻才取,回复里的 `#12` 点了在画布上定位。
  *
  * 版式、拉宽、换工作流、定位、找下载地址各有一组(在后面)。
  */
@@ -47,11 +48,26 @@ const api = vi.hoisted(() => ({
   modelThumbnailUrl: (_: string, folder: string, name: string) => `thumb://${folder}/${name}`,
 }));
 vi.mock("@/api/client", () => api);
-vi.mock("@/app/preferences", () => ({
+vi.mock("@/app/preferences", async () => {
+  //: 助手的页面上下文用真的中文文案拼(看得出填进去的是什么);别的照旧回键名
+  const { messages } = await import("@/app/messages");
+  const zh = messages["zh-CN"] as Record<string, string>;
   //: 「结果取自 {nodes}」留着占位:看得出填进去的节点名
-  useI18n: () => (key: string) => (key === "workbenchRunResultsFrom" ? "workbenchRunResultsFrom {nodes}" : key),
-  usePreferences: () => ({ locale: "zh" }),
-}));
+  const t = (key: string) => (key === "workbenchRunResultsFrom" ? "workbenchRunResultsFrom {nodes}"
+    : key.startsWith("workbenchAssistant") ? zh[key] : key);
+  return { useI18n: () => t, usePreferences: () => ({ locale: "zh" }) };
+});
+//: 智能体面板本身另有测试(features/agent):这里换成一个记下参数、把「回复」交给真的 Markdown 渲染的替身
+const agent = vi.hoisted(() => ({ props: null as null | Record<string, unknown>, reply: "" }));
+vi.mock("@/features/agent/CanvasAgentChat", async () => {
+  const { AgentMarkdown } = await import("@/components/markdown/Markdown");
+  return {
+    CanvasAgentChat: (props: Record<string, unknown>) => {
+      agent.props = props;
+      return <div data-agent-chat="">{agent.reply && <AgentMarkdown>{agent.reply}</AgentMarkdown>}</div>;
+    },
+  };
+});
 
 import type { WorkflowApp } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
@@ -205,7 +221,7 @@ describe("ComfyUI 工作台", () => {
     expect(within(bar).getByRole("img", { name: "workbenchUnsavedChanges" })).toBeTruthy();
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT));
     expect(within(column()).getAllByRole("tab").map((one) => one.textContent)).toEqual([
-      "workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun",
+      "workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
     ]);
     fireEvent.click(within(bar).getByRole("button", { name: "workbenchColumnHide" }));
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(0));
@@ -995,5 +1011,86 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
     api.getWorkflowLibrary.mockResolvedValue({ workflows: [], manager: { version: "" } });
     await missingTab();
     expect(await within(column()).findByText("workbenchMissingNoManager")).toBeTruthy();
+  });
+});
+
+describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () => {
+  const context = () => (agent.props!.contextLine as () => string)();
+  beforeEach(() => {
+    agent.props = null;
+    agent.reply = "";
+  });
+
+  it("第五个页签;面板停靠在列里、不浮也不关,会话在开工作台的那个工作区", async () => {
+    await mount();
+    expect(screen.getAllByRole("tab").map((one) => one.textContent)).toEqual(
+      ["workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant"]);
+    expect(agent.props, "没去过的页签不挂").toBeNull();
+    tab("workbenchTabAssistant");
+    expect(shownPanel().querySelector("[data-agent-chat]")).toBeTruthy();
+    expect(agent.props).toMatchObject({ mode: "docked", dockedLayout: "inline", workspaceId: "w1" });
+    expect(agent.props!.onModeChange, "没有「浮起来」").toBeUndefined();
+    expect(agent.props!.onClose, "没有关闭键:换个页签就收起来了").toBeUndefined();
+    expect(shownPanel().hasAttribute("data-workbench-scroll"), "对话自己滚,这一层不滚").toBe(false);
+  });
+
+  it("页面上下文发送那一刻才取:哪台 ComfyUI、版本、开着哪一张、改没改、选中了谁;不放整张图", async () => {
+    const bridge = await mount();
+    tab("workbenchTabAssistant");
+    expect(typeof agent.props!.contextLine).toBe("function");
+    const first = context();
+    for (const piece of ["ComfyUI「ComfyUI · 192.168.3.15」", "instance_id=i1", "ComfyUI 0.39.0,前端 1.53.10",
+                         "「古风」(workflows/人像/古风.json),有没存的改动", "选中的节点:#4 CheckpointLoaderSimple「Load Checkpoint」",
+                         "comfy_canvas_read"]) {
+      expect(first, piece).toContain(piece);
+    }
+    expect(first.match(/instance_id=i1/g), "工具都带上连接 id").toHaveLength(2);
+    expect(first, "控件的值、整张图都不在上下文里").not.toContain("sdxl.safetensors");
+    bridge.emit(state({ workflow: { path: "", name: "Unsaved Workflow", temporary: true, modified: false,
+                                    key: "workflows/Unsaved Workflow.json", revision: 2 },
+                        selection: { count: 3, node: null }, server: { comfyui: "", frontend: "" } }));
+    const later = context();
+    expect(later).toContain("没存过的「Unsaved Workflow」,没有没存的改动");
+    expect(later).toContain("选中的节点:3 个");
+    expect(later).toContain("版本还没读到");
+  });
+
+  it("画布上的运行报错写进上下文(在 ComfyUI 里点的运行也算);之后又跑成了就不提", async () => {
+    const bridge = await mount();
+    tab("workbenchTabAssistant");
+    bridge.emit(state({ events: [{ type: "execution_error", at: 1, promptId: "p1", node: "3", nodeType: "KSampler",
+                                   message: "Expected all tensors to be on the same device" }] }));
+    expect(context()).toContain("画布上最近一次运行在 #3(KSampler)报错:Expected all tensors to be on the same device");
+    bridge.emit(state({ events: [{ type: "execution_success", at: 2, promptId: "p2", node: "" }] }));
+    expect(context()).not.toContain("报错");
+  });
+
+  it("在工作台里跑这一张失败了:带上任务号和原因,诊断时交给 comfy_check", async () => {
+    await mount();
+    api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-7", status: "queued" } });
+    api.getJob.mockResolvedValue({ ...SUCCEEDED, id: "job-7", status: "failed", result: null,
+                                   error: "ComfyUI 拒绝了这张工作流:#3 Value not in list: sampler_name" });
+    api.getCanvasApp.mockResolvedValue(appData());
+    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
+    await waitFor(() => expect(api.runCanvas).toHaveBeenCalled());
+    tab("workbenchTabAssistant");
+    await waitFor(() => expect(context()).toContain(
+      "上次在工作台里运行这一张失败了(job_id=job-7):ComfyUI 拒绝了这张工作流:#3 Value not in list: sampler_name"));
+  });
+
+  it("回复里的 #4、#459:451 点了在画布上定位(子图里的交给桥一层层打开);画布上没有就在旁边说;代码里的不动", async () => {
+    agent.reply = "看 #4 的 ckpt_name,子图里的 #459:451 缺模型;`#9` 只是代码。";
+    const bridge = await mount();
+    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
+      call.op === "locate" && call.node === "4" ? { ok: false, error: "noNode" } : { ok: true });
+    tab("workbenchTabAssistant");
+    const inner = await screen.findByRole("button", { name: "#459:451" });
+    fireEvent.click(inner);
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "locate", node: "459:451", subgraph: null }));
+    expect(within(shownPanel()).queryByRole("status")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "#4" }));
+    expect(await within(shownPanel()).findByRole("status")).toHaveProperty("textContent", "画布上没有节点 #4");
+    expect(screen.queryByRole("button", { name: "#9" }), "代码里的不变成定位").toBeNull();
+    expect(screen.getByText("#9").tagName).toBe("CODE");
   });
 });

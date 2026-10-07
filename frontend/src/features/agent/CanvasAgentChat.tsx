@@ -128,8 +128,10 @@ export function CanvasAgentChat({
   mode: CanvasAgentMode;
   /** Canvas docks cover content; the editor reserves a separate grid column. */
   dockedLayout?: "overlay" | "inline";
-  onModeChange: (mode: CanvasAgentMode) => void;
-  onClose: () => void;
+  /** 不给就没有「浮起来 / 停靠」那颗(ComfyUI 工作台的「助手」页签:就在那一列里)。 */
+  onModeChange?: (mode: CanvasAgentMode) => void;
+  /** 不给就没有关闭键(工作台的页签:换个页签就收起来了)。 */
+  onClose?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -455,18 +457,22 @@ export function CanvasAgentChat({
         >
           <Plus size={13} />
         </IconButton>
-        <IconButton
-          unstyled
-          type="button"
-          className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-          label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
-          onClick={() => onModeChange(isFloating ? "docked" : "floating")}
-        >
-          {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
-        </IconButton>
-        <IconButton unstyled type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
-          <X size={13} />
-        </IconButton>
+        {onModeChange && (
+          <IconButton
+            unstyled
+            type="button"
+            className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+            label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+            onClick={() => onModeChange(isFloating ? "docked" : "floating")}
+          >
+            {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
+          </IconButton>
+        )}
+        {onClose && (
+          <IconButton unstyled type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
+            <X size={13} />
+          </IconButton>
+        )}
       </div>
       <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
       <div

@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { APP_CHROME, ChromeAboveDialogs } from "@/components/ui/appChrome";
@@ -9,6 +9,7 @@ import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
+import { AssistantPanel } from "@/features/plugins/workbench/AssistantPanel";
 import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
@@ -21,7 +22,7 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
 
-const TABS = ["models", "missing", "app", "run"] as const;
+const TABS = ["models", "missing", "app", "run", "assistant"] as const;
 type Tab = (typeof TABS)[number];
 const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
@@ -36,11 +37,13 @@ const COLUMN_REGION = { side: "left" as const };
 const TAB_PANEL =
   "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-3 focus-visible:outline-none focus-visible:ring-2 " +
   "focus-visible:ring-inset focus-visible:ring-ring";
+/** 「助手」页签:对话面板自己滚、自己留边,这一层只占满剩下的高。 */
+const ASSISTANT_PANEL = "grid min-h-0 flex-1";
 
 /**
  * ComfyUI 工作台(ADR 0038 §3):全屏,左边整块是那台 ComfyUI 自己的画布(内嵌视图,每个自定义节点照常能用),Mosael 的东西
  * 都画在它旁边 —— 顶栏(连接、工作流名、有没有没存的改动、操控方式、「保存」「运行」)和右边能收起、能拉宽拉窄的一列(模型库、
- * 缺失项、应用、运行与结果)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 `barHeight`(和主进程 EMBED_HEADER_HEIGHT
+ * 缺失项、应用、运行与结果、助手 —— 智能体,ADR 0042)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 `barHeight`(和主进程 EMBED_HEADER_HEIGHT
  * 同一个数,见 contracts/shared-constants.json),右边那一列开着时视图让出那么宽(见 columnWidth);要确认的事就地确认。
  *
  * 和画布通话的是主进程注入的桥(只拉不推,见 electron/publish/comfyWorkbench);这版前端缺了哪一样,那一处就说「这版 ComfyUI
@@ -104,6 +107,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     missing: t("workbenchTabMissing"),
     app: t("workbenchTabApp"),
     run: t("workbenchTabRun"),
+    assistant: t("workbenchTabAssistant"),
   };
 
   //: 顶栏:控件一律 sm 一档(32px、text-ui-sm),居中排在栏里;文字那一段同一个字号
@@ -209,7 +213,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               onClick={() => setTab(one)}
             >
               {one === "models" ? <Boxes size={13} aria-hidden /> : one === "missing" ? <TriangleAlert size={13} aria-hidden />
-                : one === "app" ? <ListChecks size={13} aria-hidden /> : <Play size={13} aria-hidden />}
+                : one === "app" ? <ListChecks size={13} aria-hidden /> : one === "run" ? <Play size={13} aria-hidden />
+                : <Bot size={13} aria-hidden />}
               {tabLabel[one]}
             </button>
           ))}
@@ -222,7 +227,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
         )}
         {state && TABS.filter((one) => visited.has(one)).map((one) => (
           <div key={one} role="tabpanel" id={`comfy-workbench-panel-${one}`} aria-labelledby={`comfy-workbench-tab-${one}`}
-               hidden={tab !== one} tabIndex={0} data-workbench-scroll="" className={TAB_PANEL}>
+               hidden={tab !== one} {...(one === "assistant" ? { className: ASSISTANT_PANEL }
+                 : { tabIndex: 0, "data-workbench-scroll": "", className: TAB_PANEL })}>
             {/* 换了一张工作流(key 变了):模型库、缺失项、应用各自重挂,从头读这一张 */}
             {one === "models" && (
               <ModelsPanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
@@ -239,6 +245,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               <RunPanel target={target} runs={runs} events={events} workflowKey={workflowKey} active={tab === "run"}
                         canMark={Boolean(capabilities?.marks && capabilities?.export)} runError={run.error} />
             )}
+            {one === "assistant" && <AssistantPanel target={target} runs={runs} workflowKey={workflowKey} />}
           </div>
         ))}
       </aside>

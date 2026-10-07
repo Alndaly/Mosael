@@ -8,6 +8,7 @@ import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { CitationLink } from "./CitationLink";
+import { MARKDOWN_REF, MarkdownRefsContext } from "./markdownRefs";
 
 import { useI18n } from "@/app/preferences";
 
@@ -105,8 +106,16 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
   );
 }
 
+/** 链接:页面引用(见 markdownRefs)交给那个页面画,别的照旧是引用胶囊 / 普通链接。 */
+function MarkdownLink(props: React.ComponentProps<"a"> & { node?: unknown }) {
+  const refs = React.useContext(MarkdownRefsContext);
+  const href = props.href ?? "";
+  if (refs && href.startsWith(MARKDOWN_REF)) return refs.render(decodeURIComponent(href.slice(MARKDOWN_REF.length)), props.children);
+  return <CitationLink {...props} />;
+}
+
 /** 定值:组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
-const COMPONENTS: Components = { pre: CodeCard, a: CitationLink };
+const COMPONENTS: Components = { pre: CodeCard, a: MarkdownLink };
 
 /**
  * `fullTables`:表格按全高排、跟着外面一起滚。Streamdown 缺省把表格限在 300px、里面再套一层滚动框 ——
@@ -115,6 +124,8 @@ const COMPONENTS: Components = { pre: CodeCard, a: CitationLink };
  */
 export function AgentMarkdown({ children, fullTables = false }: { children: string; fullTables?: boolean }) {
   const t = useI18n();
+  const refs = React.useContext(MarkdownRefsContext);
+  const markdown = React.useMemo(() => (refs ? refs.rewrite(children) : children), [refs, children]);
   return (
     // 正文里的图(回复里贴的图、文档解析出的插图)点开看大图,左右翻的是**这一段**里的全部图。
     // 不接管 Streamdown 自己的图片组件(它带着加载失败的说明和悬停下载),只在外面接住点在图上的那一下。
@@ -127,7 +138,7 @@ export function AgentMarkdown({ children, fullTables = false }: { children: stri
       controls={{ table: false, code: { copy: true, download: false } }}
       translations={{ copyCode: t("copy"), copied: t("copied") }}
     >
-      {children}
+      {markdown}
     </Streamdown>
     </div>
   );
