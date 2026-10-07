@@ -49,6 +49,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Board, GenerationJob, Job, PluginInstance, ProviderProfile, User, Workflow
 from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
+from app.domain.agent import places
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import generation as plugin_generation
@@ -487,19 +488,24 @@ def copy(db: Session, instance: PluginInstance, path: str, new_path: str) -> dic
 
 
 def rename(db: Session, instance: PluginInstance, path: str, new_path: str) -> dict[str, str]:
-    """改名 / 挪目录(已有就撞名,不覆盖)。"""
+    """改名 / 挪目录(已有就撞名,不覆盖)。在这张里开的对话,家跟着挪(ADR 0044 §9)。"""
     _require(db, instance)
     path, new_path = workflow_path(path), workflow_path(new_path)
     if path == new_path:
         return {"path": path}
-    return {"path": _write(db, instance, {"op": "rename_workflow", "path": path, "new_path": new_path}, wanted=new_path)}
+    done = _write(db, instance, {"op": "rename_workflow", "path": path, "new_path": new_path}, wanted=new_path)
+    places.follow_library_move(db, instance, path, done)
+    return {"path": done}
 
 
 def trash(db: Session, instance: PluginInstance, path: str) -> dict[str, str]:
-    """「删除」:挪进回收目录(ADR 0035 §3),不硬删。回回收目录里的路径。"""
+    """「删除」:挪进回收目录(ADR 0035 §3),不硬删。回回收目录里的路径。在这张里开的对话,家跟着进回收目录 —— 恢复时
+    一起回来(ADR 0044 §9)。"""
     _require(db, instance)
     path = workflow_path(path)
-    return {"path": _write(db, instance, {"op": "trash_workflow", "path": path}, wanted=path)}
+    done = _write(db, instance, {"op": "trash_workflow", "path": path}, wanted=path)
+    places.follow_library_move(db, instance, path, done)
+    return {"path": done}
 
 
 def restore(db: Session, instance: PluginInstance, path: str, new_path: str = "") -> dict[str, str]:
@@ -507,7 +513,9 @@ def restore(db: Session, instance: PluginInstance, path: str, new_path: str = ""
     _require(db, instance)
     path = trash_path(path)
     target = workflow_path(new_path) if new_path else _TRASH_PATH.match(path).group("original")  # type: ignore[union-attr]
-    return {"path": _write(db, instance, {"op": "restore_workflow", "path": path, "new_path": target}, wanted=target)}
+    done = _write(db, instance, {"op": "restore_workflow", "path": path, "new_path": target}, wanted=target)
+    places.follow_library_move(db, instance, path, done)
+    return {"path": done}
 
 
 # --- 文件夹 -------------------------------------------------------------------------
@@ -520,7 +528,8 @@ def make_folder(db: Session, instance: PluginInstance, path: str) -> dict[str, s
 
 
 def rename_folder(db: Session, instance: PluginInstance, path: str, new_path: str) -> dict[str, str]:
-    """文件夹改名,或挪到别的文件夹里:里面的工作流跟着换路径(生成目录重拉)。目标已经有了撞名 409,不合并进去。"""
+    """文件夹改名,或挪到别的文件夹里:里面的工作流跟着换路径(生成目录重拉),在它们里面开的对话家也跟着挪。目标已经有了
+    撞名 409,不合并进去。"""
     _require(db, instance)
     path, new_path = folder_path(path), folder_path(new_path)
     if path == new_path:
@@ -528,7 +537,9 @@ def rename_folder(db: Session, instance: PluginInstance, path: str, new_path: st
     if new_path.lower().startswith(path.lower() + "/"):
         raise WorkflowLibraryError("workflowLibErr_folderIntoItself", path=path)
     request = {"op": "rename_folder", "path": path, "new_path": new_path}
-    return {"path": _write(db, instance, request, wanted=new_path, folder=True)}
+    done = _write(db, instance, request, wanted=new_path, folder=True)
+    places.follow_library_move(db, instance, path, done, folder=True)
+    return {"path": done}
 
 
 def trash_folder(db: Session, instance: PluginInstance, path: str) -> dict[str, str]:

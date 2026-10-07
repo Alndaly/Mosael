@@ -568,6 +568,45 @@ def test_删除文件夹_只删空的_不空回409带个数_空的挪进回收�
     assert client.post(f"{base}/folders/trash", json={"path": "../x"}).status_code == 422
 
 
+def test_改名_挪文件夹_删除再恢复_在那张里开的对话家跟着挪_只挪那一张和那个文件夹里的(library) -> None:
+    """ADR 0044 §9:在 Mosael 工作流库里改的,后端那个用例在同一个事务里挪家。挪不碰 updated_at;撞名没改成的不挪。"""
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    workspace = _workspace(client)
+
+    def session(place_id: str) -> dict:
+        created = client.post("/api/agent/sessions", json={"workspace_id": workspace,
+                                                           "home": {"kind": "comfyui", "id": f"{instance_id}{place_id}"}})
+        assert created.status_code == 200, created.text
+        return created.json()
+
+    def home(created: dict) -> str:
+        return client.get(f"/api/agent/sessions/{created['id']}").json()["home_id"].removeprefix(instance_id)
+
+    portrait = session("/portrait.json")
+    sketch = session("/sub/deeper/sketch.json")
+    lookalike = session("/subway/x.json")
+    other_case = session("/SUB/x.json")
+    unsaved = session("#workflows/portrait.json")
+
+    assert client.post(f"{base}/rename", json={"path": "portrait.json", "new_path": "taken.json"}).status_code == 409
+    assert home(portrait) == "/portrait.json", "撞名没改成:不挪"
+    assert client.post(f"{base}/rename", json={"path": "portrait.json", "new_path": "sub/portrait.json"}).status_code == 200
+    assert home(portrait) == "/sub/portrait.json"
+    assert home(unsaved) == "#workflows/portrait.json", "同名的没存过那张是另一处"
+
+    assert client.post(f"{base}/folders/rename", json={"path": "sub", "new_path": "片子/草图"}).status_code == 200
+    assert (home(portrait), home(sketch)) == ("/片子/草图/portrait.json", "/片子/草图/deeper/sketch.json"), "文件夹里任意深的都跟着"
+    assert (home(lookalike), home(other_case)) == ("/subway/x.json", "/SUB/x.json"), "前缀像的、大小写不同的是别的文件夹"
+
+    trashed = client.post(f"{base}/trash", json={"path": "片子/草图/deeper/sketch.json"}).json()["path"]
+    assert home(sketch) == f"/{trashed}", "进回收目录也跟着,恢复时才回得来"
+    assert client.post(f"{base}/restore", json={"path": trashed, "new_path": "回来了.json"}).status_code == 200
+    assert home(sketch) == "/回来了.json"
+    after = client.get(f"/api/agent/sessions/{portrait['id']}").json()
+    assert after["updated_at"] == portrait["updated_at"], "挪家不算对话里有动静"
+
+
 # --- 应用表单(ADR 0038)---------------------------------------------------------------
 
 

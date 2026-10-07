@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, func, literal, select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -275,7 +275,8 @@ def where(session: AgentSession) -> str:
 
 
 def move_comfy_homes(db: Session, user: User, workspace_id: str, from_id: str, to_id: str) -> int:
-    """ComfyUI 那张工作流第一次存盘、改名、挪文件夹:家跟着挪(ADR 0044 §9)。只挪他自己的对话;同一台连接里挪。
+    """ComfyUI 那张工作流第一次存盘、改名、挪文件夹(工作台的桥报来的,ADR 0044 §9):家跟着挪。只挪他自己的对话;同一台
+    连接里挪。不按工作区筛 —— 同一台连接可以在几个工作区里用,文件换了地方,哪个工作区里家在它上面的都跟着挪。
 
     Mosael 自家的东西按 id 认,永远不用挪 —— 所以这里只收 ComfyUI。返回挪了几段。
     """
@@ -284,16 +285,36 @@ def move_comfy_homes(db: Session, user: User, workspace_id: str, from_id: str, t
     if comfy_parts(source.id)[0] != comfy_parts(target.id)[0]:
         raise PlaceError("agentErr_placeMoveAcrossConnections")
     _comfy_ensure(db, user, workspace_id, target.id)
+    return _move_homes(db, user.id, AgentSession.home_id == source.id, target.id)
+
+
+def follow_library_move(
+    db: Session, connection: PluginInstance, old_path: str, new_path: str, *, folder: bool = False
+) -> int:
+    """在 Mosael 工作流库(ADR 0035)里改名、挪、移进 / 移出回收目录:家在那个文件上的对话跟着挪,和改文件同一个事务
+    (ADR 0044 §9)。`folder`:挪的是一个文件夹,家在它里面(任意深)的每一张都换上新的前缀。路径照工作流库的写法
+    (`workflows/` 下的相对路径,和桥报的 `path` 同一种),按原样比 —— 大小写不同是另一个文件。
+
+    连接归一个人,家能建在它上面的只有他(`_comfy_ensure`)—— 按连接的主人筛。返回挪了几段。
+    """
+    old, new = f"{connection.id}/{old_path}", f"{connection.id}/{new_path}"
+    if old == new:
+        return 0
+    if not folder:
+        return _move_homes(db, connection.owner_user_id, AgentSession.home_id == old, new)
+    old_prefix, new_prefix = f"{old}/", f"{new}/"
+    # 前缀按原样比(substr,不用 LIKE:SQLite 的 LIKE 不分大小写,还得转义 % 和 _)
+    inside = func.substr(AgentSession.home_id, 1, len(old_prefix)) == old_prefix
+    renamed = literal(new_prefix) + func.substr(AgentSession.home_id, len(old_prefix) + 1)
+    return _move_homes(db, connection.owner_user_id, inside, renamed)
+
+
+def _move_homes(db: Session, owner_user_id: str, which: ColumnElement[bool], home_id: Any) -> int:
     moved = db.execute(
         update(AgentSession)
-        .where(
-            AgentSession.workspace_id == workspace_id,
-            AgentSession.owner_user_id == user.id,
-            AgentSession.home_kind == COMFYUI,
-            AgentSession.home_id == source.id,
-        )
+        .where(AgentSession.owner_user_id == owner_user_id, AgentSession.home_kind == COMFYUI, which)
         # 挪家不算对话里有动静:不碰 updated_at(列表按它排,改个文件名不该把这几段顶到最前)。
-        .values(home_id=target.id, updated_at=AgentSession.updated_at)
+        .values(home_id=home_id, updated_at=AgentSession.updated_at)
         .execution_options(synchronize_session=False)
     )
     return int(moved.rowcount or 0)

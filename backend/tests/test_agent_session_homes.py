@@ -192,13 +192,27 @@ def test_家跟着挪_只收_ComfyUI_只挪自己的_不顶到最前(comfy) -> N
     unsaved = f"{connection}#workflows/Unsaved Workflow (2).json"
     mine = _session(owner, workspace, {"kind": "comfyui", "id": unsaved})
     assert mine["home_name"] == "Unsaved Workflow (2)"
+    #: 同一台连接在另一个工作区里也用着:文件换了地方,那边家在它上面的也跟着挪
+    elsewhere = _workspace(owner)
+    there = _session(owner, elsewhere, {"kind": "comfyui", "id": unsaved})
+    untouched = _session(owner, workspace, {"kind": "comfyui", "id": f"{connection}#workflows/Unsaved Workflow (3).json"})
+    #: 同事的对话哪怕家写着同一处(界面建不出来,直接写库),也不归他挪
+    theirs_row = _session(mate, workspace, STUDIO)
+    with SessionLocal() as db:
+        row = db.get(AgentSession, theirs_row["id"])
+        row.home_kind, row.home_id = "comfyui", unsaved
+        db.commit()
     saved = f"{connection}/人像/qwen 编辑.json"
 
     moved = owner.post("/api/agent/homes/move", json={"workspace_id": workspace, "kind": "comfyui", "from_id": unsaved, "to_id": saved})
-    assert moved.status_code == 200 and moved.json() == {"moved": 1}
+    assert moved.status_code == 200 and moved.json() == {"moved": 2}
     after = owner.get(f"/api/agent/sessions/{mine['id']}").json()
     assert (after["home_id"], after["home_name"]) == (saved, "qwen 编辑")
     assert after["updated_at"] == mine["updated_at"], "挪家不算对话里有动静"
+    assert owner.get(f"/api/agent/sessions/{there['id']}").json()["home_id"] == saved
+    assert owner.get(f"/api/agent/sessions/{untouched['id']}").json()["home_id"] == untouched["home_id"]
+    with SessionLocal() as db:
+        assert db.get(AgentSession, theirs_row["id"]).home_id == unsaved, "只挪他自己的"
 
     note = _note(owner, workspace)
     wrong = owner.post("/api/agent/homes/move", json={"workspace_id": workspace, "kind": "note", "from_id": note, "to_id": note})
