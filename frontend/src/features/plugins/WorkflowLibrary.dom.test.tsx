@@ -549,6 +549,10 @@ describe("工作流库", () => {
     expect(showModel).toHaveBeenLastCalledWith({ model: { folder: "checkpoints", name: "sdxl.safetensors" } });
     const absent = within(usedModels).getByText("gone.safetensors").closest("li") as HTMLElement;
     expect(within(absent).queryByRole("button"), "缺的在「缺的模型」那一节里下载").toBeNull();
+    //: 两行一样高、徽章对成一列:按钮是 32px 的方按钮,缺的那行在同一位置留一格一样大的空位
+    expect(within(present).getByRole("button", { name: "workflowShowInModelLibrary" }).className).toContain("size-8");
+    expect(absent.querySelector("[data-model-row-slot]")?.className).toContain("size-8");
+    for (const row of [present, absent]) expect(row.className).toContain("min-h-8");
     const missing = screen.getByRole("region", { name: "workflowMissingModels" });
     fireEvent.click(within(missing).getByRole("button", { name: "workflowDownloadInModelLibrary" }));
     expect(showModel).toHaveBeenLastCalledWith({

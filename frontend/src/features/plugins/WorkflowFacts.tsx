@@ -100,23 +100,26 @@ export function WorkflowFacts({
         {(facts.models?.length ?? 0) > 0 ? (
           <ul className="m-0 grid list-none gap-1 p-0">
             {(facts.models ?? []).map((one) => (
-              <li key={`${one.folder}/${one.name}`} className="flex min-w-0 items-center gap-2 text-ui-sm text-foreground">
+              //: 每行一样高(32px,和那颗方按钮一样);缺的那行也留出按钮那一格 —— 「在 / 缺」对成一列,行距不跟着有没有按钮变
+              <li key={`${one.folder}/${one.name}`} data-model-row="" className="flex min-h-8 min-w-0 items-center gap-2 text-ui-sm text-foreground">
                 <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
                 <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
                 <CatalogBadge tone={one.present ? "success" : "warning"}>
                   {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
                 </CatalogBadge>
                 {/* 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库 */}
-                {onShowModel && one.present && (
-                  <IconButton
-                    size="sm"
-                    className="shrink-0 text-muted-foreground"
-                    label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
-                    onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
-                  >
-                    <Library size={13} />
-                  </IconButton>
-                )}
+                {onShowModel &&
+                  (one.present ? (
+                    <IconButton
+                      className="shrink-0 text-muted-foreground"
+                      label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
+                      onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
+                    >
+                      <Library size={13} />
+                    </IconButton>
+                  ) : (
+                    <span aria-hidden data-model-row-slot="" className="size-8 shrink-0" />
+                  ))}
               </li>
             ))}
           </ul>
