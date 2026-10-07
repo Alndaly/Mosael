@@ -545,7 +545,6 @@ export const plugins = {
   workbenchModelDetailOpen: "查看「{name}」的详情",
   workbenchModelDetailClose: "关闭详情",
   workbenchPreviewOpen: "看大图:{title}",
-  workbenchModelsFilled: "已经把「{name}」填进画布上的这一格;存好之后才写进工作流文件",
   workbenchModelsNotInList: "画布上这一格的下拉里还没有它(刚下的模型要刷新一下下拉)",
   workbenchCombosRefresh: "刷新下拉",
   workbenchCombosRefreshed: "下拉刷新好了",

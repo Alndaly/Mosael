@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { ModelEncoder, ModelFile, NodeEncoders } from "@/api/client";
+import type { EncoderRecipe, ModelEncoder, ModelFile } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
@@ -123,7 +123,7 @@ export function EncoderOverview({ encoder }: { encoder: ModelEncoder }) {
  * 工作台里选文本编码器的那一格:这个文件不在节点现在那个 type 的配方里时标一枚「不在 wan 的配方里」(悬停说为什么)。合用的、
  * ComfyUI 不看 type 的、认不出是哪一种的不标。
  */
-export function EncoderRecipeMark({ model, recipe }: { model: Pick<ModelFile, "encoder">; recipe: NodeEncoders | null }) {
+export function EncoderRecipeMark({ model, recipe }: { model: Pick<ModelFile, "encoder">; recipe: EncoderRecipe | null }) {
   const t = useI18n();
   if (encoderFit(model, recipe) !== "misfit" || !recipe || !model.encoder) return null;
   const why = t("workbenchModelsNotInRecipeHint").replaceAll("{type}", recipe.type).replace("{kind}", model.encoder.label);

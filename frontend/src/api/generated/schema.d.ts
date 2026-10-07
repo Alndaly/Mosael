@@ -13133,6 +13133,16 @@ export interface components {
             pairs?: string[];
         };
         /**
+         * ModelEncoderRecipeOut
+         * @description 一种 type 配哪几种文本编码器。
+         */
+        ModelEncoderRecipeOut: {
+            /** Fits */
+            fits?: string[];
+            /** Any Type */
+            any_type?: string[];
+        };
+        /**
          * ModelFileOut
          * @description 那台服务器上的一个模型文件。预览图走宿主的地址(`/model-library/preview`),那一头的地址不出现在这里。
          */
@@ -13333,29 +13343,27 @@ export interface components {
         };
         /**
          * ModelNodeEncodersOut
-         * @description 选文本编码器的那一格:节点现在的 type 配哪几种编码器。
+         * @description 选文本编码器的那一格:这种节点**每一种** type 配哪几种编码器。界面照节点上 `type_widget` 那一格现在的值自己挑 ——
+         *     换模型、换 type 都不用再问。
          */
         ModelNodeEncodersOut: {
-            /** Type */
-            type: string;
-            /** Fits */
-            fits?: string[];
-            /** Any Type */
-            any_type?: string[];
+            /** Type Widget */
+            type_widget?: string | null;
+            /** By Type */
+            by_type?: {
+                [key: string]: components["schemas"]["ModelEncoderRecipeOut"];
+            };
         };
         /**
          * ModelNodeFolderIn
-         * @description 画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。
+         * @description 画布上选中的节点的一格:节点类型 + 输入名。**不带节点上现在选的值** —— 答案只看这两样,在节点上填一个模型、换一个
+         *     type 都不用再问(界面按这两样缓存)。
          */
         ModelNodeFolderIn: {
             /** Class Type */
             class_type: string;
             /** Input */
             input: string;
-            /** Values */
-            values?: {
-                [key: string]: string;
-            };
         };
         /** ModelNodeFoldersOut */
         ModelNodeFoldersOut: {

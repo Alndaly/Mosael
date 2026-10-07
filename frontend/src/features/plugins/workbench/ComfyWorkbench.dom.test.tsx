@@ -256,7 +256,7 @@ describe("ComfyUI 工作台", () => {
   it("模型库:选中加载节点只列那个目录的模型,点一行经桥填进去;下拉里还没有就给「刷新下拉」", async () => {
     const bridge = await mount();
     await waitFor(() => expect(api.getNodeFolders).toHaveBeenCalledWith("i1", [
-      { class_type: "CheckpointLoaderSimple", input: "ckpt_name", values: { ckpt_name: "sdxl.safetensors" } },
+      { class_type: "CheckpointLoaderSimple", input: "ckpt_name" },
     ]));
     const list = await screen.findByRole("list", { name: "workbenchModelsList" });
     expect(within(list).getAllByRole("listitem").map((one) => one.textContent)).toEqual([
@@ -265,15 +265,25 @@ describe("ComfyUI 工作台", () => {
     expect(within(list).getByRole("button", { pressed: true }).textContent).toContain("SDXL Base");
     fireEvent.click(within(list).getByRole("button", { name: /film grain/ }));
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setWidget", node: "4", widget: "ckpt_name", value: "flux-dev.safetensors" }));
-    expect((await within(column()).findByRole("status")).textContent).toContain("workbenchModelsFilled");
+    //: 填好了不另说一句(维护者:不要那句「已经把…填进画布上的这一格」);画布上那一格换了值,列表不回到「读取中」、不再问插件
+    bridge.emit(state({ selection: { count: 1, node: { ...LOADER, widgets: [{ ...LOADER.widgets[0], value: "flux-dev.safetensors" }] } } }));
+    await waitFor(() => expect(within(list).getByRole("button", { pressed: true }).textContent).toContain("film grain"));
+    expect(within(column()).queryByRole("status")).toBeNull();
+    expect(within(column()).queryByText("workbenchModelsLoading")).toBeNull();
 
     bridge.comfyWorkbench.mockImplementationOnce(async () => ({ ok: false, error: "notInList" }));
     fireEvent.click(within(list).getByRole("button", { name: /SDXL Base/ }));
     fireEvent.click(await screen.findByRole("button", { name: /workbenchCombosRefresh/ }));
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "refreshCombos" }));
+
+    //: 换到同一种的另一个节点:同一句问题,用缓存的 —— 不回到「读取中」
+    bridge.emit(state({ selection: { count: 1, node: { ...LOADER, id: "12" } } }));
+    expect(within(column()).queryByText("workbenchModelsLoading")).toBeNull();
+    expect(await screen.findByRole("list", { name: "workbenchModelsList" })).toBeTruthy();
+    expect(api.getNodeFolders).toHaveBeenCalledTimes(1);
   });
 
-  it("模型库:选中 CLIP 加载节点时,合它现在 type 的文本编码器排前面,不在配方里的排最后、标出来;换了 type 重新问", async () => {
+  it("模型库:选中 CLIP 加载节点时,合它现在 type 的文本编码器排前面,不在配方里的排最后、标出来;换了 type 就地重排、不再问", async () => {
     const encoder = (name: string, kind: string, label: string) => ({
       folder: "text_encoders", name, family: "", family_source: "not_applicable", title: "", triggers: [], has_preview: false,
       encoder: { kind, label, source: "weights", pairs: [] },
@@ -283,11 +293,12 @@ describe("ComfyUI 工作台", () => {
       models: [encoder("a_clip_l.safetensors", "clip_l", "CLIP-L"), encoder("b_qwen.safetensors", "qwen3_06b", "Qwen3 0.6B"),
                encoder("c_umt5.safetensors", "umt5_xxl", "UMT5-XXL")],
     });
-    api.getNodeFolders.mockImplementation(async (_: string, nodes: { input: string; values: Record<string, string> }[]) => ({
+    api.getNodeFolders.mockImplementation(async (_: string, nodes: { input: string }[]) => ({
       folders: nodes.map((one) => (one.input === "clip_name" ? "text_encoders" : "")),
-      encoders: nodes.map((one) => (one.input !== "clip_name" ? null : one.values.type === "wan"
-        ? { type: "wan", fits: ["umt5_xxl"], any_type: ["qwen3_06b"] }
-        : { type: "stable_diffusion", fits: ["clip_l", "clip_h", "clip_g"], any_type: ["qwen3_06b"] })),
+      encoders: nodes.map((one) => (one.input !== "clip_name" ? null : { type_widget: "type", by_type: {
+        wan: { fits: ["umt5_xxl"], any_type: ["qwen3_06b"] },
+        stable_diffusion: { fits: ["clip_l", "clip_h", "clip_g"], any_type: ["qwen3_06b"] },
+      } })),
     }));
     const clip = (type: string) => ({ id: "5", type: "CLIPLoader", title: "Load CLIP", widgets: [
       { name: "clip_name", type: "combo", value: "c_umt5.safetensors", combo: true },
@@ -308,9 +319,10 @@ describe("ComfyUI 工作台", () => {
 
     bridge.emit(state({ selection: { count: 1, node: clip("stable_diffusion") } }));
     await waitFor(async () => expect((await rows())[0].textContent).toContain("CLIP-L"));
-    expect(api.getNodeFolders).toHaveBeenLastCalledWith("i1", expect.arrayContaining([
-      { class_type: "CLIPLoader", input: "clip_name", values: { clip_name: "c_umt5.safetensors", type: "stable_diffusion" } },
-    ]));
+    expect(api.getNodeFolders, "配方是每一种 type 的,就地挑").toHaveBeenCalledTimes(1);
+    expect(api.getNodeFolders).toHaveBeenLastCalledWith("i1", [
+      { class_type: "CLIPLoader", input: "clip_name" }, { class_type: "CLIPLoader", input: "type" },
+    ]);
     expect((await rows())[2].querySelector("[data-recipe-misfit]"), "UMT5-XXL 不在 stable_diffusion 的配方里").toBeTruthy();
   });
 
@@ -724,11 +736,15 @@ describe("模型库:每一行的第二行不重复第一行", () => {
 });
 
 describe("模型库:换模型不闪;点缩略图看大图", () => {
-  it("点一行:上一句话一直留着、回话到了原地换成新的一句;列表里的每一行不重挂", async () => {
+  it("点一行:没填成的那一句一直留着、回话到了才换;填成了不另说一句、那一句撤掉;列表里的每一行不重挂", async () => {
     const bridge = await mount();
     const list = await screen.findByRole("list", { name: "workbenchModelsList" });
     fireEvent.click(within(list).getByRole("button", { name: /film grain/ }));
-    const note = await within(column()).findByText(/workbenchModelsFilled/);
+    await waitFor(() => expect(calls(bridge)).toContainEqual(expect.objectContaining({ op: "setWidget", value: "flux-dev.safetensors" })));
+    expect(within(column()).queryByRole("status"), "填成了不另说一句").toBeNull();
+    bridge.comfyWorkbench.mockImplementationOnce(async () => ({ ok: false, error: "notInList" }));
+    fireEvent.click(within(list).getByRole("button", { name: /SDXL Base/ }));
+    const note = await within(column()).findByText(/workbenchModelsNotInList/);
     const rows = within(list).getAllByRole("listitem");
     let answer: (value: unknown) => void = () => undefined;
     bridge.comfyWorkbench.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)) as never);
@@ -737,8 +753,7 @@ describe("模型库:换模型不闪;点缩略图看大图", () => {
     expect(note.isConnected, "填的过程中那一句不撤掉(撤掉再放回来,整个列表上下跳一下)").toBe(true);
     expect(within(list).getByRole("button", { name: /Pony/ }).getAttribute("aria-busy"), "点的那一行在转圈").toBe("true");
     await act(async () => answer({ ok: true, value: "pony.safetensors" }));
-    expect(note.isConnected).toBe(true);
-    expect(within(column()).getByText(/workbenchModelsFilled/), "还是同一个元素,换了内容").toBe(note);
+    expect(note.isConnected, "填成了:上一次没填成的那句撤掉").toBe(false);
     expect(within(list).getAllByRole("listitem").every((row, index) => row === rows[index]), "每一行都是原来那个元素").toBe(true);
   });
 

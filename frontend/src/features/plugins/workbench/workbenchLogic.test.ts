@@ -16,6 +16,7 @@ import {
   onlyResult,
   outputGroups,
   packPage,
+  pickRecipe,
   presentIn,
   runGallery,
   runsByWorkflow,
@@ -40,15 +41,16 @@ const model = (folder: string, name: string, extra: Partial<ModelFile> = {}): Mo
   ({ folder, name, family: "", family_source: "", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", ...extra });
 
 describe("工作台面板背后的纯函数", () => {
-  it("选中节点上的下拉格子交给插件问目录;插件说了目录的那几格才是选模型文件的", () => {
-    //: 每一格都带上这个节点上下拉格子现在的值(只有字符串的那几格):插件据此判,界面不认识它们
-    const values = { lora_name: "style.safetensors", mode: "x" };
+  it("选中节点上的下拉格子交给插件问目录(只问节点类型和输入名);插件说了目录的那几格才是选模型文件的", () => {
     expect(comboInputs(lora)).toEqual([
-      { class_type: "LoraLoader", input: "lora_name", values },
-      { class_type: "LoraLoader", input: "mode", values },
+      { class_type: "LoraLoader", input: "lora_name" },
+      { class_type: "LoraLoader", input: "mode" },
     ]);
+    //: 填了另一个模型、换了同一种的另一个节点:问的是同一句(面板按它缓存,不再读一遍)
+    const picked = { ...lora, id: "11", widgets: lora.widgets.map((one) => (one.name === "lora_name" ? { ...one, value: "other.safetensors" } : one)) };
+    expect(JSON.stringify(comboInputs(picked))).toBe(JSON.stringify(comboInputs(lora)));
     expect(comboInputs(null)).toEqual([]);
-    expect(modelSlots(lora, ["loras", ""])).toEqual([{ widget: "lora_name", folder: "loras", value: "style.safetensors", encoders: null }]);
+    expect(modelSlots(lora, ["loras", ""])).toEqual([{ widget: "lora_name", folder: "loras", value: "style.safetensors", recipe: null }]);
     expect(modelSlots(loader, []), "插件还没回话就当没有").toEqual([]);
   });
 
@@ -60,9 +62,14 @@ describe("工作台面板背后的纯函数", () => {
         { name: "type", type: "combo", value: "wan", combo: true },
       ],
     };
+    //: 插件给的是每一种 type 的配方;照节点上 type 那一格现在的值挑
+    const table = { type_widget: "type", by_type: {
+      wan: { fits: ["umt5_xxl"], any_type: ["qwen3_06b"] },
+      stable_diffusion: { fits: ["clip_l", "clip_h", "clip_g"], any_type: ["qwen3_06b"] },
+    } };
     const recipe = { type: "wan", fits: ["umt5_xxl"], any_type: ["qwen3_06b"] };
-    const [slot] = modelSlots(clip, ["text_encoders", ""], [recipe, null]);
-    expect(slot.encoders).toEqual(recipe);
+    const [slot] = modelSlots(clip, ["text_encoders", ""], [table, null]);
+    expect(slot.recipe).toEqual(recipe);
     const encoder = (name: string, kind: string) =>
       model("text_encoders", name, { family_source: "not_applicable", encoder: { kind, label: kind, source: "weights", pairs: [] } });
     const models = [
@@ -76,6 +83,21 @@ describe("工作台面板背后的纯函数", () => {
     expect(models.map((one) => encoderFit(one, recipe))).toEqual(["misfit", null, "any", "fits"]);
     expect(byRecipe(models, null), "不是 CLIP 加载节点:照原来的先后").toEqual(models);
     expect(encoderFit(model("loras", "x.safetensors"), recipe), "不是文本编码器的文件不标").toBeNull();
+  });
+
+  it("配方在这里照节点现在的 type 挑:换 type 不用再问;没有 type 可选的只有那一项;不认得的 type、原型上的名字不排", () => {
+    const table = { type_widget: "type", by_type: { wan: { fits: ["umt5_xxl"], any_type: [] }, flux: { fits: ["clip_l", "t5_xxl"] } } };
+    const clip = (type: string): WorkbenchNode => ({
+      id: "3", type: "DualCLIPLoader", title: "",
+      widgets: [{ name: "clip_name1", type: "combo", value: "a.safetensors", combo: true }, { name: "type", type: "combo", value: type, combo: true }],
+    });
+    expect(pickRecipe(table, clip("wan"))).toEqual({ type: "wan", fits: ["umt5_xxl"], any_type: [] });
+    expect(pickRecipe(table, clip("flux"))).toEqual({ type: "flux", fits: ["clip_l", "t5_xxl"] });
+    expect(pickRecipe(table, clip("some_new_type"))).toBeNull();
+    expect(pickRecipe(table, clip("constructor")), "type 的值是画布上来的,不取到原型上去").toBeNull();
+    const triple = { type_widget: null, by_type: { sd3: { fits: ["clip_l", "clip_g", "t5_xxl"], any_type: [] } } };
+    expect(pickRecipe(triple, clip("wan")), "三个文件的加载节点没有 type 可选:一律那一项").toEqual({ type: "sd3", ...triple.by_type.sd3 });
+    expect(pickRecipe(null, clip("wan"))).toBeNull();
   });
 
   it("这个目录里有没有那个文件:Windows 的反斜杠和正斜杠当一样;空值不算缺", () => {

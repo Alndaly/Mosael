@@ -6,32 +6,31 @@
  * 桥报来的东西主进程已经规整过(electron/publish/comfyWorkbench.parseWorkbenchPoll);这里仍只当提示:节点名字以导出的那张图为准,
  * 产出来自哪个节点以插件读的历史为准(任务回执里的 `source_node`)。
  */
-import type { Job, ModelFile, NodeEncoders, WorkflowNodePack } from "@/api/client";
+import type { EncoderRecipe, Job, ModelFile, NodeEncoders, WorkflowNodePack } from "@/api/client";
 import type { AppDraft } from "@/features/plugins/workflowAppForm";
 import type { WorkbenchRun } from "@/features/plugins/workbench/workbenchSession";
 
 export type WorkbenchNode = NonNullable<ComfyWorkbenchState["selection"]["node"]>;
 
 /**
- * 选中节点上的下拉格子,按插件问它是哪个模型目录用的样子(节点类型 + 输入名),带上这个节点上下拉格子现在的值 —— 插件据此
- * 判,比如 CLIP 加载节点的 type 配哪几种文本编码器。界面不认识这些格子是干什么的。
+ * 选中节点上的下拉格子,按插件问它是哪个模型目录用的样子:节点类型 + 输入名。**不带格子现在的值** —— 带上的话,在节点上
+ * 填一个模型问题就变了,整列跟着重新读(维护者:「为何切换模型会导致右侧列表重新变成 loading 状态」)。同一种节点问的是
+ * 同一句,换一个同类的节点也不再问。界面不认识这些格子是干什么的。
  */
-export function comboInputs(node: WorkbenchNode | null): { class_type: string; input: string; values: Record<string, string> }[] {
+export function comboInputs(node: WorkbenchNode | null): { class_type: string; input: string }[] {
   if (!node) return [];
-  const combos = node.widgets.filter((one) => one.combo);
-  const values = Object.fromEntries(combos.flatMap((one) => (typeof one.value === "string" ? [[one.name, one.value]] : [])));
-  return combos.map((one) => ({ class_type: node.type, input: one.name, values }));
+  return node.widgets.filter((one) => one.combo).map((one) => ({ class_type: node.type, input: one.name }));
 }
 
 /**
  * 选中节点上选模型文件的那几格(插件说了目录的):widget 名字、目录、现在的值;选文本编码器的那一格还有节点现在的 type 配
- * 哪几种(`encoders`,插件给的;别的格子是 null)。
+ * 哪几种(`recipe`,照插件给的每一种 type 的配方在这里挑;别的格子是 null)。
  */
 export interface ModelSlot {
   widget: string;
   folder: string;
   value: string;
-  encoders: NodeEncoders | null;
+  recipe: EncoderRecipe | null;
 }
 
 export function modelSlots(
@@ -39,12 +38,32 @@ export function modelSlots(
   folders: readonly string[],
   encoders: readonly (NodeEncoders | null)[] = [],
 ): ModelSlot[] {
-  const combos = node ? node.widgets.filter((one) => one.combo) : [];
+  if (!node) return [];
+  const combos = node.widgets.filter((one) => one.combo);
   return combos.flatMap((widget, index) =>
     folders[index]
-      ? [{ widget: widget.name, folder: folders[index], value: typeof widget.value === "string" ? widget.value : "", encoders: encoders[index] ?? null }]
+      ? [{
+          widget: widget.name,
+          folder: folders[index],
+          value: typeof widget.value === "string" ? widget.value : "",
+          recipe: pickRecipe(encoders[index] ?? null, node),
+        }]
       : [],
   );
+}
+
+/**
+ * 选文本编码器的那一格配哪几种:插件给的是这种节点每一种 type 的配方,这里照节点上 type 那一格**现在**的值挑 —— 在画布上
+ * 换 type,下一拍就照新的排,不用再问。没有 type 可选的加载节点(三个、四个文件的)只有那一项。不认得的 type(更新的
+ * ComfyUI 加的)是 null:不排、不标。
+ */
+export function pickRecipe(encoders: NodeEncoders | null, node: WorkbenchNode): EncoderRecipe | null {
+  const byType = encoders?.by_type ?? {};
+  const widget = encoders?.type_widget;
+  const type = widget ? node.widgets.find((one) => one.name === widget)?.value : Object.keys(byType)[0];
+  //: 只认这张表自己的键(type 的值是画布上来的,`constructor` 这种不能取到原型上去)
+  if (typeof type !== "string" || !Object.hasOwn(byType, type)) return null;
+  return { type, ...byType[type] };
 }
 
 /**
@@ -53,7 +72,7 @@ export function modelSlots(
  */
 export type EncoderFit = "fits" | "any" | "misfit";
 
-export function encoderFit(model: Pick<ModelFile, "encoder">, recipe: NodeEncoders | null): EncoderFit | null {
+export function encoderFit(model: Pick<ModelFile, "encoder">, recipe: EncoderRecipe | null): EncoderFit | null {
   const kind = model.encoder?.kind;
   if (!recipe || !kind) return null;
   if ((recipe.fits ?? []).includes(kind)) return "fits";
@@ -61,7 +80,7 @@ export function encoderFit(model: Pick<ModelFile, "encoder">, recipe: NodeEncode
 }
 
 /** 按配方排:在配方里的在前,不看 type 的、认不出的在中间,不在配方里的最后;同一档里照原来的先后。 */
-export function byRecipe(models: readonly ModelFile[], recipe: NodeEncoders | null): ModelFile[] {
+export function byRecipe(models: readonly ModelFile[], recipe: EncoderRecipe | null): ModelFile[] {
   if (!recipe) return [...models];
   const rank = (model: ModelFile) => {
     const fit = encoderFit(model, recipe);

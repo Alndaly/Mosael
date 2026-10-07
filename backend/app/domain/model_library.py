@@ -199,16 +199,30 @@ def _encoder(value: Any) -> dict[str, Any] | None:
             "source": source if source in ("weights", "filename") else "", "pairs": pairs[:_MAX_PAIRS]}
 
 
+#: 一种节点最多认几种 type(ComfyUI 0.39 的 CLIPLoader 列着 40 来种)。
+_MAX_TYPES = 200
+#: 节点上一格的名字(ComfyUI 的输入名:`type`、`clip_name1`……)。
+_WIDGET = re.compile(r"[A-Za-z0-9_.-]{1,200}")
+
+
 def _node_encoders(value: Any) -> dict[str, Any] | None:
-    """工作台里选文本编码器的那一格:节点现在的 `type`、在这个 type 配方里的几种(`fits`)、ComfyUI 不看 type 的几种
-    (`any_type`)。不是这种格子是 None。"""
+    """工作台里选文本编码器的那一格:节点上选 type 的那一格(`type_widget`;没有 type 可选的是 None)和每一种 type 的配方
+    (`by_type`:在配方里的几种 `fits`、ComfyUI 不看 type 的几种 `any_type`)。不像种类名的 type、没有一种合用的配方丢掉;
+    一项都不剩、或者没有 type 可选却不止一项,整格不要。不是这种格子是 None。"""
     if not isinstance(value, dict):
         return None
-    kind = _text(value.get("type"), 40)
-    fits = _kinds(value.get("fits"))
-    if not _KIND.fullmatch(kind) or not fits:
+    widget = value.get("type_widget")
+    if widget is not None and not (isinstance(widget, str) and _WIDGET.fullmatch(widget)):
         return None
-    return {"type": kind, "fits": fits, "any_type": _kinds(value.get("any_type"))}
+    raw = value.get("by_type") if isinstance(value.get("by_type"), dict) else {}
+    by_type: dict[str, dict[str, list[str]]] = {}
+    for kind, recipe in list(raw.items())[:_MAX_TYPES]:
+        fits = _kinds(recipe.get("fits")) if isinstance(recipe, dict) else []
+        if isinstance(kind, str) and _KIND.fullmatch(kind) and fits:
+            by_type[kind] = {"fits": fits, "any_type": _kinds(recipe.get("any_type"))}
+    if not by_type or (widget is None and len(by_type) != 1):
+        return None
+    return {"type_widget": widget, "by_type": by_type}
 
 
 def _source(value: Any) -> dict[str, str] | None:
@@ -535,25 +549,15 @@ def search_sources(db: Session, instance: PluginInstance, filename: str, folder:
 MAX_NODE_FOLDERS = 64
 
 
-#: 一格带着的节点上下拉格子的值最多几个。
-_MAX_NODE_VALUES = 32
-
-
-def _node_values(value: Any) -> dict[str, str]:
-    """节点上下拉格子现在的值(名字 → 选的那一项):插件据此判,比如 CLIP 加载节点的 type。"""
-    items = list(value.items())[:_MAX_NODE_VALUES] if isinstance(value, dict) else []
-    return {_text(key, 200): _text(one, 200) for key, one in items if _text(key, 200) and isinstance(one, str)}
-
-
 def node_folders(db: Session, instance: PluginInstance, nodes: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """工作台的「模型库」面板(ADR 0038 §6):画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件 ——
     面板据此只列那个目录的模型,点一个填进那一格。不是选模型文件的格子是空串。选文本编码器的那一格另有 `encoders`:
-    节点现在的 type 配哪几种(面板据此把合用的排前面、标出不合的);插件不说就是 None。插件只查表,不问 ComfyUI。"""
+    这种节点每一种 type 配哪几种(面板照节点现在的 type 挑,把合用的排前面、标出不合的);插件不说就是 None。答案只看
+    节点类型和输入名。插件只查表,不问 ComfyUI。"""
     _require(db, instance)
     if len(nodes) > MAX_NODE_FOLDERS:
         raise ModelLibraryError("modelLibErr_tooManyNodes", n=str(MAX_NODE_FOLDERS))
-    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200),
-              "values": _node_values(one.get("values"))} for one in nodes]
+    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200)} for one in nodes]
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "node_folders", "nodes": asked},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     folders = output.get("folders")

@@ -539,7 +539,6 @@ export const plugins = {
   workbenchModelDetailOpen: "View details of “{name}”",
   workbenchModelDetailClose: "Close details",
   workbenchPreviewOpen: "View larger: {title}",
-  workbenchModelsFilled: "Filled “{name}” into this input on the canvas; it goes into the workflow file once you save",
   workbenchModelsNotInList: "This input's dropdown on the canvas doesn't have it yet (refresh the dropdowns after downloading a model)",
   workbenchCombosRefresh: "Refresh dropdowns",
   workbenchCombosRefreshed: "Dropdowns refreshed",

@@ -115,9 +115,14 @@ elif op == "node_folders":
     out = {"folders": ["checkpoints" if one["input"] == "ckpt_name" else "text_encoders" if one["input"] == "clip_name" else
                        "../etc" if one["input"] == "evil" else "" for one in nodes]}
     if any(one["input"] == "clip_name" for one in nodes):
-        out["encoders"] = [{"type": one["values"].get("type", ""), "fits": ["umt5_xxl", "Not A Kind"],
-                            "any_type": ["qwen3_06b"]} if one["input"] == "clip_name" else
-                           {"type": "../x", "fits": ["x"]} if one["input"] == "type" else None for one in nodes]
+        out["encoders"] = [
+            {"type_widget": "type", "by_type": {"wan": {"fits": ["umt5_xxl", "Not A Kind"], "any_type": ["qwen3_06b"]},
+                                                "../x": {"fits": ["x"]}, "flux": {"fits": []}}}
+            if one["input"] == "clip_name" else
+            {"type_widget": None, "by_type": {"sd3": {"fits": ["clip_l"]}, "hidream": {"fits": ["clip_g"]}}}
+            if one["input"] == "clip_name1" else
+            {"type_widget": "ty\npe", "by_type": {"wan": {"fits": ["umt5_xxl"]}}} if one["input"] == "type" else None
+            for one in nodes]
     emit({"ok": True, "output": out})
 elif op == "detail":
     emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["name"],
@@ -733,25 +738,28 @@ def test_工作台_选中节点那一格是哪个模型目录_插件给的不像
     assert response.status_code == 200, response.text
     assert response.json() == {"folders": ["checkpoints", "", ""], "encoders": [None, None, None]}, "插件不说配方就是没有"
     sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
-    assert sent["nodes"][0] == {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name", "values": {}}
+    assert sent["nodes"][0] == {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"}
     too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders",
                            json={"nodes": [{"class_type": "X", "input": "y"}] * 65})
     assert too_many.status_code == 422
 
 
-def test_工作台_选文本编码器的那一格带着节点type的配方_节点上的值照传(library) -> None:
+def test_工作台_选文本编码器的那一格带着每一种type的配方_不带节点上的值(library) -> None:
     client, instance_id, _ = library
     response = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
-        {"class_type": "CLIPLoader", "input": "clip_name", "values": {"type": "wan", "device": "default"}},
-        {"class_type": "CLIPLoader", "input": "type", "values": {"type": "wan", "device": "default"}}]})
+        {"class_type": "CLIPLoader", "input": "clip_name"}, {"class_type": "TripleCLIPLoader", "input": "clip_name1"},
+        {"class_type": "CLIPLoader", "input": "type"}]})
     assert response.status_code == 200, response.text
-    assert response.json() == {"folders": ["text_encoders", ""], "encoders": [
-        {"type": "wan", "fits": ["umt5_xxl"], "any_type": ["qwen3_06b"]}, None]}, "不像种类名的丢掉;type 不像样的整格不要"
+    assert response.json()["encoders"] == [
+        {"type_widget": "type", "by_type": {"wan": {"fits": ["umt5_xxl"], "any_type": ["qwen3_06b"]}}},
+        None, None,
+    ], "不像种类名的、一种都不合的丢掉;没有 type 可选却不止一项、type 那一格名字不像样的整格不要"
     sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
-    assert sent["nodes"][0]["values"] == {"type": "wan", "device": "default"}
-    too_many = client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
-        {"class_type": "X", "input": "y", "values": {str(index): "v" for index in range(40)}}]})
-    assert too_many.status_code == 422
+    assert sent["nodes"][0] == {"class_type": "CLIPLoader", "input": "clip_name"}, "答案只看节点类型和输入名"
+    client.post(f"/api/plugins/instances/{instance_id}/model-library/node-folders", json={"nodes": [
+        {"class_type": "CLIPLoader", "input": "clip_name", "values": {"type": "wan"}}]})
+    sent = [op for op in _ops() if op["op"] == "node_folders"][-1]
+    assert sent["nodes"] == [{"class_type": "CLIPLoader", "input": "clip_name"}], "节点上的值不往下传"
 
 
 def test_文本编码器那一格_宿主规整_别的文件没有这一格(library) -> None:

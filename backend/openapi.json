@@ -35857,6 +35857,27 @@
         "title": "ModelEncoderOut",
         "description": "一个文本编码器是哪一种、常配哪几种底模(ADR 0034 §2 的 2026-10-07 补记)。一个编码器给好几种底模用,所以它不贴底模\n(`family` 空着、`family_source` 是 `not_applicable`),而是说这些。"
       },
+      "ModelEncoderRecipeOut": {
+        "properties": {
+          "fits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fits"
+          },
+          "any_type": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Any Type"
+          }
+        },
+        "type": "object",
+        "title": "ModelEncoderRecipeOut",
+        "description": "一种 type 配哪几种文本编码器。"
+      },
       "ModelFileOut": {
         "properties": {
           "folder": {
@@ -36239,31 +36260,28 @@
       },
       "ModelNodeEncodersOut": {
         "properties": {
-          "type": {
-            "type": "string",
-            "title": "Type"
+          "type_widget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Widget"
           },
-          "fits": {
-            "items": {
-              "type": "string"
+          "by_type": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelEncoderRecipeOut"
             },
-            "type": "array",
-            "title": "Fits"
-          },
-          "any_type": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Any Type"
+            "type": "object",
+            "title": "By Type"
           }
         },
         "type": "object",
-        "required": [
-          "type"
-        ],
         "title": "ModelNodeEncodersOut",
-        "description": "选文本编码器的那一格:节点现在的 type 配哪几种编码器。"
+        "description": "选文本编码器的那一格:这种节点**每一种** type 配哪几种编码器。界面照节点上 `type_widget` 那一格现在的值自己挑 ——\n换模型、换 type 都不用再问。"
       },
       "ModelNodeFolderIn": {
         "properties": {
@@ -36276,14 +36294,6 @@
             "type": "string",
             "maxLength": 200,
             "title": "Input"
-          },
-          "values": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "maxProperties": 32,
-            "title": "Values"
           }
         },
         "type": "object",
@@ -36292,7 +36302,7 @@
           "input"
         ],
         "title": "ModelNodeFolderIn",
-        "description": "画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。"
+        "description": "画布上选中的节点的一格:节点类型 + 输入名。**不带节点上现在选的值** —— 答案只看这两样,在节点上填一个模型、换一个\ntype 都不用再问(界面按这两样缓存)。"
       },
       "ModelNodeFoldersOut": {
         "properties": {

@@ -307,34 +307,42 @@ def test_常配_细分的那一支排最后_不配的不写(plugin) -> None:
 
 # --- 工作台:按节点现在的 type 排 ---------------------------------------------------------------------
 
-def test_CLIP加载节点_按type说哪几种在配方里(plugin) -> None:
-    recipe_for = plugin.encoders.recipe_for
-    wan = recipe_for("CLIPLoader", {"type": "wan", "device": "default"})
-    assert wan["type"] == "wan" and wan["fits"] == ["umt5_xxl"]
+def test_CLIP加载节点_每一种type说哪几种在配方里_不看节点上现在选了什么(plugin) -> None:
+    recipes_for = plugin.encoders.recipes_for
+    single = recipes_for("CLIPLoader")
+    assert single["type_widget"] == "type"
+    wan = single["by_type"]["wan"]
+    assert wan["fits"] == ["umt5_xxl"]
     assert "qwen3_06b" in wan["any_type"] and "clip_l" not in wan["any_type"], "ComfyUI 不看 type 的不算不合"
-    anima = recipe_for("CLIPLoaderGGUF", {"type": "stable_diffusion"})
+    anima = recipes_for("CLIPLoaderGGUF")["by_type"]["stable_diffusion"]
     assert set(anima["fits"]) == {"clip_l", "clip_h", "clip_g"}
     assert "qwen3_06b" in anima["any_type"], "Anima 的官方模板就是 stable_diffusion 配 Qwen3 0.6B"
-    assert recipe_for("DualCLIPLoader", {"type": "flux"})["fits"] == ["clip_l", "t5_xxl"]
-    assert recipe_for("DualCLIPLoader", {"type": "flux"})["any_type"] == [], "两个文件的每个 type 都有自己的建法"
-    triple = recipe_for("TripleCLIPLoader", {})
-    assert (triple["type"], set(triple["fits"])) == ("sd3", {"clip_l", "clip_g", "t5_xxl"})
-    assert recipe_for("QuadrupleCLIPLoaderGGUF", {"type": "stable_diffusion"})["type"] == "hidream", "四个文件一律 HiDream"
-    assert recipe_for("CLIPLoader", {"type": "some_new_type"}) is None, "不认得的 type:不排、不标"
-    assert recipe_for("CLIPLoader", {}) is None
-    assert recipe_for("CheckpointLoaderSimple", {"type": "wan"}) is None
+    assert {"stable_diffusion", "wan", "qwen_image", "krea2", "lumina2", "flux2", "ltxv"} <= set(single["by_type"]), \
+        "一个文件的每一种 type 都在,界面换 type 不用再问"
+    assert "sdxl" not in single["by_type"] and "*" not in single["by_type"], "只列这种节点读几个文件时有的 type;「不看 type」不是一种 type"
+    dual = recipes_for("DualCLIPLoader")["by_type"]
+    assert dual["flux"] == {"fits": ["clip_l", "t5_xxl"], "any_type": []}, "两个文件的每个 type 都有自己的建法"
+    assert dual["sdxl"]["fits"] == ["clip_l", "clip_g"]
+    assert recipes_for("TripleCLIPLoader") == {"type_widget": None, "by_type": {
+        "sd3": {"fits": ["clip_l", "clip_g", "t5_xxl"], "any_type": []}}}, "三个文件没有 type 可选:一律 SD 3"
+    quad = recipes_for("QuadrupleCLIPLoaderGGUF")
+    assert (quad["type_widget"], list(quad["by_type"])) == (None, ["hidream"]), "四个文件一律 HiDream,GGUF 带着 type 也不看"
+    assert recipes_for("CheckpointLoaderSimple") is None
+    for loader in ("CLIPLoader", "DualCLIPLoader"):
+        for recipe in recipes_for(loader)["by_type"].values():
+            assert recipe["fits"] and not set(recipe["fits"]) & set(recipe["any_type"]), "合的不再算「不看 type」"
 
 
 def test_工作台_选文本编码器的格子带上配方(comfy) -> None:
     out = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "node_folders", "nodes": [
-        {"class_type": "CLIPLoader", "input": "clip_name", "values": {"type": "wan", "device": "default"}},
-        {"class_type": "CLIPLoader", "input": "type", "values": {"type": "wan"}},
-        {"class_type": "CLIPLoaderGGUF", "input": "clip_name", "values": {"type": "krea2"}},
+        {"class_type": "CLIPLoader", "input": "clip_name"},
+        {"class_type": "CLIPLoader", "input": "type"},
+        {"class_type": "CLIPLoaderGGUF", "input": "clip_name"},
         {"class_type": "CheckpointLoaderSimple", "input": "ckpt_name"},
     ]}, {"SERVER_URL": comfy.url}, timeout=60).output
     assert out["folders"] == ["text_encoders", "", "clip_gguf", "checkpoints"]
-    assert out["encoders"][0]["fits"] == ["umt5_xxl"]
-    assert out["encoders"][2]["fits"] == ["qwen3vl_4b"]
+    assert out["encoders"][0]["by_type"]["wan"]["fits"] == ["umt5_xxl"]
+    assert out["encoders"][2]["by_type"]["krea2"]["fits"] == ["qwen3vl_4b"]
     assert out["encoders"][1] is None and out["encoders"][3] is None
 
 

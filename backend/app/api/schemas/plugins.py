@@ -677,11 +677,11 @@ class ModelDownloadRequest(ApiModel):
 
 
 class ModelNodeFolderIn(ApiModel):
-    """画布上选中的节点的一格:节点类型 + 输入名,和这个节点上下拉格子现在的值(名字 → 选的那一项;CLIP 加载节点据此看 type)。"""
+    """画布上选中的节点的一格:节点类型 + 输入名。**不带节点上现在选的值** —— 答案只看这两样,在节点上填一个模型、换一个
+    type 都不用再问(界面按这两样缓存)。"""
 
     class_type: str = Field(max_length=200)
     input: str = Field(max_length=200)
-    values: dict[str, str] = Field(default_factory=dict, max_length=32)
 
 
 class ModelNodeFoldersRequest(ApiModel):
@@ -690,15 +690,24 @@ class ModelNodeFoldersRequest(ApiModel):
     nodes: list[ModelNodeFolderIn] = Field(max_length=64)
 
 
-class ModelNodeEncodersOut(ApiModel):
-    """选文本编码器的那一格:节点现在的 type 配哪几种编码器。"""
+class ModelEncoderRecipeOut(ApiModel):
+    """一种 type 配哪几种文本编码器。"""
 
-    #: 节点现在的 type(三个、四个文件的加载节点没有 type,是 ComfyUI 一律用的那一路:`sd3`、`hidream`)
-    type: str
     #: 在这个 type 的配方里的几种(`ModelEncoderOut.kind`)
     fits: list[str] = Field(default_factory=list)
     #: ComfyUI 认出是这几种之后不看 type、建出来都一样:不算不合
     any_type: list[str] = Field(default_factory=list)
+
+
+class ModelNodeEncodersOut(ApiModel):
+    """选文本编码器的那一格:这种节点**每一种** type 配哪几种编码器。界面照节点上 `type_widget` 那一格现在的值自己挑 ——
+    换模型、换 type 都不用再问。"""
+
+    #: 节点上选 type 的那一格;三个、四个文件的加载节点没有 type 可选(ComfyUI 一律建 SD 3 / HiDream 那一路),是 null,
+    #: 这时 `by_type` 只有那一项
+    type_widget: str | None = None
+    #: type → 它的配方。不在里面的 type(更新的 ComfyUI 加的):不排、不标
+    by_type: dict[str, ModelEncoderRecipeOut] = Field(default_factory=dict)
 
 
 class ModelNodeFoldersOut(ApiModel):

@@ -377,21 +377,31 @@ def describe(folder: str, name: str, found: str | None) -> dict[str, Any] | None
     return {"kind": kind, "label": LABELS[kind], "source": source, "pairs": pairs(kind)}
 
 
-def recipe_for(class_type: str, values: Mapping[str, Any]) -> dict[str, Any] | None:
-    """工作台:选中的是 CLIP 加载节点时,按它现在的 type(`values` 是节点上下拉格子的值)说哪几种编码器在这个 type 的配方里
-    (`fits`),哪几种 ComfyUI 不看 type、建出来都一样(`any_type`,不算不合)。别的种类就是不合。不是 CLIP 加载节点、
-    type 是这里不认得的(更新的 ComfyUI 加的)→ None,界面不排、不标。"""
+#: 工作台里 CLIP 加载节点上选 type 的那一格叫什么(一个、两个文件的加载节点,GGUF 的同名)。
+TYPE_WIDGET = "type"
+
+
+def recipes_for(class_type: str) -> dict[str, Any] | None:
+    """工作台:选中的是 CLIP 加载节点时,它**每一种** type 各配哪几种编码器 —— 界面照节点上 type 那一格现在的值自己挑,换模型、
+    换 type 都不用再问(此前按节点上的值问,每填一次模型问一次,整列跟着回到「读取中」)。
+
+    `type_widget`:选 type 的那一格(`TYPE_WIDGET`);三个、四个文件的加载节点没有 type 可选(ComfyUI 一律建 SD 3 / HiDream
+    那一路,GGUF 的那两个带着 type 也不看),是 None,`by_type` 只有那一项。`by_type[type]`:`fits` 在这个 type 的配方里,
+    `any_type` ComfyUI 认出是它之后不看 type、建出来都一样(不算不合)。不在 `by_type` 里的 type(更新的 ComfyUI 加的)界面不排、
+    不标。不是 CLIP 加载节点 → None。"""
     files = LOADERS.get(class_type)
     if not files:
         return None
-    wanted = FIXED_TYPES.get(files) or str(values.get("type") or "").strip()
     mine = [recipe for recipe in RECIPES if recipe.files == files]
-    fits = [kind for recipe in mine if recipe.type == wanted for kind in recipe.kinds]
-    if not wanted or not fits:
-        return None
-    loose = [kind for recipe in mine if recipe.type == ANY_TYPE for kind in recipe.kinds if kind not in fits]
-    return {"type": wanted, "fits": list(dict.fromkeys(fits)), "any_type": list(dict.fromkeys(loose))}
+    fixed = FIXED_TYPES.get(files)
+    types = [fixed] if fixed else list(dict.fromkeys(recipe.type for recipe in mine if recipe.type != ANY_TYPE))
+    loose = [kind for recipe in mine if recipe.type == ANY_TYPE for kind in recipe.kinds]
+    by_type: dict[str, dict[str, list[str]]] = {}
+    for wanted in types:
+        fits = list(dict.fromkeys(kind for recipe in mine if recipe.type == wanted for kind in recipe.kinds))
+        by_type[wanted] = {"fits": fits, "any_type": list(dict.fromkeys(kind for kind in loose if kind not in fits))}
+    return {"type_widget": None if fixed else TYPE_WIDGET, "by_type": by_type}
 
 
 __all__ = ["ENCODER_FOLDERS", "KINDS", "RECIPES", "applies", "describe", "kind_of_gguf", "kind_of_header", "kind_of_name",
-           "kind_of_weights", "pairs", "recipe_for"]
+           "kind_of_weights", "pairs", "recipes_for"]

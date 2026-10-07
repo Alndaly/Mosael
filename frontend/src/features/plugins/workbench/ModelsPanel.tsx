@@ -221,8 +221,9 @@ function SlotPicker({
   const { openImagePreview } = useImagePreview();
   const [query, setQuery] = React.useState("");
   const [family, setFamily] = React.useState("");
-  //: 填进去的结果那一句:**只在回话到了时换成新的一句**,填的过程中不先撤掉 —— 撤掉再放回来,下面整个列表会先往上
-  //: 跳、再往下跳(维护者:「每次切换模型都会导致右侧这个窗口闪烁一下」)
+  //: 没填成的那一句(不在下拉里、桥没做成):**只在回话到了时换**,填的过程中不先撤掉 —— 撤掉再放回来,下面整个列表会先
+  //: 往上跳、再往下跳(维护者:「每次切换模型都会导致右侧这个窗口闪烁一下」)。填成了不另说一句(维护者不要):选中的那一行
+  //: 换过去就是回答;上一次没填成的那句随之撤掉
   const [note, setNote] = React.useState<Note | null>(null);
   //: 说有预览图、取的时候却没取到的那几个:缩略图换成了占位,也就没有大图可看
   const [failed, setFailed] = React.useState<ReadonlySet<string>>(() => new Set());
@@ -231,14 +232,14 @@ function SlotPicker({
   const treatmentOf = (model: ModelFile) => previewTreatment(previewSettings, Boolean(model.nsfw?.flagged));
   const families = folderFamilies(models, slot.folder);
   //: 选文本编码器的格子:合节点现在 type 的排前面(不合的在最后、标出来)
-  const listed = byRecipe(folderModels(models, slot.folder, { query, family }), slot.encoders);
+  const listed = byRecipe(folderModels(models, slot.folder, { query, family }), slot.recipe);
   const present = presentIn(models, slot.folder, slot.value);
 
   const pick = useMutation({
     mutationFn: (model: ModelFile) =>
       workbenchCall({ op: "setWidget", node: node.id, widget: slot.widget, value: model.name }),
-    onSuccess: (result, model) => {
-      if (result.ok) setNote({ tone: "info", text: t("workbenchModelsFilled").replace("{name}", modelBaseName(model.name)) });
+    onSuccess: (result) => {
+      if (result.ok) setNote(null);
       else if (result.error === "notInList") setNote({ tone: "warning", text: t("workbenchModelsNotInList"), refresh: true });
       else setNote({ tone: "error", text: t("workbenchCallFailed").replace("{why}", "message" in result && result.message ? result.message : result.error) });
     },
@@ -385,7 +386,7 @@ function SlotPicker({
                         {(model.encoder?.label || model.family || subtitle) && (
                           <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
                             {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
-                            <EncoderRecipeMark model={model} recipe={slot.encoders} />
+                            <EncoderRecipeMark model={model} recipe={slot.recipe} />
                             {subtitle && <Truncate>{subtitle}</Truncate>}
                           </span>
                         )}

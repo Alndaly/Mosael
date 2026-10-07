@@ -207,11 +207,17 @@ export const getLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-
 /** 下载本机识别的权重(只给部署管理员;后台下,回当时的状态)。 */
 export const installLocalNsfw = () => api<ModelLocalNsfw>("/api/model-library/local-nsfw/install", { method: "POST" });
 
-/** 选文本编码器的那一格:节点现在的 type 配哪几种编码器(`fits`)、哪几种 ComfyUI 不看 type(`any_type`)。 */
-export type NodeEncoders = components["schemas"]["ModelNodeEncodersOut"];
 /**
- * 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名 + 这个节点上下拉格子现在的值)各选的是哪个模型目录的
- * 文件(不是的为空串),选文本编码器的那一格再带上 `encoders`(其余为 null)。
+ * 选文本编码器的那一格:这种节点**每一种** type 配哪几种编码器(`by_type`),和节点上选 type 的那一格(`type_widget`;
+ * 没有 type 可选的加载节点是 null,`by_type` 只有一项)。界面照节点现在的 type 自己挑(见 workbenchLogic.pickRecipe)。
+ */
+export type NodeEncoders = components["schemas"]["ModelNodeEncodersOut"];
+/** 挑出来的那一份:节点现在的 type、在它配方里的几种(`fits`)、ComfyUI 不看 type 的几种(`any_type`)。 */
+export type EncoderRecipe = components["schemas"]["ModelEncoderRecipeOut"] & { type: string };
+/**
+ * 工作台的「模型库」面板:画布上选中的节点那几格(节点类型 + 输入名)各选的是哪个模型目录的文件(不是的为空串),选文本
+ * 编码器的那一格再带上 `encoders`(其余为 null)。**答案只看这两样**:节点上填了什么、type 选了什么都不问 —— 按它们缓存,
+ * 填一个模型、换一个节点(同一种)都不再问。
  */
 export const getNodeFolders = (instanceId: string, nodes: components["schemas"]["ModelNodeFolderIn"][]) =>
   api<components["schemas"]["ModelNodeFoldersOut"]>(`/api/plugins/instances/${instanceId}/model-library/node-folders`, {
