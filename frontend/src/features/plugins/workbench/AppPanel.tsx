@@ -61,7 +61,7 @@ export function AppPanel({ target, canExport, canMark }: { target: WorkbenchTarg
         {dirty && (
           <span role="status" data-app-dirty="" className="mr-auto inline-flex items-center gap-1.5 text-ui-xs font-medium text-warning">
             <span aria-hidden className="size-1.5 rounded-full bg-warning" />
-            {t("workflowAppDirty")}
+            {t("workbenchAppDirty")}
           </span>
         )}
         <Button variant="outline" size="xs" loading={read.isPending} onClick={() => {

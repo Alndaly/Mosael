@@ -83,8 +83,8 @@ for you (Apple silicon, Windows or Linux with NVIDIA). Every saved workflow beco
 and on boards, and a tool the agent and workflows can run. The **model library** lists the server's checkpoints, LoRAs
 and other files with preview images, base model and trigger words, and downloads what's missing; the **workflow
 library** organizes workflows in folders, creates and imports them, and completes missing models and custom nodes. An
-**app form** shows only the few fields others need to fill in, and the desktop **ComfyUI workbench** opens ComfyUI's own
-canvas with Mosael's model library, missing items, app form and run results docked beside it. Mosael doesn't replace
+**simplified form** shows only the few fields others need to fill in, and the desktop **ComfyUI workbench** opens ComfyUI's own
+canvas with Mosael's model library, missing items, form and run results docked beside it. Mosael doesn't replace
 ComfyUI's own interface — it puts your workflows next to cloud models, the editor and automation. [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui)
 
 ![ComfyUI model library with previews, base model and file size](website/public/media/screens/en/model-library.png)

@@ -11,7 +11,7 @@ export const assetLibrary = {
   entitiesKinds: "资产种类",
   entitiesSearch: "搜名字、描述、提示词描述",
   entitiesEmptyTitle: "还没有{kind}",
-  entitiesEmptyBody_character: "建一个,挂上几张参考图(正面、侧面、三视图……)。之后在 AI 工作台、画板、工作流里 @ 它,同一个角色每次都是同一张脸。",
+  entitiesEmptyBody_character: "建一个,挂上几张参考图(正面、侧面、三视图……)。之后在 AI Studio、画板、工作流里 @ 它,同一个角色每次都是同一张脸。",
   entitiesEmptyBody_location: "建一个,挂上几张参考图(全景、设定图、不同时间的样子……)。之后生成时 @ 它,同一个地方每一镜都对得上。",
   entitiesEmptyBody_prop: "建一件,挂上几张参考图(正面、三视图、细节……)。之后生成时 @ 它,同一件东西在每一镜里都是同一个样子。",
   entityCreate: "创建",
