@@ -286,7 +286,7 @@ python3 scripts/sync-ratchet-docs.py
 | 文本 I/O 必须**自己说清用什么编码**,不能问平台要。 | `backend/tests/test_text_io_never_inherits_the_platform_encoding.py` |
 | 知识库整块删掉了。 | `backend/tests/test_the_knowledge_base_is_gone.py` |
 | 「能对时间线做什么」只有**一份**数据,而且它说的是实话。 | `backend/tests/test_timeline_ops_have_one_list.py` |
-| 工具定义加系统提示,不超过本机回退窗口的六成 —— 每轮都重发、又压不掉的那一块,得有个明说的上限。 | `backend/tests/test_tool_definitions_budget.py` |
+| 工具定义加系统提示,不超过本机回退窗口的六成 —— 每轮都重发、又压不掉的那一块,得有个明说的上限。**按每一处量**。 | `backend/tests/test_tool_definitions_budget.py` |
 | 结构性约束:**docs/MCP.md 的工具清单与代码一致**。 | `backend/tests/test_tool_docs_in_sync.py` |
 | 面向用户的节点说明和占位里**不摆模板写法**(`{{…}}`)。 | `backend/tests/test_ui_copy_has_no_template_syntax.py` |
 | 结构性约束:**记进操作日志的每一种操作,都要登记它的逆操作。** | `backend/tests/test_undo_registry.py` |

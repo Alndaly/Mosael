@@ -150,21 +150,39 @@ _EFFECTS = frozenset({"reads", "writes", "confirms"})
 _TOOL_EFFECTS: dict[str, str] = {}
 _AWAITS_ANSWER: set[str] = set()
 _TOOL_NEEDS: dict[str, str] = {}
+#: 工具属于哪一份(ADR 0044 §8):不在这里的是通用的,哪儿都发。
+_KITS = frozenset({"comfyui", "canvas"})
+_TOOL_KITS: dict[str, str] = {}
 
 
-def tool(*, effect: str, awaits_answer: bool = False, description: str | None = None, needs: str | None = None):
+def tool(
+    *,
+    effect: str,
+    awaits_answer: bool = False,
+    description: str | None = None,
+    needs: str | None = None,
+    kit: str | None = None,
+):
     """登记一个工具,连同它做了什么(见上)。`effect` 没有默认值 —— 漏写是 TypeError。
 
     `description` 给了就用它代替 docstring:说明要从别处**生成**的工具用(edit_timeline 的算子清单从入参模型生成)。
 
     `needs`:这个工具只对接了某种插件能力的人有用(插件清单 `provides` 里的名字,如 ComfyUI 的 `workflow_library`)。
     没接的人每一轮不发它的定义(见 tool_manifest.agent_tool_specs)—— 工具定义每轮重发,一个用不上的工具也是实打实的开销。
+
+    `kit`:工具跟着**这一轮在哪说的**走(ADR 0044 §8,见 tool_manifest.kits_for)。不声明是通用的,哪儿都发;
+    `"comfyui"` 只在 ComfyUI 工作台里发(`comfy_*`,改图的、装节点包的以后也进这一份);`"canvas"` 是改 Mosael 自家画布的那一份
+    (画板、时间线、3D 场景、工作流、Blender),工作台以外哪儿都发、工作台里不发 —— 那里要的是 ComfyUI 的图。
     """
     if effect not in _EFFECTS:
         raise ValueError(f"effect must be one of {sorted(_EFFECTS)}, got {effect!r}")
+    if kit is not None and kit not in _KITS:
+        raise ValueError(f"kit must be one of {sorted(_KITS)}, got {kit!r}")
 
     def register(fn):
         _TOOL_EFFECTS[fn.__name__] = effect
+        if kit:
+            _TOOL_KITS[fn.__name__] = kit
         if needs:
             _TOOL_NEEDS[fn.__name__] = needs
         if awaits_answer:
@@ -383,7 +401,7 @@ def _edit_timeline_description() -> str:
     ])
 
 
-@tool(effect="confirms", description=_edit_timeline_description())
+@tool(effect="confirms", description=_edit_timeline_description(), kit="canvas")
 def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
     if _looks_like_workflow_graph_ops(operations):
         raise ValueError(
@@ -1644,7 +1662,7 @@ def create_scene(name: str, workspace_id: str = "") -> dict[str, Any]:
     return _use_case(use_cases.create, request.workspace_id, request.name, request.content, out=SceneOut)
 
 
-@tool(effect="writes")
+@tool(effect="writes", kit="canvas")
 def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] | None = None,
                remove_ids: list[str] | None = None, shots: list[dict[str, Any]] | None = None,
                name: str | None = None, workspace_id: str = "") -> dict[str, Any]:
@@ -1777,7 +1795,7 @@ def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover
     )
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def list_scene_models(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: the imported 3D models available in this workspace, with id, name, format and size.
 
@@ -1790,7 +1808,7 @@ def list_scene_models(workspace_id: str = "") -> list[dict[str, Any]]:
     return _use_case(use_cases.list_models, workspace_id or _default_workspace_id())
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "", time: float = 0.0,
                workspace_id: str = "") -> list[TextContent | ImageContent]:
     """Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view.
@@ -1813,7 +1831,7 @@ def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "",
     return _with_images(data)
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def blender_inspect(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only: what is in the Blender scene the user has open right now — every object's name,
     type, parent, location, rotation (degrees), scale, dimensions (metres) and, for meshes, vertex /
@@ -1824,7 +1842,7 @@ def blender_inspect(instance_id: str = "", workspace_id: str = "") -> dict[str, 
     return _use_case(use_cases.inspect, workspace_id or _default_workspace_id(), instance_id)
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def blender_look(views: list[str] | None = None, objects: list[str] | None = None, shading: str = "solid",
                  zoom: float = 1.0, instance_id: str = "",
                  workspace_id: str = "") -> list[TextContent | ImageContent]:
@@ -1854,7 +1872,7 @@ def blender_look(views: list[str] | None = None, objects: list[str] | None = Non
     return _with_images(data)
 
 
-@tool(effect="confirms")
+@tool(effect="confirms", kit="canvas")
 def blender_execute(code: str, purpose: str = "", instance_id: str = "") -> dict[str, Any]:
     """Confirmation required: run Python (bpy) inside the user's open Blender to model.
 
@@ -1879,7 +1897,7 @@ def blender_execute(code: str, purpose: str = "", instance_id: str = "") -> dict
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="writes")
+@tool(effect="writes", kit="canvas")
 def blender_send_scene(scene_id: str, shot_id: str = "", instance_id: str = "",
                        workspace_id: str = "") -> dict[str, Any]:
     """Send a Mosael 3D scene into Blender, so you can refine it there with real modeling.
@@ -1908,7 +1926,7 @@ def blender_send_scene(scene_id: str, shot_id: str = "", instance_id: str = "",
     return _use_case(send)
 
 
-@tool(effect="writes")
+@tool(effect="writes", kit="canvas")
 def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", objects: list[str] | None = None,
                             position: list[float] | None = None, instance_id: str = "",
                             workspace_id: str = "") -> dict[str, Any]:
@@ -1930,7 +1948,7 @@ def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", o
     )
 
 
-@tool(effect="writes")
+@tool(effect="writes", kit="canvas")
 def render_scene_references(scene_id: str, shot_id: str, render: str = "stills", project_id: str = "",
                             workspace_id: str = "") -> dict[str, Any]:
     """Render blockout references of one shot of a 3D scene and save them as assets:
@@ -1958,7 +1976,7 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
 # `instance_id` 是 ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each
     subgraph) the nodes with ref, type, widget values and inputs (`in`: "<ref>.<output>"), plus selection, modified flag
@@ -1969,7 +1987,7 @@ def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str
     return _use_case(workbench_agent.canvas, workspace_id or _default_workspace_id(), instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_locate(node: str, subgraph: str = "", instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12"
     or "12:5". Changes nothing."""
@@ -1978,7 +1996,7 @@ def comfy_locate(node: str, subgraph: str = "", instance_id: str = "", workspace
     return _use_case(workbench_agent.locate, workspace_id or _default_workspace_id(), node, subgraph, instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) —
     missing nodes / models, mistyped or unconnected inputs, values outside a dropdown or range, size multiples, base
@@ -1988,7 +2006,7 @@ def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", w
     return _use_case(workbench_agent.check, workspace_id or _default_workspace_id(), instance_id, job_id, last_error)
 
 
-@tool(effect="confirms", needs="workflow_library")
+@tool(effect="confirms", needs="workflow_library", kit="comfyui")
 def comfy_canvas_edit(ops: list[dict[str, Any]], instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: change the workflow open on the workbench canvas. One batch, all or nothing, one Ctrl+Z;
     the user sees the change list and clicks Apply. Refused up front if any op fails validation or the batch adds errors
@@ -2011,7 +2029,7 @@ def comfy_canvas_edit(ops: list[dict[str, Any]], instance_id: str = "", workspac
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="writes", needs="workflow_library")
+@tool(effect="writes", needs="workflow_library", kit="comfyui")
 def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any]] | None = None, name: str = "", path: str = "",
                      instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Open a workflow in a NEW workbench tab; the open ones stay untouched, nothing is saved (the user saves).
@@ -2024,7 +2042,7 @@ def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any
                      instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_templates(query: str = "", task: str = "", model: str = "", limit: int = 6, instance_id: str = "") -> dict[str, Any]:
     """Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building
     from scratch. Each lists its models and whether this machine has them (or in another subfolder / precision), total
@@ -2034,7 +2052,7 @@ def comfy_templates(query: str = "", task: str = "", model: str = "", limit: int
     return _use_case(workbench_agent.templates, query, task, model, limit, instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_template(name: str, pack: str = "", instance_id: str = "") -> dict[str, Any]:
     """Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder
     / precision), what stays missing (URL, size), missing node types and a graph summary. Never invents files. `pack`:
@@ -2044,7 +2062,7 @@ def comfy_template(name: str, pack: str = "", instance_id: str = "") -> dict[str
     return _use_case(workbench_agent.template, name, pack, instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_node_types(query: str = "", classes: list[str] | None = None, limit: int = 10, instance_id: str = "") -> dict[str, Any]:
     """Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type,
     required, options, default, range), outputs and pack."""
@@ -2053,7 +2071,7 @@ def comfy_node_types(query: str = "", classes: list[str] | None = None, limit: i
     return _use_case(workbench_agent.node_types, query, classes or [], limit, instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_node_packs(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only: installed custom node packs (id, version, enabled, source, node types); with the
     workbench open, also which pack each canvas node comes from."""
@@ -2062,7 +2080,7 @@ def comfy_node_packs(instance_id: str = "", workspace_id: str = "") -> dict[str,
     return _use_case(workbench_agent.node_packs, workspace_id or _default_workspace_id(), instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_node_pack_search(query: str = "", node_types: list[str] | None = None, instance_id: str = "") -> dict[str, Any]:
     """Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the
     Comfy Registry), ranked, installed ones marked. Check one with comfy_node_pack_info before recommending it."""
@@ -2071,7 +2089,7 @@ def comfy_node_pack_search(query: str = "", node_types: list[str] | None = None,
     return _use_case(workbench_agent.node_pack_search, query, node_types or [], instance_id)
 
 
-@tool(effect="reads", needs="workflow_library")
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_node_pack_info(pack_id: str, instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only: analyse a node pack before installing — registry status of the newest version
     (Flagged / Banned / deprecated: say so, don't recommend it; `install_version` is the latest normal one), publisher,
@@ -2238,7 +2256,7 @@ def get_workflow(workflow_id: str) -> dict[str, Any]:
     return _use_case(use_cases.readable, workflow_id, out=WorkflowOut)
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def list_workflow_node_types(node_type: str = "") -> list[dict[str, Any]] | dict[str, Any]:
     """Read-only: list allowed workflow node types, or inspect one type in full.
 
@@ -2296,7 +2314,7 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="confirms")
+@tool(effect="confirms", kit="canvas")
 def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops.
 
@@ -2350,7 +2368,7 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="confirms")
+@tool(effect="confirms", kit="canvas")
 def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name: str = "", description: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: rename a workflow or replace its ENTIRE graph.
 
@@ -2396,7 +2414,7 @@ def list_boards(workspace_id: str = "") -> list[dict[str, Any]]:
     return [{"id": b["id"], "name": b["name"], "items": b["item_count"]} for b in boards]
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Read-only: inspect one CREATIVE BOARD canvas in full.
 
@@ -2421,7 +2439,7 @@ def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     return _use_case(use_cases.read, board_id, workspace_id or _default_workspace_id(), out=BoardOut)
 
 
-@tool(effect="confirms")
+@tool(effect="confirms", kit="canvas")
 def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops.
 
@@ -2521,7 +2539,7 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="reads")
+@tool(effect="reads", kit="canvas")
 def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: list what content items on a creative board can DO — their abilities and slot generators.
 
@@ -2565,7 +2583,7 @@ def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
     return [one for one in listed if one.get("runs_from_draft")]
 
 
-@tool(effect="confirms")
+@tool(effect="confirms", kit="canvas")
 def run_board_item(board_id: str, item_id: str, producer: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Run an ABILITY of a content item on a creative board (or its slot generator / 3D render), as if the user pressed it.
 
@@ -3382,4 +3400,6 @@ MUTATING_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if eff
 ANSWER_TOOLS = frozenset(_AWAITS_ANSWER)
 #: 工具 → 它要的插件能力(见 tool 的 `needs`)。
 TOOL_NEEDS: dict[str, str] = dict(_TOOL_NEEDS)
+#: 工具 → 它属于哪一份(见 tool 的 `kit`)。不在里面的是通用的。
+TOOL_KITS: dict[str, str] = dict(_TOOL_KITS)
 

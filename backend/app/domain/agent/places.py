@@ -23,7 +23,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import AgentSession, Board, Note, PluginInstance, Project, Scene3D, User, Workflow, WorkspaceMember
+from app.db.models import AgentMessage, AgentSession, Board, Note, PluginInstance, Project, Scene3D, User, Workflow, WorkspaceMember
 from app.domain.permissions import NotVisible
 
 STUDIO = "studio"
@@ -109,6 +109,20 @@ def from_payload(value: Any) -> Place | None:
 
 def home_of(session: AgentSession) -> Place:
     return Place(session.home_kind, session.home_id)
+
+
+def turn_place(db: Session, session: AgentSession) -> Place:
+    """这一轮在哪(ADR 0044 §8):这一轮要回答的那条用户消息记着的 `place` —— 最新一条不在排队的用户消息;它没记
+    (飞书、另一段对话发来的通知、老消息)就是这段对话的家。决定这一轮发哪些工具,水位也照它算。"""
+    #: 排在队里的(还没轮到它们的)从最新的往前跳过;队不会排到几十条那么长。
+    payloads = db.scalars(
+        select(AgentMessage.payload)
+        .where(AgentMessage.session_id == session.id, AgentMessage.role == "user")
+        .order_by(AgentMessage.created_at.desc())
+        .limit(50)
+    )
+    latest = next((payload for payload in payloads if not (payload or {}).get("queued")), None)
+    return from_payload((latest or {}).get("place")) or home_of(session)
 
 
 def memory_project(session: AgentSession) -> str | None:

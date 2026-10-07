@@ -1121,18 +1121,22 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     return {"context": session_context(db, session), "compaction": result.compaction}
 
 
-def tool_definition_tokens(db: Session, user_id: str | None = None) -> int:
+def tool_definition_tokens(db: Session, session: AgentSession) -> int:
     """工具定义每轮重发一遍占掉多少 —— 这个应用里通常是**最大的一块**。
 
     按 sidecar 实际发出去的形状估:名字 + 描述 + 参数 schema 的 JSON。它不随对话增长,所以
     一条消息都没有的会话也已经占掉了一大块 —— 那正是这一屏要说清的事。
+
+    清单和 /api/agent/tools 同一个函数、同一个答案(按这段对话的主人、这一轮在哪说的裁,ADR 0044 §8)—— 面板上的水位就是
+    这一处这一轮真发出去的那份。
     """
+    from app.domain.agent.places import turn_place
     from app.domain.agent.tool_manifest import agent_tool_specs
 
     payload = json.dumps(
         [
             {"name": spec.name, "description": spec.description, "parameters": spec.parameters}
-            for spec in agent_tool_specs(db, user_id)
+            for spec in agent_tool_specs(db, session.owner_user_id, turn_place(db, session))
         ],
         ensure_ascii=False,
     )
@@ -1176,7 +1180,7 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
         **context_breakdown(
             session.adapter_state,
             system_prompt=build_system_prompt(db, session),
-            tool_tokens=tool_definition_tokens(db, session.owner_user_id),
+            tool_tokens=tool_definition_tokens(db, session),
             window=window,
         ),
     }

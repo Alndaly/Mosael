@@ -1,4 +1,4 @@
-"""工具定义加系统提示,不超过本机回退窗口的六成 —— 每轮都重发、又压不掉的那一块,得有个明说的上限。
+"""工具定义加系统提示,不超过本机回退窗口的六成 —— 每轮都重发、又压不掉的那一块,得有个明说的上限。**按每一处量**。
 
 ## 现场
 
@@ -23,7 +23,15 @@
   再谈按需裁剪工具集。**不要再把回退窗口往上调**:它是对「查不到窗口的本机模型」的猜测,调大它不会让那台
   机器上的窗口变大,只会让请求在服务端超窗。
 
-量的是界面那条水位用的同一个函数(session_context → tool_definition_tokens + 系统提示),不另估一遍。
+## 为什么按每一处量(ADR 0044 §8)
+
+工具清单按**这一轮在哪说的**裁:ComfyUI 工作台里有 `comfy_*`、没有改 Mosael 画布的那一份(`canvas`),别处反过来。
+此前这里只量了「挂在本机模型上、没接 ComfyUI 的一段对话」—— 接了 ComfyUI、用本机模型的人固定开销约 39.4K,超了,
+而这条是绿的。现在**接了 ComfyUI + 本机模型**,七种地方各建一段家在那里的对话,每一段都量。之后加的 `comfy_*`
+(ADR 0042 第二、三步)一律进 `kit="comfyui"`,由这里替它们看着。
+
+量的是界面那条水位用的同一个函数(session_context → tool_definition_tokens + 系统提示),不另估一遍;水位和
+/api/agent/tools 发出去的是同一份(下面也量)。
 """
 
 from __future__ import annotations
@@ -31,49 +39,187 @@ from __future__ import annotations
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from app.core.db import SessionLocal
+from app.core.security import mint_service_session
+from app.db.models import AgentMessage
 from app.domain.providers.model_limits import LOCAL_FALLBACK_CONTEXT_WINDOW
-from tests.util import add_provider, fresh_client
+from tests.fake_comfyui import FakeComfyUI, comfyui_grants
+from tests.util import add_provider, fresh_client, second_client, user_id
 
 #: 固定开销(工具定义 + 系统提示)最多占本机回退窗口的这么多。理由见模块说明。
 FIXED_OVERHEAD_SHARE = 0.6
 
+PACKAGE = "dev.mosael.comfyui"
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "comfyui" / "agent"
+COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
+#: 改 Mosael 自家画布的那一份里的几样(不必列全:在且只在工作台以外)。
+CANVAS_TOOLS = {"edit_board", "edit_timeline", "edit_scene", "edit_workflow", "blender_execute"}
+PLACES = ("studio", "project", "note", "board", "workflow", "scene", "comfyui")
 
-def _local_session(client) -> str:
-    """一次挂在本机端点上的对话 —— 窗口查不到,落到本机回退值,正是预算要守的那个窗口。"""
-    from app.core.db import SessionLocal
 
+@pytest.fixture(scope="module")
+def comfy():
+    with FakeComfyUI() as fake:
+        fake.state.object_info = json.loads((FIXTURES / "object_info.json").read_text(encoding="utf-8"))
+        yield fake
+
+
+def _local_model() -> None:
+    """一段挂在本机端点上的对话 —— 窗口查不到,落到本机回退值,正是预算要守的那个窗口。"""
     with SessionLocal() as db:
         add_provider(
             db, name="Local", vendor="openai-compatible", base_url="http://127.0.0.1:11434/v1",
             api_key="k", model="some-local-gguf", capability_ids=["chat"], owner_username="tester",
         )
         db.commit()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    created = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "T"})
+
+
+def _connect(client, comfy: FakeComfyUI) -> str:
+    created = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}})
     assert created.status_code == 200, created.text
-    return created.json()["id"]
+    instance_id = created.json()["id"]
+    client.patch(f"/api/plugins/instances/{instance_id}/permissions", json={"grants": comfyui_grants()})
+    assert client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
+    return instance_id
 
 
-def test_工具定义加系统提示_不超过本机回退窗口的六成() -> None:
+def _homes(client, workspace: str, connection: str) -> dict[str, dict[str, str]]:
+    """七种地方,各一样东西。"""
+    project = client.post("/api/projects", json={"workspace_id": workspace, "name": "宣传片"}).json()["id"]
+    note = client.post("/api/notes", json={"workspace_id": workspace, "title": "周报", "markdown": "正文"}).json()["id"]
+    board = client.post("/api/boards", json={"workspace_id": workspace, "name": "分镜"}).json()["id"]
+    workflow = client.post("/api/workflows", json={"workspace_id": workspace, "name": "出海流程"}).json()["id"]
+    scene = client.post("/api/scenes", json={"workspace_id": workspace, "name": "客厅"}).json()["id"]
+    return {
+        "studio": {"kind": "studio", "id": ""},
+        "project": {"kind": "project", "id": project},
+        "note": {"kind": "note", "id": note},
+        "board": {"kind": "board", "id": board},
+        "workflow": {"kind": "workflow", "id": workflow},
+        "scene": {"kind": "scene", "id": scene},
+        "comfyui": {"kind": "comfyui", "id": f"{connection}/人像/qwen 编辑.json"},
+    }
+
+
+@pytest.fixture
+def everywhere(comfy) -> dict[str, Any]:
+    """接了 ComfyUI、用本机模型的人,七种地方各一段家在那里的对话。"""
     client = fresh_client()
-    context = client.get(f"/api/agent/sessions/{_local_session(client)}").json()["context"]
+    _local_model()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    connection = _connect(client, comfy)
+    sessions = {}
+    for kind, home in _homes(client, workspace, connection).items():
+        created = client.post("/api/agent/sessions", json={"workspace_id": workspace, "home": home})
+        assert created.status_code == 200, created.text
+        sessions[kind] = created.json()["id"]
+    return {"client": client, "workspace": workspace, "connection": connection, "sessions": sessions}
+
+
+def _context(client, session_id: str) -> dict[str, int]:
+    context = client.get(f"/api/agent/sessions/{session_id}").json()["context"]
     assert context is not None, "没配上供应商:水位不显示,这条预算就什么都没量"
     assert context["window"] == LOCAL_FALLBACK_CONTEXT_WINDOW, "这次对话没落到本机回退窗口上"
+    return {part["kind"]: part["tokens"] for part in context["parts"]}
 
-    parts = {part["kind"]: part["tokens"] for part in context["parts"]}
+
+def _turn_tools(client, session_id: str) -> set[str]:
+    """sidecar 这一轮拿到的工具:用这一轮的令牌(铸的时候记着是哪段对话)取。"""
+    with SessionLocal() as db:
+        token = mint_service_session(db, user_id(), agent_session_id=session_id)
+        db.commit()
+    listed = client.get("/api/agent/tools", headers={"Authorization": f"Bearer {token}"})
+    assert listed.status_code == 200, listed.text
+    return {one["name"] for one in listed.json()}
+
+
+def _said(session_id: str, place: dict[str, str] | None, queued: bool = False) -> None:
+    """这段对话里多一条用户消息(在哪说的记在 payload 里)—— 不跑一轮,只看下一轮会发哪些工具。"""
+    payload: dict[str, Any] = {"place": place} if place else {}
+    if queued:
+        payload["queued"] = True
+    with SessionLocal() as db:
+        db.add(AgentMessage(session_id=session_id, role="user", content="说一句", payload=payload))
+        db.commit()
+
+
+@pytest.mark.parametrize("kind", PLACES)
+def test_接了_ComfyUI_的本机模型_每一处的工具定义加系统提示_不超过回退窗口的六成(everywhere, kind: str) -> None:
+    parts = _context(everywhere["client"], everywhere["sessions"][kind])
     fixed = parts["tools"] + parts["system"]
     budget = int(LOCAL_FALLBACK_CONTEXT_WINDOW * FIXED_OVERHEAD_SHARE)
     assert fixed <= budget, (
-        f"每轮重发的固定开销 {fixed}(工具定义 {parts['tools']} + 系统提示 {parts['system']})"
+        f"在「{kind}」那一处,每轮重发的固定开销 {fixed}(工具定义 {parts['tools']} + 系统提示 {parts['system']})"
         f"超过了本机回退窗口 {LOCAL_FALLBACK_CONTEXT_WINDOW} 的六成({budget})。"
-        "先把新加的说明写紧,别去调回退窗口 —— 见本模块说明。"
+        "先把新加的说明写紧,别去调回退窗口 —— 见本模块说明;新的 comfy_* 记得进 kit=\"comfyui\"。"
     )
 
 
-def test_量到的是真东西() -> None:
+@pytest.mark.parametrize("kind", PLACES)
+def test_量到的是真东西(everywhere, kind: str) -> None:
     """假阴性比红更危险:哪天工具清单或系统提示量出来是 0,上面那条会真空通过。"""
-    client = fresh_client()
-    context = client.get(f"/api/agent/sessions/{_local_session(client)}").json()["context"]
-    parts = {part["kind"]: part["tokens"] for part in context["parts"]}
+    parts = _context(everywhere["client"], everywhere["sessions"][kind])
     assert parts["tools"] > 10_000, "工具定义量出来这么小?注册表里有上百个工具"
     assert parts["system"] > 500, "系统提示量出来这么小?"
+
+
+@pytest.mark.parametrize("kind", PLACES)
+def test_comfy_工具在且只在工作台_画布那一份在且只在工作台以外(everywhere, kind: str) -> None:
+    tools = _turn_tools(everywhere["client"], everywhere["sessions"][kind])
+    if kind == "comfyui":
+        assert COMFY_TOOLS <= tools and not tools & CANVAS_TOOLS
+    else:
+        assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
+    assert {"list_assets", "open_view", "remember"} <= tools, "通用的哪儿都发"
+
+
+def test_这一轮在哪说的说了算_不是家在哪(everywhere) -> None:
+    """家在 AI Studio 的一段,在工作台里接着聊:那一轮有 comfy_*、没有画布那一份;回到 AI Studio 说一句,反过来。
+    排在队里还没轮到的那条不算 —— 它说的是下一轮。"""
+    client, session = everywhere["client"], everywhere["sessions"]["studio"]
+    workbench = {"kind": "comfyui", "id": f"{everywhere['connection']}/人像/qwen 编辑.json"}
+    _said(session, workbench)
+    tools = _turn_tools(client, session)
+    assert COMFY_TOOLS <= tools and not tools & CANVAS_TOOLS
+    with_comfy = _context(client, session)["tools"]
+
+    _said(session, {"kind": "studio", "id": ""}, queued=True)
+    assert COMFY_TOOLS <= _turn_tools(client, session), "排队的那条还没轮到"
+
+    _said(session, {"kind": "studio", "id": ""})
+    tools = _turn_tools(client, session)
+    assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
+    assert _context(client, session)["tools"] != with_comfy, "水位跟着这一轮真发出去的那份走"
+
+
+def test_消息没记在哪说的_飞书_通知_老消息_按家发(everywhere) -> None:
+    client, session = everywhere["client"], everywhere["sessions"]["comfyui"]
+    _said(session, None)
+    assert COMFY_TOOLS <= _turn_tools(client, session)
+
+
+def test_没有对话的调用方全给(everywhere) -> None:
+    names = {one["name"] for one in everywhere["client"].get("/api/agent/tools").json()}
+    assert COMFY_TOOLS <= names and CANVAS_TOOLS <= names
+
+
+def test_没接_ComfyUI_的人_在工作台那一处也没有_comfy_工具(everywhere) -> None:
+    """这一轮说是在工作台里(地方只校验形状),可他没接 ComfyUI:needs 照旧叠在上面。"""
+    other = second_client("other")
+    workspace = other.post("/api/workspaces", json={"name": "O"}).json()["id"]
+    session = other.post("/api/agent/sessions", json={"workspace_id": workspace, "home": {"kind": "studio"}}).json()["id"]
+    _said(session, {"kind": "comfyui", "id": "somebody-elses"})
+    with SessionLocal() as db:
+        token = mint_service_session(db, user_id("other"), agent_session_id=session)
+        db.commit()
+    names = {one["name"] for one in other.get("/api/agent/tools", headers={"Authorization": f"Bearer {token}"}).json()}
+    assert not names & COMFY_TOOLS
+    assert not names & CANVAS_TOOLS, "在工作台里说的,画布那一份照样不发"
+    assert "list_assets" in names

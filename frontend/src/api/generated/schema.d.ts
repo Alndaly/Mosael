@@ -7941,6 +7941,10 @@ export interface paths {
         /**
          * List Agent Tools
          * @description The tools an agent runtime may offer. Derived from the MCP registry, never a second list.
+         *
+         *     sidecar 每一轮开始时拿这一轮的令牌来取 —— 令牌铸的时候就记着是哪段对话,于是清单按**这一轮在哪说的**裁(ADR 0044 §8,
+         *     见 places.turn_place 与 tool_manifest.kits_for):ComfyUI 工作台里说的有 `comfy_*`、没有改 Mosael 画布的那一份,别处反过来。
+         *     没有对话的调用方(登录令牌、MCP 直连)全给。
          */
         get: operations["list_agent_tools_api_agent_tools_get"];
         put?: never;

@@ -78,12 +78,37 @@ def agent_tool_name(instance_id: str, tool_name: str) -> str:
     return f"{head[: MAX_AGENT_TOOL_NAME - _NAME_DIGEST - 1]}_{digest}"
 
 
-def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
+#: 插件工具跟着它的连接替宿主做的那件事走(ADR 0044 §8):替工作台提供工作流库的那种连接(ComfyUI),它暴露给智能体的
+#: 工具(列工作流、查服务、停任务、把存着的每一张工作流当成一个工具跑)属于工作台那一份 —— 在工作台以外,跑一张 ComfyUI
+#: 工作流走的是 generate_image(每张存着的工作流都是那里的一个模型),不必每轮再背一遍。没有对应的插件工具是通用的。
+_PROVIDES_KIT = {"workflow_library": "comfyui"}
+
+
+def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str | None]) -> str | None:
+    if instance_id not in cache:
+        from app.db.models import PluginInstance
+        from app.domain.plugins import instances as inst
+        from app.domain.plugins.errors import PluginDomainError
+
+        instance = db.get(PluginInstance, instance_id)
+        try:
+            provides = inst.manifest_for(db, instance).provides if instance is not None else []
+        except PluginDomainError:
+            provides = []
+        cache[instance_id] = next((kit for capability, kit in _PROVIDES_KIT.items() if capability in provides), None)
+    return cache[instance_id]
+
+
+def _plugin_tool_specs(db: Any, user_id: str | None = None, kits: frozenset[str] | None = None) -> list[ToolSpec]:
     from app.domain.effects import needs_card
     from app.domain.plugins.tools import exposed
 
     specs = []
+    instance_kits: dict[str, str | None] = {}
     for tool in exposed(db, user_id):
+        kit = _plugin_kit(db, tool["instance_id"], instance_kits)
+        if kits is not None and kit is not None and kit not in kits:
+            continue
         # 有后果的插件工具(花钱、对外、在本机跑代码,见 domain/effects)调用时先开一张卡 ——
         # 和内置的确认类工具同一个标记、同一条等待协议(sidecar 据此阻塞轮询,见 _CONFIRMATION_PROTOCOL)。
         gated = needs_card(tool["effects"])
@@ -141,15 +166,30 @@ def _describe(description: str, gated: bool, awaits_answer: bool = False) -> str
     return f"{description.rstrip()}\n\n{_CONFIRMATION_PROTOCOL}"
 
 
-def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
+def kits_for(place: Any) -> frozenset[str]:
+    """这一轮在哪说的,就发哪几份工具(ADR 0044 §8,工具的 `kit` 见 mcp_server.tool)。通用的(不声明 kit)哪儿都发。
+
+    ComfyUI 工作台是另一个世界:那里要的是 ComfyUI 的图(`comfyui`),不是 Mosael 的画板和时间线(`canvas`);反过来,AI Studio
+    和 Mosael 各页面之间串门是常事(在画板里让它建一条时间线),那一份不按页面拆。
+    """
+    from app.domain.agent.places import COMFYUI
+
+    return frozenset({"comfyui"}) if place.kind == COMFYUI else frozenset({"canvas"})
+
+
+def agent_tool_specs(db: Any, user_id: str | None = None, place: Any = None) -> list[ToolSpec]:
     """同一份清单,不经 HTTP —— 上下文水位要按它算「工具定义占了多少」。
 
     分成两个函数而不是让水位那边再列一遍:第二份清单会漂移,而漂移后的水位仍然看起来像
     测量结果(这条路由的文档注释里记着上一次漂移的代价:子智能体静默少了十九个工具)。
+
+    `place`:这一轮在哪说的(见 places.turn_place),按它挑工具的那几份(`kits_for`)。没有对话的调用方(MCP 直连、界面
+    拉工具清单)给 None —— 全给。
     """
     registry = tool_registry()
     tools = asyncio.run(registry.mcp.list_tools())
     provided = _provided_capabilities(db, user_id)
+    kits = kits_for(place) if place is not None else None
     specs = [
         ToolSpec(
             name=tool.name,
@@ -167,9 +207,10 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
             read_only=tool.name in registry.READ_ONLY_TOOLS,
         )
         for tool in tools
-        if provided is None or registry.TOOL_NEEDS.get(tool.name, "") in provided
+        if (provided is None or registry.TOOL_NEEDS.get(tool.name, "") in provided)
+        and (kits is None or registry.TOOL_KITS.get(tool.name) in (None, *kits))
     ]
-    return specs + _plugin_tool_specs(db, user_id)
+    return specs + _plugin_tool_specs(db, user_id, kits)
 
 
 def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:

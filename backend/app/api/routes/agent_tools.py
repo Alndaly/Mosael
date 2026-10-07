@@ -53,9 +53,20 @@ class ToolInvocation(BaseModel):
 
 
 @router.get("/agent/tools", response_model=list[ToolSpec])
-def list_agent_tools(db: DbSession, user: CurrentUser) -> list[ToolSpec]:
-    """The tools an agent runtime may offer. Derived from the MCP registry, never a second list."""
-    return agent_tool_specs(db, user.id)
+def list_agent_tools(db: DbSession, user: CurrentUser, token: PresentedToken) -> list[ToolSpec]:
+    """The tools an agent runtime may offer. Derived from the MCP registry, never a second list.
+
+    sidecar 每一轮开始时拿这一轮的令牌来取 —— 令牌铸的时候就记着是哪段对话,于是清单按**这一轮在哪说的**裁(ADR 0044 §8,
+    见 places.turn_place 与 tool_manifest.kits_for):ComfyUI 工作台里说的有 `comfy_*`、没有改 Mosael 画布的那一份,别处反过来。
+    没有对话的调用方(登录令牌、MCP 直连)全给。
+    """
+    from app.db.models import AgentSession
+    from app.domain.agent import places
+    from app.domain.agent.autopilot import session_for_token
+
+    session_id = session_for_token(db, token)
+    session = db.get(AgentSession, session_id) if session_id else None
+    return agent_tool_specs(db, user.id, places.turn_place(db, session) if session is not None else None)
 
 
 def _accepted_names(fn: Any) -> list[str]:
