@@ -169,6 +169,8 @@ describe("工作台模型库里的模型详情", () => {
     });
     expect(within(dialog).getByRole("heading", { name: "pony.safetensors" }), "模型库那一页详情:名字是文件名").toBeInTheDocument();
     expect(dialog.className, "压在外壳(z-200)之上").toMatch(/\bz-\[205\]/);
+    //: 没有弹窗标题栏给详情的固定头垫上边距:弹窗自己出,和左右的 px-6 一样
+    expect(dialog.className, "名字和按钮不贴着弹窗上沿").toMatch(/\bpt-6\b/);
     expect(document.querySelector(".modal-overlay")?.className).toMatch(/\bz-\[205\]/);
     //: 和模型库同一份本事:NSFW 那一行能改手动标记;同一份预览图设置:NSFW 默认模糊
     expect(within(dialog).getByText("modelNsfwRow")).toBeInTheDocument();

@@ -174,7 +174,9 @@ function ModelDetailDialog({
         showClose={false}
         aria-describedby={undefined}
         data-workbench-model-detail=""
-        className="flex h-[min(860px,calc(100dvh-3rem))] w-[min(1180px,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0"
+        //: 上边距 pt-6 和左右的 px-6 一样:详情的固定头(DETAIL_HEAD)只有左右和下边距,上边距本来由弹窗的标题栏给 ——
+        //: 模型库的弹窗有那条标题栏,这里没有,名字和按钮就贴着弹窗的上沿(维护者截图)
+        className="flex h-[min(860px,calc(100dvh-3rem))] w-[min(1180px,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 pt-6"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           onClosed();
