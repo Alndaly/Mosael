@@ -52,7 +52,7 @@ import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
-import { APP_CHROME, installAppChromeGuards } from "@/components/ui/appChrome";
+import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -152,7 +152,7 @@ const PUBLISH_BAR_REGION = { side: "bottom" as const };
 
 /** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 页面工具 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
-function PublishViewBar() {
+export function PublishViewBar() {
   const t = useI18n();
   const { workspaceId } = React.useContext(BrowserToolsWorkspace);
   const [state, setState] = React.useState<PublishViewState>({
@@ -190,8 +190,9 @@ function PublishViewBar() {
     void window.mosaelPublish?.focusPage?.();
   };
 
+  // 挂到 body 末尾:排在底下开着的弹窗后面,顶栏才拖得动窗口(见 ChromeAboveDialogs)
   return (
-    <>
+    <ChromeAboveDialogs>
     <div
       {...APP_CHROME}
       style={{ height: PUBLISH_BAR_HEIGHT }}
@@ -300,7 +301,7 @@ function PublishViewBar() {
     {/* 左侧页面列表。不能放进上面那条栏里:栏的 backdrop-filter 会让 fixed 定位相对它而不是窗口。
         key:换了一个会话就是另一份列表。 */}
     <BrowserPageList key={state.accountId ?? ""} state={state} top={PUBLISH_BAR_HEIGHT} />
-    </>
+    </ChromeAboveDialogs>
   );
 }
 

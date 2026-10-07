@@ -1,9 +1,8 @@
 import React from "react";
-import { createPortal } from "react-dom";
 import { ArrowLeft, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { APP_CHROME } from "@/components/ui/appChrome";
+import { APP_CHROME, ChromeAboveDialogs } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint, HintRegion } from "@/components/ui/tooltip";
@@ -256,10 +255,11 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     </HintRegion.Provider>
   ) : null;
 
+  //: 顶栏和那一列都挂到 body 末尾:排在底下开着的工作流库后面,顶栏才拖得动窗口(见 ChromeAboveDialogs)
   return (
-    <>
+    <ChromeAboveDialogs>
       {bar}
-      {aside && createPortal(aside, document.body)}
-    </>
+      {aside}
+    </ChromeAboveDialogs>
   );
 }

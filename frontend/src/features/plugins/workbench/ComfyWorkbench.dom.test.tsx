@@ -56,6 +56,7 @@ vi.mock("@/app/preferences", () => ({
 import type { WorkflowApp } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { installAppChromeGuards } from "@/components/ui/appChrome";
+import { declaresDrag, noDragAfter } from "@/test/dragRegions";
 import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
 import { ComfyWorkbench } from "./ComfyWorkbench";
 import { RECHECK_DELAY_MS } from "./MissingPanel";
@@ -566,6 +567,31 @@ describe("底下开着模态弹窗(工作流库)时:那一列滚得动、小眼�
     return event.defaultPrevented;
   };
   const libraryDialog = () => screen.getByRole("dialog", { name: "工作流库", hidden: true });
+
+  it("顶栏拖得动窗口:排在底下工作流库的遮罩和内容(都声明 no-drag)后面", async () => {
+    // 拖拽区按文档顺序合、后面的盖前面的(见 test/dragRegions)。顶栏留在应用的根节点里,就排在工作流库那两个 portal 前面,
+    // 被整窗的遮罩减掉 —— 真机上就是拖不动。所以先让工作流库开着(真机上就是从它里面点的),再在同一棵树里挂上工作台。
+    const bridge = desktop();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const dialog = await library();
+    const tree = (workbench: boolean) => (
+      <QueryClientProvider client={client}>
+        <ImagePreviewProvider>
+          {dialog}
+          {workbench && <ComfyWorkbench barHeight={56} />}
+        </ImagePreviewProvider>
+      </QueryClientProvider>
+    );
+    const view = render(tree(false));
+    await waitFor(() => expect(document.querySelector(".modal-overlay")).not.toBeNull());
+    await openWorkbench(TARGET, { path: "人像/古风.json" });
+    view.rerender(tree(true));
+    bridge.emit(state());
+    const bar = document.querySelector("[data-comfy-workbench-bar]")!;
+    expect(declaresDrag(bar), "顶栏是拖拽区").toBe(true);
+    expect(noDragAfter(bar), "没有排在顶栏后面的 no-drag").toEqual([]);
+    expect(libraryDialog(), "工作流库还开着").toBeTruthy();
+  });
 
   it("滚轮在那一列里不被拦下;弹窗外面的别处照样被它的滚动锁拦着", async () => {
     const bridge = await mount(state(), await library());

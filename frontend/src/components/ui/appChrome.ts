@@ -1,3 +1,6 @@
+import type * as React from "react";
+import { createPortal } from "react-dom";
+
 /**
  * **窗口外壳**:内嵌网页视图亮着时盖在应用最上层的浏览器顶栏、页面列表、侧栏、框选浮层(App 的 PublishViewBar、
  * BrowserPageList、ToolDrawer、RegionOverlay)。
@@ -19,8 +22,25 @@
  *
  * 全屏看图的灯箱(components/app/image-preview 的宿主)也挂它:它同样盖在弹窗上面、又在弹窗外面 —— 在大图上翻页、
  * 点关闭,不该顺手把底下那个弹窗关掉。
+ *
+ * 顶栏(拖它挪窗口的那一条)还要排在底下那个弹窗**后面**,见 ChromeAboveDialogs。
  */
 export const APP_CHROME = { "data-app-chrome": "" } as const;
+
+/**
+ * 把窗口外壳挂到 body 末尾 —— 排在**它出现时已经开着**的弹窗后面,拖得动窗口。
+ *
+ * 顶栏声明了 `-webkit-app-region: drag`。拖拽区是按**文档顺序**收集的(Chromium 的 LocalFrameView::CollectDraggableRegions
+ * 先序遍历布局树,和 z-index 无关),Electron 合并时**后面的盖前面的**(shell/browser/ui/drag_util.cc:重叠处以排在后面的为准)。
+ * 弹窗的遮罩(整窗)和内容都声明了 no-drag,经 Portal 挂在 body 末尾;顶栏要是留在应用的根节点里,就排在它们前面、被整块
+ * 减掉 —— 真机上从工作流库「在工作台里打开」,工作流库留在底下,工作台的顶栏怎么拖窗口都不动。
+ *
+ * 挂到 body 末尾之后,文档顺序就是打开的先后:先开着的弹窗在前,顶栏盖过它;顶栏之后才打开的(看大图、工作台里的弹窗)在后、
+ * 盖在顶栏上,和它们画在顶栏上面一致 —— 它们伸进顶栏那一截照样点得到。
+ */
+export function ChromeAboveDialogs({ children }: { children: React.ReactNode }): React.ReactPortal {
+  return createPortal(children, document.body);
+}
 
 type OutsideEvent = Event & { detail?: { originalEvent?: Event } | number };
 
