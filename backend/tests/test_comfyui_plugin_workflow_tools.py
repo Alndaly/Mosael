@@ -9,7 +9,8 @@
   内置文生图是 `wf_builtin_txt2img`;
 - 入参:提示词 / 素材(带种类)/ 参数(人话名字、范围、可选值、高级)/ 种子尺寸张数(高级),必填的是真必须的;
 - 输出按输出节点声明;`replaces` 说清楚老的 `run_workflow` 怎么改写过来(`values` 按节点 id 和按节点标题的都认);
-- 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点的第一份记成具名输出。
+- 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点的第一份记成具名输出;
+- 名字:起了精简表单标题的叫「工作流 · 标题」(和模型下拉同一个名字),工具名不跟着变。
 """
 
 from __future__ import annotations
@@ -56,6 +57,46 @@ def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
     comfy.state.workflows["people/人像.json"] = comfy.state.workflows.pop("portrait.json")
     renamed = _tools(comfy.url, tmp_path)
     assert PORTRAIT_TOOL in renamed and renamed[PORTRAIT_TOOL]["label"]["zh"] == "工作流 · people/人像"
+
+
+def _titled(title: str) -> dict[str, Any]:
+    """portrait.json 起了精简表单标题 `title`(只挑了提示词那一格)。"""
+    stored = json.loads(json.dumps(PORTRAIT_UI))
+    stored["extra"] = {"mosael": {"version": 1, "app": {"title": title, "description": "", "graph_items": {}}}}
+    prompt = next(one for one in stored["nodes"] if one["id"] == 6)
+    prompt["properties"] = {"mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+    return stored
+
+
+def test_起了精简表单标题的工作流_工具和模型下拉同一个名字_工具名不变(comfy, tmp_path: Path) -> None:
+    """维护者:同一张 krea2-text-2-image.json,模型下拉里叫「快速用krea2生图」,添加节点、画布上的节点、画板的能力、智能体
+    的工具清单里却叫「工作流 · krea2-text-2-image」。现在一条规矩:有精简表单标题就是标题,没有才是文件名。
+    改了标题只换名字:工具名按图里的 id 起,存着的节点、智能体记着的名字不变;说明里带着文件路径,按文件名也搜得到。"""
+    comfy.state.workflows["portrait.json"] = _titled("快速出图")
+    tools = _tools(comfy.url, tmp_path)
+    tool = tools[PORTRAIT_TOOL]
+    assert tool["label"] == {"zh": "工作流 · 快速出图", "en": "Workflow · 快速出图"}
+    assert "「快速出图」" in tool["description"]["zh"] and "portrait.json" in tool["description"]["zh"]
+    assert "“快速出图”" in tool["description"]["en"] and "portrait.json" in tool["description"]["en"]
+    models = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "models"}, {"SERVER_URL": comfy.url},
+                                  timeout=60).output["models"]
+    assert next(one for one in models if one["id"] == "portrait.json")["label"] == "快速出图", "模型下拉同一个名字"
+    listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {"query": "快速"}, {"SERVER_URL": comfy.url},
+                                  timeout=60).output["workflows"]
+    assert [(one["id"], one["label"], one["tool"]) for one in listed] == [("portrait.json", "快速出图", PORTRAIT_TOOL)]
+    by_file = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {"query": "portrait"}, {"SERVER_URL": comfy.url},
+                                   timeout=60).output["workflows"]
+    assert [one["id"] for one in by_file] == ["portrait.json"], "按文件名也找得到"
+
+    comfy.state.workflows["portrait.json"] = _titled("换了个标题")
+    renamed = _tools(comfy.url, tmp_path)
+    assert renamed[PORTRAIT_TOOL]["label"]["zh"] == "工作流 · 换了个标题", "改了标题:工具名不变,只换名字"
+    assert renamed[PORTRAIT_TOOL]["replaces"] == tool["replaces"]
+
+    comfy.state.workflows["portrait.json"] = PORTRAIT_UI
+    plain = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL]
+    assert plain["label"]["zh"] == "工作流 · portrait", "没有精简表单:还是文件名"
+    assert "portrait.json" not in plain["description"]["zh"], "名字就是文件名时说明里不再重复"
 
 
 def test_几张图撞了同一个id_都退到路径哈希_不抢名字(comfy, tmp_path: Path) -> None:

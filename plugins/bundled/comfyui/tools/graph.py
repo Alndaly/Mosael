@@ -1060,6 +1060,12 @@ class Form:
         return {(one.item["node"], one.item["input"]): "negative" if one.item.get("role") == "negative" else "prompt"
                 for one in self.fields if one.kind == "text" and one.main}
 
+    def named(self, label: Any) -> Any:
+        """这张图在 Mosael 里**叫什么** —— 到处同一个名字:作者在应用表单上起了标题就是标题,否则是它自己的名字(`label`:
+        保存的工作流是文件路径去掉 `.json`,内置图和模板是写死的那一对)。生成的模型下拉(describe)、每张图的工具
+        (添加节点、画布上的节点、画板的能力、智能体的工具,见 tooling)、`list_workflows` 读的都是这一条。"""
+        return self.title if self.app and self.title else label
+
     def graph_item(self, kind: str) -> Field | None:
         return next((one for one in self.fields if one.kind == kind), None)
 
@@ -1356,8 +1362,8 @@ def describe(
 
     model: dict[str, Any] = {
         "id": model_id,
-        # 应用的标题换掉模型下拉里那一项的名字;模型 id 仍是文件路径
-        "label": form.title if form.app and form.title else label,
+        # 应用的标题换掉模型下拉里那一项的名字(Form.named,和这张图的工具同一个名字);模型 id 仍是文件路径
+        "label": form.named(label),
         "kind": kind,
         "modes": modes,
         "parameters": parameters,

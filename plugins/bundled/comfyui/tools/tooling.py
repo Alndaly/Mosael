@@ -150,6 +150,8 @@ class Shape:
         self.prompts: dict[tuple[str, str], str] = {}
         #: 表单上读素材的槽位(见 graph.Form.slots):给的蒙版只替这几个读图节点的 alpha 那一路
         self.slots: list[dict[str, str]] = []
+        #: 这张图叫什么(graph.Form.named:精简表单的标题,没有就是文件名)—— 工具的名字、说明用它
+        self.name: Any = ""
 
 
 def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
@@ -159,6 +161,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     shape = Shape()
     kind = graph.kind_of(api)
     form = models.form_of(entry, object_info)
+    shape.name = form.named(entry.label)
     placeholders = graph._placeholders_in(api)  # noqa: SLF001 — 同一个插件里的模块
     #: 占位符只在内置图和粘贴的模板里有,它们没有应用表单
     auto = set() if form.app else placeholders
@@ -372,9 +375,13 @@ def _mirror(entry: models.Entry, kind: str, shape: Shape, found: list[dict[str, 
 
 
 def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dict[str, Any]:
+    """一张图的工具。**名字和模型下拉里那一项是同一个**(graph.Form.named):起了精简表单标题的叫「工作流 · 标题」,
+    没起的叫「工作流 · 文件名」。标题换了只换名字 —— 工具名(`name`)按图里的 id 起,存着的节点、智能体记着的名字都不变。
+    叫的是标题时,说明里带上文件路径:添加节点按说明也搜得到,在 ComfyUI 里也找得到是哪一张。"""
     shape = shape_of(entry, object_info)
-    label = entry.label if isinstance(entry.label, str) else entry.label.get("en", entry.id)
-    label_zh = entry.label if isinstance(entry.label, str) else entry.label.get("zh", label)
+    label = shape.name if isinstance(shape.name, str) else shape.name.get("en", entry.id)
+    label_zh = shape.name if isinstance(shape.name, str) else shape.name.get("zh", label)
+    titled = shape.name != entry.label
     tags = [tag for tag in graph.features(entry.api, object_info=object_info) if tag in _FEATURE_LABELS]
     what_zh = "、".join(_FEATURE_LABELS[tag][0] for tag in tags)
     what_en = ", ".join(_FEATURE_LABELS[tag][1] for tag in tags)
@@ -384,9 +391,9 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
         "label": _pair(f"工作流 · {label_zh}", f"Workflow · {label}"),
         "description": _pair(
             f"在 ComfyUI 上原样跑「{label_zh}」这张工作流" + (f"({what_zh})" if what_zh else "")
-            + f",交回它全部 {outputs} 个输出节点的产出。",
+            + f",交回它全部 {outputs} 个输出节点的产出。" + (f"文件是 {entry.id}。" if titled else ""),
             f"Runs the ComfyUI workflow “{label}” as-is" + (f" ({what_en})" if what_en else "")
-            + f" and returns everything its {outputs} output node(s) produce.",
+            + f" and returns everything its {outputs} output node(s) produce." + (f" File: {entry.id}." if titled else ""),
         ),
         "stream": True,
         "timeout_seconds": TIMEOUT_SECONDS,

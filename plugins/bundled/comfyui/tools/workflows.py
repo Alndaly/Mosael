@@ -53,14 +53,15 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
     entries = list(models.each(comfy, object_info, locale))
     names = tooling.tool_names(entries)
     for entry in entries:
-        name = _text(entry.label, locale)
+        form = models.form_of(entry, object_info) if not entry.problem else None
+        #: 和这张图的工具、模型下拉里那一项同一个名字(graph.Form.named);按文件路径(`id`)也搜得到
+        name = _text(form.named(entry.label) if form else entry.label, locale)
         if query and query not in entry.id.lower() and query not in name.lower():
             continue
-        if entry.problem:
+        if form is None:
             found.append({"id": entry.id, "label": name, "error": entry.problem})
             continue
-        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale,
-                            models.form_of(entry, object_info))
+        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale, form)
         if entry.id in names and tooling.runnable(entry, object_info):
             # 跑它用的工具(输入就是它自己的节点);一个输出节点都没有的图没有工具
             described["tool"] = names[entry.id]
