@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.domain.agent import stream as agent_stream
 from app.main import app
-from tests.util import first_free_port_of_this_worker, fresh_client, insert_asset
+from tests.util import free_port, fresh_client, insert_asset
 
 # 进 docs/CONVENTIONS.md 的棘轮清单(scripts/sync-ratchet-docs.py 生成)。
 RATCHET = True
@@ -57,7 +57,7 @@ def test_long_responses_only_come_from_the_helpers() -> None:
 
 class _Server:
     def __init__(self) -> None:
-        self.port = first_free_port_of_this_worker()
+        self.port = free_port()
         self.server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning",
                                                     lifespan="off"))
         self.thread = threading.Thread(target=self.server.run, daemon=True)

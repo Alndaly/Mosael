@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import json
-import socket
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +32,7 @@ from tests.fake_comfyui import (
     fixture_workflow,
     minimax_h3_ui,
 )
+from tests.util import free_port
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -444,12 +444,6 @@ def test_重启后带着回执接着等_不再提交(comfy, tmp_path: Path) -> N
 # --- 失败说人话 -----------------------------------------------------------------------
 
 
-def _unused_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 def test_要登录的ComfyUI_按访问凭据带上Authorization头_WebSocket也带(comfy, tmp_path: Path) -> None:
     comfy.state.authorization = "Bearer s3cret"
     comfy.state.websocket = True
@@ -468,7 +462,7 @@ def test_地址里写了用户名密码_说清楚填到访问凭据(comfy) -> No
 
 
 def test_连不上说出地址(tmp_path: Path) -> None:
-    url = f"http://127.0.0.1:{_unused_port()}"
+    url = f"http://127.0.0.1:{free_port()}"
     with pytest.raises(runtime.PluginRuntimeError, match=url.split("//")[1]):
         _models(url)
 

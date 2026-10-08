@@ -26,6 +26,7 @@ from app.domain.local_services import logs as service_logs
 from app.domain.local_services import pidfiles, supervisor
 from app.domain.local_services.logs import ServiceLog
 from app.domain.local_services.supervisor import FAILED, RESTARTING, RUNNING, STARTING, STOPPED, LaunchSpec, ServiceProcess
+from tests.util import free_port
 
 FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="按 pid 看孙进程还在不在用的是 os.kill(pid, 0)")
@@ -46,14 +47,8 @@ def _fast(monkeypatch: pytest.MonkeyPatch):
     supervisor._directories.clear()
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 def _spec(tmp_path: Path, *flags: str, ready_timeout: float = 20.0, port: int | None = None) -> LaunchSpec:
-    port = port or _free_port()
+    port = port or free_port()
     return LaunchSpec(
         argv=[sys.executable, str(FAKE), "--port", str(port), *flags],
         env={**os.environ, "FAKE_ENV": "宿主给的"}, cwd=str(tmp_path), port=port, health_path="/system_stats",
@@ -303,7 +298,7 @@ def test_端口被占认得出() -> None:
         holder.listen()
         port = holder.getsockname()[1]
         assert supervisor.port_in_use(port)
-    assert not supervisor.port_in_use(_free_port())
+    assert not supervisor.port_in_use(free_port())
 
 
 # ---- 日志缓冲 ------------------------------------------------------------------

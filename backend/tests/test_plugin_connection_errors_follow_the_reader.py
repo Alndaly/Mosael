@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import json
-import socket
 
 import pytest
 from sqlalchemy import text
@@ -23,7 +22,7 @@ from app.db.migrations import _migrate_plugin_connection_errors_follow_the_reade
 from app.domain.jobs import blame
 from app.domain.plugins.runtime import PluginRuntimeError, _final_response
 from tests.fake_comfyui import comfyui_grants
-from tests.util import fresh_client
+from tests.util import fresh_client, free_port
 
 PACKAGE = "dev.mosael.comfyui"
 ZH = {"Accept-Language": "zh-CN"}
@@ -32,10 +31,7 @@ EN = {"Accept-Language": "en-US"}
 
 def _closed_port_url() -> str:
     """一个此刻没人听的本机端口:连上去必然被拒。"""
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    return f"http://127.0.0.1:{port}"
+    return f"http://127.0.0.1:{free_port()}"
 
 
 def _status(client, headers) -> dict:

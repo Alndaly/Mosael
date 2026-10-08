@@ -31,7 +31,7 @@ from app.domain import local_services
 from app.domain.local_services import pidfiles, records, supervisor
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from tests.util import first_free_port_of_this_worker, fresh_client, second_client
+from tests.util import first_free_port_of_this_worker, fresh_client, second_client, free_port
 
 FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
 PACKAGE_ID = "dev.test.localsvc"
@@ -145,12 +145,6 @@ def _manifest(path: Path) -> dict[str, Any]:
         "services": [{"key": "fake", "title": {"zh": "假服务", "en": "Fake service"}, "tool": "svc"}],
         "_path": str(path),
     }
-
-
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
 
 
 @pytest.fixture(autouse=True)
@@ -518,7 +512,7 @@ def test_改端口要先停_改完地址跟着变_插件把旧地址的数据搬
     before = _configure(plugged, instance_id, _folder(tmp_path)).json()["url"]
     plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
     _wait_state(plugged, instance_id, "running")
-    new_port = _free_port()
+    new_port = free_port()
     running = plugged.put(f"/api/plugins/instances/{instance_id}/local-service", json={"port": new_port})
     assert running.status_code == 409 and "停" in running.json()["detail"]
     plugged.post(f"/api/plugins/instances/{instance_id}/local-service/stop")
@@ -723,7 +717,7 @@ def test_后端重启_在_命令行也对_健康检查不过就不接回(plugged
     pid = _wait_state(plugged, instance_id, "running")["pid"]
     _simulate_backend_crash()
     record = pidfiles.read_all()[0]
-    pidfiles.write(pidfiles.PidRecord(**{**record.__dict__, "port": _free_port()}))
+    pidfiles.write(pidfiles.PidRecord(**{**record.__dict__, "port": free_port()}))
     assert pidfiles.same_process(pidfiles.read_all()[0]), "进程在、命令行也对"
     assert local_services.adopt_orphans() == 0
     assert _status(plugged, instance_id)["state"] == "stopped"
@@ -939,7 +933,7 @@ def _invoke(instance_id: str, tool: str, *, autostart: bool = True):
 def test_连一台服务器_连不上照插件说的(plugged) -> None:
     """没有本机服务:那句「确认它在运行、地址填对」就是对的,原样留着。"""
     instance_id = _connection(plugged)
-    plugged.patch(f"/api/plugins/instances/{instance_id}", json={"config": {"server_url": f"http://127.0.0.1:{_free_port()}"}})
+    plugged.patch(f"/api/plugins/instances/{instance_id}", json={"config": {"server_url": f"http://127.0.0.1:{free_port()}"}})
     invocation = _invoke(instance_id, "reach")
     assert invocation.status == "failed" and "地址填对" in invocation.error
 

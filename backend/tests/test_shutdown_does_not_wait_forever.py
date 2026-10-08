@@ -21,7 +21,7 @@ import httpx
 from app.core.lifeline import FORCE_EXIT_AFTER, GRACEFUL_SHUTDOWN_SECONDS
 from app.domain import local_services
 from app.domain.agent import stream as agent_stream
-from tests.util import first_free_port_of_this_worker, fresh_client
+from tests.util import free_port, fresh_client
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -41,7 +41,7 @@ def test_an_open_stream_does_not_keep_the_cleanup_from_running(monkeypatch) -> N
     real_stop_all = local_services.stop_all
     monkeypatch.setattr(local_services, "stop_all", lambda: (cleaned.set(), real_stop_all()))
 
-    port = first_free_port_of_this_worker()
+    port = free_port()
     config = run_backend.config(port)
     config.log_level = "warning"
     server = uvicorn.Server(config)

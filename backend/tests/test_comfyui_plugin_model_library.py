@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import re
-import socket
 import sys
 import threading
 import time
@@ -29,6 +28,7 @@ import pytest
 from app.domain.plugins import runtime
 from app.domain.plugins.runtime import PluginRuntimeError
 from tests.fake_comfyui import FakeComfyUI, subgraph_promoting
+from tests.util import free_port
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -1094,9 +1094,7 @@ def test_连不上时_第一行只说该做什么_地址和原文在下一行(mo
     from comfy_http import Comfy
     from lines import ComfyError
 
-    with socket.socket() as sock:  # 一个没人在听的端口
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()  # 一个没人在听的端口
     for locale, first in (("zh", "连不上这台 ComfyUI,确认它在运行、地址填对"),
                           ("en", "Can't reach this ComfyUI. Make sure it is running and the URL is right")):
         with pytest.raises(ComfyError) as caught:
