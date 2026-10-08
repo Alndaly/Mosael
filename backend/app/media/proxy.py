@@ -33,6 +33,7 @@ from pathlib import Path
 
 from app.core.child_process import run_logged
 from app.core.config import settings
+from app.core.text import blame_line
 
 PROXY_NAME = "proxy.mp4"
 # Height cap for the proxy. The compositor decodes this, not the original, so a
@@ -74,10 +75,20 @@ class ProxyTimedOut(RuntimeError):
     """转码在时限内没做完 —— 和「解不开」是两回事:换台快一点的机器、或者等空闲时再试,多半转得出来。"""
 
 
+class ProxyFailed(RuntimeError):
+    """ffmpeg 自己报错退出了。`reason` 是它说明原因的那一行(见 core/text.blame_line),可能为空。"""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 def build_proxy(source: Path, target: Path, *, timeout: float = PROXY_TIMEOUT_FLOOR_SECONDS) -> bool:
     """Transcode the H.264 short-GOP faststart preview proxy. Returns success.
 
-    超时抛 `ProxyTimedOut`(半截文件已删),好让调用方说清是「太慢」而不是「转坏了」。"""
+    超时抛 `ProxyTimedOut`(半截文件已删),好让调用方说清是「太慢」而不是「转坏了」;ffmpeg 自己报错退出时抛
+    `ProxyFailed`,带着它说明原因的那一行(源文件坏了、编码不支持……)—— 此前失败只有一句「ffmpeg 代理转码失败」,
+    看不出是哪种(体检 UM-33)。"""
     # Cap height (even width via -2), never upscaling — yuv420p needs even dimensions either way.
     scale = f"scale=-2:'min({PROXY_HEIGHT},ih)'"
     args = [
@@ -100,6 +111,10 @@ def build_proxy(source: Path, target: Path, *, timeout: float = PROXY_TIMEOUT_FL
     except subprocess.TimeoutExpired as exc:
         target.unlink(missing_ok=True)
         raise ProxyTimedOut(f"proxy transcode did not finish within {timeout:.0f}s") from exc
+    except subprocess.CalledProcessError as exc:
+        target.unlink(missing_ok=True)
+        said = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        raise ProxyFailed(blame_line(said)) from exc
     except Exception:
         target.unlink(missing_ok=True)
         return False

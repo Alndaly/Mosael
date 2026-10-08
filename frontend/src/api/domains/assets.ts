@@ -173,6 +173,11 @@ export function setAssetTags(assetId: string, tags: string[]): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ tags }) });
 }
 
+/** 重新生成这份素材的预览代理(上一次转坏了)。 */
+export function regenerateAssetProxy(assetId: string): Promise<Job> {
+  return api<Job>(`/api/assets/${encodeURIComponent(assetId)}/proxy`, { method: "POST" });
+}
+
 export function deleteAsset(assetId: string): Promise<unknown> {
   return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }

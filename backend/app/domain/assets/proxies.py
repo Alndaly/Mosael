@@ -40,6 +40,7 @@ from app.media.proxy import (
     AUDIO_PROXY_NAME,
     PROXY_NAME,
     TRANSCODE_SLOTS,
+    ProxyFailed,
     ProxyTimedOut,
     audio_proxy_path,
     build_audio_proxy,
@@ -208,11 +209,15 @@ def _transcode(job_id: str, asset_id: str) -> None:
             if video:
                 #: 时限按时长放宽(见 media/proxy.proxy_timeout);超时和转坏分开说 —— 超时的换个时候重试多半转得出来。
                 limit = proxy_timeout((asset.media_info or {}).get("duration"))
+                ffmpeg_said = ""
                 try:
                     built = build_proxy(source, proxy_path(source.parent), timeout=limit)  # slot held by _run_proxy
                     timed_out = False
                 except ProxyTimedOut:
                     built, timed_out = False, True
+                except ProxyFailed as exc:
+                    #: 带上 ffmpeg 说明原因的那一行:源文件坏了、编码不支持、磁盘满了,看得出是哪种(体检 UM-33)。
+                    built, timed_out, ffmpeg_said = False, False, exc.reason
                 ensure_wanted()  # 转码中途被取消:ffmpeg 已被停下,不把「转坏了」记到素材上
                 if built:
                     result["proxy_key"] = proxy_key_for(asset)
@@ -221,7 +226,7 @@ def _transcode(job_id: str, asset_id: str) -> None:
                     _set_proxy_meta(db, asset_id, "failed")
                     failures.append(
                         f"代理转码超时({limit / 60:.0f} 分钟内没转完;片子太长或解码太慢,可以稍后重试)"
-                        if timed_out else "ffmpeg 代理转码失败"
+                        if timed_out else (f"ffmpeg 代理转码失败:{ffmpeg_said}" if ffmpeg_said else "ffmpeg 代理转码失败")
                     )
             if audio:
                 if not probe_has_audio(source):

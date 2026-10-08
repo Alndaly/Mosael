@@ -1,9 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, Square } from "lucide-react";
+import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelJob, getJob, listJobEvents, type Job } from "@/api/client";
+import { cancelJob, getJob, listJobEvents, regenerateAssetProxy, type Job } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { JobEventList } from "@/components/jobs/JobEvents";
@@ -20,6 +20,14 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
+
+/**
+ * 失败了能就地重来的任务种类:怎么重来由那一种自己说(拿载荷里的什么、调哪个接口)。此前失败的任务只有「前往对应页面 / 关闭」,
+ * 想重试得自己去找入口(体检 UM-33)。没列在这里的种类不摆「重试」—— 重跑会不会再花钱、要不要换参数,得在它自己的页面里定。
+ */
+const RETRY: Record<string, (job: Job) => Promise<unknown> | null> = {
+  proxy: (job) => (typeof job.payload?.asset_id === "string" ? regenerateAssetProxy(job.payload.asset_id) : null),
+};
 
 /** 任务执行详情:该 job 的状态/进度 + task_events 事件时间线(执行记录)。
  *  任务中心点击任意任务打开它——这才是"任务执行记录的某一条详情"。 */
@@ -76,6 +84,15 @@ export function JobDetailDialog({
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });
+  const retryable = current && jobDisplayStatus(current) === "failed" ? RETRY[current.kind] : undefined;
+  const retry = useMutation({
+    mutationFn: () => retryable?.(current!) ?? Promise.resolve(null),
+    onSuccess: () => {
+      toast.success(t("jobRetryQueued"));
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
 
   return (
     <ModalShell
@@ -97,6 +114,11 @@ export function JobDetailDialog({
                   <Square size={13} /> {t("jobCancel")}
                 </Button>
               </Hint>
+            )}
+            {retryable && (
+              <Button size="sm" variant="outline" className={active ? undefined : "mr-auto"} loading={retry.isPending} onClick={() => retry.mutate()}>
+                <RotateCcw size={13} /> {t("jobRetry")}
+              </Button>
             )}
             {onGoto && <Button size="sm" variant="outline" onClick={onGoto}><ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}</Button>}
             <Button size="sm" onClick={onClose}>{t("close")}</Button>

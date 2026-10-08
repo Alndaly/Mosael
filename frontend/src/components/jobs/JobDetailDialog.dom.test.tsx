@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Job } from "@/api/client";
@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
     '{"code":"InputImageSensitiveContentDetected.PrivacyInformation","request_id":"021788160646919b9f489096afc36acf450c00ec3935d23a968bb2"}',
   events: [] as Array<Record<string, unknown>>,
   cancelled: [] as string[],
+  regenerated: [] as string[],
 }));
 
 vi.mock("@/app/preferences", () => ({
@@ -35,9 +36,13 @@ vi.mock("@/api/client", () => ({
     h.cancelled.push(id);
     return null;
   },
+  regenerateAssetProxy: async (id: string) => {
+    h.regenerated.push(id);
+    return null;
+  },
 }));
 vi.mock("@/api/errorMessage", () => ({ errorText: (e: Error) => e.message }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
@@ -181,5 +186,48 @@ describe("任务执行详情:做出了什么", () => {
     mountJob({ kind: "workflow", result: { context: { a: 1 } } as unknown as Job["result"] });
     await screen.findByText("jobDetailEvents");
     expect(document.querySelector("[data-job-result]")).toBeNull();
+  });
+});
+
+//: 体检 UM-33:执行记录此前直接显示 `job.queued / job.running / job.failed` 和一段原始 JSON;失败的任务不能就地重试。
+describe("执行记录说人话,原始数据收进开发者信息", () => {
+  function mountWith(events: Array<Record<string, unknown>>, patch: Partial<Job> = {}) {
+    h.events = events;
+    h.regenerated = [];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <JobDetailDialog job={{ ...job, ...patch } as Job} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("认得出的事件写名字;原名和载荷收在「开发者信息」里,默认收着;认不出的照原样", async () => {
+    mountWith([
+      { id: "e1", type: "job.queued", created_at: "2026-08-31T14:00:00Z", payload: { message: "排上了" } },
+      { id: "e2", type: "job.mystery", created_at: "2026-08-31T14:00:01Z", payload: {} },
+    ]);
+    expect(await screen.findByText("jobEvent_job_queued")).toBeInTheDocument();
+    expect(screen.getByText("job.mystery")).toBeInTheDocument();
+    const developer = document.querySelector("[data-event-developer]") as HTMLDetailsElement;
+    expect(developer.open).toBe(false);
+    expect(developer.textContent).toContain("job.queued");
+    expect(developer.textContent).toContain("排上了");
+  });
+
+  it("失败的预览代理能就地重试;别的种类、没失败的不给", async () => {
+    const view = mountWith([], { kind: "proxy", payload: { asset_id: "a1" } as Job["payload"] });
+    fireEvent.click(await screen.findByRole("button", { name: /jobRetry/ }));
+    await waitFor(() => expect(h.regenerated).toEqual(["a1"]));
+    view.unmount();
+
+    const other = mountWith([], { kind: "ai_generation" });
+    await screen.findByText("jobDetailEvents");
+    expect(screen.queryByRole("button", { name: /jobRetry/ })).toBeNull();
+    other.unmount();
+
+    mountWith([], { kind: "proxy", status: "succeeded", error: null, payload: { asset_id: "a1" } as Job["payload"] });
+    await screen.findByText("jobDetailEvents");
+    expect(screen.queryByRole("button", { name: /jobRetry/ })).toBeNull();
   });
 });
