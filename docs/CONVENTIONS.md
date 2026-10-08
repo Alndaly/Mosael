@@ -186,6 +186,32 @@
 - 绕过 flush 的写(比较并交换的 `update(Board)…values(canvas=…)`)要就地 `references.resync`
   (棘轮:`tests/test_record_references.py`)。
 
+## 测试约定
+
+### 测试里怎么等
+
+后端测试默认并行(pytest-xdist),CI 是 4 核满载。「睡一下,它应该已经……了」在本机永远绿,在机器忙的时候随机红 ——
+而红的经常是无辜的那条。规矩:**等事件、等条件,不等时间。**
+
+- **替身阻塞在事件上,由测试放行**:要「这一轮还在跑」,替身就 `release.wait(30)`,断言完再 `release.set()`;
+  不要「替身睡 0.2 秒,测试赶在 0.2 秒内做完」。要「几项同时在跑」,让它们在 `threading.Barrier(n, timeout=10)` 上会齐。
+- **要「它已经进去了」,就让它进门时 `entered.set()`**,测试 `assert entered.wait(30)`;不要 `time.sleep(0.3)  # 让它进去`。
+- **轮询等那个事实**(`_until(predicate, timeout=30)`):上限给足,条件一成立就返回,给多大都不花钱。只领一次、只看一眼的写法
+  (`sleep(0.5)` 然后单发一次 `claim`)不行。
+- **不写「耗时 < N 秒」**。要证明「没等那件慢事」,就让那件事一直卡着(替身卡在事件上),断言**返回的时候它还卡着**;
+  要证明「是并发的」,用会齐。实在要比时间,线画在对照值(不修的话要等多久)的一半。
+- **不写「睡一下,确认没发生」**:机器越忙越来不及发生,修复撤掉照样绿。等到一个确定的终点(线程结束、状态落定)再数。
+- **落终态之后的收拾**(失败原因抄到生成记录上、关掉这次运行开的浏览器会话)在任务提交之后的 after_commit 里做:
+  断言它们用 `tests/util.wait_settled`,不用 `wait_status`。
+- **谁起的线程谁收**:测试函数体里起的线程,测完还活着,这条测试会在 teardown 红(`tests/conftest.py`)。
+- **读库的测试先 `fresh_client()`**:进程起来时表已经建好(conftest),但里面是前面测试留下的什么,看排在谁后面。
+- 前端同理:用 `waitFor` 等条件,`vi.useFakeTimers` 推进计时器;不要 `await new Promise((r) => setTimeout(r, 800))`
+  然后断言;模块级的可变状态(测试文件里的 `const config = {...}`、被测模块里的缓存)在 `beforeEach` 里还原 ——
+  `vitest --sequence.shuffle` 打乱顺序跑,依赖先后的用例当场就红。
+
+验收这类修法:后端开 `MOSAEL_TEST_THREAD_JITTER=0.3`(每条新线程起步前随机等 0–0.3 秒,见 `backend/tests/thread_jitter.py`),
+换几个 `MOSAEL_TEST_THREAD_JITTER_SEED` 各跑几遍;前端 `pnpm vitest run --sequence.shuffle --sequence.seed=<n>` 换几个种子。
+
 ## 结构性约束(棘轮)
 
 **棘轮**指的是只能往一个方向走的检查:存量问题冻结在一份允许清单里,新增会红,修好一处就得

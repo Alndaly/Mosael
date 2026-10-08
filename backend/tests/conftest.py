@@ -48,9 +48,26 @@ for _proxy_variable in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
     os.environ.pop(_proxy_variable, None)
     os.environ.pop(_proxy_variable.lower(), None)
 
+import threading
 import time
 
 import pytest
+
+#: 真的钟。测试的桩撤掉之前 conftest 自己要量时间时用它:有的测试把全局的 `time.monotonic` 换掉了(见 _background_work_…)。
+_real_monotonic = time.monotonic
+
+
+def pytest_configure(config) -> None:
+    """开关式的「线程起步随机推后」:默认不开,见 tests/thread_jitter.py。"""
+    from tests import thread_jitter
+
+    thread_jitter.install_from_env()
+
+
+def pytest_report_header(config) -> str | None:
+    from tests import thread_jitter
+
+    return thread_jitter.header()
 
 
 @pytest.hookimpl(optionalhook=True)
@@ -79,6 +96,66 @@ def pytest_unconfigure(config) -> None:
         if not os.path.exists(_DATA_DIR):
             return
         time.sleep(0.2)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _every_process_starts_with_the_current_schema():
+    """每个进程(xdist 的每个 worker)一起来就把库建成当前的形状,不等哪条测试碰巧先调 `fresh_client()`。
+
+    此前库只在 `fresh_client()` 里建。不调它、却经过已装好的缝读库的测试(起 sidecar 时由 `app.main` 导入期装上的
+    「子进程代理从库里读」,见 ai/sidecar/pi_client.use_proxy_source)只要是这个 worker 第一条碰库的,就是
+    `no such table: network_config` —— 而 xdist 收集时每个 worker 都把所有测试文件导入一遍,`app.main` 总是在的。
+    红不红看切块边界落在哪,`-n` 换个数就换一批;点名跑两个文件(`pytest tests/test_pi_turn_lifecycle.py
+    tests/test_agent_queue.py`)则必红。这里只保证**表在**;要干净的库照旧调 `fresh_client()`。
+    """
+    from app.db.migrations import init_db
+
+    init_db()
+
+
+#: 测试函数体里起的线程,测试连同它的 fixture 都收完之后,最多再等这么久让它们自己结束。
+_STRAY_THREAD_GRACE_SECONDS = 10.0
+#: 本来就活到进程结束的后台线程(按线程 target 的名字认):本机合成 / 识别常驻进程池的回收线程,池子是进程级的。
+_PROCESS_LIFETIME_THREAD_TARGETS = ("_reap_idle",)
+_THREADS_BEFORE_BODY = pytest.StashKey[set]()
+
+
+def _lives_for_the_process(thread: threading.Thread) -> bool:
+    return any(f"({target})" in thread.name for target in _PROCESS_LIFETIME_THREAD_TARGETS)
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_call(item) -> None:
+    item.stash[_THREADS_BEFORE_BODY] = set(threading.enumerate())
+
+
+@pytest.hookimpl(wrapper=True, trylast=True)
+def pytest_runtest_teardown(item, nextitem):
+    """**谁起的线程谁收。** 测试函数体里起的线程,测试和它的 fixture 都收完之后还活着,就让**这一条**在 teardown 红。
+
+    此前这种线程活过测试本身,在后面某条测试 drop_all 的空当里查库、抛异常 —— pytest 把线程里的异常
+    (`PytestUnhandledThreadExceptionWarning`,pyproject 里升成了错误)记在**当时恰好在跑的那条**头上:红的是无辜的,
+    肇事的那条早就绿着走了。实测:一条测试用 `with fresh_client()` 跑了整个 app lifespan,留下「保持运行」那条线程,
+    线程起步稍晚一点(tests/thread_jitter.py),它就在几条之后的 test_agent_first_token 里报 `no such table: local_services`。
+
+    只看函数体里起的(fixture 在 setup 里起、按自己的作用域收的不算);给 `_STRAY_THREAD_GRACE_SECONDS` 让它们自己走完;
+    进程级常驻的按 `_PROCESS_LIFETIME_THREAD_TARGETS` 放过。
+    """
+    result = yield
+    before = item.stash.get(_THREADS_BEFORE_BODY, None)
+    if before is None:  # 函数体没跑(setup 就失败了、被跳过)
+        return result
+    stray = [t for t in threading.enumerate() if t not in before and t.is_alive() and not _lives_for_the_process(t)]
+    deadline = _real_monotonic() + _STRAY_THREAD_GRACE_SECONDS
+    for thread in stray:
+        thread.join(max(0.0, deadline - _real_monotonic()))
+    alive = [thread.name for thread in stray if thread.is_alive()]
+    if alive:
+        raise AssertionError(
+            f"这条测试起的线程在它结束 {_STRAY_THREAD_GRACE_SECONDS:g} 秒后还活着:{alive} —— 它们会在后面别的测试里"
+            "读写重建中的库、把异常记到无辜的测试头上。在测试里等它们结束(放行替身、join),或者别起它们。"
+        )
+    return result
 
 
 @pytest.fixture(autouse=True)
@@ -207,6 +284,32 @@ def _conversations_are_not_named_over_the_network(monkeypatch):
         raise RuntimeError("the test suite does not name conversations over the network")
 
     monkeypatch.setattr(titles, "_ask", unreachable)
+
+
+@pytest.fixture(autouse=True)
+def _background_work_ends_while_the_patches_are_still_on(monkeypatch):
+    """这条测试派出去的后台活(智能体的一轮和它顺手起的「起名」线程、自动放行、in-process 任务),在测试的桩**还在**的时候收完。
+
+    依赖 `monkeypatch`,所以它的收尾排在 monkeypatch 撤桩**之前**。此前只在下一条测试开头等(_no_stragglers_from_the_previous_test),
+    那时桩已经撤了:答完第一轮才起的起名线程要是起步晚了一点(机器忙;tests/thread_jitter.py 能稳定复现),它拿到的是
+    **真的** `titles._ask`,对着测试里配的假地址出网、重试、退避,在下一条测试里还活着。没有后台活就当场返回。
+    """
+    yield
+    from app.domain.agent.autopilot import AUTOPILOT_THREAD_NAME
+    from app.domain.agent.host import TURN_THREAD_NAME
+    from app.domain.jobs import JOB_THREAD_NAME
+
+    #: 只按线程名等**真在跑的**:不看派发器的账(有的测试把派发器的 Thread 换成「start 什么都不做」的替身,账上那一条永远
+    #: 「在跑」),也不调用要读钟的等待函数 —— 这时测试的桩还在,有的测试把全局的 `time.monotonic` 换成了只走三下的假钟。
+    #: 钟用 conftest 导入时拿到的那个真的。
+    #: 每次重新数:一轮答完才起的起名线程也叫 TURN_THREAD_NAME,它在前一条线程结束之前就已经起来了。
+    names = (TURN_THREAD_NAME, AUTOPILOT_THREAD_NAME, JOB_THREAD_NAME)
+    deadline = _real_monotonic() + 30
+    while _real_monotonic() < deadline:
+        alive = [t for t in threading.enumerate() if t.name in names and t.is_alive()]
+        if not alive:
+            break
+        alive[0].join(max(0.0, deadline - _real_monotonic()))
 
 
 @pytest.fixture(autouse=True)

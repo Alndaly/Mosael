@@ -223,6 +223,20 @@ def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
     return status
 
 
+def wait_settled(client, job_id: str, timeout: float = 30.0) -> str:
+    """等任务落终态,**再等落终态之后的收拾也做完**,返回终态。
+
+    任务线程先提交终态,收拾(`jobs.register_settle_listener` 登记的:把失败原因抄到生成记录上、关掉这次运行开的浏览器
+    会话……)挂在那次提交的 after_commit 上,在同一条线程里另开事务做。`wait_status` 看到 `failed` 的那一刻,收拾可能
+    还没提交 —— 断言收拾的结果(生成记录的 `error`、会话是不是关了)就得用这个,不然机器一忙就读到收拾之前的样子。
+    收拾跑在任务线程里,任务线程都结束了,收拾就一定做完了。
+    """
+    status = wait_status(client, job_id, timeout=timeout)
+    if status in ("succeeded", "failed") and not wait_for_idle_jobs(timeout=timeout):
+        raise AssertionError(f"任务 {job_id} 已经 {status},它的线程 {timeout} 秒还没结束 —— 落终态之后的收拾卡住了")
+    return status
+
+
 def add_provider(db, *, model: str = "", capability_ids=None, owner_username: str = "", make_default: bool = True, **fields):
     """建一条连接、它的模型行,以及一把钥匙。
 
