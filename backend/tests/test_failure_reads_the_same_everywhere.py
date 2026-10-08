@@ -356,3 +356,34 @@ def test_只有原文的失败_那一句是原文去掉套话的样子() -> None
     assert run.error_hint is None
     assert Run(None).error_summary is None and Run(None).error_detail is None
     assert Run("没有找到这个账号").error_detail is None, "本来就是一句人话:没有详情"
+
+
+def test_工作流的子任务失败_那一句和怎么修照子任务的说() -> None:
+    """「子任务失败:「连接名」生成失败:……」那截壳之外,子任务自己的那一句、原文、原因和怎么修照样到得了工作流的运行面板。"""
+    from app.domain.failure_summary import detail_of, hint_of, summarize
+
+    child = {"error": "「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
+             "key": "providerErr_pluginFailed", "params": COMFY_FAILURE}
+    params = {"reason": child["error"], "inner": child}
+    error = "子任务失败:" + child["error"]
+    assert summarize(error, "wfErr_childFailed", params, "zh") == "ComfyUI 执行到「KSampler」这一步出错"
+    assert detail_of(error, "wfErr_childFailed", params, "zh") == "KSampler: hostbuf_file_reader_read failed"
+    assert hint_of(params, "en")["steps"][0]["command"] == UPGRADE
+    #: 套了两层(子图里的子任务)也一样
+    nested = {"reason": error, "inner": {"error": error, "key": "wfErr_childFailed", "params": params}}
+    assert summarize("x", "wfErr_childFailed", nested, "zh") == "ComfyUI 执行到「KSampler」这一步出错"
+
+
+def test_节点失败的事件也带那三样() -> None:
+    from app.api.schemas.jobs import TaskEventOut
+    from datetime import datetime
+
+    event = TaskEventOut(id="e", job_id="j", type="workflow.node.failed", created_at=datetime(2026, 10, 9),
+                         payload={"node_id": "gen", "error": "子任务失败:x", "error_key": "wfErr_childFailed",
+                                  "error_params": {"reason": "x", "inner": {"error": "x", "key": "providerErr_pluginFailed",
+                                                                             "params": COMFY_FAILURE}}})
+    out = event.model_dump()["payload"]
+    assert out["error_summary"] == "ComfyUI 执行到「KSampler」这一步出错"
+    assert out["error_hint"]["cause"] == "那台 ComfyUI 装的 comfy-kitchen 太旧"
+    quiet = TaskEventOut(id="e", job_id="j", type="workflow.node.started", created_at=datetime(2026, 10, 9), payload={"node_id": "gen"})
+    assert quiet.model_dump()["payload"] == {"node_id": "gen"}, "没失败的事件原样"

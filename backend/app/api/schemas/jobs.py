@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_serializer, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.failures import FailureReadout
@@ -47,6 +47,22 @@ class TaskEventOut(OrmModel):
     type: str
     payload: dict
     created_at: datetime
+
+    @field_serializer("payload")
+    def _failure_readable(self, payload: dict) -> dict:
+        """带着失败的事件(节点失败、工作流失败:原文 `error`、文案 key、参数,见 workflows.engine._failure_payload)多给三样:
+        那一句、原文、原因和怎么修,按读的人的语言(和任务、生成记录同一份,见 schemas/failures)。事件库里只存原样。"""
+        if not isinstance(payload, dict) or not (payload.get("error") or payload.get("error_key")):
+            return payload
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import detail_of, hint_of, summarize
+
+        locale = get_current_locale()
+        error = str(payload.get("error") or "")
+        key = str(payload.get("error_key") or "")
+        params = payload.get("error_params") if isinstance(payload.get("error_params"), dict) else {}
+        return {**payload, "error_summary": summarize(error, key, params, locale) or None,
+                "error_detail": detail_of(error, key, params, locale), "error_hint": hint_of(params, locale)}
 
 
 class JobSummaryOut(FailureReadout, OrmModel):

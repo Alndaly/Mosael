@@ -110,9 +110,14 @@ def wait_for_job(job_id: str, *, release: "Session | None" = None) -> Job:
             # 只转 attest,子任务的截图之类现场留在它自己的运行记录里。
             failure = (job.result or {}).get("failure") if isinstance(job.result, dict) else None
             attest = ((failure or {}).get("details") or {}).get("attest") if isinstance(failure, dict) else None
+            #: 子任务自己的失败原样带着(`inner`:原文、文案 key、参数):给人看的那一句、原文、原因和怎么修照子任务的说
+            #: (见 failure_summary.inner_failure)—— 「子任务失败:」这截壳之外,ComfyUI 那句「执行到「KSampler」这一步出错」和
+            #: 升级命令也到得了工作流的运行面板。
+            inner = {"error": job.error or "", "key": job.error_key or "", "params": dict(job.error_params or {})}
             raise WorkflowDomainError(
                 "wfErr_childFailed",
-                params={"reason": job.error or job.message},
+                params={"reason": job.error or job.message,
+                        **({"inner": inner} if inner["error"] or inner["key"] else {})},
                 details={"attest": attest} if isinstance(attest, dict) else None,
             )
         if job.status == "succeeded":

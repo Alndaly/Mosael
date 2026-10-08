@@ -47,8 +47,21 @@ _HTTP_STATUS = re.compile(r"\bHTTP (\d{3})\b")
 _WRAPPER_KEYS = frozenset({"providerErr_pluginFailed"})
 
 
+def inner_failure(params: dict[str, Any] | None) -> tuple[str, str, dict[str, Any]] | None:
+    """一层壳里包着的那次失败(参数里的 `inner`:原文、文案 key、参数):工作流的「子任务失败」包着子任务自己的失败。
+    给人看的三样(那一句、原文、原因和怎么修)都照里面那一次说 —— 「子任务失败:「连接名」生成失败:……」那截壳,卡的标题和
+    哪个节点已经说了。没有就是 None。"""
+    inner = (params or {}).get("inner")
+    if isinstance(inner, dict) and (inner.get("error") or inner.get("key")):
+        params = inner.get("params") if isinstance(inner.get("params"), dict) else {}
+        return str(inner.get("error") or ""), str(inner.get("key") or ""), dict(params)
+    return None
+
+
 def summarize(error: str | None, key: str, params: dict[str, Any] | None, locale: str) -> str:
     """一次失败给人看的那一句话(按 `locale` 翻)。`error` 是原文,`key` / `params` 是它的文案 key 与参数(没有就是空)。"""
+    if (inner := inner_failure(params)) is not None:
+        return summarize(*inner, locale)
     fields = dict(params or {})
     said = read_param(fields.get("summary"), locale) if fields.get("summary") else ""
     if isinstance(said, str) and said.strip():
@@ -71,6 +84,8 @@ def summarize(error: str | None, key: str, params: dict[str, Any] | None, locale
 def detail_of(error: str | None, key: str, params: dict[str, Any] | None, locale: str) -> str | None:
     """原文(失败卡、画板格子的「详情」里给):插件给的原话(参数里的 `original`,ComfyUI 的「KSampler: …」)、上游的原话(`detail`),
     都没有就是记下的那句失败原因。它和那一句人话说的是同一件事、没有多出任何信息时是 None —— 不摆一个点开还是那句话的「详情」。"""
+    if (inner := inner_failure(params)) is not None:
+        return detail_of(*inner, locale)
     fields = dict(params or {})
     raw = next((fields[key] for key in ("original", "detail") if isinstance(fields.get(key), str) and fields[key].strip()),
                error)
@@ -86,6 +101,8 @@ def detail_of(error: str | None, key: str, params: dict[str, Any] | None, locale
 def hint_of(params: dict[str, Any] | None, locale: str) -> dict[str, Any] | None:
     """认得出的原因和怎么修(插件说的 `hint`,见 plugins.runtime.failure_shape),按 `locale` 读成字:
     `{"cause": 一句或 None, "steps": [{"text": 一句, "command": 原样的命令或 None}]}`。没有就是 None。"""
+    if (inner := inner_failure(params)) is not None:
+        return hint_of(inner[2], locale)
     hint = (params or {}).get("hint")
     if not isinstance(hint, dict):
         return None
@@ -189,4 +206,4 @@ def _clip(text: str) -> str:
     return collapsed[: SUMMARY_DETAIL_CHARS - 1].rstrip() + "…"
 
 
-__all__ = ["SUMMARY_DETAIL_CHARS", "detail_of", "hint_of", "hint_text", "short_detail", "status_of", "summarize"]
+__all__ = ["SUMMARY_DETAIL_CHARS", "detail_of", "hint_of", "hint_text", "inner_failure", "short_detail", "status_of", "summarize"]

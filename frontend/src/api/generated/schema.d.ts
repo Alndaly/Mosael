@@ -11721,6 +11721,19 @@ export interface components {
              * @default
              */
             allow_tool: string;
+            /**
+             * Error Summary
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
+             */
+            readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
+             */
+            readonly error_detail: string | null;
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
         };
         /**
          * CostAmountOut

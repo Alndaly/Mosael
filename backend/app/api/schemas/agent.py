@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from pydantic import Field, StrictBool, ValidationInfo, computed_field, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.failures import FailureReadout
 
 class AgentContextPart(ApiModel):
     """堆叠条里的一段。kind ∈ messages|tools|system|free。"""
@@ -329,7 +330,7 @@ class ConfirmationApproval(ApiModel):
     choices: dict[str, StrictBool] = Field(default_factory=dict)
 
 
-class ConfirmationOut(OrmModel):
+class ConfirmationOut(FailureReadout, OrmModel):
     id: str
     workspace_id: str
     session_id: str | None

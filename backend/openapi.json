@@ -32860,6 +32860,44 @@
             "type": "string",
             "title": "Allow Tool",
             "default": ""
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
+            "readOnly": true
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
+            "readOnly": true
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -32876,7 +32914,10 @@
           "error",
           "requested_by",
           "created_at",
-          "resolved_at"
+          "resolved_at",
+          "error_summary",
+          "error_detail",
+          "error_hint"
         ],
         "title": "ConfirmationOut"
       },
