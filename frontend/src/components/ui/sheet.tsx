@@ -47,7 +47,7 @@ const SheetContent = React.forwardRef<
       <DialogPrimitive.Overlay
         className={cn(
           MODAL_OVERLAY,
-          "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none",
+          "duration-240 ease-enter data-[state=closed]:ease-exit data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none",
         )}
       />
       <DialogPrimitive.Content
@@ -56,7 +56,7 @@ const SheetContent = React.forwardRef<
         className={cn(
           "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed z-50 grid min-h-0 w-[min(30rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]",
           "modal-surface border-[var(--modal-border)] bg-[var(--modal-surface)] text-popover-foreground shadow-[var(--shadow-modal)]",
-          "duration-250 data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:animate-none motion-reduce:transition-none",
+          "duration-240 ease-enter data-[state=closed]:ease-exit data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:animate-none motion-reduce:transition-none",
           SIDES[side],
           className,
         )}

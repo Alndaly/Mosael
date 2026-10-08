@@ -111,7 +111,7 @@ function AssetRow({ row, onOpen }: { row: Record<string, unknown>; onOpen: (id: 
           <span className="h-[22px] w-[34px] shrink-0 rounded-md border border-border bg-muted object-cover" data-kind={kind} />
         )}
         {playable && (
-          <span className="absolute inset-0 flex items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--background)_45%,transparent)] text-foreground opacity-0 transition-opacity duration-[120ms] group-hover/play:opacity-100 group-focus-visible/play:opacity-100 group-aria-expanded/play:opacity-100" aria-hidden>
+          <span className="absolute inset-0 flex items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--background)_45%,transparent)] text-foreground opacity-0 transition-opacity duration-100 group-hover/play:opacity-100 group-focus-visible/play:opacity-100 group-aria-expanded/play:opacity-100" aria-hidden>
             {/* An image is opened, not played. */}
             {isImage ? <Maximize2 size={10} /> : <Play size={10} />}
           </span>

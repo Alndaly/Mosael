@@ -4,10 +4,11 @@ import { useMediaMatch } from "@/lib/useMediaMatch";
 
 import { readCollapsed, writeCollapsed } from "./pageListState";
 
-/** 列表展开 / 收起、画面跟着滑的过渡多长(毫秒)。列表宽度和画面的 CSS transition 用的是同一个数。 */
-export const PAGE_LIST_MOTION_MS = 180;
-/** 过渡的缓动:先快后慢,收尾不拖。 */
-export const PAGE_LIST_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+/** 列表展开 / 收起、画面跟着滑的过渡多长(毫秒)。列表宽度和画面的 CSS transition 用的是同一个数。
+ *  取动效刻度的中档(design/tokens.css 的 --motion-base);等过渡走完要用到毫秒数,所以这里写数字,不写 var()。 */
+export const PAGE_LIST_MOTION_MS = 160;
+/** 过渡的缓动:进场那一种,先快后慢,收尾不拖。 */
+export const PAGE_LIST_EASING = "var(--motion-ease-enter)";
 /** 鼠标停多久才临时展开:从网页移到窗口边上一掠而过,不该弹出来。 */
 const HOVER_MS = 150;
 /** 移开多久才收回:指针在列表边上抖一下不算离开。 */

@@ -29,7 +29,7 @@ export function AppearanceSection() {
               <button
                 key={option}
                 type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === option && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", theme === option && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 onClick={() => setTheme(option)}
               >
                 <Icon size={13} /> {t(THEME_LABEL_KEYS[option])}
@@ -42,14 +42,14 @@ export function AppearanceSection() {
         <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           <button
             type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", locale === "zh-CN" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", locale === "zh-CN" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setLocale("zh-CN")}
           >
             {t("languageZh")}
           </button>
           <button
             type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", locale === "en-US" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", locale === "en-US" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setLocale("en-US")}
           >
             {t("languageEn")}
@@ -151,7 +151,7 @@ export function BackgroundSection() {
             <button
               key={kind}
               type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", appearance.kind === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", appearance.kind === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => chooseKind(kind)}
             >
               {kind === "none" ? t("appearanceBgNone") : kind === "preset" ? t("appearanceBgPreset") : t("appearanceBgImage")}
@@ -178,7 +178,7 @@ export function BackgroundSection() {
                 key={preset.id}
                 type="button"
                 className={cn(
-                  "relative h-14 cursor-pointer overflow-hidden rounded-lg border border-border bg-cover bg-center transition-[box-shadow,transform] duration-[120ms] hover:-translate-y-px [&>span]:absolute [&>span]:bottom-1.5 [&>span]:left-[7px] [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:text-white [&>span]:[text-shadow:0_1px_3px_rgba(0,0,0,0.55)]",
+                  "relative h-14 cursor-pointer overflow-hidden rounded-lg border border-border bg-cover bg-center transition-[box-shadow,transform] duration-100 hover:-translate-y-px [&>span]:absolute [&>span]:bottom-1.5 [&>span]:left-[7px] [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:text-white [&>span]:[text-shadow:0_1px_3px_rgba(0,0,0,0.55)]",
                   appearance.preset === preset.id && "border-primary shadow-[0_0_0_2px_var(--primary)]",
                 )}
                 style={{ backgroundImage: preset.css }}

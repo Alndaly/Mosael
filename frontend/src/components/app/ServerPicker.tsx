@@ -66,7 +66,7 @@ export function ServerPicker() {
       <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-[30px] w-full [&>button]:flex-1 [&>button]:justify-center">
         <button
           type="button"
-          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "local" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", mode === "local" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => {
             setMode("local");
             setFailed(null);
@@ -76,7 +76,7 @@ export function ServerPicker() {
         </button>
         <button
           type="button"
-          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "remote" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", mode === "remote" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => {
             setMode("remote");
             setFailed(null);

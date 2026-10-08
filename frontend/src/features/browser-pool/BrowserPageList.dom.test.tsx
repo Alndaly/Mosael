@@ -13,6 +13,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { BrowserPageList, PAGE_LIST_COLLAPSED_WIDTH, PAGE_LIST_WIDTH } from "./BrowserPageList";
 import { moveBefore } from "./pageListState";
+import { PAGE_LIST_MOTION_MS } from "./usePageListMotion";
 
 const PAGES = [
   { id: "1", title: "首页", url: "https://example.com/", favicon: "", current: false },
@@ -286,7 +287,7 @@ describe("收起时临时展开(像 Arc)", () => {
 
 describe("展开、收起的过渡", () => {
   it("固定展开 → 收起:先拍下画面盖住网页,再让网页左侧变窄;列表和画面一起滑过去,走完才揭开", async () => {
-    //: 「网页变窄」那一刻的样子在那一刻记下来:滑动只有 180ms,事后再看,机器一忙(waitFor 隔 50ms 才看一眼、线程被抢)
+    //: 「网页变窄」那一刻的样子在那一刻记下来:滑动只有 160ms,事后再看,机器一忙(waitFor 隔 50ms 才看一眼、线程被抢)
     //: 看到时已经滑完、揭开了 —— 并行满载时实测 `coverPage` 已经被叫过 false。
     let sliding: Record<string, unknown> | null = null;
     bridge.setPagesInset.mockImplementation(async (inset: number) => {
@@ -311,9 +312,9 @@ describe("展开、收起的过渡", () => {
     // 盖着的时候列表和画面的左沿一起往回滑(同一条过渡),那时还没揭开。
     expect(sliding).toEqual({
       navWidth: `${PAGE_LIST_COLLAPSED_WIDTH}px`,
-      navTransition: expect.stringContaining("width 180ms"),
+      navTransition: expect.stringContaining(`width ${PAGE_LIST_MOTION_MS}ms`),
       frameLeft: `${PAGE_LIST_COLLAPSED_WIDTH}px`,
-      frameTransition: expect.stringContaining("left 180ms"),
+      frameTransition: expect.stringContaining(`left ${PAGE_LIST_MOTION_MS}ms`),
       uncovered: false,
     });
     await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
@@ -355,7 +356,7 @@ describe("展开、收起的过渡", () => {
     expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
     //: 中途一次都没揭开:揭开只有最后那一次,排在网页挪好之后。按调用先后判,不在「看见网页挪好」那一刻去看还没揭开 ——
-    //: 那一刻之后只剩 180ms 的滑动,机器一忙,看的时候已经滑完、揭开了(并行满载时实测)。
+    //: 那一刻之后只剩 160ms 的滑动,机器一忙,看的时候已经滑完、揭开了(并行满载时实测)。
     expect(bridge.coverPage.mock.calls.filter(([covered]) => covered === false)).toHaveLength(1);
     expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
   });
@@ -364,7 +365,7 @@ describe("展开、收起的过渡", () => {
     window.localStorage.setItem("mosael.browserPages.collapsed", "1");
     render(<BrowserPageList state={state()} top={56} />);
     await peekOut(() => fireEvent.mouseEnter(nav()));
-    expect(nav().style.transition).toContain("width 180ms");
+    expect(nav().style.transition).toContain(`width ${PAGE_LIST_MOTION_MS}ms`);
     //: 揭开那一刻列表是什么样子,在那一刻记下来(同上:不在事后去看「还没揭开」)。
     const atUncover: (string | null)[] = [];
     bridge.coverPage.mockImplementation(async (covered: boolean) => {

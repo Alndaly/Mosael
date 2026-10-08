@@ -572,7 +572,7 @@ function RailButton({
       <button
         type="button"
         className={cn(
-        "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
+        "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-160 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
         compact && "justify-center px-0",
         active &&
           "bg-accent font-semibold text-accent-foreground hover:bg-accent hover:text-accent-foreground",

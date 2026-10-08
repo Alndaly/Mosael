@@ -25,6 +25,15 @@ export function visibleCanvasSize(
 }
 
 /**
+ * 视口飞过去用多久。**要求减少动态时直接跳到**:画布整块平移、缩放正是这条设置要避开的那种运动,而它是 JS 驱动的
+ * (React Flow 内部一帧一帧改 transform),tokens.css 里压 CSS 动画时长的那条全局规则管不到它。
+ */
+export function canvasCameraDuration(ms: number): number {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return ms;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms;
+}
+
+/**
  * Fit every node into the part of a React Flow surface that is actually visible.
  *
  * Docked panels are layered over the canvas, so React Flow's built-in fitView
@@ -52,7 +61,7 @@ export function fitCanvasViewport<NodeType extends Node = Node, EdgeType extends
   );
   return instance.setViewport(
     { ...viewport, x: viewport.x + visible.left, y: viewport.y + visible.top },
-    { duration: options.duration ?? 250 },
+    { duration: canvasCameraDuration(options.duration ?? 240) },
   );
 }
 
@@ -70,7 +79,7 @@ export function centerCanvasViewport<NodeType extends Node = Node, EdgeType exte
     x: visible.left + visible.width / 2 - point.x * zoom,
     y: visible.top + visible.height / 2 - point.y * zoom,
     zoom,
-  }, { duration: options.duration ?? 350 });
+  }, { duration: canvasCameraDuration(options.duration ?? 350) });
 }
 
 /**

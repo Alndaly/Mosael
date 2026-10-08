@@ -400,7 +400,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               一行里两组字各自贴边,中间那段空是最先被看见的东西,而它什么都不是。 */}
           {hasBody && (
             <ChevronRight
-              className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")}
+              className={cn("size-3 flex-none transition-transform duration-100", open && "rotate-90")}
               aria-hidden
             />
           )}
@@ -510,7 +510,7 @@ function SkillUseRow({ tool }: { tool: ToolCall }) {
             {data?.source && <span className="flex-none pl-1.5 text-ui-xs">{data.source}</span>}
           </MarkerContent>
           {body && (
-            <ChevronRight className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")} aria-hidden />
+            <ChevronRight className={cn("size-3 flex-none transition-transform duration-100", open && "rotate-90")} aria-hidden />
           )}
         </button>
       </Marker>
@@ -638,7 +638,7 @@ function ThinkingBlock({ text, done, durationSeconds }: { text: string; done?: b
           </MarkerContent>
           {text && (
             <ChevronRight
-              className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")}
+              className={cn("size-3 flex-none transition-transform duration-100", open && "rotate-90")}
               aria-hidden
             />
           )}

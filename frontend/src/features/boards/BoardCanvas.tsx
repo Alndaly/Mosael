@@ -1013,7 +1013,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           //: 浮层,位置一重叠就压在面板的发送键上 —— 调层级做不到只让面板盖过它(节点也会跟着盖过去)。打开一格的面板
           //: 时人在改这一格、不在找位置,缩略图淡出、不接点击,关掉面板就回来。
           className={cn(
-            "overflow-hidden rounded-md border border-border transition-opacity duration-150",
+            "overflow-hidden rounded-md border border-border transition-opacity duration-160",
             composerShown && "pointer-events-none opacity-0",
           )}
           bgColor="var(--panel)"

@@ -198,7 +198,7 @@ export function workflowEditorToolbar({
                   className={cn(
                     // 组已经有自己的边框和底了,按钮**不再各带一层** —— 那是胶囊套胶囊。
                     // 状态靠颜色说,不靠再画一圈线。
-                    "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                    "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground",
                     checklistCount > 0 ? "gap-1 px-2" : "w-8 justify-center",
                     analysis.errorCount
                       ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"

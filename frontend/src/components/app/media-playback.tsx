@@ -403,7 +403,7 @@ export function VideoPlayer({
       )}
 
       {/* 控件条悬停才出现;藏起来时连指针事件一起收掉(透明不等于不吃事件)。 */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-[opacity,transform] duration-150 group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100 group-focus-within/player:pointer-events-auto group-focus-within/player:translate-y-0 group-focus-within/player:opacity-100">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-[opacity,transform] duration-160 group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100 group-focus-within/player:pointer-events-auto group-focus-within/player:translate-y-0 group-focus-within/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
           <IconButton unstyled type="button" label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">

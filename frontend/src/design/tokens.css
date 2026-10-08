@@ -81,6 +81,19 @@
   --radius-lg: calc(var(--radius) + 4px);
   --radius-xl: calc(var(--radius) + 8px);
 
+  /* 动效的刻度(docs/CONVENTIONS.md「动效」):时长三档 —— 快 100ms(行上的悬停底色、小箭头转个向、悬停才露出的小图标)、
+     中 160ms(控件换颜色、浮层 / 菜单 / 说明 / 弹窗进出、折叠区块、东西挪到新位置)、慢 240ms(从窗口边滑进来的抽屉、
+     大图的放大);外加一档「余韵」600ms,只给「刚做完」的高亮慢慢退掉用。缓动两种 ——
+     进场用 ease-enter(先快后慢,落得稳),退场用 ease-exit(先慢后快,走得干脆)。时长写 Tailwind 的
+     duration-100 / duration-160 / duration-240 / duration-600,缓动写 ease-enter / ease-exit;CSS 里写 var(--motion-fast|base|slow|linger)、
+     var(--motion-ease-enter|exit)(值在下面 :root 里)。
+     不在这几档上的时长有棘轮拦(design/motion.test.ts)。 */
+  --ease-enter: var(--motion-ease-enter);
+  --ease-exit: var(--motion-ease-exit);
+  /* 只写了 transition-colors / transition-opacity、没写时长的那一百多处:默认落在中档上(Tailwind 自带的是 150ms + ease-in-out)。 */
+  --default-transition-duration: var(--motion-base);
+  --default-transition-timing-function: var(--motion-ease-enter);
+
   --animate-mosael-spin: mosael-spin 0.9s linear infinite;
   @keyframes mosael-spin {
     to {
@@ -89,7 +102,7 @@
   }
   /* 折叠区块的展开/收起。高度由 Radix 量好写进 --radix-collapsible-content-height ——
      这是 CSS 自己算不出来的那一个数(内容高度未知时 height: auto 无法过渡)。 */
-  --animate-collapsible-down: collapsible-down 160ms ease-out;
+  --animate-collapsible-down: collapsible-down var(--motion-base) var(--motion-ease-enter);
   @keyframes collapsible-down {
     from {
       height: 0;
@@ -98,7 +111,7 @@
       height: var(--radix-collapsible-content-height);
     }
   }
-  --animate-collapsible-up: collapsible-up 140ms ease-in;
+  --animate-collapsible-up: collapsible-up var(--motion-base) var(--motion-ease-exit);
   @keyframes collapsible-up {
     from {
       height: var(--radix-collapsible-content-height);
@@ -164,7 +177,7 @@
       transform: translateX(100%);
     }
   }
-  --animate-confirm-in: confirm-in 160ms ease-out;
+  --animate-confirm-in: confirm-in var(--motion-base) var(--motion-ease-enter);
   /* 数据线流动的虚线(见 components/app/canvasEdges):位移 -11 正好是虚线一个周期 6+5,首尾接得上。 */
   --animate-edge-flow: edge-flow 0.6s linear infinite;
   @keyframes edge-flow {
@@ -187,6 +200,13 @@
 /* Open Studio — cool white workspace, clear blue actions, neutral media surfaces.
  * Both themes share semantic roles; custom wallpaper and CSS remain opt-in overrides. */
 :root {
+  /* 动效的三档时长和两种缓动(说明见 @theme 里 --ease-enter 那一段)。 */
+  --motion-fast: 100ms;
+  --motion-base: 160ms;
+  --motion-slow: 240ms;
+  --motion-linger: 600ms;
+  --motion-ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   color-scheme: light;
   --radius: 8px;
   --destructive-foreground: #ffffff;
@@ -783,12 +803,24 @@ body {
   background: transparent;
 }
 
+/* 要求减少动态:过渡和动画都压到一瞬,**循环的只走一遍就停在原样**。此前只压了时长,循环的照旧循环 —— 0.01ms 一圈,
+   每一帧落在随便哪个相位上:转圈的图标停在歪着的角度或者一帧一个角度地抖,语音浮标那一圈卡在半涨开的样子(实测:
+   prefers-reduced-motion 下取到的是 rotate(216°)、scale(1.08) 这种中间态)。只走一遍、不留结尾帧(没有 fill-mode),
+   画出来的就是元素本来的样子。
+   **转圈例外**:它是「还在做」的唯一信号(按钮、列表、加载块上),不停,只放慢 —— 小图标原地转不是减少动态要避开的那种运动。
+   棘轮:design/motion.test.ts。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  .animate-mosael-spin,
+  .animate-spin {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 
@@ -796,8 +828,8 @@ body {
 @layer base {
   :where(button, input, textarea, select, [role="tab"], [role="menuitem"], [role="checkbox"], [role="switch"]) {
     transition-property: color, background-color, border-color, box-shadow;
-    transition-duration: 160ms;
-    transition-timing-function: ease-out;
+    transition-duration: var(--motion-base);
+    transition-timing-function: var(--motion-ease-enter);
   }
 }
 @property --workspace-sticky-presence {
@@ -829,8 +861,8 @@ body {
  */
 .workspace-sticky {
   --workspace-sticky-presence: 1;
-  transition: --workspace-sticky-presence 260ms ease-out, background-color 260ms ease-out,
-    border-color 260ms ease-out;
+  transition: --workspace-sticky-presence var(--motion-slow) var(--motion-ease-enter),
+    background-color var(--motion-slow) var(--motion-ease-enter), border-color var(--motion-slow) var(--motion-ease-enter);
 }
 .workspace-sticky[data-stuck="false"] {
   --workspace-sticky-presence: 0;

@@ -17,6 +17,9 @@ import { extendTailwindMerge } from "tailwind-merge";
  */
 const twMerge = extendTailwindMerge({
   extend: {
+    // 动效的两种缓动(design/tokens.css 的 --ease-enter / --ease-exit)。不登记的话 `ease-enter` 不和 `ease-out` 判成同一组,
+    // 两个都留在 class 里,谁生效看样式表里的先后,不看调用处写的先后。
+    theme: { ease: ["enter", "exit"] },
     classGroups: {
       // 与 design/tokens.css 的 --text-ui-* 一一对应。加新字号要同时加到这里,
       // 否则它在 cn() 里就是不生效 —— 而这件事在页面上看不出是 bug,只看得出"有点怪"。

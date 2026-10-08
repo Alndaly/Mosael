@@ -177,12 +177,12 @@ export const ChatBubble = React.memo(function ChatBubble({
           content={message.content}
           usageEvents={usageEvents}
           durationOverride={payload?.usage?.duration_seconds}
-          className="opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
+          className="opacity-0 transition-opacity duration-100 group-hover/bubble:opacity-100"
         />
       ) : (
         <MessageFooter
           content={message.content}
-          className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
+          className="justify-end opacity-0 transition-opacity duration-100 group-hover/bubble:opacity-100"
         >
           <MessageTime iso={message.created_at} />
         </MessageFooter>

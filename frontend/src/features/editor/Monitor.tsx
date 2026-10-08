@@ -594,7 +594,7 @@ export function Monitor({
           <IconButton variant="ghost" size="icon-sm" onClick={() => stepFrames(-1)} label={t("monFrameBack")} shortcut="←">
             <StepBack size={14} />
           </IconButton>
-          <IconButton variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} label={t("playPause")} shortcut={t("keySpace")}>
+          <IconButton variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-100 hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} label={t("playPause")} shortcut={t("keySpace")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
           </IconButton>
           <IconButton variant="ghost" size="icon-sm" onClick={() => stepFrames(1)} label={t("monFrameForward")} shortcut="→">

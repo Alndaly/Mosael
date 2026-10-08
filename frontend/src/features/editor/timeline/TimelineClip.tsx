@@ -77,7 +77,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       "border-[color-mix(in_oklab,var(--track-subtitle-border)_45%,var(--border))] bg-[color-mix(in_oklab,var(--track-subtitle-border)_18%,var(--panel))] text-[var(--track-subtitle-text)]",
     // 松手落位/涟漪让位由这组过渡完成;拖拽本体靠下面的 duration-0 覆盖成 1:1 跟手
     // (依赖 cn/tailwind-merge 的后者胜出,dragging 分支必须排在 animate 之后)。
-    animate && "transition-[left,width,transform] duration-200 ease-out motion-reduce:transition-none",
+    animate && "transition-[left,width,transform] duration-160 ease-enter motion-reduce:transition-none",
     selected && "z-[2] border-primary shadow-[0_0_0_1px_var(--primary)]",
     dragging && "z-[3] cursor-grabbing opacity-[0.92] duration-0",
     // 脱机:斜纹 + 警示色。**要一眼看出来**,而不是"这一段颜色好像浅一点" —— 它在成片里

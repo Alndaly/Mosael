@@ -34,7 +34,7 @@
 /* Keep tools on the document's baseline; only the scrolled surface gains glass. */
 .note-format-sentinel { height:1px; margin-bottom:-1px; pointer-events:none; }
 .note-format { position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 0; margin-bottom:32px; color:var(--muted-foreground); isolation:isolate; }
-.note-format::before { content:""; position:absolute; inset:0 -12px; z-index:-1; border-radius:0 0 12px 12px; background:transparent; transition:background-color 180ms ease,box-shadow 180ms ease,backdrop-filter 180ms ease; pointer-events:none; }
+.note-format::before { content:""; position:absolute; inset:0 -12px; z-index:-1; border-radius:0 0 12px 12px; background:transparent; transition:background-color var(--motion-base) var(--motion-ease-enter),box-shadow var(--motion-base) var(--motion-ease-enter),backdrop-filter var(--motion-base) var(--motion-ease-enter); pointer-events:none; }
 .note-format[data-stuck=true]::before { background:var(--modal-surface); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); box-shadow:0 6px 18px -12px color-mix(in srgb,var(--foreground) 16%,transparent); }
 .note-format-group { display:flex; align-items:center; gap:2px; flex-shrink:0; }
 .note-format-group + .note-format-group { padding-left:8px; border-left:1px solid color-mix(in srgb,var(--foreground) 7%,transparent); }
@@ -79,7 +79,7 @@
 .note-properties { padding:18px; width:260px; flex-shrink:0; min-height:0; overflow:auto; background:var(--workspace-subtle); font-size:var(--text-ui-xs); }
 .note-properties label { display:block; margin:20px 0 8px; color:var(--muted-foreground); }
 .note-source { padding:12px 0; overflow-wrap:anywhere; }.note-source blockquote { color:var(--muted-foreground); margin:8px 0; line-height:1.6; }
-.notes-layout button { transition:color 160ms,background-color 160ms; cursor:pointer; }.notes-layout button:disabled { opacity:.5; cursor:default; }
+.notes-layout button { transition:color var(--motion-base),background-color var(--motion-base); cursor:pointer; }.notes-layout button:disabled { opacity:.5; cursor:default; }
 @media(max-width:1000px) { .note-properties { width:220px; } }
 @media(max-width:740px) { .notes-layout { flex-direction:column; }.notes-index { flex-basis:auto; max-height:230px; }.note-properties { width:100%; max-height:250px; }.note-body { padding:0 20px 40px; scroll-padding-top:110px; }.note-document-header { padding:8px 12px; }.note-format { gap:6px; margin-bottom:24px; }.note-format-group + .note-format-group { padding-left:6px; }.notes-resize { display:none; } }
 @media(prefers-reduced-motion:reduce) { .notes-layout button,.note-format::before { transition:none; } }
@@ -164,7 +164,7 @@
 .note-image-frame { position:relative; display:block; width:fit-content; max-width:100%; margin:0 auto; }
 .note-image-frame[hidden] { display:none; }
 /* 带上框的类名:后面那条通用的 .note-node-button(透明底、灰字)压不过它。 */
-.note-image-frame .note-image-zoom { position:absolute; top:8px; right:8px; color:#e8eaed; background:rgba(10,12,15,0.72); backdrop-filter:blur(4px); opacity:0; cursor:zoom-in; transition:opacity 150ms; }
+.note-image-frame .note-image-zoom { position:absolute; top:8px; right:8px; color:#e8eaed; background:rgba(10,12,15,0.72); backdrop-filter:blur(4px); opacity:0; cursor:zoom-in; transition:opacity var(--motion-fast); }
 .note-image-frame .note-image-zoom:hover { color:#fff; background:rgba(10,12,15,0.86); }
 .note-image-frame:hover .note-image-zoom,.note-image-frame .note-image-zoom:focus-visible { opacity:1; }
 @media (hover:none) { .note-image-frame .note-image-zoom { opacity:1; } }
@@ -202,7 +202,7 @@
 /* **底色画在整行上,不画在按钮上。** 多选模式下勾选框是行的一部分、却在按钮外面 ——
    底色若只给按钮,悬停时高亮从勾选框右边才开始,左边空着一截,和"已选中"那一档的宽度对不上
    (已选中一直是画在整行上的)。三档共用同一块底,宽度就只有一个说法。 */
-.note-list-entry { display:flex; align-items:flex-start; min-width:0; border-radius:8px; margin-bottom:3px; transition:background-color 160ms ease,color 160ms ease; }
+.note-list-entry { display:flex; align-items:flex-start; min-width:0; border-radius:8px; margin-bottom:3px; transition:background-color var(--motion-base) var(--motion-ease-enter),color var(--motion-base) var(--motion-ease-enter); }
 .note-list-entry:hover { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
 .note-list-entry:has(.note-list-row[aria-current=true]) { background:var(--accent); }
 .note-list-entry .note-list-row { flex:1; min-width:0; margin:0; }

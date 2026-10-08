@@ -20,7 +20,7 @@ export const FLOATING_COLLISION_PADDING = { top: WINDOW_CHROME_HEIGHT + 8, right
  * 语义色该取什么值",调用方照旧写 `border-divider`。
  */
 export const FLOATING_SURFACE = "floating-surface rounded-lg border border-floating-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)]";
-export const FLOATING_MOTION = "duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none motion-reduce:transition-none";
+export const FLOATING_MOTION = "duration-160 ease-enter data-[state=closed]:ease-exit data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none motion-reduce:transition-none";
 export const MODAL_SURFACE = "modal-surface rounded-2xl border border-[var(--modal-border)] bg-[var(--modal-surface)] text-popover-foreground shadow-[var(--shadow-modal)]";
 export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-50 bg-[var(--overlay-modal)]";
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";

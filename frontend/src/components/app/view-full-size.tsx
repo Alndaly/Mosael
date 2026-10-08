@@ -41,7 +41,7 @@ export function ViewFullSizeButton({
         onOpen();
       }}
       className={cn(
-        "nodrag nopan absolute z-[3] grid size-7 cursor-zoom-in place-items-center rounded-md border-0 bg-[rgba(10,12,15,0.72)] p-0 text-[#e8eaed] backdrop-blur-sm transition-opacity duration-150",
+        "nodrag nopan absolute z-[3] grid size-7 cursor-zoom-in place-items-center rounded-md border-0 bg-[rgba(10,12,15,0.72)] p-0 text-[#e8eaed] backdrop-blur-sm transition-opacity duration-160",
         "opacity-0 hover:bg-[rgba(10,12,15,0.86)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/preview:opacity-100 group-focus-within/preview:opacity-100",
         //: 没有悬停的设备(触屏)上一直露着 —— 不然那里永远看不到它。
         "[@media(hover:none)]:opacity-100",

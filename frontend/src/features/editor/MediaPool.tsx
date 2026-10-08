@@ -270,7 +270,7 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
       {...listeners}
       {...attributes}
       data-pool-item={asset.id}
-      className="group/pool relative grid cursor-grab select-none grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-control active:cursor-grabbing"
+      className="group/pool relative grid cursor-grab select-none grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-160 hover:bg-control active:cursor-grabbing"
       onDoubleClick={onAdd}
     >
       {/* 缩略图必须 absolute 铺满(而不是 h-full/w-full):容器是 grid + place-items-center,
@@ -310,7 +310,7 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
       <IconButton
         unstyled
         type="button"
-        className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-popover text-muted-foreground opacity-0 transition-[opacity,color,background-color] duration-150 hover:text-primary group-hover/pool:opacity-100 group-focus-within/pool:opacity-100"
+        className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-popover text-muted-foreground opacity-0 transition-[opacity,color,background-color] duration-160 hover:text-primary group-hover/pool:opacity-100 group-focus-within/pool:opacity-100"
         label={t("addToTimeline")}
         onClick={(event) => {
           event.stopPropagation();

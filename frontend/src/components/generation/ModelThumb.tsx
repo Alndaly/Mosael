@@ -68,7 +68,7 @@ export const modelSubFolder = (name: string) => normModelName(name).split("/").s
  * 放大一点再模糊:模糊会把边缘晕成半透明,放大后由外层的 `overflow-hidden` 裁掉。
  */
 const REVEAL =
-  "transition-[filter,transform,opacity] duration-150 motion-reduce:transition-none " +
+  "transition-[filter,transform,opacity] duration-160 motion-reduce:transition-none " +
   "group-hover/thumb:scale-100 group-hover/thumb:blur-none " +
   "group-focus-visible/thumb:scale-100 group-focus-visible/thumb:blur-none " +
   "group-has-[:focus-visible]/thumb:scale-100 group-has-[:focus-visible]/thumb:blur-none";
@@ -185,7 +185,7 @@ export function ModelThumb({
       data-loading={loaded === src ? undefined : ""}
       data-treatment={treatment}
       className={cn(
-        "bg-secondary object-cover opacity-0 transition-opacity duration-150 motion-reduce:transition-none data-[loaded]:opacity-100",
+        "bg-secondary object-cover opacity-0 transition-opacity duration-160 motion-reduce:transition-none data-[loaded]:opacity-100",
         BLUR_CLASS[treatment],
         className,
       )}

@@ -44,7 +44,7 @@ export function InspectorCard({
       {onToggle && (
         <ChevronRight
           size={11}
-          className={cn("shrink-0 opacity-50 transition-transform duration-[120ms]", open && "rotate-90")}
+          className={cn("shrink-0 opacity-50 transition-transform duration-100", open && "rotate-90")}
           aria-hidden
         />
       )}

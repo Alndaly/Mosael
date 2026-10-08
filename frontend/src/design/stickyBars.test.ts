@@ -44,7 +44,8 @@ describe("吸顶栏", () => {
     for (const property of ["--workspace-sticky-presence", "background-color", "border-color"]) {
       expect(transition).toContain(property);
     }
-    expect(transition).toMatch(/\d+ms/);
+    // 有时长(动效刻度上的一档,见 design/motion.test.ts),不是 0。
+    expect(transition).toMatch(/\d+ms|var\(--motion-(fast|base|slow)\)/);
     // 要求减少动效的人拿到的是瞬时切换,而不是"没有底色"。
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*?\.workspace-sticky \{ transition-duration: 0ms/);
   });

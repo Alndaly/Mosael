@@ -187,7 +187,7 @@ export function PanelResizeHandles({
           label={t(CORNER_LABEL[corner])}
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
           data-resize-handle={corner}
-          className="pointer-events-auto fixed z-[70] rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-[opacity,color] duration-150 hover:text-foreground focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[visible=true]/resize:opacity-100 group-has-[:focus-visible]/resize:opacity-100"
+          className="pointer-events-auto fixed z-[70] rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-[opacity,color] duration-160 hover:text-foreground focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[visible=true]/resize:opacity-100 group-has-[:focus-visible]/resize:opacity-100"
           style={{ ...cornerZone(corner, card), cursor: RESIZE_CURSOR[corner] }}
           onPointerDown={(event) => startResize(event, corner)}
           onKeyDown={(event) => keyResize(event, corner)}

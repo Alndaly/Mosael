@@ -381,7 +381,7 @@ export function Recorder({
                 key={s}
                 type="button"
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                  "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground",
                   source === s &&
                     "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
                 )}

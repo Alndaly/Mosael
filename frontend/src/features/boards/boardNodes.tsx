@@ -279,7 +279,7 @@ function useRunState(item: BoardItem) {
   return {
     "data-board-run-status": actual,
     "data-board-just-ran": flash ? "" : undefined,
-    className: cn(RUN_STATE_CLASS[status], "transition-colors duration-700", flash && "border-success/60"),
+    className: cn(RUN_STATE_CLASS[status], "transition-colors duration-600", flash && "border-success/60"),
   } as const;
 }
 

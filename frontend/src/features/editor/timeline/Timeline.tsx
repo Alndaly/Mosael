@@ -977,7 +977,7 @@ export function Timeline({
             <Hint label={t("toolSelectHint")} shortcut="A">
               <button
                 type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-pressed={tool === "select"}
                 onClick={() => useEditorStore.getState().setTool("select")}
               >
@@ -987,7 +987,7 @@ export function Timeline({
             <Hint label={t("toolBladeHint")} shortcut="B">
               <button
                 type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-pressed={tool === "blade"}
                 onClick={() => useEditorStore.getState().setTool("blade")}
               >
@@ -999,7 +999,7 @@ export function Timeline({
             <Hint label={t("editModeOverwriteHint")}>
               <button
                 type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-pressed={editMode === "overwrite"}
                 onClick={() => useEditorStore.getState().setEditMode("overwrite")}
               >
@@ -1009,7 +1009,7 @@ export function Timeline({
             <Hint label={t("editModeInsertHint")}>
               <button
                 type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-pressed={editMode === "insert"}
                 onClick={() => useEditorStore.getState().setEditMode("insert")}
               >

@@ -163,7 +163,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
         className={cn(
           "pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full",
           "border border-floating-border bg-panel/95 px-2.5 py-1 text-ui-sm text-foreground",
-          "shadow-[var(--shadow-panel)] backdrop-blur-xl transition-opacity duration-200",
+          "shadow-[var(--shadow-panel)] backdrop-blur-xl transition-opacity duration-160",
           // 听到的原话可能很长,给个上限并省略 —— 一条横穿屏幕的提示比不显示更糟。
           "max-w-[260px] overflow-hidden text-ellipsis",
           captionOnLeft ? "right-[60px]" : "left-[60px]",

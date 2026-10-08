@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ReactFlowInstance } from "@xyflow/react";
-import { centerCanvasViewport, excludeCanvasOverlay, visibleCanvasSize } from "./fitCanvasViewport";
+import { canvasCameraDuration, centerCanvasViewport, excludeCanvasOverlay, visibleCanvasSize } from "./fitCanvasViewport";
 
 describe("visibleCanvasSize", () => {
   it("removes docked overlays from the fit viewport", () => {
@@ -64,5 +64,29 @@ describe("excludeCanvasOverlay", () => {
   it("can use the area below a shallow floating panel", () => {
     expect(excludeCanvasOverlay(1200, 800, {}, { left: 50, top: 10, right: 1150, bottom: 200 }))
       .toEqual({ left: 0, top: 208, right: 0, bottom: 0 });
+  });
+});
+
+describe("canvasCameraDuration", () => {
+  it("要求减少动态时视口直接跳到,不飞过去", () => {
+    vi.stubGlobal("window", { matchMedia: (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)" }) });
+    try {
+      expect(canvasCameraDuration(350)).toBe(0);
+      const setViewport = vi.fn();
+      const instance = { setViewport, getZoom: () => 1 } as unknown as ReactFlowInstance;
+      centerCanvasViewport(instance, { clientWidth: 800, clientHeight: 600 } as HTMLElement, { x: 0, y: 0 });
+      expect(setViewport.mock.calls[0][1]).toEqual({ duration: 0 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("没要求时照给的时长", () => {
+    vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+    try {
+      expect(canvasCameraDuration(350)).toBe(350);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

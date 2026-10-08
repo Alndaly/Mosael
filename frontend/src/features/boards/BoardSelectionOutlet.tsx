@@ -180,7 +180,7 @@ export function BoardSelectionOutlet({
         data-selection-frame=""
         aria-hidden
         className={cn(
-          "absolute rounded-2xl border border-dashed transition-colors duration-150",
+          "absolute rounded-2xl border border-dashed transition-colors duration-160",
           point ? "border-primary/70" : "border-primary/45",
         )}
         style={{ left, top, width, height }}

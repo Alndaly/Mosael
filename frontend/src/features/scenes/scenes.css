@@ -314,7 +314,7 @@
   color: var(--foreground);
   font-size: var(--text-ui-xs);
   font-family: var(--font-mono);
-  transition: background-color 140ms ease, border-color 140ms ease;
+  transition: background-color var(--motion-base) var(--motion-ease-enter), border-color var(--motion-base) var(--motion-ease-enter);
 }
 .scene-number input:hover,
 .scene-number [role="combobox"]:hover {
@@ -618,7 +618,7 @@
 .scene-panel-toggle svg {
   flex-shrink: 0;
   color: var(--muted-foreground);
-  transition: transform 140ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease-enter);
 }
 .scene-panel[data-open="false"] .scene-panel-toggle svg {
   transform: rotate(-90deg);
@@ -767,7 +767,7 @@
 }
 .scene-subsection-toggle svg {
   flex-shrink: 0;
-  transition: transform 140ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease-enter);
 }
 .scene-subsection[data-state="open"] > .scene-subsection-toggle svg {
   transform: rotate(90deg);
@@ -1091,7 +1091,7 @@
 .scene-blender-heading p, .scene-blender small, .scene-blender-result > span { color: var(--muted-foreground); font-size: var(--text-ui-xs); line-height: 1.6; }
 .scene-blender-heading strong { font-size: var(--text-ui-sm); }
 .scene-blender-connection > :first-child { flex: 1; min-width: 0; }
-.scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease; }
+.scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color var(--motion-base) var(--motion-ease-enter), color var(--motion-base) var(--motion-ease-enter), opacity var(--motion-base) var(--motion-ease-enter); }
 .scene-blender-action:hover:not(:disabled) { background: var(--accent); }
 .scene-blender-action:disabled { opacity: .45; cursor: default; }
 .scene-blender-action > span { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
@@ -1259,7 +1259,7 @@
   line-height: 1;
   cursor: pointer;
   /* 背面的球透明度由内联样式给(它跟着深度走),这里只管过渡。 */
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease-enter), box-shadow var(--motion-fast) var(--motion-ease-enter);
 }
 .scene-axis-ball:hover,
 .scene-axis-ball:focus-visible {
@@ -1291,6 +1291,6 @@ button.scene-object-twist:hover {
   color: var(--foreground);
 }
 .scene-object-twist svg {
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease-enter);
 }
 }
