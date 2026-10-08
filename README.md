@@ -285,7 +285,7 @@ says why in the console. `vite build` reads the variable too; release builds don
 The same steps as CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml), which runs them as three parallel jobs: the quick checks, the frontend, the backend) — keep the two in sync:
 
 ```bash
-pnpm lint                                   # oxlint (frontend, website) + ruff (backend, community, packages/mosael-formats)
+pnpm lint                                   # leftover merge-conflict markers + oxlint (frontend, website) + ruff (backend, community, packages/mosael-formats)
 pnpm --dir frontend build                   # tsc --noEmit + vite build; the backend's burned-in text tests render with this dist
 (cd backend && uv run --frozen python -m pytest -q)
 pnpm --dir frontend exec vitest run

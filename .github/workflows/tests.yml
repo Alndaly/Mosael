@@ -54,6 +54,7 @@ jobs:
           }
 
       # 五处 lint(frontend、website 的 oxlint,backend、community、packages/mosael-formats 的 ruff)都是零告警,所以它能当闸用 —— 一条开局几百条警告的 lint 只能当摆设。
+      # 打头的是 scripts/check-conflict-markers.py:被跟踪的文本文件里不许留着合并冲突的标记(e36342248 漏进 CHANGELOG 过一行)。
       # 放在测试前面:它几秒钟就跑完,而且它抓的那类问题(未定义名字、未用变量)在测试
       # 里往往表现为一个八竿子打不着的报错。
       - name: Lint
