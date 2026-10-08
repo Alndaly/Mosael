@@ -231,8 +231,7 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
 def _apply_moves(db: Session, instance: PluginInstance, raw: Any, names: set[str]) -> None:
     """插件说有几个工具名改了意思(一次性的改名,ADR 0045,见 plugins.moves):这个连接上没做过的那几批做一次 —— 开关
     跟着新名字(在按推荐补开关之前,不然新名字先被补成推荐的那一档),存着的工作流节点、画板格子改到新名字,记账。
-    改不成就整个撤掉、不记账,下次刷新再来:改名在一个保存点里做,撤的只是它,清单本身照样和它在同一笔里提交。
-    (保存点开在清单那次 flush 之后,外层事务已经开着 —— 不会成了最外层、RELEASE 时自己先提交。)不提交。"""
+    改不成就整个撤掉、不记账,下次刷新再来:改名在一个保存点里做,撤的只是它,清单本身照样和它在同一笔里提交。不提交。"""
     moves = plugin_moves.pending(instance, TOOLS, plugin_moves.clean_moves(raw, names))
     if not moves:
         return

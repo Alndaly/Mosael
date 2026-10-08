@@ -190,11 +190,24 @@
 `tests/test_schema_version_follows_the_migrations.py` 会红 —— 此前这个数停在 4 而其间加了几十步,v1.9.3 照常打开 main 迁过的库,
 智能体页随即 `no such column`。
 
+### 写锁:攥着它的时候不做长活
+
+SQLite 同一时刻只有一个写事务。从第一句写到提交,别的写入(别的节点、请求、任务进度)都在排队,最多等 `core/db.LOCK_WAIT_SECONDS`。
+所以写过之后不做长活(调供应商、等子任务、跑插件进程):先提交再等,见 `executors.common.connection_handed_back`、
+`plugins.tools._plugin_slot`。攥写锁超过 `LONG_WRITE_SECONDS` 的事务、等不到锁的那一句,`core/db` 都记一条警告,点名攥锁的线程
+和它从哪一行开始写 —— 查「database is locked」先看这两条。
+
+- 先读后写不用特意开 `BEGIN IMMEDIATE`:pysqlite 只在第一句写之前才 BEGIN,之前的读各自自动提交,第一句写排队等锁。
+  要「判和写之间不许别人插进来」才用 `immediate_unit_of_work`(浏览器会话的租约)。
+- 保存点(`begin_nested`)可以放心用:事务里还没写过时开保存点,`core/db` 先 `BEGIN IMMEDIATE`,保存点从来不是最外层
+  (否则 SQLite 把它当成延迟事务的开头:里面先读后写当场报 database is locked,RELEASE 还会当场提交)。
+  棘轮:`tests/test_writes_wait_for_the_write_lock.py`、`tests/test_unit_of_work.py`。
+
 ### 批量维护不把行读成 ORM 对象
 
 清理、批量删这类「一次动成千上万行」的活:先用集合式查询挑出 id(读,不占写锁),再按批删、一批一个事务,删用
 `execution_options(synchronize_session=False)`(或 Core 的表达式)。ORM 的 DELETE 默认把身份映射里的全部对象过一遍,
-读进来的行越多越是平方级,而整段攥着写锁,别的写入 5 秒后失败(见 jobs.prunable_task_events / finished_job_trees)。
+读进来的行越多越是平方级,而整段攥着写锁,别的写入等满上限就失败(见 jobs.prunable_task_events / finished_job_trees)。
 一次放下很多段片段同理:`coverage.TrackCover` 只查一次轨,二分找落点,不逐段 `clear_range`。
 
 ### JSON 里点名的别的记录,反查走引用表

@@ -233,6 +233,22 @@ class module_time:  # noqa: N801 — 用起来像一个模块(`module_time(sleep
         return getattr(time, name)
 
 
+@contextlib.contextmanager
+def lock_wait(seconds: float):
+    """这一段里写入等写锁的上限换成 `seconds`(`core.db.LOCK_WAIT_SECONDS`):要「等满了还没拿到锁」的测试
+    不必陪着等满 30 秒。连接在建立时读这个数,所以进出各清一次连接池,这一段里新建的连接都用它。"""
+    from app.core import db as core_db
+
+    saved = core_db.LOCK_WAIT_SECONDS
+    core_db.LOCK_WAIT_SECONDS = seconds
+    engine.dispose()
+    try:
+        yield
+    finally:
+        core_db.LOCK_WAIT_SECONDS = saved
+        engine.dispose()
+
+
 def until(predicate, timeout: float = 30.0, interval: float = 0.02) -> bool:
     """等一个条件成立:成立就返回 True,到上限还不成立返回 False —— 调用处写 `assert until(...), "等的是什么"`。
 

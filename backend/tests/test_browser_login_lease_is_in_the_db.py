@@ -17,7 +17,7 @@ from app.core.db import SessionLocal, engine
 from app.db.migrations import _migrate_browser_sessions_one_open_per_login
 from app.db.models import BrowserAction, BrowserSession, User
 from app.domain import browser
-from tests.util import fresh_client
+from tests.util import fresh_client, lock_wait
 
 
 def _ws() -> str:
@@ -143,7 +143,7 @@ class _WriteLockHolder:
 def test_库被别的写事务占着一会儿_打开会话等它放手_不报database_is_locked() -> None:
     ws = _ws()
     holder = _WriteLockHolder()
-    #: 占一秒再放手:打开会话在这一秒里等着(busy_timeout 5 秒)。计时器晚了只是占得更久一点。
+    #: 占一秒再放手:打开会话在这一秒里等着(等锁的上限见 core.db.LOCK_WAIT_SECONDS)。计时器晚了只是占得更久一点。
     letting_go = threading.Timer(1.0, holder.release)
     letting_go.start()
     try:
@@ -156,18 +156,18 @@ def test_库被别的写事务占着一会儿_打开会话等它放手_不报dat
     assert [row.id for row in _open_rows(browser.named_partition(ws, "xhs"))] == [session.id]
 
 
-def test_库一直被占着_重试完按被占用报_不是sqlite的错(monkeypatch) -> None:
+def test_库一直被占着_等满了按被占用报_不是sqlite的错() -> None:
     ws = _ws()
-    monkeypatch.setattr(browser, "LEASE_ATTEMPTS", 1)
-    holder = _WriteLockHolder()  # 打开会话报错之前一直占着:比 busy_timeout(5 秒)长
-    try:
-        with SessionLocal() as db, pytest.raises(browser.BrowserDomainError) as caught:
-            browser.open_session(
-                db, workspace_id=ws, kind="named", name="xhs", owner_kind="workflow", owner_id="run-1", actor=None
-            )
-        assert caught.value.key == "browserErr_sessionBusy"
-    finally:
-        holder.release()
+    with lock_wait(0.5):
+        holder = _WriteLockHolder()  # 打开会话报错之前一直占着:比等锁的上限长
+        try:
+            with SessionLocal() as db, pytest.raises(browser.BrowserDomainError) as caught:
+                browser.open_session(
+                    db, workspace_id=ws, kind="named", name="xhs", owner_kind="workflow", owner_id="run-1", actor=None
+                )
+            assert caught.value.key == "browserErr_sessionBusy"
+        finally:
+            holder.release()
 
 
 def test_库里直接插第二个开着的具名会话_被索引拒绝() -> None:

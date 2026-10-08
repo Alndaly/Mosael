@@ -362,10 +362,6 @@ def login_notice(db: Session, session: BrowserSession) -> str:
     return tr("browserNotice_loginNotCarriedOver", name=session.name, detail=move.reason)
 
 
-#: 拿租约时库被别的写事务占着(每次最多等 busy_timeout 5 秒),最多试几次;都没拿到就按「被占用」报。
-LEASE_ATTEMPTS = 3
-
-
 def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], BrowserDomainError]) -> BrowserSession:
     """具名 / 池档案会话的租约:这份登录(分区)上已经开着的那个归同一个 owner 就复用,归别人就拒;没有就开 `wanted`。
     占着它的那个早就没人用了(智能体没关、运行异常退出)的话先收回来再判(见 reclaim_idle_sessions)。
@@ -377,17 +373,16 @@ def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], Brow
 
     这里提交调用方的会话(open_session 一直会提交它:紧接着的动作在别的连接里读这个会话),只是挪到了租约之前 ——
     它要是攥着写锁,租约那个连接就会排在它自己身后等满超时。
+
+    库被别的写事务占着时,拿锁照全库的等锁预算排队(core.db.LOCK_WAIT_SECONDS);等满了还没拿到,按「被占用」报。
     """
     db.commit()
-    for attempt in range(LEASE_ATTEMPTS):
-        try:
-            session_id = _lease_once(wanted, busy)
-            break
-        except OperationalError as exc:
-            if "database is locked" not in str(exc):
-                raise
-            if attempt == LEASE_ATTEMPTS - 1:
-                raise busy() from exc
+    try:
+        session_id = _lease_once(wanted, busy)
+    except OperationalError as exc:
+        if "database is locked" not in str(exc):
+            raise
+        raise busy() from exc
     session = db.get(BrowserSession, session_id)
     assert session is not None  # 刚在租约的事务里提交过
     return session

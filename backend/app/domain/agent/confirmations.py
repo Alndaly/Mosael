@@ -245,8 +245,6 @@ def approve_confirmation(
         #
         # 撤得干净是因为 `_claim` 刚提交过:从那一刻起会话里只有执行体的改动,回滚正好就是它那一段
         # (提交之后才跑的钩子 —— 删文件、起任务线程 —— 跟着丢掉,见 core/unit_of_work)。
-        # 不用保存点(`begin_nested`):认领提交之后 SQLite 上还没有打开的事务,SAVEPOINT 就成了最外层,
-        # 执行成功时的 RELEASE 会当场提交执行体的改动,早于卡的状态(tests/test_unit_of_work 钉着这件事)。
         db.rollback()
         confirmation.status = "failed"
         #: **整句存下,不按位置截**(与 jobs.blame 同一条):`error` 是 Text 列,长短是界面排版的事 —— 卡上过长的

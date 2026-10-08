@@ -89,20 +89,17 @@ def test_回滚到保存点_里面登记的钩子不跑_外面的照跑(probe) -
     assert seen == ["outer", "inner-kept"]
 
 
-def test_保存点是事务里的第一句时_释放它就是提交(probe) -> None:
-    """为什么批准确认卡不用保存点包执行体(见 domain/agent/confirmations.approve_confirmation)。
-
-    pysqlite 只在第一句写之前自己 BEGIN。事务里还没写过时开保存点,SQLite 把 SAVEPOINT 当成最外层事务的开头,
-    于是 RELEASE 当场提交 —— 外层之后回滚,保存点里写的也收不回来了。钉住这件事:哪天连接设置改了、它不再成立,
-    这条会红,那时才可以改用保存点。
-    """
+def test_保存点是事务里的第一句时_外层回滚照样收回它(probe) -> None:
+    """pysqlite 只在第一句写之前自己 BEGIN,SAVEPOINT 不算写。此前事务里还没写过时开保存点,SQLite 把它当成最外层
+    事务的开头,RELEASE 当场提交 —— 外层之后回滚,保存点里写的收不回来。现在这种保存点开在一个 `BEGIN IMMEDIATE`
+    里(core/db),从来不是最外层:释放它只是并进外层,外层回滚一起撤。"""
     from app.core.db import SessionLocal
 
     with SessionLocal() as db:
         with db.begin_nested():
             _write(db, "released")
         db.rollback()
-    assert probe() == ["released"]
+    assert probe() == []
 
 
 def _app() -> FastAPI:

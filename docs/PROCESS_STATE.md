@@ -114,6 +114,9 @@
 - `app/media/render_executor.py:_FILTER_SCRIPT_FLAGS`(本机 ffmpeg 从文件读滤镜图用哪种写法)、
   `app/media/render_executor.py:_HW_SELF_TESTED`(硬件编码小样自检通过过的分辨率与参数)——
   都是"问过 ffmpeg 了"。只记成功的探测,重启后第一次导出再问一遍,多花零点几秒。
+- `app/core/db.py:_writers` — 这个进程里谁正攥着 SQLite 的写锁(第一句写在什么时候、哪个线程、从哪一行开始写),只用来在
+  database is locked 的报错和「写锁攥太久」的警告里点名,不参与任何判断。重启后是空的,那时也没有在攥锁的事务;多进程下各记各的,
+  攥锁的要是另一个进程,报错里说「锁在别的进程手里」。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
 - `app/media/filmstrip.py:_making` — 每个素材目录一把锁:同一段素材的帧条同时只做一份,后到的等它做完直接拿(画板上同一段
   素材挂了好几处时,此前各起一份 ffmpeg)。帧条本身和「做不出来」的标记都在素材目录里,重启不丢;多进程下各锁各的,
