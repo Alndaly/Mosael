@@ -14,7 +14,8 @@ import { workspaceKeys } from "@/api/queryKeys";
 import { readHint } from "@/test/hint";
 
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  //: 退出确认的文案带着「{name}」槽:看填进去的是工作区名还是自己的用户名。
+  useI18n: () => (key: string) => (key === "teamLeaveConfirm" ? "teamLeaveConfirm「{name}」" : key),
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
@@ -24,6 +25,7 @@ const h = vi.hoisted(() => ({
   members: [] as Array<Record<string, unknown>>,
   sent: [] as Array<Record<string, unknown>>,
   activity: [] as Array<Record<string, unknown>>,
+  sentCalls: 0,
   deleteWorkspace: vi.fn(),
   inviteMember: vi.fn(),
   revokeInvitation: vi.fn(),
@@ -31,7 +33,10 @@ const h = vi.hoisted(() => ({
 vi.mock("@/api/client", () => ({
   listWorkspaces: async () => h.server,
   listMembers: async () => ({ my_role: h.role, members: h.members }),
-  sentInvitations: async () => ({ invitations: h.sent }),
+  sentInvitations: async () => {
+    h.sentCalls += 1;
+    return { invitations: h.sent };
+  },
   revokeInvitation: (wid: string, id: string) => h.revokeInvitation(wid, id),
   listActivity: async () => h.activity,
   deleteWorkspace: (id: string) => h.deleteWorkspace(id),
@@ -58,6 +63,7 @@ beforeEach(() => {
   h.members = [];
   h.sent = [];
   h.activity = [];
+  h.sentCalls = 0;
   h.inviteMember.mockReset();
   h.revokeInvitation.mockReset();
   h.revokeInvitation.mockResolvedValue(undefined);
@@ -140,6 +146,7 @@ it("编辑看不到发出去的邀请(和后端同一道闸),也就不去要", a
   mount(h.server[0]);
   await screen.findByText("Studio");
   await waitFor(() => expect(screen.queryByText("Mate")).toBeNull());
+  expect(h.sentCalls).toBe(0);
 });
 
 //: 体检 UM-29:退出确认此前把自己的用户名当成工作区名(「确定退出「uiviewer」所在的工作区?」)。
@@ -150,7 +157,7 @@ it("退出确认里写的是工作区名,不是自己的用户名", async () => 
   mount(h.server[0]);
   fireEvent.click(await screen.findByRole("button", { name: "teamLeave" }));
   const dialog = await screen.findByRole("alertdialog");
-  expect(dialog.textContent).toContain("teamLeaveConfirm");
+  expect(dialog.textContent).toContain("teamLeaveConfirm「Studio」");
   expect(dialog.textContent).not.toContain("uiviewer");
 });
 

@@ -74,4 +74,9 @@ it("两张邀请卡:点了一张的「接受」,只有那一个键在转,另一�
   expect(within(cards[0]).getByRole("button", { name: /notifInviteDecline/ })).toBeDisabled();
   expect(within(cards[1]).getByRole("button", { name: /notifInviteAccept/ })).toBeEnabled();
   expect(within(cards[1]).getByRole("button", { name: /notifInviteAccept/ })).not.toHaveAttribute("aria-busy");
+
+  //: 点另一张的「拒绝」:转的是那张的「拒绝」,它的「接受」按不动。
+  fireEvent.click(within(cards[1]).getByRole("button", { name: /notifInviteDecline/ }));
+  await waitFor(() => expect(within(cards[1]).getByRole("button", { name: /notifInviteDecline/ })).toHaveAttribute("aria-busy", "true"));
+  expect(within(cards[1]).getByRole("button", { name: /notifInviteAccept/ })).toBeDisabled();
 });

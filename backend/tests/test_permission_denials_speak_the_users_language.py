@@ -41,3 +41,8 @@ def test_编辑去管成员_说要管理员或所有者() -> None:
     )
     assert denied.status_code == 403
     assert "「管理员」" in denied.json()["detail"] and "Insufficient" not in denied.json()["detail"]
+
+    me = editor.get("/api/auth/me").json()["id"]
+    demoted = editor.patch(f"/api/workspaces/{ws}/members/{me}", json={"role": "viewer"}, headers={"Accept-Language": "en-US"})
+    assert demoted.status_code == 403
+    assert "Admin or Owner" in demoted.json()["detail"] and "Insufficient" not in demoted.json()["detail"]
