@@ -510,7 +510,7 @@ def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | Non
         return Unusable(PluginDomainError("pluginErr_nodeNoConnection", plugin=plugin))
     tool_shown = tool_name
     upgrade_in = ""
-    details: list[str] = []
+    details: list[tuple[str, str]] = []  # (连接名, 卡在哪)
     for instance in connections:
         # 先认出工具叫什么,再看连接卡在哪:被挡的连接缓存着的清单里也有它的名字 —— 此前被挡就直接跳过,
         # 报错里露的是调用名(ComfyUI 每张工作流一个的 `wf_<哈希>`),用户认不出是哪个。
@@ -519,7 +519,7 @@ def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | Non
             tool_shown = tool_label(tool) or tool_name
         blocked = inst.blocked_reason(db, instance)
         if blocked:
-            details.append(tr("pluginWhy_connection", name=instance.name, reason=blocked))
+            details.append((instance.name, blocked))
             continue
         if tool is None:
             # 清单上没有它:清单上一次没拉下来时说那个原因(服务没开、超时)—— 那时说「插件更新后去掉了它」是错的,
@@ -534,17 +534,31 @@ def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | Non
                 upgrade_in = upgrade_in or (instance.id if explained.upgrade else "")
             else:
                 reason = tr("pluginWhy_toolGone")
-            details.append(tr("pluginWhy_connection", name=instance.name, reason=reason))
+            details.append((instance.name, reason))
             continue
         if tool["internal"]:
-            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolInternal")))
+            details.append((instance.name, tr("pluginWhy_toolInternal")))
         elif tool_name not in inst.exposed_tools(db, instance.id):
-            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolNotExposed")))
+            details.append((instance.name, tr("pluginWhy_toolNotExposed")))
         else:
             return None
     return Unusable(PluginDomainError(
-        "pluginErr_nodeUnusable", plugin=plugin, tool=tool_shown, details=tr("punct_listSep").join(details)
+        "pluginErr_nodeUnusable", plugin=plugin, tool=tool_shown, details=_per_connection(details)
     ), upgrade_in)
+
+
+def _per_connection(details: list[tuple[str, str]]) -> str:
+    """逐条说每个连接卡在哪;几个连接卡在同一处(指着同一台服务器的两条连接,工作流都要升级)就并成一条、原因只说一遍 ——
+    此前一条一句,同一段话重复几遍,真正不一样的那条反而淹在里面。顺序按各原因第一次出现。"""
+    grouped: dict[str, list[str]] = {}
+    for name, reason in details:
+        grouped.setdefault(reason, []).append(name)
+    parts = [
+        tr("pluginWhy_connection", name=names[0], reason=reason) if len(names) == 1
+        else tr("pluginWhy_connections", names=tr("pluginWhy_nameSep").join(names), reason=reason)
+        for reason, names in grouped.items()
+    ]
+    return tr("punct_listSep").join(parts)
 
 
 def _explained(db: Session, instance: Any, tool_name: str) -> Any:

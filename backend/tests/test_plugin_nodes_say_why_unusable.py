@@ -13,6 +13,7 @@ from app.core.db import SessionLocal
 from app.db.models import PluginInstance
 from app.domain.plugins import instances as inst
 from app.domain.plugins.nodes import plugin_node_types, why_unusable
+from app.domain.plugins.tools import refresh_tools
 from app.domain.workflows import WorkflowDomainError, create_workflow
 from app.domain.workflows.engine import start_workflow_job
 from tests.test_plugin_nodes_hold_what_they_declare import PACKAGE, _graph, _install
@@ -110,3 +111,23 @@ def test_接口按请求方说出用不了的那几个(tmp_path) -> None:
     body = answer.json()
     assert [one["type"] for one in body] == [f"plugin.{PACKAGE}.render"]
     assert "勾选" in body[0]["reason"]
+
+
+def test_几个连接卡在同一处_原因只说一遍_连接名都在(tmp_path) -> None:
+    """指着同一台服务器的两条连接,卡在同一处(这里:都没勾这个工具)—— 此前一条连接一句,同一段话重复几遍;
+    卡在不同处的那条照样单独说。"""
+    fresh_client()
+    first = _install(tmp_path, user_id())
+    with SessionLocal() as db:
+        second = PluginInstance(package_id=PACKAGE, name="第二台", enabled=True, owner_user_id=user_id())
+        third = PluginInstance(package_id=PACKAGE, name="第三台", enabled=False, owner_user_id=user_id())
+        db.add_all([second, third])
+        db.commit()
+        refresh_tools(db, second, notify=False)
+        for instance_id in (first, second.id):
+            inst.set_exposed(db, db.get(PluginInstance, instance_id), {"join": False})
+        db.commit()
+        reason = str(why_unusable(db, f"plugin.{PACKAGE}.join", user_id()))
+    assert reason.count("没有勾选这个工具") == 1, reason
+    assert "连接「我的列表器」「第二台」没有勾选这个工具" in reason, reason
+    assert "连接「第三台」" in reason and "未启用" in reason, reason

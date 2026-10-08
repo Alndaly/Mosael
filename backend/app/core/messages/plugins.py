@@ -538,6 +538,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{tool}” from “{plugin}” can't be used: {details}",
     },
     "pluginWhy_connection": {"zh": "连接「{name}」{reason}", "en": "connection “{name}”: {reason}"},
+    #: 几个连接卡在同一处:原因按单个连接的句式写(「上已经没有…」「has…」),并起来也这样接
+    "pluginWhy_connections": {"zh": "连接「{names}」{reason}", "en": "each of the connections “{names}”: {reason}"},
+    "pluginWhy_nameSep": {"zh": "」「", "en": "”, “"},
     "pluginWhy_toolGone": {
         "zh": "上已经没有这个工具了(插件更新后去掉了它)",
         "en": "no longer has this tool (the plugin dropped it in an update)",
