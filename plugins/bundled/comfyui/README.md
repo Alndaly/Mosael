@@ -548,6 +548,20 @@ besides the failure text, so the host's AI Studio failure card and board cells s
   same shape.
 - To add a known error to `known_failures.py`: `Known(pattern, cause, steps)`, with steps as `Step(text, command)`.
 
+## The upgrade gap, and renames in the workflow library (1.23.0, ADR 0045 revision 2)
+
+- **An old-format workflow with forms reports no entries until it's upgraded** (`app_form.Marks.forms_await_upgrade`): `op: models` /
+  `op: tools` leave out its full entry, and naming it directly says to upgrade first. Old references (board cells, sessions, workflow
+  nodes and scheduled tasks storing `<path>` / `wf_<id>`) meant the form back then; listing it would run the full workflow instead. Left
+  out, they fall into the host's "remembered but unavailable · needs upgrade" path. Old-format files with only result marks are listed
+  as before. Once upgraded both entries and the one-time move come back.
+- **`op: explain` gains a `tools` half**: `{"op": "explain", "tools": ["wf_…"]}` → `{"tools": [{name, label, group, reason, upgrade}]}`
+  — why a workflow's plugin node is unusable (old-format forms to upgrade, form deleted, workflow gone, can't run); the `ids` half also
+  recognises a full entry id in the gap.
+- **Rename answers carry `moved`**: when `rename_workflow` / `rename_folder` succeed they report what each entry's model id became, and
+  the tool names that changed (id-based names don't; path-hash names do; the not-yet-upgraded old form counts too) for that workflow or
+  every one in the folder. The host moves its stored references in the same request and records nothing in the one-time move ledger.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's
