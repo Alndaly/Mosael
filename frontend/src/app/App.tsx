@@ -53,6 +53,7 @@ import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { useToastClearance } from "@/components/app/toastClearance";
+import { useDesignSheetRoute } from "@/dev/designSheetRoute";
 import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -88,6 +89,9 @@ import { SectionBoundary } from "@/components/app/errorBoundary";
 //: 和整个插件工作台 —— 静态 import 时这些都在首屏关键路径上(首屏 JS 78 个文件 / 2.8 MB;改成懒加载、文案表按语言分块之后 32 个 / 1.3 MB)。
 //: app/pageChunks.test.ts 盯着入口的静态依赖闭包,不让它们再回来。
 const ComfyWorkbench = React.lazy(() => import("@/features/plugins/workbench/ComfyWorkbench").then((m) => ({ default: m.ComfyWorkbench })));
+//: 设计语言的规格样张(docs/DESIGN_LANGUAGE.md):**只在开发构建里有**。发行构建里 import.meta.env.DEV 是常量 false,
+//: 这一行连同那个懒加载的模块一起被摇掉,发行包里没有这一页。
+const DesignSheet = import.meta.env.DEV ? React.lazy(() => import("@/dev/DesignSheet").then((m) => ({ default: m.DesignSheet }))) : null;
 
 /** 内嵌视图那一圈出错时:请主进程把原生网页视图收起来(和「返回 Mosael」一样)—— 不然一块光秃秃的网页盖在一切上面,出口都没了。 */
 const hideNativeView = () => void window.mosaelPublish?.hideView().catch(() => undefined);
@@ -123,7 +127,7 @@ export function App() {
             <TooltipProvider delayDuration={300}>
               <AuthProvider>
                 <ImagePreviewProvider>
-                  <AuthGate />
+                  <AuthGateOrDesignSheet />
                   <AppToaster />
                   {/* 常驻在窗口上的这几块各自兜底:哪一块渲染出错只收起它自己、弹一条提示,不把整个窗口换成「出错了」
                       (见 components/app/errorBoundary 的 SectionBoundary)。 */}
@@ -319,6 +323,19 @@ export function PublishViewBar() {
 }
 
 /** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
+/** 开发构建里打开 `#/dev/design` 时是规格样张(不用登录);别的时候照常。 */
+function AuthGateOrDesignSheet() {
+  const onSheet = useDesignSheetRoute();
+  if (DesignSheet && onSheet) {
+    return (
+      <React.Suspense fallback={null}>
+        <DesignSheet />
+      </React.Suspense>
+    );
+  }
+  return <AuthGate />;
+}
+
 function AppToaster() {
   const { theme } = usePreferences();
   //: 贴底的输入区(AI Studio、智能体面板)伸进右下角那一列时整体抬到它上沿之上,不盖住发送键(见 toastClearance)。

@@ -79,6 +79,7 @@ const EXEMPT = new Map<string, string>([
   ["frontend/src/features/home/poems.ts", "首页每日一句的古诗词原文(断网兜底),是内容不是界面文字"],
   ["frontend/src/features/notes/strings.ts", "笔记自己的中英文案表(含编辑器节点文案)"],
   ["frontend/src/features/notes/useNoteAttachments.tsx", "发给模型的笔记引用说明,界面上不显示"],
+  ["frontend/src/dev/DesignSheet.tsx", "设计语言的规格样张,只在开发构建里有、不进发行包,给维护者拍板看(docs/DESIGN_LANGUAGE.md)"],
 ]);
 
 /** 还没翻完的:文件 → 还剩几行。**只减不增。** */
