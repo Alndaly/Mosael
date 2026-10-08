@@ -15,7 +15,12 @@ vi.mock("@/app/preferences", () => ({ usePreferences: () => ({ locale: "zh-CN" }
 const api = vi.hoisted(() => ({
   listNotes: vi.fn(async () => [] as Note[]),
   listNoteTopics: vi.fn(async () => [] as string[]),
-  getNote: vi.fn(async (_ws: string, id: string) => ({ id } as Note)),
+  //: 一篇完整的笔记(正文、来源都在):此前只给 `{ id }`,打开它时编辑器读 `markdown`、合并读 `sources` 都是 undefined ——
+  //: 按文件顺序跑时前面「切走再回来」换上的完整笔记没撤掉,碰巧盖住了;打乱顺序就是两条未捕获的异常。
+  getNote: vi.fn(async (_ws: string, id: string) => ({
+    id, workspace_id: "ws", title: "", markdown: "", project_id: null, tags: [], topics: [], sources: [], favorite: false,
+    trashed: false, revision: 1, save_seq: 1, created_at: "2026-09-24", updated_at: "2026-09-24",
+  } as Note)),
   createNote: vi.fn(async (_ws: string, body: Partial<Note>) => ({ id: `new-${body.title}` } as Note)),
 }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
@@ -32,7 +37,8 @@ vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
 const { NoteEditor } = await import("./NoteEditor");
 const { NotesView } = await import("./NotesView");
 
-afterEach(() => { cleanup(); localStorage.clear(); window.location.hash = ""; vi.clearAllMocks(); });
+//: `resetAllMocks` 而不是 `clearAllMocks`:用例里换上的实现(mockImplementation / mockResolvedValue)也撤回到上面那一份,不带进下一条。
+afterEach(() => { cleanup(); localStorage.clear(); window.location.hash = ""; vi.resetAllMocks(); });
 
 const note = (id: string, title: string): Note => ({ ...emptyNote, id, workspace_id: "ws", title, revision: 1, save_seq: 1, created_at: "2026-09-24", updated_at: "2026-09-24" });
 

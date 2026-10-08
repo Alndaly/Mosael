@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 import { ImagePreviewProvider, useImagePreview } from "@/components/app/image-preview";
-import { NativeViewStandIn, resetNativeViewAside, stepNativeViewAside } from "@/components/ui/nativeViewAside";
+import { NativeViewStandIn, resetNativeViewAside, settleNativeViewAside, stepNativeViewAside } from "@/components/ui/nativeViewAside";
 
 function Opener() {
   const { openImagePreview } = useImagePreview();
@@ -56,8 +56,9 @@ beforeEach(() => {
   });
   vi.stubGlobal("mosaelPublish", { setOverlay, snapshotPage });
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await settleNativeViewAside(); // 卸载放开之后那一串还在路上:走完再重置,别带进下一条
   resetNativeViewAside();
   vi.unstubAllGlobals();
 });

@@ -95,6 +95,9 @@ export default defineConfig({
     // 所有 UI 回归(下拉滚不动、弹窗关闭时内容先清空、面板贴位)只能靠人手在浏览器里看。
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
+    // 单条用例的上限(默认 5 秒)。正常的用例都在一秒内;整套并行、机器满载时重的 DOM 用例(整页挂载、虚拟列表)
+    // 会被拖到好几秒 —— 上限只在真卡住时才用得上,给宽一点不花钱。
+    testTimeout: 15_000,
     // electron/ 下的主进程代码也归这一套测试跑。它此前没有任何测试 —— 而 esbuild 只打包、
     // 不看类型也不跑用例,于是那半边代码的回归只能等打包后在真机上撞见(登录项那条就是)。
     include: ["src/**/*.{test,spec}.?(c|m)[jt]s?(x)", "../electron/**/*.{test,spec}.?(c|m)[jt]s?(x)"],

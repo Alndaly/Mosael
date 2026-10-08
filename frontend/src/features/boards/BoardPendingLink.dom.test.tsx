@@ -67,6 +67,9 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  //: 画板记着每张板上次的视口(usePersistentViewport,存在本机):每条用例从「没记过」起步,不接着上一条摆好的视口。
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   flow.props = null;
   flow.instance = null;
@@ -172,6 +175,12 @@ async function frame() {
  */
 async function zoomOut() {
   const target = { x: 40, y: 20, zoom: 0.5 };
+  //: 画布 onInit 之后在下一帧里摆初始视口(有记着的就还原,没有就铺满 —— jsdom 没有尺寸,铺满算出来是 NaN)。
+  //: 先让那一帧过去,再摆这一份:不然这里刚摆好,那一帧接着把它盖掉 —— 此前单独跑这个文件里的某一条就是 NaN,
+  //: 按顺序跑能绿,是因为前一条记下的视口被还原了(测的也就不是这一份视口)。
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  });
   for (let attempt = 0; attempt < 50; attempt += 1) {
     await act(async () => {
       await flow.instance!.setViewport(target);

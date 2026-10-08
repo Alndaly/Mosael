@@ -46,6 +46,8 @@ let takes = 0;
 let painters = 0;
 let frameLoaded: (() => void) | null = null;
 const listeners = new Set<() => void>();
+/** 等「这一串走完」的人(只有测试等,见 settleNativeViewAside)。 */
+const settledWaiters: Array<() => void> = [];
 
 /** 第几张画面在 Element Timing 里叫什么。 */
 const paintId = (take: number) => `native-view-stand-in-${take}`;
@@ -141,6 +143,7 @@ async function reconcile(): Promise<void> {
     } while (again || holders > 0 !== aside);
   } finally {
     running = false;
+    for (const done of settledWaiters.splice(0)) done();
   }
 }
 
@@ -207,6 +210,15 @@ export function NativeViewStandIn() {
 /** 这张图解码好、下一帧画得出来了(没有 `decode` 的环境:加载好就算)。解不了也不拦着。 */
 function decoded(image: HTMLImageElement): Promise<void> {
   return typeof image.decode === "function" ? image.decode().catch(() => undefined) : Promise.resolve();
+}
+
+/**
+ * 测试用:等正在走的那一串「让开 / 放回」走完(没在走就当场返回)。`resetNativeViewAside` 之前先等它 —— 那一串跨着好几个
+ * await,上一条测试关了浮层、它还在路上;不等就重置,它走完时把 `aside` 和主进程那边的记录写进下一条测试(打乱顺序或机器忙时,
+ * 下一条就多出两笔「拍画面 / 挪开」)。
+ */
+export function settleNativeViewAside(): Promise<void> {
+  return running ? new Promise((resolve) => settledWaiters.push(resolve)) : Promise.resolve();
 }
 
 /** 测试用:回到什么都没让开的样子。 */

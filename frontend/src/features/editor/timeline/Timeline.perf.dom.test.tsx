@@ -71,8 +71,12 @@ const time = (fn: () => void) => {
   act(fn);
   return performance.now() - start;
 };
-/** 多量几次取中位数:整套并行跑时单次测量会被别的 worker 抢走 CPU,中位数不怕偶发的一次慢。 */
-const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+/**
+ * 多量几次取**最快**的那次:别的 worker 抢 CPU 只会让一次测量变慢、不会变快,最快那次最接近这一步本身的活有多少。
+ * 此前取中位数 —— 整套并行跑、机器满载时七次里过半被抢,点选 3000 段量出 68ms 对 300 段 5ms,线画在三倍上就红了;
+ * 而要防的那种退化(整树协调)每一步都慢一个数量级,最快那次也躲不掉。
+ */
+const fastest = (values: number[]) => Math.min(...values);
 const renderedClips = (root: HTMLElement) => root.querySelectorAll("[data-clip-id]").length;
 const rulerTicks = (root: HTMLElement) => root.querySelectorAll(".bg-\\[var\\(--ruler-tick\\)\\]").length;
 
@@ -91,11 +95,11 @@ function measure(nClips: number) {
     );
   }
   act(() => useEditorStore.getState().setDragDraft(null));
-  const select = median([0, 1, 2, 3, 4, 5, 6].map((i) => time(() => useEditorStore.getState().selectClip(`c1_${i}`))));
-  const zoom = median([80, 40, 80, 40, 80, 40, 80].map((px) => time(() => useEditorStore.getState().setPxPerSecond(px))));
+  const select = fastest([0, 1, 2, 3, 4, 5, 6].map((i) => time(() => useEditorStore.getState().selectClip(`c1_${i}`))));
+  const zoom = fastest([80, 40, 80, 40, 80, 40, 80].map((px) => time(() => useEditorStore.getState().setPxPerSecond(px))));
   const rendered = renderedClips(container);
   unmount();
-  return { rendered, drag: median(drags), select, zoom };
+  return { rendered, drag: fastest(drags), select, zoom };
 }
 
 afterEach(() => useEditorStore.setState({ dragDraft: null, selectedClipIds: [], pxPerSecond: 40, playhead: 0 }));
@@ -108,7 +112,7 @@ describe("时间线虚拟化", () => {
     expect(large.rendered).toBeLessThan(400);
 
     // 修之前(单机,jsdom,3000 段):拖动 ~280、点选 ~260、缩放 ~310ms;修之后 300 段和 3000 段都是 3 / 3 / 13ms
-    // 上下。整树协调时 3000 段是 300 段的十来倍;留三倍,再加 5ms 吸收亚毫秒那几步的抖动。
+    // 上下。整树协调时 3000 段是 300 段的十来倍;留三倍,再加 5ms 吸收亚毫秒那几步的抖动(比的是各自最快的那次)。
     for (const step of ["drag", "select", "zoom"] as const) {
       expect(large[step], `${step}:300 段 ${small[step].toFixed(1)}ms,3000 段 ${large[step].toFixed(1)}ms`).toBeLessThan(
         small[step] * 3 + 5,

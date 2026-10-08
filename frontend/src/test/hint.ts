@@ -15,7 +15,12 @@ function triggerOf(element: HTMLElement): HTMLElement {
 export async function readHint(element: HTMLElement): Promise<string> {
   const target = triggerOf(element);
   fireEvent.keyDown(document, { key: "Tab" });
-  act(() => target.focus());
+  act(() => {
+    //: 它可能已经有焦点了(对话框打开时自动聚焦到第一个能聚焦的,正好是它):再 focus() 一次什么都不发生,说明不出。
+    //: 先移开再切回来 —— 此前这种用例能绿,靠的是上一条测试按过 Tab、留下了「键盘在切」的标记(单独跑必红)。
+    if (document.activeElement === target) target.blur();
+    target.focus();
+  });
   const tooltip = await screen.findByRole("tooltip");
   return tooltip.textContent ?? "";
 }

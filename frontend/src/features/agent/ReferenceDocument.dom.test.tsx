@@ -3,7 +3,7 @@ import React from "react";
 import type { JSONContent } from "@tiptap/react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
@@ -93,7 +93,14 @@ describe("点开引用", () => {
     await vi.waitFor(() => expect(openImagePreview).toHaveBeenCalled());
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("笔记、画板、工作流是页面 —— 跳过去,不塞进一个只看得见开头的小弹层", async () => {
+    //: 点的时候现问一句「它还在不在」(useReferencePreview):这里答「在」。此前这条没有自己的 fetch,
+    //: 靠的是上面素材那条留下没撤的那个 —— 单独跑或打乱顺序时问不到,报「已经不在了」,不跳。
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "x" }), { headers: { "content-type": "application/json" } })));
     for (const [kind, id, mark] of [["note", "n1", "note=n1"], ["board", "b1", "board=b1"], ["workflow", "w1", "workflow=w1"]] as const) {
       const view = render(<ReferenceDocument document={bubble(kind, id)} />);
       await userEvent.click(screen.getByRole("button"));

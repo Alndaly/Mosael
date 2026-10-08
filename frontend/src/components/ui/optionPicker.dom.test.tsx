@@ -13,13 +13,14 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 const options = (count: number) =>
   Array.from({ length: count }, (_, index) => ({ value: `m${index}`, label: `模型 ${index}` }));
 
-describe("选项一多就带搜索", () => {
-  beforeAll(() => {
-    // cmdk 在挂载时就要 ResizeObserver;jsdom 没有。
-    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-    Element.prototype.scrollIntoView ??= () => {};
-  });
+// cmdk 在挂载时就要 ResizeObserver;jsdom 没有。放在文件这一层:「选项的副标题」那组也挂可搜索的那版 —— 此前这段写在第一组里,
+// 打乱顺序(`vitest --sequence.shuffle`)时副标题那组先跑,就是 `ResizeObserver is not defined`。
+beforeAll(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  Element.prototype.scrollIntoView ??= () => {};
+});
 
+describe("选项一多就带搜索", () => {
   it("短清单还是 Select —— 三个宽高比之间插一行输入框是纯噪音", () => {
     const { container } = render(
       <OptionPicker value="m0" onChange={vi.fn()} options={options(SEARCHABLE_THRESHOLD)} />,

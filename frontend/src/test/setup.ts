@@ -6,9 +6,18 @@
  */
 if (typeof document !== "undefined") {
   await import("@testing-library/jest-dom/vitest");
-  const { cleanup } = await import("@testing-library/react");
+  const { cleanup, configure } = await import("@testing-library/react");
+  // `findBy*` / `waitFor` 等的是条件,条件一成立就返回 —— 上限给多大都不花钱,只在真红的时候多等一会儿。默认的 1 秒
+  // 在整套并行跑、机器满载时不够:AI Studio 那一页挂上、拉完假数据、画出「生成中」要一秒多(实测 findByRole 超时)。
+  // 给 4 秒:留在单条用例 15 秒的上限(vite.config 的 testTimeout)里面,红的时候报的还是「找不到什么」而不是「超时」。
+  configure({ asyncUtilTimeout: 4_000 });
   const { afterEach } = await import("vitest");
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    // 悬停说明记着「焦点是不是键盘切过来的」(components/ui/tooltip 的模块级标记,按 Tab 记上、指针一动清掉)。
+    // 不清的话,上一条测试按过 Tab,这一条里对话框自动聚焦到的那个控件就冒出说明 —— 依赖先后的绿,单独跑或打乱顺序就红。
+    document.dispatchEvent(new Event("pointerdown"));
+  });
 
   // jsdom 没有 matchMedia,而项目里的响应式分支全走 useMediaMatch —— 少了它,任何渲染到
   // 带断点组件的用例都会在 useSyncExternalStore 里炸,报的还是 React 内部栈,看不出是环境缺口。

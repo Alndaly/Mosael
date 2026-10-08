@@ -12,7 +12,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -42,7 +42,7 @@ import type { ModelFile, ModelNsfw } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { ModalShell } from "@/components/app/modals";
 import { APP_CHROME, installAppChromeGuards } from "@/components/ui/appChrome";
-import { NativeViewStandIn, resetNativeViewAside } from "@/components/ui/nativeViewAside";
+import { NativeViewStandIn, resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nativeViewAside";
 import { HintRegion } from "@/components/ui/tooltip";
 import { ModelsPanel } from "./ModelsPanel";
 import { openWorkbench, resetWorkbench } from "./workbenchSession";
@@ -146,7 +146,11 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // 先卸载、等「让开 / 放回」那一串走完,再重置:关上详情时那一串还在路上,不等就重置,它走完时把「拍画面 / 挪开」记进下一条测试
+  // (打乱顺序、机器忙时实测:下一条的日志多出两笔)。
+  cleanup();
+  await settleNativeViewAside();
   resetWorkbench();
   resetNativeViewAside();
   vi.unstubAllGlobals();

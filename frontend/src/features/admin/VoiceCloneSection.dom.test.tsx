@@ -46,6 +46,15 @@ const models = [
     sources: ["hf", "hf-mirror", "modelscope"] },
 ];
 
+//: 每条用例从同一份「存着的配置 / 模型状态」起步。下面几组各自改 config、models 而不还原(它们只关心自己那一幕);
+//: 第一组用的是这里写的初始值 —— 不还原的话,打乱顺序(`vitest --sequence.shuffle`)时它拿到的是别组改过的那份,当场红。
+const INITIAL_CONFIG = { ...config };
+const INITIAL_MODELS = models.map((one) => ({ ...one }));
+beforeEach(() => {
+  Object.assign(config, INITIAL_CONFIG);
+  models.splice(0, models.length, ...INITIAL_MODELS.map((one) => ({ ...one })));
+});
+
 vi.mock("@/api/client", () => ({
   getTtsConfig: () => Promise.resolve(config),
   updateTtsConfig: () => Promise.resolve(config),

@@ -63,6 +63,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // 有几条用例按下之后没松开(只看拖动当中的那一下):拖动的监听挂在 window 上、松开才摘,不收尾就带进下一条,
+  // 下一条的 `setPanelLayout` 平白多记几次(打乱顺序时实测)。在这里替它们松开。
+  fireEvent.pointerUp(window);
   vi.useRealTimers();
 });
 

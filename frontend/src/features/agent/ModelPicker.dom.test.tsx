@@ -13,7 +13,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listCapabilityModels = vi.fn();
 const listProviderModels = vi.fn();
@@ -92,6 +92,13 @@ function mount(session: unknown = SESSION) {
     </QueryClientProvider>,
   );
 }
+
+//: 还没建的会话(草稿)选的模型记在这个窗口里(sessionSelection 的草稿设置,存在 sessionStorage):每条用例从空的存储起步 ——
+//: 此前「草稿上选了 m-deep」那条留下的记录,打乱顺序时让「会话还没读到」那条显示成 m-deep。
+beforeEach(() => {
+  window.sessionStorage.clear();
+  window.localStorage.clear();
+});
 
 describe("模型选择器", () => {
   it("还在读的时候不消失,而且先把会话上那个模型名显示出来", async () => {

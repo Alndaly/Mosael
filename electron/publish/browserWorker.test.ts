@@ -157,11 +157,13 @@ it("被放弃的那条一停,同一会话上排在它后面的失败现场截图
 });
 
 it("先搬完登录分区,再开始认领", async () => {
-  seedOldLogin("rpa-xhs");
+  //: 用一个别的用例都没碰过的分区:执行器记着「这个进程用过哪些分区」(模块级,用过的不搬、推迟),下面「推迟」那条
+  //: 在 rpa-xhs 上跑过一条动作 —— 打乱顺序时它排在前面,这里的搬家就被推迟了,`settle` 不来。
+  seedOldLogin("rpa-first");
   const order: string[] = [];
   mocks.backend.partitionMoves.mockImplementation(async () => {
     order.push("moves");
-    return [{ id: "m1", old_partition: "persist:rpa-xhs", new_partition: "persist:rpa-ws-0123456789abcdef" }];
+    return [{ id: "m1", old_partition: "persist:rpa-first", new_partition: "persist:rpa-ws-0123456789abcdef" }];
   });
   mocks.backend.settlePartitionMove.mockImplementation(async () => {
     order.push("settle");

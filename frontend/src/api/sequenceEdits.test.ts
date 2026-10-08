@@ -12,6 +12,9 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  // 编辑模块记着每条时间线最新的版本号(模块级):每条用例换一份新模块,不接着上一条推到的版本号往下算
+  // —— 此前打乱顺序时「每一步都带 base_revision」带出去的是上一条留下的 11 / 12。
+  vi.resetModules();
 });
 
 function reply(status: number, payload: unknown) {
