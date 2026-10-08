@@ -48,10 +48,8 @@
 | `comfy_node_pack_search` | 直接执行 | Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the |
 | `comfy_node_packs` | 直接执行 | Read-only: installed custom node packs (id, version, enabled, source, node types); with the |
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
-| `comfy_run_workflow` | 确认卡 | Confirmation required: run a saved workflow whose own tool isn't in your list this turn (you get the one on the |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
-| `comfy_workflow_inputs` | 直接执行 | Read-only: the inputs of a saved workflow's tool (all of them, long dropdowns as a count), or with `input` that |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
@@ -113,6 +111,7 @@
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `open_view` | 直接执行 | Take the user to a page in Mosael — optionally to one specific record. |
+| `plugin_tools` | 直接执行 | Read-only: plugin tools not in your list this turn. No `tool`: find them by `query` words. With `tool` (its |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
 | `read_document` | 直接执行 | Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB). |
 | `read_note` | 直接执行 | Read a note with its source references and immutable revision. Cite citation_url after |
@@ -124,6 +123,7 @@
 | `run_board_item` | 确认卡 | Run an ABILITY of a content item on a creative board (or its slot generator / 3D render), as if the user pressed it. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet in an ISOLATED sandbox and return `output`. |
 | `run_host_code` | 确认卡 | Confirmation required: run Python directly on the user's computer, NOT isolated. |
+| `run_plugin_tool` | 确认卡 | Confirmation required: call a plugin tool not in your list this turn (`tool` as in plugin_tools; `arguments`: |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |

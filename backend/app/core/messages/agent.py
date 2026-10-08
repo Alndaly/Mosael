@@ -26,6 +26,23 @@ MESSAGES: dict[str, dict[str, str]] = {
             "(including the port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable."
         ),
     },
+    # 这一轮没发的插件工具经 plugin_tools / run_plugin_tool 够得着(ADR 0044 修订 2026-10-08)
+    "pluginToolErr_notFound": {
+        "zh": "这里够不着叫「{tool}」的插件工具:用 plugin_tools 按字找(`tool` 那一栏),或者给工作流的路径",
+        "en": "No plugin tool “{tool}” is within reach here: search with plugin_tools (the `tool` field), or give the workflow's path",
+    },
+    "pluginToolErr_whichConnection": {
+        "zh": "好几个连接上都有它,用完整名字说是哪一个:{names}",
+        "en": "Several connections have it; say which one by its full name: {names}",
+    },
+    "pluginToolErr_noInput": {
+        "zh": "{tool} 没有入参「{input}」:用 plugin_tools 不带 input 看它收哪些",
+        "en": "{tool} has no input “{input}”: call plugin_tools without `input` to see what it takes",
+    },
+    "pluginToolErr_unknownInputs": {
+        "zh": "{tool} 不认这几个入参:{keys}。它收的是:{accepted}",
+        "en": "{tool} doesn't take these inputs: {keys}. It takes: {accepted}",
+    },
     # 地方(ADR 0044):对话的家、每条消息在哪说的
     "agentErr_placeUnknownKind": {
         "zh": "不认识的地方「{kind}」。",

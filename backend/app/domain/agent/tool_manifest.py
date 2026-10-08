@@ -81,25 +81,28 @@ def agent_tool_name(instance_id: str, tool_name: str) -> str:
 
 #: 插件工具跟着它的连接替宿主做的那件事走(ADR 0044 §8):替工作台提供工作流库的那种连接(ComfyUI),它暴露给智能体的
 #: 工具(列工作流、查服务、停任务、把存着的每一张工作流当成一个工具跑)属于工作台那一份 —— 在工作台以外,跑一张 ComfyUI
-#: 工作流走的是 generate_image(每张存着的工作流都是那里的一个模型),不必每轮再背一遍。没有对应的插件工具是通用的。
+#: 工作流走的是 generate_image(每张存着的工作流都是那里的一个模型),不必每轮再背一遍。
 _PROVIDES_KIT = {"workflow_library": "comfyui"}
-#: 这一份的插件工具发给智能体时入参收紧(见 plugin_schema):查可选值的工具(`comfy_workflow_inputs`)也在这一份里。
-_COMPACTED_KITS = frozenset({"comfyui"})
+#: 别的插件工具(Blender、Manim、TikHub……)是**通用插件工具**那一份:和 `canvas` 同一条,工作台以外(ADR 0044 修订
+#: 2026-10-08 之二)。那里是 ComfyUI 的世界;而工作台以外的几处共用同一份内置工具,按页面再分哪一处也装不下它们。
+GENERAL_PLUGIN_KIT = "plugins"
 #: 往回看这段对话的多少条消息(找调过的工具、点过的名)。
 _TURN_HISTORY = 200
 #: 名字短于这么多个字的不拿来认「点过名」(一个字到处都是)。
 _MIN_NAMED = 2
-#: 经它们点到一张工作流(参数 `workflow`)也算这段对话用过它:下一轮起它自己的工具跟着发。
-_WORKFLOW_POINTERS = frozenset({"comfy_run_workflow", "comfy_workflow_inputs"})
+#: 经它们点到一个插件工具(参数 `tool`:工具名、完整名字或工作流路径)也算这段对话用过它:下一轮起它自己的定义跟着发。
+_POINTERS = frozenset({"plugin_tools", "run_plugin_tool"})
+#: 这一轮有没发的插件工具时才发的那两个:够得着它们的路。一个都没有就不背。
+ON_DEMAND_TOOLS = frozenset({"plugin_tools", "run_plugin_tool"})
 
 
 @dataclass(frozen=True)
 class Turn:
-    """这一轮的几样事实,挑**工作流工具**用(ADR 0044 修订 2026-10-08)。
+    """这一轮的几样事实,挑**插件工具**用(ADR 0044 修订 2026-10-08)。
 
     - `place`:这一轮在哪说的(places.turn_place);
-    - `called`:这段对话里调过的工具名,和经 `comfy_run_workflow` / `comfy_workflow_inputs` 点到的工作流;
-    - `said`:这段对话里用户说的话(小写),认「点过名」。
+    - `called`:这段对话里调过的工具名,和经 `plugin_tools` / `run_plugin_tool` 点到的(它们的 `tool` 参数);
+    - `said`:这段对话里用户说的话(小写),认「点过名」(只认工作流的名字,见 `_workflow_names`)。
     """
 
     place: Any
@@ -130,8 +133,8 @@ def turn_of(db: Any, session: Any) -> Turn:
         for tool in _tool_calls(payload):
             called.add(str(tool.get("name") or ""))
             args = tool.get("args") if isinstance(tool.get("args"), dict) else {}
-            if tool.get("name") in _WORKFLOW_POINTERS and isinstance(args.get("workflow"), str):
-                called.add(args["workflow"].strip())
+            if tool.get("name") in _POINTERS and isinstance(args.get("tool"), str):
+                called.add(args["tool"].strip())
     return Turn(place=turn_place(db, session), called=frozenset(called - {""}), said="\n".join(said).lower())
 
 
@@ -152,23 +155,33 @@ def _workflow_names(workflow: dict[str, Any]) -> list[str]:
     return [str(one).strip().lower() for one in names if isinstance(one, str) and len(one.strip()) >= _MIN_NAMED]
 
 
+def _on_demand(tool: dict[str, Any], kit: str) -> bool:
+    """这个插件工具是不是**只在用得上时**才发完整定义:存着的工作流各一个的那种(带 `workflow`),和通用插件工具。
+    ComfyUI 连接自己的那几个(列工作流、查服务、停任务)在工作台里一直发。"""
+    return bool(tool.get("workflow")) or kit == GENERAL_PLUGIN_KIT
+
+
 def _wanted(tool: dict[str, Any], agent_name: str, turn: Turn) -> bool:
-    """一个工作流工具这一轮发不发:画布上开着的那张、这段对话调过的、用户点过名的(ADR 0044 修订 2026-10-08)。"""
+    """一个只在用得上时才发的插件工具,这一轮发不发(ADR 0044 修订 2026-10-08):这段对话调过的(直接调,或经 `plugin_tools` /
+    `run_plugin_tool` 点到);工作流工具另加画布上开着的那张、用户点过名的。"""
     from app.domain.agent.places import COMFYUI, comfy_parts
 
-    workflow = tool["workflow"]
+    workflow = tool.get("workflow") or {}
     path = workflow.get("path") or ""
+    if {agent_name, tool["name"], *([path] if path else [])} & turn.called:
+        return True
+    if not workflow:
+        return False
     place = turn.place
     if place is not None and place.kind == COMFYUI:
         connection, open_path, _key = comfy_parts(place.id)
         if connection == tool["instance_id"] and open_path and open_path == path:
             return True
-    if {agent_name, tool["name"], path} & turn.called:
-        return True
     return any(name in turn.said for name in _workflow_names(workflow))
 
 
-def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str | None]) -> str | None:
+def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str]) -> str:
+    """这个连接的插件工具属于哪一份:替宿主提供工作流库的是 `comfyui`,别的是 `GENERAL_PLUGIN_KIT`。`cache` 按连接记。"""
     if instance_id not in cache:
         from app.db.models import PluginInstance
         from app.domain.plugins import instances as inst
@@ -179,42 +192,61 @@ def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str | None]) -> str 
             provides = inst.manifest_for(db, instance).provides if instance is not None else []
         except PluginDomainError:
             provides = []
-        cache[instance_id] = next((kit for capability, kit in _PROVIDES_KIT.items() if capability in provides), None)
+        cache[instance_id] = next((kit for capability, kit in _PROVIDES_KIT.items() if capability in provides),
+                                  GENERAL_PLUGIN_KIT)
     return cache[instance_id]
 
 
-def _plugin_tool_specs(
-    db: Any, user_id: str | None = None, kits: frozenset[str] | None = None, turn: Turn | None = None
-) -> list[ToolSpec]:
-    """这个人暴露给智能体的插件工具。`turn` 给了(一段对话里的一轮)就只发用得上的**工作流工具**(带 `workflow` 的那种,
-    见 `_wanted`);`comfyui` 那一份的入参收紧(plugin_schema)。"""
-    from app.domain.agent.plugin_schema import agent_parameters, omitted_note
-    from app.domain.effects import needs_card
+def agent_plugin_tools(db: Any, user_id: str | None, kits: frozenset[str] | None) -> list[tuple[dict[str, Any], str]]:
+    """这个人在发 `kits` 那几份的地方**进得了智能体工具表**的插件工具,和各自属于哪一份(`kits` 为 None:全部)。这一轮发出去的、
+    plugin_tools / run_plugin_tool 够得着的,都从这一份里挑。
+
+    插件说不进智能体工具表的(`agent: false`;ComfyUI 有表单的工作流,它的完整工作流 —— 给智能体的是那张表单,ADR 0045 §5)不在
+    这里:工作流节点、画板、插件页照常有它,这条路也不把它绕回来(要全部参数,智能体走生成那一路、带完整工作流的模型 id)。
+    """
     from app.domain.plugins.tools import exposed
 
-    specs = []
-    instance_kits: dict[str, str | None] = {}
+    cache: dict[str, str] = {}
+    found = []
     for tool in exposed(db, user_id):
         if not tool["agent"]:
-            # 插件说这个工具不进智能体的工具表(`agent: false`;ComfyUI 有表单的工作流,它的完整工作流 —— 给智能体的是
-            # 那张表单,ADR 0045 §5)。工作流节点、画板、插件页照常有它。
             continue
-        kit = _plugin_kit(db, tool["instance_id"], instance_kits)
-        if kits is not None and kit is not None and kit not in kits:
-            continue
+        kit = _plugin_kit(db, tool["instance_id"], cache)
+        if kits is None or kit in kits:
+            found.append((tool, kit))
+    return found
+
+
+@dataclass
+class _PluginTools:
+    specs: list[ToolSpec]
+    #: 这一轮没发、经 plugin_tools / run_plugin_tool 够得着的,按连接名数:{连接名: 几个}。
+    unlisted: dict[str, int]
+
+
+def _plugin_tools(
+    db: Any, user_id: str | None = None, kits: frozenset[str] | None = None, turn: Turn | None = None
+) -> _PluginTools:
+    """这个人暴露给智能体的插件工具。`turn` 给了(一段对话里的一轮)就只发这一处的那几份里**用得上的**(见 `_on_demand`、
+    `_wanted`),没发的数一个数;发出去的每一个都按同一套收紧(plugin_schema)。"""
+    from app.domain.agent.plugin_schema import agent_description, agent_parameters, omitted_note
+    from app.domain.effects import needs_card
+
+    specs = []
+    unlisted: dict[str, int] = {}
+    for tool, kit in agent_plugin_tools(db, user_id, kits):
         name = agent_tool_name(tool["instance_id"], tool["name"])
-        if turn is not None and tool.get("workflow") and not _wanted(tool, name, turn):
+        if turn is not None and _on_demand(tool, kit) and not _wanted(tool, name, turn):
+            unlisted[tool["instance_name"]] = unlisted.get(tool["instance_name"], 0) + 1
             continue
-        parameters, omitted = tool["input_schema"] or {"type": "object", "properties": {}}, 0
-        if kit in _COMPACTED_KITS:
-            parameters, omitted = agent_parameters(parameters)
+        parameters, omitted = agent_parameters(tool["input_schema"] or {"type": "object", "properties": {}})
         # 有后果的插件工具(花钱、对外、在本机跑代码,见 domain/effects)调用时先开一张卡 ——
         # 和内置的确认类工具同一个标记、同一条等待协议(sidecar 据此阻塞轮询,见 _CONFIRMATION_PROTOCOL)。
         gated = needs_card(tool["effects"])
         # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件页看,而不是
         # 以为 Mosael 自己坏了。实例名(「TikHub · 哔哩哔哩」)也就在这里起作用 ——
         # 同名工具来自不同连接时,模型靠它分辨。
-        description = f"[插件·{tool['instance_name']}] {tool['description']}".strip()
+        description = agent_description(f"[插件·{tool['instance_name']}] {tool['description']}".strip())
         if omitted:
             description = f"{description}\n\n{omitted_note(omitted)}"
         specs.append(ToolSpec(
@@ -224,7 +256,7 @@ def _plugin_tool_specs(
             confirmation=gated,
             read_only=tool["read_only"],
         ))
-    return specs
+    return _PluginTools(specs=specs, unlisted=unlisted)
 
 
 #: 确认门控工具在**这条路**上的真实协议。工具自己的描述只说事实(要用户批准、可能花钱),
@@ -271,12 +303,22 @@ def _describe(description: str, gated: bool, awaits_answer: bool = False) -> str
 def kits_for(place: Any) -> frozenset[str]:
     """这一轮在哪说的,就发哪几份工具(ADR 0044 §8,工具的 `kit` 见 mcp_server.tool)。通用的(不声明 kit)哪儿都发。
 
-    ComfyUI 工作台是另一个世界:那里要的是 ComfyUI 的图(`comfyui`),不是 Mosael 的画板和时间线(`canvas`);反过来,AI Studio
-    和 Mosael 各页面之间串门是常事(在画板里让它建一条时间线),那一份不按页面拆。
+    ComfyUI 工作台是另一个世界:那里要的是 ComfyUI 的图(`comfyui`),不是 Mosael 的画板和时间线(`canvas`)、也不是 Blender、
+    Manim 这些通用插件工具(`GENERAL_PLUGIN_KIT`);反过来,AI Studio 和 Mosael 各页面之间串门是常事(在画板里让它建一条时间线),
+    那两份不按页面拆。
     """
     from app.domain.agent.places import COMFYUI
 
-    return frozenset({"comfyui"}) if place.kind == COMFYUI else frozenset({"canvas"})
+    return frozenset({"comfyui"}) if place.kind == COMFYUI else frozenset({"canvas", GENERAL_PLUGIN_KIT})
+
+
+def session_kits(db: Any, session_id: str) -> frozenset[str] | None:
+    """`session_id` 那段对话这一轮发哪几份(没有对话 / 对话没了:None,全部)。工具在执行时按它认够得着的插件工具。"""
+    from app.db.models import AgentSession
+    from app.domain.agent.places import turn_place
+
+    session = db.get(AgentSession, session_id) if session_id else None
+    return kits_for(turn_place(db, session)) if session is not None else None
 
 
 def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -> list[ToolSpec]:
@@ -286,7 +328,8 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
     测量结果(这条路由的文档注释里记着上一次漂移的代价:子智能体静默少了十九个工具)。
 
     `session`:这一轮属于哪段对话。按它认出这一轮在哪说的(places.turn_place),挑工具的那几份(`kits_for`);再按这段对话
-    挑工作流工具(`Turn`)。没有对话的调用方(MCP 直连、界面拉工具清单)给 None —— 全给。
+    挑只在用得上时才发的插件工具(`Turn`)。这一轮有没发的,`ON_DEMAND_TOOLS` 跟着发,`plugin_tools` 的说明里点出是哪几个连接的;
+    一个没发的都没有就不发那两个。没有对话的调用方(MCP 直连、界面拉工具清单)给 None —— 全给。
     """
     registry = tool_registry()
     tools = asyncio.run(registry.mcp.list_tools())
@@ -313,7 +356,14 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
         if (provided is None or registry.TOOL_NEEDS.get(tool.name, "") in provided)
         and (kits is None or registry.TOOL_KITS.get(tool.name) in (None, *kits))
     ]
-    return specs + _plugin_tool_specs(db, user_id, kits, turn)
+    plugin = _plugin_tools(db, user_id, kits, turn)
+    if turn is not None and not plugin.unlisted:
+        specs = [spec for spec in specs if spec.name not in ON_DEMAND_TOOLS]
+    elif plugin.unlisted:
+        where = "; ".join(f"{name} ({count})" for name, count in plugin.unlisted.items())
+        specs = [spec.model_copy(update={"description": f"{spec.description}\n\nNot in your list now: {where}."})
+                 if spec.name == "plugin_tools" else spec for spec in specs]
+    return specs + plugin.specs
 
 
 def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:

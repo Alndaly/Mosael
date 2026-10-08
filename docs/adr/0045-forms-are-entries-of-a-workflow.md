@@ -242,7 +242,8 @@ ComfyUI 插件把 ComfyUI 上每张保存的工作流报成两样东西:一个**
 - 第二步每张表单一个工具:表单入口一般只有几项(维护者那张 1.4K 字符,约 0.4K token),表单多几张也在预算里。
 - **和「工作台那一轮只发用得上的工作流工具」(ADR 0044 修订,插件 1.19.0 的 `workflow: {path, name}`)怎么合**:一张工作流的几个入口
   `workflow.path` 相同、`name` 各是各的主名,所以画布上开着这张、对话里调过它、用户说到它的文件名,表单入口都会被挑上;完整入口在这之前
-  就被 `agent: false` 筛掉。按路径找工具的两个宿主工具 `comfy_workflow_inputs` / `comfy_run_workflow`(agent/workflow_tools)也只认
+  就被 `agent: false` 筛掉。按路径找工具的两个宿主工具 `comfy_workflow_inputs` / `comfy_run_workflow`(agent/workflow_tools;ADR 0044
+  修订之二起并成通用的 `plugin_tools` / `run_plugin_tool`,在 agent/plugin_lookup)也只认
   进得了智能体工具表的那几个:按路径找到的是表单入口,点完整入口的工具名报「找不到」—— 这条路不把 `agent: false` 的绕回来。第二步一张
   工作流几张表单时,按路径找到的是第一张表单;要别的那几张,智能体用 `list_workflows` 里的 `forms[].tool`。
 

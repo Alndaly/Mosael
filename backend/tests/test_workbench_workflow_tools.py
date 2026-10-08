@@ -1,15 +1,15 @@
-"""工作台那一轮的工作流工具:只发用得上的那几张,别的经 comfy_workflow_inputs / comfy_run_workflow 够得着;发给智能体的入参
+"""工作台那一轮的工作流工具:只发用得上的那几张,别的经 plugin_tools / run_plugin_tool 够得着;发给智能体的入参
 收紧(ADR 0044 修订 2026-10-08)。
 
 维护者那台 ComfyUI 上 24 张工作流,每张一个插件工具(`wf_*`),入参连同每个下拉的整张选项表 —— 工作台那一轮发出去的工具定义
 约 18 万 token,预算 3.84 万。接的是 tests/comfyui_big_catalog 那台「像真的」:十几张工作流、349 项的 LoRA 下拉、一张一百多个
 可调项的图。这里钉住:
 
-- 带 `workflow` 的工具只发画布上开着的那张、这段对话里调过的(连同经 comfy_run_workflow / comfy_workflow_inputs 点到的)、
+- 带 `workflow` 的工具只发画布上开着的那张、这段对话里调过的(连同经 run_plugin_tool / plugin_tools 点到的)、
   用户点过名的(名字或文件名出现在他的话里);别的不发;没有对话的调用方全给;
 - 发给智能体的入参收紧:长下拉换成一句「N options」,大图按「必填 → 非高级 → 高级」挑到上限、说一句没列出几项;插件页、
   工作流节点拿到的那份照旧是整张下拉;
-- comfy_workflow_inputs 列一张工作流的全部入参、查某个下拉的可选值(按字筛);comfy_run_workflow 开的卡说的、问人的那一档、
+- plugin_tools 列一张工作流的全部入参、查某个下拉的可选值(按字筛);run_plugin_tool 开的卡说的、问人的那一档、
   批准之后的执行和那个工具自己的卡同一份,认不得的入参名不悄悄丢掉。
 """
 
@@ -54,18 +54,18 @@ def bench(comfy) -> dict[str, Any]:
     client.patch(f"/api/plugins/instances/{connection}/permissions", json={"grants": comfyui_grants()})
     assert client.patch(f"/api/plugins/instances/{connection}", json={"enabled": True}).status_code == 200
     assert client.post(f"/api/plugins/instances/{connection}/refresh").status_code == 200
-    names = {path: _inputs(client, workspace, workflow=path)["tool"] for path in [*PLAIN, BIG, TINY]}
+    names = {path: _inputs(client, workspace, tool=path)["tool"] for path in [*PLAIN, BIG, TINY]}
     return {"client": client, "workspace": workspace, "connection": connection, "names": names}
 
 
-def _call(client, workspace: str, tool: str, **arguments: Any) -> dict[str, Any]:
-    answer = client.post(f"/api/agent/tools/{tool}?workspace_id={workspace}", json={"arguments": arguments})
+def _call(client, workspace: str, agent_tool: str, **arguments: Any) -> dict[str, Any]:
+    answer = client.post(f"/api/agent/tools/{agent_tool}?workspace_id={workspace}", json={"arguments": arguments})
     assert answer.status_code == 200, answer.text
     return answer.json()
 
 
 def _inputs(client, workspace: str, **arguments: Any) -> dict[str, Any]:
-    out = _call(client, workspace, "comfy_workflow_inputs", **arguments)
+    out = _call(client, workspace, "plugin_tools", **arguments)
     assert "result" in out, out
     return out["result"]
 
@@ -107,9 +107,9 @@ def test_工作流工具只发画布上那张_点过名的_调过的_别的不�
         "用户点过名的(文件名);只有一个字的名字(「图」)不算 —— 一个字到处都是")
 
     _message(session, "assistant", "好", {"timeline": [{"type": "tool", "tool": {"name": bench["names"][PLAIN[8]], "args": {}}}]})
-    _message(session, "assistant", "好", {"tools": [{"name": "comfy_run_workflow", "args": {"workflow": BIG}}]})
+    _message(session, "assistant", "好", {"tools": [{"name": "run_plugin_tool", "args": {"tool": BIG}}]})
     assert _workflow_tools(_turn(bench, session), bench) == {PLAIN[0], PLAIN[4], PLAIN[8], BIG}, (
-        "调过的(时间线里的工具)、经 comfy_run_workflow 点到的(老消息的 tools 也认)")
+        "调过的(时间线里的工具)、经 run_plugin_tool 点到的(老消息的 tools 也认)")
 
     _message(session, "user", "排着的这句提到 LoRA 组合 12")
     with SessionLocal() as db:
@@ -145,7 +145,7 @@ def test_发给智能体的入参收紧_插件页和工作流节点那份照旧�
     session = _session(bench, PLAIN[0])
     spec = _turn(bench, session)[bench["names"][PLAIN[0]]]
     lora = next(value for key, value in spec["parameters"]["properties"].items() if key.startswith("lora_name"))
-    assert "enum" not in lora and "349 options — comfy_workflow_inputs lists them" in lora["description"]
+    assert "enum" not in lora and "349 options — plugin_tools lists them" in lora["description"]
     sampler = next(value for key, value in spec["parameters"]["properties"].items() if key.startswith("sampler_name"))
     assert "enum" not in sampler and "45 options" in sampler["description"], f"多于 {ENUM_INLINE} 项的都换成一句"
     scheduler = next(value for key, value in spec["parameters"]["properties"].items() if key.startswith("scheduler"))
@@ -159,39 +159,39 @@ def test_发给智能体的入参收紧_插件页和工作流节点那份照旧�
 
     big = _turn(bench, _session(bench, BIG))[bench["names"][BIG]]
     assert len(json.dumps(big["parameters"], ensure_ascii=False)) <= SPEC_CAP
-    assert "more inputs (advanced) aren't listed here — comfy_workflow_inputs shows them all" in big["description"]
+    assert "more inputs (advanced) aren't listed here — plugin_tools shows them all" in big["description"]
     assert "prompt" in big["parameters"]["properties"], "非高级的(提示词)排在前头,不会被挑掉"
 
 
 def test_查一张工作流的全部入参_某个下拉的可选值(bench) -> None:
     client, workspace = bench["client"], bench["workspace"]
-    listed = _inputs(client, workspace, workflow=BIG)
+    listed = _inputs(client, workspace, tool=BIG)
     assert listed["tool"] == bench["names"][BIG] and listed["workflow"] == BIG
     assert len(listed["inputs"]) > 100, "全部入参,不设上限"
     lora_key = next(key for key in listed["inputs"] if key.startswith("lora_name"))
     assert "enum" not in listed["inputs"][lora_key], "长下拉照旧是一句,值单独查"
 
-    by_name = _inputs(client, workspace, workflow=bench["names"][BIG].split("__")[-1], query="seed")
+    by_name = _inputs(client, workspace, tool=bench["names"][BIG].split("__")[-1], query="seed")
     assert by_name["inputs"] and all("seed" in key or "seed" in str(value.get("title", "")).lower()
                                      for key, value in by_name["inputs"].items()), "按入参名、标题筛;也认 list_workflows 回的 tool"
 
-    options = _inputs(client, workspace, workflow=bench["names"][BIG], input=lora_key, query="lora_01")
+    options = _inputs(client, workspace, tool=bench["names"][BIG], input=lora_key, query="lora_01")
     assert options["total"] == 349 and options["matched"] == len(options["options"]) > 0
     assert all("lora_01" in one for one in options["options"])
 
-    missing = _call(client, workspace, "comfy_workflow_inputs", workflow=BIG, input="no_such_input")
+    missing = _call(client, workspace, "plugin_tools", tool=BIG, input="no_such_input")
     assert "no_such_input" in missing["error"]
-    gone = _call(client, workspace, "comfy_workflow_inputs", workflow="不存在的.json")
-    assert "list_workflows" in gone["error"]
+    gone = _call(client, workspace, "plugin_tools", tool="不存在的.json")
+    assert "plugin_tools" in gone["error"]
 
 
 def test_按工作流跑_卡和那个工具自己的同一份_认不得的入参不悄悄丢(bench) -> None:
     client, workspace = bench["client"], bench["workspace"]
     tool = bench["names"][PLAIN[2]]
-    steps = next(key for key in _inputs(client, workspace, workflow=PLAIN[2])["inputs"] if key.startswith("steps"))
-    out = _call(client, workspace, "comfy_run_workflow", workflow=PLAIN[2].removesuffix(".json"), arguments={steps: 30})
+    steps = next(key for key in _inputs(client, workspace, tool=PLAIN[2])["inputs"] if key.startswith("steps"))
+    out = _call(client, workspace, "run_plugin_tool", tool=PLAIN[2].removesuffix(".json"), arguments={steps: 30})
     card = client.get(f"/api/confirmations/{out['result']['confirmation_id']}").json()
-    assert card["tool"] == "comfy_run_workflow" and card["status"] == "pending"
+    assert card["tool"] == "run_plugin_tool" and card["status"] == "pending"
     assert card["payload"]["tool"] == tool and card["payload"]["arguments"] == {steps: 30}, "认出的是那张工作流的工具"
     assert "LoRA 组合 03" in card["summary"] and card["permission"] == "ai-cost", "卡上说的、问人的那一档和它自己的卡同一份"
 
@@ -199,7 +199,7 @@ def test_按工作流跑_卡和那个工具自己的同一份_认不得的入参
     assert done["status"] == "executed", done.get("error")
     assert done["result"].get("asset_ids"), "批准之后走的是那个工具自己的执行入口:在那台 ComfyUI 上跑完、交回产出"
 
-    wrong = _call(client, workspace, "comfy_run_workflow", workflow=PLAIN[2], arguments={"stepz": 30})
+    wrong = _call(client, workspace, "run_plugin_tool", tool=PLAIN[2], arguments={"stepz": 30})
     assert "stepz" in wrong["error"] and steps in wrong["error"], "说清楚它收哪些"
     assert len(client.get(f"/api/confirmations?workspace_id={workspace}").json()) == 1, "名字不对的没开卡(只有上面那一张)"
 
@@ -247,3 +247,4 @@ def test_工作流工具说得出跑的是哪张(bench) -> None:
         reported = {one["workflow"]["path"] for one in exposed(db, user_id()) if one.get("workflow")}
     assert {*PLAIN, BIG, TINY, "builtin:txt2img"} <= reported
     assert not any(name.startswith(PLUGIN_TOOL_PREFIX) for name in reported)
+

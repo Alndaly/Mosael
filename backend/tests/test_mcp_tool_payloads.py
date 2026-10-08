@@ -68,7 +68,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "comfy_templates": {"query": "qwen image edit", "limit": 3},
     "comfy_template": {"name": "image_qwen_image_2_1_image_edit"},
     "comfy_node_types": {"classes": ["KSampler"]},
-    "comfy_workflow_inputs": {"workflow": "人像/古风.json", "input": "lora_name_10", "query": "detail"},
+    "plugin_tools": {"query": "古风", "tool": "人像/古风.json", "input": "lora_name_10"},
     "comfy_node_packs": {},
     "comfy_node_pack_search": {"node_types": ["WanVideoSampler"]},
     "comfy_node_pack_info": {"pack_id": "rgthree-comfy"},

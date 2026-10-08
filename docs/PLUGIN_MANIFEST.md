@@ -525,8 +525,8 @@ input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchem
 
 `workflow`:这个工具跑的是连接上的**哪张工作流**(替宿主提供工作流库的那种插件用),`{"path": "<工作流库里的路径>",
 "name": "<到处同一个名字,可以按语言分>"}`。智能体每一轮只拿得到用得上的那几张的工具 —— 画布上开着的、这段对话里调过的、
-用户点过名的(名字或文件名出现在他的话里),别的经 `list_workflows` 和 `comfy_workflow_inputs` / `comfy_run_workflow` 够得着
-(ADR 0044 修订 2026-10-08)。挑选只看这个键,不看工具名。路径不像样的整条不认,名字不像样的只丢名字。
+用户点过名的(名字或文件名出现在他的话里),别的经 `list_workflows` 和 `plugin_tools` / `run_plugin_tool` 够得着
+(ADR 0044 修订 2026-10-08;那两个对每个插件工具都一样,`tool` 也认这里的 `path`)。挑选只看这个键,不看工具名。路径不像样的整条不认,名字不像样的只丢名字。
 
 `group`:这个工具是**哪样东西的哪个入口**(ADR 0045),和模型目录里的同一个形状(见下面 `op: "models"`):ComfyUI 一张工作流的
 「完整工作流」和它上面的每张表单各是一个工具,`group.id` 相同。宿主据此把同一组的几个排在一起、第二行写「来自 X」/「完整工作流」,
@@ -534,7 +534,7 @@ input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchem
 
 `agent: false`:这个工具**不进智能体的工具表**(只认 `false`,别的写法当没写)—— 工作流节点、画板、插件页照常有它,开关照常管。
 ComfyUI 有表单的工作流,它的完整工作流工具这样标:给智能体的是表单那一项(作者给别人准备的那张表),要全部参数智能体走生成那一路、
-带完整工作流的模型 id。`comfy_workflow_inputs` / `comfy_run_workflow` 按路径找工具时也不把它绕回来。它不是 `internal`:不藏、
+带完整工作流的模型 id。`plugin_tools` / `run_plugin_tool` 按路径找工具时也不把它绕回来。它不是 `internal`:不藏、
 不只给宿主,只是少出现在智能体那一处。
 
 报出来的工具存进 `plugin_instances.discovered_tools`(MCP 连接从服务拉来的清单也存在这里),和清单里声明的走

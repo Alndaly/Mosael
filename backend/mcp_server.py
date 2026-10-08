@@ -1968,6 +1968,41 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
     )
 
 
+# ---------- 这一轮工具表里没有的插件工具(ADR 0044 修订 2026-10-08,见 domain/agent/plugin_lookup) ----------
+#
+# 每一轮只发用得上的插件工具的完整定义(工作台里画布上那张工作流、这段对话调过的、点过名的;通用插件工具只发调过的)。别的经这两个:
+# 找 / 看完整说明和全部入参 / 看某个下拉的可选值,和调一次。只在这一处这一轮发的那几份里找(工作台里是 ComfyUI 的,别处是通用插件的)。
+# 这一轮一个没发的都没有时,这两个也不发(tool_manifest.ON_DEMAND_TOOLS)。
+
+
+@tool(effect="reads")
+def plugin_tools(query: str = "", tool: str = "", input: str = "") -> dict[str, Any]:  # noqa: A002
+    """Read-only: plugin tools not in your list this turn. No `tool`: find them by `query` words. With `tool` (its
+    name, or a saved workflow's path): its full description and inputs (`query` filters them). With `input` too: that
+    input's options (`query` filters them)."""
+    from app.domain.agent import plugin_lookup
+
+    return _use_case(plugin_lookup.lookup, query, tool, input, _SESSION_ID.get())
+
+
+@tool(effect="confirms")
+def run_plugin_tool(tool: str, arguments: dict[str, Any] | None = None, workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: call a plugin tool not in your list this turn (`tool` as in plugin_tools; `arguments`:
+    its inputs). Same card and result as calling it directly."""
+    from app.domain.agent import plugin_lookup
+
+    name = _use_case(plugin_lookup.resolve_name, tool, _SESSION_ID.get())
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "run_plugin_tool",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"tool": name, "arguments": dict(arguments or {})},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
 # ---------- ComfyUI 工作台里的智能体(ADR 0042:读和诊断、改和新建) ----------
 #
 # 碰画布的(comfy_canvas_read / comfy_locate / comfy_check / comfy_canvas_edit / comfy_canvas_new)经桌面版主进程交给那个连接开着的
@@ -2040,33 +2075,6 @@ def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any
 
     return _use_case(workbench_agent.open_new, workspace_id or _default_workspace_id(), template, pack, path, name, ops or [],
                      instance_id, opened_by=_SESSION_ID.get())
-
-
-@tool(effect="reads", needs="workflow_library", kit="comfyui")
-def comfy_workflow_inputs(workflow: str, input: str = "", query: str = "", instance_id: str = "") -> dict[str, Any]:  # noqa: A002
-    """Read-only: the inputs of a saved workflow's tool (all of them, long dropdowns as a count), or with `input` that
-    input's options (`query` filters; also filters inputs by name). `workflow`: its `tool` from list_workflows, the full tool
-    name, or its path."""
-    from app.domain.agent import workflow_tools
-
-    return _use_case(workflow_tools.inputs, workflow, input, query, instance_id)
-
-
-@tool(effect="confirms", needs="workflow_library", kit="comfyui")
-def comfy_run_workflow(workflow: str, arguments: dict[str, Any] | None = None, instance_id: str = "",
-                       workspace_id: str = "") -> dict[str, Any]:
-    """Confirmation required: run a saved workflow whose own tool isn't in your list this turn (you get the one on the
-    canvas and those used or named in this conversation). `workflow` as in comfy_workflow_inputs; `arguments`: that tool's
-    inputs. Same card text and result as calling its tool."""
-    confirmation = _open_card(
-        {
-            "workspace_id": workspace_id or _default_workspace_id(),
-            "tool": "comfy_run_workflow",
-            "requested_by": _REQUESTED_BY.get(),
-            "payload": {"workflow": workflow, "arguments": dict(arguments or {}), "instance_id": instance_id},
-        },
-    )
-    return _confirmation_reply(confirmation)
 
 
 @tool(effect="reads", needs="workflow_library", kit="comfyui")

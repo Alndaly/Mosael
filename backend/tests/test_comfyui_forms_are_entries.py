@@ -103,19 +103,18 @@ def test_表单入口的模型id比路径长_生成接口收得下(connected) ->
 
 
 def test_工作台按路径找工作流工具_有表单的找到的是表单入口_完整工作流不绕回来(connected) -> None:
-    """`comfy_workflow_inputs` / `comfy_run_workflow` 按路径找那张工作流的工具:一张有表单的工作流两个入口路径相同,找到的是
-    表单入口;按名字点完整工作流(`agent: false`)也找不到 —— 这条路不把不进智能体工具表的那个绕回来(ADR 0045 §5)。"""
+    """`plugin_tools` / `run_plugin_tool` 按路径找那张工作流的工具:一张有表单的工作流两个入口路径相同,找到的是表单入口;
+    按名字点完整工作流(`agent: false`)也找不到 —— 这条路不把不进智能体工具表的那个绕回来(ADR 0045 §5)。"""
     from app.db.models import User
-    from app.domain.agent import workflow_tools
+    from app.domain.agent import plugin_lookup
 
-    _, _, instance_id = connected
     with SessionLocal() as db:
         me = db.get(User, user_id())
-        tool, _name = workflow_tools.resolve(db, me, "portrait.json")
+        tool, _name = plugin_lookup.resolve(db, me, "portrait.json")
         assert tool["name"] == PORTRAIT_TOOL + "_app"
-        assert workflow_tools.resolve(db, me, "portrait")[0]["name"] == PORTRAIT_TOOL + "_app"
-        with pytest.raises(workflow_tools.WorkflowToolError):
-            workflow_tools.resolve(db, me, PORTRAIT_TOOL, instance_id)
+        assert plugin_lookup.resolve(db, me, "portrait")[0]["name"] == PORTRAIT_TOOL + "_app"
+        with pytest.raises(plugin_lookup.PluginLookupError):
+            plugin_lookup.resolve(db, me, PORTRAIT_TOOL)
 
 
 def test_智能体调表单入口的工具_确认卡上说出来自哪张工作流(connected) -> None:

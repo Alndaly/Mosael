@@ -11,6 +11,9 @@
 卡以具体的工具名开(而不是一个统称的「运行插件工具」),「本会话始终允许」于是按工具记 ——
 允许了一次 Manim 渲染,不等于允许往云盘传文件。这一族名字由 registry.confirmable_family 认领。
 
+这一轮工具表里没有的插件工具(ADR 0044 修订 2026-10-08,见 agent.plugin_lookup)经 `run_plugin_tool` 调:它开自己那一张卡
+(每个开卡的工具一条登记),卡上的说明、问人的那一档、开卡校验、批准后的执行都委托给那个工具自己的这一套。
+
 用户自己在插件页点「试一下」、工作流里的插件节点、画板上自己点运行,都不经这里:那是人点的。
 """
 
@@ -22,7 +25,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_family
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_family, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.effects import needs_card, permission_for, warning_key
@@ -141,15 +144,10 @@ def _summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    return run_call(db, confirmation.tool, confirmation.payload, confirmation.workspace_id, actor)
+    return _run(db, confirmation.tool, confirmation.payload, confirmation.workspace_id, actor)
 
 
-def validate_call(db: Session, name: str, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    """展开名 `name` 那个工具的开卡校验(和以它命名的卡同一份)。别的卡替它开时用(见 comfyui 的 comfy_run_workflow)。"""
-    _bind(name).validate(db, workspace_id, payload, actor)
-
-
-def run_call(db: Session, name: str, payload: dict[str, Any], workspace_id: str, actor: str | None) -> dict[str, Any]:
+def _run(db: Session, name: str, payload: dict[str, Any], workspace_id: str, actor: str | None) -> dict[str, Any]:
     """批准之后跑:**同一个** plugins.tools.invoke(智能体直接调、工作流节点、插件页试跑走的都是它)。
 
     只用**批准者自己**接的连接:连接归人,别人批准就是拿接入者的第三方密钥替他花钱 —— 那不是
@@ -175,9 +173,45 @@ def run_call(db: Session, name: str, payload: dict[str, Any], workspace_id: str,
     return output if isinstance(output, dict) else {"output": output}
 
 
-#: 别的卡替一个插件工具开时,卡上怎么说、按哪一档问、要不要问人,和以那个工具命名的卡同一份。
-summarize_call = _summarize
-escalate_call = _escalate
-needs_card_call = _needs_card
+def _on_behalf_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """`run_plugin_tool` 的卡:`tool` 是它替调的那个插件工具的展开名(mcp_server 开卡前已在这一处够得着的里认出)。入参名都得是
+    它认得的,再走**那个工具自己的**开卡校验;卡上记着它的展开名。"""
+    from app.domain.agent.plugin_lookup import PluginLookupError, unknown_inputs
+
+    name = str(payload.get("tool") or "")
+    tool = exposed_tool(db, name, actor) if name.startswith(PLUGIN_TOOL_PREFIX) else None
+    if tool is None:
+        raise ConfirmationError("confirmErr_pluginToolUnavailable", name=name)
+    arguments = payload.get("arguments")
+    arguments = {} if arguments is None else arguments
+    if not isinstance(arguments, dict):
+        raise ConfirmationError("confirmErr_pluginToolBadInput", name=tool["label"], detail="arguments")
+    try:
+        unknown_inputs(tool, arguments)
+    except PluginLookupError as exc:
+        raise ConfirmationError("confirmErr_pluginToolBadInput", name=tool["label"], detail=str(exc)) from exc
+    call: dict[str, Any] = {"arguments": arguments}
+    _bind(name).validate(db, workspace_id, call, actor)
+    payload.clear()
+    payload.update({**call, "tool": name})
+
+
+def _on_behalf_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = dict(confirmation.payload or {})
+    return _run(db, str(payload.get("tool") or ""), payload, confirmation.workspace_id, actor)
+
 
 confirmable_family(PLUGIN_TOOL_PREFIX, _bind)
+
+#: 调一个这一轮工具表里没有的插件工具(见模块说明)。卡上的话、档位、要不要问人都按 payload 里那个工具的事实算 —— 和以它
+#: 命名的卡同一套函数。
+confirmable_tool(ConfirmableTool(
+    name="run_plugin_tool",
+    permission="edit",
+    cost="none",
+    summarize=_summarize,
+    execute=_on_behalf_execute,
+    validate=_on_behalf_validate,
+    escalate=_escalate,
+    needs_card=_needs_card,
+))

@@ -401,3 +401,19 @@ def pinned(db, workflow) -> dict:
 
     revision = current_workflow_revision(db, workflow)
     return {"workflow_id": workflow.id, "workflow_revision_id": revision.id, "workflow_revision": revision.revision}
+
+
+def settled_card(card_id: str, timeout: float = 30.0):
+    """等自动放行判完、批准了的执行走到终态(approved 是中间态),再读这张确认卡(脱离会话的 ORM 行)。"""
+    from app.core.db import SessionLocal
+    from app.db.models import ToolConfirmation
+
+    assert wait_for_idle_autopilot(timeout)
+    deadline = time.monotonic() + timeout
+    while True:
+        with SessionLocal() as db:
+            row = db.get(ToolConfirmation, card_id)
+            db.expunge(row)
+        if row.status != "approved" or time.monotonic() > deadline:
+            return row
+        time.sleep(0.02)

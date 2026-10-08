@@ -40,6 +40,13 @@
 tests/comfyui_big_catalog 那台:十几张工作流、几百项的下拉、一张一百多个可调项的图,工作台那一处画布上开着最大那张。
 工作台那一轮只发用得上的工作流工具(画布上那张、对话里调过的、点过名的),发出去的插件工具入参收紧(agent/plugin_schema),
 单个插件工具的定义有上限(`PLUGIN_TOOL_CAP`)。
+
+## 通用插件也进来(ADR 0044 修订 2026-10-08 之二)
+
+维护者还开着一个 3D 软件的 MCP 连接(27 个工具,约 3.1 万字符)、一个出讲解视频的、一个代码动画的 —— 它们每一处都全发,工作台
+以外六处每轮约 4.99 万 token,工作台约 4.61 万。这里接的是 tests/general_plugins 那三个(形状照真的造,名字和内容是编的)。
+通用插件工具跟着地方走(工作台以外),而且只发这段对话调过的;别的经 `plugin_tools` / `run_plugin_tool` 够得着,这两个只在
+这一轮真有没发的插件工具时才发。
 """
 
 from __future__ import annotations
@@ -55,9 +62,9 @@ import pytest
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX
+from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.providers.model_limits import LOCAL_FALLBACK_CONTEXT_WINDOW
-from tests import comfyui_big_catalog
+from tests import comfyui_big_catalog, general_plugins
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import add_provider, fresh_client, second_client, user_id
 
@@ -69,8 +76,9 @@ PLUGIN_TOOL_CAP = 6_000
 
 PACKAGE = "dev.mosael.comfyui"
 COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
-               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new",
-               "comfy_workflow_inputs", "comfy_run_workflow"}
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
+#: 这一轮没发的插件工具经它们够得着;一个没发的都没有就不发。
+ON_DEMAND = {"plugin_tools", "run_plugin_tool"}
 #: 改 Mosael 自家画布的那一份里的几样(不必列全:在且只在工作台以外)。
 CANVAS_TOOLS = {"edit_board", "edit_timeline", "edit_scene", "edit_workflow", "blender_execute"}
 PLACES = ("studio", "project", "note", "board", "workflow", "scene", "comfyui")
@@ -125,17 +133,20 @@ def _homes(client, workspace: str, connection: str) -> dict[str, dict[str, str]]
 
 @pytest.fixture
 def everywhere(comfy) -> dict[str, Any]:
-    """接了 ComfyUI、用本机模型的人,七种地方各一段家在那里的对话。"""
+    """接了 ComfyUI 和三个通用插件、用本机模型的人,七种地方各一段家在那里的对话。"""
     client = fresh_client()
     _local_model()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     connection = _connect(client, comfy)
+    general = general_plugins.install(client)
     sessions = {}
     for kind, home in _homes(client, workspace, connection).items():
         created = client.post("/api/agent/sessions", json={"workspace_id": workspace, "home": home})
         assert created.status_code == 200, created.text
         sessions[kind] = created.json()["id"]
-    return {"client": client, "workspace": workspace, "connection": connection, "sessions": sessions}
+    return {"client": client, "workspace": workspace, "connection": connection, "sessions": sessions,
+            "general": {agent_tool_name(general[plugin["id"]], tool["name"])
+                        for plugin in general_plugins.ALL for tool in plugin["tools"]["declare"]}}
 
 
 def _context(client, session_id: str) -> dict[str, int]:
@@ -203,6 +214,19 @@ def test_comfy_工具在且只在工作台_画布那一份在且只在工作台�
     else:
         assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
     assert {"list_assets", "open_view", "remember"} <= tools, "通用的哪儿都发"
+    assert ON_DEMAND <= tools, "工作台里有没发的工作流工具、别处有没发的通用插件工具:够得着它们的路要在"
+
+
+@pytest.mark.parametrize("kind", PLACES)
+def test_通用插件工具_一段新对话里哪一处都不发完整定义_工作台里也够不着(everywhere, kind: str) -> None:
+    client, session = everywhere["client"], everywhere["sessions"][kind]
+    specs = _turn_specs(client, session)
+    assert not {one["name"] for one in specs} & everywhere["general"]
+    note = next(one for one in specs if one["name"] == "plugin_tools")["description"]
+    if kind == "comfyui":
+        assert "3D 软件(测试)" not in note, "工作台里不是它们的地方"
+    else:
+        assert all(f"{plugin['name']} ({len(plugin['tools']['declare'])})" in note for plugin in general_plugins.ALL), note
 
 
 def test_工作台那一轮_工作流工具只发画布上开着的那张(everywhere) -> None:
@@ -230,6 +254,8 @@ def test_单个插件工具的定义有上限(everywhere, kind: str) -> None:
     assert workflow_tools, "一个工作流工具都没量到"
     if kind == "no-conversation":
         assert len(workflow_tools) >= comfyui_big_catalog.PLAIN_WORKFLOWS + 1
+        assert len(plugin) >= len(workflow_tools) + sum(len(one["tools"]["declare"]) for one in general_plugins.ALL), \
+            "通用插件工具也在量的里头"
     too_big = {one["name"]: _size(one) for one in plugin if _size(one) > PLUGIN_TOOL_CAP}
     assert not too_big, f"这几个插件工具的定义超过了 {PLUGIN_TOOL_CAP} 字符:{too_big}"
     assert not any(comfyui_big_catalog.LORAS[100] in json.dumps(one["parameters"], ensure_ascii=False) for one in plugin), \
