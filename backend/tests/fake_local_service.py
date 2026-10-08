@@ -7,12 +7,15 @@
 - `--slow`:先睡这么久再开始听(第一次启动要解包前端的那种);
 - `--hang`:一直不听(就绪超时);
 - `--exit-at-start`:还没听就以这个退出码退出(参数不对、缺依赖);
-- `--crash-after`:听起来以后过这么久崩掉(退出码 1);
+- `--crash-after`:**头一回答了健康检查之后**过这么久崩掉(退出码 1);
 - `--crash-first N`:配 `--count`,前 N 次启动都在就绪之后崩掉,之后稳住(崩溃重启之后能恢复);
 - `--count`:每次启动往这个文件追加一行(数它起了几次);
 - `--child`:起一个孙进程(一直睡),把它的 pid 写进这个文件(验「停整组」);
 - `--ignore-term`:不理 SIGTERM(验「10 秒后强杀」);
-- `--mute-after`:就绪之后过这么久不再应答(关掉监听),进程照样活着(「进程在、却没有应答」)。
+- `--mute-after`:就绪之后(头一回答了健康检查之后)过这么久不再应答(关掉监听),进程照样活着(「进程在、却没有应答」)。
+
+「崩」「不再应答」都从**头一回答了健康检查**算,不从开始听算:看护那边要先看到它就绪,这两件事才是「运行中崩了 / 没了应答」。
+此前从开始听算,看护线程起得晚 0.2 秒,进程就在被看到就绪之前崩了 —— 测的成了「还没就绪就退出」。
 
 启动时往 stdout 打几行日志:一行中文、一段用回车刷新的进度条 —— 日志缓冲按终端的样子收。
 """
@@ -30,6 +33,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+#: 头一回答了健康检查(有人看到它就绪了)。
+_seen_ready = threading.Event()
+
+
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 — http.server 的约定
         if self.path != "/system_stats":
@@ -42,6 +49,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
+        _seen_ready.set()
 
     def log_message(self, *_args: object) -> None:
         return
@@ -96,6 +105,7 @@ def main() -> None:
         crash_after = None
     if crash_after is not None:
         def crash() -> None:
+            _seen_ready.wait()
             time.sleep(crash_after)
             print("出错了,崩掉", flush=True)
             os._exit(1)
@@ -103,6 +113,7 @@ def main() -> None:
         threading.Thread(target=crash, daemon=True).start()
     if args.mute_after is not None:
         def mute() -> None:
+            _seen_ready.wait()
             time.sleep(args.mute_after)
             print("不再应答(进程还在)", flush=True)
             server.shutdown()

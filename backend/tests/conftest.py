@@ -124,6 +124,25 @@ def _lives_for_the_process(thread: threading.Thread) -> bool:
     return any(f"({target})" in thread.name for target in _PROCESS_LIFETIME_THREAD_TARGETS)
 
 
+def _let_the_body_threads_finish(item) -> list[threading.Thread]:
+    """等这条测试函数体里起的线程自己结束(最多 `_STRAY_THREAD_GRACE_SECONDS`),交回还活着的那些。函数体没跑过就什么都不等。"""
+    before = item.stash.get(_THREADS_BEFORE_BODY, None)
+    if before is None:  # 函数体没跑(setup 就失败了、被跳过)
+        return []
+    stray = [t for t in threading.enumerate() if t not in before and t.is_alive() and not _lives_for_the_process(t)]
+    deadline = _real_monotonic() + _STRAY_THREAD_GRACE_SECONDS
+    for thread in stray:
+        thread.join(max(0.0, deadline - _real_monotonic()))
+    return [thread for thread in stray if thread.is_alive()]
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item) -> None:
+    #: 记在 junit 里:这条跑在哪个 worker 上。一条随机红的测试,常常是同一个 worker 里排在它前面的那条留下了东西
+    #: (库里的行、没收的线程)—— CI 传上来的报告里按 worker 一筛,就是它前面跑过的那一串。
+    item.user_properties.append(("xdist_worker", os.environ.get("PYTEST_XDIST_WORKER", "main")))
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_call(item) -> None:
     item.stash[_THREADS_BEFORE_BODY] = set(threading.enumerate())
@@ -142,14 +161,7 @@ def pytest_runtest_teardown(item, nextitem):
     进程级常驻的按 `_PROCESS_LIFETIME_THREAD_TARGETS` 放过。
     """
     result = yield
-    before = item.stash.get(_THREADS_BEFORE_BODY, None)
-    if before is None:  # 函数体没跑(setup 就失败了、被跳过)
-        return result
-    stray = [t for t in threading.enumerate() if t not in before and t.is_alive() and not _lives_for_the_process(t)]
-    deadline = _real_monotonic() + _STRAY_THREAD_GRACE_SECONDS
-    for thread in stray:
-        thread.join(max(0.0, deadline - _real_monotonic()))
-    alive = [thread.name for thread in stray if thread.is_alive()]
+    alive = [thread.name for thread in _let_the_body_threads_finish(item)]
     if alive:
         raise AssertionError(
             f"这条测试起的线程在它结束 {_STRAY_THREAD_GRACE_SECONDS:g} 秒后还活着:{alive} —— 它们会在后面别的测试里"
@@ -357,11 +369,16 @@ _SNAPSHOT_STATE = (
 
 
 @pytest.fixture(autouse=True)
-def _restore_process_snapshots():
+def _restore_process_snapshots(request):
     """每条测试跑完把那几处配置快照还原成它进来时的样子。
 
     还原的是**进来时**的值而不是模块默认值:有的测试会在 fixture 里故意设好一个值,
     按默认值还原等于把那条测试自己的布置也抹掉。
+
+    **先等这条测试起的后台线程走完,再还原。** 反过来的话,还原之后才跑到的那条线程会把它看到的配置重新缓存进去,
+    而下一条测试「进来时的值」就是这份 —— 从此一路传下去。实测:`GET /api/settings/tts` 顺手起的运行时探测线程
+    (起步晚一点,tests/thread_jitter.py)在还原之后读配置,把上一条测试库里的 fish-speech 缓存进 `_cached`,
+    隔了五条的 test_tts_config_get_and_update 读到的默认引擎就成了 fish-speech。
     """
     import importlib
 
@@ -373,5 +390,6 @@ def _restore_process_snapshots():
             continue
         saved.append((module, attribute, getattr(module, attribute, None)))
     yield
+    _let_the_body_threads_finish(request.node)
     for module, attribute, value in saved:
         setattr(module, attribute, value)

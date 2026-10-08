@@ -212,6 +212,41 @@ def seed_assets(workspace_id: str, kinds: dict[str, str]) -> None:
         db.commit()
 
 
+#: 测试进程起来时的真钟。有的测试把 `time.sleep` / `time.monotonic` 整个换掉(换成不睡、或往前拨的假钟),
+#: `until` 用的是这两个,不受它们影响。
+_real_sleep = time.sleep
+_real_monotonic = time.monotonic
+
+
+class module_time:  # noqa: N801 — 用起来像一个模块(`module_time(sleep=...)` 顶替某个模块里的 `time`)
+    """给**一个模块**换上它自己的 `time`:只换给出的几个函数,其余照真的 time 模块。
+
+    `monkeypatch.setattr(http_retry.time, "sleep", ...)` 看着像只换了 http_retry 的,换的其实是整个进程的
+    `time.sleep` —— 同一进程里别的线程(看护、回收、这条测试起的后台线程)也跟着不睡了、拿到假钟了。要换就换模块上的
+    名字:`monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))`。
+    """
+
+    def __init__(self, **overrides) -> None:
+        self.__dict__.update(overrides)
+
+    def __getattr__(self, name: str):
+        return getattr(time, name)
+
+
+def until(predicate, timeout: float = 30.0, interval: float = 0.02) -> bool:
+    """等一个条件成立:成立就返回 True,到上限还不成立返回 False —— 调用处写 `assert until(...), "等的是什么"`。
+
+    上限给足:条件一成立就返回,给多大都不花钱;只在真红的时候多等一会儿。不要写「睡 0.3 秒,它应该已经……了」。
+    """
+    deadline = _real_monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if _real_monotonic() >= deadline:
+            return False
+        _real_sleep(interval)
+
+
 def wait_status(client, job_id: str, timeout: float = 60.0) -> str:
     """等任务落终态,返回它;等满 `timeout` 还没落就返回当时的状态(断言会说清是哪一种)。
 
