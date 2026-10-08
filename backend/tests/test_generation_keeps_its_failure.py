@@ -63,6 +63,7 @@ def test_重启时接不回来_也记下() -> None:
     generation_id, _job_id = _generation(ws, status="running")
     with SessionLocal() as db:
         reconcile_orphaned_jobs(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
     assert _listed(client, ws, generation_id, "en")["error"] == (
         "The backend restarted and interrupted this task; please start it again"
     )

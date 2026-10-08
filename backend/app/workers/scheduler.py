@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, now
-from app.domain.jobs import expire_worker_leases, prune_task_events
+from app.core.unit_of_work import unit_of_work
+from app.domain.jobs import PRUNE_BATCH, delete_task_events, expire_worker_leases, prunable_task_events
 from app.domain.scheduler import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
 from app.domain.scheduler.executors import notify_run_failed, sync_run_states
 from app.domain.scheduler.operations import compute_next_run_at
@@ -51,15 +52,31 @@ def _loop(stop: threading.Event) -> None:
         try:
             with SessionLocal() as db:
                 tick(db)
-                # Task-event retention (plan §12.3) piggybacks on this loop.
-                if time.monotonic() - last_prune >= PRUNE_INTERVAL_SECONDS:
-                    last_prune = time.monotonic()
-                    removed = prune_task_events(db)
-                    db.commit()
-                    if removed:
-                        logger.info("Task-event retention removed %d rows", removed)
+            # Task-event retention (plan §12.3) piggybacks on this loop.
+            if time.monotonic() - last_prune >= PRUNE_INTERVAL_SECONDS:
+                last_prune = time.monotonic()
+                removed = prune_events(stop)
+                if removed:
+                    logger.info("Task-event retention removed %d rows", removed)
         except Exception:  # the loop must survive any single bad tick
             logger.exception("Scheduler tick failed")
+
+
+def prune_events(stop: threading.Event | None = None) -> int:
+    """按保留规则清任务事件:先读出该删的(不占写锁),再**一批一个事务**地删。返回一共删了几条。
+
+    此前整张表一个事务:一年的量要一分多钟,全程攥着写锁,别的写入 5 秒后失败。一批两千条是几十毫秒的事,
+    批与批之间别的写入照常插进来。停机信号来了就停在批与批之间 —— 剩下的下一轮再删。
+    """
+    with SessionLocal() as db:
+        ids = prunable_task_events(db)
+    removed = 0
+    for start in range(0, len(ids), PRUNE_BATCH):
+        if stop is not None and stop.is_set():
+            break
+        with unit_of_work() as db:
+            removed += delete_task_events(db, ids[start:start + PRUNE_BATCH])
+    return removed
 
 
 def tick(db: Session) -> list[str]:

@@ -66,7 +66,6 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import install_rate_limiting
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal
-from app.core.unit_of_work import unit_of_work
 from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
@@ -80,12 +79,8 @@ from app.domain.agent.skills.catalog import SkillDomainError
 from app.domain.entities import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
 from app.domain.voices.remote import RemoteConsentRequired
-from app.domain.assets import reconcile_broken_media_info
-from app.domain.agent.host import reconcile_orphaned_agent_sessions
-from app.domain.blender.bridge import reconcile_orphaned_transfers as reconcile_blender_transfers
 from app.domain.jobs import register_external_kind
-from app.domain.restart import reconcile_after_restart
-from app.domain.assets.proxies import reconcile_missing_proxies
+from app.domain.restart import settle_previous_run
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
 
@@ -112,21 +107,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         register_external_kind(kind)
     if external:
         logger.info("external job kinds (driven by outside worker): %s", ", ".join(external))
-    # 启动收尾是一次用例:下面几个函数只改对象,这一段正常结束时一起提交(见 core/unit_of_work)。
-    with unit_of_work() as db:
-        # 重启杀掉一切进程内的线程/子进程/连接,**在调用之前就落库的那些「进行中」的行
-        # 自己不会醒过来**。谁来收尾登记在 domain/restart 的那张表上,由一条棘轮按 ORM
-        # 推导出「哪些表需要登记」——此前是四个手写的调用,而第五、第六处照样漏了。
-        settled = reconcile_after_restart(db)
-        # 卡在 running 的智能体会话拨回 idle,否则前端永远「思考中」。它不按表登记:
-        # 要收的不止 agent_sessions 一张(那一轮留下的确认卡也要作废)。
-        reconcile_orphaned_agent_sessions(db)
-        # Backfill preview proxies for any videos missing one (best-effort).
-        reconcile_missing_proxies(db)
-        # 修复 remux 上线前导入的坏素材(直录 webm 缺时长/缩略图/波形)。
-        reconcile_broken_media_info(db)
-    # Blender 互通留在磁盘上(transfer.json),推导不出来,所以单列 —— 同一条规矩的第六处。
-    settled["blender_transfers"] = reconcile_blender_transfers()
+    # 重启杀掉一切进程内的线程/子进程/连接,**在调用之前就落库的那些「进行中」的行自己不会醒过来**。谁来收尾登记在
+    # domain/restart 的那张表上(由一条棘轮按 ORM 推导「哪些表需要登记」);卡住的智能体会话、缺的预览代理、坏素材的
+    # 时长一起收。**一次用例一个事务**,全部收完才提交 —— 提交钩子(送回执会在对话里起一轮)在那之后才跑,见那里的说明。
+    settled = settle_previous_run()
     for table, count in settled.items():
         if count:
             logger.info("reconciled %d orphaned %s left by a previous restart", count, table)

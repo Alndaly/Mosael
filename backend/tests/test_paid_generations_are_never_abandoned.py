@@ -232,6 +232,7 @@ def test_重启时_有回执的接着取_没回执的才判失败(quiet_runner, 
     )
     with SessionLocal() as db:
         jobs.reconcile_orphaned_jobs(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
     with SessionLocal() as db:
         assert db.get(Job, submitted).status == "running", "付过钱的那一条不能判失败"
         assert db.get(Job, never_id).status == "failed", "还没提交的,没有东西可取,照旧判中断"

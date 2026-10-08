@@ -993,16 +993,18 @@ def settle_partition_move(db: Session, move_id: str, *, worker: str, status: str
         db.flush()
 
 
-def reconcile_browser_state() -> int:
+def reconcile_browser_state(db: Session) -> int:
     """后端重启:执行器视图已随旧进程消失,把残留的未终态动作落 failed、开着的会话落 closed。
-    返回清理的动作数。"""
+    返回清理的动作数。
+
+    不提交、用调用方的会话:重启收尾是一个事务(domain/restart.settle_previous_run)。此前这里自己开一个事务 —— 而同一次收尾里
+    任务那一步已经在外层事务里写过、攥着写锁,这里的写入要排在它后面,等满 busy_timeout 就让启动失败。"""
     cleaned = 0
-    with unit_of_work() as db:
-        stale = db.scalars(select(BrowserAction).where(BrowserAction.status.in_(("queued", "running")))).all()
-        for act in stale:
-            act.status = "failed"
-            act.error = "browserErr_backendRestarted"
-            cleaned += 1
-        for session in db.scalars(select(BrowserSession).where(BrowserSession.status == "open")).all():
-            session.status = "closed"
+    stale = db.scalars(select(BrowserAction).where(BrowserAction.status.in_(("queued", "running")))).all()
+    for act in stale:
+        act.status = "failed"
+        act.error = "browserErr_backendRestarted"
+        cleaned += 1
+    for session in db.scalars(select(BrowserSession).where(BrowserSession.status == "open")).all():
+        session.status = "closed"
     return cleaned

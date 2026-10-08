@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, event, inspect, select
+from sqlalchemy import delete, event, func, inspect, select, union_all
 from sqlalchemy.orm import Session
 
 from app.core import abort
@@ -934,15 +934,21 @@ def reconcile_orphaned_jobs(db: Session) -> int:
         job.error_key = "jobErr_backendRestart"
         job.error = t("jobErr_backendRestart", DEFAULT_LOCALE)
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
-    if stale:
-        db.commit()
-    #: 先落库那些失败的,再接着干能接的 —— resume 自己开会话,不能夹在这个事务中间。
-    for job in resumable:
-        if not _RESUMERS[job.kind].resume(job.id):
-            logger.warning("job %s [%s] said it could resume but did not", job.id, job.kind)
+    #: **不在这里提交。** 重启收尾是一次用例(domain/restart.settle_previous_run):几张表一起收完、一起提交,提交钩子
+    #: (落终态之后的收拾、送回执 —— 回执会在对话里起一轮)在**全部**收完之后才跑。此前这里自己提交,钩子当场就跑:
+    #: 回执在空闲的对话里起了一轮,紧接着「把卡住的会话拨回 idle」把这一轮当成重启前的孤儿拨回去、还补了一句「已中断」。
+    #: 接着干的那几个同理,提交之后才开始(resume 自己开会话、起线程,不能夹在这个事务中间)。
     if resumable:
-        logger.info("resumed %d job(s) whose remote work outlived the restart", len(resumable))
-    return len(failed) + expire_worker_leases(db)
+        resumes = [(job.kind, job.id) for job in resumable]
+        after_commit(db, lambda: _resume(resumes))
+    return len(failed) + _expire_worker_leases(db)
+
+
+def _resume(resumes: list[tuple[str, str]]) -> None:
+    for kind, job_id in resumes:
+        if not _RESUMERS[kind].resume(job_id):
+            logger.warning("job %s [%s] said it could resume but did not", job_id, kind)
+    logger.info("resumed %d job(s) whose remote work outlived the restart", len(resumes))
 
 
 def _cancel_job_row(db: Session, job: Job) -> bool:
@@ -1071,7 +1077,14 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
 
 
 def expire_worker_leases(db: Session) -> int:
-    """Settle abandoned work; never automatically repeat a potentially billable side effect."""
+    """Settle abandoned work; never automatically repeat a potentially billable side effect. Commits."""
+    expired = _expire_worker_leases(db)
+    db.commit()
+    return expired
+
+
+def _expire_worker_leases(db: Session) -> int:
+    """同上,不提交(重启收尾把它和别的几张表一起提交)。"""
     now = models_now()
     #: **判据只有一条:租约到点了。** 此前这里还有一条 `lease_expires_at IS NULL` 的兼容分支,
     #: 伺候"租约列还不存在时就已经 running 的行"—— 而那本该由迁移一次性了结的
@@ -1097,7 +1110,6 @@ def expire_worker_leases(db: Session) -> int:
             db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "worker_lease_expired"}))
             _cancel_descendants(db, job.id)
             expired += 1
-    db.commit()
     return expired
 
 
@@ -1171,40 +1183,63 @@ def report_job(
     return job
 
 
-def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
-    """Apply the retention rules to task_events. Returns rows deleted."""
+#: 一批最多删这么多条任务事件。删的时候攥着写锁:一批要短,别的写入(请求、任务进度)才等得过 busy_timeout。
+PRUNE_BATCH = 2000
+
+
+def prunable_task_events(db: Session, *, now: datetime | None = None) -> list[str]:
+    """按保留规则该删的任务事件 id。**只读** —— 不占写锁;删由 `delete_task_events` 分批做(见 workers/scheduler.prune_events)。
+
+    规则:进行中的任务全留;已结束的留最近 TERMINAL_KEEP_EVENTS 条(工作流在窗口内全留);结束超过 EVENT_RETENTION_DAYS
+    天的事件全删,任务那一行留着。
+
+    **判据是一条集合式查询,不把任务读成 ORM 对象。** 此前逐个任务查、逐个删,而 ORM 的 DELETE 每一次都把身份映射里
+    的全部对象过一遍(默认的 synchronize_session):一年的量(三万多个任务)清一次 67 秒,全程攥着写锁 ——
+    期间别的写入 5 秒后报 database is locked。
+    """
     reference = now or models_now()  # utcnow() is deprecated; models_now is the same naive UTC
     cutoff = reference - timedelta(days=EVENT_RETENTION_DAYS)
-    removed = 0
-
-    terminal_jobs = db.scalars(select(Job).where(Job.status.in_(TERMINAL_STATUSES))).all()
-    for job in terminal_jobs:
-        if job.updated_at < cutoff:
-            result = db.execute(delete(TaskEvent).where(TaskEvent.job_id == job.id))
-            removed += result.rowcount or 0
-            continue
-        # 工作流历史靠 started/finished/failed 事件配对还原每一个节点。通用的“只留最后 5 条”
-        # 会稳定地裁掉前半程，让失败运行看起来只执行了最后一个报错节点。30 天窗口已经给存储
-        # 设了明确上限；窗口内保留完整工作流事件，才能让“执行历史”名副其实。
-        if job.kind == "workflow":
-            continue
-        keep_ids = list(
-            db.scalars(
-                select(TaskEvent.id)
-                .where(TaskEvent.job_id == job.id)
-                .order_by(TaskEvent.created_at.desc())
-                .limit(TERMINAL_KEEP_EVENTS)
-            )
+    finished = Job.status.in_(TERMINAL_STATUSES)
+    expired = (
+        select(TaskEvent.id.label("id"))
+        .join(Job, Job.id == TaskEvent.job_id)
+        .where(finished, Job.updated_at < cutoff)
+    )
+    # 工作流历史靠 started/finished/failed 事件配对还原每一个节点。通用的“只留最后 5 条”
+    # 会稳定地裁掉前半程，让失败运行看起来只执行了最后一个报错节点。30 天窗口已经给存储
+    # 设了明确上限；窗口内保留完整工作流事件，才能让“执行历史”名副其实。
+    ranked = (
+        select(
+            TaskEvent.id.label("id"),
+            func.row_number()
+            .over(partition_by=TaskEvent.job_id, order_by=(TaskEvent.created_at.desc(), TaskEvent.id.desc()))
+            .label("newest_first"),
         )
-        result = db.execute(
-            delete(TaskEvent).where(TaskEvent.job_id == job.id, TaskEvent.id.not_in(keep_ids))
-        )
-        removed += result.rowcount or 0
-    return removed
+        .join(Job, Job.id == TaskEvent.job_id)
+        .where(finished, Job.updated_at >= cutoff, Job.kind != "workflow")
+        .subquery()
+    )
+    trimmed = select(ranked.c.id).where(ranked.c.newest_first > TERMINAL_KEEP_EVENTS)
+    return list(db.scalars(union_all(expired, trimmed)))
 
 
-def clear_finished_jobs(db: Session, workspace_id: str, *, removable: Any = None) -> int:
-    """任务中心的「清空已结束」:删掉面板上列着的那些已结束任务,**连同它们收纳的子任务**。返回删了几个。
+def delete_task_events(db: Session, ids: list[str]) -> int:
+    """按 id 删一批任务事件(不提交)。返回删了几条。"""
+    if not ids:
+        return 0
+    db.execute(delete(TaskEvent).where(TaskEvent.id.in_(ids)).execution_options(synchronize_session=False))
+    return len(ids)
+
+
+def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
+    """一次删完(一个事务)。给测试和小库用;调度线程走分批的 `workers/scheduler.prune_events`。"""
+    ids = prunable_task_events(db, now=now)
+    return sum(delete_task_events(db, ids[start:start + PRUNE_BATCH]) for start in range(0, len(ids), PRUNE_BATCH))
+
+
+def finished_job_trees(db: Session, workspace_id: str, *, removable: Any = None) -> list[str]:
+    """任务中心的「清空已结束」该删哪些任务:面板上列着的那些已结束任务,**连同它们收纳的子任务**。只读,返回 id ——
+    一棵树的 id 挨在一起(删由 `delete_jobs` 分批做,见 job_center.clear_finished)。
 
     面板只列顶层任务(子任务收在父任务的详情里,见 routes/jobs 的 `top_level`),所以清的单位是**一棵树**:
     顶层任务结束了、而且它底下每一个子任务也都结束了,整棵一起删。此前是「这个工作区里所有已结束的行」,
@@ -1218,37 +1253,50 @@ def clear_finished_jobs(db: Session, workspace_id: str, *, removable: Any = None
     `removable`:清的人能动哪些行(`jobs` 表上的 SQL 条件,见 generation/sessions.jobs_writable_filter)。
     一棵树里只要有一行他动不了(别人私有会话里的生成),整棵留着 —— 和取消任务同一道闸。
     """
-    jobs = list(db.scalars(select(Job).where(Job.workspace_id == workspace_id)))
+    #: 只读建树要的三列,不把任务读成 ORM 对象:一个用了几个月的工作区有上万个任务,整行(连 payload、result)读进来
+    #: 再逐个 `db.delete`,ORM 每删一个都把身份映射过一遍 —— 1.2 万个任务点一次要 41 秒,全程攥着写锁。
+    rows = db.execute(
+        select(Job.id, Job.parent_job_id, Job.status).where(Job.workspace_id == workspace_id)
+    ).all()
     allowed = (
         None if removable is None
         else set(db.scalars(select(Job.id).where(Job.workspace_id == workspace_id, removable)))
     )
-    present = {job.id for job in jobs}
-    children: dict[str, list[Job]] = {}
-    for job in jobs:
-        if job.parent_job_id:
-            children.setdefault(job.parent_job_id, []).append(job)
+    status_of = {row.id: row.status for row in rows}
+    children: dict[str, list[str]] = {}
+    for row in rows:
+        if row.parent_job_id:
+            children.setdefault(row.parent_job_id, []).append(row.id)
 
-    def tree(root: Job) -> list[Job]:
+    def tree(root: str) -> list[str]:
         nodes, frontier = [root], [root]
         while frontier:
-            kids = children.get(frontier.pop().id, [])
+            kids = children.get(frontier.pop(), [])
             nodes.extend(kids)
             frontier.extend(kids)
         return nodes
 
-    removed = 0
-    for root in jobs:
-        if root.parent_job_id in present:
+    doomed: list[str] = []
+    for row in rows:
+        if row.parent_job_id in status_of:
             continue
-        nodes = tree(root)
-        if any(node.status not in TERMINAL_STATUSES for node in nodes):
+        nodes = tree(row.id)
+        if any(status_of[node] not in TERMINAL_STATUSES for node in nodes):
             continue
-        if allowed is not None and any(node.id not in allowed for node in nodes):
+        if allowed is not None and any(node not in allowed for node in nodes):
             continue
-        for node in nodes:
-            db.execute(delete(TaskEvent).where(TaskEvent.job_id == node.id))
-            db.delete(node)
-        removed += len(nodes)
-    db.flush()
-    return removed
+        doomed.extend(nodes)
+    return doomed
+
+
+#: 「清空已结束」一批删多少个任务。删的时候攥着写锁(连带它们的事件、外键上的置空),一批要短。
+DELETE_JOBS_BATCH = 500
+
+
+def delete_jobs(db: Session, ids: list[str]) -> int:
+    """按 id 删一批任务连同它们的事件(不提交)。返回删了几个。批的大小由调用方定(见 DELETE_JOBS_BATCH)。"""
+    if not ids:
+        return 0
+    db.execute(delete(TaskEvent).where(TaskEvent.job_id.in_(ids)).execution_options(synchronize_session=False))
+    db.execute(delete(Job).where(Job.id.in_(ids)).execution_options(synchronize_session=False))
+    return len(ids)

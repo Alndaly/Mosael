@@ -976,7 +976,7 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             )
             .values(status="cancelled", error="backend restarted mid-turn", resolved_at=now())
         )
-        db.commit()
+    # 不提交:重启收尾是一次用例,几张表收完一起提交(见 domain/restart.settle_previous_run)。
     return len(stale)
 
 

@@ -847,7 +847,7 @@ def _asset_name(prompt: str, model: str) -> str:
 def record_failure(db, job: Job) -> None:
     """生成任务失败了:把失败原因抄到**生成记录自己**身上(`error` / `error_key` / `error_params`,和任务同形)。
 
-    任务是会被清掉的(任务中心的「清空已结束」,见 jobs.clear_finished_jobs),生成记录不会 —— 它是创作历史,
+    任务是会被清掉的(任务中心的「清空已结束」,见 job_center.clear_finished),生成记录不会 —— 它是创作历史,
     `job_id` 在任务删掉时置空。此前失败原因只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的「生成失败」。
 
     挂在任务**落终态**那一刻(jobs.register_settle_listener),而不是写在 `_fail` 里:让任务失败的不止执行体

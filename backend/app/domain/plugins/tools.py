@@ -810,6 +810,5 @@ def reconcile_orphaned_invocations(db: Session) -> int:
         invocation.status = "failed"
         # 和别的失败原因一样按文案表说(此前这一句是写死的中文,英文界面上照样冒出来)。
         invocation.error = tr("pluginErr_interruptedByRestart")
-    if stale:
-        db.commit()
+    # 不提交:重启收尾是一次用例,几张表收完一起提交(见 domain/restart.settle_previous_run)。
     return len(stale)

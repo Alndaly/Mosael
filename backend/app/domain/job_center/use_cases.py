@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, User
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter, jobs_writable_filter
-from app.domain.jobs import cancel_job, clear_finished_jobs
+from app.core.unit_of_work import unit_of_work
+from app.domain.jobs import DELETE_JOBS_BATCH, cancel_job, delete_jobs, finished_job_trees
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
 
@@ -62,6 +63,17 @@ def cancel(db: Session, user: User, job_id: str) -> Job:
 
 
 def clear_finished(db: Session, user: User, workspace_id: str) -> int:
-    """任务中心的「清空已结束」。别人私有会话里的生成不归他清 —— 和取消同一道闸。"""
+    """任务中心的「清空已结束」。别人私有会话里的生成不归他清 —— 和取消同一道闸。
+
+    **一批一个事务**:先读出该删的(不占写锁),再按 DELETE_JOBS_BATCH 个一批删、每批提交。一个用了几个月的工作区有上万个
+    已结束任务,一个事务删完要攥着写锁十几秒,那期间别的写入(任务进度、别人的请求)5 秒后报 database is locked。
+    清理是幂等的:中途失败,删掉的那几批就是删掉了,剩下的下次再点;拆开的一棵树里留下的子任务没了父任务,下次当顶层清。
+    `db` 只用来读和鉴权,删走自己的事务。
+    """
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return clear_finished_jobs(db, workspace_id, removable=jobs_writable_filter(Job.id, user))
+    doomed = finished_job_trees(db, workspace_id, removable=jobs_writable_filter(Job.id, user))
+    removed = 0
+    for start in range(0, len(doomed), DELETE_JOBS_BATCH):
+        with unit_of_work() as batch:
+            removed += delete_jobs(batch, doomed[start:start + DELETE_JOBS_BATCH])
+    return removed

@@ -47,7 +47,8 @@ def list_job_kinds(user: CurrentUser) -> dict:
 
 
 @router.delete("/jobs/finished")
-def delete_finished_jobs(workspace_id: str, db: Tx, user: CurrentUser) -> dict:
+def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    # 不是 Tx:清理一批一个事务,由用例自己开(见 job_center.clear_finished);请求会话只用来读和鉴权。
     return {"removed": job_center.clear_finished(db, user, workspace_id)}
 
 

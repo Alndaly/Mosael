@@ -150,7 +150,9 @@ def test_reconcile_fails_pending_and_closes_sessions() -> None:
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="navigate", args={}, status="running"))
         db.commit()
 
-    assert browser.reconcile_browser_state() >= 1
+    with SessionLocal() as db:
+        assert browser.reconcile_browser_state(db) >= 1
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
     with SessionLocal() as db:
         assert db.get(BrowserSession, sid).status == "closed"
         acts = db.scalars(select(BrowserAction).where(BrowserAction.session_id == sid)).all()

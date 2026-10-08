@@ -38,6 +38,7 @@ def test_重启把中断那轮的确认卡一并作废() -> None:
 
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     with SessionLocal() as db:
         card = db.scalars(select_cards(sid)).one()
@@ -64,6 +65,7 @@ def test_外部智能体的卡不受牵连() -> None:
 
     with SessionLocal() as db:
         reconcile_orphaned_agent_sessions(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     with SessionLocal() as db:
         card = db.scalars(select_cards(None)).one()
@@ -83,6 +85,7 @@ def test_没有卡在跑的时候什么都不动() -> None:
 
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 0
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     with SessionLocal() as db:
         assert db.scalars(select_cards(sid)).one().status == "pending", "把还有效的卡也作废了"

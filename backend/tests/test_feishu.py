@@ -266,6 +266,7 @@ def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> Non
         session.status = "running"  # 模拟一轮跑到一半进程没了
         db.commit()
         assert reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
         assert inbound.notify_interrupted_chats(db) == 1
 
     assert sent == [("oc_r", "上一轮对话因后端重启而中断,请重新发送。")]
@@ -291,11 +292,13 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
         session.status = "running"
         db.commit()
         reconcile_orphaned_agent_sessions(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
         assert inbound.notify_interrupted_chats(db) == 1
 
     # 第二次启动:没有新的中断,聊天里也没人说话 —— **不能**再发。
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 0
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
         assert inbound.notify_interrupted_chats(db) == 0
     assert len(sent) == 1, f"同一条中断说明发了 {len(sent)} 次"
 
@@ -305,6 +308,7 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
         session.status = "running"
         db.commit()
         assert reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
         assert inbound.notify_interrupted_chats(db) == 1
     assert len(sent) == 2
 
@@ -325,6 +329,7 @@ def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
         session.status = "running"
         db.commit()
         reconcile_orphaned_agent_sessions(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     def boom(*a, **k):
         raise feishu_client.FeishuError("token 过期")

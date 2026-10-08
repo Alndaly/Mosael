@@ -63,9 +63,8 @@ def registered() -> dict[str, Callable[[Session], int]]:
         "plugin_invocations": reconcile_orphaned_invocations,
         # 克隆音色的远端副本(ADR 0037):建到一半进程没了的,记成失败、下次用到时重建。
         "voice_enrollments": reconcile_orphaned_enrollments,
-        # 浏览器那条要收的不止一张表(还有执行器视图),签名也不吃 Session ——
-        # 包一层,让这份登记上的每一项长得一样。
-        "browser_actions": lambda _db: reconcile_browser_state(),
+        # 浏览器那条要收的不止一张表(动作和会话都收),和别的几项一样用收尾那一个事务。
+        "browser_actions": reconcile_browser_state,
         "asset_extractions": reconcile_orphaned_extractions,
     }
 
@@ -73,3 +72,30 @@ def registered() -> dict[str, Callable[[Session], int]]:
 def reconcile_after_restart(db: Session) -> dict[str, int]:
     """把上一个进程留下的「进行中」逐个收尾。返回每张表处理了几行。"""
     return {table: settle(db) for table, settle in registered().items()}
+
+
+def settle_previous_run() -> dict[str, int]:
+    """启动时收上一个进程的尾。**一次用例、一个事务**:所有收尾都做完才一起提交,提交钩子在那之后才跑。
+
+    提交钩子里有副作用:任务落终态之后的收拾、把回执送回发起它的对话(会在空闲的对话里**起一轮**)、接着干能接着干的
+    远端任务。此前任务那一步自己提交,钩子当场就跑 —— 回执起的那一轮,紧接着被下一步「把卡住的会话拨回 idle」当成重启前
+    的孤儿拨回去,还补了一句「上一轮对话因后端重启而中断」;而那一轮其实正在跑,用户再发一句就是同一个会话两轮并发。
+    现在会话先被拨回、卡片先作废,回执再来;回执起的那一轮就是唯一在跑的那一轮。
+
+    会话那一步不按表登记(它要收的不止 agent_sessions 一张,那一轮留下的确认卡也要作废);两个「补派生物」的扫描
+    (预览代理、坏素材的时长)也在这一个事务里,它们派出去的任务同样在提交之后才起线程。磁盘上的记录(Blender 的
+    transfer.json)推导不出来,事务之外单列。返回每一项处理了几行。
+    """
+    from app.core.unit_of_work import unit_of_work
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.assets import reconcile_broken_media_info
+    from app.domain.assets.proxies import reconcile_missing_proxies
+    from app.domain.blender.bridge import reconcile_orphaned_transfers
+
+    with unit_of_work() as db:
+        settled = reconcile_after_restart(db)
+        settled["agent_sessions"] = reconcile_orphaned_agent_sessions(db)
+        reconcile_missing_proxies(db)
+        reconcile_broken_media_info(db)
+    settled["blender_transfers"] = reconcile_orphaned_transfers()
+    return settled

@@ -79,6 +79,7 @@ def test_重启接着取_首帧素材删了也照样去问远端(monkeypatch, tm
 
     with SessionLocal() as db:
         jobs.reconcile_orphaned_jobs(db)
+        db.commit()  # 测试是入口:重启收尾不提交,接着取在提交之后才开始(见 domain/restart.settle_previous_run)
     job = _wait_settled(job_id)
 
     assert resumed == ["/tasks/cgt-paid"], "付过钱的远端任务没人去问"

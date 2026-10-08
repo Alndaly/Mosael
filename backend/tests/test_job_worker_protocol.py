@@ -158,6 +158,7 @@ class TestReconcile:
         orphan_id = _make_job(workspace_id, kind="render")
         with SessionLocal() as db:
             reconcile_orphaned_jobs(db)
+            db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
             assert db.get(Job, external_id).status == "queued"
             orphan = db.get(Job, orphan_id)
             assert orphan.status == "failed" and "重启" in orphan.error
@@ -347,6 +348,7 @@ def test_没有租约的老任务由迁移一次性了结_而不是读路径天�
         db.commit()
         # 读路径不再管它 —— 没有租约就不是"租约到点了"。
         assert reconcile_orphaned_jobs(db) == 0
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     _migrate_job_worker_leases()
     with engine.begin() as conn:

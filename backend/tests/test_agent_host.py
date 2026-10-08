@@ -446,6 +446,7 @@ def test_reconcile_orphaned_agent_sessions() -> None:
         stuck_id, fine_id = stuck.id, fine.id
 
         assert reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
         db.refresh(stuck)
         db.refresh(fine)
@@ -458,6 +459,7 @@ def test_reconcile_orphaned_agent_sessions() -> None:
 
         # 幂等
         assert reconcile_orphaned_agent_sessions(db) == 0
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
 
 def test_session_analysis_video_mode_patch() -> None:

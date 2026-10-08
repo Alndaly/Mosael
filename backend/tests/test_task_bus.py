@@ -87,6 +87,7 @@ def test_reconcile_orphaned_jobs_on_restart() -> None:
 
     with SessionLocal() as db:
         assert reconcile_orphaned_jobs(db) == 2  # running + queued in-process jobs
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
 
     with SessionLocal() as db:
         states = {jid: db.get(Job, jid).status for jid in ids}

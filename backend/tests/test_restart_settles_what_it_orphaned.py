@@ -32,6 +32,7 @@ def test_停在running的插件调用被判成失败() -> None:
 
     with SessionLocal() as db:
         settled = reconcile_after_restart(db)
+        db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
     assert settled["plugin_invocations"] == 1
 
     with SessionLocal() as db:
