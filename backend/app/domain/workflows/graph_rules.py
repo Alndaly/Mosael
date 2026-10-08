@@ -297,6 +297,7 @@ def validate_graph(
     allow_missing_start: bool = False,
     extra_types: dict[str, dict[str, Any]] | None = None,
     explain_plugin_node: Callable[[str], str | None] | None = None,
+    unusable_plugin_nodes_ok: bool = False,
     _path: tuple[str, ...] = (),
 ) -> list[str]:
     """结构校验:返回错误列表(空表 = 合法)。
@@ -319,6 +320,12 @@ def validate_graph(
 
     allow_missing_start=True 同样用于**保存**:用户可以把画布清空或删除开始节点做草稿;
     运行时仍然 require_start=True 且 allow_missing_start=False,没有开始节点就不能运行。
+
+    unusable_plugin_nodes_ok=True 也用于**保存**:插件节点此刻用不了(连接停了、ComfyUI 上那张工作流的表单还是上一版格式要升级、
+    工具没勾选……)不拦存盘 —— 用得了用不了是运行时那一刻的事实。此前一张图里有一个指着旧格式表单工具的节点,整张图连别处的改动
+    都存不下来(422);现在节点照常摆着、画布上标「用不了」(修法是升级的标「用不了 · 需要升级」),运行时这一道仍然挡住(维护者
+    2026-10-09 按推荐拍板,ADR 0045 修订之二 D64)。认不出的非插件类型照旧报错。内嵌子图只在运行前(require_config)
+    整份校验,保存时本来就不下探。
 
     require_start=False 用于循环体子图:子图没有 start 节点(执行时由循环上下文喂入
     {{loop.item}}),无入边的节点即为入口;若子图里出现 start 则报错。
@@ -380,7 +387,8 @@ def validate_graph(
             errors.append(tr("wfCheck_duplicateId", id=node_id))
         seen_ids.add(node_id)
         if node_type not in known_types:
-            errors.append(_unknown_type_error(node))
+            if not (unusable_plugin_nodes_ok and _is_plugin_node_type(node_type)):
+                errors.append(_unknown_type_error(node))
             continue
         if node_type == "start":
             starts.append(node)
@@ -895,6 +903,13 @@ _MAX_GRAPH_SCAN_DEPTH = 16
 #: 上面那几张由声明派生的集合 —— 而它跑的是别人的代码,默认就该按"应用之外"算;用的是某人接的插件连接,
 #: 也该按"花他的钱"算。
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX as _PLUGIN_NODE_PREFIX
+
+
+def _is_plugin_node_type(node_type: str) -> bool:
+    """`plugin.<包>.<工具>` 的样子(不管那个插件、那个工具此刻在不在)。"""
+    from app.domain.plugins.nodes import parse_node_type
+
+    return parse_node_type(node_type) is not None
 
 
 def _is_external(node_type: str, types: frozenset[str]) -> bool:

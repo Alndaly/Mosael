@@ -132,6 +132,39 @@ def test_升级之前的空档_老引用记着的完整入口和工具都说需�
     assert ran.status_code == 422 and "旧格式" in str(ran.json()["detail"]), "工作台的「运行」说先升级,不说「还不是生成模型」"
 
 
+def test_工作流里有节点指着旧格式表单的工具_整张照样存得下_节点用不了需要升级_运行时挡住(old_library) -> None:
+    """ADR 0045 修订之二 D64(维护者 2026-10-09 按推荐拍板):此前一张工作流里只要有一个节点指着旧格式表单的工具(那几张升级之前
+    清单上没有它),整张图连别处的改动都存不下来(422)。现在能存,节点照常摆着、标「用不了 · 需要升级」,运行时挡住。"""
+    client, comfy, instance_id, ws = old_library
+    old_node = f"plugin.{PACKAGE}.{FULL_TOOL}_app"
+    graph = {"nodes": [
+        {"id": "start", "type": "start", "config": {"params": {}}},
+        {"id": "draw", "type": old_node, "config": {"prompt": "柴犬", "instance_id": instance_id}},
+        {"id": "say", "type": "template", "config": {"template": "画好了:{{draw.image}}"}},
+        {"id": "each", "type": "subgraph", "config": {"body": {"nodes": [
+            {"id": "again", "type": old_node, "config": {"prompt": "柴犬"}}], "edges": []}}},
+    ], "edges": [{"id": "e1", "source": "start", "target": "draw"}, {"id": "e2", "source": "draw", "target": "say"}]}
+    created = client.post("/api/workflows", json={"workspace_id": ws, "name": "老节点", "graph": graph})
+    assert created.status_code == 200, created.text
+    workflow = created.json()
+    edited = copy.deepcopy(workflow["graph"])
+    next(one for one in edited["nodes"] if one["id"] == "say")["config"]["template"] = "改了别处:{{draw.image}}"
+    saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": edited, "base_graph_hash": workflow["graph_hash"]})
+    assert saved.status_code == 200, "别处的改动照样存得下:" + saved.text
+    assert next(one for one in saved.json()["graph"]["nodes"] if one["id"] == "draw")["type"] == old_node, "节点照原样留着"
+
+    unusable = client.get("/api/workflows/node-types/unusable", params={"types": [old_node]}).json()
+    assert unusable[0]["upgrade"] is True and unusable[0]["instance_id"] == instance_id, "画布上标「用不了 · 需要升级」"
+    ran = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})
+    assert ran.status_code == 422, "运行时这一道照样挡住"
+    assert "旧格式" in str(ran.json()["detail"]) and "查看并升级" in str(ran.json()["detail"])
+
+    typo = copy.deepcopy(graph)
+    typo["nodes"][2]["type"] = "no_such_node"
+    assert client.post("/api/workflows", json={"workspace_id": ws, "name": "认不出", "graph": typo}).status_code == 422, \
+        "认不出的非插件类型照旧存不下"
+
+
 def test_查看并升级_改完表单入口出来_老引用改到表单入口(old_library) -> None:
     client, comfy, instance_id, ws = old_library
     profile_id = _profile_id(instance_id)
