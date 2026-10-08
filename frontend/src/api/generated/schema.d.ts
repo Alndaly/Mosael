@@ -531,23 +531,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/publish/worker/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Status */
-        get: operations["status_api_publish_worker_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/jobs/worker/claim": {
         parameters: {
             query?: never;
@@ -5063,6 +5046,29 @@ export interface paths {
         };
         /** Platforms */
         get: operations["platforms_api_publish_platforms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/publish/worker/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Status
+         * @description 桌面发布器在不在线(发布页据此说「发布器没起来,任务会一直排着」)。
+         *
+         *     **给界面读的,所以凭登录会话,不凭执行器密钥。** 它此前挂在执行器通道上(那里一律要 X-Mosael-Worker-Key),界面
+         *     拿不到那把密钥:每次打开发布页都收到 401,而界面把 401 当成「登录过期」—— 一打开发布页就被登出。
+         */
+        get: operations["worker_status_api_publish_worker_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -20544,28 +20550,6 @@ export interface operations {
             };
         };
     };
-    status_api_publish_worker_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     claim_api_jobs_worker_claim_post: {
         parameters: {
             query?: never;
@@ -29775,6 +29759,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublishPlatformOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_status_api_publish_worker_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */

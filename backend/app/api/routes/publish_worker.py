@@ -117,8 +117,3 @@ def worker_account(account_id: str, db: DbSession) -> dict[str, Any]:
 def heartbeat() -> dict[str, Any]:
     publish_worker.heartbeat()
     return {"ok": True}
-
-
-@router.get("/publish/worker/status")
-def status() -> dict[str, Any]:
-    return {"online": publish_worker.worker_online()}

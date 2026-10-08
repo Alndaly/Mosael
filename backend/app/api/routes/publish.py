@@ -15,6 +15,7 @@ from app.api.schemas import (
     PublishTaskOut,
 )
 from app.domain.publish import use_cases as publish_uc
+from app.domain.publish import worker as publish_worker
 from app.db.models import Asset, PublishAccount
 from app.core.i18n import get_current_locale, t
 from app.domain.publish import (
@@ -58,6 +59,16 @@ def platforms() -> list[dict]:
         }
         for key, meta in PUBLISH_PLATFORMS.items()
     ]
+
+
+@router.get("/publish/worker/status")
+def worker_status(user: CurrentUser) -> dict[str, bool]:
+    """桌面发布器在不在线(发布页据此说「发布器没起来,任务会一直排着」)。
+
+    **给界面读的,所以凭登录会话,不凭执行器密钥。** 它此前挂在执行器通道上(那里一律要 X-Mosael-Worker-Key),界面
+    拿不到那把密钥:每次打开发布页都收到 401,而界面把 401 当成「登录过期」—— 一打开发布页就被登出。
+    """
+    return {"online": publish_worker.worker_online()}
 
 
 @router.get("/publish/accounts", response_model=list[PublishAccountOut])

@@ -1198,29 +1198,6 @@
         }
       }
     },
-    "/api/publish/worker/status": {
-      "get": {
-        "tags": [
-          "publish-worker"
-        ],
-        "summary": "Status",
-        "operationId": "status_api_publish_worker_status_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Status Api Publish Worker Status Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/jobs/worker/claim": {
       "post": {
         "tags": [
@@ -15636,6 +15613,42 @@
                   },
                   "type": "array",
                   "title": "Response Platforms Api Publish Platforms Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/publish/worker/status": {
+      "get": {
+        "tags": [
+          "publish"
+        ],
+        "summary": "Worker Status",
+        "description": "桌面发布器在不在线(发布页据此说「发布器没起来,任务会一直排着」)。\n\n**给界面读的,所以凭登录会话,不凭执行器密钥。** 它此前挂在执行器通道上(那里一律要 X-Mosael-Worker-Key),界面\n拿不到那把密钥:每次打开发布页都收到 401,而界面把 401 当成「登录过期」—— 一打开发布页就被登出。",
+        "operationId": "worker_status_api_publish_worker_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Worker Status Api Publish Worker Status Get"
                 }
               }
             }
