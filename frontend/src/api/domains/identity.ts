@@ -83,6 +83,11 @@ export function deleteAccount(userId: string): Promise<void> {
   return api<void>(`/api/admin/users/${userId}`, { method: "DELETE" });
 }
 
+/** 部署管理员替成员重置密码:返回的临时密码只这一次给出(库里存哈希),他已登录的会话全部作废。 */
+export function resetUserPassword(userId: string): Promise<components["schemas"]["AdminPasswordResetOut"]> {
+  return api<components["schemas"]["AdminPasswordResetOut"]>(`/api/admin/users/${userId}/password`, { method: "POST" });
+}
+
 export function setDeploymentAdmin(userId: string, granted: boolean): Promise<unknown> {
   return api(`/api/auth/users/${userId}/deployment-admin`, { method: "POST", body: JSON.stringify({ granted }) });
 }

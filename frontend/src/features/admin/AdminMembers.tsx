@@ -1,11 +1,13 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldCheck, ShieldOff, Trash2, Users } from "lucide-react";
+import { Copy, KeyRound, ShieldCheck, ShieldOff, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
-import { adminUsers, deleteAccount, setDeploymentAdmin, type AdminUser } from "@/api/client";
+import { adminUsers, deleteAccount, resetUserPassword, setDeploymentAdmin, type AdminUser } from "@/api/client";
+import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { ConfirmDialog } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +58,18 @@ function AccountsSection() {
       void qc.invalidateQueries({ queryKey: ["admin-overview"] });
     },
     // 挡下来的那句话(哪几个工作区里还有别人)本身就是下一步该做什么,原样给他看。
+    onError: (error: Error) => toast.error(error.message),
+  });
+  //: 忘了密码的成员此前只能被删号重来(体检 UM-04)。临时密码只在这一次给出:弹窗里给管理员复制,交给对方。
+  const { user: me } = useAuth();
+  const [resetting, setResetting] = React.useState<AdminUser | null>(null);
+  const [issued, setIssued] = React.useState<{ name: string; password: string } | null>(null);
+  const resetPassword = useMutation({
+    mutationFn: (row: AdminUser) => resetUserPassword(row.id),
+    onSuccess: ({ password }, row) => {
+      setResetting(null);
+      setIssued({ name: row.display_name || row.username, password });
+    },
     onError: (error: Error) => toast.error(error.message),
   });
   const setAdmin = useMutation({
@@ -165,6 +179,13 @@ function AccountsSection() {
                                 onSelect: () => setAdmin.mutate({ id: row.id, granted: true }),
                               },
                           {
+                            label: t("adminResetPassword"),
+                            icon: <KeyRound size={14} />,
+                            hint: row.id === me?.id ? t("adminResetPasswordSelf") : undefined,
+                            disabled: row.id === me?.id || resetPassword.isPending,
+                            onSelect: () => setResetting(row),
+                          },
+                          {
                             label: t("adminDeleteUser"),
                             icon: <Trash2 size={14} />,
                             destructive: true,
@@ -192,6 +213,39 @@ function AccountsSection() {
         pending={removeUser.isPending}
         onConfirm={() => removing && removeUser.mutate(removing.id)}
       />
+      <ConfirmDialog
+        open={resetting !== null}
+        title={t("adminResetPassword")}
+        body={t("adminResetPasswordBody").replace("{name}", resetting?.display_name || resetting?.username || "")}
+        confirmLabel={t("adminResetPassword")}
+        onCancel={() => setResetting(null)}
+        pending={resetPassword.isPending}
+        onConfirm={() => resetting && resetPassword.mutate(resetting)}
+      />
+      <ModalShell
+        open={issued !== null}
+        onOpenChange={(next) => !next && setIssued(null)}
+        title={t("adminResetPasswordDone").replace("{name}", issued?.name ?? "")}
+        footer={<Button onClick={() => setIssued(null)}>{t("close")}</Button>}
+      >
+        <div className="grid gap-3" data-temporary-password="">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-panel-inset px-3 py-2">
+            <code className="timecode min-w-0 flex-1 select-all break-all text-ui-md">{issued?.password}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (!issued) return;
+                void navigator.clipboard.writeText(issued.password);
+                toast.success(t("adminResetPasswordCopied"));
+              }}
+            >
+              <Copy size={13} /> {t("copy")}
+            </Button>
+          </div>
+          <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("adminResetPasswordOnce")}</p>
+        </div>
+      </ModalShell>
     </AdminSection>
   );
 }

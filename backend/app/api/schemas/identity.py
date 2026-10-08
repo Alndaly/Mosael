@@ -41,6 +41,12 @@ class UserOut(OrmModel):
     oauth_providers: list[str] = Field(default_factory=list)
 
 
+class AdminPasswordResetOut(ApiModel):
+    """部署管理员替成员重置密码:新的临时密码原文**只在这一次**给出(库里存哈希),交给对方后他在「设置 → 账户」里改。"""
+
+    password: str
+
+
 class AdminUserOut(ApiModel):
     """管理员看到的一个人。"""
 

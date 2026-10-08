@@ -15,6 +15,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "账号不存在",
         "en": "Account not found.",
     },
+    "routeErr_resetOwnPassword": {
+        "zh": "改自己的密码在「设置 → 账户」里(要输入当前密码);在这里重置会把你自己踢下线",
+        "en": "Change your own password in Settings → Account (it asks for the current one); resetting it here would sign you out.",
+    },
     "routeErr_aiConnectionNotFound": {
         "zh": "这条 AI 供应商连接不存在",
         "en": "This AI provider connection doesn't exist.",

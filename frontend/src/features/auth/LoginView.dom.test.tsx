@@ -64,3 +64,18 @@ describe("登录失败的说法", () => {
     expect(await screen.findByText("loginFailed")).toBeTruthy();
   });
 });
+
+describe("忘了密码", () => {
+  it("登录页说清找谁重置,并给出怎么做的文档", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LoginView />
+      </QueryClientProvider>,
+    );
+    expect(document.querySelector("[data-login-forgot]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "loginForgot" }));
+    const hint = document.querySelector("[data-login-forgot]");
+    expect(hint?.textContent).toContain("loginForgotBody");
+    expect(hint?.querySelector("a")?.getAttribute("href")).toBe("https://mosael.com/zh/docs/guides/admin");
+  });
+});

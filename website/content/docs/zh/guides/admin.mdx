@@ -2,7 +2,7 @@
 title: 管理控制台与统计
 description: 部署管理员在「管理」里看用量、管成员与注册、装本机引擎、设下载源和出站代理、备份数据;每个人在「统计」里看自己的数据。
 order: 22
-updated: 2026-10-05
+updated: 2026-10-08
 version: 1.9.3
 ---
 
@@ -32,6 +32,24 @@ version: 1.9.3
   带外发给对方,由他自己设密码。开着自助注册时这里会说「现在不需要邀请码」。
 
 不论怎么加入,每个人拿到的都是自己的工作区;要一起做事,把人加进同一个工作区(「设置 → 团队与成员」)。
+
+### 有人忘了密码
+
+- **成员忘了**:在他那一行的 ⋯ 菜单里点「重置密码」。他现在的密码和所有已登录的会话立刻失效,弹窗里给出一个临时密码 ——
+  **只显示这一次**,复制下来交给他;他登录后在「设置 → 账户」里改成自己的。改你自己的密码不走这里,在「设置 → 账户」里改。
+- **你就是唯一的部署管理员,自己忘了**:在运行后端的那台电脑上跑一条命令重置(不用先停应用):
+
+  ```bash
+  # 开发环境(源码检出)
+  cd backend && uv run python -m app.cli reset-password <用户名>
+
+  # 安装好的应用(macOS)
+  /Applications/Mosael.app/Contents/Resources/backend/mosael-backend/mosael-backend reset-password <用户名>
+  ```
+
+  Windows / Linux 在安装目录的 `resources/backend/mosael-backend/` 下(Windows 是 `mosael-backend.exe`)。命令打印一个临时密码,
+  用它登录后再改;想直接设成某个密码就加 `--password <新密码>`。数据目录和后端是同一份(默认 `~/.mosael`,设了 `MOSAEL_DATA_DIR`
+  就用它);用户名记不清的话,随便填一个,命令会列出这台部署上有哪些账号。
 
 ![管理 → 成员:账户表(角色、最近活跃、工作区、客户端版本)和邀请码;开放注册时写着「现在不需要邀请码」](/media/screens/admin-members.png)
 

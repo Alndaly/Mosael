@@ -18,6 +18,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
+import { docsUrl } from "@/lib/deepLink";
 
 type LoginValues = { username: string; displayName: string; password: string; confirm: string; inviteCode: string };
 
@@ -41,6 +42,7 @@ export function LoginView() {
   const { hasUsers, openRegistration, login, register } = useAuth();
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
   const [legalDoc, setLegalDoc] = React.useState<LegalDoc | null>(null);
+  const [forgotOpen, setForgotOpen] = React.useState(false);
 
   const schema = React.useMemo(() => {
     const base = z.object({
@@ -220,13 +222,34 @@ export function LoginView() {
             </form>
           </Form>
 
-          <button
-            type="button"
-            className="-mt-2 cursor-pointer justify-self-start border-0 bg-transparent p-0.5 text-ui-sm text-muted-foreground hover:text-accent-foreground hover:underline"
-            onClick={switchMode}
-          >
-            {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
-          </button>
+          <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0.5 text-ui-sm text-muted-foreground hover:text-accent-foreground hover:underline"
+              onClick={switchMode}
+            >
+              {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
+            </button>
+            {/* 忘了密码此前没有任何下一步(体检 UM-04):说清找谁重置,唯一的管理员自己用命令行。 */}
+            {mode === "login" && hasUsers && (
+              <button
+                type="button"
+                aria-expanded={forgotOpen}
+                className="cursor-pointer border-0 bg-transparent p-0.5 text-ui-sm text-muted-foreground hover:text-accent-foreground hover:underline"
+                onClick={() => setForgotOpen((open) => !open)}
+              >
+                {t("loginForgot")}
+              </button>
+            )}
+          </div>
+          {mode === "login" && forgotOpen && (
+            <p data-login-forgot="" className="-mt-4 m-0 rounded-md bg-secondary px-3 py-2.5 text-ui-xs leading-[1.6] text-muted-foreground">
+              {t("loginForgotBody")}{" "}
+              <a className="text-primary underline underline-offset-2" href={docsUrl("guides/admin", locale)} target="_blank" rel="noreferrer noopener">
+                {t("loginForgotDocs")}
+              </a>
+            </p>
+          )}
 
           <OAuthButtons />
         </div>

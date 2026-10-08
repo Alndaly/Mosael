@@ -18077,6 +18077,49 @@
         }
       }
     },
+    "/api/admin/users/{user_id}/password": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Reset User Password",
+        "description": "替一个成员重置密码:生成一个临时密码(只在这一次给出),他已经登录着的会话全部作废(见 members.reset_password)。\n\n忘了密码的人此前只能被删号重来。改自己的密码走「设置 → 账户」(要旧密码) —— 在这里重置自己会把自己踢下线。",
+        "operationId": "reset_user_password_api_admin_users__user_id__password_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPasswordResetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/registration": {
       "put": {
         "tags": [
@@ -26475,6 +26518,20 @@
         },
         "type": "object",
         "title": "AdminOverviewOut"
+      },
+      "AdminPasswordResetOut": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "AdminPasswordResetOut",
+        "description": "部署管理员替成员重置密码:新的临时密码原文**只在这一次**给出(库里存哈希),交给对方后他在「设置 → 账户」里改。"
       },
       "AdminUserOut": {
         "properties": {

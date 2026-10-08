@@ -2,7 +2,7 @@
 title: Admin console & statistics
 description: Deployment admins use Admin to watch usage, manage members and sign-up, install local engines, set mirrors and the outbound proxy, and back up data; everyone gets their own numbers in Statistics.
 order: 22
-updated: 2026-10-05
+updated: 2026-10-08
 version: 1.9.3
 ---
 
@@ -38,6 +38,27 @@ Pick a range at the top: the last 7 / 30 / 90 days. Job activity and spend follo
 
 However people join, each gets a workspace of their own; to work together, add people to the same workspace (**Settings → Team &
 members**).
+
+### When someone forgets their password
+
+- **A member forgot**: choose **Reset password** in their row's ⋯ menu. Their current password and every signed-in session stop
+  working right away, and a dialog shows a temporary password — **shown only once**, so copy it and hand it over; they change it in
+  **Settings → Account** after signing in. Your own password is changed in **Settings → Account**, not here.
+- **You are the only deployment admin and forgot yours**: run one command on the computer that runs the backend (no need to quit
+  the app first):
+
+  ```bash
+  # Development (source checkout)
+  cd backend && uv run python -m app.cli reset-password <username>
+
+  # Installed app (macOS)
+  /Applications/Mosael.app/Contents/Resources/backend/mosael-backend/mosael-backend reset-password <username>
+  ```
+
+  On Windows / Linux it lives under `resources/backend/mosael-backend/` in the install folder (`mosael-backend.exe` on Windows).
+  The command prints a temporary password to sign in with and then change; add `--password <new password>` to set one directly. It
+  uses the same data folder as the backend (`~/.mosael` by default, or `MOSAEL_DATA_DIR` if set); if you don't remember the
+  username, enter any name and the command lists the accounts on this deployment.
 
 ![Admin → Members: the account table (role, last active, workspaces, client version) and invite codes; with open registration it says none are needed](/media/screens/en/admin-members.png)
 

@@ -91,6 +91,29 @@ def create_account(db: Session, *, username: str, display_name: str, password: s
     return user
 
 
+#: 管理员重置时生成的临时密码多长(token_urlsafe 的字节数,出来是 16 个字符)。
+_TEMP_PASSWORD_BYTES = 12
+
+
+def reset_password(db: Session, user: User, password: str | None = None) -> str:
+    """给一个账号换一个新密码,并让他已经登录着的会话全部失效。返回新密码的原文(只这一次,库里存的是哈希)。
+
+    忘了密码的人此前没有任何路:登录页没有入口,部署管理员也改不了别人的密码,只能删号重来 —— 连他的对话、密钥、
+    只有他一个人的工作区一起没了;唯一的部署管理员忘了密码就整台锁死。现在两条路:管理页「重置密码」(部署管理员
+    替成员换)、后端命令行 `reset-password`(兜唯一管理员被锁在外面,见 app/cli)。
+
+    `password` 为 None 时生成一个随机的临时密码 —— 交给对方,他登录后在「设置 → 账户」里改成自己的。不提交。
+    """
+    from app.db.models import AuthSession
+
+    chosen = password if password is not None else secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
+    user.password_hash = hash_password(chosen)
+    #: 旧会话一起作废:要重置往往是因为账号可能落在别人手上,换了密码而旧令牌照样能用就白换了。
+    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
+    db.flush()
+    return chosen
+
+
 def free_username(db: Session, base: str) -> str:
     """`base` 没人用就是它,否则依次试 base2、base3……(第三方登录拿邮箱局部名起名时用)。"""
     username = normalize_username(base)

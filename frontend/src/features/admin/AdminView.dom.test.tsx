@@ -17,6 +17,8 @@ const t = (key: string) => key;
 vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("./AdminActivityChart", () => ({ AdminActivityChart: () => null }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+//: 登录着的是部署管理员 Boss(a1):他那一行的「重置密码」灰掉 —— 改自己的密码走「设置 → 账户」。
+vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "a1" } }) }));
 
 const rows: Array<Record<string, unknown>> = [];
 let overview: Record<string, unknown> = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
@@ -28,6 +30,7 @@ const calls = {
   overview: vi.fn(),
   setAdmin: vi.fn(),
   deleteAccount: vi.fn(),
+  resetPassword: vi.fn(),
   setOpenRegistration: vi.fn(),
   createInvite: vi.fn(),
 };
@@ -64,6 +67,10 @@ vi.mock("@/api/client", async (importOriginal) => ({
   deleteAccount: (id: string) => {
     calls.deleteAccount(id);
     return Promise.resolve();
+  },
+  resetUserPassword: (id: string) => {
+    calls.resetPassword(id);
+    return Promise.resolve({ password: "Temp-Pass-123" });
   },
   authBootstrap: () => Promise.resolve({ has_users: true, open_registration: openRegistration }),
   setOpenRegistration: (open: boolean) => {
@@ -301,6 +308,24 @@ describe("成员", () => {
     expect(calls.deleteAccount).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
     await waitFor(() => expect(calls.deleteAccount).toHaveBeenCalledWith("u1"));
+  });
+
+  it("忘了密码的成员从他那一行的菜单里重置:先问一句,临时密码只在弹窗里给一次;自己那一行不给点", async () => {
+    show([admin, base], "members");
+    const row = (await screen.findByText("Demo")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: /adminRowActions/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /adminResetPassword/ }));
+    expect(calls.resetPassword).not.toHaveBeenCalled();
+    const confirm = await screen.findByRole("alertdialog");
+    expect(confirm.textContent).toContain("adminResetPasswordBody");
+    fireEvent.click(within(confirm).getByRole("button", { name: "adminResetPassword" }));
+    await waitFor(() => expect(calls.resetPassword).toHaveBeenCalledWith("u1"));
+    expect((await screen.findByText("Temp-Pass-123")).closest("[data-temporary-password]")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+
+    const mine = (await screen.findByText("Boss")).closest("tr")!;
+    fireEvent.click(within(mine).getByRole("button", { name: /adminRowActions/ }));
+    expect(await screen.findByRole("menuitem", { name: /adminResetPassword/ })).toBeDisabled();
   });
 
   it("最后一位部署管理员收不回、也删不得(后端会 409,这里先不给点)", async () => {

@@ -5864,6 +5864,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users/{user_id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset User Password
+         * @description 替一个成员重置密码:生成一个临时密码(只在这一次给出),他已经登录着的会话全部作废(见 members.reset_password)。
+         *
+         *     忘了密码的人此前只能被删号重来。改自己的密码走「设置 → 账户」(要旧密码) —— 在这里重置自己会把自己踢下线。
+         */
+        post: operations["reset_user_password_api_admin_users__user_id__password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/registration": {
         parameters: {
             query?: never;
@@ -8854,6 +8876,14 @@ export interface components {
              * @default 30
              */
             window_days: number;
+        };
+        /**
+         * AdminPasswordResetOut
+         * @description 部署管理员替成员重置密码:新的临时密码原文**只在这一次**给出(库里存哈希),交给对方后他在「设置 → 账户」里改。
+         */
+        AdminPasswordResetOut: {
+            /** Password */
+            password: string;
         };
         /**
          * AdminUserOut
@@ -31438,6 +31468,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_user_password_api_admin_users__user_id__password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPasswordResetOut"];
+                };
             };
             /** @description Validation Error */
             422: {

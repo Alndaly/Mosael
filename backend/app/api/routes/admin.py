@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 
 from app.core.i18n import tr
 from app.core.outbound_guard import AllowlistError
-from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AdminOverviewOut, AdminUserOut
+from app.api.deps import CurrentUser, DbSession, Tx
+from app.api.schemas import AdminOverviewOut, AdminPasswordResetOut, AdminUserOut
 from app.domain.permissions import ensure_deployment_admin
 from app.domain import dashboard, deployment, host_files, members, outbound_allowlist
 from app.db.models import AuthSession, User, WorkspaceMember
@@ -73,6 +73,21 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
     except members.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+@router.post("/admin/users/{user_id}/password", response_model=AdminPasswordResetOut)
+def reset_user_password(user_id: str, db: Tx, user: CurrentUser) -> AdminPasswordResetOut:
+    """替一个成员重置密码:生成一个临时密码(只在这一次给出),他已经登录着的会话全部作废(见 members.reset_password)。
+
+    忘了密码的人此前只能被删号重来。改自己的密码走「设置 → 账户」(要旧密码) —— 在这里重置自己会把自己踢下线。
+    """
+    ensure_deployment_admin(db, user)
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail=tr("routeErr_accountNotFound"))
+    if target.id == user.id:
+        raise HTTPException(status_code=409, detail=tr("routeErr_resetOwnPassword"))
+    return AdminPasswordResetOut(password=members.reset_password(db, target))
 
 
 class RegistrationSwitch(BaseModel):
