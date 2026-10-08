@@ -80,6 +80,27 @@ describe("图标按钮的悬停说明", () => {
   });
 });
 
+describe("多行的说明", () => {
+  it("说明里的换行照写的来:画板格子「详情」里的「原因 + 怎么修」一步一行,不挤成一段", () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Hint label={"那台 ComfyUI 太旧\n1. 升级:\npip install -U x"} hint={"原话\n第二行"}>
+          <button type="button" aria-label="详情">详情</button>
+        </Hint>
+      </TooltipProvider>,
+    );
+    fireEvent.keyDown(document, { key: "Tab" });
+    act(() => screen.getByRole("button", { name: "详情" }).focus());
+    const tooltip = screen.getByRole("tooltip");
+    //: 最里面那一层(名字外面还套着一层和快捷键并排的 flex)
+    const innermost = (text: string) => [...tooltip.querySelectorAll("span")].filter((one) => one.textContent === text).at(-1)!;
+    const label = innermost("那台 ComfyUI 太旧\n1. 升级:\npip install -U x");
+    const hint = innermost("原话\n第二行");
+    expect(label.className).toMatch(/whitespace-pre-line/);
+    expect(hint.className).toMatch(/whitespace-pre-line/);
+  });
+});
+
 describe("有时有说明的控件", () => {
   it("没有可说的就不出说明,而且结构不变 —— 说明来去时控件不会被换掉、丢了焦点", async () => {
     const { rerender } = render(

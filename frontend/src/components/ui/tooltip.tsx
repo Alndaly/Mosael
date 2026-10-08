@@ -328,11 +328,12 @@ function Hint({
           ))}
           {label ? (
             <span className={cn("flex items-center justify-between gap-3", lines.length > 0 && "text-muted-foreground")}>
-              <span>{label}</span>
+              {/* 换行照写的来(画板格子「详情」里的「原因 + 怎么修」一步一行);没有换行的说明不受影响 */}
+              <span className="whitespace-pre-line">{label}</span>
               {shortcut && shortcut.length > 0 ? <Shortcut keys={shortcut} /> : null}
             </span>
           ) : null}
-          {hint && hint !== label ? <span className="block text-muted-foreground">{hint}</span> : null}
+          {hint && hint !== label ? <span className="block whitespace-pre-line text-muted-foreground">{hint}</span> : null}
           {disabledReason ? <span className={cn("block", label && "text-muted-foreground")}>{disabledReason}</span> : null}
         </TooltipContent>
       </Tooltip>

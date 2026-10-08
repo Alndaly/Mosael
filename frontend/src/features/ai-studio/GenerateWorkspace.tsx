@@ -2025,6 +2025,12 @@ function GenerationTurn({
         : generation.cost_confidence === "not_billed"
           ? t("usageCostNotBilled")
           : "";
+  //: 没交回产出的那一条(停下的、跑挂了的)是一张卡:这一条的元信息(模型、用时、费用、时间)收进卡头右边,不在卡外另起一行,
+  //: 时间也不再单独飘在提示词下面 —— 此前看不出那行小字和那个「30 分钟前」是谁的。
+  const noOutput = outputs.length === 0 && (status === "stopped" || status === "failed");
+  const meta = (
+    <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput ? timestamp : null} />
+  );
   return (
     <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center" data-generation-status={status}>
       <div className="grid justify-items-end gap-1">
@@ -2035,13 +2041,15 @@ function GenerationTurn({
           </div>
         ) : null}
         {/* 和对话页的用户气泡同一个脚注:复制 + 时间。此前这里只有一个裸 <time>,
-            没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。 */}
-        <MessageFooter
-          content={prompt}
-          className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/gen:opacity-100"
-        >
-          <MessageTime iso={timestamp} />
-        </MessageFooter>
+            没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。没交回产出的那一条,时间在卡头里。 */}
+        {prompt || !noOutput ? (
+          <MessageFooter
+            content={prompt}
+            className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/gen:opacity-100"
+          >
+            {noOutput ? null : <MessageTime iso={timestamp} />}
+          </MessageFooter>
+        ) : null}
         {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />
         {voiced && <TruncatedNote generation={generation} />}
@@ -2102,7 +2110,7 @@ function GenerationTurn({
             ))}
           </div>
         ) : status === "stopped" ? (
-          <GenerationStoppedCard />
+          <GenerationStoppedCard meta={meta} />
         ) : status === "failed" ? (
           //: 原因读**生成记录自己**存的那份 —— 任务会被清掉,记录不会(见后端 generation.runner.record_failure)。
           //: 那一句人话、原文、认得出的原因都由后端出(error_summary / error_detail / error_hint,和画板格子同一个来源,见后端
@@ -2111,8 +2119,9 @@ function GenerationTurn({
           <GenerationFailureCard
             summary={generation.error_summary ?? ""}
             detail={generation.error_detail ?? null}
-            hint={generation.error_hint ?? null}
+            fix={generation.error_hint ?? null}
             copyText={generation.error ?? ""}
+            meta={meta}
             repeat={onRepeat && generation.repeatable && knownName ? { run: onRepeat, pending: repeating } : undefined}
             retrieve={onRetrieve && generation.retrievable ? { run: onRetrieve, pending: retrieving } : undefined}
             upgrade={gone.missing?.upgrade && gone.missing.plugin_instance_id
@@ -2131,15 +2140,33 @@ function GenerationTurn({
             stopping={stopping}
           />
         )}
-        <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
-          <Hint label={engineName.primary} hint={engineName.secondary || null}>
-            <span data-engine-name="">{engineName.primary}</span>
-          </Hint>
-          {durationLabel ? <span>{durationLabel}</span> : null}
-          {costLabel ? <span>{costLabel}</span> : null}
-        </small>
+        {noOutput ? null : <div className="justify-self-start">{meta}</div>}
       </div>
     </article>
+  );
+}
+
+/**
+ * 一条生成的元信息:用的哪个模型(主名;副名 —— 来自哪张工作流、哪台服务器 —— 在悬停里)、用了多久、费用,没交回产出的那一条
+ * 再带上时间(它在卡头里,提示词下面就不再摆)。成图、在跑的那一条摆在产出下面,停下的、跑挂了的摆在卡头右边。
+ */
+function TurnMeta({ engineName, parts, time }: { engineName: TwoLayerName; parts: string[]; time: string | null }) {
+  const items: React.ReactNode[] = [
+    <Hint key="engine" label={engineName.primary} hint={engineName.secondary || null}>
+      <span data-engine-name="">{engineName.primary}</span>
+    </Hint>,
+    ...parts.filter(Boolean).map((part) => <span key={part}>{part}</span>),
+    ...(time ? [<MessageTime key="time" iso={time} />] : []),
+  ];
+  return (
+    <small className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-xs text-muted-foreground" data-generation-meta="">
+      {items.map((item, index) => (
+        <React.Fragment key={index}>
+          {index > 0 ? <span aria-hidden>·</span> : null}
+          {item}
+        </React.Fragment>
+      ))}
+    </small>
   );
 }
 

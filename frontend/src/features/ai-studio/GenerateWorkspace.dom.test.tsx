@@ -228,64 +228,115 @@ describe("失败卡写后端那一句人话,原文收在折起的「详情」里
     created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z", costs: [], cost_confidence: null,
     retrievable: false, repeatable: true, ...extra,
   });
-  //: 维护者截图里那一条:ComfyUI 报了执行错误(远端明确失败)。后端给的一句话、原话、认得出的原因
+  //: 维护者截图里那一条:ComfyUI 报了执行错误(远端明确失败)。后端给的一句话、原话、认得出的原因和怎么修(插件分着交)
+  const UPGRADE = 'pip install -U "comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"';
   const comfy = (extra: Record<string, unknown>) => failed({
     provider_profile_id: "p9", provider: "plugin:dev.mosael.comfyui", model: "krea2-text-2-image.json#app",
     error: "「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
     error_summary: "ComfyUI 执行到「KSampler」这一步出错",
     error_detail: "KSampler: hostbuf_file_reader_read failed",
-    error_hint: "这是那台 ComfyUI 上的问题,不是这张工作流的:它装的 comfy-kitchen 太旧……",
+    error_hint: { cause: "那台 ComfyUI 装的 comfy-kitchen 太旧", steps: [
+      { text: "在那台机器上升级两个包:", command: UPGRADE },
+      { text: "重启 ComfyUI,再生成一次。", command: null },
+    ] },
     ...extra,
   });
+  const KREA = { ...IMAGE_OPTION, id: "p9:image:krea2", provider_profile_id: "p9", provider: "plugin:dev.mosael.comfyui",
+                 model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", is_default: false };
+  const cardOf = async () => (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
 
-  it("卡上写那一句,不写原文;原文在默认折起的「详情」里,复制在详情里", async () => {
+  it("卡上写那一句,不写原文;原文在默认收起的「详情」里,开关和复制在动作那一行的右边", async () => {
     renderStudio({ generations: [failed({})] });
-    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
-    expect(card.textContent).toContain("DashScope 不认这把密钥");
-    const shown = within(card).getByText(/DashScope 不认这把密钥/);
+    const card = await cardOf();
+    const shown = card.querySelector("[data-failure-summary]")!;
+    expect(shown.textContent).toContain("DashScope 不认这把密钥");
     expect(shown.textContent).not.toMatch(/https?:|For more information|SECRET/);
-    const details = card.querySelector<HTMLDetailsElement>("[data-failure-detail]")!;
-    expect(details.open, "默认折起").toBe(false);
-    expect(within(details).getByText("genFailureDetail")).toBeInTheDocument();
-    expect(details.querySelector("pre")?.textContent).toContain("For more information check");
-    expect(details.querySelector("[data-failure-copy]"), "有详情时复制在详情里").not.toBeNull();
-    expect(card.querySelector("[data-failure-actions] [data-failure-copy]"), "动作那一排不再摆一颗").toBeNull();
+    const toggle = card.querySelector<HTMLButtonElement>("[data-failure-actions] [data-failure-detail-toggle]")!;
+    const block = card.querySelector<HTMLElement>("[data-failure-detail]")!;
+    expect(toggle.getAttribute("aria-expanded"), "默认收起").toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe(block.id);
+    expect(block.hidden).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(block.hidden).toBe(false);
+    expect(block.tagName).toBe("PRE");
+    expect(block.textContent).toContain("For more information check");
+    expect(card.querySelectorAll("[data-failure-copy]"), "复制错误只有一颗").toHaveLength(1);
+    expect(card.querySelector("[data-failure-actions] [data-failure-copy]")?.getAttribute("aria-label")).toBe("genCopyError");
+    expect(block.querySelector("button"), "详情块里不再单独摆一行复制").toBeNull();
   });
 
-  it("ComfyUI 报了执行错误:不摆「重新取回」;一句人话不重复连接名;认得出的原因给提示;能再来一次;没写字不摆空气泡", async () => {
-    renderStudio({ generations: [comfy({ request: { prompt: "" } })], options: [IMAGE_OPTION, { ...IMAGE_OPTION, id: "p9:image:krea2", provider_profile_id: "p9",
-      provider: "plugin:dev.mosael.comfyui", model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", is_default: false }] });
-    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+  it("ComfyUI 报了执行错误:不摆「重新取回」;一句人话不重复连接名;原因一句、步骤分开、命令一块等宽字带复制;能再来一次;没写字不摆空气泡", async () => {
+    renderStudio({ generations: [comfy({ request: { prompt: "" } })], options: [IMAGE_OPTION, KREA] });
+    const card = await cardOf();
     expect(within(card).queryByRole("button", { name: /genRetrieve/ })).toBeNull();
     const said = card.querySelector("[data-failure-summary]")!.textContent!;
     expect(said).toBe("ComfyUI 执行到「KSampler」这一步出错");
     expect(said).not.toContain("生成失败");
-    expect(card.querySelector("[data-failure-hint]")?.textContent).toContain("这是那台 ComfyUI 上的问题");
+    const fix = card.querySelector<HTMLElement>("[data-failure-fix]")!;
+    expect(fix.tagName).toBe("DL");
+    expect([...fix.querySelectorAll("dt")].map((one) => one.textContent)).toEqual(["genFailureCause", "genFailureFix"]);
+    expect(fix.querySelector("[data-failure-cause]")?.textContent).toBe("那台 ComfyUI 装的 comfy-kitchen 太旧");
+    const steps = [...fix.querySelectorAll("[data-failure-steps] > li")];
+    expect(steps.map((one) => one.textContent)).toEqual([`1.在那台机器上升级两个包:${UPGRADE}`, "2.重启 ComfyUI,再生成一次。"]);
+    const command = steps[0].querySelector("[data-failure-command]")!;
+    expect(command.querySelector("code")?.textContent, "命令单独一块等宽字").toBe(UPGRADE);
+    expect(command.querySelector("code")!.className, "不把 >= 画成连字「≥」").toMatch(/\[font-variant-ligatures:none\]/);
+    expect(within(command as HTMLElement).getByRole("button", { name: "genCopyCommand" })).toBeInTheDocument();
+    expect(fix.querySelector("[data-failure-cause]")!.textContent, "命令不埋在句子里").not.toContain("pip");
     expect(within(card).getByRole("button", { name: /genRepeat/ })).toBeInTheDocument();
-    expect(card.querySelector("[data-failure-detail] pre")?.textContent).toBe("KSampler: hostbuf_file_reader_read failed");
+    expect(card.querySelector("[data-failure-detail]")?.textContent).toBe("KSampler: hostbuf_file_reader_read failed");
     const turn = card.closest("article")!;
     expect(turn.querySelector("[data-generation-prompt]"), "这一轮没写字:不摆空气泡").toBeNull();
     expect(within(turn as HTMLElement).queryByRole("button", { name: "复制" }), "也没有空的「复制」").toBeNull();
   });
 
-  it("原文和那一句说的是同一件事(后端不给详情):不摆「详情」,「复制错误」在动作那一排", async () => {
+  it("只有一步的修法不编号;没有认得出的原因就不摆那块面板", async () => {
+    renderStudio({ generations: [comfy({ error_hint: { cause: null, steps: [{ text: "换一个完整的 checkpoint。", command: null }] } })],
+                   options: [IMAGE_OPTION, KREA] });
+    const card = await cardOf();
+    const fix = card.querySelector<HTMLElement>("[data-failure-fix]")!;
+    expect([...fix.querySelectorAll("dt")].map((one) => one.textContent)).toEqual(["genFailureFix"]);
+    expect(fix.querySelector("ol"), "一步不编号").toBeNull();
+    expect(fix.textContent).toContain("换一个完整的 checkpoint。");
+    cleanup();
+    renderStudio({ generations: [failed({})] });
+    expect((await cardOf()).querySelector("[data-failure-fix]")).toBeNull();
+  });
+
+  it("原文和那一句说的是同一件事(后端不给详情):不摆「详情」,复制错误照旧在那一行右边", async () => {
     renderStudio({ generations: [failed({ error: "ComfyUI 里这个任务被中断了", error_summary: "ComfyUI 里这个任务被中断了",
                                           error_detail: null })] });
-    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    const card = await cardOf();
     expect(card.querySelector("[data-failure-detail]")).toBeNull();
+    expect(card.querySelector("[data-failure-detail-toggle]")).toBeNull();
     expect(within(card).queryByText("genFailureDetail")).toBeNull();
-    expect(card.querySelector("[data-failure-actions] [data-failure-copy]")?.textContent).toContain("genCopyError");
+    expect(card.querySelector("[data-failure-actions] [data-failure-copy]")?.getAttribute("aria-label")).toBe("genCopyError");
   });
 
   it("颜色克制:只有标题用 destructive 色,那一句是正常前景色,底是中性面板色", async () => {
     renderStudio({ generations: [failed({})] });
-    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    const card = await cardOf();
     expect(card.className).not.toMatch(/destructive/);
     expect(card.className).toMatch(/bg-secondary/);
     expect(card.querySelector("[data-failure-summary]")!.className).toMatch(/text-foreground/);
     expect(card.querySelector("[data-failure-summary]")!.className).not.toMatch(/destructive/);
     expect(card.getAttribute("role")).toBe("group");
-    expect(document.getElementById(card.getAttribute("aria-labelledby")!)?.textContent).toBe("generationFailedTitle");
+    const title = document.getElementById(card.getAttribute("aria-labelledby")!)!;
+    expect(title.textContent).toBe("generationFailedTitle");
+    expect(title.className).toMatch(/text-destructive/);
+  });
+
+  it("模型、用时、费用、时间收进卡头右边:卡外不再另起一行,提示词下面也不再飘一个时间", async () => {
+    renderStudio({ generations: [failed({ provider: "openai", model: "gpt-image-1", cost_confidence: "not_billed" })] });
+    const card = await cardOf();
+    const meta = card.querySelector<HTMLElement>("[data-no-output-head] [data-no-output-meta]")!;
+    expect(meta.querySelector("[data-engine-name]")).not.toBeNull();
+    expect(meta.textContent).toContain("usageCostNotBilled");
+    expect(meta.querySelector("time"), "时间在卡头里").not.toBeNull();
+    const turn = card.closest("article")!;
+    expect(turn.querySelectorAll("[data-generation-meta]"), "只有卡头那一份").toHaveLength(1);
+    expect(turn.querySelectorAll("time"), "提示词下面不再另摆时间").toHaveLength(1);
   });
 
   it("记着的模型用不了、修法是升级:失败卡上给「去工作流库升级」,不给「再来一次」", async () => {
