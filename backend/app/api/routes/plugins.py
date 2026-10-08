@@ -450,8 +450,9 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
     """
     try:
         if body.local_service is None:
+            # 亲手建的连接建好就是启用的:还缺的权限、配置、凭据各自挡着,补齐就能用(见 instances.add)
             instance = inst.create(
-                db, package_id, body.config, body.name, owner_user_id=user.id, grant=body.grant_permissions,
+                db, package_id, body.config, body.name, owner_user_id=user.id, grant=body.grant_permissions, enabled=True,
             )
         else:
             ensure_deployment_admin(db, user)

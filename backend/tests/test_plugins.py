@@ -393,12 +393,14 @@ def test_不可用的原因一句话说清() -> None:
     三处各写一句不一样的话。"""
     client = install(KEYED)
     created = client.post("/api/plugins/dev.keyed/instances", json={}).json()
-    assert created["blocked_reason"] == "未启用"
+    assert created["enabled"] is True and created["blocked_reason"] == "缺少配置: 平台", "亲手建的连接建好就是启用的"
 
     def reason() -> str:
         package = packages(client)["dev.keyed"]
         return package["instances"][0]["blocked_reason"]
 
+    client.patch(f"/api/plugins/instances/{created['id']}", json={"enabled": False})
+    assert reason() == "未启用"
     client.patch(f"/api/plugins/instances/{created['id']}", json={"enabled": True})
     assert "缺少配置: 平台" == reason()
     client.patch(f"/api/plugins/instances/{created['id']}", json={"config": {"platform": "douyin"}})
@@ -412,6 +414,21 @@ def test_不可用的原因一句话说清() -> None:
     assert packages(client)["dev.keyed"]["instances"][0]["pending_permissions"] == []
     # 不可用的实例一个工具都不出:让智能体去调一个必定失败的工具,只会烧掉一轮对话。
     assert client.get("/api/plugins/tools").json() != []
+
+
+def test_亲手建的连接_授予缺的权限那一下就能用_不用再去拨启用() -> None:
+    """PLG-8:「连一台服务器」建好的连接此前是停用的,横幅说「授予之后,它提供的模型和工具就能用了」,授予完却还是「已停用」、
+    工具「已开启 0 / N」,要自己再去找右上角的开关。建它就是要用它;装插件时顺手建的默认连接照旧停用(装上不等于启用)。"""
+    client = install(KEYED)
+    created = client.post("/api/plugins/dev.keyed/instances", json={"config": {"platform": "bilibili"}}).json()
+    client.patch(f"/api/plugins/instances/{created['id']}/credentials", json={"values": {"api_key": "k"}})
+    instance = packages(client)["dev.keyed"]["instances"][0]
+    assert instance["enabled"] is True and instance["pending_permissions"] == ["network:demo"]
+    assert client.get("/api/plugins/tools").json() == [], "权限还没授予:一个工具都不出"
+    client.patch(f"/api/plugins/instances/{created['id']}/permissions", json={"grants": {"network:demo": True}})
+    instance = packages(client)["dev.keyed"]["instances"][0]
+    assert (instance["enabled"], instance["blocked_reason"]) == (True, "")
+    assert [one["name"] for one in client.get("/api/plugins/tools").json()] == ["shout"], "授予那一下就能用"
 
 
 def test_MCP_启用时拉不到工具清单_原因记下来_改配置时重拉(monkeypatch) -> None:

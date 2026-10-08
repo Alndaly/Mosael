@@ -51,9 +51,10 @@ def create(
     *,
     owner_user_id: str = "",
     grant: Collection[str] = (),
+    enabled: bool = False,
 ) -> PluginInstance:
     """新建一个连接:`add` 再 `commit_created`。"""
-    return commit_created(db, add(db, package_id, config, name, owner_user_id=owner_user_id, grant=grant))
+    return commit_created(db, add(db, package_id, config, name, owner_user_id=owner_user_id, grant=grant, enabled=enabled))
 
 
 def add(
@@ -64,12 +65,17 @@ def add(
     *,
     owner_user_id: str = "",
     grant: Collection[str] = (),
+    enabled: bool = False,
 ) -> PluginInstance:
     """建一个连接和它的授权记录,**只 flush、不提交、不通知**。同一次新建里还有别的要一起建时用它(本机服务的连接:那一行、
     端口、写进 `server_url` 的地址,见 local_services.create_connection),全做完再 `commit_created`;中途哪一步不成,调用方
     回滚,连接也不留下。
 
-    `grant`:人在新建弹窗里看过、同意建好时一起授予的那几项权限,必须是清单里声明的。"""
+    `grant`:人在新建弹窗里看过、同意建好时一起授予的那几项权限,必须是清单里声明的。
+
+    `enabled`:人在插件页「新建连接」里亲手建的是 True —— 建它就是要用它,还缺的权限、配置、凭据各自挡着(blocked_reason),
+    补齐那一下它就能用,不再要人另外去拨「启用」(此前横幅说「授予之后就能用了」,授予完却还是停用的)。装插件时顺手建的
+    默认连接照旧是停用的:装上不等于启用。"""
     package = db.get(PluginPackage, package_id)
     if package is None:
         raise PluginDomainError("pluginErr_notFound")
@@ -92,7 +98,7 @@ def add(
         package_id=package_id,
         owner_user_id=owner_user_id,
         name=name.strip() or render_name(manifest, merged),
-        enabled=False,
+        enabled=enabled,
         config=merged,
         discovered_tools=[],
     )
