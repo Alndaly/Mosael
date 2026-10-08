@@ -38,19 +38,32 @@ vi.mock("@/api/client", () => ({
 vi.mock("@/components/ui/searchable-select", async () => {
   const { Hint } = await import("@/components/ui/tooltip");
   return {
+  //: 默认的触发器(和真的一样:名字给读屏、显示选中的那一项或占位、在办时 aria-busy、点不了时 disabled)+ 一排选项
   SearchableSelect: ({
-    trigger,
     hint,
     options,
+    value,
+    placeholder,
+    ariaLabel,
+    busy,
+    disabled,
     onValueChange,
   }: {
-    trigger: React.ReactNode;
     hint?: string | null;
     options: { value: string; label: string }[];
+    value: string;
+    placeholder?: string;
+    ariaLabel?: string;
+    busy?: boolean;
+    disabled?: boolean;
     onValueChange: (value: string) => void;
   }) => (
     <>
-      <Hint label={hint}>{trigger}</Hint>
+      <Hint label={hint}>
+        <button type="button" aria-label={ariaLabel} aria-busy={busy || undefined} disabled={disabled}>
+          {options.find((option) => option.value === value)?.label ?? placeholder}
+        </button>
+      </Hint>
       {options.map((option) => (
         <button key={option.value} type="button" data-option={option.value} onClick={() => onValueChange(option.value)}>
           {option.label}
@@ -100,13 +113,24 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
+/** 读完了的那颗下拉(读的时候是同一颗,点不了、在转圈)。 */
+const ready = () =>
+  waitFor(() => {
+    const trigger = screen.getByRole("button", { name: "模型" });
+    expect(trigger).not.toBeDisabled();
+    return trigger;
+  });
+
 describe("模型选择器", () => {
   it("还在读的时候不消失,而且先把会话上那个模型名显示出来", async () => {
     // 一直挂着的请求 = 读取中。此前这一刻整个控件是 null。
     api.mockImplementation(() => new Promise(() => {}));
     listCapabilityModels.mockImplementation(() => new Promise(() => {}));
     mount();
-    const holder = await screen.findByRole("status");
+    //: 读的时候就是那颗下拉,点不了、在转圈,上面写着会话上那个模型
+    const holder = await screen.findByRole("button", { name: "模型" });
+    expect(holder).toBeDisabled();
+    expect(holder.getAttribute("aria-busy")).toBe("true");
     expect(holder.textContent).toContain("deepseek-v4-flash");
   });
 
@@ -114,7 +138,9 @@ describe("模型选择器", () => {
     api.mockImplementation(() => new Promise(() => {}));
     listCapabilityModels.mockImplementation(() => new Promise(() => {}));
     mount(null);
-    expect((await screen.findByRole("status")).textContent).toContain("选择模型");
+    const holder = await screen.findByRole("button", { name: "模型" });
+    expect(holder.getAttribute("aria-busy")).toBe("true");
+    expect(holder.textContent).toContain("选择模型");
   });
 
   it("对话模型清单读不出来,会话上选着的那个照样在,而且说一声少了东西", async () => {
@@ -129,7 +155,7 @@ describe("模型选择器", () => {
     listCapabilityModels.mockRejectedValue(new Error("端点挂了"));
     mount();
     // 此前:读失败整个控件 return null。
-    const trigger = await screen.findByRole("button", { name: "模型" });
+    const trigger = await ready();
     expect(trigger.textContent).toContain("deepseek-v4-flash");
     //: 少了东西要说一声,不能一声不吭。
     expect(await readHint(trigger)).toBe("有连接的模型列表没读出来");
@@ -152,7 +178,7 @@ describe("模型选择器", () => {
     ]);
     listProviderModels.mockResolvedValue([{ id: "wan2.2-s2v" }, { id: "fun-music-v1" }, { id: "kimi-k3" }]);
     mount({ id: "s1", provider_profile_id: "p1", model: "k3" });
-    await screen.findByRole("button", { name: "模型" });
+    await ready();
     const offered = [...document.querySelectorAll("[data-option]")].map((one) => one.textContent);
     expect(offered).toEqual(["Kimi · k3", "阿里云百炼 · qwen-plus"]);
     expect(listCapabilityModels).toHaveBeenCalledWith("chat");

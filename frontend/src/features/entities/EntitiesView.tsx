@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plus, Search, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -19,7 +19,7 @@ import { RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CARD_GRID, CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpenRequest } from "@/lib/deepLink";
@@ -187,18 +187,13 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             }))}
           />
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="relative min-w-40 flex-1">
-              <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
-              <Input
+            <SearchInput className="min-w-40 flex-1"
                 aria-label={t("entitiesSearch")}
-                className="border-border bg-control pl-9"
                 value={search}
                 placeholder={t("entitiesSearch")}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
+                onChange={(event) => setSearch(event.target.value)} />
             <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-              <SelectTrigger className="w-auto min-w-32 border-border bg-control" aria-label={t("entitiesSort")}>
+              <SelectTrigger className="w-auto min-w-32" aria-label={t("entitiesSort")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

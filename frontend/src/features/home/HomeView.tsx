@@ -8,7 +8,6 @@ import {
   FolderPlus,
   Layers,
   MoreHorizontal,
-  Search,
   Pencil,
   Scissors,
   Trash2,
@@ -35,7 +34,7 @@ import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { nextProjectName, useCreateProject } from "@/lib/useCreateProject";
@@ -257,7 +256,7 @@ export function HomeView({
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
           ))}
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
+          <SearchInput className="w-52" aria-label={t("searchProjects")} value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} />
           {/* 「最近」这一栏本身就是按更新时间排的,这里只是**显示**成它;人选的那种排序原样留着,回到「全部」
               还是他选的那一种 —— 切到「最近」时不去改写它(那等于替人把排序改了)。 */}
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>

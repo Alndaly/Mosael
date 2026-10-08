@@ -9,7 +9,6 @@ import {
   FolderTree,
   ImageUp,
   RotateCcw,
-  Search,
   SearchCheck,
   ShieldAlert,
   ShieldCheck,
@@ -56,7 +55,7 @@ import {
 } from "@/components/generation/modelPreviewSettings";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
@@ -602,17 +601,12 @@ function MetadataSection({ entries, loading, error }: { entries: [string, string
       ) : (
         <>
           {entries.length > 1 && (
-            <label className="relative min-w-0">
-              <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
+            <SearchInput className="min-w-0"
                 type="search"
-                className="pl-9"
                 placeholder={t("modelMetaSearch")}
                 aria-label={t("modelMetaSearch")}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
+                onChange={(event) => setQuery(event.target.value)} />
           )}
           {shown.length > 0 ? (
             <dl className="m-0 grid min-w-0">

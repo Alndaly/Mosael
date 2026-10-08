@@ -41,9 +41,13 @@ import { Input } from "@/components/ui/input";
  * 弹窗表单看起来不像一家的。要改表单观感,改这一处。
  *
  * 用法:<label className={DIALOG_FIELD}><span>标题</span><Input …/><small>说明</small></label>
+ *
+ * **只管标题和说明,不碰里面的控件**:输入框、文本域自己就是字段的样子(components/ui/control-size)。此前这里用后代选择器
+ * 又给输入框套了一遍描边、底色、留白、字号和聚焦样式 —— 选择器比控件自己的类更具体,弹窗里的输入框于是聚焦时只换描边色、
+ * 没有聚焦环,带放大镜的搜索框让出的左边距也被它的 `px-3` 盖回去。
  */
 export const DIALOG_FIELD =
-  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded-md [&_input]:border [&_input]:border-field-border [&_input]:bg-field [&_input]:px-3 [&_input]:py-2 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded-md [&_textarea]:border [&_textarea]:border-field-border [&_textarea]:bg-field [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
+  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground";
 
 /**
  * 全站弹窗的外壳:**三段** —— 钉住的头、能滚的身体、钉住的尾。

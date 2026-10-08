@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, FileText, Image as ImageIcon, Loader2, Play, Search, Video } from "lucide-react";
+import { Check, FileText, Image as ImageIcon, Loader2, Play, Video } from "lucide-react";
 
 import { assetThumbnailUrl, type AssetCard } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -8,7 +8,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { ModalShell } from "@/components/app/modals";
 import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Truncate } from "@/components/ui/truncate";
@@ -239,22 +239,17 @@ export function AssetGridPicker<T extends GridAsset>({
         <>
           {description ? <p className="m-0 text-ui-sm text-muted-foreground">{description}</p> : null}
           <div data-asset-grid-toolbar="" className="flex min-w-0 flex-wrap items-center gap-2">
-            <div className="relative min-w-48 flex-1">
-              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
+            <SearchInput className="min-w-48 flex-1"
                 ref={searchRef}
                 autoFocus
                 size="sm"
-                className="pl-8"
                 aria-label={searchLabel}
                 placeholder={searchLabel}
                 value={query}
                 maxLength={300}
                 onChange={(event) => onQueryChange(event.target.value)}
                 onKeyDown={searchKeys}
-                aria-controls={listId}
-              />
-            </div>
+                aria-controls={listId} />
             {toolbar}
           </div>
           {banner}

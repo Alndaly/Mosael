@@ -13,7 +13,6 @@ import {
   ListFilter,
   MoreHorizontal,
   RefreshCcw,
-  Search,
   SearchX,
   TriangleAlert,
   Unplug,
@@ -56,6 +55,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -322,10 +322,7 @@ export function ModelLibraryDialog({
   //: 筛选和排序不摆,下载点不了并说为什么。在读时的进度、读不出来时的「重试」在内容区里。
   const toolbar = !library.data ? (
     <>
-      <label className="relative min-w-[180px] flex-1 basis-[180px]">
-        <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-9" disabled placeholder={t("modelLibrarySearchPending")} aria-label={t("modelLibrarySearchPending")} />
-      </label>
+      <SearchInput className="min-w-[180px] flex-1 basis-[180px]" disabled placeholder={t("modelLibrarySearchPending")} aria-label={t("modelLibrarySearchPending")} />
       <DownloadButton disabledReason={library.isError ? t("modelLibraryUnreadable") : t("modelLibraryStillReading")} />
     </>
   ) : current === MISSING_VIEW || current === DOWNLOADS_VIEW ? (
@@ -343,16 +340,11 @@ export function ModelLibraryDialog({
     ) : (
       <>
         {/* 放不放得下一行按搜索框最窄的时候算(basis = min),放得下它再往宽里长。 */}
-        <label className="relative min-w-[180px] flex-1 basis-[180px]">
-          <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-9"
+        <SearchInput className="min-w-[180px] flex-1 basis-[180px]"
             placeholder={searchLabel}
             aria-label={scopeName ? t("modelLibrarySearchIn").replace("{folder}", scopeName).replace("{n}", String(scope.length)) : searchLabel}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+            onChange={(event) => setQuery(event.target.value)} />
         <FamilyFilter
           families={familyList}
           value={activeFamilies}

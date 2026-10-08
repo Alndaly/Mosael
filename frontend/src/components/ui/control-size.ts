@@ -80,6 +80,16 @@ export const SEGMENTED_SIZE: Record<ControlTier, { list: string; item: string }>
   md: { list: "gap-1 rounded-lg p-1", item: `${CONTROL_HEIGHT.sm} rounded-md px-3 text-ui-sm [&_svg]:size-4` },
 };
 
+/**
+ * 搜索框(SearchInput):左边一个放大镜,输入框给它让出位置。图标和留白跟着字段的档位走 —— 此前十几处各写各的
+ * `pl-7` / `pl-8` / `pl-9` / `pl-[30px]`,放大镜一处 13px 贴左 10px、一处 16px 顶在 12px 的高度上,同一种搜索框十几个样子。
+ */
+export const SEARCH_FIELD: Record<FieldSize, { icon: string; pad: string; trailing: string }> = {
+  xs: { icon: "left-2 size-3.5", pad: "pl-7", trailing: "right-1.5" },
+  sm: { icon: "left-2.5 size-3.5", pad: "pl-8", trailing: "right-2" },
+  md: { icon: "left-3 size-4", pad: "pl-9", trailing: "right-2.5" },
+};
+
 /** 行内动作(Button `variant="inline"`):高 24、上下各收 2px(不撑高所在的那一行),12px 字、14px 图标。 */
 export const INLINE_ACTION_SIZE = "h-6 -my-0.5 gap-1 rounded-sm px-1.5 py-0 text-ui-xs [&_svg]:size-3.5";
 

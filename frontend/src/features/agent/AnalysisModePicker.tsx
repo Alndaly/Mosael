@@ -28,9 +28,9 @@ export function AnalysisModePicker({ workspaceId, place, session }: { workspaceI
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题。
     <Select key={value} value={value} onValueChange={(next) => setMode.mutate({ analysis_video_mode: next })}>
       <Hint label={t("analysisModeHint")}>
-        <SelectTrigger size="sm" className="w-full text-xs text-muted-foreground" aria-label={t("analysisModeLabel")}>
+        <SelectTrigger size="sm" className="w-full" aria-label={t("analysisModeLabel")}>
           <span className="flex min-w-0 items-center gap-1.5">
-            <Film size={13} className="shrink-0 opacity-70" />
+            <Film className="size-3.5 shrink-0 opacity-70" />
             <SelectValue />
           </span>
         </SelectTrigger>

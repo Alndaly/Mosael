@@ -1,10 +1,9 @@
 import React from "react";
-import { Search } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
@@ -102,21 +101,16 @@ export function PickListDialog<T>({
       header={
         <>
           {description ? <p className="m-0 text-ui-xs text-muted-foreground">{description}</p> : null}
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
+          <SearchInput
               autoFocus
               size="sm"
-              className="pl-8"
               aria-label={searchLabel}
               placeholder={searchLabel}
               value={query}
               maxLength={300}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={keys}
-              aria-controls="pick-list"
-            />
-          </div>
+              aria-controls="pick-list" />
         </>
       }
     >

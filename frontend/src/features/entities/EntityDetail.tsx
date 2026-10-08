@@ -33,11 +33,11 @@ import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CollectionTabs } from "@/components/layout/StudioPage";
+import { FieldBox } from "@/components/ui/field-box";
 import { Button } from "@/components/ui/button";
 import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
-import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTrail } from "@/components/layout/pageTrail";
@@ -501,7 +501,7 @@ function KindFields({
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
   const t = useI18n();
   return (
-    <label className={cn(fieldTriggerClass(), "cursor-pointer gap-2.5")} data-color-field="">
+    <FieldBox as="label" className="cursor-pointer gap-2.5" data-color-field="">
       <input
         type="color"
         aria-label={label}
@@ -523,7 +523,7 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
           <X size={14} />
         </IconButton>
       )}
-    </label>
+    </FieldBox>
   );
 }
 

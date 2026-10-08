@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Loader2, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 
 import { listCapabilityModels, listProviderDefaults, listProviderProfiles } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
@@ -11,7 +11,6 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Truncate } from "@/components/ui/truncate";
 import { gotoSettings } from "@/lib/deepLink";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -87,14 +86,19 @@ export function ModelPicker({ workspaceId, place, session }: { workspaceId: stri
    * (清单现在是后端汇总好的一份,一条连接的目录读不出来不再影响它。)
    */
   if (loading) {
+    //: 还在读:同一颗下拉,点不了、箭头换成转圈(和读完之后同一个样子、同一个位置,读完不跳)
     return (
-      <span
-        role="status"
-        className="inline-flex h-7 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground opacity-70"
-      >
-        <Truncate>{settings.model || t("agentModelPlaceholder")}</Truncate>
-        <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
-      </span>
+      <SearchableSelect
+        size="xs"
+        className="w-auto max-w-[220px]"
+        disabled
+        busy
+        ariaLabel={t("agentModelLabel")}
+        value=""
+        onValueChange={() => undefined}
+        options={[]}
+        placeholder={settings.model || t("agentModelPlaceholder")}
+      />
     );
   }
   if (options.length === 0) {
@@ -102,10 +106,10 @@ export function ModelPicker({ workspaceId, place, session }: { workspaceId: stri
       <Button
         variant="outline"
         size="xs"
-        className="gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+        className="text-muted-foreground hover:text-foreground"
         onClick={() => gotoSettings("providers:chat")}
       >
-        <Settings2 size={13} />
+        <Settings2 />
         {t("agentConfigureModel")}
       </Button>
     );
@@ -124,21 +128,13 @@ export function ModelPicker({ workspaceId, place, session }: { workspaceId: stri
       emptyText={t("cmdkEmpty")}
       //: 有连接读不出来时说一声 —— 少了几个模型总比"整个控件不见了"好,但也不能一声不吭。
       hint={failed ? t("agentModelSomeUnavailable") : undefined}
-      trigger={
-        <button
-          type="button"
-          aria-label={t("agentModelLabel")}
-          className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
-        >
-          <Truncate>{currentLabel}</Truncate>
-          {/* 没有会话时这一下要先建会话再写,不止一个来回 —— 转圈说明"收到了,在办"。 */}
-          {update.isPending ? (
-            <Loader2 size={13} className="shrink-0 animate-mosael-spin" />
-          ) : (
-            <ChevronDown size={13} className="shrink-0 opacity-50" />
-          )}
-        </button>
-      }
+      //: 输入框底栏那一档(xs,28px);默认的触发器 —— 此前自己画了一颗「像下拉的按钮」,箭头、留白、聚焦样子都和别的下拉不一样
+      size="xs"
+      className="w-auto max-w-[220px]"
+      ariaLabel={t("agentModelLabel")}
+      placeholder={currentLabel}
+      //: 没有会话时这一下要先建会话再写,不止一个来回 —— 转圈说明"收到了,在办"
+      busy={update.isPending}
     />
   );
 }

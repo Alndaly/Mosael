@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, Loader2, Plus, Search } from "lucide-react";
+import { LayoutGrid, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { appendBoardNote, createBoard, listBoards, type BoardSummary } from "@/api/domains/boards";
@@ -9,7 +9,7 @@ import { errorText } from "@/api/errorMessage";
 import { boardKeys } from "@/api/queryKeys";
 import { usePreferences } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { MenuItem } from "@/components/ui/menu";
 import { openBoardItem } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
@@ -97,11 +97,8 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
       title={sb.title}
       className="w-[420px]"
       header={(
-        <div className="relative">
-          <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" className="!pl-9" aria-label={sb.search} placeholder={sb.search} value={q} maxLength={120}
+        <SearchInput type="search" aria-label={sb.search} placeholder={sb.search} value={q} maxLength={120}
             disabled={busy} onChange={(event) => setQ(event.target.value)} />
-        </div>
       )}
     >
       <div className={cn(DIALOG_FIELD, "gap-2")}>

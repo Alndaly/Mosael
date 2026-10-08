@@ -1,6 +1,6 @@
 import { assetKeys } from "@/api/queryKeys";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
-import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
+import { LayoutGrid, List, MoreHorizontal } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
@@ -26,7 +26,7 @@ import { VideoCompareView } from "@/features/media/VideoCompareView";
 import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -538,12 +538,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             {/* 多了「配音片段」那一枚,一行就放不下了(1440 宽的窗口里差一百多像素):搜索那一段整段换到第二行、铺满,
                 视图切换留在第一行最右 —— 不把搜索框和标签筛选挤到压在一起,竖线也不会悬在第二行的行首。 */}
             <div className={cn("flex min-w-0 flex-1 items-center gap-2", intermediates.length > 0 && "order-last basis-full")}>
-              <div className="relative min-w-40 flex-1">
-                <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
-                <Input aria-label={t("searchAssets")} className="border-border bg-control pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
-              </div>
+              <SearchInput className="min-w-40 flex-1" aria-label={t("searchAssets")} value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
               <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-                <SelectTrigger className="w-auto min-w-32 border-border bg-control" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-auto min-w-32" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="created">{t("sortNewest")}</SelectItem>
                   <SelectItem value="updated">{t("sortUpdated")}</SelectItem>

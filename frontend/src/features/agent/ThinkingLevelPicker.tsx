@@ -6,14 +6,12 @@ import { listCapabilityModels, type CapabilityModel } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import { useSessionSettings } from "@/features/agent/currentAgentSession";
 import type { AgentPlace } from "@/features/agent/places";
-import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 
@@ -88,18 +86,17 @@ export function ThinkingLevelPicker({ workspaceId, place, session }: { workspace
     //: 按钮一直是禁用的,说明挂在 Hint 给它套的壳上:读取中只说「读取中」,发不出时再说一句怎么办。
     return (
       <Hint label={unavailable ? reason : undefined} disabledReason={unavailable ? t("agentThinkingUnavailableHint") : reason}>
-        <button
-          type="button"
-          disabled
-          className={cn(
-            fieldTriggerClass("sm"),
-            "text-xs text-muted-foreground",
-          )}
-          aria-label={reason}
-        >
-          <Brain size={13} className="shrink-0 opacity-70" />
-          <Truncate>{reason}</Truncate>
-        </button>
+        {/* 和读完之后同一颗下拉(sm),只是点不了:此前自己画了一颗「像下拉的按钮」,箭头、字号和读完之后的那颗对不上 */}
+        <span className="block">
+          <Select disabled value="">
+            <SelectTrigger size="sm" className="w-full" aria-label={reason}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Brain className="size-3.5 shrink-0 opacity-70" />
+                <Truncate className="text-muted-foreground">{reason}</Truncate>
+              </span>
+            </SelectTrigger>
+          </Select>
+        </span>
       </Hint>
     );
   }
@@ -137,11 +134,11 @@ export function ThinkingLevelPicker({ workspaceId, place, session }: { workspace
     <Select key={value} value={value} onValueChange={(next) => setLevel.mutate({ thinking_level: next })}>
       <SelectTrigger
         size="sm"
-        className="w-full justify-between text-xs text-muted-foreground"
+        className="w-full"
         aria-label={t("agentThinkingLevel")}
       >
         <span className="flex min-w-0 items-center gap-1.5">
-          <Brain size={13} className="shrink-0 opacity-70" />
+          <Brain className="size-3.5 shrink-0 opacity-70" />
           <SelectValue />
         </span>
       </SelectTrigger>

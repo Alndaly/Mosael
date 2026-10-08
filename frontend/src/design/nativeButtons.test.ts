@@ -9,7 +9,8 @@
  * 该用什么:
  * - 按钮 → `Button` / `IconButton`;分段 → `Segmented`(或 segmentedListClass / segmentedItemClass);胶囊筛选 → `Chip`;
  *   单选 → `RadioGroup`;页签 → `Tabs` / `CollectionTabs`;菜单里的一行 → `MenuItem`;
- * - 选一个值 → `Select` / `OptionPicker` / `SearchableSelect` / `Combobox` / `TimePicker`(它们的触发器同一种样子)。
+ * - 选一个值 → `Select` / `OptionPicker` / `SearchableSelect` / `Combobox` / `TimePicker`(它们的触发器同一种样子);
+ *   长得像字段、却不是下拉的一格(只读的值、取色条)→ `FieldBox`;搜索框 → `SearchInput`。
  *
  * 两条都**按文件冻结**存量,只减不增:
  * - 原生 `<button>`:components/ui(基础组件自己)以外,每个文件还剩几个;
@@ -55,7 +56,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/agent/ContextMeter.tsx": 2,
   "features/agent/InlineQuestions.tsx": 1,
   "features/agent/messageUsage.tsx": 1,
-  "features/agent/ModelPicker.tsx": 1,
   "features/agent/NoteEditPreview.tsx": 1,
   "features/agent/QueuedMessages.tsx": 1,
   "features/agent/skills/SkillCardPreviews.tsx": 1,
@@ -63,7 +63,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/agent/SpeakButton.tsx": 1,
   "features/agent/stickToBottom.tsx": 1,
   "features/agent/SubagentPanel.tsx": 3,
-  "features/agent/ThinkingLevelPicker.tsx": 1,
   "features/agent/ToolCalls.tsx": 3,
   "features/agent/toolResultShapes.tsx": 2,
   "features/agent/trace/TraceView.tsx": 4,
@@ -176,13 +175,7 @@ const NATIVE_STOCK: Record<string, number> = {
 };
 
 /** 自画的下拉触发器:`文件` → 还剩几个。只减不增。 */
-const TRIGGER_STOCK: Record<string, number> = {
-  "components/app/combobox.tsx": 2,
-  "features/agent/ModelPicker.tsx": 1,
-  "features/agent/ThinkingLevelPicker.tsx": 1,
-  "features/entities/EntityDetail.tsx": 1,
-  "features/plugins/PluginsView.tsx": 2,
-};
+const TRIGGER_STOCK: Record<string, number> = {};
 
 export function nativeButtons(): Map<string, number[]> {
   const found = new Map<string, number[]>();
@@ -197,11 +190,14 @@ export function nativeButtons(): Map<string, number[]> {
 
 const FIELD_LOOK = /(?:^|\s)(?:[\w-]+:)*(?:border-field-border|bg-field)(?=\s|$)/;
 
+/** 自己就是一种下拉的基础件(不在 components/ui 里的):组合框(能选清单里的,也能手填)。 */
+const TRIGGER_OWNERS = ["components/app/combobox.tsx"];
+
 export function drawnTriggers(): Map<string, string[]> {
   const found = new Map<string, string[]>();
   const add = (file: string, what: string) => found.set(file, [...(found.get(file) ?? []), what]);
   for (const file of tsxSources()) {
-    if (OWNERS.some((owner) => file.startsWith(owner))) continue;
+    if (OWNERS.some((owner) => file.startsWith(owner)) || TRIGGER_OWNERS.includes(file)) continue;
     const code = readSource(file);
     code.split("\n").forEach((line, index) => {
       if (/\b(?:fieldTriggerClass|FIELD_TRIGGER_CHEVRON)\b/.test(line) && !/^\s*import\b/.test(line)) add(file, `${index + 1}: fieldTriggerClass`);

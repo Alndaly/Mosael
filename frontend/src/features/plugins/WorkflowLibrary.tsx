@@ -25,7 +25,6 @@ import {
   Puzzle,
   RefreshCcw,
   RotateCcw,
-  Search,
   SearchX,
   SlidersHorizontal,
   Sparkles,
@@ -80,7 +79,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, openContextMenuFromKeyboard } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -530,22 +529,14 @@ export function WorkflowLibraryDialog({
       {refresh}
     </>
   ) : !library.data ? (
-    <label className="relative min-w-[180px] flex-1 basis-[220px]">
-      <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <Input className="pl-9" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
-    </label>
+    <SearchInput className="min-w-[180px] flex-1 basis-[220px]" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
   ) : (
     <>
-      <label className="relative min-w-[180px] flex-1 basis-[220px]">
-        <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="pl-9"
+      <SearchInput className="min-w-[180px] flex-1 basis-[220px]"
           placeholder={searchLabel}
           aria-label={searchLabel}
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
+          onChange={(event) => setQuery(event.target.value)} />
       <OptionPicker
         className="w-[132px]"
         ariaLabel={t("workflowLibraryKind")}

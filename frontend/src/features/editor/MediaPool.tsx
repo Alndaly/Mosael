@@ -2,7 +2,7 @@ import React from "react";
 import { assetKeys } from "@/api/queryKeys";
 import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Search, Tag, Trash2 } from "lucide-react";
+import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Tag, Trash2 } from "lucide-react";
 
 import { assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -17,7 +17,7 @@ import { TagChips } from "@/features/media/TagChips";
 import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags";
 import { useImagePreview } from "@/components/app/image-preview";
 import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
@@ -172,10 +172,7 @@ export function MediaPool({
       </div>
       <div className="grid gap-2 px-3 pb-3">
         <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input size="sm" className="pl-8 text-ui-xs" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} aria-label={t("searchAssets")} />
-          </div>
+          <SearchInput className="min-w-0 flex-1" size="sm" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} aria-label={t("searchAssets")} />
           {allTags.length > 0 && <TagFilter compact counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
         </div>
         <ActiveTagChips value={tagFilter} onChange={setTagFilter} match={tagMatch} />

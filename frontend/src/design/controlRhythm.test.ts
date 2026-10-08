@@ -65,7 +65,7 @@ const BUTTON_SIZE = new Map([
 /** 字段的 `size` 档(components/ui/control-size.ts 的 FIELD_SIZE),和按钮同名同高。 */
 const FIELD_SIZE_PX = new Map([["xs", 28], ["sm", 32], ["md", 40]]);
 /** 走 FIELD_SIZE 档位的字段:输入框和各种下拉触发器。没写 size 就是 md。 */
-const FIELD = new Set(["Input", "SelectTrigger", "Pick", "OptionPicker", "Combobox", "TimePicker"]);
+const FIELD = new Set(["Input", "SearchInput", "SelectTrigger", "Pick", "OptionPicker", "Combobox", "TimePicker"]);
 /** 走 portal 渲染,不占所在行的空间。 */
 const PORTALED = new Set([
   "Popover", "PopoverContent", "Dialog", "DialogContent", "ModalShell", "Tooltip",

@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Truncate } from "@/components/ui/truncate";
@@ -184,16 +184,13 @@ export function CanvasNodeSearch({
           input.current?.focus();
         }}
       >
-        <div className="relative">
-          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={input}
-            size="sm"
-            className="pl-[30px] pr-12 focus-visible:border-primary focus-visible:ring-0"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t(placeholder)}
-            aria-label={t("wfNodeSearch")}
+        <SearchInput
+          ref={input}
+          size="sm"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t(placeholder)}
+          aria-label={t("wfNodeSearch")}
             onKeyDown={(event) => {
               // 输入法还在组词时的 Enter 是"上屏",不是"下一个" —— 中文用户每打一个词都会误跳一次。
               if (event.nativeEvent.isComposing) return;
@@ -208,16 +205,8 @@ export function CanvasNodeSearch({
                 step(-1);
               }
             }}
-          />
-          {query.trim() && (
-            <span
-              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ui-xs tabular-nums text-muted-foreground"
-              data-search-count=""
-            >
-              {`${current === null ? 0 : current + 1}/${matches.length}`}
-            </span>
-          )}
-        </div>
+          trailing={query.trim() ? <span data-search-count="">{`${current === null ? 0 : current + 1}/${matches.length}`}</span> : undefined}
+        />
         <div ref={list} className="mt-1.5 flex max-h-80 flex-col gap-0.5 overflow-auto">
           {matches.length === 0 ? (
             <div className="px-2 py-2.5 text-center text-xs text-muted-foreground">{t("wfNodeSearchEmpty")}</div>

@@ -1,12 +1,12 @@
 import { HANDLE_ROW } from "@/lib/useResizableSidebar";
 import React from "react";
-import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, Search, ListFilter, ZoomIn, ZoomOut, Scan } from "lucide-react";
+import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, ListFilter, ZoomIn, ZoomOut, Scan } from "lucide-react";
 import type { SceneContent, SceneShot } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Truncate } from "@/components/ui/truncate";
 import { trackRows, sameKey, type SceneKey } from "./sceneTracks";
 import { SHOT_FPS } from "./encodeVideo";
@@ -134,7 +134,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
         <Popover>
           <PopoverTrigger asChild><IconButton size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} label={t("sceneAnimSearch")}><ListFilter /></IconButton></PopoverTrigger>
           <PopoverContent align="end" className="grid w-64 gap-3 p-3">
-            <label className="scene-dope-search"><Search size={14}/><Input size="xs" className="pl-7" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
+            <SearchInput size="xs" className="w-full" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} />
             <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
           </PopoverContent>
         </Popover>

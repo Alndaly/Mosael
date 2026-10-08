@@ -1,6 +1,6 @@
 import React from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookPlus, CornerDownLeft, FileText, Loader2, Search } from "lucide-react";
+import { BookPlus, CornerDownLeft, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { appendNote, createNote, listNotes, type Note, type NoteSource } from "@/api/domains/notes";
 import { noteKeys } from "@/api/queryKeys";
@@ -8,6 +8,7 @@ import { errorText } from "@/api/errorMessage";
 import { usePreferences } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { MenuItem } from "@/components/ui/menu";
 import { Hint } from "@/components/ui/tooltip";
@@ -93,12 +94,8 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
 
         <section className={DIALOG_FIELD} aria-labelledby={`${ids}-append`}>
           <span id={`${ids}-append`}>{s.append}</span>
-          <div className="relative">
-            {/* `!pl-9`:DIALOG_FIELD 给字段里的输入框统一上了 px-3(选择器更具体),搜索框要给左边的放大镜让位。 */}
-            <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input id={`${ids}-search`} type="search" className="!pl-9" aria-label={s.search} value={q} onChange={e => setQ(e.target.value)} placeholder={s.search} maxLength={300}
-              onKeyDown={e => { if (e.key === "ArrowDown") { e.preventDefault(); rows()[0]?.focus(); } }} />
-          </div>
+          <SearchInput id={`${ids}-search`} type="search" aria-label={s.search} value={q} onChange={e => setQ(e.target.value)} placeholder={s.search} maxLength={300}
+            onKeyDown={e => { if (e.key === "ArrowDown") { e.preventDefault(); rows()[0]?.focus(); } }} />
           {/* 列表有边界、有上限高度,自己滚 —— 不再一路顶到弹窗底边。 */}
           <div ref={listRef} role="list" aria-labelledby={`${ids}-append`} aria-busy={notes.isFetching}
             className="grid max-h-60 min-h-24 content-start overflow-y-auto overscroll-contain rounded-lg border border-field-border p-1">

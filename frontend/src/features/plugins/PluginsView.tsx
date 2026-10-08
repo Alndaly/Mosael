@@ -3,6 +3,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { toast } from "sonner";
+import { FieldBox } from "@/components/ui/field-box";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
@@ -52,7 +53,6 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
-import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-trigger";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
@@ -719,13 +719,10 @@ export function FieldInput({
       // 排成一列时,一行光秃秃的文字读起来像"这块没做完",那比"假下拉"更糟。
       // 变的只有两处:锁图标占了箭头的位置(说明它是钉死的),以及整块不可点。
       return (
-        <div
-          aria-readonly="true"
-          className={cn(fieldTriggerClass(), "cursor-default text-muted-foreground", className)}
-        >
+        <FieldBox aria-readonly="true" className={cn("cursor-default text-muted-foreground", className)}>
           <Truncate>{only?.label ?? value}</Truncate>
-          <Lock className={cn(FIELD_TRIGGER_CHEVRON, "size-3.5")} />
-        </div>
+          <Lock aria-hidden className="ml-auto size-3.5 shrink-0 opacity-50" />
+        </FieldBox>
       );
     }
     return (

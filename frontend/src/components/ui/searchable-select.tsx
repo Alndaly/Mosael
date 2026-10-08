@@ -1,6 +1,6 @@
 import * as React from "react";
 import { defaultFilter } from "cmdk";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Loader2 } from "lucide-react";
 
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -149,6 +149,8 @@ export function SearchableSelect({
   hint,
   shortcut,
   missingLabel,
+  busy = false,
+  ariaLabel,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -173,6 +175,10 @@ export function SearchableSelect({
    * 「需要升级」/「用不了」,警示色),不写占位的「选择模型」—— 显示的就是记着的那个,不是空着、也不是别的。
    */
   missingLabel?: string | null;
+  /** 在办(刚选的那一项正在写回去、清单还在读):箭头的位置换成转圈,`aria-busy`。 */
+  busy?: boolean;
+  /** 默认触发器给读屏的名字(值本身不足以说明这一格是什么时)。 */
+  ariaLabel?: string;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -223,6 +229,8 @@ export function SearchableSelect({
             <button
               type="button"
               disabled={disabled}
+              aria-label={ariaLabel}
+              aria-busy={busy || undefined}
               /* **共用 fieldTriggerClass**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
                  px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
                  表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
@@ -236,7 +244,7 @@ export function SearchableSelect({
               <Truncate className={cn(!selected && (missing ? "text-warning" : "text-muted-foreground"))}>
                 {selectedText ?? (missing ? missingLabel : null) ?? placeholder ?? ""}
               </Truncate>
-              <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
+              {busy ? <Loader2 className={cn(FIELD_TRIGGER_CHEVRON, "animate-mosael-spin opacity-70")} /> : <ChevronDown className={FIELD_TRIGGER_CHEVRON} />}
             </button>
           )}
         </PopoverTrigger>

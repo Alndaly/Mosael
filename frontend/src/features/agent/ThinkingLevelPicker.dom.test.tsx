@@ -55,6 +55,14 @@ function mount(which: unknown = session) {
 
 afterEach(cleanup);
 
+/** 读完之后那颗能选的下拉(读的时候、发不出时是同一颗,点不了)。 */
+const picker = () =>
+  waitFor(() => {
+    const trigger = screen.getByRole("combobox");
+    expect(trigger).not.toBeDisabled();
+    return trigger;
+  });
+
 describe("思考档位", () => {
   /**
    * 用户报的:选了「关闭」,Kimi k3 照样在思考。
@@ -68,16 +76,17 @@ describe("思考档位", () => {
     catalog = [model({ reasoning: true, thinking_levels: [] })];
     mount();
     expect(await screen.findByText("这条连接发不出思考档位")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeDisabled();
+    //: 占位就是那颗下拉,点不了
+    expect(screen.getByRole("combobox")).toBeDisabled();
     // 点不了也说得出怎么办。
-    expect(await readHint(screen.getByRole("button"))).toContain("去设置里打开 reasoning_effort");
+    expect(await readHint(screen.getByRole("combobox"))).toContain("去设置里打开 reasoning_effort");
     expect(screen.queryByText("关闭")).not.toBeInTheDocument();
   });
 
   it("后端说得出档位才给下拉", async () => {
     catalog = [model({ reasoning: true, thinking_levels: ["off", "low", "medium", "high"] })];
     mount();
-    expect(await screen.findByRole("combobox")).toBeInTheDocument();
+    expect(await picker()).toBeInTheDocument();
     expect(screen.queryByText("这条连接发不出思考档位")).not.toBeInTheDocument();
   });
 
@@ -85,7 +94,8 @@ describe("思考档位", () => {
     catalog = [model({ reasoning: false, thinking_levels: [] })];
     const { container } = mount();
     await waitFor(() => expect(api).toHaveBeenCalled());
-    expect(container.querySelector("[role=combobox]")).toBeNull();
+    await screen.findByText("这条连接发不出思考档位");
+    expect(container.querySelector("[role=combobox]:not(:disabled)")).toBeNull();
   });
 
   it("发不出去时占住这一格 —— 标题是外面画的,返回 null 会留下一个空标题", async () => {
@@ -105,7 +115,7 @@ describe("思考档位", () => {
     // 此前界面给它四档,其中「关闭」是空操作、「中」是个会被拒的值。
     catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
     mount();
-    await screen.findByRole("combobox");
+    await picker();
     expect(screen.queryByText("关闭")).not.toBeInTheDocument();
   });
 
@@ -119,7 +129,7 @@ describe("思考档位", () => {
   it("k3 会话默认那一档:写的是「模型默认」,不是一片空白", async () => {
     catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
     mount();
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await picker();
     expect(trigger.textContent).not.toBe("");
     expect(trigger.textContent).toContain("模型默认");
   });
@@ -127,7 +137,7 @@ describe("思考档位", () => {
   it("能关的模型照旧说「关闭」", async () => {
     catalog = [model({ reasoning: true, thinking_levels: ["off", "low", "medium", "high"] })];
     mount();
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await picker();
     expect(trigger.textContent).toContain("关闭");
     expect(trigger.textContent).not.toContain("模型默认");
   });
@@ -154,7 +164,7 @@ describe("思考档位", () => {
   it("会话没写死模型时,按默认模型取档位,而不是判成发不出去", async () => {
     catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
     mount(inheriting);
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await picker();
     expect(trigger.textContent).toContain("模型默认");
     expect(screen.queryByText("这条连接发不出思考档位")).not.toBeInTheDocument();
   });
@@ -170,7 +180,7 @@ describe("思考档位", () => {
   it("还没有会话也在,按新会话的默认值(建表默认 off)显示", async () => {
     catalog = [model({ reasoning: true, thinking_levels: ["off", "low", "high"] })];
     mount(null);
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await picker();
     expect(trigger.textContent).toContain("关闭");
     expect(trigger).not.toBeDisabled();
   });

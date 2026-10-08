@@ -1,11 +1,11 @@
 import React from "react";
-import { Check, Plus, Search } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import type { WorkflowApp, WorkflowFillable } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { KindIcon, techText, valueText, visualOf } from "@/features/plugins/appForm/fieldFacts";
@@ -42,11 +42,8 @@ export function SourcePanel({
         </h4>
         <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowAppSourceHint")}</p>
       </div>
-      <label className="relative block">
-        <Search size={14} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input size="sm" className="pl-8" value={query} placeholder={t("workflowAppSearch")} aria-label={t("workflowAppSearch")}
+      <SearchInput className="block" size="sm" value={query} placeholder={t("workflowAppSearch")} aria-label={t("workflowAppSearch")}
                onChange={(event) => setQuery(event.target.value)} />
-      </label>
       {groups.length === 0 && query.trim() && (
         <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowAppSearchEmpty").replace("{query}", query.trim())}</p>
       )}

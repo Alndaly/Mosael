@@ -28,7 +28,7 @@ const CONTAINERS = new Set([
   "SettingsGroup",
   "SettingsBlock",
 ]);
-const FIELDS = new Set(["Input", "SelectTrigger", "OptionPicker", "SearchableSelect", "Combobox", "TimePicker"]);
+const FIELDS = new Set(["Input", "SearchInput", "SelectTrigger", "OptionPicker", "SearchableSelect", "Combobox", "TimePicker"]);
 const OWNERS = ["components/ui/", "dev/"];
 
 /** 存量:`文件` → 几个容器里混了档。只减不增。 */

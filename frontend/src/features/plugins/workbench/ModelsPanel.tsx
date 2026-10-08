@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Info, Loader2, MousePointerClick, RefreshCcw, Search } from "lucide-react";
+import { Check, Info, Loader2, MousePointerClick, RefreshCcw } from "lucide-react";
 
 import { getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -15,7 +15,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { OverChromeModals } from "@/components/ui/overChromeModal";
 import { Truncate } from "@/components/ui/truncate";
 import { EncoderRecipeMark } from "@/features/plugins/ModelEncoder";
@@ -305,11 +305,8 @@ function SlotPicker({
                        }} />
       )}
       <div className="flex items-center gap-1.5">
-        <label className="relative min-w-0 flex-1">
-          <Search size={13} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input size="xs" className="pl-8" value={query} placeholder={t("workbenchModelsSearch").replace("{folder}", slot.folder)}
+        <SearchInput className="min-w-0 flex-1" size="xs" value={query} placeholder={t("workbenchModelsSearch").replace("{folder}", slot.folder)}
                  aria-label={t("workbenchModelsSearch").replace("{folder}", slot.folder)} onChange={(event) => setQuery(event.target.value)} />
-        </label>
         <ModelPreviewSettingsButton compact />
       </div>
       {families.length > 1 && (

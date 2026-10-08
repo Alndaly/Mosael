@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, Info, LayoutGrid, List, Pencil, Search, Trash2 } from "lucide-react";
+import { Clock, Info, LayoutGrid, List, Pencil, Trash2 } from "lucide-react";
 
 import type { PricingRule } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,7 +8,7 @@ import type { useMultiSelect } from "@/lib/useMultiSelect";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { cn } from "@/lib/utils";
 
@@ -105,20 +105,15 @@ export function PricingRuleFilters({
   const ruleCount = groups.reduce((sum, group) => sum + group.rules.length, 0);
   // **和素材库那一行同一套刻度**:标准高度的输入框和下拉(border-border bg-control),视图切换是
   // 标准尺寸的描边按钮。此前这里用了 h-8 + 小一号的字,和系统里别的筛选栏、设置表单比矮一截。
-  const picker = "w-auto min-w-36 max-w-52 border-border bg-control";
+  const picker = "w-auto min-w-36 max-w-52";
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-48 flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            className="border-border bg-control pl-9"
+        <SearchInput className="min-w-48 flex-1"
             value={filters.query}
             placeholder={t("pricingSearch")}
             aria-label={t("pricingSearch")}
-            onChange={(event) => set({ query: event.target.value })}
-          />
-        </div>
+            onChange={(event) => set({ query: event.target.value })} />
         <OptionPicker
           className={picker}
           ariaLabel={t("pricingProviderProfile")}

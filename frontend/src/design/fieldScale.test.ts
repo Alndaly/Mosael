@@ -36,7 +36,7 @@ const SRC = join(import.meta.dirname, "..");
  * 走 FIELD_SIZE 档位的字段。`Pick` 是 scenes/boards 里转交给 OptionPicker 的薄壳,className
  * 原样透下去,所以一样要管。
  */
-const FIELDS = ["Input", "SelectTrigger", "OptionPicker", "SearchableSelect", "Combobox", "TimePicker", "Pick"];
+const FIELDS = ["Input", "SearchInput", "SelectTrigger", "OptionPicker", "SearchableSelect", "Combobox", "TimePicker", "Pick"];
 
 /** 存量:`文件: 类名`(不带行号,同 buttonScale / gridAxes)。只减不增。 */
 const GRANDFATHERED = new Set<string>([]);
@@ -153,7 +153,7 @@ describe("字段高度刻度", () => {
     //: 这个仓库出过「解析器坏了、什么都没扫到、于是永远全绿」的棘轮。拿一处已知用 size 的
     //: 调用点当探针:它得被切成开标签、读出 size。
     const probe = strip(readFileSync(join(SRC, "components/app/CanvasNodeSearch.tsx"), "utf8"));
-    const inputs = openTags(probe, "Input");
+    const inputs = openTags(probe, "SearchInput");
     expect(inputs.length).toBeGreaterThan(0);
     expect(inputs.map((tag) => attribute(tag, "size"))).toContain("sm");
     //: 解析器本身:抓得到 h-8 / h-[26px] / py-1,放过变体前缀与嵌套 JSX 里的类。

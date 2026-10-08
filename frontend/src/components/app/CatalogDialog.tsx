@@ -1,11 +1,10 @@
 import React from "react";
-import { Search } from "lucide-react";
 
 import { CatalogBack, useCatalogBack } from "@/components/app/catalogBack";
 import { DETAIL_HEAD, DETAIL_SCROLL, DetailBackButton } from "@/components/app/DetailHead";
 import { ModalShell } from "@/components/app/modals";
 import { CollectionTabs } from "@/components/layout/StudioPage";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
@@ -137,20 +136,11 @@ export function CatalogDialog<T, F extends string = string>({
           <div className="grid min-w-0 gap-3">
             {description && <p className="m-0 text-ui-sm font-normal leading-relaxed text-muted-foreground">{description}</p>}
             <div className="flex min-w-0 items-center gap-2">
-              <label className="relative min-w-0 flex-1">
-                <Search
-                  size={14}
-                  aria-hidden
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  className="pl-9"
+              <SearchInput className="min-w-0 flex-1"
                   placeholder={searchLabel}
                   aria-label={searchLabel}
                   value={query}
-                  onChange={(event) => onQueryChange(event.target.value)}
-                />
-              </label>
+                  onChange={(event) => onQueryChange(event.target.value)} />
               {headerActions}
             </div>
             {(filters || refine) && (
