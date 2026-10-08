@@ -135,3 +135,26 @@ it("一次计费调用都没有的运行不显示花费那一行", async () => {
   await screen.findByText("完成");
   expect(screen.queryByTestId("run-costs")).toBeNull();
 });
+
+//: 维护者:「工作流等存在类似情况的失败的那个卡片 UI 也进行彻底的重构排版」—— 整轮失败是全应用那一份失败展示,那一句照跑挂的子任务说
+it("这一轮跑挂了:一张失败展示,写后端摘好的那一句、认得出时的原因和怎么修,原文在「详情」里", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    {
+      id: "j1", kind: "workflow", status: "failed", message: "工作流失败", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10",
+      payload: {}, result: {}, error: "子任务失败:「ComfyUI · http://x」生成失败:ComfyUI 执行失败:KSampler: boom",
+      error_summary: "ComfyUI 执行到「KSampler」这一步出错", error_detail: "KSampler: boom",
+      error_hint: { cause: "那台 ComfyUI 太旧", steps: [{ text: "升级", command: "pip install -U x" }] },
+    },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+
+  fireEvent.click(await screen.findByText("工作流失败"));
+  const card = (await screen.findByText("ComfyUI 执行到「KSampler」这一步出错")).closest<HTMLElement>("[data-run-failed]")!;
+  expect(card.getAttribute("role")).toBe("group");
+  expect(card.querySelector("[data-failure-cause]")?.textContent).toBe("那台 ComfyUI 太旧");
+  expect(card.querySelector("[data-failure-command] code")?.textContent).toBe("pip install -U x");
+  expect(card.querySelector("[data-failure-detail]")?.textContent).toBe("KSampler: boom");
+  expect(card.textContent, "原文那一整句不贴在卡上").not.toContain("http://x");
+});

@@ -40,7 +40,8 @@ describe("全应用那一份失败展示", () => {
     const card = screen.getByRole("group", { name: "发布失败" });
     expect(card.querySelector("[data-failure-fix]")).toBeNull();
     expect(card.querySelector("[data-failure-detail-toggle]")).toBeNull();
-    expect(card.querySelector("[data-failure-copy]")).not.toBeNull();
+    expect(card.querySelector("[data-failure-head] [data-failure-copy]"), "动作那一行只剩复制时不单占一行,放进卡头").not.toBeNull();
+    expect(card.querySelector("[data-failure-actions]")).toBeNull();
   });
 
   it("「已停止」同一个壳:灰色的图标和标题,不是失败的红", () => {

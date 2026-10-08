@@ -178,6 +178,23 @@ describe("任务详情", () => {
     expect(document.querySelector("[data-webhook-secret-legacy]")).toBeNull();
   });
 
+  it("跑挂的那一次:一行失败展示,写后端摘好的那一句,原文在「详情」里", async () => {
+    h.tasks = [task()];
+    h.runs = [{ id: "r1", scheduled_task_id: "t1", job_id: null, status: "failed", result: {},
+                error: "Timeout 30000ms exceeded.\n=== logs ===", error_summary: "Timeout 30000ms exceeded.",
+                error_detail: "Timeout 30000ms exceeded.\n=== logs ===", error_hint: null,
+                started_at: "2026-09-24T08:58:17", finished_at: "2026-09-24T08:58:20" }];
+    mount();
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-run-failed='r1']");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(row.getAttribute("data-failure-size")).toBe("inline");
+    expect(row.querySelector("[data-failure-summary]")?.textContent).toBe("Timeout 30000ms exceeded.");
+    expect(row.querySelector("[data-failure-more]"), "原文比那一句多:有「详情」").not.toBeNull();
+  });
+
   it("运行记录按本地时区显示时间;每天几点的任务说清按哪个时区", async () => {
     h.tasks = [task({ trigger_type: "daily", schedule: { time: "09:00" }, timezone: "Etc/GMT+12" })];
     h.runs = [{ id: "r1", scheduled_task_id: "t1", job_id: null, status: "succeeded", result: {}, error: null, started_at: "2026-09-24T08:58:17", finished_at: "2026-09-24T08:58:20" }];
