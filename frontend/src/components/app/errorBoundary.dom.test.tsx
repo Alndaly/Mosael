@@ -122,4 +122,33 @@ describe("一块界面的错误边界", () => {
       spy.mockRestore();
     }
   });
+
+  it("浮层那一块的代码没取到(quiet):提示上带「重新加载」—— 懒组件把失败缓存住了,再点开照样是同一个错", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    try {
+      render(
+        <SectionBoundary mode="quiet">
+          <Boom message="Failed to fetch dynamically imported module: http://x/ComfyWorkbench.js" />
+        </SectionBoundary>,
+      );
+      const [, options] = toastError.mock.calls[0] as [string, { action?: { label: string; onClick: () => void } }];
+      expect(options.action?.label).toBe("重新加载");
+      options.action!.onClick();
+      expect(reload).toHaveBeenCalledTimes(1);
+      // 组件自己出错的不带:重新加载照样出错,给这个按钮是误导。
+      toastError.mockClear();
+      render(
+        <SectionBoundary mode="quiet">
+          <Boom message="confirmation payload is not an object" />
+        </SectionBoundary>,
+      );
+      expect((toastError.mock.calls[0] as [string, { action?: unknown }])[1].action).toBeUndefined();
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+      spy.mockRestore();
+    }
+  });
 });

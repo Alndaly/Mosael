@@ -91,8 +91,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
  *
  * - `inline`(默认):原地换成一句「这一块出错了」、原始报错和「重试」(代码块没取到时是「重新加载」);给了 `onClose`
  *   就再给一个「关闭」—— 助手面板出错时,人多半想先把它收起来接着干活。
- * - `quiet`:不占地方,只弹一条提示(原始报错在提示的说明里)。给浮在窗口上的那些用:确认中心、免提浮标、内嵌浏览器的顶栏 ——
- *   它们没有一块「自己的地方」可以摆一张错误卡,`resetKey` 一变(换了一页、浏览器视图重新亮起)就重新挂上。
+ * - `quiet`:不占地方,只弹一条提示(原始报错在提示的说明里;代码块没取到时提示上带「重新加载」)。给浮在窗口上的那些用:
+ *   确认中心、免提浮标、内嵌浏览器的顶栏 —— 它们没有一块「自己的地方」可以摆一张错误卡,`resetKey` 一变(换了一页、浏览器视图
+ *   重新亮起)就重新挂上。
  */
 export function SectionBoundary({
   children,
@@ -112,7 +113,16 @@ export function SectionBoundary({
 }) {
   const t = useI18n();
   const caught = (error: Error) => {
-    if (mode === "quiet") toast.error(t("sectionCrashedQuiet"), { description: error.message });
+    if (mode === "quiet") {
+      //: 这一块的代码没取到时,提示上带「重新加载」:懒组件把失败缓存住了,网络回来之后再点开它照样是同一个错
+      //: (在桌面版里实测:工作台那一块取失败一次,同一个窗口里再「在工作台里打开」还是收起 + 同一条提示,请求数 0)。
+      //: 多留一会儿:这一块常常是从一个开着的弹窗里点开的(工作流库里「在工作台里打开」),弹窗开着时提示上的按钮点不到,
+      //: 人得先关掉弹窗。
+      const reload = isChunkLoadError(error)
+        ? { action: { label: t("appReload"), onClick: () => window.location.reload() }, duration: 20_000 }
+        : {};
+      toast.error(t("sectionCrashedQuiet"), { description: error.message, ...reload });
+    }
     onCatch?.(error);
   };
   return (
