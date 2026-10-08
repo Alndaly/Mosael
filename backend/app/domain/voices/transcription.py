@@ -32,7 +32,7 @@ from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
-from app.domain.jobs import ASR_SLOTS, blame, finish_job, run_job_guarded, say
+from app.domain.jobs import ASR_SLOTS, blame, finish_job, lock_active_job, say, start_job
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -362,9 +362,9 @@ def start_transcription(
 
 
 def _run_transcription(job_id: str, asset_id: str) -> None:
-    """Take an admission slot before touching the database — see run_job_guarded."""
+    """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底)."""
     with ASR_SLOTS:
-        run_job_guarded(job_id, lambda: _run_transcription_body(job_id, asset_id), what="转写")
+        _run_transcription_body(job_id, asset_id)
 
 
 def _run_transcription_body(job_id: str, asset_id: str) -> None:
@@ -378,7 +378,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             engine_id = chosen.engine_id
             # 状态经 finish_job 写:排队时就被取消的不被写回 running,转完时不盖掉中途的取消
             # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
-            if not finish_job(db, job, status="running", progress=0.1):
+            if not start_job(db, job, progress=0.1):
                 return
             say(job, "jobMsg_asrRunning", provider=chosen.name)
             emit_job_event(db, job.id, "job.running", {"provider": engine_id})
@@ -405,6 +405,11 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             segments = parse_transcript_segments(output.get("segments") or [])
             if not segments:
                 raise ASRError("asrErr_emptyResult")
+            job = db.get(Job, job_id)
+            # **先拿住这个任务、再写逐字稿**:写逐字稿会先删掉旧的那份,取消落在识别途中的,这里拿不到(已经是
+            # 终态),旧逐字稿原样留着。「还有人要吗」和「写进去」「落成功」在同一个事务里。
+            if not lock_active_job(db, job):
+                return
             transcript = attach_transcript(
                 db,
                 asset_id=asset_id,
@@ -413,7 +418,6 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 segments=segments,
                 source=f"asr:{engine_id}",
             )
-            job = db.get(Job, job_id)
             result = {"transcript_id": transcript.id, "segments": len(segments)}
             if finish_job(db, job, status="succeeded", progress=1.0, result=result):
                 say(job, "jobMsg_asrDone")

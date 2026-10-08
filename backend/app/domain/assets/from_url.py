@@ -36,7 +36,16 @@ from app.db.models import Job
 from app.domain.assets import register_file_asset
 from app.domain.assets.source_url import remember_asset_source
 from app.domain.assets.web_capture import PAGE_VIDEO, WebSource, remember_web_source
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, register_job_child, say, unregister_job_child
+from app.domain.jobs import (
+    create_job,
+    detach_job_child,
+    dispatch_job,
+    emit_job_event,
+    finish_job,
+    register_job_child,
+    say,
+    start_job,
+)
 from app.media import ytdlp
 
 logger = logging.getLogger(__name__)
@@ -143,7 +152,9 @@ def _run(job_id: str) -> None:
         actor = job.created_by
         #: 从页面里下的视频,「截取时间」就是点下载的那一刻 —— 任务建出来的时候。
         requested_at = job.created_at.replace(tzinfo=timezone.utc)
-        job.status = "running"
+        # 状态经总线写:排队时被取消的,不在这里被写回「在跑」、照样去下。
+        if not start_job(db, job):
+            return
         emit_job_event(db, job.id, "job.running", {})
 
     stop = _StopFlag()
@@ -195,6 +206,8 @@ def _run(job_id: str) -> None:
                 logger.warning("从链接导入:第 %s 条失败:%s", index + 1, str(exc)[:200])
                 continue
 
+            if stop.event.is_set():
+                break  # 这一条下完的那一刻被取消了:不进素材库
             # 一条一个事务:下好的那些不因为后面哪一条出错而跟着没了。
             with unit_of_work() as db:
                 asset = register_file_asset(
@@ -223,35 +236,31 @@ def _run(job_id: str) -> None:
             if job is None or stop.event.is_set():
                 return
             if done == 0:
-                job.status = "failed"
-                say(job, "jobMsg_urlImportFailed")
-                job.error = failure_report(failures)
-                emit_job_event(db, job.id, "job.failed", {})
+                if finish_job(db, job, status="failed", error=failure_report(failures)):
+                    say(job, "jobMsg_urlImportFailed")
+                    emit_job_event(db, job.id, "job.failed", {})
             else:
-                job.status = "succeeded"
-                job.progress = 1.0
+                result = {"asset_ids": asset_ids, "done": done, "failed": failed}
                 # 部分失败也是成功的一种,但**不能都说成「完成」** —— 下好的那些是真的下好了,
-                # 而少掉的几条只有说出来用户才知道要去补。
-                if failed:
-                    say(job, "jobMsg_urlImportPartial", done=done, failed=failed)
-                    # 成功的任务也带 error:任务详情里它就显示在消息下面。「20 条成功 3 条失败」
-                    # 里的那 3 条,不说清是哪几条、为什么,用户只能自己一条条比对。
-                    job.error = failure_report(failures)
-                else:
-                    say(job, "jobMsg_urlImportDone", done=done)
-                job.result = {"asset_ids": asset_ids, "done": done, "failed": failed}
-                emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
+                # 而少掉的几条只有说出来用户才知道要去补。成功的任务也带 error:任务详情里它就显示在消息下面。
+                # 「20 条成功 3 条失败」里的那 3 条,不说清是哪几条、为什么,用户只能自己一条条比对。
+                extra = {"error": failure_report(failures)} if failed else {}
+                if finish_job(db, job, status="succeeded", progress=1.0, result=result, **extra):
+                    if failed:
+                        say(job, "jobMsg_urlImportPartial", done=done, failed=failed)
+                    else:
+                        say(job, "jobMsg_urlImportDone", done=done)
+                    emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则它永远停在 running
         logger.exception("从链接导入任务 %s 失败", job_id)
         with unit_of_work() as db:
             job = db.get(Job, job_id)
-            if job is not None:
-                job.status = "failed"
+            if job is not None and finish_job(db, job, status="failed", error=str(exc)[:600]):
                 say(job, "jobMsg_urlImportFailed")
-                job.error = str(exc)[:600]
                 emit_job_event(db, job.id, "job.failed", {})
     finally:
-        unregister_job_child(job_id)
+        # 只摘自己登记的这一个:派发处登记的取消开关由派发处摘(unregister 会把它一起摘掉)。
+        detach_job_child(job_id, stop)
         shutil.rmtree(workdir, ignore_errors=True)
 
 

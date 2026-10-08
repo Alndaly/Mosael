@@ -266,14 +266,9 @@ def start_enrollment(
         message_params={"voice": voice.name},
     )
     job_id = job.id
-    dispatch_job(db, job, lambda: _run_enrollment(job_id))
+    # 失败兜底由派发处套着(jobs.dispatch_job → run_job_guarded)。
+    dispatch_job(db, job, lambda: _enrollment_body(job_id))
     return job
-
-
-def _run_enrollment(job_id: str) -> None:
-    from app.domain.jobs import run_job_guarded
-
-    run_job_guarded(job_id, lambda: _enrollment_body(job_id), what="复刻音色")
 
 
 def _enrollment_body(job_id: str) -> None:

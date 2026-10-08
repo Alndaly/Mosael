@@ -32,7 +32,7 @@ from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
 from app.domain import capabilities, model_nsfw_local, model_previews
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
@@ -606,7 +606,7 @@ def start_download(
         message_params={"name": filename},
     )
     job_id = job.id
-    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _download(job_id), what="模型下载"))
+    dispatch_job(db, job, lambda: _download(job_id))
     return job
 
 
@@ -752,7 +752,7 @@ def start_lookup(
         message_params={"n": str(len(wanted))},
     )
     job_id = job.id
-    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _lookups(job_id), what="模型信息"))
+    dispatch_job(db, job, lambda: _lookups(job_id))
     return job
 
 

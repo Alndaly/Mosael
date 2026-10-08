@@ -24,7 +24,16 @@ from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.lineage import SEPARATE, made_from
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import (
+    RENDER_SLOTS,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+    finish_job,
+    lock_active_job,
+    say,
+    start_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +76,9 @@ def start_clip_audio_job(db: Session, *, sequence_id: str, clip_id: str, action:
 
 
 def _run(job_id: str) -> None:
+    # 先拿名额、再开会话;失败兜底由派发处套着(jobs.dispatch_job)。
     with RENDER_SLOTS:
-        run_job_guarded(job_id, lambda: _body(job_id), what="片段声音处理")
+        _body(job_id)
 
 
 def _cached_stems(db: Session, asset: Asset) -> dict[str, str]:
@@ -105,7 +115,7 @@ def _body(job_id: str) -> None:
         if clip is None or not clip.asset_id:
             raise ClipAudioError("clipAudioErr_clipNotFound")
         source_asset_id = clip.asset_id
-        if not finish_job(db, job, status="running", progress=0.1):
+        if not start_job(db, job, progress=0.1):
             return
         say(job, "jobMsg_clipAudioRunning")
         emit_job_event(db, job.id, "job.running", {})
@@ -125,8 +135,12 @@ def _body(job_id: str) -> None:
                 made = {"vocals": stems.vocals.id, "background": stems.background.id}
 
     with unit_of_work() as db:
-        changed = _place(db, sequence_id, clip_id, source_asset_id, action, made, created_by)
         job = db.get(Job, job_id)
+        # **先拿住这个任务、再动时间线**:「还有人要吗」和「换上时间线」「落成功」在同一个事务里 —— 取消落在
+        # 处理途中的,这里拿不到(已经是终态),时间线一个片段都不动。此前是先换片段、后看取消。
+        if job is None or not lock_active_job(db, job):
+            return
+        changed = _place(db, sequence_id, clip_id, source_asset_id, action, made, created_by)
         result = {"action": action, "assets": made, "clips": changed}
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, f"jobMsg_clipAudioDone_{action}", n=changed)

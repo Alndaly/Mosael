@@ -24,13 +24,10 @@ OWNER = "domain/jobs.py"
 
 #: 还没改过来的执行体。**只减不增**:改好一处就从这里删一处。
 REMAINING = {
-    # 发布任务的状态机在 PublishTask 上,_sync_job 把它映射到 job;任务被取消后回报直接返回,
-    # 不会走到这里的赋值 —— 但它仍是直接赋值,等发布那条链一起收。
+    # 发布任务的状态机在 PublishTask 上,_sync_job 把它映射到 job。起步和中间态已经经 start_job;剩下的两处是
+    # **终态之间**的改写 —— 发布器卡住被回收成「失败」之后又回报了成功(视频确实发出去了),要照实记成功,
+    # 而 finish_job 不改已经落了终态的行。「终态不回头」由 jobs._terminal_is_terminal 在 ORM 上守着。
     "domain/publish/worker.py",
-    "domain/voices/voices.py",
-    "domain/assets/from_url.py",
-    "domain/assets/proxies.py",
-    "domain/boards/trim.py",
 }
 
 

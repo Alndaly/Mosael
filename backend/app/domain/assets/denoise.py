@@ -31,7 +31,16 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import DENOISE, derived
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import (
+    RENDER_SLOTS,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+    ensure_wanted,
+    finish_job,
+    say,
+    start_job,
+)
 from app.media.audio_io import AudioIOError, as_audio, replace_audio
 from app.media.paths import resolve_key
 
@@ -137,6 +146,8 @@ def denoise_asset(
             output = cleaned if asset.kind == "audio" else replace_audio(source, cleaned, work / f"denoised{_video_suffix(source)}")
         except AudioIOError as exc:
             raise DenoiseError(str(exc)) from exc
+        # 降噪的时候这件活被取消了:ffmpeg / 引擎已被停下,产出不进素材库。
+        ensure_wanted()
         made = register_file_asset(
             db,
             workspace_id=asset.workspace_id,
@@ -207,7 +218,7 @@ def start_denoise_job(
 def _run_job(job_id: str, asset_id: str, engine: str, strength: str) -> None:
     # 和导出、转 GIF 同一档:"这台机器要忙一阵",不该几个一起抢 CPU。
     with RENDER_SLOTS:
-        run_job_guarded(job_id, lambda: _job_body(job_id, asset_id, engine, strength), what="降噪")
+        _job_body(job_id, asset_id, engine, strength)
 
 
 def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
@@ -217,7 +228,7 @@ def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
         if job is None or asset is None:
             return
         # 状态经 finish_job 写,理由同分离(见 separation._job_body)。
-        if not finish_job(db, job, status="running", progress=0.1):
+        if not start_job(db, job, progress=0.1):
             return
         say(job, "jobMsg_denoiseRunning")
         emit_job_event(db, job.id, "job.running", {})

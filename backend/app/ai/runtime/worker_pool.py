@@ -19,6 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.ai.runtime.errors import RuntimeSetupError
+from app.core import abort
 from app.core.child_process import popen_text
 from app.core.i18n import is_message_key
 
@@ -76,6 +77,8 @@ class ResidentWorker:
         self.busy = False
         #: 是被看门狗杀的,还是自己死的。两者给用户的话不一样。
         self.timed_out = False
+        #: 是不是因为这次请求所在的任务被取消而杀的(见 _kill_for_abort)。
+        self.cancelled = False
         self.process = popen_text(
             [python, worker_path, "--serve"],
             stdin=subprocess.PIPE,
@@ -157,6 +160,11 @@ class ResidentWorker:
         on_progress: Callable[[dict], None] | None,
         timeout: float,
     ) -> dict:
+        #: 这次请求所在的那件活(任务)被取消时,杀掉这个进程:识别 / 合成跑在常驻进程里,不杀它就照跑到底
+        #: (识别最长一小时),占着 ASR_SLOTS / TTS_SLOTS,别的任务全排在后面。代价是下一次要重新加载权重。
+        scope = abort.current()
+        if scope is not None and scope.aborted:
+            raise RuntimeSetupError("jobErr_cancelled")
         self.process.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self.process.stdin.flush()
 
@@ -167,14 +175,21 @@ class ResidentWorker:
         watchdog = threading.Timer(timeout, self._kill_for_timeout)
         watchdog.daemon = True
         watchdog.start()
+        detach = scope.on_abort(self._kill_for_abort) if scope is not None else (lambda: None)
         try:
             return self._read_until_done(on_progress)
         finally:
+            detach()
             watchdog.cancel()
 
     def _kill_for_timeout(self) -> None:
         logger.warning("%s 的%s进程没有回音,杀掉", self.engine, self._noun)
         self.timed_out = True
+        self.kill()
+
+    def _kill_for_abort(self) -> None:
+        logger.info("%s 的%s所在的任务被取消,停下这个进程", self.engine, self._noun)
+        self.cancelled = True
         self.kill()
 
     def _read_until_done(self, on_progress: Callable[[dict], None] | None) -> dict:
@@ -200,6 +215,8 @@ class ResidentWorker:
         # 走到这里 = stdout 关了(进程死了)或超时。**最坏的失败是没有回音** ——
         # 那看起来和"还在跑"一模一样,所以必须变成一个明确的错误。
         self.kill()
+        if self.cancelled:
+            raise RuntimeSetupError("jobErr_cancelled")
         if self.timed_out:
             raise RuntimeSetupError(f"runtimeErr_{self._kind}WorkerTimedOut")
         raise RuntimeSetupError(f"runtimeErr_{self._kind}WorkerDied")

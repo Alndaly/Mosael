@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, PublishAccount, PublishTask, now
-from app.domain.jobs import emit_job_event, say
+from app.domain.jobs import emit_job_event, say, start_job
 from app.domain.notifications import notify
 from app.domain.publish.post import published_post
 from app.domain.publish import (
@@ -141,8 +141,7 @@ def claim_next_pending(
     task.claimed_by = worker
     if task.job_id:
         job = db.get(Job, task.job_id)
-        if job is not None:
-            job.status = "running"
+        if job is not None and start_job(db, job):
             say(job, "jobMsg_publishRunning", title=task.title or asset.name)
     db.flush()
     return {
@@ -234,6 +233,8 @@ def _sync_job(db: Session, task: PublishTask) -> None:
     if job is None:
         return
     if task.status == "success":
+        # **终态之间可以改写**:发布器卡住被回收成「失败」之后又回报了成功(视频确实发出去了),记成功 ——
+        # 那是平台上真实发生的事。所以这里不经 finish_job(它不改已经落了终态的行)。
         job.status = "succeeded"
         job.progress = 1.0
         say(job, "jobMsg_publishDone", title=task.title)
@@ -246,8 +247,8 @@ def _sync_job(db: Session, task: PublishTask) -> None:
         job.error = task.error_message or task.status
         say(job, "jobMsg_publishFailed" if task.status == "failed" else "jobMsg_publishCancelled", title=task.title)
         emit_job_event(db, job.id, "publish.failed", {"status": task.status, "error": job.error})
-    else:
-        job.status = "running"
+    elif start_job(db, job):
+        # 中间态(要登录、等人工……)。任务已经落了终态的(回收成失败之后发布器又报了一句进度)不写回「在跑」。
         say(job, "jobMsg_publishStatus", status=task.status, title=task.title)
         emit_job_event(db, job.id, "publish.status", {"status": task.status})
 

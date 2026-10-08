@@ -26,6 +26,7 @@ from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
+from app.core import abort
 from app.core.text import strip_ansi
 
 logger = logging.getLogger(__name__)
@@ -552,6 +553,22 @@ def run_logged(
             kwargs.setdefault(key, value)
     line = _describe(args)
     started = time.monotonic()
+    #: **跑在一个任务里时,取消要停得下它。** 任务取消拉的是这件活的开关(core/abort),而此前这里起的
+    #: ffmpeg / Demucs / 一次性 worker 都没登记在开关上:取消之后照跑最长一小时,占着导出、分离共用的名额,
+    #: 跑完的产出还照样入库。所以在这一个口子上接一次:自成一组、开关一拉停下整棵进程树,跑完撤掉登记。
+    scope = abort.current()
+    detach: list[Callable[[], None]] = []
+    if scope is not None:
+        group = True
+        announce_to_caller = on_child
+
+        def announce(process: subprocess.Popen) -> None:
+            detach.append(scope.on_abort(lambda: kill_tree(process)))
+            if announce_to_caller is not None:
+                announce_to_caller(process)
+
+        on_child = announce
+
     try:
         if on_child is None and not group and max_stdout is None:
             result = subprocess.run(args, **kwargs)
@@ -563,6 +580,9 @@ def run_logged(
     except OSError as exc:
         logger.warning("%s 起不来:%s(%s)", what, exc, line)
         raise
+    finally:
+        for undo in detach:
+            undo()
     # 子进程默认当自己在终端里,输出带 ANSI 颜色码;而这些文字的去处常常是浏览器
     # (任务的 error 字段、下载失败提示)。在**唯一的出口**上去掉一次,好过在十来个
     # `raise XxxError(f"…{result.stderr}")` 里各记得一次。

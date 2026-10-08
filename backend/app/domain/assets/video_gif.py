@@ -13,7 +13,16 @@ from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import GIF, derived
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import (
+    RENDER_SLOTS,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+    ensure_wanted,
+    finish_job,
+    say,
+    start_job,
+)
 from app.media.paths import resolve_key
 from app.media.video_gif import encode_video_gif
 
@@ -65,12 +74,9 @@ def start_video_to_gif(
 
 
 def _run(job_id: str, asset_id: str, fps: int, width: int, start: float, duration: float | None) -> None:
+    # 先拿名额、再开会话;失败兜底由派发处套着(jobs.dispatch_job)。
     with RENDER_SLOTS:
-        run_job_guarded(
-            job_id,
-            lambda: _body(job_id, asset_id, fps, width, start, duration),
-            what="视频转 GIF",
-        )
+        _body(job_id, asset_id, fps, width, start, duration)
 
 
 def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, duration: float | None) -> None:
@@ -81,7 +87,7 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
             return
         # 状态经 finish_job 写:排队时就被取消的不被写回 running,编码完时不盖掉中途的取消
         # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
-        if not finish_job(db, job, status="running", progress=0.1):
+        if not start_job(db, job, progress=0.1):
             return
         say(job, "jobMsg_videoGifRunning")
         emit_job_event(db, job.id, "job.running", {})
@@ -94,6 +100,7 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
         with tempfile.TemporaryDirectory(prefix="mosael-gif-") as tmp:
             target = Path(tmp) / f"{source.stem}.gif"
             encode_video_gif(source, target, fps=fps, width=width, start=start, duration=duration)
+            ensure_wanted()  # 编码的时候被取消了:ffmpeg 已被停下,不登记
             made = register_file_asset(
                 db,
                 workspace_id=asset.workspace_id,

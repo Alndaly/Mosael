@@ -25,7 +25,7 @@ from app.db.models import Asset, AssetExtraction, Job, now
 from app.domain import capabilities
 from app.domain.documents import CAPABILITY, DocumentParserUnavailable
 from app.domain.documents.local import DocumentParseError, Parsed, attach_page_images, parse_local
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say, was_cancelled
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
 from app.media.paths import asset_dir, resolve_key
 from app.media.thumbnails import thumbnail_path, write_thumbnail
 
@@ -81,7 +81,7 @@ def start_parse(
     )
     extraction.job_id = job.id
     extraction_id, job_id, builtin = extraction.id, job.id, provider.builtin
-    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _body(job_id, extraction_id, builtin), what="文档解析"))
+    dispatch_job(db, job, lambda: _body(job_id, extraction_id, builtin))
     return extraction
 
 

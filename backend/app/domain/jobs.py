@@ -19,9 +19,10 @@ from sqlalchemy.orm import Session
 from app.core import abort
 from app.core.db import SessionLocal
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
+from app.core.i18n import DEFAULT_LOCALE, LocalizedError, fragment, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
+from app.domain import job_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +229,35 @@ TTS_SLOTS = threading.Semaphore(1)
 PLUGIN_SLOTS = threading.Semaphore(4)
 
 
-def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job") -> None:
+class JobCancelled(LocalizedError, RuntimeError):
+    """这件活已经没人要了(被取消了,或者它所在的那个任务失败了)。执行体在登记产出、改时间线、写逐字稿……
+    这些**副作用之前**经 `ensure_wanted` 抛它;派发处的兜底(run_job_guarded)认得它,不把它说成「出错」。"""
+
+
+def ensure_wanted() -> None:
+    """登记产出 / 改别人的东西之前问一句:这件活还有人要吗。不要了抛 `JobCancelled`。
+
+    问的是**上下文里正在跑的那个任务**(dispatch_job 给每个执行体设好了;工作流的节点认的是工作流那个任务)——
+    所以分离、降噪这类既被自己的任务调、也被工作流节点调的函数,在自己体内问一句就两边都管到。不在任何任务里
+    (请求线程、脚本)就什么都不查。
+
+    两个来源,先看快的:取消在**提交之前**就拉下了这件活的开关(见 _cancel_job_row → kill_job_child);
+    开关没拉下的,再读库里的那一份(取消是别的会话写进来的,不读身份映射里的)。
+    """
+    scope = abort.current()
+    if scope is not None and scope.aborted:
+        raise JobCancelled(CANCELLED_ERROR_KEY)
+    job_id = current_parent_job_id()
+    if job_id is None:
+        return
+    with SessionLocal() as db:
+        status = db.scalar(select(Job.status).where(Job.id == job_id))
+    #: 只认 failed:被取消、或它所在的任务失败了。succeeded 的父任务照样能派生收尾的活(见 _ParentJob 的 derived)。
+    if status == "failed":
+        raise JobCancelled(CANCELLED_ERROR_KEY)
+
+
+def run_job_guarded(job_id: str, body: Callable[[], None], *, what: object = "job") -> None:
     """Run a worker body so that no failure can leave the job silently queued.
 
     Every worker began with `db.get(Job, job_id)` OUTSIDE its try. That is the call that checks
@@ -236,20 +265,39 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
     died, and the row stayed `queued` with no error — forever, since reconcile only runs at
     startup. A backfill of 60 videos produced 45 such jobs.
 
-    Anything the body does not handle is recorded on the job here instead.
+    Anything the body does not handle is recorded on the job here instead. **dispatch_job 替每个派发出去的
+    执行体套上它** —— 此前要每个执行体自己记得套,七个没套。`what` 是这类活叫什么(一个文案片段,读的时候按
+    读的人的语言翻;直接调它的地方也可以给一句话)。
     """
     try:
         body()
+    except JobCancelled:
+        # 执行体自己发现没人要了(ensure_wanted):正常情况下取消那一侧已经落了终态,这里什么都不改;
+        # 取消没能提交的那种(开关拉下了、事务回滚了)由这里收成「已取消」,不让它停在 running。
+        logger.info("job %s stopped: no longer wanted", job_id)
+        _record_crash(job_id, what, cancelled=True)
     except Exception as exc:  # noqa: BLE001 — a worker thread must never die silently
         logger.exception("%s worker crashed (job=%s)", what, job_id)
-        try:
-            with unit_of_work() as db:
-                job = db.get(Job, job_id)
-                if job is not None and finish_job(db, job, status="failed", **blame(exc)):
-                    say(job, "jobMsg_genericFailed", what=what)
-                    db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
-        except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
-            logger.exception("could not record the failure of %s %s", what, job_id)
+        _record_crash(job_id, what, exc=exc)
+
+
+def _record_crash(job_id: str, what: object, *, exc: Exception | None = None, cancelled: bool = False) -> None:
+    try:
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None:
+                return
+            if cancelled:
+                if finish_job(db, job, status="failed", error=t(CANCELLED_ERROR_KEY, DEFAULT_LOCALE),
+                              error_key=CANCELLED_ERROR_KEY, error_params={}):
+                    say(job, "jobMsg_cancelled")
+                    db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={"stage": "worker"}))
+                return
+            if finish_job(db, job, status="failed", **blame(exc)):
+                say(job, "jobMsg_genericFailed", what=what)
+                db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
+    except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
+        logger.exception("could not record the failure of %s %s", what, job_id)
 
 
 def run_job_inline(
@@ -313,12 +361,13 @@ def say(job: Job, key: str, **params: object) -> None:
     为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
     用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
     """
-    from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message
+    from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message, stored_param
 
     #: 有几处传进来的是一句现成的话(子任务转述的消息、第三方的原话)。它不是 key,不该当 key
     #: 落库 —— 否则读的时候会被当模板再填一遍(见 core/i18n.is_message_key)。
     job.message_key = key if is_message_key(key) else ""
-    job.message_params = {k: str(v) for k, v in params.items()}
+    #: 参数里的文案片段(`fragment`,比如任务种类的名字)原样留着,读的时候按读的人的语言翻;其余写成字。
+    job.message_params = {k: stored_param(v) if isinstance(v, dict) else str(v) for k, v in params.items()}
     job.message = render_message(key, DEFAULT_LOCALE, job.message_params)
 
 
@@ -394,6 +443,32 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
     elif status == "succeeded":
         logger.info("job %s [%s] succeeded in %s", job.id, job.kind, took)
     return True
+
+
+def start_job(db: Session, job: Job, **fields: Any) -> bool:
+    """排队 → 在跑。**执行体起步只经这里。** 返回 False = 它在排队时已经落了终态(被取消了),执行体照此直接退出,
+    什么都不做。
+
+    此前几个执行体一上来直接 `job.status = "running"`:排队时(派发器名额满、等转码名额、等本机合成名额)被取消的
+    任务,轮到它时被写回 running、照跑到底、最后记成成功 —— 付费的配音照样调用,落终态的收拾和回执各跑两遍。
+    """
+    return finish_job(db, job, status="running", **fields)
+
+
+class JobStateError(RuntimeError):
+    """有人想把一个已经落了终态的任务写回「进行中」。是代码错,不是用户能处理的情况 —— 见 _terminal_is_terminal。"""
+
+
+@event.listens_for(Job.status, "set", active_history=True)
+def _terminal_is_terminal(job: Job, value: Any, previous: Any, _initiator: Any) -> None:
+    """**终态不回头。** 一个任务成功、失败、被取消之后,不许再被写回排队 / 在跑。
+
+    守在 ORM 的属性上,不在某个函数里:状态的写法此前有好几种(finish_job、直接赋值、执行体自己的收尾),
+    漏走 finish_job 的那一处在这里当场炸,而不是悄悄把一次取消改写掉(见 start_job)。终态之间的改写
+    (发布器在超时判失败之后又回报了成功)不归这里管,那是 finish_job 的调用方自己的判断。
+    """
+    if previous in TERMINAL_STATUSES and value not in TERMINAL_STATUSES:
+        raise JobStateError(f"job {job.id} is already {previous}; it cannot go back to {value}")
 
 
 #: 「这活儿干完了,回执寄给谁」。key 是收信方的种类,值是那一类怎么送。
@@ -681,6 +756,10 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
     job_id = job.id
     kind = job.kind
 
+    #: 兜底记失败时这类活叫什么:任务种类的名字(文案片段,读的时候按读的人的语言翻)。
+    entry = job_catalog.JOB_KINDS.get(kind)
+    what = fragment(entry.label_key if entry is not None else job_catalog.FALLBACK_LABEL_KEY)
+
     def run_as_job() -> None:
         # 执行体里建出来的任务都归这个任务(ADR-0018)。新线程不继承 contextvar ——
         # 此前字幕配音逐句建的合成、导出收尾排的代理转码,全都成了顶层任务,各自弹一条"完成"。
@@ -688,10 +767,17 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         # 取消要掐得掉**正在进行**的出站请求(大模型、配音、翻译……)和一次性子进程,不只是改一行状态(见 core/abort)。
         # 开关登记成这个任务的「子进程」:取消(连同级联到它的)经 kill_job_child 调到它的 kill()。
         stop = abort.AbortScope()
-        register_job_child(job_id, stop)
+
+        def body() -> None:
+            # 登记要碰库(看取消是不是已经提交了),所以也在兜底里面:连接池满了的那一下不能让线程无声地死掉。
+            register_job_child(job_id, stop)
+            thread_target()
+
         try:
             with abort.scope(stop):
-                thread_target()
+                # **兜底在这里套一次,对每个派发出去的执行体都成立**:执行体在它自己的 try 之前抛出的任何东西
+                # (连接池等满、库被锁、解密失败……)都落成这个任务的失败,不再停在 queued / running 等下次重启。
+                run_job_guarded(job_id, body, what=what)
         finally:
             detach_job_child(job_id, stop)
             forget_job_kill(job_id)

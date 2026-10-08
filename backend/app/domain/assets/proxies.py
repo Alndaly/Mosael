@@ -24,7 +24,16 @@ from app.core.config import settings
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.media_info import patch_media_info
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import (
+    JobCancelled,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+    ensure_wanted,
+    finish_job,
+    say,
+    start_job,
+)
 from app.media.paths import resolve_key
 from app.media.probe import probe_has_audio
 from app.media.proxy import (
@@ -150,12 +159,25 @@ def _run_proxy(job_id: str, asset_id: str) -> None:
     so a startup backfill of 60 videos put 45 threads into that timeout — each dying with its
     job still `queued` and nothing to reconcile it. Queueing on the semaphore costs a sleeping
     thread; queueing on the connection pool costs the job.
+
+    失败兜底由派发处套着(jobs.dispatch_job → run_job_guarded),这里只管先拿名额。
     """
     with TRANSCODE_SLOTS:
-        run_job_guarded(job_id, lambda: _proxy_body(job_id, asset_id), what="代理生成")
+        _proxy_body(job_id, asset_id)
 
 
 def _proxy_body(job_id: str, asset_id: str) -> None:
+    try:
+        _transcode(job_id, asset_id)
+    except JobCancelled:
+        # 转到一半被取消:ffmpeg 已被停下。还挂在 pending 的那几样落成「没有代理」(见 _drop_pending),
+        # 再把取消交给派发处的兜底(取消通常已经落库;没落成的那种由它收成「已取消」)。
+        with unit_of_work() as db:
+            _drop_pending(db, job_id, asset_id)
+        raise
+
+
+def _transcode(job_id: str, asset_id: str) -> None:
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -163,10 +185,12 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
         # 做哪几样写在任务的 payload 里(排队时定的),worker 只认任务,不另传参数。
         video = bool(job.payload["video"])
         audio = bool(job.payload["audio"])
+        # 状态经总线写:在等转码名额时被取消的,不在这里被写回「在跑」(此前直接赋值,取消被改写成「成功」)。
+        if not start_job(db, job, progress=0.1):
+            _drop_pending(db, job_id, asset_id)
+            return
         try:
-            job.status = "running"
             say(job, "jobMsg_proxyRunning")
-            job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {})
             # 「在跑」先落库:转码要一阵,界面要马上看得到。
             db.commit()
@@ -180,7 +204,9 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
             failures: list[str] = []
             # 两样各自落各自的状态:画面代理转坏了,声音照样能听;反过来也一样。
             if video:
-                if build_proxy(source, proxy_path(source.parent)):  # slot already held by _run_proxy
+                built = build_proxy(source, proxy_path(source.parent))  # slot already held by _run_proxy
+                ensure_wanted()  # 转码中途被取消:ffmpeg 已被停下,不把「转坏了」记到素材上
+                if built:
                     result["proxy_key"] = proxy_key_for(asset)
                     _set_proxy_meta(db, asset_id, "ready", key=result["proxy_key"])
                 else:
@@ -189,24 +215,41 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
             if audio:
                 if not probe_has_audio(source):
                     _set_audio_proxy_meta(db, asset_id, "silent")
-                elif build_audio_proxy(source, audio_proxy_path(source.parent)):
-                    result["audio_proxy_key"] = audio_proxy_key_for(asset)
-                    _set_audio_proxy_meta(db, asset_id, "ready", key=result["audio_proxy_key"])
                 else:
-                    _set_audio_proxy_meta(db, asset_id, "failed")
-                    failures.append("ffmpeg 音频代理转码失败")
+                    built = build_audio_proxy(source, audio_proxy_path(source.parent))
+                    ensure_wanted()
+                    if built:
+                        result["audio_proxy_key"] = audio_proxy_key_for(asset)
+                        _set_audio_proxy_meta(db, asset_id, "ready", key=result["audio_proxy_key"])
+                    else:
+                        _set_audio_proxy_meta(db, asset_id, "failed")
+                        failures.append("ffmpeg 音频代理转码失败")
             job = db.get(Job, job_id)
             if failures:
                 _fail_job(db, job, ";".join(failures))
                 return
-            job.status = "succeeded"
-            job.progress = 1.0
-            say(job, "jobMsg_proxyDone")
-            job.result = result
-            emit_job_event(db, job.id, "job.succeeded", result)
+            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+                say(job, "jobMsg_proxyDone")
+                emit_job_event(db, job.id, "job.succeeded", result)
+        except JobCancelled:
+            raise
         except Exception as exc:  # a worker thread must record failure, never die silently
             db.rollback()
             _fail(db, job_id, asset_id, str(exc)[:500], video=video, audio=audio)
+
+
+def _drop_pending(db: Session, job_id: str, asset_id: str) -> None:
+    """这次代理不做了(排队时或转到一半被取消):点名要做、还挂在 pending 的那几样记成 failed —— 「没有代理、
+    可以手动重试」,而不是停在 pending:那样启动补齐扫描会把它当成「重启害死的」再排一次,用户的取消在下次启动时被撤销。"""
+    job = db.get(Job, job_id)
+    asset = db.get(Asset, asset_id)
+    if job is None or asset is None:
+        return
+    video, audio = bool(job.payload.get("video")), bool(job.payload.get("audio"))
+    if video and proxy_status(asset) == "pending":
+        _set_proxy_meta(db, asset_id, "failed")
+    if audio and audio_proxy_status(asset) == "pending":
+        _set_audio_proxy_meta(db, asset_id, "failed")
 
 
 def _fail(db: Session, job_id: str, asset_id: str, reason: str, *, video: bool, audio: bool) -> None:
@@ -220,10 +263,8 @@ def _fail(db: Session, job_id: str, asset_id: str, reason: str, *, video: bool, 
 
 
 def _fail_job(db: Session, job: Job | None, reason: str) -> None:
-    if job is not None:
-        job.status = "failed"
+    if job is not None and finish_job(db, job, status="failed", error=reason):
         say(job, "jobMsg_proxyFailed")
-        job.error = reason
         emit_job_event(db, job.id, "job.failed", {"reason": reason})
 
 

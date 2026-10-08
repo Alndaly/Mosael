@@ -66,7 +66,7 @@ from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
 from app.domain.agent import places
 from app.domain.boards.producer_ids import node_producer_id
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins import host_capabilities
@@ -1168,7 +1168,7 @@ def start_node_install(db: Session, user: User, instance: PluginInstance, *, wor
         message_params={"name": subject},
     )
     job_id = job.id
-    dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _install(job_id), what="装节点包"))
+    dispatch_job(db, job, lambda: _install(job_id))
     return job
 
 

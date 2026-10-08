@@ -18,7 +18,7 @@ from app.domain.billing.usage import billable, once
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.domain.jobs import TTS_SLOTS, blame, run_job_guarded, say
+from app.domain.jobs import TTS_SLOTS, JobCancelled, blame, ensure_wanted, finish_job, say, start_job
 from app.db.models import Asset, Job, Voice
 from app.db.model_base import now
 from app.domain.assets.importer import register_file_asset
@@ -534,7 +534,7 @@ def _run_synthesis(
     clone_engine: str = "",
     clone_model: str = "",
 ) -> None:
-    """Take an admission slot before touching the database — see run_job_guarded.
+    """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底).
 
     Only the local clone engine takes the slot. A remote engine is an HTTP request that holds no
     model in memory, so queueing it behind the single local slot would serialise work that has
@@ -557,9 +557,9 @@ def _run_synthesis(
     )
     if engine == CLONE_ENGINE:
         with TTS_SLOTS:
-            run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
+            _run_synthesis_body(*args)
     else:
-        run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
+        _run_synthesis_body(*args)
 
 
 def _intermediate_of(job: Job) -> str:
@@ -609,8 +609,9 @@ def _run_synthesis_body(
             voice = db.get(Voice, voice_id) if voice_id else None
             if voice is None and (voice_id or engine == CLONE_ENGINE):
                 raise VoiceError("voiceErr_voiceNotFound")
-            job.status = "running"
-            job.progress = 0.2
+            # 状态经总线写:排队时(等本机合成名额、派发器名额)被取消的,不在这里被写回「在跑」、照样去念。
+            if not start_job(db, job, progress=0.2):
+                return
             say(job, "jobMsg_ttsRunning", voice=voice.name if voice else (engine_voice or engine))
             emit_job_event(db, job.id, "job.running", {})
             # 「在念」先落库:合成要一阵(本机克隆十几分钟),界面要马上看得到。
@@ -678,6 +679,7 @@ def _run_synthesis_body(
                 job.progress = 0.95
                 # 念完了,先把进度落库再登记素材(拷贝、探测、画波形还要一会儿)。
                 db.commit()
+                ensure_wanted()  # 念的时候被取消了:产出不进素材库
                 asset = register_file_asset(
                     db,
                     workspace_id=voice.workspace_id,
@@ -693,20 +695,18 @@ def _run_synthesis_body(
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
                 patch_media_info(db, asset.id, {"voice_id": voice.id})
             job = db.get(Job, job_id)
-            job.status = "succeeded"
-            job.progress = 1.0
-            say(job, "jobMsg_ttsDone")
-            job.result = {"asset_id": asset.id, "engine": used}
-            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+            result = {"asset_id": asset.id, "engine": used}
+            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+                say(job, "jobMsg_ttsDone")
+                emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+        except JobCancelled:
+            raise  # 不是「合成失败」:派发处的兜底认得它
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             job = db.get(Job, job_id)
-            if job is not None:
-                job.status = "failed"
+            #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。取消落在中途的,不改写它。
+            if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_ttsFailed")
-                #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。
-                for field, value in blame(exc).items():
-                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
             # 失败落进任务行是给用户看的;日志是给排查的人看的。此前只有前者,于是一次
             # 失败在日志里一个字都没有 —— 而这一整天的排查全靠日志。
@@ -931,6 +931,8 @@ def _synthesize_remote(
         job.progress = 0.85
         # 付过费的那次合成已经回来了:进度(和这次的用量)先落库,再登记素材。
         db.commit()
+        # 等远端回话的时候被取消了:账照记(上面那一笔已经落了),产出不进素材库。
+        ensure_wanted()
         asset = register_file_asset(
             db,
             workspace_id=workspace_id,
@@ -945,11 +947,9 @@ def _synthesize_remote(
             # 和本机克隆那条同一个记法:这段音频是这把嗓子的克隆,拿去做数字人时照它查授权声明。
             patch_media_info(db, asset.id, {"voice_id": voice.id})
     job = db.get(Job, job.id)
-    job.status = "succeeded"
-    job.progress = 1.0
-    say(job, "jobMsg_ttsDone")
-    job.result = {"asset_id": asset.id, "engine": engine}
-    emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+    if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "engine": engine}):
+        say(job, "jobMsg_ttsDone")
+        emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
 
 
 def start_podcast(
@@ -999,20 +999,16 @@ def start_podcast(
     dispatch_job(
         db,
         job,
-        lambda: run_job_guarded(
+        lambda: _run_podcast_body(
             job_id,
-            lambda: _run_podcast_body(
-                job_id,
-                workspace_id,
-                project_id,
-                text,
-                topic,
-                action,
-                speakers or [],
-                speed,
-                provider_profile_id,
-            ),
-            what="播客",
+            workspace_id,
+            project_id,
+            text,
+            topic,
+            action,
+            speakers or [],
+            speed,
+            provider_profile_id,
         ),
     )
     return job
@@ -1036,8 +1032,9 @@ def _run_podcast_body(
         job = db.get(Job, job_id)
         if job is None:
             return
-        job.status = "running"
-        job.progress = 0.2
+        # 排队时被取消的不再去合成(那是一次付费调用)。
+        if not start_job(db, job, progress=0.2):
+            return
         emit_job_event(db, job.id, "job.running", {})
         # 「在做」先落库:一次播客合成要几分钟,界面要马上看得到。
         db.commit()
@@ -1079,6 +1076,7 @@ def _run_podcast_body(
             job.progress = 0.85
             # 付过费的那次合成已经回来了:进度(和这次的用量)先落库,再登记素材。
             db.commit()
+            ensure_wanted()  # 合成途中被取消:账照记,产出不进素材库
             asset = register_file_asset(
                 db,
                 workspace_id=workspace_id,
@@ -1090,11 +1088,9 @@ def _run_podcast_body(
             )
 
         job = db.get(Job, job_id)
-        job.status = "succeeded"
-        job.progress = 1.0
-        say(job, "jobMsg_podcastDone")
         # The dialogue text is returned without timings, and inventing them from character
         # counts would produce subtitles that drift audibly. Callers that need a timed
         # transcript can run the normal 转写 over the generated audio, which measures them.
-        job.result = {"asset_id": asset.id, "texts": result.texts}
-        emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+        if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "texts": result.texts}):
+            say(job, "jobMsg_podcastDone")
+            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})

@@ -32,7 +32,16 @@ from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import SEPARATE, derived
 from app.media.audio_io import AudioIOError, as_audio
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import (
+    RENDER_SLOTS,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+    ensure_wanted,
+    finish_job,
+    say,
+    start_job,
+)
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
@@ -118,6 +127,8 @@ def separate_asset(
         except AudioIOError as exc:
             raise SeparationError(str(exc)) from exc
         stems = adapter.separate(SeparationRequest(audio_path=audio), work / "out")
+        # 分离的时候这件活被取消了(界面取消、工作流停了):Demucs 已被停下,产出不进素材库。
+        ensure_wanted()
         made: dict[str, Asset] = {}
         for stem in (VOCALS, BACKGROUND):
             path = stems.get(stem)
@@ -188,8 +199,9 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
 
 
 def _run_job(job_id: str, asset_id: str, engine: str) -> None:
+    # 先拿名额、再开会话;失败兜底由派发处套着(jobs.dispatch_job)。
     with RENDER_SLOTS:
-        run_job_guarded(job_id, lambda: _job_body(job_id, asset_id, engine), what="人声与背景音分离")
+        _job_body(job_id, asset_id, engine)
 
 
 def _job_body(job_id: str, asset_id: str, engine: str) -> None:
@@ -200,7 +212,7 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
             return
         # 状态一律经 finish_job 写:排队时就被取消的不被写回 running,跑完时不盖掉中途的取消
         # (工作流取消会级联到这里 —— 模型停不下来,但取消过的活不能又变成「完成」)。
-        if not finish_job(db, job, status="running", progress=0.1):
+        if not start_job(db, job, progress=0.1):
             return
         say(job, "jobMsg_separateRunning")
         emit_job_event(db, job.id, "job.running", {})

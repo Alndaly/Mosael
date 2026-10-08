@@ -26,7 +26,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import TRIM, derived
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, ensure_wanted, finish_job, say, start_job
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
@@ -72,25 +72,22 @@ def start_trim(
     # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
     job_id, asset_id = job.id, asset.id
-    dispatch_job(
-        db,
-        job,
-        lambda: run_job_guarded(job_id, lambda: _trim_body(job_id, asset_id, start, end, mute), what="素材截取"),
-    )
+    dispatch_job(db, job, lambda: _trim_body(job_id, asset_id, start, end, mute))
     return job
 
 
 def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool) -> None:
-    # 任务线程的入口就是这次用例的边界:正常走完提交,抛出来回滚(失败由 run_job_guarded 落进任务)。
+    # 任务线程的入口就是这次用例的边界:正常走完提交,抛出来回滚(失败由派发处套的 run_job_guarded 落进任务)。
     # 中间那次提交是有意的:ffmpeg 要跑一阵,「在截」得先让别的会话看得见。
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
-        job.status = "running"
+        # 状态经总线写:排队时被取消的,不在这里被写回「在跑」。
+        if not start_job(db, job, progress=0.1):
+            return
         say(job, "jobMsg_trimRunning")
-        job.progress = 0.1
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
@@ -114,6 +111,7 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
             if not target.is_file() or target.stat().st_size == 0:
                 raise TrimError("trimErr_empty")
 
+            ensure_wanted()  # 截的时候被取消了:片段不进素材库
             made = register_file_asset(
                 db,
                 workspace_id=asset.workspace_id,
@@ -125,10 +123,8 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
                 derived_from=derived(TRIM, asset.id),
             )
 
-        job.status = "succeeded"
-        job.progress = 1.0
-        say(job, "jobMsg_trimDone")
         #: 和语音合成同一个形状(单数)—— 画板的回执两种都读得懂,见 domain/boards。
-        job.result = {"asset_id": made.id}
-        emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
+        if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": made.id}):
+            say(job, "jobMsg_trimDone")
+            emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
         logger.info("trim %s [%.2f, %.2f] -> asset %s", asset.id, start, end, made.id)

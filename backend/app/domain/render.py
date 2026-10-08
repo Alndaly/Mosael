@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import tr
-from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
+from app.domain.jobs import RENDER_SLOTS, dispatch_job, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import EXPORT, FRAME, derived
@@ -402,9 +402,9 @@ def start_export(db: Session, sequence_id: str, export_params: dict | None = Non
 
 
 def _run_export(job_id: str, plan: RenderPlan) -> None:
-    """Take an admission slot before touching the database — see run_job_guarded."""
+    """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底)."""
     with RENDER_SLOTS:
-        run_job_guarded(job_id, lambda: _run_export_body(job_id, plan), what="导出")
+        _run_export_body(job_id, plan)
 
 
 def _format_eta(seconds: float) -> str:
