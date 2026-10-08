@@ -522,7 +522,7 @@ export function ProviderProfilesSection({
                 {/* 常用的三个留在行内:展开模型、查额度、启停。授权/编辑/删除进溢出菜单 ——
                     订阅档案原本七个图标挤成一排,每个都同等分量,反而哪个都不显眼。 */}
                 <IconButton
-                  size="icon"
+                  size="icon-sm"
                   label={t("modelListTitle")}
                   aria-expanded={expanded.has(profile.id)}
                   onClick={() =>
@@ -540,7 +540,7 @@ export function ProviderProfilesSection({
                     "不支持",等于摆了个做不到的操作。 */}
                 {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
                 <IconButton
-                  size="icon"
+                  size="icon-sm"
                   loading={toggle.isPending && toggle.variables?.id === profile.id}
                   onClick={() => toggle.mutate(profile)}
                   label={profile.enabled ? t("providerDisable") : t("providerEnable")}
@@ -549,7 +549,7 @@ export function ProviderProfilesSection({
                 </IconButton>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <IconButton size="icon" label={t("more")}>
+                    <IconButton size="icon-sm" label={t("more")}>
                       <MoreHorizontal size={13} />
                     </IconButton>
                   </PopoverTrigger>

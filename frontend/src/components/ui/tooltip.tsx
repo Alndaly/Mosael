@@ -31,7 +31,7 @@ const Tooltip = TooltipPrimitive.Root
 
 /** 说明浮层的外观。长网址、长文件名在浮层里折行(任意处可断),不把浮层撑出窗口。 */
 const TOOLTIP_SURFACE =
-  "z-50 max-w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-md border border-border bg-popover px-3 py-1.5 text-xs leading-relaxed text-popover-foreground [overflow-wrap:anywhere]"
+  "z-50 max-w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-md border border-border bg-popover px-3 py-1.5 text-ui-xs leading-relaxed text-popover-foreground [overflow-wrap:anywhere]"
 const TOOLTIP_MOTION =
   "duration-160 ease-enter data-[state=closed]:ease-exit animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-tooltip-content-transform-origin) motion-reduce:animate-none"
 

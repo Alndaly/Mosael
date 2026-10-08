@@ -1,5 +1,5 @@
 import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -495,7 +495,7 @@ export function ChatWorkspace({
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
               进了子代理它变成面包屑的第一段,回来它就是标题本身。空会话仍保留弹性间距,分开模式与视图切换。 */}
           <Truncate className="flex-1 text-ui-sm font-medium text-foreground">{activeSession?.title}</Truncate>
-          <div className={SEGMENTED_LIST} role="tablist" aria-label={t("chatSessionsTitle")}>
+          <div className={segmentedListClass()} role="tablist" aria-label={t("chatSessionsTitle")}>
             {(["chat", "trace"] as const).map((item) => (
               <button
                 key={item}
@@ -503,7 +503,7 @@ export function ChatWorkspace({
                 role="tab"
                 aria-selected={view === item}
                 onClick={() => setView(item)}
-                className={segmentedTriggerClass(view === item)}
+                className={segmentedItemClass(view === item)}
               >
                 {t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
               </button>
@@ -723,7 +723,7 @@ export function ChatWorkspace({
                       <IconButton
                         type="button"
                         variant="default"
-                        size="icon"
+                        size="icon-sm"
                         className="shrink-0 rounded-full"
                         label={t("chatStop")}
                         loading={stopTurn.isPending}
@@ -735,7 +735,7 @@ export function ChatWorkspace({
                       <IconButton
                         type="submit"
                         variant="default"
-                        size="icon"
+                        size="icon-sm"
                         className="shrink-0 rounded-full"
                         label={running ? t("chatSteer") : t("chatSend")}
                         hint={running ? t("chatSteerHint") : undefined}

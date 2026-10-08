@@ -131,7 +131,7 @@ export function SceneBlender({
           </div>
           <IconButton
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             label={t("sceneBlenderRefresh")}
             disabled={busy}
             onClick={() => {

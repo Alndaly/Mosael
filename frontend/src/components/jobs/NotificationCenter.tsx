@@ -103,7 +103,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       }}
     >
       <PopoverTrigger asChild>
-        <IconButton variant="ghost" size="icon" className="relative" label={t("notifTitle")}>
+        <IconButton variant="ghost" size="icon-sm" className="relative" label={t("notifTitle")}>
           <Bell size={15} />
           {unread > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{unread > 99 ? "99+" : unread}</em>}
         </IconButton>

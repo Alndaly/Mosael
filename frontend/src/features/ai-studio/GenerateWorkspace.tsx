@@ -1540,7 +1540,7 @@ export function GenerateWorkspace({
                 <IconButton
                   type="submit"
                   variant="default"
-                  size="icon"
+                  size="icon-sm"
                   className="shrink-0 rounded-full"
                   label={t("generate")}
                   shortcut={formatCombo(SUBMIT_COMBO)}

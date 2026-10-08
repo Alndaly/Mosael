@@ -8,10 +8,9 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { ModalShell } from "@/components/app/modals";
 import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
-import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Truncate } from "@/components/ui/truncate";
 import { assetKindKey, documentFacts, kindIsVisual } from "@/lib/assetKinds";
 import { assetOriginKey } from "@/lib/assetOrigin";
@@ -535,7 +534,7 @@ function GridSkeleton() {
 }
 
 /**
- * 按种类筛:全应用的分段控件(SEGMENTED_LIST / segmentedTriggerClass),和头里的搜索框、按钮一样 32px 高。
+ * 按种类筛:全应用的分段控件(segmentedListClass / segmentedItemClass 的 sm 档),和头里的搜索框、按钮一样 32px 高。
  * 画板挑素材(全部 / 图片 / 视频 / 音频 / 文档)和挂参考图(全部 / 图片 / 视频)都用它。
  */
 export function AssetKindSwitch<V extends string>({
@@ -550,14 +549,14 @@ export function AssetKindSwitch<V extends string>({
   onChange: (value: V) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cn(SEGMENTED_LIST, CONTROL_HEIGHT.sm, "min-h-0 p-0.5")}>
+    <div role="radiogroup" aria-label={label} className={segmentedListClass("sm")}>
       {options.map((one) => (
         <button
           key={one.value}
           type="button"
           role="radio"
           aria-checked={value === one.value}
-          className={cn(segmentedTriggerClass(value === one.value), "h-7 min-h-0 px-2.5")}
+          className={segmentedItemClass(value === one.value, "sm")}
           onClick={() => onChange(one.value)}
         >
           {one.label}

@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { FIELD_SIZE, type FieldSize } from "@/components/ui/control-size"
+import { FIELD_INVALID, FIELD_SIZE, type FieldSize } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
 export type InputProps = Omit<React.ComponentProps<"input">, "size"> & {
@@ -21,7 +21,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          "flex w-full rounded-md border border-field-border bg-field py-1 transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          "flex w-full rounded-md border border-field-border bg-field py-1 transition-colors file:border-0 file:bg-transparent file:text-ui-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          FIELD_INVALID,
           FIELD_SIZE[size],
           className
         )}

@@ -40,7 +40,7 @@ import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { SpeechVoiceFields, SpeedPicker } from "@/features/voice/SpeechVoiceFields";
@@ -362,14 +362,14 @@ export function PodcastComposerFields({
   };
   return (
     <div className="grid gap-2" data-podcast-composer={draft.mode}>
-      <div className={cn(SEGMENTED_LIST, "min-h-8 justify-self-start p-0.5")} role="tablist" aria-label={t("createPodcastModeLabel")}>
+      <div className={cn(segmentedListClass("sm"), "justify-self-start")} role="tablist" aria-label={t("createPodcastModeLabel")}>
         {PODCAST_MODES.map((mode) => (
           <button
             key={mode}
             type="button"
             role="tab"
             aria-selected={draft.mode === mode}
-            className={cn(segmentedTriggerClass(draft.mode === mode), "min-h-7 px-2.5 text-ui-xs")}
+            className={segmentedItemClass(draft.mode === mode, "sm")}
             onClick={() => draft.setMode(mode)}
           >
             {t(PODCAST_MODE_LABELS[mode])}

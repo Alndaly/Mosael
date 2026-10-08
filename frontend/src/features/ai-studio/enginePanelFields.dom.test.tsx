@@ -16,7 +16,7 @@ import { CONTROL_HEIGHT, CONTROL_SQUARE } from "@/components/ui/control-size";
  * 照 components/ui/fieldSize.dom.test.tsx 的写法,按「东西在哪」查:高度类必须挂在真正画出边框的那个元素上(input 本身、
  * role=combobox 的触发器、SearchableSelect 那颗带 bg-field 的按钮),而且恰好一个 —— 两个同时在就是 cn() 没合并掉。
  * 每种会话还钉一个下限个数:右栏一格都没渲染出来时「每一格都是 md」天然成立,那不算过。
- * 挨着字段的方钮(试听)是和 md 字段同高的 icon-lg(40px)。
+ * 挨着字段的方钮(试听)是和 md 字段同高的 icon(40px)。
  */
 
 vi.mock("@/app/preferences", () => ({
@@ -194,7 +194,7 @@ describe("创作页右栏:字段都是「音色」那一档(md)", () => {
       return found;
     });
     for (const preview of previews) {
-      expect(preview.className.split(/\s+/)).toContain(CONTROL_SQUARE.lg);
+      expect(preview.className.split(/\s+/)).toContain(CONTROL_SQUARE.md);
       //: 和下拉在同一行:同一个父元素里就是那颗下拉
       const row = preview.parentElement!;
       expect(row.querySelector("[role=combobox]")).toBeTruthy();

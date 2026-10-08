@@ -85,3 +85,53 @@ describe("Button 的行内动作那一档", () => {
     expect(classes).not.toContain("text-muted-foreground");
   });
 });
+
+/**
+ * 2026-10 定稿的刻度(docs/DESIGN_LANGUAGE.md):方钮和同档文字控件一样高(md 40,不再有 36 和另一个 40);
+ * 文字按钮里的图标跟着档位(xs 14,sm、md 16);只有图标的按钮在哪一档都是 16。
+ */
+describe("Button 的方钮和图标跟着档位", () => {
+  it("icon 40、icon-sm 32、icon-xs 28 —— 和同档的文字按钮同高", () => {
+    for (const [size, square, text] of [["icon", "size-10", "default"], ["icon-sm", "size-8", "sm"], ["icon-xs", "size-7", "xs"]] as const) {
+      const { getAllByRole, unmount } = render(
+        <>
+          <Button size={size} aria-label="方钮" />
+          <Button size={text}>文字</Button>
+        </>,
+      );
+      const [squareButton, textButton] = getAllByRole("button");
+      expect(squareButton.className.split(/\s+/)).toContain(square);
+      const height = { default: "h-10", sm: "h-8", xs: "h-7" }[text];
+      expect(textButton.className.split(/\s+/)).toContain(height);
+      unmount();
+    }
+  });
+
+  it("xs 文字按钮里的图标 14,sm 和默认档 16", () => {
+    const icon = (size: "xs" | "sm" | "default") => {
+      const { getByRole, unmount } = render(<Button size={size}>新建</Button>);
+      const classes = getByRole("button").className.split(/\s+/);
+      unmount();
+      return classes;
+    };
+    expect(icon("xs")).toContain("[&_svg]:size-3.5");
+    expect(icon("xs")).not.toContain("[&_svg]:size-4");
+    expect(icon("sm")).toContain("[&_svg]:size-4");
+    expect(icon("default")).toContain("[&_svg]:size-4");
+  });
+
+  it("只有图标的按钮在哪一档都是 16 —— 借 xs 文字档(宽度跟着内容走)时也是", async () => {
+    const { IconButton } = await import("@/components/ui/icon-button");
+    for (const size of ["xs", "sm", "icon-xs", "icon-sm", "icon"] as const) {
+      const { getByRole, unmount } = render(
+        <IconButton size={size} label="更多">
+          <svg />
+        </IconButton>,
+      );
+      const classes = getByRole("button").className.split(/\s+/);
+      expect(classes, size).toContain("[&_svg]:size-4");
+      expect(classes, size).not.toContain("[&_svg]:size-3.5");
+      unmount();
+    }
+  });
+});

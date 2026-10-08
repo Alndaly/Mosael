@@ -1,5 +1,5 @@
 import { useI18n } from "@/app/preferences";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -19,14 +19,14 @@ export function useStatRange(key: string): [number, (days: number) => void] {
 export function RangePicker({ days, onChange }: { days: number; onChange: (days: number) => void }) {
   const t = useI18n();
   return (
-    <span className={cn(SEGMENTED_LIST, "min-h-8 p-0.5")} role="radiogroup" aria-label={t("statRangeLabel")}>
+    <span className={segmentedListClass("sm")} role="radiogroup" aria-label={t("statRangeLabel")}>
       {RANGES.map((value) => (
         <button
           key={value}
           type="button"
           role="radio"
           aria-checked={Number(value) === days}
-          className={cn(segmentedTriggerClass(Number(value) === days), "min-h-7 px-3 text-ui-xs tabular-nums")}
+          className={cn(segmentedItemClass(Number(value) === days, "sm"), "tabular-nums")}
           onClick={() => onChange(Number(value))}
         >
           {t("statRangeDays").replace("{n}", value)}

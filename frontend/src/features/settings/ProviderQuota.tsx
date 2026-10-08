@@ -116,7 +116,7 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
       <PopoverTrigger asChild>
         {/* 与授权/登出/编辑/开关/删除同列的图标钮:额度是这一行的又一个动作,
             单独占一行的胶囊按钮会把每张卡撑高一截,行与行的节奏也就散了。 */}
-        <IconButton size="icon" label={t("quotaFetch")}>
+        <IconButton size="icon-sm" label={t("quotaFetch")}>
           <Gauge size={13} />
         </IconButton>
       </PopoverTrigger>

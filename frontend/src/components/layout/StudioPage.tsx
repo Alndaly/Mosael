@@ -1,4 +1,6 @@
 import React from "react";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { TAB_TRIGGER } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 /** The page owns its title, description and primary action; collections own their filters. */
@@ -55,7 +57,7 @@ export function CollectionTabs<T extends string>({ value, onChange, items, label
       tabIndex={index === focusable ? 0 : -1}
       onClick={() => onChange(item.value)}
       onKeyDown={(event) => onKeyDown(event, index)}
-      className={cn("flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-1 text-ui-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", value === item.value && "border-primary text-primary")}
+      className={cn(TAB_TRIGGER, CONTROL_HEIGHT.md)}
     >
       {item.label}{item.count !== undefined && <span className="text-ui-xs tabular-nums text-muted-foreground">{item.count}</span>}
     </button>)}

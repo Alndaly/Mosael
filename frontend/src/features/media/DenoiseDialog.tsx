@@ -11,7 +11,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { gotoAdmin, gotoJob } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
@@ -166,14 +166,14 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
           <div className="grid gap-2.5">
             <span className={SECTION_LABEL}>{t("denoiseStrength")}</span>
             {/* 三档等分整行 —— 挤在左边、右边空一大截时,看着像没排完。 */}
-            <div className={cn(SEGMENTED_LIST, "grid w-full auto-cols-fr grid-flow-col")} role="radiogroup" aria-label={t("denoiseStrength")}>
+            <div className={segmentedListClass("md", { fill: true })} role="radiogroup" aria-label={t("denoiseStrength")}>
               {strengths.map((one) => (
                 <button
                   key={one}
                   type="button"
                   role="radio"
                   aria-checked={strength === one}
-                  className={segmentedTriggerClass(strength === one)}
+                  className={segmentedItemClass(strength === one)}
                   onClick={() => setStrength(one)}
                 >
                   {t(STRENGTH_LABELS[one])}

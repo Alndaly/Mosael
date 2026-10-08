@@ -56,14 +56,22 @@ describe("Input 的档位", () => {
     expect(input.hasAttribute("size")).toBe(false);
   });
 
-  it("调用点的字号、留白仍可覆盖,高度不被冲掉", () => {
+  //: 合并本身照旧是 cn 的后者胜出(存量还在用);业务代码里新写的覆盖由 design/controlOverrides.test.ts 拦。
+  it("className 合并时后写的胜出,高度不被冲掉", () => {
     render(<Input aria-label="名字" size="sm" className="px-1.5 text-ui-xs" />);
-    const input = screen.getByLabelText("名字");
-    expectHeight(input, CONTROL_HEIGHT.sm);
-    expect(input.className).toContain("text-ui-xs");
-    expect(input.className).not.toContain("text-ui-sm");
-    expect(input.className).toContain("px-1.5");
-    expect(input.className).not.toContain("px-2.5");
+    const classes = screen.getByLabelText("名字").className.split(/\s+/);
+    expectHeight(screen.getByLabelText("名字"), CONTROL_HEIGHT.sm);
+    expect(classes).toContain("text-ui-xs");
+    expect(classes).not.toContain("text-ui-sm");
+    expect(classes).toContain("px-1.5");
+    expect(classes).not.toContain("px-2.5");
+  });
+
+  it("出错(aria-invalid)时描边和聚焦环是危险色", () => {
+    render(<Input aria-label="名字" aria-invalid />);
+    const classes = screen.getByLabelText("名字").className.split(/\s+/);
+    expect(classes).toContain("aria-invalid:border-destructive");
+    expect(classes).toContain("aria-invalid:focus-visible:ring-destructive");
   });
 });
 

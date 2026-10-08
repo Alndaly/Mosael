@@ -743,7 +743,7 @@ export function CanvasAgentChat({
               {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
                 <IconButton
                   variant="default"
-                  size="icon"
+                  size="icon-sm"
                   className="rounded-full"
                   label={t("chatStop")}
                   loading={stopTurn.isPending}
@@ -754,7 +754,7 @@ export function CanvasAgentChat({
               ) : (
                 <IconButton
                   variant="default"
-                  size="icon"
+                  size="icon-sm"
                   className="rounded-full"
                   label={running ? t("chatSteer") : t("chatSend")}
                   hint={running ? t("chatSteerHint") : undefined}

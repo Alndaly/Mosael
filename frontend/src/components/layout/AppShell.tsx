@@ -166,7 +166,7 @@ export function AppShell({
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
             <div className="flex min-w-0 items-center gap-3 text-ui-sm text-muted-foreground">
-              <IconButton variant="ghost" size="icon" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" label={compact ? t("navExpand") : t("navCollapse")}>
+              <IconButton variant="ghost" size="icon-sm" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" label={compact ? t("navExpand") : t("navCollapse")}>
                 {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
               </IconButton>
               <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", (scoped || trail) && "font-medium text-muted-foreground")}>
@@ -241,7 +241,7 @@ export function AppShell({
           <button
             type="button"
             aria-label={t("cmdkTitle")}
-            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_span]:hidden"
+            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-ui-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_span]:hidden"
             onClick={() => window.dispatchEvent(new CustomEvent("mosael:open-cmdk"))}
           >
             <Search size={15} />
@@ -252,7 +252,7 @@ export function AppShell({
           {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
           <IconButton
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             onClick={() => setTheme(nextTheme(theme))}
             label={t("settingsTheme")}
             hint={t(THEME_LABEL_KEYS[theme])}
@@ -261,7 +261,7 @@ export function AppShell({
           </IconButton>
           <IconButton
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
             label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
           >

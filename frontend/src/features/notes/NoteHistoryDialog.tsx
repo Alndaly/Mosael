@@ -14,13 +14,12 @@ import {
 import { DiffSegments } from "@/components/app/DiffSegments";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { diffText } from "@/lib/textDiff";
-import { cn } from "@/lib/utils";
 import { NoteReader } from "./NoteEditor";
 import { useNoteStrings } from "./strings";
 import { diffDocument, type DocumentDiffBlock } from "./versionDiff";
@@ -181,10 +180,10 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                 </div>
               </div>
               <div className="note-history-views">
-                <div role="radiogroup" aria-label={v.views} className={cn(SEGMENTED_LIST, "min-h-9")}>
+                <div role="radiogroup" aria-label={v.views} className={segmentedListClass("sm")}>
                   {(["preview", "current", "previous"] as const).map((one) => (
                     <button key={one} type="button" role="radio" aria-checked={showing === one} disabled={!usable[one]}
-                      className={cn(segmentedTriggerClass(showing === one), "min-h-7 px-2.5 text-ui-xs disabled:cursor-default disabled:opacity-40")}
+                      className={segmentedItemClass(showing === one, "sm")}
                       onClick={() => setView(one)}>
                       {{ preview: v.preview, current: v.compareCurrent, previous: v.comparePrevious }[one]}
                     </button>

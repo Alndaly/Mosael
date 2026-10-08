@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
 
-import { CONTROL_HEIGHT, CONTROL_SQUARE } from "@/components/ui/control-size"
+import { CONTROL_HEIGHT, CONTROL_ICON, CONTROL_SQUARE, INLINE_ACTION_SIZE } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -36,29 +36,23 @@ const buttonVariants = cva(
       },
       size: {
         default: `${CONTROL_HEIGHT.md} rounded-md px-4 py-2`,
-        // 28px 的带文字胶囊。工具栏那一行放的都是次要动作,sm(32px)在里面偏高、px-3 偏宽;
-        // 高度压到 28 之后 text-ui-sm 会把胶囊顶满,所以这一档自带 text-ui-xs —— 字号跟着
-        // 高度走,不必每个调用点再补一遍。
-        xs: `${CONTROL_HEIGHT.xs} rounded-md px-2.5 text-ui-xs`,
+        // 28px 的带文字按钮(密集工具条)。高度压到 28 之后 text-ui-sm 会把它顶满,所以这一档自带 text-ui-xs,
+        // 图标跟着缩到 14(16 的图标配 12 的字,图标比字重)—— 字号、图标跟着高度走,不必每个调用点再补一遍。
+        xs: `${CONTROL_HEIGHT.xs} rounded-md px-2.5 text-ui-xs ${CONTROL_ICON.text.xs}`,
         sm: `${CONTROL_HEIGHT.sm} rounded-md px-3`,
         lg: `${CONTROL_HEIGHT.lg} rounded-md px-6`,
-        icon: `${CONTROL_SQUARE.md} rounded-md`,
-        // 与 sm 同高的方形图标按钮。卡片、工具栏这类窄容器里,次要动作放不下文字标签,
-        // 而 icon(36px)在一排 sm(32px)按钮中间会高出一截。
-        "icon-sm": `${CONTROL_SQUARE.sm} rounded-md`,
-        // 28px:全应用工具栏的**实际**刻度(时间线、编辑器、设置页、智能体输入框都是这一档)。
-        // 这一档以前没有 token,于是几十处各自写 `h-7 w-7` 盖在 size="icon" 上 —— 盖漏一处
-        // 就是一个 36px 的圆按钮杵在一排 28px 控件中间,智能体输入框刚栽过这一下。
+        // 方钮和同档文字控件一样高:icon 40 和 md 的输入框、按钮并排,icon-sm 32、icon-xs 28 同理。图标在哪一档都是 16。
+        // 此前 icon 是 36,比同档 40 矮一截;挨着字段的试听键只好另起一档 icon-lg(40)—— 定稿后合成一个名字。
+        // 这几档以前没有 token 时,几十处各自写 `h-7 w-7` 盖在 size="icon" 上 —— 盖漏一处就是一颗大圆钮杵在一排小控件中间。
         // 棘轮:`components/ui/buttonScale.test.ts` 拦下一处再手搓。
-        "icon-xs": `${CONTROL_SQUARE.xs} rounded-md`,
-        // 40px:和 md 字段(输入框、下拉的默认档)同高的方钮。挨着字段放的图标按钮用它 —— 生成右栏音色、发音人旁边的试听键,
-        // 分时段价格那一行末尾的删除钮;用 icon(36)会比旁边的字段矮一截。
-        "icon-lg": `${CONTROL_SQUARE.lg} rounded-md`,
+        icon: `${CONTROL_SQUARE.md} rounded-md ${CONTROL_ICON.square}`,
+        "icon-sm": `${CONTROL_SQUARE.sm} rounded-md ${CONTROL_ICON.square}`,
+        "icon-xs": `${CONTROL_SQUARE.xs} rounded-md ${CONTROL_ICON.square}`,
       },
     },
     compoundVariants: [
       //: 行内动作自带尺寸:不论调用处写没写 size,都是这一套(写在最后,cn 合并时盖过 size 那一档的高度、留白和字号)。
-      { variant: "inline", class: "h-6 -my-0.5 gap-1 rounded px-1.5 py-0 text-ui-xs [&_svg]:size-3.5" },
+      { variant: "inline", class: INLINE_ACTION_SIZE },
     ],
     defaultVariants: {
       variant: "default",

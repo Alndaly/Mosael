@@ -189,7 +189,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       <PopoverTrigger asChild>
         <IconButton
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           className="relative"
           label={t("taskCenter")}
         >

@@ -19,6 +19,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { fieldHeights } from "@/test/fieldTier";
 import {
   NodeConfigForm,
   nodeConfigTiers,
@@ -48,7 +49,7 @@ const SPECS = {
   expert: { type: "string", active_when: { platform: "x" }, label: "只对 x 有用" },
 } as unknown as Record<string, ConfigSpec>;
 
-function Host({ config }: { config: Record<string, unknown> }) {
+function Host({ config, compact = false }: { config: Record<string, unknown>; compact?: boolean }) {
   const fieldOptions = useNodeFieldOptions({ specs: SPECS, config, workspaceId: "w1", nodeType: "plugin.any.tool" });
   const { basic } = nodeConfigTiers(SPECS, config);
   return (
@@ -61,11 +62,12 @@ function Host({ config }: { config: Record<string, unknown> }) {
       onSetConfig={vi.fn()}
       onTypeConfig={vi.fn()}
       onPatchConfig={vi.fn()}
+      compact={compact}
     />
   );
 }
 
-function renderForm(config: Record<string, unknown>) {
+function renderForm(config: Record<string, unknown>, compact = false) {
   const asked: string[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
@@ -80,20 +82,30 @@ function renderForm(config: Record<string, unknown>) {
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <Host config={config} />
+        <Host config={config} compact={compact} />
       </TooltipProvider>
     </QueryClientProvider>,
   );
-  return { asked };
+  return { asked, unmount: view.unmount };
 }
 
 const fieldKeys = () =>
   Array.from(document.querySelectorAll<HTMLElement>("[data-field-key]")).map((el) => el.dataset.fieldKey);
 
 describe("节点表单", () => {
+  //: 一个容器一个档(docs/DESIGN_LANGUAGE.md):字段的 size 是按排法算出来的(`size={size}`),静态棘轮看不见,这里在 DOM 上量。
+  it("一张表单里的字段同一档:检查器那一列都是 md(40),画板弹层(compact)都是 sm(32)", async () => {
+    for (const compact of [false, true]) {
+      const { unmount } = renderForm({ platform: "x", expert: "" }, compact);
+      await waitFor(() => expect(document.querySelectorAll("[data-field-key]").length).toBeGreaterThan(1));
+      expect(fieldHeights(document.body), compact ? "compact" : "inspector").toEqual([compact ? "h-8" : "h-10"]);
+      unmount();
+    }
+  });
+
   it("高级项和此刻不参与的字段都不在基础档里", () => {
     expect(nodeConfigTiers(SPECS, {}).basic.map(([key]) => key)).toEqual(["video", "platform"]);
     expect(nodeConfigTiers(SPECS, {}).advanced.map(([key]) => key)).toEqual(["page"]);

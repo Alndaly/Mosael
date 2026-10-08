@@ -13,8 +13,8 @@ import { playBlob, stopPlayback } from "@/lib/audioPlayback";
  * 音频从哪来由调用方给(`load`)—— 各处试听的是不同的东西,取、播、停这一段是同一件事。
  * `disabledReason` 是灰着的时候悬停说明里那句「为什么点不了」。
  *
- * **40px 的方钮(icon-lg)**:它总是挨着一个音色下拉放(创作页右栏的音色、发音人,资产的声音,智能体朗读的音色),
- * 下拉是 md 档 40px;此前是 icon(36),每一处都比旁边的下拉矮一截。
+ * **40px 的方钮(md 档的 icon)**:它总是挨着一个音色下拉放(创作页右栏的音色、发音人,资产的声音,智能体朗读的音色),
+ * 下拉是 md 档 40px,方钮和它同高。
  */
 export function VoicePreviewButton({
   load,
@@ -60,7 +60,7 @@ export function VoicePreviewButton({
   return (
     <IconButton
       variant="outline"
-      size="icon-lg"
+      size="icon"
       // 挨着下拉放在一行 flex 里:不缩,不然下拉的名字一长它就被挤成 31px 宽的窄条
       className="shrink-0"
       loading={state === "loading"}

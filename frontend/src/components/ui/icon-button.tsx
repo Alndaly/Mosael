@@ -1,5 +1,8 @@
 import * as React from "react"
 
+import { CONTROL_ICON } from "@/components/ui/control-size"
+import { cn } from "@/lib/utils"
+
 import { BusyChildren, Button, type ButtonProps } from "./button"
 import { Hint, type HintShortcut } from "./tooltip"
 
@@ -45,7 +48,10 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
         </button>
       )
     } else {
-      button = <Button ref={ref} variant={variant} size={size} aria-label={label} {...props} />
+      //: 只有图标的按钮,图标在哪一档都是 16(control-size 的 CONTROL_ICON.square)—— 文字档(xs)把图标缩到 14 是给「图标 + 字」的,
+      //: 这里借文字档只是为了宽度跟着内容走(图标 + 小下拉箭头那种),图标照旧 16。
+      const { className, ...rest } = props
+      button = <Button ref={ref} variant={variant} size={size} aria-label={label} className={cn(CONTROL_ICON.square, className)} {...rest} />
     }
     return (
       <Hint

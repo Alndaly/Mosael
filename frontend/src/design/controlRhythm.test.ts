@@ -41,10 +41,10 @@ const SRC = join(import.meta.dirname, "..");
  * 改清单的话,清单就没人愿意维护了;和 `buttonScale.test.ts`、`gridAxes.test.ts` 同一套键)。
  */
 const GRANDFATHERED = new Map<string, string>([
-  // 圆形发送键是这一行的主操作,故意比左边那排 28px 的工具大一圈。
-  ["features/agent/CanvasAgentChat.tsx: 28/36", "发送键是主操作,故意更大"],
-  ["features/ai-studio/GenerateWorkspace.tsx: 28/36", "同上"],
-  ["features/ai-studio/ChatWorkspace.tsx: 28/36", "同上"],
+  // 圆形发送键是这一行(输入框底栏,xs)的主操作,故意大一档(sm 32)。
+  ["features/agent/CanvasAgentChat.tsx: 28/32", "发送键是主操作,故意更大"],
+  ["features/ai-studio/GenerateWorkspace.tsx: 28/32", "同上"],
+  ["features/ai-studio/ChatWorkspace.tsx: 28/32", "同上"],
   // 进度条/滑杆:轨道和滑块本来就不该和按钮一样高。
   ["components/app/MediaPreviewPlayer.tsx: 16/32", "进度条不是控件,是轨道"],
   ["components/ui/slider.tsx: 6/16", "滑杆的轨道与滑块"],
@@ -59,7 +59,7 @@ const FONT = new Map([
   ["--text-ui-md", 16], ["--text-ui-lg", 18],
 ]);
 const BUTTON_SIZE = new Map([
-  ["default", 40], ["lg", 44], ["icon", 36], ["icon-lg", 40],
+  ["default", 40], ["lg", 44], ["icon", 40],
   ["sm", 32], ["icon-sm", 32], ["xs", 28], ["icon-xs", 28],
 ]);
 /** 字段的 `size` 档(components/ui/control-size.ts 的 FIELD_SIZE),和按钮同名同高。 */

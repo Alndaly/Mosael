@@ -5,10 +5,9 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "rechar
 import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMoney, microsIn, type CostAmount } from "@/lib/money";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { cn } from "@/lib/utils";
 import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import {
@@ -133,7 +132,7 @@ export function UsageCostPanel({
         {/* 币种说明就写在面板底下(见末尾那一行),这里不再挂一条一样的悬停说明。 */}
         {currencies.length > 1 && (
           <span
-            className={cn(SEGMENTED_LIST, "min-h-0 p-0.5")}
+            className={segmentedListClass("xs")}
             role="radiogroup"
             aria-label={t("homeChartUsageCurrency")}
           >
@@ -143,7 +142,7 @@ export function UsageCostPanel({
                 type="button"
                 role="radio"
                 aria-checked={code === currency}
-                className={cn(segmentedTriggerClass(code === currency), "min-h-6 px-2 text-ui-xs")}
+                className={segmentedItemClass(code === currency, "xs")}
                 onClick={() => setPicked(code)}
               >
                 {code}

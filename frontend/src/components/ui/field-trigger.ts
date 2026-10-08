@@ -1,4 +1,4 @@
-import { FIELD_SIZE, type FieldSize } from "@/components/ui/control-size";
+import { FIELD_INVALID, FIELD_SIZE, type FieldSize } from "@/components/ui/control-size";
 
 /**
  * 「看起来像输入框的下拉触发器」的唯一样式来源。
@@ -29,7 +29,7 @@ const FIELD_TRIGGER_BASE =
  * 高度、左右留白、字号都对得上。别在调用点用 `h-*` 改高度:`design/fieldScale.test.ts` 会拦。
  */
 export function fieldTriggerClass(size: FieldSize = "md"): string {
-  return `${FIELD_TRIGGER_BASE} ${FIELD_SIZE[size]}`;
+  return `${FIELD_TRIGGER_BASE} ${FIELD_INVALID} ${FIELD_SIZE[size]}`;
 }
 
 /** 触发器右侧的下拉箭头。尺寸与透明度跟着触发器走,三种控件同一个写法。 */

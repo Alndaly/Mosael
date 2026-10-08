@@ -2,7 +2,7 @@ import React from "react";
 
 import type { Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import {
@@ -25,14 +25,14 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   useStudioLink(setTab);
 
   const switcher = (
-    <div className={SEGMENTED_LIST} role="tablist" aria-label="AI Studio">
+    <div className={segmentedListClass()} role="tablist" aria-label="AI Studio">
       {STUDIO_TABS.map((item) => (
         <button
           key={item}
           type="button"
           role="tab"
           aria-selected={tab === item}
-          className={segmentedTriggerClass(tab === item)}
+          className={segmentedItemClass(tab === item)}
           onClick={() => setTab(item)}
         >
           {t(STUDIO_TAB_LABELS[item])}

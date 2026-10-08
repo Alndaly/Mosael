@@ -40,7 +40,7 @@ import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Hint } from "@/components/ui/tooltip";
 import {
   LocalServiceLogDialog,
@@ -291,7 +291,7 @@ export function WhereChoice({
   ];
   return (
     <Hint disabledReason={disabledReason}>
-      <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(SEGMENTED_LIST, "flex-wrap")}>
+      <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(segmentedListClass(), "flex-wrap")}>
         {options.map((one) => {
           const locked = one.value === "server" ? undefined : localDisabledReason;
           const button = (
@@ -301,7 +301,7 @@ export function WhereChoice({
               role="radio"
               aria-checked={mode === one.value}
               disabled={Boolean(disabledReason || locked)}
-              className={cn(segmentedTriggerClass(mode === one.value), "disabled:opacity-50")}
+              className={segmentedItemClass(mode === one.value)}
               onClick={() => onChoose(one.value)}
             >
               {t(one.label)}

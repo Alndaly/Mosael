@@ -11,9 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MenuItem } from "@/components/ui/menu";
 import { Hint } from "@/components/ui/tooltip";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { relativeTime } from "@/lib/time";
-import { cn } from "@/lib/utils";
 import { useNoteStrings } from "./strings";
 
 /** 一种可选的正文形状。给了两份以上,对话框就多一排切换;只给正文的调用方什么都不用改。 */
@@ -75,9 +74,9 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
           {variants.length > 1 && <>
             <span id={`${ids}-shape`}>{s.shape}</span>
             {/* 两种形状等分整行 —— 和降噪强度那排是同一个分段控件,挤在左边的话读起来像两个标签页。 */}
-            <div className={cn(SEGMENTED_LIST, "grid w-full auto-cols-fr grid-flow-col")} role="radiogroup" aria-labelledby={`${ids}-shape`}>{variants.map(variant =>
+            <div className={segmentedListClass("md", { fill: true })} role="radiogroup" aria-labelledby={`${ids}-shape`}>{variants.map(variant =>
               <button key={variant.id} type="button" role="radio" aria-checked={variant.id === chosen?.id} disabled={busy}
-                className={segmentedTriggerClass(variant.id === chosen?.id)} onClick={() => setVariantId(variant.id)}>{variant.label}</button>)}</div>
+                className={segmentedItemClass(variant.id === chosen?.id)} onClick={() => setVariantId(variant.id)}>{variant.label}</button>)}</div>
           </>}
           <small data-slot="save-summary">{s.willSave(markdown.length, chosenSources.length)}</small>
         </div>}
