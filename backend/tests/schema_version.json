@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -23,6 +23,7 @@
     "drop-publish-account-profile-name",
     "drop-reviews-table",
     "drop-shared-credentials",
+    "expire-orphaned-session-confirmations",
     "forget-comfyui-run-workflow-tool",
     "merge-object-storage-plugins",
     "merge-openai-tts-engine",
