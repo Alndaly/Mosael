@@ -1,6 +1,9 @@
-"""重新生成 `tests/migration_bodies.json`。
+"""重新生成 `tests/migration_bodies.json` 和 `tests/schema_version.json`。
 
 `python -m tests.freeze_migration_bodies`(在 backend/ 里跑)。
+
+后一份记的是 `DATABASE_SCHEMA_VERSION` 此刻认得的那几步一次性迁移(见 test_schema_version_follows_the_migrations):
+新加了一步,先把那个数加一,再跑这个脚本。
 
 **它不是「让测试变绿」的按钮。** 指纹变了通常说明一个已经记过账的一次性迁移被改了身体,
 而那对已经升过的机器无效 —— 正确做法是新开一个步骤名。只有确属无害的重构(纯改名、
@@ -11,7 +14,9 @@ from __future__ import annotations
 
 import json
 
+from app.db.safety import DATABASE_SCHEMA_VERSION
 from tests.test_migration_bodies_are_frozen import FINGERPRINTS, _fingerprints
+from tests.test_schema_version_follows_the_migrations import SNAPSHOT, once_steps
 
 
 def main() -> None:
@@ -19,6 +24,11 @@ def main() -> None:
         json.dumps(dict(sorted(_fingerprints().items())), indent=2) + "\n", encoding="utf-8"
     )
     print(FINGERPRINTS)
+    SNAPSHOT.write_text(
+        json.dumps({"version": DATABASE_SCHEMA_VERSION, "steps": once_steps()}, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(SNAPSHOT)
 
 
 if __name__ == "__main__":

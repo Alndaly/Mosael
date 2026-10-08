@@ -21,10 +21,12 @@ from pathlib import Path
 # 这个数现在**只做一件事:拦住降级** —— 库被更新的版本迁移过之后,老版本不许再动它。
 # 它不再决定"要不要拍快照":那个决定改由「有没有待跑的一次性迁移」回答(见 MigrationPlan.pending)。
 #
-# 为什么改:这个常量自 2026-09-04 起没被 bump 过,而其间新增了十四个迁移(含一次 DROP TABLE
-# 加搬文件)。于是 `current == target`,快照一次都没拍过 —— **机制没坏,开关一直关着**。
-# 靠人记得改一个数才生效的保险,迟早会在它最该生效的那次是关着的。
-DATABASE_SCHEMA_VERSION = 4
+# **每加一个一次性迁移就加一。** 老版本手里只有这一个判据(库的 user_version 比它认得的大就拒绝启动),它认不出
+# 新加的迁移名。此前这个数自 2026-09-22 起停在 4,而其间加了几十步迁移(包括 ADR 0044 重建 agent_sessions、删掉
+# project_id):用 v1.9.3 打开 main 迁过的库,`init_db` 照常通过,智能体页随即报 `no such column`。
+# 靠人记得改的数守不住,所以有测试看着:`tests/test_schema_version_follows_the_migrations.py` 对着
+# `tests/schema_version.json`(这个数当时认得的那几步),多出一步而这个数没动就红。
+DATABASE_SCHEMA_VERSION = 5
 
 
 class DatabaseVersionTooNew(RuntimeError):
