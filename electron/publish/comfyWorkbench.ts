@@ -569,9 +569,12 @@ export function workbenchInstallScript(origin: string): string {
     return { problems, steps };
   };
   //: 查过的一批真改到画布上:只记一步撤销(前端的改动跟踪在 beforeChange / afterChange 之间不记,afterChange 时记一次);
-  //: 万一改到一半出错,把记下的那一步退掉(和 Ctrl+Z 同一条路),再把它从「重做」里拿掉 —— 画布回到改之前
+  //: 万一改到一半出错,把记下的那一步退掉(和 Ctrl+Z 同一条路),再把它从「重做」里拿掉 —— 画布回到改之前。
+  //: 「记没记下那一步」看改动跟踪的当前状态换没换(它记一步就换上一份新的 activeState),**不看撤销队列的长度**:
+  //: 队列有上限(前端 MAX_HISTORY = 50),满了是先 push 再 shift,长度不变 —— 按长度判,改过 50 步的图上就退不回去
   const applyResolved = async (steps) => {
     const changes = tracker();
+    const before = changes.activeState;
     const depth = changes.undoQueue.length;
     const created = {};
     let failure = null;
@@ -589,7 +592,9 @@ export function workbenchInstallScript(origin: string): string {
       changes.afterChange();
     }
     if (failure) {
-      if (changes.undoQueue.length > depth) {
+      //: 还没有当前状态的(前端还没记过第一份)只能退回去看队列长度
+      const recorded = before ? changes.activeState !== before : changes.undoQueue.length > depth;
+      if (recorded) {
         await changes.undo();
         changes.redoQueue.pop();
       }

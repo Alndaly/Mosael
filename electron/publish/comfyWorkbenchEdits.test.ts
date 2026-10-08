@@ -268,6 +268,8 @@ function editingPage() {
       const now = serialize(root);
       if (now === this.activeState) return;
       this.undoQueue.push(this.activeState);
+      //: 前端的撤销队列有上限(ChangeTracker.MAX_HISTORY = 50):先 push 再 shift,满了长度不变
+      if (this.undoQueue.length > 50) this.undoQueue.shift();
       this.activeState = now;
       this.redoQueue.length = 0;
     }),
@@ -404,6 +406,23 @@ describe("桥第 5 版:智能体改图", () => {
     expect(page.tracker.undoQueue).toEqual([]);
     expect(page.tracker.redoQueue, "改了一半的那份不能再被「重做」出来").toEqual([]);
     expect(page.tracker.changeCount).toBe(0);
+  });
+
+  //: PLG-4:按撤销队列的长度判「记没记下那一步」,队列满 50 步时 push 再 shift 长度不变 —— 退不回去,画布停在改了一半
+  it("这张图上已经改过 50 步(撤销队列满了)时改到一半出错:照样退回改之前", async () => {
+    const page = await installed();
+    for (let n = 0; n < 50; n += 1) page.tracker.undoQueue.push(`用户的第 ${n + 1} 步`);
+    const before = page.tracker.activeState;
+    page.root.refuseNextLink = true;
+    const result = await apply(page, [
+      { op: "set_widget", layer: null, node: "3", widget: "steps", value: 31 },
+      { op: "connect", layer: null, from: { node: "4", name: "MODEL" }, to: { node: "3", name: "model" } },
+    ]);
+    expect(result).toMatchObject({ error: "failed" });
+    expect(page.tracker.undo).toHaveBeenCalledTimes(1);
+    expect(page.tracker.activeState, "画布回到改之前").toBe(before);
+    expect(page.tracker.redoQueue).toEqual([]);
+    expect(page.tracker.undoQueue.at(-1), "用户自己的步数还在(最早那一步是前端自己挤掉的)").toBe("用户的第 50 步");
   });
 
   it("什么都没改成就出错:没记下那一步,就不退 —— 不能把用户自己的上一步退掉", async () => {
