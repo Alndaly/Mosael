@@ -37,7 +37,7 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {}, selected: [], restore() {} }),
 }));
 vi.mock("@/features/agent/composerAttachments", () => ({
   textAttachmentBlock: () => "",
@@ -51,7 +51,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
     onPaste() {},
     drop: { handlers: {}, overlay: null },
     accept() {},
-    clear() {},
+    clear() {}, restore() {},
   }),
 }));
 vi.mock("@/features/agent/ChatComposer", () => ({

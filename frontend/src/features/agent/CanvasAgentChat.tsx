@@ -26,6 +26,7 @@ import { DictateButton } from "@/features/agent/DictateButton";
 
 import {
   type Asset,
+  type Note,
   compactAgentSession,
   deleteAgentSession,
   dropQueuedMessage,
@@ -61,6 +62,8 @@ import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { homeOf, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
+import { readComposerDraft, stashComposerExtras, takeComposerExtras, writeComposerDraft } from "@/features/agent/sessionSelection";
+import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -144,7 +147,19 @@ export function CanvasAgentChat({
   const qc = useQueryClient();
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点,存成字符串就散了。
   //: 要发出去的那句话由 `draftText` 从文档派生(引用序列化成 `@名字`)。
-  const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
+  //: **按地方分**(ADR 0044):换一篇笔记、工作台换一张图,面板不重挂、只换 `place` —— 输入框里那半句话不该跟着走
+  //: (在 A 里写的「把这篇第一段删掉」发出去就成了对 B)。打的字记在 sessionStorage,附件和引用的笔记暂存在内存里。
+  const [draft, setDraftState] = React.useState<JSONContent>(() => readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
+  const setDraft = React.useCallback(
+    (next: JSONContent | ((current: JSONContent) => JSONContent)) => {
+      setDraftState((current) => {
+        const value = typeof next === "function" ? next(current) : next;
+        writeComposerDraft(workspaceId, place, documentText(value).trim() || collectReferences(value).length ? value : null);
+        return value;
+      });
+    },
+    [workspaceId, place],
+  );
   const draftText = React.useMemo(() => documentText(draft), [draft]);
   const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
@@ -168,6 +183,24 @@ export function CanvasAgentChat({
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
+  //: 换地方:上一处挂着的附件 / 引用暂存起来,这一处先前的取回来;打的字换成这一处的。见上面 `draft` 那段。
+  const composerShownFor = React.useRef({ workspaceId, place, key: `${workspaceId}|${here}` });
+  const composerLatest = React.useRef({ media: attach.media, files: attach.files, notes: noteAttach.selected });
+  composerLatest.current = { media: attach.media, files: attach.files, notes: noteAttach.selected };
+  const { restore: restoreAttachments } = attach;
+  const { restore: restoreNotes } = noteAttach;
+  React.useEffect(() => {
+    const key = `${workspaceId}|${here}`;
+    const previous = composerShownFor.current;
+    if (previous.key === key) return;
+    const { media, files, notes } = composerLatest.current;
+    stashComposerExtras(previous.workspaceId, previous.place, media.length || files.length || notes.length ? { media, files, notes } : null);
+    composerShownFor.current = { workspaceId, place, key };
+    const saved = takeComposerExtras<{ media: Asset[]; files: { name: string; content: string }[]; notes: Note[] }>(workspaceId, place);
+    restoreAttachments({ media: saved?.media ?? [], files: saved?.files ?? [] });
+    restoreNotes(saved?.notes ?? []);
+    setDraftState(readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
+  }, [workspaceId, place, here, restoreAttachments, restoreNotes]);
 
   const isFloating = mode === "floating";
 
@@ -190,20 +223,6 @@ export function CanvasAgentChat({
     },
   });
 
-  const messages = useQuery({
-    queryKey: ["agent-messages", sessionId],
-    enabled: Boolean(sessionId),
-    queryFn: () => listAgentMessages(sessionId),
-    refetchInterval: 1500,
-    refetchOnWindowFocus: true,
-  });
-  //: 「还没读到」不能说成「是空的」:选着一段、它还在路上,或者它的消息还在路上。草稿不用等任何东西。
-  const sessionLoading = current.resolving || (Boolean(sessionId) && messages.isPending);
-  const isDraft = !activeSession && !current.resolving;
-  //: 草稿、这里一段都没有时,空态要知道工作区里别处有没有对话(有才给「接着别处的对话」)。
-  const draftAlone = isDraft && current.listLoaded && current.here.length === 0;
-  const everywhere = useAgentSessions(workspaceId, { enabled: switcherOpen || draftAlone });
-  const elsewhere = everywhere.data ? everywhere.data.filter((item) => placeKey(homeOf(item)) !== here) : null;
   /** 会话详情:运行状态、水位(列表接口不带 —— 那要为每个会话各算一次,而界面只看当前这个)。 */
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
@@ -213,6 +232,22 @@ export function CanvasAgentChat({
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
+  //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)。
+  const messages = useQuery({
+    queryKey: ["agent-messages", sessionId],
+    enabled: Boolean(sessionId),
+    queryFn: () => listAgentMessages(sessionId),
+    refetchInterval: transcriptPolling(running),
+    refetchOnWindowFocus: true,
+  });
+  useTranscriptFollowsSession(sessionId, live.data);
+  //: 「还没读到」不能说成「是空的」:选着一段、它还在路上,或者它的消息还在路上。草稿不用等任何东西。
+  const sessionLoading = current.resolving || (Boolean(sessionId) && messages.isPending);
+  const isDraft = !activeSession && !current.resolving;
+  //: 草稿、这里一段都没有时,空态要知道工作区里别处有没有对话(有才给「接着别处的对话」)。
+  const draftAlone = isDraft && current.listLoaded && current.here.length === 0;
+  const everywhere = useAgentSessions(workspaceId, { enabled: switcherOpen || draftAlone });
+  const elsewhere = everywhere.data ? everywhere.data.filter((item) => placeKey(homeOf(item)) !== here) : null;
   //: 语音模式要念的三样东西。**用和子组件完全相同的 queryKey** —— react-query 按键共享缓存,
   //: 所以这里不会多发一次请求;另起一个键才会变成两套轮询。
   
@@ -575,7 +610,7 @@ export function CanvasAgentChat({
                   <AgentTurnContent timeline={payload?.timeline} />
                   {message.error && (
                     <div className={payload?.timeline?.length ? "mt-2" : undefined}>
-                      <AgentErrorCard content={message.content} error={message.error} />
+                      <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
                     </div>
                   )}
                 </>

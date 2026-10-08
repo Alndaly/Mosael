@@ -84,3 +84,40 @@ it("opened from the window chrome (the ComfyUI workbench column, z 200): lifted 
   expect(plain.className, "elsewhere it stays in the normal floating layer").toContain("z-50");
   expect(plain.hasAttribute("data-app-chrome")).toBe(false);
 });
+
+it("a caller whose `view` changes identity every render (an inline arrow) does not send the menu into a render loop", async () => {
+  //: 智能体输入框就是这么写的:`view: (items) => items.slice(0, N)`。此前 hook 每次重算都回一个新对象,
+  //: 「渲染 → effect → setState → 渲染」转个不停(菜单开着时每秒上百次)。
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  let renders = 0;
+  let inline: SuggestionMenu<string>;
+  function Inline() {
+    renders += 1;
+    //: 死循环时让它当场炸,而不是把测试进程拖到内存耗尽。
+    if (renders > 60) throw new Error("render loop: the menu never stops re-rendering");
+    inline = useSuggestionMenu<string>({ view: (items) => items.slice(0, 5) });
+    return <inline.Portal>{(item) => <span>{item}</span>}</inline.Portal>;
+  }
+  render(<Inline />);
+  act(() => inline.render().onStart({ items: ["one", "two"], command: vi.fn(), clientRect: () => new DOMRect(10, 10, 1, 20) }));
+  const settled = renders;
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+  expect(renders - settled).toBeLessThanOrEqual(1);
+  expect(inline!.menu?.items).toEqual(["one", "two"]);
+  expect(errors.mock.calls.filter((args) => String(args[0]).includes("Maximum update depth"))).toHaveLength(0);
+  errors.mockRestore();
+});
+
+it("keyboard highlight survives a recompute over the same candidates", () => {
+  render(<Harness />);
+  const lifecycle = menu.render();
+  const props = { items: ["one", "two", "three"], command: vi.fn(), clientRect: () => new DOMRect(10, 10, 1, 20) };
+  act(() => lifecycle.onStart(props));
+  act(() => lifecycle.onKeyDown({ event: new KeyboardEvent("keydown", { key: "ArrowDown" }) }));
+  act(() => lifecycle.onUpdate({ ...props, items: [...props.items] }));
+  expect(menu.menu?.active).toBe(1);
+  act(() => lifecycle.onUpdate({ ...props, items: ["three"] }));
+  expect(menu.menu?.active, "a different batch starts from the top").toBe(0);
+});

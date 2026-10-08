@@ -25,6 +25,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
+import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
@@ -140,13 +141,6 @@ export function ChatWorkspace({
   //: 贴底跟随。resetKey 用会话 id:换会话该从底部重新开始。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
 
-  const messages = useQuery({
-    queryKey: ["agent-messages", activeSession?.id],
-    enabled: Boolean(activeSession),
-    queryFn: () => listAgentMessages(activeSession!.id),
-    refetchInterval: 1200,
-    refetchOnWindowFocus: true,
-  });
   const session = useQuery({
     queryKey: ["agent-session", activeSession?.id],
     enabled: Boolean(activeSession),
@@ -155,6 +149,16 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)—— 此前每 1.2 秒
+  //: 无条件整段重拉,一段带着工具结果的长对话就是每秒几 MB。
+  const messages = useQuery({
+    queryKey: ["agent-messages", activeSession?.id],
+    enabled: Boolean(activeSession),
+    queryFn: () => listAgentMessages(activeSession!.id),
+    refetchInterval: transcriptPolling(running),
+    refetchOnWindowFocus: true,
+  });
+  useTranscriptFollowsSession(activeSession?.id ?? "", session.data);
   //: 会话清单还在路上,或者选中的这条会话的消息还在路上。两者都不算"这条会话是空的"。
   //: `enabled` 为假时 React Query 的 status 也是 pending,所以要先确认真的有一条会话在读。
   const sessionLoading = current.resolving || (Boolean(activeSession) && messages.isPending);

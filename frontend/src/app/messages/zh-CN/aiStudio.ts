@@ -62,6 +62,7 @@ export const aiStudio = {
   renameGenerationSession: "重命名生成会话",
   deleteGenerationSessionBody: "这个生成会话里的任务记录将被删除,已生成的素材会保留在素材库。",
   chatPlaceholder: "让智能体查看素材、修改时间线、生成内容…",
+  chatComposerLabel: "给智能体的消息",
   chatSend: "发送",
   chatStop: "停止",
   chatParentRunning: "父会话运行中",

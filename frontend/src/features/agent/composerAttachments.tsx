@@ -82,6 +82,8 @@ export interface ComposerAttachments {
   removeMedia: (index: number) => void;
   removeFile: (index: number) => void;
   clear: () => void;
+  /** 换一处地方时,把那一处先前挂着的附件放回来(见 CanvasAgentChat:输入框里的东西按地方分,ADR 0044)。 */
+  restore: (saved: { media: Asset[]; files: TextAttachment[] }) => void;
   /** 交给 ComposerChips 显示的一排小条 —— 和笔记引用拼在同一排里。 */
   chips: ComposerChip[];
   /** 点开音频、文档附件时的素材详情弹窗。调用方把它挂进树里(和输入框同一层)。 */
@@ -243,6 +245,10 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     clear: React.useCallback(() => {
       setMedia([]);
       setFiles([]);
+    }, []),
+    restore: React.useCallback((saved: { media: Asset[]; files: TextAttachment[] }) => {
+      setMedia(saved.media);
+      setFiles(saved.files);
     }, []),
   };
 }

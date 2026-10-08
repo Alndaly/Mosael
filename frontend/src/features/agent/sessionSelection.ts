@@ -114,7 +114,7 @@ export function startAgentDraft(workspaceId: string, place: AgentPlace): void {
 export function moveChoices(workspaceId: string, from: AgentPlace, to: AgentPlace): void {
   const storage = store();
   try {
-    for (const key of [agentSessionSelectionKey, draftSettingsKey]) {
+    for (const key of [agentSessionSelectionKey, draftSettingsKey, composerKey]) {
       const value = storage.getItem(key(workspaceId, from));
       if (value) storage.setItem(key(workspaceId, to), value);
       else storage.removeItem(key(workspaceId, to));
@@ -186,4 +186,53 @@ export function clearDraftSettings(workspaceId: string, place: AgentPlace): void
     return;
   }
   changed();
+}
+
+// —— 输入框里还没发出去的东西:每一处一份(ADR 0044「每一处各接各的」,智能体那一路 AGENT-9) ——
+//
+// 此前输入框是面板组件里的一份状态,换一篇笔记(面板不重挂、只换 `place`)它原样留着:在笔记 A 里打了一半的
+// 「把这篇笔记的第一段删掉」,换到笔记 B 还在,发出去就是对 B(页面上下文在发送那一刻读的是 B)。所以按地方分:
+// 打的字记在 sessionStorage 里(和选择一样只记这一次运行;重新加载页面不丢);附件、引用的笔记是对象,记在这个窗口的内存里。
+
+const COMPOSER_PREFIX = "mosael.agent.composer.";
+
+function composerKey(workspaceId: string, place: AgentPlace): string {
+  return `${COMPOSER_PREFIX}${workspaceId}.${placeKey(place)}`;
+}
+
+/** 这一处没发出去的那段(编辑器文档);没有返回 null。 */
+export function readComposerDraft<T>(workspaceId: string, place: AgentPlace): T | null {
+  try {
+    const raw = store().getItem(composerKey(workspaceId, place));
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 记下这一处没发出去的那段;`null` = 清掉(发出去了、或者删空了)。 */
+export function writeComposerDraft(workspaceId: string, place: AgentPlace, document: unknown | null): void {
+  try {
+    if (document) store().setItem(composerKey(workspaceId, place), JSON.stringify(document));
+    else store().removeItem(composerKey(workspaceId, place));
+  } catch {
+    // 存不进去:这一处的半句话换个地方再回来就没了 —— 不比把它带到别处去糟。
+  }
+}
+
+const composerExtras = new Map<string, unknown>();
+
+/** 换走之前,把这一处挂着的附件 / 引用暂存起来(只在这个窗口的内存里)。 */
+export function stashComposerExtras(workspaceId: string, place: AgentPlace, extras: unknown | null): void {
+  const key = composerKey(workspaceId, place);
+  if (extras) composerExtras.set(key, extras);
+  else composerExtras.delete(key);
+}
+
+/** 回到这一处时取回它先前挂着的附件 / 引用(取了就从暂存里拿掉)。 */
+export function takeComposerExtras<T>(workspaceId: string, place: AgentPlace): T | null {
+  const key = composerKey(workspaceId, place);
+  const found = composerExtras.get(key) as T | undefined;
+  composerExtras.delete(key);
+  return found ?? null;
 }

@@ -93,15 +93,21 @@ export function useSuggestionMenu<T>({
   const viewRef = React.useRef(view);
   viewRef.current = view;
 
+  //: **没变就交回同一个对象**(`prev`):React 认引用,新对象就是一次重渲。下面那个跟着 `view` 跑的 effect 每次渲染都可能
+  //: 重算一遍 —— 调用方传的 `view` 是行内箭头函数时它每次渲染都换身份(智能体输入框就是这么写的),而这里每次都回一个新
+  //: 对象的话,就成了「渲染 → effect → setState → 渲染」的死循环:菜单开着时每秒上百次(打 `@` 就能看到满屏
+  //: Maximum update depth exceeded)。所以「同一批候选、高亮没动、提示没变」一律原样交回,循环在第一圈就停。
   const next = React.useCallback((prev: SuggestionMenuState<T> | null, source: T[]): SuggestionMenuState<T> | null => {
     const items = viewRef.current ? viewRef.current(source) : source;
     if (items.length) {
-      const active = prev && !prev.hint && sameRef.current(prev.items, items) ? prev.active : 0;
-      return { items, active };
+      const same = Boolean(prev && !prev.hint && sameRef.current(prev.items, items));
+      if (prev && same && prev.items.length === items.length && prev.items.every((one, at) => one === items[at])) return prev;
+      return { items, active: prev && same ? prev.active : 0 };
     }
     const hint = emptyRef.current?.() ?? "";
     //: 有候选源、只是这次输入没匹配上 → 不打扰,继续敲两下自己就出来了。
-    return hint ? { items: [], active: 0, hint } : null;
+    if (!hint) return null;
+    return prev && prev.hint === hint && prev.items.length === 0 ? prev : { items: [], active: 0, hint };
   }, []);
 
   const render = React.useCallback(

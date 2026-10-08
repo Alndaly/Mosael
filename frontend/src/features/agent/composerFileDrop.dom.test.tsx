@@ -53,7 +53,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() } }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {}, selected: [], restore() {} }),
 }));
 vi.mock("@/features/ai-studio/SessionList", () => ({ SessionList: () => null }));
 vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null }));

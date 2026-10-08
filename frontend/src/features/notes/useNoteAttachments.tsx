@@ -24,6 +24,9 @@ export function useNoteAttachments(workspaceId: string) {
   function show(element: HTMLElement | null) { anchor.current = element; setQ(""); setActive(0); setOpen(true); }
   return {
     clear: () => setSelected([]),
+    /** 挂着的那几篇;换一处地方时由调用方暂存,回来再 `restore`(输入框里的东西按地方分)。 */
+    selected,
+    restore: (notes: Note[]) => setSelected(notes),
     context: selected.length ? `用户明确引用的笔记（请先调用 read_note 读取下列固定版本，按需分页，然后在回答中引用 citation_url）：\n${selected.map(n => JSON.stringify({note_id: n.id, workspace_id: workspaceId, revision: n.revision, title: n.title})).join("\n")}` : "",
     summary: selected.map(n => `@${n.title || s.untitled}`).join(" "),
     hasNotes: selected.length > 0,

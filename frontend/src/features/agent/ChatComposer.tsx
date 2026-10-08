@@ -21,6 +21,12 @@ import { Truncate } from "@/components/ui/truncate";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { cn } from "@/lib/utils";
 
+/** `@` 菜单只摆前几条。**模块级、身份不变**:`useSuggestionMenu` 的 `view` 一换身份就重算一遍可见列表(见那里的说明),
+ *  写成行内箭头函数就是每次渲染都换 —— 打 `@` 时菜单开着,渲染就停不下来。 */
+function firstReferences(items: AgentReference[]): AgentReference[] {
+  return items.slice(0, REFERENCE_MENU_LIMIT);
+}
+
 /** 从文档里收出所有引用,按出现顺序去重。 */
 export function collectReferences(document: JSONContent | undefined): AgentReference[] {
   const out: AgentReference[] = [];
@@ -184,7 +190,7 @@ export function ChatComposer({
   const menu = useSuggestionMenu<AgentReference>({
     emptyHint: () => t("boardNoAssetsToMention"),
     sameItems: (a, b) => a.length === b.length && a.every((one, at) => one.id === b[at].id),
-    view: (items) => items.slice(0, REFERENCE_MENU_LIMIT),
+    view: firstReferences,
   });
 
   //: 「/」的那一份菜单:候选是技能,不是对象。两份菜单各管各的,回车让路的判据是「任何一份开着」。
@@ -269,6 +275,11 @@ export function ChatComposer({
     content: value,
     editorProps: {
       attributes: {
+        //: 富文本编辑区是一个 contenteditable 的 div:不给名字,读屏念到的只是「可编辑文本」,不知道这是给谁写的。
+        //: 示例文字(placeholder)不算名字 —— 打了字它就没了。
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": t("chatComposerLabel"),
         class: cn(
           "max-h-[220px] min-h-9 w-full overflow-y-auto border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] text-foreground outline-none",
           className,

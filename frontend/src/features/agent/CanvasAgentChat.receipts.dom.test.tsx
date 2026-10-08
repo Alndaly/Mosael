@@ -67,7 +67,7 @@ vi.mock("@/features/agent/useAgentTurnStream", () => ({
 }));
 vi.mock("@/features/agent/messageUsage", () => ({ MessageUsageFooter: () => null }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {}, selected: [], restore() {} }),
 }));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 1e6,
@@ -75,7 +75,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
   textAttachmentBlock: () => "",
   useComposerAttachments: () => ({
     isEmpty: true, files: [], media: [], chips: [], uploading: false, previewModal: null,
-    onPaste() {}, drop: { handlers: {}, overlay: null }, accept() {}, clear() {},
+    onPaste() {}, drop: { handlers: {}, overlay: null }, accept() {}, clear() {}, restore() {},
   }),
 }));
 vi.mock("@/features/agent/ChatComposer", () => ({

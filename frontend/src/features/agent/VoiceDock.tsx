@@ -34,6 +34,7 @@ import { useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 
 const DOCK_SIZE = 52;
 
@@ -52,12 +53,14 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     enabled: Boolean(sessionId),
     refetchInterval: 1500,
   });
+  //: 和面板同一条:消息只在跑着的时候轮询,空闲时跟着会话变化重取(见 transcriptFollowsSession)。
   const messages = useQuery({
     queryKey: ["agent-messages", sessionId],
     queryFn: () => listAgentMessages(sessionId),
     enabled: Boolean(sessionId),
-    refetchInterval: 2000,
+    refetchInterval: transcriptPolling(live.data?.status === "running"),
   });
+  useTranscriptFollowsSession(sessionId, live.data);
 
   const rows = messages.data ?? [];
   const reply = React.useMemo(() => {

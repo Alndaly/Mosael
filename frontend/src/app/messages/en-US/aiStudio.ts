@@ -62,6 +62,7 @@ export const aiStudio = {
   renameGenerationSession: "Rename generation session",
   deleteGenerationSessionBody: "Generation records in this session will be deleted. Generated assets stay in the media library.",
   chatPlaceholder: "Ask the agent to inspect assets, edit the timeline, generate media…",
+  chatComposerLabel: "Message to the agent",
   chatSend: "Send",
   chatStop: "Stop",
   chatParentRunning: "Parent session is running",

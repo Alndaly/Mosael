@@ -38,7 +38,7 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear: mocks.clearNotes }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear: mocks.clearNotes, selected: [], restore() {} }),
 }));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 4000,
@@ -54,7 +54,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
     onPaste() {},
     drop: { handlers: {}, overlay: null },
     accept() {},
-    clear() {},
+    clear() {}, restore() {},
   }),
 }));
 vi.mock("@/features/agent/ChatComposer", () => ({
