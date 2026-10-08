@@ -35,6 +35,8 @@ ROUTES = {
     "/view": bytes(range(256)) * 4096,  # 1 MB 的一份「成片」
     "/prompt": json.dumps({"prompt_id": "p1", "number": 1}).encode(),
 }
+#: 跳转(反向代理换了路径):照 urllib 的规矩跟。
+REDIRECTS = {"/moved_stats": "/system_stats"}
 
 
 class PortForward:
@@ -100,6 +102,10 @@ class PortForward:
                     fault = self.faults.popleft() if self.faults else ""
                 if headers.get("connection", "").lower() == "close" or fault == "drop":
                     return  # UU 的样子:一个字不回,断开
+                if path in REDIRECTS:
+                    location = REDIRECTS[path].encode()
+                    conn.sendall(b"HTTP/1.1 302 Found\r\nLocation: " + location + b"\r\nContent-Length: 0\r\n\r\n")
+                    continue
                 body = ROUTES.get(path)
                 if body is None:
                     conn.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nContent-Type: text/plain\r\n\r\nnot found")
@@ -222,3 +228,11 @@ def test_宿主的健康检查经转发也问得到(forward: PortForward) -> Non
     assert supervisor.healthy(f"{forward.url}/system_stats")
     assert not supervisor.healthy(f"{forward.url}/nothing-here")
     assert not [headers for *_, headers in forward.seen if "connection" in headers]
+
+
+def test_GET_跟着跳转走_POST_不跟_307(forward: PortForward, comfy_http) -> None:
+    """换成 http.client 之后跳转要自己跟:GET 跟到底;POST 碰上 302 照 urllib 改成不带正文的 GET。"""
+    with comfy_http.Comfy(forward.url) as comfy:
+        assert comfy.get("/moved_stats")["system"]["comfyui_version"] == "0.3.99"
+        assert comfy.post("/moved_stats", {"x": 1})["system"]["comfyui_version"] == "0.3.99"
+    assert forward.requests("GET", "/system_stats"), "跳转后的地址没被问到"

@@ -170,7 +170,7 @@ class Comfy:
                         method, body = "GET", None
                         sent = {key: value for key, value in sent.items() if key.lower() != "content-type"}
                     continue
-                if response.status >= 400:
+                if response.status >= 400 or response.status in _REDIRECTS:  # 没跟的跳转(POST 的 307 / 308)也照 urllib 算出错
                     raise HTTPStatusError(response.status, response.reason, response.read(_MAX_ERROR_BODY))
                 return self._consume(method, response, consume, origin, target, body, sent, timeout)
             finally:
