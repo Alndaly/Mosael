@@ -428,6 +428,14 @@ HTTP 404。
   —— 那台 ComfyUI 的 comfy-kitchen 或 comfyui-workflow-templates 太旧(要 ≥ 0.2.37 / ≥ 0.11.77)。加一种就在 `KNOWN` 里加一行。
 - 失败原因那句话(`error`)不变:任务中心、日志、智能体读的还是它。
 
+## 修补(1.22.1)
+
+- **认得出的原因分成「原因」和「怎么修」**:失败的样子里的 `hint` 不再是一整句话,而是 `cause`(一句原因)加 `steps`(修的步骤,
+  一步一句;要敲的命令单独放在那一步的 `command` 里)。宿主在失败卡上把原因、步骤分开摆,命令用等宽字摆成一块、带复制 —— 此前
+  `pip install -U comfy-kitchen comfyui-workflow-templates` 埋在一大段话的中间。升级命令现在带上版本下限
+  (`"comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"`)。缺模型文件、checkpoint 里没有 CLIP / VAE 也照这个形状说。
+- `known_failures.py` 加一种认得出的错误:`Known(pattern, cause, steps)`,步骤用 `Step(text, command)`。
+
 ## 精简表单(1.13.0;此前叫「应用表单」)
 
 对应 RunningHub 的「AI 应用」(ADR 0038 第一刀):作者从一张工作流**全部能填的项**里挑出要给别人填的几项、起名、排序、

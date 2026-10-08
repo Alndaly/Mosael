@@ -33886,6 +33886,54 @@
         ],
         "title": "ExtractionSectionsOut"
       },
+      "FailureHintOut": {
+        "properties": {
+          "cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/FailureStepOut"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "title": "FailureHintOut",
+        "description": "认得出的失败:为什么(`cause`,一句)和怎么修(`steps`,一步一句),按读的人的语言挑好(见 domain/failure_summary.hint_of)。"
+      },
+      "FailureStepOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command"
+          }
+        },
+        "type": "object",
+        "title": "FailureStepOut",
+        "description": "修的一步:一句话;要在终端里敲的命令另放(原样,不翻)—— 失败卡把它摆成等宽的一块、带复制。"
+      },
       "FeishuBindCodeOut": {
         "properties": {
           "code": {
@@ -34552,14 +34600,13 @@
           "error_hint": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/FailureHintOut"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Error Hint",
-            "description": "认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」),失败卡上那句话下面摆。没有是 None。",
+            "description": "认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),\n失败卡上那句话下面摆。没有是 None。",
             "readOnly": true
           },
           "repeatable": {

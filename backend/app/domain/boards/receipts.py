@@ -222,14 +222,14 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         reason, detail, hint = tr("boardErr_noOutput"), "", ""
     else:
         from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import detail_of, hint_of, summarize
+        from app.domain.failure_summary import detail_of, hint_text, summarize
 
         error = str(getattr(job, "error", "") or "")
         key, params = str(getattr(job, "error_key", "") or ""), dict(getattr(job, "error_params", None) or {})
         reason = summarize(error, key, params, get_current_locale())
         #: 原文只在它比那一句多出信息时留(和 AI 工作台的失败卡同一个判据);认得出的原因另带一句该去哪修
         detail = detail_of(error, key, params, get_current_locale()) or ""
-        hint = hint_of(params, get_current_locale()) or ""
+        hint = hint_text(params, get_current_locale())
 
     board = db.get(Board, board_id)
     if board is None:

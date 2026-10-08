@@ -454,9 +454,19 @@ def _plugin_failed(name: str, exc: Exception) -> GenerationAdapterError:
         detail=str(exc),
         **({"original": failure["detail"]} if failure.get("detail") else {}),
         **({"summary": authored_text(failure["summary"])} if failure.get("summary") else {}),
-        **({"hint": authored_text(failure["hint"])} if failure.get("hint") else {}),
+        **({"hint": _stored_hint(failure["hint"])} if failure.get("hint") else {}),
         **({"remote": remote} if remote else {}),
     )
+
+
+def _stored_hint(hint: dict[str, Any]) -> dict[str, Any]:
+    """「原因 + 怎么修」存进任务参数的样子:句子按语言分着存(给人看时按读的人的语言挑,见 failure_summary.hint_of),命令原样。"""
+    return {
+        **({"cause": authored_text(hint["cause"])} if hint.get("cause") else {}),
+        **({"steps": [{**({"text": authored_text(step["text"])} if step.get("text") else {}),
+                       **({"command": step["command"]} if step.get("command") else {})} for step in hint["steps"]]}
+           if hint.get("steps") else {}),
+    }
 
 
 def _library_file(path: Path) -> Path:

@@ -286,32 +286,61 @@ def _env(
 #: 「失败的样子」里 `remote` 认的两个值:`failed` = 远端明确失败了(再问一次也是这一句),`pending` = 交出去了、没等到或没拿到
 #: (远端可能照样做完 —— 生成那一侧据此摆「重新取回」)。
 FAILURE_REMOTE = ("failed", "pending")
-#: 原话最长收多少字;一句人话、一句提示最长多少字。
+#: 原话最长收多少字;一句人话、一句原因、一步修法最长多少字;一条命令最长多少字;最多几步。
 _FAILURE_DETAIL_CHARS = 4000
 _FAILURE_TEXT_CHARS = 600
+_FAILURE_COMMAND_CHARS = 500
+_FAILURE_STEPS = 6
 
 
 def failure_shape(raw: Any) -> dict[str, Any]:
-    """插件说的「失败的样子」收成规整的形状:认不出的格子丢掉。`summary` / `hint` 可以按语言分(`{"zh": …, "en": …}`),原样
-    留着、给人看时再挑。整个认不出就是空的。"""
+    """插件说的「失败的样子」收成规整的形状:认不出的格子丢掉。`summary` 和 `hint` 里的句子可以按语言分(`{"zh": …, "en": …}`),
+    原样留着、给人看时再挑。`hint` 是「原因 + 怎么修」:`{"cause": 一句, "steps": [{"text": 一句, "command": 原样的命令}]}`
+    (见 docs/PLUGIN_MANIFEST「失败的样子」)。整个认不出就是空的。"""
     if not isinstance(raw, dict):
         return {}
     out: dict[str, Any] = {}
     if raw.get("remote") in FAILURE_REMOTE:
         out["remote"] = raw["remote"]
-    for key in ("summary", "hint"):
-        value = raw.get(key)
-        if isinstance(value, dict):
-            texts = {str(lang)[:16]: one.strip()[:_FAILURE_TEXT_CHARS] for lang, one in value.items()
-                     if isinstance(one, str) and one.strip()}
-            if texts:
-                out[key] = texts
-        elif isinstance(value, str) and value.strip():
-            out[key] = value.strip()[:_FAILURE_TEXT_CHARS]
+    summary = _failure_text(raw.get("summary"))
+    if summary:
+        out["summary"] = summary
+    hint = _failure_hint(raw.get("hint"))
+    if hint:
+        out["hint"] = hint
     detail = raw.get("detail")
     if isinstance(detail, str) and detail.strip():
         out["detail"] = detail.strip()[:_FAILURE_DETAIL_CHARS]
     return out
+
+
+def _failure_text(value: Any) -> str | dict[str, str] | None:
+    """一句话:一个字符串,或者按语言分的几句。空的、认不出的是 None。"""
+    if isinstance(value, dict):
+        texts = {str(lang)[:16]: one.strip()[:_FAILURE_TEXT_CHARS] for lang, one in value.items()
+                 if isinstance(one, str) and one.strip()}
+        return texts or None
+    if isinstance(value, str) and value.strip():
+        return value.strip()[:_FAILURE_TEXT_CHARS]
+    return None
+
+
+def _failure_hint(value: Any) -> dict[str, Any] | None:
+    """「原因 + 怎么修」:原因一句(`cause`),修法几步(`steps`,每步一句 `text`、要敲的命令 `command` 原样留着)。一格都没有是 None。"""
+    if not isinstance(value, dict):
+        return None
+    steps: list[dict[str, Any]] = []
+    for raw in value.get("steps") if isinstance(value.get("steps"), list) else []:
+        if not isinstance(raw, dict):
+            continue
+        text = _failure_text(raw.get("text"))
+        command = raw.get("command").strip()[:_FAILURE_COMMAND_CHARS] if isinstance(raw.get("command"), str) else ""
+        if text or command:
+            steps.append({**({"text": text} if text else {}), **({"command": command} if command else {})})
+    cause = _failure_text(value.get("cause"))
+    if not cause and not steps:
+        return None
+    return {**({"cause": cause} if cause else {}), **({"steps": steps[:_FAILURE_STEPS]} if steps else {})}
 
 
 def _final_response(response: Any) -> ToolResult:

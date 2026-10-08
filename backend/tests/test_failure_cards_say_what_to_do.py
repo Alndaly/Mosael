@@ -93,11 +93,16 @@ def test_ComfyUI_报了执行错误_不摆重新取回_一句人话_原话进详
     assert record["error_summary"].startswith("ComfyUI 执行到「") and record["error_summary"].endswith("这一步出错")
     assert "生成失败" not in record["error_summary"] and "ComfyUI ·" not in record["error_summary"], "不重复连接名"
     assert record["error_detail"] == "KSampler: hostbuf_file_reader_read failed"
-    assert record["error_hint"].startswith("这是那台 ComfyUI 上的问题") and "0.2.37" in record["error_hint"]
+    hint = record["error_hint"]
+    assert hint["cause"].startswith("那台 ComfyUI 装的 comfy-kitchen") and "pip" not in hint["cause"], "原因一句,不带命令"
+    assert [step["command"] for step in hint["steps"]] == [
+        'pip install -U "comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"', None], "升级命令单独一格,再一步是重启"
+    assert all("pip install" not in step["text"] for step in hint["steps"]), "命令不埋在句子里"
     english = client.get("/api/generation/jobs", params={"workspace_id": workspace,
                                                          "session_id": submitted["generation"]["session_id"]},
                          headers={"Accept-Language": "en-US"}).json()[0]
-    assert english["error_summary"].startswith("ComfyUI hit an error at the") and "comfy-kitchen" in english["error_hint"]
+    assert english["error_summary"].startswith("ComfyUI hit an error at the") and "comfy-kitchen" in english["error_hint"]["cause"]
+    assert english["error_hint"]["steps"][1]["text"] == "Restart ComfyUI and generate again."
 
 
 def test_交出去之后连不上_可能照样做完_摆重新取回(connected) -> None:

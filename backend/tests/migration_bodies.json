@@ -105,6 +105,7 @@
   "migrate-existing-libraries-get-the-gemini-chat-prices": "769549784b016813",
   "migrate-existing-libraries-get-the-new-reference-prices": "45e2038aefb275db",
   "migrate-existing-libraries-get-the-s2v-detect-price": "1c424e65a55af763",
+  "migrate-failure-hints-say-cause-and-steps": "8c06b17a4df5194b",
   "migrate-frame-rate-is-not-a-time-base": "446b87e34de294c6",
   "migrate-generation-capabilities-need-evidence": "7dc2e6b86dfaf1b1",
   "migrate-generation-capability-profiles": "6887da83fd3289b7",

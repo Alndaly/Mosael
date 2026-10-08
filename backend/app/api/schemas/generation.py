@@ -162,6 +162,20 @@ class PodcastCreate(ApiModel):
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
+class FailureStepOut(ApiModel):
+    """修的一步:一句话;要在终端里敲的命令另放(原样,不翻)—— 失败卡把它摆成等宽的一块、带复制。"""
+
+    text: str = ""
+    command: str | None = None
+
+
+class FailureHintOut(ApiModel):
+    """认得出的失败:为什么(`cause`,一句)和怎么修(`steps`,一步一句),按读的人的语言挑好(见 domain/failure_summary.hint_of)。"""
+
+    cause: str | None = None
+    steps: list[FailureStepOut] = Field(default_factory=list)
+
+
 class GenerationJobOut(OrmModel):
     id: str
     workspace_id: str
@@ -235,14 +249,16 @@ class GenerationJobOut(OrmModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def error_hint(self) -> str | None:
-        """认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」),失败卡上那句话下面摆。没有是 None。"""
+    def error_hint(self) -> FailureHintOut | None:
+        """认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),
+        失败卡上那句话下面摆。没有是 None。"""
         if not self.error_params:
             return None
         from app.core.i18n import get_current_locale
         from app.domain.failure_summary import hint_of
 
-        return hint_of(self.error_params, get_current_locale())
+        hint = hint_of(self.error_params, get_current_locale())
+        return FailureHintOut.model_validate(hint) if hint else None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

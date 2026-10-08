@@ -230,15 +230,24 @@ json.dump({"ok": False, "error": {"zh": "ComfyUI 执行失败:KSampler: hostbuf_
                "remote": "failed",                       # failed:远端明确失败了;pending:交出去了、没等到或没拿到
                "summary": {"zh": "ComfyUI 执行到「KSampler」这一步出错", "en": "…"},   # 失败卡上那一句
                "detail": "KSampler: hostbuf_file_reader_read failed",               # 原话,收进「详情」
-               "hint": {"zh": "这是那台 ComfyUI 上的问题:……", "en": "…"},            # 认得出的原因:该去哪修
+               "hint": {                                                            # 认得出的:原因和怎么修
+                   "cause": {"zh": "那台 ComfyUI 装的 comfy-kitchen 太旧……", "en": "…"},
+                   "steps": [
+                       {"text": {"zh": "在那台机器上把两个包升上去:", "en": "…"},
+                        "command": 'pip install -U "comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"'},
+                       {"text": {"zh": "重启 ComfyUI,再生成一次。", "en": "…"}},
+                   ],
+               },
            }}, sys.stdout, ensure_ascii=False)
 ```
 
 - `remote`:替宿主做生成的插件最该说的一格。`pending` 的意思是「任务交出去了,但我没等到结果 / 结果没拿回来」(连不上那台服务器、
   取产出文件时断了),远端可能照样做完 —— 宿主据此在失败卡上摆「重新取回」(带着回执调 `resume`,不重新提交);`failed` 是远端
   明确失败了(执行出错、被中断、那边已经没有这个任务),再取一次只会拿到同一个错误,宿主不摆。不说就当「不知道」,也不摆。
-- `summary`:一句人话,不带「谁失败了」那截(连接名、「生成失败」由宿主说);`detail`:原话(宿主在它比那一句多出信息时才摆「详情」);
-  `hint`:认得出的原因、该去哪修(只写确定的,认不出就不给)。`summary` / `hint` 可以按语言分。
+- `summary`:一句人话,不带「谁失败了」那截(连接名、「生成失败」由宿主说);`detail`:原话(宿主在它比那一句多出信息时才摆「详情」)。
+- `hint`:认得出的失败才给(只写确定的,认不出就不给),分两格、至少有一格:`cause` 一句原因;`steps` 修的步骤,一步一句 `text`,
+  要在终端里敲的命令放进那一步的 `command`(原样,不翻;宿主摆成等宽的一块、带复制)—— **别把命令埋在句子里**。最多 6 步。
+- `summary`、`cause`、`text` 可以按语言分;`command` 是一个字符串。
 - 宿主只认这几格,认不出的丢掉;`error` 照旧是完整的那句失败原因(任务中心、日志、智能体读它)。
 
 **失败的响应里也可以带 `state`**(`{"ok": false, "error": "…", "state": {…}}`),宿主照样记住:令牌续好了、

@@ -139,13 +139,21 @@ def test_老画板上的失败格子由迁移改成那一句加原文() -> None:
 
 # --- 失败卡(维护者 2026-10-08:「生成失败」消息框太丑)----------------------------------------------------------------------
 
-#: ComfyUI 执行出错时插件交回的失败的样子(见插件 run.failure):一句人话、原话、认得出的原因。
+#: ComfyUI 执行出错时插件交回的失败的样子(见插件 run.failure),存进任务参数的样子(见 plugin_connections._stored_hint):
+#: 一句人话、原话、认得出的原因和怎么修(句子按语言分着存,命令原样)。
+UPGRADE = 'pip install -U "comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"'
 COMFY_FAILURE = {
     "name": "ComfyUI · http://192.168.3.15:8188",
     "detail": "ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
     "original": "KSampler: hostbuf_file_reader_read failed",
     "summary": {"__text": {"zh": "ComfyUI 执行到「KSampler」这一步出错", "en": "ComfyUI hit an error at the “KSampler” step"}},
-    "hint": {"__text": {"zh": "这是那台 ComfyUI 上的问题,不是这张工作流的:……", "en": "This is a problem with that ComfyUI install: …"}},
+    "hint": {
+        "cause": {"__text": {"zh": "那台 ComfyUI 装的 comfy-kitchen 太旧", "en": "That ComfyUI install has an old comfy-kitchen"}},
+        "steps": [
+            {"text": {"__text": {"zh": "在那台机器上升级:", "en": "On that machine, upgrade:"}}, "command": UPGRADE},
+            {"text": {"__text": {"zh": "重启 ComfyUI,再生成一次。", "en": "Restart ComfyUI and generate again."}}},
+        ],
+    },
     "remote": "failed",
 }
 
@@ -159,8 +167,90 @@ def test_插件说了一句人话_失败卡写它_不重复连接名_原文和�
     [record] = client.get("/api/generation/jobs", params={"workspace_id": workspace}).json()
     assert record["error_summary"] == "ComfyUI 执行到「KSampler」这一步出错"
     assert record["error_detail"] == "KSampler: hostbuf_file_reader_read failed"
-    assert record["error_hint"].startswith("这是那台 ComfyUI 上的问题")
+    assert record["error_hint"] == {"cause": "那台 ComfyUI 装的 comfy-kitchen 太旧", "steps": [
+        {"text": "在那台机器上升级:", "command": UPGRADE},
+        {"text": "重启 ComfyUI,再生成一次。", "command": None},
+    ]}, "原因一句、修法一步一句,命令单独一格(失败卡摆成等宽的一块、带复制)"
     assert record["retrievable"] is False and record["repeatable"] is True
+    english = client.get("/api/generation/jobs", params={"workspace_id": workspace}, headers={"Accept-Language": "en-US"}).json()[0]
+    assert english["error_hint"]["cause"] == "That ComfyUI install has an old comfy-kitchen"
+    assert [step["text"] for step in english["error_hint"]["steps"]] == ["On that machine, upgrade:", "Restart ComfyUI and generate again."]
+    assert english["error_hint"]["steps"][0]["command"] == UPGRADE, "命令原样,不翻"
+
+
+def test_画板格子的详情里_原因和怎么修拼成一段_命令单独一行() -> None:
+    from app.domain.failure_summary import hint_text
+
+    assert hint_text(COMFY_FAILURE, "zh") == (
+        "那台 ComfyUI 装的 comfy-kitchen 太旧\n1. 在那台机器上升级:\n" + UPGRADE + "\n2. 重启 ComfyUI,再生成一次。")
+    only = {"hint": {"steps": [{"text": {"__text": {"zh": "换一个完整的 checkpoint。", "en": "Pick a complete checkpoint."}}}]}}
+    assert hint_text(only, "en") == "Pick a complete checkpoint.", "只有一步不编号"
+    assert hint_text({}, "zh") == "" and hint_text({"hint": "一句话"}, "zh") == "", "不是「原因 + 怎么修」的形状不认"
+
+
+def test_画板格子跑挂了_原因和怎么修拼好存进格子() -> None:
+    from tests.util import fresh_client
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    board_id = client.post("/api/boards", json={"workspace_id": workspace, "name": "B", "canvas": {
+        "items": [{"id": "img", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-1"}}],
+        "edges": [],
+    }}).json()["id"]
+    job = SimpleNamespace(id="job-1", status="failed", result=None, error="ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
+                          error_key="providerErr_pluginFailed", error_params=COMFY_FAILURE, created_by=None)
+    with SessionLocal() as db:
+        deliver_generated(db, job, receipt_to_item(board_id, "img"))
+    run = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["canvas"]["items"][0]["run"]
+    assert run["error"] == "ComfyUI 执行到「KSampler」这一步出错"
+    assert run["error_hint"].startswith("那台 ComfyUI 装的 comfy-kitchen 太旧\n1. ") and UPGRADE in run["error_hint"]
+
+
+def test_插件说的失败的样子_原因和步骤收成规整的形状() -> None:
+    from app.domain.plugins.runtime import failure_shape
+
+    shape = failure_shape({"remote": "failed", "hint": {
+        "cause": {"zh": " 太旧了 ", "en": "Too old", "fr": ""},
+        "steps": [{"text": {"zh": "升级:"}, "command": f"  {UPGRADE}  "}, {"text": ""}, "乱写的", {"command": "comfy restart"}],
+    }})
+    assert shape["hint"] == {"cause": {"zh": "太旧了", "en": "Too old"},
+                             "steps": [{"text": {"zh": "升级:"}, "command": UPGRADE}, {"command": "comfy restart"}]}
+    assert "hint" not in failure_shape({"hint": "一整句话,命令埋在里面"}), "一句话不是「原因 + 怎么修」:不认"
+    assert "hint" not in failure_shape({"hint": {"cause": " ", "steps": [{"text": ""}]}}), "一格都没有就是没有"
+    many = failure_shape({"hint": {"steps": [{"text": f"第 {n} 步"} for n in range(20)]}})
+    assert len(many["hint"]["steps"]) == 6, "步骤有上限"
+
+
+def test_老的一整句提示挪进原因_重跑不变() -> None:
+    """1.22.0 插件交的 hint 是一整句话:迁移把它原样挪进 `cause`(任务和生成记录两处),新形状不动。"""
+    from sqlalchemy import text as sql
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_failure_hints_say_cause_and_steps
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    old_hint = {"__text": {"zh": "这是那台 ComfyUI 上的问题:…… pip install -U comfy-kitchen ……", "en": "This is …"}}
+    old = {**COMFY_FAILURE, "hint": old_hint}
+    workspace = _failed_generation(client, key="providerErr_pluginFailed", params=old, error="x")
+    _failed_generation(client, key="providerErr_pluginFailed", params=COMFY_FAILURE, error="y")
+    _failed_generation(client, key="providerErr_pluginFailed", params={**COMFY_FAILURE, "hint": ""}, error="z")
+
+    _migrate_failure_hints_say_cause_and_steps()
+    _migrate_failure_hints_say_cause_and_steps()
+
+    with engine.begin() as conn:
+        rows = [*conn.execute(sql("SELECT error, error_params FROM jobs")), *conn.execute(sql("SELECT error, error_params FROM generation_jobs"))]
+    hints: dict[str, list] = {}
+    for error, raw in rows:
+        params = json.loads(raw) if isinstance(raw, str) else raw
+        hints.setdefault(error, []).append(params.get("hint", "—"))
+    assert hints["x"] == [{"cause": old_hint}, {"cause": old_hint}], "任务和生成记录两处都挪了"
+    assert hints["y"] == [COMFY_FAILURE["hint"], COMFY_FAILURE["hint"]], "新形状不动"
+    assert hints["z"] == ["—", "—"], "空的提示去掉"
+    [record] = client.get("/api/generation/jobs", params={"workspace_id": workspace}).json()
+    assert record["error_hint"] == {"cause": old_hint["__text"]["zh"], "steps": []}
 
 
 def test_插件没说人话的_只留原因_原文和它一样就没有详情() -> None:

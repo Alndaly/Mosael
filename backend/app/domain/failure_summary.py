@@ -14,7 +14,8 @@
 - 插件说了一句人话的(参数里的 `summary`,ComfyUI:「ComfyUI 执行到「KSampler」这一步出错」)就是它;插件生成失败没说的,只留原因本身
   —— 「「连接名」生成失败:」那截前缀在失败卡的标题和脚注里已经说过了。
 
-旁边两样:`detail_of`(原文,收进「详情」;和那一句说的是同一件事、没有多出信息时不给)、`hint_of`(认得出的原因:该去哪修)。
+旁边两样:`detail_of`(原文,收进「详情」;和那一句说的是同一件事、没有多出信息时不给)、`hint_of`(认得出的原因和怎么修:
+一句原因、几步修法,要敲的命令单独一格 —— 失败卡把命令摆成等宽的一块、带复制;画板格子读 `hint_text` 拼好的一段)。
 
 不翻、不猜上游的原话,只是不把它整段搬到用户眼前。
 """
@@ -82,10 +83,45 @@ def detail_of(error: str | None, key: str, params: dict[str, Any] | None, locale
     return text
 
 
-def hint_of(params: dict[str, Any] | None, locale: str) -> str | None:
-    """认得出的原因:该去哪修(插件说的 `hint`,ComfyUI:「这是那台 ComfyUI 上的问题:……」)。没有就是 None。"""
-    hint = read_param((params or {}).get("hint"), locale) if (params or {}).get("hint") else ""
-    return hint.strip() if isinstance(hint, str) and hint.strip() else None
+def hint_of(params: dict[str, Any] | None, locale: str) -> dict[str, Any] | None:
+    """认得出的原因和怎么修(插件说的 `hint`,见 plugins.runtime.failure_shape),按 `locale` 读成字:
+    `{"cause": 一句或 None, "steps": [{"text": 一句, "command": 原样的命令或 None}]}`。没有就是 None。"""
+    hint = (params or {}).get("hint")
+    if not isinstance(hint, dict):
+        return None
+    cause = _said(hint.get("cause"), locale)
+    steps = []
+    for step in hint.get("steps") if isinstance(hint.get("steps"), list) else []:
+        if not isinstance(step, dict):
+            continue
+        text = _said(step.get("text"), locale)
+        command = step.get("command").strip() if isinstance(step.get("command"), str) and step["command"].strip() else None
+        if text or command:
+            steps.append({"text": text or "", "command": command})
+    if not cause and not steps:
+        return None
+    return {"cause": cause, "steps": steps}
+
+
+def hint_text(params: dict[str, Any] | None, locale: str) -> str:
+    """同一份「原因 + 怎么修」拼成一段字(画板格子「详情」的悬停里只摆得下一段):原因一行,修法一步一行(多步时编号),命令单独一行。"""
+    hint = hint_of(params, locale)
+    if hint is None:
+        return ""
+    lines = [hint["cause"]] if hint["cause"] else []
+    numbered = len(hint["steps"]) > 1
+    for index, step in enumerate(hint["steps"], start=1):
+        if step["text"]:
+            lines.append(f"{index}. {step['text']}" if numbered else step["text"])
+        if step["command"]:
+            lines.append(step["command"])
+    return "\n".join(lines)
+
+
+def _said(value: Any, locale: str) -> str | None:
+    """一句存着没翻的话(按语言分的 `authored_text`,或一个字符串)按这个语言读成字;空的是 None。"""
+    said = read_param(value, locale) if value else ""
+    return said.strip() if isinstance(said, str) and said.strip() else None
 
 
 #: 比「是不是同一件事」时不算的句末标点
@@ -150,4 +186,4 @@ def _clip(text: str) -> str:
     return collapsed[: SUMMARY_DETAIL_CHARS - 1].rstrip() + "…"
 
 
-__all__ = ["SUMMARY_DETAIL_CHARS", "detail_of", "hint_of", "short_detail", "status_of", "summarize"]
+__all__ = ["SUMMARY_DETAIL_CHARS", "detail_of", "hint_of", "hint_text", "short_detail", "status_of", "summarize"]

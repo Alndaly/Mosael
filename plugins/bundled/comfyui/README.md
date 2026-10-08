@@ -527,6 +527,16 @@ besides the failure text, so the host's AI Studio failure card and board cells s
   ≥ 0.2.37 / ≥ 0.11.77). Adding one is one more line in `KNOWN`.
 - The failure text (`error`) is unchanged: the task center, logs and the agent still read it.
 
+## Fixes (1.22.1)
+
+- **A known cause is split into "why" and "how to fix"**: `hint` in the failure shape is no longer one sentence but `cause` (one
+  sentence) plus `steps` (one sentence per step; a command to type goes in that step's `command`). The host shows the cause and the
+  steps separately and sets the command in a monospace block with a copy button — before, `pip install -U comfy-kitchen
+  comfyui-workflow-templates` sat in the middle of a long paragraph. The upgrade command now carries the minimum versions
+  (`"comfy-kitchen>=0.2.37" "comfyui-workflow-templates>=0.11.77"`). A missing model file and a checkpoint without CLIP / VAE use the
+  same shape.
+- To add a known error to `known_failures.py`: `Known(pattern, cause, steps)`, with steps as `Step(text, command)`.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's

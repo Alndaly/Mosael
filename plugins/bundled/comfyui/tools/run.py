@@ -385,7 +385,7 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None, node_
     用户在「模型」里挑了一个不带文本编码器的文件,读完这句也不知道是哪个文件、该换成什么。
 
     交给宿主的那一句人话(`summary`)只说出错在哪一步(节点在图里的名字,没有就是类名),ComfyUI 的原话(`detail`)收进失败卡的
-    「详情」;原话认得出(见 known_failures)再带一句该去哪修(`hint`)。
+    「详情」;原话认得出(见 known_failures)再带上原因和怎么修(`hint`:`cause` 一句、`steps` 几步,命令单独放)。
     """
     titles = convert.titles_of(api or {})
     step = titles.get(node_id) or node
@@ -404,8 +404,9 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None, node_
             f"ComfyUI doesn't have the model file “{name}” (folder {folder}). Put it in ComfyUI's models/{folder}, or pick a "
             "file it has in the parameters, and try again.",
         ), failure={**shape, "summary": say(locale, f"ComfyUI 上没有模型文件「{name}」", f"ComfyUI doesn't have the model file “{name}”").texts,
-                    "hint": say(locale, f"把它放进 ComfyUI 的 models/{folder},或者在参数里换成已有的文件再试。",
-                                f"Put it in ComfyUI's models/{folder}, or pick a file it has in the parameters, and try again.").texts})
+                    "hint": known_failures.fix(None, [known_failures.Step(say(
+                        locale, f"把它放进 ComfyUI 的 models/{folder},或者在参数里换成它已有的文件,再生成一次。",
+                        f"Put it in ComfyUI's models/{folder}, or pick a file it has in the parameters, and generate again.").texts)])})
     missing = _MISSING_PART.search(said or "")
     if missing:
         files = graph.checkpoint_files(api or {})
@@ -422,11 +423,15 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None, node_
                 "ComfyUI that loads the text encoder on its own and pick that workflow in Mosael.",
             ), failure={**shape, "summary": say(locale, f"模型文件{named_zh}里没有文本编码器(CLIP)",
                                                 f"The model file {named_en} has no text encoder (CLIP)").texts,
-                        "hint": say(locale, "Flux、Anima 这类模型的文本编码器是单独的文件。换一个完整的 checkpoint;或者在 ComfyUI 里搭一张"
-                                            "单独加载文本编码器的工作流并保存,再在 Mosael 里选那个工作流。",
-                                    "Models such as Flux or Anima ship their text encoder separately. Pick a complete checkpoint, "
-                                    "or save a workflow in ComfyUI that loads the text encoder on its own and pick that workflow in "
-                                    "Mosael.").texts})
+                        "hint": known_failures.fix(
+                            say(locale, "Flux、Anima 这类模型的文本编码器是单独的文件,普通的 checkpoint 加载节点读不出来。",
+                                "Models such as Flux or Anima ship their text encoder as a separate file, so a plain checkpoint "
+                                "loader can't read one.").texts,
+                            [known_failures.Step(say(
+                                locale, "换一个完整的 checkpoint;或者在 ComfyUI 里搭一张单独加载文本编码器的工作流并保存,再在 Mosael "
+                                        "里选那个工作流。",
+                                "Pick a complete checkpoint, or save a workflow in ComfyUI that loads the text encoder on its own "
+                                "and pick that workflow in Mosael.").texts)])})
         return ComfyError(say(
             locale,
             f"模型文件{named_zh}里没有 VAE。换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点"
@@ -434,10 +439,11 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None, node_
             f"The model file {named_en} has no VAE. Pick a checkpoint with a baked-in VAE, or add a VAE loader to a "
             "workflow in ComfyUI, save it, and pick that workflow in Mosael.",
         ), failure={**shape, "summary": say(locale, f"模型文件{named_zh}里没有 VAE", f"The model file {named_en} has no VAE").texts,
-                    "hint": say(locale, "换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点并保存,再在 Mosael 里选那个"
-                                        "工作流。",
-                                "Pick a checkpoint with a baked-in VAE, or add a VAE loader to a workflow in ComfyUI, save it, and "
-                                "pick that workflow in Mosael.").texts})
+                    "hint": known_failures.fix(None, [known_failures.Step(say(
+                        locale, "换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点并保存,再在 Mosael 里选那个"
+                                "工作流。",
+                        "Pick a checkpoint with a baked-in VAE, or add a VAE loader to a workflow in ComfyUI, save it, and "
+                        "pick that workflow in Mosael.").texts)])})
     return ComfyError(say(locale, f"ComfyUI 执行失败:{raw or '详见 ComfyUI 日志'}",
                           f"ComfyUI execution failed: {raw or 'see the ComfyUI log'}"), failure=shape)
 

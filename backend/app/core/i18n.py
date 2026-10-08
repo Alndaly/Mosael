@@ -177,6 +177,10 @@ def stored_param(value: Any) -> Any:
     再按读的人的习惯连起来(见 _resolve_params);其余写成字。"""
     if isinstance(value, dict) and ("__key" in value or "__text" in value):
         return value
+    if isinstance(value, dict):
+        #: 有结构的参数(插件生成失败时的「原因 + 怎么修」:`{"cause": …, "steps": [{"text": …, "command": …}]}`)逐格照同一个
+        #: 规矩存,读的人自己去挑(见 failure_summary.hint_of)。此前整个写成一个 Python repr 的字符串,里面的话再也挑不出来。
+        return {str(key): stored_param(one) for key, one in value.items()}
     if isinstance(value, (list, tuple)):
         return [stored_param(one) for one in value]
     return str(value)

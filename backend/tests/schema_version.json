@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -107,6 +107,7 @@
     "migrate-existing-libraries-get-the-gemini-chat-prices",
     "migrate-existing-libraries-get-the-new-reference-prices",
     "migrate-existing-libraries-get-the-s2v-detect-price",
+    "migrate-failure-hints-say-cause-and-steps",
     "migrate-frame-rate-is-not-a-time-base",
     "migrate-generation-capabilities-need-evidence",
     "migrate-generation-capability-profiles",

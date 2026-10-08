@@ -12196,6 +12196,29 @@ export interface components {
             /** Sections */
             sections?: components["schemas"]["ExtractionSectionOut"][];
         };
+        /**
+         * FailureHintOut
+         * @description 认得出的失败:为什么(`cause`,一句)和怎么修(`steps`,一步一句),按读的人的语言挑好(见 domain/failure_summary.hint_of)。
+         */
+        FailureHintOut: {
+            /** Cause */
+            cause?: string | null;
+            /** Steps */
+            steps?: components["schemas"]["FailureStepOut"][];
+        };
+        /**
+         * FailureStepOut
+         * @description 修的一步:一句话;要在终端里敲的命令另放(原样,不翻)—— 失败卡把它摆成等宽的一块、带复制。
+         */
+        FailureStepOut: {
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Command */
+            command?: string | null;
+        };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
             /** Code */
@@ -12462,10 +12485,10 @@ export interface components {
              */
             readonly error_detail: string | null;
             /**
-             * Error Hint
-             * @description 认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」),失败卡上那句话下面摆。没有是 None。
+             * @description 认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),
+             *     失败卡上那句话下面摆。没有是 None。
              */
-            readonly error_hint: string | null;
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
             /**
              * Repeatable
              * @description 能不能「再来一次」(照这一条记着的模型和参数重新提交一次,POST /generation/jobs/{id}/again):工作台跑画布上那张图的不行

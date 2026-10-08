@@ -8203,6 +8203,37 @@ def _migrate_plugin_connection_errors_follow_the_reader() -> None:
                 )
 
 
+def _migrate_failure_hints_say_cause_and_steps() -> None:
+    """失败参数里认得出的原因(`error_params.hint`)从一整句话改成「原因 + 怎么修」:`{"cause": 一句, "steps": [{"text", "command"}]}`。
+
+    此前插件交的 hint 是一句话(按语言分着存,`{"__text": …}`),要敲的命令埋在句子里;失败卡现在把原因、修的步骤和命令分开摆
+    (命令一块等宽字、带复制),插件也改成分着交(见 plugins.runtime.failure_shape)。库里那几条旧的(这一形状只在 1.22.0 插件
+    交出去过)原样挪进 `cause` —— 那句话本来就是原因加修法,拆不开也不猜,照旧整句给人看;没有步骤。
+
+    任务(`jobs`)和生成记录(`generation_jobs`,失败原因抄了一份)两处都改。幂等:新形状是带 `cause` / `steps` 的字典,不再被认作旧的。
+    """
+    tables = set(inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        for table in ("jobs", "generation_jobs"):
+            if table not in tables:
+                continue
+            rows = conn.execute(text(f"SELECT id, error_params FROM {table} WHERE error_params LIKE '%\"hint\"%'")).fetchall()
+            for row_id, raw in rows:
+                params = json.loads(raw) if isinstance(raw, str) else raw
+                if not isinstance(params, dict) or "hint" not in params:
+                    continue
+                hint = params["hint"]
+                if isinstance(hint, dict) and ("cause" in hint or "steps" in hint):
+                    continue
+                said = hint.get("__text") if isinstance(hint, dict) else hint
+                if said:
+                    params["hint"] = {"cause": hint}
+                else:
+                    params.pop("hint")
+                conn.execute(text(f"UPDATE {table} SET error_params = :params WHERE id = :id"),
+                             {"params": json.dumps(params, ensure_ascii=False), "id": row_id})
+
+
 def _migrate_generation_results_keep_output_parameters_apart() -> None:
     """生成任务结果里「每份用的参数」(每张一个种子)从 `outputs` 挪到 `output_parameters`。
 
@@ -9173,6 +9204,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_usage_follows_todays_booking),
             #: 生成任务结果里每份的参数挪出 `outputs`(那个键是「交回了什么」,画板和任务详情只认它)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_generation_results_keep_output_parameters_apart),
+            #: 失败参数里认得出的原因从一整句话改成「原因 + 怎么修」:旧的那一句挪进 `cause`。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_failure_hints_say_cause_and_steps),
             #: 百炼说话照片之前的人像预检(wan2.2-s2v-detect)补上参考价:预检此前一笔都没进账。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_s2v_detect_price),
             #: Google 连接能对话了:已有 Gemini 对话模型行的补上 Gemini 的参考价。
