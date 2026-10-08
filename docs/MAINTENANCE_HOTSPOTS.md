@@ -483,10 +483,14 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 
 ## Verification rule
 
+完整的门禁清单只有一份:README「测试与检查」那一段,和 CI(`.github/workflows/tests.yml`)按同样的顺序跑同样的几步。
 每个 slice 至少跑:
 
+- `pnpm lint`(仓库根)**每次都跑** —— 它是 oxlint(frontend、website)加三处 ruff(backend、community、
+  packages/mosael-formats),是 CI 的第一步。只跑 frontend 那半漏过 F401,CI 连红过三次
 - `pnpm build:publisher` when touching `electron/publish/**`
-- `cd frontend && pnpm exec tsc -b --noEmit && pnpm vitest run` when touching frontend
+- `pnpm --dir frontend build && pnpm --dir frontend exec vitest run` when touching frontend(`build` = `tsc --noEmit` +
+  vite build;整套 vitest 要跑满,`design/` 下的棘轮扫全仓)
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
   测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么。
   它默认按核数并行(pyproject 的 addopts 带 `-n auto --dist worksteal`,pytest-xdist;16 核的 Mac 上两分多钟,串行二十分钟以上),
@@ -496,8 +500,9 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
   进程级的「当前值」(语言、环境变量、模块里的缓存)由 conftest 每条还原,新加的那种要登记进
   `docs/PROCESS_STATE.md` 并加进还原名单
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
-- `pnpm --dir website build` when touching 官网或文档;release CI 会重跑这道门禁,
-  但本地先跑可以在提交前发现 TypeScript、路由、MDX 与服务端渲染问题
+- `pnpm --dir website test && pnpm --dir website build` when touching 官网、文档或插件 README:
+  每次推 main 的 CI 都跑这道门禁(`website test` 不编译 `content/docs` 下的 MDX,MDX 写坏了只有 build 抓得到),
+  本地先跑可以在提交前发现 TypeScript、路由、MDX 与服务端渲染问题
 - targeted browser smoke only when the change affects actual platform page driving
 - **桌面端**(不是浏览器预览)when the change touches 拖拽区 / 无边框窗 / 内嵌浏览器 —— 见第 10 条
 - **拿真实凭据跑一次** when the change touches 供应商凭据、令牌刷新或额度解析 —— 见第 11 条

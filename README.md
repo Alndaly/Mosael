@@ -282,18 +282,24 @@ says why in the console. `vite build` reads the variable too; release builds don
 
 ### Tests and checks
 
+The same steps, in the same order, as CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) — keep the two in sync:
+
 ```bash
+pnpm lint                                   # oxlint (frontend, website) + ruff (backend, community, packages/mosael-formats)
+pnpm --dir frontend build                   # tsc --noEmit + vite build; the backend's burned-in text tests render with this dist
 (cd backend && uv run --frozen python -m pytest -q)
 pnpm --dir frontend exec vitest run
-pnpm --dir frontend exec tsc -b --noEmit
+uv run --project backend --frozen python backend/scripts/export_openapi.py --check && pnpm gen:api   # then: git diff frontend/src/api/generated/schema.d.ts
 pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --dir agent-sidecar test
 pnpm typecheck:electron
 pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
-pnpm --dir frontend gen:api        # after backend OpenAPI changes
 pnpm --dir website test && pnpm --dir website build
 ```
 
-Run checks from the repository root. Current results are recorded in [GitHub Actions](https://github.com/Alndaly/Mosael/actions); test counts change as the project grows.
+Run checks from the repository root. Locally it is enough to run `pnpm lint` plus the lines for what you changed; CI runs all of them.
+Current results are recorded in [GitHub Actions](https://github.com/Alndaly/Mosael/actions); test counts change as the project grows.
+A daily run ([`chaos.yml`](.github/workflows/chaos.yml)) repeats the gate in shuffled order with randomly delayed thread starts,
+to catch tests that only pass by luck — see 「测试里怎么等」(how tests wait) in [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
 
 The backend suite runs in parallel by default ([pytest-xdist](https://pytest-xdist.readthedocs.io/), one worker per
 CPU core, each with its own throwaway data directory). Naming a file or a single test runs it serially in one process,

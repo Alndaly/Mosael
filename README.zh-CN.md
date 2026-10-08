@@ -253,15 +253,23 @@ cd frontend && VITE_MOSAEL_API_URL=http://127.0.0.1:8833 pnpm exec vite --host 1
 
 ### 测试与检查
 
+和 CI([`.github/workflows/tests.yml`](.github/workflows/tests.yml))是同一份清单、同样的顺序,改一处要两处一起改:
+
 ```bash
+pnpm lint                                   # oxlint(frontend、website)+ ruff(backend、community、packages/mosael-formats)
+pnpm --dir frontend build                   # tsc --noEmit + vite build;后端的烧字测试要用这份 dist 真渲
 (cd backend && uv run --frozen python -m pytest -q)
 pnpm --dir frontend exec vitest run
-pnpm --dir frontend exec tsc -b --noEmit
-pnpm --dir frontend gen:api        # 后端 OpenAPI 变化后运行
-pnpm --dir website build           # 修改官网或文档后运行
+uv run --project backend --frozen python backend/scripts/export_openapi.py --check && pnpm gen:api   # 再 git diff frontend/src/api/generated/schema.d.ts
+pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --dir agent-sidecar test
+pnpm typecheck:electron
+pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
+pnpm --dir website test && pnpm --dir website build
 ```
 
-以上命令从仓库根目录运行。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。
+以上命令从仓库根目录运行。本地跑 `pnpm lint` 加上改动涉及的那几行就够,CI 每次全跑。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。
+另有一个每天一次的运行([`chaos.yml`](.github/workflows/chaos.yml)):打乱顺序、让每条新线程随机晚起一会儿,把整道门禁再跑一遍,
+找靠运气才绿的测试 —— 写法见 [docs/CONVENTIONS.md](docs/CONVENTIONS.md)「测试里怎么等」。
 
 后端测试默认并行跑（[pytest-xdist](https://pytest-xdist.readthedocs.io/)，每个 CPU 核一个 worker，各有一个用完即删的
 数据目录）。点名某个文件或某一条用例时在本进程里串行跑，`print`、`-s`、`--pdb` 照常可用：
