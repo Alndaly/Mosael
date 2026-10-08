@@ -1,24 +1,15 @@
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
-import path from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
 import { compileMDX } from "next-mdx-remote/rsc";
+
+import { registerSourceAliases } from "./source-aliases.mjs";
 
 //: 插件详情页的 README 是**当 MDX 编译的**:正文里一个裸的 `<节点标题>` 就是一个没闭合的 JSX 标签,
 //: `next build` 预渲染那一页时整站构建失败 —— 而此前这里的测试只看 README 在不在、语言对不对,一路全绿。
 //: 这里每个插件、每种语言的 README 都按详情页那一套(同一个 pluginDocSource、同一份 mdxOptions、同一个 compileMDX)
 //: 编一遍,编不过就红。
-const SRC = path.resolve(import.meta.dirname, "..", "src");
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith("@/")) {
-      return nextResolve(pathToFileURL(path.join(SRC, `${specifier.slice(2)}.ts`)).href, context);
-    }
-    return nextResolve(specifier, context);
-  },
-});
+registerSourceAliases();
 
 const { LOCALES } = await import("../src/i18n/config.ts");
 const { README_FILE, listPlugins, readPluginDoc } = await import("../src/lib/registry.ts");

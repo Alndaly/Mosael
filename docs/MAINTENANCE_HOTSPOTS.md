@@ -501,7 +501,8 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
   `docs/PROCESS_STATE.md` 并加进还原名单
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
 - `pnpm --dir website test && pnpm --dir website build` when touching 官网、文档或插件 README:
-  每次推 main 的 CI 都跑这道门禁(`website test` 不编译 `content/docs` 下的 MDX,MDX 写坏了只有 build 抓得到),
+  每次推 main 的 CI 都跑这道门禁(`website test` 把文档正文和插件 README 都按页面那一套编译、渲染一遍,几秒钟;
+  build 另外查 TypeScript、路由和服务端渲染),
   本地先跑可以在提交前发现 TypeScript、路由、MDX 与服务端渲染问题
 - targeted browser smoke only when the change affects actual platform page driving
 - **桌面端**(不是浏览器预览)when the change touches 拖拽区 / 无边框窗 / 内嵌浏览器 —— 见第 10 条
