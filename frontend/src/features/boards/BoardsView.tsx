@@ -93,6 +93,7 @@ import { EdgeShapeToggle, useEdgeShape } from "@/components/app/canvasEdgeShape"
 import { CanvasNodeSearch, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { boardSearchEntries } from "@/features/boards/boardSearch";
 import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
+import { useSaveShortcut } from "@/lib/saveShortcut";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -890,6 +891,12 @@ function BoardDetail({
    */
   //: `latest`:离开画板、关页面时,画布还攒着没汇上来的那一下(并步窗口)也得存上 —— 卸载时这里的清理比画布的先跑。
   const { flush: flushSaves } = useAutosave(canvas, save, { latest: () => apiRef.current?.flush() });
+  //: ⌘S:把画布上还没存的编辑马上送出去(见 lib/saveShortcut)。和画布上的动作同一个次序(见下面的 run):
+  //: 画布还攒着、没汇上来的那一下先拿出来存上,再等在路上的保存都落地。
+  useSaveShortcut(() => {
+    const latest = api?.flush();
+    void (latest ? save(latest).then(() => flushSaves(), () => false) : flushSaves());
+  });
   //: 画布汇上来的新一份。本地那份的引用**当场**换上:动作(生成、写字)和轮询读的是它,不等下一次渲染。
   const onCanvasChange = React.useCallback((next: Canvas) => {
     localCanvas.current = next;

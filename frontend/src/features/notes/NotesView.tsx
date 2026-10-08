@@ -47,6 +47,7 @@ import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
 import { mergeAppendedNote } from "./appendMerge";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { useSaveShortcut } from "@/lib/saveShortcut";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
 
@@ -338,6 +339,8 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
     } catch (e) { if (mounted.current) { setError(e instanceof ApiError && e.status === 409 ? s.conflict : errorText(e)); setStatus("error"); } }
     finally { busy.current = false; }
   }, [note.id, note.workspace_id, qc, s.conflict, storageKey]);
+  //: ⌘S:欠着的这一份马上存,不等那 700ms(见 lib/saveShortcut)。
+  useSaveShortcut(() => void persist());
   React.useLayoutEffect(() => {
     const current: NoteController = {id:note.id,read:()=>latest.current,update:async patch=>{
       change(patch);

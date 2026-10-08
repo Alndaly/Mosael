@@ -85,6 +85,7 @@ vi.mock("@/features/boards/BoardCanvas", () => ({
 import { ApiError, type Board, type BoardCanvas, type Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
+import { installSaveShortcut } from "@/lib/saveShortcut";
 
 const workspace = { id: "w1", name: "W" } as Workspace;
 
@@ -263,6 +264,30 @@ describe("画板详情页与服务端的同步", () => {
 
     expect(apiMocks.updateBoard).toHaveBeenCalledTimes(1);
     expect((apiMocks.updateBoard.mock.calls[0][1] as { canvas: BoardCanvas }).canvas.items[0].x).toBe(500);
+  });
+
+  it("刚拖完就按 ⌘S:画布上还攒着的那一下马上存上(不等自动保存),键被拦下", async () => {
+    const uninstall = installSaveShortcut(window);
+    try {
+      const note = { id: "n1", kind: "note" as const, x: 0, y: 0, width: 220, height: 140, text: "a" };
+      const server: BoardCanvas = { items: [note], edges: [], markers: [] };
+      opens(boardAt(3, server));
+      apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => boardAt(4, body.canvas));
+      mount();
+      await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+      //: 画布此刻:便签拖到了 500,还没到 400ms 的并步,没汇给上层。
+      canvasHarness.api.flush.mockImplementation(() => ({ ...server, items: [{ ...note, x: 500 }] }));
+      const event = new KeyboardEvent("keydown", { key: "s", code: "KeyS", metaKey: true, bubbles: true, cancelable: true });
+      act(() => void document.body.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(true);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(apiMocks.updateBoard).toHaveBeenCalledTimes(1);
+      expect((apiMocks.updateBoard.mock.calls[0][1] as { canvas: BoardCanvas }).canvas.items[0].x).toBe(500);
+    } finally {
+      uninstall();
+    }
   });
 
   it("一直在操作、画布的把手每一步都换一份新的:轮询照样按时,不被一次次重置", async () => {

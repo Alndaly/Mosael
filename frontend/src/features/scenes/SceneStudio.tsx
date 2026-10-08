@@ -135,6 +135,7 @@ import {
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
+import { useSaveShortcut } from "@/lib/saveShortcut";
 import "./scenes.css";
 
 /**
@@ -475,6 +476,8 @@ function SceneEditor({
       throw e;
     }
   });
+  //: ⌘S:欠着的这一份马上存(见 lib/saveShortcut)。
+  useSaveShortcut(() => void autosave.flush());
   function change(next: typeof draft) {
     const previous = current.current;
     setHistory((h) => [...h.slice(-49), previous]);

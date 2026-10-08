@@ -31,6 +31,7 @@ import { readHint } from "@/test/hint";
 import { WithPageTrail } from "@/test/pageTrail";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { installSaveShortcut } from "@/lib/saveShortcut";
 
 beforeAll(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
@@ -171,6 +172,26 @@ it("双击画布空白处不缩放(两块画布同一份指针设置;缩放走�
     document.removeEventListener("dblclick", reached);
   }
   expect(reached).toHaveBeenCalledTimes(1);
+});
+
+it("⌘S 在检查器的字段里也存(不等自动保存那 700ms),也不让浏览器弹「存储网页」", async () => {
+  //: main.tsx 装的那一个全局监听(lib/saveShortcut);此前这里的 ⌘S 只在画布焦点时接,字段里让路。
+  const uninstall = installSaveShortcut(window);
+  try {
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    fireEvent.click(nodeEl("llm-1"));
+    const name = await screen.findByLabelText("wfNodeName");
+    fireEvent.change(name, { target: { value: "改过的名字" } });
+    const event = new KeyboardEvent("keydown", { key: "s", code: "KeyS", metaKey: true, bubbles: true, cancelable: true });
+    act(() => void name.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(apiMocks.updateWorkflow).toHaveBeenCalled(), { timeout: 400 });
+    const graph = (apiMocks.updateWorkflow.mock.calls[0][1] as { graph: WorkflowGraph }).graph;
+    expect(graph.nodes.find((node) => node.id === "llm-1")?.name).toBe("改过的名字");
+  } finally {
+    uninstall();
+  }
 });
 
 it("复制粘贴一组节点:组内的 {{引用}} 跟着换成新节点,组外的不动", async () => {

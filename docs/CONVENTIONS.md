@@ -100,6 +100,13 @@
 - 所有用户可见文案走 i18n(`src/app/messages.ts`),中英两份都要有。
 - 时间线的几何计算住在 `domain/timeline/geometry.ts`,是有测试的纯函数;组件里不内联几何。
 - 动态长列表的下拉用共享的可搜索 Combobox;拖拽交互用 dnd-kit。
+- **⌘S / Ctrl+S 全应用一个行为:能存就马上存,不能存也拦下**(不让网页版弹浏览器的「存储网页」),焦点在输入框、编辑器里一样。
+  全局监听在 `main.tsx` 装一次(`lib/saveShortcut`),页面用 `useSaveShortcut(fn)` 登记「此刻存什么」(自动保存的页面就是把
+  欠着的那份马上存掉),不各自另听这个键。ComfyUI 工作台在它自己那一栏里先接(存那张工作流)。
+- **多选的修饰键只有两条规则。** 摆在空间里的东西(画板、工作流画布、时间线片段、3D 关键帧):⌘ / Ctrl / Shift + 点击都是
+  「加入 / 移出选择」,Shift + 拖空白是框选(两块画布共用 `components/app/canvasInputMode` 的 `CANVAS_POINTER_PROPS`)。
+  有先后顺序的列表(素材、笔记、场景列表、设置里的表,`lib/useMultiSelect`):⌘ / Ctrl + 点击加入 / 移出,Shift + 点击从上一次点的
+  那项连选到这项。
 - **从素材库挑媒体(图片、视频、音频、文档素材)的弹窗只有一种:`components/app/AssetGridPicker`** —— 缩略图网格,格子下面写名字、
   种类和尺寸、来源和多久以前;键盘、看大图、加载 / 空态都在里面。点了即挑中的直接用,多选或先选再确认的给 `selection` 和 `footer`,
   头里的筛选和动作给 `toolbar`。按名字挑的清单(笔记、3D 场景、资产)用 `components/app/PickListDialog`;表单里就地挑一份的用 Combobox。

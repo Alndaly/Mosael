@@ -4,6 +4,7 @@ import type { Node } from "@xyflow/react";
 import { hasFocusedFloatingPanel } from "@/components/app/useFloatingPanel";
 import type { WorkflowSaveState } from "@/features/workflows/useWorkflowSave";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
+import { useSaveShortcut } from "@/lib/saveShortcut";
 import { listenKeys } from "@/lib/shortcuts";
 
 //: 编辑器的两组画布快捷键。WorkflowEditor 在原来那两条 effect 的位置调它们,注册顺序不变。
@@ -11,10 +12,13 @@ import { listenKeys } from "@/lib/shortcuts";
 /**
  * 画布快捷键。
  *
- * ⌘/Ctrl+N 打开「添加节点」;⌘/Ctrl+S 存盘;⌘/Ctrl+Enter 运行。
+ * ⌘/Ctrl+N 打开「添加节点」;⌘/Ctrl+Enter 运行;⌘/Ctrl+S 存盘。
  *
- * **在输入框里一律不劫持** —— 在节点检查器里打字时按 ⌘N,想要的是浏览器的新建窗口
+ * **N 和 Enter 在输入框里一律不劫持** —— 在节点检查器里打字时按 ⌘N,想要的是浏览器的新建窗口
  * (或什么都不发生),而不是画布上冒出一个节点。这和撤销那条同一个判据。
+ *
+ * **⌘S 例外:在检查器的字段里也存。** 在字段里改完按 ⌘S,想的就是存这一张;此前它在字段里让路,
+ * 网页版弹的是浏览器的「存储网页」。它走全应用那一条(lib/saveShortcut),不在这里另听。
  */
 export function useWorkflowEditorShortcuts({
   save,
@@ -23,6 +27,9 @@ export function useWorkflowEditorShortcuts({
   save: WorkflowSaveState["save"];
   startRun: () => Promise<void>;
 }) {
+  useSaveShortcut(() => {
+    if (!save.isPending) save.mutate();
+  });
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
@@ -36,9 +43,6 @@ export function useWorkflowEditorShortcuts({
         if (!trigger) return;
         event.preventDefault();
         trigger.click();
-      } else if (key === "s") {
-        event.preventDefault();
-        if (!save.isPending) save.mutate();
       } else if (event.key === "Enter") {
         event.preventDefault();
         void startRun();
