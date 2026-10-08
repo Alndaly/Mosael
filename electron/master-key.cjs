@@ -13,6 +13,11 @@
  * - 老版本留下的明文 `secret.key`:封存一份、确认解得回同一把之后删掉明文。
  * - 系统没有可用的钥匙串(`isEncryptionAvailable()` 为假,常见于没有桌面密钥环的 Linux):不封存,
  *   后端照旧用数据目录里的 `secret.key`(没有就由这里先建好,两边拿到的是同一把)。那是如实的降级,不假装加了密。
+ *   第一次封存时钥匙串出错同样降级成明文:那时还没有封存过的钥匙,明文就是唯一的那一把。
+ * - **封存过的钥匙解不开**(用户在钥匙串提示上点了拒绝、钥匙串锁着或被重置、应用换了签名身份)**绝不降级**:
+ *   明文在封存时就删了,这时让后端照常起来,它会另生一把新钥匙 —— 之后存的凭据用新钥匙加密,旧的那些再也解不开,
+ *   而且界面没有壳令牌、连后端都连不上。所以抛 `SealedKeyUnavailableError`,由 `unlockMasterKey` 停下来问人
+ *   (重试 / 去钥匙串授权 / 退出),问到解开为止或者退出,后端不起。
  *
  * 主密钥还派生出**壳令牌**(`shellToken`):打包版的界面从 file:// 加载,请求的 Origin 是 `null` —— 任何网页里的
  * sandboxed iframe 也是。壳在自己发往本机后端的请求上带 `X-Mosael-Shell: <shellToken>`,后端只放行带着它的
@@ -54,30 +59,83 @@ function shellToken(key) {
  * @returns {{ key: string, sealed: boolean }}
  */
 function resolveMasterKey(dataDir, safeStorage) {
-  if (!safeStorage.isEncryptionAvailable()) {
-    const plain = path.join(dataDir, PLAIN_NAME);
-    if (!fs.existsSync(plain)) writePrivate(plain, generateFernetKey());
-    return { key: fs.readFileSync(plain, "utf8").trim(), sealed: false };
-  }
   const sealed = path.join(dataDir, SEALED_NAME);
   const plain = path.join(dataDir, PLAIN_NAME);
   if (fs.existsSync(sealed)) {
-    const key = safeStorage.decryptString(fs.readFileSync(sealed)).trim();
+    let key;
+    try {
+      //: 钥匙串用不了(isEncryptionAvailable 为假)时 decryptString 同样抛错,一并算解不开 —— 封存过就不降级。
+      key = safeStorage.decryptString(fs.readFileSync(sealed)).trim();
+    } catch (error) {
+      throw new SealedKeyUnavailableError(sealed, error);
+    }
     //: 封存之后又出现了明文(比如从老版本的备份恢复):以封存的那把为准,明文只有一致时才删 ——
     //: 不一致说明它来自别的数据,留着让人看见,不替他删。
     if (fs.existsSync(plain) && fs.readFileSync(plain, "utf8").trim() === key) fs.rmSync(plain, { force: true });
     return { key, sealed: true };
   }
+  const plainKey = () => {
+    if (!fs.existsSync(plain)) writePrivate(plain, generateFernetKey());
+    return { key: fs.readFileSync(plain, "utf8").trim(), sealed: false };
+  };
+  if (!safeStorage.isEncryptionAvailable()) return plainKey();
   const key = fs.existsSync(plain) ? fs.readFileSync(plain, "utf8").trim() : generateFernetKey();
-  writePrivate(sealed, safeStorage.encryptString(key));
-  //: 解得回同一把才删明文 —— 否则丢的是所有已存凭据。
-  if (safeStorage.decryptString(fs.readFileSync(sealed)).trim() !== key) {
-    fs.rmSync(sealed, { force: true });
-    if (!fs.existsSync(plain)) writePrivate(plain, key);
-    return { key, sealed: false };
+  try {
+    writePrivate(sealed, safeStorage.encryptString(key));
+    //: 解得回同一把才删明文 —— 否则丢的是所有已存凭据。
+    if (safeStorage.decryptString(fs.readFileSync(sealed)).trim() === key) {
+      fs.rmSync(plain, { force: true });
+      return { key, sealed: true };
+    }
+  } catch {
+    //: 第一次封存就出错:落到下面,明文是唯一的那一把。
   }
-  fs.rmSync(plain, { force: true });
-  return { key, sealed: true };
+  fs.rmSync(sealed, { force: true });
+  if (!fs.existsSync(plain)) writePrivate(plain, key);
+  return plainKey();
 }
 
-module.exports = { PLAIN_NAME, SEALED_NAME, generateFernetKey, resolveMasterKey, shellToken };
+/** 封存过的主密钥解不开。带着封存文件的路径,给人看的对话框里要说是哪一份。 */
+class SealedKeyUnavailableError extends Error {
+  constructor(sealedPath, cause) {
+    super(`the sealed master key could not be unlocked: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+    this.name = "SealedKeyUnavailableError";
+    this.sealedPath = sealedPath;
+  }
+}
+
+/**
+ * 取主密钥,取不到就问人,直到取到或者人说退出。退出回 null —— 调用方据此不起后端。
+ *
+ * `ask` 回 "retry"(再试一次)、"keychain"(先打开钥匙串访问再试)或 "quit"。
+ * @param {{
+ *   dataDir: string,
+ *   safeStorage: Parameters<typeof resolveMasterKey>[1],
+ *   ask: (error: Error) => Promise<"retry" | "keychain" | "quit">,
+ *   openKeychain?: () => Promise<unknown> | void,
+ *   log?: (error: Error) => void,
+ * }} options
+ * @returns {Promise<{ key: string, sealed: boolean } | null>}
+ */
+async function unlockMasterKey({ dataDir, safeStorage, ask, openKeychain = () => undefined, log = () => undefined }) {
+  for (;;) {
+    try {
+      return resolveMasterKey(dataDir, safeStorage);
+    } catch (error) {
+      log(error);
+      const choice = await ask(error);
+      if (choice === "quit") return null;
+      if (choice === "keychain") await openKeychain();
+    }
+  }
+}
+
+module.exports = {
+  PLAIN_NAME,
+  SEALED_NAME,
+  SealedKeyUnavailableError,
+  generateFernetKey,
+  resolveMasterKey,
+  shellToken,
+  unlockMasterKey,
+};

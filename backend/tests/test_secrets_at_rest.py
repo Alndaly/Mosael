@@ -254,3 +254,33 @@ def test_the_stdin_flag_without_a_key_fails_loudly(monkeypatch) -> None:
             secrets_at_rest.master_key()
     finally:
         secrets_at_rest.master_key.cache_clear()
+
+
+def test_a_sealed_data_dir_without_the_key_refuses_to_mint_a_new_one(monkeypatch, tmp_path) -> None:
+    """桌面版封存过(只剩 secret.key.sealed、明文已删)而壳没把钥匙交下来:不另生一把 —— 那会让已存的凭据全解不开。"""
+    import pytest
+
+    (tmp_path / "secret.key.sealed").write_bytes(b"sealed-by-the-keychain")
+    monkeypatch.setattr(secrets_at_rest, "key_path", lambda: tmp_path / "secret.key")
+    monkeypatch.delenv("MOSAEL_SECRET_KEY", raising=False)
+    monkeypatch.delenv("MOSAEL_SECRET_KEY_STDIN", raising=False)
+    secrets_at_rest.master_key.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="Refusing to generate a new key"):
+            secrets_at_rest.master_key()
+        assert not (tmp_path / "secret.key").exists(), "没有落下一把新的明文钥匙"
+    finally:
+        secrets_at_rest.master_key.cache_clear()
+
+
+def test_an_unsealed_data_dir_still_gets_a_key_file(monkeypatch, tmp_path) -> None:
+    """没封存过的数据目录(裸跑 uvicorn、没有钥匙串)照旧:没有就建一把 0600 的。"""
+    monkeypatch.setattr(secrets_at_rest, "key_path", lambda: tmp_path / "secret.key")
+    monkeypatch.delenv("MOSAEL_SECRET_KEY", raising=False)
+    monkeypatch.delenv("MOSAEL_SECRET_KEY_STDIN", raising=False)
+    secrets_at_rest.master_key.cache_clear()
+    try:
+        key = secrets_at_rest.master_key()
+        assert (tmp_path / "secret.key").read_bytes().strip() == key
+    finally:
+        secrets_at_rest.master_key.cache_clear()

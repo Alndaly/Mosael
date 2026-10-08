@@ -43,6 +43,8 @@ ENV_VAR = "MOSAEL_SECRET_KEY"
 #: 设为 1 = 主密钥在标准输入的第一行(桌面版,见模块说明)。读到之后从本进程环境里摘掉,子进程不继承。
 STDIN_FLAG = "MOSAEL_SECRET_KEY_STDIN"
 KEY_FILENAME = "secret.key"
+#: 桌面版封存进系统钥匙串的那一份(electron/master-key.cjs 的 SEALED_NAME)。后端解不开它,只认它在不在。
+SEALED_FILENAME = "secret.key.sealed"
 
 #: 装秘密的列。**登记在这一处**,棘轮据此检查它们确实用了加密类型
 #: (见 tests/test_secrets_at_rest.py)。新加一个装秘密的列而忘了加密,测试直接红。
@@ -80,7 +82,7 @@ def _from_stdin() -> bytes:
 
 @functools.lru_cache(maxsize=1)
 def master_key() -> bytes:
-    """这个部署的主密钥:标准输入(桌面版)> 环境变量 > 数据目录里的 0600 文件(没有就建一个)。
+    """这个部署的主密钥:标准输入(桌面版)> 环境变量 > 数据目录里的 0600 文件(没有就建一个;桌面版封存过的数据目录不建)。
 
     缓存:每读一次列都去碰一次文件系统没有意义,而"密钥是哪一把"在一次进程生命周期里不变。
     测试换密钥时调 `master_key.cache_clear()`。加锁:第一次取可能同时来自几条线程,而标准输入只能读一次。
@@ -99,6 +101,16 @@ def _load() -> bytes:
     path = key_path()
     if path.is_file():
         return path.read_bytes().strip()
+
+    # 桌面版把主密钥封存进系统钥匙串之后会删掉明文(electron/master-key.cjs)。这时还走到这里,说明壳没把它交下来
+    # (钥匙串解不开,或者有人对着这个数据目录手动起了后端)—— 另生一把新钥匙,已存的凭据就全解不开了,之后存的
+    # 又只有新钥匙认。宁可起不来。
+    sealed = path.with_name(SEALED_FILENAME)
+    if sealed.is_file():
+        raise RuntimeError(
+            f"{sealed} exists but the master key was not supplied: start Mosael (the desktop app unlocks it from the "
+            f"system keychain), or pass {ENV_VAR}. Refusing to generate a new key, which would orphan stored credentials."
+        )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     generated = Fernet.generate_key()

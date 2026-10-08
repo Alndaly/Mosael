@@ -89,6 +89,21 @@ const MESSAGES = {
     zh: "本地后端没能在端口 {port} 上就绪。请确认端口未被占用;日志可在 ~/.mosael/logs 查看。",
     en: "The local backend did not become healthy on port {port}. Check that the port is free and see logs in ~/.mosael/logs if available.",
   },
+  masterKey_title: { zh: "Mosael 取不到加密钥匙", en: "Mosael can't unlock its encryption key" },
+  masterKey_message: {
+    zh: "存在系统钥匙串里的 Mosael 主密钥解不开。",
+    en: "The Mosael master key kept in the system keychain could not be unlocked.",
+  },
+  masterKey_detailMac: {
+    zh: "已保存的凭据(模型服务的密钥、插件凭据)都靠这把钥匙解密。Mosael 不会另生一把新钥匙凑合用 —— 那样旧的凭据就再也解不开了。\n\n如果刚才在钥匙串的提示里点了「拒绝」,点「重试」,再选「允许」或「始终允许」;也可以在「钥匙串访问」里找到「Mosael Safe Storage」,把 Mosael 加进它的访问控制后再重试。\n\n封存的钥匙:{path}",
+    en: "Your saved credentials (provider keys, plugin credentials) are decrypted with this key. Mosael will not make a new key to get by — the old credentials could never be decrypted again.\n\nIf you just clicked \"Deny\" on the keychain prompt, click Try Again and choose \"Allow\" or \"Always Allow\". You can also find \"Mosael Safe Storage\" in Keychain Access, add Mosael to its access control, and try again.\n\nSealed key: {path}",
+  },
+  masterKey_detail: {
+    zh: "已保存的凭据(模型服务的密钥、插件凭据)都靠这把钥匙解密。Mosael 不会另生一把新钥匙凑合用 —— 那样旧的凭据就再也解不开了。\n\n请确认系统的凭据存储(Windows 的数据保护 / 桌面的密钥环)可用,再点「重试」。\n\n封存的钥匙:{path}",
+    en: "Your saved credentials (provider keys, plugin credentials) are decrypted with this key. Mosael will not make a new key to get by — the old credentials could never be decrypted again.\n\nMake sure the system credential store (Windows data protection / your desktop keyring) is available, then click Try Again.\n\nSealed key: {path}",
+  },
+  masterKey_retry: { zh: "重试", en: "Try Again" },
+  masterKey_openKeychain: { zh: "打开钥匙串访问", en: "Open Keychain Access" },
   restore_needsManagedBackend: {
     zh: "恢复数据需要由本桌面应用启动的后端",
     en: "Restore requires the backend managed by this desktop app",

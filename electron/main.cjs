@@ -17,7 +17,9 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { loginShellPath } = require("./login-shell-path.cjs");
-const { resolveMasterKey, shellToken } = require("./master-key.cjs");
+const { SEALED_NAME, shellToken, unlockMasterKey } = require("./master-key.cjs");
+const { createAppUrlCheck, createSenderCheck, guardNavigation } = require("./app-origin.cjs");
+const { installPermissionPolicy } = require("./web-permissions.cjs");
 const { createRestartPolicy, reusable } = require("./backend-lifecycle.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
@@ -85,6 +87,11 @@ app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const isDev = !app.isPackaged;
+// 应用自己的页面在哪:开发时是 Vite,打包后是 dist 里的文件。主窗口只许停在这里、IPC 只收这里发来的、壳令牌只加在
+// 这里发出的请求上(见 app-origin.cjs)。
+const FRONTEND_URL = process.env.MOSAEL_FRONTEND_URL || "http://127.0.0.1:5173";
+const FRONTEND_DIST = path.join(__dirname, "..", "frontend", "dist");
+const isAppUrl = createAppUrlCheck({ isPackaged: !isDev, frontendUrl: FRONTEND_URL, distDir: FRONTEND_DIST });
 // 打包产物冒烟由 CI 显式开启。结果写文件而不是只看退出码：壳、冻结后端、renderer
 // 任一层提前退出都可能同样得到 code 0，结构化结果才说得清实际走到了哪一步。
 const smokeResultPath = process.env.MOSAEL_SMOKE_TEST_RESULT || "";
@@ -147,6 +154,53 @@ app.on("render-process-gone", (_event, webContents, details) => {
 app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
 });
+
+/** 同一句只记一次:网页可能一遍遍地要同一个权限,别把日志刷满。 */
+const loggedOnce = new Set();
+function appendMainLogOnce(kind, line) {
+  if (loggedOnce.has(`${kind} ${line}`)) return;
+  loggedOnce.add(`${kind} ${line}`);
+  appendMainLog(kind, line);
+}
+
+// 网页权限默认拒绝(见 web-permissions.cjs)。每一个新会话(发布账号、浏览器池档案、RPA / 智能体会话、ComfyUI 工作台的
+// 分区)一建出来就装上内嵌网页那一档;默认会话在 ready 之后换成应用那一档。
+app.on("session-created", (created) => {
+  installPermissionPolicy(created, { isAppUrl: null, log: (line) => appendMainLogOnce("permission", line) });
+});
+
+// IPC 只收主窗口自己那个主框架、停在应用地址上时发来的(见 app-origin.cjs)。所有处理器都经这两个注册,
+// 不直接用 ipcMain(electron/app-origin.test.ts 盯着)。
+const fromAppWindow = createSenderCheck({ isAppUrl, windowOf: (contents) => BrowserWindow.fromWebContents(contents) });
+function refusedSender(channel, event) {
+  let from = "";
+  try {
+    from = new URL(event.senderFrame?.url ?? "").origin;
+  } catch {
+    from = "unknown";
+  }
+  appendMainLogOnce("ipc-refused", `${channel} from ${from}`);
+}
+/** 一问一答的处理器。调用方不是应用自己就拒绝(渲染层收到的是一个错误)。 */
+function handle(channel, listener) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!fromAppWindow(event)) {
+      refusedSender(channel, event);
+      throw new Error(`${channel}: refused, the caller is not the Mosael window`);
+    }
+    return listener(event, ...args);
+  });
+}
+/** 单向的消息。调用方不是应用自己就丢掉。 */
+function listen(channel, listener) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!fromAppWindow(event)) {
+      refusedSender(channel, event);
+      return;
+    }
+    listener(event, ...args);
+  });
+}
 
 // 冒烟悬挂时,超时那一侧只知道「它没退出」。阶段轨迹**边走边落盘**,于是「卡在哪一站」
 // 是一条可读的事实,而不是靠读 356 行 diff 猜 —— Windows 上这一步从 6 秒变成跑不完 90 秒,
@@ -232,12 +286,8 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on("second-instance", (_event, argv) => {
     if (system) system.adoptSecondInstance(argv);
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win && !win.isDestroyed()) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    }
+    // 还在启动(窗口没建)时不替它建:那时后端还没就绪、IPC 也没注册,窗口建好自然会露面。
+    if (BrowserWindow.getAllWindows().length > 0) showWindow();
   });
 }
 
@@ -277,6 +327,17 @@ function installShellHeader(token) {
   shellHeaderInstalled = true;
   const urls = [`http://127.0.0.1:${BACKEND_PORT}/*`, `http://localhost:${BACKEND_PORT}/*`];
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) => {
+    // 只加在应用页面发出的请求上:哪个框架发的就看哪个框架的地址(应用里嵌的第三方 iframe 不算)。
+    let from = "";
+    try {
+      from = details.frame?.url || details.webContents?.getURL() || "";
+    } catch {
+      // 框架已经没了
+    }
+    if (!isAppUrl(from)) {
+      callback({});
+      return;
+    }
     callback({ requestHeaders: { ...details.requestHeaders, "X-Mosael-Shell": currentShellToken } });
   });
 }
@@ -307,6 +368,39 @@ async function waitForBackend(timeoutMs) {
   return false;
 }
 
+/**
+ * 封存的主密钥解不开时问人:重试 / (mac)打开钥匙串访问再试 / 退出。说清楚为什么不能「先凑合用着」——
+ * 另生一把新钥匙,已存的凭据就再也解不开了。
+ * @returns {Promise<"retry" | "keychain" | "quit">}
+ */
+async function askAboutMasterKey() {
+  const mac = process.platform === "darwin";
+  const buttons = [t("masterKey_retry"), ...(mac ? [t("masterKey_openKeychain")] : []), t("menu_quitApp")];
+  const { response } = await dialog.showMessageBox({
+    type: "error",
+    title: t("masterKey_title"),
+    message: t("masterKey_message"),
+    detail: t(mac ? "masterKey_detailMac" : "masterKey_detail", { path: path.join(configuredDataDir, SEALED_NAME) }),
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1,
+    noLink: true,
+  });
+  if (response === 0) return "retry";
+  if (mac && response === 1) return "keychain";
+  return "quit";
+}
+
+/** 打开「钥匙串访问」:macOS 15 起它挪进了 CoreServices,老系统还在「实用工具」里。 */
+async function openKeychainAccess() {
+  for (const bundle of [
+    "/System/Library/CoreServices/Applications/Keychain Access.app",
+    "/System/Applications/Utilities/Keychain Access.app",
+  ]) {
+    if (fs.existsSync(bundle) && !(await shell.openPath(bundle))) return;
+  }
+}
+
 async function ensureBackend() {
   // 端口上已经有个健康的后端(开发时手动起的 uvicorn、上次没退干净的)→ 对得上才复用。
   // 打包版要版本、数据目录都一致:上次壳被强杀留下的孤儿可能是旧版本、指着另一份数据。
@@ -317,6 +411,28 @@ async function ensureBackend() {
     appendMainLog("backend-not-reusable", verdict.reason);
     dialog.showErrorBox(t("backend_portTakenTitle"), t("backend_portTakenBody", { port: BACKEND_PORT, reason: verdict.reason }));
     return false;
+  }
+
+  // 落盘加密的主密钥:系统钥匙串封存,经标准输入交给后端(见 master-key.cjs)。没有可用的钥匙串时后端照旧用数据目录里的
+  // secret.key。封存过却解不开就停下来问人,人说退出就不起后端 —— 绝不让后端另生一把新钥匙。**只在打包版这么做**:
+  // 开发时常有人对着同一个数据目录手动起 uvicorn,明文文件被收走的话,手动起的那个就起不来了。
+  let masterKey = null;
+  if (!isDev) {
+    const resolved = await unlockMasterKey({
+      dataDir: configuredDataDir,
+      safeStorage,
+      // 冒烟里没有人点按钮:直接按退出算,结果文件里记着后端没起来。
+      ask: isSmokeTest ? async () => "quit" : askAboutMasterKey,
+      openKeychain: openKeychainAccess,
+      log: (error) => appendMainLog("master-key-unavailable", error),
+    });
+    if (!resolved) {
+      app.quit();
+      return false;
+    }
+    // 壳令牌:界面(file://,Origin 为 null)发往本机后端的请求都带上它,后端只放行带着它的 null 来源。
+    installShellHeader(shellToken(resolved.key));
+    if (resolved.sealed) masterKey = resolved.key;
   }
 
   const { command, args, cwd } = backendCommand();
@@ -367,20 +483,6 @@ async function ensureBackend() {
       process.platform === "win32" ? "python.exe" : path.join("bin", "python3"),
     );
     if (fs.existsSync(ttsPython)) backendEnv.MOSAEL_TTS_BASE_PYTHON = ttsPython;
-  }
-  // 落盘加密的主密钥:系统钥匙串封存,经标准输入交给后端(见 master-key.cjs)。钥匙串不可用时是 null,
-  // 后端照旧用数据目录里的 secret.key。**只在打包版这么做**:开发时常有人对着同一个数据目录手动起 uvicorn,
-  // 明文文件被收走的话,手动起的那个会新建一把钥匙,已存的凭据全解不开。
-  let masterKey = null;
-  if (!isDev) {
-    try {
-      const resolved = resolveMasterKey(configuredDataDir, safeStorage);
-      // 壳令牌:界面(file://,Origin 为 null)发往本机后端的请求都带上它,后端只放行带着它的 null 来源。
-      installShellHeader(shellToken(resolved.key));
-      if (resolved.sealed) masterKey = resolved.key;
-    } catch (error) {
-      appendMainLog("master-key-unavailable", error);
-    }
   }
   if (masterKey) {
     backendEnv.MOSAEL_SECRET_KEY_STDIN = "1";
@@ -598,6 +700,19 @@ function buildAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+/** 把主窗口叫到前台:不在就建一个,最小化了就还原。托盘、Dock(activate)、第二次启动、深链都走这一个。 */
+function showWindow() {
+  let win = BrowserWindow.getAllWindows()[0];
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    win = BrowserWindow.getAllWindows()[0];
+  }
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
 function createWindow() {
   const isMac = process.platform === "darwin";
   const win = new BrowserWindow({
@@ -664,6 +779,13 @@ function createWindow() {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
+  // 主框架只许停在应用自己的地址上(见 app-origin.cjs):落到别处的页面会拿到 preload 的全部桥。拦下的 http(s) 和上面一样交给
+  // 系统浏览器;file:、自定义协议什么都不做。(拖进窗口的文件本来就不导航:Electron 的 navigateOnDragDrop 默认为假。)
+  guardNavigation(win.webContents, {
+    isAppUrl,
+    openExternal: (url) => void shell.openExternal(url),
+    log: (line) => appendMainLog("navigation", line),
+  });
   markSmokeStage("window-created");
   if (isSmokeTest) {
     win.webContents.once("did-finish-load", async () => {
@@ -705,9 +827,9 @@ function createWindow() {
     });
   }
   if (isDev) {
-    win.loadURL(process.env.MOSAEL_FRONTEND_URL || "http://127.0.0.1:5173");
+    win.loadURL(FRONTEND_URL);
   } else {
-    win.loadFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
+    win.loadFile(path.join(FRONTEND_DIST, "index.html"));
   }
 
   // 启动发布执行器:后端是任务事实源,这里驱动每账号一个持久登录的内嵌视图。
@@ -798,6 +920,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // 应用自己的页面(主窗口、浮层视图)用默认会话:换成应用那一档权限(session-created 先给它装的是内嵌网页那一档)。
+  installPermissionPolicy(session.defaultSession, { isAppUrl, log: (line) => appendMainLogOnce("permission", line) });
   // 最先定语言:下面 ensureBackend 失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
@@ -810,6 +934,8 @@ app.whenReady().then(async () => {
       app.exit(1);
       return;
     }
+    // 人在主密钥那个框里选了退出:已经在退了,不再补一个「启动失败」。
+    if (quitting) return;
     dialog.showErrorBox(t("backend_startFailedTitle"), t("backend_startFailedBody", { port: BACKEND_PORT }));
     app.quit();
     return;
@@ -828,78 +954,76 @@ app.whenReady().then(async () => {
         : t("publisher_missing"),
     );
   };
-  ipcMain.handle(IPC.invoke.publishLogin, (_e, payload) => {
+  handle(IPC.invoke.publishLogin, (_e, payload) => {
     const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishLogin);
     return requirePublish().openLogin(accountId, platform);
   });
-  ipcMain.handle(IPC.invoke.publishOpenPage, (_e, payload) => {
+  handle(IPC.invoke.publishOpenPage, (_e, payload) => {
     const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishOpenPage);
     return requirePublish().openPage(accountId, platform);
   });
-  ipcMain.handle(IPC.invoke.publishSignOut, (_e, payload) => {
+  handle(IPC.invoke.publishSignOut, (_e, payload) => {
     const { accountId } = parsePublishTarget(payload, IPC.invoke.publishSignOut);
     return requirePublish().signOutAccount(accountId);
   });
-  ipcMain.handle(IPC.invoke.browserClearProfile, (_e, payload) => {
+  handle(IPC.invoke.browserClearProfile, (_e, payload) => {
     const { partition } = parseBrowserProfile(payload);
     return requirePublish().clearPoolProfile(partition);
   });
-  ipcMain.handle(IPC.invoke.publishInspect, (_e, payload) => {
+  handle(IPC.invoke.publishInspect, (_e, payload) => {
     const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishInspect);
     return requirePublish().inspectAccount(accountId, platform);
   });
-  ipcMain.handle(IPC.invoke.publishNavigate, (_e, payload) => {
+  handle(IPC.invoke.publishNavigate, (_e, payload) => {
     const { url } = parseUrlRequest(payload, IPC.invoke.publishNavigate);
     return requirePublish().navigateView(url);
   });
-  ipcMain.handle(IPC.invoke.publishBack, () => requirePublish().viewBack());
-  ipcMain.handle(IPC.invoke.publishForward, () => requirePublish().viewForward());
-  ipcMain.handle(IPC.invoke.publishReload, () => requirePublish().viewReload());
-  ipcMain.handle(IPC.invoke.publishHideView, () => requirePublish().hidePublishView());
+  handle(IPC.invoke.publishBack, () => requirePublish().viewBack());
+  handle(IPC.invoke.publishForward, () => requirePublish().viewForward());
+  handle(IPC.invoke.publishReload, () => requirePublish().viewReload());
+  handle(IPC.invoke.publishHideView, () => requirePublish().hidePublishView());
   // 悬浮面板:渲染层拖动/缩放/关闭。几何由主进程持有(layout() 要用,还要落盘)。
-  ipcMain.handle(IPC.invoke.publishPanelLayout, (_e, payload) =>
+  handle(IPC.invoke.publishPanelLayout, (_e, payload) =>
     requirePublish().setPanelLayout(parsePanelLayout(payload)),
   );
-  ipcMain.handle(IPC.invoke.publishClosePanel, (_e, payload) => {
+  handle(IPC.invoke.publishClosePanel, (_e, payload) => {
     const { id } = parsePanelId(payload);
     return requirePublish().closePanel(id);
   });
   // 前台会话的页面列表:切换、关闭、拖动重排、新建、让出左侧那一列。
-  ipcMain.handle(IPC.invoke.publishSwitchPage, (_e, payload) =>
+  handle(IPC.invoke.publishSwitchPage, (_e, payload) =>
     requirePublish().switchViewPage(parsePageId(payload, IPC.invoke.publishSwitchPage).id),
   );
-  ipcMain.handle(IPC.invoke.publishClosePage, (_e, payload) =>
+  handle(IPC.invoke.publishClosePage, (_e, payload) =>
     requirePublish().closeViewPage(parsePageId(payload, IPC.invoke.publishClosePage).id),
   );
-  ipcMain.handle(IPC.invoke.publishReorderPages, (_e, payload) =>
+  handle(IPC.invoke.publishReorderPages, (_e, payload) =>
     requirePublish().reorderViewPages(parsePageOrder(payload).ids),
   );
-  ipcMain.handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
-  ipcMain.handle(IPC.invoke.publishPagesInset, (_e, payload) =>
+  handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
+  handle(IPC.invoke.publishPagesInset, (_e, payload) =>
     requirePublish().setPagesInset(parsePagesInset(payload).left),
   );
-  ipcMain.handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
-  ipcMain.handle(IPC.invoke.publishCoverPage, (_e, payload) =>
+  handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
+  handle(IPC.invoke.publishCoverPage, (_e, payload) =>
     requirePublish().coverViewPage(parseCoverPage(payload).covered),
   );
-  ipcMain.handle(IPC.invoke.publishOverlay, (_e, payload) => requirePublish().overlayViewPage(parseOverlay(payload).up));
-  ipcMain.handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
-  // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起。只收主窗口自己发来的。
-  ipcMain.on(IPC.send.floatShow, (event, payload) => {
-    if (!publish || BrowserWindow.fromWebContents(event.sender)?.webContents !== event.sender) return;
-    void publish.showFloat(parseFloatShow(payload));
+  handle(IPC.invoke.publishOverlay, (_e, payload) => requirePublish().overlayViewPage(parseOverlay(payload).up));
+  handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
+  // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起(只收主窗口自己发来的,listen 那一道已经认过)。
+  listen(IPC.send.floatShow, (_event, payload) => {
+    if (publish) void publish.showFloat(parseFloatShow(payload));
   });
-  ipcMain.on(IPC.send.floatHide, (event, payload) => {
-    if (!publish || BrowserWindow.fromWebContents(event.sender)?.webContents !== event.sender) return;
-    publish.hideFloat(parseFloatHide(payload).id ?? undefined);
+  listen(IPC.send.floatHide, (_event, payload) => {
+    if (publish) publish.hideFloat(parseFloatHide(payload).id ?? undefined);
   });
-  ipcMain.handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
+  handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
     const { id, muted } = parsePanelMuted(payload);
     return requirePublish().setPanelMuted(id, muted);
   });
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。
-  ipcMain.handle(IPC.invoke.browserOpenLogin, async (_e, payload) => {
+  handle(IPC.invoke.browserOpenLogin, async (_e, payload) => {
     try {
       const request = parseBrowserLogin(payload);
       await requirePublish().openPoolLogin(request);
@@ -911,7 +1035,7 @@ app.whenReady().then(async () => {
   // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):写死的脚本经前端的设置仓库设好,写回服务器的那一下只在这个分区上拦下。
   // ComfyUI 工作台(ADR 0038 §3):开 = 亮出视图、注入写死的桥、开始轮询(视图收起就停);面板要桥做的事逐项校验后以 JSON
   // 数据嵌进写死的调用脚本。两条都只认按连接 id 拼出来的分区。
-  ipcMain.handle(IPC.invoke.comfyuiOpenWorkbench, async (_e, payload) => {
+  handle(IPC.invoke.comfyuiOpenWorkbench, async (_e, payload) => {
     try {
       const request = parseComfyWorkbenchOpen(payload);
       return { ok: true, outcome: await requirePublish().openComfyWorkbench(request) };
@@ -919,14 +1043,14 @@ app.whenReady().then(async () => {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  ipcMain.handle(IPC.invoke.comfyuiWorkbenchCall, async (_e, payload) => {
+  handle(IPC.invoke.comfyuiWorkbenchCall, async (_e, payload) => {
     try {
       return await requirePublish().comfyWorkbenchCall(parseComfyWorkbenchCall(payload));
     } catch (err) {
       return { ok: false, error: "invalid", message: String(err && err.message ? err.message : err) };
     }
   });
-  ipcMain.handle(IPC.invoke.comfyuiNavigation, async (_e, payload) => {
+  handle(IPC.invoke.comfyuiNavigation, async (_e, payload) => {
     try {
       const request = parseComfyNavigation(payload);
       return { ok: true, outcome: await requirePublish().setComfyViewNavigation(request) };
@@ -935,30 +1059,30 @@ app.whenReady().then(async () => {
     }
   });
   // 浏览器会话顶栏的页面工具:载荷先过契约里的解析器,作用对象由主进程认(前台视图)。
-  ipcMain.handle(IPC.invoke.pageToolsCapture, (_e, payload) =>
+  handle(IPC.invoke.pageToolsCapture, (_e, payload) =>
     requirePublish().capturePage(parseCaptureMode(payload).mode),
   );
-  ipcMain.handle(IPC.invoke.pageToolsRegionStart, () => requirePublish().beginRegionCapture());
-  ipcMain.handle(IPC.invoke.pageToolsRegionFinish, (_e, payload) =>
+  handle(IPC.invoke.pageToolsRegionStart, () => requirePublish().beginRegionCapture());
+  handle(IPC.invoke.pageToolsRegionFinish, (_e, payload) =>
     requirePublish().finishRegionCapture(parseRegionSelection(payload).selection),
   );
-  ipcMain.handle(IPC.invoke.pageToolsVideos, () => requirePublish().probeVideos());
-  ipcMain.handle(IPC.invoke.pageToolsImages, () => requirePublish().listImages());
-  ipcMain.handle(IPC.invoke.pageToolsFetchImages, (_e, payload) =>
+  handle(IPC.invoke.pageToolsVideos, () => requirePublish().probeVideos());
+  handle(IPC.invoke.pageToolsImages, () => requirePublish().listImages());
+  handle(IPC.invoke.pageToolsFetchImages, (_e, payload) =>
     requirePublish().fetchImages(parseImageUrls(payload).urls),
   );
-  ipcMain.handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
-  ipcMain.handle(IPC.invoke.pageToolsInset, (_e, payload) =>
+  handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
+  handle(IPC.invoke.pageToolsInset, (_e, payload) =>
     requirePublish().setToolsInset(parseToolsInset(payload).right),
   );
-  ipcMain.handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
+  handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
     requirePublish().saveDownload(parseSaveDownload(payload)),
   );
   // 开发时主进程过期提示:主进程启动时加载的产物(main.cjs、几个 bundle)变了,而正在跑的还是旧的 —— 渲染层
   // 热更新成了新代码,去调旧主进程里没有的处理器就会失败。给界面一条「重启后生效」,能重启时带按钮。
   // 正式打包的应用不起这个(isDev 为假)。
-  ipcMain.handle(IPC.invoke.mainStatus, () => mainStaleStatus());
-  ipcMain.handle(IPC.invoke.restartMain, () => {
+  handle(IPC.invoke.mainStatus, () => mainStaleStatus());
+  handle(IPC.invoke.restartMain, () => {
     if (!DEV_RESTART_CODE) throw new Error(t("devMain_cannotRestart"));
     // 由 dev-loop.cjs 拉起:以「要重启」的退出码退出,它再拉一遍 Electron;vite、后端那几栏不动。
     appendMainLog("dev-restart", `stale=${staleMainFiles.join(",")}`);
@@ -977,21 +1101,21 @@ app.whenReady().then(async () => {
   }
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
-  ipcMain.handle(IPC.invoke.checkUpdates, async () => {
+  handle(IPC.invoke.checkUpdates, async () => {
     try {
       return await checkForUpdates();
     } catch (error) {
       return { error: error.message };
     }
   });
-  ipcMain.handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
-  ipcMain.handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
-  ipcMain.handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
+  handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
+  handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
   // 路径格旁边的「选择…」:挂在发起的那个窗口上(找不到就用前台窗口),交回选中的路径或 null。
-  ipcMain.handle(IPC.invoke.pickPath, (event, payload) =>
+  handle(IPC.invoke.pickPath, (event, payload) =>
     pickPath(dialog, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow(), parsePickPath(payload)),
   );
-  ipcMain.handle(IPC.invoke.dataExportDiagnostics, async () => {
+  handle(IPC.invoke.dataExportDiagnostics, async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const picked = await dialog.showSaveDialog({
       title: t("dialog_exportDiagnostics"),
@@ -1020,7 +1144,7 @@ app.whenReady().then(async () => {
     });
     return { status: "saved", path: picked.filePath };
   });
-  ipcMain.handle(IPC.invoke.dataCreateBackup, async (_event, payload) => {
+  handle(IPC.invoke.dataCreateBackup, async (_event, payload) => {
     const { token } = parseAuthToken(payload, IPC.invoke.dataCreateBackup);
     const stamp = new Date().toISOString().slice(0, 10);
     const picked = await dialog.showSaveDialog({
@@ -1052,7 +1176,7 @@ app.whenReady().then(async () => {
       throw error;
     }
   });
-  ipcMain.handle(IPC.invoke.dataApplyRestore, async (_event, payload) => {
+  handle(IPC.invoke.dataApplyRestore, async (_event, payload) => {
     const { stageId } = parseRestoreStage(payload);
     quitting = true;
     try {
@@ -1083,7 +1207,7 @@ app.whenReady().then(async () => {
 
   buildAppMenu();
   // 渲染层的界面语言(首次加载、以及每次在设置里切换)。变了才重建菜单;托盘由系统能力层自己重建。
-  ipcMain.on(IPC.send.locale, (_event, payload) => {
+  listen(IPC.send.locale, (_event, payload) => {
     const before = i18n.getLocale();
     if (applyLocale(parseLocale(payload).locale) !== before) buildAppMenu();
   });
@@ -1096,7 +1220,7 @@ app.whenReady().then(async () => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
   // Win/Linux:标题栏三键叠层颜色随前端主题(mosaelDesktop.setTitleOverlay)。mac 无叠层。
-  ipcMain.on(IPC.send.titleOverlay, (event, payload) => {
+  listen(IPC.send.titleOverlay, (event, payload) => {
     if (process.platform === "darwin") return;
     const colors = parseTitleOverlay(payload);
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -1108,23 +1232,12 @@ app.whenReady().then(async () => {
   });
 
   createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  // 点 Dock 图标(mac 的 activate):和托盘「打开 Mosael」同一件事。关窗只是藏起来(system/residency),窗口一直在,
+  // 只在「一个窗口都没有时才建」的老写法下,藏起来的窗口点 Dock 叫不回来。
+  app.on("activate", () => showWindow());
 
   // 系统能力:窗口建好之后再注册(residency 要挂到窗口的 close 上)。
   if (system) {
-    const showWindow = () => {
-      let win = BrowserWindow.getAllWindows()[0];
-      if (!win || win.isDestroyed()) {
-        createWindow();
-        win = BrowserWindow.getAllWindows()[0];
-      }
-      if (!win) return;
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    };
     systemHandle = system.registerSystemCapabilities({
       getWindow: () => BrowserWindow.getAllWindows()[0] ?? null,
       showWindow,
@@ -1135,22 +1248,22 @@ app.whenReady().then(async () => {
       trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
     });
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
-    ipcMain.on(IPC.send.systemStatus, (_e, payload) => systemHandle?.pushStatus(parseSystemStatus(payload)));
+    listen(IPC.send.systemStatus, (_e, payload) => systemHandle?.pushStatus(parseSystemStatus(payload)));
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
-    ipcMain.on(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
+    listen(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
     // dev 下 process.execPath 是 Electron 二进制,写进登录项等于让开发机开机启动一个裸 Electron。
-    ipcMain.handle(IPC.invoke.getOpenAtLogin, () => (isDev ? null : system.getOpenAtLogin()));
-    ipcMain.handle(IPC.invoke.setOpenAtLogin, (_e, enabled) =>
+    handle(IPC.invoke.getOpenAtLogin, () => (isDev ? null : system.getOpenAtLogin()));
+    handle(IPC.invoke.setOpenAtLogin, (_e, enabled) =>
       isDev ? null : system.setOpenAtLogin(Boolean(enabled)),
     );
 
     // 自定义 CSS:渲染层要三样东西 —— 内容(启动时读一次,之后靠推送)、路径(设置页显示)、
     // 以及打开/定位这个文件的两个动作。写入始终由用户在自己的编辑器里完成,应用不代写。
-    ipcMain.handle(IPC.invoke.customCssRead, () => system.readCustomCss());
-    ipcMain.handle(IPC.invoke.customCssPath, () => system.customCssPath());
-    ipcMain.handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
-    ipcMain.handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
+    handle(IPC.invoke.customCssRead, () => system.readCustomCss());
+    handle(IPC.invoke.customCssPath, () => system.customCssPath());
+    handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
+    handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
 
     // 开机自启拉起时静默驻留托盘,不弹窗口。
     if (system.isHiddenLaunch()) BrowserWindow.getAllWindows()[0]?.hide();
