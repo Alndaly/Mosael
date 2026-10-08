@@ -364,11 +364,14 @@ class ConfirmationOut(OrmModel):
     always_asks: bool = False
     #: 卡上批的人能拨的开关,和它们现在的值(「建好就启用」);没有就是空的。批准时把拨好的带回来。
     choices: dict[str, bool] = {}
+    #: 点「本会话始终允许」时记在哪个工具名下(白名单里的 `tool`)。多数卡就是 `tool`;`run_plugin_tool` 是它替调的那个插件工具
+    #: (见 ConfirmableTool.allowance_tool)。
+    allow_tool: str = ""
 
     @model_validator(mode="after")
     def _split_for_the_card(self) -> ConfirmationOut:
         from app.core.i18n import get_current_locale
-        from app.domain.agent.confirmable import tool_spec
+        from app.domain.agent.confirmable import allowance_name, tool_spec
         from app.domain.agent.confirmations import card_parts
 
         headline, warning = card_parts(self.summary_key, self.summary_params, get_current_locale())
@@ -377,6 +380,7 @@ class ConfirmationOut(OrmModel):
         spec = tool_spec(self.tool)
         self.always_asks = bool(spec is not None and spec.always_asks)
         self.choices = {name: bool((self.payload or {}).get(name)) for name in (spec.choices if spec is not None else ())}
+        self.allow_tool = allowance_name(self.tool, self.payload)
         return self
 
 

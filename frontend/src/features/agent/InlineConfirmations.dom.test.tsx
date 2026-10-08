@@ -26,9 +26,13 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/features/agent/confirmSurface", () => ({ registerInlineConfirmSurface: () => () => {} }));
 
 const pendingCards = [
-  { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "edit", payload: {}, status: "pending" },
-  { id: "c2", tool: "render_sequence", summary: "导出", permission: "render-cost", payload: {}, status: "pending" },
-  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "external", payload: {}, status: "pending" },
+  { id: "c1", tool: "edit_timeline", allow_tool: "edit_timeline", summary: "改时间线", permission: "edit", payload: {}, status: "pending" },
+  { id: "c2", tool: "render_sequence", allow_tool: "render_sequence", summary: "导出", permission: "render-cost", payload: {}, status: "pending" },
+  { id: "c3", tool: "run_host_code", allow_tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "external", payload: {}, status: "pending" },
+  {
+    id: "c4", tool: "run_plugin_tool", allow_tool: "plugin__conn__wf_portrait", summary: "跑「人像」", permission: "ai-cost",
+    payload: {}, status: "pending",
+  },
 ];
 
 /** 决策请求停在这里,好在"正在飞"的那一刻断言。 */
@@ -123,6 +127,20 @@ describe("确认卡的等待状态", () => {
     const [, init] = api.mock.calls.find(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")!;
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       auto_allow_tools: [{ tool: "render_sequence", permission: "render-cost" }],
+    });
+    releaseDecision();
+  });
+
+  it("替别的工具开的卡(run_plugin_tool),「本会话始终允许」记在卡说的那个工具名下 —— 只放行同一张工作流", async () => {
+    renderCards();
+    // c3 是撤不回的那一档,没有这个按钮:第三个「本会话始终允许」是 c4 的。
+    (await screen.findAllByText("本会话始终允许"))[2].click();
+    await waitFor(() =>
+      expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(true),
+    );
+    const [, init] = api.mock.calls.find(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")!;
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      auto_allow_tools: [{ tool: "plugin__conn__wf_portrait", permission: "ai-cost" }],
     });
     releaseDecision();
   });

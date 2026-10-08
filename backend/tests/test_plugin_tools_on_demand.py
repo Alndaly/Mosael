@@ -147,7 +147,7 @@ def test_调一次_不花钱的直接跑_花钱的问人按它的档(setup) -> N
     paid = _call(setup, session, "run_plugin_tool", tool="explainer_voice", arguments={"text": "你好"})
     card = setup["client"].get(f"/api/confirmations/{paid['result']['confirmation_id']}").json()
     assert card["status"] == "pending" and card["permission"] == "ai-cost" and card["tool"] == "run_plugin_tool"
-    assert card["payload"]["tool"] == names["explainer_voice"]
+    assert card["allow_tool"] == names["explainer_voice"] and card["payload"]["tool"] == names["explainer_voice"]
 
     wrong = _call(setup, session, "run_plugin_tool", tool="explainer_voice", arguments={"txt": "你好"})
     assert "txt" in wrong["error"] and "text" in wrong["error"], "认不得的入参名不悄悄丢掉,说清它收哪些"

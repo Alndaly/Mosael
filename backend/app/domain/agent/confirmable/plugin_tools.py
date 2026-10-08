@@ -12,7 +12,8 @@
 允许了一次 Manim 渲染,不等于允许往云盘传文件。这一族名字由 registry.confirmable_family 认领。
 
 这一轮工具表里没有的插件工具(ADR 0044 修订 2026-10-08,见 agent.plugin_lookup)经 `run_plugin_tool` 调:它开自己那一张卡
-(每个开卡的工具一条登记),卡上的说明、问人的那一档、开卡校验、批准后的执行都委托给那个工具自己的这一套。
+(每个开卡的工具一条登记),卡上的说明、问人的那一档、开卡校验、批准后的执行都委托给那个工具自己的这一套;「本会话始终允许」
+记在**那个工具**名下(`allowance_tool`)—— 点了只放行同一个,而且和直接调它共用同一条。
 
 用户自己在插件页点「试一下」、工作流里的插件节点、画板上自己点运行,都不经这里:那是人点的。
 """
@@ -204,7 +205,7 @@ def _on_behalf_execute(db: Session, confirmation: Any, actor: str | None) -> dic
 confirmable_family(PLUGIN_TOOL_PREFIX, _bind)
 
 #: 调一个这一轮工具表里没有的插件工具(见模块说明)。卡上的话、档位、要不要问人都按 payload 里那个工具的事实算 —— 和以它
-#: 命名的卡同一套函数。
+#: 命名的卡同一套函数;「本会话始终允许」记在它名下。
 confirmable_tool(ConfirmableTool(
     name="run_plugin_tool",
     permission="edit",
@@ -214,4 +215,5 @@ confirmable_tool(ConfirmableTool(
     validate=_on_behalf_validate,
     escalate=_escalate,
     needs_card=_needs_card,
+    allowance_tool=lambda payload: str(payload.get("tool") or ""),
 ))

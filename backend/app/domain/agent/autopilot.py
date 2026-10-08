@@ -92,7 +92,7 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     「这一次不用问人」排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
     见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一格的一项只读能力也一样直接跑。
     """
-    from app.domain.agent.confirmable import tool_spec
+    from app.domain.agent.confirmable import allowance_name, tool_spec
 
     spec = tool_spec(confirmation.tool)
     if spec is not None and spec.always_asks:
@@ -112,14 +112,16 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
         return Decision(approve=False, detail={"reason": "mode-set-by-someone-else"})
 
     permission = confirmation.permission
-    allowed_up_to = session_allowance(session, confirmation.tool)
+    # 记在哪个工具名下由卡说了算(替别的工具开卡的 run_plugin_tool 记在它替调的那个名下,见 ConfirmableTool.allowance_tool)。
+    allowed_as = allowance_name(confirmation.tool, confirmation.payload)
+    allowed_up_to = session_allowance(session, allowed_as)
     if allowed_up_to and _within(permission, allowed_up_to):
         # 用户在一张读过的卡上点了「本会话始终允许」—— 逐个工具、他自己点的,和模式放行是两回事,
         # 所以留痕也分开记。只放行**不高于他当时那一档**的卡(见 SESSION_ALLOWABLE)。
         return Decision(
             approve=True,
             mode="session-allow",
-            detail={"tool": confirmation.tool, "permission": permission, "allowed_up_to": allowed_up_to},
+            detail={"tool": allowed_as, "permission": permission, "allowed_up_to": allowed_up_to},
         )
 
     mode = session.permission_mode

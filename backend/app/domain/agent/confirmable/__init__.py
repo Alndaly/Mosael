@@ -9,7 +9,14 @@
 """
 
 from app.domain.agent.confirmable.registry import (
-    PERMISSIONS, ConfirmableTool, confirmable_family, confirmable_tool, tool_families, tool_spec, tool_specs,
+    PERMISSIONS,
+    ConfirmableTool,
+    allowance_name,
+    confirmable_family,
+    confirmable_tool,
+    tool_families,
+    tool_spec,
+    tool_specs,
 )
 
 #: 登记的副作用发生在 import 时,所以这些模块必须被引到(和 workflows 的执行器同一个做法)。
@@ -18,5 +25,12 @@ from app.domain.agent.confirmable import (  # noqa: F401,E402  (registration)
 )
 
 __all__ = [
-    "PERMISSIONS", "ConfirmableTool", "confirmable_family", "confirmable_tool", "tool_families", "tool_spec", "tool_specs",
+    "PERMISSIONS",
+    "ConfirmableTool",
+    "allowance_name",
+    "confirmable_family",
+    "confirmable_tool",
+    "tool_families",
+    "tool_spec",
+    "tool_specs",
 ]

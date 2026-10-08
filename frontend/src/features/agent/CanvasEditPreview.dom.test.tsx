@@ -47,7 +47,7 @@ const PAYLOAD = {
 
 function card(status = "pending"): Confirmation {
   return {
-    id: "c1", workspace_id: "w1", session_id: "s1", tool: "comfy_canvas_edit", permission: "edit",
+    id: "c1", workspace_id: "w1", session_id: "s1", tool: "comfy_canvas_edit", allow_tool: "comfy_canvas_edit", permission: "edit",
     summary: "改 ComfyUI 画布上开着的「人像」:6 处改动,一次 Ctrl+Z 就退回去", headline: "改 ComfyUI 画布上开着的「人像」:6 处改动,一次 Ctrl+Z 就退回去",
     warning: "子图「Image Edit (Qwen Image 2.1)」在这张图里用了 2 处:改的是它的定义,每一处都会变", always_asks: false, choices: {},
     summary_key: "confirm_comfyCanvasEdit", summary_params: {}, payload: PAYLOAD, status, result: {}, error: null,

@@ -31583,6 +31583,11 @@
             "type": "object",
             "title": "Choices",
             "default": {}
+          },
+          "allow_tool": {
+            "type": "string",
+            "title": "Allow Tool",
+            "default": ""
           }
         },
         "type": "object",

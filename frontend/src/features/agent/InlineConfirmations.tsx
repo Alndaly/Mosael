@@ -167,6 +167,7 @@ export function ConfirmationsProvider({
       if (choice === "session") {
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
         // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。
+        // 「工具」是卡说的 `allow_tool`:替别的插件工具开卡的 run_plugin_tool 记在它替调的那个名下(只放行同一个)。
         const session = await getAgentSession(sessionId);
         const next = [...(session.auto_allow_tools ?? []), { tool, permission }];
         await updateAgentSession(sessionId, { auto_allow_tools: next });
@@ -193,7 +194,7 @@ export function ConfirmationsProvider({
       <DecisionButtons
         item={item}
         busyChoice={busy?.id === item.id ? busy.choice : null}
-        onDecide={(choice, choices) => mutate({ id: item.id, tool: item.tool, permission: item.permission, choice, choices })}
+        onDecide={(choice, choices) => mutate({ id: item.id, tool: item.allow_tool, permission: item.permission, choice, choices })}
       />
     ), [busy, mutate, readOnly, t]);
 

@@ -10,7 +10,9 @@
 - 发给智能体的入参收紧:长下拉换成一句「N options」,大图按「必填 → 非高级 → 高级」挑到上限、说一句没列出几项;插件页、
   工作流节点拿到的那份照旧是整张下拉;
 - plugin_tools 列一张工作流的全部入参、查某个下拉的可选值(按字筛);run_plugin_tool 开的卡说的、问人的那一档、
-  批准之后的执行和那个工具自己的卡同一份,认不得的入参名不悄悄丢掉。
+  批准之后的执行和那个工具自己的卡同一份,认不得的入参名不悄悄丢掉;
+- 在它的卡上点「本会话始终允许」,记在**那张工作流的工具**名下:同一张(同连接、同一张)第二次不问、直接调它自己的工具也不问,
+  换一张照问,另一台连接上同一个路径的照问;往外发请求、删东西那两档照旧不进(维护者 2026-10-08 定)。
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.plugins.dynamic_tools import clean_workflow
 from tests import comfyui_big_catalog
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
-from tests.util import fresh_client, user_id
+from tests.util import fresh_client, settled_card, user_id
 
 PACKAGE = "dev.mosael.comfyui"
 PLAIN = [f"人像/LoRA 组合 {index:02d}.json" for index in range(1, comfyui_big_catalog.PLAIN_WORKFLOWS + 1)]
@@ -193,6 +195,7 @@ def test_按工作流跑_卡和那个工具自己的同一份_认不得的入参
     card = client.get(f"/api/confirmations/{out['result']['confirmation_id']}").json()
     assert card["tool"] == "run_plugin_tool" and card["status"] == "pending"
     assert card["payload"]["tool"] == tool and card["payload"]["arguments"] == {steps: 30}, "认出的是那张工作流的工具"
+    assert card["allow_tool"] == tool, "「本会话始终允许」记在那个工具名下"
     assert "LoRA 组合 03" in card["summary"] and card["permission"] == "ai-cost", "卡上说的、问人的那一档和它自己的卡同一份"
 
     done = client.post(f"/api/confirmations/{card['id']}/approve").json()
@@ -248,3 +251,42 @@ def test_工作流工具说得出跑的是哪张(bench) -> None:
     assert {*PLAIN, BIG, TINY, "builtin:txt2img"} <= reported
     assert not any(name.startswith(PLUGIN_TOOL_PREFIX) for name in reported)
 
+
+def test_本会话始终允许按工作流记_同一张不再问_换一张照问_撤不回的两档不进(bench, comfy) -> None:
+    client, workspace = bench["client"], bench["workspace"]
+    session = _session(bench, PLAIN[0])
+    with SessionLocal() as db:
+        turn = {"Authorization": f"Bearer {mint_service_session(db, user_id(), agent_session_id=session)}"}
+        db.commit()
+
+    def run(agent_tool: str, **arguments: Any) -> str:
+        """以这一轮的身份调,回开出来的卡。"""
+        out = client.post(f"/api/agent/tools/{agent_tool}?workspace_id={workspace}", json={"arguments": arguments},
+                          headers=turn).json()
+        assert "result" in out, out
+        return out["result"]["confirmation_id"]
+
+    first = client.get(f"/api/confirmations/{run('run_plugin_tool', tool=PLAIN[2])}").json()
+    assert first["status"] == "pending" and first["allow_tool"] == bench["names"][PLAIN[2]]
+    allowed = client.patch(f"/api/agent/sessions/{session}",
+                           json={"auto_allow_tools": [{"tool": first["allow_tool"], "permission": first["permission"]}]})
+    assert allowed.status_code == 200, allowed.text
+
+    again = settled_card(run("run_plugin_tool", tool=PLAIN[2].removesuffix(".json")))
+    assert again.status == "executed" and again.decision_mode == "session-allow", "同一张第二次不问"
+    direct = settled_card(run(bench["names"][PLAIN[2]]))
+    assert direct.decision_mode == "session-allow", "直接调它自己的工具,和经 run_plugin_tool 共用同一条"
+    other = settled_card(run("run_plugin_tool", tool=PLAIN[3]))
+    assert other.status == "pending", "换一张照问"
+
+    second = client.post(f"/api/plugins/{PACKAGE}/instances", json={"config": {"server_url": comfy.url}}).json()["id"]
+    client.patch(f"/api/plugins/instances/{second}/permissions", json={"grants": comfyui_grants()})
+    assert client.patch(f"/api/plugins/instances/{second}", json={"enabled": True}).status_code == 200
+    assert client.post(f"/api/plugins/instances/{second}/refresh").status_code == 200
+    elsewhere = agent_tool_name(second, bench["names"][PLAIN[2]].split("__")[-1])
+    assert settled_card(run("run_plugin_tool", tool=elsewhere)).status == "pending", "另一台连接上同一个路径的照问"
+
+    for tier in ("external", "destroy"):
+        refused = client.patch(f"/api/agent/sessions/{session}",
+                               json={"auto_allow_tools": [{"tool": first["allow_tool"], "permission": tier}]})
+        assert refused.status_code == 422, (tier, refused.text)

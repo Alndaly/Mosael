@@ -11170,6 +11170,11 @@ export interface components {
             choices: {
                 [key: string]: boolean;
             };
+            /**
+             * Allow Tool
+             * @default
+             */
+            allow_tool: string;
         };
         /**
          * CostAmountOut

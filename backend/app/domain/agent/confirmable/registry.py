@@ -74,6 +74,10 @@ class ConfirmableTool:
     #: 批的人在卡上能改的几个**开关**(布尔),名字就是 payload 里的键,缺省值是开卡时 payload 里的那个。
     #: 「建好就启用」就是一个:看过全文的人可以当场决定。批准时只认这里声明过的键(见 confirmations.approve_confirmation)。
     choices: tuple[str, ...] = ()
+    #: 这张卡的「本会话始终允许」记在哪个工具名下(None = 卡自己的名字)。替别的工具开卡的那种用:`run_plugin_tool` 记在它替调的
+    #: 那个插件工具名下 —— 点了只放行同一个(同一张工作流),换一个照问;和直接调那个工具共用同一条(ADR 0044 修订 2026-10-08)。
+    #: 返回的名字也得是认得的确认卡工具(插件工具按族认),否则白名单写不进去(见 autopilot.set_session_allowances)。
+    allowance_tool: Callable[[dict[str, Any]], str] | None = None
 
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
@@ -117,6 +121,14 @@ def tool_spec(name: str) -> ConfirmableTool | None:
         if name.startswith(prefix) and len(name) > len(prefix):
             return bind(name)
     return None
+
+
+def allowance_name(tool: str, payload: dict[str, Any] | None) -> str:
+    """名叫 `tool`、载荷是 `payload` 的那张卡,「本会话始终允许」记在哪个工具名下(见 ConfirmableTool.allowance_tool)。"""
+    spec = tool_spec(tool)
+    if spec is None or spec.allowance_tool is None:
+        return tool
+    return spec.allowance_tool(payload or {}) or tool
 
 
 def tool_specs() -> dict[str, ConfirmableTool]:
