@@ -13,10 +13,11 @@
 
 from __future__ import annotations
 
+import bisect
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Clip
@@ -113,6 +114,49 @@ def clear_range(journal: Journal, track_id: str, start: float, end: float, *, ke
     for other in clips_on_track(journal.db, track_id):
         if other.id not in kept:
             carve(journal, other, start, end)
+
+
+class TrackCover:
+    """一条轨上片段的内存索引,给「一次放下很多段」用(导入字幕、一键生成字幕)。
+
+    `clear_range` 每放一段就把整条轨重新查一遍、逐段比:放 n 段就是 n² —— 导入两千条字幕 18 秒,而且这一整段
+    攥着写锁(实测 500 / 1000 / 2000 条:1.1 / 4.1 / 18.2 秒)。这里只查一次库,按起点排好;放下一段时用二分找出
+    落点附近的那几段,挖掉被盖住的部分(和 clear_range 同一个 `carve`),再把变动的几段在索引里挪好位置。
+
+    依赖这条轨的不变量:同一条轨上的片段不重叠(见本模块开头)—— 所以按起点排好后,终点也是递增的,
+    从落点往前找到第一段不碰着的就可以停。
+    """
+
+    def __init__(self, journal: Journal, track_id: str) -> None:
+        self.journal = journal
+        self.track_id = track_id
+        self._clips = clips_on_track(journal.db, track_id)
+
+    def place(self, clip: Clip) -> None:
+        """`clip` 已经建好(journal.create)、在这条轨上:轨上被它盖住的部分挖掉,然后把它记进索引。"""
+        start, end = clip.timeline_start, clip_end(clip)
+        upto = bisect.bisect_left(self._clips, end - EPS, key=_start_of)
+        first = upto
+        while first > 0 and clip_end(self._clips[first - 1]) > start + EPS:
+            first -= 1
+        for other in self._clips[first:upto]:
+            if other is clip:
+                continue
+            self._clips.remove(other)
+            right = carve(self.journal, other, start, end)
+            if not inspect(other).deleted:
+                self._insert(other)
+            if right is not None:
+                self._insert(right)
+        if clip not in self._clips:
+            self._insert(clip)
+
+    def _insert(self, clip: Clip) -> None:
+        bisect.insort(self._clips, clip, key=_start_of)
+
+
+def _start_of(clip: Clip) -> float:
+    return clip.timeline_start
 
 
 def shift(journal: Journal, clips: Iterable[Clip], delta: float) -> None:

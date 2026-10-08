@@ -19,7 +19,7 @@ from app.domain.sequences._timeline import (
     finite_number,
     too_short,
 )
-from app.domain.sequences.coverage import clear_range, clip_end, clips_on_track
+from app.domain.sequences.coverage import TrackCover, clear_range, clip_end, clips_on_track
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.journal import Journal
 
@@ -66,6 +66,9 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         # 新字幕落点上的那几条 —— 重新转写后断句变了,落在新字幕空隙里的旧字幕还会留着。
         for old in clips_on_track(db, track.id):
             journal.delete(old)
+    # 一次放下很多条:轨上的片段在内存里排好、二分找落点(见 TrackCover)。逐条 clear_range 是 n² ——
+    # 导入两千条字幕 18 秒、全程攥着写锁。
+    cover = TrackCover(journal, track.id)
     created = 0
     seen: set[tuple[float, str]] = set()
     for text, start, duration in cues:
@@ -92,7 +95,7 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
             )
         )
         # 和放下一段片段同一条规矩:同一条字幕轨上不叠着两条字幕,后来的这条盖住落点上的。
-        clear_range(journal, track.id, clip.timeline_start, clip_end(clip), keep={clip.id})
+        cover.place(clip)
         created += 1
     if not created:
         raise SequenceDomainError("No subtitle cues to insert")
