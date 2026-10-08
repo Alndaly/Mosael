@@ -356,6 +356,10 @@ def test_只有原文的失败_那一句是原文去掉套话的样子() -> None
     assert run.error_hint is None
     assert Run(None).error_summary is None and Run(None).error_detail is None
     assert Run("没有找到这个账号").error_detail is None, "本来就是一句人话:没有详情"
+    #: 多行的原文(发布脚本等按钮超时加一整段日志):那一句是头一行,日志在详情里
+    playwright = Run("Timeout 30000ms exceeded.\n=========== logs ===========\nwaiting for get_by_role(\"button\", name=\"发布\")")
+    assert playwright.error_summary == "Timeout 30000ms exceeded."
+    assert "waiting for get_by_role" in playwright.error_detail
 
 
 def test_工作流的子任务失败_那一句和怎么修照子任务的说() -> None:

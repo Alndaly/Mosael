@@ -102,9 +102,9 @@ function EventRow({ event, locale }: { event: JobEvent; locale: string }) {
           <i className={cn("mt-[5px] h-1.5 w-1.5 rounded-full bg-border-strong", failed && "bg-destructive")} />
           <div className="grid min-w-0 gap-px">
             <span className="text-ui-xs text-foreground [overflow-wrap:anywhere]">{label ? t(label) : event.type}</span>
-            {eventText(payload) && (
+            {eventText(payload, Boolean(failure)) && (
               <small className="min-w-0 text-ui-xs text-muted-foreground [overflow-wrap:anywhere]">
-                {eventText(payload)}
+                {eventText(payload, Boolean(failure))}
               </small>
             )}
           </div>
@@ -146,10 +146,10 @@ function eventPayloadRemainder(payload: Record<string, unknown>): Record<string,
   return remainder;
 }
 
-function eventText(payload: Record<string, unknown> | null | undefined): string | null {
+/** 这一行下面那一小句。`failureShown`:原因已经在展开的失败展示里了 —— 行上只写是哪一步,不把原因再写一遍。 */
+function eventText(payload: Record<string, unknown> | null | undefined, failureShown = false): string | null {
   if (!payload) return null;
   const p = payload as Record<string, unknown>;
-  //: 失败的原因不在这一行里写原文:没有名字的(工作流失败)写后端摘好的那一句,整段在展开的失败展示里
-  const candidate = p.name ?? p.message ?? p.error_summary ?? p.error ?? p.status;
+  const candidate = failureShown ? (p.name ?? p.message) : (p.name ?? p.message ?? p.error ?? p.status);
   return typeof candidate === "string" ? candidate : null;
 }

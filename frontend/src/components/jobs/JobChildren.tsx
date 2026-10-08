@@ -95,7 +95,8 @@ function ChildRow({ child }: { child: Job }) {
         <div className="ml-5 mt-1.5 grid min-w-0 gap-2 pb-1">
           {/* 失败原因先说。它此前整条藏在钻不进去的那一层里,行上只剩一个红色的「失败」。 */}
           {child.error && child.status === "failed" && (
-            <FailureCard title={t("failureOfKind").replace("{kind}", kindOf(child.kind).label)}
+            //: 子任务这一档是一行(那一句 + 「详情」浮层):工作流的失败照跑挂的那个子任务说,整张卡上面那一份已经摆过一遍
+            <FailureCard size="inline" lines={2} title={t("failureOfKind").replace("{kind}", kindOf(child.kind).label)}
                          {...failureFields(child, child.error)} data-job-failed={child.id} />
           )}
           {events.isPending ? (

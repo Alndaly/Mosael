@@ -178,7 +178,10 @@ def short_detail(text: str) -> str:
     raw = _FOR_URL.sub("", raw)
     raw = _HTTPX_PREFIX.sub(lambda found: f"HTTP {found.group(1)}", raw)
     raw = _URL.sub("", raw)
-    return _clip(raw)
+    #: 头一句是头一行:多行的原文(自动化脚本的超时加一整段日志、插件两行的失败原因)后面几行是现场,不进那一句 —— 此前整段
+    #: 压成一行,「Timeout 30000ms exceeded. ====== logs ====== waiting for …」
+    first = next((line.strip() for line in raw.splitlines() if line.strip()), "")
+    return _clip(first)
 
 
 def _provider_message(body: str) -> str:

@@ -117,8 +117,11 @@ function dataAttributes(props: FailureCardProps): DataAttributes {
 }
 
 function FullFailure(props: FailureCardProps) {
-  const { status = "failed", title, meta, className, children } = props;
+  const { status = "failed", title, meta, className, children, actions, detail, copyText } = props;
+  const t = useI18n();
   const titleId = React.useId();
+  //: 没有该点的、也没有原文可展开时,动作那一行就只剩一颗复制 —— 不为它单占一行,放进卡头最右边
+  const copyInHead = !actions && !detail && Boolean(copyText?.trim());
   return (
     <div
       role="group"
@@ -139,8 +142,11 @@ function FullFailure(props: FailureCardProps) {
             {meta}
           </div>
         ) : null}
+        {copyInHead ? (
+          <CopyIconButton text={copyText!.trim()} label={t("failureCopyError")} className={cn("-my-1", !meta && "ml-auto")} data-failure-copy="" />
+        ) : null}
       </div>
-      <FailureBody {...props} />
+      <FailureBody {...props} copyText={copyInHead ? null : copyText} />
       {children}
     </div>
   );
@@ -373,7 +379,7 @@ function FixStep({ step }: { step: { text: string; command?: string | null } }) 
   );
 }
 
-function CopyIconButton({ text, label, ...rest }: { text: string; label: string } & DataAttributes) {
+function CopyIconButton({ text, label, className, ...rest }: { text: string; label: string; className?: string } & DataAttributes) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
   const copy = () => {
@@ -382,7 +388,7 @@ function CopyIconButton({ text, label, ...rest }: { text: string; label: string 
     window.setTimeout(() => setCopied(false), 1200);
   };
   return (
-    <IconButton label={copied ? t("copied") : label} size="icon-xs" className="shrink-0 text-muted-foreground" onClick={copy} {...rest}>
+    <IconButton label={copied ? t("copied") : label} size="icon-xs" className={cn("shrink-0 text-muted-foreground", className)} onClick={copy} {...rest}>
       {copied ? <Check size={13} /> : <Copy size={13} />}
     </IconButton>
   );
