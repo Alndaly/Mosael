@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { atLeast, workspaceDeleteBlockedReason, workspaceMenuState } from "@/components/layout/workspaceMenu";
+import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog";
 import { relativeTime } from "@/lib/time";
 import { useDeleteWorkspace, useRenameWorkspace, useWorkspaces } from "@/lib/workspaces";
 
@@ -228,10 +229,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         pending={renameMut.isPending}
         onSubmit={(name) => renameMut.mutate({ id: wid, name })}
       />
-      <ConfirmDialog
-        open={deleteOpen}
-        title={t("deleteWorkspace")}
-        body={t("deleteWorkspaceConfirm").replace("{name}", workspace.name)}
+      <DeleteWorkspaceDialog
+        workspace={deleteOpen ? workspace : null}
         onCancel={() => setDeleteOpen(false)}
         pending={deleteMut.isPending}
         onConfirm={() => deleteMut.mutate(wid)}

@@ -32,7 +32,8 @@ import {
 } from "@/components/layout/workspaceMenu";
 import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { accountOrigin } from "@/components/layout/accountOrigin";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { RenameDialog } from "@/components/app/modals";
+import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
@@ -453,6 +454,8 @@ function WorkspaceSwitcher({
       <RenameDialog
         open={creating}
         title={t("workspaceNew")}
+        label={t("workspaceNameLabel")}
+        confirmLabel={t("createProjectConfirm")}
         initialValue=""
         onCancel={() => setCreating(false)}
         pending={createMut.isPending}
@@ -471,10 +474,8 @@ function WorkspaceSwitcher({
           else renameMut.mutate({ id: renaming.id, name: name.trim() });
         }}
       />
-      <ConfirmDialog
-        open={removing !== null}
-        title={t("deleteWorkspace")}
-        body={t("deleteWorkspaceConfirm").replace("{name}", removing?.name ?? "")}
+      <DeleteWorkspaceDialog
+        workspace={removing}
         onCancel={() => setRemoving(null)}
         pending={removeMut.isPending}
         onConfirm={() => {

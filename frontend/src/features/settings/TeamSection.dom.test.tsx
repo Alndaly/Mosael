@@ -93,7 +93,10 @@ it("删掉当前工作区:列表缓存里立刻拿掉它(WorkspaceGate 据此落
   // 灰着时按钮外面多一层说明原因的壳,能点了壳就拿掉 —— 按钮会换一个元素,所以每次都重新找。
   await waitFor(() => expect(screen.getByRole("button", { name: /deleteWorkspace/ })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: /deleteWorkspace/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
+  const confirm = await screen.findByRole("button", { name: "deleteWorkspacePermanently" });
+  fireEvent.change(screen.getByRole("textbox", { name: "deleteWorkspaceTypeName" }), { target: { value: "一 " } });
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
   await waitFor(() => expect(h.deleteWorkspace).toHaveBeenCalledWith("w1"));
   await waitFor(() =>
     expect(client.getQueryData<Workspace[]>(workspaceKeys.all())?.map((one) => one.id)).toEqual(["w2"]),

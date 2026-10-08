@@ -374,8 +374,8 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
           <div className="min-w-0 flex-1">
             <button type="button" className={cn("block max-w-full cursor-pointer rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")}><Truncate>{project.name}</Truncate></button>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Film size={12} />{t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}</span>
-              <span className="inline-flex items-center gap-1"><Layers size={12} />{t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}</span>
+              <span className="inline-flex items-center gap-1"><Film size={12} />{t((project.asset_count ?? 0) === 1 ? "projectStatAsset" : "projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}</span>
+              <span className="inline-flex items-center gap-1"><Layers size={12} />{t((project.sequence_count ?? 0) === 1 ? "projectStatSequence" : "projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}</span>
               {project.updated_at && <Hint label={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}><span>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span></Hint>}
             </div>
           </div>

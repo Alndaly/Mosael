@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
 /**
@@ -163,6 +163,8 @@ export function RenameDialog({
   initialValue,
   pending,
   confirmLabel,
+  label,
+  placeholder,
   onCancel,
   onSubmit,
 }: {
@@ -172,6 +174,9 @@ export function RenameDialog({
   pending: boolean;
   /** 确认键上写什么;不给就是「确认」(新建时写「创建」)。 */
   confirmLabel?: string;
+  /** 输入框上的标签;不给就是「名称」。此前只有一个没有标签的空框,新建时得猜要填什么,读屏只念「编辑文本」(体检 UM-28)。 */
+  label?: string;
+  placeholder?: string;
   onCancel: () => void;
   onSubmit: (value: string) => void;
 }) {
@@ -209,8 +214,9 @@ export function RenameDialog({
             name="value"
             render={({ field }) => (
               <FormItem>
+                <FormLabel>{label ?? t("nameField")}</FormLabel>
                 <FormControl>
-                  <Input autoFocus {...field} />
+                  <Input autoFocus placeholder={placeholder} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

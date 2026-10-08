@@ -172,6 +172,16 @@ it("项目没取回来时说没取回来、能重试,不说「还没有项目」
   expect(screen.getByText("homeEmptyTitle")).toBeTruthy();
 });
 
+//: 体检 UM-30:英文首页「1 sequences」。一个就用单数那条。
+it("项目卡上的序列数一个时用单数那条文案", () => {
+  localStorage.setItem("mosael:tab:home-collection", "all");
+  render(provider(
+    <HomeView workspace={workspace} projects={[{ ...projects[0], sequence_count: 1 }, { ...projects[1], sequence_count: 2 }]} load={loaded} onOpenProject={vi.fn()} />,
+  ));
+  expect(screen.getAllByText("projectStatSequence").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("projectStatSequences").length).toBeGreaterThan(0);
+});
+
 it("轮询中途失败、手上还有上一份时照旧列项目", () => {
   render(provider(
     <HomeView workspace={workspace} projects={projects} load={{ ...loaded, error: new Error("boom") }} onOpenProject={vi.fn()} />,

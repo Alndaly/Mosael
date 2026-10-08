@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 import { messages } from "@/app/messages";
@@ -106,7 +106,11 @@ it("删掉当前工作区之后,落到剩下的那个", async () => {
   const { client, resolved } = shell();
   fireEvent.click(await screen.findByRole("button", { name: new RegExp(zh.workspaceSwitch) }));
   fireEvent.click(await screen.findByRole("button", { name: `${zh.delete}: 默认工作区` }));
-  fireEvent.click(await screen.findByRole("button", { name: zh.confirm }));
+  //: 删工作区要把名字打一遍(体检 UM-26):打对之前确认键是灰的。
+  const confirm = await screen.findByRole("button", { name: zh.deleteWorkspacePermanently });
+  expect(confirm).toBeDisabled();
+  fireEvent.change(within(screen.getByRole("alertdialog")).getByRole("textbox"), { target: { value: "默认工作区" } });
+  fireEvent.click(confirm);
 
   await waitFor(() => expect(deleteWorkspace).toHaveBeenCalledWith("ws-1"));
   await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-2"));
