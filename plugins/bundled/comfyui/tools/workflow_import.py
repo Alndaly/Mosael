@@ -38,11 +38,11 @@ import zipfile
 import zlib
 from dataclasses import dataclass, field
 from typing import Any
-from urllib import error, parse
+from urllib import parse
 
 import convert
 import sources
-from comfy_http import Comfy
+from comfy_http import Comfy, HTTPStatusError
 from install import MANAGER_CLIENT, MANAGER_LOST_SECONDS, MANAGER_POLL_SECONDS, _cancelled, _log_cursor, _log_reason, \
     manager_needed, manager_version
 from lines import ComfyError, say
@@ -274,11 +274,13 @@ def _fetch(url: str, comfy: Comfy, locale: str) -> tuple[bytes, str]:
     name = parse.unquote(parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1])
     if site == "comfy":
         path = url[len(comfy.base):]
+        def take(response: Any) -> bytes:
+            _page(response.getheader("Content-Type") or "", locale)
+            return _read(response, locale)
+
         try:
-            with comfy._open("GET", path) as response:  # noqa: SLF001 — 带着这个连接的访问凭据
-                _page(response.headers.get("Content-Type") or "", locale)
-                return _read(response, locale), name
-        except error.HTTPError as exc:
+            return comfy.exchange("GET", path, take), name  # 带着这个连接的访问凭据
+        except HTTPStatusError as exc:
             raise ComfyError(say(locale, f"这台 ComfyUI 回了 HTTP {exc.code}:这个地址取不到东西",
                                  f"This ComfyUI answered HTTP {exc.code}: nothing to fetch there")) from exc
     current = url

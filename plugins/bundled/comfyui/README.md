@@ -527,6 +527,17 @@ besides the failure text, so the host's AI Studio failure card and board cells s
   ≥ 0.2.37 / ≥ 0.11.77). Adding one is one more line in `KNOWN`.
 - The failure text (`error`) is unchanged: the task center, logs and the agent still read it.
 
+## Fixes (1.22.2)
+
+- **Reaching ComfyUI through a port forward (UU Remote, frp, SSH forwarding) no longer works only half the time.** The plugin
+  used urllib, which puts `Connection: close` on every request; some forwarders drop about half of those connections early
+  ("Can't reach this ComfyUI", `Remote end closed connection without response`), and a large `/object_info` was sometimes cut off
+  half way (`IncompleteRead`), while the same address worked in a browser. Requests now go over `http.client` and keep their
+  connection open (one connection per thread within a call, closed at the end), without that header.
+- A read request (GET, HEAD) whose connection is dropped, or whose answer stops half way, is retried once on a fresh connection.
+  POSTs (queueing a job, writing a file) are never retried — they would run twice.
+- Finding ComfyUI on this computer goes through the same connection code.
+
 ## Fixes (1.22.1)
 
 - **A known cause is split into "why" and "how to fix"**: `hint` in the failure shape is no longer one sentence but `cause` (one

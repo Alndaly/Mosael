@@ -223,6 +223,7 @@ def main() -> None:
     payload = request.get("input") or {}
     locale = str(request.get("locale") or os.environ.get("MOSAEL_LOCALE") or "zh")
     tool = request.get("tool")
+    comfy: Comfy | None = None
     try:
         if tool == "comfyui_generation" and payload.get("op") in _SERVICE:
             # 本机服务的操作(ADR 0041):只描述、不起进程,也不和那台服务器说话 —— 问怎么起的时候它当然还没起
@@ -236,7 +237,8 @@ def main() -> None:
             return
         if tool == "comfyui_generation" and payload.get("op") == "service_busy":
             # 闲置自动停之前:它的任务队列里有没有在跑、在排的
-            emit({"ok": True, "output": service.busy(payload, locale, comfy=Comfy(env_base_url(), locale, env_access_token()))})
+            comfy = Comfy(env_base_url(), locale, env_access_token())
+            emit({"ok": True, "output": service.busy(payload, locale, comfy=comfy)})
             return
         if tool == "comfyui_generation" and payload.get("op") in _SERVICE_STREAMING:
             # 让 Mosael 装、换版本(流式:一步一行,宿主建取消文件就停在那一步,下次接着来)
@@ -265,6 +267,9 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001 — 插件自己的 bug:把原因交回去,别只留一个退出码
         traceback.print_exc(file=sys.stderr)
         emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+    finally:
+        if comfy is not None:
+            comfy.close()  # 这次调用一直用着的那几条连接(comfy_http 保持连接)
 
 
 if __name__ == "__main__":

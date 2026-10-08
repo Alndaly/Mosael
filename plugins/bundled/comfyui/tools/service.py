@@ -32,10 +32,9 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib import request
-
 import pinned
 import shared_models
+from comfy_http import Comfy
 from lines import ComfyError, say
 
 #: 健康检查问这条:ComfyUI 起来以后它立刻回一份系统信息(显卡、版本),比首页轻。
@@ -68,9 +67,6 @@ OLD_MANAGER_DIR = "comfyui-manager"
 
 #: 端口和监听地址由宿主给(建连接时选定、局域网开关),写在附加参数里会和它打架。
 _HOST_FLAGS = ("--port", "--listen")
-
-#: 本机发现不走代理:问的是本机。下载 pysssss 要走宿主给这个连接的代理(urllib 缺省就读那几个环境变量)。
-_LOCAL = request.build_opener(request.ProxyHandler({}))
 
 #: 试跑的那几行:导入 torch,看能用哪种显卡,顺带看装没装 Manager 的 pip 包、`WANTED` 里的包缺哪几个(只认装没装,不比版本;
 #: 包名的大小写和 `-` / `_` 由 importlib.metadata 自己归一,ComfyUI 要的 Python 3.10 起都这样)。
@@ -500,9 +496,10 @@ def discover(payload: dict[str, Any], locale: str, ports: tuple[int, ...] = DISC
     for port in ports:
         url = f"http://127.0.0.1:{port}"
         try:
-            with _LOCAL.open(f"{url}{HEALTH_PATH}", timeout=DISCOVER_TIMEOUT_SECONDS) as response:
-                stats = json.loads(response.read(256 * 1024).decode("utf-8", "replace"))
-        except (OSError, ValueError):
+            # 和连 ComfyUI 的其余请求同一个传输层(comfy_http):不走代理(问的是本机),不发 `Connection: close`
+            with Comfy(url, locale) as comfy:
+                stats = comfy.get(HEALTH_PATH, timeout=DISCOVER_TIMEOUT_SECONDS)
+        except ComfyError:
             continue
         system = stats.get("system") if isinstance(stats, dict) else None
         if not isinstance(system, dict):

@@ -32,7 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from urllib import request
+from urllib import parse
 
 from app.core.child_process import kill_group, kill_tree, process_alive, spawn_to_file, terminate_group
 from app.core.i18n import LocalizedError
@@ -68,8 +68,6 @@ RESTART_BASE_DELAY = 1.0
 #: 起不来时摆出来的日志行数。
 FAILURE_TAIL_LINES = 40
 
-#: 健康检查不走任何代理:它问的是本机。
-_OPENER = request.build_opener(request.ProxyHandler({}))
 
 
 @dataclass(frozen=True)
@@ -95,12 +93,23 @@ Respawn = Callable[[], LaunchSpec]
 
 
 def healthy(url: str) -> bool:
-    """健康检查:那条路径回 2xx。连不上、超时、回别的都不算。"""
+    """健康检查:那条路径回 2xx。连不上、超时、回别的都不算。
+
+    用 http.client 直接问:不走任何代理(问的是本机),也不发 urllib 硬塞的 `Connection: close` —— 经端口转发的那头碰上它
+    大约一半会把连接提前断掉(和插件 comfy_http 是同一件事)。"""
     try:
-        with _OPENER.open(url, timeout=HEALTH_TIMEOUT_SECONDS) as response:
-            return 200 <= response.status < 300
+        target = parse.urlsplit(url)
+        connection = http.client.HTTPConnection(target.hostname or "127.0.0.1", target.port or 80,
+                                                timeout=HEALTH_TIMEOUT_SECONDS)
+    except ValueError:
+        return False
+    try:
+        connection.request("GET", target.path or "/")
+        return 200 <= connection.getresponse().status < 300
     except (OSError, ValueError, http.client.HTTPException):
         return False
+    finally:
+        connection.close()
 
 
 def port_in_use(port: int) -> bool:

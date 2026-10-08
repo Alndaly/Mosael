@@ -428,6 +428,16 @@ HTTP 404。
   —— 那台 ComfyUI 的 comfy-kitchen 或 comfyui-workflow-templates 太旧(要 ≥ 0.2.37 / ≥ 0.11.77)。加一种就在 `KNOWN` 里加一行。
 - 失败原因那句话(`error`)不变:任务中心、日志、智能体读的还是它。
 
+## 修补(1.22.2)
+
+- **经端口转发连 ComfyUI(UU 远程、frp、SSH 转发)不再时好时坏。** 此前插件用 urllib,它给每个请求都带上 `Connection: close`;
+  有的转发碰上这种请求大约一半会把连接提前断掉(「连不上这台 ComfyUI」,`Remote end closed connection without response`),
+  大的 `/object_info` 有时读到一半就断(`IncompleteRead`),同一个地址在浏览器里却一切正常。现在改用 `http.client`、保持连接
+  (一次调用里每个线程一条,用完关掉),不带那个头。
+- 读的请求(GET、HEAD)碰上连接被断开、回答读到一半断了,换一条新连接重来一次。交东西的请求(POST:交任务、写文件)不重来 ——
+  重来就做了两遍。
+- 本机找 ComfyUI 也走同一套连接。
+
 ## 修补(1.22.1)
 
 - **认得出的原因分成「原因」和「怎么修」**:失败的样子里的 `hint` 不再是一整句话,而是 `cause`(一句原因)加 `steps`(修的步骤,
