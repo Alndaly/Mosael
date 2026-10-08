@@ -162,8 +162,9 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
             {statTiles.map((tile) => {
               const body = <>
                 <span className="col-start-2 row-start-1 inline-flex text-muted-foreground">{tile.icon}</span>
-                {/* 这里现在可能是一串钱("¥0.0004 + US$1.20"),不再只是一个小整数 —— 窄屏上要能截断。 */}
-                <Truncate as="strong" className="col-start-1 row-start-2 text-3xl font-semibold leading-tight tabular-nums">{tile.value}</Truncate>
+                {/* 这里可能是一串钱("¥0.0004 + US$1.20"):放不下时**折行**,不截断 —— 截掉的那半正是另一种币
+                    (此前 1440 宽下只剩「US$9.33 + ¥…」,体检 UM-31)。和管理概览的花费读数同一个做法。 */}
+                <strong data-stat-value="" className="col-start-1 row-start-2 text-3xl font-semibold leading-tight tabular-nums [overflow-wrap:anywhere]">{tile.value}</strong>
                 <Truncate className="col-start-1 row-start-1 text-ui-xs text-muted-foreground">
                   {t(tile.key).replace("{n}", windowDays)}
                   {tile.extra && (

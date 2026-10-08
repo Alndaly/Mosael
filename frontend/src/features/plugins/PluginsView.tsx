@@ -2,6 +2,7 @@ import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DE
 import { assetKeys } from "@/api/queryKeys";
 import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
+import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
@@ -110,10 +111,20 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
     staleTime: Infinity,
   });
   const scan = useMutation({
-    mutationFn: () => rescanPlugins(),
+    //: 带上扫之前已经登记的那几个,扫完说出多了哪几个 —— 此前转一下就结束,扫没扫到东西看不出来(体检 UM-32)。
+    mutationFn: (known: ReadonlySet<string>) => rescanPlugins().then((after) => after.filter((pkg) => !known.has(pkg.id))),
+    onSuccess: (added) =>
+      toast.success(
+        added.length > 0
+          ? t("pluginScanAdded").replace("{n}", String(added.length)).replace("{names}", added.map((pkg) => pkg.name).join(t("listSeparator")))
+          : t("pluginScanNothingNew"),
+      ),
     // 失败时也刷新:扫描跳过坏掉的那个包、照样登记别的(后端说清是哪个),列表得跟上登记上的那些。
     onSettled: () => invalidatePluginDependents(qc),
   });
+  //: 列表上标出哪几个有新版(和详情页头、插件市场同一份索引、同一个 query key):此前只有点进详情才看得到(体检 UM-32)。
+  const market = useQuery({ queryKey: ["plugin-market"], queryFn: () => listPluginMarket(), retry: false });
+  const updatable = new Set((market.data?.plugins ?? []).filter((entry) => entry.update_available).map((entry) => entry.id));
 
   const list = packages.data ?? [];
   // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
@@ -177,7 +188,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   );
 
 
-  const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
+  const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate(new Set((packages.data ?? []).map((pkg) => pkg.id)))} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
     {marketDialog}
@@ -216,6 +227,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                     <small>
                       v{item.version} · {t("pluginConnectionCount").replace("{n}", String((item.instances ?? []).length))}
                       {waiting && <span className="text-warning"> · {t("pluginPermWaiting")}</span>}
+                      {updatable.has(item.id) && <span data-plugin-updatable="" className="text-warning"> · {t("pluginMarketHasUpdate")}</span>}
                     </small>
                   </span>
                 </button>

@@ -86,6 +86,10 @@ it("writes one amount per currency on the usage tile instead of a mixed sum", as
   const usage = screen.getByText("homeStatAiUsage").closest("[data-stat]")!;
   expect(usage).toHaveTextContent("CN¥12.30 + $4.50");
   expect(usage).not.toHaveTextContent("16.8");
+  //: 体检 UM-31:放不下时折行,不截断 —— 截掉的那半正是另一种币(此前只剩「US$9.33 + ¥…」)。
+  const value = usage.querySelector("[data-stat-value]")!;
+  expect(value.className).not.toMatch(/\btruncate\b/);
+  expect(value.className).toContain("[overflow-wrap:anywhere]");
 });
 
 // 每格去哪儿、哪几格不去(理由见 StatisticsView 里 StatTile 的说明)。都走「从页面起点进来」:

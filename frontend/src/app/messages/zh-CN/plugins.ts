@@ -95,6 +95,8 @@ export const plugins = {
   pluginMarketFailed: "打不开插件市场",
   pluginInstall: "安装",
   pluginUpdate: "更新",
+  pluginScanAdded: "扫到 {n} 个新插件:{names}",
+  pluginScanNothingNew: "扫完了,没有新的插件",
   pluginInstalled: "已装 v{v}",
   mediaDropHint: "松手上传到素材库",
   mediaDropUploading: "正在上传…",

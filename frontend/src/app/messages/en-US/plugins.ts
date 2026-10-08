@@ -93,6 +93,8 @@ export const plugins = {
   pluginMarketFailed: "Cannot reach the plugin market",
   pluginInstall: "Install",
   pluginUpdate: "Update",
+  pluginScanAdded: "Found {n} new plugin(s): {names}",
+  pluginScanNothingNew: "Scan finished — no new plugins",
   pluginInstalled: "v{v} installed",
   mediaDropHint: "Drop to add to the library",
   mediaDropUploading: "Uploading…",
