@@ -9,6 +9,7 @@ import { deleteStorageOrphans, storageOrphansQuery, type StorageOrphan } from "@
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Truncate } from "@/components/ui/truncate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,7 +106,7 @@ export function StorageCleanupSection() {
                 />
                 <HardDrive size={14} className="shrink-0 text-muted-foreground" aria-hidden />
                 <div className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate font-mono text-ui-xs text-foreground">{one.key}</span>
+                  <Truncate className="font-mono text-ui-xs text-foreground">{one.key}</Truncate>
                   <span className="text-ui-xs text-muted-foreground">
                     {t(REASON_LABEL[one.reason] ?? "storageOrphanRowGone")} · {formatBytes(one.bytes)} ·{" "}
                     {/* 多久没动过了:刚导入一半的不会列出来(一小时内动过的不算),放了很久的才是真没人要。 */}
