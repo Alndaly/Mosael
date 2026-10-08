@@ -47,13 +47,16 @@ import { ADMIN_SETTINGS, SETTINGS_SEARCH, matchSettings } from "@/lib/settingsSe
 import { useAssetPages } from "@/lib/assetQueries";
 import { assetKindKey } from "@/lib/assetKinds";
 import { emitOpenEvent, gotoAdmin, gotoSettings, openBoard, openNote, OPEN_ASSET_EVENT } from "@/lib/deepLink";
-import { listenKeys } from "@/lib/shortcuts";
+import { isCommandPaletteKey, listenKeys } from "@/lib/shortcuts";
+import { leaveNativeView } from "@/lib/nativeView";
 
 
 type PaletteItem = {
   /** cmdk 的 value:不可读的稳定 id(`nav-media`、`asset-<id>`…),受控高亮认的是它。 */
   value: string;
   onSelect: () => void;
+  /** 选了它人还留在原处(换主题):不收起前台的原生视图。别的都是去别处的。 */
+  staysHere?: boolean;
   disabled?: boolean;
   content: React.ReactNode;
 };
@@ -94,7 +97,7 @@ export function CommandPalette({
   // Cmd+K / Ctrl+K 全局开关
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
+      if (isCommandPaletteKey(event)) {
         event.preventDefault();
         setOpen((value) => !value);
       }
@@ -212,9 +215,12 @@ export function CommandPalette({
   const settingsMatches = q ? matchSettings(SETTINGS_SEARCH, query, t).slice(0, 6) : [];
   const adminSettingMatches = q ? matchSettings(ADMIN_SETTINGS, query, t).slice(0, 4) : [];
 
-  const run = (action: () => void) => {
+  //: 去别处的那几项:内嵌浏览器、工作台在前台时先把它收起来再走(ADR 0051)—— 不然面板一关,网页又盖回来,
+  //: 跳过去的那一页在它底下,看着像什么都没发生。先收再关面板:面板关掉时视图回到原处那一步就落了空,不闪。
+  const run = (item: PaletteItem) => {
+    if (!item.staysHere) void leaveNativeView();
     setOpen(false);
-    action();
+    item.onSelect();
   };
 
   const upcomingTheme = nextTheme(theme);
@@ -246,6 +252,7 @@ export function CommandPalette({
               {
                 value: "action-toggle-theme",
                 onSelect: () => setTheme(upcomingTheme),
+                staysHere: true,
                 content: (
                   <>
                     <UpcomingThemeIcon size={14} />
@@ -469,7 +476,7 @@ export function CommandPalette({
           <React.Fragment key={group.id}>
             <CommandGroup heading={group.heading}>
               {group.items.map((item) => (
-                <CommandItem key={item.value} value={item.value} disabled={item.disabled} onSelect={() => run(item.onSelect)}>
+                <CommandItem key={item.value} value={item.value} disabled={item.disabled} onSelect={() => run(item)}>
                   {item.content}
                 </CommandItem>
               ))}

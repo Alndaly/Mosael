@@ -18,6 +18,10 @@ import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
 import { canGoHome, openedIn } from "@/features/agent/homeLabel";
 import { Truncate } from "@/components/ui/truncate";
 import { useHeaderStatusSlot } from "@/components/layout/headerSlot";
+import { InChromeStatusSlot, useChromeStatusSlot } from "@/components/app/chromeStatusSlot";
+import { APP_CHROME } from "@/components/ui/appChrome";
+import { StepNativeViewAside } from "@/components/ui/nativeViewAside";
+import { leaveNativeView, useNativeViewInFront } from "@/lib/nativeView";
 
 
 /**
@@ -83,17 +87,30 @@ export function ConfirmationCenter({
   //: 在等(见 headerSlot:还浮在页面上的话,盖住的还是那几颗);来了新卡自己再展开(收起的是「这几张」,不是「以后的都别给我看」)。
   const [tucked, setTucked] = React.useState<ReadonlySet<string>>(() => new Set());
   const headerSlot = useHeaderStatusSlot();
+  //: **原生视图在前台时卡不自己跳出来**(ADR 0051 §3):内嵌浏览器、工作台的画布盖在一切 DOM 上,右上角的卡在它底下 ——
+  //: 智能体等着人拍板,人看不见卡。可也不该自己让开:人正在登录、正在看画布,画面突然冻住、盖上一张卡。所以收成外壳顶栏上
+  //: 的「N 张卡等你拍板」,点了才请视图让开、把卡展开;收起、拍完,视图回来。视图收起,一切照旧。
+  const chromeSlot = useChromeStatusSlot();
+  const overNativeView = useNativeViewInFront() && chromeSlot !== null;
+  const [openOverView, setOpenOverView] = React.useState(false);
+  if (openOverView && (!overNativeView || items.length === 0)) setOpenOverView(false);
   const allTucked = items.length > 0 && items.every((item) => tucked.has(item.id)) && settled.cards.length === 0;
   if (items.length === 0 && settled.cards.length === 0) return null;
-  if (allTucked) {
+  //: 视图在前台、没有要拍板的卡(只剩执行失败的那几张留着读):等视图收起再摆出来,不为它们亮一个「0 张」
+  if (overNativeView && items.length === 0) return null;
+  if (allTucked || (overNativeView && !openOverView)) {
     const waiting = t("confirmCenterWaiting").replace("{n}", String(items.length));
     const pill = (
       <Button
-        size="sm"
+        size={overNativeView ? chromeSlot.size : "sm"}
         variant="outline"
-        className={cn("gap-1.5 rounded-full", !headerSlot && FLOATING_SURFACE)}
+        className={cn("gap-1.5 rounded-full", !headerSlot && !overNativeView && FLOATING_SURFACE)}
         aria-label={waiting}
-        onClick={() => setTucked(new Set())}
+        data-confirm-center-pill=""
+        onClick={() => {
+          setTucked(new Set());
+          if (overNativeView) setOpenOverView(true);
+        }}
       >
         <ShieldAlert size={14} aria-hidden />
         {/* 窄窗口顶栏放不下一句话(搜索框也只剩图标):只留数字。 */}
@@ -101,6 +118,7 @@ export function ConfirmationCenter({
         <span className="tabular-nums min-[761px]:hidden">{items.length}</span>
       </Button>
     );
+    if (overNativeView) return <InChromeStatusSlot slot={chromeSlot}>{pill}</InChromeStatusSlot>;
     return headerSlot ? (
       createPortal(pill, headerSlot)
     ) : (
@@ -112,18 +130,27 @@ export function ConfirmationCenter({
 
   return (
     // 高度有界、自己滚:卡多了不能从窗口底下溢出去,最后那张的按钮就点不到了。
+    // 在原生视图前面展开时(人点了外壳上的小标):抬过外壳、请视图让开;卡里点、按 Esc 不关底下开着的弹窗(见 appChrome)。
     <div
-      className="fixed right-4 top-14 z-[60] grid max-h-[calc(100vh-4.5rem)] w-[360px] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-y-auto"
+      {...(overNativeView ? APP_CHROME : undefined)}
+      className={cn(
+        "fixed right-4 top-14 grid max-h-[calc(100vh-4.5rem)] w-[360px] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-y-auto",
+        overNativeView ? "z-[210]" : "z-[60]",
+      )}
       role="region"
       aria-label={t("confirmTitle")}
     >
+      {overNativeView && <StepNativeViewAside />}
       {items.length > 0 && (
         <div className="flex justify-end">
           <Button
             size="xs"
             variant="ghost"
             className={cn(FLOATING_SURFACE, "gap-1 text-muted-foreground")}
-            onClick={() => setTucked(new Set(items.map((item) => item.id)))}
+            onClick={() => {
+              setTucked(new Set(items.map((item) => item.id)));
+              setOpenOverView(false);
+            }}
           >
             <ChevronUp size={13} aria-hidden />
             {t("confirmCenterTuck")}
@@ -178,7 +205,11 @@ function CardHome({ sessionId, goHome }: { sessionId: string; goHome?: (session:
           size="xs"
           variant="ghost"
           className="shrink-0"
-          onClick={() => void Promise.resolve(goHome(home)).catch((error: Error) => toast.error(error.message))}
+          //: 去别处:内嵌浏览器、工作台在前台时先收起来再走(ADR 0051)
+          onClick={() => {
+            void leaveNativeView();
+            void Promise.resolve(goHome(home)).catch((error: Error) => toast.error(error.message));
+          }}
         >
           <CornerUpLeft /> {t("agentGoHome")}
         </Button>

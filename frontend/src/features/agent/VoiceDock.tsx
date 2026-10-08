@@ -31,6 +31,8 @@ import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { placePayload } from "@/features/agent/places";
 import { VoiceOrb } from "@/features/agent/VoiceOrb";
 import { useFloatingPanel } from "@/components/app/useFloatingPanel";
+import { InChromeStatusSlot, useChromeStatusSlot } from "@/components/app/chromeStatusSlot";
+import { useNativeViewInFront } from "@/lib/nativeView";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -123,6 +125,32 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   //: 而"被切掉的解释"比没有解释更让人烦躁。
   const captionOnLeft = (style?.left ?? 0) > window.innerWidth / 2;
   const caption = loop.state === "hearing" || !loop.heard ? label : `${t("voiceDockHeard")}${loop.heard}`;
+  const toggle = () => {
+    if (loop.on) loop.stop();
+    else void loop.start();
+  };
+
+  //: 内嵌浏览器、工作台的画布在前台时(ADR 0051 D37):浮标拖到哪儿都可能落在网页底下,收成外壳顶栏上的一个图标 —— 同一个
+  //: 免提循环,说话照常;听到的那一句写在悬停说明里。视图收起,回到原来拖到的位置。
+  const chromeSlot = useChromeStatusSlot();
+  const overNativeView = useNativeViewInFront();
+  if (overNativeView && chromeSlot) {
+    return (
+      <InChromeStatusSlot slot={chromeSlot}>
+        <IconButton
+          variant="outline"
+          size={chromeSlot.size === "xs" ? "icon-xs" : "icon-sm"}
+          data-voice-dock-in-chrome=""
+          className={cn(loop.on && "border-primary/60", loop.state === "hearing" && "ring-2 ring-primary/30")}
+          onClick={toggle}
+          label={label}
+          hint={loop.heard ? `${t("voiceDockHeard")}${loop.heard}` : undefined}
+        >
+          <VoiceOrb state={loop.state} levelRef={loop.levelRef} />
+        </IconButton>
+      </InChromeStatusSlot>
+    );
+  }
 
   return (
     <div
@@ -147,9 +175,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
         // 拖完手一松不该顺带开关一次免提 —— 你只是想把它挪开。wasDragged 读一次就清,
         // 所以键盘敲回车(没有 pointer 事件)照样按得动。
         onClick={() => {
-          if (wasDragged()) return;
-          if (loop.on) loop.stop();
-          else void loop.start();
+          if (!wasDragged()) toggle();
         }}
         label={label}
         hint={loop.heard ? `${t("voiceDockHeard")}${loop.heard}` : undefined}

@@ -63,6 +63,11 @@ ipcRenderer.on(IPC.event.openTasks, () => {
   window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
 });
 
+// 网页在前台时按的 ⌘K(主进程从内嵌网页里截下来的,ADR 0051)→ 命令面板。CommandPalette 听的同样是 window 事件。
+ipcRenderer.on(IPC.event.commandPalette, () => {
+  window.dispatchEvent(new CustomEvent("mosael:open-cmdk"));
+});
+
 // mosael:// 深链与「拖到应用图标上的文件」。同样转成 window 事件,复用前端已有的
 // 深链通道(lib/deepLink 的 gotoRecord / mosael:open-* 那套),不另起一套路由。
 ipcRenderer.on(IPC.event.deepLink, (_event, link) => {
@@ -187,6 +192,10 @@ const publishBridge = {
   // 外壳里的悬停说明画到网页上面(浮层视图):不等回话,跟着说明出、收。
   showFloat: (hint) => ipcRenderer.send(IPC.send.floatShow, hint),
   hideFloat: (id) => ipcRenderer.send(IPC.send.floatHide, id ? { id } : {}),
+  // 原生视图在前台时,右下角的提示条画到网页上面(ADR 0051);上面的指针由主进程换算好交回来,渲染层点真的那一条。
+  showToasts: (toasts) => ipcRenderer.send(IPC.send.toastsShow, toasts),
+  hideToasts: () => ipcRenderer.send(IPC.send.toastsHide),
+  onToastsPointer: (callback) => onEvent(IPC.event.toastsPointer, callback),
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 

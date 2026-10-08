@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -42,6 +42,10 @@ vi.mock("@/api/transport", async (importOriginal) => ({
 }));
 
 import { HEADER_STATUS_SLOT_ID } from "@/components/layout/headerSlot";
+import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
+import { APP_CHROME } from "@/components/ui/appChrome";
+import { resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nativeViewAside";
+import { resetNativeViewForTests } from "@/lib/nativeView";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 
@@ -159,3 +163,87 @@ it("挂在对话上的卡写「智能体请求」,外部智能体的卡才写「
   expect(screen.getByText("confirmTitle · mcp")).toBeTruthy();
   expect(screen.queryByText("confirmTitle · agent")).toBeNull();
 });
+
+/**
+ * ADR 0051 §3:内嵌浏览器、工作台的画布在前台时卡不自己跳出来 —— 右上角的卡在网页底下看不见,自己让开又会在人登录、看画布时
+ * 突然把画面冻住。所以收成外壳顶栏上的「N 张卡等你拍板」,点了才请视图让开、展开;收起或拍完,视图回来;视图收起,一切照旧。
+ */
+describe("原生视图在前台时,卡收在外壳顶栏上", () => {
+  let push: ((state: { visible: boolean }) => void) | null = null;
+  const setOverlay = vi.fn(async (_up: boolean) => undefined);
+  const hideView = vi.fn(async () => undefined);
+  function desktop() {
+    vi.stubGlobal("mosaelPublish", {
+      onViewState: (callback: (state: { visible: boolean }) => void) => {
+        push = callback;
+        callback({ visible: true });
+        return () => (push = null);
+      },
+      setOverlay,
+      hideView,
+    });
+    resetNativeViewForTests();
+  }
+  function renderOverView(goHome?: () => void) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        {/* 内嵌浏览器的顶栏(外壳)和它上面留的那个位 */}
+        <div {...APP_CHROME} data-testid="browser-bar">
+          <ChromeStatusSlot size="xs" />
+        </div>
+        <ConfirmationCenter workspaceId="w1" goHome={goHome} />
+      </QueryClientProvider>,
+    );
+  }
+  afterEach(async () => {
+    cleanup();
+    await settleNativeViewAside();
+    resetNativeViewAside();
+    vi.unstubAllGlobals();
+    resetNativeViewForTests();
+    setOverlay.mockClear();
+    hideView.mockClear();
+  });
+
+  it("只亮一颗小标,卡不跳出来、视图不让开;点了才让开、展开,卡抬过外壳;收起,视图回来", async () => {
+    desktop();
+    renderOverView();
+    const pill = await screen.findByRole("button", { name: /confirmCenterWaiting/ });
+    expect(screen.getByTestId("browser-bar").contains(pill)).toBe(true);
+    expect(pill.className, "和外壳顶栏的控件同一档(xs)").toMatch(/\bh-7\b/);
+    expect(screen.queryByText("不隔离")).toBeNull();
+    expect(setOverlay).not.toHaveBeenCalled();
+
+    fireEvent.click(pill);
+    const region = await screen.findByRole("region", { name: "confirmTitle" });
+    expect(region.className).toMatch(/z-\[210\]/);
+    expect(region.hasAttribute("data-app-chrome")).toBe(true);
+    expect(screen.getByText("不隔离")).toBeTruthy();
+    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+
+    fireEvent.click(screen.getByRole("button", { name: /confirmCenterTuck/ }));
+    expect(await screen.findByRole("button", { name: /confirmCenterWaiting/ })).toBeTruthy();
+    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+  });
+
+  it("视图收起:卡回到右上角照常摆着", async () => {
+    desktop();
+    renderOverView();
+    await screen.findByRole("button", { name: /confirmCenterWaiting/ });
+    act(() => push?.({ visible: false }));
+    expect(await screen.findByText("不隔离")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "confirmTitle" }).className).toMatch(/z-\[60\]/);
+  });
+
+  it("「回到那里」是去别处:先把视图收起来", async () => {
+    desktop();
+    const goHome = vi.fn();
+    renderOverView(goHome);
+    fireEvent.click(await screen.findByRole("button", { name: /confirmCenterWaiting/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /agentGoHome/ }));
+    expect(hideView).toHaveBeenCalledTimes(1);
+    expect(goHome).toHaveBeenCalledWith(session);
+  });
+});
+

@@ -17,7 +17,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Progress } from "@/components/ui/progress";
-import { Hint } from "@/components/ui/tooltip";
+import { CHROME_LAYER, Hint } from "@/components/ui/tooltip";
+import { StepNativeViewAside } from "@/components/ui/nativeViewAside";
+import { useOverChromeModal } from "@/components/ui/overChromeModal";
+import { leaveNativeView } from "@/lib/nativeView";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -106,8 +109,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     setOpen(false);
   };
 
-  // 详情弹层里「前往对应页面」:去哪一页、打开哪条记录,由任务目录声明。
+  // 详情弹层里「前往对应页面」:去哪一页、打开哪条记录,由任务目录声明。换地方之前先收起前台的原生视图(ADR 0051)。
   const gotoDetailPage = (job: JobSummary) => {
+    void leaveNativeView();
     gotoJobPage(job, kindOf(job.kind));
     setDetailJob(null);
   };
@@ -184,6 +188,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     }
   }, [jobs.data, kindsReady, kindOf, t, qc]);
 
+  //: 原生视图(内嵌浏览器、工作台)在前台时(App 外面那层 OverNativeView 说):弹出层抬过外壳、开着时请视图让开 ——
+  //: 系统通知点进来打开的任务中心,不该画在网页底下(ADR 0051 D34)。详情框、确认框读同一个范围,自己抬、自己让。
+  const { aside: overNativeView } = useOverChromeModal();
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -200,7 +208,12 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
-      <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("taskCenter")}>
+      <PopoverContent
+        {...(overNativeView ? CHROME_LAYER : undefined)}
+        className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0"
+        aria-label={t("taskCenter")}
+      >
+        {overNativeView && <StepNativeViewAside />}
         <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (

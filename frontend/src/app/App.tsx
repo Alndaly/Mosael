@@ -54,6 +54,9 @@ import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { useToastClearance } from "@/components/app/toastClearance";
+import { useToastMirror } from "@/components/app/toastMirror";
+import { OverNativeView } from "@/components/app/overNativeView";
+import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
 import { useDesignSheetRoute } from "@/dev/designSheetRoute";
 import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
@@ -298,6 +301,8 @@ export function PublishViewBar() {
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
       )}
+      {/* 等人拍板的卡、免提浮标:网页在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
+      <ChromeStatusSlot size="xs" />
       {/* 开发时主进程过期:窗口底部那条提示被网页视图盖住了,顶栏里常驻一个小标记(正式打包的应用永远没有)。 */}
       <MainStaleBadge />
       {/* 离开这个窗口的主出口:留着字(图标认不出「回到 Mosael」),说明里补一句连按两次 Esc 也能回来。 */}
@@ -323,7 +328,6 @@ export function PublishViewBar() {
   );
 }
 
-/** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
 /** 开发构建里打开 `#/dev/design` 时是规格样张(不用登录);别的时候照常。 */
 function AuthGateOrDesignSheet() {
   const onSheet = useDesignSheetRoute();
@@ -337,22 +341,30 @@ function AuthGateOrDesignSheet() {
   return <AuthGate />;
 }
 
-function AppToaster() {
+/** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
+export function AppToaster() {
   const { theme } = usePreferences();
   //: 贴底的输入区(AI Studio、智能体面板)伸进右下角那一列时整体抬到它上沿之上,不盖住发送键(见 toastClearance)。
   const bottom = useToastClearance();
+  //: 内嵌浏览器、工作台在前台时,提示条画进浮层视图、按钮点得到(ADR 0051 D33,见 toastMirror)
+  const [host, setHost] = React.useState<HTMLDivElement | null>(null);
+  const mirrored = useToastMirror(host);
   return (
-    <Toaster
-      theme={theme}
-      position="bottom-right"
-      offset={{ bottom }}
-      mobileOffset={{ bottom }}
-      gap={8}
-      toastOptions={{
-        className:
-          "rounded-lg! border! border-floating-border! bg-popover! text-ui-sm! text-foreground! shadow-none!",
-      }}
-    />
+    //: 挂 APP_CHROME:任何弹窗开着时提示条都盖在它上面、却在它外面 —— 模态弹窗把 body 设成 pointer-events: none,提示条跟着
+    //: 点不动;点上去又被当成「点了弹窗外面」把弹窗关掉。和窗口外壳同一个处理(D40,见 appChrome)。
+    <div ref={setHost} {...APP_CHROME} data-app-toaster="" data-toasts-mirrored={mirrored ? "" : undefined}>
+      <Toaster
+        theme={theme}
+        position="bottom-right"
+        offset={{ bottom }}
+        mobileOffset={{ bottom }}
+        gap={8}
+        toastOptions={{
+          className:
+            "rounded-lg! border! border-floating-border! bg-popover! text-ui-sm! text-foreground! shadow-none!",
+        }}
+      />
+    </div>
   );
 }
 
@@ -657,7 +669,9 @@ function Studio({
         </React.Suspense>
         </PageBoundary>
         {/* 浮在页面上的这几块各自兜底,换一页就重新挂上(见 SectionBoundary 的 quiet)。 */}
+        {/* 命令面板和下面那一问:内嵌浏览器、工作台在前台时也在它们前面打开(ADR 0051,见 OverNativeView) */}
         <SectionBoundary mode="quiet" resetKey={view}>
+        <OverNativeView>
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}
@@ -666,13 +680,14 @@ function Studio({
           onCreateProject={() => createProject.mutate()}
           creatingProject={createProject.isPending}
         />
+        </OverNativeView>
         </SectionBoundary>
         <SectionBoundary mode="quiet" resetKey={view}>
         <ConfirmationCenter workspaceId={workspace.id} goHome={(session) => goHome(workspace.id, session)} />
         </SectionBoundary>
         {/* 把配音库的嗓子交给远端引擎念、这个账号第一次用它时那一问(ADR 0037)。挂在应用级:配音、字幕配音、
             画板、对话音色几处都会撞上同一个 409,确认框只有一个。 */}
-        <SectionBoundary mode="quiet" resetKey={view}><RemoteVoiceConsentHost /></SectionBoundary>
+        <SectionBoundary mode="quiet" resetKey={view}><OverNativeView><RemoteVoiceConsentHost /></OverNativeView></SectionBoundary>
         {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"
             的时候还叫得动。默认不浮,由设置里那个开关决定(本地偏好,见 app/preferences)。 */}
         {voiceDock && <SectionBoundary mode="quiet" resetKey={view}><VoiceDock workspaceId={workspace.id} onClose={() => setVoiceDock(false)} /></SectionBoundary>}

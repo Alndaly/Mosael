@@ -1,5 +1,7 @@
 import React from "react";
 
+import { leaveNativeView, nativeViewInFront } from "@/lib/nativeView";
+
 /**
  * 「打开某一条记录」的请求,**放进信箱**,而不是按时间猜对方什么时候准备好。
  *
@@ -293,17 +295,25 @@ export const VIEW_RECORD_EVENTS: Record<string, string> = {
  *
  * 深链只导航:主进程那边已经把 view 限死在白名单里、id 限死了字符集(见
  * electron/system/deepLink.ts 头部关于「为什么只导航不执行」的说明),这里不再放宽。
+ *
+ * 内嵌浏览器、工作台在前台时**先把它收起来再跳**(ADR 0051 D35):不然路由在网页底下换了,窗口被唤到前台却看不出任何变化,
+ * 按「返回 Mosael」之后才落到那一页。收起和「返回 Mosael」是同一下 —— 视图还活着,工作台里没存的改动还在,不另弹确认。
  */
 export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () => void {
-  const onLink = (event: Event) => {
-    const link = (event as CustomEvent<{ view?: string; id?: string; market?: string; template?: string; join?: string }>).detail;
-    //: 邀请链接(`join`)不在这里:登录之前也要接得住,由启动时挂上的 lib/inviteLinks.listenInviteDeepLinks 收。
-    if (!link?.view || link.join) return;
+  const go = (link: { view: string; id?: string; market?: string; template?: string }) => {
     //: 官网社区页的「在 Mosael 中打开」:没装的插件、没添加的模板在本机没有记录 id,
     //: 要的是「打开市场 / 社区,找到它」—— 装、添加仍由人点(只导航,见 electron/system/deepLink)。
     if (link.market) return gotoRecord("/plugins", OPEN_PLUGIN_IN_MARKET, link.market);
     if (link.template) return gotoRecord("/workflows", OPEN_WORKFLOW_TEMPLATE, link.template);
     gotoRecord(`/${link.view}`, VIEW_RECORD_EVENTS[link.view], link.id);
+  };
+  const onLink = (event: Event) => {
+    const link = (event as CustomEvent<{ view?: string; id?: string; market?: string; template?: string; join?: string }>).detail;
+    const view = link?.view;
+    //: 邀请链接(`join`)不在这里:登录之前也要接得住,由启动时挂上的 lib/inviteLinks.listenInviteDeepLinks 收。
+    if (!view || link.join) return;
+    if (nativeViewInFront()) void leaveNativeView().then(() => go({ ...link, view }));
+    else go({ ...link, view });
   };
   const onOpenFiles = (event: Event) => {
     const paths = (event as CustomEvent<string[]>).detail;

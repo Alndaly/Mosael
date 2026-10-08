@@ -208,6 +208,43 @@ describe("浮层视图", () => {
     expect(hostFocus).toHaveBeenCalled();
   });
 
+  it("提示条那一块(ADR 0051):不留余量、右下角贴着窗口右下角;交给浮层页的是 showToasts", async () => {
+    const win = makeWindow();
+    const layer = new FloatLayer(win as never, () => null, { kind: "toasts" });
+    const toasts = { id: "toasts", html: "<section><ol data-sonner-toaster></ol></section>", rect: { x: 1040, y: 760, width: 400, height: 140 }, root: CONTENT.root };
+    await layer.show(toasts);
+    const [view] = fake.WebContentsView.created;
+    expect(view.webContents.scripts.at(-1)).toContain("window.floatLayer?.showToasts(");
+    expect(view.webContents.scripts.at(-1)).toContain(JSON.stringify(toasts.html));
+    expect(view.bounds).toEqual({ x: 1040, y: 760, width: 400, height: 140 });
+  });
+
+  it("提示条上的指针交回渲染层:换算成主窗口的 CSS 坐标(按主窗口的缩放),只认左键松开、移动、移出", async () => {
+    const win = makeWindow("http://127.0.0.1:5173/", 1.25);
+    const pointers: unknown[] = [];
+    const layer = new FloatLayer(win as never, () => null, { kind: "toasts", onPointer: (pointer) => pointers.push(pointer) });
+    await layer.show({ id: "toasts", html: "<section></section>", rect: { x: 1040, y: 760, width: 400, height: 140 }, root: CONTENT.root });
+    const [view] = fake.WebContentsView.created;
+    const mouse = view.webContents.handlers.get("before-mouse-event")!;
+    mouse({}, { type: "mouseMove", x: 10, y: 20 });
+    mouse({}, { type: "mouseDown", x: 10, y: 20, button: "left" });
+    mouse({}, { type: "mouseUp", x: 10, y: 20, button: "right" });
+    mouse({}, { type: "mouseUp", x: 10, y: 20, button: "left" });
+    mouse({}, { type: "mouseLeave", x: -1, y: -1 });
+    const at = { x: (1040 * 1.25 + 10) / 1.25, y: (760 * 1.25 + 20) / 1.25 };
+    expect(pointers).toEqual([
+      { type: "move", ...at },
+      { type: "up", ...at },
+      { type: "leave", x: (1040 * 1.25 - 1) / 1.25, y: (760 * 1.25 - 1) / 1.25 },
+    ]);
+  });
+
+  it("说明那一种不接指针(它只有说明那么大,指针本来就在说明外面)", () => {
+    const layer = new FloatLayer(makeWindow() as never);
+    layer.warm();
+    expect(fake.WebContentsView.created[0].webContents.handlers.has("before-mouse-event")).toBe(false);
+  });
+
   it("销毁:摘下视图、关掉它的网页", () => {
     const win = makeWindow();
     const layer = new FloatLayer(win as never);

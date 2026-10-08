@@ -7,6 +7,21 @@ const OFF_WINDOW_GAP = 64;
 
 type Rect = { x: number; y: number; width: number; height: number };
 
+/** 提示条那一块浮层视图上的一下指针,换算成主窗口的 CSS 坐标(见 FloatLayer 的 `onPointer`)。 */
+export interface FloatPointer {
+  type: "move" | "up" | "leave";
+  x: number;
+  y: number;
+}
+
+/**
+ * 这一块浮层画哪一种:
+ * - `hint`(默认):外壳里的一条悬停说明,四周留一点余量,只有说明那么大;不接指针(指针本来就在说明外面)。
+ * - `toasts`:右下角那一整块提示条(ADR 0051)。浮层页照主窗口的样子贴着视图右下角摆提示条,所以不留余量、视图的右下角就是
+ *   窗口的右下角;提示条上有按钮,指针要转交回渲染层(`onPointer`),由它点真的那一条。
+ */
+export type FloatKind = "hint" | "toasts";
+
 /** 一条要画在原生网页视图上面的说明(渲染层量好、序列化好的,见 frontend/src/components/ui/floatLayer.ts)。 */
 export interface FloatHint {
   /** 哪一条:收起时只收自己那一条,已经换成下一条了就不动。 */
@@ -43,7 +58,12 @@ export class FloatLayer {
     private readonly window: BaseWindow,
     /** 最后拿着焦点的那个(网页或主窗口):浮层视图拿到焦点时还给它。 */
     private readonly focusTarget: () => Electron.WebContents | null = () => null,
+    private readonly options: { kind?: FloatKind; onPointer?: (pointer: FloatPointer) => void } = {},
   ) {}
+
+  private get kind(): FloatKind {
+    return this.options.kind ?? "hint";
+  }
 
   warm(): void {
     this.ensure();
@@ -56,17 +76,21 @@ export class FloatLayer {
     const zoom = this.host()?.getZoomFactor() ?? 1;
     view.webContents.setZoomFactor(zoom);
     const { x, y, width, height } = hint.rect;
+    const pad = this.kind === "toasts" ? 0 : PAD;
     const target = {
-      x: Math.floor((x - PAD) * zoom),
-      y: Math.floor((y - PAD) * zoom),
-      width: Math.ceil((width + PAD * 2) * zoom),
-      height: Math.ceil((height + PAD * 2) * zoom),
+      x: Math.floor((x - pad) * zoom),
+      y: Math.floor((y - pad) * zoom),
+      width: Math.ceil((width + pad * 2) * zoom),
+      height: Math.ceil((height + pad * 2) * zoom),
     };
     await this.ready;
     if (this.current !== hint.id) return;
     // 先在窗口外画好(浮层页等一帧再回话),再挪进来 —— 挪进来那一帧就是这条说明。
-    const payload = { html: hint.html, root: hint.root, pad: PAD, width };
-    await view.webContents.executeJavaScript(`window.floatLayer?.show(${JSON.stringify(payload)})`).catch(() => undefined);
+    const script =
+      this.kind === "toasts"
+        ? `window.floatLayer?.showToasts(${JSON.stringify({ html: hint.html, root: hint.root })})`
+        : `window.floatLayer?.show(${JSON.stringify({ html: hint.html, root: hint.root, pad, width })})`;
+    await view.webContents.executeJavaScript(script).catch(() => undefined);
     if (this.current !== hint.id || this.window.isDestroyed()) return;
     this.bounds = target;
     view.setBounds(target);
@@ -121,6 +145,16 @@ export class FloatLayer {
     view.webContents.on("will-navigate", (event) => event.preventDefault());
     view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     view.webContents.on("focus", () => this.returnFocus());
+    // 提示条上的按钮:这块视图里画的只是一份照着画的样子,点了要交回渲染层点真的那一条(见 FloatPointer)。
+    const onPointer = this.options.onPointer;
+    if (onPointer) {
+      view.webContents.on("before-mouse-event", (_event, mouse) => {
+        const type = mouse.type === "mouseUp" ? (mouse.button === "left" ? "up" : null) : mouse.type === "mouseMove" ? "move" : mouse.type === "mouseLeave" ? "leave" : null;
+        if (!type) return;
+        const zoom = this.host()?.getZoomFactor() || 1;
+        onPointer({ type, x: (this.bounds.x + mouse.x) / zoom, y: (this.bounds.y + mouse.y) / zoom });
+      });
+    }
     this.window.contentView.addChildView(view);
     this.view = view;
     // 和主窗口同源:开发时是 vite 的地址,打包后是 dist 里的文件。

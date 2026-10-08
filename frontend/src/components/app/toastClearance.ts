@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useNativeViewInFront } from "@/lib/nativeView";
+
 /**
  * 提示条(右下角的 toast)让开页面底部固定的输入区。
  *
@@ -47,18 +49,24 @@ export function toastBottomOffset(boxes: Box[], viewport: { width: number; heigh
 /**
  * 给 Toaster 的 `offset` / `mobileOffset` 用:底边那一项跟着挂了标记的输入区走。
  *
- * 什么时候重新量:窗口大小变了、DOM 里挂上 / 拿掉了输入区(换页、开关智能体面板)、输入区自己长高了(多写几行)。
- * 一帧最多量一次 —— DOM 变动很频繁(流式回复一帧一变),回调只排一次 requestAnimationFrame;值没变不重渲。
+ * 什么时候重新量:窗口大小变了、DOM 里挂上 / 拿掉了输入区(换页、开关智能体面板)、输入区自己长高了(多写几行)、
+ * 原生视图进出前台。一帧最多量一次 —— DOM 变动很频繁(流式回复一帧一变),回调只排一次 requestAnimationFrame;值没变不重渲。
+ *
+ * 原生视图(内嵌浏览器、工作台的画布)在前台时,提示条画在它上面(toastMirror),而页面整块在它底下:只认外壳里的输入区
+ * (工作台右边那一列的智能体输入框),底下那页看不见的输入框不把提示条抬起来。
  */
 export function useToastClearance(): number {
   const [offset, setOffset] = React.useState(TOAST_EDGE);
+  const overNativeView = useNativeViewInFront();
   React.useEffect(() => {
     let frame = 0;
     const observed = new Set<Element>();
     const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => schedule());
     const measure = () => {
       frame = 0;
-      const marked = Array.from(document.querySelectorAll(`[${TOAST_AVOID_ATTRIBUTE}]`));
+      const marked = Array.from(document.querySelectorAll(`[${TOAST_AVOID_ATTRIBUTE}]`)).filter(
+        (element) => !overNativeView || element.closest("[data-app-chrome]") !== null,
+      );
       if (resize) {
         for (const element of marked) {
           if (observed.has(element)) continue;
@@ -86,6 +94,6 @@ export function useToastClearance(): number {
       resize?.disconnect();
       window.removeEventListener("resize", schedule);
     };
-  }, []);
+  }, [overNativeView]);
   return offset;
 }

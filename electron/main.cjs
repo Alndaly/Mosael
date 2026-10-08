@@ -55,6 +55,7 @@ const {
   parseOverlay,
   parseFloatShow,
   parseFloatHide,
+  parseToastsShow,
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
@@ -933,6 +934,16 @@ function createWindow() {
         onDownload: (notice) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.pageToolsDownload, notice);
         },
+        // 提示条那一块浮层视图上的指针(ADR 0051):渲染层据此点真的那条提示。
+        onToastsPointer: (pointer) => {
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.toastsPointer, pointer);
+        },
+        // 网页在前台时按的 ⌘K:键盘交回 Mosael,开命令面板(ADR 0051)。
+        onCommandPalette: () => {
+          if (win.isDestroyed()) return;
+          win.webContents.focus();
+          win.webContents.send(IPC.event.commandPalette);
+        },
         // ComfyUI 工作台:主进程轮询内嵌画布里的桥看到的(选中、脏标记、能力、事件),规整过才发;null 是会话结束了。
         onWorkbench: (update) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.comfyuiWorkbench, update);
@@ -1106,6 +1117,13 @@ app.whenReady().then(async () => {
   });
   listen(IPC.send.floatHide, (_event, payload) => {
     if (publish) publish.hideFloat(parseFloatHide(payload).id ?? undefined);
+  });
+  // 原生视图在前台时右下角的提示条:交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051)。
+  listen(IPC.send.toastsShow, (_event, payload) => {
+    if (publish) void publish.showToasts(parseToastsShow(payload));
+  });
+  listen(IPC.send.toastsHide, () => {
+    if (publish) publish.hideToasts();
   });
   handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
     const { id, muted } = parsePanelMuted(payload);

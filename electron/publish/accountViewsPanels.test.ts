@@ -465,6 +465,46 @@ describe("keyboard focus between Mosael and the embedded page", () => {
   });
 });
 
+describe("⌘K in the embedded page opens Mosael's command palette (ADR 0051)", () => {
+  const key = (view: FakeView, input: Record<string, unknown>) => {
+    const event = { prevented: false, preventDefault() { this.prevented = true; } };
+    view.webContents.emit("before-input-event", event, { type: "keyDown", key: "k", meta: false, control: false, shift: false, alt: false, ...input });
+    return event.prevented;
+  };
+
+  it("the shown page's ⌘K / Ctrl+K goes to Mosael and not to the page; ⇧⌘K, ⌥⌘K and plain K stay with the page", () => {
+    const palette = vi.fn();
+    const own = new AccountViewManager(() => undefined, () => undefined, () => undefined, palette);
+    own.attachWindow(window as never, () => null);
+    own.registerSession("pool-a", "persist:pool-a");
+    own.show("pool-a");
+    const page = own.foreground()!.webContents as unknown as FakeView["webContents"];
+    const view = { webContents: page } as FakeView;
+    expect(key(view, { meta: true }), "⌘K").toBe(true);
+    expect(key(view, { control: true, key: "K" }), "Ctrl+K").toBe(true);
+    expect(palette).toHaveBeenCalledTimes(2);
+    expect(key(view, { meta: true, shift: true }), "⇧⌘K").toBe(false);
+    expect(key(view, { meta: true, alt: true }), "⌥⌘K").toBe(false);
+    expect(key(view, {}), "K").toBe(false);
+    expect(key(view, { meta: true, type: "keyUp" }), "松开").toBe(false);
+    expect(palette).toHaveBeenCalledTimes(2);
+    own.destroyAll();
+  });
+
+  it("a page that is not the one in front keeps its ⌘K", () => {
+    const palette = vi.fn();
+    const own = new AccountViewManager(() => undefined, () => undefined, () => undefined, palette);
+    own.attachWindow(window as never, () => null);
+    own.registerSession("pool-a", "persist:pool-a");
+    own.show("pool-a");
+    const page = own.foreground()!.webContents as unknown as FakeView["webContents"];
+    own.hide();
+    expect(key({ webContents: page } as FakeView, { meta: true })).toBe(false);
+    expect(palette).not.toHaveBeenCalled();
+    own.destroyAll();
+  });
+});
+
 describe("the foreground view and the toolbar's page tools", () => {
   const HEADER = 56;
 

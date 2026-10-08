@@ -163,6 +163,16 @@ export function listenKeys(
   return () => target.removeEventListener(type, listener, options);
 }
 
+/**
+ * 命令面板的开关键:⌘K / Ctrl+K,不带 ⇧、⌥(⌘⇧K 是剪辑页的「全部切开」)。
+ *
+ * 内嵌网页、工作台的画布在前台时键盘在网页那边,渲染层收不到这一下:主进程按同一个判据在网页里把它截下来交回
+ * (electron/publish/accountViews 的 isCommandPaletteKey,ADR 0051);焦点落在 Mosael 看不见的地方时也不吞它(embeddedFocus)。
+ */
+export function isCommandPaletteKey(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey">): boolean {
+  return event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey;
+}
+
 /** 焦点在能打字的地方时,所有单键快捷键都要让路 —— 否则用户打个 "1" 就被传送走了。 */
 export function isTypingTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;

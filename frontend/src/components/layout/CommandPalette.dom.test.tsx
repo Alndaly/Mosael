@@ -6,9 +6,9 @@
  * - 默认高亮按实际渲染顺序取第一项 —— 只搜到工作流时 Enter 也得有目标。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ theme: "dark", setTheme: vi.fn() }));
 vi.mock("@/app/preferences", () => ({
@@ -37,6 +37,9 @@ vi.mock("@/lib/deepLink", async (importOriginal) => ({
 }));
 
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { OverNativeView } from "@/components/app/overNativeView";
+import { resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nativeViewAside";
+import { resetNativeViewForTests } from "@/lib/nativeView";
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = () => {};
@@ -56,13 +59,16 @@ function mount() {
   const onCreateProject = vi.fn();
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CommandPalette
-        workspace={{ id: "w1", name: "W" } as never}
-        projects={[]}
-        onNavigate={onNavigate}
-        onOpenProject={vi.fn()}
-        onCreateProject={onCreateProject}
-      />
+      {/* 和 App 里一样挂在 OverNativeView 里(ADR 0051) */}
+      <OverNativeView>
+        <CommandPalette
+          workspace={{ id: "w1", name: "W" } as never}
+          projects={[]}
+          onNavigate={onNavigate}
+          onOpenProject={vi.fn()}
+          onCreateProject={onCreateProject}
+        />
+      </OverNativeView>
     </QueryClientProvider>,
   );
   act(() => void window.dispatchEvent(new CustomEvent("mosael:open-cmdk")));
@@ -116,4 +122,53 @@ it("设置项搜得到;只在管理页的,不是部署管理员时看得到但�
   const proxy = await screen.findByRole("option", { name: /proxyTitle/ });
   expect(proxy).toHaveTextContent("cmdkAdminOnly");
   expect(proxy).toHaveAttribute("aria-disabled", "true");
+});
+
+//: ADR 0051 D36:内嵌浏览器、工作台的画布在前台时 ⌘K 照常能用 —— 面板抬过外壳、开着时请视图让开;选了去别处的那一项,先把视图收起来再走
+//: (不然面板一关网页又盖回来,跳过去的那一页在它底下)。换主题人还在原处,不收。
+describe("原生视图在前台时的命令面板", () => {
+  const order: string[] = [];
+  let bridge: { onViewState: unknown; setOverlay: ReturnType<typeof vi.fn>; hideView: ReturnType<typeof vi.fn> };
+  beforeEach(() => {
+    order.length = 0;
+    bridge = {
+      onViewState: (callback: (state: { visible: boolean }) => void) => {
+        callback({ visible: true });
+        return () => undefined;
+      },
+      setOverlay: vi.fn(async (up: boolean) => void order.push(`overlay:${up}`)),
+      hideView: vi.fn(async () => void order.push("hideView")),
+    };
+    vi.stubGlobal("mosaelPublish", bridge);
+    resetNativeViewForTests();
+  });
+  afterEach(async () => {
+    cleanup(); // 先卸掉面板(放开它占的那次让开),再重置
+    await settleNativeViewAside();
+    resetNativeViewAside();
+    vi.unstubAllGlobals();
+    resetNativeViewForTests();
+  });
+
+  it("面板抬过外壳(z 205),开着时视图让开", async () => {
+    mount();
+    const panel = await screen.findByRole("dialog");
+    expect(panel.className).toMatch(/z-\[205\]/);
+    await waitFor(() => expect(order).toEqual(["overlay:true"]));
+  });
+
+  it("选了一页:先收起视图,再跳", async () => {
+    const { onNavigate } = mount();
+    onNavigate.mockImplementation(() => void order.push("navigate"));
+    await waitFor(() => expect(order).toEqual(["overlay:true"]));
+    fireEvent.click(await screen.findByRole("option", { name: /navMedia|素材|media/i }));
+    expect(order.slice(0, 3)).toEqual(["overlay:true", "hideView", "navigate"]);
+  });
+
+  it("换主题:人还在原处,不收视图", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("option", { name: /cmdkToggleTheme/ }));
+    expect(h.setTheme).toHaveBeenCalled();
+    expect(bridge.hideView).not.toHaveBeenCalled();
+  });
 });

@@ -47,6 +47,11 @@ const contract = require("./ipc-contract.cjs") as {
     root: { className: string; style: string; attributes: Record<string, string> };
   };
   parseFloatHide: (value: unknown) => { id: string | null };
+  parseToastsShow: (value: unknown) => {
+    html: string;
+    rect: { x: number; y: number; width: number; height: number };
+    root: { className: string; style: string; attributes: Record<string, string> };
+  };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -355,6 +360,20 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseFloatShow({ ...hint, extra: 1 })).toThrow(/unexpected field extra/);
     expect(contract.parseFloatHide({ id: "hint-1" })).toEqual({ id: "hint-1" });
     expect(contract.parseFloatHide({})).toEqual({ id: null });
+  });
+
+  it("decodes the toasts drawn over a native view (ADR 0051): same bounds as a hint, room for a stack of toasts, no id", () => {
+    const toasts = {
+      html: "<section><ol data-sonner-toaster></ol></section>",
+      rect: { x: 1040, y: 760, width: 400, height: 140 },
+      root: { className: "dark", style: "", attributes: { "data-theme": "dark" } },
+    };
+    expect(contract.parseToastsShow(toasts)).toEqual(toasts);
+    expect(contract.parseToastsShow({ ...toasts, html: "x".repeat(200_000) }).html).toHaveLength(200_000);
+    expect(() => contract.parseToastsShow({ ...toasts, html: "x".repeat(300_000) })).toThrow(/toasts:show.*html/);
+    expect(() => contract.parseToastsShow({ ...toasts, rect: { ...toasts.rect, x: Number.POSITIVE_INFINITY } })).toThrow(/toasts:show.*rect/);
+    expect(() => contract.parseToastsShow({ ...toasts, root: { ...toasts.root, attributes: { onload: "x" } } })).toThrow(/attribute/);
+    expect(() => contract.parseToastsShow({ ...toasts, id: "toasts" })).toThrow(/unexpected field id/);
   });
 
   it("decodes saving a finished download: an http(s) server, a token, a workspace, nothing else", () => {

@@ -1,3 +1,7 @@
+/* 提示条那一块(ADR 0051)照 Sonner 的样式画。主窗口里 Sonner 在运行时把这同一份样式插进 <head>,不分层;这张页不跑 Sonner,
+   照它导出的那份引进来,也不分层 —— 层叠和主窗口一模一样,画出来才一模一样(不是 design/tokens.css 里 layer(vendor) 那一类)。 */
+@import "sonner/dist/styles.css";
+
 /* 浮层视图是透明的:只看得见说明本身。 */
 html,
 body {
@@ -18,4 +22,22 @@ body {
 #float > * {
   position: relative;
   max-width: none !important;
+}
+
+/* 提示条那一块(ADR 0051,见 render.ts 的 showToasts):这块视图只有提示条那么宽,Sonner 的窄屏样式(max-width: 600px:
+   铺满整宽、换一套边距)在这里会生效 —— 而主窗口最窄 980px,从来不是那一套。照宽屏的样子摆回来。 */
+@media (max-width: 600px) {
+  #toasts [data-sonner-toaster][data-x-position="right"] {
+    left: auto;
+    right: var(--offset-right);
+    width: var(--width);
+  }
+  #toasts [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: var(--offset-bottom);
+  }
+  #toasts [data-sonner-toaster] [data-sonner-toast] {
+    left: auto;
+    right: 0;
+    width: var(--width);
+  }
 }

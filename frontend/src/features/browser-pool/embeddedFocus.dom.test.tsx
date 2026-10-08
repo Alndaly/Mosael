@@ -104,6 +104,24 @@ describe("网页亮着时,落在 Mosael 看不见的地方的按键", () => {
   });
 });
 
+describe("网页亮着时按 ⌘K(ADR 0051 D36)", () => {
+  it("命令面板照常打开:不吞,也不把键盘交给网页;⇧⌘K 照旧吞", () => {
+    act(() => byId("opener").focus());
+    show();
+    const onKey = vi.fn();
+    document.addEventListener("keydown", onKey);
+    const palette = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    byId("opener").dispatchEvent(palette);
+    expect(onKey).toHaveBeenCalledTimes(1);
+    expect(palette.defaultPrevented).toBe(false);
+    expect(focusPage).not.toHaveBeenCalled();
+    byId("opener").dispatchEvent(new KeyboardEvent("keydown", { key: "K", metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    expect(onKey).toHaveBeenCalledTimes(1);
+    expect(focusPage).toHaveBeenCalled();
+    document.removeEventListener("keydown", onKey);
+  });
+});
+
 describe("外壳里用鼠标点完,键盘交回网页", () => {
   it("鼠标点的交回网页;键盘按的(Enter / 空格,click 的 detail 是 0)焦点留在外壳里接着走", () => {
     pageAfterPointer({ detail: 1 });

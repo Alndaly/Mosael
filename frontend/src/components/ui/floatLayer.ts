@@ -19,8 +19,8 @@ function floatBridge(): Pick<NonNullable<Window["mosaelPublish"]>, "showFloat" |
   return bridge && typeof bridge.showFloat === "function" && typeof bridge.hideFloat === "function" ? bridge : null;
 }
 
-/** 根元素上和外观有关的那几样:主题、字体、语言。浮层页照着设,画出来和应用里一模一样。 */
-function rootLook(): FloatHint["root"] {
+/** 根元素上和外观有关的那几样:主题、字体、语言。浮层页照着设,画出来和应用里一模一样(提示条那一块也用,见 toastMirror)。 */
+export function rootLook(): FloatHint["root"] {
   const root = document.documentElement;
   const attributes: Record<string, string> = {};
   for (const attribute of Array.from(root.attributes)) {

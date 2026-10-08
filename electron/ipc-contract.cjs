@@ -79,6 +79,9 @@ const IPC = Object.freeze({
     // 内嵌浏览器外壳里的悬停说明交给浮层视图画在网页上面 / 收起(见 publish/floatLayer.ts)。
     floatShow: "float:show",
     floatHide: "float:hide",
+    // 原生视图在前台时,右下角的提示条交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051,见 publish/floatLayer.ts)。
+    toastsShow: "toasts:show",
+    toastsHide: "toasts:hide",
   }),
   event: Object.freeze({
     fullscreen: "mosael:fullscreen",
@@ -95,6 +98,10 @@ const IPC = Object.freeze({
     pageToolsDownload: "pageTools:download",
     // ComfyUI 工作台:主进程轮询画布里的桥看到的(选中、脏标记、能力、事件);state 为 null 是会话结束了。
     comfyuiWorkbench: "comfyui:workbench",
+    // 提示条那一块浮层视图上的指针(移动、松开、离开),换算成主窗口的 CSS 坐标交回渲染层,由它点真的那条提示(ADR 0051)。
+    toastsPointer: "toasts:pointer",
+    // 内嵌网页、工作台画布里按的 ⌘K:主进程截下来交给渲染层开命令面板(ADR 0051)。
+    commandPalette: "mosael:command-palette",
   }),
 });
 
@@ -650,12 +657,22 @@ function parseFloatShow(value) {
   const id = requiredString(payload, "id", channel);
   if (id.length > 64) throw new TypeError(`${channel}: id is too long`);
   if (typeof payload.html !== "string" || payload.html.length > 65_536) throw new TypeError(`${channel}: html must be a string under 64 KiB`);
-  const rect = record(payload.rect, channel);
+  return { id, html: payload.html, rect: floatRect(payload.rect, channel), root: floatRoot(payload.root, channel) };
+}
+
+/** 浮层画在主窗口哪一块(CSS 像素),有界。 */
+function floatRect(value, channel) {
+  const rect = record(value, channel);
   const { x, y, width, height } = rect;
   if (!finiteIn(x, -10_000, 10_000) || !finiteIn(y, -10_000, 10_000) || !finiteIn(width, 0, 4_000) || !finiteIn(height, 0, 4_000)) {
     throw new TypeError(`${channel}: rect must be a bounded rectangle`);
   }
-  const root = record(payload.root, channel);
+  return { x, y, width, height };
+}
+
+/** 主窗口根元素上和外观有关的那几样(主题、字体、语言),浮层页照着设;别的属性一律不收。 */
+function floatRoot(value, channel) {
+  const root = record(value, channel);
   onlyKeys(root, ["className", "style", "attributes"], channel);
   if (typeof root.className !== "string" || root.className.length > 4_096) throw new TypeError(`${channel}: root className is invalid`);
   if (typeof root.style !== "string" || root.style.length > 16_384) throw new TypeError(`${channel}: root style is invalid`);
@@ -667,7 +684,21 @@ function parseFloatShow(value) {
       throw new TypeError(`${channel}: root attribute ${name} is not allowed`);
     }
   }
-  return { id, html: payload.html, rect: { x, y, width, height }, root: { className: root.className, style: root.style, attributes: { ...attributes } } };
+  return { className: root.className, style: root.style, attributes: { ...attributes } };
+}
+
+/**
+ * 提示条那一块:渲染层把右下角整块提示条(Sonner 的 section)序列化好交过来。`rect` 是它在主窗口里该占的那一块(CSS 像素):
+ * 从最上面那条提示的左上角到窗口右下角 —— 提示条是贴着窗口右下角摆的,浮层视图的右下角也得是窗口的右下角。
+ */
+function parseToastsShow(value) {
+  const channel = IPC.send.toastsShow;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["html", "rect", "root"], channel);
+  if (typeof payload.html !== "string" || payload.html.length > 262_144) {
+    throw new TypeError(`${channel}: html must be a string under 256 KiB`);
+  }
+  return { html: payload.html, rect: floatRect(payload.rect, channel), root: floatRoot(payload.root, channel) };
 }
 
 /** 收起哪一条(不给 id 就是不管哪条都收)。 */
@@ -823,6 +854,7 @@ module.exports = {
   parseOverlay,
   parseFloatShow,
   parseFloatHide,
+  parseToastsShow,
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,

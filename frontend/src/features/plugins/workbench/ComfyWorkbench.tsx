@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
 import { APP_CHROME, ChromeAboveDialogs } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -241,6 +242,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           )}
           {!state && <span className="shrink-0 text-muted-foreground">{t("workbenchConnecting")}</span>}
         </div>
+        {/* 等人拍板的卡、免提浮标:画布在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
+        <ChromeStatusSlot size="sm" />
         <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" />
         <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
               shortcut={canSave ? formatCombo(SAVE_KEY) : null}>

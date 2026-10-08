@@ -8,6 +8,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TOAST_EDGE, toastBottomOffset, useToastClearance } from "./toastClearance";
+import { resetNativeViewForTests } from "@/lib/nativeView";
 
 const VIEWPORT = { width: 1440, height: 900 };
 const box = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom, width: right - left, height: bottom - top });
@@ -91,5 +92,50 @@ describe("useToastClearance", () => {
     await settle();
     await settle();
     expect(offset()).toBe(TOAST_EDGE);
+  });
+  //: ADR 0051:原生视图(内嵌浏览器、工作台)在前台时提示条画在它上面,页面整块在它底下 —— 底下那页看不见的输入框不该把提示条
+  //: 抬起来;外壳里的(工作台右边那一列的智能体输入框)照样让。
+  it("原生视图在前台时只认外壳里的输入区", async () => {
+    let push: ((state: { visible: boolean }) => void) | null = null;
+    vi.stubGlobal("mosaelPublish", {
+      onViewState: (callback: (state: { visible: boolean }) => void) => {
+        push = callback;
+        return () => (push = null);
+      },
+    });
+    resetNativeViewForTests();
+    try {
+      function Page({ inChrome }: { inChrome: boolean }) {
+        return (
+          <>
+            <Probe />
+            {inChrome ? (
+              <aside data-app-chrome="">
+                <form data-toast-avoid="" />
+              </aside>
+            ) : (
+              <form data-toast-avoid="" />
+            )}
+          </>
+        );
+      }
+      const view = render(<Page inChrome={false} />);
+      await settle();
+      await settle();
+      expect(offset(), "视图不在前台:照常让").toBe(900 - 744 + 12);
+
+      act(() => push?.({ visible: true }));
+      await settle();
+      await settle();
+      expect(offset(), "页面在网页底下:不让").toBe(TOAST_EDGE);
+
+      view.rerender(<Page inChrome />);
+      await settle();
+      await settle();
+      expect(offset(), "外壳里的:让").toBe(900 - 744 + 12);
+    } finally {
+      vi.unstubAllGlobals();
+      resetNativeViewForTests();
+    }
   });
 });

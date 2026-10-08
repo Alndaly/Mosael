@@ -7,10 +7,15 @@
 [data-radix-popper-content-wrapper] {
   z-index: 120 !important;
 }
-/* 窗口外壳(内嵌浏览器的顶栏、页面列表、侧栏,见 components/ui/appChrome.ts):底下开着模态弹窗时 body 是
-   pointer-events: none,外壳盖在弹窗上面却在它外面 —— 不放开就点不动。 */
+/* 窗口外壳(内嵌浏览器的顶栏、页面列表、侧栏,见 components/ui/appChrome.ts)和右下角的提示条:底下开着模态弹窗时 body 是
+   pointer-events: none,它们盖在弹窗上面却在它外面 —— 不放开就点不动(提示条上的「撤销」「查看」点了没反应,ADR 0051 D40)。 */
 [data-app-chrome] {
   pointer-events: auto;
+}
+/* 原生视图在前台时提示条画在浮层视图上(components/app/toastMirror):DOM 里那份照常计时、给读屏念,只是透明,
+   不在同一个位置再叠一层(投影会深一倍)。 */
+[data-toasts-mirrored] [data-sonner-toaster] {
+  opacity: 0;
 }
 /* 内嵌浏览器的顶栏、侧栏、工作台那一列(z 200,压在原生网页视图周围)里出的说明和打开的浮层(Popover / Select / 右键菜单),
    压在它们上面(见 tooltip.tsx 的 HintRegion、useChromeLayer)。 */

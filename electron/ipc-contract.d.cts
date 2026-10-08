@@ -60,6 +60,8 @@ export const IPC: {
     locale: "mosael:locale";
     floatShow: "float:show";
     floatHide: "float:hide";
+    toastsShow: "toasts:show";
+    toastsHide: "toasts:hide";
   }>;
   readonly event: Readonly<{
     fullscreen: "mosael:fullscreen";
@@ -74,6 +76,8 @@ export const IPC: {
     browserFrame: "browser:frame";
     pageToolsDownload: "pageTools:download";
     comfyuiWorkbench: "comfyui:workbench";
+    toastsPointer: "toasts:pointer";
+    commandPalette: "mosael:command-palette";
   }>;
 };
 
@@ -124,6 +128,11 @@ export function parseCoverPage(value: unknown): { covered: boolean };
 export function parseOverlay(value: unknown): { up: boolean };
 export function parseFloatShow(value: unknown): {
   id: string;
+  html: string;
+  rect: { x: number; y: number; width: number; height: number };
+  root: { className: string; style: string; attributes: Record<string, string> };
+};
+export function parseToastsShow(value: unknown): {
   html: string;
   rect: { x: number; y: number; width: number; height: number };
   root: { className: string; style: string; attributes: Record<string, string> };

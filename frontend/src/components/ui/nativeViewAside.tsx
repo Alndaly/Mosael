@@ -147,16 +147,33 @@ async function reconcile(): Promise<void> {
   }
 }
 
-/** 占住一次「让开」;返回放开它的函数(放多次只算一次)。 */
+/** 「有没有浮层要它让开」变了(0 ↔ 非 0)时通知的人(useNativeViewSteppedAside)。 */
+const asideListeners = new Set<() => void>();
+
+/**
+ * 占住一次「让开」;返回放开它的函数(放多次只算一次)。
+ *
+ * 最后一处放开时,放回视图那一步等到这一拍的同步代码走完再开始:一处浮层收起、同一次提交里另一处接着要它让开
+ * (任务中心里点一条任务:弹出层收起、详情框打开),React 先跑完卸载再跑挂载 —— 当场就放回的话,视图回来一下又挪走,
+ * 画面闪一次。等一个微任务,那时已经又有人要它让开,就什么都不做。
+ */
 export function stepNativeViewAside(): () => void {
   holders += 1;
-  if (holders === 1) void reconcile();
+  if (holders === 1) {
+    void reconcile();
+    for (const listener of asideListeners) listener();
+  }
   let released = false;
   return () => {
     if (released) return;
     released = true;
     holders -= 1;
-    if (holders === 0) void reconcile();
+    if (holders > 0) return;
+    queueMicrotask(() => {
+      if (holders > 0) return;
+      void reconcile();
+      for (const listener of asideListeners) listener();
+    });
   };
 }
 
@@ -165,6 +182,23 @@ export function stepNativeViewAside(): () => void {
  * 不该再当成「落在看不见的地方」吞掉、交给网页(见 browser-pool/embeddedFocus)。
  */
 export const nativeViewAside = () => holders > 0;
+
+/**
+ * 同上,跟着变。提示条用它:原生视图让开着的时候窗口里看得见的全是 Mosael 的 DOM,提示条照常画在 DOM 里,不必再交给浮层视图
+ * (ADR 0051)。
+ */
+export function useNativeViewSteppedAside(): boolean {
+  return React.useSyncExternalStore(
+    (listener) => {
+      asideListeners.add(listener);
+      return () => {
+        asideListeners.delete(listener);
+      };
+    },
+    nativeViewAside,
+    () => false,
+  );
+}
 
 /** `active` 为真的这段时间里让原生视图让开(卸载时也放开)。 */
 export function useNativeViewAside(active: boolean): void {
@@ -233,6 +267,7 @@ export function settleNativeViewAside(): Promise<void> {
 /** 测试用:回到什么都没让开的样子。 */
 export function resetNativeViewAside(): void {
   holders = 0;
+  for (const listener of asideListeners) listener();
   aside = false;
   running = false;
   again = false;

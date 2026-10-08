@@ -62,6 +62,14 @@ async function settleLayout(wc: Electron.WebContents): Promise<void> {
     .catch(() => undefined);
 }
 
+/**
+ * Mosael 的命令面板快捷键:⌘K,或者 Ctrl+K;只认按下那一下、不带 Shift / Alt。和渲染层同一个判据
+ * (frontend/src/lib/shortcuts.ts 的 isCommandPaletteKey,两边各一份:主进程这边认的是 Electron 的 Input)。
+ */
+export function isCommandPaletteKey(input: Pick<Electron.Input, "type" | "key" | "meta" | "control" | "shift" | "alt">): boolean {
+  return input.type === "keyDown" && input.key.toLowerCase() === "k" && (input.meta || input.control) && !input.shift && !input.alt;
+}
+
 /** 连按两次 Esc 判定为「退出内嵌浏览器」的时间窗(见 ensure() 里的 before-input-event)。 */
 const DOUBLE_ESCAPE_MS = 700;
 
@@ -229,6 +237,8 @@ export class AccountViewManager {
     private readonly onViewChanged: (state: ViewState) => void = noop,
     private readonly onPanelsChanged: (cards: PanelCard[]) => void = () => undefined,
     private readonly onDownload: (notice: DownloadNotice) => void = () => undefined,
+    /** 前台网页里按了 ⌘K(见 ensure() 里的 before-input-event):交给 Mosael 开命令面板。 */
+    private readonly onCommandPalette: () => void = noop,
   ) {}
 
   /**
@@ -1046,7 +1056,14 @@ export class AccountViewManager {
     // **正在网页里打字时两次都留给网页**:编辑器、搜索框、表单里连按 Esc(收起补全、退出编辑)再常见不过,
     // 这时把人拽回 Mosael 就是截走了网页的键。问一下网页焦点在不在可编辑元素上,在就不退。
     let lastEscapeAt = 0;
-    view.webContents.on("before-input-event", (_event, input) => {
+    view.webContents.on("before-input-event", (event, input) => {
+      // ⌘K(Windows / Linux 上 Ctrl+K)是 Mosael 的命令面板,网页在前台时也照常能用(ADR 0051):截下来,不交给网页。
+      // 只认亮在前台的那一页;面板上的网页、后台的页面不是人此刻在用的。
+      if (isCommandPaletteKey(input) && this.visibleId === accountId && isCurrent()) {
+        event.preventDefault();
+        this.onCommandPalette();
+        return;
+      }
       if (input.type !== "keyDown" || input.key !== "Escape") return;
       const now = Date.now();
       if (now - lastEscapeAt <= DOUBLE_ESCAPE_MS) {
@@ -1412,8 +1429,9 @@ export function createSharedViews(
   onViewChanged?: (state: ViewState) => void,
   onPanelsChanged?: (cards: PanelCard[]) => void,
   onDownload?: (notice: DownloadNotice) => void,
+  onCommandPalette?: () => void,
 ): AccountViewManager {
-  shared = new AccountViewManager(onViewChanged, onPanelsChanged, onDownload);
+  shared = new AccountViewManager(onViewChanged, onPanelsChanged, onDownload, onCommandPalette);
   return shared;
 }
 

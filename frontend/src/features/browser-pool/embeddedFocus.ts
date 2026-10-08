@@ -1,5 +1,5 @@
 import { nativeViewAside } from "@/components/ui/nativeViewAside";
-import { listenKeys } from "@/lib/shortcuts";
+import { isCommandPaletteKey, listenKeys } from "@/lib/shortcuts";
 
 /**
  * 键盘焦点在 Mosael 和内嵌网页之间怎么走。
@@ -11,7 +11,7 @@ import { listenKeys } from "@/lib/shortcuts";
  *   收回去之后放回去。它已经不在了(弹窗关了)就不硬找。
  * - **网页亮着时,落在 Mosael 看不见的地方的按键不让它生效**:系统焦点回到 Mosael(点了顶栏的空白处)而 DOM
  *   焦点还停在底下那个按钮上时,回车会把它再点一次 —— 看不见地打开了别的东西。这一下吞掉,键盘交给网页。
- *   外壳(APP_CHROME)里的按键照常。
+ *   外壳(APP_CHROME)里的按键照常;⌘K 照常(命令面板开着时网页让开,见 components/app/overNativeView)。
  */
 export function installEmbeddedFocus(): () => void {
   const bridge = window.mosaelPublish;
@@ -36,8 +36,9 @@ export function installEmbeddedFocus(): () => void {
   const stopKeys = listenKeys(
     window,
     (event) => {
-      // 大图这类整窗的浮层开着时网页挪到了窗口外:按键是给浮层的(Esc 关掉、左右翻页),不吞
-      if (!visible || nativeViewAside() || inChrome(event.target)) return;
+      // 大图这类整窗的浮层开着时网页挪到了窗口外:按键是给浮层的(Esc 关掉、左右翻页),不吞。
+      // ⌘K 也不吞:网页在前台时命令面板照常开,开着时网页让开(ADR 0051 D36)。
+      if (!visible || nativeViewAside() || inChrome(event.target) || isCommandPaletteKey(event)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void bridge.focusPage?.();

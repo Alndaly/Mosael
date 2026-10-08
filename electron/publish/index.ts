@@ -27,6 +27,8 @@ export {
   showFloat,
   focusViewPage,
   hideFloat,
+  showToasts,
+  hideToasts,
   republishViewState,
   hostZoomChanged,
   releaseWorkbenchView,

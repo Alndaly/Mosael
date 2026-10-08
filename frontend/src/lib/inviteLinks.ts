@@ -1,5 +1,7 @@
 import React from "react";
 
+import { leaveNativeView } from "@/lib/nativeView";
+
 /**
  * 邀请链接(ADR 0054)在客户端这一侧:链接长什么样、从一段文字里认出码、打开之后「待处理的那一张」放在哪。
  *
@@ -106,11 +108,15 @@ export function captureInviteFromLocation(location: Location = window.location, 
 }
 
 /** 桌面端深链 `mosael://open?join=<码>`:主进程转成 `mosael:deep-link` 事件(detail.join)。登录前也要接得住,所以在
- *  启动时挂一次,而不是挂在登录之后才有的工作台里。 */
+ *  启动时挂一次,而不是挂在登录之后才有的工作台里。
+ *
+ *  加入之后切到那个工作区:内嵌浏览器、工作台在前台的话先收起来(和别的深链一样,ADR 0051 D35),不然切换发生在网页底下。 */
 export function listenInviteDeepLinks(): () => void {
   const onLink = (event: Event) => {
     const join = (event as CustomEvent<{ join?: string }>).detail?.join;
-    if (typeof join === "string") setPendingInvite(join);
+    if (typeof join !== "string") return;
+    void leaveNativeView();
+    setPendingInvite(join);
   };
   window.addEventListener("mosael:deep-link", onLink);
   return () => window.removeEventListener("mosael:deep-link", onLink);

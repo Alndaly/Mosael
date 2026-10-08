@@ -238,6 +238,25 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     await waitFor(() => expect(standIn()).toBeNull());
   });
 
+  it("一处收起、同一拍里另一处接着要它让开(任务中心里点一条任务:弹出层换成详情框):视图不回来,不闪", async () => {
+    render(<NativeViewStandIn />);
+    const popover = stepNativeViewAside();
+    await frameLoads();
+    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+    //: React 在同一次提交里先跑卸载(弹出层放开)、再跑挂载(详情框占上)
+    popover();
+    const detail = stepNativeViewAside();
+    //: 放回那一步排在微任务里:让它跑完(当场就放回的话,这时候已经调过 setOverlay(false) 了)
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await settleNativeViewAside();
+    expect(setOverlay.mock.calls, "视图一直让开着").toEqual([[true]]);
+    expect(snapshotPage).toHaveBeenCalledTimes(1);
+    act(() => detail());
+    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+  });
+
   it("网页版(没有这座桥):什么都不做", () => {
     vi.stubGlobal("mosaelPublish", undefined);
     const release = stepNativeViewAside();

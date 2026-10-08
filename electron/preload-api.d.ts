@@ -138,6 +138,20 @@ export interface MosaelPublishBridge {
    */
   showFloat(hint: FloatHint): void;
   hideFloat(id?: string): void;
+  /**
+   * 原生视图在前台时,右下角那一整块提示条交给提示条那一块浮层视图画在网页上面(ADR 0051):`rect` 是从最上面那条提示的
+   * 左上角到窗口右下角(CSS 像素)。没有提示、视图收起、让开了就收起。
+   */
+  showToasts(toasts: Omit<FloatHint, "id">): void;
+  hideToasts(): void;
+  /** 那一块浮层视图上的指针(主窗口的 CSS 坐标):`up` 是点了一下,渲染层据此点真的那条提示。 */
+  onToastsPointer(callback: (pointer: ToastsPointer) => void): () => void;
+}
+
+export interface ToastsPointer {
+  type: "move" | "up" | "leave";
+  x: number;
+  y: number;
 }
 
 export interface MosaelBrowserBridge {

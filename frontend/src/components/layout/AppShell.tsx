@@ -34,6 +34,7 @@ import {
 import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { RenameDialog } from "@/components/app/modals";
+import { OverNativeView } from "@/components/app/overNativeView";
 import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -248,7 +249,8 @@ export function AppShell({
             <span>{t("cmdkTitle")}</span>
             <Kbd className="max-[760px]:hidden">{formatCombo("Mod+K")}</Kbd>
           </button>
-          {workspaceId && <TaskCenter workspaceId={workspaceId} />}
+          {/* 系统通知点进来时任务中心在网页、工作台前面打开(ADR 0051,见 OverNativeView) */}
+          {workspaceId && <OverNativeView><TaskCenter workspaceId={workspaceId} /></OverNativeView>}
           {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
           <IconButton
             variant="ghost"

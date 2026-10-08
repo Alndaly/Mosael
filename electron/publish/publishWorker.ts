@@ -24,7 +24,7 @@ import {
   type PanelLayoutChange,
 } from "./accountViews";
 import type { DownloadNotice } from "./downloads";
-import { FloatLayer, type FloatHint } from "./floatLayer";
+import { FloatLayer, type FloatHint, type FloatPointer } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
@@ -43,6 +43,8 @@ let views: AccountViewManager | null = null;
 /** ComfyUI 工作台的会话(ADR 0038 §3):主进程轮询内嵌画布里的桥,交给渲染层。 */
 let workbench: WorkbenchSessions | null = null;
 let floatLayer: FloatLayer | null = null;
+/** 原生视图在前台时右下角的提示条画在这一块上(ADR 0051);提示条上的按钮靠它把指针交回渲染层。 */
+let toastLayer: FloatLayer | null = null;
 // 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
 const running = new Set<string>();
 const taskControllers = new Map<string, AbortController>();
@@ -551,6 +553,10 @@ export function startPublishWorker(opts: {
   onDownload?: (notice: DownloadNotice) => void;
   /** ComfyUI 工作台:桥那边看到的(选中、脏标记、能力、事件);`state: null` 是会话结束了。 */
   onWorkbench?: (update: { connectionId: string; state: WorkbenchState | null }) => void;
+  /** 提示条那一块浮层视图上的指针(主窗口的 CSS 坐标):渲染层据此点真的那条提示(ADR 0051)。 */
+  onToastsPointer?: (pointer: FloatPointer) => void;
+  /** 内嵌网页、工作台画布里按了 ⌘K:交给渲染层开命令面板(ADR 0051)。 */
+  onCommandPalette?: () => void;
 }): void {
   if (views) return;
   stopped = false;
@@ -560,13 +566,20 @@ export function startPublishWorker(opts: {
   onFrame = opts.onFrame ?? null;
   // 浮层视图(外壳里的悬停说明画在网页上面):内嵌浏览器一亮出来就先建好,收回去时收起说明。
   floatLayer = new FloatLayer(opts.window, () => views?.focusTarget() ?? null);
+  toastLayer = new FloatLayer(opts.window, () => views?.focusTarget() ?? null, {
+    kind: "toasts",
+    onPointer: (pointer) => opts.onToastsPointer?.(pointer),
+  });
   const onViewChanged = (state: ViewState) => {
     if (state.visible) floatLayer?.warm();
-    else floatLayer?.hide();
+    else {
+      floatLayer?.hide();
+      toastLayer?.hide();
+    }
     opts.onViewChanged?.(state);
   };
   // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
-  views = createSharedViews(onViewChanged, opts.onPanels, opts.onDownload);
+  views = createSharedViews(onViewChanged, opts.onPanels, opts.onDownload, () => opts.onCommandPalette?.());
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   workbench = new WorkbenchSessions({
     driver: (partition) => views?.existingDriver(partition) ?? null,
@@ -598,6 +611,8 @@ export function stopPublishWorker(): void {
   workbench = null;
   floatLayer?.destroy();
   floatLayer = null;
+  toastLayer?.destroy();
+  toastLayer = null;
   onFrame = null;
   mirroring = null;
   running.clear();
@@ -933,6 +948,13 @@ export function showFloat(hint: FloatHint): Promise<void> {
 }
 export function hideFloat(id?: string): void {
   floatLayer?.hide(id);
+}
+/** 原生视图在前台时,右下角的提示条画到网页上面 / 收起(ADR 0051)。 */
+export function showToasts(toasts: Omit<FloatHint, "id">): Promise<void> {
+  return toastLayer?.show({ id: "toasts", ...toasts }) ?? Promise.resolve();
+}
+export function hideToasts(): void {
+  toastLayer?.hide();
 }
 export function coverViewPage(covered: boolean): void {
   views?.setForegroundHidden("cover", covered);

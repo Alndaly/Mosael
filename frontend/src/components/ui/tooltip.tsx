@@ -350,6 +350,7 @@ export {
   HintRegion,
   regionPlacement,
   useChromeLayer,
+  CHROME_LAYER,
   EnsureProvider,
   useExclusiveOpen,
   HintScope,
