@@ -290,7 +290,7 @@ def test_这一轮在停_几张一起起的都取消_不只是正在等的那一
             executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
     assert caught.value.key == "wfErr_cancelled" and len(children) == 3
     with unit_of_work() as db:
-        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("failed", "jobErr_cancelled")] * 3
+        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("cancelled", "")] * 3
 
 
 def test_第三张被拒_前两张已经建好的任务一并取消_不停在排队(setup, monkeypatch) -> None:
@@ -316,4 +316,4 @@ def test_第三张被拒_前两张已经建好的任务一并取消_不停在排
         executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
     assert refused.value.key == "genErr_noDefaultModel" and len(children) == 2
     with unit_of_work() as db:
-        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("failed", "jobErr_cancelled")] * 2
+        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("cancelled", "")] * 2

@@ -39,6 +39,7 @@ export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () =
   const jobs = stats?.jobs_by_day ?? [];
   const jobsTotal = jobs.reduce((sum, point) => sum + point.total, 0);
   const jobsFailed = jobs.reduce((sum, point) => sum + point.failed, 0);
+  const jobsStopped = jobs.reduce((sum, point) => sum + point.cancelled, 0);
 
   return (
     // 范围、读数、图三块挨得近一些(gap-5):它们是同一件事的三层,不是三个分开的节。
@@ -76,7 +77,8 @@ export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () =
               </h2>
               {stats && jobsTotal > 0 && (
                 <span className="text-ui-xs tabular-nums text-muted-foreground">
-                  {t("adminJobsSummary").replace("{total}", String(jobsTotal)).replace("{failed}", String(jobsFailed))}
+                  {t("adminJobsSummary").replace("{total}", String(jobsTotal)).replace("{failed}", String(jobsFailed))
+                    .replace("{stopped}", String(jobsStopped))}
                 </span>
               )}
             </header>

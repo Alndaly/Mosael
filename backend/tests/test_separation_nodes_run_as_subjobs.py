@@ -139,7 +139,7 @@ def test_跑到一半被取消_收尾时不把自己写回完成(monkeypatch, au
     def cancel_midway(run):
         def wrapped(*args, **kwargs):
             with SessionLocal() as other:
-                cancel_job(other, other.get(Job, job_id))
+                cancel_job(other, other.get(Job, job_id), by=None)
                 other.commit()  # 测试是入口:cancel_job 不提交
             return run(*args, **kwargs)
 
@@ -153,4 +153,4 @@ def test_跑到一半被取消_收尾时不把自己写回完成(monkeypatch, au
         denoise._job_body(job_id, asset_id, "", "")
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        assert (job.status, job.error_key) == ("failed", "jobErr_cancelled"), job.status
+        assert (job.status, job.error_key) == ("cancelled", ""), job.status

@@ -25,7 +25,7 @@ import { listJobChildren, listJobEvents, type Job } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobEventList } from "@/components/jobs/JobEvents";
 import { useJobKinds } from "@/components/jobs/jobKinds";
-import { jobDisplayStatus, runStatusText } from "@/components/jobs/runStatus";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
@@ -84,10 +84,10 @@ function ChildRow({ child }: { child: Job }) {
         <span
           className={cn(
             "shrink-0 text-ui-2xs",
-            active ? "text-primary" : child.status === "succeeded" ? "text-success" : jobDisplayStatus(child) === "cancelled" ? "text-muted-foreground" : "text-destructive",
+            active ? "text-primary" : child.status === "succeeded" ? "text-success" : child.status === "cancelled" ? "text-muted-foreground" : "text-destructive",
           )}
         >
-          {runStatusText(t, active ? "running" : jobDisplayStatus(child))}
+          {runStatusText(t, active ? "running" : child.status)}
         </span>
       </button>
       {open && (

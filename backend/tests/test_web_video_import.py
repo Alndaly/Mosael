@@ -147,7 +147,7 @@ def test_取消之后真的停下_不再写回成功也不入库(monkeypatch: py
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         assert job is not None
-        cancel_job(db, job)
+        cancel_job(db, job, by=None)
         db.commit()
     worker.join(10)
     assert not worker.is_alive()

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import AgentMessage, AgentSession, Job, User
 from app.domain.agent import host
-from app.domain.jobs import TERMINAL_STATUSES, register_receipt_deliverer
+from app.domain.jobs import CANCELLED, TERMINAL_STATUSES, register_receipt_deliverer
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,9 @@ def _summarize(job: Job) -> str:
         # 只说「完成了」的话,它还得再查一次任务才拿得到。
         tail = f",素材 id:{'、'.join(ids)}" if ids else ""
         return f"{what}已完成{tail}。"
+    if job.status == CANCELLED:
+        # 被停下的不是失败(ADR 0049):说成「失败了」,智能体会当成一次该重试的失败。它会不会有结果了 —— 不会,所以照样说一声。
+        return f"{what}已取消。"
     reason = str(job.error or job.message or "").strip()
     return f"{what}失败了{f':{reason}' if reason else ''}。"
 

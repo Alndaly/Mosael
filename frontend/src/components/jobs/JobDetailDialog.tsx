@@ -10,7 +10,7 @@ import { JobEventList } from "@/components/jobs/JobEvents";
 import { JobResult } from "@/components/jobs/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useJobKinds } from "@/components/jobs/jobKinds";
-import { jobDisplayStatus, runStatusText } from "@/components/jobs/runStatus";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -19,7 +19,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
-const ACTIVE = new Set(["queued", "running", "pending"]);
+const ACTIVE = new Set(["queued", "running"]);
 
 /**
  * 失败了能就地重来的任务种类:怎么重来由那一种自己说(拿载荷里的什么、调哪个接口)。此前失败的任务只有「前往对应页面 / 关闭」,
@@ -86,7 +86,7 @@ export function JobDetailDialog({
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });
-  const retryable = current && jobDisplayStatus(current) === "failed" ? RETRY[current.kind] : undefined;
+  const retryable = current && current.status === "failed" ? RETRY[current.kind] : undefined;
   const retry = useMutation({
     mutationFn: () => retryable?.(current!) ?? Promise.resolve(null),
     onSuccess: () => {
@@ -134,22 +134,22 @@ export function JobDetailDialog({
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground",
-                (active || current.status === "running" || current.status === "pending" || current.status === "queued") &&
+                active &&
                   "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
                 !active && current.status === "succeeded" && "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success",
-                !active && jobDisplayStatus(current) === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
+                !active && current.status === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
               )}
             >
               {active ? (
                 <Loader2 size={13} className="animate-mosael-spin" />
               ) : current.status === "succeeded" ? (
                 <CheckCircle2 size={13} />
-              ) : jobDisplayStatus(current) === "cancelled" ? (
+              ) : current.status === "cancelled" ? (
                 <Ban size={13} />
               ) : (
                 <CircleAlert size={13} />
               )}
-              {runStatusText(t, active ? "running" : jobDisplayStatus(current))}
+              {runStatusText(t, active ? "running" : current.status)}
             </span>
             <Truncate className="text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</Truncate>
           </div>
@@ -163,8 +163,7 @@ export function JobDetailDialog({
               </span>
             )}
           </div>
-          {/* 被停下的任务 error 里只是「已取消」那句,状态那一行已经说了,不再画一行红字。 */}
-          {current.error && jobDisplayStatus(current) !== "cancelled" && (
+          {current.error && (
             <p className="m-0 min-w-0 whitespace-pre-wrap text-ui-xs text-destructive [overflow-wrap:anywhere]">
               {current.error}
             </p>

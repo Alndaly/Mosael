@@ -6,6 +6,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
+from app.domain.jobs import JobStateError
 from app.domain.scheduler.operations import SchedulerDomainError, compute_next_run_at
 from app.workers.scheduler import tick
 from tests.util import fresh_client
@@ -135,17 +136,18 @@ def test_scheduled_export_cancels_child_and_stays_cancelled(monkeypatch):
         dispatch_scheduled_job(db, task, run, job)
         child = db.get(Job, job.result["delegated_job_id"])
         assert child.parent_job_id == job.id
-        cancel_job(db, job)
+        cancel_job(db, job, by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
         db.refresh(child)
-        assert child.status == "failed"
-        # A legacy worker's late result must not change the cancelled wrapper.
-        child.status = "succeeded"
-        db.commit()
+        assert child.status == "cancelled"
+        # 迟到的结果改不动被停下的任务(ADR 0049:cancelled 进去就出不来)。
+        with pytest.raises(JobStateError):
+            child.status = "succeeded"
+        db.rollback()
         sync_run_states(db)
         db.refresh(job)
-        assert job.status == "failed" and job.error == "已取消"
-        assert run.status == "failed"
+        assert job.status == "cancelled" and job.error is None
+        assert run.status == "cancelled"
 
 
 class Test三个触发入口是同一个:

@@ -273,7 +273,7 @@ def wait_status(client, job_id: str, timeout: float = 60.0) -> str:
     status = "queued"
     while time.monotonic() < deadline:
         status = client.get(f"/api/jobs/{job_id}").json()["status"]
-        if status in ("succeeded", "failed"):
+        if status in ("succeeded", "failed", "cancelled"):
             return status
         time.sleep(0.15)
     return status
@@ -288,7 +288,7 @@ def wait_settled(client, job_id: str, timeout: float = 30.0) -> str:
     收拾跑在任务线程里,任务线程都结束了,收拾就一定做完了。
     """
     status = wait_status(client, job_id, timeout=timeout)
-    if status in ("succeeded", "failed") and not wait_for_idle_jobs(timeout=timeout):
+    if status in ("succeeded", "failed", "cancelled") and not wait_for_idle_jobs(timeout=timeout):
         raise AssertionError(f"任务 {job_id} 已经 {status},它的线程 {timeout} 秒还没结束 —— 落终态之后的收拾卡住了")
     return status
 

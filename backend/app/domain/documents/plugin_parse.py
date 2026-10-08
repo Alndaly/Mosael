@@ -67,8 +67,6 @@ def _cancelled(job_id: str | None) -> bool:
         return False
     from app.domain.jobs import was_cancelled
 
-    #: 取消的任务在库里是 failed + jobErr_cancelled,不是 cancelled(见 jobs.was_cancelled)—— 此前这里
-    #: 比的是 cancelled,于是插件那边从来没收到过「停下」。
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         return job is not None and was_cancelled(job)

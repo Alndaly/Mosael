@@ -161,6 +161,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_httpStatus": {"zh": "请求返回了 {status}:{reason}", "en": "The request returned {status}: {reason}"},
     "wfErr_conditionNeedsNumbers": {"zh": "比较方式「{op}」要的是数字,拿到的是 {left} / {right}", "en": "The “{op}” comparison needs numbers; got {left} / {right}"},
     "wfErr_childFailed": {"zh": "子任务失败:{reason}", "en": "The sub-task failed: {reason}"},
+    "wfErr_childCancelled": {"zh": "子任务已被取消", "en": "The sub-task was cancelled"},
     "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},

@@ -201,7 +201,7 @@ def test_写的时候被停下_笔记不新建也不改写() -> None:
         def chat(self, target, messages, **kwargs):
             with SessionLocal() as db:
                 job = db.scalars(select(Job).where(Job.kind == "board_write", Job.status == "running")).one()
-                cancel_job(db, job)
+                cancel_job(db, job, by=None)
                 db.commit()
             return super().chat(target, messages, **kwargs)
 

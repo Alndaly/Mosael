@@ -19,7 +19,7 @@ from app.api.deps import DbSession, Tx
 from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
-from app.domain.jobs import JobError, cancel_job, was_cancelled
+from app.domain.jobs import JobError, cancel_job
 from app.domain.scheduler import SchedulerDomainError, trigger_scheduled_task, webhook_secret_matches
 from app.api.schemas.base import ApiModel
 
@@ -65,11 +65,9 @@ def _out(db, run: ScheduledTaskRun) -> HookRunOut:
         return HookRunOut(run_id=run.id, status=run.status, error=run.error, result=run.result or {},
                           started_at=run.started_at, finished_at=run.finished_at)
     shown = JobOut.model_validate(job)  # 按请求语言渲染 message / error(见 JobOut)
-    # 任务系统把「被取消」记成 failed + jobErr_cancelled。对外单列成 cancelled:调用方对
-    # 「我自己停掉的」和「跑挂了」该做的事不一样(后者要报警、要重试)。
-    status = "cancelled" if was_cancelled(job) else job.status
+    # 被停下的就是 cancelled(ADR 0049):调用方对「我自己停掉的」和「跑挂了」该做的事不一样(后者要报警、要重试)。
     return HookRunOut(
-        run_id=run.id, job_id=job.id, status=status, progress=job.progress or 0,
+        run_id=run.id, job_id=job.id, status=job.status, progress=job.progress or 0,
         message=shown.message, error=shown.error, result=job.result or {},
         started_at=run.started_at, finished_at=run.finished_at,
     )
@@ -101,7 +99,7 @@ def cancel_hook_run(task_id: str, run_id: str, secret: str, db: Tx) -> HookRunOu
     if job is None:
         raise HTTPException(status_code=409, detail=tr("jobErr_alreadyFinished"))
     try:
-        cancel_job(db, job)
+        cancel_job(db, job, by=None)  # 外部系统凭这条任务的密钥来停的,不是 Mosael 里的哪个人
     except JobError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.refresh(run)

@@ -26,21 +26,20 @@ from app.domain import job_catalog
 
 logger = logging.getLogger(__name__)
 
-TERMINAL_STATUSES = ("succeeded", "failed")
-#: 「被人取消」在库里的记法:failed + 这个 key(见 _cancel_job_row)。判它的地方都认这一个常量。
+#: 被停下的任务落的状态(ADR 0049):人点了停止 / 取消,或者 Mosael 替人做的决定 —— 父任务被取消了、等它的那一轮停了。
+#: 它是终态,而且**进去就出不来**(见 _terminal_is_terminal)。租约过期、重启打断、父任务失败照旧是 failed:那不是谁的决定。
+CANCELLED = "cancelled"
+TERMINAL_STATUSES = ("succeeded", "failed", CANCELLED)
+#: 「被停下了」的那句话(「已取消」)。任务本身不再用它记取消(见 CANCELLED);还用它的:执行体发现自己没人要了时抛的
+#: JobCancelled、工作流节点事件里那一步「被停下」、生成记录上抄下的「已停止」(generation.runner.record_failure)。
 CANCELLED_ERROR_KEY = "jobErr_cancelled"
 #: 「后端重启时它还在跑、接不回来」的记法:failed + 这个 key(见 reconcile_orphaned_jobs)。
 RESTART_ERROR_KEY = "jobErr_backendRestart"
 
 
 def was_cancelled(job: Any) -> bool:
-    """这个任务是不是被人取消的。
-
-    总线把「被取消」记成 failed + jobErr_cancelled(见 _cancel_job_row),没有单独的状态。
-    对外要分开说的地方(外部钩子、画板上那一格)都问这一处 —— 各自判一遍的话,哪天取消换了
-    记法,漏改的那一处就把「我自己停掉的」说成「跑挂了」。
-    """
-    return getattr(job, "status", None) == "failed" and getattr(job, "error_key", None) == CANCELLED_ERROR_KEY
+    """这个任务是不是被停下的(状态是 `cancelled`,ADR 0049)。"""
+    return getattr(job, "status", None) == CANCELLED
 
 # 「当前正在执行的父任务」:之后 create_job 建出来的任务,都挂在它下面(ADR-0018)。
 #
@@ -254,8 +253,8 @@ def ensure_wanted() -> None:
         return
     with SessionLocal() as db:
         status = db.scalar(select(Job.status).where(Job.id == job_id))
-    #: 只认 failed:被取消、或它所在的任务失败了。succeeded 的父任务照样能派生收尾的活(见 _ParentJob 的 derived)。
-    if status == "failed":
+    #: 只认被停下、或它所在的任务失败了。succeeded 的父任务照样能派生收尾的活(见 _ParentJob 的 derived)。
+    if status in ("failed", CANCELLED):
         raise JobCancelled(CANCELLED_ERROR_KEY)
 
 
@@ -290,10 +289,10 @@ def _record_crash(job_id: str, what: object, *, exc: Exception | None = None, ca
             if job is None:
                 return
             if cancelled:
-                if finish_job(db, job, status="failed", error=t(CANCELLED_ERROR_KEY, DEFAULT_LOCALE),
-                              error_key=CANCELLED_ERROR_KEY, error_params={}):
+                if finish_job(db, job, status=CANCELLED, error=None, error_key="", error_params={}):
                     say(job, "jobMsg_cancelled")
-                    db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={"stage": "worker"}))
+                    db.add(TaskEvent(job_id=job.id, type="job.cancelled",
+                                     payload={"by": None, "cascaded_from": None, "stage": "worker"}))
                 return
             if finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_genericFailed", what=what)
@@ -475,6 +474,11 @@ def _terminal_is_terminal(job: Job, value: Any, previous: Any, _initiator: Any) 
     """
     if previous in TERMINAL_STATUSES and value not in TERMINAL_STATUSES:
         raise JobStateError(f"job {job.id} is already {previous}; it cannot go back to {value}")
+    #: **被停下的改不成别的终态**(ADR 0049 决定 2):停下是人的决定,迟到的「成功」也推翻不了它 —— 取消会停下进程、丢掉
+    #: 产出,一个迟到的成功说明那一下没停住,要查的是为什么没停住,而不是把一个已经丢掉的结果记成成功。
+    #: 失败 → 成功照旧可以(发布器被回收成失败之后又回报了成功)。
+    if previous == CANCELLED and value != CANCELLED:
+        raise JobStateError(f"job {job.id} was cancelled; it cannot become {value}")
 
 
 #: 「这活儿干完了,回执寄给谁」。key 是收信方的种类,值是那一类怎么送。
@@ -832,7 +836,7 @@ def create_job(
         parent_job = db.get(Job, parent)
         if parent_job is not None and not lock_active_job(db, parent_job):
             raise JobError("jobErr_parentFinished")
-    elif parent and db.scalar(select(Job.status).where(Job.id == parent)) == "failed":
+    elif parent and db.scalar(select(Job.status).where(Job.id == parent)) in ("failed", CANCELLED):
         # derived 放宽的只是「父任务**成功**收尾之后」(导出收尾时登记产物、排代理转码)。
         # 父任务被取消或失败了就不再起新活:取消级联停得住正在跑的那一个子任务,可执行体的
         # 循环会接着派下一个 —— 字幕配音逐句合成,每一句都是一次付费调用。读库里的状态,
@@ -968,15 +972,17 @@ def register_cancel_listener(kind: str, listener: Callable[[Session, Job], None]
     _CANCEL_LISTENERS[kind] = listener
 
 
-def _cancel_job_row(db: Session, job: Job) -> bool:
-    """把单个 job 落取消态 + 掐子进程 + 撤登记过的外部单(不 commit)。返回它是否原本还在跑。"""
+def _cancel_job_row(db: Session, job: Job, *, by: str | None, cascaded_from: str | None) -> bool:
+    """把单个 job 落取消态 + 掐子进程 + 撤登记过的外部单(不 commit)。返回它是否原本还在跑。
+
+    取消不是一个错误,没有原因可说:`error` / `error_key` 清空。谁取消的(`by`,用户 id;Mosael 自己停下的是 None)、
+    是不是从别的任务级联下来的(`cascaded_from`)记在那一条 `job.cancelled` 事件里(ADR 0049 决定 3)。"""
     if job.status not in ("queued", "running") or not lock_active_job(db, job):
         return False
-    job.status = "failed"
-    job.error_key = CANCELLED_ERROR_KEY
-    job.error = t(CANCELLED_ERROR_KEY, DEFAULT_LOCALE)
+    job.status = CANCELLED
+    job.error, job.error_key, job.error_params = None, "", {}
     say(job, "jobMsg_cancelled")
-    db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
+    db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={"by": by, "cascaded_from": cascaded_from}))
     # Stop the actual work, not just the row describing it.
     if kill_job_child(job.id):
         db.add(TaskEvent(job_id=job.id, type="job.child_killed", payload={}))
@@ -986,7 +992,7 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
     return True
 
 
-def _cancel_descendants(db: Session, job_id: str) -> set[str]:
+def _cancel_descendants(db: Session, job_id: str, *, by: str | None) -> set[str]:
     frontier, seen = [job_id], {job_id}
     while frontier:
         parent_id = frontier.pop()
@@ -997,24 +1003,25 @@ def _cancel_descendants(db: Session, job_id: str) -> set[str]:
             if child.id in seen:
                 continue
             seen.add(child.id)
-            _cancel_job_row(db, child)
+            #: 级联下来的也是被停下的(ADR 0049 决定 4),不是失败。
+            _cancel_job_row(db, child, by=by, cascaded_from=parent_id)
             frontier.append(child.id)
     return seen
 
 
-def cancel_job_tree(db: Session, job: Job) -> set[str] | None:
+def cancel_job_tree(db: Session, job: Job, *, by: str | None = None, cascaded_from: str | None = None) -> set[str] | None:
     """取消这个任务,并广度遍历取消它的后代(连嵌套子工作流)。不 commit。
 
     返回取消到的 id(含自己);它已经落了终态就返回 None、什么都不动。用户点取消(cancel_job)
     和「等它的人不再要它了」(工作流这一轮正在停,见 workflows.executors.common.wait_until)
-    走的是同一条路 —— 取消只有一种做法。
+    走的是同一条路 —— 取消只有一种做法。`by`:谁取消的(用户 id);`cascaded_from`:是哪个任务停下连带它停的。
     """
-    if not _cancel_job_row(db, job):
+    if not _cancel_job_row(db, job, by=by, cascaded_from=cascaded_from):
         return None
-    return _cancel_descendants(db, job.id)
+    return _cancel_descendants(db, job.id, by=by)
 
 
-def cancel_job(db: Session, job: Job) -> Job:
+def cancel_job(db: Session, job: Job, *, by: str | None) -> Job:
     """用户主动取消:job 落终态,发布任务同步撤单,工作流在节点边界停下。
 
     线程内正在执行的节点无法安全掐断;engine 每个节点边界都会重读 job 状态,看到已取消
@@ -1023,7 +1030,7 @@ def cancel_job(db: Session, job: Job) -> Job:
     """
     if job.status not in ("queued", "running"):
         raise JobError("jobErr_alreadyFinished")
-    seen = cancel_job_tree(db, job)
+    seen = cancel_job_tree(db, job, by=by)
     if seen is None:
         db.rollback()
         raise JobError("jobErr_alreadyFinished")
@@ -1122,7 +1129,7 @@ def _expire_worker_leases(db: Session) -> int:
         ):
             say(job, "jobMsg_leaseExpired")
             db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "worker_lease_expired"}))
-            _cancel_descendants(db, job.id)
+            _cancel_descendants(db, job.id, by=None)
             expired += 1
     return expired
 

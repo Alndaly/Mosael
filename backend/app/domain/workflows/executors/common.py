@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.jobs import cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
+from app.domain.jobs import CANCELLED, cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.graph_run import GraphRun
 from app.domain.workflows.run_scope import halted
@@ -118,12 +118,19 @@ def wait_for_job(job_id: str, *, release: "Session | None" = None) -> Job:
         if job.status == "succeeded":
             db.expunge(job)
             return job
+        if job.status == CANCELLED:
+            # 整轮在停(用户停了这条工作流,子任务跟着被停下):这一轮是被停下的,不是这个节点失败了。
+            # 这一轮没在停、只有这个子任务被人单独停了(任务中心里点了它的「取消」):节点失败,说清楚是被停下的
+            # (ADR 0049 决定 8)—— 此前是「子任务失败:已取消」。
+            if stopping(db):
+                raise WorkflowDomainError("wfErr_cancelled")
+            raise WorkflowDomainError("wfErr_childCancelled")
         return None
 
     def abandon(db: Session) -> None:
         job = db.get(Job, job_id)
         if job is not None:
-            cancel_job_tree(db, job)
+            cancel_job_tree(db, job, cascaded_from=job.parent_job_id)
 
     return wait_until(settled, release=release, on_stop=abandon)
 

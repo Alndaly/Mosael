@@ -58,7 +58,7 @@ def _settle(job_id: str) -> str:
     while time.monotonic() < deadline:
         with SessionLocal() as db:
             status = db.get(Job, job_id).status
-        if status in ("succeeded", "failed"):
+        if status in ("succeeded", "failed", "cancelled"):
             return status
         time.sleep(0.1)
     raise AssertionError("工作流没跑完")
@@ -117,7 +117,7 @@ def test_取消时正在等的那一步当场放手_排着的动作不再执行(
     assert action_id is not None, "等待动作一直没入队"
 
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
     # 等待节点给了 60 秒 + 15 秒的余量。取消之后要当场收场,而不是等满它 —— 上限取它的一半以下:要分辨的是
     # 「当场放手」和「等满 75 秒」,不是「几秒内」;机器忙时收场慢几秒不该算错。

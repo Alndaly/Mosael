@@ -55,7 +55,7 @@ def _job(ws: str, kind: str, payload: dict | None = None) -> str:
 
 def _cancel(job_id: str) -> None:
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
 
 
@@ -125,7 +125,7 @@ def test_start_job_refuses_a_job_cancelled_while_it_was_queued() -> None:
     _cancel(job_id)
     with unit_of_work() as db:
         assert start_job(db, db.get(Job, job_id)) is False
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 def test_ensure_wanted_asks_the_job_it_runs_in() -> None:
@@ -182,9 +182,9 @@ def test_a_proxy_cancelled_while_waiting_for_a_slot_stays_cancelled(monkeypatch)
         TRANSCODE_SLOTS.release()
     assert wait_for_idle_jobs(timeout=30)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY), "取消被执行体改写了"
+    assert _status(job_id) == ("cancelled", ""), "取消被执行体改写了"
     assert built == [], "取消了的代理照样转了码"
-    assert settled == ["failed"], f"落终态之后的收拾跑了 {len(settled)} 次:{settled}"
+    assert settled == ["cancelled"], f"落终态之后的收拾跑了 {len(settled)} 次:{settled}"
     with SessionLocal() as db:
         # 不是停在 pending(那样下次启动补齐扫描会把它再排一次,用户的取消被撤销)。
         assert db.get(Asset, video).media_info.get("proxy_status") == "failed"
@@ -202,7 +202,7 @@ def test_a_remote_voice_cancelled_while_queued_never_calls_the_paid_engine(monke
     voices._run_synthesis_body(job_id, None, "你好", None, "openai", "alloy", 1.0, ws)
 
     assert calls == [], "排队时取消了的配音照样去调了付费接口"
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 def test_a_podcast_cancelled_while_queued_never_calls_the_provider(monkeypatch) -> None:
@@ -218,7 +218,7 @@ def test_a_podcast_cancelled_while_queued_never_calls_the_provider(monkeypatch) 
     voices._run_podcast_body(job_id, ws, None, "材料", "", 0, [], 1.0)
 
     assert calls == []
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 def test_a_trim_cancelled_while_queued_never_runs_ffmpeg(monkeypatch) -> None:
@@ -234,7 +234,7 @@ def test_a_trim_cancelled_while_queued_never_runs_ffmpeg(monkeypatch) -> None:
     trim._trim_body(job_id, video, 0.0, 1.0, False)
 
     assert ran == []
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 def test_a_link_import_cancelled_while_queued_never_downloads(monkeypatch) -> None:
@@ -249,7 +249,7 @@ def test_a_link_import_cancelled_while_queued_never_downloads(monkeypatch) -> No
     from_url._run(job_id)
 
     assert downloads == []
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 def test_a_late_publish_progress_does_not_bring_a_failed_job_back(monkeypatch) -> None:
@@ -273,7 +273,7 @@ def test_a_late_publish_progress_does_not_bring_a_failed_job_back(monkeypatch) -
         task = db.get(PublishTask, task_id)
         task.status = "login_required"
         _sync_job(db, task)
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +383,7 @@ def test_cancelling_a_separation_stops_demucs_frees_the_slot_and_registers_nothi
     assert _gone_within(worker_pid, 5), "取消之后 Demucs 还在跑"
     assert wait_for_idle_jobs(timeout=30)
     assert RENDER_SLOTS._value == slots_before, "取消了的分离还占着导出 / 分离共用的名额"
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     with SessionLocal() as db:
         assert db.scalars(select(Asset).where(Asset.source == "separated")).all() == [], "取消了的分离照样登记了产出"
 
@@ -414,7 +414,7 @@ def test_cancelling_a_proxy_mid_transcode_stops_ffmpeg_and_keeps_the_cancel(tmp_
 
     assert _gone_within(ffmpeg_pid, 5), "取消之后 ffmpeg 还在转"
     assert wait_for_idle_jobs(timeout=30)
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY), "取消被改写成了别的"
+    assert _status(job_id) == ("cancelled", ""), "取消被改写成了别的"
     with SessionLocal() as db:
         assert db.get(Asset, video).media_info.get("proxy_status") == "failed"
 
@@ -452,7 +452,7 @@ def test_a_cancelled_clip_denoise_leaves_the_timeline_alone(monkeypatch) -> None
         holder["job_id"] = job.id
     assert wait_for_idle_jobs(timeout=30)
 
-    assert _status(holder["job_id"]) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(holder["job_id"]) == ("cancelled", "")
     with SessionLocal() as db:
         assert db.get(Clip, clip_id).asset_id == source, "取消了的片段降噪照样把时间线上的片段换掉了"
 
@@ -481,7 +481,7 @@ def test_a_cancelled_transcription_keeps_the_old_transcript(tmp_path, monkeypatc
 
     transcription._run_transcription_body(job_id, asset_id)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     with SessionLocal() as db:
         kept = db.scalars(select(Transcript).where(Transcript.asset_id == asset_id)).all()
         assert [one.id for one in kept] == [old_id], "取消了的转写照样覆盖了旧逐字稿"
@@ -529,7 +529,7 @@ def test_a_separation_cancelled_as_it_finishes_registers_no_stems(monkeypatch) -
         job_id = start_separation_job(db, asset=db.get(Asset, source), created_by=None).id
     assert wait_for_idle_jobs(timeout=30)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     assert _registered("separated") == []
 
 
@@ -554,7 +554,7 @@ def test_a_denoise_cancelled_as_it_finishes_registers_nothing(monkeypatch) -> No
         job_id = start_denoise_job(db, asset=db.get(Asset, source), created_by=None).id
     assert wait_for_idle_jobs(timeout=30)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     assert _registered("denoised") == []
 
 
@@ -572,7 +572,7 @@ def test_a_gif_cancelled_as_it_finishes_registers_nothing(monkeypatch) -> None:
         job_id = video_gif.start_video_to_gif(db, asset=db.get(Asset, video), created_by=None).id
     assert wait_for_idle_jobs(timeout=30)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     with SessionLocal() as db:
         assert [one.name for one in db.scalars(select(Asset).where(Asset.name.like("%GIF%")))] == []
 
@@ -600,5 +600,5 @@ def test_a_remote_voice_cancelled_while_the_engine_speaks_registers_nothing(monk
     finally:
         jobs_bus.reset_parent_job(token)
 
-    assert _status(job_id) == ("failed", CANCELLED_ERROR_KEY)
+    assert _status(job_id) == ("cancelled", "")
     assert _registered("tts") == []

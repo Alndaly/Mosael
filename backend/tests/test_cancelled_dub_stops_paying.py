@@ -51,7 +51,7 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
         if len(synthesized) == 1:
             # 第一句合成期间,用户取消了(或者取消了外面那条工作流,级联下来)。
             with SessionLocal() as other:
-                cancel_job(other, other.get(Job, dub["id"]))
+                cancel_job(other, other.get(Job, dub["id"]), by=None)
                 other.commit()  # 测试是入口:cancel_job 不提交
         audio = Asset(workspace_id=ws, kind="audio", name=text, file_key="media/d.wav", media_info={"duration": 2.0})
         db.add(audio)
@@ -73,7 +73,7 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
     assert len(synthesized) == 1, f"取消之后又合成了 {len(synthesized) - 1} 句"
     with SessionLocal() as db:
         job = db.get(Job, dub["id"])
-        assert job.status == "failed" and job.error_key == "jobErr_cancelled", (job.status, job.error_key)
+        assert job.status == "cancelled", (job.status, job.error_key)
         dub_track = db.scalar(select(Track).where(Track.sequence_id == sequence_id, Track.role == "dub"))
         assert dub_track is None or not dub_track.clips, "取消之后还往时间线上落了配音"
 
@@ -106,4 +106,4 @@ def test_等一句合成等到超时_放弃时把那条合成任务取消掉(mon
         assert db.get(Job, dub_id).error_key == "jobErr_noDubSucceeded"
         child = db.get(Job, stuck[0])
         assert child.status not in ("queued", "running"), "放弃等的那条合成任务被取消了,不会再被执行、再计费"
-        assert child.error_key == "jobErr_cancelled"
+        assert child.status == "cancelled"

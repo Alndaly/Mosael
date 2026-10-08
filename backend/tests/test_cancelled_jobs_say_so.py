@@ -1,9 +1,8 @@
 """A job somebody stopped says so in the job API instead of passing for a failure.
 
-Cancelling writes ``status="failed"`` with the ``jobErr_cancelled`` key. The task center only read
-``status``, so every stop the user pressed (AI Studio, a board cell, a workflow run) came back as a red
-"… · failed" toast while the place they pressed it said "stopped". ``cancelled`` tells the two apart without
-handing the internal message key to the client.
+Cancelling used to write ``status="failed"`` with the ``jobErr_cancelled`` key, and every place that only read
+``status`` — the task center first of all — turned the user's own "stop" into a red "… · failed". Cancelled is now
+its own terminal status (ADR 0049): no error, and a real failure stays a failure.
 """
 
 from __future__ import annotations
@@ -29,10 +28,9 @@ def test_a_stopped_job_is_reported_as_cancelled() -> None:
 
     stopped = client.post(f"/api/jobs/{job_id}/cancel")
     assert stopped.status_code == 200, stopped.text
-    assert stopped.json()["cancelled"] is True
+    assert (stopped.json()["status"], stopped.json()["error"]) == ("cancelled", None)
     listed = {row["id"]: row for row in client.get("/api/jobs", params={"workspace_id": ws}).json()}
-    assert listed[job_id]["status"] == "failed"
-    assert listed[job_id]["cancelled"] is True
+    assert listed[job_id]["status"] == "cancelled"
 
 
 def test_a_real_failure_and_a_success_are_not_cancelled() -> None:
@@ -45,5 +43,5 @@ def test_a_real_failure_and_a_success_are_not_cancelled() -> None:
         db.commit()
 
     listed = {row["id"]: row for row in client.get("/api/jobs", params={"workspace_id": ws}).json()}
-    assert listed[failed_id]["status"] == "failed" and listed[failed_id]["cancelled"] is False
-    assert listed[done_id]["cancelled"] is False
+    assert (listed[failed_id]["status"], listed[failed_id]["error"]) == ("failed", "ffmpeg exited 1")
+    assert listed[done_id]["status"] == "succeeded"

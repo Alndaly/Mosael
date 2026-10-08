@@ -4,6 +4,7 @@ import { FileOutput } from "lucide-react";
 
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
 import { getJob } from "@/api/domains/jobs";
+import { jobSettled } from "@/components/jobs/runStatus";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
     queryFn: () => getJob(jobId!),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "succeeded" || status === "failed" ? false : 700;
+      return jobSettled(status) ? false : 700;
     },
     refetchOnWindowFocus: true,
   });

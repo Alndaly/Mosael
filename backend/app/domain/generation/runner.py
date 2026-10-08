@@ -44,11 +44,13 @@ from sqlalchemy import func, or_, select
 from app.core.db import SessionLocal
 from app.core.http_retry import sent_but_unanswered
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
 from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider
 from app.domain.jobs import (
+    CANCELLED,
+    CANCELLED_ERROR_KEY,
     RESTART_ERROR_KEY,
     blame,
     dispatch_job,
@@ -169,7 +171,7 @@ def retrievable(db, generation: GenerationJob, job: Job | None) -> bool:
     停下 = 用户说了「这一份我不要了」(ADR 0019 Consequences);跑挂了的才值得再问一次。任务被任务中心清掉之后回执跟着没了,
     那时也取不回。
     """
-    if job is None or job.status != "failed" or was_cancelled(job) or generation.result_asset_id:
+    if job is None or job.status != "failed" or generation.result_asset_id:
         return False
     if not result_may_exist(str(job.error_key or ""), dict(job.error_params or {})):
         return False
@@ -601,7 +603,7 @@ def reconcile_unsettled_charges(db) -> int:
     following = func.json_extract(Job.payload, f"$.{REMOTE_TASK_FIELD}.following")
     #: 只取带着这两个标记之一的那几行 —— 不把全部失败的生成读成对象(CONVENTIONS「批量维护不把行读成 ORM 对象」)。
     rows = db.scalars(select(Job).where(
-        Job.kind == "ai_generation", Job.status == "failed", or_(marked.is_not(None), following.is_not(None)),
+        Job.kind == "ai_generation", Job.status.in_(("failed", CANCELLED)), or_(marked.is_not(None), following.is_not(None)),
     )).all()
     handled = 0
     followers: list[str] = []
@@ -1087,12 +1089,16 @@ def record_failure(db, job: Job) -> None:
 
     **不看任务种类,看有没有记录挂着它**:创作页的语音、播客记录挂的是 `tts` / `podcast` 任务(ADR 0055 §5)。
     """
-    if job.status != "failed":
+    if job.status == CANCELLED:
+        #: 停下的任务没有失败原因(ADR 0049);记录上照旧抄下「已停止」的记法 —— 卡片据此写「已停止」,不摆失败卡
+        #: (见 GenerationJobOut.stopped)。记录活得比任务久,它得自己记得。
+        error, error_key, error_params = t(CANCELLED_ERROR_KEY, DEFAULT_LOCALE), CANCELLED_ERROR_KEY, {}
+    elif job.status == "failed":
+        error, error_key, error_params = job.error, job.error_key or "", dict(job.error_params or {})
+    else:
         return
     for generation in db.scalars(select(GenerationJob).where(GenerationJob.job_id == job.id)):
-        generation.error = job.error
-        generation.error_key = job.error_key or ""
-        generation.error_params = dict(job.error_params or {})
+        generation.error, generation.error_key, generation.error_params = error, error_key, error_params
 
 
 #: 重启后这一类任务**接着取**,而不是判失败。登记在总线上(见 jobs.register_resumer),

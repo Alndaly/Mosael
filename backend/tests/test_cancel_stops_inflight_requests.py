@@ -22,7 +22,6 @@ import pytest
 from app.core import abort, outbound_guard
 from app.core.db import SessionLocal
 from app.core.http_retry import RetryingClient
-from app.core.i18n import t
 from tests.util import add_provider, fresh_client, until, wait_settled, wait_status
 
 #: 上游「生成」要多久才回。旧代码下取消之后连接一直挂到这时;新代码下取消后一秒内就断。
@@ -214,9 +213,7 @@ def test_取消工作流_在途的大模型请求当场断开_不重发_节点�
 
     #: 等到任务线程结束再数连接:重试只能从它发出去,它结束了就不会再有。此前是睡 0.3 秒再数 ——
     #: 机器一忙,重试还没来得及发,断言照样成立。
-    assert wait_settled(client, job_id) == "failed"
-    final = client.get(f"/api/jobs/{job_id}").json()
-    assert final["error"] == t("jobErr_cancelled", "zh"), "取消的原因不被节点失败盖掉"
+    assert wait_settled(client, job_id) == "cancelled", "取消不被节点失败盖掉"
     assert held.connections == 1, "取消之后不重试、不再发"
     finished = [one for one in _job_events(client, job_id) if one["type"] == "workflow.node.finished"]
     assert [one["payload"].get("node_id") for one in finished if one["payload"].get("node_id") == "write"] == []
@@ -238,8 +235,7 @@ def test_取消时_HTTP_请求节点等着的连接当场断开(held: _SlowUpstr
     assert held.bodies == [{"q": 1}]
     assert held.closed.wait(CLOSE_WITHIN_SECONDS)
     assert held.closed_at - cancelled_at < CLOSE_WITHIN_SECONDS
-    assert wait_status(client, job_id) == "failed"
-    assert client.get(f"/api/jobs/{job_id}").json()["error"] == t("jobErr_cancelled", "zh")
+    assert wait_status(client, job_id) == "cancelled"
 
 
 def test_取消时正在读的流式响应当场停_之后一个字节都不再进来(streaming: _SlowUpstream) -> None:
@@ -374,7 +370,7 @@ def test_取消落在子进程刚起的那一下_后登记的子进程照样当�
     jobs.register_job_child(job_id, body)  # 执行体在跑(它一开跑就登记的取消开关)
     try:
         with SessionLocal() as db:
-            jobs.cancel_job(db, db.get(Job, job_id))  # 掐了,还没提交
+            jobs.cancel_job(db, db.get(Job, job_id), by=None)  # 掐了,还没提交
             late = _Child()
             jobs.register_job_child(job_id, late)  # 执行体恰好此刻起了一个新子进程
             assert body.killed and late.killed, "取消还没提交时登记上来的子进程也要掐掉"

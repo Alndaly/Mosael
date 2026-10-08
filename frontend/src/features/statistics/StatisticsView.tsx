@@ -110,9 +110,15 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
           key: "homeStatJobsDone",
           value: stats.jobs_succeeded,
           icon: <Clock3 size={13} />,
+          //: 失败和被停下的分开说(ADR 0049):停下是人自己按的,不该读成「失败了几个」。
           extra:
-            stats.jobs_failed > 0
-              ? { text: t("homeStatJobsFailedSuffix").replace("{n}", String(stats.jobs_failed)) }
+            stats.jobs_failed > 0 || stats.jobs_cancelled > 0
+              ? {
+                  text: [
+                    stats.jobs_failed > 0 ? t("homeStatJobsFailedSuffix").replace("{n}", String(stats.jobs_failed)) : "",
+                    stats.jobs_cancelled > 0 ? t("homeStatJobsStoppedSuffix").replace("{n}", String(stats.jobs_cancelled)) : "",
+                  ].filter(Boolean).join(" · "),
+                }
               : undefined,
         },
         {

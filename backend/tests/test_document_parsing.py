@@ -252,7 +252,7 @@ def test_解析中停下_记成已停止_任务不被改成失败(monkeypatch) -
     def slow_parse(source, target, on_progress=None):
         with SessionLocal() as db:
             job = db.scalars(select(Job).where(Job.kind == "document_parse").order_by(Job.created_at.desc())).first()
-            cancel_job(db, job)
+            cancel_job(db, job, by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
         on_progress(0.3, "docProgress_readPages")
         raise AssertionError("停下之后不该再往下读")

@@ -11568,6 +11568,8 @@ export interface components {
             succeeded: number;
             /** Failed */
             failed: number;
+            /** Cancelled */
+            cancelled: number;
         };
         /**
          * DailyPublishOut
@@ -11637,6 +11639,11 @@ export interface components {
              * @default 0
              */
             failed: number;
+            /**
+             * Cancelled
+             * @default 0
+             */
+            cancelled: number;
         };
         /**
          * DenoiseAssetRequest
@@ -12498,9 +12505,8 @@ export interface components {
             /**
              * Stopped
              * @description 有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
-             *     界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY
-             *     (见 jobs.was_cancelled),生成记录在任务落终态那一刻抄下了同一个 key(generation.runner.record_failure),
-             *     任务被清掉之后也还在。
+             *     界面说「已停止」,不摆一张红色的失败卡。任务落 `cancelled` 那一刻,生成记录抄下「已停止」的 key
+             *     (generation.runner.record_failure),任务被清掉之后也还在。
              */
             readonly stopped: boolean;
         };
@@ -12870,8 +12876,11 @@ export interface components {
             kind: string;
             /** Parent Job Id */
             parent_job_id?: string | null;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
             /** Progress */
             progress: number;
             /** Message */
@@ -12896,11 +12905,6 @@ export interface components {
             result: {
                 [key: string]: unknown;
             };
-            /**
-             * Cancelled
-             * @description 被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。
-             */
-            readonly cancelled: boolean;
         };
         /**
          * JobSummaryOut
@@ -12923,8 +12927,11 @@ export interface components {
             kind: string;
             /** Parent Job Id */
             parent_job_id?: string | null;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
             /** Progress */
             progress: number;
             /** Message */
@@ -12945,11 +12952,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            /**
-             * Cancelled
-             * @description 被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。
-             */
-            readonly cancelled: boolean;
         };
         /**
          * Keyframe
@@ -19726,6 +19728,8 @@ export interface components {
             jobs_succeeded: number;
             /** Jobs Failed */
             jobs_failed: number;
+            /** Jobs Cancelled */
+            jobs_cancelled: number;
             /** Published */
             published: number;
             /** Daily */

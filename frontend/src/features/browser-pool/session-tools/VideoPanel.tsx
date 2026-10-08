@@ -153,7 +153,7 @@ export function VideoPanel({
                   <span className="text-ui-xs text-muted-foreground">{t("browserToolsDownloading").replace("{p}", String(Math.round(entry.progress * 100)))}</span>
                 </>
               ) : (
-                <span className={entry.status === "succeeded" ? "text-ui-xs text-muted-foreground" : "text-ui-xs text-destructive"}>
+                <span className={entry.status === "failed" ? "text-ui-xs text-destructive" : "text-ui-xs text-muted-foreground"}>
                   {entry.status === "succeeded"
                     ? t("browserToolsSavedAsset")
                     : entry.status === "cancelled"

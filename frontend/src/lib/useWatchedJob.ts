@@ -2,8 +2,7 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getJob } from "@/api/client";
-
-const isSettled = (status: string | undefined) => status === "succeeded" || status === "failed";
+import { jobSettled as isSettled } from "@/components/jobs/runStatus";
 
 /**
  * 盯着一个刚排上的任务,在它跑完之前让发起的按钮保持忙碌。

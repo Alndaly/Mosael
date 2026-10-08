@@ -2,7 +2,7 @@ import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DE
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, ChevronRight, CircleAlert, Copy, Loader2, Play, Plus, Power, RotateCcw, Timer, Trash2, Users2 } from "lucide-react";
+import { Ban, CalendarClock, CheckCircle2, ChevronRight, CircleAlert, Copy, Loader2, Play, Plus, Power, RotateCcw, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -864,6 +864,8 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: JobSummary | null })
           <Loader2 size={12} className="animate-mosael-spin" />
         ) : run.status === "succeeded" ? (
           <CheckCircle2 size={12} />
+        ) : run.status === "cancelled" ? (
+          <Ban size={12} />
         ) : (
           <CircleAlert size={12} />
         )}

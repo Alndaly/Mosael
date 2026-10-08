@@ -29,10 +29,13 @@ export function runStatusText(t: (key: MessageKey) => string, status: string): s
 }
 
 /**
- * 一个任务**落在哪种状态上**,给界面看的那一种。被停下的任务库里是 `failed`(带 `jobErr_cancelled`,后端用
- * `cancelled` 这一位说出来),界面按「已取消」说、不按失败画红 —— 用户刚亲手点了停止,右下角弹「失败」是两处各说各的。
- * 任务中心的提示、任务行、任务详情、子任务清单都走这里,不各自去看 status。
+ * 任务的终态:成功、失败、**被停下**(`cancelled`,ADR 0049)。和后端 `jobs.TERMINAL_STATUSES` 是同一组。
+ *
+ * 轮询「它结束了没有」的地方都问这一处。此前各处自己写「成功或失败」两种:被停下有了自己的状态之后,
+ * 漏改的那一处会把一个被停下的任务当成「还在跑」,一直轮询下去(棘轮:runStatus.test.ts)。
  */
-export function jobDisplayStatus(job: { status: string; cancelled?: boolean }): string {
-  return job.status === "failed" && job.cancelled ? "cancelled" : job.status;
+export const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(["succeeded", "failed", "cancelled"]);
+
+export function jobSettled(status: string | undefined): boolean {
+  return status !== undefined && TERMINAL_JOB_STATUSES.has(status);
 }

@@ -13,7 +13,6 @@ from sqlalchemy import text
 from app.core.db import SessionLocal, engine
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key
 from app.db.models import Asset, Job, PublishTask, User
-from app.domain.jobs import CANCELLED_ERROR_KEY
 from tests.test_publish_worker import WORKER, setup_browser_task
 from tests.util import fresh_client
 
@@ -108,8 +107,7 @@ def test_删发布账号_没发完的任务背后的job落已取消_发布器查
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        # 任务总线上「取消」是 failed + jobErr_cancelled(见 jobs._cancel_job_row)。
-        assert (job.status, job.error_key) == ("failed", CANCELLED_ERROR_KEY), "任务行没了,job 还停在运行中"
+        assert (job.status, job.error_key) == ("cancelled", ""), "任务行没了,job 还停在运行中"
     # 发布器每半秒查一次任务状态,查不到就中止(electron/publish/publishWorker.ts 的 checkpoint)。
     assert client.get(f"/api/publish/worker/task/{task['id']}").status_code == 404
 

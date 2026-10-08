@@ -1448,14 +1448,14 @@ def test_cancel_running_workflow() -> None:
     assert until(slow_started), "引擎一直没进 slow 节点"
     cancelled = client.post(f"/api/jobs/{job_id}/cancel")
     assert cancelled.status_code == 200
-    assert cancelled.json()["error"] == "已取消"
+    assert cancelled.json()["status"] == "cancelled" and cancelled.json()["error"] is None
 
     # 引擎在节点边界停下:job 保持取消态,不会被后续节点改写成 succeeded。
     # 等到执行它的线程结束再看(之后不会再有谁写它);此前是无条件睡满 6 秒。
-    assert wait_settled(client, job_id) == "failed"
+    assert wait_settled(client, job_id) == "cancelled"
     job = client.get(f"/api/jobs/{job_id}").json()
-    assert job["status"] == "failed"
-    assert job["error"] == "已取消"
+    assert job["status"] == "cancelled"
+    assert job["error"] is None
 
     # 已结束的任务再取消 → 409
     again = client.post(f"/api/jobs/{job_id}/cancel")
@@ -1550,7 +1550,7 @@ def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypat
         with SessionLocal() as db:
             from app.domain.jobs import cancel_job
 
-            cancel_job(db, db.get(Job, children[0]))
+            cancel_job(db, db.get(Job, children[0]), by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
         thread.join(timeout=5)
     assert not stuck, "一个节点失败了,引擎还在等兄弟节点的子任务自己跑完"
@@ -1580,7 +1580,7 @@ def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
     #: 等它真的在延时里了再取消(此前是睡 0.3 秒)。
     assert until(delaying), "延时节点一直没开始"
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
     # 不修的话要睡满 30 秒:线画在它的一半。
     thread.join(timeout=15)
@@ -1618,7 +1618,7 @@ def test_取消之后才失败的节点_执行历史里记的是已取消_不是
     #: 节点还没开始就被取消,走的是另一条路,失败事件里没有 error_key(并行满载下实测 KeyError)。
     assert entered.wait(30), "节点一直没开始"
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
     thread.join(timeout=30)
     assert not thread.is_alive()

@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -75,6 +75,7 @@
     "migrate-browser-profile-start-url",
     "migrate-browser-sessions-one-open-per-login",
     "migrate-called-workflows-declare-their-output",
+    "migrate-cancelled-jobs-get-their-own-status",
     "migrate-capability-defaults-name-builtins",
     "migrate-client-surface",
     "migrate-client-version",

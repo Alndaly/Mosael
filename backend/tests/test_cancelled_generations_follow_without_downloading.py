@@ -21,7 +21,6 @@ from app.core.http_retry import RetryingClient as RealClient
 from app.core.unit_of_work import unit_of_work
 from app.db.models import GeneratedAsset, Job, ProviderUsageEvent
 from app.domain.generation import runner
-from app.domain.jobs import CANCELLED_ERROR_KEY
 from tests.test_interrupted_downloads_can_be_retrieved import SIGNED, _video_generation
 from tests.util import module_time
 
@@ -80,7 +79,7 @@ def _cancel(job_id: str) -> None:
     from app.domain.jobs import cancel_job
 
     with unit_of_work() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
 
 
 def _wait_for_usage(generation_id: str, timeout: float = 15.0) -> ProviderUsageEvent:
@@ -130,7 +129,7 @@ def test_停下之后跟到远端做完_按回包记账_成片不下_也不占�
     assert "following" not in payload["remote_task"], "记完账要摘掉「正在跟」,否则重启还会再跟一遍"
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        assert job.error_key == CANCELLED_ERROR_KEY, "停下照旧是停下"
+        assert job.status == "cancelled", "停下照旧是停下"
         assert db.scalars(select(GeneratedAsset).where(GeneratedAsset.job_id == job_id)).first() is None
 
 
@@ -144,7 +143,7 @@ def test_跟到一半后端重启_接着跟_账照记_成片不下(monkeypatch) 
     #: 上一个进程留下的样子:任务已停下,远端任务交出去了,正在替记账跟着。
     with unit_of_work() as db:
         job = db.get(Job, job_id)
-        job.status, job.error_key = "failed", CANCELLED_ERROR_KEY
+        job.status = "cancelled"
         job.payload = {"remote_task": {"poll_path": poll_path, "following": True}}
 
     seen = _ark(monkeypatch, lambda _n: {"status": "succeeded", "content": {"video_url": SIGNED}, "usage": USAGE})

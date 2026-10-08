@@ -271,9 +271,8 @@ class GenerationJobOut(OrmModel):
     @property
     def stopped(self) -> bool:
         """有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
-        界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY
-        (见 jobs.was_cancelled),生成记录在任务落终态那一刻抄下了同一个 key(generation.runner.record_failure),
-        任务被清掉之后也还在。"""
+        界面说「已停止」,不摆一张红色的失败卡。任务落 `cancelled` 那一刻,生成记录抄下「已停止」的 key
+        (generation.runner.record_failure),任务被清掉之后也还在。"""
         return self.error_key == CANCELLED_ERROR_KEY
 
 

@@ -91,7 +91,7 @@ export function NodeInstallNote({
         <div key={job.id} className="grid min-w-0 gap-1">
           <span className="text-foreground">
             {t(job.status === "succeeded" ? "workflowInstallDone" : job.status === "failed" ? "workflowInstallFailed"
-              : "workflowInstallRunning").replace("{name}", subjectOf(job))}
+              : job.status === "cancelled" ? "workflowInstallCancelled" : "workflowInstallRunning").replace("{name}", subjectOf(job))}
           </span>
           {installActive(job) && <Progress value={Math.round((job.progress ?? 0) * 100)} className="h-1.5" />}
           {job.status === "failed" && job.error && (

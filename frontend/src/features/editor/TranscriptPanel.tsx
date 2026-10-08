@@ -6,6 +6,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
 import { getAssetTranscript, getJob, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
+import { jobSettled } from "@/components/jobs/runStatus";
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
@@ -546,7 +547,7 @@ export function TranscriptPanel({
     queryFn: () => getJob(asrJobId!),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "succeeded" || status === "failed" ? false : 1500;
+      return jobSettled(status) ? false : 1500;
     },
     refetchOnWindowFocus: true,
   });

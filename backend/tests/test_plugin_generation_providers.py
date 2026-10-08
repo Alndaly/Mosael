@@ -569,8 +569,8 @@ def test_取消经取消文件传到插件(plugged) -> None:
     wait_for_idle_jobs(timeout=20)
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        # 取消是一种失败终态(见 jobs._cancel_job_row),原因说的是「已取消」而不是插件出错
-        assert job.status == "failed" and job.error_key == "jobErr_cancelled"
+        # 取消是任务自己的终态(ADR 0049),不是插件出错
+        assert job.status == "cancelled"
         assert not db.scalars(select(GeneratedAsset).where(GeneratedAsset.job_id == job_id)).all()
 
 

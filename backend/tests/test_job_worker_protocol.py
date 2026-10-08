@@ -162,11 +162,11 @@ class TestReport:
         _make_job(workspace_id)
         with SessionLocal() as db:
             job = claim_next_job(db)
-            cancel_job(db, job)
+            cancel_job(db, job, by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
             report_job(db, job, lease_token=job.lease_token, status="succeeded", result={"asset_id": "a1"})
             db.refresh(job)
-            assert job.status == "failed" and job.error == "已取消"
+            assert job.status == "cancelled" and job.error is None
             assert job.result != {"asset_id": "a1"}
 
     def test_unknown_status_is_rejected(self, external_demo) -> None:

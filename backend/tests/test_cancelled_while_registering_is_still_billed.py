@@ -62,7 +62,7 @@ def test_登记素材时被停下_成片在库_账也在(monkeypatch) -> None:
         if count["n"] == 2:
             #: 登记第二份时,用户在任务中心点了取消(另一个会话)
             with SessionLocal() as other:
-                jobs.cancel_job(other, other.get(Job, job_id))
+                jobs.cancel_job(other, other.get(Job, job_id), by=None)
                 other.commit()
         return registered(db, **fields)
 

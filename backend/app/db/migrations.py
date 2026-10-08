@@ -6227,6 +6227,35 @@ def _migrate_job_keys_are_keys() -> None:
                 )
 
 
+def _migrate_cancelled_jobs_get_their_own_status() -> None:
+    """被停下的任务有了自己的终态 `cancelled`(ADR 0049)。此前记成 `failed` + `error_key = jobErr_cancelled`。
+
+    - jobs:那样记的改成 `cancelled`,`error` / `error_key` / `error_params` 清空(取消没有原因可说),消息换成「已取消」
+      (jobMsg_cancelled,按缺省语言渲染,读的时候按读的人的语言翻)。
+    - scheduled_task_runs:任务已经是 `cancelled` 的跟着改成 `cancelled`,`error` 清空(运行记录此前抄的是任务的 failed)。
+    - 生成记录(generation_jobs)不动:它显示「已停止」靠自己抄下的 error_key,那一套照旧。
+    """
+    from app.core.i18n import DEFAULT_LOCALE, render_message
+
+    tables = set(inspect(engine).get_table_names())
+    if "jobs" not in tables:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE jobs SET status = 'cancelled', error = NULL, error_key = '', error_params = '{}', "
+                "message_key = 'jobMsg_cancelled', message_params = '{}', message = :message "
+                "WHERE status = 'failed' AND error_key = 'jobErr_cancelled'"
+            ),
+            {"message": render_message("jobMsg_cancelled", DEFAULT_LOCALE, {})},
+        )
+        if "scheduled_task_runs" in tables:
+            conn.execute(text(
+                "UPDATE scheduled_task_runs SET status = 'cancelled', error = NULL "
+                "WHERE status = 'failed' AND job_id IN (SELECT id FROM jobs WHERE status = 'cancelled')"
+            ))
+
+
 def _migrate_job_worker_leases() -> None:
     with engine.begin() as conn:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
@@ -9226,6 +9255,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_publish_records_outlive_their_asset),
             #: 创作页之前做的语音、播客并进创作会话(ADR 0055 §8)。要在 SCHEMA 之后:会话、记录的表照现在的 ORM 建好了。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_and_podcast_join_creation_sessions),
+            #: 被停下的任务有了自己的终态(ADR 0049):老库里记成 failed + jobErr_cancelled 的改过来,定时任务的运行记录跟着改。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_cancelled_jobs_get_their_own_status),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

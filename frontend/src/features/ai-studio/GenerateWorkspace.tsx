@@ -45,6 +45,7 @@ import {
   type JobSummary,
   type Workspace,
 } from "@/api/client";
+import { jobSettled } from "@/components/jobs/runStatus";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { MissingModelNotice, UpgradeInLibraryButton } from "@/features/plugins/MissingModelNotice";
@@ -952,7 +953,7 @@ export function GenerateWorkspace({
   //: (生成记录在任务失败那一刻抄下它,任务之后会被清掉,见后端 generation.runner.record_failure)。
   //: 按「哪几条落了终态」认,不按条数:列表只给最近的两百条加上在跑的(后端定的),新建一条把最老的一条挤出去、同一拍里
   //: 另一条落了终态,条数不变 —— 按条数认的话这一次就不重拉了。
-  const settled = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").map((job) => job.id).join(",");
+  const settled = (jobs.data ?? []).filter((job) => jobSettled(job.status)).map((job) => job.id).join(",");
   React.useEffect(() => {
     if (settled) {
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
@@ -1933,7 +1934,8 @@ function settlingAfterStop(generation: GenerationJob): boolean {
 }
 
 function turnStatus(generation: GenerationJob, job: JobSummary | null): TurnStatus {
-  if (generation.stopped) return "stopped";
+  //: 任务已经落了「已取消」、记录还没抄下「已停止」(抄在落终态之后的收拾里,见后端 record_failure)的那一下,也是停下了。
+  if (generation.stopped || job?.status === "cancelled") return "stopped";
   // job 行可能已被任务中心「清空已结束」删掉(记录长存、job_id 置空):有产物即成功;记录上记着失败原因、
   // 或者任务已经不在了,即失败;只有任务还在而列表没拉到时才视作排队中。
   const status =

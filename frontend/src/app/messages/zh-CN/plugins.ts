@@ -42,6 +42,7 @@ export const plugins = {
   //: 看起来像没生效。
   jobCancelHint: "当前这一步跑完后停下,已经产生的结果会保留",
   wfStop: "停止运行",
+  wfHistoryStopped: "已停止",
   jobRunningFor: "已跑 {t}",
   jobDetailTitle: "任务执行详情",
   jobDetailResult: "结果",
@@ -721,6 +722,7 @@ export const plugins = {
   workflowInstallRunning: "正在装 {name}…",
   workflowInstallDone: "{name} 装好了:重启 ComfyUI 之后才加载",
   workflowInstallFailed: "{name} 没装成",
+  workflowInstallCancelled: "{name} 的安装已取消",
   workflowInstallNoManager: "这台 ComfyUI 没有 Mosael 能用的 ComfyUI-Manager,没法替它装节点包。Mosael 要 ComfyUI-Manager V4(ComfyUI 0.4.0 起自带):在那台机器上 pip install -r manager_requirements.txt,启动时加 --enable-manager;或者手动装(放进 ComfyUI/custom_nodes 再重启)。",
   workflowInstalledNotLoaded: "有节点包装了却没加载:重启 ComfyUI 试试;还不行就去那台机器的控制台看它为什么没加载上。",
   workflowRestart: "重启 ComfyUI",

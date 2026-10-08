@@ -49,7 +49,7 @@ function renderHistory(viewedRunId: string | null = "j1", onViewRun = vi.fn()) {
 
 //: 用户点了停止的那一次:列表行说「已取消」(走 i18n,不是英文原文 cancelled),
 //: 停下时在跑的那一步也说已取消,而不是一个红叉「失败」。
-it("被取消的运行:没有 message 时说状态的译名;在跑的那一步显示已取消", async () => {
+it("被停下的运行:这一页按的是「停止运行」,写已停止(ADR 0049);在跑的那一步显示已取消", async () => {
   apiMocks.listWorkflowRuns.mockResolvedValue([
     { id: "j1", kind: "workflow", status: "cancelled", message: "", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {} },
   ]);
@@ -60,7 +60,7 @@ it("被取消的运行:没有 message 时说状态的译名;在跑的那一步�
   apiMocks.listJobChildren.mockResolvedValue([]);
   renderHistory();
 
-  expect(await screen.findByText("runStatus_cancelled")).toBeInTheDocument();
+  expect(await screen.findByText("wfHistoryStopped")).toBeInTheDocument();
   expect(screen.queryByText("cancelled")).toBeNull();
   expect(await screen.findByText("wfStepCancelled")).toBeInTheDocument();
 });

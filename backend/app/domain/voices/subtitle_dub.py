@@ -26,7 +26,7 @@ from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.media_info import patch_media_info
-from app.domain.jobs import JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs import CANCELLED, CANCELLED_ERROR_KEY, JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
@@ -230,6 +230,8 @@ def _await_child(job_id: str) -> str:
                 if not asset_id:
                     raise DubError("dubErr_childNoAudio")
                 return str(asset_id)
+            if child.status == CANCELLED:
+                raise DubError(CANCELLED_ERROR_KEY)
             if child.status == "failed":
                 # 子任务的失败原因带 key 就接着带 key 走;不带 key 的是一句现成的话(第三方原文)。
                 if child.error_key:
@@ -241,7 +243,7 @@ def _await_child(job_id: str) -> str:
     with unit_of_work() as db:
         child = db.get(Job, job_id)
         if child is not None:
-            cancel_job_tree(db, child)
+            cancel_job_tree(db, child, cascaded_from=child.parent_job_id)
     raise DubError("dubErr_childTimeout")
 
 

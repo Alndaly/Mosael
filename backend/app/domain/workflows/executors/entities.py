@@ -391,7 +391,7 @@ def _abandon(child_ids: list[str]) -> None:
         for child_id in child_ids:
             job = cleanup.get(Job, child_id)
             if job is not None:
-                cancel_job_tree(cleanup, job)
+                cancel_job_tree(cleanup, job, cascaded_from=job.parent_job_id)
 
 
 @register("entity_angles")

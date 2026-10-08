@@ -79,7 +79,7 @@ def cancel(db: Session, user: User, job_id: str) -> Job:
     job = readable(db, user, job_id)
     ensure_workspace_perm(db, user, job.workspace_id, "edit")
     ensure_job_writable(db, user, job.id)
-    return cancel_job(db, job)
+    return cancel_job(db, job, by=user.id)
 
 
 def clear_finished(db: Session, user: User, workspace_id: str) -> int:

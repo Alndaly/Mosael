@@ -29,6 +29,7 @@ from app.db.models import (
     Workspace,
     now,
 )
+from app.domain.jobs import CANCELLED, TERMINAL_STATUSES
 from app.domain.publish import summary_bucket
 from app.domain.billing.usage import CostAmount, costs_by_currency, summarize_usage
 
@@ -53,14 +54,15 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
 
     scoped = lambda model: select(func.count()).select_from(model).where(model.workspace_id == workspace_id)  # noqa: E731
 
-    # 活动图:窗口内逐日成功/失败(按终态时间 updated_at 归日,UTC),缺日补零。
+    # 活动图:窗口内逐日成功 / 失败 / 被停下(按终态时间 updated_at 归日,UTC),缺日补零。被停下的不算失败
+    # (ADR 0049):「停止」按钮用得越多,失败率就越失真。
     span_start = (now() - timedelta(days=days - 1)).date()
     since = datetime.combine(span_start, datetime.min.time())
     day_rows = db.execute(
         select(func.date(Job.updated_at), Job.status, func.count())
         .where(
             Job.workspace_id == workspace_id,
-            Job.status.in_(("succeeded", "failed")),
+            Job.status.in_(TERMINAL_STATUSES),
             Job.updated_at >= since,
         )
         .group_by(func.date(Job.updated_at), Job.status)
@@ -73,6 +75,7 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
             date=str(span_start + timedelta(days=offset)),
             succeeded=by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
             failed=by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
+            cancelled=by_day.get(str(span_start + timedelta(days=offset)), {}).get(CANCELLED, 0),
         )
         for offset in range(days)
     ]
@@ -140,6 +143,7 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
         running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
         jobs_succeeded=sum(day["succeeded"] for day in daily),
         jobs_failed=sum(day["failed"] for day in daily),
+        jobs_cancelled=sum(day["cancelled"] for day in daily),
         published=sum(day["succeeded"] for day in publish_daily),
     )
 
@@ -156,12 +160,14 @@ def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, An
         select(func.count(func.distinct(AuthSession.user_id))).where(AuthSession.last_seen_at >= active_since)
     )
     counted = {
-        str(day): (int(total), int(failed or 0))
-        for day, total, failed in db.execute(
+        str(day): (int(total), int(failed or 0), int(cancelled or 0))
+        for day, total, failed, cancelled in db.execute(
             select(
                 func.date(Job.created_at),
                 func.count(),
                 func.sum(func.iif(Job.status == "failed", 1, 0)),
+                #: 被停下的单列,不算失败(ADR 0049)。
+                func.sum(func.iif(Job.status == CANCELLED, 1, 0)),
             )
             .where(Job.created_at >= since)
             .group_by(func.date(Job.created_at))
@@ -172,8 +178,8 @@ def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, An
     jobs_by_day = []
     for offset in range(days):
         day = str(first_day + timedelta(days=offset))
-        total, failed = counted.get(day, (0, 0))
-        jobs_by_day.append({"day": day, "total": total, "failed": failed})
+        total, failed, cancelled = counted.get(day, (0, 0, 0))
+        jobs_by_day.append({"day": day, "total": total, "failed": failed, "cancelled": cancelled})
     # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
     # **连不上人的也要列出来**(外连接,落进 user_id 为空的「无归属」那一行):智能体对话、画板、工作流节点里的调用
     # 不挂任务。此前内连接把它们整个丢掉,条形加起来只有合计的零头(体检 UM-11,维护者库上 94% 的美元花费归不到人)。

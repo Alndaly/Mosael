@@ -92,7 +92,7 @@ const running = (kind: string) =>
  * 不能只 sleep 一下就翻:第一次拉取要是直接拿到终态,组件只会把它记进基线而不认为
  * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态。判据用任务中心按钮上的转圈图标,
  * 它就是"running 已经进到组件里了"。 */
-async function finish(kind: string, status: "succeeded" | "failed", error: string | null = null, extra: object = {}) {
+async function finish(kind: string, status: "succeeded" | "failed" | "cancelled", error: string | null = null, extra: object = {}) {
   await waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), {
     timeout: 4000,
   });
@@ -222,19 +222,19 @@ describe("每个任务最多说一次,历史任务不说", () => {
 });
 
 describe("被停下的任务不是失败", () => {
-  //: 取消在库里落成 failed + jobErr_cancelled,后端用 cancelled 这一位说出来。此前任务中心只看 status:
-  //: 用户在 AI 工作台点了「停止」,原位写「已停止」,右下角却弹红色的「AI 生成 · 失败 / 已取消」。
-  it("做完总要说的种类:中性地说一句「已取消」,不弹红色失败,系统通知也这么说", async () => {
+  //: 被停下是任务自己的终态 `cancelled`(ADR 0049)。停是人自己按的,按的地方已经写着「已停止 / 已取消」:
+  //: 任务中心不再弹提示、不发系统通知(决定 10),行上用中性色写「已取消」(这里的按钮是「取消任务」,决定 11)。
+  it("做完总要说的种类:被停下的也不弹提示、不发系统通知,改动的东西照样刷新;行上中性地写已取消", async () => {
     const notifyTask = vi.fn();
     (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = { notifyTask };
     try {
-      mount(running("subtitle_dub"));
-      await finish("subtitle_dub", "failed", "已取消", { message: "已取消", cancelled: true });
-      await waitFor(() => expect(h.toast.message).toHaveBeenCalledTimes(1), { timeout: 4000 });
-      expect(h.toast.message.mock.calls[0][0]).toBe("字幕配音 · runStatus_cancelled");
+      const invalidated = mount(running("subtitle_dub"));
+      await finish("subtitle_dub", "cancelled", null, { message: "已取消" });
+      await waitFor(() => expect(invalidated.length).toBeGreaterThan(0), { timeout: 4000 });
+      expect(h.toast.message).not.toHaveBeenCalled();
       expect(h.toast.error).not.toHaveBeenCalled();
-      expect(notifyTask).toHaveBeenCalledWith({ title: "字幕配音 · runStatus_cancelled", body: "" });
-      // 任务行上也不是红色的失败:打开任务中心,那一行写的是任务自己那句「已取消」,行里没有红色。
+      expect(h.toast.success).not.toHaveBeenCalled();
+      expect(notifyTask).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
       const row = (await screen.findByText("已取消")).closest("[role=button]");
       expect(row).not.toBeNull();
@@ -247,15 +247,15 @@ describe("被停下的任务不是失败", () => {
 
   it("只报失败的种类:被停下的不说", async () => {
     const invalidated = mount(running("proxy"));
-    await finish("proxy", "failed", "已取消", { message: "已取消", cancelled: true });
+    await finish("proxy", "cancelled", null, { message: "已取消" });
     await waitFor(() => expect(invalidated.some((key) => key[0] === "assets")).toBe(true), { timeout: 4000 });
     expect(h.toast.error).not.toHaveBeenCalled();
     expect(h.toast.message).not.toHaveBeenCalled();
   });
 
-  it("真失败照旧红色地说(cancelled 为假),行里是红色的失败原因", async () => {
+  it("真失败照旧红色地说,行里是红色的失败原因", async () => {
     mount(running("proxy"));
-    await finish("proxy", "failed", "ffmpeg 退出码 1", { cancelled: false });
+    await finish("proxy", "failed", "ffmpeg 退出码 1");
     await waitFor(() => expect(h.toast.error).toHaveBeenCalledTimes(1), { timeout: 4000 });
     fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
     const row = (await screen.findByText("ffmpeg 退出码 1")).closest("[role=button]");

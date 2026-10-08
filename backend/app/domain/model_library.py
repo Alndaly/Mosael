@@ -615,7 +615,6 @@ def _cancelled(job_id: str) -> bool:
     from app.core.db import SessionLocal
     from app.domain.jobs import was_cancelled
 
-    #: 取消的任务在库里是 failed + jobErr_cancelled(见 jobs.was_cancelled)。
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         return job is None or was_cancelled(job) or job.status not in ("queued", "running")

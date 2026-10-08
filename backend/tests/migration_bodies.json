@@ -73,6 +73,7 @@
   "migrate-browser-profile-start-url": "822690beeabbac43",
   "migrate-browser-sessions-one-open-per-login": "63337c4e5dcdf10f",
   "migrate-called-workflows-declare-their-output": "af9a1a9a2ba21752",
+  "migrate-cancelled-jobs-get-their-own-status": "54d12fa8199afc53",
   "migrate-capability-defaults-name-builtins": "f507a57f27c9b437",
   "migrate-client-surface": "3541588c42fc29ab",
   "migrate-client-version": "ae528442c7991b57",

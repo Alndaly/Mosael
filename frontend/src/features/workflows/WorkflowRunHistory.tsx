@@ -269,7 +269,10 @@ export function WorkflowRunHistory({
             >
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">
-                <Truncate className="text-xs">{run.message || runStatusText(t, run.status)}</Truncate>
+                {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
+                <Truncate className="text-xs">
+                  {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
+                </Truncate>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}

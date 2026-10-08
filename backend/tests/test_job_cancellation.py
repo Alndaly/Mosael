@@ -46,7 +46,7 @@ def test_a_worker_cannot_overwrite_a_cancellation() -> None:
         worker_view = db.get(Job, job_id)  # what the worker loaded when it started
 
         with SessionLocal() as other:
-            cancel_job(other, other.get(Job, job_id))
+            cancel_job(other, other.get(Job, job_id), by=None)
             other.commit()  # 测试是入口:cancel_job 不提交
 
         # The worker now finishes and tries to report success against its stale object.
@@ -56,7 +56,7 @@ def test_a_worker_cannot_overwrite_a_cancellation() -> None:
     assert wrote is False, "finish_job let the worker clobber the cancellation"
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        assert job.status == "failed" and job.error == "已取消"
+        assert job.status == "cancelled" and job.error is None
         assert job.message == "已取消", "the cancellation's own message was relabelled"
 
 
@@ -84,7 +84,7 @@ def test_cancelling_kills_the_registered_child() -> None:
     register_job_child(job_id, child)
     try:
         with SessionLocal() as db:
-            cancel_job(db, db.get(Job, job_id))
+            cancel_job(db, db.get(Job, job_id), by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
         # If cancel had only flipped the row, this would block until the sleep finished.
         assert process.wait(timeout=10) != 0, "the child outlived its cancelled job"
@@ -104,7 +104,7 @@ def test_a_finished_job_stops_being_cancellable() -> None:
         job = db.get(Job, job_id)
         assert job.status in TERMINAL_STATUSES
         try:
-            cancel_job(db, job)
+            cancel_job(db, job, by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
         except ValueError:
             return
@@ -119,14 +119,14 @@ def test_cancelled_queued_export_never_starts_renderer(monkeypatch):
     _, ws = _workspace()
     job_id = _job(ws, status="queued")
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
     renderer = Mock(side_effect=RuntimeError("renderer must not start"))
     monkeypatch.setattr(render, "execute_render", renderer)
     render._run_export(job_id, SimpleNamespace(render_plan_hash="test"))
     renderer.assert_not_called()
     with SessionLocal() as db:
-        assert db.get(Job, job_id).error == "已取消"
+        assert db.get(Job, job_id).status == "cancelled"
 
 
 def test_child_registered_after_cancellation_is_killed():
@@ -135,7 +135,7 @@ def test_child_registered_after_cancellation_is_killed():
     _, ws = _workspace()
     job_id = _job(ws)
     with SessionLocal() as db:
-        cancel_job(db, db.get(Job, job_id))
+        cancel_job(db, db.get(Job, job_id), by=None)
         db.commit()  # 测试是入口:cancel_job 不提交
     child = Mock()
     try:
@@ -160,7 +160,7 @@ def test_generation_cancelled_during_provider_call_does_not_import_results(monke
         generation_id = generation.id
     def generate(*args):
         with SessionLocal() as other:
-            cancel_job(other, other.get(Job, job_id))
+            cancel_job(other, other.get(Job, job_id), by=None)
             other.commit()  # 测试是入口:cancel_job 不提交
         return SimpleNamespace(output_paths=[tmp_path / "not-imported.png"])
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
@@ -173,4 +173,4 @@ def test_generation_cancelled_during_provider_call_does_not_import_results(monke
     runner._run_generation(generation_id)
     importer.assert_not_called()
     with SessionLocal() as db:
-        assert db.get(Job, job_id).error == "已取消"
+        assert db.get(Job, job_id).status == "cancelled"

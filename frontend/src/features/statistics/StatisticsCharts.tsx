@@ -28,6 +28,8 @@ import {
 
 const activityConfig = {
   succeeded: { label: "", color: "var(--chart-ok)" },
+  //: 被停下的(ADR 0049):不算失败,用中性色,不和成功、失败抢色。
+  cancelled: { label: "", color: "var(--muted-foreground)" },
   failed: { label: "", color: "var(--chart-fail)" },
 } satisfies ChartConfig;
 
@@ -57,12 +59,13 @@ function formatCount(value: number): string {
 
 export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   const t = useI18n();
-  const max = Math.max(...daily.map((day) => day.succeeded + day.failed));
+  const max = Math.max(...daily.map((day) => day.succeeded + day.cancelled + day.failed));
   if (max === 0) {
     return <EmptyState size="compact" icon={<Activity size={15} />} title={t("homeChartEmptyActivity")} />;
   }
   const config: ChartConfig = {
     succeeded: { ...activityConfig.succeeded, label: t("homeLegendSucceeded") },
+    cancelled: { ...activityConfig.cancelled, label: t("homeLegendStopped") },
     failed: { ...activityConfig.failed, label: t("homeLegendFailed") },
   };
   const data = daily.map((day) => ({ ...day, day: day.date.slice(5) }));
@@ -80,8 +83,9 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
           minTickGap={48}
         />
         <ChartTooltip cursor={{ fillOpacity: 0.06 }} content={<ChartTooltipContent />} />
-        {/* 堆叠:成功在下、失败在上;radius 只圆数据端(顶),基线端直角 */}
+        {/* 堆叠:成功在下、已停止居中、失败在上;radius 只圆数据端(顶),基线端直角 */}
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
+        <Bar dataKey="cancelled" stackId="jobs" fill="var(--color-cancelled)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
       </BarChart>

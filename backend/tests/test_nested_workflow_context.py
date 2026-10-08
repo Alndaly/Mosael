@@ -48,7 +48,7 @@ def test_nested_loop_stops_after_parent_is_cancelled(monkeypatch):
     def leaf(db, wf, config):
         parent = db.get(Job, parent_id)
         if parent.status == "running":
-            cancel_job(db, parent)
+            cancel_job(db, parent, by=None)
             db.commit()  # 测试是入口:cancel_job 不提交
         return {}
     handler = Mock(side_effect=leaf)
@@ -61,4 +61,4 @@ def test_nested_loop_stops_after_parent_is_cancelled(monkeypatch):
             assert "取消" in str(exc)
     assert handler.call_count == 1
     with SessionLocal() as db:
-        assert db.get(Job, parent_id).error == "已取消"
+        assert db.get(Job, parent_id).status == "cancelled"

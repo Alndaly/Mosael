@@ -32493,13 +32493,18 @@
           "failed": {
             "type": "integer",
             "title": "Failed"
+          },
+          "cancelled": {
+            "type": "integer",
+            "title": "Cancelled"
           }
         },
         "type": "object",
         "required": [
           "date",
           "succeeded",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "title": "DailyActivityOut",
         "description": "一天的任务活动(首页活动图的一根柱)。date 为 YYYY-MM-DD(UTC)。"
@@ -32622,6 +32627,11 @@
           "failed": {
             "type": "integer",
             "title": "Failed",
+            "default": 0
+          },
+          "cancelled": {
+            "type": "integer",
+            "title": "Cancelled",
             "default": 0
           }
         },
@@ -34618,7 +34628,7 @@
           "stopped": {
             "type": "boolean",
             "title": "Stopped",
-            "description": "有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——\n界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY\n(见 jobs.was_cancelled),生成记录在任务落终态那一刻抄下了同一个 key(generation.runner.record_failure),\n任务被清掉之后也还在。",
+            "description": "有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——\n界面说「已停止」,不摆一张红色的失败卡。任务落 `cancelled` 那一刻,生成记录抄下「已停止」的 key\n(generation.runner.record_failure),任务被清掉之后也还在。",
             "readOnly": true
           }
         },
@@ -35480,6 +35490,13 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
             "title": "Status"
           },
           "progress": {
@@ -35520,12 +35537,6 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Result"
-          },
-          "cancelled": {
-            "type": "boolean",
-            "title": "Cancelled",
-            "description": "被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。",
-            "readOnly": true
           }
         },
         "type": "object",
@@ -35540,8 +35551,7 @@
           "error",
           "created_at",
           "updated_at",
-          "result",
-          "cancelled"
+          "result"
         ],
         "title": "JobOut",
         "description": "一个任务的全部:列表里那一行,加上它做出了什么(`result`)。详情、取消、子任务这些一次只出几个的出口用它。"
@@ -35573,6 +35583,13 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
             "title": "Status"
           },
           "progress": {
@@ -35608,12 +35625,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
-          },
-          "cancelled": {
-            "type": "boolean",
-            "title": "Cancelled",
-            "description": "被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。",
-            "readOnly": true
           }
         },
         "type": "object",
@@ -35627,8 +35638,7 @@
           "payload",
           "error",
           "created_at",
-          "updated_at",
-          "cancelled"
+          "updated_at"
         ],
         "title": "JobSummaryOut",
         "description": "任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。\n\n结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里\n578 个顶层任务的列表 2.4 MB,其中 3 MB 量级的是工作流的结果 —— 而列表一处都不读它,有任务在跑时却每 1.5 秒拉一遍。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"
@@ -49461,6 +49471,10 @@
             "type": "integer",
             "title": "Jobs Failed"
           },
+          "jobs_cancelled": {
+            "type": "integer",
+            "title": "Jobs Cancelled"
+          },
           "published": {
             "type": "integer",
             "title": "Published"
@@ -49557,6 +49571,7 @@
           "window_days",
           "jobs_succeeded",
           "jobs_failed",
+          "jobs_cancelled",
           "published",
           "daily",
           "asset_kinds",

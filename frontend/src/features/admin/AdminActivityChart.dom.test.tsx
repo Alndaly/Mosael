@@ -16,13 +16,21 @@ vi.mock("recharts", () => ({
 }));
 
 it("renders positive API totals even when the API has no succeeded field", () => {
-  render(<AdminActivityChart points={[{ day: "2026-09-06", total: 5, failed: 2 }]} loading={false} error={false} onRetry={() => {}} />);
-  expect(JSON.parse(screen.getByLabelText("activity").textContent!)).toEqual([{ day: "2026-09-06", total: 5, failed: 2, other: 3 }]);
+  render(<AdminActivityChart points={[{ day: "2026-09-06", total: 5, failed: 2, cancelled: 0 }]} loading={false} error={false} onRetry={() => {}} />);
+  expect(JSON.parse(screen.getByLabelText("activity").textContent!)).toEqual([{ day: "2026-09-06", total: 5, failed: 2, cancelled: 0, other: 3 }]);
   expect(screen.getByText("adminJobsOther")).toBeInTheDocument();
   expect(screen.queryByText("homeLegendSucceeded")).not.toBeInTheDocument();
 });
 
-it.each([{ points: [] }, { points: [{ day: "2026-09-06", total: 0, failed: 0 }] }])("shows an empty state for no activity", ({ points }) => {
+it("stopped jobs get their own segment and are neither failures nor in the rest (ADR 0049)", () => {
+  render(<AdminActivityChart points={[{ day: "2026-09-06", total: 6, failed: 2, cancelled: 1 }]} loading={false} error={false} onRetry={() => {}} />);
+  expect(JSON.parse(screen.getByLabelText("activity").textContent!)).toEqual([
+    { day: "2026-09-06", total: 6, failed: 2, cancelled: 1, other: 3 },
+  ]);
+  expect(screen.getByText("homeLegendStopped")).toBeInTheDocument();
+});
+
+it.each([{ points: [] }, { points: [{ day: "2026-09-06", total: 0, failed: 0, cancelled: 0 }] }])("shows an empty state for no activity", ({ points }) => {
   render(<AdminActivityChart points={points} loading={false} error={false} onRetry={() => {}} />);
   expect(screen.getByText("adminNoDataTitle")).toBeInTheDocument();
   expect(screen.queryByLabelText("activity")).not.toBeInTheDocument();

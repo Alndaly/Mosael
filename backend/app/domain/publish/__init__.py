@@ -334,7 +334,7 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
     )):
         job = db.get(Job, task.job_id) if task.job_id else None
         if job is not None:
-            cancel_job_tree(db, job)  # 已经落了终态的不动;顺带把任务撤单(见 jobs._cancel_job_row)
+            cancel_job_tree(db, job, by=actor)  # 已经落了终态的不动;顺带把任务撤单(见 jobs._cancel_job_row)
         task.status = "cancelled"
     sharing.forget(db, "publish_account", account.id)
     db.delete(account)

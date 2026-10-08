@@ -126,7 +126,7 @@ def _run_and_cancel(*, cancel_ok: bool, resumable: bool, rule: tuple[str, int, s
 
 def test_撤得掉的远端任务撤掉_记零才是真的没扣() -> None:
     usage, job, events = _run_and_cancel(cancel_ok=True, resumable=True, rule=("million_output_token", 46_000_000, "CNY"))
-    assert job.error_key == "jobErr_cancelled", (job.error, events)
+    assert job.status == "cancelled", (job.status, events)
     assert _ADAPTER.calls == ["cancel /tasks/cgt-cancel"], "撤掉了就不用再等它"
     assert (usage.status, usage.cost_micros, usage.cost_confidence) == ("failed", 0, "not_billed")
     assert "job.remote_cancelled" in events
@@ -134,7 +134,7 @@ def test_撤得掉的远端任务撤掉_记零才是真的没扣() -> None:
 
 def test_撤不掉的接着等到终态_按回包里实际计费的量记账() -> None:
     usage, job, _events = _run_and_cancel(cancel_ok=False, resumable=True, rule=("million_output_token", 46_000_000, "CNY"))
-    assert job.error_key == "jobErr_cancelled", "取消照旧是取消:成片不进任何地方"
+    assert job.status == "cancelled", "取消照旧是取消:成片不进任何地方"
     assert _ADAPTER.calls == ["cancel /tasks/cgt-cancel", "resume /tasks/cgt-cancel"]
     #: 和「下载失败也按回包记」同一份样本:110902 个 token × ¥46 / 百万。
     assert (usage.cost_micros, usage.currency, usage.cost_confidence) == (5_101_492, "CNY", "estimated")

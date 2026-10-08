@@ -21,11 +21,12 @@ export function AdminActivityChart({ points, loading, error, onRetry }: {
   if (error) return <EmptyState size="compact" icon={<CircleAlert size={15} />} title={t("adminJobsLoadError")} action={<Button variant="outline" size="xs" onClick={onRetry}>{t("retry")}</Button>} />;
   if (!points.some(point => point.total > 0)) return <EmptyState size="compact" icon={<Activity size={15} />} title={t("adminNoDataTitle")} body={t("adminNoData")} />;
 
-  // The API counts all jobs and failures, not successes: queued/cancelled jobs
+  // The API counts all jobs, failures and stopped ones (ADR 0049), not successes: queued and running jobs
   // belong to the remaining total too. Do not present them as successful jobs.
-  const data = points.map(point => ({ ...point, other: Math.max(0, point.total - point.failed) }));
+  const data = points.map(point => ({ ...point, other: Math.max(0, point.total - point.failed - point.cancelled) }));
   const config = {
     other: { label: t("adminJobsOther"), color: "var(--chart-video)" },
+    cancelled: { label: t("homeLegendStopped"), color: "var(--muted-foreground)" },
     failed: { label: t("homeLegendFailed"), color: "var(--chart-fail)" },
   };
   return <div className="grid gap-3">
@@ -36,11 +37,13 @@ export function AdminActivityChart({ points, loading, error, onRetry }: {
         <ChartTooltip cursor={{ fillOpacity: 0.06 }} content={<ChartTooltipContent />} />
         {/* 堆叠:未失败在下、失败在上;radius 只圆数据端(顶),基线端直角。 */}
         <Bar dataKey="other" stackId="jobs" fill="var(--color-other)" maxBarSize={18} />
+        <Bar dataKey="cancelled" stackId="jobs" fill="var(--color-cancelled)" maxBarSize={18} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={18} radius={[2, 2, 0, 0]} />
       </BarChart>
     </ChartContainer>
     <div className="flex items-center gap-4 text-ui-xs text-muted-foreground">
       <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[var(--chart-video)]" />{t("adminJobsOther")}</span>
+      <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[var(--muted-foreground)]" />{t("homeLegendStopped")}</span>
       <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[var(--chart-fail)]" />{t("homeLegendFailed")}</span>
     </div>
   </div>;

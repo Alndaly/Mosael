@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation } from "@tanstack/react-query";
 
 import { cancelJob, getJob, urlSupport } from "@/api/client";
+import { jobSettled } from "@/components/jobs/runStatus";
 import { useI18n } from "@/app/preferences";
 
 import type { PageInfo, PageToolsBridge } from "./pageActions";
@@ -72,7 +73,7 @@ export function useVideoTools(
         void getJob(jobId)
           .then((job) => {
             if (stopped) return;
-            const settled = job.status === "succeeded" || job.status === "failed";
+            const settled = jobSettled(job.status);
             setDownloads((list) =>
               list.map((entry) =>
                 entry.jobId !== jobId || entry.status !== "running"
@@ -80,7 +81,7 @@ export function useVideoTools(
                   : {
                       ...entry,
                       progress: job.progress ?? entry.progress,
-                      status: settled ? (job.status as "succeeded" | "failed") : "running",
+                      status: settled ? (job.status as "succeeded" | "failed" | "cancelled") : "running",
                       error: job.error ?? undefined,
                     },
               ),

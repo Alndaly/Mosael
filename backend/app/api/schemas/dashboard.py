@@ -10,6 +10,8 @@ class DaySeriesPoint(ApiModel):
     day: str
     total: int = 0
     failed: int = 0
+    #: 被停下的(ADR 0049),不算在 failed 里。
+    cancelled: int = 0
 
 
 class UserSpendPoint(ApiModel):
@@ -42,6 +44,8 @@ class DailyActivityOut(ApiModel):
     date: str
     succeeded: int
     failed: int
+    #: 被停下的(ADR 0049),不算在 failed 里。
+    cancelled: int
 
 
 class DailyPublishOut(ApiModel):
@@ -108,6 +112,7 @@ class WorkspaceSummaryOut(ApiModel):
     window_days: int
     jobs_succeeded: int
     jobs_failed: int
+    jobs_cancelled: int
     published: int
     # 图表数据:窗口内逐日任务活动(旧→新,缺日补零)与素材类型构成(当前总数)
     daily: list[DailyActivityOut]

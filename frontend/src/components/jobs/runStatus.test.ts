@@ -1,6 +1,9 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { jobDisplayStatus, runStatusLabelKey, runStatusText } from "./runStatus";
+import { jobSettled, runStatusLabelKey, runStatusText } from "./runStatus";
 
 describe("任务状态的叫法", () => {
   it("认识的状态给对应的键", () => {
@@ -18,12 +21,25 @@ describe("任务状态的叫法", () => {
   });
 });
 
-describe("给界面看的那种状态", () => {
-  it("被停下的(库里是 failed、cancelled 为真)按「已取消」说;真失败、别的状态原样", () => {
-    expect(jobDisplayStatus({ status: "failed", cancelled: true })).toBe("cancelled");
-    expect(jobDisplayStatus({ status: "failed", cancelled: false })).toBe("failed");
-    expect(jobDisplayStatus({ status: "failed" })).toBe("failed");
-    expect(jobDisplayStatus({ status: "succeeded", cancelled: true })).toBe("succeeded");
-    expect(jobDisplayStatus({ status: "running" })).toBe("running");
+describe("任务结束了没有", () => {
+  it("被停下的也是结束了(ADR 0049),还在跑的、没取到的不是", () => {
+    for (const status of ["succeeded", "failed", "cancelled"]) expect(jobSettled(status)).toBe(true);
+    for (const status of ["queued", "running", undefined]) expect(jobSettled(status)).toBe(false);
+  });
+
+  it("棘轮:不再写死「成功或失败」当结束 —— 被停下的任务会被当成还在跑,一直轮询下去", () => {
+    const root = join(import.meta.dirname, "..", "..");
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !path.includes("generated")) files.push(path);
+      }
+    };
+    walk(root);
+    const pattern = /status === "succeeded" \|\| [\w.?]*status === "failed"|status === "failed" \|\| [\w.?]*status === "succeeded"/;
+    const offenders = files.filter((path) => pattern.test(readFileSync(path, "utf8"))).map((path) => relative(root, path));
+    expect(offenders).toEqual([]);
   });
 });

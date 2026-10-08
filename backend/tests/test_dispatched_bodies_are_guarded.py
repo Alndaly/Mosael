@@ -80,4 +80,4 @@ def test_a_body_that_finds_itself_unwanted_is_recorded_as_cancelled() -> None:
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        assert (job.status, job.error_key, job.message_key) == ("failed", CANCELLED_ERROR_KEY, "jobMsg_cancelled")
+        assert (job.status, job.error_key, job.message_key) == ("cancelled", "", "jobMsg_cancelled")

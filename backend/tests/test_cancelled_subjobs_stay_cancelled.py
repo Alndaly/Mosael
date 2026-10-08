@@ -42,14 +42,14 @@ def _job(ws: str, kind: str) -> str:
 
 def _cancel(job_id: str) -> None:
     with SessionLocal() as other:
-        cancel_job(other, other.get(Job, job_id))
+        cancel_job(other, other.get(Job, job_id), by=None)
         other.commit()  # 测试是入口:cancel_job 不提交
 
 
 def _assert_still_cancelled(job_id: str) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        assert (job.status, job.error_key) == ("failed", "jobErr_cancelled"), (job.status, job.error_key)
+        assert (job.status, job.error_key) == ("cancelled", ""), (job.status, job.error_key)
 
 
 def test_转_GIF_编码途中被取消(media, monkeypatch) -> None:

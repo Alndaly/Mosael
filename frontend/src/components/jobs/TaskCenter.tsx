@@ -21,7 +21,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
-import { jobDisplayStatus, runStatusText } from "@/components/jobs/runStatus";
+import { jobSettled } from "@/components/jobs/runStatus";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -154,7 +154,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       // 都被当成「刚做完」弹一遍的原因(见 api/domains/jobs 的 topLevelJobsQuery)。
       if (job.parent_job_id) continue;
       const prev = prevStatuses.current.get(job.id);
-      const terminal = job.status === "succeeded" || job.status === "failed";
+      const terminal = jobSettled(job.status);
       prevStatuses.current.set(job.id, job.status);
       // Settled on this poll: active→terminal, or first seen already terminal (prev undefined).
       // A fast job (e.g. a workflow with a notify node) can go queued→done between two polls, so
@@ -169,16 +169,14 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       }
       // **只有这里说"做完了"**(ADR-0018)。发起任务的组件只说"排上了";子任务不在这个列表里,
       // 由父任务替它说。
-      //: **被停下的不是失败。** 库里它是 failed(见 runStatus.jobDisplayStatus):只在「做完总要说一声」的种类上中性地说
-      //: 一句「已取消」,「只报失败」的种类不说 —— 停是人自己按的,原位已经写着了。
-      const status = jobDisplayStatus(job);
-      if (status === "cancelled" ? meta.announce !== "always" : !shouldAnnounce(meta, job.status)) continue;
+      //: **被停下的不说**(ADR 0049 决定 10):停是人自己按的,按的那个地方已经写着「已停止 / 已取消」;再弹一句、
+      //: 再发一条系统通知,是同一件事说两遍。改动的东西照样刷新(上面)。
+      if (job.status === "cancelled" || !shouldAnnounce(meta, job.status)) continue;
       if (announced.current.has(job.id)) continue;
       announced.current.add(job.id);
-      const outcome = status === "succeeded" ? t("jobDone") : status === "cancelled" ? runStatusText(t, status) : t("jobFailed");
-      const detail = status === "cancelled" ? undefined : ((job.status === "failed" ? job.error : job.message) ?? undefined);
-      if (status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
-      else if (status === "cancelled") toast.message(`${meta.label} · ${outcome}`);
+      const outcome = job.status === "succeeded" ? t("jobDone") : t("jobFailed");
+      const detail = (job.status === "failed" ? job.error : job.message) ?? undefined;
+      if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
       else toast.error(`${meta.label} · ${outcome}`, { description: detail });
       // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
       // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
@@ -285,7 +283,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
   const { locale } = usePreferences();
   const meta = useJobKinds().kindOf(job.kind);
   const running = ACTIVE.has(job.status);
-  const status = jobDisplayStatus(job);
+  const status = job.status;
   const failed = !running && status === "failed";
   const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
   return (
