@@ -538,11 +538,10 @@ class Seeder:
         out["project2"], out["sequence2"] = self.vertical_cut(api, workspace, locale, assets)
         # A GIF made with the app's own "convert to GIF" — another real source chain.
         job = ok(api.post(f"/assets/{assets['bunny']}/convert-gif", json={"fps": 12, "width": 480}))
-        self.wait_job(api, job["id"])
-        gif = next(a for a in ok(api.get("/assets", params={"workspace_id": workspace}))
-                   if any(d["asset_id"] == assets["bunny"] and d["op"] == "gif" for d in a.get("derived_from") or []))
-        ok(api.patch(f"/assets/{gif['id']}", json={"name": names["bunny-gif"]}))
-        assets["bunny-gif"] = gif["id"]
+        #: 任务的结果里就写着做出来的那一份(见后端 assets/video_gif):不必翻素材库去认来源链。
+        gif = self.wait_job(api, job["id"])["result"]["asset_id"]
+        ok(api.patch(f"/assets/{gif}", json={"name": names["bunny-gif"]}))
+        assets["bunny-gif"] = gif
         shotlist = self.shotlist_pdf(locale)
         assets["shotlist"] = self.upload(api, workspace, project, shotlist, names["shotlist"], "application/pdf")["id"]
         ok(api.get(f"/assets/{assets['shotlist']}/extractions"))  # the library parses documents locally on first open
@@ -611,6 +610,8 @@ class Seeder:
                 localStorage.setItem('mosael.preferences', JSON.stringify({theme: 'light', locale, font: 'default'}));
                 localStorage.setItem('mosael:workspace', ws);
             }""", [f"http://127.0.0.1:{API_PORT}", self.token, "zh-CN" if locale == "zh" else "en-US", workspace])
+            #: 令牌是页面加载时读一次的(前端 api/transport):写完 localStorage 要重载,下面那次只改 hash 的跳转不会重新读。
+            page.reload(wait_until="domcontentloaded")
             page.goto(f"{app}/#/notes?note={note_id}", wait_until="networkidle")
             page.wait_for_timeout(2500)
             page.locator('[data-slot="save-status"][data-state="saved"]').wait_for(timeout=30000)
@@ -706,6 +707,8 @@ class Seeder:
                 localStorage.setItem('mosael.preferences', JSON.stringify({theme: 'light', locale, font: 'default'}));
                 localStorage.setItem('mosael:workspace', ws);
             }""", [f"http://127.0.0.1:{API_PORT}", self.token, "zh-CN" if locale == "zh" else "en-US", workspace])
+            #: 令牌是页面加载时读一次的(前端 api/transport):写完 localStorage 要重载,下面那次只改 hash 的跳转不会重新读。
+            page.reload(wait_until="domcontentloaded")
             page.goto(app + "/#/scenes", wait_until="networkidle")
             label = "打开三间展厅示例" if locale == "zh" else "Open the three-hall sample"
             page.get_by_role("button", name=label, exact=True).click()
@@ -872,7 +875,11 @@ class Seeder:
     def placeholder_provider(self) -> None:
         """A generation connection that is configured but cannot run: its endpoint is a closed local port and its
         key is a placeholder string. Generation panels then show their configured, not-yet-run state (model picker,
-        "N×"); nothing is ever generated, and the name says what it is."""
+        "N×"); nothing is ever generated, and the name says what it is.
+
+        The closed port covers chat and speech only: DashScope's image / video task API ignores the connection's
+        endpoint and goes to dashscope.aliyuncs.com (adapters/alibaba/dashscope/connection.task_api_base). Pressing
+        Generate on a seeded image or video cell would send the placeholder string there (401). Never press it."""
         api = self.api("zh")
         profile = ok(api.post("/settings/providers", json={
             "name": PLACEHOLDER_PROVIDER, "vendor": "alibaba",
@@ -897,10 +904,22 @@ class Seeder:
         ok(api.put("/settings/provider-defaults/chat", json={"provider_profile_id": profile["id"], "model": model}))
         self.fixture["local_chat"] = model
 
+    @staticmethod
+    def list_assets(api: httpx.Client, workspace: str) -> list[dict]:
+        """素材库整页取回(`GET /assets` 分页了:`{items, next_cursor, total}`,翻到 next_cursor 为空)。"""
+        rows, cursor = [], None
+        while True:
+            params = {"workspace_id": workspace, "limit": 200, **({"cursor": cursor} if cursor else {})}
+            page = ok(api.get("/assets", params=params))
+            rows += page["items"]
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return rows
+
     def wait_assets(self, api: httpx.Client, workspace: str, ids: list[str]) -> None:
         """Imports probe and thumbnail in the background; wait until every asset has its media info."""
         for _ in range(240):
-            rows = {row["id"]: row for row in ok(api.get("/assets", params={"workspace_id": workspace}))}
+            rows = {row["id"]: row for row in self.list_assets(api, workspace)}
             pending = [i for i in ids if not (rows.get(i, {}).get("media_info") or {}).get("duration") and rows.get(i, {}).get("kind") in ("video", "audio")]
             if not pending:
                 return
