@@ -654,6 +654,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这条生成会话是同事共享给你看的。改名、删除、收进分组、换模型和在里面继续生成只有主人能做",
         "en": "This generation session was shared with you to view. Only its owner can rename, delete, group, change its model or keep generating in it.",
     },
+    "shareErr_notManageable_scheduledTask": {
+        "zh": "这个定时任务属于别人:它到点替主人跑、用的是主人的钥匙和额度。改、停用、删除、重置触发密钥和立即运行只有主人能做",
+        "en": "This scheduled task belongs to someone else: it runs as its owner, on the owner's keys and quota. Only its owner can change, disable, delete, reset its trigger secret or run it now.",
+    },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",

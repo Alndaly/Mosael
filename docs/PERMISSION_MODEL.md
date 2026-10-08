@@ -198,6 +198,14 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 棘轮:`tests/test_private_identities_are_managed_by_their_owner.py`(闸门的 `actor` 必填、调用点不写 None、两张路由表里
 每条带 `{account_id}` / `{profile_id}` 的写入路由都过闸)。
 
+**定时任务同一条。** 它到点替主人跑、用主人的钥匙和额度(§3.6 那张「跑的人」表),却停在这一节之前的样子:改、停用 / 启用、
+删、重置触发密钥、立即运行只查 editor,同事能把别人的任务改绑到自己的工作流再立即运行。现在这五样经
+`scheduler.use_cases.manageable_task`(工作区 `schedule` 权限 + `ensure_manageable`),路由回 403
+(`shareErr_notManageable_scheduledTask`)。webhook 触发密钥同时改成**只存哈希**(`scheduled_tasks.webhook_secret_hash`):
+此前它明文躺在 `payload` 里、列表接口发给工作区里每个人,只读成员凭它不用登录就能触发、取消主人的运行。原文只在生成的那一次
+响应里给主人(建 webhook 任务、重置、改成 webhook);老库的明文由迁移换成哈希,外部系统手上那串照样能用,界面提醒主人重置一次。
+钥匙与额度本身要不要纳入 §3.8 的担保人检查,另行讨论。测试:`tests/test_scheduled_tasks_belong_to_their_owner.py`。
+
 ## 4. 已经对上的地方
 
 盘点不能只列问题,否则读的人会以为整套都在漏:

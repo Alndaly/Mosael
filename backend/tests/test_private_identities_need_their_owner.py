@@ -345,7 +345,7 @@ def _webhook_run(client: TestClient, workspace_id: str, profile_id: str) -> Job:
             "schedule": {}, "payload": {"workflow_id": workflow.json()["id"], "params": {}},
         },
     ).json()
-    fired = client.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={task['payload']['webhook_secret']}")
+    fired = client.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={task['webhook_secret']}")
     assert fired.status_code == 200, fired.text
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:

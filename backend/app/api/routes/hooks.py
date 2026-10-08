@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import secrets
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
@@ -21,7 +20,7 @@ from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
 from app.domain.jobs import JobError, cancel_job, was_cancelled
-from app.domain.scheduler import SchedulerDomainError, trigger_scheduled_task
+from app.domain.scheduler import SchedulerDomainError, trigger_scheduled_task, webhook_secret_matches
 from app.api.schemas.base import ApiModel
 
 router = APIRouter(tags=["hooks"])
@@ -47,8 +46,8 @@ def _task(db, task_id: str, secret: str) -> ScheduledTask:
     task = db.get(ScheduledTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail=tr("hookErr_taskNotFound"))
-    expected = str((task.payload or {}).get("webhook_secret") or "")
-    if task.trigger_type != "webhook" or not expected or not secrets.compare_digest(expected, secret):
+    #: 库里只存哈希(见 domain/scheduler.issue_webhook_secret):来客手上那串再哈希一次比对。
+    if not webhook_secret_matches(task, secret):
         raise HTTPException(status_code=403, detail=tr("hookErr_badSecret"))
     return task
 

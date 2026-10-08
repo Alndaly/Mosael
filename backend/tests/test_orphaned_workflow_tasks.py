@@ -106,7 +106,7 @@ class Test跑不起来的任务打不开也跑不了:
         workflow_id = _workflow(client, ws)
         task = _task(client, ws, workflow_id, trigger_type="webhook")
         client.delete(f"/api/workflows/{workflow_id}")
-        secret = task["payload"]["webhook_secret"]
+        secret = task["webhook_secret"]
         response = client.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={secret}")
         assert response.status_code == 409
         assert _runs(task["id"]) == 0

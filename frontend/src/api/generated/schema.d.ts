@@ -4285,7 +4285,7 @@ export interface paths {
         put?: never;
         /**
          * Reset Webhook Secret
-         * @description 重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。
+         * @description 重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。新密钥的原文只在这一次响应里。
          */
         post: operations["reset_webhook_secret_api_scheduled_tasks__task_id__webhook_secret_post"];
         delete?: never;
@@ -16655,6 +16655,10 @@ export interface components {
              * @default true
              */
             shared: boolean;
+            /** Webhook Secret Set At */
+            webhook_secret_set_at?: string | null;
+            /** Webhook Secret */
+            webhook_secret?: string | null;
         };
         /** ScheduledTaskRunOut */
         ScheduledTaskRunOut: {

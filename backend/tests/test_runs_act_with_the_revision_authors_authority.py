@@ -140,7 +140,7 @@ def _hooked(client: TestClient, workspace_id: str, profile_id: str) -> tuple[dic
 
 
 def _fire(client: TestClient, task: dict) -> tuple[Job, ScheduledTaskRun]:
-    fired = client.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={task['payload']['webhook_secret']}")
+    fired = client.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={task['webhook_secret']}")
     assert fired.status_code == 200, fired.text
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:

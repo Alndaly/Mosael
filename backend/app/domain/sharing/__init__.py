@@ -283,6 +283,8 @@ _NOT_MANAGEABLE_KEYS: dict[str, str] = {
     #: 两类会话共享出去是给人**看**的(见下面的 `readable` / `writable`)。
     "agent_session": "shareErr_notManageable_agentSession",
     "generation_session": "shareErr_notManageable_generationSession",
+    #: 定时任务替主人跑、用主人的钥匙和额度 —— 和发布账号同一类(见 scheduler/use_cases)。
+    "scheduled_task": "shareErr_notManageable_scheduledTask",
 }
 
 

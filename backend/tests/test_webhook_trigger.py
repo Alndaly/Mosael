@@ -27,7 +27,7 @@ def test_webhook_trigger_flow() -> None:
             "payload": {"workflow_id": workflow["id"], "params": {}},
         },
     ).json()
-    secret = task["payload"]["webhook_secret"]
+    secret = task["webhook_secret"]
     assert secret  # 创建时服务端自动生成
 
     # 错误密钥 → 403;webhook 路由不需要登录态

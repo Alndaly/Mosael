@@ -1,7 +1,15 @@
 """定时任务的用例:按任务所在的工作区过闸(见 CONVENTIONS「一次用例一个事务,授权在领域里」)。
 
-看任务和运行记录不点名权限;建、改、删、重置密钥、立刻跑一次点名 `schedule`。
-定时任务默认共享给工作区(团队基建),列表仍按 sharing 的可见性过滤。
+看任务和运行记录不点名权限;建任务点名 `schedule`。定时任务默认共享给工作区(团队基建),列表仍按 sharing 的
+可见性过滤。
+
+**管一个任务只有它的主人**(改、停用 / 启用、删、重置触发密钥、立即运行):任务到点替主人跑、用主人的钥匙和额度
+(见 operations._open_run),和发布账号、浏览器档案是同一类东西 —— 共享进工作区是借给同事看、看它跑得怎样,
+不是交出去管(ADR 0008 §3.9,`sharing.ensure_manageable`)。此前只查 editor:同事能把别人的任务改绑到自己的
+工作流、再点「立即运行」,用别人的钥匙和额度跑自己的东西。
+
+触发密钥只存哈希;原文只出现在生成它的那一次响应里(建 webhook 任务、重置密钥、改成 webhook),由这几个用例
+连同任务一起交给路由。
 """
 
 from __future__ import annotations
@@ -28,9 +36,11 @@ def _task(db: Session, task_id: str) -> ScheduledTask:
     return task
 
 
-def schedulable_task(db: Session, user: User, task_id: str) -> ScheduledTask:
+def manageable_task(db: Session, user: User, task_id: str) -> ScheduledTask:
+    """要管这个任务:工作区里有 `schedule` 权限,**而且是任务的主人**(见模块说明)。"""
     task = _task(db, task_id)
     ensure_workspace_perm(db, user, task.workspace_id, "schedule")
+    sharing.ensure_manageable(db, SHARE_KIND, task, actor=user.id)
     return task
 
 
@@ -69,31 +79,40 @@ def list_runs(db: Session, user: User, task_id: str) -> list[ScheduledTaskRun]:
 # ---------------- 写 ----------------
 
 
-def create(db: Session, user: User, workspace_id: str, **fields: Any) -> ScheduledTask:
-    """记下**它替谁跑**:定时执行没有「当时的操作人」,事后要知道这段自动化是谁挂上去的。"""
+def create(db: Session, user: User, workspace_id: str, **fields: Any) -> tuple[ScheduledTask, str | None]:
+    """记下**它替谁跑**:定时执行没有「当时的操作人」,事后要知道这段自动化是谁挂上去的。
+
+    webhook 任务连同触发密钥的原文一起返回(只这一次,见 operations.issue_webhook_secret);别的任务给 None。
+    """
     ensure_workspace_perm(db, user, workspace_id, "schedule")
     task = ops.create_scheduled_task(db, workspace_id=workspace_id, owner=user.id, **fields)
     sharing.claim(db, SHARE_KIND, task, user)
+    secret = ops.issue_webhook_secret(db, task) if task.trigger_type == "webhook" else None
     db.flush()
-    return annotate(db, user, task)
+    return annotate(db, user, task), secret
 
 
-def update(db: Session, user: User, task_id: str, changes: dict[str, Any]) -> ScheduledTask:
-    return ops.update_scheduled_task(db, schedulable_task(db, user, task_id), changes)
+def update(db: Session, user: User, task_id: str, changes: dict[str, Any]) -> tuple[ScheduledTask, str | None]:
+    """改一个任务。改成 webhook 任务时发一把新密钥,原文随这一次返回。"""
+    task = ops.update_scheduled_task(db, manageable_task(db, user, task_id), changes)
+    secret = ops.issue_webhook_secret(db, task) if task.trigger_type == "webhook" and not task.webhook_secret_hash else None
+    return annotate(db, user, task), secret
 
 
 def delete(db: Session, user: User, task_id: str) -> None:
-    task = schedulable_task(db, user, task_id)
+    task = manageable_task(db, user, task_id)
     sharing.forget(db, "scheduled_task", task.id)
     db.delete(task)
 
 
-def rotate_secret(db: Session, user: User, task_id: str) -> ScheduledTask:
-    """重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。"""
-    return annotate(db, user, ops.rotate_webhook_secret(db, schedulable_task(db, user, task_id)))
+def rotate_secret(db: Session, user: User, task_id: str) -> tuple[ScheduledTask, str]:
+    """重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。新密钥的原文只随这一次返回。"""
+    task = manageable_task(db, user, task_id)
+    secret = ops.rotate_webhook_secret(db, task)
+    return annotate(db, user, task), secret
 
 
 def run_now(db: Session, user: User, task_id: str) -> tuple[ScheduledTask, ScheduledTaskRun, Any]:
-    task = schedulable_task(db, user, task_id)
+    task = manageable_task(db, user, task_id)
     run, job = ops.trigger_scheduled_task(db, task)
     return task, run, job

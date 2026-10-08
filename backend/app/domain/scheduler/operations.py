@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -10,6 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.core.tokens import token_digest
 from app.db import references
 from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
@@ -47,11 +49,9 @@ def create_scheduled_task(
     if kind not in SCHEDULED_EXECUTORS:
         # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
         raise SchedulerDomainError("schedErr_badKind", kinds=" / ".join(SCHEDULED_EXECUTORS))
+    payload = _without_secret(payload)
     if enabled:
         ensure_runnable(db, kind=kind, workspace_id=workspace_id, payload=payload, owner=owner)
-    if trigger_type == "webhook" and not payload.get("webhook_secret"):
-        # 外部触发路由不走登录态,按任务级密钥鉴权。
-        payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
     task = ScheduledTask(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -70,44 +70,67 @@ def create_scheduled_task(
     return task
 
 
+def issue_webhook_secret(db: Session, task: ScheduledTask) -> str:
+    """给 webhook 任务发一把新的触发密钥,**返回原文** —— 这是原文唯一一次出现:库里只存哈希
+    (`webhook_secret_hash`,见 core/tokens.token_digest),调用方把它放进这一次的响应给主人看一眼。
+
+    外部触发路由不走登录态,按这把密钥鉴权(见 api/routes/hooks);它同时管着触发、查进度和取消三件事。
+    """
+    secret = secrets.token_urlsafe(24)
+    task.webhook_secret_hash = token_digest(secret)
+    task.webhook_secret_set_at = now()
+    db.flush()
+    return secret
+
+
+def webhook_secret_matches(task: ScheduledTask, secret: str) -> bool:
+    """外部系统带来的那串对不对得上。只对 webhook 任务成立;比的是哈希,用常数时间比较。"""
+    expected = task.webhook_secret_hash or ""
+    return (
+        task.trigger_type == "webhook"
+        and bool(expected)
+        and bool(secret)
+        and hmac.compare_digest(expected, token_digest(secret))
+    )
+
+
 def update_scheduled_task(db: Session, task: ScheduledTask, changes: dict[str, Any]) -> ScheduledTask:
     # 按**改完之后**的样子判:同一次既改绑到一张在的图、又打开开关,是可以的。停用永远放行 ——
     # 一个跑不起来的任务至少要关得掉。
     enabled = task.enabled if changes.get("enabled") is None else changes["enabled"]
     if changes.get("payload") is not None:
-        # 触发密钥**归服务端管**:只由建任务和 rotate_webhook_secret 写。客户端带着一份旧 payload
-        # 回来保存(编辑名称/参数时就是这样)不能把刚重置过的密钥写回去,也不能自己指定一个。
-        changes = {**changes, "payload": _keep_secret(task.payload, changes["payload"])}
+        changes = {**changes, "payload": _without_secret(changes["payload"])}
     payload = task.payload if changes.get("payload") is None else changes["payload"]
     if enabled:
         ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=payload, owner=task.owner_user_id)
     for key, value in changes.items():
         if value is not None:
             setattr(task, key, value)
+    if task.trigger_type != "webhook":
+        #: 不再是 webhook 任务:密钥作废。改回 webhook 时发一把新的(见 use_cases.update),旧地址不会复活。
+        task.webhook_secret_hash = None
+        task.webhook_secret_set_at = None
     task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone) if task.enabled else None
     db.flush()
     db.refresh(task)
     return task
 
 
-def _keep_secret(current: dict[str, Any] | None, incoming: dict[str, Any]) -> dict[str, Any]:
-    incoming = {k: v for k, v in incoming.items() if k != "webhook_secret"}
-    secret = (current or {}).get("webhook_secret")
-    return {**incoming, "webhook_secret": secret} if secret else incoming
+def _without_secret(payload: dict[str, Any]) -> dict[str, Any]:
+    """触发密钥**归服务端管**:只由 `issue_webhook_secret` 发,不在 payload 里。客户端带来的 `webhook_secret` 一律不收 ——
+    既不能自己指定一把,也不能把一份旧 payload 存回去。"""
+    return {key: value for key, value in (payload or {}).items() if key != "webhook_secret"}
 
 
-def rotate_webhook_secret(db: Session, task: ScheduledTask) -> ScheduledTask:
-    """换一把触发密钥,旧的立刻失效 —— 触发地址泄漏时的补救。
+def rotate_webhook_secret(db: Session, task: ScheduledTask) -> str:
+    """换一把触发密钥,旧的立刻失效 —— 触发地址泄漏时的补救。返回新密钥的原文(只这一次,见 issue_webhook_secret)。
 
     密钥同时管着触发、查进度和取消三件事(见 api/routes/hooks),换掉它三扇门一起关上。
     已经在跑的那次不受影响:它不再需要密钥。
     """
     if task.trigger_type != "webhook":
         raise SchedulerDomainError("schedErr_notWebhook")
-    task.payload = {**(task.payload or {}), "webhook_secret": secrets.token_urlsafe(24)}
-    db.flush()
-    db.refresh(task)
-    return task
+    return issue_webhook_secret(db, task)
 
 
 def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:

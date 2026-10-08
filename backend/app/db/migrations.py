@@ -8394,6 +8394,43 @@ def _migrate_plugin_instances_remember_applied_moves() -> None:
         conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN applied_moves JSON NOT NULL DEFAULT '{}'"))
 
 
+def _migrate_webhook_secrets_are_hashed() -> None:
+    """定时任务的 webhook 触发密钥从 `payload.webhook_secret`(明文)搬到 `webhook_secret_hash`(只存哈希)。
+
+    明文那一份随列表接口发给工作区里的每个人,只读成员拿着它不用登录就能触发、取消以主人身份跑的运行。
+    改成和会话令牌一样只存哈希(见 core/tokens.token_digest):外部系统手上那串没变,校验时再哈希一次就对得上 ——
+    **已经接好的集成不会断**。`webhook_secret_set_at` 留空:这把密钥曾经对所有人可见,界面提醒主人重置一次。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 ScheduledTask 已经指望它们在了。幂等:payload 里没有明文的行不碰。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(scheduled_tasks)"))}
+        if not columns:
+            return
+        if "webhook_secret_hash" not in columns:
+            conn.execute(text("ALTER TABLE scheduled_tasks ADD COLUMN webhook_secret_hash VARCHAR(80)"))
+        if "webhook_secret_set_at" not in columns:
+            conn.execute(text("ALTER TABLE scheduled_tasks ADD COLUMN webhook_secret_set_at DATETIME"))
+        for row in conn.execute(text("SELECT id, payload FROM scheduled_tasks")).mappings().all():
+            payload = row["payload"]
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except ValueError:
+                    continue
+            if not isinstance(payload, dict) or "webhook_secret" not in payload:
+                continue
+            secret = payload.pop("webhook_secret")
+            conn.execute(
+                text("UPDATE scheduled_tasks SET payload = :payload, webhook_secret_hash = :hashed WHERE id = :id"),
+                {
+                    "payload": json.dumps(payload, ensure_ascii=False),
+                    "hashed": token_digest(str(secret)) if isinstance(secret, str) and secret else None,
+                    "id": row["id"],
+                },
+            )
+
+
 def _drop_empty_agent_sessions() -> None:
     """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
 
@@ -8742,6 +8779,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_provider_models_remember_their_group,
                 # 同上:ORM 上的 PluginInstance 指望「做过哪几批改名」那一列在(ADR 0045)。
                 _migrate_plugin_instances_remember_applied_moves,
+                # 同上:ORM 上的 ScheduledTask 指望「触发密钥的哈希」两列在;明文从 payload 里摘掉、换成哈希。
+                _migrate_webhook_secrets_are_hashed,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

@@ -35,7 +35,7 @@ def _wait(client, url: str) -> dict:
 def test_an_external_caller_can_follow_the_run_it_fired() -> None:
     client = fresh_client()
     _, _, task = _hooked(client)
-    secret = task["payload"]["webhook_secret"]
+    secret = task["webhook_secret"]
     base = f"/api/hooks/scheduled-tasks/{task['id']}"
     fired = client.post(f"{base}?secret={secret}").json()
 
@@ -56,7 +56,7 @@ def test_an_external_caller_can_follow_the_run_it_fired() -> None:
 def test_cancel_stops_a_run_that_is_still_going() -> None:
     client = fresh_client()
     ws, _, task = _hooked(client)
-    secret = task["payload"]["webhook_secret"]
+    secret = task["webhook_secret"]
     base = f"/api/hooks/scheduled-tasks/{task['id']}"
     # 直接造一条「还在跑」的运行:真去触发的话,测试环境里起始节点一眨眼就跑完了,来不及取消。
     with SessionLocal() as db:
@@ -80,8 +80,8 @@ def test_a_run_of_another_task_is_not_reachable_with_this_secret() -> None:
     client = fresh_client()
     _, _, mine = _hooked(client)
     _, _, other = _hooked(client)
-    theirs = client.post(f"/api/hooks/scheduled-tasks/{other['id']}?secret={other['payload']['webhook_secret']}").json()
-    secret = mine["payload"]["webhook_secret"]
+    theirs = client.post(f"/api/hooks/scheduled-tasks/{other['id']}?secret={other['webhook_secret']}").json()
+    secret = mine["webhook_secret"]
     base = f"/api/hooks/scheduled-tasks/{mine['id']}/runs/{theirs['run_id']}"
     assert client.get(f"{base}?secret={secret}").status_code == 404
     assert client.post(f"{base}/cancel?secret={secret}").status_code == 404
@@ -90,10 +90,10 @@ def test_a_run_of_another_task_is_not_reachable_with_this_secret() -> None:
 def test_resetting_the_secret_retires_the_old_url_and_edits_cannot_bring_it_back() -> None:
     client = fresh_client()
     _, workflow, task = _hooked(client)
-    old = task["payload"]["webhook_secret"]
+    old = task["webhook_secret"]
     rotated = client.post(f"/api/scheduled-tasks/{task['id']}/webhook-secret")
     assert rotated.status_code == 200, rotated.text
-    new = rotated.json()["payload"]["webhook_secret"]
+    new = rotated.json()["webhook_secret"]
     assert new and new != old
     base = f"/api/hooks/scheduled-tasks/{task['id']}"
     assert client.post(f"{base}?secret={old}").status_code == 403
@@ -101,7 +101,7 @@ def test_resetting_the_secret_retires_the_old_url_and_edits_cannot_bring_it_back
     # 编辑时带着那份旧 payload 保存 —— 旧密钥不能借这条路回来,也不能自己指定一个。
     stale = {"workflow_id": workflow["id"], "params": {}, "webhook_secret": old}
     saved = client.patch(f"/api/scheduled-tasks/{task['id']}", json={"payload": stale}).json()
-    assert saved["payload"]["webhook_secret"] == new
+    assert "webhook_secret" not in saved["payload"] and saved["webhook_secret"] is None
     assert client.post(f"{base}?secret={old}").status_code == 403
     assert client.post(f"{base}?secret={new}").status_code == 200
 

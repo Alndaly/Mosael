@@ -2,7 +2,7 @@
 title: Scheduled tasks
 description: Set workflow triggers, review run history and manage active schedules.
 order: 16
-updated: 2026-10-04
+updated: 2026-10-08
 version: 1.9.3
 ---
 
@@ -12,7 +12,9 @@ version: 1.9.3
 
 ## Create a task
 
-Choose **New task**, enter a name, select a workflow and choose a manual, scheduled or webhook trigger. **Daily (pick time)** uses a time picker with an hour column and a minute column; picking the minute closes it, and the arrow keys move within a column. Configure model connections, media inputs and required fields in the workflow before enabling the plan. Manual tasks do not run on a schedule.
+Choose **New task**, enter a name, select a workflow and choose a manual, scheduled or webhook trigger. **Daily (pick time)** uses a time picker with an hour column and a minute column; picking the minute closes it, and the arrow keys move within a column. The time is in your computer's time zone (the detail area says which zone a task's schedule uses; tasks created earlier run on UTC, and their owner can switch them to the local zone in one click). Manual tasks do not run on a schedule.
+
+Once you pick a workflow, the dialog lists its start inputs: scheduled runs use what you fill in here, and the workflow's defaults for blanks. Inputs marked `*` with no default are required — the task can't be created without them. Anything other nodes need (picking a file or a connection) has to be filled in on the workflow canvas first. After creation, the **Workflow inputs** row in the detail area shows what was filled in, and the owner can **Edit inputs**.
 
 Clicking the bound workflow row in the detail area opens that task's workflow, not whichever workflow the Workflows page last had open.
 
@@ -20,7 +22,7 @@ Clicking the bound workflow row in the detail area opens that task's workflow, n
 
 ## Run and disable
 
-Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying. The run history refreshes on its own: runs started outside this page — a webhook, a scheduled trigger, a teammate's **Run now** — appear too, and the **Last run** field updates with them, without reloading the page.
+Run a task immediately or toggle its enabled state in the detail area. **Only the task's owner can change, enable or disable, delete, reset the trigger secret of, or run it now**: a task runs as its owner, on the owner's keys and quota, and sharing it into the workspace lets teammates see it and how it's doing — not manage it. On someone else's task these controls are greyed out, and hovering explains why. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying. The run history refreshes on its own: runs started outside this page — a webhook, a scheduled trigger — appear too, and the **Last run** field updates with them, without reloading the page.
 
 ![Task details: the daily schedule, next and last run, the bound workflow; the run list holds a real result of Run now](/media/screens/en/scheduler-runs.png)
 
@@ -28,7 +30,7 @@ Every trigger first goes through **the same pre-run check** as **Run** in the wo
 
 ### Who a run acts as
 
-Scheduled triggers, webhook triggers and a teammate's **Run now** all run **as the task's owner** (whoever
+Scheduled triggers, webhook triggers and **Run now** all run **as the task's owner** (whoever
 created it): their model keys, their usage, and only the publishing accounts and browser profiles they may
 use — their own or those shared into the workspace. If the graph references an account or profile someone
 hasn't shared, that run fails saying it "belongs to someone else and hasn't been shared"; ask its owner to
@@ -52,7 +54,9 @@ Deleting a workflow disables the scheduled tasks bound to it on the spot, so the
 
 A webhook task's detail area shows its **Trigger URL**. An external system (CI, n8n, a script) POSTs to it to fire one run, without signing in: the `secret` in the URL is the credential. The same secret also lets it check how that run is going and cancel it, so the caller does not have to trigger and wait blindly.
 
-Expand **How to call it** under the trigger URL for three copyable commands that already carry this task's address and secret:
+**The secret is shown only once.** The backend stores only a hash of it: right after you create a webhook task or reset its secret, the full trigger URL is shown that one time — copy it into the external system then. After you leave the page it is masked; reset it to get a new URL. Webhook tasks created before secrets were stored as hashes had a secret every member of the workspace could see, so their detail area reminds the owner to reset it once — the old URL keeps working until then.
+
+Expand **How to call it** under the trigger URL for three copyable commands that already carry this task's address (and the secret right after it's generated; afterwards a `<secret>` placeholder):
 
 ```bash
 # Fire one run; returns run_id
@@ -72,4 +76,4 @@ The example uses the default local backend address; commands copied from **How t
 - Cancelling works at node granularity: the step currently executing finishes, then the run stops, and any child jobs it spawned are cancelled too.
 - A secret reaches **only this task's own runs**. A `run_id` belonging to another task is treated as not found.
 
-If the secret leaks, choose **Reset secret** next to the trigger URL. The old URL stops working immediately, and so do status checks and cancels made with the old secret; update the external system to the new URL. A run that is already going is not affected.
+If the secret leaks (or you've lost it), the owner chooses **Reset secret** next to the trigger URL. The old URL stops working immediately, and so do status checks and cancels made with the old secret; update the external system to the new URL. A run that is already going is not affected.

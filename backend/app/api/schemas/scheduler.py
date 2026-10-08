@@ -49,6 +49,12 @@ class ScheduledTaskOut(OrmModel):
     owner_user_id: str | None = None
     is_mine: bool = True
     shared: bool = True
+    #: webhook 触发密钥是什么时候生成 / 重置的。webhook 任务上为空 = 只存哈希之前的那一把,它曾经对工作区里
+    #: 所有人可见,界面提醒主人重置一次。
+    webhook_secret_set_at: datetime | None = None
+    #: 触发密钥的**原文**:只在生成它的那一次响应里有(建 webhook 任务、重置密钥、改成 webhook),别的时候都是 None ——
+    #: 库里只存哈希(见 domain/scheduler.issue_webhook_secret)。
+    webhook_secret: str | None = None
 
 
 class ScheduledTaskRunOut(OrmModel):

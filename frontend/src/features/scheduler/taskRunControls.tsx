@@ -28,6 +28,7 @@ export function hasActiveRun(runs: readonly Pick<ScheduledTaskRun, "status">[] |
 export function TaskRunControls({
   enabled,
   blocked,
+  notOwner,
   running,
   onRun,
   onToggle,
@@ -35,19 +36,21 @@ export function TaskRunControls({
   enabled: boolean;
   /** 跑不起来(绑的工作流已删除)。 */
   blocked: boolean;
+  /** 不是这个任务的主人:为什么动不了(后端只许主人运行、启停,见 scheduler.manageable_task)。 */
+  notOwner?: string;
   /** 有一次还在跑(或正在发起)。这时按钮说「运行中」、点不动 —— 定时任务不重入。 */
   running: boolean;
   onRun: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
   const t = useI18n();
-  const hint = blocked ? t("taskBlockedWorkflowGone") : undefined;
-  // 点不动的原因:跑不起来(工作流删了)优先;否则是任务停着。「运行中」由按钮上的字自己说。
+  const hint = notOwner ?? (blocked ? t("taskBlockedWorkflowGone") : undefined);
+  // 点不动的原因:不是主人、跑不起来(工作流删了)优先;否则是任务停着。「运行中」由按钮上的字自己说。
   const runBlockedBy = hint ?? (!enabled ? t("taskRunNeedsEnabled") : undefined);
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       <Hint disabledReason={runBlockedBy}>
-        <Button variant="outline" disabled={!enabled || blocked} loading={running} onClick={onRun}>
+        <Button variant="outline" disabled={!enabled || blocked || !!notOwner} loading={running} onClick={onRun}>
           <Play size={13} /> {running ? t("runStatus_running") : t("runNow")}
         </Button>
       </Hint>
@@ -58,7 +61,7 @@ export function TaskRunControls({
         {/* 跑不起来时**打不开,但关得掉** —— 万一它还开着(不变式成立之前留下的),得能停下它。 */}
         <Switch
           checked={enabled}
-          disabled={blocked && !enabled}
+          disabled={!!notOwner || (blocked && !enabled)}
           aria-label={enabled ? t("pluginOn") : t("pluginOff")}
           onCheckedChange={onToggle}
         />

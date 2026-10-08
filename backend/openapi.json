@@ -13158,7 +13158,7 @@
           "scheduler"
         ],
         "summary": "Reset Webhook Secret",
-        "description": "重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。",
+        "description": "重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。新密钥的原文只在这一次响应里。",
         "operationId": "reset_webhook_secret_api_scheduled_tasks__task_id__webhook_secret_post",
         "parameters": [
           {
@@ -43266,6 +43266,29 @@
             "type": "boolean",
             "title": "Shared",
             "default": true
+          },
+          "webhook_secret_set_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Secret Set At"
+          },
+          "webhook_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Secret"
           }
         },
         "type": "object",

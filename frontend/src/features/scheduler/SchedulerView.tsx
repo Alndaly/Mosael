@@ -46,7 +46,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
 import { hasActiveRun, TaskRunControls } from "./taskRunControls";
-import { nextRunText, scheduleText } from "./scheduleText";
+import { localTimeZone, nextRunText, scheduleText, scheduleUsesClock } from "./scheduleText";
+import { TaskParamsForm } from "./TaskParamsForm";
+import { formValuesFrom, missingRequired, runParamsFrom, startParamsOf } from "./taskParams";
+import { errorText } from "@/api/errorMessage";
+import { Hint } from "@/components/ui/tooltip";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -104,6 +108,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
   const [menuDeleting, setMenuDeleting] = React.useState<ScheduledTask | null>(null);
+  //: 触发密钥的原文只在生成它的那一次响应里(建 webhook 任务、重置密钥):记在这一页的内存里给主人看一眼,
+  //: 离开这一页就没了 —— 库里只有哈希(体检 UM-02)。
+  const [revealedSecrets, setRevealedSecrets] = React.useState<Record<string, string>>({});
+  const reveal = React.useCallback((task: ScheduledTask) => {
+    const secret = task.webhook_secret;
+    if (secret) setRevealedSecrets((now) => ({ ...now, [task.id]: secret }));
+  }, []);
 
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
@@ -158,6 +169,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
       onClose={() => setCreating(false)}
       onCreated={(task) => {
         setCreating(false);
+        reveal(task);
         setSelectedId(task.id);
         void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
       }}
@@ -221,9 +233,10 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <TaskMenuRunItem task={task} blocked={isBlocked(task)} onRun={() => menuRun.mutate(task.id)} />
+                  {/* 管一个任务只有它的主人(后端 scheduler.manageable_task):别人的任务菜单里这几项灰掉。 */}
+                  <TaskMenuRunItem task={task} blocked={isBlocked(task) || !task.is_mine} onRun={() => menuRun.mutate(task.id)} />
                   <ContextMenuItem
-                    disabled={!task.enabled && isBlocked(task)}
+                    disabled={!task.is_mine || (!task.enabled && isBlocked(task))}
                     onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}
                   >
                     <MenuItemBody icon={<Power />} label={task.enabled ? t("pluginOff") : t("pluginOn")} />
@@ -234,7 +247,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                     </ContextMenuItem>
                   )}
                   <ContextMenuSeparator />
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(task)}>
+                  <ContextMenuItem disabled={!task.is_mine} className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(task)}>
                     <MenuItemBody icon={<Trash2 />} label={t("delete")} />
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -242,7 +255,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
             ))}
       </>}>
           {selected ? (
-            <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
+            <TaskDetail
+              key={selected.id}
+              task={selected}
+              workspaceId={workspace.id}
+              revealedSecret={revealedSecrets[selected.id]}
+              onSecretIssued={reveal}
+            />
           ) : (
             <EmptyState icon={<Timer size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
@@ -266,19 +285,35 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
  * 同一把密钥还管着「查这次运行到哪了」和「取消它」(后端 api/routes/hooks)—— 此前外部系统
  * 触发完就只能干等。三条调用写在折叠的说明里,各自能复制。密钥泄漏了就重置:旧地址连同
  * 查进度、取消一起失效。
+ *
+ * **密钥只在生成它的那一次看得到**(建任务、重置之后,`revealed`):库里只存哈希。此前它明文躺在任务里,
+ * 列表接口发给工作区里每个人,只读成员拿着它不用登录就能触发(体检 UM-02)。之后要新地址就重置。
+ * 只存哈希之前就有的那一把(`webhook_secret_set_at` 为空)曾经对所有人可见,这里提醒主人重置一次。
  */
-function WebhookUrlRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
+function WebhookUrlRow({
+  task,
+  workspaceId,
+  revealed,
+  onSecretIssued,
+}: {
+  task: ScheduledTask;
+  workspaceId: string;
+  revealed?: string;
+  onSecretIssued: (task: ScheduledTask) => void;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [confirming, setConfirming] = React.useState(false);
   const [showApi, setShowApi] = React.useState(false);
-  const secret = String((task.payload as { webhook_secret?: string })?.webhook_secret ?? "");
   const base = `${API_BASE}/api/hooks/scheduled-tasks/${task.id}`;
+  const secret = revealed ?? "<secret>";
   const url = `${base}?secret=${secret}`;
+  const ownerOnly = task.is_mine ? undefined : t("taskOwnerOnly");
   const reset = useMutation({
     mutationFn: () => resetWebhookSecret(task.id),
-    onSuccess: () => {
+    onSuccess: (next) => {
       setConfirming(false);
+      onSecretIssued(next);
       toast.success(t("webhookResetDone"));
       void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
     },
@@ -298,17 +333,40 @@ function WebhookUrlRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
       <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
         <div className="flex min-w-0 max-w-[460px] items-center gap-1">
           <Truncate as="code" className="timecode max-w-[300px] text-xs text-muted-foreground">
-            {url}
+            {revealed ? url : `${base}?secret=••••••`}
           </Truncate>
-          <IconButton label={t("copy")} onClick={() => copy(url, t("webhookCopied"))}>
+          <IconButton
+            label={t("copy")}
+            disabled={!revealed}
+            disabledReason={revealed ? undefined : t("webhookSecretHidden")}
+            onClick={() => copy(url, t("webhookCopied"))}
+          >
             <Copy />
           </IconButton>
-          <IconButton label={t("webhookReset")} onClick={() => setConfirming(true)}>
+          <IconButton label={t("webhookReset")} disabled={!!ownerOnly} disabledReason={ownerOnly} onClick={() => setConfirming(true)}>
             <RotateCcw />
           </IconButton>
         </div>
       </SettingsRow>
       <div className="grid gap-2 pb-4">
+        {revealed ? (
+          <p data-webhook-secret-once="" className="m-0 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] px-3 py-2 text-ui-xs leading-[1.5] text-foreground">
+            {t("webhookSecretOnce")}
+          </p>
+        ) : task.webhook_secret_set_at ? (
+          <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("webhookSecretHidden")}</small>
+        ) : (
+          <div data-webhook-secret-legacy="" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] px-3 py-2">
+            <span className="text-ui-xs leading-[1.5] text-foreground">
+              {task.is_mine ? t("webhookLegacySecret") : t("webhookLegacySecretNotMine")}
+            </span>
+            {task.is_mine && (
+              <Button size="xs" variant="outline" onClick={() => setConfirming(true)}>
+                <RotateCcw size={12} /> {t("webhookReset")}
+              </Button>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="inline-flex w-fit items-center gap-1 text-ui-xs text-muted-foreground hover:text-foreground"
@@ -378,6 +436,9 @@ function CreateTaskDialog({
   const [trigger, setTrigger] = React.useState<"manual" | "scheduled" | "webhook">("manual");
   const [schedKind, setSchedKind] = React.useState<"hourly" | "daily">("hourly");
   const [dailyTime, setDailyTime] = React.useState("09:00");
+  //: 工作流开始节点的参数(见 taskParams):换了工作流就从头填。
+  const [paramValues, setParamValues] = React.useState<Record<string, string>>({});
+  const [attempted, setAttempted] = React.useState(false);
 
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
@@ -385,6 +446,8 @@ function CreateTaskDialog({
     enabled: open,
   });
   const selectedWorkflow = (workflows.data ?? []).find((workflow) => workflow.id === workflowId) ?? null;
+  const specs = React.useMemo(() => startParamsOf(selectedWorkflow?.graph), [selectedWorkflow]);
+  const missing = missingRequired(specs, paramValues);
 
   const create = useMutation({
     mutationFn: () => {
@@ -399,11 +462,20 @@ function CreateTaskDialog({
         kind: "workflow",
         trigger_type,
         schedule,
-        payload: { workflow_id: workflowId, params: {} },
+        //: 「每天 09:00」是**这个人这里**的 09:00:不带时区的话后端按 UTC 算,北京时间下午五点才跑(体检 UM-18)。
+        timezone: localTimeZone(),
+        payload: { workflow_id: workflowId, params: runParamsFrom(specs, paramValues) },
       });
     },
     onSuccess: onCreated,
+    //: 跑不起来的原因(缺参数、工作流里还有没填的节点)写在弹窗里、挨着要改的地方,不只是右下角一闪而过。
+    onError: () => undefined,
   });
+  const submit = () => {
+    setAttempted(true);
+    if (missing.length > 0) return;
+    create.mutate();
+  };
 
   return (
     <ModalShell
@@ -413,7 +485,7 @@ function CreateTaskDialog({
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
-          <Button size="sm" disabled={!workflowId} loading={create.isPending} onClick={() => create.mutate()}>
+          <Button size="sm" disabled={!workflowId} loading={create.isPending} onClick={submit}>
             <CalendarClock size={13} /> {t("createTask")}
           </Button>
         </>
@@ -432,7 +504,12 @@ function CreateTaskDialog({
             placeholder={t("wfPickWorkflow")}
             emptyText={t("cmdkEmpty")}
             className="w-full"
-            onValueChange={setWorkflowId}
+            onValueChange={(next) => {
+              setWorkflowId(next);
+              setParamValues({});
+              setAttempted(false);
+              create.reset();
+            }}
           />
           {(workflows.data ?? []).length === 0 && workflows.isSuccess && (
             <small>{t("noWorkflowHint")}</small>
@@ -443,6 +520,7 @@ function CreateTaskDialog({
             </small>
           )}
         </div>
+        <TaskParamsForm specs={specs} values={paramValues} onChange={setParamValues} showMissing={attempted} missing={missing} />
         <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("taskTriggerLabel")}</span>
           <Select value={trigger} onValueChange={(value) => setTrigger(value as typeof trigger)}>
@@ -482,13 +560,28 @@ function CreateTaskDialog({
             </div>
           </div>
         )}
+        {create.isError && (
+          <p role="alert" className="m-0 text-ui-xs leading-[1.5] text-destructive">{errorText(create.error)}</p>
+        )}
       </div>
     </ModalShell>
   );
 }
 
-function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
+function TaskDetail({
+  task,
+  workspaceId,
+  revealedSecret,
+  onSecretIssued,
+}: {
+  task: ScheduledTask;
+  workspaceId: string;
+  revealedSecret?: string;
+  onSecretIssued: (task: ScheduledTask) => void;
+}) {
   const t = useI18n();
+  //: 管这个任务只有它的主人(后端 scheduler.manageable_task):它到点替主人跑、用主人的钥匙和额度。
+  const ownerOnly = task.is_mine ? undefined : t("taskOwnerOnly");
   const qc = useQueryClient();
   const [deleting, setDeleting] = React.useState(false);
 
@@ -511,6 +604,11 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   };
   const toggleTask = useMutation({
     mutationFn: (enabled: boolean) => updateScheduledTask(task.id, { enabled }),
+    onSuccess: refresh,
+  });
+  const localZone = localTimeZone();
+  const useLocalZone = useMutation({
+    mutationFn: () => updateScheduledTask(task.id, { timezone: localZone }),
     onSuccess: refresh,
   });
   const runTask = useMutation({
@@ -548,6 +646,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <TaskRunControls
             enabled={task.enabled}
             blocked={blocked}
+            notOwner={ownerOnly}
             // 按**这个任务实际有没有一次在跑**判,和工作流编辑器的运行键同一个意思;请求那几十毫秒也算。
             running={runTask.isPending || hasActiveRun(runs.data)}
             onRun={() => runTask.mutate()}
@@ -560,6 +659,17 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskSchedule")}</dt>
             <dd className="tabular-nums">{scheduleLabel}</dd>
+            {/* 「每天 09:00」是哪里的 09:00:和这台电脑不是同一个时区时写出来(老任务都是 UTC),主人能一键改成本地。 */}
+            {scheduleUsesClock(task) && task.timezone !== localZone && (
+              <dd data-task-timezone="" className="flex flex-wrap items-center gap-1.5 text-ui-xs text-muted-foreground">
+                {t("taskTimezoneOther").replace("{zone}", task.timezone)}
+                {task.is_mine && (
+                  <Button size="xs" variant="outline" loading={useLocalZone.isPending} onClick={() => useLocalZone.mutate()}>
+                    {t("taskTimezoneUseLocal").replace("{zone}", localZone)}
+                  </Button>
+                )}
+              </dd>
+            )}
           </div>
           <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskNextRun")}</dt>
@@ -577,7 +687,10 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       {(task.kind === "workflow" || task.trigger_type === "webhook") && (
         <div className="grid divide-y divide-divider">
           {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
-          {task.trigger_type === "webhook" && <WebhookUrlRow task={task} workspaceId={workspaceId} />}
+          {task.kind === "workflow" && <TaskParamsRow task={task} workspaceId={workspaceId} />}
+          {task.trigger_type === "webhook" && (
+            <WebhookUrlRow task={task} workspaceId={workspaceId} revealed={revealedSecret} onSecretIssued={onSecretIssued} />
+          )}
         </div>
       )}
 
@@ -602,14 +715,17 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       {/* 删除排在最后、样子最轻 —— 危险操作不该和日常操作抢同一个视觉分量。 */}
       <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
         <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("deleteTaskDesc")}</p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={() => setDeleting(true)}
-        >
-          <Trash2 size={13} /> {t("delete")}
-        </Button>
+        <Hint disabledReason={ownerOnly}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            disabled={!!ownerOnly}
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={13} /> {t("delete")}
+          </Button>
+        </Hint>
       </div>
 
       <ConfirmDialog
@@ -620,6 +736,90 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         pending={deleteTask.isPending}
         onConfirm={() => deleteTask.mutate()}
       />
+    </div>
+  );
+}
+
+/** 一次运行开始的钟点:本地时区、当前语言,月-日 时:分:秒。 */
+function runClock(iso: string, locale: string): string {
+  return parseServerTime(iso).toLocaleString(locale, {
+    month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+}
+
+/**
+ * 任务带给工作流的参数(开始节点那几项,见 taskParams):看得到填了什么;主人能改。
+ *
+ * 此前新建弹窗没地方填、参数写死成 `{}`,工作流只要有一个必填输入就建不成;建好的任务也改不了参数(体检 UM-03)。
+ */
+function TaskParamsRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const workflows = useWorkflows(workspaceId);
+  const workflow = (workflows.data ?? []).find((one) => one.id === boundWorkflowId(task)) ?? null;
+  const specs = React.useMemo(() => startParamsOf(workflow?.graph), [workflow]);
+  const saved = (task.payload as { params?: unknown })?.params;
+  const [editing, setEditing] = React.useState(false);
+  const [values, setValues] = React.useState<Record<string, string>>({});
+  const [attempted, setAttempted] = React.useState(false);
+  const missing = missingRequired(specs, values);
+  const save = useMutation({
+    mutationFn: () => updateScheduledTask(task.id, { payload: { ...task.payload, params: runParamsFrom(specs, values) } }),
+    onSuccess: () => {
+      setEditing(false);
+      void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
+    },
+    onError: () => undefined,
+  });
+  if (!workflow || specs.length === 0) return null;
+  const shown = formValuesFrom(specs, saved);
+  const startEditing = () => {
+    setValues(shown);
+    setAttempted(false);
+    save.reset();
+    setEditing(true);
+  };
+  return (
+    <div className="grid gap-2 py-4" data-task-params-row="">
+      {editing ? (
+        <>
+          <TaskParamsForm specs={specs} values={values} onChange={setValues} showMissing={attempted} missing={missing} />
+          {save.isError && <p role="alert" className="m-0 text-ui-xs leading-[1.5] text-destructive">{errorText(save.error)}</p>}
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              loading={save.isPending}
+              onClick={() => {
+                setAttempted(true);
+                if (missing.length === 0) save.mutate();
+              }}
+            >
+              {t("taskParamsSave")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>{t("cancel")}</Button>
+          </div>
+        </>
+      ) : (
+        <SettingsRow label={t("taskParamsLabel")} description={t("taskParamsDesc")}>
+          <div className="flex min-w-0 max-w-[460px] items-start gap-2">
+            <dl className="m-0 grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-ui-xs [&_dd]:m-0">
+              {specs.map((spec) => (
+                <React.Fragment key={spec.name}>
+                  <dt className="text-muted-foreground">{spec.name}</dt>
+                  <Truncate as="dd" className={cn(!shown[spec.name] && "text-muted-foreground")}>
+                    {shown[spec.name] || (spec.fallback === "" || spec.fallback == null ? "—" : t("taskParamDefaultPlaceholder").replace("{value}", String(spec.fallback)))}
+                  </Truncate>
+                </React.Fragment>
+              ))}
+            </dl>
+            <Hint disabledReason={task.is_mine ? undefined : t("taskOwnerOnly")}>
+              <Button size="xs" variant="outline" disabled={!task.is_mine} onClick={startEditing}>
+                {t("taskParamsEdit")}
+              </Button>
+            </Hint>
+          </div>
+        </SettingsRow>
+      )}
     </div>
   );
 }
@@ -664,7 +864,8 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
         <div className="flex min-w-0 items-baseline gap-1.5 [&_strong]:whitespace-nowrap [&_strong]:text-ui-sm">
           <strong>{run.started_at ? relativeTime(run.started_at, locale) : runStatusText(t, run.status)}</strong>
           {run.started_at && (
-            <span className="timecode text-ui-xs text-muted-foreground">{run.started_at.replace("T", " ").slice(5, 19)}</span>
+            //: 按本地时区显示,和页头「上次运行」同一个钟:此前直接截了后端的 UTC 字符串,北京时间差 8 小时(体检 UM-18)。
+            <span className="timecode text-ui-xs text-muted-foreground">{runClock(run.started_at, locale)}</span>
           )}
         </div>
         {message && (

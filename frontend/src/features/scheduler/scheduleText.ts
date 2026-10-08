@@ -51,6 +51,20 @@ export function scheduleText(task: TaskLike, t: Translate, locale: string, forma
   return Object.keys(schedule).length === 0 ? t("schedNone") : JSON.stringify(schedule);
 }
 
+/** 这台电脑的时区(IANA 名)。建定时任务时带上:「每天 09:00」说的是这里的 09:00(后端不给就按 UTC 算)。 */
+export function localTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/** 按某个钟点排程的任务(每天 / 每周):它的「几点」才和时区有关。 */
+export function scheduleUsesClock(task: Pick<ScheduledTask, "trigger_type">): boolean {
+  return task.trigger_type === "daily" || task.trigger_type === "weekly";
+}
+
 /** 下次运行:有时间说时间;没有的话说清楚**为什么**没有 —— 手动、webhook、停用是三回事。 */
 export function nextRunText(task: TaskLike, t: Translate, formatTime: (iso: string) => string): string {
   if (task.next_run_at) return formatTime(task.next_run_at);

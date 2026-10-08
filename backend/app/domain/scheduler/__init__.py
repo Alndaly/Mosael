@@ -4,10 +4,12 @@ from app.domain.scheduler.operations import (
     SchedulerDomainError,
     create_scheduled_task,
     ensure_runnable,
+    issue_webhook_secret,
     rotate_webhook_secret,
     stop_tasks_bound_to_workflow,
     trigger_scheduled_task,
     update_scheduled_task,
+    webhook_secret_matches,
 )
 
 __all__ = [
@@ -16,8 +18,10 @@ __all__ = [
     "SchedulerDomainError",
     "create_scheduled_task",
     "ensure_runnable",
+    "issue_webhook_secret",
     "rotate_webhook_secret",
     "stop_tasks_bound_to_workflow",
     "trigger_scheduled_task",
     "update_scheduled_task",
+    "webhook_secret_matches",
 ]

@@ -26,6 +26,12 @@ class ScheduledTask(Base):
     timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="UTC")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: webhook 触发密钥的**哈希**(`sha256:<hex>`,见 core/tokens.token_digest)。原文只在生成和重置的那一次响应里
+    #: 给主人看一眼,库里不留 —— 此前它明文躺在 payload 里,列表接口把它发给工作区里每个人(含只读成员)。
+    webhook_secret_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: 这把密钥是什么时候生成 / 重置的。空 = 改成只存哈希之前就有的那一把:它曾经对工作区里所有人可见,
+    #: 界面提醒主人重置一次。
+    webhook_secret_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
