@@ -204,6 +204,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const compared = comparable.flatMap((asset) => comparedDetails.get(asset.id) ?? []);
   const refresh = () => qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
 
+  //: 关掉详情,焦点回到这一份的卡片上:详情是按 id 开的,没有一颗「触发器」可还,此前键盘 Esc 关掉之后焦点掉回 body,
+  //: 几百张的网格里得从页面顶上重新 Tab(体检 UM-24)。卡片不在眼前(虚拟列表滚走了、从别处深链进来)就不管。
+  const closePreview = () => {
+    const closed = previewingId;
+    setPreviewingId(null);
+    if (!closed) return;
+    window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-asset-opener="${closed}"]`)?.focus());
+  };
+
   // Cmd+K 面板选中素材后跳转到本页并直接打开详情(统一先进详情卡,图片也一样,要看大图再从卡里点开)。
   useOpenRequest(OPEN_ASSET_EVENT, (assetId) => {
     setPreviewingId(assetId);
@@ -328,7 +337,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           }}
         >
           {/* 读屏念的名字:逐句配音的一句名字都一样,带上念的那句话才分得清。 */}
-        <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.media_info.line_text ? `${asset.name}: ${asset.media_info.line_text}` : asset.name} />
+        <button type="button" data-asset-opener={asset.id} className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.media_info.line_text ? `${asset.name}: ${asset.media_info.line_text}` : asset.name} />
           <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
           {/* 点卡片是开详情(看尺寸、来源、标签)、勾选模式里是勾选;看大图是另一件事,单独一颗,摆在缩略图左上角。 */}
           {kindIsVisual(asset.kind) && (
@@ -619,7 +628,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         </div>
       )}
 
-      <AssetPreviewModalById id={previewingId} onClose={() => setPreviewingId(null)} />
+      <AssetPreviewModalById id={previewingId} onClose={closePreview} />
       <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
       {denoiseDialog}
       <RenameDialog

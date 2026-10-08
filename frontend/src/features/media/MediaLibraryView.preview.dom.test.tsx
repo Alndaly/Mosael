@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 /**
@@ -27,9 +27,11 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/features/media/recordingContext", () => ({ useRecorder: () => ({ openRecorder: vi.fn() }) }));
 vi.mock("@/features/media/UrlImportDialog", () => ({ UrlImportDialog: () => null }));
 const detail = vi.hoisted(() => vi.fn());
+const closeDetail = vi.hoisted(() => ({ current: () => {} }));
 vi.mock("@/features/media/AssetPreviewModalById", () => ({
-  AssetPreviewModalById: ({ id }: { id: string | null }) => {
+  AssetPreviewModalById: ({ id, onClose }: { id: string | null; onClose: () => void }) => {
     detail(id);
+    closeDetail.current = onClose;
     return null;
   },
 }));
@@ -82,6 +84,18 @@ it("点卡片本身照旧开详情,不开灯箱", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "still 名字" }));
   await waitFor(() => expect(detail).toHaveBeenCalledWith("still"));
   expect(openImagePreview).not.toHaveBeenCalled();
+});
+
+//: 体检 UM-24:键盘关掉详情之后焦点掉回 body,几百张的网格里得从顶上重新 Tab。
+it("关掉详情,焦点回到打开它的那张卡上", async () => {
+  mount();
+  const opener = await screen.findByRole("button", { name: "still 名字" });
+  opener.focus();
+  fireEvent.click(opener);
+  await waitFor(() => expect(detail).toHaveBeenCalledWith("still"));
+  (document.activeElement as HTMLElement | null)?.blur();
+  act(() => closeDetail.current());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "still 名字" })));
 });
 
 it("勾选模式里点「看大图」只看,不勾选", async () => {
