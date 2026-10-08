@@ -23,6 +23,7 @@ from app.db.models import GeneratedAsset, Job, ProviderUsageEvent
 from app.domain.generation import runner
 from app.domain.jobs import CANCELLED_ERROR_KEY
 from tests.test_interrupted_downloads_can_be_retrieved import SIGNED, _video_generation
+from tests.util import module_time
 
 USAGE = {"completion_tokens": 432000, "total_tokens": 432000}
 
@@ -33,9 +34,9 @@ def _no_sleep(monkeypatch):
     import app.core.http_retry as http_retry
     from app.ai import media_transfer
 
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(polling.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(media_transfer.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(polling, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(media_transfer, "time", module_time(sleep=lambda *_: None))
 
 
 def _ark(monkeypatch, answer) -> dict[str, list]:

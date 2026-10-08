@@ -24,6 +24,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import GenerationJob, Job, ProviderUsageEvent
 from app.domain.billing.usage import create_pricing_rule
 from app.domain.generation import runner
+from tests.util import module_time
 
 SEEDREAM = "doubao-seedream-4-0-250828"
 SEEDANCE = "doubao-seedance-2-0-260128"
@@ -33,7 +34,7 @@ SEEDANCE = "doubao-seedance-2-0-260128"
 def _no_sleep(monkeypatch):
     import app.core.http_retry as http_retry
 
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))
 
 
 def _post(url: str = "https://ark.example/api/v3/images/generations") -> httpx.Request:
