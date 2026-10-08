@@ -649,6 +649,7 @@ function Studio({
           workspace,
           project,
           projects: projects.data ?? [],
+          projectsLoad: { pending: projects.isPending, error: projects.isError ? projects.error : null, retrying: projects.isFetching, retry: () => void projects.refetch() },
           openProject,
           createProject: () => createProject.mutate(),
           creatingProject: createProject.isPending,

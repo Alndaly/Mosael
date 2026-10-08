@@ -18,10 +18,12 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({
 vi.mock("./AdminActivityChart", () => ({ AdminActivityChart: () => null }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 //: 登录着的是部署管理员 Boss(a1):他那一行的「重置密码」灰掉 —— 改自己的密码走「设置 → 账户」。
-vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "a1" } }) }));
+const viewer = vi.hoisted(() => ({ admin: true as boolean | undefined }));
+vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "a1" } }), useDeploymentAdmin: () => viewer.admin }));
 
 const rows: Array<Record<string, unknown>> = [];
 let overview: Record<string, unknown> = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
+let overviewFails = false;
 let openRegistration = true;
 /** 出站代理读得到什么:null = 读失败(后端拒了、或者断网)。 */
 let network: Record<string, unknown> | null = { proxy_url: "", no_proxy: "" };
@@ -57,7 +59,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   updateInstallSource: (body: { pip_index?: string }) => Promise.resolve({ pip_index: body.pip_index ?? "" }),
   adminOverview: (days: number) => {
     calls.overview(days);
-    return Promise.resolve({ ...overview, window_days: days });
+    return overviewFails ? Promise.reject(new Error("boom")) : Promise.resolve({ ...overview, window_days: days });
   },
   adminUsers: () => Promise.resolve(rows),
   setDeploymentAdmin: (id: string, granted: boolean) => {
@@ -132,6 +134,8 @@ beforeEach(() => {
   openRegistration = true;
   network = { proxy_url: "", no_proxy: "" };
   overview = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
+  overviewFails = false;
+  viewer.admin = true;
   for (const fn of Object.values(calls)) fn.mockClear();
 });
 
@@ -242,6 +246,41 @@ describe("概览", () => {
     expect(screen.queryByText(/16\.5/)).not.toBeInTheDocument();
     // 混着两种钱时,说清条形按哪种量、合计是多少(各币种一笔)。
     expect(screen.getByText("adminSpendCurrencyHint")).toBeInTheDocument();
+  });
+
+  //: 体检 UM-11 的过渡修法:不挂任务的用量列在最后一行「无归属」,各行加起来等于合计,并说清它是什么。
+  it("没记下是谁花的那部分列成「无归属」,条形淡一些,下面说清是哪些", async () => {
+    overview = {
+      window_days: 30,
+      jobs_by_day: [],
+      costs: [{ currency: "USD", micros: 8_000_000 }],
+      spend_by_user: [
+        { user_id: "u1", username: "demo", calls: 1, costs: [{ currency: "USD", micros: 1_000_000 }] },
+        { user_id: "", username: "", calls: 2, costs: [{ currency: "USD", micros: 7_000_000 }] },
+      ],
+    };
+    const { container } = show();
+    expect(await screen.findByText("adminNoOwner")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-spend-unattributed]")).toHaveLength(1);
+    expect(screen.getByText("adminSpendUnattributedHint")).toBeInTheDocument();
+  });
+
+  //: 体检 UM-21:取不回来时此前四个读数是「—」、「谁在花钱」写「还没有产生花费」+「去设置价格规则」。
+  it("概览取不回来:说取不回来、能重试,不画成「还没有产生花费」", async () => {
+    overviewFails = true;
+    show();
+    expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByText("adminNoSpendTitle")).toBeNull();
+    expect(screen.queryByText("adminStatUsers")).toBeNull();
+  });
+
+  it("不是部署管理员的人打开管理页:直接说这一页是谁的,不发那几个会 403 的请求", async () => {
+    viewer.admin = false;
+    const { container } = show();
+    expect(screen.getByText("adminOnlyTitle")).toBeInTheDocument();
+    expect(container.querySelector("[data-admin-forbidden]")).not.toBeNull();
+    expect(screen.queryByRole("group", { name: "adminTabsLabel" })).toBeNull();
+    expect(calls.overview).not.toHaveBeenCalled();
   });
 
   it("没有花费时给下一步:同一页的「成本规则」tab,不跳去设置页", async () => {

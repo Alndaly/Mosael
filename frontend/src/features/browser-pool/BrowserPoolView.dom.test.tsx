@@ -20,9 +20,10 @@ const base = {
   last_checked_at: null, last_error: null, shared: true,
 };
 let profiles: Array<Record<string, unknown>> = [];
+let failure: Error | null = null;
 const recheckPublishAccount = vi.fn();
 vi.mock("@/api/client", () => ({
-  listBrowserProfiles: () => Promise.resolve(profiles),
+  listBrowserProfiles: () => (failure ? Promise.reject(failure) : Promise.resolve(profiles)),
   listPublishPlatforms: () => Promise.resolve([{ platform: "bilibili", label: "Bilibili" }]),
   createBrowserProfile: vi.fn(), deleteBrowserProfile: vi.fn(), deletePublishAccount: vi.fn(),
   patchPublishAccount: vi.fn(), recheckPublishAccount: (id: string) => recheckPublishAccount(id), recordBrowserProfileOpened: vi.fn(),
@@ -39,6 +40,16 @@ function show() {
     </QueryClientProvider>,
   );
 }
+
+//: 体检 UM-21:取不回来时此前只剩标题和一个「0」,让人以为账号都没了、去重建。
+it("账号列表取不回来:说取不回来、能重试,不画成 0 个", async () => {
+  failure = new Error("boom");
+  const view = show();
+  expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
+  expect(view.container.querySelector("[data-pool-load-error]")).not.toBeNull();
+  expect(screen.queryByText("poolEmptyTitle")).toBeNull();
+  failure = null;
+});
 
 it("共享给我的账号:能打开,管理动作一个都不摆", async () => {
   profiles = [{ ...base, id: "p1", name: "同事的 B 站", bound_account_id: "a1", is_mine: false }];

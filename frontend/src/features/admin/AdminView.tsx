@@ -1,7 +1,11 @@
 import React from "react";
 
+import { ShieldCheck } from "lucide-react";
+
 import type { Workspace } from "@/api/client";
+import { useDeploymentAdmin } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useOpenRequest } from "@/lib/deepLink";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -57,6 +61,17 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
     const target = TABS.find((one) => one === link);
     if (target) setTab(target);
   });
+  //: 入口只对部署管理员显示,但地址(#/admin)谁都打得开。此前非管理员打开是四个「—」、「还没有产生花费」+「去设置价格规则」
+  //: —— 把 403 画成了空(体检 UM-21)。直接说这一页是谁的。
+  const admin = useDeploymentAdmin();
+  if (admin === false) {
+    return (
+      <div className={STUDIO_PAGE} data-admin-page data-admin-forbidden="">
+        <PageHeading title={t("navAdmin")} description={t("studioAdminDesc")} />
+        <EmptyState icon={<ShieldCheck size={22} />} title={t("adminOnlyTitle")} body={t("adminOnlyBody")} />
+      </div>
+    );
+  }
 
   return (
     <div className={STUDIO_PAGE} data-admin-page>

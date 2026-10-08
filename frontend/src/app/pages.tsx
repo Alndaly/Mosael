@@ -3,7 +3,7 @@ import React from "react";
 import type { ProjectWithStats, Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import type { StudioView } from "@/components/layout/navLabels";
-import { HomeView } from "@/features/home/HomeView";
+import { HomeView, type ProjectsLoad } from "@/features/home/HomeView";
 
 /**
  * **页面按需加载。** 打开一次素材库,不该先解析工作流的图编辑器、笔记的富文本内核和 3D 的
@@ -33,6 +33,8 @@ export type PageContext = {
   workspace: Workspace;
   project: ProjectWithStats | null;
   projects: ProjectWithStats[];
+  /** 项目列表取得怎样:首页要分得清「还没有项目」和「没取回来」。 */
+  projectsLoad: ProjectsLoad;
   openProject: (projectId: string) => void;
   createProject: () => void;
   creatingProject: boolean;
@@ -51,6 +53,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
     <HomeView
       workspace={ctx.workspace}
       projects={ctx.projects}
+      load={ctx.projectsLoad}
       onOpenProject={ctx.openProject}
     />
   ),

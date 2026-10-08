@@ -30,7 +30,8 @@ import { Truncate } from "@/components/ui/truncate";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -41,13 +42,18 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { toast } from "sonner";
 
 
+/** 项目列表取得怎样。列表在 App 里取(侧栏切项目也要它),首页只读这份状态。 */
+export type ProjectsLoad = { pending: boolean; error: unknown; retrying: boolean; retry: () => void };
+
 export function HomeView({
   workspace,
   projects,
+  load,
   onOpenProject,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
+  load: ProjectsLoad;
   onOpenProject: (projectId: string) => void;
 }) {
   const t = useI18n();
@@ -251,7 +257,13 @@ export function HomeView({
         </div>
       </div>
 
-      {projects.length === 0 ? (
+      {/* 「还没有项目」只在真取回来一个空列表时说:后端瞬断、升级重启时取不回来,此前也是这一句 + 「新建一个项目」,
+          看着像项目全丢了(体检 UM-21)。轮询中途失败、手上还有上一份的,照旧显示上一份。 */}
+      {projects.length === 0 && load.error ? (
+        <PageLoadError icon={<Clapperboard size={22} />} error={load.error} retrying={load.retrying} onRetry={load.retry} />
+      ) : projects.length === 0 && load.pending ? (
+        <LoadingState />
+      ) : projects.length === 0 ? (
         <EmptyState
           icon={<Clapperboard size={22} />}
           title={t("homeEmptyTitle")}

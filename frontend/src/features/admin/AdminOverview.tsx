@@ -4,7 +4,7 @@ import { Coins } from "lucide-react";
 
 import { adminOverview, type AdminOverview as Overview } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { RangePicker, useStatRange } from "@/components/app/RangePicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,6 +48,11 @@ export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () =
         <p className="m-0 text-ui-xs text-muted-foreground">{t("adminRangeScope")}</p>
       </div>
 
+      {/* 取不回来就说取不回来:此前四个读数是「—」、「谁在花钱」写「还没有产生花费」,像是这台部署什么都没发生(体检 UM-21)。 */}
+      {overview.isError && !stats ? (
+        <PageLoadError size="section" icon={<Coins size={20} />} error={overview.error} retrying={overview.isFetching} onRetry={() => void overview.refetch()} />
+      ) : (
+      <>
       <section data-admin-section="stats" aria-label={t("adminTabOverview")} className="@container/stats grid min-w-0">
         <div className="grid grid-cols-2 gap-3 @min-[760px]/stats:grid-cols-4">
           <StatTile loading={overview.isPending} label={t("adminStatUsers")} value={stats?.users} hint={stats && t("adminStatActive").replace("{n}", String(stats.active_users_7d))} />
@@ -92,6 +97,8 @@ export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () =
           </section>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -158,25 +165,33 @@ function SpendByPerson({
   }
   const primaryCurrency = stats?.costs?.[0]?.currency ?? "";
   const primaryMax = Math.max(0, ...spend.map((row) => microsIn(row.costs, primaryCurrency)));
+  //: 后端把没挂在任务上的用量(智能体对话、画板、工作流节点里的调用)列成最后一行、user_id 为空 —— 各行加起来才等于合计。
+  //: 此前它们整个不在图上,条形只有合计的零头(体检 UM-11)。按人记下来要等写入时带上是谁花的。
+  const unattributed = spend.some((row) => !row.user_id);
   return (
     <div className="grid gap-4">
       <ul className="m-0 grid list-none gap-3.5 p-0">
         {spend.map((row) => (
-          <li key={row.user_id || "unknown"} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-ui-sm">
-            <Truncate>{row.username || t("adminNoOwner")}</Truncate>
+          <li
+            key={row.user_id || "unknown"}
+            data-spend-unattributed={row.user_id ? undefined : ""}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-ui-sm"
+          >
+            <Truncate className={row.user_id ? undefined : "text-muted-foreground"}>{row.username || t("adminNoOwner")}</Truncate>
             {/* 金额**不设固定宽、不换行**:w-24 曾装不下「0.0007 USD · 6」,调用次数被挤到第二行。 */}
             <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
               {formatCosts(row.costs, locale)} · {row.calls}
             </span>
             <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-secondary">
               <span
-                className="block h-full rounded-full bg-[var(--chart-image)]"
+                className={row.user_id ? "block h-full rounded-full bg-[var(--chart-image)]" : "block h-full rounded-full bg-muted-foreground/40"}
                 style={{ width: `${Math.max(2, (microsIn(row.costs, primaryCurrency) / (primaryMax || 1)) * 100)}%` }}
               />
             </span>
           </li>
         ))}
       </ul>
+      {unattributed && <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("adminSpendUnattributedHint")}</p>}
       {(stats?.costs ?? []).length > 1 && (
         <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
           {t("adminSpendCurrencyHint")

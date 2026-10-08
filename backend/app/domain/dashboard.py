@@ -101,8 +101,12 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
         for offset in range(days)
     ]
 
+    # 素材的数和构成**按素材库的口径**:中间产物(逐句配音的一句……,ADR 0036)不算。此前把它们算进来,统计写
+    # 1267、点进素材库只有 282,构成被九百多段配音片段淹没(体检 UM-12)。
     kind_rows = db.execute(
-        select(Asset.kind, func.count()).where(Asset.workspace_id == workspace_id).group_by(Asset.kind)
+        select(Asset.kind, func.count())
+        .where(Asset.workspace_id == workspace_id, Asset.intermediate == "")
+        .group_by(Asset.kind)
     ).all()
     asset_kinds = {str(kind): int(count_) for kind, count_ in kind_rows}
     publish_platform_rows = db.execute(
@@ -130,7 +134,7 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
         usage_token_daily=usage.token_daily,
         usage_by_provider=usage.by_provider,
         project_count=count(scoped(Project)),
-        asset_count=count(scoped(Asset)),
+        asset_count=count(scoped(Asset).where(Asset.intermediate == "")),
         sequence_count=count(scoped(Sequence)),
         workflow_count=count(scoped(Workflow)),
         running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
@@ -171,20 +175,23 @@ def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, An
         total, failed = counted.get(day, (0, 0))
         jobs_by_day.append({"day": day, "total": total, "failed": failed})
     # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
+    # **连不上人的也要列出来**(外连接,落进 user_id 为空的「无归属」那一行):智能体对话、画板、工作流节点里的调用
+    # 不挂任务。此前内连接把它们整个丢掉,条形加起来只有合计的零头(体检 UM-11,维护者库上 94% 的美元花费归不到人)。
+    # 写入时就记下是谁花的,等 ADR 定(草稿 0050);在那之前至少让各行加起来等于合计。
     in_window = ProviderUsageEvent.created_at >= since
     calls = {
         user_id: (str(username or ""), int(count_ or 0))
         for user_id, username, count_ in db.execute(
             select(Job.created_by, User.username, func.count())
             .select_from(ProviderUsageEvent)
-            .join(Job, Job.id == ProviderUsageEvent.job_id)
+            .join(Job, Job.id == ProviderUsageEvent.job_id, isouter=True)
             .join(User, User.id == Job.created_by, isouter=True)
             .where(in_window)
             .group_by(Job.created_by, User.username)
         ).all()
     }
     spent = costs_by_currency(
-        db, in_window, group_by=(Job.created_by,), join=((Job, Job.id == ProviderUsageEvent.job_id),)
+        db, in_window, group_by=(Job.created_by,), join=((Job, Job.id == ProviderUsageEvent.job_id),), outer=True
     )
     totals = costs_by_currency(db, in_window).get((), [])
     # **排序不把各币种加起来比。**按这台部署的主要币种(计过价次数最多的那种)上的金额排,
@@ -195,21 +202,24 @@ def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, An
     def primary_micros(costs: list[CostAmount]) -> int:
         return next((amount.micros for amount in costs if amount.currency == primary), 0)
 
-    ranked = sorted(
-        calls.items(),
+    # 「无归属」那一行排在最后:它是没记下是谁的余数,不是一个可以去谈的人;前二十名也给它留一个位置。
+    people = sorted(
+        ((user_id, row) for user_id, row in calls.items() if user_id is not None),
         key=lambda item: (primary_micros(spent.get((item[0],), [])), item[1][1]),
         reverse=True,
-    )
+    )[:20]
+    unattributed = [(None, calls[None])] if None in calls else []
+    ranked = people + unattributed
     return dict(
         costs=totals,
         users=db.scalar(select(func.count()).select_from(User)) or 0,
         active_users_7d=int(active or 0),
         workspaces=db.scalar(select(func.count()).select_from(Workspace)) or 0,
-        assets=db.scalar(select(func.count()).select_from(Asset)) or 0,
+        assets=db.scalar(select(func.count()).select_from(Asset).where(Asset.intermediate == "")) or 0,
         jobs_by_day=jobs_by_day,
         spend_by_user=[
             {"user_id": str(user_id or ""), "username": username, "costs": spent.get((user_id,), []), "calls": count_}
-            for user_id, (username, count_) in ranked[:20]
+            for user_id, (username, count_) in ranked
         ],
         window_days=days,
     )

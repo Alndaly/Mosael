@@ -27,7 +27,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -249,6 +249,16 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
 
   // 空池沿用工作流空页：去掉只剩标题和重复操作的顶栏，让说明与下一步动作一起落在
   // 页面中心。这样中心按整个内容区计算，不会被一条没有内容价值的顶栏向下推。
+  //: 取不回来不是「0 个」:此前只剩标题和一个「0」,让人以为账号都没了、去重建(体检 UM-21)。
+  if (profiles.isError && items.length === 0) {
+    return (
+      <div className={STUDIO_PAGE} data-pool-load-error="">
+        <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} />
+        <PageLoadError icon={<Boxes size={22} />} error={profiles.error} retrying={profiles.isFetching} onRetry={() => void profiles.refetch()} />
+      </div>
+    );
+  }
+
   if (profiles.isSuccess && items.length === 0) {
     return (
       <div className={STUDIO_PAGE}>

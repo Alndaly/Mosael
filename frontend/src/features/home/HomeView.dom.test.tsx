@@ -25,6 +25,7 @@ const projects = [
   // 封面由后端算好给(时间线上最早出现的画面),卡片只管画。
   { id: "newer", name: "Newer film", updated_at: "2026-09-06", created_at: "2026-09-01", cover_asset_id: "cover" },
 ] as ProjectWithStats[];
+const loaded = { pending: false, error: null, retrying: false, retry: vi.fn() };
 function provider(children: React.ReactNode) {
   return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>;
 }
@@ -32,7 +33,7 @@ beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
 it("opens and filters projects in both presentations and draws the cover the backend picked", async () => {
   const open = vi.fn();
-  const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
+  const view = render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={open} />));
   const header = screen.getByRole("banner");
   expect(view.container.firstElementChild?.firstElementChild).toBe(header);
   expect(within(header).getByText("Studio A")).toBeVisible();
@@ -63,7 +64,7 @@ it("opens and filters projects in both presentations and draws the cover the bac
 
 it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不是打开", async () => {
   const open = vi.fn();
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={open} />));
 
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Newer film" }));
@@ -78,7 +79,7 @@ it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不�
 });
 
 it("选择模式下点这一行的空白处也能勾上", () => {
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   const row = screen.getByRole("button", { name: "mediaSelectMode: Older film" }).closest("article")!;
@@ -91,7 +92,7 @@ it("选择模式下点这一行的空白处也能勾上", () => {
 
 it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开", () => {
   const open = vi.fn();
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={open} />));
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   const row = screen.getByRole("button", { name: "homeOpenEditor: Older film" }).closest("article")!;
   fireEvent.click(row);
@@ -103,13 +104,13 @@ it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开
 });
 
 it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺底,不在整张卡外面再套一圈", async () => {
-  const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  const view = render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
   fireEvent.click(screen.getByRole("button", { name: "createProject" }));
   const naming = await screen.findByRole("dialog");
   fireEvent.click(within(naming).getByRole("button", { name: "createProjectConfirm" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   const created = { id: "brand-new", name: "Brand new", updated_at: "2026-09-24", created_at: "2026-09-24" } as ProjectWithStats;
-  view.rerender(provider(<HomeView workspace={workspace} projects={[created, ...projects]} onOpenProject={vi.fn()} />));
+  view.rerender(provider(<HomeView workspace={workspace} projects={[created, ...projects]} load={loaded} onOpenProject={vi.fn()} />));
 
   const card = view.container.querySelector('[data-project-id="brand-new"]')!;
   expect(card.className).not.toMatch(/\bring-/);
@@ -124,7 +125,7 @@ it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺
 //: 和时间线同一条规则:右键的那一项在选区里,菜单作用于整个选区、只给能对一批做的动作;不在,就只是它自己。
 //: 此前多选着右键一项,菜单给的是单条的重命名 / 删除 —— 看着像批量删,实际只删了被点的那一条。
 it("多选时右键选区里的一项:菜单作用于整个选区;右键选区外的一项只作用于它自己", async () => {
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
@@ -147,9 +148,34 @@ it("多选时右键选区里的一项:菜单作用于整个选区;右键选区�
 it("切到「最近」再回「全部」,排序还是人选的那一种", () => {
   localStorage.setItem("mosael:tab:home-collection", "all");
   localStorage.setItem("mosael:tab:home-sort", "name");
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
   fireEvent.click(screen.getByRole("button", { name: "homeRecent" }));
   expect(localStorage.getItem("mosael:tab:home-sort")).toBe("name");
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   expect(screen.getByRole("combobox", { name: "sortUpdated" })).toHaveTextContent("sortName");
+});
+
+//: 体检 UM-21:项目列表取不回来时,此前也是「还没有项目 / 新建一个项目」—— 后端瞬断、升级重启时看着像项目全丢了。
+it("项目没取回来时说没取回来、能重试,不说「还没有项目」;取回来是空的才说", () => {
+  const retry = vi.fn();
+  const view = render(provider(
+    <HomeView workspace={workspace} projects={[]} load={{ pending: false, error: new Error("boom"), retrying: false, retry }} onOpenProject={vi.fn()} />,
+  ));
+  expect(screen.queryByText("homeEmptyTitle")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+  expect(retry).toHaveBeenCalled();
+
+  view.rerender(provider(<HomeView workspace={workspace} projects={[]} load={{ ...loaded, pending: true }} onOpenProject={vi.fn()} />));
+  expect(screen.queryByText("homeEmptyTitle")).toBeNull();
+
+  view.rerender(provider(<HomeView workspace={workspace} projects={[]} load={loaded} onOpenProject={vi.fn()} />));
+  expect(screen.getByText("homeEmptyTitle")).toBeTruthy();
+});
+
+it("轮询中途失败、手上还有上一份时照旧列项目", () => {
+  render(provider(
+    <HomeView workspace={workspace} projects={projects} load={{ ...loaded, error: new Error("boom") }} onOpenProject={vi.fn()} />,
+  ));
+  expect(screen.getAllByText("Newer film").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
 });

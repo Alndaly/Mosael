@@ -178,9 +178,14 @@ export function useAuth(): AuthState {
  * **藏起来的入口不是权限**:后端每条 /api/admin 路由各自把关,这里只是不给不相干的人添乱。
  */
 export function useIsDeploymentAdmin(): boolean {
+  return useDeploymentAdmin() ?? false;
+}
+
+/** 同上,但分得清「还不知道」:`/me` 还没回来是 undefined。管理页要据此决定是等一下,还是说「这一页只给部署管理员」。 */
+export function useDeploymentAdmin(): boolean | undefined {
   const me = useQuery({
     queryKey: ["auth-me"],
     queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me"),
   });
-  return me.data?.is_deployment_admin ?? false;
+  return me.data?.is_deployment_admin;
 }

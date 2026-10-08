@@ -56,11 +56,13 @@ def costs_by_currency(
     *where: Any,
     group_by: Iterable[Any] = (),
     join: Iterable[tuple[Any, Any]] = (),
+    outer: bool = False,
 ) -> dict[tuple[Any, ...], list[CostAmount]]:
     """按币种汇总计过价的用量事件 —— **全仓唯一一处把 cost_micros 加起来的地方。**
 
     `where` 是筛选条件,`group_by` 是除币种之外还要分的组(哪一天、哪家供应商、哪个人),
-    `join` 是 `(表, on 条件)`,给那些要顺着别的表才分得了组的汇总(按人要经过 jobs)。
+    `join` 是 `(表, on 条件)`,给那些要顺着别的表才分得了组的汇总(按人要经过 jobs);`outer` 让连不上的事件
+    也留下、落进键为 None 的那一组(按人分时就是「无归属」),而不是从汇总里消失。
     返回 `{分组键: [CostAmount, …]}`;不分组时键是 `()`。
 
     SQL 里 `GROUP BY 币种`:加法只发生在同一个币种之内,调用方想加错都没有机会。
@@ -77,7 +79,7 @@ def costs_by_currency(
         func.count(),
     ).select_from(ProviderUsageEvent)
     for target, onclause in join:
-        stmt = stmt.join(target, onclause)
+        stmt = stmt.join(target, onclause, isouter=outer)
     #: 没花的钱不是钱:免费的引擎(`free`)、失败了服务商什么都没回(`not_billed`)都记 0,混进来的话账上会冒出一笔
     #: 「$0.00」—— 一个人民币部署里一笔美元的零,一次没扣钱的失败显示成「费用 US$0.00」(没定价的模型失败了,币种
     #: 只能猜成美元),还按次数把它排成主要币种。界面另说「未扣费」(见 NOT_SPENT)。
