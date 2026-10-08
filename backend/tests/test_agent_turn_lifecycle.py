@@ -219,6 +219,7 @@ def test_后端重启作废的卡和别的作废同一种状态() -> None:
         db.get(AgentSession, sid).status = "running"
         db.commit()
         assert host.reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()  # 启动收尾的几步不各自提交,由 restart.settle_previous_run 收完一起提交(ADR 0018 修订)
     card = _card(card_id)
     assert (card.status, card.error) == ("expired", "backend_restarted")
 
