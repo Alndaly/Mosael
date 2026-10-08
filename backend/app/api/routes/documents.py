@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentTextOut, DocumentPagesRequest, DocumentParseRequest, ExtractionSectionsOut
@@ -106,4 +107,4 @@ def get_extraction_file(asset_id: str, extraction_id: str, path: str, db: DbSess
     target = (root / path).resolve()
     if not (target.is_relative_to(root / "pages") or target.is_relative_to(root / "images")) or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(target)
+    return file_response(db, target)

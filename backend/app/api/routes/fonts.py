@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import FontOut
@@ -47,7 +48,7 @@ def get_font_file(font_id: str, db: DbSession, user: CurrentUser) -> FileRespons
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Font file is missing")
     suffix = path.suffix.lower()
-    return FileResponse(path, media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"))
+    return file_response(db, path, media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"))
 
 
 @router.delete("/fonts/{font_id}", status_code=204)

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from app.api.responses import file_response
 from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.config import settings
@@ -68,7 +68,8 @@ def receive(scene_id: str, transfer_id: str, workspace_id: str, db: Tx, user: Cu
 @router.get('/{scene_id}/blender/{transfer_id}/project')
 def project(scene_id: str, transfer_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     path = use_cases.project_file(db, user, workspace_id, scene_id, transfer_id)
-    return FileResponse(path, filename='Mosael.blend', media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store'})
+    return file_response(db, path, filename='Mosael.blend', media_type='application/octet-stream',
+                         headers={'Cache-Control': 'private, no-store'})
 
 
 # ---- 智能体用的那几条(见 domain/blender/agent.py)。跑代码不在这里:它只走确认卡。 ----

@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -228,7 +229,7 @@ def get_user_avatar(user_id: str, db: DbSession, user: CurrentUser) -> FileRespo
     if not path.is_file():
         raise HTTPException(status_code=404, detail="No avatar")
     media_type = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}.get(path.suffix.lstrip("."), "application/octet-stream")
-    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=86400"})
+    return file_response(db, path, media_type=media_type, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("/auth/me/password")

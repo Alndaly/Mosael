@@ -9,6 +9,8 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
+
+from app.api.responses import event_stream
 from sqlalchemy import select
 
 from app.core.i18n import tr
@@ -291,12 +293,15 @@ def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> R
 
 
 @router.get("/agent/sessions/{session_id}/stream", response_model=AgentStreamEvent)
-async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> StreamingResponse:
+def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> StreamingResponse:
     """SSE: live token stream of the in-flight turn (snapshots, then done).
 
     `response_model` 在这里**只为把帧的形状写进 openapi**:返回的是 `StreamingResponse`,
     FastAPI 对直接返回的 Response 不做序列化,所以它不影响流本身。有了它,前端两个消费者
     就从生成类型取形状,不再各写一份 `as {...}` 断言 —— 那两份此前已经不一样了。
+
+    **端点本身是同步的**:查权限要碰库,放在事件循环上做会卡住所有请求(见 api/responses 和那条棘轮);
+    流本身是一个异步生成器,照旧在事件循环上一帧一帧发。发之前把会话还掉 —— 这一轮跑多久,流就开多久。
     """
     readable_session(db, user, session_id)
 
@@ -319,7 +324,8 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
                 break
             await asyncio.sleep(0.1)
 
-    return StreamingResponse(
+    return event_stream(
+        db,
         generator(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

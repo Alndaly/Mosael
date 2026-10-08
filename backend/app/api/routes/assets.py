@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
@@ -438,7 +439,7 @@ def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileRespo
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset file missing")
     media_type = mimetypes.guess_type(asset.original_filename or path.name)[0] or "application/octet-stream"
-    return FileResponse(path, media_type=media_type, filename=asset.original_filename or path.name)
+    return file_response(db, path, media_type=media_type, filename=asset.original_filename or path.name)
 
 
 @router.get("/assets/{asset_id}/preview")
@@ -458,7 +459,7 @@ def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileRe
     if compatible is None:
         raise HTTPException(status_code=422, detail="Image preview could not be generated")
     preview, media_type = compatible
-    return FileResponse(preview, media_type=media_type)
+    return file_response(db, preview, media_type=media_type)
 
 
 @router.get("/assets/{asset_id}/thumbnail")
@@ -470,7 +471,7 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
         generate_thumbnail(source, asset.kind, source.parent)  # backfill for pre-thumbnail imports
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
-    return FileResponse(thumb, media_type=THUMBNAIL_MEDIA_TYPE)
+    return file_response(db, thumb, media_type=THUMBNAIL_MEDIA_TYPE)
 
 
 @router.post("/assets/{asset_id}/frame", response_model=AssetOut)
@@ -500,7 +501,7 @@ def get_asset_filmstrip(asset_id: str, db: DbSession, user: CurrentUser) -> File
         generate_filmstrip(source, asset.kind, source.parent)
     if not strip.is_file():
         raise HTTPException(status_code=404, detail="Filmstrip not available")
-    return FileResponse(strip, media_type="image/jpeg")
+    return file_response(db, strip, media_type="image/jpeg")
 
 
 @router.get("/assets/{asset_id}/waveform")
@@ -509,7 +510,7 @@ def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileR
     waveform = waveform_path(resolve_key(asset.file_key).parent)
     if not waveform.is_file():
         raise HTTPException(status_code=404, detail="Waveform not available")
-    return FileResponse(waveform, media_type="application/json")
+    return file_response(db, waveform, media_type="application/json")
 
 
 @router.get("/assets/{asset_id}/proxy")
@@ -519,7 +520,7 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
     proxy = proxy_path(resolve_key(asset.file_key).parent)
     if not proxy.is_file():
         raise HTTPException(status_code=404, detail="Proxy not available")
-    return FileResponse(proxy, media_type="video/mp4")
+    return file_response(db, proxy, media_type="video/mp4")
 
 
 @router.get("/assets/{asset_id}/audio-proxy")
@@ -532,7 +533,7 @@ def get_asset_audio_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> Fi
     proxy = audio_proxy_path(resolve_key(asset.file_key).parent)
     if not proxy.is_file():
         raise HTTPException(status_code=404, detail="Audio proxy not available")
-    return FileResponse(proxy, media_type="audio/mp4")
+    return file_response(db, proxy, media_type="audio/mp4")
 
 
 

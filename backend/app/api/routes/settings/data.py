@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
+from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession
 from app.domain.data_management import RestoreValidationError, create_backup_archive, stage_restore_archive
@@ -18,7 +19,8 @@ def download_backup(db: DbSession, user: CurrentUser) -> FileResponse:
     ensure_deployment_admin(db, user)
     archive = create_backup_archive()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return FileResponse(
+    return file_response(
+        db,
         archive,
         media_type="application/zip",
         filename=f"Mosael-{stamp}.mosael-backup",

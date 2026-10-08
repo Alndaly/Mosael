@@ -36,6 +36,7 @@ from app.core.i18n import LocalizedError, tr
 from app.api.deps import DbSession
 from app.api.routes.auth import current_user_out
 from app.core.config import settings
+from app.core.db import SessionLocal
 from app.core.security import mint_login_session
 from app.db.models import OAuthIdentity, User
 from app.domain import members
@@ -144,10 +145,16 @@ def callback_get(provider: str, request: Request, db: DbSession) -> HTMLResponse
 
 
 @router.post("/auth/oauth/{provider}/callback")
-async def callback_post(provider: str, request: Request, db: DbSession) -> HTMLResponse:
+async def callback_post(provider: str, request: Request) -> HTMLResponse:
     form = await request.form()  # Apple 的 form_post 回调
-    # 换 token 是一次阻塞的网络请求:交给线程池,别在事件循环上等供应商。
-    return await run_in_threadpool(_handle_callback, provider, {k: str(v) for k, v in form.items()}, db)
+    # 换 token 是一次阻塞的网络请求、落库也是:都交给线程池,会话在那边开、在那边关 —— async 端点不拿
+    # 请求会话(见 tests/test_async_routes_do_not_touch_the_database)。
+    return await run_in_threadpool(_handle_callback_in_own_session, provider, {k: str(v) for k, v in form.items()})
+
+
+def _handle_callback_in_own_session(provider: str, params: dict[str, str]) -> HTMLResponse:
+    with SessionLocal() as db:
+        return _handle_callback(provider, params, db)
 
 
 def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTMLResponse:

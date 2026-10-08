@@ -140,10 +140,10 @@ def read_skill_file(workspace_id: str, ref: str, path: str, db: DbSession, user:
 
 
 @router.put("/workspaces/{workspace_id}/skills/{ref}/files/{path:path}", response_model=AgentSkillDetailOut)
-async def put_skill_file(workspace_id: str, ref: str, path: str, db: Tx, user: CurrentUser,
-                         file: UploadFile = File(...)) -> dict:
-    """加 / 换技能里的一个文件(SKILL.md 走表单)。"""
-    data = await file.read()
+def put_skill_file(workspace_id: str, ref: str, path: str, db: Tx, user: CurrentUser,
+                   file: UploadFile = File(...)) -> dict:
+    """加 / 换技能里的一个文件(SKILL.md 走表单)。同步端点:要写库,不能在事件循环上做。"""
+    data = file.file.read()
     return _detail(use_cases.put_file(db, user, workspace_id, ref, path, data))
 
 
@@ -153,7 +153,7 @@ def delete_skill_file(workspace_id: str, ref: str, path: str, db: Tx, user: Curr
 
 
 @router.post("/workspaces/{workspace_id}/skill-imports", response_model=AgentSkillImportOut)
-async def stage_skill_import(
+def stage_skill_import(
     workspace_id: str,
     db: Tx,
     user: CurrentUser,
@@ -163,9 +163,9 @@ async def stage_skill_import(
     source_name: str = Form(default=""),
 ) -> dict:
     """导入第一步:收一个 `.zip`(`archive`),或者一个文件夹里的全部文件(`files` 与同序的相对路径 `paths`)。
-    读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。"""
+    读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。同步端点:解包、写库都不该在事件循环上做。"""
     if archive is not None:
-        data = await archive.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+        data = archive.file.read(MAX_IMPORT_UPLOAD_BYTES + 1)
         if len(data) > MAX_IMPORT_UPLOAD_BYTES:
             raise SkillDomainError("skillErr_archiveTooLarge", limit=MAX_IMPORT_UPLOAD_BYTES // (1024 * 1024))
         return use_cases.stage_import(db, user, workspace_id, archive=data,
@@ -177,7 +177,7 @@ async def stage_skill_import(
     collected: dict[str, bytes] = {}
     total = 0
     for upload, relative in zip(files, paths, strict=True):
-        data = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+        data = upload.file.read(MAX_IMPORT_UPLOAD_BYTES + 1)
         total += len(data)
         if total > MAX_IMPORT_UPLOAD_BYTES:
             raise SkillDomainError("skillErr_archiveTooLarge", limit=MAX_IMPORT_UPLOAD_BYTES // (1024 * 1024))

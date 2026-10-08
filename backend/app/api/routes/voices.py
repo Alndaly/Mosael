@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.voices.transcription import ASRError
@@ -192,7 +193,7 @@ def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileRespons
     path = voices.reference_path(voice)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=tr("routeErr_referenceAudioMissing"))
-    return FileResponse(path, media_type="audio/wav")
+    return file_response(db, path, media_type="audio/wav")
 
 
 @router.post("/voices/{voice_id}/synthesize", response_model=JobOut)

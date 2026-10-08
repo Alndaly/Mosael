@@ -7521,6 +7521,9 @@ export interface paths {
          *     `response_model` 在这里**只为把帧的形状写进 openapi**:返回的是 `StreamingResponse`,
          *     FastAPI 对直接返回的 Response 不做序列化,所以它不影响流本身。有了它,前端两个消费者
          *     就从生成类型取形状,不再各写一份 `as {...}` 断言 —— 那两份此前已经不一样了。
+         *
+         *     **端点本身是同步的**:查权限要碰库,放在事件循环上做会卡住所有请求(见 api/responses 和那条棘轮);
+         *     流本身是一个异步生成器,照旧在事件循环上一帧一帧发。发之前把会话还掉 —— 这一轮跑多久,流就开多久。
          */
         get: operations["stream_agent_turn_api_agent_sessions__session_id__stream_get"];
         put?: never;
@@ -7919,7 +7922,7 @@ export interface paths {
         get: operations["read_skill_file_api_workspaces__workspace_id__skills__ref__files__path__get"];
         /**
          * Put Skill File
-         * @description 加 / 换技能里的一个文件(SKILL.md 走表单)。
+         * @description 加 / 换技能里的一个文件(SKILL.md 走表单)。同步端点:要写库,不能在事件循环上做。
          */
         put: operations["put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"];
         post?: never;
@@ -7942,7 +7945,7 @@ export interface paths {
         /**
          * Stage Skill Import
          * @description 导入第一步:收一个 `.zip`(`archive`),或者一个文件夹里的全部文件(`files` 与同序的相对路径 `paths`)。
-         *     读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。
+         *     读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。同步端点:解包、写库都不该在事件循环上做。
          */
         post: operations["stage_skill_import_api_workspaces__workspace_id__skill_imports_post"];
         delete?: never;

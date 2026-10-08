@@ -462,7 +462,7 @@ def export_subtitles(
 
 
 @router.post("/sequences/{sequence_id}/subtitles/import", response_model=SubtitleImportOut)
-async def import_subtitles(
+def import_subtitles(
     sequence_id: str,
     db: Tx,
     user: CurrentUser,
@@ -480,7 +480,9 @@ async def import_subtitles(
     from app.media.subtitle_files import SubtitleFileError
 
     require_sequence_access(db, user, sequence_id, perm="edit")
-    data = await file.read(_SUBTITLE_FILE_LIMIT + 1)
+    # 同步读(上传已经落在临时文件里):这个端点要做一整串库操作,不能是 async —— 在事件循环上做,导入两千条
+    # 字幕的那十几秒里所有请求(播放、SSE、别的页面)都停着。见 tests/test_async_routes_do_not_touch_the_database。
+    data = file.file.read(_SUBTITLE_FILE_LIMIT + 1)
     if len(data) > _SUBTITLE_FILE_LIMIT:
         raise HTTPException(status_code=413, detail=tr("subfileErr_tooLarge"))
     sequence = db.get(Sequence, sequence_id)

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, Response
 from fastapi.responses import FileResponse
+from app.api.responses import file_response
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.scenes import (SceneCreate, SceneOperations, SceneOut, SceneReferenceOut,
@@ -40,7 +41,7 @@ def preview_image(scene_id: str, workspace_id: str, db: DbSession, user: Current
     """画板 3D 场景格上的全景白模(JPEG)。`<img>` 带不了请求头,凭据走 `?token=`;调用方在地址里带上修订号,
     场景一改地址就变,浏览器缓存不会给出旧图。"""
     path = use_cases.overview_image(db, user, workspace_id, scene_id)
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+    return file_response(db, path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/scenes/{scene_id}/revisions")
@@ -84,8 +85,8 @@ def model_data(model_id: str, workspace_id: str, db: DbSession, user: CurrentUse
     # 每个并发下载各占一份内存。FileResponse 走 sendfile,顺带自带 Range 支持。
     if not path.is_file():
         raise HTTPException(404, tr("routeErr_modelFileGone"))
-    return FileResponse(path, media_type="model/gltf-binary" if model.format == "glb" else "model/gltf+json",
-                        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+    return file_response(db, path, media_type="model/gltf-binary" if model.format == "glb" else "model/gltf+json",
+                         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @router.post('/scenes/{scene_id}/operations', response_model=SceneOut)
