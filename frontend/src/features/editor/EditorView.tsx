@@ -94,6 +94,7 @@ import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
+import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
 export function EditorView({
   workspace,
@@ -940,6 +941,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   // 素材拖入时间线走 dnd-kit(指针传感器,移动 6px 才起手,不吃普通点击/右键菜单)。
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const dndAccessibility = useDndAccessibility();
   const [dragOverlayAsset, setDragOverlayAsset] = React.useState<AssetCard | null>(null);
   const onAssetDragStart = (event: DragStartEvent) => {
     const asset = event.active.data.current?.asset as AssetCard | undefined;
@@ -999,6 +1001,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   return (
     <DndContext
       sensors={dndSensors}
+      accessibility={dndAccessibility}
       collisionDetection={pointerWithin}
       onDragStart={onAssetDragStart}
       onDragEnd={onAssetDragStop}

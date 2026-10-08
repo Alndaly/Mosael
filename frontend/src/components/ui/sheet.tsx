@@ -10,6 +10,7 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
+import { useCloseLabel } from "./closeLabel"
 
 /**
  * 贴着屏幕一侧滑出的面板。
@@ -40,6 +41,7 @@ const SheetContent = React.forwardRef<
 >(({ className, children, side = "right", showClose = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),和 Dialog 同一个理由。见 hook 注释。
   useModalTeardownGuard()
+  const closeLabel = useCloseLabel()
   return (
     <SheetPortal>
       <DialogPrimitive.Overlay
@@ -66,7 +68,7 @@ const SheetContent = React.forwardRef<
         {showClose && (
           <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{closeLabel}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

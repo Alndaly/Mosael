@@ -286,6 +286,13 @@ export const shell = {
   cancel: "取消",
   confirm: "确认",
   close: "关闭",
+  //: 能拖着排序的列表给读屏的说明和播报(dnd-kit 默认是英文,还念内部 id)
+  dndInstructions: "这一项可以按住拖动,换到别的位置。",
+  dndPickedUp: "已拿起。",
+  dndMovedOver: "移到了另一项的位置上。",
+  dndMovedNowhere: "这里放不下。",
+  dndDropped: "已放下。",
+  dndCancelled: "已取消拖动,回到原处。",
   browserPreviewTitle: "浏览器预览",
   browserPreviewNoPixels: "后台运行中,暂无画面",
   browserPreviewNoPixelsDone: "已结束,无画面留存",

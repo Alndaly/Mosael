@@ -34,8 +34,11 @@ it("hiding comments preserves their data and exits editing", async () => {
   expect(screen.getByText("Existing comment")).toBeInTheDocument();
   expect(container.querySelector("[data-workflow-comment]")).toHaveClass("pointer-events-none");
   expect(screen.getByRole("button", { name: "comments 1" })).toHaveStyle({ pointerEvents: "auto" });
+  //: 名字说的是点了会怎样,所以它是动作按钮、不带 aria-pressed —— 此前评论显示着时读屏念「隐藏评论,已按下」。
+  expect(screen.getByRole("button", { name: "commentsHide" })).not.toHaveAttribute("aria-pressed");
   fireEvent.click(screen.getByRole("button", { name: "commentsHide" }));
   expect(container.querySelector("[data-workflow-comment]")).toBeNull();
+  expect(screen.getByRole("button", { name: "commentsShow" })).not.toHaveAttribute("aria-pressed");
   expect(screen.getByRole("button", { name: "boardCommentMode" })).toHaveAttribute("aria-pressed", "false");
   fireEvent.click(screen.getByRole("button", { name: "commentsShow" }));
   expect(screen.getByRole("button", { name: "comments 1" })).toHaveAttribute("tabindex", "-1");

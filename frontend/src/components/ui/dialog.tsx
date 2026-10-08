@@ -10,6 +10,7 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
+import { useCloseLabel } from "./closeLabel"
 import { StepNativeViewAside } from "./nativeViewAside"
 import { useOverChromeModal } from "./overChromeModal"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
@@ -48,6 +49,7 @@ const DialogContent = React.forwardRef<
   useModalTeardownGuard()
   //: 从工作台那一列里打开的:抬过外壳、请原生视图让开(见 overChromeModal)
   const { layer, aside } = useOverChromeModal()
+  const closeLabel = useCloseLabel()
   return (
   <DialogPortal>
     {/* 遮罩一直挂着:卸掉再挂回来会排到内容后面、盖住弹窗(见 appChrome) */}
@@ -72,7 +74,7 @@ const DialogContent = React.forwardRef<
       {showClose && (
         <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>

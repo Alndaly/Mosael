@@ -58,6 +58,7 @@ import { importEach, importFailureText } from "@/lib/importEach";
 import { cn } from "@/lib/utils";
 import { useCatalogLabels } from "@/features/entities/entityMeta";
 import { LibraryPickerDialog } from "@/features/entities/LibraryPickerDialog";
+import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
 const WALL_ID = "entity-wall";
 
@@ -175,6 +176,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
   };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const dndAccessibility = useDndAccessibility();
   const onDragEnd = (event: DragEndEvent) => {
     const active = String(event.active.id);
     const over = event.over ? String(event.over.id) : null;
@@ -190,7 +192,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
 
   const busy = drop.active || upload.isPending;
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} accessibility={dndAccessibility} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <section className="grid min-w-0 content-start gap-4" aria-label={t("entityReferences")} data-reference-wall="">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="grid min-w-0 gap-0.5">

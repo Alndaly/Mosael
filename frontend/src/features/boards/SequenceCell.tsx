@@ -26,6 +26,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
+import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
 /** 贴着格子外壳内沿上半的圆角(和 boardNodes 的 CELL_INNER_TOP_RADIUS 同一个值:外壳 rounded-xl 减 1px 边框)。 */
 const CELL_INNER_TOP_RADIUS = "rounded-t-[calc(var(--radius-xl)-1px)]";
@@ -149,6 +150,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   //: 正在拖的那一段和拖动开始时的画布缩放(见 SortableTile)。
   const [dragging, setDragging] = React.useState<{ id: string; zoom: number } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_THRESHOLD } }));
+  const dndAccessibility = useDndAccessibility();
   const scrubbing = React.useRef(false);
 
   //: 播放:按真实时间往前走,走到头停。画面、声音各自按「这一刻该在哪一段的哪一秒」跟上。
@@ -376,6 +378,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
           ) : (
             <DndContext
               sensors={sensors}
+              accessibility={dndAccessibility}
               collisionDetection={closestCenter}
               onDragStart={({ active }) => {
                 //: 格子在画布里是缩放过的:拖动库量的是屏幕像素,段自己挪的是条里的像素,开拖时记下两者之比。

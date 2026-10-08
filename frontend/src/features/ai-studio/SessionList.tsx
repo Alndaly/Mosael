@@ -36,6 +36,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
+import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
 /**
  * 行上多说的一句和多出的一颗按钮(对话列表:「在剪辑《A》里开的」和「回到那里」,ADR 0044 §5)。生成会话没有,不给。
@@ -294,6 +295,7 @@ export function SessionList<S extends ListedSession>({
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
   // 6px 起手:和剪辑页拖素材同一套 —— 不吃普通点击,也不吃右键菜单。
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const dndAccessibility = useDndAccessibility();
 
   const containerOf = (id: string) =>
     Object.keys(containers).find((key) => containers[key].includes(id)) ?? UNGROUPED;
@@ -409,6 +411,7 @@ export function SessionList<S extends ListedSession>({
       </div>
       <DndContext
         sensors={sensors}
+        accessibility={dndAccessibility}
         collisionDetection={pointerWithin}
         onDragStart={(event: DragStartEvent) => setDraggingId(String(event.active.id))}
         onDragEnd={onDragEnd}
