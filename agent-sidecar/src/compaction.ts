@@ -46,6 +46,25 @@ export const COMPACT_RATIO = 0.8;
 /** 摘要之后保留的最近消息条数。太少会丢掉正在进行的那件事的上下文,太多则压不下来。 */
 export const KEEP_RECENT = 8;
 
+/**
+ * 压完之后整段(固定开销 + 交接说明 + 留下的原文)的目标:窗口的这么多。
+ *
+ * 此前只按**条数**留最近 8 条:本机模型(窗口查不到,按 64K 回退)上,工具定义加系统提示本身就占六成,8 条长回答再加上去,
+ * 压完仍在 80% 的线上 —— 于是**每一轮都压一次、每一次都压不下去**,每轮多付一次摘要的钱(智能体那一路 AGENT-6,假模型复现:
+ * 第 5 轮起每轮都压,压完水位停在 83.6%)。现在留多少按 token 算:压到这条线以下,留不下的原文进交接说明;最近那一问一答
+ * 无论如何都留着(那是正在做的事)。
+ */
+export const COMPACT_TARGET_RATIO = 0.5;
+
+/** 给交接说明预留的估算 token(它要和留下的原文一起装进目标里)。 */
+const SUMMARY_ALLOWANCE_TOKENS = 1500;
+
+/** 每轮重发、压不掉的那一块(工具定义 + 系统提示)的估算:供应商上次回报的用量减去消息本身。没有回报就当 0。 */
+export function fixedOverhead(messages: readonly Message[]): number {
+  if (anchorIndex(messages) < 0) return 0;
+  return Math.max(0, contextTokens(messages) - estimateAll(messages));
+}
+
 /** 没有真实计量时的每 token 字符数。中英混排的粗略经验值 —— 只用于"最近几条新增了多少",
  *  估偏一点不影响判断,真实数字下一轮就由供应商纠正回来。 */
 export const CHARS_PER_TOKEN = 3.5;
@@ -258,11 +277,26 @@ export function dropOlder(messages: readonly Message[], start: number): Message[
  * 返回 0 表示不该切 —— 全部都算"最近",没有可摘要的早期部分。切在非 user 边界会留下
  * 没有对应 assistant 调用的 toolResult,下一次请求直接被供应商拒。
  */
-export function splitPoint(messages: readonly Message[]): number {
-  if (messages.length <= KEEP_RECENT) return 0;
-  let start = messages.length - KEEP_RECENT;
-  while (start > 0 && messages[start]?.role !== "user") start -= 1;
-  return start;
+export function splitPoint(messages: readonly Message[], keepTokens = Number.POSITIVE_INFINITY): number {
+  if (!Number.isFinite(keepTokens)) {
+    if (messages.length <= KEEP_RECENT) return 0;
+    let start = messages.length - KEEP_RECENT;
+    while (start > 0 && messages[start]?.role !== "user") start -= 1;
+    return start;
+  }
+  // 按 token:从最新往回数,最多 KEEP_RECENT 条、合计不超过 keepTokens;再往**后**挪到一条 user 边界(往前挪会超预算)。
+  // 最近那条 user 起的这一段无论如何都留着 —— 那是正在做的事;它前面没有东西可摘就不切。
+  const lastUser = messages.reduce((found, message, index) => (message.role === "user" ? index : found), -1);
+  let start = messages.length;
+  let used = 0;
+  const floor = Math.max(0, messages.length - KEEP_RECENT);
+  while (start > floor && used + estimateTokens(messages[start - 1]) <= keepTokens) {
+    used += estimateTokens(messages[start - 1]);
+    start -= 1;
+  }
+  while (start < messages.length && messages[start]?.role !== "user") start += 1;
+  if (lastUser >= 0 && (start >= messages.length || start > lastUser)) start = lastUser;
+  return Math.max(0, start);
 }
 
 /** 交给模型的摘要指令。要的是"能接着干活"所需的东西,不是一篇读后感。 */
@@ -303,7 +337,11 @@ export async function compact(
   if (!options.force && !shouldCompact(messages, options.contextWindow)) {
     return { messages: [...messages], info: null };
   }
-  let cut = splitPoint(messages);
+  // 留多少原文按 token 定(见 COMPACT_TARGET_RATIO):目标减去压不掉的固定开销和交接说明。窗口不知道时退回按条数。
+  const keepTokens = options.contextWindow > 0
+    ? Math.max(0, options.contextWindow * COMPACT_TARGET_RATIO - fixedOverhead(messages) - SUMMARY_ALLOWANCE_TOKENS)
+    : Number.POSITIVE_INFINITY;
+  let cut = splitPoint(messages, keepTokens);
   if (cut <= 0 && messages.length > 1) {
     // 一个工具回包就可能把首轮撑爆，此时消息还不足 KEEP_RECENT，旧逻辑永远找不到切点。
     // 优先在下一条 user 前切；只有一个 user 时概括整轮，下一条新问题会在摘要之后追加。

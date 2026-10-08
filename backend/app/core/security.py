@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import timedelta
 
@@ -20,6 +21,7 @@ __all__ = [
     "mint_service_session",
     "new_session_token",
     "SERVICE_PATH_PREFIXES",
+    "service_request_allowed",
     "prune_expired_sessions",
     "token_digest",
     "revoke_other_logins",
@@ -138,6 +140,26 @@ SERVICE_PATH_PREFIXES = (
     "/api/agent/questions/",
     "/api/agent/provider-credentials",
 )
+
+#: 上面那几组里,**写**只放这几条(其余只许读)。确认卡和选择卡上它只开卡、轮询结果、「卡等到点、作废它」,不拍板。
+#: 此前只按路径前缀放行,同一份令牌 POST `/api/confirmations/{id}/approve` 也过 —— 拿到这份令牌的进程就能替用户批它自己开的卡,
+#: 而那正是确认卡整套机制里最不该给出去的一项(智能体那一路 AGENT-14)。答选择卡同理。
+_SERVICE_WRITES = (
+    re.compile(r"^/api/agent/tools(/[^/]+)?$"),
+    #: 开卡是**提议**,不是拍板:卡挂在哪段对话由这份令牌决定(它铸的时候记着是哪一轮),批不批照样是人。
+    re.compile(r"^/api/confirmations$"),
+    re.compile(r"^/api/confirmations/[^/]+/expire$"),
+    re.compile(r"^/api/agent/provider-credentials/[^/]+/(acquire|commit|renew|release)$"),
+)
+
+
+def service_request_allowed(method: str, path: str) -> bool:
+    """服务令牌能不能走这一条:路径在那几组里,而且是读、或者是那几条写之一。"""
+    if not path.startswith(SERVICE_PATH_PREFIXES):
+        return False
+    if method.upper() in ("GET", "HEAD", "OPTIONS"):
+        return True
+    return any(rule.match(path) for rule in _SERVICE_WRITES)
 
 
 def _mint(

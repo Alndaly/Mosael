@@ -43,7 +43,14 @@ const SUBAGENT_PROMPT = `你是一个子智能体,被主智能体派来独立完
  *  拿得到它们,而池会话用的是用户在别人站点上的真实登录身份。现在内置工具也是**显式声明**
  *  (后端 mcp_server.READ_ONLY_TOOLS),漏声明的一律算会改东西。 */
 export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
-  return tools.filter((tool) => (tool as { readOnly?: boolean }).readOnly === true && tool.name !== "run_subagent");
+  return tools.filter((tool) => {
+    const flags = tool as { readOnly?: boolean; awaitsAnswer?: boolean };
+    // 「只读」的里头还有两样不给(智能体那一路 AGENT-15):
+    //   · 问用户的(ask_user,`awaitsAnswer`)—— 和不给它写工具同一个理由:用户看不见的子智能体问出来的选择卡,他没有上下文可答,
+    //     而它阻塞时主智能体也跟着卡在那次调用里;
+    //   · open_view —— 它不改数据,却会把用户正在看的页面拽走;一次后台调查不该做这件事。
+    return flags.readOnly === true && !flags.awaitsAnswer && tool.name !== "run_subagent" && tool.name !== "open_view";
+  });
 }
 
 /**
@@ -86,6 +93,11 @@ export async function runSubagent(input: {
   streamFn: any;
   signal?: AbortSignal;
   onToolEvent?: (event: SubagentToolEvent) => void;
+  /**
+   * 每次请求前整理发送副本 —— 和主智能体同一道闸(pi.ts 的 guardRunawayTurn:超大的工具结果按窗口裁、留不出回答就不发)。
+   * 此前子智能体没有它:一次 list_jobs 回了 893 KB,它在最多 24 步的循环里每一步都整段重发(窗口小的模型直接 400,大窗口的照单付钱)。
+   */
+  fitContext?: (messages: AgentMessage[]) => AgentMessage[];
 }): Promise<{ report: string; steps: number; trace: SubagentTraceItem[]; error?: string }> {
   const agent = new Agent({
     initialState: {
@@ -98,14 +110,15 @@ export async function runSubagent(input: {
     streamFn: input.streamFn,
     // 步数上限:子智能体没人盯着,转不出来时要能自己停下并交代进展。
     transformContext: async (messages: AgentMessage[]) => {
-      const toolTurns = messages.filter((m) => m.role === "assistant").length;
+      const fitted = input.fitContext ? input.fitContext(messages) : messages;
+      const toolTurns = fitted.filter((m) => m.role === "assistant").length;
       if (toolTurns > MAX_STEPS) {
         return [
-          ...messages,
+          ...fitted,
           { role: "user", content: "已达到步数上限。立刻停止调用工具,用现有发现写出结论。" } as AgentMessage,
         ];
       }
-      return messages;
+      return fitted;
     },
   });
 

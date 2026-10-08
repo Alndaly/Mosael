@@ -4,11 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, X } from "lucide-react";
 
 import {
+  addSessionAllowance,
   approveConfirmation,
-  getAgentSession,
   listConfirmations,
   rejectConfirmation,
-  updateAgentSession,
   type Confirmation,
 } from "@/api/client";
 import { approveLabel } from "@/features/agent/approveLabels";
@@ -175,9 +174,8 @@ export function ConfirmationsProvider({
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
         // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。
         // 「工具」是卡说的 `allow_tool`:替别的插件工具开卡的 run_plugin_tool 记在它替调的那个名下(只放行同一个)。
-        const session = await getAgentSession(sessionId);
-        const next = [...(session.auto_allow_tools ?? []), { tool, permission }];
-        await updateAgentSession(sessionId, { auto_allow_tools: next });
+        // **加一条,由后端合并**:此前在这里读出整份、加一条、写回去,两张卡几乎同时点,后写的盖掉先写的。
+        await addSessionAllowance(sessionId, { tool, permission });
         void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
       }
       return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id, choices);

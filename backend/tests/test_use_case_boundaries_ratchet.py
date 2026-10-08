@@ -25,7 +25,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/agent/autopilot.py": 4,
     "app/domain/agent/confirmations.py": 1,
-    "app/domain/agent/host.py": 11,
+    "app/domain/agent/host.py": 10,
     "app/domain/assets/denoise.py": 1,
     "app/domain/assets/importer.py": 1,
     "app/domain/assets/proxies.py": 1,

@@ -290,3 +290,24 @@ def test_本会话始终允许按工作流记_同一张不再问_换一张照问
         refused = client.patch(f"/api/agent/sessions/{session}",
                                json={"auto_allow_tools": [{"tool": first["allow_tool"], "permission": tier}]})
         assert refused.status_code == 422, (tier, refused.text)
+
+
+def test_点名要点得像点名_两三个字的名字不被日常说话带进来(bench) -> None:
+    """ADR 0044 修订之四:此前两个字就算点过名 —— 名叫「放大」「测试」「人像」的工作流,用户随口一句话就把它整份定义带进每一轮。
+    现在四个字以上才按出现认;更短的要括起来(「图」《图》);纯英文数字的名字要整词。"""
+    from app.domain.agent.tool_manifest import _named
+
+    assert not _named("放大", "帮我把这张放大一点"), "两个字的名字被日常说话带进来了"
+    assert _named("放大", "用「放大」那张跑一下")
+    assert _named("图", "用《图》那张")
+    assert not _named("图", "出一张图")
+    assert _named("多段精修", "用多段精修那张跑")
+    assert _named("test", "run the test workflow")
+    assert not _named("test", "this is just testing"), "英文名要整词"
+    assert _named("lora 组合 05", "再用 lora 组合 05 出一张")
+
+    session = _session(bench, PLAIN[0])
+    _message(session, "user", "出一张图,然后放大看看")
+    assert TINY not in _workflow_tools(_turn(bench, session), bench), "「图」这一个字到处都是"
+    _message(session, "user", "那就用「图」那张试试")
+    assert TINY in _workflow_tools(_turn(bench, session), bench)

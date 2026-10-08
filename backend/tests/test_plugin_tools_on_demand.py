@@ -20,7 +20,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
 from app.domain.agent.plugin_schema import DESCRIPTION_CAP
-from app.domain.agent.tool_manifest import ON_DEMAND_TOOLS, agent_tool_name
+from app.domain.agent.tool_manifest import _CONFIRMATION_PROTOCOL, ON_DEMAND_TOOLS, agent_tool_name
 from tests import general_plugins
 from tests.util import fresh_client, second_client, settled_card, user_id
 
@@ -130,7 +130,7 @@ def test_找_看全文和入参_查可选值(setup) -> None:
         {"type": "tool", "tool": {"name": names["explainer_voice"], "args": {}}}]})
     turn = _turn(setup["client"], session)
     sent = turn[names["explainer_scene_code"]]["description"]
-    assert len(sent.split("\n\nThis call BLOCKS")[0]) <= DESCRIPTION_CAP and "plugin_tools shows the full description" in sent, \
+    assert len(sent.split(f"\n\n{_CONFIRMATION_PROTOCOL}")[0]) <= DESCRIPTION_CAP and "plugin_tools shows the full description" in sent, \
         "发出去的那份说明有上限,说清全文在哪"
     sent_voice = turn[names["explainer_voice"]]["parameters"]["properties"]["voice"]
     assert "enum" not in sent_voice and "200 options — plugin_tools lists them" in sent_voice["description"], \

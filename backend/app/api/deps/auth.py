@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.core.security import SERVICE_PATH_PREFIXES, find_session, renew_if_stale
+from app.core.security import find_session, renew_if_stale, service_request_allowed
 from app.db.models import AuthSession, User, now
 
 #: 客户端自报身份的请求头,语法是 `<界面>/<版本>`(例如 `app/1.4.3`、`browser-extension/0.1.0`)。
@@ -76,8 +76,9 @@ def get_current_user(
         session = None
     if session is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    if session.kind == "service" and not request.url.path.startswith(SERVICE_PATH_PREFIXES):
-        # 服务令牌只给 sidecar 这类进程外调用方做它该做的那几件事(见 core/security.SERVICE_PATH_PREFIXES)。
+    if session.kind == "service" and not service_request_allowed(request.method, request.url.path):
+        # 服务令牌只给 sidecar 这类进程外调用方做它该做的那几件事(见 core/security.service_request_allowed):
+        # 那几组路由上读;写只有调工具、作废等到点的卡、回写自己的凭据 —— 批卡、答选择卡不行。
         raise HTTPException(status_code=403, detail="Service token is not allowed on this endpoint")
     user = db.get(User, session.user_id)
     if user is None:

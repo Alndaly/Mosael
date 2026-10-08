@@ -30,7 +30,9 @@ await build({
 // 绝对路径要转成 file:// URL —— 裸路径在 Windows 上会被当成协议名(ERR_UNSUPPORTED_ESM_URL_SCHEME)。
 const {
   COMPACT_RATIO,
+  COMPACT_TARGET_RATIO,
   KEEP_RECENT,
+  fixedOverhead,
   compact,
   contextTokens,
   estimateTokens,
@@ -273,4 +275,41 @@ test("压缩不改动消息本身的内容和角色", () => {
     assert.ok(found, "保留的那条应该还在");
     assert.equal(found.extra, "别的字段", "除了 usage,别的字段不该被动");
   });
+});
+
+
+test("固定开销占了六成的本机窗口上:不会每一轮都压一次、每次都压不下去", async () => {
+  // 现场(智能体那一路 AGENT-6,假模型复现):64K 回退窗口,工具定义 + 系统提示约 3.9 万;每轮回答约 1.2 万字。此前按条数留最近
+  // 8 条,压完仍在 80% 线上 —— 第 5 轮起每轮都压一次(每次多一次摘要请求),水位停在 83.6%。
+  const window = 64_000;
+  const overhead = 39_000;
+  const answer = "这是一段很长的回答。".repeat(1200); // 约 3.4K token
+  let messages = [];
+  let compactions = 0;
+  const summarize = async () => "交接说明:早期对话写过几段长回答。";
+  for (let turn = 0; turn < 12; turn += 1) {
+    messages.push(user(`第 ${turn} 轮的问题`));
+    const result = await compact(messages, { contextWindow: window, summarize });
+    if (result.info) {
+      compactions += 1;
+      messages = result.messages;
+      // 压完之后整段(固定开销 + 留下的)落在目标附近,远低于触发线 —— 下一轮不会马上又压。
+      assert.ok(overhead + result.info.tokensAfter < window * COMPACT_RATIO, `压完仍在线上:${overhead + result.info.tokensAfter}`);
+      assert.equal(messages.at(-1).content, `第 ${turn} 轮的问题`, "正在问的那一句一定留着");
+    }
+    // 这一轮的回答:供应商回报的用量 = 固定开销 + 消息本身。
+    const reply = assistant(answer);
+    reply.usage = { input: overhead + messages.reduce((sum, one) => sum + estimateTokens(one), 0), output: estimateTokens(reply) };
+    messages.push(reply);
+  }
+  assert.ok(compactions >= 1, "一次都没压?");
+  assert.ok(compactions <= 4, `十二轮里压了 ${compactions} 次 —— 还是在每轮都压`);
+});
+
+test("固定开销按供应商回报的用量减去消息本身估;没有回报时是 0", () => {
+  const messages = [user("问"), assistant("答", { input: 30_000, output: 10 })];
+  const estimated = messages.reduce((sum, one) => sum + estimateTokens(one), 0);
+  assert.equal(fixedOverhead(messages), 30_010 - estimated);
+  assert.equal(fixedOverhead([user("问")]), 0);
+  assert.ok(COMPACT_TARGET_RATIO < COMPACT_RATIO);
 });

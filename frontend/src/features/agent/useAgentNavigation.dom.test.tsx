@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   listAgentSessions: vi.fn(),
   pendingView: "" as string,
   pendingAt: null as string | null,
+  //: 后端按它自己的钟算好的「过去多久」(秒)。
+  pendingAge: null as number | null,
   isMine: true,
 }));
 vi.mock("@/api/client", () => ({
@@ -41,7 +43,7 @@ function serveSessions(failFirstDelete = false) {
   let deletes = 0;
   mocks.getAgentSession.mockImplementation(async (id: string) => ({
     id, workspace_id: "w1", title: id, is_mine: mocks.isMine, home_kind: "studio", home_id: "", home_name: "", home_state: "ok",
-    pending_view: mocks.pendingView, pending_view_at: mocks.pendingAt,
+    pending_view: mocks.pendingView, pending_view_at: mocks.pendingAt, pending_view_age_seconds: mocks.pendingAge,
   }));
   mocks.api.mockImplementation(async (_path: string, init?: { method?: string }) => {
     if (init?.method === "DELETE") {
@@ -66,6 +68,7 @@ describe("智能体要求的页面跳转", () => {
     mocks.listAgentSessions.mockReset().mockResolvedValue([]);
     mocks.pendingView = "";
     mocks.pendingAt = serverTime(1000);
+    mocks.pendingAge = 1;
     mocks.isMine = true;
   });
 
@@ -88,6 +91,7 @@ describe("智能体要求的页面跳转", () => {
     adoptAgentSession("w1", STUDIO, "s-other");
     mocks.pendingView = "publish";
     mocks.pendingAt = serverTime(40_000);
+    mocks.pendingAge = 40;
     serveSessions();
     const onNavigate = vi.fn();
     mount(onNavigate);
@@ -128,6 +132,42 @@ describe("智能体要求的页面跳转", () => {
     mount(onNavigate);
     await waitFor(() => expect(mocks.listAgentSessions).toHaveBeenCalled());
     expect(mocks.getAgentSession).not.toHaveBeenCalled();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("新不新按服务端的钟(智能体那一路 AGENT-19)", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    resetActivePlaces();
+    mocks.api.mockReset();
+    mocks.getAgentSession.mockReset();
+    mocks.listAgentSessions.mockReset().mockResolvedValue([]);
+    mocks.isMine = true;
+  });
+
+  it("这台机器的钟慢了一分钟:服务端说才过去 2 秒,照样跳", async () => {
+    adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
+    mocks.pendingView = "media";
+    //: 时间戳按这台机器的钟看是一分钟以后 / 一分钟以前都不该影响判断 —— 只看后端给的「过去多久」。
+    mocks.pendingAt = serverTime(-60_000);
+    mocks.pendingAge = 2;
+    serveSessions();
+    const onNavigate = vi.fn();
+    mount(onNavigate);
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("media", ""));
+  });
+
+  it("这台机器的钟快了一分钟:服务端说已经过去 45 秒,不跳、清掉", async () => {
+    adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
+    mocks.pendingView = "media";
+    mocks.pendingAt = serverTime(1000);
+    mocks.pendingAge = 45;
+    serveSessions();
+    const onNavigate = vi.fn();
+    mount(onNavigate);
+    await waitFor(() => expect(mocks.api).toHaveBeenCalled());
     expect(onNavigate).not.toHaveBeenCalled();
   });
 });

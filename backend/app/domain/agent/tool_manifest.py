@@ -88,8 +88,11 @@ _PROVIDES_KIT = {"workflow_library": "comfyui"}
 GENERAL_PLUGIN_KIT = "plugins"
 #: 往回看这段对话的多少条消息(找调过的工具、点过的名)。
 _TURN_HISTORY = 200
-#: 名字短于这么多个字的不拿来认「点过名」(一个字到处都是)。
-_MIN_NAMED = 2
+#: 工作流名「点过名」:名字至少这么长才按出现认(ADR 0044 修订之四)。此前两个字就算 —— 「放大」「测试」「人像」这类名字被
+#: 日常说话带进来,每带进一张就多背一份最多 6000 字符的定义。更短的名字只有用引号 / 书名号括起来才算(「图」、《放大》)。
+_MIN_NAMED = 4
+#: 短名字要这样括起来才算点名。
+_NAME_QUOTES = ("「」", "『』", "《》", "“”", "‘’", '""', "''", "``")
 #: 经它们点到一个插件工具(参数 `tool`:工具名、完整名字或工作流路径)也算这段对话用过它:下一轮起它自己的定义跟着发。
 _POINTERS = frozenset({"plugin_tools", "run_plugin_tool"})
 #: 这一轮有没发的插件工具时才发的那两个:够得着它们的路。一个都没有就不背。
@@ -152,7 +155,17 @@ def _workflow_names(workflow: dict[str, Any]) -> list[str]:
     names = list(name.values()) if isinstance(name, dict) else [name]
     stem = str(workflow.get("path") or "").rsplit("/", 1)[-1]
     names.append(stem[: -len(".json")] if stem.lower().endswith(".json") else stem)
-    return [str(one).strip().lower() for one in names if isinstance(one, str) and len(one.strip()) >= _MIN_NAMED]
+    return [str(one).strip().lower() for one in names if isinstance(one, str) and one.strip()]
+
+
+def _named(name: str, said: str) -> bool:
+    """用户的话里点到了这个名字吗(都已小写)。够长的:中文按出现认,纯英文数字的要整词(「test」不认「testing」);
+    短的:只认括起来的。"""
+    if len(name) >= _MIN_NAMED:
+        if name.isascii():
+            return re.search(rf"(?<![a-z0-9_]){re.escape(name)}(?![a-z0-9_])", said) is not None
+        return name in said
+    return any(f"{pair[0]}{name}{pair[1]}" in said for pair in _NAME_QUOTES)
 
 
 def _on_demand(tool: dict[str, Any], kit: str) -> bool:
@@ -177,7 +190,7 @@ def _wanted(tool: dict[str, Any], agent_name: str, turn: Turn) -> bool:
         connection, open_path, _key = comfy_parts(place.id)
         if connection == tool["instance_id"] and open_path and open_path == path:
             return True
-    return any(name in turn.said for name in _workflow_names(workflow))
+    return any(_named(name, turn.said) for name in _workflow_names(workflow))
 
 
 def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str]) -> str:
@@ -270,11 +283,12 @@ def _plugin_tools(
 #: 描述里留着「after approval get_confirmation returns the job_id」的后果是真机可见的:
 #: 模型按它去找一个永远收不到的 confirmation_id,在对话里说「我没有收到 confirmation_id」,
 #: 然后多跑 get_job / sleep 两步去查一件已经做完的事。
-_CONFIRMATION_PROTOCOL = (
-    "This call BLOCKS until the user approves or rejects it, and then returns the final "
-    "result directly — there is no confirmation_id for you to poll and no need to call "
-    "get_confirmation or get_job afterwards. A returned result means it already happened."
-)
+#:
+#: **短**(维护者 2026-10-08 定的方案 A,ADR 0044 修订之四):它跟在每个开卡工具的说明末尾,工作台以外每轮五十多个工具各背一遍。
+#: 此前 251 字符,压到 100 字符、意思不丢 —— 会阻塞到用户批或拒;拿到结果 = 做了;报错(拒绝、作废、执行失败,见 sidecar
+#: tools.awaitConfirmation 抛的那几句)= 没做;别自己轮询。
+#: 仍然写在每个工具自己的说明里(test_tool_confirmation_contract 钉着),不挪进系统提示。
+_CONFIRMATION_PROTOCOL = "BLOCKS until the user approves or rejects; a result means done, an error means not done. Don't poll."
 
 
 #: 选择卡在这条路上的真实协议。和确认卡是同一件事的两个结局:

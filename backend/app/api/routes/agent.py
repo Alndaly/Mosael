@@ -42,6 +42,7 @@ from app.api.schemas import (
     AgentToolsetOut,
     AgentStreamEvent,
     ProviderUsageEventOut,
+    SessionAllowance,
 )
 from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
@@ -194,6 +195,8 @@ def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> 
     session = writable_session(db, user, session_id)
     try:
         result = host.compact_session_context(db, session, user)
+    except host.HostError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except host.SidecarError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return AgentCompactOut(**result)
@@ -269,15 +272,33 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     if body.group_id is not None:
         session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:
-        try:
-            autopilot.set_session_allowances(
-                db, user, session, [(entry.tool, entry.permission) for entry in body.auto_allow_tools]
-            )
-        except autopilot.PermissionModeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        with autopilot.ALLOWANCE_LOCK:
+            try:
+                autopilot.set_session_allowances(
+                    db, user, session, [(entry.tool, entry.permission) for entry in body.auto_allow_tools]
+                )
+            except autopilot.PermissionModeError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            db.commit()
     db.commit()
     if organising_only:
         session_groups.restore_updated_at(db, session, kept_updated_at)
+        db.commit()
+    db.refresh(session)
+    return _out(db, user, session)
+
+
+@router.post("/agent/sessions/{session_id}/allowances", response_model=AgentSessionOut)
+def add_agent_session_allowance(
+    session_id: str, body: SessionAllowance, db: DbSession, user: CurrentUser
+) -> AgentSession:
+    """「本会话始终允许」加一条(卡上点了它)。在库里那一份上合并 —— 此前界面读出整份、加一条、PATCH 整份,两张卡几乎同时点就丢一条。"""
+    session = writable_session(db, user, session_id)
+    with autopilot.ALLOWANCE_LOCK:
+        try:
+            autopilot.add_session_allowance(db, user, session, body.tool, body.permission)
+        except autopilot.PermissionModeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         db.commit()
     db.refresh(session)
     return _out(db, user, session)

@@ -41,6 +41,7 @@ from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context
 from app.domain.providers.model_limits import fallback_context_window
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError, get_current_locale, set_current_locale, tr
 from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, ToolConfirmation, User, now
@@ -1154,30 +1155,66 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     压缩本身要调一次模型做摘要,所以它是用户主动触发而不是后台悄悄跑。压完把新的
     adapter_state 回存,并在对话里留一条 system 消息 —— **压缩必须被看见**:静默压缩会让
     用户以为模型"忘了"早期内容,而实际上是我们主动移走的。
+
+    **压缩期间这段对话是占着的**(和一轮同一个条件更新,`_claim_idle_session`):此前它不认领,摘要要几十秒,这期间发出的
+    一句照常起一轮;两边各读一份记忆、各写回一份,后写的盖掉先写的 —— 压缩期间说的那句(和它的回答)从模型记忆里消失,或者
+    压缩白做(智能体那一路 AGENT-5,假模型复现过)。现在压缩期间来的话照排队的规矩进队,压完 drain;正有一轮在跑时不压(409)。
+    摘要那几十秒也不攥着这次请求的数据库连接(和一轮的三段式同一个理由)。
     """
-    provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id)
-    result = compact_session(
-        api_base=f"http://{settings.backend_host}:{settings.backend_port}",
-        token=mint_tool_token(db, user),
-        provider=provider_dict,
-        model=agent_model,
-        adapter_state=session.adapter_state,
-    )
-    if result.adapter_state is not None:
-        session.adapter_state = result.adapter_state
-    if result.compaction:
-        db.add(
-            AgentMessage(
-                session_id=session.id,
-                role="system",
-                content="",
-                payload={"compaction": result.compaction, **({"context": result.context} if result.context else {})},
-            )
+    session_id = session.id
+    #: 认领自己一个短事务:认领之后读的那份记忆是**认领那一刻**的(这次请求一开头读的那份可能已经被刚收尾的一轮改过)。
+    with unit_of_work() as claim:
+        if not _claim_idle_session(claim, session_id):
+            raise HostError("agentErr_compactWhileRunning")
+        row = claim.get(AgentSession, session_id)
+        profile_id, model, owner_id, before = row.provider_profile_id, row.model or "", row.owner_user_id, row.adapter_state
+    token = ""
+    try:
+        provider_dict, agent_model, _profile = resolve_chat_provider(db, profile_id, model, user_id=owner_id)
+        token = mint_tool_token(db, user)
+        db.close()
+        result = compact_session(
+            api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+            token=token,
+            provider=provider_dict,
+            model=agent_model,
+            adapter_state=before,
         )
-    db.commit()
-    # 压完的水位**在这边重算**,不用 sidecar 回报的那份:后者只有 {tokens, window},没有分项。
-    # 两条路给两种形状,界面就得判断"这次有没有明细" —— 而那正是同一个数有两个来源的代价。
-    return {"context": session_context(db, session), "compaction": result.compaction}
+        with unit_of_work() as write:
+            row = write.get(AgentSession, session_id)
+            if row is None:
+                return {"context": None, "compaction": None}
+            if result.adapter_state is not None:
+                row.adapter_state = result.adapter_state
+            if result.compaction:
+                write.add(
+                    AgentMessage(
+                        session_id=session_id,
+                        role="system",
+                        content="",
+                        payload={"compaction": result.compaction, **({"context": result.context} if result.context else {})},
+                    )
+                )
+            write.flush()
+            # 压完的水位**在这边重算**,不用 sidecar 回报的那份:后者只有 {tokens, window},没有分项。
+            # 两条路给两种形状,界面就得判断"这次有没有明细" —— 而那正是同一个数有两个来源的代价。
+            return {"context": session_context(write, row), "compaction": result.compaction}
+    finally:
+        _release_after_compaction(session_id, token)
+
+
+def _release_after_compaction(session_id: str, token: str) -> None:
+    """压缩收尾(成功、失败都走):放开这段对话、收回那份令牌,再把压缩期间排进来的话跑掉。"""
+    try:
+        with unit_of_work() as db:
+            row = db.get(AgentSession, session_id)
+            if row is not None:
+                row.status = "idle"
+            if token:
+                revoke_session(db, token)
+    except Exception:  # noqa: BLE001 —— 对话可能刚被删掉
+        logger.warning("could not release session %s after compaction", session_id)
+    _drain_queue(session_id)
 
 
 def tool_definition_tokens(db: Session, session: AgentSession) -> int:

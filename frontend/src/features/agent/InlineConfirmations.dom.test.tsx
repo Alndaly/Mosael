@@ -41,7 +41,8 @@ let releaseDecision: () => void = () => {};
 const api = vi.fn(async (path: string, _init?: unknown) => {
   if (path.startsWith("/api/confirmations?")) return pendingCards;
   if (path.startsWith("/api/agent/questions")) return [];
-  if (path.startsWith("/api/agent/sessions/")) return { id: "s1", auto_allow_tools: [] };
+  if (path.startsWith("/api/agent/sessions/") && !path.endsWith("/allowances")) return { id: "s1", auto_allow_tools: [] };
+  if (path.endsWith("/allowances")) return { id: "s1", auto_allow_tools: [] };
   await new Promise<void>((resolve) => {
     releaseDecision = resolve;
   });
@@ -121,13 +122,12 @@ describe("确认卡的等待状态", () => {
     /* 只记工具名时,点过一张 ai-cost 的 run_workflow,之后带 HTTP / 发布节点(external)的 run_workflow 也直接放行。 */
     renderCards();
     (await screen.findAllByText("本会话始终允许"))[1].click();
-    await waitFor(() =>
-      expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(true),
-    );
-    const [, init] = api.mock.calls.find(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")!;
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      auto_allow_tools: [{ tool: "render_sequence", permission: "render-cost" }],
-    });
+    // 加一条,由后端在它那一份上合并(不再读出整份、加一条、PATCH 整份 —— 两张卡同时点会丢一条)。
+    await waitFor(() => expect(api.mock.calls.some(([path]) => path === "/api/agent/sessions/s1/allowances")).toBe(true));
+    const [, init] = api.mock.calls.find(([path]) => path === "/api/agent/sessions/s1/allowances")!;
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tool: "render_sequence", permission: "render-cost" });
+    expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(false);
     releaseDecision();
   });
 
@@ -135,13 +135,9 @@ describe("确认卡的等待状态", () => {
     renderCards();
     // c3 是撤不回的那一档,没有这个按钮:第三个「本会话始终允许」是 c4 的。
     (await screen.findAllByText("本会话始终允许"))[2].click();
-    await waitFor(() =>
-      expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(true),
-    );
-    const [, init] = api.mock.calls.find(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")!;
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      auto_allow_tools: [{ tool: "plugin__conn__wf_portrait", permission: "ai-cost" }],
-    });
+    await waitFor(() => expect(api.mock.calls.some(([path]) => path === "/api/agent/sessions/s1/allowances")).toBe(true));
+    const [, init] = api.mock.calls.find(([path]) => path === "/api/agent/sessions/s1/allowances")!;
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tool: "plugin__conn__wf_portrait", permission: "ai-cost" });
     releaseDecision();
   });
 

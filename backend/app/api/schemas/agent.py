@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, StrictBool, ValidationInfo, field_validator, model_validator
+from pydantic import Field, StrictBool, ValidationInfo, computed_field, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AgentContextPart(ApiModel):
@@ -204,6 +204,17 @@ class AgentSessionOut(OrmModel):
     pending_view: str = ""
     #: 那是什么时候要求的。过了 30 秒前端不跟、直接清掉(ADR 0044 §6)。
     pending_view_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def pending_view_age_seconds(self) -> float | None:
+        """那次「带我过去」过去多久了 —— **按服务端的钟算**。前端拿自己的钟去减服务端的时间戳,两台机器差半分钟
+        (网页版连远程服务器时很常见)就会把每一次都当成过期、或者永不过期(智能体那一路 AGENT-19)。"""
+        if self.pending_view_at is None:
+            return None
+        from app.db.models import now
+
+        return max(0.0, round((now() - self.pending_view_at).total_seconds(), 1))
     #: 当前上下文水位。**每次请求现算**,而不是等某一轮回报 —— 打开旧会话、刚换过模型、
     #: 上一轮失败了,这些时候都没有新的一轮可以带回这个数,而"还能聊多久"这个问题恰恰在
     #: 开口之前就要有答案。窗口取当前模型的,换模型即变。

@@ -23106,6 +23106,59 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/allowances": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Add Agent Session Allowance",
+        "description": "「本会话始终允许」加一条(卡上点了它)。在库里那一份上合并 —— 此前界面读出整份、加一条、PATCH 整份,两张卡几乎同时点就丢一条。",
+        "operationId": "add_agent_session_allowance_api_agent_sessions__session_id__allowances_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionAllowance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/stream": {
       "get": {
         "tags": [
@@ -27782,6 +27835,19 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "pending_view_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending View Age Seconds",
+            "description": "那次「带我过去」过去多久了 —— **按服务端的钟算**。前端拿自己的钟去减服务端的时间戳,两台机器差半分钟\n(网页版连远程服务器时很常见)就会把每一次都当成过期、或者永不过期(智能体那一路 AGENT-19)。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -27797,7 +27863,8 @@
           "adapter",
           "status",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "pending_view_age_seconds"
         ],
         "title": "AgentSessionOut"
       },

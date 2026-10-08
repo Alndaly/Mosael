@@ -197,6 +197,22 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
         session.mode_set_at = now()
 
 
+#: 「本会话始终允许」是读出整份、加一条、写回去:两张卡几乎同时点(几个工具调用同时在等批),两次读到的是同一份,后写的盖掉先写的
+#: (智能体那一路 AGENT-16)。后端只有一个进程,这一把锁把「读 → 合并 → 提交」排成一队就够了。
+ALLOWANCE_LOCK = threading.Lock()
+
+
+def add_session_allowance(db: Session, user: User, session: AgentSession, tool: str, permission: str) -> None:
+    """往「本会话始终允许」里**加一条**(界面在卡上点了它):在库里那一份上合并,不信调用方手里的那份。调用方持 `ALLOWANCE_LOCK`、
+    在锁里提交。校验和整份替换同一套(`set_session_allowances`)。"""
+    db.refresh(session)
+    current = [
+        (str(entry.get("tool") or ""), str(entry.get("permission") or ""))
+        for entry in (session.auto_allow_tools or []) if isinstance(entry, dict)
+    ]
+    set_session_allowances(db, user, session, [*current, (tool, permission)])
+
+
 def _rules_for(db: Session, confirmation: ToolConfirmation) -> dict:
     workspace = db.get(Workspace, confirmation.workspace_id)
     return rules.normalize(workspace.autopilot_rules if workspace is not None else None)
@@ -365,7 +381,9 @@ __all__ = [
     "AUTOPILOT_THREAD_NAME",
     "COST_AUTO_LIMIT",
     "Decision",
+    "ALLOWANCE_LOCK",
     "SESSION_ALLOWABLE",
+    "add_session_allowance",
     "consider",
     "decide",
     "session_allowance",

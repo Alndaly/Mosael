@@ -3286,12 +3286,52 @@ def list_jobs(workspace_id: str = "", kind: str = "", limit: int = 20) -> list[d
     **not** have a job id — get_job needs one, and without this tool there was no way to
     find it. Also use to check whether work you started earlier in the conversation finished.
     Filter with kind ("render", "transcribe", "url_import", "generation"…). Newest first.
+    Each entry is a brief (status, message/error, ids it produced); call get_job for the full payload and result.
     """
     from app.api.schemas import JobOut
     from app.domain.job_center import use_cases
 
     jobs = _use_case(use_cases.list_jobs, workspace_id or _default_workspace_id(), kind=kind or None, top_level=True, out=JobOut)
-    return jobs[: max(1, min(int(limit), 100))]
+    return [_job_brief(job) for job in jobs[: max(1, min(int(limit), 100))]]
+
+
+#: 列任务时每一条说明 / 错误最多留多少字。
+_JOB_TEXT_CHARS = 300
+#: 载荷里认得出「这是哪个任务」的那几格(给人看的标题、提示词开头)。
+_JOB_SUBJECT_KEYS = ("subject", "title", "name", "prompt", "text")
+
+
+def _job_brief(job: dict[str, Any]) -> dict[str, Any]:
+    """列任务时给智能体的那一条:是什么、到哪一步、产出了哪些东西的 id。整份载荷 / 结果用 get_job 看。
+
+    此前回的是整份 JobOut —— 工作流任务的载荷和结果平均 36 KB、最大 420 KB,一次 list_jobs 回了 893 KB(维护者库里实际出现过,
+    约 25 万 token),这一轮之后每次请求都整段重发(智能体那一路 AGENT-12)。
+    """
+    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    brief: dict[str, Any] = {
+        key: job.get(key) for key in ("id", "kind", "status", "progress", "created_at", "updated_at") if key in job
+    }
+    if job.get("parent_job_id"):
+        brief["parent_job_id"] = job["parent_job_id"]
+    for key in ("message", "error"):
+        text = job.get(key)
+        if isinstance(text, str) and text.strip():
+            brief[key] = text.strip()[:_JOB_TEXT_CHARS]
+    subject = next((payload[key] for key in _JOB_SUBJECT_KEYS if isinstance(payload.get(key), str) and payload[key].strip()), "")
+    if subject:
+        brief["subject"] = subject.strip()[:120]
+    #: 产出:结果里叫 *_id / *_ids 的那几格(素材、字幕轨、转写……)—— 智能体接着要用的就是它们。
+    produced = {
+        key: value for key, value in result.items()
+        if (key.endswith("_id") and isinstance(value, str))
+        or (key.endswith("_ids") and isinstance(value, list) and all(isinstance(one, str) for one in value))
+    }
+    if produced:
+        brief["produced"] = produced
+    if set(result) - set(produced):
+        brief["details"] = "get_job"
+    return brief
 
 
 @tool(effect="writes")

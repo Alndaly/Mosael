@@ -363,6 +363,8 @@ export async function buildAllTools(
         // 这边再抄一份名字清单必然漂移(那种漂移让十九个工具静默消失过一次)。
         // 内置工具的只读 = 没有确认门;插件工具要 manifest 明写,默认不算。
         readOnly: Boolean(spec.read_only),
+        //: 问用户、等作答的那种(ask_user):子智能体不拿(见 subagent.readOnlyTools)。
+        awaitsAnswer: Boolean(spec.awaits_answer),
         description: spec.description || spec.name,
         // The manifest's parameters are already JSON Schema, which is what pi wants.
         parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,

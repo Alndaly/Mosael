@@ -7684,6 +7684,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/allowances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Agent Session Allowance
+         * @description 「本会话始终允许」加一条(卡上点了它)。在库里那一份上合并 —— 此前界面读出整份、加一条、PATCH 整份,两张卡几乎同时点就丢一条。
+         */
+        post: operations["add_agent_session_allowance_api_agent_sessions__session_id__allowances_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}/stream": {
         parameters: {
             query?: never;
@@ -9425,6 +9445,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Pending View Age Seconds
+             * @description 那次「带我过去」过去多久了 —— **按服务端的钟算**。前端拿自己的钟去减服务端的时间戳,两台机器差半分钟
+             *     (网页版连远程服务器时很常见)就会把每一次都当成过期、或者永不过期(智能体那一路 AGENT-19)。
+             */
+            readonly pending_view_age_seconds: number | null;
         };
         /** AgentSessionUpdate */
         AgentSessionUpdate: {
@@ -34994,6 +35020,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_agent_session_allowance_api_agent_sessions__session_id__allowances_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionAllowance"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionOut"];
                 };
             };
             /** @description Validation Error */

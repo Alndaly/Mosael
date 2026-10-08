@@ -26,7 +26,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getAgentSession } from "@/api/client";
 import { passConversation, useActivePlace } from "@/features/agent/activePlace";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
-import { parseServerTime } from "@/lib/time";
 
 /** 要求了多久以内的跳转还跟。 */
 export const PENDING_VIEW_FRESH_MS = 30_000;
@@ -55,6 +54,9 @@ export function useAgentNavigation({
 
   const pending = session.data?.pending_view ?? "";
   const askedAt = session.data?.pending_view_at ?? null;
+  //: 过去多久了,**按服务端的钟**(后端算好给):拿这台机器的钟去减服务端的时间戳,两台机器差半分钟(网页版连远程服务器)
+  //: 就把每一次「带我过去」都当成过期、或者永不过期。
+  const askedAgo = session.data?.pending_view_age_seconds ?? null;
   //: 同一条待跳转在被 DELETE 掉之前还会被轮询读回来几次(请求在飞的那段时间)。
   //: 不记下来的话,同一次"带我过去"会连着跳三四次 —— 而副作用是把用户在这几百毫秒里
   //: 自己点开的页面又抢回去。
@@ -67,7 +69,7 @@ export function useAgentNavigation({
     const stamp = `${sessionId}:${pending}:${askedAt ?? ""}`;
     if (doneRef.current === stamp) return;
     doneRef.current = stamp;
-    const fresh = !askedAt || Date.now() - parseServerTime(askedAt).getTime() <= PENDING_VIEW_FRESH_MS;
+    const fresh = askedAgo === null ? !askedAt : askedAgo * 1000 <= PENDING_VIEW_FRESH_MS;
     if (fresh) {
       const [view, id = ""] = pending.split(":");
       // 先递棒子再跳:跳过去的页面一登记就接得住。

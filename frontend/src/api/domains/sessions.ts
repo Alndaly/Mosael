@@ -80,6 +80,9 @@ export const createAgentSession = (body: AgentSessionCreateBody) =>
 export const getAgentSession = (sessionId: string) => api<AgentSession>(`/api/agent/sessions/${sessionId}`);
 export const updateAgentSession = (sessionId: string, body: Record<string, unknown>) =>
   api<AgentSession>(`/api/agent/sessions/${sessionId}`, { method: "PATCH", body: JSON.stringify(body) });
+/** 「本会话始终允许」加一条:后端在它那一份上合并(界面不再读出整份、加一条、写回去 —— 两张卡同时点会丢一条)。 */
+export const addSessionAllowance = (sessionId: string, body: components["schemas"]["SessionAllowance"]) =>
+  api<AgentSession>(`/api/agent/sessions/${sessionId}/allowances`, { method: "POST", body: JSON.stringify(body) });
 
 export const listAgentMessages = (sessionId: string) =>
   api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/messages`);

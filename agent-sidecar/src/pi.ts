@@ -87,6 +87,13 @@ function buildSubagentTools(
         // 每一步实时外发,挂在**这次 run_subagent 调用**名下 —— 界面据此把子步
         // 归到发起它的那张卡,而不是一段几十秒的静默。
         onToolEvent: (event: SubagentToolEvent) => handlers.onSubtool?.({ parentCallId, ...event }),
+        // 和主智能体同一道闸:超大的工具结果按窗口裁,留不出回答就不发(见 guardRunawayTurn)。
+        fitContext: (messages) =>
+          guardRunawayTurn(
+            messages,
+            Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW,
+            Number(model?.maxTokens) || FALLBACK_MAX_TOKENS,
+          ),
       });
       if (args.wait === true) {
         // 阻塞路径:等到报告直接返回 —— 模型明说"这一个不等到没法继续"。

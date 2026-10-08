@@ -17,7 +17,7 @@ type Place = { kind: string; id: string };
 type Session = {
   id: string; workspace_id: string; title: string; is_mine: boolean; status: string;
   home_kind: string; home_id: string; home_name: string; home_state: string;
-  pending_view: string; pending_view_at: string | null;
+  pending_view: string; pending_view_at: string | null; pending_view_age_seconds?: number | null;
 };
 type Message = { id: string; session_id: string; role: string; content: string; payload: Record<string, unknown>; error: null; created_at: string };
 
@@ -221,7 +221,7 @@ it("智能体带着走:对话中途它带你去笔记 B,B 接着这段,下一句
   mount(<Studio start={PROJECT_A} />);
   expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
 
-  Object.assign(backend.sessions[0], { pending_view: "notes:b", pending_view_at: new Date().toISOString().replace("Z", "") });
+  Object.assign(backend.sessions[0], { pending_view: "notes:b", pending_view_at: new Date().toISOString().replace("Z", ""), pending_view_age_seconds: 0 });
   await waitFor(() => expect(backend.deletes).toContain("s1"), { timeout: 4000 });
   await waitFor(() => expect(readChoice("w1", NOTE_B)).toBe("s1"));
   expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
@@ -243,7 +243,7 @@ it("带到没有面板的页面(素材页):AI Studio 那一处接住这段", asy
   mount(<Studio start={PROJECT_A} />);
   expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
 
-  Object.assign(backend.sessions[0], { pending_view: "media", pending_view_at: new Date().toISOString().replace("Z", "") });
+  Object.assign(backend.sessions[0], { pending_view: "media", pending_view_at: new Date().toISOString().replace("Z", ""), pending_view_age_seconds: 0 });
   await waitFor(() => expect(screen.queryByTestId("panel")).toBeNull(), { timeout: 4000 });
   await waitFor(() => expect(readChoice("w1", STUDIO)).toBe("s1"), { timeout: 4000 });
 });
@@ -254,7 +254,7 @@ it("40 秒前要求的跳转:不跳,清掉", async () => {
   expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
 
   Object.assign(backend.sessions[0], {
-    pending_view: "notes:b", pending_view_at: new Date(Date.now() - 40_000).toISOString().replace("Z", ""),
+    pending_view: "notes:b", pending_view_at: new Date(Date.now() - 40_000).toISOString().replace("Z", ""), pending_view_age_seconds: 40,
   });
   await waitFor(() => expect(backend.deletes).toContain("s1"), { timeout: 4000 });
   expect(panel().getByText("剪辑里说的话")).toBeTruthy();

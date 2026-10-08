@@ -139,6 +139,7 @@ def everywhere(comfy) -> dict[str, Any]:
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     connection = _connect(client, comfy)
     general = general_plugins.install(client)
+    _fill_memory(client, workspace)
     sessions = {}
     for kind, home in _homes(client, workspace, connection).items():
         created = client.post("/api/agent/sessions", json={"workspace_id": workspace, "home": home})
@@ -147,6 +148,19 @@ def everywhere(comfy) -> dict[str, Any]:
     return {"client": client, "workspace": workspace, "connection": connection, "sessions": sessions,
             "general": {agent_tool_name(general[plugin["id"]], tool["name"])
                         for plugin in general_plugins.ALL for tool in plugin["tools"]["declare"]}}
+
+
+def _fill_memory(client, workspace: str) -> None:
+    """记忆记满(ADR 0044 修订之四):系统提示里的记忆有上限(memory.MAX_PROMPT_CHARS,4000 字),这是产品允许的、每轮都要付的
+    固定开销。此前这里量的是空记忆的新工作区 —— 记了八条约定的人已经超出预算 751 token,而这条是绿的。量上限,不量「典型值」:
+    典型值会变,上限是承诺。"""
+    from app.domain.agent.memory import MAX_CONTENT_CHARS, MAX_PROMPT_CHARS
+
+    line = "视频统一用 1080x1920 竖屏,片头三秒内出现品牌标识,字幕用思源黑体,配色避开纯红,结尾留两秒黑场。"
+    for index in range(MAX_PROMPT_CHARS // MAX_CONTENT_CHARS + 2):
+        content = (f"约定{index}:" + line * 20)[:MAX_CONTENT_CHARS]
+        created = client.post("/api/agent/memories", json={"workspace_id": workspace, "content": content})
+        assert created.status_code == 201, created.text
 
 
 def _context(client, session_id: str) -> dict[str, int]:
@@ -204,6 +218,9 @@ def test_量到的是真东西(everywhere, kind: str) -> None:
     parts = _context(everywhere["client"], everywhere["sessions"][kind])
     assert parts["tools"] > 10_000, "工具定义量出来这么小?注册表里有上百个工具"
     assert parts["system"] > 500, "系统提示量出来这么小?"
+    from app.domain.agent.memory import MAX_PROMPT_CHARS
+
+    assert parts["system"] > (MAX_PROMPT_CHARS * 0.9) / 3.5, "记忆没记满 —— 这条预算量的就不是带满记忆的那一种"
 
 
 @pytest.mark.parametrize("kind", PLACES)

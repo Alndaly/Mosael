@@ -42,6 +42,9 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "BoardProducerOut.output_kinds": "智能体的 list_board_producers 读它(跑一次会在右边长出哪几种格子)",
     # —— 归属与留痕:后端授权按它判,界面拿到的列表已经按人筛过了
     "AgentSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
+    # —— 可写的设置要读得回来:界面在卡上「加一条」走 POST /allowances(服务端合并,智能体那一路 AGENT-16),不再读整份;
+    #    PATCH 整份替换的调用方(脚本、MCP 客户端)先读回这一份再写
+    "AgentSessionOut.auto_allow_tools": "PATCH 整份替换「本会话始终允许」的调用方读回它;界面加一条走 POST /allowances,不读整份",
 
     "GenerationSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "ScheduledTaskOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
