@@ -489,6 +489,19 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
 - A form without a title (the one rewritten from the previous format, if it never had one) is named "Untitled form"; the editor requires
   every form to have a title.
 
+
+## Fixes (1.21.1)
+
+- **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's
+  `extra.mosael` is version 1, written by a newer plugin, or has no recognisable version, and say to "Review and upgrade" or update
+  Mosael. They used to be read as "no forms": the workbench's Forms tab still offered to write and "Only this node's image" still marked
+  results, the bridge rewrote the canvas from the empty set, and one save wiped the author's forms for good. An `extra.mosael` that isn't
+  an object at all (hand-broken) is overwritten as before.
+- **One unreadable model file is flagged, not fatal**: `/view_metadata` answers 5xx for a zero-byte, unfinished or truncated
+  safetensors; the plugin used to pass that on and the whole model library (and the thumbnail model pickers in generation forms) failed.
+  Now that file is listed with `broken: true` (shown as "Unreadable file") and the rest as usual; it counts as read, so that machine isn't
+  asked again until the file changes (size or modification time), e.g. once the download finishes.
+
 ## Simplified forms (1.13.0; formerly "app forms")
 
 The counterpart of RunningHub's "AI apps" (ADR 0038, first slice): the author picks the few items others should fill in
