@@ -390,11 +390,15 @@ def create_connection(
 
     **地址归宿主分**:`server_url`(SERVICE_ADDRESS_FIELD)客户端给了也不用 —— 清单里它是必填的,本机的两种填的是宿主选的
     那个端口,不是让客户端先编一个。用我自己装的走 `configure`(要 `confirm_run_code`);让 Mosael 装的只建这一行(目录是宿主分的
-    安装目录、还没装好),不开始装:装之前人要先看安装计划。"""
+    安装目录、还没装好),不开始装:装之前人要先看安装计划。
+
+    **建好就是启用的**(维护者 2026-10-09 按推荐拍板,D55):和「连一台服务器」一样 —— 亲手建它就是要用它(inst.add 的 `enabled`)。
+    服务什么时候起不变:启用不起进程,建好之后那次对齐目录跳过停着的服务(host_capabilities.notify、service_gate.no_autostart),
+    「一直开着」默认关,用到时才起;让 Mosael 装的那一份没装好时连接页照旧说「还没装」。"""
     if mode not in records.MODES:
         raise LocalServiceError("localServiceErr_unknownMode", status=422, mode=mode)
     fields = {key: value for key, value in (config or {}).items() if key != SERVICE_ADDRESS_FIELD}
-    instance = inst.add(db, package_id, fields, name, owner_user_id=owner_user_id, grant=grant)
+    instance = inst.add(db, package_id, fields, name, owner_user_id=owner_user_id, grant=grant, enabled=True)
     if mode == records.DIRECTORY:
         configure(db, instance, directory=directory, python=python, confirm_run_code=confirm_run_code)
     else:

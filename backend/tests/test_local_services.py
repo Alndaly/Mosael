@@ -293,8 +293,10 @@ def test_新建时用我自己装的_一个请求建好_端口和地址宿主给
     assert created.status_code == 200, created.text
     body = created.json()
     assert body["config"]["server_url"] == f"http://127.0.0.1:{base + 1}", "地址是宿主选的端口,不是客户端编的那个"
+    assert body["enabled"] is True, "建好就是启用的,和「连一台服务器」一样(维护者 2026-10-09 按推荐拍板,D55)"
     status = _status(plugged, body["id"])
-    assert (status["mode"], status["directory"], status["port"], status["state"]) == ("directory", directory, base + 1, "stopped")
+    assert (status["mode"], status["directory"], status["port"], status["state"]) == ("directory", directory, base + 1, "stopped"), \
+        "服务什么时候起不变:启用不起进程,用到时才起"
     assert status["url"] == body["config"]["server_url"]
     # 建好马上就能认目录(界面在建好之后接着认一遍、摆在卡片上;确认在弹窗里问过一次)
     found = plugged.post(f"/api/plugins/instances/{body['id']}/local-service/detect",
@@ -306,6 +308,7 @@ def test_新建时让Mosael装_只建那一行不开始装_目录是宿主分的
     created = _create(plugged, {"mode": "managed"})
     assert created.status_code == 200, created.text
     instance_id = created.json()["id"]
+    assert created.json()["enabled"] is True, "建好就是启用的(D55);还没装好由下面的状态说(not_installed)"
     status = _status(plugged, instance_id)
     assert (status["mode"], status["installed"], status["install"]) == ("managed", False, None), "装之前人要先看安装计划"
     assert status["directory"] == str(records.install_root(instance_id))
