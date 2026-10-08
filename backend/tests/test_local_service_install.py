@@ -19,6 +19,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -534,7 +535,8 @@ def test_速度按同一个文件的字节和时间算_换文件重新量(monkey
     from app.domain.local_services.logs import ServiceLog
 
     clock = [100.0]
-    monkeypatch.setattr(installer.time, "monotonic", lambda: clock[0])
+    #: 只换安装器这个模块读的钟(此前换的是全局的 `time.monotonic`:这条测试跑着时,进程里谁读钟都停在 100 秒)。
+    monkeypatch.setattr(installer, "time", SimpleNamespace(monotonic=lambda: clock[0], time=time.time, sleep=time.sleep))
     run = installer.InstallRun("x", ServiceLog(Path("/nonexistent/x.log")), author_locale="zh")
     run.on_step({"event": "step", "outline": [{"key": "fetch", "title": {"zh": "下载", "en": "Download"}}]})
     assert [one.key for one in run.steps] == ["fetch", installer.TRIAL]

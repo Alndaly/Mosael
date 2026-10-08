@@ -49,36 +49,96 @@ def short_queue(monkeypatch):
     monkeypatch.setattr(browser, "_executor_contact", None)
 
 
-def test_排在同一会话前一条后面_不算排队_前一条做完就轮到它(short_queue) -> None:
+class _Clock:
+    """浏览器域读的那只钟(`browser.time.monotonic`):只在测试拨它的时候走;`sleep` 照真的睡,轮询照常转。
+
+    记下每条线程读了几次 —— 「后一条的轮询已经看见拨过的钟了」要按那条线程算,前一条也在轮询。
+    """
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+        self._lock = threading.Lock()
+        self._reads: dict[int, int] = {}
+
+    def monotonic(self) -> float:
+        with self._lock:
+            ident = threading.get_ident()
+            self._reads[ident] = self._reads.get(ident, 0) + 1
+            return self.now
+
+    def advance(self, seconds: float) -> None:
+        with self._lock:
+            self.now += seconds
+
+    def reads(self, thread: threading.Thread) -> int:
+        with self._lock:
+            return self._reads.get(thread.ident or 0, 0)
+
+    @staticmethod
+    def sleep(seconds: float) -> None:
+        time.sleep(seconds)
+
+
+def _until(predicate, timeout: float = 30.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        value = predicate()
+        if value:
+            return value
+        time.sleep(0.02)
+    raise AssertionError("等待条件超时")
+
+
+def _claim(worker) -> dict:
+    return _until(lambda: worker.post("/api/browser/worker/claim", json={"worker": "w"}).json()["action"])
+
+
+def _queued(session_id: str, action: str) -> bool:
+    with SessionLocal() as db:
+        return db.query(BrowserAction).filter(
+            BrowserAction.session_id == session_id, BrowserAction.action == action).first() is not None
+
+
+def test_排在同一会话前一条后面_不算排队_前一条做完就轮到它(short_queue, monkeypatch) -> None:
+    """排队上限压成 1 秒,后一条在同一会话前一条后面「等」2.5 秒 —— 这 2.5 秒是**拨钟**拨出来的,不是睡出来的。
+
+    此前真睡 2.5 秒,再要求「前一条一报完成就在 1 秒内领走后一条」:机器一忙(并行满载),报完成到领取之间就超过 1 秒,
+    后一条已经按排队超时放弃 —— 测试红,而被测的规矩没错。钟不走,「前一条做完之后」那段排队就是 0,领取快慢无所谓;
+    要是有人把「排在前一条后面」也算进排队,拨过的 2.5 秒照样让后一条超时放弃,断言照样红。
+    """
+    clock = _Clock()
+    monkeypatch.setattr(browser, "time", clock)
     ws = _ws()
     sid = _session(ws, "xhs")
     worker = worker_client()
 
     first, first_box = _in_thread(lambda: browser.run_action(sid, "wait", {"timeout_ms": 60000}, timeout=30))
-    time.sleep(0.5)
-    claimed = worker.post("/api/browser/worker/claim", json={"worker": "w"}).json()["action"]
+    claimed = _claim(worker)
     assert claimed["action"] == "wait"
 
     # 同一次运行的另一条分支在同一个会话上做事:前面那条还在跑,它等的时间远超排队上限
     second, second_box = _in_thread(lambda: browser.run_action(sid, "extract", {"selector": "h1"}))
-    time.sleep(2.5)
-    assert second.is_alive() and "error" not in second_box
+    _until(lambda: _queued(sid, "extract"))
+    clock.advance(2.5)
+    seen = clock.reads(second)
+    # 后一条的轮询至少又转了两圈、看见了拨过的钟(或者它已经放弃了 —— 那下一行断言说清楚)
+    _until(lambda: clock.reads(second) >= seen + 4 or not second.is_alive())
+    assert second.is_alive() and "error" not in second_box, f"排在同一会话前一条后面的时间被算成了排队:{second_box}"
     # 执行器这时也领不走它(同一会话串行)
     assert worker.post("/api/browser/worker/claim", json={"worker": "w"}).json()["action"] is None
 
     worker.patch("/api/browser/worker/report", json={
         "action_id": claimed["id"], "status": "done", "lease_token": claimed["lease_token"],
     })
-    # 前一条一做完,后一条的排队就开始计时(上面把上限压成了 1 秒)—— 当场就领,不先等前一条的线程收尾:
-    # 机器一忙,那一下 join 就能超过 1 秒,后一条已经按排队超时放弃,这里领到的是 None。
-    next_one = worker.post("/api/browser/worker/claim", json={"worker": "w"}).json()["action"]
-    first.join(timeout=5)
+    next_one = _claim(worker)
+    first.join(timeout=30)
+    assert not first.is_alive() and "error" not in first_box, first_box
     assert next_one["action"] == "extract"
     worker.patch("/api/browser/worker/report", json={
         "action_id": next_one["id"], "status": "done", "result": {"value": "标题"}, "lease_token": next_one["lease_token"],
     })
-    second.join(timeout=5)
-    assert second_box.get("value") == {"value": "标题"}
+    second.join(timeout=30)
+    assert second_box.get("value") == {"value": "标题"}, second_box
 
 
 def test_执行器在线但前面排满了_报排队超时和前面有几条(short_queue) -> None:

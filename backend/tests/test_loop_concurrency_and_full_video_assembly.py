@@ -63,16 +63,28 @@ class Test循环并发:
         running = 0
         peak = 0
         lock = threading.Lock()
+        #: 前三项先在门口会齐 —— 会齐了就是真的同时在跑(并发 3);再**倒着**放行:第 3 项先完、第 1 项最后完,
+        #: 「谁先完成谁在前」会排错。此前靠 0.25 / 0.2 / 0.15 秒的错峰睡眠让三项碰上,机器一忙第 3 项的线程起晚了,
+        #: 前两项已经走了一项,峰值只有 2(线程起步推后 0–0.5 秒时 2/3 红)。
+        first_three = threading.Barrier(3, timeout=10)
+        finished: list[str] = []
+        turn = threading.Condition(lock)
 
         def slow_echo(db, workflow, config):
             nonlocal running, peak
+            index = int(config["index"])
             with lock:
                 running += 1
                 peak = max(peak, running)
-            # 越靠前的越慢:顺序执行和"谁先完成谁在前"都会排错。
-            time.sleep(0.05 * (5 - int(config["index"])))
+            if index < 3:
+                first_three.wait()
+                with turn:
+                    # 第 2 项等第 3 项完、第 1 项等第 2 项完
+                    assert turn.wait_for(lambda: len(finished) >= 2 - index, timeout=10), "倒序放行等不到"
             with lock:
                 running -= 1
+                finished.append(config["item"])
+                turn.notify_all()
             return {"text": config["item"]}
 
         fake_node("template", slow_echo)
@@ -84,11 +96,15 @@ class Test循环并发:
     def test_只有一项失败时_说清是哪一项(self, fake_node) -> None:
         ws = _workspace()
 
+        others_done = threading.Semaphore(0)
+
         def boom(db, workflow, config):
             if config["item"] == "c":
                 # 等另外两项跑完再炸:还在跑的会被一起叫停(那时报的是几项的汇总),这里只看一项失败的说法。
-                time.sleep(0.3)
+                # 等的是「它们跑完了」这件事,不是 0.3 秒 —— 机器一忙,0.3 秒里它们还没开始。
+                assert others_done.acquire(timeout=10) and others_done.acquire(timeout=10), "另外两项没跑完"
                 raise WorkflowDomainError("炸在 c")
+            others_done.release()
             return {"text": config["item"]}
 
         fake_node("template", boom)
@@ -104,12 +120,16 @@ class Test循环并发:
         ws = _workspace()
         started: list[str] = []
         lock = threading.Lock()
+        #: 三项先在门口会齐再一起「超时」—— 那正是真机上的样子(三镜同时在跑、同时失败)。此前各睡 0.05 秒就失败:
+        #: 机器一忙(CI 上并行跑),第 3 项的线程还没起来,第 1 项已经失败、把它叫停了,`started` 只有两项 ——
+        #: 那是对的行为,测的却不是这一条(线程起步推后 0–0.2 秒时 3/3 红;下面那条 d72668939 修的是同一个形状)。
+        all_started = threading.Barrier(3, timeout=10)
 
         def paid_call(db, workflow, config):
             with lock:
                 started.append(config["item"])
             if config["item"] in {"1", "2", "3"}:
-                time.sleep(0.05)
+                all_started.wait()
                 raise WorkflowDomainError("Generation timed out")
             return {"text": config["item"]}
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from copy import deepcopy
 
@@ -1582,7 +1583,10 @@ def test_取消之后才失败的节点_执行历史里记的是已取消_不是
     from app.domain.jobs import cancel_job
     from app.domain.workflows.executors import _REGISTRY
 
+    entered = threading.Event()
+
     def waits_then_loses_its_resource(db, scope, config):
+        entered.set()
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             with SessionLocal() as check:
@@ -1596,11 +1600,13 @@ def test_取消之后才失败的节点_执行历史里记的是已取消_不是
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     graph = {"nodes": [{"id": "d", "type": "delay", "name": "等元素", "config": {"seconds": 30}}], "edges": []}
     outcome, job_id, thread = _run_graph_in_thread(graph, workspace_id=ws)
-    time.sleep(0.3)
+    #: 要测的是「节点**在等**的时候被取消」:等它真进了节点再取消。此前睡 0.3 秒当它进去了 —— 机器一忙,
+    #: 节点还没开始就被取消,走的是另一条路,失败事件里没有 error_key(并行满载下实测 KeyError)。
+    assert entered.wait(30), "节点一直没开始"
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
         db.commit()  # 测试是入口:cancel_job 不提交
-    thread.join(timeout=10)
+    thread.join(timeout=30)
     assert not thread.is_alive()
     with SessionLocal() as db:
         failed = [e.payload for e in db.query(TaskEvent).filter(TaskEvent.job_id == job_id).all()

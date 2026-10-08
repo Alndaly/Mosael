@@ -64,7 +64,7 @@ def client_and_profile():
     return client, resp.json()["id"]
 
 
-def _poll_until(client, profile_id: str, login_id: str, predicate, timeout: float = 5.0) -> dict:
+def _poll_until(client, profile_id: str, login_id: str, predicate, timeout: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout
     state: dict = {}
     while time.monotonic() < deadline:
@@ -145,7 +145,7 @@ def test_cancel_kills_the_process(fake_sidecar, client_and_profile) -> None:
 
     resp = client.delete(f"/api/settings/providers/{profile_id}/oauth/login/{login_id}")
     assert resp.status_code == 204
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 30  # 对照是「挂满 15 分钟」:当场取消和等满分得开就行,不必卡几秒
     while session.process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.05)
     assert session.process.poll() is not None, "取消后进程还活着"
@@ -158,6 +158,11 @@ def test_a_second_start_reuses_the_running_login(fake_sidecar, client_and_profil
     _poll_until(client, profile_id, first, lambda s: s["prompt"] is not None)
     second = client.post(f"/api/settings/providers/{profile_id}/oauth/login").json()["login_id"]
     assert second == first
+    #: 收尾:那个授权进程在等人输设备码,不取消它就挂满 15 分钟,读它输出的线程也一起活过这条测试。
+    session = login_mod.get_session(first)
+    assert client.delete(f"/api/settings/providers/{profile_id}/oauth/login/{first}").status_code == 204
+    assert session is not None and session.process is not None
+    session.process.wait(timeout=30)
 
 
 def test_api_key_vendors_cannot_start_an_oauth_login(client_and_profile) -> None:

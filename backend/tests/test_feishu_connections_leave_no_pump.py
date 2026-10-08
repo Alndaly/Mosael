@@ -30,9 +30,11 @@ def test_子进程自己退出_停机时也等它的泵写完最后一次状态(
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     #: 写状态放慢一点:真机上它快得几乎看不见,但「停机时它还在写」这个窗口是真的,放大它才测得到。
     write_status = connections.bots.write_status
+    writing_error = threading.Event()
 
     def slow_write(bot_id: str, status: str, detail: str = "") -> None:
         if status == "error":
+            writing_error.set()
             time.sleep(0.5)
         write_status(bot_id, status, detail)
 
@@ -40,6 +42,9 @@ def test_子进程自己退出_停机时也等它的泵写完最后一次状态(
     bot = client.post("/api/feishu/bots", json={"workspace_id": ws["id"], "app_id": "cli_q", "app_secret": "s"}).json()
     #: 等子进程**自己**退出(不是被停掉的):这时它可能已经不在连接表里,泵还在写最后一次状态。
     connections._processes[bot["id"]].process.wait(timeout=10)
+    #: 等泵**已经在写**「出错」那一笔了再停机 —— 要测的正是「停机时它还在写」。此前子进程一退就停机:泵的线程起步晚一点、
+    #: 还没读到 EOF,停机就把它当成「被停掉的」记了离线(线程起步推后 0–0.3 秒时实测 `'offline' == 'error'`)。
+    assert writing_error.wait(30), "子进程退出了,泵一直没去写「出错」"
 
     connections.stop_all_connections()
 

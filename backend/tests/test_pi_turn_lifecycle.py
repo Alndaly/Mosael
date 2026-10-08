@@ -164,10 +164,17 @@ class TestControlFrames:
 
         def drive():
             # The turn is blocking, so the control frames are written from another thread —
-            # the same shape as an API request arriving mid-turn.
-            time.sleep(0.4)
+            # the same shape as an API request arriving mid-turn. Wait for the turn to be *live*
+            # (registered with its stdin) rather than sleeping and hoping: on a busy machine the
+            # sidecar is not up after 0.4 s and the steer lands nowhere. The sidecar reads its
+            # stdin line by line, so `act`'s frame is logged before the abort that follows it.
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                with pi_client._LIVE_LOCK:
+                    if session_id in pi_client._LIVE:
+                        break
+                time.sleep(0.01)
             act()
-            time.sleep(0.2)
             pi_client.abort_turn(session_id)
 
         thread = threading.Thread(target=drive, daemon=True)
@@ -177,7 +184,8 @@ class TestControlFrames:
             {"base_url": "http://x", "api_key": "k", "vendor": "v"},
             "model", None, None, None, session_id=session_id, images=images,
         )
-        thread.join(5)
+        thread.join(30)
+        assert not thread.is_alive()
 
     def test_a_steer_reaches_the_sidecar_in_the_shape_it_parses(self, echo_sidecar) -> None:
         capture: dict = {}

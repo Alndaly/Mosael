@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderProfile
 from tests.fake_comfyui import comfyui_grants, PNG, FakeComfyUI
-from tests.util import fresh_client, wait_status
+from tests.util import fresh_client, wait_settled, wait_status
 
 PACKAGE = "dev.mosael.comfyui"
 VENDOR = f"plugin:{PACKAGE}"
@@ -159,7 +159,8 @@ def test_跑挂了的不是停下的(connected) -> None:
         "workspace_id": workspace, "session_id": None, "project_id": None, "provider_profile_id": profile_id,
         "provider": VENDOR, "model": "portrait.json", "kind": "image", "prompt": "海边的柴犬", "parameters": {},
     }).json()
-    assert wait_status(client, submitted["job"]["id"], timeout=60) == "failed"
+    #: 失败原因是任务落终态**之后**才抄到生成记录上的(generation.runner.record_failure):等收拾做完再读。
+    assert wait_settled(client, submitted["job"]["id"], timeout=60) == "failed"
     [record] = client.get(
         f"/api/generation/jobs?workspace_id={workspace}&session_id={submitted['generation']['session_id']}").json()
     assert record["stopped"] is False and "CUDA out of memory" in record["error"]

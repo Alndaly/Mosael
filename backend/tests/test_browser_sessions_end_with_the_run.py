@@ -80,7 +80,7 @@ def test_中途失败_这次运行开的会话被关掉(monkeypatch) -> None:
         "session": "{{open.session}}", "selector": ".go",
     }}))
     assert _settle(job_id) == "failed"
-    assert wait_for_idle_jobs(5)
+    assert wait_for_idle_jobs(30)  # 关会话是落终态之后的收拾(after_commit),跑在任务线程里
     (session,) = _sessions(ws)
     assert session.status == "closed", "失败的运行把会话留在了执行器里"
 
@@ -91,6 +91,8 @@ def test_没接关闭节点_跑完也关(monkeypatch) -> None:
     ws = _ws()
     job_id = _start(ws, _graph(OPEN))
     assert _settle(job_id) == "succeeded"
+    #: 同上:看到 succeeded 时收拾可能还没提交 —— 等任务线程走完再看会话。
+    assert wait_for_idle_jobs(30)
     (session,) = _sessions(ws)
     assert session.status == "closed"
 
@@ -114,8 +116,9 @@ def test_取消时正在等的那一步当场放手_排着的动作不再执行(
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
         db.commit()  # 测试是入口:cancel_job 不提交
-    # 等待节点给了 60 秒 + 15 秒的余量。取消之后要在几秒内收场,而不是等满它。
-    assert wait_for_idle_jobs(5), "取消之后,等待那一步还挂在那里等它自己超时"
+    # 等待节点给了 60 秒 + 15 秒的余量。取消之后要当场收场,而不是等满它 —— 上限取它的一半以下:要分辨的是
+    # 「当场放手」和「等满 75 秒」,不是「几秒内」;机器忙时收场慢几秒不该算错。
+    assert wait_for_idle_jobs(30), "取消之后,等待那一步还挂在那里等它自己超时"
     with SessionLocal() as db:
         assert db.get(BrowserAction, action_id).status == "failed", "排着的动作还会被执行器领走"
         (session,) = db.query(BrowserSession).filter(BrowserSession.workspace_id == ws).all()

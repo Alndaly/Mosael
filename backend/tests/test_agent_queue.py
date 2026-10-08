@@ -11,7 +11,10 @@ the earlier ones read as ignored.
 
 from __future__ import annotations
 
+import threading
 import time
+
+import pytest
 
 from app.domain.agent import host
 from app.ai.sidecar.pi_client import TurnResult
@@ -20,9 +23,34 @@ from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from tests.util import fresh_client
 
 
-def _slow_turn(*args, **kwargs):
-    time.sleep(0.8)
-    return TurnResult(text="ok")
+class _HeldTurn:
+    """一轮「还在跑」的替身:卡着不答,直到测试 `release()`;放行之后的每一轮都当场答完。
+
+    这些测试要在第一轮跑着的时候做事(发下一条、看队列、steer)。此前替身是睡 0.8 秒 / 0.2 秒的,测试得赶在那段时间里
+    做完 —— 机器一忙就赶不上:队列已经被下一轮取走(读到 `[]`),或者 steer 时那一轮已经结束(409)。
+    卡着等放行,就没有「赶得上赶不上」。记下每一轮收到的提示词(`run_turn(session_id, prompt, …)` 的第二个参数)。
+    """
+
+    def __init__(self, answer=lambda prompt: "ok") -> None:
+        self._release = threading.Event()
+        self._answer = answer
+        self.prompts: list[str] = []
+
+    def __call__(self, *args, **kwargs):
+        self.prompts.append(kwargs["prompt"] if "prompt" in kwargs else args[1])
+        assert self._release.wait(30), "测试一直没放行这一轮"
+        return TurnResult(text=self._answer(self.prompts[-1]))
+
+    def release(self) -> None:
+        self._release.set()
+
+
+@pytest.fixture
+def held_turn(monkeypatch):
+    turn = _HeldTurn()
+    monkeypatch.setattr(host, "run_turn", turn)
+    yield turn
+    turn.release()  # 测试中途红了也放行,别让那一轮的线程活过这条测试
 
 
 def _session(client):
@@ -76,10 +104,9 @@ def _wait_idle(session_id: str, seconds: float = 8) -> str:
     return "running"
 
 
-def test_a_mid_turn_message_is_queued_not_steered(monkeypatch) -> None:
+def test_a_mid_turn_message_is_queued_not_steered(monkeypatch, held_turn) -> None:
     """The default must not touch the running turn."""
     steers: list[str] = []
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
 
     client = fresh_client()
@@ -89,40 +116,29 @@ def test_a_mid_turn_message_is_queued_not_steered(monkeypatch) -> None:
 
     assert steers == [], "the queued message was pushed into the running turn"
     assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["two"]
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
-def test_a_queued_message_runs_as_its_own_turn_when_the_first_ends(monkeypatch) -> None:
+def test_a_queued_message_runs_as_its_own_turn_when_the_first_ends(held_turn) -> None:
     """The point of queuing: it gets answered on its own terms, not merged into the answer
     that was already in flight."""
-    prompts: list[str] = []
-
-    def record(*args, **kwargs):
-        prompts.append(kwargs.get("prompt") or args[0] if args else kwargs.get("prompt"))
-        time.sleep(0.3)
-        return TurnResult(text="ok")
-
-    monkeypatch.setattr(host, "run_turn", lambda *a, **kw: (prompts.append(kw["prompt"]), time.sleep(0.2), TurnResult(text="ok"))[-1])
-
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "two"})
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "three"})
+    #: 第一轮还卡着:后两条一定是排着的(不卡的话,机器一忙它们可能各自成了直接发起的一轮,测的就不是排队)。
+    assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["two", "three"]
 
+    held_turn.release()
+    _wait_until(lambda: len(held_turn.prompts) == 3)
     assert _wait_idle(sid) == "idle"
-    assert prompts == ["one", "two", "three"], prompts
+    assert held_turn.prompts == ["one", "two", "three"], held_turn.prompts
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
 
 
-def test_a_queued_message_keeps_hidden_context(monkeypatch) -> None:
-    prompts: list[str] = []
-    monkeypatch.setattr(
-        host,
-        "run_turn",
-        lambda *a, **kw: (prompts.append(kw["prompt"]), time.sleep(0.2), TurnResult(text="ok"))[-1],
-    )
-
+def test_a_queued_message_keeps_hidden_context(held_turn) -> None:
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
@@ -133,18 +149,18 @@ def test_a_queued_message_keeps_hidden_context(monkeypatch) -> None:
 
     queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
     assert [m["content"] for m in queued] == ["two"]
+    held_turn.release()
     # 等的是**这两个 turn 都跑过了**,不是"看起来空闲了"。
     # 出队和「状态翻成 running」之间有一瞬:在那一瞬采样,队列已空、状态还没翻,
     # `_wait_idle` 就会提前返回,而第二个 turn 其实还没开始 —— 于是 prompts 只有一条。
     # 这条按机器负载概率性变红(实测跑三遍全量红两遍),等错了东西比等得不够久更难查。
-    _wait_until(lambda: len(prompts) == 2)
+    _wait_until(lambda: len(held_turn.prompts) == 2)
     assert _wait_idle(sid) == "idle"
-    assert prompts == ["one", "当前工作流 workflow_id=w1\n\n用户消息:\ntwo"], prompts
+    assert held_turn.prompts == ["one", "当前工作流 workflow_id=w1\n\n用户消息:\ntwo"], held_turn.prompts
 
 
-def test_steering_is_opt_in_per_message(monkeypatch) -> None:
+def test_steering_is_opt_in_per_message(monkeypatch, held_turn) -> None:
     steers: list[str] = []
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
 
     client = fresh_client()
@@ -162,12 +178,12 @@ def test_steering_is_opt_in_per_message(monkeypatch) -> None:
     assert steers == ["当前工作流 workflow_id=w1\n\n用户消息:\n改成竖屏"]
     # It left the queue: steering it and then running it again would answer it twice.
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
-def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch) -> None:
+def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch, held_turn) -> None:
     """Reporting a failure the user cannot act on is worse than letting it run on its own."""
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": False)
 
     client = fresh_client()
@@ -180,11 +196,11 @@ def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch) -> N
 
     assert res.status_code == 200 and res.json() == {"steered": False}
     assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["two"]
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
-def test_a_queued_message_can_be_withdrawn(monkeypatch) -> None:
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
+def test_a_queued_message_can_be_withdrawn(held_turn) -> None:
 
     client = fresh_client()
     sid = _session(client)
@@ -194,17 +210,18 @@ def test_a_queued_message_can_be_withdrawn(monkeypatch) -> None:
 
     assert client.delete(f"/api/agent/sessions/{sid}/queue/{queued[0]['id']}").status_code == 200
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
     with SessionLocal() as db:
         assert db.get(AgentMessage, queued[0]["id"]) is None
 
 
-def test_the_message_being_answered_is_not_in_the_queue(monkeypatch) -> None:
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
+def test_the_message_being_answered_is_not_in_the_queue(held_turn) -> None:
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
@@ -271,16 +288,17 @@ def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
     previous turn's answer, and the conversation reads as every question in a row followed by
     every answer in a row, which is exactly what it looked like.
     """
-    monkeypatch.setattr(
-        host,
-        "run_turn",
-        lambda *a, **kw: (time.sleep(0.2), TurnResult(text=f"答:{kw['prompt']}"))[-1],
-    )
+    turn = _HeldTurn(answer=lambda prompt: f"答:{prompt}")
+    monkeypatch.setattr(host, "run_turn", turn)
 
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "一"})
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "二"})
+    #: 第一轮还卡着,「二」一定是排着的 —— 要测的正是排队那条落在哪。
+    assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["二"]
+    turn.release()
+    _wait_until(lambda: len(turn.prompts) == 2)
     assert _wait_idle(sid) == "idle"
 
     transcript = [(m["role"], m["content"]) for m in client.get(f"/api/agent/sessions/{sid}/messages").json()]
@@ -293,9 +311,8 @@ def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
     ], transcript
 
 
-def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch) -> None:
+def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch, held_turn) -> None:
     """Same rule for the other path: it joins the conversation when it is cut in."""
-    monkeypatch.setattr(host, "run_turn", _slow_turn)
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": True)
 
     client = fresh_client()
@@ -310,6 +327,7 @@ def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch) -> 
         original = db.get(AgentMessage, first["id"])
         assert steered.created_at >= original.created_at
         assert not (steered.payload or {}).get("queued")
+    held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
@@ -356,15 +374,9 @@ def test_排队的跨会话通知_重放时也带上信封(monkeypatch) -> None:
 
     这里直接盯模型收到的那份文本,而不是盯 content —— content 本来就该是干净的。
     """
-    prompts: list[str] = []
-
-    def _capture(*args, **kwargs):
-        # run_turn(session_id, prompt, token) —— 第二个位置参数就是模型收到的那份
-        prompts.append(args[1] if len(args) > 1 else kwargs.get("prompt", ""))
-        time.sleep(0.3)
-        return TurnResult(text="ok")
-
-    monkeypatch.setattr(host, "run_turn", _capture)
+    turn = _HeldTurn()  # 记下模型收到的那份(run_turn 的第二个参数);第一轮卡着,通知一定排队
+    monkeypatch.setattr(host, "run_turn", turn)
+    prompts = turn.prompts
 
     client = fresh_client()
     sid = _session(client)
@@ -384,6 +396,7 @@ def test_排队的跨会话通知_重放时也带上信封(monkeypatch) -> None:
         assert len(queued) == 1, "通知没有排队"
         assert (queued[0].payload or {}).get("from_agent_session") == "peer-9", "排队时把来源丢了"
         assert "【" not in queued[0].content, "信封又被拼进正文了"
+    turn.release()
 
     # **等的就是断言的那件事。** 这里此前等的是「会话空闲了」—— 而 idle 在两轮之间是**真的**:
     # 第一轮在 finally 里置 idle,drain 随后才抢占并起第二轮。满负载跑整个套件时那道缝会变宽,

@@ -103,6 +103,7 @@ def test_工作台里通用插件工具不发_也够不着(setup) -> None:
 
 
 def test_没有没发的插件工具_那两个不背() -> None:
+    fresh_client()  # 一个干净的库:此前直接用前一条测试留下的那份,「有没有没发的插件工具」看排在谁后面
     other = second_client("bare")
     workspace = other.post("/api/workspaces", json={"name": "B"}).json()["id"]
     session = other.post("/api/agent/sessions", json={"workspace_id": workspace, "home": {"kind": "studio"}}).json()["id"]

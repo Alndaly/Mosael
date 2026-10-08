@@ -32,10 +32,13 @@ def test_progress_follows_bytes_on_disk_not_worker_events(monkeypatch, tmp_path)
     watcher = f5_models._ByteWatcher(model, model.id, {"message": "下载中"})
     watcher.start()
     try:
-        # worker **一个事件都不报**,只是在下载 —— 盘上的字节慢慢多起来。
+        # worker **一个事件都不报**,只是在下载 —— 盘上的字节慢慢多起来。每写一次,等看盘的线程报出这个大小再写下一次:
+        # 此前是写完睡 0.08 秒,看盘的线程起步晚一点就只看到最后那一个大小(「进度没动过:[0.9, 0.9]」)。
         for size in (200, 500, 900):
             (target / "model_21999120.pt").write_bytes(b"x" * size)
-            time.sleep(0.08)
+            deadline = time.monotonic() + 30
+            while not (seen and seen[-1] >= size / 1000) and time.monotonic() < deadline:
+                time.sleep(0.01)
     finally:
         watcher.stop()
         f5_models.clear_live(model.id)
@@ -57,9 +60,13 @@ def test_progress_never_claims_done_before_it_is(monkeypatch, tmp_path) -> None:
 
     watcher = f5_models._ByteWatcher(model, model.id, {"message": "x"})
     watcher.start()
-    time.sleep(0.1)
+    #: 等它真报过一次进度再看 —— 此前睡 0.1 秒就看,看盘的线程还没报,读到的是「没有进度」,断言照样成立。
+    deadline = time.monotonic() + 30
+    while not f5_models.status(model).get("progress") and time.monotonic() < deadline:
+        time.sleep(0.01)
     watcher.stop()
     progress = f5_models.status(model)["progress"]
+    assert progress, "看盘的线程一次进度都没报"
     f5_models.clear_live(model.id)
     assert progress <= 0.99, f"报了 {progress} —— 100% 该由「检查点在盘上」来说"
 

@@ -34,8 +34,10 @@ def test_the_added_tools_reach_the_agent() -> None:
 
 
 def test_they_are_in_the_manifest_the_runtime_reads() -> None:
-    with fresh_client() as client:
-        served = {tool["name"] for tool in client.get("/api/agent/tools").json()}
+    #: 不写 `with fresh_client() as client:` —— 进 TestClient 的上下文就跑了整个 app lifespan(起「保持运行」、闲置看护、
+    #: 引擎预探测……),那几条线程活过这条测试,在后面别的测试 drop_all 的空当里查库。这里只要一次 GET。
+    client = fresh_client()
+    served = {tool["name"] for tool in client.get("/api/agent/tools").json()}
     missing = sorted(name for name in ADDED if name not in served)
     assert missing == [], f"这些工具没被 /api/agent/tools 端出去:{missing}"
 

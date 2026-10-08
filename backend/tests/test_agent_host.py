@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from base64 import b64decode
+from types import SimpleNamespace
 
 from app.ai.sidecar import pi_client
 from app.domain.agent import host
@@ -522,7 +523,9 @@ def test_一轮结束时不会留下思考中() -> None:
 def test_思考块收起时记下用了多久_落库时带着(monkeypatch) -> None:
     """「已思考」右侧和工具卡一样显示用时。起点记在流状态里,收起时写进块;落库保留它。"""
     clock = iter([100.0, 100.0, 107.4])  # 首个 token 时刻、思考起点、思考结束
-    monkeypatch.setattr(agent_stream.time, "monotonic", lambda: next(clock))
+    #: 只换流状态那个模块读的钟。此前换的是全局的 `time.monotonic`(`agent_stream.time` 就是 time 模块本身):
+    #: 这条测试跑着的时候,进程里别的线程、收尾时等后台活的那段一读钟就是 StopIteration。
+    monkeypatch.setattr(agent_stream, "time", SimpleNamespace(monotonic=lambda: next(clock)))
     session_id = "s-thinking-duration"
     agent_stream._stream_reset(session_id)
     agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "先想一下"})

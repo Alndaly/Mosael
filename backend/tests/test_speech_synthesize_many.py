@@ -57,17 +57,33 @@ def _batch(n: int, tmp_path: Path):
     )
 
 
+class _FirstWaitsForSecond(_Recorder):
+    """第 1 句一直等到第 2 句也开始了才往下走 —— 一句一句来的话,第 2 句永远开始不了,第 1 句等满就报错。
+
+    此前用总耗时证明「并发了」(`< 12 × 0.05 × 0.7` 秒):机器一忙,线程排不上,并发的那一批也走不进这条线
+    (CI 式满载下实测 0.70 秒)。会齐不看钟:并发时当场会齐,不并发时必然等不到。
+    """
+
+    def __init__(self) -> None:
+        super().__init__(supports_parallel_synthesis=True)
+        self._second_started = threading.Event()
+
+    def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None:
+        if request.text == "line 1":
+            self._second_started.set()
+        if request.text == "line 0" and not self._second_started.wait(30):
+            raise SpeechSynthesisError("cue 1 never started while cue 0 was in flight")
+        super().synthesize(request, out_path)
+
+
 def test_a_remote_engine_synthesises_cues_concurrently(tmp_path: Path) -> None:
-    adapter = _Recorder(supports_parallel_synthesis=True)
+    adapter = _FirstWaitsForSecond()
     requests, paths = _batch(12, tmp_path)
 
-    started = time.perf_counter()
     errors = synthesize_many(adapter, requests, paths)
-    elapsed = time.perf_counter() - started
 
-    assert errors == [None] * 12
+    assert errors == [None] * 12, "第 1 句在飞的时候第 2 句没开始 —— 远端引擎被一句一句地跑了"
     assert adapter.peak > 1, "a remote engine ran one cue at a time"
-    assert elapsed < 12 * 0.05 * 0.7, "no faster than serial"
 
 
 def test_a_local_engine_is_kept_to_one_at_a_time(tmp_path: Path) -> None:
