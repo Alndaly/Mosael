@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
-from app.domain.jobs import TERMINAL_STATUSES, blame, finish_job, reset_parent_job, say, set_parent_job
+from app.domain.jobs import TERMINAL_STATUSES, blame, failure_payload, finish_job, reset_parent_job, say, set_parent_job
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +164,13 @@ def dispatch_scheduled_job(db: Session, task: ScheduledTask, run: ScheduledTaskR
         run.status = "failed"
         run.error = str(exc)[:500]
         run.finished_at = now()
+        #: 开跑前就停在「这一版要主人认可」(ADR 0047,见 workflows.engine.start_workflow_job):任务照常启用,
+        #: 运行记录和那次运行的失败现场都带上是哪一版,主人在任务页 / 运行历史里一键「认可这一版」。
+        failure = failure_payload(exc)
+        attest = (failure.get("details") or {}).get("attest")
+        if isinstance(attest, dict):
+            job.result = {**(job.result or {}), "failure": failure}
+            run.result = {**(run.result or {}), "attest": attest}
         #: 到点跑的那一刻没人看着:派不出去要说一声(工作流跑起来之后的失败由引擎通知,这里是还没跑起来的那一种)。
         notify_run_failed(db, task, job, str(exc))
     finally:

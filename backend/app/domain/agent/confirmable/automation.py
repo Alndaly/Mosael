@@ -255,6 +255,15 @@ def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> 
             "confirmErr_workflowChangedSinceCard",
             name=workflow.name, opened=payload["workflow_revision"], now=workflow.revision,
         )
+    if confirmation.decision_mode == "manual" and actor:
+        #: 人点了「同意」就是点了运行:点运行即认可(ADR 0047 D6)。自动放行的不算 —— 那是无人看着的运行,
+        #: 别人改过的那一版要花他的连接时照样停下来等他认可。
+        from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision
+
+        try:
+            attest_current_revision(db, workflow, attested_by=actor)
+        except WorkflowRevisionError as exc:
+            raise ConfirmationError.relay(exc) from exc
     job = start_workflow_job(db, workflow, created_by=actor, params=dict(payload.get("params") or {}))
     return {"job_id": job.id, "workflow_revision": int(workflow.revision or 0)}
 

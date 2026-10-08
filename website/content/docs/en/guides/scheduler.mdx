@@ -2,7 +2,7 @@
 title: Scheduled tasks
 description: Set workflow triggers, review run history and manage active schedules.
 order: 16
-updated: 2026-10-08
+updated: 2026-10-09
 version: 1.9.3
 ---
 
@@ -43,6 +43,23 @@ by someone else. Once the owner has reviewed the change, **Approve this version*
 the next run go through. Approving doesn't change the graph or add a version, and it only counts for
 things the approver can use. On a single-user install the author and the owner are the same person, so
 this never comes up.
+
+**AI and plugin connections work the same way.** They spend the owner's keys and quota: if a version
+someone else changed uses chat, generation, voice or translation nodes, or plugin nodes, it only spends once
+the owner approves it. Until then a due run stops **before it starts**, spending nothing; the task stays
+enabled and the run's row offers **Approve this version**. Workflows that use no connection at all (only
+templates, conditions, editing, local rendering) aren't affected.
+
+- **Clicking Run now counts as approval.** The owner is right there: the click approves the current
+  version, so this run and later scheduled ones go ahead. **Run** in the workflow editor and approving an
+  agent's "run workflow" card yourself work the same way. Only due, webhook-triggered and auto-approved
+  agent runs actually wait for approval. It approves this workflow's current version only — a called
+  sub-workflow someone else changed and you haven't approved still stops and asks you to approve that one.
+- **Needs your approval.** When someone changes a workflow your task uses (or a sub-workflow it calls), you
+  get a notification; the task shows **Needs your approval** in the list, and its details say which
+  workflow and version, with **Approve this version** right there. Teammates see **Waiting for its owner** —
+  their approval doesn't count, since it isn't their money. Whoever edited the workflow also sees a note at
+  the top of the editor that the task resumes once you approve.
 
 Scheduling runs on the connected backend. In local mode it runs with the app, so fully quitting stops scheduled execution. With a remote backend, that server must stay running. Closing a window and quitting the application are different actions. See [Workflows](/docs/guides/workflows) for triggers and variables.
 

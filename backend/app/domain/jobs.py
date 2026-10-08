@@ -297,6 +297,12 @@ def _record_crash(job_id: str, what: object, *, exc: Exception | None = None, ca
             if finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_genericFailed", what=what)
                 db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
+                #: 异常带着现场(「这一版要主人认可」的 attest,见 domain/authority):留在任务上,等它的工作流 / 定时任务
+                #: 从这里抄过去给「认可这一版」(executors.common.wait_for_job、scheduler.sync_run_states)。
+                #: 一个工作流里的生成任务撞上这道闸,就是从这里走的 —— 它在自己的线程里解析连接。
+                failure = failure_payload(exc) if exc is not None else {}
+                if failure.get("details"):
+                    job.result = {**(job.result or {}), "failure": failure}
     except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
         logger.exception("could not record the failure of %s %s", what, job_id)
 
@@ -399,6 +405,20 @@ def blame(exc: Exception) -> dict[str, Any]:
         #: 参数里的文案片段(字段名之类,见 core/i18n.fragment)原样留着,读的时候一起翻。
         "error_params": {k: stored_param(v) for k, v in (params or {}).items()},
     }
+
+
+def failure_payload(exc: Exception) -> dict[str, Any]:
+    """把异常变成任务总线可持久化的失败现场(`job.result["failure"]`)。
+
+    **和任务上的失败原因同一个形状**(见 blame):那句话本身、它的文案 key 和参数 —— 和节点事件的 `name` / `name_key`
+    同构,出口可以按读的人的语言重翻。异常带着的 `details`(「这一版要主人认可」的 attest,见 domain/authority)
+    跟着走:运行历史、定时任务的运行记录据此给「认可这一版」。
+    """
+    payload: dict[str, Any] = {key: value for key, value in blame(exc).items() if value}
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict) and details:
+        payload["details"] = details
+    return payload
 
 
 def lock_active_job(db: Session, job: Job) -> bool:

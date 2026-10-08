@@ -13,6 +13,7 @@ from typing import Annotated
 
 from app.api.schemas import (
     JobOut,
+    TaskAwaitingApprovalOut,
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
     WorkflowCreate,
@@ -31,6 +32,7 @@ from app.api.schemas import (
     WorkflowUpdate,
 )
 from app.domain.scheduler import stop_tasks_bound_to_workflow
+from app.domain.scheduler import use_cases as scheduler_uc
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
     WorkflowDomainError,
@@ -51,6 +53,7 @@ from app.domain.workflows import use_cases as workflow_uc
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
     WorkflowRevisionError,
+    attest_current_revision,
     attest_revision,
     get_workflow_revision,
     list_workflow_revisions,
@@ -368,6 +371,26 @@ def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[W
     return _with_vouchers(db, list_workflow_revisions(db, workflow.id))
 
 
+@router.get("/workflows/{workflow_id}/awaiting-approvals", response_model=list[TaskAwaitingApprovalOut])
+def awaiting_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> list[TaskAwaitingApprovalOut]:
+    """绑着这张图(或调用它的图)、在等主人认可的定时任务(ADR 0047 D10)。编辑器据此提醒改图的人:你存的这一版
+    要任务主人认可之后,那个任务到点才会接着花主人的 AI 连接 —— 只提醒、不拦;主人那边另有通知和任务上的标记。"""
+    from app.db.models import User
+
+    workflow = workflow_uc.readable(db, user, workflow_id)
+    rows: list[TaskAwaitingApprovalOut] = []
+    for task, waiting in scheduler_uc.awaiting_approval_for(db, user, workflow):
+        owner = db.get(User, task.owner_user_id) if task.owner_user_id else None
+        rows.append(TaskAwaitingApprovalOut(
+            task_id=task.id,
+            task_name=task.name,
+            owner_name=(owner.display_name or owner.username) if owner is not None else "",
+            is_mine=task.owner_user_id == user.id,
+            awaiting=waiting.attest_details()["attest"],
+        ))
+    return rows
+
+
 @router.post("/workflows/{workflow_id}/revisions/{revision}/attest", response_model=WorkflowRevisionOut)
 def attest(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> WorkflowRevision:
     """「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。
@@ -418,7 +441,11 @@ def delete(workflow_id: str, db: Tx, user: CurrentUser) -> Response:
 def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -> Job:
     workflow = workflow_uc.editable(db, user, workflow_id)
     try:
+        #: 点运行即认可(ADR 0047 D6):有人看着的运行不该被「这一版要你认可」挡下。
+        attest_current_revision(db, workflow, attested_by=user.id)
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
+    except WorkflowRevisionError as exc:
+        raise HTTPException(status_code=422, detail=_localized(WorkflowDomainError.from_error(exc))) from exc
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 

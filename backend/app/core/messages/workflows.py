@@ -80,6 +80,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
     "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
     "wfErr_callNodeNotRunnable": {"zh": "「{node}」:{reason}", "en": "“{node}”: {reason}"},
+    # 开跑前:这一次要花跑的人的连接,而这一版他没担保(ADR 0047,见 engine.unvouched_spend)。
+    "wfErr_spendNotVouched": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而这次运行要用跑的人自己的 AI 连接或插件连接(花他的钥匙和额度)。请跑的人打开这个工作流,确认改动后点「认可这一版」—— 认可之前不会开跑",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and this run would use the runner's own AI or plugin connections (their key and quota). Ask the runner to open the workflow, review the change and click “Approve this version” — it won't start until then.",
+    },
     "wfErr_calledWorkflowNotRunnable": {
         "zh": "「{node}」调用的工作流「{name}」现在跑不起来:{reason}",
         "en": "The workflow “{name}” called by “{node}” can't run right now: {reason}",

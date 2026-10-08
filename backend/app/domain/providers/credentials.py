@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderCredential, ProviderProfile
+from app.domain.authority import ensure_vouched_to_spend
 
 
 
@@ -77,6 +78,9 @@ def resolve_connection(
     # ProviderCredential 行，少了这道判断就会让任何用户使用别人的本地端点。
     if user_id is not None and profile.owner_user_id != user_id:
         return None
+    # 在一次工作流运行里:用这条连接就是花主人的钥匙和额度,被执行的每一版图都要有主人担保(ADR 0047)。
+    # 这是兜底 —— 开跑前已经按同一条判过(workflows.engine.start_workflow_job);运行中途才定下来的连接在这里拦。
+    ensure_vouched_to_spend(db, profile.owner_user_id, connection=profile.name)
     credential = pick(db, profile.id, user_id)
     # **插件连接的钥匙在插件实例上**(ADR 0020):这条连接只是生成领域指向那个实例的把手,
     # 凭据、端点都由插件运行时只注入给那个插件自己。在这里要一把连接上的钥匙,等于要一把

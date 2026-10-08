@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -175,6 +175,7 @@
     "migrate-scene-cameras-become-objects",
     "migrate-scene-models-to-disk",
     "migrate-scene-models-to-workspace",
+    "migrate-scheduled-tasks-vouch-for-what-they-run",
     "migrate-scripts-declaring-input-go-back",
     "migrate-sequence-operation-clip-records-are-complete",
     "migrate-session-allow-remembers-the-tier",

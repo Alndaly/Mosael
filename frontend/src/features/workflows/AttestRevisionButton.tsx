@@ -21,6 +21,10 @@ export function AttestRevisionButton({ attest, onDone }: { attest: RevisionAttes
     mutationFn: () => attestWorkflowRevision(attest.workflow_id, attest.revision),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workflow-revisions", attest.workflow_id] });
+      //: 「待你确认」跟着消失(ADR 0047):定时任务上的标记、编辑器里的提醒。认可的可能是子流程那一版,
+      //: 绑着的是调用它的图 —— 两份都整个失效,不按这一张图的 id 挑。
+      void qc.invalidateQueries({ queryKey: ["scheduled-tasks"] });
+      void qc.invalidateQueries({ queryKey: ["workflow-awaiting-approvals"] });
       toast.success(t("wfRevisionAttested").replace("{version}", String(attest.revision)));
       onDone?.();
     },

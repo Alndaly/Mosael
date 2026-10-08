@@ -29,6 +29,7 @@ from app.domain.jobs import (
     create_job,
     current_parent_job_id,
     dispatch_job,
+    failure_payload,
     emit_job_event,
     finish_job,
     listening_for_progress,
@@ -49,7 +50,9 @@ from app.domain.workflows import (
     validate_graph,
     with_run_params,
 )
-from app.domain.workflows.graph_rules import run_params
+from app.domain.authority import Authority, Voucher
+from app.domain.workflows.authority import revision_voucher, run_authority
+from app.domain.workflows.graph_rules import run_params, spending_nodes_in_graph
 from app.domain.workflows.node_types import node_title
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config, one_asset_fields
 from app.domain.workflows.executors import get_executor, run_preflights
@@ -89,7 +92,20 @@ def start_workflow_job(
         raise WorkflowDomainError.from_error(exc) from exc
     #: 开跑前的那一套检查(结构、必填、插件按跑的人、生成节点的文字、节点的运行前检查、字面量指定的
     #: 子工作流)只在 check_runnable 一处 —— 智能体开卡、定时任务启用与触发问的是同一个函数。
-    check_runnable(db, workflow, params, job.created_by if job is not None else created_by)
+    actor = job.created_by if job is not None else created_by
+    check_runnable(db, workflow, params, actor)
+    #: 这一次要花跑的人的连接(钥匙、额度),而被执行的某一版他没担保:不开跑、一分钱不花,失败现场带着要认可的
+    #: 那一版(ADR 0047)。不放进 check_runnable:那是「图本身跑不跑得起来」,定时任务启用、到点触发前都问它,
+    #: 不过就停用任务 —— 而这一条是「这一版等主人认可」,任务该照常到点、每次记一条带「认可这一版」的失败。
+    #: 挂在哪条运行底下:定时任务复用的包装任务还没钉修订,从它的上一层问起;子流程在调用它的那一层里。
+    above = run_authority(db, job.parent_job_id if job is not None else current_parent_job_id())
+    waiting = unvouched_spend(db, workflow, actor, above=above)
+    if waiting is not None:
+        raise WorkflowDomainError(
+            "wfErr_spendNotVouched",
+            params={"workflow": waiting.workflow_name, "revision": waiting.revision},
+            details=waiting.attest_details(),
+        )
     pinned_payload = {
         "workflow_id": workflow.id,
         "workflow_revision_id": revision.id,
@@ -151,6 +167,70 @@ def start_workflow_job(
 
 #: 子工作流最多往下查几层 —— 和执行时 call_workflow 的嵌套上限同一个数(见 executors.subworkflow)。
 _MAX_CALL_DEPTH = 8
+
+
+def unvouched_spend(
+    db: Session, workflow: Workflow, actor: str | None, *, above: Authority | None = None
+) -> Voucher | None:
+    """这一次运行要不要花跑的人(`actor`)的连接,而被执行的某一版他没担保:要的话交回第一版等他认可的,不要就 None。
+
+    连接只归一个人、只有主人用得了(providers.credentials.resolve_connection),所以花的就是跑的人的钱。哪几版要他担保,
+    和执行时那道闸(domain/authority.ensure_vouched_to_spend)在用到连接的那一刻看到的一样:那一刻所在的这一版,加上
+    调用它的每一层(`above`:这次运行挂在哪条运行底下)。于是一版要担保,当且仅当它自己、或它字面量调用的子流程
+    (顺下去)里有会花钱的节点(节点声明 `"spends"`,见 graph_rules.SPENDING_NODE_TYPES)—— 只调了一张不花钱的子流程,
+    那张子流程是谁改的不在这里问。子流程名字写成引用、由数据边供的,运行前不知道是哪一张,到它开跑时同一条再判一次。
+
+    定时任务卡上的「待你确认」问的也是这里(scheduler.approvals)。
+    """
+    if not actor:
+        return None
+    try:
+        revision = current_workflow_revision(db, workflow)
+    except WorkflowRevisionError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    needed = _spend_vouchers(db, revision, workflow.workspace_id, seen=frozenset({workflow.id}))
+    if not needed:
+        return None
+    for voucher in (*(above.vouchers if above is not None else ()), *needed):
+        if actor not in voucher.users:
+            return voucher
+    return None
+
+
+def _spend_vouchers(db: Session, revision: WorkflowRevision, workspace_id: str, *, seen: frozenset[str]) -> list[Voucher]:
+    """这一版(连同它字面量调用的子流程)要花跑的人的钱时,哪几版得有他担保;不花就是空。"""
+    needed: list[Voucher] = []
+    if len(seen) <= _MAX_CALL_DEPTH:
+        for child in _literal_callees(db, revision.graph, workspace_id):
+            if child.id in seen:
+                continue
+            try:
+                child_revision = current_workflow_revision(db, child)
+            except WorkflowRevisionError:
+                continue  # 子流程那一版说不清 —— check_runnable 已经替它报过
+            needed += _spend_vouchers(db, child_revision, workspace_id, seen=seen | {child.id})
+    if needed or spending_nodes_in_graph(revision.graph):
+        return [revision_voucher(db, revision), *needed]
+    return []
+
+
+def _literal_callees(db: Session, graph: dict[str, Any], workspace_id: str) -> list[Workflow]:
+    """图里 `call_workflow` 节点**字面量**点名的子工作流(循环体、子图里的也算)。名字是引用、由数据边供的,
+    运行前不知道是哪一张,不在这里;不在这个工作区的、删了的也不在 —— 那是 check_runnable 报的事。"""
+    found: list[Workflow] = []
+    for layer, node, _title in _nodes(graph):
+        if node.get("type") != "call_workflow":
+            continue
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        target_id = config.get("workflow_id")
+        if not isinstance(target_id, str) or not target_id.strip() or _templated(target_id):
+            continue
+        if (str(node.get("id") or ""), "workflow_id") in _bound(layer):
+            continue
+        child = db.get(Workflow, target_id.strip())
+        if child is not None and child.workspace_id == workspace_id and child not in found:
+            found.append(child)
+    return found
 
 
 def check_runnable(
@@ -421,7 +501,7 @@ def _run_workflow_thread(
             logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
-            failure = _failure_payload(exc)
+            failure = failure_payload(exc)
             #: 失败原因连同它的 key 一起落库 —— 接口按读的人的语言翻(见 jobs.blame)。
             if not finish_job(db, job, status="failed", **blame(exc)):
                 return
@@ -439,20 +519,6 @@ def _run_workflow_thread(
                 link="#/workflows",
                 payload={"workflow_id": workflow.id, "job_id": job.id},
             )
-
-
-def _failure_payload(exc: Exception) -> dict[str, Any]:
-    """把异常变成任务总线可持久化的失败现场。
-
-    **和任务上的失败原因同一个形状**(见 jobs.blame):那句话本身、它的文案 key 和参数 ——
-    和节点事件的 `name` / `name_key` 同构,出口可以按读的人的语言重翻。不按位置截:此前
-    `str(exc)[:500]` 把长一点的原因(条件节点带着两边的原值)切成半句话,切掉的恰好是后半截。
-    """
-    payload: dict[str, Any] = {key: value for key, value in blame(exc).items() if value}
-    details = getattr(exc, "details", None)
-    if isinstance(details, dict) and details:
-        payload["details"] = details
-    return payload
 
 
 def execute_graph(
@@ -736,7 +802,7 @@ def run_graph(
                                    error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
                         break
                     error, failed_node = exc, nid
-                    node_event("workflow.node.failed", nid, **_failure_payload(exc))
+                    node_event("workflow.node.failed", nid, **failure_payload(exc))
                     # **失败让这一轮停下。** 还在跑的兄弟节点做完了也没人要:它们正在等的子任务
                     # 由等的那一方取消掉(见 executors.common.wait_until),而不是陪它们跑完。
                     halt.set()
@@ -765,7 +831,7 @@ def run_graph(
             for future, pending_nid in futures.items():
                 failure = future.exception()
                 if failure is not None:
-                    node_event("workflow.node.failed", pending_nid, **_failure_payload(failure))
+                    node_event("workflow.node.failed", pending_nid, **failure_payload(failure))
                 else:
                     node_finished(pending_nid, future.result())
 

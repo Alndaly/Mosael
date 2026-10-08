@@ -2,7 +2,7 @@ import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DE
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CalendarClock, CheckCircle2, ChevronRight, CircleAlert, Copy, Loader2, Play, Plus, Power, RotateCcw, Timer, Trash2, Users2 } from "lucide-react";
+import { Ban, CalendarClock, CheckCircle2, ChevronRight, CircleAlert, Copy, Loader2, Play, Plus, Power, RotateCcw, ShieldAlert, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -236,6 +236,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                       <Truncate as="strong">{task.name}</Truncate>
                       <small>
                         {kindOf(task.kind).label} · {t(`trigger_${task.trigger_type}` as never)}
+                        {/* 别人改过绑着的图,下一次到点要等主人认可(ADR 0047):列表里就看得见,不用点进去。 */}
+                        {task.awaiting_approval && (
+                          <span data-task-awaiting-approval-mark="" className="text-warning">
+                            {" · "}
+                            {task.is_mine ? t("taskAwaitingApproval") : t("taskAwaitingApprovalOther")}
+                          </span>
+                        )}
                       </small>
                     </span>
                   </button>
@@ -661,6 +668,7 @@ function TaskDetail({
             onToggle={(checked) => toggleTask.mutate(checked)}
           />
         </div>
+        <AwaitingApprovalNotice task={task} />
         {/* 计划 / 下次 / 上次是**三个短事实**,不是三件要操作的事 —— 它们此前各占一整行,
             每行还配一句说明,读三个时间戳要扫过六行字。摆成一排。 */}
         <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-4 text-ui-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
@@ -828,6 +836,33 @@ function TaskParamsRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
           </div>
         </SettingsRow>
       )}
+    </div>
+  );
+}
+
+/**
+ * 「待你确认」(ADR 0047):绑着的图(或它调用的子流程)是别人改的,下一次到点会停下、不花主人的 AI 连接,直到主人认可
+ * 那一版。主人就地点「认可这一版」;别人只看得到在等主人 —— 他认可不算数,花的不是他的钱。
+ */
+function AwaitingApprovalNotice({ task }: { task: ScheduledTask }) {
+  const t = useI18n();
+  const waiting = task.awaiting_approval;
+  if (!waiting) return null;
+  const body = (task.is_mine ? t("taskAwaitingApprovalBody") : t("taskAwaitingApprovalBodyOther"))
+    .replace("{workflow}", waiting.workflow_name)
+    .replace("{version}", String(waiting.revision));
+  return (
+    <div
+      role="status"
+      data-task-awaiting-approval=""
+      className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] px-3 py-2 text-ui-xs text-foreground"
+    >
+      <ShieldAlert size={14} className="shrink-0 text-warning" />
+      <span className="min-w-0 flex-1">
+        <strong className="mr-1.5 text-warning">{task.is_mine ? t("taskAwaitingApproval") : t("taskAwaitingApprovalOther")}</strong>
+        {body}
+      </span>
+      {task.is_mine && <AttestRevisionButton attest={waiting} />}
     </div>
   );
 }

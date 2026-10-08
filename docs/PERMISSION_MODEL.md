@@ -204,7 +204,26 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 (`shareErr_notManageable_scheduledTask`)。webhook 触发密钥同时改成**只存哈希**(`scheduled_tasks.webhook_secret_hash`):
 此前它明文躺在 `payload` 里、列表接口发给工作区里每个人,只读成员凭它不用登录就能触发、取消主人的运行。原文只在生成的那一次
 响应里给主人(建 webhook 任务、重置、改成 webhook);老库的明文由迁移换成哈希,外部系统手上那串照样能用,界面提醒主人重置一次。
-钥匙与额度本身要不要纳入 §3.8 的担保人检查,另行讨论。测试:`tests/test_scheduled_tasks_belong_to_their_owner.py`。
+钥匙与额度本身纳入 §3.8 的担保人检查,见 §3.10。测试:`tests/test_scheduled_tasks_belong_to_their_owner.py`。
+
+### 3.10 同事改了图,主人的任务就花主人的 AI 钥匙和额度 — ✅ 已修复
+
+§3.8 只对私有身份关了「借别人的任务用别人的东西」。AI 供应商连接、插件连接同样归人(用它就是花主人的钥匙和额度),此前却只看
+跑的人:同事改了主人的定时任务绑着的图,到点一跑,花的是主人的钱。
+
+现在判据同一条([ADR 0047](adr/0047-scheduled-runs-need-a-voucher-for-provider-keys.md)):一次运行要用属于某人的连接,被执行的
+每一版图都要有**连接的主人**做担保人。
+
+- **开跑前查**(`workflows.engine.unvouched_spend`):图里(连同字面量调用的子流程)有会用到连接的节点(节点声明 `"spends"`,
+  插件节点一律算)时,每一版都要有跑的人担保;过不了就不开跑,报 `wfErr_spendNotVouched`,失败现场带 `details.attest`;
+- **执行时兜底**(`domain/authority.ensure_vouched_to_spend`):放在解析连接的那一处(`providers.credentials.resolve_connection`)
+  和插件干活的两条路(`plugins.tools.invoke` / `invoke_host`),自己从任务上下文取这次运行的授权,报 `spendErr_notVouched`;
+- **点运行即认可**:编辑器的「运行」、定时任务的「立即运行」、亲手点同意的智能体卡,记点的人为当前这一版的担保人 —— 实际只挡
+  无人看着的运行(到点、webhook、自动放行);
+- **只提醒、不拦**:别人存了一版被定时任务绑着的图,任务主人收到通知、任务上挂「待你确认」,编辑器里提醒改图的人;
+- 升级时迁移 `migrate-scheduled-tasks-vouch-for-what-they-run` 给每个任务的主人对它此刻跑的那几版补一条认可。
+
+棘轮:`tests/test_scheduled_runs_need_a_voucher_to_spend.py`(每个节点声明 `spends`、组装根把授权接进闸)。
 
 ## 4. 已经对上的地方
 

@@ -32,6 +32,19 @@ class WorkflowRevisionError(LocalizedError, RuntimeError):
     """修订快照对不上或者不存在。带文案 key(`wfErr_revision*`),按请求方的语言翻。"""
 
 
+#: 存出新的一版之后要告诉谁:(db, 工作流, 新的这一版)。ADR 0047 —— 别人的定时任务绑着这张图(或调用它的图)时,
+#: 这一版要等任务主人认可才会花他的钥匙和额度,得告诉他。工作流不认识定时任务(定时任务依赖工作流),由组装根
+#: 登记(app.main._wire_seams)。机械改写(`source="migration"`)不通知:它沿用上一版的担保人
+#: (见 plugin_references._commit_mechanical_revision),没有什么要谁去认可。
+RevisionSaved = Callable[[Session, Workflow, WorkflowRevision], None]
+_saved_listeners: list[RevisionSaved] = []
+
+
+def on_saved(listener: RevisionSaved) -> None:
+    if listener not in _saved_listeners:
+        _saved_listeners.append(listener)
+
+
 def graph_digest(graph: dict) -> str:
     """完整图摘要，用于校验当前投影和不可变快照各自没有损坏。"""
 
@@ -248,6 +261,10 @@ def commit_graph_revision(
             source_id=revision.id,
         )
         db.refresh(workflow)
+        #: 刷新之后再告诉别人:听的一方要按「当前版」判(revision 是条件 UPDATE 写的,会话里那份还是旧号)。
+        if source != "migration":
+            for listener in _saved_listeners:
+                listener(db, workflow, revision)
         return revision
 
     raise WorkflowRevisionError("wfErr_revisionConcurrent")
@@ -332,6 +349,15 @@ def revision_vouchers(db: Session, revision: WorkflowRevision) -> frozenset[str]
         select(WorkflowRevisionAttestation.user_id).where(WorkflowRevisionAttestation.revision_id == revision.id)
     )
     return frozenset({user for user in (revision.created_by, *attested) if user})
+
+
+def attest_current_revision(db: Session, workflow: Workflow, *, attested_by: str) -> WorkflowRevision:
+    """**点运行即认可**(ADR 0047 D6):人点了「运行」/「立即运行」,他就在现场、看得见这张图 —— 记他为当前这一版的担保人。
+
+    于是有人看着的运行零摩擦,真正会被「这一版要主人认可」挡下的只有无人看着的运行(到点的定时任务、webhook、
+    智能体自动放行的)。认可的只是**这一张图的当前版**:它调用的子流程是别人改过、他还没认可的那一版,照样停下来请他认可。
+    """
+    return attest_revision(db, workflow, current_workflow_revision(db, workflow).revision, attested_by=attested_by)
 
 
 def attest_revision(db: Session, workflow: Workflow, target_revision: int, *, attested_by: str) -> WorkflowRevision:

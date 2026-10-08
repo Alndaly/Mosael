@@ -173,6 +173,7 @@
   "migrate-scene-cameras-become-objects": "df310644caa04840",
   "migrate-scene-models-to-disk": "f6948f98c02c039e",
   "migrate-scene-models-to-workspace": "1804893907b3c1c4",
+  "migrate-scheduled-tasks-vouch-for-what-they-run": "785746cd8c9b3e79",
   "migrate-scripts-declaring-input-go-back": "23e75694acbfa381",
   "migrate-sequence-operation-clip-records-are-complete": "61aaac6cec4a9964",
   "migrate-session-allow-remembers-the-tier": "0e1a781bf2173db2",

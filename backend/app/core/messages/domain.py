@@ -518,6 +518,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The bound workflow “{name}” can't run with this task's parameters: {reason}",
     },
     "schedNotice_runFailed": {"zh": "定时任务没跑起来:{name}", "en": "Scheduled task didn't start: {name}"},
+    # 有人改了被你的定时任务绑着的工作流(ADR 0047 D10):只提醒,不拦。
+    "schedNotice_awaitingApproval": {
+        "zh": "定时任务「{name}」等你确认工作流的新版本",
+        "en": "Scheduled task “{name}” is waiting for you to approve a workflow change",
+    },
+    "schedNotice_awaitingApprovalBody": {
+        "zh": "{saver} 改了工作流「{workflow}」(v{revision})。你认可这一版之前,这个任务到点会停下,不花你的 AI 连接和插件连接。去定时任务页看改了什么、点「认可这一版」",
+        "en": "{saver} changed the workflow “{workflow}” (v{revision}). Until you approve this version, the task will stop when it's due instead of spending your AI and plugin connections. Open Scheduled tasks to review the change and click “Approve this version”.",
+    },
     "schedNotice_disabled": {
         "zh": "定时任务跑不起来,已停用:{name}",
         "en": "Scheduled task can't run and was turned off: {name}",
@@ -644,6 +653,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "hostErr_notVouched": {
         "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要读这台电脑上的文件。请部署管理员打开这个工作流,确认改动后点「认可这一版」",
         "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it reads files on this computer. Ask a deployment admin to open the workflow, review the change and click “Approve this version”.",
+    },
+    # 花某人的 AI 连接 / 插件连接(钥匙和额度)也要那一版有他担保(ADR 0047,见 domain/authority.ensure_vouched_to_spend)。
+    "spendErr_notVouched": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要用连接「{connection}」—— 花的是连接主人的钥匙和额度。请连接的主人打开这个工作流,确认改动后点「认可这一版」",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it uses the connection “{connection}” — spending its owner's key and quota. Ask the connection's owner to open the workflow, review the change and click “Approve this version”.",
     },
     # 管私有身份只认主人(见 domain/sharing.ensure_manageable)。共享是借出去用,不是交出去管。
     "shareErr_notManageable": {

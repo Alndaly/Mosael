@@ -2,7 +2,15 @@ import React from "react";
 import { type QueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { ApiError, getWorkflow, updateWorkflow, type Workflow, type WorkflowGraph, type WorkflowNodeType } from "@/api/client";
+import {
+  ApiError,
+  getWorkflow,
+  tasksAwaitingApprovalKey,
+  updateWorkflow,
+  type Workflow,
+  type WorkflowGraph,
+  type WorkflowNodeType,
+} from "@/api/client";
 import type { useI18n } from "@/app/preferences";
 import { graphAtScope } from "@/features/workflows/scope";
 import { syncFromServer } from "@/features/workflows/serverSync";
@@ -150,6 +158,8 @@ export function useWorkflowSave({
       // 纯布局保存不会成版，也不需要重拉历史；执行语义变化时才同步版本面板。
       if (saved.revision !== workflow.revision) {
         void qc.invalidateQueries({ queryKey: ["workflow-revisions", workflow.id] });
+        //: 新的一版可能让别人的定时任务停下等主人认可(ADR 0047):画布上那条提醒跟着刷新。
+        void qc.invalidateQueries({ queryKey: tasksAwaitingApprovalKey(workflow.id) });
       }
     },
     onError: (error: Error) => {

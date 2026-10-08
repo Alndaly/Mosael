@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
+from app.domain.authority import ensure_vouched_to_spend
 from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
@@ -317,6 +318,7 @@ def invoke(
     blocked = inst.blocked_reason(db, instance)
     if blocked:
         raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    _ensure_vouched_to_spend(db, instance)
     tool = find(db, instance_id, tool_name)
     if tool is None:
         raise PluginDomainError("pluginErr_noSuchTool", name=instance.name, tool=tool_name)
@@ -526,6 +528,13 @@ def _finisher(tool: dict[str, Any]) -> Any:
     return None
 
 
+def _ensure_vouched_to_spend(db: Session, instance: PluginInstance) -> None:
+    """插件连接也归人:背后可能是付费的 GPU / 云,带着他的凭据。在一次工作流运行里用它,被执行的每一版图都要有
+    连接的主人担保(ADR 0047,判据见 domain/authority.ensure_vouched_to_spend)。`invoke` 和 `invoke_host` 两条用它
+    干活的路都先问这里;`invoke_service` 是管理动作(问怎么起、装节点),不是用它干活,不问。"""
+    ensure_vouched_to_spend(db, instance.owner_user_id or None, connection=instance.name)
+
+
 def invoke_host(
     db: Session,
     instance_id: str,
@@ -565,6 +574,7 @@ def invoke_host(
     blocked = inst.blocked_reason(db, instance)
     if blocked:
         raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    _ensure_vouched_to_spend(db, instance)
     tool = host_tool(db, instance, capability)
     manifest = inst.manifest_for(db, instance)
     budget = timeout if timeout is not None else tool.get("timeout_seconds")

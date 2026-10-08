@@ -169,6 +169,10 @@
 - `app/domain/plugins/moves.py:_tool_listeners`、`app/domain/providers/moved_models.py:_listeners` —— 插件报的一次性改名
   (`moved`,ADR 0045)落到各领域:工具改了名,工作流节点、画板格子跟着改;模型改了名,生成会话、记录、用量、定时任务、
   画板、工作流里存着的引用跟着改。组装根在导入期登记,运行时只读;做过哪几批记在库里(`plugin_instances.applied_moves`)。
+- `app/domain/authority.py:_run_authority` —— 花某人的连接时那道闸(ADR 0047)从哪取「这次运行的授权」:组装根交给它
+  `workflows.authority.current_authority`(沿任务父链收,任务和修订都在库里)。供应商、插件两个域不认识工作流。
+- `app/domain/workflows/revisions.py:_saved_listeners` —— 存出新的一版之后要告诉谁(ADR 0047:绑着这张图的、别人的定时任务
+  要等主人认可,给主人发通知)。组装根在导入期登记 `scheduler.approvals.remind_owners`,运行时只读;去重看库里没读的通知。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
 

@@ -90,7 +90,10 @@ def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     except WorkflowDomainError as exc:
         #: 开跑前那一道说的是**子工作流自己**的话(「节点 start 缺少必填配置 …」),挂在这个节点上读的人会去
         #: 调用方的开始节点里找。说清是调的哪一张跑不起来。
-        raise WorkflowDomainError("wfErr_calledWorkflowCannotStart", params={"name": target.name, "reason": exc}) from exc
+        #: 子工作流停在「这一版要认可」(ADR 0047)时,要认可的是哪一版跟着走,外层照样给得出「认可这一版」。
+        raise WorkflowDomainError(
+            "wfErr_calledWorkflowCannotStart", params={"name": target.name, "reason": exc}, details=exc.details or None
+        ) from exc
     final = wait_for_job(child.id, release=db)
     result = final.result or {}
     # **判有无,不判真假;而且没有退路。**

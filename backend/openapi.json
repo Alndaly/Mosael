@@ -14197,6 +14197,53 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/awaiting-approvals": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Awaiting Approvals",
+        "description": "绑着这张图(或调用它的图)、在等主人认可的定时任务(ADR 0047 D10)。编辑器据此提醒改图的人:你存的这一版\n要任务主人认可之后,那个任务到点才会接着花主人的 AI 连接 —— 只提醒、不拦;主人那边另有通知和任务上的标记。",
+        "operationId": "awaiting_approvals_api_workflows__workflow_id__awaiting_approvals_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskAwaitingApprovalOut"
+                  },
+                  "title": "Response Awaiting Approvals Api Workflows  Workflow Id  Awaiting Approvals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
       "post": {
         "tags": [
@@ -29758,6 +29805,30 @@
         "type": "object",
         "title": "AutopilotRulesBody"
       },
+      "AwaitingApprovalOut": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "workflow_name": {
+            "type": "string",
+            "title": "Workflow Name"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "workflow_name",
+          "revision"
+        ],
+        "title": "AwaitingApprovalOut",
+        "description": "等谁认可的那一版:哪条工作流的第几版(和失败现场里的 `attest` 同一个形状,见 domain/authority.Voucher)。"
+      },
       "BlenderImportRequest": {
         "properties": {
           "workspace_id": {
@@ -44062,6 +44133,16 @@
               }
             ],
             "title": "Webhook Secret"
+          },
+          "awaiting_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AwaitingApprovalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -45399,6 +45480,39 @@
           "text"
         ],
         "title": "SynthesizeRequest"
+      },
+      "TaskAwaitingApprovalOut": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_name": {
+            "type": "string",
+            "title": "Task Name"
+          },
+          "owner_name": {
+            "type": "string",
+            "title": "Owner Name"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine"
+          },
+          "awaiting": {
+            "$ref": "#/components/schemas/AwaitingApprovalOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_name",
+          "owner_name",
+          "is_mine",
+          "awaiting"
+        ],
+        "title": "TaskAwaitingApprovalOut",
+        "description": "绑着这张图(或调用它的图)、在等主人认可的一个定时任务 —— 编辑器据此提醒改图的人(ADR 0047 D10)。"
       },
       "TaskEventOut": {
         "properties": {

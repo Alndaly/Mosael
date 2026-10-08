@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   runs: [] as any[],
   create: vi.fn(),
   update: vi.fn(),
+  attest: vi.fn(),
 }));
 
 const WORKFLOW = {
@@ -82,6 +83,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   runScheduledTask: vi.fn(),
   resetWebhookSecret: vi.fn(),
   setResourceShared: vi.fn(),
+  attestWorkflowRevision: h.attest,
   fetchJobKinds: async () => ({ kinds: [], fallback: { kind: "", label: "任务", announce: "never", affects: [], view: null, record_field: null } }),
   topLevelJobsQuery: (workspaceId: string) => ({ queryKey: ["jobs", workspaceId, "top-level"], queryFn: async () => [] }),
 }));
@@ -198,5 +200,51 @@ describe("任务详情", () => {
     expect(create.hasAttribute("disabled")).toBe(true);
     expect(await readHint(create)).toBe("roleReadOnlyHint");
     expect(screen.getByRole("heading", { level: 2, name: "schedulerTitle" })).toBeTruthy();
+  });
+});
+
+//: ADR 0047:绑着的图是别人改的,下一次到点要等主人认可、不花主人的 AI 连接。列表和详情上都看得见,主人就地认可。
+describe("待你确认", () => {
+  const waiting = { workflow_id: "wf1", workflow_name: "商品图", revision: 7 };
+
+  it("我的任务:列表上标「待你确认」,详情里说清是哪一版,点「认可这一版」认可的就是它", async () => {
+    h.attest.mockResolvedValue({});
+    h.tasks = [task({ awaiting_approval: waiting })];
+    mount();
+    const notice = await waitFor(() => {
+      const found = document.querySelector("[data-task-awaiting-approval]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(notice.textContent).toContain("taskAwaitingApproval");
+    expect(notice.textContent).toContain("taskAwaitingApprovalBody");
+    expect(document.querySelector("[data-task-awaiting-approval-mark]")?.textContent).toContain("taskAwaitingApproval");
+    h.tasks = [task({ awaiting_approval: null })];
+    fireEvent.click(within(notice).getByRole("button", { name: /wfRevisionAttestFor/ }));
+    await waitFor(() => expect(h.attest).toHaveBeenCalledWith("wf1", 7));
+    //: 认可之后任务重新拉一遍,标记跟着消失。
+    await waitFor(() => expect(document.querySelector("[data-task-awaiting-approval]")).toBeNull());
+  });
+
+  it("别人的任务:说在等主人,不给认可按钮 —— 花的不是我的钱", async () => {
+    h.tasks = [task({ is_mine: false, owner_user_id: "someone", awaiting_approval: waiting })];
+    mount();
+    const notice = await waitFor(() => {
+      const found = document.querySelector("[data-task-awaiting-approval]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(notice.textContent).toContain("taskAwaitingApprovalOther");
+    expect(notice.textContent).toContain("taskAwaitingApprovalBodyOther");
+    expect(within(notice).queryByRole("button")).toBeNull();
+    expect(document.querySelector("[data-task-awaiting-approval-mark]")?.textContent).toContain("taskAwaitingApprovalOther");
+  });
+
+  it("不在等:什么都不挂", async () => {
+    h.tasks = [task({ awaiting_approval: null })];
+    mount();
+    await screen.findByRole("button", { name: /runNow/ });
+    expect(document.querySelector("[data-task-awaiting-approval]")).toBeNull();
+    expect(document.querySelector("[data-task-awaiting-approval-mark]")).toBeNull();
   });
 });

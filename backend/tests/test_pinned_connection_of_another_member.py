@@ -16,6 +16,7 @@ from app.core.i18n import t
 from app.db.models import Job, ProviderProfile, Workflow
 from app.domain.workflows import create_workflow
 from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.revisions import attest_current_revision
 from tests.util import add_provider, fresh_client, second_client, user_id
 
 
@@ -58,8 +59,11 @@ def team(monkeypatch):
     monkeypatch.setattr(translate_domain, "chat", fake_chat)
 
     def run_as_member() -> Job:
+        """成员在编辑器里点「运行」:点运行即认可当前这一版(ADR 0047 D6),花的是他自己的连接。"""
         with SessionLocal() as db:
-            job_id = start_workflow_job(db, db.get(Workflow, workflow_id), created_by=user_id("other")).id
+            workflow = db.get(Workflow, workflow_id)
+            attest_current_revision(db, workflow, attested_by=user_id("other"))
+            job_id = start_workflow_job(db, workflow, created_by=user_id("other")).id
             db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
         for _ in range(200):
             with SessionLocal() as db:

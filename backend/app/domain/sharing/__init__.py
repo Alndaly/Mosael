@@ -244,7 +244,7 @@ class NotVouchedError(NotUsableError):
     """跑的人用得了,但被执行的那一版图是别人改的,而改它的人用不了这一份 —— 要主人认可这一版。
 
     `details["attest"]` 说是哪条工作流的哪一版(界面据此给「认可这一版」),和 key 一起顺着
-    工作流的失败现场走(见 workflows.engine._failure_payload)。
+    工作流的失败现场走(见 jobs.failure_payload)。
     """
 
     def __init__(self, key: str, voucher: Voucher) -> None:

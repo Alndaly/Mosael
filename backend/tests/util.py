@@ -357,6 +357,10 @@ def acting_as(db, user_id: str | None = None):
     而不是让领域代码去容忍"没有人"(那正是钥匙归人要消灭的状态)。
 
     用**调用方自己的会话**建这个 job:另开一个会话会和调用方尚未提交的行打架。
+
+    建的是**不钉修订**的那一种任务(和画板跑一个节点同一种,`board_run`):只说替谁干,不说跑的是哪一版图。
+    写成 `workflow` 却不钉修订,就成了「说不出执行的是哪一版」的工作流运行 —— 那样的运行谁的连接、账号都借不到
+    (见 workflows.authority._voucher、ADR 0047),测的就不是节点本身了。
     """
     from app.db.models import User, Workspace
     from app.domain import jobs as jobs_domain
@@ -365,7 +369,7 @@ def acting_as(db, user_id: str | None = None):
     job = jobs_domain.create_job(
         db,
         workspace_id=db.query(Workspace).first().id,
-        kind="workflow",
+        kind="board_run",
         payload={},
         created_by=actor,
     )

@@ -596,9 +596,15 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: (`{{上游.值}}`)或接了数据边 —— 运行时按顺序取第一个非空的值(点击、等待、按名字找资产的执行器都这么取),
 #: 上游给空就落到兜底那一格。执行器不按顺序取、两样都给就报错的组(浏览器上传的素材 / 路径,见
 #: host_files.upload_source)在字段上写 `"one_of_strict": True`:那一组照旧恰好填一个。
+#:
+#: `"spends"`(必填,True/False,ADR 0047):这个节点会不会用到**某人的** AI 供应商连接或插件连接 —— 花他的钥匙和额度。
+#: 运行前检查据此判「这一版要不要跑的人担保」(engine.start_workflow_job);判的是节点类型,所以是保守的:配音节点
+#: 选了免费的内置引擎也算。执行时那道闸(domain/authority.ensure_vouched_to_spend)只在真解析到连接的那一刻拦,
+#: 是兜底。插件节点(`plugin.` 开头)一律算。私有发布账号、浏览器档案、本机文件不归这一格管(那是 §3.8 的闸)。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_start",
         "description": "wfNode_start_desc",
@@ -628,6 +634,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "llm": {
         "external": False,
+        "spends": True,
         "category": "wfCat_ai",
         "label": "wfNode_llm",
         "description": "wfNode_llm_desc",
@@ -675,6 +682,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 口播按时长收紧(见 executors/ai.fit_narration):脚本之后量一遍每段念出来要多久,超了的交回给模型改短。
     "fit_narration": {
         "external": False,
+        "spends": True,
         "category": "wfCat_ai",
         "label": "wfNode_fit_narration",
         "description": "wfNode_fit_narration_desc",
@@ -699,6 +707,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "plugin_tool": {
         "external": True,
+        "spends": True,
         "category": "wfCat_plugin",
         "label": "wfNode_plugin_tool",
         "description": "wfNode_plugin_tool_desc",
@@ -714,6 +723,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "transcribe_asset": {
         "external": False,
+        "spends": True,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["text"],
         "board_group": "audio", "board_description": "wfNode_transcribe_asset_board",
@@ -737,6 +747,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 分辨率 / 画质 / 「AI 生成」标识读的是这同一份字段声明,和剪辑页导出同一组取值(render.EXPORT_*)。
     "export_sequence": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_export_sequence",
         "description": "wfNode_export_sequence_desc",
@@ -754,6 +765,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_search": {
         "external": False,
+        "spends": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_search", "description": "wfNode_note_search_desc",
         "config": {"query": {"type": "template"}, "limit": {"type": "number", "default": 10},
                    "offset": {"type": "number", "default": 0, "advanced": True}},
@@ -762,6 +774,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_read": {
         "external": False,
+        "spends": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_read", "description": "wfNode_note_read_desc",
         # 两个字段不分档(见 tests/test_advanced_split_is_sane.py):藏起唯一的可选项,
         # 省下的空间抵不上多出来的那一次点击。
@@ -773,6 +786,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_create": {
         "external": False,
+        "spends": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_create", "description": "wfNode_note_create_desc",
         "config": {"title": {"type": "template", "required": True},
                    "markdown": {"type": "template", "required": True}, "tags": {"type": "template", "advanced": True}},
@@ -781,6 +795,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "asset": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset",
         "description": "wfNode_asset_desc",
@@ -792,6 +807,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 需要登录才下得到的(抖音、会员视频)借浏览器池档案的登录态;只借这一次,下完就关。
     "import_url": {
         "external": True,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_import_url",
         "description": "wfNode_import_url_desc",
@@ -810,6 +826,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "inspect_sequence": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_inspect_sequence",
         "description": "wfNode_inspect_sequence_desc",
@@ -818,6 +835,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "timeline_append": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_append",
         "description": "wfNode_timeline_append_desc",
@@ -845,6 +863,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "timeline_add_track": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_add_track",
         "description": "wfNode_timeline_add_track_desc",
@@ -861,6 +880,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "timeline_clear": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_clear",
         "description": "wfNode_timeline_clear_desc",
@@ -869,6 +889,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "timeline_cut_ranges": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_cut_ranges",
         "description": "wfNode_timeline_cut_ranges_desc",
@@ -907,6 +928,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "edit_timeline": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_edit_timeline",
         "description": "wfNode_edit_timeline_desc",
@@ -925,6 +947,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "ai_generate": {
         "external": False,
+        "spends": True,
         "category": "wfCat_ai",
         "label": "wfNode_ai_generate",
         "description": "wfNode_ai_generate_desc",
@@ -986,6 +1009,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 还没解析过就先用本地解析解一遍再给。接写作、翻译、生成。
     "document_to_markdown": {
         "external": False,
+        "spends": True,
         "category": "wfCat_knowledge",
         "label": "wfNode_document_to_markdown",
         "description": "wfNode_document_to_markdown_desc",
@@ -1003,6 +1027,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "video_to_gif": {
         "external": False,
+        "spends": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
         #: 落板的输出是哪种素材(见 boards.transforms.output_kinds):GIF 是一张动图,不是一段视频。
@@ -1024,6 +1049,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 画板上切出来的几格照原来的宫格排在右边(`board_columns` 点名交出列数的那个输出,见 boards.canvas._derive)。
     "image_grid_split": {
         "external": False,
+        "spends": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_ids"],
         "board_columns": "columns",
@@ -1046,6 +1072,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "publish": {
         "external": True,
+        "spends": False,
         "category": "wfCat_publish",
         "label": "wfNode_publish",
         "description": "wfNode_publish_desc",
@@ -1063,6 +1090,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "condition": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_condition",
         "description": "wfNode_condition_desc",
@@ -1082,6 +1110,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "http_request": {
         "external": True,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_http_request",
         "description": "wfNode_http_request_desc",
@@ -1106,6 +1135,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "code": {
         "external": True,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_code",
         "description": "wfNode_code_desc",
@@ -1117,6 +1147,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "template": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_template",
         "description": "wfNode_template_desc",
@@ -1125,6 +1156,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "json_extract": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_json_extract",
         "description": "wfNode_json_extract_desc",
@@ -1138,6 +1170,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 路,而循环体拿不到「第几批的内容」;拆批之后 loop_foreach 直接逐批跑。
     "list_chunk": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_list_chunk",
         "description": "wfNode_list_chunk_desc",
@@ -1150,6 +1183,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "text_transform": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_text_transform",
         "description": "wfNode_text_transform_desc",
@@ -1173,6 +1207,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 认链接要跟短链的跳转(v.douyin.com、xhslink.com、b23.tv),所以算外部节点。
     "social_link": {
         "external": True,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_social_link",
         "description": "wfNode_social_link_desc",
@@ -1187,6 +1222,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "social_metrics": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_social_metrics",
         "description": "wfNode_social_metrics_desc",
@@ -1214,6 +1250,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 分析类模板在存笔记之前都过它 —— 提示词里写了「只引用原文」,模型仍会把归纳的话放进引号。
     "quote_check": {
         "external": False,
+        "spends": False,
         "category": "wfCat_data",
         "label": "wfNode_quote_check",
         "description": "wfNode_quote_check_desc",
@@ -1229,6 +1266,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "delay": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_delay",
         "description": "wfNode_delay_desc",
@@ -1237,6 +1275,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "synthesize_speech": {
         "external": False,
+        "spends": True,
         "category": "wfCat_audio",
         "label": "wfNode_synthesize_speech",
         "description": "wfNode_synthesize_speech_desc",
@@ -1272,6 +1311,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "notify": {
         "external": False,
+        "spends": False,
         "category": "wfCat_publish",
         "label": "wfNode_notify",
         "description": "wfNode_notify_desc",
@@ -1283,6 +1323,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "translate": {
         "external": False,
+        "spends": True,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["text"],
         "board_group": "text", "board_description": "wfNode_translate_board",
@@ -1310,6 +1351,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 8 路并发 + 共用一条连接,顺带共用重试。
     "translate_lines": {
         "external": False,
+        "spends": True,
         "category": "wfCat_ai",
         "label": "wfNode_translate_lines",
         "description": "wfNode_translate_lines_desc",
@@ -1344,6 +1386,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 于是自动流程里的布景永远只能是基本体拼的。
     "scene_props": {
         "external": False,
+        "spends": False,
         "category": "wfCat_3d",
         "label": "wfNode_scene_props",
         "description": "wfNode_scene_props_desc",
@@ -1363,6 +1406,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "scene_create": {
         "external": False,
+        "spends": False,
         "category": "wfCat_3d",
         "label": "wfNode_scene_create",
         "description": "wfNode_scene_create_desc",
@@ -1379,6 +1423,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: (boards.transforms 的判法),所以不挂在文档、便签上。
     "scene_from_text": {
         "external": False,
+        "spends": True,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["scene_id"],
         "board_group": "scene", "board_description": "wfNode_scene_from_text_board",
@@ -1402,6 +1447,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 同一件事分成两半摆在桌上。
     "scene_render": {
         "external": False,
+        "spends": False,
         "surfaces": ["workflow"],
         "output_media": {"first_frame_asset_id": "image", "last_frame_asset_id": "image", "video_asset_id": "video"},
         "category": "wfCat_3d",
@@ -1442,6 +1488,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "separate_audio": {
         "external": False,
+        "spends": True,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["vocals_asset_id", "background_asset_id"],
         "output_media": {"vocals_asset_id": "audio", "background_asset_id": "audio"},
@@ -1472,6 +1519,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 降噪(ADR-0017)。**产出一份新素材**:音频进音频出,视频进视频出(画面原样拷贝)。
     "denoise_audio": {
         "external": False,
+        "spends": True,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
         #: 进什么出什么:视频进视频出(画面原样、只换声音),音频进音频出。此前声明成只出音频,
@@ -1505,6 +1553,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "generate_subtitles": {
         "external": False,
+        "spends": True,
         "category": "wfCat_asset",
         "label": "wfNode_generate_subtitles",
         "description": "wfNode_generate_subtitles_desc",
@@ -1545,6 +1594,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "dub_subtitles": {
         "external": False,
+        "spends": True,
         "category": "wfCat_audio",
         "label": "wfNode_dub_subtitles",
         "description": "wfNode_dub_subtitles_desc",
@@ -1604,6 +1654,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "loop_foreach": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_loop_foreach",
         "description": "wfNode_loop_foreach_desc",
@@ -1646,6 +1697,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "loop_while": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_loop_while",
         "description": "wfNode_loop_while_desc",
@@ -1664,6 +1716,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "asset_query": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_query",
         "description": "wfNode_asset_query_desc",
@@ -1679,6 +1732,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 先按名字取(取不到 found = 0 再去画),画完存 —— 下一部片子里同一个角色是同一张脸。
     "entity_get": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_entity_get",
         "description": "wfNode_entity_get_desc",
@@ -1696,6 +1750,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "entity_list": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_entity_list",
         "description": "wfNode_entity_list_desc",
@@ -1710,6 +1765,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "entity_save": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_entity_save",
         "description": "wfNode_entity_save_desc",
@@ -1731,6 +1787,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 工作流里点名一个资产,或接上游「取资产」「存成资产」给的 id。每一张是一次付费的生成。
     "entity_angles": {
         "external": False,
+        "spends": True,
         "effects": "paid",
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_ids"],
@@ -1751,6 +1808,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "entity_expressions": {
         "external": False,
+        "spends": True,
         "effects": "paid",
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_ids"],
@@ -1771,6 +1829,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 数字人(ADR 0028 §4):配音 → 说话照片 / 改口型。画板上分别是人物资产格、图片格、视频格的能力。每一次都是付费生成。
     "entity_speak": {
         "external": False,
+        "spends": True,
         "effects": "paid",
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id", "audio_asset_id"],
@@ -1793,6 +1852,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "image_speak": {
         "external": False,
+        "spends": True,
         "effects": "paid",
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id", "audio_asset_id"],
@@ -1818,6 +1878,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "video_lipsync": {
         "external": False,
+        "spends": True,
         "effects": "paid",
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id", "audio_asset_id"],
@@ -1841,6 +1902,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "dub_lipsync": {
         "external": False,
+        "spends": True,
         #: 每一块有配音的原片是一次付费的改口型。
         "effects": "paid",
         "category": "wfCat_ai",
@@ -1861,6 +1923,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "talking_segments": {
         "external": False,
+        "spends": True,
         #: 逐句配音:走 TTS,云端引擎按字计费。
         "effects": "paid",
         "category": "wfCat_ai",
@@ -1881,6 +1944,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "asset_tag": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_tag",
         "description": "wfNode_asset_tag_desc",
@@ -1901,6 +1965,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "asset_update": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_update",
         "description": "wfNode_asset_update_desc",
@@ -1913,6 +1978,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "project_create": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_project_create",
         "description": "wfNode_project_create_desc",
@@ -1923,6 +1989,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "project_sequence_create": {
         "external": False,
+        "spends": False,
         "category": "wfCat_asset",
         "label": "wfNode_project_sequence_create",
         "description": "wfNode_project_sequence_create_desc",
@@ -1939,6 +2006,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
         "external": True,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_call_workflow",
         "description": "wfNode_call_workflow_desc",
@@ -1950,6 +2018,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "output": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_output",
         "description": "wfNode_output_desc",
@@ -1963,6 +2032,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "subgraph": {
         "external": False,
+        "spends": False,
         "category": "wfCat_flow",
         "label": "wfNode_subgraph",
         "description": "wfNode_subgraph_desc",
@@ -1978,6 +2048,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
     "browser_open": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_open",
         "description": "wfNode_browser_open_desc",
@@ -2007,6 +2078,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_navigate": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_navigate",
         "description": "wfNode_browser_navigate_desc",
@@ -2025,6 +2097,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_click": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_click",
         "description": "wfNode_browser_click_desc",
@@ -2043,6 +2116,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_input": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_input",
         "description": "wfNode_browser_input_desc",
@@ -2057,6 +2131,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_upload": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_upload",
         "description": "wfNode_browser_upload_desc",
@@ -2075,6 +2150,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_extract": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_extract",
         "description": "wfNode_browser_extract_desc",
@@ -2093,6 +2169,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_wait": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_wait",
         "description": "wfNode_browser_wait_desc",
@@ -2110,6 +2187,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_scroll": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_scroll",
         "description": "wfNode_browser_scroll_desc",
@@ -2127,6 +2205,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_evaluate": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_evaluate",
         "description": "wfNode_browser_evaluate_desc",
@@ -2146,6 +2225,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 「关一页」,同一个表单就有三种互不相干的填法,输出也说不清是哪一页的。
     "browser_page": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_page",
         "description": "wfNode_browser_page_desc",
@@ -2174,6 +2254,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 框选要人拖,节点里换成「某个元素」。
     "browser_screenshot": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_screenshot",
         "description": "wfNode_browser_screenshot_desc",
@@ -2208,6 +2289,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "browser_close": {
         "external": True,
+        "spends": False,
         "category": "wfCat_browser",
         "label": "wfNode_browser_close",
         "description": "wfNode_browser_close_desc",

@@ -8661,6 +8661,72 @@ def _migrate_publish_records_outlive_their_asset() -> None:
         ))
 
 
+def _migrate_scheduled_tasks_vouch_for_what_they_run() -> None:
+    """ADR 0047 D11:定时任务从这一版起,要「被执行的那一版有主人担保」才花主人的 AI 连接 / 插件连接。
+
+    升级前它们就是这样在跑的,升级不该让它们一夜之间全停在「这一版要你认可」:给每个工作流任务的主人,对绑着的那张图的
+    **当前版**、以及它字面量调用的子流程的当前版(顺下去),各记一条认可。已经是担保人的(作者、认可过的)不重复记。
+    以后别人再改,要主人认可(只提醒、不拦,见 domain/scheduler/approvals)。
+
+    自成一体,不调领域代码:领域的判据以后会变,迁移认的是这一刻的形状。子流程按字面量的 `workflow_id` 找
+    (循环体、子图里的也算;写成引用、由数据边供的不算 —— 那是运行时才知道的)。幂等:重跑时都已是担保人,什么都不记。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"scheduled_tasks", "workflows", "workflow_revisions", "workflow_revision_attestations"} <= tables:
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import ScheduledTask, Workflow, WorkflowRevision, WorkflowRevisionAttestation
+
+    def called(graph: Any) -> list[str]:
+        if not isinstance(graph, dict):
+            return []
+        edges = [edge for edge in graph.get("edges") or [] if isinstance(edge, dict)]
+        found: list[str] = []
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            config = node.get("config") if isinstance(node.get("config"), dict) else {}
+            target = config.get("workflow_id")
+            bound = any(edge.get("kind") == "data" and str(edge.get("target")) == str(node.get("id"))
+                        and edge.get("target_input") == "workflow_id" for edge in edges)
+            if node.get("type") == "call_workflow" and isinstance(target, str) and target.strip() \
+                    and "{{" not in target and not bound:
+                found.append(target.strip())
+            found.extend(called(config.get("body")))
+        return found
+
+    with Session(engine) as db:
+        for task in db.scalars(select(ScheduledTask).where(ScheduledTask.kind == "workflow")).all():
+            owner = task.owner_user_id
+            payload = task.payload if isinstance(task.payload, dict) else {}
+            if not owner:
+                continue
+            frontier = [str(payload.get("workflow_id") or "")]
+            seen: set[str] = set()
+            while frontier:
+                workflow_id = frontier.pop()
+                if not workflow_id or workflow_id in seen:
+                    continue
+                seen.add(workflow_id)
+                workflow = db.get(Workflow, workflow_id)
+                if workflow is None or workflow.workspace_id != task.workspace_id:
+                    continue
+                revision = db.scalar(select(WorkflowRevision).where(
+                    WorkflowRevision.workflow_id == workflow.id, WorkflowRevision.revision == workflow.revision))
+                if revision is None:
+                    continue
+                attested = db.scalar(select(WorkflowRevisionAttestation.id).where(
+                    WorkflowRevisionAttestation.revision_id == revision.id, WorkflowRevisionAttestation.user_id == owner))
+                if revision.created_by != owner and attested is None:
+                    db.add(WorkflowRevisionAttestation(revision_id=revision.id, user_id=owner))
+                    # 同一版可能被这个主人的好几个任务绑着(或被调用好几次):先落下,下一次查得到。
+                    db.flush()
+                frontier.extend(called(revision.graph))
+        db.commit()
+
+
 def _foreign_key_violations(sqlite: Any, tables: list[str]) -> Counter[tuple[str, str]]:
     """这几张表上「指向不存在的行」的外键,按 (子表, 父表) 计数。按计数比,不按 rowid:重建的那张表 rowid 会变。"""
     found: Counter[tuple[str, str]] = Counter()
@@ -9257,6 +9323,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_and_podcast_join_creation_sessions),
             #: 被停下的任务有了自己的终态(ADR 0049):老库里记成 failed + jobErr_cancelled 的改过来,定时任务的运行记录跟着改。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_cancelled_jobs_get_their_own_status),
+            #: 定时任务的主人为它此刻跑的那几版补一条认可(ADR 0047 D11):升级前它们就这样在跑,升级后要「有主人担保」
+            #: 才花主人的连接。排在所有落新修订的迁移之后 —— 认可的是迁移完之后的当前版。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_scheduled_tasks_vouch_for_what_they_run),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

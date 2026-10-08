@@ -447,6 +447,15 @@ def _wire_seams() -> None:
     moved_models.on_moved(generation_moved_models.follow)
     moved_models.on_moved(billing_usage.follow_moved_models)
     moved_models.on_moved(scheduler_operations.follow_moved_models)
+    # 一次运行花某人的钱(他的 AI 连接、插件连接),被执行的每一版图都要有他担保(ADR 0047)。供应商、插件两个域不认识
+    # 工作流,「这次运行的授权」由这里接上;别人存了一版被定时任务绑着的工作流,要告诉任务主人 —— 工作流不认识定时任务。
+    from app.domain import authority as spend_gate
+    from app.domain.scheduler import approvals as scheduler_approvals
+    from app.domain.workflows import authority as workflow_authority
+    from app.domain.workflows import revisions as workflow_revisions
+
+    spend_gate.use_run_authority(workflow_authority.current_authority)
+    workflow_revisions.on_saved(scheduler_approvals.remind_owners)
     plugin_references.install()
     board_plugin_references.install()
     asset_plugin_bridge.install()

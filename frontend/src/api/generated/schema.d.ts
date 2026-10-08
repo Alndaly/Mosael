@@ -4656,6 +4656,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/awaiting-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Awaiting Approvals
+         * @description 绑着这张图(或调用它的图)、在等主人认可的定时任务(ADR 0047 D10)。编辑器据此提醒改图的人:你存的这一版
+         *     要任务主人认可之后,那个任务到点才会接着花主人的 AI 连接 —— 只提醒、不拦;主人那边另有通知和任务上的标记。
+         */
+        get: operations["awaiting_approvals_api_workflows__workflow_id__awaiting_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
         parameters: {
             query?: never;
@@ -10365,6 +10386,18 @@ export interface components {
             rules: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * AwaitingApprovalOut
+         * @description 等谁认可的那一版:哪条工作流的第几版(和失败现场里的 `attest` 同一个形状,见 domain/authority.Voucher)。
+         */
+        AwaitingApprovalOut: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Name */
+            workflow_name: string;
+            /** Revision */
+            revision: number;
         };
         /** BlenderImportRequest */
         BlenderImportRequest: {
@@ -16988,6 +17021,7 @@ export interface components {
             webhook_secret_set_at?: string | null;
             /** Webhook Secret */
             webhook_secret?: string | null;
+            awaiting_approval?: components["schemas"]["AwaitingApprovalOut"] | null;
         };
         /** ScheduledTaskRunOut */
         ScheduledTaskRunOut: {
@@ -17593,6 +17627,21 @@ export interface components {
              * @default 1
              */
             speed: number;
+        };
+        /**
+         * TaskAwaitingApprovalOut
+         * @description 绑着这张图(或调用它的图)、在等主人认可的一个定时任务 —— 编辑器据此提醒改图的人(ADR 0047 D10)。
+         */
+        TaskAwaitingApprovalOut: {
+            /** Task Id */
+            task_id: string;
+            /** Task Name */
+            task_name: string;
+            /** Owner Name */
+            owner_name: string;
+            /** Is Mine */
+            is_mine: boolean;
+            awaiting: components["schemas"]["AwaitingApprovalOut"];
         };
         /** TaskEventOut */
         TaskEventOut: {
@@ -29157,6 +29206,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowRevisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    awaiting_approvals_api_workflows__workflow_id__awaiting_approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskAwaitingApprovalOut"][];
                 };
             };
             /** @description Validation Error */

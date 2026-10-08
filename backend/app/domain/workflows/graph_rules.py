@@ -884,16 +884,22 @@ def _unresolvable_container_refs(inner: dict[str, Any], nodes: list[Any], node_t
 EXTERNAL_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("external"))
 INTERNAL_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if not spec.get("external"))
 
+#: 会用到**某人的** AI 供应商连接 / 插件连接、花他的钥匙和额度的节点(ADR 0047)。同样声明在节点自己身上(`"spends"`),
+#: 运行前检查据此判「这一版要不要跑的人担保」(见 engine.start_workflow_job)。
+SPENDING_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("spends"))
+
 _MAX_GRAPH_SCAN_DEPTH = 16
 
 
 #: 插件节点的类型前缀(`plugin.<插件id>.<工具名>`)。类型是**运行时**才知道的,所以它进不了
-#: 上面那两张由声明派生的集合 —— 而它跑的是别人的代码,默认就该按"应用之外"算。
+#: 上面那几张由声明派生的集合 —— 而它跑的是别人的代码,默认就该按"应用之外"算;用的是某人接的插件连接,
+#: 也该按"花他的钱"算。
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX as _PLUGIN_NODE_PREFIX
 
 
 def _is_external(node_type: str, types: frozenset[str]) -> bool:
-    return node_type in types or (types is EXTERNAL_NODE_TYPES and node_type.startswith(_PLUGIN_NODE_PREFIX))
+    plugin_counts = types is EXTERNAL_NODE_TYPES or types is SPENDING_NODE_TYPES
+    return node_type in types or (plugin_counts and node_type.startswith(_PLUGIN_NODE_PREFIX))
 
 
 def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> set[str]:
@@ -921,6 +927,12 @@ def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> se
 def external_nodes_in_graph(graph: Any) -> set[str]:
     """图里用到的**后果在应用之外**的节点 —— 决定确认卡的权限档(见 domain/agent/confirmations)。"""
     return _nodes_of_types(graph, EXTERNAL_NODE_TYPES)
+
+
+def spending_nodes_in_graph(graph: Any) -> set[str]:
+    """图里(连同循环体、子图里)会用到某人连接的节点(ADR 0047)。`call_workflow` 调起的子流程不在这里算 ——
+    它跑的是它自己的那一版,由运行前检查顺着调用关系另算(见 engine.start_workflow_job)。"""
+    return _nodes_of_types(graph, SPENDING_NODE_TYPES)
 
 
 def reference_dependencies(graph: dict[str, Any]) -> dict[str, set[str]]:

@@ -29,6 +29,14 @@ class ScheduledTaskUpdate(ApiModel):
     payload: dict | None = None
 
 
+class AwaitingApprovalOut(ApiModel):
+    """等谁认可的那一版:哪条工作流的第几版(和失败现场里的 `attest` 同一个形状,见 domain/authority.Voucher)。"""
+
+    workflow_id: str
+    workflow_name: str
+    revision: int
+
+
 class ScheduledTaskOut(OrmModel):
     id: str
     workspace_id: str
@@ -55,6 +63,20 @@ class ScheduledTaskOut(OrmModel):
     #: 触发密钥的**原文**:只在生成它的那一次响应里有(建 webhook 任务、重置密钥、改成 webhook),别的时候都是 None ——
     #: 库里只存哈希(见 domain/scheduler.issue_webhook_secret)。
     webhook_secret: str | None = None
+    #: 「待你确认」(ADR 0047):下一次到点会停在「这一版要主人认可」—— 绑着的图(或它调用的子流程)是别人改的,
+    #: 而它要花主人的 AI 连接 / 插件连接。主人点「认可这一版」之后就是空的。停用的任务不算。
+    awaiting_approval: AwaitingApprovalOut | None = None
+
+
+class TaskAwaitingApprovalOut(ApiModel):
+    """绑着这张图(或调用它的图)、在等主人认可的一个定时任务 —— 编辑器据此提醒改图的人(ADR 0047 D10)。"""
+
+    task_id: str
+    task_name: str
+    owner_name: str
+    #: 是不是我的任务:是的话编辑器给「认可这一版」,不是的话说「要 {owner_name} 认可」。
+    is_mine: bool
+    awaiting: AwaitingApprovalOut
 
 
 class ScheduledTaskRunOut(OrmModel):

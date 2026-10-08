@@ -83,6 +83,18 @@ def _run(client, workflow_id: str) -> dict:
     return client.get(f"/api/jobs/{started.json()['id']}").json()
 
 
+def _run_unattended(client, workflow_id: str) -> dict:
+    """没人看着的那一种运行(到点的定时任务、webhook):不像点「运行」那样顺手认可当前版(ADR 0047 D6),
+    所以「这一版没人担保」照样会停下来 —— 迁移修的正是这个。"""
+    from app.domain.workflows.engine import start_workflow_job
+
+    with SessionLocal() as db:
+        job_id = start_workflow_job(db, db.get(Workflow, workflow_id), created_by=_uid("tester")).id
+        db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
+    wait_status(client, job_id, timeout=15)
+    return client.get(f"/api/jobs/{job_id}").json()
+
+
 def _close_sessions() -> None:
     with SessionLocal() as db:
         db.execute(text("UPDATE browser_sessions SET status = 'closed'"))
@@ -133,7 +145,7 @@ def test_已经升过的库_没作者的迁移修订补上上一版的作者和�
         stale = current_workflow_revision(db, db.get(Workflow, created["id"]))
         assert stale.revision == 4 and stale.created_by is None and not revision_vouchers(db, stale)
     _close_sessions()
-    failed = _run(owner, created["id"])
+    failed = _run_unattended(owner, created["id"])
     assert failed["status"] == "failed" and "认可这一版" in failed["error"], failed
     _close_sessions()
 

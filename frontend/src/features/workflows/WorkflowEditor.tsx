@@ -56,6 +56,7 @@ import { useWorkflowRun } from "@/features/workflows/useWorkflowRun";
 import { useWorkflowSave } from "@/features/workflows/useWorkflowSave";
 import { useWorkflowComments } from "./WorkflowComments";
 import { workflowEditorToolbar } from "@/features/workflows/WorkflowEditorToolbar";
+import { ScheduledApprovalNotice } from "@/features/workflows/ScheduledApprovalNotice";
 import { TemplateUpgradeNotice } from "@/features/workflows/TemplateUpgradeNotice";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
@@ -501,6 +502,8 @@ export function WorkflowEditor({
             挂在画布上而不是历史面板里 —— 面板关了,画布照样停在那一次。 */}
         {/* 从旧版官方模板建的图:说一声,点一下按新版重建(旧图保留)。见 TemplateUpgradeNotice。 */}
         <TemplateUpgradeNotice workflowId={workflow.id} meta={rootGraph?.meta} />
+        {/* 别人的定时任务绑着这张图、在等主人认可改过的那一版(ADR 0047):只提醒、不拦。见 ScheduledApprovalNotice。 */}
+        <ScheduledApprovalNotice workflowId={workflow.id} />
         {viewedRun !== runJobId && (
           <div
             role="status"
