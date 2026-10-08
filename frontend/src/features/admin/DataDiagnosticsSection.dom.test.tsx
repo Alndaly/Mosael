@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderInto, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +10,10 @@ const api = vi.hoisted(() => vi.fn());
 vi.mock("@/api/client", () => ({ api, getAuthToken: () => "test-token", isCustomServer: () => false }));
 
 import { DataDiagnosticsSection } from "./DataDiagnosticsSection";
+
+//: 这一节里还有「任务记录保留」那一行,它读后端(ADR 0050)。
+const render = (ui: React.ReactElement) =>
+  renderInto(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 
 afterEach(() => {
   delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;

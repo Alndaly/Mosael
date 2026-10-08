@@ -93,6 +93,7 @@ def ai_edit_graph(
     # 而不是让用户在成本明细里看到两行不明所以的记录。
     with billable(
         db,
+        user_id=user_id,
         capability="chat",
         operation="workflow_ai_edit",
         idempotency_key=once("workflow_ai_edit"),

@@ -1,7 +1,7 @@
 """生成记录**自己**存失败原因。
 
-任务会被任务中心的「清空已结束」删掉(生成记录的 job_id 随之置空),生成记录不会 —— 它是创作历史。此前失败原因
-只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的「生成失败」。
+任务行可能已经不在了(老版本的「清空已结束」真删过,生成记录的 job_id 随之置空),生成记录一直在 —— 它是创作历史。
+此前失败原因只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的「生成失败」。
 
 原因在任务**落「失败」那一刻**抄过来(generation.runner.record_failure,挂在 jobs.register_settle_listener 上),
 所以执行体自己失败、用户取消、重启时接不回来这几条路都算数;存的是 key 加参数,读的时候按读的人的语言翻。
@@ -12,7 +12,7 @@ from __future__ import annotations
 from app.core.db import SessionLocal
 from app.db.models import GenerationJob, Job
 from app.domain.generation.runner import GenerationRunError, _fail
-from app.domain.jobs import create_job, reconcile_orphaned_jobs
+from app.domain.jobs import create_job, delete_jobs, reconcile_orphaned_jobs
 from tests.util import fresh_client
 
 
@@ -40,7 +40,9 @@ def test_执行体失败_原因记在生成记录上_清掉任务之后还在_�
     with SessionLocal() as db:
         _fail(db, db.get(Job, job_id), GenerationRunError("genErr_noApiKey", provider="openai"))
 
-    assert client.delete(f"/api/jobs/finished?workspace_id={ws}").json() == {"removed": 1}
+    with SessionLocal() as db:
+        assert delete_jobs(db, [job_id]) == 1
+        db.commit()
     english = _listed(client, ws, generation_id, "en")
     assert english["job_id"] is None
     assert english["error"] == "Provider openai doesn't have your API key yet. Add it in Settings first."

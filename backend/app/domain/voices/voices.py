@@ -845,6 +845,7 @@ def speak_to_file(
         # 正是 billable 留给调用方的那一半。
         with billable(
             session,
+            user_id=user_id,
             capability="tts",
             operation="synthesize_speech",
             idempotency_key=once("synthesize_speech"),
@@ -1182,6 +1183,7 @@ def _run_podcast_body(
             out = Path(tmp) / "podcast.mp3"
             with billable(
                 db,
+                user_id=job.created_by,
                 capability="podcast",
                 operation="synthesize_podcast",
                 workspace_id=workspace_id,

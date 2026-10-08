@@ -56,16 +56,25 @@ export function listJobChildren(jobId: string): Promise<Job[]> {
   return api<Job[]>(`/api/jobs/${jobId}/children`);
 }
 
-export type ClearFinishedPreview = components["schemas"]["ClearFinishedPreviewOut"];
+export type JobCenter = components["schemas"]["JobCenterOut"];
 
-/** 「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数,和真删的是同一份计划。 */
-export function previewClearFinished(workspaceId: string): Promise<ClearFinishedPreview> {
-  return api<ClearFinishedPreview>(`/api/jobs/finished/preview?workspace_id=${encodeURIComponent(workspaceId)}`);
+/**
+ * 任务中心面板(ADR 0050):还在跑的全部,加上结束在我的水位线之后的最近那些;`cleared` 是水位线之前结束的(「显示已清掉的」)。
+ * `cleared_at` 为空 = 没清过。水位线每人每个工作区一条,和定时任务页读的那份(`topLevelJobsQuery`)不是一回事 —— 那份不看水位线。
+ */
+export function taskCenterQuery(workspaceId: string, { cleared = false }: { cleared?: boolean } = {}) {
+  return {
+    queryKey: ["jobs", workspaceId, "task-center", cleared ? "cleared" : "shown"] as const,
+    queryFn: () =>
+      api<JobCenter>(`/api/jobs/center?workspace_id=${encodeURIComponent(workspaceId)}${cleared ? "&cleared=true" : ""}`),
+  };
 }
 
-/** 删掉那些已结束的任务(连同子任务和事件)。**不可恢复**,先给人看 `previewClearFinished`。 */
-export function clearFinishedJobs(workspaceId: string): Promise<{ removed: number }> {
-  return api<{ removed: number }>(`/api/jobs/finished?workspace_id=${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
+/** 「清空已结束」:把我的水位线挪到现在。**什么都不删** —— 别人的面板、工作流历史、统计都不动,要找回来打开「显示已清掉的」。 */
+export function clearTaskCenter(workspaceId: string): Promise<{ cleared_at: string }> {
+  return api<{ cleared_at: string }>(`/api/jobs/center/clear?workspace_id=${encodeURIComponent(workspaceId)}`, {
+    method: "POST",
+  });
 }
 
 export type JobKind = components["schemas"]["JobKindOut"];

@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.job_center import use_cases as job_center
-from app.api.schemas import ClearFinishedPreviewOut, JobKindCatalogOut, JobOut, JobSummaryOut, TaskEventOut
+from app.api.schemas import JobCenterClearedOut, JobCenterOut, JobKindCatalogOut, JobOut, JobSummaryOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
@@ -51,16 +51,24 @@ def list_job_kinds(user: CurrentUser) -> dict:
     }
 
 
-@router.get("/jobs/finished/preview", response_model=ClearFinishedPreviewOut)
-def preview_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    """「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数。"""
-    return job_center.preview_clear_finished(db, user, workspace_id)
+@router.get("/jobs/center", response_model=JobCenterOut)
+def job_center_panel(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    cleared: bool = False,
+    limit: int = Query(job_center.PANEL_LIMIT, ge=1, le=1000),
+) -> dict:
+    """任务中心面板(ADR 0050):还在跑的全部,加上结束在我的水位线之后的最近 `limit` 条;`cleared=true` 是水位线之前结束的
+    那些(「显示已清掉的」,只读)。水位线每人每个工作区一条,别人的面板各看各的。"""
+    jobs, cleared_at = job_center.panel(db, user, workspace_id, cleared=cleared, limit=limit)
+    return {"jobs": jobs, "cleared_at": cleared_at}
 
 
-@router.delete("/jobs/finished")
-def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    # 不是 Tx:清理一批一个事务,由用例自己开(见 job_center.clear_finished);请求会话只用来读和鉴权。
-    return {"removed": job_center.clear_finished(db, user, workspace_id)}
+@router.post("/jobs/center/clear", response_model=JobCenterClearedOut)
+def clear_job_center(workspace_id: str, db: Tx, user: CurrentUser) -> dict:
+    """「清空已结束」:把我的水位线挪到现在。**不删任何东西**(D27)—— 任务行只由部署的保留清理删(D29)。"""
+    return {"cleared_at": job_center.clear_panel(db, user, workspace_id)}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

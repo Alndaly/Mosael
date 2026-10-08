@@ -102,14 +102,15 @@ def _exchange(db: Session, session: AgentSession) -> tuple[str, str]:
     return (said or "")[:_EXCERPT_CHARS], (answer or "")[:_EXCERPT_CHARS]
 
 
-def _ask(target: Any, messages: list[dict[str, str]], *, workspace_id: str, session_id: str) -> str:
-    """问一次模型。和别的一次性补全一样记账(见 billing.usage.billable):起名花的是这段对话主人的钱,账上要看得见。"""
+def _ask(target: Any, messages: list[dict[str, str]], *, workspace_id: str, session_id: str, user_id: str | None) -> str:
+    """问一次模型。和别的一次性补全一样记账(见 billing.usage.billable):起名花的是这段对话主人的钱(`user_id`),账上要看得见。"""
     from app.core.db import SessionLocal
     from app.domain.ai_chat import chat
     from app.domain.billing.usage import billable
 
     with SessionLocal() as billing_db, billable(
         billing_db,
+        user_id=user_id,
         capability="chat",
         operation="agent_title",
         workspace_id=workspace_id,
@@ -146,6 +147,8 @@ def name_session(session_id: str, actor_id: str | None, resolve_chat_provider: R
             #: 用这段对话自己的那条连接和模型;订阅授权(Kimi Code 这类)只走网关,所以要 automation 那一档。
             target = target_for(db, profile, model=model, surface="automation")
             workspace_id = session.workspace_id
+            #: 起名花的是这段对话主人的钱 —— 和挑连接用的是同一个人(ADR 0050 D30)。
+            payer = session.owner_user_id or actor_id
         raw = _ask(
             target,
             [
@@ -154,6 +157,7 @@ def name_session(session_id: str, actor_id: str | None, resolve_chat_provider: R
             ],
             workspace_id=workspace_id,
             session_id=session_id,
+            user_id=payer,
         )
         title = clean(raw)
         if not title:

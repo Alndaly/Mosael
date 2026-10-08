@@ -80,7 +80,7 @@ def _gpt_image_rules(db, model: str) -> None:
 
 
 def _record(db, ws: str, model: str, units: dict, key: str) -> ProviderUsageEvent:
-    return record_usage(db, workspace_id=ws, provider="openai-compatible", model=model, capability="image",
+    return record_usage(db, user_id=None, workspace_id=ws, provider="openai-compatible", model=model, capability="image",
                         operation="generation_job", idempotency_key=key, units=units)
 
 

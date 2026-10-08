@@ -15,7 +15,7 @@ from __future__ import annotations
 from app.core.db import Base  # noqa: F401
 from app.db.model_base import new_id, now  # noqa: F401
 
-from app.db.model_slices.jobs import Job, TaskEvent  # noqa: E402,F401
+from app.db.model_slices.jobs import Job, JobCenterMark, TaskEvent  # noqa: E402,F401
 from app.db.model_slices.notifications import Notification  # noqa: E402,F401
 from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun  # noqa: E402,F401
 from app.db.model_slices.workflows import Workflow, WorkflowRevision, WorkflowRevisionAttestation, WorkflowRunOutput  # noqa: E402,F401

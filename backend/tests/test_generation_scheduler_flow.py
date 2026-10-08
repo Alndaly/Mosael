@@ -229,9 +229,9 @@ def test_scheduled_task_run_creates_job(tmp_path: Path) -> None:
 
 
 def test_clearing_finished_jobs_keeps_generation_history() -> None:
-    """生成记录是创作历史:任务中心「清空已完成」删 job 后,记录必须还在
+    """生成记录是创作历史:任务行没了(老版本的「清空已结束」真删过;保留清理不删生成记录指着的,ADR 0050),记录必须还在
     (job_id 置空),会话列表接口也仍要返回它。曾因 CASCADE 全部丢失。"""
-    from app.domain.jobs import create_job
+    from app.domain.jobs import create_job, delete_jobs
     from app.db.models import GenerationSession, User
 
     client = fresh_client()
@@ -253,8 +253,9 @@ def test_clearing_finished_jobs_keeps_generation_history() -> None:
         db.commit()
         session_id, generation_id = session.id, generation.id
 
-    removed = client.delete(f"/api/jobs/finished?workspace_id={ws['id']}").json()
-    assert removed["removed"] >= 1
+    with SessionLocal() as db:
+        assert delete_jobs(db, [job.id]) == 1
+        db.commit()
 
     listed = client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session_id}").json()
     assert [g["id"] for g in listed] == [generation_id]
@@ -273,10 +274,10 @@ def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
         g3 = GenerationJob(workspace_id=ws["id"], provider="x", model="z", kind="image", request={"prompt": "c"})
         db.add_all([g1, g2, g3])
         db.flush()
-        record_usage(db, workspace_id=ws["id"], capability="image", operation="generation_job",
+        record_usage(db, user_id=None, workspace_id=ws["id"], capability="image", operation="generation_job",
                      source_type="generation_job", source_id=g1.id, idempotency_key=f"generation:{g1.id}:succeeded",
                      cost_micros=12345, currency="CNY", cost_confidence="estimated")
-        record_usage(db, workspace_id=ws["id"], capability="image", operation="generation_job",
+        record_usage(db, user_id=None, workspace_id=ws["id"], capability="image", operation="generation_job",
                      source_type="generation_job", source_id=g2.id, idempotency_key=f"generation:{g2.id}:succeeded",
                      cost_micros=None, currency="CNY")
         db.commit()

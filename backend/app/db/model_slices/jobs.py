@@ -63,6 +63,20 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class JobCenterMark(Base):
+    """一个人在一个工作区的任务中心「清空已结束」挪到了哪儿(ADR 0050 D27):水位线。
+
+    面板只列还在跑的,和结束在水位线之后的。点「清空已结束」= 把自己的水位线挪到现在 —— **不删任何东西**:别人的面板、
+    工作流的执行历史、运行产出、统计、生成记录、用量归属都不受影响。真删只在保留清理里(见 jobs.expired_job_trees)。
+    """
+
+    __tablename__ = "job_center_marks"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
+    cleared_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class TaskEvent(Base):
     __tablename__ = "task_events"
     __table_args__ = (Index("idx_task_events_job_created", "job_id", "created_at"),)

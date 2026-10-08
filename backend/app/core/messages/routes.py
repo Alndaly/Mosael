@@ -151,6 +151,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个邀请码用不了:可能抄错了、已经有人用过,或者过了 7 天有效期。请向管理员要一个新的",
         "en": "This invite code can't be used: it may be mistyped, already used, or past its 7-day validity. Ask an administrator for a new one.",
     },
+    "routeErr_jobRetentionChoice": {
+        "zh": "任务保留只能选 90 天、180 天、365 天或永久",
+        "en": "Task retention can only be 90, 180 or 365 days, or forever.",
+    },
     "routeErr_webUrlScheme": {
         "zh": "网页地址要以 https:// 或 http:// 开头,例如 https://studio.example.com",
         "en": "The web address has to start with https:// or http://, e.g. https://studio.example.com.",

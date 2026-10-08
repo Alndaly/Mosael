@@ -29,19 +29,6 @@ class JobKindCatalogOut(ApiModel):
     fallback: JobKindOut
 
 
-class ClearFinishedPreviewOut(ApiModel):
-    """「清空已结束」删之前给人看的那几个数(见 domain/job_center.preview_clear_finished)。"""
-
-    #: 会删掉几条(面板上的顶层任务)。
-    tasks: int
-    #: 连同收纳的子任务一共几个任务。
-    jobs: int
-    #: 这几条里有几条是工作区里别的成员发起的。
-    by_others: int
-    #: 已结束却留下的几条:工作流的运行记录、记过用量的任务。
-    kept: int
-
-
 class TaskEventOut(OrmModel):
     id: str
     job_id: str
@@ -145,3 +132,16 @@ def _rendered(value: object, info: ValidationInfo, key_field: str, params_field:
     if not key:
         return value
     return render_message(key, get_current_locale(), data.get(params_field) or {})
+
+
+class JobCenterOut(ApiModel):
+    """任务中心面板(ADR 0050):列哪些任务,和我的水位线 —— `cleared_at` 为空就是没清过,界面不摆「显示已清掉的」。"""
+
+    jobs: list[JobSummaryOut]
+    cleared_at: datetime | None = None
+
+
+class JobCenterClearedOut(ApiModel):
+    """点了「清空已结束」:我的新水位线。"""
+
+    cleared_at: datetime

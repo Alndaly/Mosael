@@ -61,3 +61,19 @@ def outbound_allowlist(db: Session) -> list[str]:
 
 def set_outbound_allowlist(db: Session, entries: list[str]) -> None:
     _row(db).outbound_allowlist = list(entries)
+
+
+#: 任务行保留多久(天),部署管理员能选的几档;`None` = 永久(ADR 0050 D29)。默认 365。
+JOB_RETENTION_CHOICES: tuple[int, ...] = (90, 180, 365)
+
+
+def job_retention_days(db: Session) -> int | None:
+    """结束多少天的任务行由保留清理删掉;`None` = 永久保留。"""
+    return _row(db).job_retention_days
+
+
+def set_job_retention_days(db: Session, days: int | None) -> None:
+    """只认那几档(或永久):随手填一个 3 天,一次清理就把三天前的执行历史全删了。"""
+    if days is not None and days not in JOB_RETENTION_CHOICES:
+        raise ValueError(days)
+    _row(db).job_retention_days = days

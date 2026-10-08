@@ -784,6 +784,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 # 成本要写进消息 payload,而它是落库时才算出来的 —— 所以在 with 块之后读回。
                 with billable(
                     db,
+                    user_id=session.owner_user_id or actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,
@@ -846,6 +847,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
+                    user_id=session.owner_user_id or actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,
@@ -876,6 +878,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
+                    user_id=session.owner_user_id or actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,

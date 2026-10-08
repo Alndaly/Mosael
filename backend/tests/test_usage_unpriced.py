@@ -23,12 +23,12 @@ def test_unpriced_names_the_models_that_have_no_rule() -> None:
     with SessionLocal() as db:
         for index in range(3):
             record_usage(
-                db, workspace_id=workspace_id, provider="deepseek", capability="chat",
+                db, user_id=None, workspace_id=workspace_id, provider="deepseek", capability="chat",
                 model="deepseek-v4-flash", operation="chat", units={"input_tokens": 100},
                 idempotency_key=f"ds-{index}",
             )
         record_usage(
-            db, workspace_id=workspace_id, provider="kimi-coding", capability="chat",
+            db, user_id=None, workspace_id=workspace_id, provider="kimi-coding", capability="chat",
             model="k3", operation="chat", units={"input_tokens": 50}, idempotency_key="k3-1",
         )
         db.commit()
@@ -47,7 +47,7 @@ def test_a_priced_event_does_not_show_up_as_missing() -> None:
     workspace_id = _workspace(client)
     with SessionLocal() as db:
         record_usage(
-            db, workspace_id=workspace_id, provider="deepseek", capability="chat",
+            db, user_id=None, workspace_id=workspace_id, provider="deepseek", capability="chat",
             model="deepseek-v4-flash", operation="chat", units={"input_tokens": 100},
             cost_micros=1234, currency="USD", idempotency_key="priced-1",
         )
@@ -65,7 +65,7 @@ def test_a_model_without_a_name_still_gets_reported() -> None:
     workspace_id = _workspace(client)
     with SessionLocal() as db:
         record_usage(
-            db, workspace_id=workspace_id, provider="edge", capability="tts",
+            db, user_id=None, workspace_id=workspace_id, provider="edge", capability="tts",
             model="", operation="tts", units={"characters": 92}, idempotency_key="edge-1",
         )
         db.commit()

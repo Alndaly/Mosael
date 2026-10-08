@@ -67,6 +67,7 @@ def generate_copy(
 
     with billable(
         db,
+        user_id=user_id,
         capability="chat",
         operation="publish_copy",
         idempotency_key=once("publish_copy"),

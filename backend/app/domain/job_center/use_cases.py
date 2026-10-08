@@ -6,18 +6,21 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import GenerationJob, Job, User
-from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter, jobs_writable_filter
-from app.core.unit_of_work import unit_of_work
-from app.domain.jobs import DELETE_JOBS_BATCH, TERMINAL_STATUSES, cancel_job, delete_jobs, plan_clear_finished
-from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.db.models import GenerationJob, Job, JobCenterMark, User, now
+from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
+from app.domain.jobs import TERMINAL_STATUSES, cancel_job
+from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
 
 
-#: 列表默认给最近这么多条(另加全部还在跑的)。任务中心收拢之后只摆十来行已结束的,定时任务页按 id 找还在跑的那几条。
+#: 列表默认给最近这么多条(另加全部还在跑的)。定时任务页按 id 找运行记录挂着的那几条。
 LIST_LIMIT = 200
+#: 任务中心面板给最近这么多条(另加全部还在跑的):面板收拢之后只摆十来行已结束的。
+PANEL_LIMIT = 200
 
 
 def list_jobs(
@@ -82,35 +85,47 @@ def cancel(db: Session, user: User, job_id: str) -> Job:
     return cancel_job(db, job, by=user.id)
 
 
-def clear_finished(db: Session, user: User, workspace_id: str) -> int:
-    """任务中心的「清空已结束」。别人私有会话里的生成不归他清 —— 和取消同一道闸。
+def _mark(db: Session, user: User, workspace_id: str) -> JobCenterMark | None:
+    return db.get(JobCenterMark, (user.id, workspace_id))
 
-    **一批一个事务**:先读出该删的(不占写锁),再按 DELETE_JOBS_BATCH 个一批删、每批提交。一个用了几个月的工作区有上万个
-    已结束任务,一个事务删完要攥着写锁十几秒,那期间别的写入(任务进度、别人的请求)5 秒后报 database is locked。
-    清理是幂等的:中途失败,删掉的那几批就是删掉了,剩下的下次再点;拆开的一棵树里留下的子任务没了父任务,下次当顶层清。
-    `db` 只用来读和鉴权,删走自己的事务。
+
+def panel(
+    db: Session, user: User, workspace_id: str, *, cleared: bool = False, limit: int = PANEL_LIMIT,
+) -> tuple[list[Job], datetime | None]:
+    """任务中心面板上列什么(ADR 0050):顶层任务里**还在跑的全部**,加上结束在我的水位线之后的最近 `limit` 条。
+
+    `cleared`:「显示已清掉的」—— 结束在水位线之前的那些,最近 `limit` 条,只是翻看(D28)。没清过就没有。
+    和 `list_jobs` 同一道「看得见」的闸(别人私有会话里的生成不列)。交回 `(任务, 我的水位线)`,界面据水位线决定摆不摆那个开关。
     """
-    ensure_workspace_perm(db, user, workspace_id, "edit")
-    doomed = plan_clear_finished(db, workspace_id, removable=jobs_writable_filter(Job.id, user)).ids()
-    removed = 0
-    for start in range(0, len(doomed), DELETE_JOBS_BATCH):
-        with unit_of_work() as batch:
-            removed += delete_jobs(batch, doomed[start:start + DELETE_JOBS_BATCH])
-    return removed
+    ensure_workspace_access(db, user, workspace_id)
+    mark = _mark(db, user, workspace_id)
+    cleared_at = mark.cleared_at if mark is not None else None
+    stmt = select(Job).where(
+        Job.workspace_id == workspace_id, Job.parent_job_id.is_(None), jobs_filter(Job.id, user, workspace_id)
+    )
+    finished = Job.status.in_(TERMINAL_STATUSES)
+    newest_first = (Job.created_at.desc(), Job.id.desc())
+    if cleared:
+        if cleared_at is None:
+            return [], None
+        return list(db.scalars(stmt.where(finished, Job.updated_at <= cleared_at).order_by(*newest_first).limit(limit))), cleared_at
+    if cleared_at is not None:
+        stmt = stmt.where(or_(~finished, Job.updated_at > cleared_at))
+    recent = list(db.scalars(stmt.order_by(*newest_first).limit(limit)))
+    seen = {job.id for job in recent}
+    running = [job for job in db.scalars(stmt.where(~finished).order_by(*newest_first)) if job.id not in seen]
+    return sorted([*recent, *running], key=lambda job: (job.created_at, job.id), reverse=True), cleared_at
 
 
-def preview_clear_finished(db: Session, user: User, workspace_id: str) -> dict[str, int]:
-    """点「清空已结束」之前先给他看:会删几条(连同子任务几个)、其中几条是别人发起的、留下几条。
-
-    和 `clear_finished` 同一份计划、同一道闸 —— 看到的数和真删的数是同一个。
-    """
-    ensure_workspace_perm(db, user, workspace_id, "edit")
-    plan = plan_clear_finished(db, workspace_id, removable=jobs_writable_filter(Job.id, user))
-    return {
-        "tasks": len(plan.trees),
-        "jobs": sum(len(nodes) for nodes in plan.trees),
-        "by_others": sum(
-            1 for nodes in plan.trees if any(node.created_by not in (None, user.id) for node in nodes)
-        ),
-        "kept": plan.kept,
-    }
+def clear_panel(db: Session, user: User, workspace_id: str) -> datetime:
+    """「清空已结束」:把我在这个工作区的水位线挪到现在(D27)。**只动我自己的面板**,什么都不删 —— 所以只读成员也能清,
+    也不需要确认框(要找回来,打开「显示已清掉的」)。交回新的水位线。"""
+    ensure_workspace_member(db, user, workspace_id)
+    moment = now()
+    mark = _mark(db, user, workspace_id)
+    if mark is None:
+        db.add(JobCenterMark(user_id=user.id, workspace_id=workspace_id, cleared_at=moment))
+    else:
+        mark.cleared_at = moment
+    db.flush()
+    return moment

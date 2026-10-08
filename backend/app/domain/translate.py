@@ -348,7 +348,7 @@ def translate_many(
         shared = None if chat_target.execution_surface == "gateway" else client
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。
-        with billable(db, capability="chat", operation="translate_batch",
+        with billable(db, user_id=user_id, capability="chat", operation="translate_batch",
                       idempotency_key=once("translate_batch")) as call:
             run(lambda item: (item[0], ai_translate_with(chat_target, item[1], target, client=shared, call=call)))
     return results

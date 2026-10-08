@@ -180,25 +180,21 @@ def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, An
         day = str(first_day + timedelta(days=offset))
         total, failed, cancelled = counted.get(day, (0, 0, 0))
         jobs_by_day.append({"day": day, "total": total, "failed": failed, "cancelled": cancelled})
-    # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
-    # **连不上人的也要列出来**(外连接,落进 user_id 为空的「无归属」那一行):智能体对话、画板、工作流节点里的调用
-    # 不挂任务。此前内连接把它们整个丢掉,条形加起来只有合计的零头(体检 UM-11,维护者库上 94% 的美元花费归不到人)。
-    # 写入时就记下是谁花的,等 ADR 定(草稿 0050);在那之前至少让各行加起来等于合计。
+    # 每一笔用量写的时候就记下了替谁花的(`provider_usage_events.user_id`,ADR 0050 D30)—— 按它分,不再顺着任务找人:
+    # 智能体对话、画板、工作流节点里的调用不挂任务,此前它们整个归不到人(体检 UM-11,维护者库上 94% 的美元花费)。
+    # 回填时找不到人的历史那部分 user_id 为空,落进「无归属」那一行(D31),各行加起来等于合计。
     in_window = ProviderUsageEvent.created_at >= since
     calls = {
         user_id: (str(username or ""), int(count_ or 0))
         for user_id, username, count_ in db.execute(
-            select(Job.created_by, User.username, func.count())
+            select(ProviderUsageEvent.user_id, User.username, func.count())
             .select_from(ProviderUsageEvent)
-            .join(Job, Job.id == ProviderUsageEvent.job_id, isouter=True)
-            .join(User, User.id == Job.created_by, isouter=True)
+            .join(User, User.id == ProviderUsageEvent.user_id, isouter=True)
             .where(in_window)
-            .group_by(Job.created_by, User.username)
+            .group_by(ProviderUsageEvent.user_id, User.username)
         ).all()
     }
-    spent = costs_by_currency(
-        db, in_window, group_by=(Job.created_by,), join=((Job, Job.id == ProviderUsageEvent.job_id),), outer=True
-    )
+    spent = costs_by_currency(db, in_window, group_by=(ProviderUsageEvent.user_id,))
     totals = costs_by_currency(db, in_window).get((), [])
     # **排序不把各币种加起来比。**按这台部署的主要币种(计过价次数最多的那种)上的金额排,
     # 再按调用次数 —— 单币种部署(绝大多数)里这就是"谁花得最多";混着两种钱时,另一种钱花得多

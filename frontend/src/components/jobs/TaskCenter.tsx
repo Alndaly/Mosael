@@ -1,14 +1,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, X } from "lucide-react";
+import { Activity, Ban, CheckCircle2, ChevronDown, CircleAlert, Eraser, ListChecks, Loader2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
-import { api, clearFinishedJobs, getJob, previewClearFinished, topLevelJobsQuery, type ClearFinishedPreview, type JobSummary } from "@/api/client";
-import { errorText } from "@/api/errorMessage";
-import type { MessageKey } from "@/app/messages";
-import { ConfirmDialog } from "@/components/app/modals";
+import { api, clearTaskCenter, getJob, taskCenterQuery, type JobSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Button } from "@/components/ui/button";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { gotoJobPage, JobKindIcon, jobPage, queryKeysAffectedBy, shouldAnnounce, useJobKinds } from "@/components/jobs/jobKinds";
@@ -53,40 +51,34 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     return () => window.removeEventListener("mosael:open-tasks", onOpen);
   }, []);
 
-  const jobsQuery = topLevelJobsQuery(workspaceId);
+  //: 面板读自己的那份(ADR 0050):顶层任务里还在跑的,加上结束在**我的**水位线之后的。子任务(发布/导出/转写/生成/配音)
+  //: 收在父任务下,在任务详情里看。
+  const jobsQuery = taskCenterQuery(workspaceId);
   const jobs = useQuery({
-    // 顶层:工作流派生的子任务(发布/导出/转写/生成/配音)收纳到父工作流下,
-    // 不再与父工作流平铺成两行;子任务在工作流任务详情里查看。
     ...jobsQuery,
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
+      (query.state.data?.jobs ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
     refetchOnWindowFocus: true,
   });
-  //: 「清空已结束」是**物理删除**,删的是整个工作区所有人的已结束任务:先开确认框,框里写的数来自后端那份
-  //: 删除计划(会删几条、几条是别人的、留下几条),确认才删。此前一点就删,连工作流的执行历史一起没了。
-  const [confirmingClear, setConfirmingClear] = React.useState(false);
-  const clearPreview = useQuery({
-    queryKey: ["jobs", workspaceId, "clear-finished-preview"],
-    queryFn: () => previewClearFinished(workspaceId),
-    enabled: confirmingClear,
-    staleTime: 0,
-    gcTime: 0,
-  });
+  //: 「清空已结束」只是把我的水位线挪到现在(D27):不删任何东西、别人的面板不变,所以不要确认框;要找回来就打开底下的
+  //: 「显示已清掉的」(D28)。此前它是物理删除整个工作区所有人的已结束任务。
   const clearFinished = useMutation({
-    mutationFn: () => clearFinishedJobs(workspaceId),
-    onSuccess: ({ removed }) => {
-      setConfirmingClear(false);
-      toast.success(t("clearEndedDone").replace("{n}", String(removed)));
-      void qc.invalidateQueries({ queryKey: jobsQuery.queryKey });
+    mutationFn: () => clearTaskCenter(workspaceId),
+    onSuccess: () => {
+      toast.success(t("clearEndedDone"));
+      void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "task-center"] });
     },
+    onError: (error: Error) => toast.error(error.message),
   });
+  const [showCleared, setShowCleared] = React.useState(false);
+  const cleared = useQuery({ ...taskCenterQuery(workspaceId, { cleared: true }), enabled: open && showCleared });
   const cancelJob = useMutation({
     mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: jobsQuery.queryKey }),
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const all = jobs.data ?? [];
+  const all = jobs.data?.jobs ?? [];
   const active = all.filter((job) => ACTIVE.has(job.status));
   // 已结束的按「种类 + 对象 + 结果文本」收拢:同一个素材的代理转码失败重试了五次,
   // 是一件事发生了五次,不是五件事 —— 平铺成五行只会把别的任务挤出视野。
@@ -149,10 +141,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     // 目录没到之前不记基线:不知道一种任务该不该说,就等它到了再开始看。
     if (!jobs.data || !kindsReady) return;
     if (prevStatuses.current === null) {
-      prevStatuses.current = new Map(jobs.data.map((job) => [job.id, job.status]));
+      prevStatuses.current = new Map(jobs.data.jobs.map((job) => [job.id, job.status]));
       return;
     }
-    for (const job of jobs.data) {
+    for (const job of jobs.data.jobs) {
       // 子任务由父任务替它说(ADR-0018),也不该出现在这份顶层列表里。它要是出现了,说明
       // 缓存被别的取法写过 —— 那正是此前一打开定时任务页,历史上每个工作流派生的转写、导出
       // 都被当成「刚做完」弹一遍的原因(见 api/domains/jobs 的 topLevelJobsQuery)。
@@ -217,18 +209,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
-              disabled={clearFinished.isPending}
-              aria-busy={clearFinished.isPending || undefined}
-              onClick={() => {
-                setOpen(false);
-                setConfirmingClear(true);
-              }}
-            >
-              {clearFinished.isPending ? <Loader2 size={11} className="animate-mosael-spin" /> : <Trash2 size={11} />} {t("clearEnded")}
-            </button>
+            <Hint label={t("clearEndedHint")}>
+              <Button variant="inline" loading={clearFinished.isPending} onClick={() => clearFinished.mutate()}>
+                <Eraser /> {t("clearEnded")}
+              </Button>
+            </Hint>
           )}
         </div>
         {/* `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
@@ -254,6 +239,29 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           {all.length === 0 && (
             <EmptyState size="compact" icon={<ListChecks size={15} />} title={t("noJobsTitle")} body={t("noJobs")} />
           )}
+          {/* 清掉的只是从我的面板上拿掉,翻得回来(D28):只是看,点开照样看详情。 */}
+          {jobs.data?.cleared_at && (
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-0 border-t border-divider pt-2" data-cleared-jobs="">
+              <Button
+                variant="inline"
+                className="justify-self-start"
+                aria-expanded={showCleared}
+                onClick={() => setShowCleared((value) => !value)}
+              >
+                <ChevronDown className={cn("transition-transform", !showCleared && "-rotate-90")} />
+                {showCleared ? t("clearedHide") : t("clearedShow")}
+              </Button>
+              {showCleared && (cleared.data?.jobs ?? []).map((job, index) => (
+                <React.Fragment key={job.id}>
+                  {index > 0 && <div className={LIST_HAIRLINE} />}
+                  <JobRow job={job} onOpen={() => openJob(job)} />
+                </React.Fragment>
+              ))}
+              {showCleared && cleared.isSuccess && cleared.data.jobs.length === 0 && (
+                <p className="m-0 px-2 py-3 text-ui-xs text-muted-foreground">{t("clearedEmpty")}</p>
+              )}
+            </div>
+          )}
         </div>
       </PopoverContent>
       <JobDetailDialog
@@ -261,33 +269,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         onClose={() => setDetailJob(null)}
         onGoto={detailJob && jobPage(detailJob, kindOf(detailJob.kind)) ? () => gotoDetailPage(detailJob) : undefined}
       />
-      <ConfirmDialog
-        open={confirmingClear}
-        title={t("clearEndedTitle")}
-        body={clearEndedBody(t, clearPreview)}
-        pending={clearFinished.isPending}
-        confirmDisabled={!clearPreview.data || clearPreview.data.tasks === 0}
-        confirmLabel={clearPreview.data?.tasks ? t("clearEndedConfirm").replace("{n}", String(clearPreview.data.tasks)) : undefined}
-        onCancel={() => setConfirmingClear(false)}
-        onConfirm={() => clearFinished.mutate()}
-      />
     </Popover>
-  );
-}
-
-/** 确认框里那段话:还在数、数不出来、没有可删的,或者「会删几条、几条是别人的、留下几条」。 */
-function clearEndedBody(
-  t: (key: MessageKey) => string,
-  preview: { data?: ClearFinishedPreview; isError: boolean; error: unknown },
-): string {
-  if (preview.isError) return errorText(preview.error);
-  const plan = preview.data;
-  if (!plan) return t("clearEndedCounting");
-  const kept = plan.kept > 0 ? ` ${t("clearEndedKept").replace("{n}", String(plan.kept))}` : "";
-  if (plan.tasks === 0) return `${t("clearEndedNothing")}${kept}`;
-  const others = plan.by_others > 0 ? ` ${t("clearEndedByOthers").replace("{n}", String(plan.by_others))}` : "";
-  return (
-    t("clearEndedBody").replace("{tasks}", String(plan.tasks)).replace("{jobs}", String(plan.jobs)) + others + kept
   );
 }
 

@@ -73,7 +73,7 @@ def test_cache_read_actually_produces_cost_end_to_end() -> None:
                 billing_unit=unit, unit_amount_micros=micros,
             )
         event = record_usage(
-            db, workspace_id=ws, provider="p", capability="chat", model="m",
+            db, user_id=None, workspace_id=ws, provider="p", capability="chat", model="m",
             units={"input_tokens": 1_000_000, "output_tokens": 100_000, "cache_read_tokens": 5_000_000},
             operation="chat.turn",
             idempotency_key="cache-pricing-test",

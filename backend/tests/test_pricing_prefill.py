@@ -196,6 +196,7 @@ def test_prefilled_rules_actually_price_a_turn(monkeypatch, client_fixture) -> N
     with SessionLocal() as db:
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider_profile_id=profile_id,
             provider="openai-compatible",
@@ -370,6 +371,7 @@ def test_generation_and_speech_models_get_their_own_units(monkeypatch, client_fi
     with SessionLocal() as db:
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider_profile_id=profile_id,
             provider="alibaba",
@@ -381,6 +383,7 @@ def test_generation_and_speech_models_get_their_own_units(monkeypatch, client_fi
         )
         hd = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider_profile_id=profile_id,
             provider="alibaba",
@@ -495,7 +498,7 @@ def test_evolink_seedance_gets_evolinks_own_per_second_prices_by_resolution(monk
     ws = client.get("/api/workspaces").json()[0]["id"]
     with SessionLocal() as db:
         event = record_usage(
-            db, workspace_id=ws, provider_profile_id=profile_id, provider="evolink", capability="video",
+            db, user_id=None, workspace_id=ws, provider_profile_id=profile_id, provider="evolink", capability="video",
             model="seedance-2.5-image-to-video", operation="generation_job", idempotency_key="evolink-480p",
             units={"requests": 1, "videos": 1, "video_seconds": 5.0, "resolution": "480p"},
         )

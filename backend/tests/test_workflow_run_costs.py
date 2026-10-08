@@ -42,7 +42,7 @@ def _child_with_a_bill(db, scope, config: dict[str, Any]) -> dict[str, Any]:
 
     child = create_job(db, workspace_id=scope.workspace_id, kind="t_child", payload={}, created_by=None)
     db.flush()
-    with billable(db, capability="image", operation="t_child", workspace_id=scope.workspace_id,
+    with billable(db, user_id=None, capability="image", operation="t_child", workspace_id=scope.workspace_id,
                   idempotency_key=f"t_child:{child.id}", job_id=child.id) as call:
         call.report_cost(300_000, "CNY")
     return {"waited": 0}

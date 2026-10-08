@@ -40,6 +40,7 @@ def test_a_rejected_request_with_nothing_reported_costs_nothing() -> None:
         _qwen_rule(db, ws)
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="alibaba",
             model="qwen-image",
@@ -68,6 +69,7 @@ def test_a_failure_the_provider_reported_usage_for_is_billed_as_reported() -> No
         _qwen_rule(db, ws)
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="alibaba",
             model="qwen-image",
@@ -90,6 +92,7 @@ def test_a_failure_with_a_reported_charge_keeps_that_charge() -> None:
     with SessionLocal() as db:
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="evolink",
             model="seedance-2.5-image-to-video",
@@ -125,13 +128,13 @@ def test_没定价的模型失败了_生成那一条说未扣费_账上不冒出
                                        request={"prompt": "c"})
         db.add_all([failed, succeeded, priced_failure])
         db.flush()
-        common = {"workspace_id": ws, "provider": "plugin:dev.mosael.comfyui", "model": "girl.json", "capability": "image",
+        common = {"workspace_id": ws, "user_id": None, "provider": "plugin:dev.mosael.comfyui", "model": "girl.json", "capability": "image",
                   "operation": "generation_job", "source_type": "generation_job"}
         event = record_usage(db, **common, source_id=failed.id, idempotency_key=f"generation:{failed.id}:failed",
                              status="failed", units={"requests": 1, "images": 1})
         record_usage(db, **common, source_id=succeeded.id, idempotency_key=f"generation:{succeeded.id}:succeeded",
                      units={"requests": 1, "images": 1})
-        record_usage(db, workspace_id=ws, provider="alibaba", model="qwen-image", capability="image",
+        record_usage(db, user_id=None, workspace_id=ws, provider="alibaba", model="qwen-image", capability="image",
                      operation="generation_job", source_type="generation_job", source_id=priced_failure.id,
                      idempotency_key=f"generation:{priced_failure.id}:failed", status="failed",
                      units=QWEN_IMAGE_REJECTED["units"], raw_usage=QWEN_IMAGE_REJECTED["raw"])

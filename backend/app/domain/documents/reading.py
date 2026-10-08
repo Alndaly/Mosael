@@ -208,7 +208,7 @@ def analyze_pages(db: Session, workspace_id: str, asset_id: str, pages: list[int
     content: list[dict[str, Any]] = [{"type": "text", "text": f"{context}\n\n{question.strip() or '说说这几页的内容和版式。'}"}]
     content.extend(image_part((root / images[page - 1]).read_bytes(), "image/png") for page in wanted)
     profile = select_analysis_connection(db, profile_id, user_id)
-    with billable(db, capability="chat", operation="analyze_document_pages", workspace_id=asset.workspace_id,
+    with billable(db, user_id=user_id, capability="chat", operation="analyze_document_pages", workspace_id=asset.workspace_id,
                   idempotency_key=once("analyze_document_pages"), source_type="asset", source_id=asset.id) as call:
         answer = call_vision_model(db, profile, [{"role": "user", "content": content}], call)
     return {"asset_id": asset.id, "pages": wanted, "answer": answer}

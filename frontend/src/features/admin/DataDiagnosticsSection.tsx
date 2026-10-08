@@ -1,4 +1,5 @@
 import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, FileOutput, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,7 +16,46 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
+
+type JobRetention = { days: number | null };
+const FOREVER = "forever";
+//: 能选的几档(天);后端 domain/deployment.JOB_RETENTION_CHOICES 照同一组校验,别的数回 422。
+const RETENTION_DAYS = [90, 180, 365];
+
+/**
+ * 任务记录保留多久(ADR 0050 D29):结束超过这么多天的任务由后台的保留清理删掉;被定时任务运行、生成记录、发布记录指着的
+ * 和记过用量的不删。任务中心的「清空已结束」不删东西,只从各人的面板上拿掉 —— 真删只在这里定。
+ */
+function JobRetentionRow() {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const retention = useQuery({ queryKey: ["admin", "job-retention"], queryFn: () => api<JobRetention>("/api/admin/job-retention") });
+  const save = useMutation({
+    mutationFn: (days: number | null) =>
+      api<JobRetention>("/api/admin/job-retention", { method: "PUT", body: JSON.stringify({ days }) }),
+    onSuccess: (saved) => qc.setQueryData(["admin", "job-retention"], saved),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const value = retention.data ? (retention.data.days === null ? FOREVER : String(retention.data.days)) : "";
+  const options = [
+    ...RETENTION_DAYS.map((days) => ({ value: String(days), label: t("jobRetentionDays").replace("{n}", String(days)) })),
+    { value: FOREVER, label: t("jobRetentionForever") },
+  ];
+  return (
+    <AdminRow label={t("jobRetentionLabel")} description={t("jobRetentionDesc")}>
+      <OptionPicker
+        className="w-40"
+        ariaLabel={t("jobRetentionLabel")}
+        value={value}
+        options={options}
+        disabled={!retention.data || save.isPending}
+        onChange={(next) => save.mutate(next === FOREVER ? null : Number(next))}
+      />
+    </AdminRow>
+  );
+}
 
 /**
  * 数据与诊断:备份、恢复、诊断包 —— 动的是整台部署的数据库和日志,不是某个人的东西。
@@ -40,6 +80,7 @@ export function DataDiagnosticsSection() {
   return (
     <AdminSection id="data" title={t("dataDiagnosticsTitle")} description={t("dataDiagnosticsDesc")}>
       <div className={ADMIN_CARD}>
+        <JobRetentionRow />
         <AdminRow label={t("dataDiagnosticsBundle")} description={t("dataDiagnosticsBundleDesc")}>
           {exportDiagnostics ? (
             <Button

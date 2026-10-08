@@ -26,6 +26,7 @@ def _ws() -> str:
 def _record(db, ws: str, *, provider: str, model: str, units: dict, key: str):
     return record_usage(
         db,
+        user_id=None,
         workspace_id=ws,
         provider=provider,
         model=model,

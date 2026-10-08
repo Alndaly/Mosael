@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,7 +11,16 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, now
 from app.core.unit_of_work import unit_of_work
-from app.domain.jobs import PRUNE_BATCH, delete_task_events, expire_worker_leases, prunable_task_events
+from app.domain import deployment
+from app.domain.jobs import (
+    DELETE_JOBS_BATCH,
+    PRUNE_BATCH,
+    delete_jobs,
+    delete_task_events,
+    expire_worker_leases,
+    expired_job_trees,
+    prunable_task_events,
+)
 from app.domain.scheduler import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
 from app.domain.scheduler.executors import notify_run_failed, sync_run_states
 from app.domain.scheduler.operations import compute_next_run_at
@@ -52,12 +62,15 @@ def _loop(stop: threading.Event) -> None:
         try:
             with SessionLocal() as db:
                 tick(db)
-            # Task-event retention (plan §12.3) piggybacks on this loop.
+            # Task-event retention (plan §12.3) and task-row retention (ADR 0050) piggyback on this loop.
             if time.monotonic() - last_prune >= PRUNE_INTERVAL_SECONDS:
                 last_prune = time.monotonic()
                 removed = prune_events(stop)
                 if removed:
                     logger.info("Task-event retention removed %d rows", removed)
+                expired = prune_jobs(stop)
+                if expired:
+                    logger.info("Task retention removed %d jobs", expired)
         except Exception:  # the loop must survive any single bad tick
             logger.exception("Scheduler tick failed")
 
@@ -76,6 +89,27 @@ def prune_events(stop: threading.Event | None = None) -> int:
             break
         with unit_of_work() as db:
             removed += delete_task_events(db, ids[start:start + PRUNE_BATCH])
+    return removed
+
+
+def prune_jobs(stop: threading.Event | None = None) -> int:
+    """按部署的保留天数删结束得够久的任务(ADR 0050 D29):先读出该删的整棵树,再**一批一个事务**地删(同 prune_events)。
+    永久保留就什么都不做。返回删了几个任务。
+
+    这是任务行唯一被物理删除的地方 —— 任务中心的「清空已结束」只挪水位线。中途停下(停机信号、出错):删掉的那几批就是
+    删掉了,剩下的下一轮再删;一棵树被拆开时留下的子任务没了父任务,下一轮当顶层再算。
+    """
+    with SessionLocal() as db:
+        days = deployment.job_retention_days(db)
+        if days is None:
+            return 0
+        ids = expired_job_trees(db, cutoff=now() - timedelta(days=days))
+    removed = 0
+    for start in range(0, len(ids), DELETE_JOBS_BATCH):
+        if stop is not None and stop.is_set():
+            break
+        with unit_of_work() as db:
+            removed += delete_jobs(db, ids[start:start + DELETE_JOBS_BATCH])
     return removed
 
 

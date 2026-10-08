@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -97,6 +97,7 @@
     "migrate-connections-get-an-owner",
     "migrate-deployment-admin",
     "migrate-deployment-config",
+    "migrate-deployments-keep-finished-jobs-for-a-year",
     "migrate-deployments-know-their-web-address",
     "migrate-detached-audio-joins-its-video",
     "migrate-documents-are-not-videos",
@@ -203,6 +204,8 @@
     "migrate-transcription-engines-are-providers",
     "migrate-translation-engines-are-providers",
     "migrate-tts-pip-index",
+    "migrate-usage-finds-who-spent-it",
+    "migrate-usage-remembers-who-spent",
     "migrate-usage-unpriced-reason",
     "migrate-voices-declare-consent",
     "migrate-webhook-secrets-are-hashed",

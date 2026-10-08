@@ -152,7 +152,7 @@ def test_没有工作区归属时不静默(caplog) -> None:
     with SessionLocal() as db, caplog.at_level(logging.WARNING):
         # 幂等键是必填的(见 test_billing_keys_are_deliberate):没有隐式兜底,
         # 每个调用点都得说出自己是"有稳定工作单元"还是"重放不可能发生"。
-        with billable(db, capability="chat", operation="无归属的调用",
+        with billable(db, user_id=None, capability="chat", operation="无归属的调用",
                       idempotency_key=once("无归属的调用")) as call:
             call.meter(input_tokens=1)
     assert any("无归属的调用" in record.getMessage() for record in caplog.records)

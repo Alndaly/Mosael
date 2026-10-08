@@ -18,9 +18,11 @@ vi.mock("@/api/client", () => ({
   api: async () => [],
   fetchJobKinds: async () => ({ kinds: [], fallback: { kind: "", label: "任务", announce: "always", affects: [], view: null, record_field: null } }),
   getJob: vi.fn(),
-  previewClearFinished: vi.fn(),
-  clearFinishedJobs: vi.fn(),
-  topLevelJobsQuery: (workspaceId: string) => ({ queryKey: ["jobs", workspaceId, "top-level"], queryFn: async () => [] }),
+  clearTaskCenter: vi.fn(),
+  taskCenterQuery: (workspaceId: string) => ({
+    queryKey: ["jobs", workspaceId, "task-center", "shown"],
+    queryFn: async () => ({ jobs: [], cleared_at: null }),
+  }),
 }));
 
 import { OverNativeView } from "@/components/app/overNativeView";

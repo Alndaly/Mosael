@@ -113,6 +113,7 @@ def draft_from_session(db: Session, session: AgentSession, *, user_id: str) -> d
     target = target_for(db, profile, model=session.model or "", surface="automation")
     with billable(
         db,
+        user_id=user_id,
         capability="chat",
         operation="agent_skill_draft",
         workspace_id=session.workspace_id,

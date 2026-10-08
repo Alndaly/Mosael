@@ -68,7 +68,7 @@ def test_a_reported_charge_beats_the_price_list() -> None:
     with SessionLocal() as db:
         create_pricing_rule(db, provider="evolink", capability="video", model="seedance-2.0-mini-image-to-video",
                             billing_unit="video_second", unit_amount_micros=40_000, currency="USD")
-        with billable(db, capability="video", operation="generation_job", workspace_id=ws, provider="evolink",
+        with billable(db, user_id=None, capability="video", operation="generation_job", workspace_id=ws, provider="evolink",
                       model="seedance-2.0-mini-image-to-video", idempotency_key="evolink-reported") as call:
             call.meter(EVOLINK_SEEDANCE_MINI["units"], raw=EVOLINK_SEEDANCE_MINI["raw"])
             call.report_cost(199_000, "USD")

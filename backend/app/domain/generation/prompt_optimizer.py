@@ -228,7 +228,7 @@ def optimize_image_prompt(
     except AiChatError as exc:
         raise PromptOptimizeError.relay(exc) from exc
     # 归属走环境上下文:路由已经过了 ensure_workspace_perm,那里把工作区绑好了。
-    with billable(db, capability="chat", operation="optimize_prompt",
+    with billable(db, user_id=user_id, capability="chat", operation="optimize_prompt",
                   idempotency_key=once("optimize_prompt")) as call:
         data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip(), call)
     prompt = str(data.get("prompt") or "").strip()

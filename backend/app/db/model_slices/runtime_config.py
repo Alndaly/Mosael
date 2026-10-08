@@ -51,6 +51,9 @@ class DeploymentConfig(Base):
     #: 成员用浏览器打开 Mosael 的地址(`https://studio.example.com`)。填了,邀请链接就带一个网页地址(ADR 0054):
     #: 对方可能还没装客户端。桌面单机版没有网页,空着,邀请只给 `mosael://` 深链。
     web_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
+    #: 结束多少天的任务行由保留清理删掉(ADR 0050 D29):90 / 180 / 365;空 = 永久保留。被定时任务运行、生成记录、
+    #: 发布记录指着的和记过用量的不删(见 jobs.expired_job_trees)。保留多久是这台部署的磁盘和合规问题,归部署管理员。
+    job_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True, default=365, server_default="365")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

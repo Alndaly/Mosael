@@ -8786,6 +8786,88 @@ def _migrate_deployments_know_their_web_address() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN web_url VARCHAR(500) NOT NULL DEFAULT ''"))
 
 
+def _migrate_usage_remembers_who_spent() -> None:
+    """provider_usage_events 新增 user_id:替谁花的钱(ADR 0050 D30)。不设外键 —— 审计信息,人删了这笔钱照样是他花的。
+    加列要在 SCHEMA 之前;老账找人在 SCHEMA 之后那一步(`_migrate_usage_finds_who_spent_it`)。"""
+    inspector = inspect(engine)
+    if "provider_usage_events" not in set(inspector.get_table_names()):
+        return
+    if "user_id" in {c["name"] for c in inspector.get_columns("provider_usage_events")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE provider_usage_events ADD COLUMN user_id VARCHAR(64)"))
+
+
+def _migrate_deployments_keep_finished_jobs_for_a_year() -> None:
+    """deployment_config 新增 job_retention_days:结束多少天的任务行由保留清理删掉(ADR 0050 D29),默认 365;空 = 永久。
+    此前任务行只由「清空已结束」删(一个成员一点,全工作区的历史没了);这一版起清空只挪水位线,删交给保留清理。"""
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "job_retention_days" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN job_retention_days INTEGER DEFAULT 365"))
+
+
+def _migrate_usage_finds_who_spent_it() -> None:
+    """老账补上是谁花的(ADR 0050 D30、D31)。按线索逐类找,**找不到的留空**(管理概览里列「无归属」),不猜给工作区主人 ——
+    猜错了比空着更糟。只填还空着的;找到的人得还在(用量的 `source_id` 是字符串,对不上任何账号的不填)。幂等。
+
+    - 挂着任务的:任务的发起人(定时任务跑的是任务主人,当时就这样记在任务上);
+    - 智能体那一轮(`agent_message_id`,或没挂上时 `source_id` 就是那条消息):会话主人;
+    - 起名、技能草稿(`agent_session`):会话主人;
+    - 生成(`generation_job`):生成会话的主人;
+    - 念笔记、试听(`note_read_aloud` / `voice_preview`):`source_id` 就是那个人。
+
+    `workflow` / `board` / `asset` 那几类只记了资源 id,不知道当时是谁点的,留空。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"provider_usage_events", "users"} <= tables:
+        return
+    columns = {c["name"] for c in inspect(engine).get_columns("provider_usage_events")}
+    if "user_id" not in columns:
+        return
+    known = "EXISTS (SELECT 1 FROM users u WHERE u.id = {})"
+    steps: list[str] = []
+    if "jobs" in tables:
+        steps.append(
+            "UPDATE provider_usage_events SET user_id = (SELECT j.created_by FROM jobs j WHERE j.id = provider_usage_events.job_id)"
+            " WHERE user_id IS NULL AND job_id IS NOT NULL AND "
+            + known.format("(SELECT j.created_by FROM jobs j WHERE j.id = provider_usage_events.job_id)")
+        )
+    if {"agent_messages", "agent_sessions"} <= tables:
+        owner_of_message = (
+            "(SELECT s.owner_user_id FROM agent_messages m JOIN agent_sessions s ON s.id = m.session_id WHERE m.id = {})"
+        )
+        for message in ("provider_usage_events.agent_message_id", "provider_usage_events.source_id"):
+            found = owner_of_message.format(message)
+            guard = "agent_message_id IS NOT NULL" if message.endswith("agent_message_id") else "source_type = 'agent_message'"
+            steps.append(f"UPDATE provider_usage_events SET user_id = {found} WHERE user_id IS NULL AND {guard} AND " + known.format(found))
+    if "agent_sessions" in tables:
+        found = "(SELECT s.owner_user_id FROM agent_sessions s WHERE s.id = provider_usage_events.source_id)"
+        steps.append(
+            f"UPDATE provider_usage_events SET user_id = {found} WHERE user_id IS NULL AND source_type = 'agent_session' AND "
+            + known.format(found)
+        )
+    if {"generation_jobs", "generation_sessions"} <= tables:
+        found = (
+            "(SELECT gs.owner_user_id FROM generation_jobs g JOIN generation_sessions gs ON gs.id = g.session_id"
+            " WHERE g.id = provider_usage_events.source_id)"
+        )
+        steps.append(
+            f"UPDATE provider_usage_events SET user_id = {found} WHERE user_id IS NULL AND source_type = 'generation_job' AND "
+            + known.format(found)
+        )
+    steps.append(
+        "UPDATE provider_usage_events SET user_id = source_id WHERE user_id IS NULL"
+        " AND source_type IN ('note_read_aloud', 'voice_preview') AND " + known.format("provider_usage_events.source_id")
+    )
+    with engine.begin() as conn:
+        for statement in steps:
+            conn.execute(text(statement))
+
+
 def _migrate_registration_invites_become_invite_links() -> None:
     """注册邀请码(`registration_invites`)并进邀请链接(`invite_links`,ADR 0054 D50):不带工作区、部署管理员发的。
 
@@ -9433,6 +9515,10 @@ def migration_plan() -> MigrationPlan:
                 _migrate_deployments_know_their_web_address,
                 # 同上:ORM 上的 GenerationSession 指望「出处」两列在(ADR 0052)。
                 _migrate_generation_sessions_get_an_origin,
+                # 同上:ORM 上的 ProviderUsageEvent 指望「替谁花的钱」那一列在(ADR 0050)。
+                _migrate_usage_remembers_who_spent,
+                # 同上:ORM 上的 DeploymentConfig 指望「任务保留多久」那一列在(ADR 0050)。
+                _migrate_deployments_keep_finished_jobs_for_a_year,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -9664,6 +9750,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_generation_sessions_origin_from_facts,
                 _migrate_earlier_speech_and_podcast_find_their_origin,
             ),
+            #: 老账补上是谁花的(ADR 0050):顺着任务、智能体消息、会话、生成会话找人,找不到的留空。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_usage_finds_who_spent_it),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

@@ -168,8 +168,8 @@ def test_共享来的会话_它的生成任务同事看得见_取消不了() -> 
     assert owner.post(f"/api/jobs/{job}/cancel").status_code == 200
 
 
-def test_清空已结束_别人会话里的生成_同事清不掉() -> None:
-    """「清空已结束」是按整个工作区删的;别人私有 / 共享会话里的生成,和取消一样只有主人能动。"""
+def test_任务中心面板_别人私有会话里的生成不列() -> None:
+    """面板(ADR 0050)和任务列表同一道「看得见」的闸:别人私有会话里的生成不列,共享的列。清空只挪自己的水位线,动不了别人的任务。"""
     from app.core.db import SessionLocal
     from app.db.models import Job
     from app.domain.jobs import create_job
@@ -183,10 +183,10 @@ def test_清空已结束_别人会话里的生成_同事清不掉() -> None:
             db.get(Job, job_id).status = "succeeded"
         db.commit()
 
-    assert mate.delete(f"/api/jobs/finished?workspace_id={workspace}").json() == {"removed": 1}, "只清得掉工作区的那一个"
-    assert owner.get(f"/api/jobs/{private}").status_code == 200
-    assert owner.get(f"/api/jobs/{shared}").status_code == 200
-    assert owner.delete(f"/api/jobs/finished?workspace_id={workspace}").json() == {"removed": 2}, "主人清得掉自己的"
+    seen = {job["id"] for job in mate.get(f"/api/jobs/center?workspace_id={workspace}").json()["jobs"]}
+    assert seen == {shared, loose}
+    assert mate.post(f"/api/jobs/center/clear?workspace_id={workspace}").status_code == 200
+    assert {job["id"] for job in owner.get(f"/api/jobs/center?workspace_id={workspace}").json()["jobs"]} == {private, shared, loose}
 
 
 def test_不挂在会话上的任务_仍是工作区的() -> None:

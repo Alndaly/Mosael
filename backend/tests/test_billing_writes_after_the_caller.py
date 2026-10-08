@@ -71,7 +71,7 @@ def test_口播收紧的第二轮第三轮大模型请求_不攥着写锁(monkey
 
 
 def _call(db, workspace_id: str, key: str, **extra) -> ProviderUsageEvent | None:
-    with billable(db, capability="chat", operation="probe", workspace_id=workspace_id, idempotency_key=key, **extra) as call:
+    with billable(db, user_id=None, capability="chat", operation="probe", workspace_id=workspace_id, idempotency_key=key, **extra) as call:
         call.report_cost(1200, "USD")
     return call.event
 
@@ -112,8 +112,8 @@ def test_同一个键只记一条_接替的那一条写进来时撤下被接替�
         _call(db, workspace_id, "generation:g1:failed")
         db.commit()
     with SessionLocal() as db:
-        first = record_usage(db, workspace_id=workspace_id, capability="chat", operation="probe", idempotency_key="probe:twice")
-        again = record_usage(db, workspace_id=workspace_id, capability="chat", operation="probe", idempotency_key="probe:twice")
+        first = record_usage(db, user_id=None, workspace_id=workspace_id, capability="chat", operation="probe", idempotency_key="probe:twice")
+        again = record_usage(db, user_id=None, workspace_id=workspace_id, capability="chat", operation="probe", idempotency_key="probe:twice")
         assert again.idempotency_key == first.idempotency_key
         replaced = superseded_attempt(db, "generation:g1:failed")
         assert replaced is not None and replaced["cost_micros"] == 1200

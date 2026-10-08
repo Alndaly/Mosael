@@ -412,6 +412,7 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
                 raise WorkflowDomainError("wfErr_schemaInvalid", params={"reason": exc.message}) from exc
         with billable(
             db,
+            user_id=actor,
             capability="chat",
             operation="workflow_llm",
             idempotency_key=once("workflow_llm"),

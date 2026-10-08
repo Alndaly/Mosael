@@ -47,7 +47,7 @@ class Namer:
         self.gate = threading.Event()
         self.gate.set()
 
-    def __call__(self, target, messages, *, workspace_id: str, session_id: str) -> str:
+    def __call__(self, target, messages, *, workspace_id: str, session_id: str, user_id: str | None) -> str:
         self.asked.append(messages)
         self.gate.wait(5)
         if self.fail:

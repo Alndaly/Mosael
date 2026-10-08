@@ -745,11 +745,14 @@ def _side_call_recorder(generation: GenerationJob, job: Job, context: Generation
         "source_id": generation.id,
         "job_id": job.id,
     }
+    #: 替谁花的钱:发起这次生成的人(定时任务跑的是任务主人,ADR 0050 D30)。
+    payer = job.created_by
 
     def record(model: str, units: dict, raw: dict) -> None:
         seen[model] = seen.get(model, 0) + 1
         with unit_of_work() as fresh, billable(
             fresh,
+            user_id=payer,
             operation="generation_side_call",
             model=model,
             source_type="generation_job",
@@ -968,6 +971,7 @@ def _record_generation_usage(
     check = _cross_check(db, generation, job, context, units, reported)
     with billable(
         db,
+        user_id=job.created_by,
         capability=generation.kind,
         operation="generation_job",
         workspace_id=job.workspace_id,
@@ -1082,8 +1086,9 @@ def _asset_name(prompt: str, model: str) -> str:
 def record_failure(db, job: Job) -> None:
     """生成任务失败了:把失败原因抄到**生成记录自己**身上(`error` / `error_key` / `error_params`,和任务同形)。
 
-    任务是会被清掉的(任务中心的「清空已结束」,见 job_center.clear_finished),生成记录不会 —— 它是创作历史,
-    `job_id` 在任务删掉时置空。此前失败原因只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的「生成失败」。
+    任务行可能已经不在了(老版本的「清空已结束」真删过;保留清理不删生成记录指着的,见 jobs.expired_job_trees),生成记录
+    一直在 —— 它是创作历史,`job_id` 在任务删掉时置空。此前失败原因只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的
+    「生成失败」。
 
     挂在任务**落终态**那一刻(jobs.register_settle_listener),而不是写在 `_fail` 里:让任务失败的不止执行体
     自己 —— 用户取消(cancel_job)、重启时接不回来(reconcile_orphaned_jobs)、外部 worker 租约过期,这几条都不经过

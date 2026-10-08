@@ -25,6 +25,7 @@ def test_record_usage_estimates_cost_from_pricing_rule() -> None:
         db.flush()
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="alibaba",
             model="qwen-image",
@@ -72,6 +73,7 @@ def test_record_usage_sums_input_and_output_token_pricing_rules() -> None:
         db.flush()
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="openai-compatible",
             model="deepseek-v4-pro",
@@ -220,6 +222,7 @@ def test_缓存读写单列并算出命中率() -> None:
     with SessionLocal() as db:
         record_usage(
             db,
+            user_id=None,
             workspace_id=ws,
             provider="openai-compatible",
             model="m",
@@ -255,13 +258,13 @@ def test_调用方回滚_账照样留下_引用断开() -> None:
         job = Job(workspace_id=ws, kind="workflow", payload={})
         db.add(job)
         db.flush()
-        with billable(db, capability="chat", operation="t", workspace_id=ws, job_id=job.id,
+        with billable(db, user_id=None, capability="chat", operation="t", workspace_id=ws, job_id=job.id,
                       idempotency_key="rolled-back") as call:
             call.meter(input_tokens=3)
         db.rollback()
 
     with SessionLocal() as db:
-        with billable(db, capability="chat", operation="t", workspace_id=ws, idempotency_key=once("t")) as call:
+        with billable(db, user_id=None, capability="chat", operation="t", workspace_id=ws, idempotency_key=once("t")) as call:
             call.meter(input_tokens=5)
         # 不提交就关
 
@@ -277,7 +280,7 @@ def test_调用方提交了_不会补出第二条() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        with billable(db, capability="chat", operation="t", workspace_id=ws, idempotency_key="k") as call:
+        with billable(db, user_id=None, capability="chat", operation="t", workspace_id=ws, idempotency_key="k") as call:
             call.meter(input_tokens=3)
         db.commit()
         # 同一个会话接着开下一个事务、再回滚:上一笔已经确认过,不该再动它

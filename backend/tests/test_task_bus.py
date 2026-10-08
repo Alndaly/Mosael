@@ -66,10 +66,12 @@ def test_job_events_endpoint_and_clear_finished() -> None:
     events = client.get(f"/api/jobs/{done_id}/events").json()
     assert [event["type"] for event in events] == ["e0", "e1", "e2"]
 
-    result = client.delete(f"/api/jobs/finished?workspace_id={ws['id']}").json()
-    assert result == {"removed": 1}
+    #: 「清空已结束」只把我的面板收拾干净(ADR 0050):面板上只剩还在跑的,任务本身一条不少。
+    assert client.post(f"/api/jobs/center/clear?workspace_id={ws['id']}").status_code == 200
+    panel = client.get(f"/api/jobs/center?workspace_id={ws['id']}").json()
+    assert [job["id"] for job in panel["jobs"]] == [running_id]
     remaining = client.get(f"/api/jobs?workspace_id={ws['id']}").json()
-    assert [job["id"] for job in remaining] == [running_id]
+    assert sorted(job["id"] for job in remaining) == sorted([done_id, running_id])
 
 
 def test_reconcile_orphaned_jobs_on_restart() -> None:

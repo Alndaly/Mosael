@@ -50,6 +50,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),
+    # 任务中心的水位线(ADR 0050):每人每个工作区一条,只由面板的用例写。
+    "JobCenterMark": ("app/domain/job_center/",),
     "Notification": ("app/domain/notifications/",),
     "ActivityEvent": ("app/domain/collaboration/",),
     "Comment": ("app/domain/collaboration/",),

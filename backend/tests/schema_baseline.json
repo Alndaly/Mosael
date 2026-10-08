@@ -385,6 +385,11 @@
     "used_by",
     "workspace_id"
   ],
+  "job_center_marks": [
+    "cleared_at",
+    "user_id",
+    "workspace_id"
+  ],
   "jobs": [
     "created_at",
     "error",

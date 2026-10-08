@@ -1,6 +1,6 @@
-"""任务事件的保留清理、任务中心的「清空已结束」:**集合式、分批提交**,不把任务读成 ORM 对象。
+"""任务事件的保留清理:**集合式、分批提交**,不把任务读成 ORM 对象(任务行的保留清理同一个做法,见 test_task_retention)。
 
-此前两处都是先把任务整行读进会话、再逐个 ORM DELETE —— 而 ORM 的 DELETE 每一次都把身份映射里的全部对象过一遍,
+此前它和当时的「清空已结束」都是先把任务整行读进会话、再逐个 ORM DELETE —— 而 ORM 的 DELETE 每一次都把身份映射里的全部对象过一遍,
 任务越多越是平方级:在维护者库副本上放大到 1.2 万个任务,清理 11.6 秒、「清空已结束」41.5 秒;3.2 万个,清理 67 秒。
 而且全程一个事务攥着写锁,另一个连接的写入 5 秒后报 database is locked。清理还在启动后第 5 秒就跑一次。
 
@@ -17,7 +17,6 @@ from sqlalchemy import event
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, now
 from app.domain import jobs as jobs_bus
-from app.domain.job_center import use_cases as job_center
 from app.workers import scheduler
 from tests.util import fresh_client
 
@@ -58,7 +57,6 @@ class _Watch:
             return real()
 
         monkeypatch.setattr(scheduler, "unit_of_work", counted)
-        monkeypatch.setattr(job_center, "unit_of_work", counted)
 
     def _loaded(self, *_args) -> None:
         self.loaded += 1
@@ -87,31 +85,6 @@ def test_event_retention_keeps_the_rules_and_deletes_in_batches(monkeypatch) -> 
     assert _events(workflow) == 12, "工作流在窗口内全留(执行历史靠事件配对还原每个节点)"
     assert watch.loaded == 0, f"清理把 {watch.loaded} 个任务读成了 ORM 对象 —— 平方级就是从这儿来的"
     assert watch.commits == 7, f"25 条、一批 4 条,应该是 7 个事务,实际 {watch.commits} 个"
-
-
-def test_clearing_finished_jobs_reads_no_job_objects_and_commits_per_batch(monkeypatch) -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    done = [_job(ws, status="succeeded", events=2) for _ in range(5)]
-    # 父任务用配音(收纳子任务的那种);工作流运行是工作流页的执行历史,「清空已结束」留着它(UM-01)
-    parent = _job(ws, status="succeeded", events=1, kind="subtitle_dub")
-    child = _job(ws, status="failed", events=1, parent=parent)
-    running = _job(ws, status="running", events=1)
-    monkeypatch.setattr(job_center, "DELETE_JOBS_BATCH", 2)
-    watch = _Watch(monkeypatch)
-    try:
-        response = client.delete(f"/api/jobs/finished?workspace_id={ws}")
-    finally:
-        watch.close()
-
-    assert response.status_code == 200, response.text
-    assert response.json() == {"removed": 7}
-    with SessionLocal() as db:
-        left = {job.id for job in db.query(Job).filter(Job.workspace_id == ws)}
-        assert left == {running}
-        assert db.query(TaskEvent).filter(TaskEvent.job_id.in_([*done, parent, child])).count() == 0
-    assert watch.loaded == 0, f"「清空已结束」把 {watch.loaded} 个任务读成了 ORM 对象"
-    assert watch.commits == 4, f"7 个任务、一批 2 个,应该是 4 个事务,实际 {watch.commits} 个"
 
 
 def test_prune_runs_with_the_shared_selection(monkeypatch) -> None:

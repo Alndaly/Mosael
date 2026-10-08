@@ -37,25 +37,26 @@ def test_素材数和素材库同一个口径_中间产物不算() -> None:
     assert client.get("/api/admin/overview").json()["assets"] == 2
 
 
-def test_谁在花钱_不挂任务的用量列在最后一行无归属_各行加起来等于合计() -> None:
+def test_谁在花钱_按用量自己记的人分_记不下的列在最后一行无归属_各行加起来等于合计() -> None:
     admin = fresh_client()
     ws = admin.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
         tester = db.query(User).filter_by(username="tester").one().id
-        job = Job(workspace_id=ws, kind="generate", payload={}, created_by=tester)
-        db.add(job)
+        someone_else = Job(workspace_id=ws, kind="generate", payload={}, created_by=None)
+        db.add(someone_else)
         db.flush()
-        db.add(_usage(ws, "by-job", 1_000_000, job_id=job.id))
-        # 智能体对话、画板里的调用不挂任务 —— 比挂了任务的还多。
-        db.add(_usage(ws, "agent", 5_000_000, source_type="agent_message"))
-        db.add(_usage(ws, "board", 2_000_000, source_type="board"))
+        # 智能体对话、画板里的调用不挂任务,也记得是谁花的(ADR 0050 D30);挂着的任务是谁发起的不作数 —— 记在用量上的才算。
+        db.add(_usage(ws, "agent", 5_000_000, source_type="agent_message", user_id=tester))
+        db.add(_usage(ws, "board", 1_000_000, source_type="board", user_id=tester, job_id=someone_else.id))
+        # 升级前的老账,找不到是谁的(D31)。
+        db.add(_usage(ws, "old", 7_000_000, source_type="workflow"))
         db.commit()
 
     overview = admin.get("/api/admin/overview").json()
     rows = [(row["user_id"] == tester, row["username"], row["costs"], row["calls"]) for row in overview["spend_by_user"]]
     assert rows == [
-        (True, "tester", [{"currency": "USD", "micros": 1_000_000}], 1),
-        (False, "", [{"currency": "USD", "micros": 7_000_000}], 2),
+        (True, "tester", [{"currency": "USD", "micros": 6_000_000}], 2),
+        (False, "", [{"currency": "USD", "micros": 7_000_000}], 1),
     ], "花得更多的「无归属」也排在人后面:它是余数,不是一个能去谈的人"
     assert overview["spend_by_user"][-1]["user_id"] == ""
-    assert overview["costs"] == [{"currency": "USD", "micros": 8_000_000}]
+    assert overview["costs"] == [{"currency": "USD", "micros": 13_000_000}]

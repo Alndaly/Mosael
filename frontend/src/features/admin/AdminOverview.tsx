@@ -167,8 +167,8 @@ function SpendByPerson({
   }
   const primaryCurrency = stats?.costs?.[0]?.currency ?? "";
   const primaryMax = Math.max(0, ...spend.map((row) => microsIn(row.costs, primaryCurrency)));
-  //: 后端把没挂在任务上的用量(智能体对话、画板、工作流节点里的调用)列成最后一行、user_id 为空 —— 各行加起来才等于合计。
-  //: 此前它们整个不在图上,条形只有合计的零头(体检 UM-11)。按人记下来要等写入时带上是谁花的。
+  //: 每一笔用量写的时候就记下了是谁花的(ADR 0050);升级前的老账里找不到人的,后端列成最后一行、user_id 为空 ——
+  //: 各行加起来才等于合计。人删了账号的,那笔钱照样是他的,名字写「已删除的账号」。
   const unattributed = spend.some((row) => !row.user_id);
   return (
     <div className="grid gap-4">
@@ -179,7 +179,7 @@ function SpendByPerson({
             data-spend-unattributed={row.user_id ? undefined : ""}
             className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-ui-sm"
           >
-            <Truncate className={row.user_id ? undefined : "text-muted-foreground"}>{row.username || t("adminNoOwner")}</Truncate>
+            <Truncate className={row.user_id ? undefined : "text-muted-foreground"}>{row.username || (row.user_id ? t("adminDeletedAccount") : t("adminNoOwner"))}</Truncate>
             {/* 金额**不设固定宽、不换行**:w-24 曾装不下「0.0007 USD · 6」,调用次数被挤到第二行。 */}
             <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
               {formatCosts(row.costs, locale)} · {row.calls}

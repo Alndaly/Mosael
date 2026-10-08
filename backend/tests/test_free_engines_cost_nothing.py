@@ -54,10 +54,10 @@ def test_Edge_配音记_0_可信度是免费(workspace, tmp_path) -> None:
 def test_免费的不进花费汇总(workspace) -> None:
     ws, _me = workspace
     with SessionLocal() as db:
-        record_usage(db, workspace_id=ws, provider="bytedance", capability="image", operation="g", idempotency_key="a",
+        record_usage(db, user_id=None, workspace_id=ws, provider="bytedance", capability="image", operation="g", idempotency_key="a",
                      cost_micros=200_000, currency="CNY", cost_confidence="reported")
         for index in range(3):
-            record_usage(db, workspace_id=ws, provider="edge", capability="tts", operation="s", idempotency_key=f"e{index}",
+            record_usage(db, user_id=None, workspace_id=ws, provider="edge", capability="tts", operation="s", idempotency_key=f"e{index}",
                          cost_micros=0, cost_confidence="free")
         db.commit()
         totals = costs_by_currency(db, ProviderUsageEvent.workspace_id == ws).get((), [])

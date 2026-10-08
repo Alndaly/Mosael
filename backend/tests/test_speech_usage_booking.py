@@ -54,14 +54,14 @@ def test_老账_CosyVoice改记到alibaba_Edge没价的记0免费_有数的不�
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        record_usage(db, workspace_id=ws, provider="alibaba-cosyvoice", capability="tts", operation="synthesize_speech",
+        record_usage(db, user_id=None, workspace_id=ws, provider="alibaba-cosyvoice", capability="tts", operation="synthesize_speech",
                      model="cosyvoice-v2", idempotency_key="cosy", units={"characters": 4})
-        record_usage(db, workspace_id=ws, provider="edge", capability="tts", operation="synthesize_speech",
+        record_usage(db, user_id=None, workspace_id=ws, provider="edge", capability="tts", operation="synthesize_speech",
                      idempotency_key="edge-old", units={"characters": 4})
-        record_usage(db, workspace_id=ws, provider="edge", capability="tts", operation="synthesize_speech",
+        record_usage(db, user_id=None, workspace_id=ws, provider="edge", capability="tts", operation="synthesize_speech",
                      idempotency_key="edge-new", cost_micros=0, cost_confidence="free")
         # 别的能力里恰好叫这个名字的不归它管。
-        record_usage(db, workspace_id=ws, provider="alibaba-cosyvoice", capability="image", operation="x",
+        record_usage(db, user_id=None, workspace_id=ws, provider="alibaba-cosyvoice", capability="image", operation="x",
                      idempotency_key="other")
         db.commit()
     with engine.begin() as conn:

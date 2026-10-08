@@ -560,6 +560,7 @@ def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
         system += f"{target_name}上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,整篇重写一遍不是他要的。"
     with billable(
         db,
+        user_id=order.actor_id,
         capability="chat",
         operation="board_write",
         #: 一个任务记一次账:任务是这次调用稳定的工作单元。

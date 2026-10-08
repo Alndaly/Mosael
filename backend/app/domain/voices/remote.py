@@ -421,6 +421,7 @@ def _create(adapter, account: Account, *, voice_id: str, workspace_id: str, mode
 
     with unit_of_work() as db, billable(
         db,
+        user_id=account.owner_user_id,
         capability="tts",
         operation="enroll_voice",
         idempotency_key=once("enroll_voice"),

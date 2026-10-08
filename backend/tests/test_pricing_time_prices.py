@@ -241,6 +241,7 @@ def _record(db, ws: str, key: str, when: datetime | None, **extra: Any):
     return record_usage(
         db,
         workspace_id=ws,
+        user_id=None,
         provider="deepseek",
         model="deepseek-flash",
         capability="chat",

@@ -68,6 +68,10 @@ class ProviderUsageEvent(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 替谁花的钱(ADR 0050 D30):跑的人 —— 手动操作是点的人,定时任务是任务主人,智能体是会话主人;和钥匙、额度用谁的
+    #: 是同一条归属(ADR 0047)。**写的时候记**:读的时候顺着任务、消息去找,线索各不相同、被删的东西一删就断。
+    #: 不设外键:和 `owner_user_id` 一样是审计信息,人删了这笔钱照样是那时候那个人花的。空 = 回填时找不到人(「无归属」)。
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     provider_profile_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )

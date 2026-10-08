@@ -43,7 +43,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "components/generation/ModelPreviewSettingsButton.tsx": 1,
   "components/jobs/JobChildren.tsx": 1,
   "components/jobs/NotificationCenter.tsx": 3,
-  "components/jobs/TaskCenter.tsx": 1,
   "components/layout/AppShell.tsx": 8,
   "components/layout/InspectorCard.tsx": 1,
   "components/layout/StudioPage.tsx": 1,

@@ -38,11 +38,10 @@ vi.mock("@/api/client", () => ({
   api: h.apiMock,
   fetchJobKinds: async () => CATALOG,
   getJob: vi.fn(),
-  previewClearFinished: vi.fn(),
-  clearFinishedJobs: vi.fn(),
-  topLevelJobsQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "top-level"],
-    queryFn: () => h.apiMock(`/api/jobs?workspace_id=${workspaceId}&top_level=true`),
+  clearTaskCenter: vi.fn(),
+  taskCenterQuery: (workspaceId: string) => ({
+    queryKey: ["jobs", workspaceId, "task-center", "shown"],
+    queryFn: async () => ({ jobs: await h.apiMock(`/api/jobs/center?workspace_id=${workspaceId}`), cleared_at: null }),
   }),
 }));
 
@@ -212,10 +211,10 @@ describe("每个任务最多说一次,历史任务不说", () => {
   it("两次轮询之间建出来又做完的新任务,照样说", async () => {
     const { client } = mount([job("j1", "subtitle_dub", "running")]);
     await spinning();
-    client.setQueryData(["jobs", "w1", "top-level"], [
-      job("fast", "url_import", "succeeded"),
-      job("j1", "subtitle_dub", "running"),
-    ]);
+    client.setQueryData(["jobs", "w1", "task-center", "shown"], {
+      jobs: [job("fast", "url_import", "succeeded"), job("j1", "subtitle_dub", "running")],
+      cleared_at: null,
+    });
     await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
     expect(h.toast.success.mock.calls[0][0]).toBe("链接导入 · jobDone");
   });

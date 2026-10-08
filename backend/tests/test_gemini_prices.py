@@ -117,6 +117,7 @@ def test_预填之后一轮智能体按_pi_报的三个数算钱() -> None:
         # sidecar 的 collectUsage 报回来的形状:input 已扣掉缓存命中,思考计在 output 里。
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=workspace,
             provider_profile_id=profile.id,
             provider="google",

@@ -89,8 +89,8 @@ def test_稳定键真的会去重() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        first = record_usage(db, workspace_id=ws, capability="chat", operation="t",
+        first = record_usage(db, user_id=None, workspace_id=ws, capability="chat", operation="t",
                              idempotency_key="replay:me", units={"input_tokens": 10})
-        again = record_usage(db, workspace_id=ws, capability="chat", operation="t",
+        again = record_usage(db, user_id=None, workspace_id=ws, capability="chat", operation="t",
                              idempotency_key="replay:me", units={"input_tokens": 10})
         assert first.id == again.id, "同一个键记出了两行 —— 重放会重复计费"

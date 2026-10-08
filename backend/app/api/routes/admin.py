@@ -174,6 +174,30 @@ def set_web_url(body: WebUrlUpdate, db: Tx, user: CurrentUser) -> WebUrlUpdate:
     return WebUrlUpdate(url=deployment.web_url(db))
 
 
+class JobRetention(BaseModel):
+    #: 结束多少天的任务行由保留清理删掉:90 / 180 / 365(deployment.JOB_RETENTION_CHOICES);`null` = 永久保留(ADR 0050 D29)。
+    days: int | None
+
+
+@router.get("/admin/job-retention", response_model=JobRetention)
+def get_job_retention(db: DbSession, user: CurrentUser) -> JobRetention:
+    """任务行保留多久。只给部署管理员:和备份、恢复同一类,是这台部署的数据怎么留。"""
+    ensure_deployment_admin(db, user)
+    return JobRetention(days=deployment.job_retention_days(db))
+
+
+@router.put("/admin/job-retention", response_model=JobRetention)
+def set_job_retention(body: JobRetention, db: Tx, user: CurrentUser) -> JobRetention:
+    """改保留天数。被定时任务运行、生成记录、发布记录指着的和记过用量的任务不删;删的那一刻在后台的保留清理里。"""
+    ensure_deployment_admin(db, user)
+    try:
+        deployment.set_job_retention_days(db, body.days)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=tr("routeErr_jobRetentionChoice")) from exc
+    db.flush()
+    return JobRetention(days=deployment.job_retention_days(db))
+
+
 class SharedHostFolders(BaseModel):
     folders: list[str]
 

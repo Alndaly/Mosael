@@ -55,14 +55,11 @@ def costs_by_currency(
     db: Session,
     *where: Any,
     group_by: Iterable[Any] = (),
-    join: Iterable[tuple[Any, Any]] = (),
-    outer: bool = False,
 ) -> dict[tuple[Any, ...], list[CostAmount]]:
     """按币种汇总计过价的用量事件 —— **全仓唯一一处把 cost_micros 加起来的地方。**
 
-    `where` 是筛选条件,`group_by` 是除币种之外还要分的组(哪一天、哪家供应商、哪个人),
-    `join` 是 `(表, on 条件)`,给那些要顺着别的表才分得了组的汇总(按人要经过 jobs);`outer` 让连不上的事件
-    也留下、落进键为 None 的那一组(按人分时就是「无归属」),而不是从汇总里消失。
+    `where` 是筛选条件,`group_by` 是除币种之外还要分的组(哪一天、哪家供应商、哪个人 —— 人记在用量自己身上,
+    按 `user_id` 分;没记下是谁的落进键为 None 的那一组,即「无归属」)。
     返回 `{分组键: [CostAmount, …]}`;不分组时键是 `()`。
 
     SQL 里 `GROUP BY 币种`:加法只发生在同一个币种之内,调用方想加错都没有机会。
@@ -78,8 +75,6 @@ def costs_by_currency(
         func.sum(ProviderUsageEvent.cost_micros),
         func.count(),
     ).select_from(ProviderUsageEvent)
-    for target, onclause in join:
-        stmt = stmt.join(target, onclause, isouter=outer)
     #: 没花的钱不是钱:免费的引擎(`free`)、失败了服务商什么都没回(`not_billed`)都记 0,混进来的话账上会冒出一笔
     #: 「$0.00」—— 一个人民币部署里一笔美元的零,一次没扣钱的失败显示成「费用 US$0.00」(没定价的模型失败了,币种
     #: 只能猜成美元),还按次数把它排成主要币种。界面另说「未扣费」(见 NOT_SPENT)。
@@ -382,6 +377,7 @@ def record_usage(
     db: Session,
     *,
     workspace_id: str,
+    user_id: str | None,
     provider_profile_id: str | None = None,
     provider: str = "",
     model: str = "",
@@ -414,6 +410,10 @@ def record_usage(
     事后对着时段价目核一笔账才对得上。
 
     `supersedes`:这一条接替的那一条账的键(见 superseded_attempt)。写这一条的同一个事务里把那一条撤下。
+
+    `user_id`(**必填**,ADR 0050 D30):替谁花的钱 —— 跑的人。没有默认值:漏了它的调用点在调用那一刻就报错,而不是悄悄
+    记成「无归属」。真不知道是谁(没有人在场的后台调用)就传那个变量本身的 None,棘轮不许写字面量 None(见
+    tests/test_usage_knows_who_spent.py)。
     """
     moment = occurred_at or now()
     queued = _queued_usage(db, idempotency_key)
@@ -458,6 +458,7 @@ def record_usage(
 
     values = dict(
         workspace_id=workspace_id,
+        user_id=user_id,
         provider_profile_id=provider_profile_id,
         provider=provider,
         model=model,
@@ -1126,6 +1127,7 @@ def billable(
     *,
     capability: str,
     operation: str,
+    user_id: str | None,
     workspace_id: str = "",
     provider: str = "",
     model: str = "",
@@ -1143,6 +1145,9 @@ def billable(
     - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。`job_id` 同理:
       没给就挂在当前正在执行的任务上(见 jobs.current_parent_job_id)。
       两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
+    - **替谁花的钱**(`user_id`,必填,ADR 0050 D30):调用点自己说 —— 就是它拿来挑连接、用钥匙和额度的那个人。不从环境
+      里取:工作区是「这次请求关于哪个工作区」,一个就够;人在智能体、定时任务、工作流节点里各有各的说法(会话主人、任务主人、
+      运行的发起人),只有调用点知道这一次是哪一种。
     - **调用期间不写进调用方的会话**(D66):`db` 只拿来读价目;这条账随 `db` 提交的那一刻一起落库,没提交的在事务结束
       之后补写(契约见上面「账随调用方提交的那一刻落库」)。调用方照常提交或回滚,不必为账操心,也不会因为记账而攥着
       写锁跨过下一次供应商调用。块结束之后 `call.event` 是算好成本、还没落库的那一条。
@@ -1195,6 +1200,7 @@ def billable(
                 call.event = record_usage(
                     db,
                     workspace_id=target,
+                    user_id=user_id,
                     provider_profile_id=call.provider_profile_id,
                     provider=call.provider,
                     model=call.model,

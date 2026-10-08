@@ -132,6 +132,7 @@ def ask(
 
     with _Session() as billing_db, billable(
         billing_db,
+        user_id=user_id,
         capability="chat",
         operation="agent_judge",
         workspace_id=workspace_id,

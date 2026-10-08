@@ -350,7 +350,7 @@ def analyze_asset(
         image_path, image_mime = compatible
         profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
         with billable(
-            db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             idempotency_key=once("analyze_asset"),
             source_type="asset", source_id=asset.id,
         ) as call:
@@ -380,7 +380,7 @@ def analyze_asset(
     if native_profile is not None and mode in ("native", "auto"):
         # 原生视频理解是这套里最贵的调用之一,以前完全不在账上。
         with billable(
-            db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             idempotency_key=once("analyze_asset"),
             source_type="asset", source_id=asset.id,
         ) as call:
@@ -408,7 +408,7 @@ def analyze_asset(
     profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
     images = extract_video_frames(path)  # 帧数按时长自适应
     with billable(
-        db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+        db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         idempotency_key=once("analyze_asset"),
         source_type="asset", source_id=asset.id,
     ) as call:

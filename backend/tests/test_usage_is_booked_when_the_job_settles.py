@@ -82,7 +82,7 @@ def test_和任务终态一起提交的账_提交钩子里就看得见() -> None
     seen: list[int] = []
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        with billable(db, capability="chat", operation="probe", workspace_id=workspace, job_id=job_id,
+        with billable(db, user_id=None, capability="chat", operation="probe", workspace_id=workspace, job_id=job_id,
                       idempotency_key="probe:settles-with-the-job") as call:
             call.report_cost(900, "USD")
         finish_job(db, job, status="succeeded")

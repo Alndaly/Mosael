@@ -44,6 +44,7 @@ def test_provider_pricing_rules_crud_and_metering() -> None:
     with SessionLocal() as db:
         event = record_usage(
             db,
+            user_id=None,
             workspace_id=workspace_id,
             provider_profile_id=profile["id"],
             provider="alibaba",

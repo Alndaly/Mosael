@@ -3306,7 +3306,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/finished/preview": {
+    "/api/jobs/center": {
         parameters: {
             query?: never;
             header?: never;
@@ -3314,10 +3314,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Preview Finished Jobs
-         * @description 「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数。
+         * Job Center Panel
+         * @description 任务中心面板(ADR 0050):还在跑的全部,加上结束在我的水位线之后的最近 `limit` 条;`cleared=true` 是水位线之前结束的
+         *     那些(「显示已清掉的」,只读)。水位线每人每个工作区一条,别人的面板各看各的。
          */
-        get: operations["preview_finished_jobs_api_jobs_finished_preview_get"];
+        get: operations["job_center_panel_api_jobs_center_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3326,7 +3327,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/finished": {
+    "/api/jobs/center/clear": {
         parameters: {
             query?: never;
             header?: never;
@@ -3335,9 +3336,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /** Delete Finished Jobs */
-        delete: operations["delete_finished_jobs_api_jobs_finished_delete"];
+        /**
+         * Clear Job Center
+         * @description 「清空已结束」:把我的水位线挪到现在。**不删任何东西**(D27)—— 任务行只由部署的保留清理删(D29)。
+         */
+        post: operations["clear_job_center_api_jobs_center_clear_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6257,6 +6261,30 @@ export interface paths {
          * @description 部署的网页地址:成员用浏览器打开 Mosael 的地方。填了,邀请链接就带一个网页地址(ADR 0054 D52)。
          */
         put: operations["set_web_url_api_admin_web_url_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/job-retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Retention
+         * @description 任务行保留多久。只给部署管理员:和备份、恢复同一类,是这台部署的数据怎么留。
+         */
+        get: operations["get_job_retention_api_admin_job_retention_get"];
+        /**
+         * Set Job Retention
+         * @description 改保留天数。被定时任务运行、生成记录、发布记录指着的和记过用量的任务不删;删的那一刻在后台的保留清理里。
+         */
+        put: operations["set_job_retention_api_admin_job_retention_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -11493,20 +11521,6 @@ export interface components {
             label: string;
         };
         /**
-         * ClearFinishedPreviewOut
-         * @description 「清空已结束」删之前给人看的那几个数(见 domain/job_center.preview_clear_finished)。
-         */
-        ClearFinishedPreviewOut: {
-            /** Tasks */
-            tasks: number;
-            /** Jobs */
-            jobs: number;
-            /** By Others */
-            by_others: number;
-            /** Kept */
-            kept: number;
-        };
-        /**
          * ClipAudioRequest
          * @description 对片段做声音处理,做完直接换到时间线上:降噪 / 只留人声 / 拆成人声和背景音。
          */
@@ -13331,6 +13345,27 @@ export interface components {
             /** Web Url */
             web_url: string;
         };
+        /**
+         * JobCenterClearedOut
+         * @description 点了「清空已结束」:我的新水位线。
+         */
+        JobCenterClearedOut: {
+            /**
+             * Cleared At
+             * Format: date-time
+             */
+            cleared_at: string;
+        };
+        /**
+         * JobCenterOut
+         * @description 任务中心面板(ADR 0050):列哪些任务,和我的水位线 —— `cleared_at` 为空就是没清过,界面不摆「显示已清掉的」。
+         */
+        JobCenterOut: {
+            /** Jobs */
+            jobs: components["schemas"]["JobSummaryOut"][];
+            /** Cleared At */
+            cleared_at?: string | null;
+        };
         /** JobKindCatalogOut */
         JobKindCatalogOut: {
             /** Kinds */
@@ -13413,6 +13448,11 @@ export interface components {
             readonly error_detail: string | null;
             /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
             readonly error_hint: components["schemas"]["FailureHintOut"] | null;
+        };
+        /** JobRetention */
+        JobRetention: {
+            /** Days */
+            days: number | null;
         };
         /**
          * JobSummaryOut
@@ -26830,10 +26870,12 @@ export interface operations {
             };
         };
     };
-    preview_finished_jobs_api_jobs_finished_preview_get: {
+    job_center_panel_api_jobs_center_get: {
         parameters: {
             query: {
                 workspace_id: string;
+                cleared?: boolean;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -26847,7 +26889,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClearFinishedPreviewOut"];
+                    "application/json": components["schemas"]["JobCenterOut"];
                 };
             };
             /** @description Validation Error */
@@ -26861,7 +26903,7 @@ export interface operations {
             };
         };
     };
-    delete_finished_jobs_api_jobs_finished_delete: {
+    clear_job_center_api_jobs_center_clear_post: {
         parameters: {
             query: {
                 workspace_id: string;
@@ -26878,9 +26920,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["JobCenterClearedOut"];
                 };
             };
             /** @description Validation Error */
@@ -33109,6 +33149,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebUrlUpdate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_retention_api_admin_job_retention_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRetention"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_job_retention_api_admin_job_retention_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobRetention"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRetention"];
                 };
             };
             /** @description Validation Error */

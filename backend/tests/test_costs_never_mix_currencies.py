@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.models import GenerationJob, Job, ProviderPricingRule, ProviderUsageEvent, User
+from app.db.models import GenerationJob, ProviderPricingRule, ProviderUsageEvent, User
 from app.domain.billing.usage import CostAmount, record_usage, summarize_usage
 from tests.util import fresh_client, second_client
 
@@ -82,14 +82,10 @@ def test_管理页按人分_每个人每个币种一笔() -> None:
     second_client("mate")
     with SessionLocal() as db:
         users = {user.username: user.id for user in db.query(User).all()}
-        mine = Job(workspace_id=ws, kind="test", payload={}, created_by=users["tester"])
-        theirs = Job(workspace_id=ws, kind="test", payload={}, created_by=users["mate"])
-        db.add_all([mine, theirs])
-        db.flush()
-        # tester:¥12 + $4.5;mate:¥20(人民币花得更多)。
-        db.add(_event(ws, "t-cny", provider="alibaba", micros=12_000_000, currency="CNY", job_id=mine.id))
-        db.add(_event(ws, "t-usd", provider="openai", micros=4_500_000, currency="USD", job_id=mine.id))
-        db.add(_event(ws, "m-cny", provider="alibaba", micros=20_000_000, currency="CNY", job_id=theirs.id))
+        # tester:¥12 + $4.5;mate:¥20(人民币花得更多)。替谁花的钱记在用量自己身上(ADR 0050)。
+        db.add(_event(ws, "t-cny", provider="alibaba", micros=12_000_000, currency="CNY", user_id=users["tester"]))
+        db.add(_event(ws, "t-usd", provider="openai", micros=4_500_000, currency="USD", user_id=users["tester"]))
+        db.add(_event(ws, "m-cny", provider="alibaba", micros=20_000_000, currency="CNY", user_id=users["mate"]))
         db.commit()
 
     overview = admin.get("/api/admin/overview").json()
@@ -139,7 +135,7 @@ def test_一次调用对上的规则币种不一致_整条记成未定价() -> N
         db.add(_rule(ws, "million_output_token", 1_000_000, "USD"))
         db.flush()
         event = record_usage(
-            db, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
+            db, user_id=None, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
             operation="chat", idempotency_key="mixed", units={"input_tokens": 1_000_000, "output_tokens": 1_000_000},
         )
         db.commit()
@@ -162,7 +158,7 @@ def test_同一币种的规则照常相加() -> None:
         db.add(_rule(ws, "million_output_token", 8_000_000, "CNY"))
         db.flush()
         event = record_usage(
-            db, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
+            db, user_id=None, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
             operation="chat", idempotency_key="same", units={"input_tokens": 1_000_000, "output_tokens": 500_000},
         )
         db.commit()
@@ -178,7 +174,7 @@ def test_没用上的那条规则不算混币种() -> None:
         db.add(_rule(ws, "request", 1_000, "USD"))
         db.flush()
         event = record_usage(
-            db, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
+            db, user_id=None, workspace_id=ws, provider="deepseek", model="deepseek-v4", capability="chat",
             operation="chat", idempotency_key="unused", units={"input_tokens": 1_000_000},
         )
         db.commit()
