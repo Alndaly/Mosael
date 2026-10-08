@@ -96,8 +96,15 @@ def test_认得出用户自己设过的默认(monkeypatch) -> None:
 
     models = mcp_server.list_provider_models(capability="chat")["models"]
     assert [item["model"] for item in models if item["is_default"]] == ["qwen-max"]
-    # 没设过默认的能力就是没设过 —— 不替他从候选里挑一个充数。
-    assert all(not item["is_default"] for item in mcp_server.list_provider_models(capability="tts")["models"])
+    # 没设过默认的能力就是没设过 —— 不替他从候选里挑一个充数。要有一个候选,这句才测得到东西:此前 _setup 只配了 chat,
+    # TTS 一个候选都没有,`all(... for item in [])` 永远成立,「替他挑一个充数」的回归防不住。
+    with SessionLocal() as db:
+        add_provider(db, name="配音", vendor="alibaba", base_url="", api_key="sk-test", model="cosyvoice-v3-plus",
+                     capability_ids=["tts"], make_default=False)
+        db.commit()
+    tts = mcp_server.list_provider_models(capability="tts")["models"]
+    assert [item["model"] for item in tts] == ["cosyvoice-v3-plus"], tts
+    assert not any(item["is_default"] for item in tts), tts
 
 
 def test_执行面会转发下去(monkeypatch) -> None:
