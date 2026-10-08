@@ -369,6 +369,7 @@ export const plugins = {
   workflowKind_image: "图像",
   workflowKind_video: "视频",
   workflowKind_audio: "音频",
+  workflowKind_text: "文字",
   workflowKind_unknown: "认不出",
   workflowLibrarySort: "排序",
   workflowLibrarySortName: "按名称",

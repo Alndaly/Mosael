@@ -88,7 +88,7 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
             titles: dict[str, str], locale: str, form: graph.Form | None = None) -> dict[str, Any]:
     """一张图能喂什么、能调什么、会交出什么 —— 说的是一个入口的表单(`form`,见 graph.Form):表单入口是作者挑的那几项、
     作者起的名字,和那个入口的工具、生成表单同一张表;没给就是全部能填的项(完整工作流)。"""
-    kind = graph.kind_of(api)
+    kind = graph.shown_kind(api, object_info, titles)
     form = form or graph.default_form(graph.items(api, object_info, titles))
     found_slots = form.slots()
     named = {(one.item["node"], one.item["input"]): one.label for one in form.media() if one.label}

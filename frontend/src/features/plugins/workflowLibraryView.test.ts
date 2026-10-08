@@ -14,6 +14,7 @@ import {
   inView,
   notEmptyOf,
   validFolderPath,
+  WORKFLOW_KINDS,
 } from "./workflowLibraryView";
 
 /**
@@ -66,6 +67,16 @@ describe("文件夹名", () => {
     expect(notEmptyOf(failure({ code: "not_empty", count: 2 }))).toEqual({ count: 2 });
     expect(notEmptyOf(failure({ code: "exists", suggestion: "" }))).toBeNull();
     expect(notEmptyOf(new Error("x"))).toBeNull();
+  });
+});
+
+describe("种类", () => {
+  it("只交出一段字的(反推提示词、打标签)是「文字」一类,能单独筛出来,不混在「图像」里(PLG-11)", () => {
+    const caption = { ...flow("caption.json"), kind: "text" } as WorkflowFile;
+    const portrait = { ...flow("portrait.json"), kind: "image" } as WorkflowFile;
+    expect(WORKFLOW_KINDS).toContain("text");
+    expect(filterWorkflows([caption, portrait], { kind: "text", query: "" })).toEqual([caption]);
+    expect(filterWorkflows([caption, portrait], { kind: "image", query: "" })).toEqual([portrait]);
   });
 });
 

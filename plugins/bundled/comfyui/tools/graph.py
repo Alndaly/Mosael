@@ -562,6 +562,15 @@ def media_outputs(api: dict[str, Any], object_info: dict[str, Any] | None = None
     return [node for node in output_nodes(api, object_info, titles) if node["media"] != "text"]
 
 
+def shown_kind(api: dict[str, Any], object_info: dict[str, Any] | None = None, titles: dict[str, str] | None = None) -> str:
+    """给人看的「这张图交出什么」:`kind_of` 之外,只交出一段字的(反推提示词、打标签,一个文件都不交)是 `text` —— 工作流库、
+    `list_workflows` 里不再把它标成「图像」。跑和接素材仍看 `kind_of`(它们按图 / 视频 / 音频的规矩走)。"""
+    found = output_nodes(api, object_info, titles)
+    if found and all(node["media"] == "text" for node in found):
+        return "text"
+    return kind_of(api)
+
+
 def persists(node: dict[str, Any]) -> bool:
     """这个输出节点交出的文件**存下来**吗(历史里是 `type: output`),还是只是预览(`type: temp`)。
 

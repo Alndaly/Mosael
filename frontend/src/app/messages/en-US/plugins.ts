@@ -364,6 +364,7 @@ export const plugins = {
   workflowKind_image: "Image",
   workflowKind_video: "Video",
   workflowKind_audio: "Audio",
+  workflowKind_text: "Text",
   workflowKind_unknown: "Unknown",
   workflowLibrarySort: "Sort",
   workflowLibrarySortName: "By name",

@@ -595,3 +595,10 @@ def test_只交出一段字的图不是生成模型_照样是工具(comfy, tmp_p
     meta = node_meta(tool)
     assert content_transform_gap(meta) is None
     assert board_group(meta) == "image"
+    # PLG-11:工作流库、list_workflows 里它是「文字」,不是此前兜底的「图像」;交出文件的图照旧按 kind_of
+    listed = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "workflows"}, {"SERVER_URL": comfy.url},
+                                  timeout=60).output
+    kinds = {one["path"]: one.get("kind") for one in listed["workflows"]}
+    assert kinds["tagger.json"] == "text" and kinds["portrait.json"] == "image" and kinds["alpha.json"] == "image"
+    agent = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
+    assert {one["id"]: one["kind"] for one in agent["workflows"]}["tagger.json"] == "text"

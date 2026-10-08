@@ -15,7 +15,7 @@ const FOLDER_VIEW = "folder:";
 export const folderView = (path: string) => `${FOLDER_VIEW}${path}`;
 export const folderOfView = (view: string): string | null => (view.startsWith(FOLDER_VIEW) ? view.slice(FOLDER_VIEW.length) : null);
 
-export const WORKFLOW_KINDS = ["all", "image", "video", "audio", "broken"] as const;
+export const WORKFLOW_KINDS = ["all", "image", "video", "audio", "text", "broken"] as const;
 export type WorkflowKindFilter = (typeof WORKFLOW_KINDS)[number];
 
 export const WORKFLOW_SORTS = ["name", "modified", "nodes"] as const;

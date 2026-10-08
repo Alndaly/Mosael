@@ -18,7 +18,7 @@ type Translate = ReturnType<typeof useI18n>;
 export type WorkflowFactsSource = Pick<WorkflowFile, "inputs" | "parameters" | "outputs" | "models" | "missing_nodes" | "missing_models">;
 
 export const kindName = (t: Translate, kind: string) =>
-  kind === "image" || kind === "video" || kind === "audio" ? t(`workflowKind_${kind}`) : t("workflowKind_unknown");
+  kind === "image" || kind === "video" || kind === "audio" || kind === "text" ? t(`workflowKind_${kind}`) : t("workflowKind_unknown");
 
 export const mediaName = (t: Translate, media: string) =>
   media === "image" || media === "video" || media === "audio" || media === "text" ? t(`workflowMedia_${media}`) : media;
