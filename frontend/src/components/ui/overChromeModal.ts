@@ -1,7 +1,5 @@
 import * as React from "react";
 
-import { useNativeViewAside } from "./nativeViewAside";
-
 /**
  * **压在窗口外壳之上的模态弹窗**:从 ComfyUI 工作台那一列里打开的模型详情、它的「存为预览图」确认框。
  *
@@ -16,6 +14,8 @@ import { useNativeViewAside } from "./nativeViewAside";
  * 底下还开着的弹窗(工作流库)是 Radix 的下一层,在上面这一层里点、按 Esc,它本来就不管(Radix 只让最上面那层响应)。
  *
  * 范围之外什么都不变。
+ *
+ * 这个模块只依赖 React(app/contextIdentity.test.ts):请原生视图让开的那个组件(`StepNativeViewAside`)住在 nativeViewAside 里。
  */
 export const OverChromeModals = React.createContext(false);
 
@@ -26,13 +26,4 @@ export const OVER_CHROME_MODAL_LAYER = "z-[205]";
 export function useOverChromeModal(): { layer: string | undefined; aside: boolean } {
   const over = React.useContext(OverChromeModals);
   return { layer: over ? OVER_CHROME_MODAL_LAYER : undefined, aside: over };
-}
-
-/**
- * 放进弹窗内容里:内容挂着(开着,连同收起的动画)的这段时间请原生视图让开。弹窗组件本身关着时也在渲染(只是不出 portal),
- * 所以这一步要放在只有开着才挂上的内容里面。
- */
-export function StepNativeViewAside() {
-  useNativeViewAside(true);
-  return null;
 }

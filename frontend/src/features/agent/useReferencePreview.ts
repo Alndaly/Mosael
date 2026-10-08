@@ -6,7 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { assetPreviewItem } from "@/components/app/asset-preview";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
-import { gotoRecord, locateNotePassage, noteHref } from "@/lib/deepLink";
+import { OPEN_BOARD_EVENT, boardHref, gotoRecord, locateNotePassage, noteHref } from "@/lib/deepLink";
 import type { AgentReference, ReferenceKind } from "@/features/agent/references";
 
 /**
@@ -26,8 +26,8 @@ const ROUTES: Record<ReferenceKind, { probe: (id: string) => string; href?: (id:
   note: { probe: (id) => `/api/notes/${id}`, href: (id) => noteHref(id) },
   board: {
     probe: (id) => `/api/boards/${id}`,
-    href: (id) => `#/boards?board=${encodeURIComponent(id)}`,
-    event: "mosael:open-board",
+    href: boardHref,
+    event: OPEN_BOARD_EVENT,
   },
   workflow: {
     probe: (id) => `/api/workflows/${id}`,

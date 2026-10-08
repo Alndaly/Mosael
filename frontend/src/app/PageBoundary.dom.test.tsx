@@ -11,7 +11,7 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => {
@@ -76,6 +76,67 @@ describe("页面错误边界", () => {
     expect(screen.getByText("这一页出错了。")).toBeTruthy();
     expect(screen.queryByText("这一页没能加载出来。")).toBeNull();
     spy.mockRestore();
+  });
+
+  it("代码块没取到时「重新加载」整窗 —— React.lazy 把失败缓存住了,原地复位永远不会再去取", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    const factory = vi.fn(() => Promise.reject(new Error("Failed to fetch dynamically imported module: http://x/StatisticsView.js")));
+    const Lazy = React.lazy(factory as () => Promise<{ default: React.ComponentType }>);
+    try {
+      render(
+        <PageBoundary resetKey="statistics">
+          <React.Suspense fallback={<p>加载中</p>}>
+            <Lazy />
+          </React.Suspense>
+        </PageBoundary>,
+      );
+      await screen.findByText("这一页没能加载出来。");
+      expect(factory).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: /重新加载/ }));
+      expect(reload, "代码块没取到:只有整窗重新加载能再取一次").toHaveBeenCalledTimes(1);
+      // 反证:同一个懒组件再渲染一次,工厂不会被再调 —— 这正是原地复位没用的原因。
+      render(
+        <PageBoundary resetKey="statistics-again">
+          <React.Suspense fallback={<p>加载中</p>}>
+            <Lazy />
+          </React.Suspense>
+        </PageBoundary>,
+      );
+      await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
+      expect(factory).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+      spy.mockRestore();
+    }
+  });
+
+  it("页面自己出错时「重试」原地复位,不重新加载", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    let fail = true;
+    function Flaky() {
+      if (fail) throw new Error("useRecorder must be used within RecordingProvider");
+      return <p>剪辑页</p>;
+    }
+    try {
+      render(
+        <PageBoundary resetKey="editor">
+          <Flaky />
+        </PageBoundary>,
+      );
+      fail = false;
+      fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+      expect(screen.getByText("剪辑页")).toBeTruthy();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+      spy.mockRestore();
+    }
   });
 
   it("换了一页就自动复位,不把人锁在这一屏", () => {

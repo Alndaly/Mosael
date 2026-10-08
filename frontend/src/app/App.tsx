@@ -3,10 +3,9 @@ import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
 import { useCreateWorkspace, useWorkspaces } from "@/lib/workspaces";
 import { PageBoundary } from "@/app/PageBoundary";
 import { JOBS_CREATED_EVENT } from "@/api/client";
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, projectKeys } from "@/api/queryKeys";
 import React from "react";
 import {
-  QueryClient,
   QueryClientProvider,
   useQuery,
   useQueryClient,
@@ -27,7 +26,7 @@ import {
   type ProjectWithStats,
   type Workspace,
 } from "@/api/client";
-import { createMutationCache } from "@/app/mutationErrors";
+import { createAppQueryClient } from "@/app/queryClient";
 import { AuthProvider, useAuth } from "@/app/auth";
 import { AppearanceProvider } from "@/app/appearance";
 import { CustomCssProvider } from "@/app/customCss";
@@ -72,32 +71,27 @@ import { BrowserToolsWorkspace } from "@/app/browserToolsWorkspace";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { comfyConnectionOf } from "@/features/plugins/comfyNavigation";
 import { useKeepServiceAwake } from "@/features/plugins/localServiceStatus";
-import { ComfyWorkbench } from "@/features/plugins/workbench/ComfyWorkbench";
 import { isWorkbenchPartition, useWorkbench } from "@/features/plugins/workbench/workbenchSession";
 import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
-import { VIEW_RECORD_EVENTS, gotoRecord, listenDesktopDeepLinks } from "@/lib/deepLink";
+import { VIEW_RECORD_EVENTS, gotoRecord, listenDesktopDeepLinks, openBoard } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { Hint, HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 
-// 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
-// 给个合理缓存窗口:短时间切回同页直接用缓存,不重拉不闪;需要实时的 query 各自设了 refetchInterval,
-// 不受影响。获焦不全量重拉(Electron 频繁获焦会加剧闪烁)。
+//: **ComfyUI 工作台按需加载。** 它只在桌面版、打开工作台时才出现,却带着智能体对话(tiptap / prosemirror)、Markdown 全家
+//: 和整个插件工作台 —— 静态 import 时这些都在首屏关键路径上(首屏 JS 78 个文件 / 2.8 MB;改成懒加载、文案表按语言分块之后 32 个 / 1.3 MB)。
+//: app/pageChunks.test.ts 盯着入口的静态依赖闭包,不让它们再回来。
+const ComfyWorkbench = React.lazy(() => import("@/features/plugins/workbench/ComfyWorkbench").then((m) => ({ default: m.ComfyWorkbench })));
 
+/** 内嵌视图那一圈出错时:请主进程把原生网页视图收起来(和「返回 Mosael」一样)—— 不然一块光秃秃的网页盖在一切上面,出口都没了。 */
+const hideNativeView = () => void window.mosaelPublish?.hideView().catch(() => undefined);
 
-const queryClient = new QueryClient({
-  mutationCache: createMutationCache((message) => toast.error(message), translateNow),
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+//: 缓存窗口、获焦不重拉、4xx 不重试都在 app/queryClient 里说明。
+const queryClient = createAppQueryClient((message) => toast.error(message), translateNow);
 
 export function App() {
   // **整页点不动**的兜底:Radix 偶发把 body 的 pointer-events:none 留在那儿(浮层还开着就被
@@ -129,13 +123,15 @@ export function App() {
                 <ImagePreviewProvider>
                   <AuthGate />
                   <AppToaster />
-                  <MainStaleNotice />
+                  {/* 常驻在窗口上的这几块各自兜底:哪一块渲染出错只收起它自己、弹一条提示,不把整个窗口换成「出错了」
+                      (见 components/app/errorBoundary 的 SectionBoundary)。 */}
+                  <SectionBoundary mode="quiet"><MainStaleNotice /></SectionBoundary>
                   <PublishViewBar />
-                  <BrowserDownloads />
-                  <BrowserPreview />
-                  <LivePanels />
+                  <SectionBoundary mode="quiet"><BrowserDownloads /></SectionBoundary>
+                  <SectionBoundary mode="quiet"><BrowserPreview /></SectionBoundary>
+                  <SectionBoundary mode="quiet" onCatch={hideNativeView}><LivePanels /></SectionBoundary>
                   {/* 整窗浮层让原生网页视图挪开时,铺在它原处的那张画面(见 nativeViewAside) */}
-                  <NativeViewStandIn />
+                  <SectionBoundary mode="quiet"><NativeViewStandIn /></SectionBoundary>
                 </ImagePreviewProvider>
               </AuthProvider>
             </TooltipProvider>
@@ -179,7 +175,16 @@ export function PublishViewBar() {
   //: ComfyUI 的视图亮着:背后的本机服务正被人用着,告诉宿主别因为闲置把它停了(ADR 0041)
   useKeepServiceAwake(state.visible ? comfyConnectionOf(state.partition) : null);
   if (!state.visible) return null;
-  if (isWorkbenchPartition(workbench.target, state.partition)) return <ComfyWorkbench barHeight={PUBLISH_BAR_HEIGHT} />;
+  //: 顶栏 / 工作台出错时只收起这一圈:原生视图跟着收起(否则网页盖在一切上面、没有出口),弹一条提示。视图下次亮起是一个新的边界。
+  if (isWorkbenchPartition(workbench.target, state.partition)) {
+    return (
+      <SectionBoundary mode="quiet" onCatch={hideNativeView}>
+        <React.Suspense fallback={null}>
+          <ComfyWorkbench barHeight={PUBLISH_BAR_HEIGHT} />
+        </React.Suspense>
+      </SectionBoundary>
+    );
+  }
   //: 这是一个 ComfyUI 连接的视图、却不在工作台里(渲染层重新加载过,工作台的会话没接上):顶栏照样给画布操控方式的开关
   const comfyConnection = comfyConnectionOf(state.partition);
 
@@ -196,6 +201,7 @@ export function PublishViewBar() {
 
   // 挂到 body 末尾:排在底下开着的弹窗后面,顶栏才拖得动窗口(见 ChromeAboveDialogs)
   return (
+    <SectionBoundary mode="quiet" onCatch={hideNativeView}>
     <ChromeAboveDialogs>
     <div
       {...APP_CHROME}
@@ -306,6 +312,7 @@ export function PublishViewBar() {
         key:换了一个会话就是另一份列表。 */}
     <BrowserPageList key={state.accountId ?? ""} state={state} top={PUBLISH_BAR_HEIGHT} />
     </ChromeAboveDialogs>
+    </SectionBoundary>
   );
 }
 
@@ -544,7 +551,7 @@ function Studio({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
   const projects = useQuery({
-    queryKey: ["projects", workspace.id],
+    queryKey: projectKeys.list(workspace.id),
     queryFn: () =>
       api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
     staleTime: 0,
@@ -570,7 +577,9 @@ function Studio({
       // 白名单在后端 mcp_server._VIEWS 那一侧,这里再挡一道:两边都可能先改。
       if (!VALID_VIEWS.includes(next)) return;
       if (next === "editor" && id) openProject(id);
-      else if (id && ["scenes", "notes", "boards", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : next === "entities" ? "entity" : "board"}=${encodeURIComponent(id)}`;
+      //: 画板走信箱:人已经在画板页上时只改 hash 没反应(见 lib/deepLink 的 openBoard)。
+      else if (next === "boards" && id) openBoard(id);
+      else if (id && ["scenes", "notes", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "entity"}=${encodeURIComponent(id)}`;
       //: 工作流的 id:和 mosael:// 深链、任务中心「前往」同一条路(打开那一条工作流)。
       else if (next === "workflows" && id) gotoRecord("/workflows", VIEW_RECORD_EVENTS.workflows, id);
       else navigate(next as StudioView);
@@ -633,6 +642,8 @@ function Studio({
         })}
         </React.Suspense>
         </PageBoundary>
+        {/* 浮在页面上的这几块各自兜底,换一页就重新挂上(见 SectionBoundary 的 quiet)。 */}
+        <SectionBoundary mode="quiet" resetKey={view}>
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}
@@ -641,13 +652,16 @@ function Studio({
           onCreateProject={() => createProject.mutate()}
           creatingProject={createProject.isPending}
         />
+        </SectionBoundary>
+        <SectionBoundary mode="quiet" resetKey={view}>
         <ConfirmationCenter workspaceId={workspace.id} goHome={(session) => goHome(workspace.id, session)} />
+        </SectionBoundary>
         {/* 把配音库的嗓子交给远端引擎念、这个账号第一次用它时那一问(ADR 0037)。挂在应用级:配音、字幕配音、
             画板、对话音色几处都会撞上同一个 409,确认框只有一个。 */}
-        <RemoteVoiceConsentHost />
+        <SectionBoundary mode="quiet" resetKey={view}><RemoteVoiceConsentHost /></SectionBoundary>
         {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"
             的时候还叫得动。默认不浮,由设置里那个开关决定(本地偏好,见 app/preferences)。 */}
-        {voiceDock && <VoiceDock workspaceId={workspace.id} onClose={() => setVoiceDock(false)} />}
+        {voiceDock && <SectionBoundary mode="quiet" resetKey={view}><VoiceDock workspaceId={workspace.id} onClose={() => setVoiceDock(false)} /></SectionBoundary>}
       </AppShell>
     </RecordingProvider>
   );

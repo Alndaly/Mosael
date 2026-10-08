@@ -240,6 +240,7 @@ export function PromptEditor({
   document,
   onChange,
   placeholder,
+  label,
   candidates,
   onSubmit,
   emptyHint,
@@ -253,6 +254,8 @@ export function PromptEditor({
   /** 正文变化。`assets` 是正文里 chip 引用到的素材 —— 提交时它们进 source_assets;`entityIds` 是 @ 到的资产。 */
   onChange: (next: string, assets: string[], document: PromptDocument, entityIds: string[]) => void;
   placeholder: string;
+  /** 读屏念的名字。不给就用占位提示(tiptap 的占位只是一个 data 属性,读屏不念)。 */
+  label?: string;
   /**
    * `@` 能挑的素材:由调用方按「这个模型收得下什么」在服务端搜(素材库分了页,不再整个拿回来在这里筛)。
    * 插件每次 query 变了问一次,等它回来再画菜单。
@@ -409,6 +412,10 @@ export function PromptEditor({
         // 没有东西可滚,却会把触控板的两指平移在这块区域上截停(见 CommentComposer 那条用例)。
         class:
           "nodrag min-h-[66px] w-full border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none",
+        //: 可编辑的 div 读屏只念「可编辑文本」:名字、角色、多行都得自己写上(design/editorNames.test.ts)。
+        "aria-label": label || placeholder,
+        role: "textbox",
+        "aria-multiline": "true",
       },
       handleKeyDown: (_view, event) => {
         // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。

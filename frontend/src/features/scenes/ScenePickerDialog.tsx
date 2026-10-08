@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box } from "lucide-react";
 import { listScenes, type SceneSummary } from "@/api/domains/scenes";
+import { sceneKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { relativeTime } from "@/lib/time";
@@ -29,7 +30,7 @@ export function ScenePickerDialog({
   const { locale } = usePreferences();
   const [search, setSearch] = React.useState("");
   const scenes = useQuery({
-    queryKey: ["scene-picker", workspaceId],
+    queryKey: sceneKeys.list(workspaceId),
     queryFn: () => listScenes(workspaceId),
     enabled: open,
   });

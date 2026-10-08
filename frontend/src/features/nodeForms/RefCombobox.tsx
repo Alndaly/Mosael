@@ -82,6 +82,7 @@ export function RefCombobox({
         rows={1}
         value={value}
         variables={variables}
+        label={placeholder}
         className="py-1 text-ui-xs"
         onChange={(next) => {
           setTyped(next);

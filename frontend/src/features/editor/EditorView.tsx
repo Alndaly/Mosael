@@ -66,6 +66,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { clipEnd, frameAt, frameTime, snapToFrame } from "@/domain/timeline/geometry";
 import { clipContains, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "@/domain/timeline/editTargets";
@@ -1235,6 +1236,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           className={dockedAgent ? "editor-agent-inline z-30 grid min-h-0 min-w-0 border-l border-divider" : agentMode === "docked" ? "absolute right-2 top-2 z-40 grid w-[min(400px,90%)]" : "contents"}
           style={!dockedAgent && agentMode === "docked" ? { bottom: panelsRowBottom + 8 } : undefined}
         >
+          <SectionBoundary onClose={() => setAgentOpen("off")}>
           <CanvasAgentChat
             contextLine={agentContext}
             emptyHint={t("editorAgentEmpty")}
@@ -1247,6 +1249,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             onModeChange={setAgentMode}
             onClose={() => setAgentOpen("off")}
           />
+          </SectionBoundary>
         </div>
       )}
       <section className="editor-timeline col-span-full min-h-0 overflow-hidden border-t border-divider bg-[var(--timeline-bg)]">

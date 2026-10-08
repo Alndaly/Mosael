@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-query", () => ({
   // 按 queryKey 分发 —— 这张卡片同时问三件事:引擎目录、克隆库、所选引擎的发音人。
   useQuery: ({ queryKey, enabled }: { queryKey: unknown[]; enabled?: boolean }) => {
     if (enabled === false) return { data: undefined };
-    const [name, arg] = queryKey as [string, string];
+    const [name] = queryKey as [string];
     if (name === "tts-engines") {
       return { data: [
         { id: "builtin:clone", label: "本地音色克隆", voices: [], needs_key: false, needs_voice_id: false, note: "", ready: true },
@@ -29,10 +29,13 @@ vi.mock("@tanstack/react-query", () => ({
         { id: "builtin:volcano-podcast", label: "火山播客", voices: ["a", "b"], needs_key: true, needs_voice_id: false, note: "", ready: true },
       ] };
     }
-    if (name === "voices") return { data: [] };           // 克隆库是空的 —— 正是那台新机器
-    if (name === "tts-voices" && arg === "builtin:edge") {
-      return { data: [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" }, { value: "en-US-JennyNeural", label: "Jenny" }] };
+    // 所选引擎的发音人挂在配音库的前缀下(voiceKeys.engineVoices:["voices", 工作区, "engine", 引擎])。
+    if (name === "voices" && queryKey[2] === "engine") {
+      return queryKey[3] === "builtin:edge"
+        ? { data: [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" }, { value: "en-US-JennyNeural", label: "Jenny" }] }
+        : { data: [] };
     }
+    if (name === "voices") return { data: [] };           // 克隆库是空的 —— 正是那台新机器
     return { data: [] };
   },
 }));

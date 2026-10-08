@@ -10,6 +10,8 @@
 
 import React from "react";
 
+import { SectionBoundary } from "@/components/app/errorBoundary";
+
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { STUDIO_PLACE, type AgentPlace } from "@/features/agent/places";
 import { NotesView, type NotesAgentPanelProps } from "@/features/notes/NotesView";
@@ -24,7 +26,12 @@ function notePlace(noteId: string | null): AgentPlace {
 
 function NotesAgentPanel({ noteId, ...props }: NotesAgentPanelProps) {
   const place = React.useMemo(() => notePlace(noteId), [noteId]);
-  return <CanvasAgentChat {...props} place={place} />;
+  //: 面板出错只换掉面板,笔记照常可写(见 SectionBoundary)。
+  return (
+    <SectionBoundary onClose={props.onClose}>
+      <CanvasAgentChat {...props} place={place} />
+    </SectionBoundary>
+  );
 }
 
 export function NotesWithAgent({ workspace }: { workspace: Workspace }) {

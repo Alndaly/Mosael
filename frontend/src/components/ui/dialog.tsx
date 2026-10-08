@@ -10,7 +10,8 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { keepOpenOnAppChrome } from "@/components/ui/appChrome"
 import { HintScopeReset } from "./tooltip"
-import { StepNativeViewAside, useOverChromeModal } from "./overChromeModal"
+import { StepNativeViewAside } from "./nativeViewAside"
+import { useOverChromeModal } from "./overChromeModal"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
 const Dialog = DialogPrimitive.Root

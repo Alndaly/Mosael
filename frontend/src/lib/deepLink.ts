@@ -142,12 +142,55 @@ export function parseNotePassage(raw: string): NotePassage | null {
   }
 }
 
+/** 画板页收的「打开这一张」(见 BoardsView)。 */
+export const OPEN_BOARD_EVENT = "mosael:open-board";
+
+/**
+ * 打开某一张画板。**一律走这里**,不要自己写 `location.hash = "#/boards?board=…"`:
+ *
+ * 只改 hash 只在画板页**还没挂载**时够用。人已经在画板页上时(开着画板 A,从右上角确认中心点「回到那里」去画板 B、
+ * 智能体说「带你去看看那张板」),hash 变了却没有东西去重读它,点了没反应 —— 而那个没被接住的 `?board=B` 还留在地址里,
+ * 下一次列表变化(新建一张板、改个名)时把人拽到 B 上,新建的那张反倒没打开。信箱两种情形都接得住(design 里
+ * `boardNavigation.test.ts` 盯着没人再手写)。
+ */
+export function openBoard(boardId: string): void {
+  gotoRecord(boardHref(boardId), OPEN_BOARD_EVENT, boardId);
+}
+
+/** 一张画板的地址(给要一个 href 的地方;要「打开」就用 `openBoard`)。 */
+export function boardHref(boardId: string): string {
+  return `#/boards?board=${encodeURIComponent(boardId)}`;
+}
+
+/**
+ * 地址里带着的「打开这一条」(`#/boards?board=…` 这种:深链、书签、只改了 hash 的老调用)交给信箱,**并立刻从地址里拿掉**。
+ *
+ * 读了参数却不清掉,它就会一直留在地址里;页面下一次因为别的原因重读它(列表变了),就把人带到一个他早就没在要的地方。
+ * 交给信箱之后,接不接得住(那一条还没加载出来)由 `useOpenRequest` 管 —— 和别处发来的请求同一条路。挂载时读一次,
+ * 之后 hash 再变(人已经在这一页上)也读。
+ */
+export function useHashOpenRequest(route: string, param: string, event: string): void {
+  React.useEffect(() => {
+    const take = () => {
+      const [path, query = ""] = window.location.hash.replace(/^#\/?/, "").split("?");
+      if (`#/${path}` !== route) return;
+      const id = new URLSearchParams(query).get(param);
+      if (!id) return;
+      window.history.replaceState(null, "", route);
+      emitOpenEvent(event, id);
+    };
+    take();
+    window.addEventListener("hashchange", take);
+    return () => window.removeEventListener("hashchange", take);
+  }, [route, param, event]);
+}
+
 /** 「打开这张画板、把视野挪到这一格」—— 笔记「加到画板」之后那条提示上的「打开画板」。走信箱:画板页、那张板、
  *  画布都要先就位,画布好了自己来取(见 BoardsView 的 BoardDetail)。 */
 export const BOARD_ITEM_EVENT = "mosael:focus-board-item";
 
 export function openBoardItem(boardId: string, itemId: string): void {
-  gotoRecord(`#/boards?board=${encodeURIComponent(boardId)}`, "mosael:open-board", boardId);
+  openBoard(boardId);
   emitOpenEvent(BOARD_ITEM_EVENT, JSON.stringify({ boardId, itemId }));
 }
 

@@ -13,6 +13,7 @@ import {
   type Job,
   type Workspace,
 } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { AudioPlayerBar } from "@/components/app/media-playback";
 import { Button } from "@/components/ui/button";
@@ -162,7 +163,7 @@ function PodcastForm({ workspace, busy, onQueued }: { workspace: Workspace; busy
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   const engine = engines.data?.find((item) => item.id === PODCAST_ENGINE);
   const speakers = useQuery({
-    queryKey: ["tts-voices", PODCAST_ENGINE],
+    queryKey: voiceKeys.engineVoices(PODCAST_ENGINE),
     queryFn: () => listTtsVoices(PODCAST_ENGINE),
     enabled: Boolean(engine),
   });

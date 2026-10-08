@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { projectKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { HomeHero } from "@/features/home/HomeHero";
@@ -130,7 +131,7 @@ export function HomeView({
 
 
   React.useEffect(() => {
-    void qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
+    void qc.invalidateQueries({ queryKey: projectKeys.list(workspace.id) });
   }, [qc, workspace.id]);
 
   const visible = React.useMemo(() => {
@@ -142,7 +143,7 @@ export function HomeView({
       return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
     });
   }, [projects, search, sortKey, collection]);
-  const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
+  const refresh = () => qc.invalidateQueries({ queryKey: projectKeys.list(workspace.id) });
 
   // 多选与素材、工作流、发布同一份状态机(见 lib/useMultiSelect):退出即清空、全选只作用于
   // 当前看得见的那些(搜索之后)、被删掉的自动剔除。

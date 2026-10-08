@@ -78,6 +78,7 @@ export function RefEditor({
   onChange,
   variables,
   placeholder,
+  label,
   rows = 2,
   className,
   normalize,
@@ -92,6 +93,8 @@ export function RefEditor({
   /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
   variables: readonly string[];
   placeholder?: string;
+  /** 读屏念的名字(字段名)。不给就用占位提示;tiptap 的占位只是一个 data 属性,读屏不念。 */
+  label?: string;
   rows?: number;
   className?: string;
 }) {
@@ -174,6 +177,10 @@ export function RefEditor({
           className,
         ),
         style: `min-height:${rows * 22 + 12}px`,
+        //: 可编辑的 div 读屏只念「可编辑文本」:名字、角色、多行都得自己写上(design/editorNames.test.ts)。
+        "aria-label": label || placeholder || t("wfRefEditorHint"),
+        role: "textbox",
+        "aria-multiline": "true",
       },
     },
     onUpdate: ({ editor: instance }) => {

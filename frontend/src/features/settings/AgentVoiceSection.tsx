@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { fetchAgentVoicePreview, getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -47,7 +48,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
 
   //: 带上工作区:CosyVoice 还列这个工作区配音库里的嗓子(`cloned`)。
   const voices = useQuery({
-    queryKey: ["tts-voices", engine, workspaceId],
+    queryKey: voiceKeys.engineVoices(engine, workspaceId),
     queryFn: () => listTtsVoices(engine, workspaceId),
     enabled: Boolean(engine),
   });

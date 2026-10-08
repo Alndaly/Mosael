@@ -35,6 +35,7 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
@@ -406,7 +407,7 @@ export function WorkflowEditor({
 
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
   const agentPanel = (
-    <div ref={agentPanelRef} className="contents"><CanvasAgentChat
+    <div ref={agentPanelRef} className="contents"><SectionBoundary onClose={() => setAgentOpen(false)}><CanvasAgentChat
       contextLine={t("wfAgentContext").replace("{id}", workflow.id).replace("{name}", workflow.name)}
       emptyHint={t("wfAgentEmpty")}
       placeholder={t("wfAgentPlaceholder")}
@@ -416,7 +417,7 @@ export function WorkflowEditor({
       mode={agentMode}
       onModeChange={setAgentMode}
       onClose={() => setAgentOpen(false)}
-    /></div>
+    /></SectionBoundary></div>
   );
   const historyPanel = (
     <div ref={historyPanelRef} className="contents"><WorkflowRunHistory

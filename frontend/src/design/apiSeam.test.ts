@@ -12,11 +12,15 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { blankComments } from "@/design/jsxSource";
+
 export const RATCHET = true;
 
 const SRC = join(import.meta.dirname, "..");
 //: 存量。**只减不增** —— 迁完一块就把这个数字改小。
 const BASELINE = 56;
+//: 界面代码里(注释不算)以 `/api/` 开头的字面量,不论交给谁。存量,**只减不增**。
+const LITERAL_BASELINE = 56;
 
 function sources(dir: string): string[] {
   const out: string[] = [];
@@ -45,6 +49,27 @@ describe("接口接缝", () => {
       `现拼路径最多的几处:${worst.slice(0, 5).map(([f, n]) => `${f}(${n})`).join("、")}。` +
         "新代码请加到 api/domains/*;迁完记得把 BASELINE 改小。",
     ).toBeLessThanOrEqual(BASELINE);
+  });
+
+  /**
+   * 上面那一条只数 `api(` 后面紧跟 `/api/` 字面量的写法,于是 `apiBlob("/api/agent/speech")`、先放进一张路径表再交给
+   * `api(path(id))` 的(引用预览、会话列表)都不算数 —— 它们同样是在界面里现拼接口路径。这一条数的是结果:
+   * `api/` 之外的代码里,任何以 `/api/` 开头的字面量。
+   */
+  it("界面代码里以 /api/ 开头的字面量只减不增(不论交给 api、apiBlob 还是路径表)", () => {
+    const literal = /["'`]\/api\//g;
+    let count = 0;
+    const worst: [string, number][] = [];
+    for (const path of sources(SRC)) {
+      const hits = (blankComments(readFileSync(path, "utf8")).match(literal) ?? []).length;
+      if (hits) worst.push([path.slice(SRC.length + 1), hits]);
+      count += hits;
+    }
+    worst.sort((a, b) => b[1] - a[1]);
+    expect(
+      count,
+      `最多的几处:${worst.slice(0, 5).map(([f, n]) => `${f}(${n})`).join("、")}。新代码请加到 api/domains/*;迁完记得把 LITERAL_BASELINE 改小。`,
+    ).toBeLessThanOrEqual(LITERAL_BASELINE);
   });
 
   // 绕过 transport 直接 fetch 后端,丢的不只是路径:401 不会登出、掉线不会说「连不上」、

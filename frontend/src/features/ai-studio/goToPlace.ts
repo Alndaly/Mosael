@@ -10,7 +10,7 @@ import { adoptAgentSession } from "@/features/agent/currentAgentSession";
 import { comfyParts, homeOf, type AgentPlace } from "@/features/agent/places";
 import type { SessionHome } from "@/features/agent/homeLabel";
 import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
-import { VIEW_RECORD_EVENTS, gotoRecord, openNote } from "@/lib/deepLink";
+import { VIEW_RECORD_EVENTS, gotoRecord, openBoard, openNote } from "@/lib/deepLink";
 
 async function openComfy(workspaceId: string, placeId: string): Promise<void> {
   const { connection, path } = comfyParts(placeId);
@@ -37,7 +37,8 @@ export function goToPlace(workspaceId: string, place: AgentPlace): Promise<void>
       openNote(place.id);
       return;
     case "board":
-      window.location.hash = `#/boards?board=${encodeURIComponent(place.id)}`;
+      //: 走信箱,不只改 hash:人已经在画板页上时只改 hash 没反应(见 lib/deepLink 的 openBoard)。
+      openBoard(place.id);
       return;
     case "workflow":
       gotoRecord("/workflows", VIEW_RECORD_EVENTS.workflows, place.id);

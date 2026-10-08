@@ -215,7 +215,7 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
         } else {
           const patch:Partial<NoteContent>=action==="rename"?{title:value||""}:action==="trash"||action==="restore"?{trashed:action==="trash"}:{favorite:action==="favorite"};
           const result=active?await active.update(patch):await saveNote({...current,...patch});
-          qc.setQueryData(["note",workspace.id,current.id],result);
+          qc.setQueryData(noteKeys.detail(workspace.id,current.id),result);
         }
         done.push(target.id);
       }catch(e){failed++;toast.error(errorText(e));}

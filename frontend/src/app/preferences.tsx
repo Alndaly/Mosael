@@ -1,6 +1,7 @@
 import React from "react";
 
-import { messages, type MessageKey } from "@/app/messages";
+import type { MessageKey } from "@/app/messages";
+import { loadMessages, messagesFor, messagesLoaded } from "@/app/messageTables";
 import { INTERFACE_FONTS, loadInterfaceFont, normalizeInterfaceFont, type InterfaceFont } from "@/app/interfaceFonts";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -14,7 +15,7 @@ const STORAGE_KEY = "mosael.preferences";
  * 键写成带引号的下标,是为了让 messages.unused 棘轮认得出这条文案有人用。
  */
 function apiLocaleOf(locale: Locale): ApiLocale {
-  return { locale, unreachable: (url) => messages[locale]["apiServerUnreachable"].replace("{url}", url) };
+  return { locale, unreachable: (url) => messagesFor(locale)["apiServerUnreachable"].replace("{url}", url) };
 }
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
@@ -75,6 +76,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }
   }, [theme, locale, voiceDock, font]);
 
+  //: 切语言:那种语言的表还没取过就先取到再切(文案表按语言分块,见 app/messageTables),取不到就留在原来那种。
+  const setLocale = React.useCallback((next: Locale) => {
+    if (messagesLoaded(next)) setLocaleState(next);
+    else void loadMessages(next).then(() => setLocaleState(next), (error: unknown) => console.error("Mosael: could not load the message table", next, error));
+  }, []);
+
   const value = React.useMemo<PreferencesContextValue>(
     () => ({
       font,
@@ -84,10 +91,10 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       voiceDock,
       setVoiceDock: setVoiceDockState,
       locale,
-      setLocale: setLocaleState,
-      t: (key) => messages[locale][key],
+      setLocale,
+      t: (key) => messagesFor(locale)[key],
     }),
-    [locale, theme, voiceDock, font],
+    [locale, theme, voiceDock, font, setLocale],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
@@ -108,7 +115,12 @@ export function useI18n() {
  * built before any provider mounts). Reads the saved locale at call time, so it follows a switch.
  */
 export function translateNow(key: MessageKey): string {
-  return messages[readPreferences().locale][key];
+  return messagesFor(readPreferences().locale)[key];
+}
+
+/** 启动时先取存着的那种语言的文案表(`main.tsx` 和外壳一起并行取,取到了才渲染)。 */
+export function loadStartupMessages(): Promise<unknown> {
+  return loadMessages(readPreferences().locale);
 }
 
 function readPreferences(): { font: InterfaceFont; theme: Theme; locale: Locale; voiceDock: boolean } {

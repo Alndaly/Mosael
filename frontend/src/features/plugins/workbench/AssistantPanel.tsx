@@ -5,6 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { MarkdownRefsContext, type MarkdownRefs } from "@/components/markdown/markdownRefs";
 import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type PageOutbox } from "@/features/agent/CanvasAgentChat";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 import { AgentPageViewsContext, type AgentPageViews } from "@/features/agent/pageViews";
 import { WorkbenchAssistantContext, type AssistantFinding, type WorkbenchAssistantActions } from "@/features/plugins/workbench/assistantActions";
 import { assistantToolResult } from "@/features/plugins/workbench/assistantViews";
@@ -174,6 +175,7 @@ export function AssistantPanel({ target, place, runs, workflowKey, onShowMissing
     <MarkdownRefsContext.Provider value={NODE_REFS}>
     <WorkbenchAssistantContext.Provider value={actions}>
     <AgentPageViewsContext.Provider value={PAGE_VIEWS}>
+      <SectionBoundary>
       <CanvasAgentChat
         contextLine={contextLine}
         outbox={outbox}
@@ -186,6 +188,7 @@ export function AssistantPanel({ target, place, runs, workflowKey, onShowMissing
         mode="docked"
         dockedLayout="inline"
       />
+      </SectionBoundary>
     </AgentPageViewsContext.Provider>
     </WorkbenchAssistantContext.Provider>
     </MarkdownRefsContext.Provider>

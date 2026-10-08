@@ -22,6 +22,7 @@ import {
   type EntityPatch,
   type EntitySummary,
 } from "@/api/client";
+import { sceneKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useImagePreview } from "@/components/app/image-preview";
 import { SpeakButton } from "@/features/entities/SpeakDialog";
@@ -39,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTrail } from "@/components/layout/pageTrail";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { openBoard } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
@@ -604,7 +606,7 @@ function VoiceField({
 
 function SceneField({ workspaceId, value, onChange }: { workspaceId: string; value: string; onChange: (next: string) => void }) {
   const t = useI18n();
-  const scenes = useQuery({ queryKey: ["scene-picker", workspaceId], queryFn: () => listScenes(workspaceId) });
+  const scenes = useQuery({ queryKey: sceneKeys.list(workspaceId), queryFn: () => listScenes(workspaceId) });
   return (
     <Field label={t("entityScene")} hint={t("entitySceneHint")}>
       <OptionPicker
@@ -733,7 +735,7 @@ function UsageSection({ workspaceId, entityId }: { workspaceId: string; entityId
             lead={<LayoutGrid size={18} />}
             title={board.name}
             meta={t(board.how === "cell" ? "entityUsageCell" : "entityUsageMention")}
-            onOpen={() => go(`#/boards?board=${encodeURIComponent(board.id)}`)}
+            onOpen={() => openBoard(board.id)}
           />
         ))}
       </UsageGroup>

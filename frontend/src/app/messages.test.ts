@@ -97,3 +97,34 @@ describe("文案表分区", () => {
     for (const locale of LOCALES) expect(sizes[locale]).toBe(Object.keys(messages[locale]).length);
   });
 });
+
+/**
+ * 中英两边同一条文案的占位符(`{n}`、`{name}`……)要对得上。
+ *
+ * 文案一律是 `t(key).replace("{n}", …)` 这样填的:英文那条把 `{count}` 写成了 `{n}`,替换落空,界面上就露出一个
+ * 原样的 `{count}`;少写一个,那个数就悄悄没了。没有任何编译期检查会说话。
+ */
+const PLACEHOLDER_DIFFERS: Record<string, string> = {
+  //: 中文说「常配 X 等 N 种」(总数),英文说「and N more」(其余几种);ModelEncoder 把 {n} 和 {more} 都替换。
+  modelEncoderPairsMore: "中英说法不同:中文给总数 {n},英文给其余几种 {more}",
+};
+
+describe("中英文案的占位符", () => {
+  const placeholders = (text: string) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((one) => one[1]))].sort();
+
+  it("同一条文案两边的占位符一致", () => {
+    const zh = messages["zh-CN"];
+    const en = messages["en-US"];
+    const differ = (Object.keys(zh) as (keyof typeof zh)[])
+      .filter((key) => !(key in PLACEHOLDER_DIFFERS))
+      .filter((key) => placeholders(zh[key]).join() !== placeholders(en[key]).join())
+      .map((key) => `${key}: 中 {${placeholders(zh[key]).join(",")}} / 英 {${placeholders(en[key]).join(",")}}`);
+    expect(differ, "两边的占位符要一致,不然替换落空、界面上露出 {x}").toEqual([]);
+  });
+
+  it("例外清单里的条目确实两边不同 —— 改一致了就删掉", () => {
+    for (const key of Object.keys(PLACEHOLDER_DIFFERS) as (keyof (typeof messages)["zh-CN"])[]) {
+      expect(placeholders(messages["zh-CN"][key]).join(), key).not.toBe(placeholders(messages["en-US"][key]).join());
+    }
+  });
+});

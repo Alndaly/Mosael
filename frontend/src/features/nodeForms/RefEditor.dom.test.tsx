@@ -107,3 +107,18 @@ describe("混写编辑器里的引用标签", () => {
     expect(await hoverHint(rows[0])).toBe("save_note.note_id");
   });
 });
+
+describe("读屏念得出这是哪一格", () => {
+  it("给了字段名就念字段名;没给就念占位提示 —— tiptap 的占位只是一个 data 属性", async () => {
+    const { unmount } = render(
+      <RefCatalogContext.Provider value={catalog}>
+        <RefEditor value="" variables={variables} onChange={vi.fn()} label="停止词" />
+      </RefCatalogContext.Provider>,
+    );
+    const box = await screen.findByRole("textbox", { name: "停止词" });
+    expect(box.getAttribute("aria-multiline")).toBe("true");
+    unmount();
+    renderEditor("");
+    expect(await screen.findByRole("textbox", { name: zh.wfRefEditorHint })).toBeTruthy();
+  });
+});

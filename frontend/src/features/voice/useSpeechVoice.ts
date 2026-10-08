@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getTtsConfig, listTtsEngines, listTtsModels, listTtsVoices } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
@@ -59,7 +60,7 @@ export function useSpeechVoice(workspaceId: string) {
   // 发音人按引擎现拉:火山的目录跟着账号走,不是引擎列表的一部分。带上工作区:能复刻的引擎(CosyVoice)
   // 还列这个工作区配音库里的嗓子(`cloned`)。
   const engineVoices = useQuery({
-    queryKey: ["tts-voices", engine, workspaceId],
+    queryKey: voiceKeys.engineVoices(engine, workspaceId),
     queryFn: () => listTtsVoices(engine, workspaceId),
     enabled: engine !== CLONE_ENGINE,
   });

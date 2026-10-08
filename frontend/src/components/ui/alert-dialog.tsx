@@ -9,7 +9,8 @@ import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { buttonVariants } from "@/components/ui/button"
-import { StepNativeViewAside, useOverChromeModal } from "@/components/ui/overChromeModal"
+import { StepNativeViewAside } from "@/components/ui/nativeViewAside"
+import { useOverChromeModal } from "@/components/ui/overChromeModal"
 
 const AlertDialog = AlertDialogPrimitive.Root
 

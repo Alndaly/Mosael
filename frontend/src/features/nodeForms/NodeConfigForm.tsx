@@ -539,7 +539,7 @@ export function NodeConfigForm({
                 // 说不清每一项有哪几格的才给写数组的 JSON 框。哪种由后端的声明说(editor),见 plugins.nodes 的
                 // _config_from_schema。整格是一段 `{{…}}` 引用的(智能体写的、手填的)照旧显示那段引用 —— 卡片摆不出它。
                 (spec.editor === "items" || spec.editor === "json") && typeof value === "string" && hasReference(value) ? (
-                  <RefEditor rows={1} value={value} onChange={typeConfig(key)} variables={insertable} />
+                  <RefEditor rows={1} value={value} onChange={typeConfig(key)} variables={insertable} label={declaredLabel || key} />
                 ) : spec.editor === "items" && spec.fields && itemsFromValue(value) ? (
                   <ItemsField
                     value={value}
@@ -593,6 +593,7 @@ export function NodeConfigForm({
                   onChange={typeConfig(key)}
                   variables={insertable}
                   placeholder={spec?.description ? undefined : t("wfRefEditorHint")}
+                  label={declaredLabel || key}
                 />
               ) : (
                 // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里

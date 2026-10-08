@@ -2,26 +2,43 @@ import React from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { listConfirmations } from "@/api/client";
-import { assetKeys, boardKeys, confirmationKeys, noteKeys } from "@/api/queryKeys";
+import { assetKeys, boardKeys, confirmationKeys, noteKeys, projectKeys, skillKeys } from "@/api/queryKeys";
 
 /**
- * 一张确认卡批准或拒绝之后要刷新的缓存。卡背后的动作可能改了时间线、素材、工作流、生成任务、画板。
+ * 一张确认卡批准或拒绝之后要刷新的缓存。
  *
  * 此前全局确认中心和对话里的内联卡各写一份清单:中心那份漏了工作流(在中心批准一次「改工作流」,
  * 工作流列表还是旧的),内联那份还失效了一个没有任何查询在用的键。两处批的是同一种卡,清单只该有一份。
+ *
+ * **每一行写着是哪几种卡会改它**(对着 backend/app/domain/agent/confirmable/ 里登记的工具逐个核过,2026-10-08)。
+ * 那一轮补上的四样:项目(`delete_projects` —— 在剪辑页里批掉「删除项目 X」,切换器还列着 X、剪辑页还开着 X,
+ * 接下来的请求 404)、发布任务(`publish_asset`)、工作流的运行记录(`run_workflow`)、技能(ADR 0043 的那几张)。
+ * 只建后台任务的卡(生成、转换、导入、渲染)做完由任务那一侧按 `affects` 失效(components/jobs/jobKinds),这里不必管;
+ * `run_plugin_tool` / `run_code` / `http_request` 改了什么说不准,也不在这里猜。加一种会直接改数据的卡,就在这里加一行。
  */
 export function invalidateAfterDecision(qc: QueryClient, workspaceId: string): void {
   for (const queryKey of [
+    //: 卡本身:待批的、留痕的、执行完的。
     confirmationKeys.all(workspaceId),
+    //: edit_timeline、dub_subtitles。
     ["sequences"],
+    //: delete_assets、split_image_grid、delete_projects(素材不跟着删,只是回到工作区级)。
     assetKeys.everywhere(),
+    //: create_workflow、edit_workflow、update_workflow;run_workflow 起了一次运行,运行记录要出现这一行。
     ["workflows"],
+    ["workflow-runs"],
     ["generation-jobs"],
-    //: 智能体改画板(edit_board)批准之后:打开着的那张板重取详情、合进本地,不必等下一次自己保存撞版本号。
+    //: 智能体改画板(edit_board)、跑一格(run_board_item)批准之后:打开着的那张板重取详情、合进本地,不必等下一次自己保存撞版本号。
     boardKeys.everywhere(),
     //: 智能体改笔记(edit_note)批准之后:打开着的那篇重取,编辑器按最小差异接过来(见 notes/noteSelection.followMarkdown)。
     noteKeys.allDetails(),
     noteKeys.everywhere(),
+    //: delete_projects。
+    projectKeys.list(workspaceId),
+    //: publish_asset 建了一条发布任务。
+    ["publish-tasks"],
+    //: 技能的几张卡(新建、改、复制成我的、开关、删、导入):设置页的列表、「/」菜单、开着的编辑表单。
+    skillKeys.all(workspaceId),
   ]) {
     void qc.invalidateQueries({ queryKey });
   }

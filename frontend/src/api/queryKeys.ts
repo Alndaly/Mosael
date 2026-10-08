@@ -71,9 +71,36 @@ export const skillKeys = {
   staged: (workspaceId: string, importId: string) => ["agent-skills", workspaceId, "import", importId] as const,
 };
 
-/** 音色库(克隆出来的那些声音):按工作区,只有这一种形状。 */
+/**
+ * 音色库(克隆出来的那些声音):按工作区。
+ *
+ * **某个引擎能念的嗓子也挂在这下面。** 带上工作区时,能复刻的引擎(CosyVoice)除了系统音色还列这个工作区配音库里的克隆音色
+ * (后端 routes/voices 的 list_tts_voices)—— 此前它住在单独的 `tts-voices` 键族里,配音库新建 / 改名 / 删除只失效 `voices`,
+ * 配音面板的下拉一分钟内还是旧的(删掉的嗓子还能选,选了合成失败)。挂在同一个前缀下,失效 `.all()` 一次全覆盖。
+ * 不带工作区的(播客引擎的发音人目录)不含配音库的东西,挂在 `everywhere()` 下。
+ */
 export const voiceKeys = {
   all: (workspaceId: string) => ["voices", workspaceId] as const,
+  /** 失效用:所有工作区(复刻任务做完时不知道是哪个工作区,见 components/jobs/jobKinds)。 */
+  everywhere: () => ["voices"] as const,
+  engineVoices: (engine: string, workspaceId?: string) =>
+    (workspaceId ? (["voices", workspaceId, "engine", engine] as const) : (["voices", "engine", engine] as const)),
+};
+
+/**
+ * 项目:按工作区一份列表。外壳(顶栏切换器、剪辑页拿当前项目)、首页、智能体「删除项目」的卡批完之后都认这一份
+ * —— 此前卡批完失效的清单里没有它,在剪辑页里批掉「删除项目 X」,切换器还列着 X、剪辑页还开着 X。
+ */
+export const projectKeys = {
+  list: (workspaceId: string) => ["projects", workspaceId] as const,
+};
+
+/**
+ * 3D 场景:按工作区一份列表。场景页、画板「添加 3D 场景」的选择器、资产详情读的是同一份 —— 此前选择器住在单独的
+ * `scene-picker` 键族里,场景页新建 / 改名 / 删除只失效 `scenes`,选择器一分钟内还是旧的。
+ */
+export const sceneKeys = {
+  list: (workspaceId: string) => ["scenes", workspaceId] as const,
 };
 
 /**

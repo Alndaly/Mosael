@@ -12,6 +12,7 @@ vi.mock("@/api/transport", async (importOriginal) => ({
   api: (path: string) => api(path),
 }));
 
+import { assetKeys, projectKeys, skillKeys } from "@/api/queryKeys";
 import { invalidateAfterDecision, useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 
 function Watcher({ workspaceId }: { workspaceId: string }) {
@@ -101,4 +102,28 @@ it("批完一张卡,笔记详情和列表都要失效", () => {
   const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
   expect(keys).toContain(JSON.stringify(["note"]));
   expect(keys).toContain(JSON.stringify(["notes"]));
+});
+
+/**
+ * 卡背后能直接改数据的那几种,批完之后对应的缓存都要过期 —— 用页面里真实的键形状放进缓存再看,而不是比对清单字面量
+ * (前缀对不上时字面量照样「包含」,缓存却不失效)。项目那一行是实测漏过的:在剪辑页里批掉「删除项目 X」,
+ * 切换器还列着 X、剪辑页还开着 X。
+ */
+it("批完一张卡,项目、发布任务、运行记录、技能的缓存都过期", () => {
+  const client = new QueryClient();
+  const seeded = {
+    projects: projectKeys.list("w1"),
+    publishTasks: ["publish-tasks", "w1"],
+    workflowRuns: ["workflow-runs", "wf1"],
+    skills: skillKeys.detail("w1", "my-skill"),
+    assets: assetKeys.pages({ workspace_id: "w1" }),
+  };
+  for (const key of Object.values(seeded)) client.setQueryData(key, []);
+
+  invalidateAfterDecision(client, "w1");
+
+  const stale = Object.entries(seeded)
+    .filter(([, key]) => !client.getQueryState(key)?.isInvalidated)
+    .map(([name]) => name);
+  expect(stale, "这些缓存批完卡之后还是旧的").toEqual([]);
 });

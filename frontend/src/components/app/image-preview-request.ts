@@ -1,4 +1,4 @@
-import type { ImagePreviewItem } from "@/components/app/image-preview";
+import type { ImagePreviewItem } from "@/components/app/imagePreviewContext";
 
 /**
  * 不在 React 树里的界面也要开同一个灯箱。

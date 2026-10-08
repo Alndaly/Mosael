@@ -582,6 +582,7 @@ export function generateNodeSection({
             //: 存下去的是规整过的行(去空行、`x: role` → `x:role`),编辑器里留用户打的原样。
             normalize={(text) => sourceAssetText(parseSourceAssetText(text))}
             variables={variables}
+            label={t("wfGenSourceExtra")}
             onChange={(next: string) =>
               typeConfig("source_assets")(
                 writeSourceAssets([

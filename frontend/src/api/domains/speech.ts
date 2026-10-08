@@ -257,6 +257,11 @@ export function fetchVoicePreview(body: { workspace_id: string; engine: string; 
     : apiBlob("/api/tts/preview", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 智能体念一句话(消息下的「念给我听」、免提):要求「让它出声」开着、选好了音色,没选回 409(`POST /api/agent/speech`)。 */
+export function speakWithAgentVoice(body: { workspace_id: string; text: string }): Promise<Blob> {
+  return apiBlob("/api/agent/speech", { method: "POST", body: JSON.stringify(body) });
+}
+
 /**
  * 试听设置里存着的那份对话音色(`POST /api/agent/speech/preview`)。和对话里真念走同一个合成,
  * 只是不要求「让它出声」开着 —— 试听发生在打开之前。

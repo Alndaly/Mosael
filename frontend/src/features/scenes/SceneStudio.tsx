@@ -4,6 +4,7 @@ import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { formatBytes } from "@/lib/bytes";
+import { openBoard } from "@/lib/deepLink";
 import { saveBlobToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import { formatCombo, listenKeys } from "@/lib/shortcuts";
@@ -71,6 +72,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
+import { boardKeys, sceneKeys } from "@/api/queryKeys";
 import { importAsset } from "@/api/domains/assets";
 import { createBoard, updateBoard, withSlotProducer, type BoardItem, type SceneReferenceUse } from "@/api/domains/boards";
 import { errorText } from "@/api/errorMessage";
@@ -103,6 +105,7 @@ import {
   CanvasAgentChat,
   type CanvasAgentMode,
 } from "@/features/agent/CanvasAgentChat";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { useAutosave } from "@/lib/useAutosave";
 import {
@@ -190,7 +193,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
     return () => removeEventListener("hashchange", read);
   }, []);
   const list = useQuery({
-    queryKey: ["scenes", workspace.id],
+    queryKey: sceneKeys.list(workspace.id),
     queryFn: () => listScenes(workspace.id),
   });
   const scene = useQuery({
@@ -207,7 +210,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         initialScene(t, demo),
       );
       qc.setQueryData(["scene", workspace.id, s.id], s);
-      await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+      await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
       location.hash = `#/scenes?scene=${s.id}`;
     } catch (e) {
       toast.error(errorText(e));
@@ -238,7 +241,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         initial={scene.data!}
         onBack={() => {
           location.hash = "#/scenes";
-          void qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+          void qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
         }}
       />
     );
@@ -261,7 +264,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
               workspaceId={workspace.id}
               disabled={creating}
               onCreated={async (sceneId) => {
-                await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+                await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
                 location.hash = `#/scenes?scene=${sceneId}`;
               }}
             />
@@ -299,7 +302,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             try {
               const scene = await getScene(workspace.id, summary.id);
               await saveScene({ ...scene, name });
-              await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+              await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
               toast.success(t("sceneRenamed"));
               return true;
             } catch (e) { toast.error(errorText(e)); return false; }
@@ -312,7 +315,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
               localStorage.removeItem(`mosael.scene-draft:${workspace.id}:${sceneId}`);
               forgetSceneView(workspace.id, sceneId);
             }
-            await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+            await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
             if (done.length) toast.success(t("sceneDeletedCount").replace("{n}", String(done.length)));
             const failure = results.find(r => r.status === "rejected");
             if (failure?.status === "rejected") toast.error(t("sceneDeletePartialFailed").replace("{reason}", String(failure.reason)));
@@ -829,8 +832,8 @@ function SceneEditor({
             edges: [{ id: uid(), source: sceneItem.id, target: generator.id }],
           },
         });
-        await qc.invalidateQueries({ queryKey: ["boards", initial.workspace_id] });
-        location.hash = `#/boards?board=${board.id}`;
+        await qc.invalidateQueries({ queryKey: boardKeys.list(initial.workspace_id) });
+        openBoard(board.id);
         toast.success(kind === "image" ? t("sceneBridgeImageDone") : t("sceneBridgeVideoDone"));
       });
     } finally {
@@ -1674,6 +1677,7 @@ function SceneEditor({
               agent === "docked" ? "scene-agent-dock" : "scene-agent-floating"
             }
           >
+            <SectionBoundary onClose={() => setAgent(null)}>
             <CanvasAgentChat
               dockedLayout="inline"
               workspaceId={initial.workspace_id}
@@ -1686,6 +1690,7 @@ function SceneEditor({
               emptyHint={t("sceneAssistantEmpty")}
               placeholder={t("sceneAssistantPlaceholder")}
             />
+            </SectionBoundary>
           </div>
         )}
       </div>

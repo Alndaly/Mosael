@@ -10,13 +10,15 @@ import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@/design/tokens.css";
 import "./styles.css";
 import { AppBoundary } from "@/app/PageBoundary";
+import { loadStartupMessages } from "@/app/preferences";
 import { runLocalMigrations } from "@/lib/localMigrations";
 import { installWindowChrome } from "@/lib/windowChrome";
 
 // 本机存的设置先迁到新形状,再渲染:界面只认新形状(见 lib/localMigrations)
 runLocalMigrations();
 installWindowChrome();
-void import("@/app/App").then(({ App }) => {
+// 外壳和当前语言的文案表并行取(文案表按语言分块,只取用得到的那一种,见 app/messageTables),都到了才画。
+void Promise.all([import("@/app/App"), loadStartupMessages()]).then(([{ App }]) => {
   createRoot(document.getElementById("root")!).render(
     <AppBoundary>
       <App />

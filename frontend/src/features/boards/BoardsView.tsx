@@ -2,7 +2,7 @@ import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolba
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
-import { BOARD_ITEM_EVENT, parseBoardItem, useOpenRequest } from "@/lib/deepLink";
+import { BOARD_ITEM_EVENT, OPEN_BOARD_EVENT, parseBoardItem, useHashOpenRequest, useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,6 +61,7 @@ import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab
 import { cn } from "@/lib/utils";
 import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
+import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import {
   canvasDockedPanelEdges,
@@ -118,9 +119,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     boards.data?.map((board) => board.id),
   );
   const open = list.find((board) => board.id === openId) ?? null;
-  React.useEffect(() => { const id = new URLSearchParams(location.hash.split("?")[1] ?? "").get("board"); if (id && list.some(b => b.id === id)) { setOpenId(id); history.replaceState(null, "", "#/boards"); } }, [list, setOpenId]);
+  //: 地址里的 `?board=` 交给信箱并立刻清掉(见 lib/deepLink 的 useHashOpenRequest):此前这里读了参数、只在接住时才清,
+  //: 而且只在列表变化时读 —— 人已经在画板页上时只改 hash 没反应,没被接住的参数留在地址里,下一次列表变化把人拽过去。
+  useHashOpenRequest("#/boards", "board", OPEN_BOARD_EVENT);
   // 那一张还没加载出来时接不住 —— 返回 false,请求留在信箱里,列表到货后再投(见 lib/deepLink)。
-  useOpenRequest("mosael:open-board", (id) => {
+  useOpenRequest(OPEN_BOARD_EVENT, (id) => {
     if (!list.some((b) => b.id === id)) return false;
     setOpenId(id);
   }, [list]);
@@ -128,7 +131,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   const create = useMutation({
     mutationFn: () => createBoard({ workspace_id: workspace.id }),
     onSuccess: (board) => {
-      void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] });
+      void queryClient.invalidateQueries({ queryKey: boardKeys.list(workspace.id) });
       setOpenId(board.id);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -1268,6 +1271,7 @@ function BoardDetail({
             ...canvasDockedPanelEdges(8),
           } : undefined}
         >
+          <SectionBoundary onClose={() => setAgentOpen("off")}>
           <CanvasAgentChat
             contextLine={t("boardAgentContext").replace("{id}", board.id).replace("{name}", board.name)}
             emptyHint={t("boardAgentEmpty")}
@@ -1279,6 +1283,7 @@ function BoardDetail({
             onModeChange={setAgentMode}
             onClose={() => setAgentOpen("off")}
           />
+          </SectionBoundary>
         </div>
       )}
       {dockedAgent && (

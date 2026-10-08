@@ -171,6 +171,15 @@ export function useNativeViewAside(active: boolean): void {
   React.useEffect(() => (active ? stepNativeViewAside() : undefined), [active]);
 }
 
+/**
+ * 放进弹窗内容里:内容挂着(开着,连同收起的动画)的这段时间请原生视图让开。弹窗组件本身关着时也在渲染(只是不出 portal),
+ * 所以这一步要放在只有开着才挂上的内容里面。
+ */
+export function StepNativeViewAside() {
+  useNativeViewAside(true);
+  return null;
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

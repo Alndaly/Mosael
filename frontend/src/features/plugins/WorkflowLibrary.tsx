@@ -139,7 +139,7 @@ import {
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
-import { gotoRecord } from "@/lib/deepLink";
+import { gotoRecord, openBoard } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
 import { useFileDrop } from "@/lib/useFileDrop";
@@ -1443,7 +1443,7 @@ function WorkflowDetail({
                   className="-mx-2 flex h-8 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-ui-sm text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() =>
                     one.kind === "board"
-                      ? gotoRecord(`#/boards?board=${encodeURIComponent(one.id)}`, "mosael:open-board", one.id)
+                      ? openBoard(one.id)
                       : gotoRecord(`#/workflows?workflow=${encodeURIComponent(one.id)}`, "mosael:open-workflow", one.id)
                   }
                 >

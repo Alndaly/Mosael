@@ -173,6 +173,7 @@ export function llmAdvancedSection({
           value={String(config.stop ?? "")}
           onChange={typeConfig("stop")}
           variables={variables}
+          label={t("wfLlmStop")}
         />
         <small>{t("wfLlmStopHint")}</small>
       </div>

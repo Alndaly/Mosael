@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Project, type ProjectWithStats } from "@/api/client";
+import { projectKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 
 /**
@@ -37,7 +38,7 @@ export function nextProjectName(stem: string, existing: { name: string }[]): str
 export function useCreateProject(workspaceId: string, onCreated: (projectId: string) => void) {
   const qc = useQueryClient();
   const t = useI18n();
-  const key = ["projects", workspaceId];
+  const key = projectKeys.list(workspaceId);
 
   return useMutation({
     mutationFn: (name?: string) => {

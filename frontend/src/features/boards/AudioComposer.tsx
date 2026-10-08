@@ -3,6 +3,7 @@ import { AudioLines } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listTtsEngines, listTtsVoices, type BoardItem, type Voice } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { compactSpeechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -104,7 +105,7 @@ export function AudioComposer({
   //: 发音人按引擎现拉 —— 火山的目录跟着账号走,不是引擎列表的一部分(和字幕面板同源)。带上工作区:
   //: CosyVoice 还列配音库里的嗓子(`cloned`)。
   const engineVoices = useQuery({
-    queryKey: ["tts-voices", activeEngine?.id ?? "", workspaceId],
+    queryKey: voiceKeys.engineVoices(activeEngine?.id ?? "", workspaceId),
     queryFn: () => listTtsVoices(activeEngine?.id ?? "", workspaceId),
     enabled: Boolean(activeEngine) && !usingClone,
   });
