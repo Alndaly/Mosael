@@ -17,21 +17,20 @@ Errors exit non-zero with the message on stderr.
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
-import threading
-import time
 import traceback
 import unicodedata
 from typing import Any
 
 if __package__:
     from .asr_protocol import encode_event_line
+    from .parent_watch import watch_parent
 else:
     # Executed directly by the ASR interpreter; its sys.path only contains this
     # directory, not the application package.
     from asr_protocol import encode_event_line
+    from parent_watch import watch_parent
 
 
 def _sec(value: Any) -> float:
@@ -294,20 +293,6 @@ def _emit(payload: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
-def _watch_parent(parent_pid: int) -> None:
-    """宿主没了就跟着退。
-
-    常驻进程最坏的下场是变成孤儿:后端重启了,它还抱着几个 GB 的权重躺在那儿,而没有任何
-    东西会去收它 —— 用户只会发现内存莫名其妙少了一块。
-    """
-    while True:
-        time.sleep(5)
-        try:
-            os.kill(parent_pid, 0)
-        except OSError:
-            os._exit(0)
-
-
 def execute_request(request: dict[str, Any]) -> dict[str, Any]:
     provider = (request.get("provider") or "funasr").strip().lower()
     action = (request.get("action") or "transcribe").strip().lower()
@@ -322,7 +307,7 @@ def serve() -> None:
     常驻模式存在的全部理由就是**不要每次识别都重读一遍模型**:一次性模式下,一段十秒的
     音频里绝大部分时间花在加载上,而上一次识别刚把同一个模型读进内存、进程一退就全扔了。
     """
-    threading.Thread(target=_watch_parent, args=(os.getppid(),), daemon=True).start()
+    watch_parent()  # 宿主没了就跟着退(见 workers/parent_watch)
     for line in sys.stdin:
         line = line.strip()
         if not line:

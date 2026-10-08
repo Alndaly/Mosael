@@ -24,18 +24,18 @@ import math
 import os
 import struct
 import sys
-import threading
-import time
 import traceback
 import wave
 from pathlib import Path
 from typing import Any
 
 if __package__:
+    from .parent_watch import watch_parent
     from .tts_protocol import KeyedWorkerError, encode_event_line, error_event
 else:
     # Executed directly by the engine's isolated interpreter; its sys.path only
     # contains this directory, not the application package.
+    from parent_watch import watch_parent
     from tts_protocol import KeyedWorkerError, encode_event_line, error_event
 
 
@@ -419,26 +419,9 @@ def execute_request(request: dict[str, Any]) -> tuple[str, str]:
     raise ValueError(f"unknown TTS worker action: {action}")
 
 
-def _watch_parent(original_ppid: int) -> None:
-    """父进程没了就自己走。
-
-    现场抓到过一个 PPID=1、抱着 2.2 GB 跑了 35 分钟的孤儿:后端热重载把池子连同 kill()
-    一起带走了,而子进程没人管。**不能指望父进程记得清理** —— 它被 SIGKILL 时不会执行
-    任何清理代码。stdin 关闭是常规信号,但一个正卡在下载里的 worker 要等下载结束才读得到
-    EOF,所以另加这条:被过继给 init 就退出。
-    """
-    while True:
-        try:
-            time.sleep(1.0)
-            if os.getppid() != original_ppid:
-                os._exit(0)  # 不做清理:权重还挂在内存里,越快还给系统越好
-        except Exception:  # noqa: BLE001 — 它一死,孤儿进程就回来了,而没人会发现
-            time.sleep(5.0)
-
-
 def serve() -> None:
     """按行收请求,权重留在内存里。一个进程只服务一个引擎(两套权重同时挂是 30 GB)。"""
-    threading.Thread(target=_watch_parent, args=(os.getppid(),), daemon=True).start()
+    watch_parent()  # 宿主没了就跟着退(见 workers/parent_watch)
     for line in sys.stdin:
         line = line.strip()
         if not line:
