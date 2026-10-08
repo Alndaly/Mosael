@@ -15,7 +15,9 @@ export function providerProblem(profile: ProviderProfile): ProviderProblem | nul
     if (!profile.oauth_linked) return "unauthorized";
     return profile.oauth_expired ? "expired" : null;
   }
-  return profile.key_hint ? null : "noKey";
+  //: 看的是「有没有我自己的那份凭据」(`is_mine`),和后端放不放行同一个判据(providers/credentials.resolve_connection)。
+  //: 不看尾四位:本机 Ollama 这类不要钥匙的端点,存下的是一份空钥匙 —— 没有尾数,却照样能用。
+  return profile.is_mine ? null : "noKey";
 }
 
 /** 行内那颗修它的按钮挂这个属性:默认模型那一行的「去处理」滚到连接那一行、把焦点交给它。 */

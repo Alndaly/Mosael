@@ -506,7 +506,7 @@ export function ProviderProfilesSection({
                         <FixLink onClick={() => setAuthing(profile)}>{t("providerOauthUnlinked")}</FixLink>
                       )}
                     </>
-                  ) : profile.key_hint || profile.plugin_instance_id ? (
+                  ) : providerProblem(profile) !== "noKey" ? (
                     profile.key_hint ? ` · ${profile.key_hint}` : ""
                   ) : (
                     <> · <FixLink onClick={() => openEdit(profile)}>{t("providerNoKeyOfMine")}</FixLink></>

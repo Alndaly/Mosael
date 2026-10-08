@@ -98,7 +98,7 @@ describe("默认模型所在的连接用不了", () => {
   });
 
   it("连接好好的就不说", async () => {
-    providers = [{ id: "kimi", name: "Kimi", enabled: true, capability_ids: ["chat"], auth_type: "api_key", key_hint: "…abcd" }];
+    providers = [{ id: "kimi", name: "Kimi", enabled: true, capability_ids: ["chat"], auth_type: "api_key", key_hint: "…abcd", is_mine: true }];
     defaults = [{ capability: "chat", provider_profile_id: "kimi", model: "k3", is_mine: true }];
     models = [{ provider_profile_id: "kimi", provider_name: "Kimi", model: "k3", display_name: "k3" }];
     const { container } = renderSection("chat");
