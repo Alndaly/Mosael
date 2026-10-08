@@ -1,6 +1,7 @@
 export const shell = {
   // Shell
   workspaceDefault: "Default workspace",
+  workspaceDefaultFor: "{name}’s workspace",
   workspaceSwitch: "Switch workspace",
   studioMediaDesc: "Keep your inspiration, source media and finished work together.",
   studioPluginsDesc: "Connect your tools and expand what you can create.",

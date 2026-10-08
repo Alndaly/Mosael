@@ -1,6 +1,7 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
 import { useCreateWorkspace, useWorkspaces } from "@/lib/workspaces";
+import { FirstWorkspace } from "@/app/FirstWorkspace";
 import { PageBoundary } from "@/app/PageBoundary";
 import { JOBS_CREATED_EVENT } from "@/api/client";
 import { assetKeys, projectKeys } from "@/api/queryKeys";
@@ -14,7 +15,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  FolderPlus,
   Loader2,
   RotateCw,
   X,
@@ -55,7 +55,6 @@ import { ServerPicker } from "@/components/app/ServerPicker";
 import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { NativeViewStandIn } from "@/components/ui/nativeViewAside";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
@@ -455,18 +454,7 @@ function WorkspaceGate() {
   if (!workspace) {
     return (
       <PreShellScreen>
-        <Card className="w-[min(480px,calc(100vw-32px))] border-0 bg-transparent shadow-none">
-          <CardContent className="grid justify-items-start gap-6 px-7 py-10 text-left [&_h1]:m-0 [&_p]:m-0">
-            <h1 className="text-4xl font-semibold tracking-tighter">Mosael</h1>
-            <p className="text-lg leading-relaxed text-muted-foreground">{t("welcomeText")}</p>
-            <Button
-              loading={createWorkspace.isPending}
-              onClick={() => createWorkspace.mutate(t("workspaceDefault"))}
-            >
-              <FolderPlus size={16} /> {t("createWorkspace")}
-            </Button>
-          </CardContent>
-        </Card>
+        <FirstWorkspace pending={createWorkspace.isPending} onCreate={(name) => createWorkspace.mutate(name)} />
       </PreShellScreen>
     );
   }

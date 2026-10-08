@@ -432,6 +432,9 @@ function WorkspaceSwitcher({
                       icon={<span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold text-primary">{ws.name.slice(0, 1)}</span>}
                       label={ws.name}
                       truncate
+                      //: 别人的工作区写出我在里面是什么角色:新用户的第一个工作区和被拉进的团队工作区常常都叫「默认工作区」,
+                      //: 此前切换器里两行一模一样,分不清哪个是团队的(体检 UM-10)。
+                      description={ws.role && ws.role !== "owner" ? t(`role_${ws.role}` as never) : undefined}
                       onClick={() => { setOpen(false); setSearch(""); if (ws.id !== workspaceId) onSelectWorkspace(ws.id); }}
                     />
                     <IconButton variant="ghost" size="icon-xs" disabled={gate.renameDisabled} label={`${t("rename")}: ${ws.name}`} disabledReason={renameReason && t(renameReason)} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></IconButton>

@@ -116,3 +116,17 @@ it("删掉当前工作区之后,落到剩下的那个", async () => {
   await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-2"));
   expect(client.getQueryData<Workspace[]>(workspaceKeys.all())?.map((one) => one.id)).not.toContain("ws-1");
 });
+
+//: 体检 UM-10:被拉进团队之后切换器里两行都叫「默认工作区」,分不清哪个是团队的。别人的那行写出我在里面是什么角色。
+it("别人的工作区在切换器里写出我的角色,自己的不写", async () => {
+  server = [
+    { id: "ws-1", name: "默认工作区", role: "owner" } as Workspace,
+    { id: "ws-2", name: "默认工作区", role: "editor" } as Workspace,
+  ];
+  shell();
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(zh.workspaceSwitch) }));
+  const rows = await screen.findAllByRole("menuitemradio");
+  expect(rows).toHaveLength(2);
+  expect(rows[0].textContent).not.toContain(zh.role_owner);
+  expect(rows[1].textContent).toContain(zh.role_editor);
+});

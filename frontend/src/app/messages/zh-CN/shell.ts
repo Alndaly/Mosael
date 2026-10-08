@@ -1,6 +1,7 @@
 export const shell = {
   // Shell
   workspaceDefault: "默认工作区",
+  workspaceDefaultFor: "{name}的工作区",
   workspaceSwitch: "切换工作区",
   studioMediaDesc: "把灵感、素材和成片整理在一起。",
   studioPluginsDesc: "连接外部工具，扩展你的创作能力。",
@@ -63,7 +64,7 @@ export const shell = {
   offlineTitle: "连不上后端",
   offlineBody: "你还是登录状态 —— 只是这会儿够不着服务端。它可能正在启动,或者地址填的不是这一个。",
   welcomeText: "先创建一个工作区，开始搭建新的 AI 视频创作工作台。",
-  createWorkspace: "创建默认工作区",
+  createWorkspace: "创建工作区",
   createProject: "新建项目",
   createProjectConfirm: "创建",
   username: "用户名",
