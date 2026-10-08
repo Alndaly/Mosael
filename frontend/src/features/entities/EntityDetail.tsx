@@ -1,4 +1,6 @@
 import React from "react";
+import { useGenerationOptions, useMissingModel } from "@/lib/generationOptions";
+import { formedGroups, generationOptionNames, missingModelNames } from "@/lib/entryNames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +23,7 @@ import {
   type EntityKind,
   type EntityPatch,
   type EntitySummary,
+  type EntityUsage,
 } from "@/api/client";
 import { sceneKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
@@ -741,26 +744,7 @@ function UsageSection({ workspaceId, entityId }: { workspaceId: string; entityId
         ))}
       </UsageGroup>
       <UsageGroup title={t("entityUsageGenerations")} count={rows.generations.length}>
-        {rows.generations.map((one) => (
-          <UsageCard
-            key={`g-${one.id}`}
-            lead={
-              one.result_asset_id ? (
-                <img src={assetThumbnailUrl(one.result_asset_id)} alt="" loading="lazy" className="size-full object-cover" />
-              ) : one.kind === "video" ? (
-                <Clapperboard size={18} />
-              ) : (
-                <BookImage size={18} />
-              )
-            }
-            title={one.prompt || one.model}
-            meta={`${one.model} · ${one.created_at.slice(0, 10)}`}
-            //: 打开那条创作会话(ADR 0055 §9);老记录没挂在会话上的去创作分区
-            onOpen={() => (one.session_id ? openCreationSession(one.session_id) : go(aiStudioHref("create")))}
-            thumb={one.result_asset_id}
-            session={one.session_id}
-          />
-        ))}
+        {rows.generations.map((one) => <GenerationUsageCard key={`g-${one.id}`} one={one} />)}
       </UsageGroup>
       <UsageGroup title={t("entityUsageWorkflows")} count={rows.workflows.length}>
         {rows.workflows.map((flow) => (
@@ -792,10 +776,51 @@ function UsageGroup({ title, count, children }: { title: string; count: number; 
   );
 }
 
+/**
+ * 一条用过它的生成记录。模型写**两层名字**(D65,ADR 0045):主名是生成选项的显示名(表单入口是表单标题),副名(来自哪张工作流、
+ * 哪条连接)在悬停里;那个模型已经不在选项里了,问后端它叫什么(「krea2-text-2-image 的表单」),不写 `plugin:…`、`…#app` 这种编号。
+ */
+type EntityUsageGeneration = EntityUsage["generations"][number];
+
+function GenerationUsageCard({ one }: { one: EntityUsageGeneration }) {
+  const t = useI18n();
+  const choices = useGenerationOptions([one.kind]);
+  const formed = React.useMemo(() => formedGroups(choices.options), [choices.options]);
+  const used = choices.options.find((option) =>
+    option.provider_profile_id === one.provider_profile_id && option.kind === one.kind && option.model === one.model) ?? null;
+  const gone = useMissingModel(used || choices.pending || !one.provider_profile_id
+    ? null : { provider_profile_id: one.provider_profile_id, model: one.model, kind: one.kind });
+  const names = used ? generationOptionNames(used, formed, t) : missingModelNames(gone.missing, t);
+  return (
+    <UsageCard
+      lead={
+        one.result_asset_id ? (
+          <img src={assetThumbnailUrl(one.result_asset_id)} alt="" loading="lazy" className="size-full object-cover" />
+        ) : one.kind === "video" ? (
+          <Clapperboard size={18} />
+        ) : (
+          <BookImage size={18} />
+        )
+      }
+      title={one.prompt || names.primary}
+      meta={`${names.primary} · ${one.created_at.slice(0, 10)}`}
+      metaHint={names.secondary || null}
+      //: 打开那条创作会话(ADR 0055 §9);老记录没挂在会话上的去创作分区
+      onOpen={() => {
+        if (one.session_id) openCreationSession(one.session_id);
+        else window.location.hash = aiStudioHref("create");
+      }}
+      thumb={one.result_asset_id}
+      session={one.session_id}
+    />
+  );
+}
+
 function UsageCard({
   lead,
   title,
   meta,
+  metaHint,
   onOpen,
   thumb,
   session,
@@ -803,6 +828,8 @@ function UsageCard({
   lead: React.ReactNode;
   title: string;
   meta: string;
+  /** 元信息那一行悬停时补的一句(模型的副名:来自哪张工作流、哪条连接) */
+  metaHint?: string | null;
   onOpen: () => void;
   thumb?: string | null;
   session?: string | null;
@@ -821,7 +848,7 @@ function UsageCard({
           <Truncate className="text-ui-sm font-medium text-foreground">
             {title}
           </Truncate>
-          <Truncate className="text-ui-xs text-muted-foreground">{meta}</Truncate>
+          <Truncate className="text-ui-xs text-muted-foreground" hint={metaHint} data-usage-meta="">{meta}</Truncate>
         </span>
       </button>
     </li>

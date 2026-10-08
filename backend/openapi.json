@@ -34165,6 +34165,17 @@
             "type": "string",
             "title": "Kind"
           },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
           "model": {
             "type": "string",
             "title": "Model"

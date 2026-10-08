@@ -179,6 +179,8 @@ class EntityUsageGenerationOut(ApiModel):
     id: str
     session_id: str | None = None
     kind: str
+    #: 用的哪条连接上的哪个模型:界面拿它们查生成选项,写和别处一样的两层名字(主名、副名),不写 `model` 这串编号(D65)
+    provider_profile_id: str | None = None
     model: str
     prompt: str
     result_asset_id: str | None = None

@@ -350,5 +350,7 @@ def test_在哪里用过() -> None:
     usage = client.get(f"/api/entities/{eid}/usage").json()
     assert sorted((row["name"], row["how"]) for row in usage["boards"]) == [("提示词里 @", "mention"), ("有资产格", "cell")]
     assert [row["prompt"] for row in usage["generations"]] == ["街头"]
+    #: D65:带上连接,界面拿 (连接, 模型) 查两层名字,不写原始模型编号
+    assert "provider_profile_id" in usage["generations"][0] and usage["generations"][0]["model"] == "m"
     assert [row["name"] for row in usage["workflows"]] == ["出图流程"]
     assert me

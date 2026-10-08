@@ -12303,6 +12303,8 @@ export interface components {
             session_id?: string | null;
             /** Kind */
             kind: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
             /** Model */
             model: string;
             /** Prompt */

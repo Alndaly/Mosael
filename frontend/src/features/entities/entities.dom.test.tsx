@@ -36,7 +36,15 @@ const api = vi.hoisted(() => ({
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
   drawEntity: vi.fn(),
+  listGenerationOptions: vi.fn(async (_kind: string): Promise<unknown[]> => []),
+  getMissingModel: vi.fn(),
   api: vi.fn(),
+}));
+//: 生成选项、「记着的模型叫什么」从 api/domains/generation 直接取(lib/generationOptions)
+vi.mock("@/api/domains/generation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/domains/generation")>()),
+  listGenerationOptions: (kind: string) => api.listGenerationOptions(kind) as never,
+  getMissingModel: (...args: unknown[]) => api.getMissingModel(...args) as never,
 }));
 
 vi.mock("@/api/client", () => ({
@@ -665,6 +673,38 @@ describe("在哪里用过", () => {
     expect(within(usage).getByText("entityUsageCell")).toBeTruthy();
     expect(within(usage).getByText("街口")).toBeTruthy();
     expect(within(usage).getByText("出图流程")).toBeTruthy();
+  });
+
+  //: D65:生成记录的模型写和别处一样的两层名字,不写原始模型编号
+  it("生成记录写模型的两层名字:主名在行上、副名在悬停里;不在选项里的问后端它叫什么,不露编号", async () => {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity());
+    api.listGenerationOptions.mockImplementation(async () => [
+      { id: "p9:image:krea2-text-2-image.json#app", provider_profile_id: "p9", provider: "plugin:dev.mosael.comfyui", kind: "image",
+        model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", profile_name: "ComfyUI · http://192.168.3.15:8188",
+        group: { id: "krea2-text-2-image.json", label: "krea2-text-2-image", entry: "form" }, is_default: false },
+    ] as never);
+    api.getMissingModel.mockResolvedValue({ provider_profile_id: "gone", model: "girl.json#app", model_label: "girl 的表单",
+      profile_name: "", group: null, reason: "连接已经删了", upgrade: false, plugin_instance_id: null } as never);
+    api.getEntityUsage.mockResolvedValue({
+      boards: [],
+      generations: [
+        { id: "g1", session_id: null, kind: "image", provider_profile_id: "p9", model: "krea2-text-2-image.json#app", prompt: "街口",
+          result_asset_id: null, created_at: "2026-09-27T10:00:00" },
+        { id: "g2", session_id: null, kind: "image", provider_profile_id: "gone", model: "girl.json#app", prompt: "",
+          result_asset_id: null, created_at: "2026-09-28T10:00:00" },
+      ],
+      workflows: [],
+    });
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "entityUsage" }));
+    const usage = await screen.findByRole("region", { name: "entityUsage" });
+    await waitFor(() => expect(usage.textContent).toContain("快速用krea2生图 · 2026-09-27"));
+    await waitFor(() => expect(usage.textContent).toContain("girl 的表单 · 2026-09-28"));
+    expect(usage.textContent, "没写提示词的那条,标题也是名字").not.toContain("girl.json");
+    expect(usage.textContent).not.toContain("#app");
+    expect(usage.textContent).not.toContain("plugin:");
   });
 });
 
