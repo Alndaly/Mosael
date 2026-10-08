@@ -59,6 +59,8 @@ afterEach(() => {
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("mosael:tab:ai-studio", "generate");
+  //: 上次开着的是 s1(没选过会话时停在「新的一条」,不落进最近那条,见 UC-03)
+  localStorage.setItem("mosael.generation.session.w1.visual", "s1");
 });
 
 const IMAGE_OPTION = {
@@ -91,18 +93,24 @@ function session(isMine: boolean) {
   };
 }
 
-function renderStudio({ isMine = true, generations = [] as unknown[], options = [IMAGE_OPTION] as unknown[] } = {}) {
-  const writes: Array<{ url: string; method: string }> = [];
+//: 记着的模型不在选项里时,后端说它叫什么、为什么(GET /api/generation/missing);缺省是「连接删了」那一句
+const GONE = { provider_profile_id: "gone", model: "krea2-text-2-image.json#app", model_label: "之前选的模型", profile_name: "",
+               group: null, reason: "它所在的那条连接已经删掉了", upgrade: false, plugin_instance_id: "" };
+
+function renderStudio({ isMine = true, generations = [] as unknown[], options = [IMAGE_OPTION] as unknown[],
+                        sessions = [session(isMine)] as unknown[], missing = GONE as unknown } = {}) {
+  const writes: Array<{ url: string; method: string; body?: unknown }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     if (init?.method && init.method !== "GET") {
-      writes.push({ url, method: init.method });
-      return json({});
+      writes.push({ url, method: init.method, body: init.body ? JSON.parse(String(init.body)) : undefined });
+      return json(url.endsWith("/api/generation/sessions") ? { id: "s-new" } : {});
     }
     if (url.includes("/api/generation/options?kind=image")) return json(options);
     if (url.includes("/api/generation/options")) return json([]);
-    if (url.includes("/api/generation/sessions")) return json([session(isMine)]);
+    if (url.includes("/api/generation/missing")) return json(missing);
+    if (url.includes("/api/generation/sessions")) return json(sessions);
     if (url.includes("/api/generation/jobs")) return json(generations);
     return json([]);
   }) as never;
@@ -273,7 +281,7 @@ describe("花费那一句照实说:花了多少 / 未定价 / 未扣费", () => 
 
 describe("每一条生成下面写的是给人看的名字", () => {
   //: 维护者:用精简表单「快速用krea2生图」生成,下面却写着「plugin:dev.mosael.comfyui · krea2-text-2-image.json」
-  it("脚注写主名(表单标题),悬停写副名(来自哪张工作流、哪台服务器);不写供应商 id 和文件名;连接没了才落回 id", async () => {
+  it("脚注写主名(表单标题),悬停写副名(来自哪张工作流、哪台服务器);不写供应商 id 和文件名;连接没了写人话,不露编号", async () => {
     //: ADR 0045:名字分两层,一行的地方写主名,副名进悬停说明 —— 不拼成「连接名 · 工作流名 · 表单名」
     const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
     const comfy = { ...IMAGE_OPTION, id: "p9:image:krea2-text-2-image.json#app", provider_profile_id: "p9",
@@ -296,7 +304,11 @@ describe("每一条生成下面写的是给人看的名字", () => {
     expect(named.textContent).not.toContain("ComfyUI · http://192.168.3.15:8188");
     expect(await hoverHint(named.querySelector("[data-engine-name]") as HTMLElement))
       .toContain("来自 krea2-text-2-image · ComfyUI · http://192.168.3.15:8188");
-    expect((await footer("连接删了")).textContent).toContain("plugin:dev.mosael.comfyui · krea2-text-2-image.json#app");
+    //: 用的模型已经不在选项里(连接删了):问后端它叫什么、现在怎么了 —— 不写 `plugin:… · …#app`
+    const gone = await footer("连接删了");
+    await waitFor(() => expect(gone.querySelector("[data-engine-name]")?.textContent).toBe("之前选的模型 · genModelUnusable"));
+    expect(gone.textContent).not.toContain("plugin:");
+    expect(gone.textContent).not.toContain("#app");
   });
 });
 
@@ -321,7 +333,8 @@ describe("出图按高度定尺寸,不铺满", () => {
 
   it("多张:每张 220px 高、不伸展 —— 单数的最后一张不再被拉成整行宽(维护者:「太大了」)", async () => {
     renderStudio({ generations: [done(["a1", "a2", "a3"])] });
-    const buttons = await screen.findAllByRole("button", { name: "imagePreviewTitle" });
+    //: 会话、选项、记录三份到齐才画得出来:机器忙时(整套并行跑)一秒不够,放宽等待
+    const buttons = await screen.findAllByRole("button", { name: "imagePreviewTitle" }, { timeout: 5000 });
     expect(buttons).toHaveLength(3);
     for (const button of buttons) {
       expect(button.className).not.toMatch(/flex-\[1_1/);
@@ -354,5 +367,107 @@ describe("出图按高度定尺寸,不铺满", () => {
     renderStudio({ generations: [done(["a1"])] });
     const [button] = await screen.findAllByRole("button", { name: "imagePreviewTitle" });
     expect(button.querySelector("img")!.className.split(" ")).toEqual(expect.arrayContaining(["max-h-[360px]", "w-auto"]));
+  });
+});
+
+describe("会话记着的模型用不了:显示的就是它,不拿默认模型顶上(ADR 0045 修订之一)", () => {
+  //: 维护者撞到的:会话记着他的 ComfyUI 表单(那台还没升级),下拉、右栏、底下那枚按钮却全是默认的 gpt-image,点发送就拿它生成了
+  const KREA = { ...session(true), provider_profile_id: "p9", model: "krea2-text-2-image.json#app", title: "用 krea2 的那段" };
+  const OUTDATED = {
+    provider_profile_id: "p9", model: "krea2-text-2-image.json#app", model_label: "krea2-text-2-image 的表单",
+    profile_name: "ComfyUI · http://192.168.3.15:8188", group: { id: "krea2-text-2-image.json", label: "krea2-text-2-image", entry: "form", order: 1 },
+    reason: "工作流「krea2-text-2-image」的表单还是旧格式 —— 到工作流库里点「查看并升级」", upgrade: true, plugin_instance_id: "inst9",
+  };
+
+  it("下拉、右栏、底下那枚按钮写的是记着的那个(标着需要升级),说原因和两条路;发送键灰着,按什么都发不出去", async () => {
+    const { writes } = renderStudio({ sessions: [KREA], missing: OUTDATED });
+    const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
+    const trigger = await waitFor(() => {
+      const found = panel.querySelector<HTMLElement>("[data-engine-picker] button");
+      expect(found?.textContent).toBe("krea2-text-2-image 的表单 · genModelNeedsUpgrade");
+      return found!;
+    });
+    expect(trigger).toHaveAttribute("data-missing");
+    const note = panel.querySelector<HTMLElement>("[data-model-missing]")!;
+    expect(note.textContent).toContain("旧格式");
+    expect(note.textContent).toContain("来自 krea2-text-2-image · ComfyUI · http://192.168.3.15:8188");
+    expect(within(note).getByRole("button", { name: "genModelMissingUpgrade" })).toBeTruthy();
+    expect(within(note).getByRole("button", { name: "genModelMissingPickAnother" })).toBeTruthy();
+    expect(panel.textContent, "不摆默认模型的参数").not.toContain("genSectionOutput");
+    expect(document.body.textContent, "哪儿都不写默认的那个").not.toContain("gpt-image-1");
+    const chip = document.querySelector<HTMLElement>("[data-engine-chip]")!;
+    expect(chip.textContent).toBe("krea2-text-2-image 的表单 · genModelNeedsUpgrade");
+
+    const send = screen.getByRole("button", { name: "generate" });
+    expect(send).toBeDisabled();
+    const box = screen.getByRole("textbox", { name: "genPromptLabel" });
+    fireEvent.change(box, { target: { value: "一只猫" } });
+    fireEvent.keyDown(box, { key: "Enter", metaKey: true });
+    fireEvent.click(send);
+    expect(send).toBeDisabled();
+    expect(writes.filter((one) => one.url.includes("/api/generation/jobs")), "点不出请求").toEqual([]);
+  });
+
+  it("自己在下拉里挑了别的才换成那个,照常记进会话、发得出去", async () => {
+    const { writes } = renderStudio({ sessions: [KREA], missing: OUTDATED });
+    const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
+    await waitFor(() => expect(panel.querySelector("[data-model-missing]")).not.toBeNull());
+    fireEvent.click(within(panel.querySelector<HTMLElement>("[data-model-missing]")!).getByRole("button", { name: "genModelMissingPickAnother" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^gpt-image-1/ }));
+    await waitFor(() => expect(panel.querySelector("[data-model-missing]")).toBeNull());
+    expect(writes.find((one) => one.method === "PATCH")?.body).toMatchObject({ provider_profile_id: "p1", model: "gpt-image-1" });
+    fireEvent.change(screen.getByRole("textbox", { name: "genPromptLabel" }), { target: { value: "一只猫" } });
+    fireEvent.click(screen.getByRole("button", { name: "generate" }));
+    await waitFor(() => expect(writes.some((one) => one.url.includes("/api/generation/jobs"))).toBe(true));
+    expect(writes.find((one) => one.url.includes("/api/generation/jobs"))!.body).toMatchObject({ model: "gpt-image-1" });
+  });
+});
+
+describe("没选过会话时停在「新的一条」;「+」不建空会话(UC-03、UC-10)", () => {
+  it("有会话也不落进最近那一条:标题是「新生成」、没有那条的记录;第一次提交才建会话、记下用的模型", async () => {
+    localStorage.removeItem("mosael.generation.session.w1.visual");
+    const record = { id: "g1", workspace_id: "w1", session_id: "s1", job_id: null, provider_profile_id: "p1", provider: "openai",
+                     model: "gpt-image-1", kind: "image", request: { prompt: "画板那一次" }, result_asset_id: "a1",
+                     result_asset_ids: ["a1"], error: null, created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z" };
+    const { writes } = renderStudio({ generations: [record] });
+    expect(await screen.findByRole("button", { name: /同事的海报/ })).toBeTruthy();
+    expect(screen.getAllByText("generationNewSession").length).toBeGreaterThan(0);
+    expect(screen.queryByText("画板那一次"), "不是那条会话").toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "genPromptLabel" }), { target: { value: "一只猫" } });
+    fireEvent.click(screen.getByRole("button", { name: "generate" }));
+    await waitFor(() => expect(writes.some((one) => one.url.includes("/api/generation/jobs"))).toBe(true));
+    const created = writes.filter((one) => one.url.endsWith("/api/generation/sessions"));
+    expect(created).toHaveLength(1);
+    expect(created[0].body).toMatchObject({ kind: "image", provider_profile_id: "p1", model: "gpt-image-1" });
+    expect(writes.find((one) => one.url.includes("/api/generation/jobs"))!.body).toMatchObject({ session_id: "s-new" });
+  });
+
+  it("「+」只换成新的一条,不在服务端建会话", async () => {
+    const { writes } = renderStudio();
+    const plus = await screen.findByRole("button", { name: "generationNewSession" });
+    await waitFor(() => expect(screen.getAllByText("同事的海报"), "开着 s1:列表一行、标题一行").toHaveLength(2));
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    expect(writes.filter((one) => one.url.endsWith("/api/generation/sessions"))).toEqual([]);
+    expect(screen.getAllByText("同事的海报"), "标题换成了新的一条").toHaveLength(1);
+  });
+});
+
+describe("生成框:⌘Enter / Ctrl+Enter 生成,回车换行(UC-04)", () => {
+  it("回车不发;⌘Enter、Ctrl+Enter 发;输入框旁边说着快捷键", async () => {
+    localStorage.removeItem("mosael.generation.session.w1.visual");
+    const { writes } = renderStudio();
+    const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
+    fireEvent.change(box, { target: { value: "第一行" } });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+    fireEvent.keyDown(box, { key: "Enter" });
+    await settle();
+    expect(writes, "回车是换行:会话、生成都不建").toEqual([]);
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true, metaKey: true });
+    await settle();
+    expect(writes, "组词时的回车归输入法").toEqual([]);
+    expect(document.querySelector("[data-submit-hint]")?.textContent).toContain("genSubmitHint");
+    fireEvent.keyDown(box, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(writes.filter((one) => one.url.includes("/api/generation/jobs"))).toHaveLength(1));
   });
 });

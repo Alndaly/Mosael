@@ -63,6 +63,7 @@ function contextOf(
     generationVendors: generationVendors(models ?? []),
     generationModelsLoaded: !needs.generation || models !== undefined,
     generationPromptMode: (config) => promptMode(generationModelOf(models ?? [], config)),
+    generationModelFound: (config) => generationModelOf(models ?? [], config) !== null,
   };
 }
 

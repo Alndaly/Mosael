@@ -85,6 +85,23 @@ export function generationPickerEntry(option: NamedOption, formed: ReadonlySet<s
   };
 }
 
+/** 一个用不了的记着的模型(见 lib/generationOptions 的 useMissingModel):和生成选项同几格名字,外加修法是不是升级。 */
+type MissingNamed = NamedOption & { upgrade?: boolean };
+
+/**
+ * 一个用不了的记着的模型的两层名字(ADR 0045 修订之一):和生成选项一样摆 —— 主名「krea2-text-2-image 的表单」,副名「来自
+ * krea2-text-2-image · 连接名」。还没问到时写「之前选的模型」:**不露 `plugin:…`、`#app` 这种编号**。
+ */
+export function missingModelNames(missing: MissingNamed | null, t: Translate): TwoLayerName {
+  if (!missing) return { primary: t("genModelMissingName"), secondary: "" };
+  return generationOptionNames(missing, new Set(), t);
+}
+
+/** 只有一行的地方(模型下拉的触发器、输入框底下那枚按钮):主名后面接「· 需要升级」/「· 用不了」。 */
+export function missingModelLabel(missing: MissingNamed | null, t: Translate): string {
+  return `${missingModelNames(missing, t).primary} · ${t(missing?.upgrade ? "genModelNeedsUpgrade" : "genModelUnusable")}`;
+}
+
 /** 只有一行、又放不下第二行说明的地方(原生 `title`、一句话的悬停):两层连成一句,中间用破折号隔开。 */
 export function twoLayerTitle(name: TwoLayerName): string {
   return name.secondary ? `${name.primary} — ${name.secondary}` : name.primary;

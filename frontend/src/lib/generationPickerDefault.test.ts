@@ -5,7 +5,7 @@
  * 于是默认挑中了 147ai 上的 `claude-opus-4-6`,而用户在设置里设过的默认生图模型被晾在一边 ——
  * 后端「没点名模型就用他的默认」那条路也从来轮不到,因为前端总是点了名。
  *
- * 规则只有一处:`pickGenerationOption`(默认由后端标在选项上,`is_default`)。这里扫所有读生成选项的
+ * 规则只有一处:`chooseGenerationOption` / `pickGenerationOption`(默认由后端标在选项上,`is_default`)。这里扫所有读生成选项的
  * 源文件,不许再出现 `?? options[0]` / `|| models[0]` 这种兜底;要兜底就调那个函数。
  */
 
@@ -17,7 +17,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { GenerationOption } from "@/api/client";
-import { pickGenerationOption } from "@/lib/generationCapabilities";
+import { chooseGenerationOption, pickGenerationOption } from "@/lib/generationCapabilities";
 
 const SRC = path.resolve(__dirname, "..");
 
@@ -62,19 +62,23 @@ describe("生成模型选择器的默认", () => {
     expect(offenders, "改用 pickGenerationOption:存着的 → 默认 → 不选").toEqual([]);
   });
 
-  it("pickGenerationOption:存着的 → 默认 → 没有", () => {
+  it("chooseGenerationOption:记着的 → (没记着时)默认 → 没有;记着的不在清单里不拿别的顶上", () => {
     const option = (model: string, kind: string, isDefault = false) =>
       ({ id: model, provider_profile_id: "p", profile_name: "P", provider: "x", kind, model,
          adapter_available: true, capabilities_known: true, is_default: isDefault }) as GenerationOption;
     const first = option("aaa", "image");
     const chosen = option("flux", "image", true);
     const video = option("veo", "video", true);
+    const saved = (model: string) => ({ provider_profile_id: "p", model, kind: "image" });
 
     expect(pickGenerationOption([first])).toBeNull();
     expect(pickGenerationOption([first, chosen])).toBe(chosen);
-    expect(pickGenerationOption([first, chosen], { saved: (one) => one.model === "aaa" })).toBe(first);
-    // 存着的已经不在清单里:落到默认
-    expect(pickGenerationOption([first, chosen], { saved: (one) => one.model === "gone" })).toBe(chosen);
+    expect(chooseGenerationOption([first, chosen], saved("aaa"))).toEqual({ option: first, missing: null });
+    expect(chooseGenerationOption([first, chosen], null)).toEqual({ option: chosen, missing: null });
+    // 记着的已经不在清单里:是它不在了,不是默认 —— 默认那个是按次付费的别家模型也说不定
+    expect(chooseGenerationOption([first, chosen], saved("gone"))).toEqual({ option: null, missing: saved("gone") });
+    // 清单还没到:不说「不在了」
+    expect(chooseGenerationOption([], saved("gone"), { loaded: false })).toEqual({ option: null, missing: null });
     // 只认这种生成的默认
     expect(pickGenerationOption([first, video], { kind: "image" })).toBeNull();
     expect(pickGenerationOption([first, video], { kind: "video" })).toBe(video);

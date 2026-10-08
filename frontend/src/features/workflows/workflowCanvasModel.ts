@@ -58,7 +58,8 @@ export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): str
  * 卡片标题下那一行,按两层名字说(ADR 0045:表单是工作流的入口)。
  *
  * - 选了生成模型的节点(`ai_generate` 的连接 + 模型;资产、说话这类按生成选项 id 选的):写那个模型的**主名**,现查生成选项
- *   —— 此前写的是原始模型 id,表单入口就是 `krea2-text-2-image.json#app` 这种字直接露在画布上。查不到(模型不在了)才写 id;
+ *   —— 此前写的是原始模型 id,表单入口就是 `krea2-text-2-image.json#app` 这种字直接露在画布上。查不到(模型现在用不了)写
+ *   「之前选的模型 · 用不了」(为什么在检查器里),也不写 id;清单还没到(`loaded` 为假)先不写;
  * - 插件节点:写它是哪张工作流的哪个入口(「来自 krea2-text-2-image」/「完整工作流」),节点按插件聚合、不分连接,不写连接名;
  * - 别的照旧按配置挑一格(workflowConfigSummary)。
  */
@@ -67,13 +68,15 @@ export function workflowNodeSubtitle(
   registry: NodeRegistry,
   options: readonly GenerationOption[],
   t: (key: MessageKey) => string,
+  loaded = true,
 ): string {
   const config = node.config ?? {};
   const model = String(config.model ?? "").trim();
+  const profile = String(config.provider_profile_id ?? "");
   if (model && !model.includes("{{")) {
-    const profile = String(config.provider_profile_id ?? "");
     const chosen = options.find((one) => (profile ? one.provider_profile_id === profile && one.model === model : one.id === model));
     if (chosen) return generationOptionNames(chosen, formedGroups(options), t).primary;
+    if (node.type === "ai_generate" && profile) return loaded ? `${t("genModelMissingName")} · ${t("genModelUnusable")}` : "";
   }
   const origin = entryOrigin(registry.get(node.type)?.group, formedGroups(registry.values()), t);
   return origin || workflowConfigSummary(node);
@@ -257,6 +260,8 @@ export function workflowIssueText(
       return t("wfIssueProviderMissing");
     case "gen-provider-unconfigured":
       return t("wfIssueGenUnconfigured");
+    case "gen-model-missing":
+      return t("wfIssueGenModelMissing");
     case "type-mismatch":
       return t("wfIssueTypeMismatch")
         .replace("{expected}", workflowDataTypeName(t, issue.expected))

@@ -423,6 +423,24 @@ describe("analyzeWorkflow", () => {
     expect(issuesAtLayer(a.issues, []).get("gen")?.some((i) => i.code === "gen-provider-unconfigured")).toBe(true);
   });
 
+  it("ai_generate 选的那个模型现在不在生成选项里:报错挡住运行(ADR 0045 修订之一);清单没到、写成引用的不判", () => {
+    const g = (model: string) => graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "alibaba", provider_profile_id: "p9", model, prompt: "cat" } },
+      ],
+      [{ id: "e1", source: "start", target: "gen" }],
+    );
+    const found = (config: Record<string, unknown>) => config.model === "wan-2.5";
+    const codes = (model: string, ctx = {}) =>
+      (issuesAtLayer(analyzeWorkflow(g(model), registry, { ...fullCtx, generationModelFound: found, ...ctx }).issues, []).get("gen") ?? [])
+        .map((one) => `${one.severity}:${one.code}`);
+    expect(codes("krea2-text-2-image.json#app")).toContain("error:gen-model-missing");
+    expect(codes("wan-2.5")).not.toContain("error:gen-model-missing");
+    expect(codes("krea2-text-2-image.json#app", { generationModelsLoaded: false }), "清单还没到").not.toContain("error:gen-model-missing");
+    expect(codes("{{start.model}}"), "写成引用的由运行时定").not.toContain("error:gen-model-missing");
+  });
+
   it("ai_generate 的提示词要不要写由选中的模型说:不收的、可以不写的空着不报,要写的空着报", () => {
     const g = graph(
       [

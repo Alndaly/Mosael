@@ -2,8 +2,9 @@ import { useQueries, type QueryClient } from "@tanstack/react-query";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { listGenerationOptions, listUnavailableModels, type GenerationOption } from "@/api/domains/generation";
+import { getMissingModel, listGenerationOptions, type GenerationOption, type MissingGenerationModel } from "@/api/domains/generation";
 import { generationKeys } from "@/api/queryKeys";
+import type { SavedGenerationModel } from "@/lib/generationCapabilities";
 
 /**
  * 生成选项按种类各取一份、合成一张清单。AI 工作台、画板的提示词面板、工作流的检查器和就绪判断用的都是这里,
@@ -39,18 +40,17 @@ export function useGenerationOptions(kinds: readonly string[], { enabled = true 
 }
 
 /**
- * 选着的 (连接, 模型) 不在生成选项里时,插件说过的「现在用不了、为什么」(ComfyUI:那张工作流的表单还是旧格式,到工作流库里升级,
- * ADR 0045 §7);没说过、或者就在选项里,是 null。界面据此在「选择模型」旁边说清楚,不让人以为选择丢了。
+ * 记着的模型不在生成选项里时,它叫什么、为什么、怎么修(ADR 0045 修订之一)。`saved` 给 null(没记着、或者就在选项里)就不问。
+ * 界面据此照常显示**记着的那个**(人话的名字)、说原因、不让跑 —— 不拿默认模型顶上。
  */
-export function useUnavailableReason(profileId: string | null | undefined, model: string | null | undefined): string | null {
-  const unavailable = useQuery({
-    queryKey: generationKeys.unavailable(),
-    queryFn: listUnavailableModels,
-    enabled: Boolean(profileId && model),
+export function useMissingModel(saved: SavedGenerationModel | null): { missing: MissingGenerationModel | null; pending: boolean } {
+  const query = useQuery({
+    queryKey: generationKeys.missing(saved?.provider_profile_id ?? "", saved?.model ?? "", saved?.kind ?? ""),
+    queryFn: () => getMissingModel(saved!.provider_profile_id, saved!.model, saved!.kind),
+    enabled: Boolean(saved),
     staleTime: 30_000,
   });
-  if (!profileId || !model) return null;
-  return unavailable.data?.find((one) => one.provider_profile_id === profileId && one.model === model)?.reason ?? null;
+  return { missing: saved ? query.data ?? null : null, pending: Boolean(saved) && query.isPending };
 }
 
 /** 命令式的那一份(点「运行」的那一刻把清单取齐):同样的键,有缓存就用缓存。 */

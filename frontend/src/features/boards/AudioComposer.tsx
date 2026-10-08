@@ -10,7 +10,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
-import { isImeKeystroke } from "@/lib/shortcuts";
+import { isSubmitChord } from "@/lib/shortcuts";
 import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /**
@@ -213,8 +213,7 @@ export function AudioComposer({
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
-          if (isImeKeystroke(event)) return;
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          if (isSubmitChord(event)) {
             event.preventDefault();
             send();
           }

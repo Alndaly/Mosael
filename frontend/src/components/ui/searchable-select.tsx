@@ -148,6 +148,7 @@ export function SearchableSelect({
   trigger,
   hint,
   shortcut,
+  missingLabel,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -167,6 +168,11 @@ export function SearchableSelect({
   hint?: string | null;
   /** 打开它的快捷键(画板「添加」的 ⌘N),画在悬停说明的名字那一行。 */
   shortcut?: HintShortcut | null;
+  /**
+   * 记着的那一项现在不在清单里(用不了,见 lib/generationCapabilities 的 chooseGenerationOption):触发器上写它(人话的名字 +
+   * 「需要升级」/「用不了」,警示色),不写占位的「选择模型」—— 显示的就是记着的那个,不是空着、也不是别的。
+   */
+  missingLabel?: string | null;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -182,6 +188,7 @@ export function SearchableSelect({
   );
   const selected = items.find((item) => item.value === value);
   const selectedText = selected?.selectedLabel ?? selected?.label;
+  const missing = !selected && Boolean(missingLabel);
   const hasDescriptions = items.some((item) => item.description);
   // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
   // 分组顺序来自后端的 NODE_CATEGORIES),这里再排一次就成了第二份要维护的顺序。
@@ -221,12 +228,13 @@ export function SearchableSelect({
                  表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
                  留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
               className={cn(fieldTriggerClass(size), "text-foreground", className)}
+              data-missing={missing ? "" : undefined}
             >
               {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
                   未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
                   写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
-              <Truncate className={cn(!selected && "text-muted-foreground")}>
-                {selectedText ?? placeholder ?? ""}
+              <Truncate className={cn(!selected && (missing ? "text-warning" : "text-muted-foreground"))}>
+                {selectedText ?? (missing ? missingLabel : null) ?? placeholder ?? ""}
               </Truncate>
               <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
             </button>

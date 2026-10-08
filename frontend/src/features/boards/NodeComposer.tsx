@@ -4,7 +4,8 @@ import React from "react";
 
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { ArrowLeftRight, Plus, Sparkles, TriangleAlert } from "lucide-react";
-import { useUnavailableReason } from "@/lib/generationOptions";
+import { useGenerationOptions, useMissingModel } from "@/lib/generationOptions";
+import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
 
 
 import { type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
@@ -49,7 +50,7 @@ import {
   outputsPerRun,
   runsHint,
   parameterChoiceEntries,
-  pickGenerationOption,
+  chooseGenerationOption,
   promptMode,
   sizeOptions,
   customSizeRule,
@@ -60,7 +61,7 @@ import {
   withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
-import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
+import { formedGroups, generationPickerEntry, missingModelLabel } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -99,6 +100,7 @@ function Pick({
   placeholder,
   hint,
   ariaLabel,
+  missingLabel,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -124,6 +126,8 @@ function Pick({
   placeholder?: string;
   /** 悬停在标签上看到的全文(原始的「节点 · 输入名」这类)。 */
   hint?: string;
+  /** 存着的那一项现在不在清单里(见 OptionPicker 的同名参数) */
+  missingLabel?: string | null;
 }) {
   if (options.length === 0 && !allowFreeValue) return null;
   const control = options.length === 0 ? (
@@ -145,6 +149,7 @@ function Pick({
       ariaLabel={label ?? ariaLabel}
       icon={icon}
       placeholder={placeholder}
+      missingLabel={missingLabel}
       size="sm"
       /* 带标签的排在设置弹层里,要撑满自己那一格,**和旁边的输入框同一个样子**(有边框的字段,
          和全应用的表单一家):此前下拉是无边框的深色填充、输入框是描边的浅底,并排时像两种控件。
@@ -520,20 +525,24 @@ export function NodeComposer({
     () => models.filter((model) => model.kind === item.kind),
     [models, item.kind],
   );
-  //: 存着的那个 → 用户设的默认 → 没有(显示「选择模型」,发不出去)。**不拿第一项顶上**:清单按连接名
-  //: 排序,第一项不是谁的选择(见 pickGenerationOption)。
-  const current = pickGenerationOption(options, {
-    saved: picked ? (model) => `${model.provider_profile_id}:${model.model}` === picked : null,
-  });
-  //: 显示的就是**实际要用的**那一个。存着的模型不在清单里(被删了、那条通道停了、不再被认成这种生成)
-  //: 时 current 已经落到默认或空,选择器不能还挂着那个不存在的值 —— 显示的和发出去的不是同一个模型。
+  //: 存着的(挑过的)那个 → (什么都没存时)用户设的默认 → 没有(显示「选择模型」,发不出去)。**不拿第一项顶上**:清单按连接名
+  //: 排序,第一项不是谁的选择(见 pickGenerationOption)。**存着的不在清单里也不拿默认顶上**(被删了、那条通道停了,ComfyUI
+  //: 上那张工作流改了名、删了表单、表单还是旧格式……,见 chooseGenerationOption):此前落到默认,格子上挂着用户的工作流,
+  //: 点「生成」跑的却是默认那个,表单还被改写成了它。现在选择器写存着的那个(标着用不了)、下面说原因和出路、发不出去。
+  const pickedEngine = React.useMemo(() => {
+    const at = picked.indexOf(":");
+    return at > 0 ? { provider_profile_id: picked.slice(0, at), model: picked.slice(at + 1), kind: item.kind } : null;
+  }, [picked, item.kind]);
+  const optionsLoaded = useGenerationOptions([item.kind]).loaded;
+  const choice = chooseGenerationOption(options, pickedEngine, { loaded: optionsLoaded });
+  const current = choice.option;
+  const missingEngine = choice.missing;
+  const missingModel = useMissingModel(missingEngine);
   //: 有表单的那几张工作流:完整工作流的副名写「完整工作流」(ADR 0045)
   const formed = React.useMemo(() => formedGroups(options), [options]);
   const modelValue = current ? `${current.provider_profile_id}:${current.model}` : "";
-  //: 存着的模型不在清单里、插件说过为什么(ComfyUI:表单还是旧格式,到工作流库里升级):挨着「选择模型」说一句,悬停看全句
-  const savedKey = saved.provider_profile_id && saved.model ? `${saved.provider_profile_id}:${saved.model}` : "";
-  const unavailableReason = useUnavailableReason(savedKey && picked === savedKey && modelValue !== savedKey ? saved.provider_profile_id : null,
-                                                 saved.model);
+  //: 「换一个模型」:打开模型下拉
+  const modelPicker = React.useRef<HTMLSpanElement>(null);
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
@@ -793,14 +802,15 @@ export function NodeComposer({
       provider: current?.provider ?? saved.provider,
       provider_profile_id: current?.provider_profile_id ?? saved.provider_profile_id,
       model: current?.model ?? saved.model,
-      mode: activeMode?.key ?? mode,
-      parameters: formParameters,
+      //: 存着的模型用不了时,它的参数和生成方式原样留着(参数是照那个模型的描述符记的,别拿空的覆盖掉)
+      mode: missingEngine ? saved.mode : activeMode?.key ?? mode,
+      parameters: missingEngine ? savedParameters : formParameters,
       source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role, ...(one.from ? { from: one.from } : {}) })),
       mentioned_asset_ids: mentioned,
       ...(mentionedEntities.length > 0 || saved.mentioned_entity_ids ? { mentioned_entity_ids: mentionedEntities } : {}),
       ...(upstreamScene || saved.scene_reference ? { scene_reference: sceneReference } : {}),
     }),
-    [prompt, promptDocument, prefilled, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
+    [prompt, promptDocument, prefilled, current, saved.provider, saved.provider_profile_id, saved.model, saved.mode, savedParameters, missingEngine, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -1101,24 +1111,20 @@ export function NodeComposer({
             )}
             {/* 上限而不是 flex-1:模型名短的时候这一格就该短。名字长了在上限处截断,
                 而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。 */}
-            <Pick
-              className="max-w-[min(15rem,45%)]"
-              icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
-              value={modelValue}
-              placeholder={t("genPickModel")}
-              onChange={pickModel}
-              //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪台服务器;有表单的工作流是一小组
-              //: (小标题工作流名 + 连接名,下面「完整工作流」和每张表单)。按主名、工作流名、文件名、连接名都搜得到。
-              options={options.map((one) => ({ value: `${one.provider_profile_id}:${one.model}`, ...generationPickerEntry(one, formed, t) }))}
-            />
-            {unavailableReason && (
-              <Hint label={t("genModelUnavailable").replace("{model}", saved.model ?? "").replace("{reason}", unavailableReason)}>
-                <span role="alert" data-model-unavailable="" className="inline-flex min-w-0 items-center gap-1 px-1 text-ui-2xs text-warning">
-                  <TriangleAlert size={12} aria-hidden className="shrink-0" />
-                  <Truncate>{t("genModelUnavailableShort")}</Truncate>
-                </span>
-              </Hint>
-            )}
+            <span ref={modelPicker} className="contents" data-board-model-picker="">
+              <Pick
+                className="max-w-[min(15rem,45%)]"
+                icon={missingEngine ? <TriangleAlert size={12} className="shrink-0 text-warning" aria-hidden />
+                                    : <Sparkles size={12} className="shrink-0 text-muted-foreground" />}
+                value={modelValue}
+                placeholder={t("genPickModel")}
+                missingLabel={missingEngine ? missingModelLabel(missingModel.missing, t) : null}
+                onChange={pickModel}
+                //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪台服务器;有表单的工作流是一小组
+                //: (小标题工作流名 + 连接名,下面「完整工作流」和每张表单)。按主名、工作流名、文件名、连接名都搜得到。
+                options={options.map((one) => ({ value: `${one.provider_profile_id}:${one.model}`, ...generationPickerEntry(one, formed, t) }))}
+              />
+            </span>
             {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」
                 (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,
                 用户会以为这个模型就是没参数。显隐和弹层内容共用 settingBlocks。 */}
@@ -1330,10 +1336,17 @@ export function NodeComposer({
       }
       send={
         options.length > 0
-          ? { label: t("boardGenerate"), onSend: send, disabled: !canSend || busy, working, shortcut: true }
+          ? { label: t("boardGenerate"), onSend: send, disabled: !canSend || busy, working, shortcut: true,
+              disabledReason: missingEngine ? t("genModelMissingCannotSend") : undefined }
           : null
       }
     >
+      {/* 存着的模型用不了:说它叫什么、为什么,出路是修好它(ComfyUI:去工作流库升级)或者换一个 */}
+      {missingEngine && (
+        <MissingModelNotice missing={missingModel.missing} pending={missingModel.pending} workspaceId={workspaceId}
+                            onPickAnother={() => modelPicker.current?.querySelector<HTMLElement>("button")?.click()}
+                            className="mb-1.5" />
+      )}
       {currentPromptMode === "none" ? (
         // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的编辑器。
         <p className="m-0 px-1 py-2 text-ui-sm text-muted-foreground">{t("genPromptNotUsed")}</p>

@@ -58,6 +58,8 @@ beforeEach(() => {
   // 直接落在「音频」页的「音乐与音效」。
   localStorage.setItem("mosael:tab:ai-studio", "audio");
   localStorage.setItem("mosael:tab:ai-studio-audio", "music");
+  //: 上次开着的是 s1(没选过会话时停在「新的一条」,见 UC-03)
+  localStorage.setItem("mosael.generation.session.w1.audio", "s1");
 });
 
 function audioOption(capabilities: Record<string, unknown>) {
@@ -212,9 +214,14 @@ describe("音乐与音效在「音频」页", () => {
     expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=audio"))).toBe(true);
     expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("kind=image"))).toBe(false);
 
+    //: 「+」换成新的一条,不在服务端建空会话;第一次提交才建,记成音频、记下用的模型(UC-10)
     await user.click(screen.getByRole("button", { name: "generationNewSession" }));
+    expect(posts.some((one) => one.url.endsWith("/api/generation/sessions")), "点「+」不建").toBe(false);
+    await user.type(screen.getByRole("textbox", { name: "genPromptLabel" }), "city pop");
+    await user.click(screen.getByRole("button", { name: "generate" }));
     await waitFor(() => expect(posts.some((one) => one.url.endsWith("/api/generation/sessions"))).toBe(true));
-    expect(posts.find((one) => one.url.endsWith("/api/generation/sessions"))!.body).toMatchObject({ kind: "audio" });
+    expect(posts.find((one) => one.url.endsWith("/api/generation/sessions"))!.body).toMatchObject({
+      kind: "audio", provider_profile_id: "p1", model: "suno-v5-beta" });
   });
 
   it("「生成」页不再列音频模型:只拉图像和视频", async () => {

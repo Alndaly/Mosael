@@ -50,9 +50,13 @@ export function listGenerationOptions(kind: string): Promise<GenerationOption[]>
   return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);
 }
 
-export type UnavailableModel = components["schemas"]["GenerationUnavailableOut"];
+export type MissingGenerationModel = components["schemas"]["GenerationMissingOut"];
 
-/** 插件连接上「认得、现在用不了」的模型和为什么(ComfyUI:表单还是旧格式,到工作流库里升级)。 */
-export function listUnavailableModels(): Promise<UnavailableModel[]> {
-  return api<UnavailableModel[]>("/api/generation/unavailable");
+/**
+ * 记着的 (连接, 模型) 不在生成选项里时:它叫什么、为什么不在、怎么修(连接删了停了、模型停了;ComfyUI:表单删了、工作流改名
+ * 挪走删了、表单是旧格式要升级)。插件连接会去问插件。
+ */
+export function getMissingModel(providerProfileId: string, model: string, kind: string): Promise<MissingGenerationModel> {
+  const query = new URLSearchParams({ provider_profile_id: providerProfileId, model, kind });
+  return api<MissingGenerationModel>(`/api/generation/missing?${query.toString()}`);
 }

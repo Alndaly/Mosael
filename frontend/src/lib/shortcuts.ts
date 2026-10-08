@@ -112,6 +112,21 @@ export function isImeKeystroke(
   return native.isComposing || native.keyCode === 229;
 }
 
+/** 「写生成提示词」那几处的提交键(给人看的样子见 `formatCombo(SUBMIT_COMBO)`)。 */
+export const SUBMIT_COMBO: Combo = "Mod+Enter";
+
+/**
+ * 「写生成提示词」那几处按的是不是提交键:⌘Enter / Ctrl+Enter。光按 Enter 是换行 —— 提示词常要分行写,而一下回车就花
+ * 一次钱的生成不该这么容易按出来。AI Studio 的生成框、画板的提示词格子和音频格子同一个判据;对话页的输入框(Enter 发送)
+ * 是另一种东西,不走这里。组词期间的回车归输入法(见 isImeKeystroke)。
+ */
+export function isSubmitChord(
+  event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey"> &
+    (Pick<KeyboardEvent, "isComposing" | "keyCode"> | { nativeEvent: Pick<KeyboardEvent, "isComposing" | "keyCode"> }),
+): boolean {
+  return event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isImeKeystroke(event);
+}
+
 /**
  * 弹窗 / 浮层的 `onEscapeKeyDown`:组词期间的 Esc 是「放弃这次组词」,不是「关掉弹窗」。
  * Radix 的 DismissableLayer 在捕获阶段听 Esc、不看组词 —— 不拦的话,在弹窗里打中文按一下 Esc,

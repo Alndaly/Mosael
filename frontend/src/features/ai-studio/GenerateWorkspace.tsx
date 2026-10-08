@@ -23,6 +23,7 @@ import {
   Send,
   Sparkles,
   Square,
+  TriangleAlert,
   Wand2,
   X,
 } from "lucide-react";
@@ -46,6 +47,7 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
+import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { IconButton } from "@/components/ui/icon-button";
@@ -75,8 +77,17 @@ import {
   ParameterSection,
 } from "@/components/generation/parameterPanel";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
-import { formedGroups, generationOptionNames, generationPickerEntry, twoLayerTitle, type TwoLayerName } from "@/lib/entryNames";
-import { useGenerationOptions, useUnavailableReason } from "@/lib/generationOptions";
+import {
+  formedGroups,
+  generationOptionNames,
+  generationPickerEntry,
+  missingModelLabel,
+  missingModelNames,
+  twoLayerTitle,
+  type TwoLayerName,
+} from "@/lib/entryNames";
+import { useGenerationOptions, useMissingModel } from "@/lib/generationOptions";
+import { formatCombo, isSubmitChord, SUBMIT_COMBO } from "@/lib/shortcuts";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
@@ -86,6 +97,7 @@ import {
   booleanParameterKeys,
   capabilityBoolean,
   capabilityString,
+  chooseGenerationOption,
   declaredParameters,
   declaredParameterValue,
   defaultDuration,
@@ -374,8 +386,9 @@ export function GenerateWorkspace({
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
     refetchOnWindowFocus: true,
   });
-  const activeSession =
-    (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
+  //: 开着的那条:**选过的那条,没选过就是「新的一条」** —— 不落进列表里最近的那条。画板、工作流、智能体、定时任务每跑一次
+  //: 生成都会新开一条会话,落进「最近一条」的话,用户在这里写的提示词就续进了画板那条线程(UC-03)。新的一条第一次提交时才建。
+  const activeSession = (sessions.data ?? []).find((session) => session.id === sessionId) ?? null;
   //: 同事共享来的:只能看。只认后端明说「不是你的」—— 没说的(刚建、还没回来)当作自己的。
   const readOnly = activeSession?.is_mine === false;
   //: 模型与参数栏是「写」的一部分:只读的会话不开它(开着的话,在这里换模型会写进别人的会话)。
@@ -424,19 +437,20 @@ export function GenerateWorkspace({
   //: 「完整工作流」,和它的表单分得开。
   const formed = React.useMemo(() => formedGroups(modelOptions), [modelOptions]);
   const namesOf = (option: GenerationOption) => generationOptionNames(option, formed, t);
-  const sessionOption =
+  const sessionEngine =
     activeSession?.provider_profile_id && activeSession.model && activeSession.kind
-      ? findGenerationOption(modelOptions, activeSession.provider_profile_id, activeSession.kind, activeSession.model)
+      ? { provider_profile_id: activeSession.provider_profile_id, model: activeSession.model, kind: activeSession.kind }
       : null;
-  //: 会话记着的模型不在选项里、插件说过为什么(ComfyUI:表单还是旧格式,到工作流库里升级):在「选择模型」下面说清楚
-  const unavailableReason = useUnavailableReason(sessionOption ? null : activeSession?.provider_profile_id, activeSession?.model);
-  //: 这次挑的 → 会话记着的 → 用户设的默认(先这一页的第一种,没有就这一页随便哪一种的默认)→ 没有。
-  //: **不拿第一项顶上**:没设默认时选择器显示「选择模型」,等人选(见 pickGenerationOption)。
-  const selectedModel =
-    (modelId ? optionByValue.get(modelId) : null) ??
-    sessionOption ??
-    pickGenerationOption(modelOptions, { kind: kinds[0] }) ??
-    pickGenerationOption(modelOptions);
+  //: 这次挑的 → 会话记着的 → (会话什么都没记着时)用户设的默认(先这一页的第一种,没有就这一页随便哪一种的默认)→ 没有。
+  //: **不拿第一项顶上**:没设默认时选择器显示「选择模型」,等人选(见 pickGenerationOption)。**会话记着的不在选项里,也不拿
+  //: 默认顶上**(见 chooseGenerationOption):此前顶上的是默认的按次付费模型,下拉、右栏、底下那枚按钮全是它,点发送就拿它去
+  //: 生成了,而用户以为在用他的 ComfyUI 工作流。现在显示的是记着的那个、标着用不了、说原因,发送键灰着;自己挑了别的才换。
+  const sessionChoice = chooseGenerationOption(modelOptions, sessionEngine, { kind: kinds[0], loaded: generationOptions.loaded });
+  const pickedOption = modelId ? optionByValue.get(modelId) ?? null : null;
+  const selectedModel = pickedOption ?? sessionChoice.option ?? (sessionEngine ? null : pickGenerationOption(modelOptions));
+  //: 会话记着的那个现在用不了(这次也没挑别的):它叫什么、为什么、怎么修
+  const missingEngine = pickedOption ? null : sessionChoice.missing;
+  const missingModel = useMissingModel(missingEngine);
   const generationModelsLoading = generationOptions.pending;
   //: 这一页的几种生成一个模型都没有。选项在后端就只列启用连接下启用的模型(provider_models.models_for_capability),
   //: 所以「没配置」只有这一种样子 —— 不再拿设置页的连接列表另判一遍「选中的这个配没配」:
@@ -594,18 +608,12 @@ export function GenerateWorkspace({
 
   //: 新会话记着种类:它决定会话在哪一页(见 GENERATION_MEDIA)。
   const newSessionKind = selectedModel?.kind ?? kinds[0];
-  const createSession = useMutation({
-    mutationFn: () =>
-      api<GenerationSession>("/api/generation/sessions", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id, kind: newSessionKind }),
-      }),
-    onSuccess: (created) => {
-      setSessionId(created.id);
-      window.localStorage.setItem(sessionKey, created.id);
-      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-    },
-  });
+  //: 「+」:换成新的一条(草稿先行,和对话那边一样,ADR 0044)—— 不在服务端建一条空会话,第一次提交时才建(createGeneration)。
+  //: 此前每点一次就建一条,当「清空输入、换个思路」用的人列表里积满空的「新生成」(UC-10)。
+  const startNewSession = () => {
+    setSessionId(null);
+    window.localStorage.removeItem(sessionKey);
+  };
   const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
   // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
   //: **每条生成摊平成它的全部产出** —— 一次出四张时,画廊里就该有四张;只收封面的话,
@@ -653,7 +661,8 @@ export function GenerateWorkspace({
             generationConfig.lyrics.trim().split("\n")[0]?.slice(0, 40) ||
             t("generationNewSession"),
         };
-        if (modelId && selectedModel) {
+        //: 记下这一条用的模型:下次打开这条会话,选择器停在它上面(它后来用不了了,就照实说,不拿别的顶上)
+        if (selectedModel) {
           payload.provider_profile_id = selectedModel.provider_profile_id;
           payload.model = selectedModel.model;
         }
@@ -794,6 +803,11 @@ export function GenerateWorkspace({
   const showEngineSettings = () => {
     setParametersOpen(true);
     setEngineFlash(Date.now());
+  };
+  //: 记着的模型用不了时的「换一个模型」:打开右栏、直接打开模型下拉
+  const pickAnotherModel = () => {
+    setParametersOpen(true);
+    window.requestAnimationFrame(() => enginePanel.current?.querySelector<HTMLElement>("[data-engine-picker] button")?.click());
   };
   React.useEffect(() => {
     if (!engineFlash) return;
@@ -1132,8 +1146,8 @@ export function GenerateWorkspace({
             setSessionId(id);
             window.localStorage.setItem(sessionKey, id);
           }}
-          onCreate={() => createSession.mutate()}
-          creating={createSession.isPending}
+          onCreate={startNewSession}
+          creating={false}
           onDeleted={(ids) => {
             // 删掉的里面有正开着的那个,就把视图放下 —— 否则右边还停在一个已经不存在的会话上。
             if (sessionId && ids.includes(sessionId)) {
@@ -1151,7 +1165,7 @@ export function GenerateWorkspace({
       <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
-          <Truncate className="flex-1 text-ui-sm font-medium">{activeSession?.title}</Truncate>
+          <Truncate className="flex-1 text-ui-sm font-medium">{activeSession?.title ?? t("generationNewSession")}</Truncate>
           {!readOnly && (
             <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
           )}
@@ -1180,7 +1194,7 @@ export function GenerateWorkspace({
             <GenerationTurn
               key={generation.id}
               generation={generation}
-              engineName={used ? namesOf(used) : { primary: `${generation.provider} · ${generation.model}`, secondary: "" }}
+              engineName={used ? namesOf(used) : null}
               option={used}
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
               gallery={sessionGallery}
@@ -1231,7 +1245,8 @@ export function GenerateWorkspace({
                   event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  //: ⌘Enter / Ctrl+Enter 生成,回车换行 —— 和画板、音频格子同一个键(UC-04:一下回车就花一次钱太容易按出来)
+                  if (isSubmitChord(event)) {
                     event.preventDefault();
                     submit(event);
                   }
@@ -1281,21 +1296,46 @@ export function GenerateWorkspace({
                     </button>
                   </Hint>
                 )}
+                {/* 会话记着的模型用不了:按钮上照样写它(标着需要升级 / 用不了),点开右栏看原因和出路 */}
+                {!selectedModel && missingEngine && (
+                  <Hint label={twoLayerTitle(missingModelNames(missingModel.missing, t))} hint={missingModel.missing?.reason ?? null}>
+                    <button
+                      type="button"
+                      onClick={showEngineSettings}
+                      aria-label={t("generationEngineSettings")}
+                      aria-controls={enginePanelId}
+                      data-engine-chip=""
+                      data-missing=""
+                      className="inline-flex h-7 min-w-0 max-w-[260px] cursor-pointer items-center gap-1 rounded-md border border-warning/40 bg-field px-2 text-xs text-warning transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+                    >
+                      <TriangleAlert size={12} className="shrink-0" aria-hidden />
+                      <Truncate>{missingModelLabel(missingModel.missing, t)}</Truncate>
+                    </button>
+                  </Hint>
+                )}
                 {/* 参数栏开着时,「一个模型都没有」由那边的提示条说,这里不再摆第二个入口。 */}
-                {!(noGenerationModels && parametersOpen) && (
+                {!(noGenerationModels && parametersOpen) && !missingEngine && (
                   <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} section={settingsSection} />
                 )}
               </div>
-              <IconButton
-                type="submit"
-                variant="default"
-                size="icon"
-                className="shrink-0 rounded-full"
-                label={t("generate")}
-                disabled={!canSubmitText || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
-              >
-                <Send size={15} />
-              </IconButton>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* 提交键说在输入框旁边:回车只是换行 */}
+                <span className="text-ui-2xs text-muted-foreground max-[640px]:hidden" data-submit-hint="">
+                  {t("genSubmitHint").replace("{keys}", formatCombo(SUBMIT_COMBO))}
+                </span>
+                <IconButton
+                  type="submit"
+                  variant="default"
+                  size="icon"
+                  className="shrink-0 rounded-full"
+                  label={t("generate")}
+                  shortcut={formatCombo(SUBMIT_COMBO)}
+                  disabled={!canSubmitText || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
+                  disabledReason={missingEngine && !selectedModel ? t("genModelMissingCannotSend") : undefined}
+                >
+                  <Send size={15} />
+                </IconButton>
+              </div>
             </div>
           </form>
         )}
@@ -1356,6 +1396,7 @@ export function GenerateWorkspace({
                     搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
                 <SearchableSelect
                   value={selectedModel?.value ?? ""}
+                  missingLabel={missingEngine ? missingModelLabel(missingModel.missing, t) : null}
                   onValueChange={selectEngine}
                   options={modelGroups.flatMap((group) =>
                     group.models.map((model) => ({
@@ -1370,10 +1411,9 @@ export function GenerateWorkspace({
                   className={PARAMETER_CONTROL_CLASS}
                 />
                 </div>
-                {unavailableReason && !modelId && (
-                  <p role="alert" data-engine-unavailable="" className="m-0 text-ui-xs leading-relaxed text-warning">
-                    {t("genModelUnavailable").replace("{model}", activeSession?.model ?? "").replace("{reason}", unavailableReason)}
-                  </p>
+                {missingEngine && (
+                  <MissingModelNotice missing={missingModel.missing} pending={missingModel.pending} workspaceId={workspace.id}
+                                      onPickAnother={pickAnotherModel} className="mt-1.5" />
                 )}
               </ParameterField>
               {/* 选中的是某台 ComfyUI 上的一张工作流:在工作台里打开它(画布 + 模型库、缺失项、应用、运行,ADR 0038) */}
@@ -1670,7 +1710,7 @@ function turnStatus(generation: GenerationJob, job: Job | null): TurnStatus {
 
 function GenerationTurn({
   generation,
-  engineName,
+  engineName: knownName,
   option,
   job,
   gallery,
@@ -1681,8 +1721,8 @@ function GenerationTurn({
 }: {
   generation: GenerationJob;
   /** 用的哪条连接上的哪个模型,两层名字(ADR 0045):脚注写主名,副名(来自哪张工作流、哪台服务器)在悬停里。连接或模型
-   *  已经不在了才落回 id。 */
-  engineName: TwoLayerName;
+   *  已经不在选项里了是 null:问一下它叫什么、现在怎么了(「krea2-text-2-image 的表单 · 需要升级」),不露编号。 */
+  engineName: TwoLayerName | null;
   /** 这条用的那个模型(还在选项里的话):占位按它说的「一遍交回几份」摆。 */
   option: GenerationOption | null;
   job: Job | null;
@@ -1698,6 +1738,14 @@ function GenerationTurn({
   const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
   const status = turnStatus(generation, job);
+  //: 这条用的模型已经不在选项里:问它叫什么、现在怎么了 —— 脚注写「krea2-text-2-image 的表单 · 需要升级」,不写
+  //: `plugin:dev.mosael.comfyui · krea2-text-2-image.json#app` 这种编号
+  const gone = useMissingModel(knownName ? null : { provider_profile_id: generation.provider_profile_id ?? "",
+                                                   model: generation.model, kind: generation.kind });
+  const engineName = knownName ?? {
+    primary: missingModelLabel(gone.missing, t),
+    secondary: missingModelNames(gone.missing, t).secondary,
+  };
   //: 这一条生成的**全部**产出。后端给 result_asset_ids(封面排第一);一次只出一份时它就是
   //: 那一份 —— 不为「一份」和「多份」各写一套渲染。
   const outputs = generation.result_asset_ids?.length

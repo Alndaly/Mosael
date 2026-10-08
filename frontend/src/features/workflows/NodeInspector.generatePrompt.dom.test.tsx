@@ -83,6 +83,11 @@ function renderInspector(
     askedPaths.push(url.pathname);
     let body: unknown = [];
     if (url.pathname.endsWith("/settings/providers")) body = profiles;
+    if (url.pathname.endsWith("/generation/missing")) {
+      body = { provider_profile_id: "p1", model: url.searchParams.get("model"), model_label: "sdxl 的表单", profile_name: "ComfyUI",
+               group: { id: "sdxl.json", label: "sdxl", entry: "form", order: 1 }, reason: "工作流「sdxl」上已经没有这张表单了(删掉了)",
+               upgrade: false, plugin_instance_id: "inst" };
+    }
     if (url.pathname.endsWith("/api/assets")) body = { items: [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png" }], next_cursor: null, total: 1 };
     if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
@@ -163,6 +168,24 @@ describe("AI 生成节点顶部的配置提醒", () => {
   it("连接启用但所选服务商下没有可用的生成模型:和就绪清单、AI 工作台一样报「没配」", async () => {
     renderInspector({ parameter_keys: ["seed"] }, { modelsListed: false });
     await waitFor(() => expect(screen.getByText("wfIssueGenUnconfigured")).toBeInTheDocument());
+  });
+});
+
+describe("AI 生成节点选的模型现在用不了(ADR 0045 修订之一)", () => {
+  it("模型那一格写记着的那个(标着用不了),下面说原因;不展开手填的那三格,顶上不再叠一条「已失效」", async () => {
+    renderInspector({ parameter_keys: ["seed"] }, {
+      config: { provider_profile_id: "p1", provider: "plugin:dev.mosael.comfyui", model: "sdxl.json#k3x9a2", kind: "image", prompt: "猫" } });
+    const note = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-model-missing]");
+      expect(found?.textContent).toContain("已经没有这张表单了");
+      return found!;
+    });
+    expect(note.textContent).toContain("genModelMissingTitle");
+    const trigger = document.querySelector<HTMLElement>("[data-missing]");
+    expect(trigger?.textContent).toContain("sdxl 的表单 · genModelUnusable");
+    expect(screen.queryByText("wfGenModelUnknown")).toBeNull();
+    expect(screen.queryByText("wfGenModelMissing")).toBeNull();
+    expect(screen.queryByText("wffModel"), "手填那三格不自动展开(记着的那个说清楚了)").toBeNull();
   });
 });
 

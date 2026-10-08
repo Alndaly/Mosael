@@ -35,25 +35,39 @@ export type GenerationKind = (typeof GENERATION_KINDS)[number];
  */
 export const UNDECLARED: string[] = [];
 
+/** 一处记着的生成模型:会话、画板格子、工作流节点存着的那一对 连接 + 模型 id,和它是哪种生成。 */
+export type SavedGenerationModel = { provider_profile_id: string; model: string; kind: string };
+
 /**
- * 生成模型选择器该落在哪一项:**存着的那个 → 这个人设的默认 → 没有**。
+ * 这个人设的默认生成模型(后端标在选项上,`is_default`,和「没点名模型时用哪个」同一个 resolve_default);一项都没标就是
+ * null,选择器显示「选择模型」让人选。`kind` 给了就只认这种生成的默认 —— AI 工作台的清单是几种生成合在一起的。
  *
  * **不取第一项。** 清单按连接名排序,排在第一的那个不是谁的选择 —— 画板的出图格就是这么默认挑中了
- * 147ai 上的 `claude-opus-4-6`,而用户在设置里明明设过默认生图模型(后端没点名模型时用的也是它)。
- * 默认由后端标在选项上(`is_default`,同一个 resolve_default);一项都没标就回 null,选择器显示
- * 「选择模型」让人选。棘轮:`generationPickerDefault.test.ts`。
- *
- * `saved` 认存着的那一项(画板格的表单、会话记着的模型……);它不在清单里了(删了、停用了、
- * 不再被认成这种生成)就当没存,往下落到默认。`kind` 给了就只认这种生成的默认 —— AI 工作台的
- * 清单是三种生成合在一起的。
+ * 147ai 上的 `claude-opus-4-6`,而用户在设置里明明设过默认生图模型。棘轮:`generationPickerDefault.test.ts`。
  */
-export function pickGenerationOption<T extends GenerationOption>(
-  options: readonly T[],
-  { saved, kind }: { saved?: ((option: T) => boolean) | null; kind?: string } = {},
-): T | null {
-  const kept = saved ? options.find(saved) : undefined;
-  if (kept) return kept;
+export function pickGenerationOption<T extends GenerationOption>(options: readonly T[], { kind }: { kind?: string } = {}): T | null {
   return options.find((option) => option.is_default && (!kind || option.kind === kind)) ?? null;
+}
+
+/**
+ * 生成模型选择器落在哪一项:**记着的那个 → (什么都没记着时)这个人设的默认 → 没有**。
+ *
+ * **记着的那个不在清单里**(连接删了停了、模型停了,ComfyUI 上那张工作流改了名、删了表单、表单还是旧格式……)就是
+ * `missing`,**不拿别的顶上**。此前它落到默认:会话记着用户的 ComfyUI 工作流,下拉、右栏参数、输入框底下那枚按钮
+ * 却全是默认的按次付费图像模型,底下又写着「选着的 … 现在用不了」—— 点发送就拿那个付费模型去生成了(维护者撞到的)。
+ * 界面照常显示记着的那个、说原因、不让跑(名字和原因见 lib/generationOptions 的 useMissingModel);用户自己在下拉里挑了
+ * 别的才换成那个。清单还没到(`loaded` 为假)时两样都是空:别把「还没拉到」读成「不在了」。
+ */
+export function chooseGenerationOption<T extends GenerationOption>(
+  options: readonly T[],
+  saved: SavedGenerationModel | null,
+  { kind, loaded = true }: { kind?: string; loaded?: boolean } = {},
+): { option: T | null; missing: SavedGenerationModel | null } {
+  if (!saved) return { option: pickGenerationOption(options, { kind }), missing: null };
+  const kept = options.find((option) => option.provider_profile_id === saved.provider_profile_id && option.model === saved.model
+                                        && (!saved.kind || option.kind === saved.kind));
+  if (kept) return { option: kept, missing: null };
+  return { option: null, missing: loaded ? saved : null };
 }
 
 export function capabilityList(model: GenerationOption | null, key: string, fallback: string[]): string[] {

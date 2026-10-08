@@ -131,6 +131,7 @@ export const nodeToolbar = {
   wfEdgeFalse: "false",
   wfIssueProviderMissing: "Bound model provider no longer exists",
   wfIssueGenUnconfigured: "Chosen generation provider has no key",
+  wfIssueGenModelMissing: "The chosen generation model can't be used right now, so this can't run. See why in the inspector, then fix it or choose another.",
   wfIssueCodeTemplate: "Upstream references written in code are not substituted: wire upstream values into this node's input and read them there",
   wfIssueCodeFieldBound: "A code field is wired to an upstream output: that value would run as code, so the run is refused. Wire upstream values into this node's input and read them there",
   wfCodeFieldBoundUnbind: "Linked upstream (code fields can't be) — click to disconnect",

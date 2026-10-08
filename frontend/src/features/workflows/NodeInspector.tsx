@@ -228,7 +228,8 @@ export function NodeInspector({
       if (chosenProvider && generationModels.loaded && !generationVendors(models).has(chosenProvider)) {
         return { message: t("wfIssueGenUnconfigured"), section, error: true };
       }
-      if (chosenProvider && chosenModel && generationModels.loaded && !matchedModel) {
+      //: 连接 + 模型都记着、只是现在用不了:模型那一格下面说它叫什么、为什么、怎么修(MissingModelNotice),这里不再叠一条
+      if (chosenProvider && chosenModel && generationModels.loaded && !matchedModel && !config.provider_profile_id) {
         return { message: t("wfGenModelMissing"), section, error: true };
       }
       //: 默认供应商只在节点**没选**模型时才用得上(后端 generation/operations.create_generation_job:
@@ -671,6 +672,7 @@ export function NodeInspector({
           generateNodeSection({
             t,
             gen,
+            workspaceId,
             config,
             generationModels,
             fieldOptions,

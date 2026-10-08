@@ -104,7 +104,10 @@ export function NoteComposer({
   });
   const options = models.data ?? [];
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
-  const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;
+  //: **存着的那个不在清单里了**(连接删了停了、模型停了):不拿第一项顶上 —— 那是另一个模型(可能按量付费),写出来的也不是
+  //: 用户以为的那个。选择器照写存着的那个、标着用不了,发不出去,挑一个别的才换(ADR 0045 修订之一,和生成格子一样)。
+  const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? (picked ? null : options[0] ?? null);
+  const missingChat = picked && models.isSuccess && !current ? picked.slice(picked.indexOf(":") + 1) : "";
 
   // 升级旧节点：旧版只保存纯文本和引用 id。素材库回来后按素材名恢复 chip，并在下一次
   // onFormChange 时把结构化文档补进节点；之后重开不再依赖猜测。
@@ -242,7 +245,8 @@ export function NoteComposer({
           <OptionPicker
             ariaLabel={t("agentModel")}
             icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
-            value={`${current?.provider_profile_id}:${current?.model}`}
+            value={current ? `${current.provider_profile_id}:${current.model}` : ""}
+            missingLabel={missingChat ? `${missingChat} · ${t("genModelUnusable")}` : null}
             onChange={setPicked}
             options={options.map((one) => ({
               value: `${one.provider_profile_id}:${one.model}`,
@@ -254,7 +258,8 @@ export function NoteComposer({
           />
         )
       }
-      send={{ label: verb, onSend: send, disabled: !prompt.trim() || !current, working, shortcut: true }}
+      send={{ label: verb, onSend: send, disabled: !prompt.trim() || !current, working, shortcut: true,
+              disabledReason: missingChat ? t("genModelMissingCannotSend") : undefined }}
     >
       <PromptEditor
         value={prompt}

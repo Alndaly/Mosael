@@ -220,6 +220,7 @@ export const blenderKeys = {
  */
 export const generationKeys = {
   options: (kind?: string) => (kind ? (["generation-options", kind] as const) : (["generation-options"] as const)),
-  //: 挂在 generation-options 下面:目录重拉时和生成选项一起失效
-  unavailable: () => ["generation-options", "__unavailable"] as const,
+  //: 记着的模型为什么不在选项里。挂在 generation-options 下面:目录重拉(升级了、改回来了)时和生成选项一起失效
+  missing: (providerProfileId: string, model: string, kind: string) =>
+    ["generation-options", "__missing", providerProfileId, model, kind] as const,
 };

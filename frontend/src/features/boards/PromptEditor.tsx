@@ -20,6 +20,7 @@ import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
+import { isSubmitChord } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { EntityMentionRow, EntityThumb } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
@@ -418,8 +419,8 @@ export function PromptEditor({
         "aria-multiline": "true",
       },
       handleKeyDown: (_view, event) => {
-        // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写(和 AI Studio 的生成框同一个键,见 isSubmitChord)。
+        if (isSubmitChord(event)) {
           event.preventDefault();
           submitRef.current();
           return true;

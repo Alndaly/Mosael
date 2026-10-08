@@ -7,8 +7,11 @@ import { NodeComposer } from "./NodeComposer";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
+//: 记着的模型为什么不在清单里(GET /api/generation/missing):后端说的那一份
+const MISSING = { provider_profile_id: "gone", model: "retired-model", model_label: "退役的模型", profile_name: "演示", group: null,
+                  reason: "连接「演示」上已经没有它了(改了名、挪了位置或删掉了)—— 换一个模型", upgrade: false, plugin_instance_id: "" };
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [] }),
+  useQuery: ({ queryKey }: { queryKey?: unknown[] }) => ({ data: queryKey?.[1] === "__missing" ? MISSING : [] }),
   //: 按 id 取引到的素材(useAssetDetails):一份都没取到。
   useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -81,20 +84,27 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
 });
 
-it("存着的模型已经不在可选清单里时,选择器显示的就是实际要用的那一个(用户设的默认)", () => {
-  // 节点表单记着上次用的模型,而那个模型后来被删了(或那条通道被停了、不再被认成这种生成)。
-  // 提交时用的是用户设的默认,选择器却还挂着那个已经不存在的值 —— 显示的和发出去的不是同一个模型。
+it("存着的模型不在可选清单里了:选择器写的就是它(标着用不了),下面说原因;不拿默认顶上、发不出去、表单不被改写", () => {
+  // 节点表单记着上次用的模型,而那个模型后来被删了(或那条通道被停了,ComfyUI 上那张工作流改了名、删了表单……)。
+  // 此前选择器落到用户设的默认、点「生成」就拿默认那个跑了 —— 格子上记着的是用户的工作流,跑的却是别的(ADR 0045 修订之一)。
   const onSubmit = vi.fn();
+  const onFormChange = vi.fn();
   render(<NodeComposer
-    item={{ id: "video", kind: "video", text: "A sunrise", form: { prompt: "A sunrise", provider_profile_id: "gone", model: "retired-model" } } as BoardItem}
+    item={{ id: "video", kind: "video", text: "A sunrise",
+            form: { prompt: "A sunrise", provider_profile_id: "gone", model: "retired-model", parameters: { duration_seconds: 8 } } } as unknown as BoardItem}
     models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", model_label: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
-    busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+    busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
   />);
 
-  const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("a-long-video-model-name"));
-  expect(trigger).toBeDefined();
+  const trigger = screen.getAllByRole("combobox").find((one) => one.hasAttribute("data-missing"));
+  expect(trigger?.textContent).toContain("退役的模型 · genModelUnusable");
+  expect(screen.getAllByRole("combobox").some((one) => one.textContent?.includes("a-long-video-model-name")), "不显示默认那个").toBe(false);
+  expect(document.querySelector("[data-model-missing]")?.textContent).toContain("连接「演示」上已经没有它了");
+  expect(screen.getByRole("button", { name: "boardGenerate" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
-  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ model: "a-long-video-model-name" }));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(onFormChange, "格子的表单还是记着的那个(模型、参数)").not.toHaveBeenCalledWith(expect.objectContaining({ model: "a-long-video-model-name" }));
+  for (const [form] of onFormChange.mock.calls) expect(form).toMatchObject({ model: "retired-model", parameters: { duration_seconds: 8 } });
 });
 
 it("没设默认模型时不拿清单第一项顶上:显示「选择模型」,选了才发得出去", () => {

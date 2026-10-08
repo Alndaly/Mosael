@@ -51,7 +51,9 @@ import {
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
+import { formedGroups, generationPickerEntry, missingModelLabel } from "@/lib/entryNames";
+import { useMissingModel } from "@/lib/generationOptions";
+import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
 import { GENERATION_KIND_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 
 //: 节点检查器里「AI 生成素材」的专区:选模型、按模型能力铺参数、按角色挂输入素材。
@@ -148,7 +150,7 @@ export function useGenerateNodeSection({
 }: {
   node: WorkflowGraph["nodes"][number];
   config: NodeConfig;
-  generationModels: { options: GenerationOption[] };
+  generationModels: { options: GenerationOption[]; loaded?: boolean };
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>, options?: SetGraphOptions) => void;
   setConfig: (key: string, value: unknown, options?: SetGraphOptions) => void;
   t: ReturnType<typeof useI18n>;
@@ -156,6 +158,15 @@ export function useGenerateNodeSection({
   /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
   const [genCustom, setGenCustom] = React.useState(false);
   const genModel = node.type === "ai_generate" ? generationModelOf(generationModels.options, config) : null;
+  //: 记着连接 + 模型、清单里却没有它(连接删了停了,ComfyUI 上那张工作流改了名、删了表单、表单还是旧格式……):照常显示它、
+  //: 说原因(ADR 0045 修订之一)。这张图跑不了(就绪清单报 gen-model-missing),后端照样拒、说同一句。
+  const savedModel = String(config.model ?? "").trim();
+  const genMissingEngine =
+    node.type === "ai_generate" && !genModel && generationModels.loaded !== false && typeof config.provider_profile_id === "string" &&
+    config.provider_profile_id && savedModel && !savedModel.includes("{{")
+      ? { provider_profile_id: config.provider_profile_id, model: savedModel, kind: String(config.kind || "image") }
+      : null;
+  const genMissing = useMissingModel(genMissingEngine);
   //: 还没选过模型的生成节点**预选这个人设的默认**(节点定了种类就只认那一种的默认)。没设默认就空着,
   //: 选择器说「选择要用的生成模型」—— 不拿清单第一项顶上(见 pickGenerationOption)。只填一次:之后
   //: 用户清掉、换掉都是他的事。
@@ -297,6 +308,8 @@ export function useGenerateNodeSection({
     genCustom,
     setGenCustom,
     genModel,
+    genMissingEngine,
+    genMissing,
     genPromptMode,
     genParams,
     setGenParam,
@@ -314,6 +327,7 @@ export function useGenerateNodeSection({
 export function generateNodeSection({
   t,
   gen,
+  workspaceId,
   config,
   generationModels,
   fieldOptions,
@@ -326,6 +340,8 @@ export function generateNodeSection({
 }: {
   t: ReturnType<typeof useI18n>;
   gen: ReturnType<typeof useGenerateNodeSection>;
+  /** 「去工作流库升级」开的是这个工作区里的那个连接的工作流库 */
+  workspaceId: string;
   config: NodeConfig;
   generationModels: { options: GenerationOption[] };
   fieldOptions: ReturnType<typeof useNodeFieldOptions>;
@@ -340,6 +356,8 @@ export function generateNodeSection({
     genCustom,
     setGenCustom,
     genModel,
+    genMissingEngine,
+    genMissing,
     genParams,
     setGenParam,
     genParamKeys,
@@ -359,6 +377,7 @@ export function generateNodeSection({
             同一张工作流的表单入口挂在完整工作流下面。和 AI Studio、画板同一种样子、同样的搜索。 */}
         <OptionPicker
           value={genModel?.id ?? ""}
+          missingLabel={genMissingEngine ? missingModelLabel(genMissing.missing, t) : null}
           options={(generationModels.options).map((model) => {
             return {
               value: model.id,
@@ -390,7 +409,9 @@ export function generateNodeSection({
             setGenCustom(false);
           }}
         />
-        {!genModel && !genCustom && (config.provider || config.model) ? (
+        {genMissingEngine ? (
+          <MissingModelNotice missing={genMissing.missing} pending={genMissing.pending} workspaceId={workspaceId} />
+        ) : !genModel && !genCustom && (config.provider || config.model) ? (
           <small className="text-destructive">{t("wfGenModelUnknown")}</small>
         ) : (
           <small>{t("wfGenModelDesc")}</small>
@@ -406,7 +427,7 @@ export function generateNodeSection({
 
       {/* 自定义端点上的模型目录里没有 —— 这时才需要看见执行器那三个字段。
           已配置但对不上目录时自动展开,否则用户会看到一个空选择器却不知道值存在哪。 */}
-      {(genCustom || (!genModel && Boolean(config.provider || config.model))) && (
+      {(genCustom || (!genModel && !genMissingEngine && Boolean(config.provider || config.model))) && (
         <div className="grid min-w-0 gap-2 border-l-2 border-border pl-2">
           <div className={FIELD_BOX}>
             <span>{t("wffProvider")}</span>

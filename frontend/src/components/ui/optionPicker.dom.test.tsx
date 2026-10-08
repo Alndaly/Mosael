@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
+import { OptionPicker, SEARCHABLE_THRESHOLD, type PickerOption } from "./option-picker";
 import { insideDialog } from "./insideDialog";
 import { Hint, TooltipProvider } from "./tooltip";
 
@@ -200,5 +200,53 @@ describe("认不认得出「真的在对话框里」", () => {
         ),
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * 选项不多(走 Select 的那一支)时的小组(有表单的工作流,ADR 0045 §7):小组自成一个 SelectGroup、小标题是它的 SelectLabel。
+ * 此前小标题光秃秃挂在清单里 —— Radix 的 SelectLabel 只能放在 SelectGroup 里,画板格子的模型下拉不到 8 项、又有一张带表单的
+ * 工作流时,整页报「`SelectLabel` must be used within `SelectGroup`」(真界面走查撞到的)。
+ */
+describe("短清单里的小组;记着的那一项不在清单里", () => {
+  beforeAll(() => {
+    Object.assign(Element.prototype, {
+      hasPointerCapture: () => false,
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      scrollIntoView: () => {},
+    });
+  });
+  const SECTION = { key: "p9\nkrea2.json", label: "krea2", subtitle: "ComfyUI" };
+  const SECTIONED: PickerOption[] = [
+    { value: "builtin", label: "内置文生图" },
+    { value: "krea2.json", label: "完整工作流", section: SECTION, selectedLabel: "krea2" },
+    { value: "krea2.json#app", label: "快速出图", section: SECTION },
+    { value: "girl.json", label: "girl" },
+  ];
+
+  it("没有分组标题时也能打开:小组的小标题在、组里的行缩进,选得中", () => {
+    const onChange = vi.fn();
+    render(<OptionPicker value="krea2.json#app" onChange={onChange} options={SECTIONED} ariaLabel="模型" />);
+    fireEvent.click(screen.getByRole("combobox", { name: "模型" }));
+    const head = document.querySelector("[data-section-head]");
+    expect(head?.textContent).toContain("krea2");
+    expect(head?.closest("[role=group]")?.getAttribute("data-section-group")).toBe(SECTION.key);
+    expect(screen.getByRole("option", { name: "完整工作流" })).toHaveAttribute("data-indent");
+    expect(screen.getByRole("option", { name: "girl" })).not.toHaveAttribute("data-indent");
+    fireEvent.click(screen.getByRole("option", { name: "girl" }));
+    expect(onChange).toHaveBeenCalledWith("girl.json");
+  });
+
+  it("记着的那一项不在清单里:触发器写它(用不了),不写占位", () => {
+    for (const count of [3, SEARCHABLE_THRESHOLD + 1]) {
+      const view = render(<OptionPicker value="" onChange={vi.fn()} options={options(count)} ariaLabel="模型" placeholder="选择模型"
+                                        missingLabel="krea2 的表单 · 需要升级" />);
+      const trigger = screen.getByRole("combobox", { name: "模型" });
+      expect(trigger, `${count} 项`).toHaveAttribute("data-missing");
+      expect(trigger.textContent).toContain("krea2 的表单 · 需要升级");
+      expect(trigger.textContent).not.toContain("选择模型");
+      view.unmount();
+    }
   });
 });

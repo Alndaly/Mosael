@@ -130,13 +130,13 @@ export function useWorkflowDisplayNodes({
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
             configAssetId: configAssetId(graphNode(node.id), registry),
-            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t),
+            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t, generationModels.loaded),
             ...workflowPortPresentation(graphNode(node.id), node.data as WorkflowNodeData, registry, portNamer),
           },
         };
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded],
   );
 }

@@ -28,6 +28,7 @@ export type IssueCode =
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
+  | "gen-model-missing" // AI 生成选的那个模型现在不在生成选项里(连接删了停了,工作流改名、表单删了、表单是旧格式……)
   | "type-mismatch" // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
   | "code-template" // 代码字段里写了 {{…}}:代码不插值,那一段不会被替换(软提示)
   | "code-field-bound" // 代码字段接了数据边:上游的值整段变成代码,后端运行前拒(wfErr_codeFieldBound)
@@ -97,6 +98,8 @@ export interface AnalyzeContext {
   /** 有可用生成模型的服务商(见 bindingReadiness.generationVendors)。 */
   generationVendors: Set<string>;
   generationModelsLoaded: boolean;
+  /** 节点选的那个模型在不在生成选项里(见 readiness.generationModelOf);不给就不判。 */
+  generationModelFound?: (config: Record<string, unknown>) => boolean;
   /**
    * AI 生成节点选中的那个模型对提示词的要求(描述符的 `prompt`,见 lib/generationCapabilities.promptMode)。
    * 提示词不再在节点声明里标必填 —— 放大这类模型不收提示词,标了就永远过不了检查;所以「空着算不算
@@ -732,6 +735,13 @@ function collect(
         !ctx.generationVendors.has(provider)
       )
         push("error", "gen-provider-unconfigured", { configKey: "provider" });
+      //: 选的那个模型现在用不了:不能跑(后端照样拒,说为什么);原因、出路在检查器里(ADR 0045 修订之一)
+      else if (
+        typeof provider === "string" && provider && typeof config.model === "string" && config.model.trim() &&
+        !config.model.includes("{{") && !dataBound.has(`${node.id}:model`) &&
+        ctx.generationModelsLoaded && ctx.generationModelFound?.(config) === false
+      )
+        push("error", "gen-model-missing", { configKey: "model" });
     }
 
     // 一定不会被执行:被会跑的节点引用了就是阻断(和后端运行前那一道对齐),没人引用只是提醒。

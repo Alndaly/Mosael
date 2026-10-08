@@ -37,6 +37,17 @@ export type PickerOption = {
   selectedLabel?: string;
 };
 
+/** 相邻的同一小组(`section.key`)归成一段;不属于哪一小组的行各自一段(不重排)。 */
+function sectionRuns(rows: PickerOption[]): Array<{ section?: OptionSection; rows: PickerOption[] }> {
+  const out: Array<{ section?: OptionSection; rows: PickerOption[] }> = [];
+  for (const row of rows) {
+    const last = out[out.length - 1];
+    if (last && row.section && last.section?.key === row.section.key) last.rows.push(row);
+    else out.push({ section: row.section, rows: [row] });
+  }
+  return out;
+}
+
 /** 相邻的同名 `group` 归成一组(不重排)。 */
 function groupAdjacent(options: PickerOption[]): Array<[string, PickerOption[]]> {
   const out: Array<[string, PickerOption[]]> = [];
@@ -76,6 +87,7 @@ export function OptionPicker({
   emptyText,
   align = "start",
   hint,
+  missingLabel,
   ...rest
 }: {
   value: string;
@@ -104,10 +116,16 @@ export function OptionPicker({
   align?: "start" | "center" | "end";
   /** 触发器的悬停说明(为什么点不了、清单为什么是空的)。 */
   hint?: string | null;
+  /**
+   * 记着的那一项现在不在清单里(用不了,见 lib/generationCapabilities 的 chooseGenerationOption):触发器上写它(人话的名字 +
+   * 「需要升级」/「用不了」,警示色),不写占位的「选择模型」—— 显示的就是记着的那个,不是空着、也不是别的。
+   */
+  missingLabel?: string | null;
   /* 表单里的 FormControl 会把这几个挂到控件上(Radix Slot 克隆时注入)。不转交的话,
      错误提示和描述文字就和控件断了线 —— 读屏念到这一格时什么都没有。 */
 } & Pick<React.ComponentProps<"button">, "id" | "aria-describedby" | "aria-invalid">) {
   const selected = options.find((one) => one.value === value);
+  const missing = !selected && Boolean(missingLabel);
   if (options.length > SEARCHABLE_THRESHOLD) {
     return (
       <SearchableSelect
@@ -124,11 +142,12 @@ export function OptionPicker({
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
-          <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(fieldTriggerClass(size), className)} {...rest}>
+          <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(fieldTriggerClass(size), className)}
+                  data-missing={missing ? "" : undefined} {...rest}>
             {icon}
             {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名。 */}
-            <Truncate className={cn(!selected && "text-muted-foreground")} style={selected?.style}>
-              {selected?.selectedLabel ?? selected?.label ?? placeholder ?? ""}
+            <Truncate className={cn(!selected && (missing ? "text-warning" : "text-muted-foreground"))} style={selected?.style}>
+              {selected?.selectedLabel ?? selected?.label ?? (missing ? missingLabel : null) ?? placeholder ?? ""}
             </Truncate>
             <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
           </button>
@@ -144,37 +163,42 @@ export function OptionPicker({
           pointer-events: none,被截断的名字悬停时哪条说明都不出。自己画的这一份在触发器的 Hint 里,
           被截断了全名就并进那条说明(外面还套着一条 Hint 时并进外面那条,见 tooltip.tsx 的 Hint)。 */}
       <Hint label={hint}>
-        <SelectTrigger aria-label={ariaLabel} size={size} className={className} {...rest}>
+        <SelectTrigger aria-label={ariaLabel} size={size} className={cn(missing && "data-[placeholder]:text-warning", className)}
+                       data-missing={missing ? "" : undefined} {...rest}>
           {icon}
-          <SelectValue placeholder={placeholder}>
+          <SelectValue placeholder={missing ? missingLabel : placeholder}>
             {selected ? <Truncate>{selected.selectedLabel ?? selected.label}</Truncate> : undefined}
           </SelectValue>
         </SelectTrigger>
       </Hint>
       <SelectContent align={align} className={contentClassName}>
         {groupAdjacent(options).map(([heading, rows]) => {
-          const items = rows.map((one, index) => (
-            <React.Fragment key={one.value}>
-              {one.section && one.section.key !== rows[index - 1]?.section?.key && (
-                <SelectLabel data-section-head={one.section.key} className="grid gap-px font-normal">
-                  <Truncate className="font-medium text-foreground">{one.section.label}</Truncate>
-                  {one.section.subtitle && <Truncate className="text-muted-foreground">{one.section.subtitle}</Truncate>}
-                </SelectLabel>
-              )}
-              <SelectItem
-                value={one.value}
-                truncate
-                style={one.style}
-                description={one.description}
-                media={one.media}
-                className={one.indent || one.section ? "pl-6" : undefined}
-                data-indent={one.indent || one.section ? "" : undefined}
-                data-section={one.section?.key}
-              >
-                {one.label}
-              </SelectItem>
-            </React.Fragment>
-          ));
+          const item = (one: PickerOption) => (
+            <SelectItem
+              key={one.value}
+              value={one.value}
+              truncate
+              style={one.style}
+              description={one.description}
+              media={one.media}
+              className={one.indent || one.section ? "pl-6" : undefined}
+              data-indent={one.indent || one.section ? "" : undefined}
+              data-section={one.section?.key}
+            >
+              {one.label}
+            </SelectItem>
+          );
+          //: 一小组(有表单的工作流)自成一个 SelectGroup,小标题是它的 SelectLabel —— Radix 的 SelectLabel 只能放在 SelectGroup 里,
+          //: 光秃秃地挂在清单里整页报错(画板格子的模型下拉不到 8 项、又有一张带表单的工作流时就是这样)
+          const items = sectionRuns(rows).map((run) => run.section ? (
+            <SelectGroup key={`section:${run.section.key}`} data-section-group={run.section.key}>
+              <SelectLabel data-section-head={run.section.key} className="grid gap-px font-normal">
+                <Truncate className="font-medium text-foreground">{run.section.label}</Truncate>
+                {run.section.subtitle && <Truncate className="text-muted-foreground">{run.section.subtitle}</Truncate>}
+              </SelectLabel>
+              {run.rows.map(item)}
+            </SelectGroup>
+          ) : run.rows.map(item));
           return heading ? (
             <SelectGroup key={heading}>
               <SelectLabel>{heading}</SelectLabel>
