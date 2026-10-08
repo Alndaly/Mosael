@@ -55,7 +55,7 @@ import { SettingsBlock, SettingsRow } from "@/components/settings/settings-layou
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
-import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
+import { GenerationModelsRow, catalogNoun, withNoun } from "@/features/plugins/ProvidedModels";
 import { Disclosure } from "@/components/ui/disclosure";
 import { DeleteConnectionDialog, UninstallPluginDialog } from "@/features/plugins/LocalServiceRemoval";
 import { ConnectionLibraries } from "@/features/plugins/ConnectionLibraries";
@@ -874,7 +874,8 @@ export function ConnectionCard({
   const summaryText = ((): string => {
     if (generates && tools.length === 0) {
       const models = instance.capability_status?.generation?.models;
-      return typeof models === "number" ? t("pluginConnModels").replace("{n}", String(models)) : t("pluginGenerationDesc");
+      return withNoun(typeof models === "number" ? t("pluginConnModels").replace("{n}", String(models)) : t("pluginGenerationDesc"),
+                      catalogNoun(pkg, t));
     }
     if (hostOnly) return t("pluginHostCapabilityDesc").replace("{list}", hostCapabilities.map(labelOf).join(t("listSeparator")));
     if (tools.length === 0) return instance.blocked_reason ? "" : noToolsText;
@@ -983,7 +984,7 @@ export function ConnectionCard({
               variant="outline"
               size="default"
               className="px-3 text-muted-foreground"
-              label={pkg.kind === "mcp" ? t("pluginRefreshTools") : t("pluginRefreshModels")}
+              label={pkg.kind === "mcp" ? t("pluginRefreshTools") : withNoun(t("pluginRefreshModels"), catalogNoun(pkg, t))}
               loading={refresh.isPending}
               onClick={() => refresh.mutate()}
             >
@@ -1083,6 +1084,7 @@ export function ConnectionCard({
         <div data-connection-section="generation">
           <GenerationModelsRow
             instance={instance}
+            noun={catalogNoun(pkg, t)}
             status={instance.capability_status?.generation}
             service={localService.data}
             refreshing={refresh.isPending}

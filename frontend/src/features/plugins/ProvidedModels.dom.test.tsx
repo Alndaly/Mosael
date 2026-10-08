@@ -18,6 +18,12 @@ vi.mock("@/app/preferences", () => ({
       pluginModelTakes: "pluginModelTakes {roles}",
       pluginModelRequired: "{role} pluginModelRequired",
       pluginGenerationError: "pluginGenerationError {error}",
+      pluginGenerationStale: "没刷出来:{error} · 列着的是 {time}的清单",
+      pluginModelsTitle: "{name} 提供的{Noun}",
+      pluginModelsSearch: "搜 {n} 个{noun}",
+      pluginModelsStale: "这是 {time}的清单,现在刷不出来:{error}",
+      entryFromGroup: "来自 {name}",
+      entryFullWorkflow: "完整工作流",
     })[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
@@ -70,6 +76,7 @@ describe("插件提供的模型", () => {
     wrap(
       <GenerationModelsRow
         instance={instance}
+        noun="工作流"
         status={{ models: 3, refreshed_at: "2026-09-25T10:00:00+00:00", error: "" }}
         refreshing={false}
         onRefresh={onRefresh}
@@ -110,16 +117,18 @@ describe("插件提供的模型", () => {
     listPluginInstanceModels.mockResolvedValue(
       Array.from({ length: 8 }, (_, index) => model({ id: `w${index}.json`, label: `工作流 ${index}` })),
     );
-    wrap(<GenerationModelsRow instance={instance} status={{ models: 8, error: "" }} refreshing={false} onRefresh={vi.fn()} />);
+    wrap(<GenerationModelsRow instance={instance} noun="工作流" status={{ models: 8, error: "" }} refreshing={false} onRefresh={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "pluginModelsView" }));
-    const search = await screen.findByPlaceholderText("pluginModelsSearch");
+    const search = await screen.findByPlaceholderText("搜 8 个工作流");
+    //: 交出来的是什么由插件说(ComfyUI:工作流),标题、搜索框跟着它,不写死「模型」
+    expect(screen.getByRole("dialog").textContent).toContain("ComfyUI · 本机 提供的工作流");
     fireEvent.change(search, { target: { value: "工作流 3" } });
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
   });
 
   it("没刷出来:说原因,还没有模型就不让点「查看」", () => {
     wrap(
-      <GenerationModelsRow instance={instance} status={{ models: null, error: "连不上" }} refreshing={false} onRefresh={vi.fn()} />,
+      <GenerationModelsRow instance={instance} noun="工作流" status={{ models: null, error: "连不上" }} refreshing={false} onRefresh={vi.fn()} />,
     );
     expect(screen.getByText("pluginGenerationError 连不上").className).toContain("text-destructive");
     // 原因可能很长(连不上的原话):这一格有上限,不把左边的标签和说明挤成一列窄条,放不下的悬停看全文
@@ -127,9 +136,42 @@ describe("插件提供的模型", () => {
     expect((screen.getByRole("button", { name: "pluginModelsView" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("现在刷不出来、手里是上一次的清单:行内和弹窗顶上都说清是哪一次的、现在连不上;给「重新连接」;不再写一句像刚刷过的时间", async () => {
+    // 维护者:那一行写着「没刷出来:连不上」,弹窗却照常列出 28 个、底部写「1小时前刷新」
+    listPluginInstanceModels.mockResolvedValue([model({})]);
+    const onRefresh = vi.fn();
+    wrap(<GenerationModelsRow instance={instance} noun="工作流" refreshing={false} onRefresh={onRefresh}
+           status={{ models: 1, refreshed_at: "2026-09-25T10:00:00+00:00", error: "连不上这台 ComfyUI\nErrno 61" }} />);
+    expect(document.body.textContent).toMatch(/没刷出来:连不上这台 ComfyUI · 列着的是 .+的清单/);
+    fireEvent.click(screen.getByRole("button", { name: "pluginModelsView" }));
+    await screen.findAllByRole("listitem");
+    const banner = document.querySelector<HTMLElement>("[data-catalog-stale]")!;
+    expect(banner.textContent).toMatch(/^这是 .+的清单,现在刷不出来:连不上这台 ComfyUI/);
+    expect(document.querySelector("[data-stale]"), "清单压暗:是上一次的样子").not.toBeNull();
+    expect(screen.queryByText(/pluginModelsRefreshed/), "底部不再写「x 前刷新」").toBeNull();
+    fireEvent.click(within(banner).getByRole("button", { name: "pluginModelsReconnect" }));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it("清单好好的:顶上没有那句;表单入口和别的项左边对齐,第二行写来自哪张", async () => {
+    const group = { id: "krea2.json", label: "krea2" };
+    listPluginInstanceModels.mockResolvedValue([
+      model({ id: "krea2.json", label: "krea2", group: { ...group, entry: "full", order: 0 } }),
+      model({ id: "krea2.json#app", label: "快速出图", group: { ...group, entry: "form", order: 1 } }),
+    ]);
+    wrap(<GenerationModelsRow instance={instance} noun="工作流" refreshing={false} onRefresh={vi.fn()}
+           status={{ models: 2, refreshed_at: "2026-09-25T10:00:00+00:00", error: "" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "pluginModelsView" }));
+    const items = await screen.findAllByRole("listitem");
+    expect(document.querySelector("[data-catalog-stale]")).toBeNull();
+    const form = items.find((item) => item.getAttribute("data-entry") === "form")!;
+    expect(form.className, "不往右缩一截").not.toMatch(/\bml-\d/);
+    expect(form.textContent).toContain("来自 krea2");
+  });
+
   it("原因的原文(errno、地址)不摆在这一格里,只说第一句人话", () => {
     wrap(
-      <GenerationModelsRow instance={instance} status={{ models: null, error: "连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused" }} refreshing={false} onRefresh={vi.fn()} />,
+      <GenerationModelsRow instance={instance} noun="工作流" status={{ models: null, error: "连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused" }} refreshing={false} onRefresh={vi.fn()} />,
     );
     expect(screen.getByText("pluginGenerationError 连不上这台 ComfyUI,确认它在运行、地址填对")).toBeTruthy();
     expect(document.body.textContent).not.toContain("Errno");

@@ -98,6 +98,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path}:summary 是一句话,最长 {max} 个字 —— 长的介绍写在第一条技能的 description 里",
         "en": "In plugin manifest {path}, summary is one sentence of at most {max} characters; put a longer introduction in the first skill's description.",
     },
+    "pluginErr_manifestGenerationNoun": {
+        "zh": "插件清单 {path}:generation_noun 是一个词(每种语言最多 {max} 个字),只有 provides 里有 generation 的插件能写",
+        "en": "In plugin manifest {path}, generation_noun is one word (at most {max} characters per language), and only plugins that provide generation can set it.",
+    },
     "pluginErr_manifestServicesShape": {
         "zh": "插件清单 {path}:services 要写成一组 {{\"key\", \"title\", \"tool\"}}",
         "en": "In plugin manifest {path}, services must be a list of {{\"key\", \"title\", \"tool\"}} objects.",

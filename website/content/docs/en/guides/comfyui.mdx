@@ -40,11 +40,12 @@ brings two things:
    runs on this computer, downloaded models are written into its models folder). These are exactly the things the plugin does; connections carried over from an earlier version
    are switched off until you grant the new ones (see the upgrade section at the end).
 
-Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
-“N models · refreshed just now”; **View models** lists whether each one makes images or videos, which kinds of
-generation it supports, which inputs it takes and which parameters it has. When the server can't be reached the row
-says only what to do ("Can't reach this ComfyUI. Make sure it is running and the URL is right"), with the address and the
-raw error in the hover hint. Create one connection per server; each brings its own models and tools, and with several
+Mosael then asks the server which workflows it has. The “Workflows for generation” row on the connection card shows
+“N workflows · refreshed just now”; **View workflows** lists whether each workflow (and each of its forms) makes images or
+videos, which kinds of generation it supports, which inputs it takes and which parameters it has. When the server can't be
+reached the row says only what to do ("Can't reach this ComfyUI. Make sure it is running and the URL is right"), with the
+address and the raw error in the hover hint; if the last list is still there, the row and the top of the list both say
+which refresh it is from, the list is dimmed, and **Reconnect** tries again. Create one connection per server; each brings its own models and tools, and with several
 they fold into one line each (see [Plugins](/docs/guides/plugins)).
 
 Under Settings → AI image / AI video, a ComfyUI connection is shown as “Provided by a plugin”: rename it or change
@@ -103,7 +104,7 @@ Mosael asks the plugin to check the folder or plan the install, and without them
 ## Saved workflows are models
 
 **Save** a workflow in ComfyUI (into its workflows folder) and it appears in the pickers **within a minute** — Mosael
-checks once a minute whether the workflows folder changed and only re-reads it when it did; click **Refresh models**
+checks once a minute whether the workflows folder changed and only re-reads it when it did; click **Refresh workflows**
 on the Plugins page if you can't wait. The model is named after the workflow, and its output nodes decide what it
 makes: a workflow with a video combine node (VHS Video Combine, Save Video …) is a video model, everything else is an
 image model. **A workflow that only outputs text is not a model** (taggers, prompt interrogators — their only output

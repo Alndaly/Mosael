@@ -98,13 +98,14 @@ describe("连接卡片标题行", () => {
 describe("生成模型那一行", () => {
   function row(local: LocalService | null, error = UNREACHABLE) {
     const target = instance(error);
-    return mount(<GenerationModelsRow instance={target} status={target.capability_status?.generation} service={local}
+    return mount(<GenerationModelsRow instance={target} noun="models" status={target.capability_status?.generation} service={local}
                                       refreshing={false} onRefresh={vi.fn()} />);
   }
 
   it("连一台服务器:没刷出来照插件说的", () => {
     row(null);
-    expect(screen.getByText("pluginGenerationError")).toBeTruthy();
+    //: 手里还有上一次的清单:说的是「没刷出来 · 列着的是哪一次的」(见 ProvidedModels 的测试)
+    expect(screen.getByText("pluginGenerationStale")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /localServiceStart/ })).toBeNull();
   });
 
@@ -112,7 +113,7 @@ describe("生成模型那一行", () => {
     api.startLocalService.mockResolvedValue(service(null, { state: "running" }));
     row(service("stopped"));
     expect(screen.getByRole("status").textContent).toBe("本机的 ComfyUI:stopped");
-    expect(screen.queryByText("pluginGenerationError"), "不说插件那句「检查地址」").toBeNull();
+    expect(screen.queryByText(/pluginGeneration(Error|Stale)/), "不说插件那句「检查地址」").toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /localServiceStart/ }));
     await waitFor(() => expect(api.startLocalService).toHaveBeenCalledWith("c1"));
   });

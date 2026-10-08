@@ -41415,6 +41415,11 @@
             "type": "array",
             "title": "Provides"
           },
+          "generation_noun": {
+            "type": "string",
+            "title": "Generation Noun",
+            "default": ""
+          },
           "services": {
             "items": {
               "$ref": "#/components/schemas/PluginServiceOut"

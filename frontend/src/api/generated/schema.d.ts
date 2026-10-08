@@ -15818,6 +15818,11 @@ export interface components {
             oauth?: components["schemas"]["PluginOAuthOut"] | null;
             /** Provides */
             provides?: string[];
+            /**
+             * Generation Noun
+             * @default
+             */
+            generation_noun: string;
             /** Services */
             services?: components["schemas"]["PluginServiceOut"][];
             /**

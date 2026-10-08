@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, RefreshCcw } from "lucide-react";
+import { AlertTriangle, ChevronRight, RefreshCcw } from "lucide-react";
 
 import {
   listPluginInstanceModels,
@@ -71,17 +71,33 @@ const PARAMETER_TYPE_LABELS: Record<string, MessageKey> = {
   boolean: "pluginParamType_boolean",
 };
 
+/**
+ * 这个插件交出来的那一类东西叫什么:清单的 `generation_noun`(ComfyUI 是「工作流」,已按语言挑好),没写就是「模型」。
+ * 宿主不认识哪一家 —— ComfyUI 交的是工作流和表单,此前这里一律叫「模型」,人会去找 checkpoint。
+ */
+export function catalogNoun(pkg: { generation_noun?: string }, t: (key: MessageKey) => string): string {
+  return pkg.generation_noun?.trim() || t("pluginGenerationNoun");
+}
+
+/** 把文案里的 `{noun}` 换成这个词;`{Noun}` 是句首那一处(英文首字母大写,中文原样)。 */
+export function withNoun(text: string, noun: string): string {
+  return text.replaceAll("{noun}", noun).replaceAll("{Noun}", noun.charAt(0).toUpperCase() + noun.slice(1));
+}
+
 /** 模型多到这个数就给一个搜索框。一台 ComfyUI 存几十张工作流是常事。 */
 const SEARCH_THRESHOLD = 6;
 
 export function GenerationModelsRow({
   instance,
+  noun,
   status,
   service,
   refreshing,
   onRefresh,
 }: {
   instance: PluginInstance;
+  /** 交出来的那一类东西叫什么(见 catalogNoun)。 */
+  noun: string;
   status?: PluginCapabilityStatus;
   /** 连接背后的本机服务(没有是 null):目录没刷出来、而它此刻用不了时,按它的状态说(见 localServiceStatus)。 */
   service?: LocalService | null;
@@ -95,15 +111,16 @@ export function GenerationModelsRow({
   const local = serviceIssue(service, Boolean(status?.error));
   //: 原因只说第一行那句人话;原文(errno、地址)悬停看
   const error = status?.error ? splitErrorText(status.error) : null;
+  const refreshedAt = status?.refreshed_at ? relativeTime(status.refreshed_at, locale) : "";
+  //: 刷不出来、手里还有上一次的清单(models 是上一次成功时的数):说清列着的是什么时候的,和清单弹窗顶上那句一致
+  const stale = Boolean(error) && typeof models === "number" && Boolean(status?.refreshed_at);
   const summary = error
-    ? t("pluginGenerationError").replace("{error}", error.summary)
+    ? (stale ? t("pluginGenerationStale").replace("{time}", refreshedAt) : t("pluginGenerationError")).replace("{error}", error.summary)
     : models === null || models === undefined
       ? t("pluginGenerationNever")
-      : t("pluginGenerationCount")
-          .replace("{n}", String(models))
-          .replace("{time}", status?.refreshed_at ? relativeTime(status.refreshed_at, locale) : "");
+      : withNoun(t("pluginGenerationCount"), noun).replace("{n}", String(models)).replace("{time}", refreshedAt);
   return (
-    <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
+    <SettingsRow label={withNoun(t("pluginGenerationModels"), noun)} description={withNoun(t("pluginGenerationModelsDesc"), noun)}>
       <div className="flex min-w-0 items-center gap-2">
         {local && service ? (
           // 本机服务此刻用不了:说它的状态(停着给「启动」、起不来给「日志」),不说插件那句「检查地址」
@@ -118,13 +135,15 @@ export function GenerationModelsRow({
           </Truncate>
         )}
         <Button variant="outline" disabled={!models} onClick={() => setOpen(true)}>
-          {t("pluginModelsView")}
+          {withNoun(t("pluginModelsView"), noun)}
         </Button>
       </div>
       <ProvidedModelsDialog
         open={open}
         onOpenChange={setOpen}
         instance={instance}
+        noun={noun}
+        staleBecause={stale ? error!.summary : null}
         refreshedAt={status?.refreshed_at ?? null}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -137,6 +156,8 @@ export function ProvidedModelsDialog({
   open,
   onOpenChange,
   instance,
+  noun,
+  staleBecause,
   refreshedAt,
   refreshing,
   onRefresh,
@@ -144,6 +165,9 @@ export function ProvidedModelsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instance: PluginInstance;
+  noun: string;
+  /** 现在刷不出来的那句人话(连不上这台 ComfyUI……);null = 清单是好的。有它时顶上说清这是哪一次的清单、给「重新连接」。 */
+  staleBecause: string | null;
   refreshedAt: string | null;
   refreshing: boolean;
   onRefresh: () => void;
@@ -163,24 +187,43 @@ export function ProvidedModelsDialog({
     ? all.filter((model) => `${model.label} ${model.id} ${model.group?.label ?? ""}`.toLowerCase().includes(needle))
     : all;
   const formed = formedGroups(all);
+  const stale = Boolean(staleBecause);
   return (
     <ModalShell
       open={open}
       onOpenChange={onOpenChange}
-      title={t("pluginModelsTitle").replace("{name}", instance.name)}
+      title={withNoun(t("pluginModelsTitle"), noun).replace("{name}", instance.name)}
       className="w-[680px] max-w-[calc(100vw-32px)]"
       header={
-        all.length > SEARCH_THRESHOLD ? (
-          <Input
-            value={query}
-            placeholder={t("pluginModelsSearch").replace("{n}", String(all.length))}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+        stale || all.length > SEARCH_THRESHOLD ? (
+          <div className="grid gap-2">
+            {stale && (
+              //: 现在刷不出来:下面是上一次的清单,不是现在能用的样子 —— 先说清,给「重新连接」(就是再刷一次)
+              <div role="status" data-catalog-stale=""
+                   className="flex min-w-0 items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+                <AlertTriangle size={14} className="shrink-0 text-warning" />
+                <span className="min-w-0 flex-1 text-ui-sm text-foreground">
+                  {t("pluginModelsStale").replace("{time}", refreshedAt ? relativeTime(refreshedAt, locale) : "").replace("{error}", staleBecause ?? "")}
+                </span>
+                <Button size="sm" variant="outline" loading={refreshing} onClick={onRefresh}>
+                  {t("pluginModelsReconnect")}
+                </Button>
+              </div>
+            )}
+            {all.length > SEARCH_THRESHOLD && (
+              <Input
+                value={query}
+                placeholder={withNoun(t("pluginModelsSearch"), noun).replace("{n}", String(all.length))}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            )}
+          </div>
         ) : undefined
       }
       footer={
         <div className="flex w-full items-center gap-2">
-          {refreshedAt && (
+          {/* 刷不出来时什么时候的清单已经在顶上那句里了,这里不再写一句看起来像「刚刷过」的时间 */}
+          {refreshedAt && !stale && (
             <Truncate className="text-ui-xs text-muted-foreground">
               {t("pluginModelsRefreshed").replace("{time}", relativeTime(refreshedAt, locale))}
             </Truncate>
@@ -188,7 +231,7 @@ export function ProvidedModelsDialog({
           <span className="flex-1" />
           <Button variant="outline" loading={refreshing} onClick={onRefresh}>
             <RefreshCcw size={13} />
-            {t("pluginRefreshModels")}
+            {withNoun(t("pluginRefreshModels"), noun)}
           </Button>
         </div>
       }
@@ -199,11 +242,12 @@ export function ProvidedModelsDialog({
           <Skeleton className="h-14" />
         </div>
       ) : all.length === 0 ? (
-        <p className="m-0 text-ui-sm text-muted-foreground">{t("pluginModelsEmpty")}</p>
+        <p className="m-0 text-ui-sm text-muted-foreground">{withNoun(t("pluginModelsEmpty"), noun)}</p>
       ) : shown.length === 0 ? (
-        <p className="m-0 text-ui-sm text-muted-foreground">{t("pluginModelsNoMatch")}</p>
+        <p className="m-0 text-ui-sm text-muted-foreground">{withNoun(t("pluginModelsNoMatch"), noun)}</p>
       ) : (
-        <ul className="m-0 grid list-none gap-1.5 p-0">
+        //: 刷不出来时清单整体压暗一档:是上一次的样子,不是现在能用的
+        <ul className={cn("m-0 grid list-none gap-1.5 p-0", stale && "opacity-70")} data-stale={stale ? "" : undefined}>
           {shown.map((model) => (
             <ProvidedModelItem key={`${model.kind}:${model.id}`} model={model} origin={entryOrigin(model.group, formed, t)} />
           ))}
@@ -236,7 +280,8 @@ function ProvidedModelItem({ model, origin }: { model: PluginProvidedModel; orig
     inputs.length ? t("pluginModelTakes").replace("{roles}", inputs.join("、")) : t("pluginModelPromptOnly"),
   ].filter(Boolean);
   return (
-    <li className={cn("rounded-lg border border-border bg-card", model.group?.entry === "form" && "ml-6")} data-entry={model.group?.entry}>
+    //: 表单入口和别的项左边对齐,第二行写「来自 X」—— 不再往右缩一截(和下拉、「添加节点」同一种摆法,ADR 0045)
+    <li className="rounded-lg border border-border bg-card" data-entry={model.group?.entry}>
       <button
         type="button"
         className="flex w-full min-w-0 cursor-pointer items-start gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-secondary"

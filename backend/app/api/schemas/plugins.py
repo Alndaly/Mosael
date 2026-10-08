@@ -220,6 +220,9 @@ class PluginPackageOut(ApiModel):
     oauth: PluginOAuthOut | None = None
     #: 它能替宿主做成哪些事(`public_url` / `generation`)。
     provides: list[str] = Field(default_factory=list)
+    #: 替宿主做生成的插件交出来的那一类东西叫什么(清单的 `generation_noun`,已按看的人的语言挑好;英文是复数小写)。
+    #: 空 = 没写,界面说「模型」。ComfyUI 是「工作流」。
+    generation_noun: str = ""
     #: 能起哪几种本机服务(清单版本 8 的 `services`,ADR 0041)。有的话连接页上多一张「本机服务」卡。
     services: list[PluginServiceOut] = Field(default_factory=list)
     #: 随应用一起发的(见 domain/plugins/bundled)。卸不掉,界面不给「卸载」。

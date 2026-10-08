@@ -562,6 +562,11 @@ besides the failure text, so the host's AI Studio failure card and board cells s
   the tool names that changed (id-based names don't; path-hash names do; the not-yet-upgraded old form counts too) for that workflow or
   every one in the folder. The host moves its stored references in the same request and records nothing in the one-time move ledger.
 
+## Fixes (1.23.1)
+
+- The manifest gains `generation_noun` (`{"zh": "工作流", "en": "workflows"}`): the Plugins page row, the list dialog, its
+  search box and the refresh button say “workflows”, not “models” — what it hands over is workflows and their forms.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's

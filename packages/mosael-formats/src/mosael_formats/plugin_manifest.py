@@ -104,6 +104,10 @@ SERVICE_ADDRESS_FIELD = "server_url"
 #: 写成一段介绍的话卡片只剩省略号,详情页头被撑成一大块 —— 长的介绍归第一条工具集的 `description`。
 SUMMARY_MAX_CHARS = 140
 
+#: 清单 `generation_noun`(替宿主做生成的插件交出来的那一类东西叫什么)最长多少字。它进标题、按钮、搜索框
+#: (「刷新工作流」「搜 28 个工作流」),是一个词,不是一句话。
+GENERATION_NOUN_MAX_CHARS = 16
+
 #: 素材入参的 `format`(宿主把素材换成暂存目录里的一份副本交给插件,见 backend 的 plugins/inputs)。
 ASSET_FORMAT = "asset"
 #: 素材入参上可选的 `x-audio`:宿主先把声音抽成 wav 再给 —— `original` 保留原采样率和声道(要进成片的:降噪、分离),
@@ -319,6 +323,10 @@ class Manifest:
     summary: str = ""
     #: 这个插件能起哪几种**本机服务**(清单版本 8,ADR 0041)。没声明就是没有 —— 它的连接只能连一台已经在跑的服务器。
     services: list[Service] = field(default_factory=list)
+    #: 替宿主做生成的插件(`provides` 里有 `generation`)交出来的那一类东西**叫什么**(可以按语言分;英文写复数小写)。
+    #: 插件页上它那一行、那张清单的标题、搜索框、刷新按钮都用这个词:ComfyUI 交的是工作流和表单,叫「模型」会让人去找
+    #: checkpoint。不写就是空串,宿主说「模型」。
+    generation_noun: str = ""
 
     @property
     def description(self) -> str:
@@ -632,7 +640,20 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         package_sources=_package_sources(raw.get("package_sources"), path),
         summary=_summary(raw.get("summary"), path, pick),
         services=_services(raw.get("services"), declared, runtime_of(raw), config, path, pick),
+        generation_noun=_generation_noun(raw.get("generation_noun"), raw.get("provides"), path, pick),
     )
+
+
+def _generation_noun(raw: Any, provides: Any, path: str, pick: Callable[[Any], str]) -> str:
+    """`generation_noun`:一个词,每种语言都不超过 GENERATION_NOUN_MAX_CHARS 个字、不是空的;只有认领了 `generation` 的插件能写
+    (别的插件没有那一行、那张清单,写了是白写 —— 装的时候就说)。"""
+    if raw is None:
+        return ""
+    variants = list(raw.values()) if isinstance(raw, dict) else [raw]
+    good = bool(variants) and all(isinstance(one, str) and 0 < len(one.strip()) <= GENERATION_NOUN_MAX_CHARS for one in variants)
+    if not good or GENERATION not in [one for one in (provides or []) if isinstance(one, str)]:
+        raise ManifestError("pluginErr_manifestGenerationNoun", path=path, max=GENERATION_NOUN_MAX_CHARS)
+    return pick(raw).strip()
 
 
 def _services(

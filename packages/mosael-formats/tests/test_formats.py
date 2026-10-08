@@ -67,6 +67,19 @@ def test_一句话简介按语言挑_介绍取第一条工具集() -> None:
     assert parse({"id": "a.b", "version": "1.0.0", "name": "n"}, "x").summary == ""
 
 
+def test_交出来的那一类东西叫什么_按语言挑_不写是空串() -> None:
+    """ComfyUI 交的是工作流和表单:插件页那一行、清单标题、搜索框、刷新按钮都按它说,不叫「模型」(宿主不写死哪一家)。"""
+    raw = {"id": "a.b", "version": "1.0.0", "name": "n", "provides": ["generation"], "runtime": {"kind": "process", "entry": "m.py"},
+           "tools": {"declare": [{"name": "gen", "provides": ["generation"]}]},
+           "generation_noun": {"zh": "工作流", "en": "workflows"}}
+    token = i18n.CURRENT_LOCALE.set("en")
+    try:
+        assert parse(raw, "x").generation_noun == "workflows"
+    finally:
+        i18n.CURRENT_LOCALE.reset(token)
+    assert parse({**raw, "generation_noun": None}, "x").generation_noun == ""
+
+
 @pytest.mark.parametrize(
     ("raw", "key"),
     [
@@ -74,6 +87,11 @@ def test_一句话简介按语言挑_介绍取第一条工具集() -> None:
         # 一句话简介写成一段:卡片只剩省略号。**每种语言都查** —— 只查挑出来的那种,换个界面语言才露馅。
         ({"id": "a", "version": "1", "name": "n", "summary": "长" * 141}, "pluginErr_manifestSummaryTooLong"),
         ({"id": "a", "version": "1", "name": "n", "summary": {"zh": "短", "en": "x" * 141}}, "pluginErr_manifestSummaryTooLong"),
+        # 交出来的那一类东西叫什么:一个词;没认领生成能力的插件写了是白写
+        ({"id": "a", "version": "1", "name": "n", "generation_noun": "工作流"}, "pluginErr_manifestGenerationNoun"),
+        ({"id": "a", "version": "1", "name": "n", "provides": ["generation"], "runtime": {"kind": "process", "entry": "m.py"},
+          "tools": {"declare": [{"name": "gen", "provides": ["generation"]}]},
+          "generation_noun": {"zh": "工作流", "en": "x" * 17}}, "pluginErr_manifestGenerationNoun"),
         ({"id": "../x", "version": "1", "name": "n"}, "pluginErr_manifestBadId"),
         ({"id": "a", "version": "1", "name": "n", "instance": {"credentials": [{"key": "MOSAEL_X"}]}},
          "pluginErr_manifestReservedKey"),

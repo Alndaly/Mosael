@@ -333,6 +333,7 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                     else None
                 ),
                 "provides": manifest.provides,
+                "generation_noun": manifest.generation_noun,
                 #: 能起哪几种本机服务(ADR 0041):连接页上据此摆「本机服务」那张卡。
                 "services": [{"key": one.key, "title": one.title} for one in manifest.services],
                 "bundled": package.id in shipped,

@@ -142,3 +142,14 @@ def test_智能体调表单入口的工具_确认卡上说出来自哪张工作�
     cards = client.get("/api/confirmations", params={"workspace_id": ws, "status": "pending"}).json()
     headline = next(card["headline"] for card in cards if card["id"] == card_id)
     assert headline.startswith("运行插件工具「工作流 · 快速出图」(来自 portrait,连接「"), headline
+
+
+def test_插件页上它交出来的东西叫工作流_按看的人的语言(connected) -> None:
+    """ComfyUI 交的是工作流和表单:插件页那一行、清单弹窗、刷新按钮按插件清单的 `generation_noun` 说,不叫「模型」。"""
+    client, _, _ = connected
+    said = {
+        locale: next(one for one in client.get("/api/plugins", headers={"Accept-Language": locale}).json()
+                     if one["id"] == PACKAGE)["generation_noun"]
+        for locale in ("zh-CN", "en-US")
+    }
+    assert said == {"zh-CN": "工作流", "en-US": "workflows"}
